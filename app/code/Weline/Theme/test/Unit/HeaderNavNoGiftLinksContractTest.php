@@ -16,8 +16,11 @@ final class HeaderNavNoGiftLinksContractTest extends TestCase
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("@url{'promotion/deals'}", $src);
-        self::assertStringContainsString("@url{'faq'}", $src);
+        // 今日特价 / 客户服务由 Promotion / CustomerService 部件默认注入；右侧 navigation 槽禁止硬编码业务链
+        self::assertStringContainsString('<ul class="nav-links-list" id="nav-links-list"></ul>', $src);
+        self::assertStringContainsString('header-deals-link', $src);
+        self::assertStringContainsString('header-contact-service-link', $src);
+        self::assertStringContainsString('header-blog-link', $src);
         self::assertStringNotContainsString("@url{'registry'}", $src);
         self::assertStringNotContainsString("@url{'gift-cards'}", $src);
         self::assertStringNotContainsString('礼品心愿单', $src);
@@ -60,20 +63,21 @@ final class HeaderNavNoGiftLinksContractTest extends TestCase
         self::assertStringNotContainsString("'/promotions/", $src);
     }
 
-    public function testFullHeaderDropdownUsesHanfuDestinationsWithoutPlaceholderLinks(): void
+    public function testFullHeaderDropdownUsesGenericStorefrontDestinationsWithoutPlaceholderLinks(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/full-header/default.phtml';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("@url{'search'|['q' => '明制汉服']}", $src);
-        self::assertStringContainsString("@url{'search'|['q' => '宋制汉服']}", $src);
+        self::assertStringContainsString("@url{'products'}", $src);
+        self::assertStringContainsString("@url{'categories'}", $src);
         self::assertStringContainsString("@url{'promotion/deals'}", $src);
         self::assertStringContainsString("@url{'blog'}", $src);
-        self::assertStringContainsString("@url{'categories'}", $src);
         self::assertStringContainsString("@url{'products'|['filter' => 'new']}", $src);
         self::assertStringContainsString("@url{'cart'}", $src);
-        self::assertStringContainsString('@param logo_text {default="云裳 Hanfu Atelier"', $src);
-        self::assertStringContainsString("__('东方衣冠，全球配送')", $src);
+        self::assertStringContainsString('@param logo_text {default=""', $src);
+        self::assertStringContainsString("__('全球配送，售后无忧')", $src);
+        self::assertStringNotContainsString("__('东方衣冠，全球配送')", $src);
+        self::assertStringNotContainsString("@url{'search'|['q' => '明制汉服']}", $src);
         self::assertStringNotContainsString('href="#"', $src);
         self::assertStringNotContainsString('电子产品', $src);
         self::assertStringNotContainsString('免费配送满', $src);

@@ -51,6 +51,12 @@ class CarrierService
         if (empty($data[Carrier::schema_fields_TRACKING_URL_TEMPLATE])) {
             throw new \RuntimeException(__('物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能'));
         }
+        /** @var TrackingUrlResolver $urlResolver */
+        $urlResolver = $this->objectManager->getInstance(TrackingUrlResolver::class);
+        $template = (string)$data[Carrier::schema_fields_TRACKING_URL_TEMPLATE];
+        if (!$urlResolver->isUsableTemplate($template)) {
+            throw new \RuntimeException(__('禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板，或留空由系统使用 17TRACK 默认'));
+        }
         
         $carrier = $this->getModel();
         $carrier->setData($data);
@@ -77,6 +83,13 @@ class CarrierService
         // 如果更新tracking_url_template，验证必填
         if (isset($data[Carrier::schema_fields_TRACKING_URL_TEMPLATE]) && empty($data[Carrier::schema_fields_TRACKING_URL_TEMPLATE])) {
             throw new \RuntimeException(__('物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能'));
+        }
+        if (isset($data[Carrier::schema_fields_TRACKING_URL_TEMPLATE])) {
+            /** @var TrackingUrlResolver $urlResolver */
+            $urlResolver = $this->objectManager->getInstance(TrackingUrlResolver::class);
+            if (!$urlResolver->isUsableTemplate((string)$data[Carrier::schema_fields_TRACKING_URL_TEMPLATE])) {
+                throw new \RuntimeException(__('禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板'));
+            }
         }
         
         $carrier->setData($data);

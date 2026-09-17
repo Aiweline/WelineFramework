@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Plugin;
 
 use Weline\Framework\Plugin\Config\PluginXmlReader;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 
@@ -96,20 +97,24 @@ class PluginRegistry
      */
     public function refresh(): bool
     {
-        // 读取所有 plugin.xml 配置
-        RegistryProgress::log('Plugin scan: plugin.xml configs started');
-        $pluginData = $this->xmlReader->read();
-        RegistryProgress::count('Plugin XML scan', count($pluginData), 'modules with plugin configs');
+        try {
+            RegistryProgress::log('Plugin scan: plugin.xml configs started');
+            $pluginData = $this->xmlReader->read();
+            RegistryProgress::count('Plugin XML scan', count($pluginData), 'modules with plugin configs');
 
-        // 组织数据结构
-        RegistryProgress::log('Plugin organize registry data');
-        $registry = $this->organizeRegistryData($pluginData);
-        RegistryProgress::count('Plugin registry', count($registry['plugins'] ?? []), 'plugin entries organized');
-        unset($pluginData);
-        RegistryProgress::log('Plugin raw XML data released');
+            RegistryProgress::log('Plugin organize registry data');
+            $registry = $this->organizeRegistryData($pluginData);
+            RegistryProgress::count('Plugin registry', count($registry['plugins'] ?? []), 'plugin entries organized');
+            unset($pluginData);
+            RegistryProgress::log('Plugin raw XML data released');
 
-        // 保存注册表
-        return $this->saveRegistry($registry);
+            return $this->saveRegistry($registry);
+        } catch (\Throwable $e) {
+            RegistryProgress::log('Plugin refresh aborted; keeping existing generated/plugins.php');
+            throw $e instanceof \RuntimeException
+                ? $e
+                : new \RuntimeException('Plugin registry refresh failed: ' . $e->getMessage(), 0, $e);
+        }
     }
     
     /**
@@ -356,24 +361,17 @@ class PluginRegistry
     {
         RegistryProgress::log('Plugin save registry: generated/plugins.php');
         $content = "<?php return " . w_var_export($registry, true) . ";\n";
+        (new GeneratedPhpArrayPublisher())->publishContent(
+            self::REGISTRY_FILE,
+            $content,
+            $registry,
+            GeneratedPhpArrayPublisher::countKey('plugins'),
+        );
 
-        // 确保目录存在
-        $dir = dirname(self::REGISTRY_FILE);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
-
-        if ($result !== false) {
-            $this->cachedRegistry = $registry;
-            $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
-            RegistryProgress::log('Plugin save registry finished');
-            return true;
-        }
-
-        RegistryProgress::log('Plugin save registry failed');
-        return false;
+        $this->cachedRegistry = $registry;
+        $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        RegistryProgress::log('Plugin save registry finished');
+        return true;
     }
 
     /**

@@ -192,7 +192,7 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertSame('category', $injection['layout_type'] ?? null);
         $listInjection = $widget['default_injections'][1] ?? [];
         self::assertSame('list-recommendations', $listInjection['slot'] ?? null);
-        self::assertSame('product_list', $listInjection['layout_type'] ?? null);
+        self::assertSame('products', $listInjection['layout_type'] ?? null);
         self::assertSame('Weline_Product::templates/frontend/widgets/recommended-products.phtml', $widget['template'] ?? null);
 
         $tpl = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/recommended-products.phtml';

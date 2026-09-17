@@ -8,6 +8,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\MessageManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Ui\FormKey;
 use Weline\MediaManager\Service\AiDrawService;
 use Weline\MediaManager\Service\MediaFileAccessContextFactory;
@@ -88,11 +89,97 @@ class AiDraw extends BackendController
             );
             MessageManager::success(__('图片保存成功'));
 
+            $this->bindSavedAssetsToIdentity($this->collectInput(), is_array($result) ? $result : []);
+
             return $this->encodeJsonResponse($this->success(__('保存成功'), $result));
         } catch (\Throwable $throwable) {
             MessageManager::error(__('保存失败：%{1}', $throwable->getMessage()));
 
             return $this->encodeJsonResponse($this->error($throwable->getMessage()));
+        }
+    }
+
+    /**
+     * Inherit Ambient / identity prefix when AI save_as creates a business asset.
+     * @param array<string,mixed> $input
+     * @param array<string,mixed> $result
+     */
+    private function bindSavedAssetsToIdentity(array $input, array $result): void
+    {
+        $identityPath = trim((string)($input['identity'] ?? $input['identity_path'] ?? ''));
+        $type = trim((string)($input['identity_root'] ?? $input['type'] ?? ''));
+        $code = trim((string)($input['identity_code'] ?? $input['code'] ?? ''));
+        $scope = trim((string)($input['identity_scope'] ?? $input['scope'] ?? ''));
+        if ($identityPath === '' && ($type === '' || $code === '')) {
+            // No Ambient → do not register as strong business reference
+            return;
+        }
+        if (!class_exists(\Weline\FileManager\Service\MediaReference\MediaReferenceService::class)) {
+            return;
+        }
+        try {
+            /** @var \Weline\FileManager\Service\MediaReference\MediaReferenceService $refs */
+            $refs = ObjectManager::getInstance(
+                \Weline\FileManager\Service\MediaReference\MediaReferenceService::class
+            );
+            $slot = [];
+            foreach (['kind', 'field', 'component', 'locale', 'instance', 'role'] as $k) {
+                $v = trim((string)($input['identity_' . $k] ?? $input[$k] ?? ''));
+                if ($v !== '') {
+                    $slot[$k] = $v;
+                }
+            }
+            if ($type === '' || $code === '') {
+                // Parse typed path: product:sku:XXX:scope:a.b.c:...
+                $parts = explode(':', $identityPath);
+                if ($type === '' && isset($parts[0])) {
+                    $type = (string)$parts[0];
+                }
+                if ($code === '') {
+                    for ($i = 0, $n = count($parts); $i < $n - 1; $i++) {
+                        if (in_array($parts[$i], ['sku', 'theme', 'brand', 'post', 'category', 'key', 'code', 'website'], true)) {
+                            $code = (string)$parts[$i + 1];
+                            break;
+                        }
+                    }
+                }
+                if ($scope === '') {
+                    for ($i = 0, $n = count($parts); $i < $n - 1; $i++) {
+                        if ($parts[$i] === 'scope') {
+                            $scope = (string)$parts[$i + 1];
+                            break;
+                        }
+                    }
+                }
+            }
+            if ($type === '' || $code === '') {
+                return;
+            }
+            $identity = $refs->identity($scope !== '' ? $scope : null, $type, $code, $slot);
+            $assetIds = [];
+            foreach (['added', 'updated'] as $key) {
+                if (!isset($result[$key]) || !is_array($result[$key])) {
+                    continue;
+                }
+                foreach ($result[$key] as $row) {
+                    if (is_array($row) && !empty($row['asset_id'])) {
+                        $assetIds[] = (string)$row['asset_id'];
+                    }
+                }
+            }
+            foreach ($assetIds as $assetId) {
+                $refs->bindSingle(
+                    $identity,
+                    $assetId,
+                    $type,
+                    $code,
+                    1,
+                    $identity->path,
+                    (string)($slot['locale'] ?? ''),
+                );
+            }
+        } catch (\Throwable) {
+            // Soft-fail: save already succeeded; identity bind is additive
         }
     }
 

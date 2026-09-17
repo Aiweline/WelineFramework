@@ -29,6 +29,7 @@ final class CheckoutStorefrontSlotsCatalogContractTest extends TestCase
         self::assertIsArray($slots);
         self::assertArrayHasKey('checkout-express-payment', $slots);
         self::assertArrayHasKey('checkout-shipping-address', $slots);
+        self::assertArrayHasKey('checkout-tax-identity', $slots);
         self::assertArrayHasKey('checkout-summary-discount', $slots);
         self::assertArrayHasKey('checkout-summary-note', $slots);
         self::assertArrayHasKey('checkout-summary-credit', $slots);

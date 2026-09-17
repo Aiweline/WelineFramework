@@ -185,7 +185,7 @@ final class FooterDefaultLinksHelper
     public static function defaultLinkGroups(): array
     {
         return [
-            ['key' => 'about', 'enabled' => true, 'title' => '云裳志'],
+            ['key' => 'about', 'enabled' => true, 'title' => '关于我们'],
             ['key' => 'partner', 'enabled' => true, 'title' => '定制与合作'],
             ['key' => 'payment', 'enabled' => true, 'title' => '支付与账户'],
             ['key' => 'help', 'enabled' => true, 'title' => '帮助中心'],
@@ -248,8 +248,9 @@ final class FooterDefaultLinksHelper
     {
         return [
             ['text' => '使用条件', 'url' => '/terms', 'open_in_new' => false],
-            ['text' => '隐私声明', 'url' => '/privacy', 'open_in_new' => false],
-            ['text' => 'Cookie 政策', 'url' => '/cookies', 'open_in_new' => false],
+            ['text' => '隐私声明', 'url' => '/policy/privacy', 'open_in_new' => false],
+            ['text' => 'Cookie 政策', 'url' => '/policy/cookie', 'open_in_new' => false],
+            ['text' => '无障碍声明', 'url' => '/policy/accessibility', 'open_in_new' => false],
         ];
     }
 

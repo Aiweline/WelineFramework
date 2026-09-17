@@ -13,6 +13,7 @@ namespace Weline\Widget\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
@@ -169,38 +170,19 @@ class WidgetRegistry implements WidgetRegistryInterface
     private function saveRegistry(array $registry): bool
     {
         try {
-            $registryDir = dirname(self::REGISTRY_FILE);
-            if (!is_dir($registryDir)) {
-                mkdir($registryDir, 0755, true);
-            }
-            $fh = fopen(self::REGISTRY_FILE, 'wb');
-            if ($fh === false) {
-                return false;
-            }
-            fwrite($fh, "<?php\n");
-            fwrite($fh, "/**\n * 部件注册表\n * 此文件由系统自动生成，请勿手动修改\n * 生成时间: " . date('Y-m-d H:i:s') . "\n */\n\nreturn [\n");
-            $firstType = true;
-            foreach ($registry as $type => $widgets) {
-                if (!$firstType) {
-                    fwrite($fh, ",\n");
-                }
-                $firstType = false;
-                fwrite($fh, var_export($type, true) . " => [\n");
-                $firstName = true;
-                foreach (is_array($widgets) ? $widgets : [] as $name => $config) {
-                    if (!$firstName) {
-                        fwrite($fh, ",\n");
-                    }
-                    $firstName = false;
-                    fwrite($fh, '    ' . var_export($name, true) . ' => ' . var_export($config, true));
-                }
-                fwrite($fh, "\n]");
-            }
-            fwrite($fh, "\n];\n");
-            fclose($fh);
+            $content = "<?php\n";
+            $content .= "/**\n * 部件注册表\n * 此文件由系统自动生成，请勿手动修改\n * 生成时间: " . date('Y-m-d H:i:s') . "\n */\n\n";
+            $content .= "return " . var_export($registry, true) . ";\n";
+
+            (new GeneratedPhpArrayPublisher())->publishContent(
+                self::REGISTRY_FILE,
+                $content,
+                $registry,
+                GeneratedPhpArrayPublisher::countNestedLeaves(...),
+            );
             self::clearRuntimeCache();
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             w_log_error("保存部件注册表失败: " . $e->getMessage(), [], 'WidgetRegistry');
             return false;
         }

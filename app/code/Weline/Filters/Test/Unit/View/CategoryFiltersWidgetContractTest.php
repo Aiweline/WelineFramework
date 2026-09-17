@@ -143,20 +143,29 @@ final class CategoryFiltersWidgetContractTest extends TestCase
         self::assertStringContainsString("str_starts_with(\$key, 'af_')", $src);
     }
 
-    public function testListingFallbackUsesSummaryProjection(): void
+    public function testListingFallbackUsesCandidatesOnlyOnListingLikePaths(): void
     {
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/StorefrontFilterPanelService.php',
         );
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/category-filters.phtml',
+        );
 
+        self::assertStringContainsString('function isListingLikePath(', $src);
         self::assertStringContainsString(
             'publishedOffersForProductIds($productIds, 120, false)',
             $src,
         );
         self::assertStringContainsString(
+            'publishedListingCandidates(120, false)',
+            $src,
+        );
+        self::assertStringNotContainsString(
             'publishedOffers(120, false)',
             $src,
         );
+        self::assertStringContainsString('isListingLikePath($requestPath)', $template);
     }
 
     public function testFiltersObservesStorefrontOffersFilterEvent(): void

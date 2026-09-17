@@ -29,12 +29,16 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
         }
 
         try {
-            if ($this->allI18nFingerprintsFresh()) {
+            if ($this->allI18nFingerprintsFresh() && $this->phraseArtifactsPresent()) {
                 if (php_sapi_name() === 'cli') {
                     echo "\n[Phrase] i18n 目录指纹未变，跳过语言包 compile\n";
                 }
 
                 return;
+            }
+
+            if ($this->allI18nFingerprintsFresh() && !$this->phraseArtifactsPresent() && php_sapi_name() === 'cli') {
+                echo "\n[Phrase] i18n 源指纹命中但 generated/language 产物缺失，强制 compile\n";
             }
 
             if (php_sapi_name() === 'cli') {
@@ -83,11 +87,7 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
             return;
         }
         $fpService = new SetupSourceFingerprint();
-        $store = $fpService->loadStore();
-        foreach ($fps as $k => $v) {
-            $store[$k] = $v;
-        }
-        $fpService->saveStore($store);
+        $fpService->mergeUpdates($fps);
     }
 
     /**
@@ -114,5 +114,31 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
         }
 
         return $out;
+    }
+
+    /**
+     * generated/language 词典产物是否存在。源指纹命中但产物空/缺失时不得跳过 compile。
+     */
+    private function phraseArtifactsPresent(): bool
+    {
+        $dir = \rtrim((string)Env::path_TRANSLATE_FILES_PATH, '/\\');
+        if ($dir === '' || !\is_dir($dir)) {
+            return false;
+        }
+        $found = 0;
+        foreach (\glob($dir . DIRECTORY_SEPARATOR . '*.php') ?: [] as $file) {
+            $base = \basename((string)$file, '.php');
+            if ($base === 'words' || \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $base) !== 1) {
+                continue;
+            }
+            if ((int)@\filesize((string)$file) > 32) {
+                $found++;
+            }
+            if ($found >= 2) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -108,6 +108,41 @@ final class ProductAdminReadServiceBatchSearchTest extends TestCase
         self::assertSame([3], array_column($service->search(1, ['sku' => 'fallback-3']), 'product_id'));
     }
 
+    public function testKeywordFilterMatchesNameOrSku(): void
+    {
+        [$service] = $this->fixture();
+
+        // Same needle on name+sku remains AND (advanced filters).
+        self::assertSame([], $service->search(1, ['name' => 'ALPHA', 'sku' => 'ALPHA']));
+        // keyword is OR across name / sku.
+        self::assertSame([1], array_column($service->search(1, ['keyword' => 'ALPHA']), 'product_id'));
+        self::assertSame([2], array_column($service->search(1, ['q' => 'b-second']), 'product_id'));
+    }
+
+    public function testNamePrefersRequestedLocaleOverAlphabeticalFirst(): void
+    {
+        $attribute = static fn(int $id, string $locale, string $value): array => [
+            'entity_type' => 'product', 'entity_id' => $id, 'attribute_code' => 'name',
+            'locale' => $locale, 'store_id' => 0, 'value_type' => 'string',
+            'value_string' => $value, 'cleared' => 0, 'is_required' => 0,
+        ];
+        [$service] = $this->fixture([
+            ['product_id' => 8, 'sku' => 'LOCALE-8', 'status' => 'published', 'updated_at' => '2026-09-06 12:00:00'],
+        ], relatedRows: [
+            'offer' => [['product_id' => 8, 'offer_id' => 80, 'sku' => 'LOCALE-8']],
+            'attribute_value' => [
+                $attribute(8, 'ar_SA', 'اسم عربي'),
+                $attribute(8, 'zh_Hans_CN', '中文名称'),
+                $attribute(8, 'en_US', 'English Name'),
+            ],
+        ]);
+
+        self::assertSame('中文名称', $service->search(1, ['product_ids' => [8], 'locale' => 'zh_Hans_CN'])[0]['name'] ?? null);
+        self::assertSame('اسم عربي', $service->search(1, ['product_ids' => [8], 'locale' => 'ar_SA'])[0]['name'] ?? null);
+        // No locale: prefer zh over alphabetical-first ar_SA.
+        self::assertSame('中文名称', $service->search(1, ['product_ids' => [8]])[0]['name'] ?? null);
+    }
+
     public function testSourcePlatformFilterMatchesPlatformLabelAndNone(): void
     {
         $attributes = [

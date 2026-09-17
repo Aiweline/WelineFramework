@@ -245,7 +245,9 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('data-product-id=', $tpl);
         self::assertStringContainsString('weline-pixel::quick_buy', $tpl);
         self::assertStringContainsString('data-pixel-event="quick_buy"', $tpl);
-        self::assertStringContainsString('product-native-detail__secondary', $tpl);
+        self::assertStringContainsString('w-helppay-cta--quiet', $tpl);
+        self::assertStringContainsString('w-helppay-cta__link', $tpl);
+        self::assertStringNotContainsString('product-native-detail__secondary', $tpl);
         self::assertStringNotContainsString('w-button--secondary', $tpl);
         self::assertStringNotContainsString('w-helppay-cta__btn', $tpl);
         self::assertStringNotContainsString('checkout-shipping-address', $tpl);
@@ -263,7 +265,9 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('weline-pixel::selection_share', $tpl);
         self::assertStringContainsString('data-pixel-event="selection_share"', $tpl);
         self::assertStringContainsString('data-product-id=', $tpl);
-        self::assertStringContainsString('product-native-detail__secondary', $tpl);
+        self::assertStringContainsString('w-helppay-cta--quiet', $tpl);
+        self::assertStringContainsString('w-helppay-cta__link', $tpl);
+        self::assertStringNotContainsString('product-native-detail__secondary', $tpl);
         self::assertStringNotContainsString('w-button--secondary', $tpl);
         self::assertFileExists(dirname(__DIR__, 3) . '/Service/ShareModalI18n.php');
     }
@@ -324,10 +328,16 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('-webkit-appearance: none', $css);
         self::assertStringContainsString('.w-helppay-cta__link', $css);
         self::assertStringContainsString('product-native-detail__actions:has(.product-native-detail__secondary)', $css);
+        self::assertStringContainsString('product-native-detail__actions:has(.w-helppay-cta--quiet)', $css);
         self::assertStringContainsString('flex-wrap: wrap', $css);
+        self::assertStringContainsString('flex: 0 1 auto', $css);
+        self::assertStringContainsString('min-inline-size: 0', $css);
         self::assertStringContainsString('white-space: nowrap', $css);
         self::assertStringNotContainsString('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)', $css);
+        self::assertStringNotContainsString('flex: 1 1 calc(50%', $css);
+        self::assertStringNotContainsString('max-inline-size: calc(50%', $css);
         self::assertStringContainsString('widget-wrapper:has(.product-native-detail__secondary)', $css);
+        self::assertStringContainsString('widget-wrapper:has(.w-helppay-cta--quiet)', $css);
     }
 
     public function testHindiCsvCoversPdpChromeLabels(): void

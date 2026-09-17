@@ -225,78 +225,115 @@ $statusLabel = static function (string $status): string {
     <?php foreach ($accountCheckoutGroups as $group): ?>
         <?php $view = $presenter->present($group); ?>
         <?php $primaryOrderUuid = trim((string)($group['orders'][0]['order_uuid'] ?? '')); ?>
+        <?php
+        $hang = is_array($view['hang'] ?? null) ? $view['hang'] : null;
+        $hangPartial = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/account-order-hang.phtml';
+        $hasHang = $hang !== null && is_file($hangPartial);
+        $hasPartial = !empty($view['partial']) && !empty($view['orders']);
+        $useAccordion = $hasHang || $hasPartial;
+        $chatUnread = 0;
+        if ($hang !== null) {
+            $chatUnread = max(0, (int)($hang['chat_unread'] ?? $hang['unread'] ?? 0));
+        }
+        $accordionOpen = $chatUnread > 0;
+        ?>
         <li class="account-orders__group"
             data-group-uuid="<?= htmlspecialchars((string) $view['group_uuid'], ENT_QUOTES, 'UTF-8') ?>"
             data-view="<?= htmlspecialchars((string) $view['view'], ENT_QUOTES, 'UTF-8') ?>"
             data-partial="<?= !empty($view['partial']) ? '1' : '0' ?>"
+            data-accordion="<?= $useAccordion ? '1' : '0' ?>"
             aria-label="<?= htmlspecialchars((string) $view['summary_line'], ENT_QUOTES, 'UTF-8') ?>">
-            <div class="account-orders__summary" data-group-summary="true">
-                <strong><?= htmlspecialchars((string) $view['display_number'], ENT_QUOTES, 'UTF-8') ?></strong>
-                <span><?= htmlspecialchars((string) $view['order_count_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                <?php if (trim((string) ($view['order_type_label'] ?? '')) !== ''): ?>
-                    <span class="account-orders__badge account-orders__badge--type"
-                          data-order-type="true"
-                          data-order-type-code="<?= htmlspecialchars((string) ($view['order_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                          data-tone="<?= htmlspecialchars((string) ($view['order_type_tone'] ?? 'info'), ENT_QUOTES, 'UTF-8') ?>"
-                          data-testid="account-order-type-badge"><?= htmlspecialchars((string) $view['order_type_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                <?php endif; ?>
-                <span class="account-orders__badge"
-                      data-order-status="true"
-                      data-status="<?= htmlspecialchars((string) $view['status'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $view['status_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                <?php if (!empty($view['tracking_summary'])): ?>
-                    <span class="account-orders__badge" data-order-tracking-summary="true"><?= htmlspecialchars((string) $view['tracking_summary'], ENT_QUOTES, 'UTF-8') ?></span>
-                <?php endif; ?>
-                <span class="account-orders__total" data-order-total="true"><?= htmlspecialchars((string) $view['total_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                <?php if ($primaryOrderUuid !== ''): ?>
-                    <a class="account-orders__detail-link"
-                       data-order-detail-link="true"
-                       data-order-uuid="<?= htmlspecialchars($primaryOrderUuid, ENT_QUOTES, 'UTF-8') ?>"
-                       href="@url{'customer/account/index'|['order_uuid' => $primaryOrderUuid]}#orders"><?= __('查看详情') ?></a>
-                <?php endif; ?>
-                <?php foreach (($view['refund_semantics'] ?? []) as $label): ?>
-                    <span class="account-orders__badge" data-refund-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
-                <?php endforeach; ?>
-                <?php foreach (($view['invoice_semantics'] ?? []) as $label): ?>
-                    <span class="account-orders__badge" data-invoice-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
-                <?php endforeach; ?>
-                <?php foreach (($view['fulfillment_semantics'] ?? []) as $label): ?>
-                    <span class="account-orders__badge" data-fulfillment-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
-                <?php endforeach; ?>
-                <?php
-                $hang = is_array($view['hang'] ?? null) ? $view['hang'] : null;
-                $hangPartial = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/account-order-hang.phtml';
-                if ($hang !== null && is_file($hangPartial)) {
-                    $orderUuid = trim((string)($hang['order_ref'] ?? $primaryOrderUuid));
-                    $checkoutUrl = '/checkout';
-                    include $hangPartial;
-                }
-                ?>
-            </div>
-            <?php if (!empty($view['partial']) && !empty($view['orders'])): ?>
-            <ul class="account-orders__partial"
-                data-partial-expanded="true"
-                role="list"
-                aria-label="<?= __('订单明细') ?>">
-                <?php foreach ($view['orders'] as $order): ?>
-                <li data-order-uuid="<?= htmlspecialchars((string) $order['order_uuid'], ENT_QUOTES, 'UTF-8') ?>">
-                    <span><?= htmlspecialchars((string) $order['display_number'], ENT_QUOTES, 'UTF-8') ?></span>
-                    <?php if (trim((string) ($order['order_type_label'] ?? '')) !== ''): ?>
+            <?php if ($useAccordion): ?>
+            <details class="account-orders__accordion"
+                     data-account-orders-accordion="true"
+                     data-testid="account-orders-accordion"
+                     <?= $accordionOpen ? 'open' : '' ?>>
+                <summary class="account-orders__summary" data-group-summary="true">
+                    <span class="account-orders__chevron" aria-hidden="true"></span>
+            <?php else: ?>
+                <div class="account-orders__summary" data-group-summary="true">
+            <?php endif; ?>
+                    <strong><?= htmlspecialchars((string) $view['display_number'], ENT_QUOTES, 'UTF-8') ?></strong>
+                    <span><?= htmlspecialchars((string) $view['order_count_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if (trim((string) ($view['order_type_label'] ?? '')) !== ''): ?>
                         <span class="account-orders__badge account-orders__badge--type"
                               data-order-type="true"
-                              data-order-type-code="<?= htmlspecialchars((string) ($order['order_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                              data-tone="<?= htmlspecialchars((string) ($order['order_type_tone'] ?? 'info'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $order['order_type_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                              data-order-type-code="<?= htmlspecialchars((string) ($view['order_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                              data-tone="<?= htmlspecialchars((string) ($view['order_type_tone'] ?? 'info'), ENT_QUOTES, 'UTF-8') ?>"
+                              data-testid="account-order-type-badge"><?= htmlspecialchars((string) $view['order_type_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
-                    <span data-order-status="true"><?= htmlspecialchars((string) $order['status_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                    <?php if (!empty($order['tracking_summary'])): ?>
-                        <span data-order-tracking-summary="true"><?= htmlspecialchars((string) $order['tracking_summary'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="account-orders__badge"
+                          data-order-status="true"
+                          data-status="<?= htmlspecialchars((string) $view['status'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $view['status_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if (!empty($view['tracking_summary'])): ?>
+                        <span class="account-orders__badge" data-order-tracking-summary="true"><?= htmlspecialchars((string) $view['tracking_summary'], ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
-                    <span data-order-total="true"><?= htmlspecialchars((string) $order['total_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                    <span data-refund-label="true"><?= htmlspecialchars((string) $order['refund_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                    <span data-invoice-label="true"><?= htmlspecialchars((string) $order['invoice_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                    <span data-fulfillment-label="true"><?= htmlspecialchars((string) $order['fulfillment_label'], ENT_QUOTES, 'UTF-8') ?></span>
-                </li>
-                <?php endforeach; ?>
-            </ul>
+                    <span class="account-orders__total" data-order-total="true"><?= htmlspecialchars((string) $view['total_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if ($primaryOrderUuid !== ''): ?>
+                        <a class="account-orders__detail-link"
+                           data-order-detail-link="true"
+                           data-order-uuid="<?= htmlspecialchars($primaryOrderUuid, ENT_QUOTES, 'UTF-8') ?>"
+                           href="@url{'customer/account/index'|['order_uuid' => $primaryOrderUuid]}#orders"><?= __('查看详情') ?></a>
+                    <?php endif; ?>
+                    <?php if ($chatUnread > 0): ?>
+                        <span class="account-orders__badge account-orders__badge--unread"
+                              data-account-orders-unread="true"
+                              data-testid="account-orders-unread"><?= htmlspecialchars((string) $chatUnread, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
+                    <?php foreach (($view['refund_semantics'] ?? []) as $label): ?>
+                        <span class="account-orders__badge" data-refund-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endforeach; ?>
+                    <?php foreach (($view['invoice_semantics'] ?? []) as $label): ?>
+                        <span class="account-orders__badge" data-invoice-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endforeach; ?>
+                    <?php foreach (($view['fulfillment_semantics'] ?? []) as $label): ?>
+                        <span class="account-orders__badge" data-fulfillment-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endforeach; ?>
+            <?php if ($useAccordion): ?>
+                </summary>
+                <div class="account-orders__panel" data-account-orders-panel="true">
+                    <?php if ($hasHang):
+                        $orderUuid = trim((string)($hang['order_ref'] ?? $primaryOrderUuid));
+                        $checkoutUrl = '/checkout';
+                        $chatOpen = true;
+                    ?>
+                    <div class="account-orders__hang"
+                         data-account-orders-hang="true"
+                         data-chat-embedded="1"
+                         data-testid="account-orders-hang">
+                        <?php include $hangPartial; ?>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($hasPartial): ?>
+                    <ul class="account-orders__partial"
+                        data-partial-expanded="true"
+                        role="list"
+                        aria-label="<?= __('订单明细') ?>">
+                        <?php foreach ($view['orders'] as $order): ?>
+                        <li data-order-uuid="<?= htmlspecialchars((string) $order['order_uuid'], ENT_QUOTES, 'UTF-8') ?>">
+                            <span><?= htmlspecialchars((string) $order['display_number'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php if (trim((string) ($order['order_type_label'] ?? '')) !== ''): ?>
+                                <span class="account-orders__badge account-orders__badge--type"
+                                      data-order-type="true"
+                                      data-order-type-code="<?= htmlspecialchars((string) ($order['order_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                      data-tone="<?= htmlspecialchars((string) ($order['order_type_tone'] ?? 'info'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $order['order_type_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                            <span data-order-status="true"><?= htmlspecialchars((string) $order['status_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php if (!empty($order['tracking_summary'])): ?>
+                                <span data-order-tracking-summary="true"><?= htmlspecialchars((string) $order['tracking_summary'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                            <span data-order-total="true"><?= htmlspecialchars((string) $order['total_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span data-refund-label="true"><?= htmlspecialchars((string) $order['refund_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span data-invoice-label="true"><?= htmlspecialchars((string) $order['invoice_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span data-fulfillment-label="true"><?= htmlspecialchars((string) $order['fulfillment_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php endif; ?>
+                </div>
+            </details>
+            <?php else: ?>
+                </div>
             <?php endif; ?>
         </li>
     <?php endforeach; ?>

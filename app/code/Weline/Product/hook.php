@@ -11,9 +11,14 @@ return [
         'description' => (string)__('在商品详情页价格区块之后注入扩展内容，例如 ToC/ToB 售卖模式切换。'),
         'doc' => 'frontend/product/detail/after-price.md',
     ],
+    'Weline_Product::frontend::product::detail::after-gallery' => [
+        'name' => (string)__('商品详情图库之后'),
+        'description' => (string)__('在商品详情页主图/图库区块之后注入扩展内容，例如分销分享脚条。'),
+        'doc' => 'frontend/product/detail/after-gallery.md',
+    ],
     'Weline_Product::frontend::product::detail::after-add-to-cart' => [
         'name' => (string)__('商品详情加购之后'),
-        'description' => (string)__('在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。'),
+        'description' => (string)__('在商品详情页加购操作区域之后注入扩展内容，例如默认收起的分销分享。'),
         'doc' => 'frontend/product/detail/after-add-to-cart.md',
     ],
     'Weline_Product::backend::catalog::products::bulk-actions' => [

@@ -1,0 +1,32 @@
+.w-mkt-cart-progress {
+  margin: 0.5rem 0;
+}
+.w-mkt-cart-progress__bar {
+  height: 8px;
+  background: #e6eef1;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.w-mkt-cart-progress__fill {
+  display: block;
+  height: 100%;
+  background: #16333f;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.w-mkt-cart-progress__label {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #5c6b74;
+}
+.w-mkt-welcome-gift {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d7e3e8;
+  background: #f4f8f9;
+  font-size: 0.9rem;
+}
+.w-mkt-welcome-gift a {
+  color: #16333f;
+  font-weight: 600;
+}

@@ -1,4 +1,22 @@
-﻿商品详情已浏览,商品详情已浏览
+﻿"搜索并选择已发布商品；选中后回填产品 ID。留空则使用产品来源。","搜索并选择已发布商品；选中后回填产品 ID。留空则使用产品来源。"
+选择商品,"Select product"
+关闭,Close
+完成,Done
+搜索商品,"Search products"
+"名称或 SKU","名称或 SKU"
+搜索,Search
+打开后默认展示已发布商品，可输入关键词缩小范围。,"Published products show by default; type keywords to narrow results."
+移除,Remove
+添加,Add
+正在加载已发布商品…,"Loading published products…"
+暂无可选商品，请检查发布状态或更换关键词。,"No selectable products. Check publish status or try other keywords."
+已选商品,"Selected products"
+名称,Name
+"选品前请先选择 Website（0 为默认网站，可正常选品）。","Select a Website before picking products (0 is the default website and is allowed)."
+网站,website
+图,Image
+价格,Price
+商品详情已浏览,"Product detail viewed"
 前台商品详情成功解析报价后派发，供最近浏览、联盟等监听。,前台商品详情成功解析报价后派发，供最近浏览、联盟等监听。
 店面报价列表筛选,店面报价列表筛选
 "分类/商品列表在价格与排序之后派发，供 Filters 等模块应用 af_* 属性面筛选并回写 offers。","分类/商品列表在价格与排序之后派发，供 Filters 等模块应用 af_* 属性面筛选并回写 offers。"
@@ -181,24 +199,17 @@
 商品分类,"Product classification"
 id属性不能为空,id属性不能为空
 "通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。","通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。"
-搜索商品,搜索商品
-"名称或 SKU","名称或 SKU"
-搜索,搜索
-移除,移除
-添加,添加
 "当前范围暂无可选商品，请检查 website / 店铺范围或商品发布状态。","当前范围暂无可选商品，请检查 website / 店铺范围或商品发布状态。"
-已选商品,已选商品
-名称,名称
-"选品前请先选择 Website（0 为默认网站，可正常选品）。","Select a Website before picking products (0 is the default website and is allowed)."
-网站,website
 "搜索 Offer ID 或 SKU","搜索 Offer ID 或 SKU"
 未找到匹配项,未找到匹配项
 未选择,未选择
 搜索名称或编码,搜索名称或编码
 商品详情价格之后,商品详情价格之后
 "在商品详情页价格区块之后注入扩展内容，例如 ToC/ToB 售卖模式切换。","在商品详情页价格区块之后注入扩展内容，例如 ToC/ToB 售卖模式切换。"
+商品详情图库之后,商品详情图库之后
+在商品详情页主图/图库区块之后注入扩展内容，例如分销分享脚条。,在商品详情页主图/图库区块之后注入扩展内容，例如分销分享脚条。
 商品详情加购之后,商品详情加购之后
-在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。,在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。
+在商品详情页加购操作区域之后注入扩展内容，例如默认收起的分销分享。,在商品详情页加购操作区域之后注入扩展内容，例如默认收起的分销分享。
 商品目录批量操作扩展,商品目录批量操作扩展
 在商品目录列表批量操作栏注入扩展按钮，例如分类模块的批量调整分类。,在商品目录列表批量操作栏注入扩展按钮，例如分类模块的批量调整分类。
 "商品编辑 · 基础信息扩展","商品编辑 · 基础信息扩展"
@@ -350,63 +361,6 @@ check,check
 未找到属性集目录，请重新选择属性集。,未找到属性集目录，请重新选择属性集。
 "多选规格值后将按笛卡尔积生成子 SKU。","多选规格值后将按笛卡尔积生成子 SKU。"
 当前属性集没有可填写的商品属性（非规格组）。,当前属性集没有可填写的商品属性（非规格组）。
-热销榜内容由控制器渲染,"Best-seller content is rendered by the controller"
-我的询价,"My quotes"
-查看询价进度与回复,"View quote status and replies"
-查看您提交的商品询价与处理状态,"Review your product quote requests and status"
-暂无询价记录,"No quote requests yet"
-SKU,SKU
-状态,Status
-参考价,"Reference price"
-时间,时间
-沟通,沟通
-查看沟通,查看沟通
-"询价沟通 #%{1}","询价沟通 #%{1}"
-面包屑,Breadcrumb
-"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
-"0 件结果","0 results"
-“%{1}”,“%{1}”
-"（筛选自 %{1} 件）","(filtered from %{1})"
-排序,Sort
-当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
-该分类下暂无已发布商品。,该分类下暂无已发布商品。
-分页,分页
-全部商品,"All products"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
-"0 件商品","0 products"
-当前网站暂无已发布商品。,"There are currently no products published on the website."
-查看购物车,"View cart"
-新作入藏,"New to the Collection"
-"订阅 RSS","Subscribe to RSS"
-甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
-"共 %{1} 件新品","%{1} new arrivals"
-新品汉服,"New Hanfu Arrivals"
-新品,New
-查看商品,"View product"
-新品正在整理,"New arrivals are being curated"
-浏览全部商品,"Browse all products"
-本站人气排行,"Store popularity ranking"
-按店面热度排序的热销商品，帮你快速找到大家都在买的好物。,"Ranked by storefront popularity so you can quickly find what shoppers buy most."
-暂无热销商品,"No best sellers yet"
-当前网站暂无已发布的热销商品。,"This storefront has no published best sellers yet."
-"共 %{1} 件热销商品","%{1} best-selling products"
-排名,排名
-"已售 %{1}","%{1} sold"
-联系询价,"Contact for quote"
-查看详情,查看详情
-请至少选择一个商品,请至少选择一个商品
-已添加,已添加
-已加入购物车,已加入购物车
-全部加入购物车,全部加入购物车
-正在加入购物车...,"Adding to cart..."
-加入购物车失败,"Failed to add to cart"
-"Buy these items together","Buy these items together"
-当前商品,当前商品
-总价,总价
-上一组,上一组
-下一组,下一组
-精选好物，为你推荐,精选好物，为你推荐
 商品信息暂不可用,"Product information is unavailable"
 商品类型,"Product type"
 属性集,"Attribute set"
@@ -458,6 +412,7 @@ DPI,DPI
 "仅剩 %{1} 件","Only %{1} left in stock"
 有货,"In Stock"
 暂时缺货,"Currently unavailable"
+面包屑,Breadcrumb
 返回商品目录,"Back to products"
 商品图片,"Product images"
 选择图片或视频,"Choose image or video"
@@ -467,9 +422,9 @@ DPI,DPI
 "平均 %{1} 星","Average %{1} stars"
 "%{1} 条评价","%{1} ratings"
 查看买家评价,"See customer reviews"
-价格,Price
 选择优惠活动,选择优惠活动
 仅询价商品：以上为参考活动价，不可直接加购,"Quote-only item: price above is a promotional reference and cannot be added to cart"
+联系询价,"Contact for quote"
 售卖模式,售卖模式
 规格,Options
 请选择规格,"Select an option"
@@ -482,11 +437,14 @@ DPI,DPI
 当前规格暂不可售,"This option is currently unavailable"
 数量,Quantity
 购买数量,Quantity
-购买操作,"Purchase actions"
 提交询价,"Submit quote request"
 加入购物车,"Add to Cart"
 立即结账,"Proceed to checkout"
+购买操作,"Purchase actions"
 暂不可售,"Currently unavailable"
+正在加入购物车...,"Adding to cart..."
+已加入购物车,已加入购物车
+加入购物车失败,"Failed to add to cart"
 前往购物车,"Go to cart"
 正在前往结账...,"Going to checkout..."
 结账准备失败,"Could not prepare checkout"
@@ -496,7 +454,7 @@ DPI,DPI
 展示更多,"Show more"
 收起,"Show less"
 关于该商品,"About this item"
-关闭,Close
+参考价,"Reference price"
 联系人,Contact
 邮箱,Email
 手机,手机
@@ -509,6 +467,83 @@ DPI,DPI
 查看商品图片,查看商品图片
 请填写邮箱或手机号,"Please provide an email or phone number"
 提交成功，我们会尽快联系您。,"Submitted successfully. We will contact you soon."
+上一组,上一组
+下一组,下一组
+"筛选器区域 - 由 Filters 部件默认注入","筛选器区域 - 由 Filters 部件默认注入"
+筛选,Filter
+"工具栏区域 - 拖拽排序/视图部件到此处","工具栏区域 - 拖拽排序/视图部件到此处"
+当前网站暂无已发布商品,当前网站暂无已发布商品
+"分页区域 - 控制器渲染分页组件","分页区域 - 控制器渲染分页组件"
+关闭筛选,关闭筛选
+筛选条件,筛选条件
+全部商品,"All products"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+Category,Category
+"Custom category layout","Custom category layout"
+"分类筛选区域 - 由 Filters 部件默认注入","分类筛选区域 - 由 Filters 部件默认注入"
+"分类产品区域 - 展示该分类下的产品","分类产品区域 - 展示该分类下的产品"
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
+"Scheduled category layout","Scheduled category layout"
+"分类导航 slot，可由分类模块或导航部件接管。","分类导航 slot，可由分类模块或导航部件接管。"
+"筛选 slot，可由筛选模块或筛选部件接管。","筛选 slot，可由筛选模块或筛选部件接管。"
+"这里是分类列表的默认展示区域。接入真实分类或商品模块后，会通过 hook 或部件替换为真实列表。","这里是分类列表的默认展示区域。接入真实分类或商品模块后，会通过 hook 或部件替换为真实列表。"
+Product,Product
+"Custom product layout","Custom product layout"
+已发布商品,已发布商品
+"产品主信息区域 - 由 Product 部件默认注入","产品主信息区域 - 由 Product 部件默认注入"
+"侧边栏区域 - 拖拽推荐部件到此处","侧边栏区域 - 拖拽推荐部件到此处"
+"产品详情标签区域 - 拖拽详情/评价/问答部件到此处","产品详情标签区域 - 拖拽详情/评价/问答部件到此处"
+"Scheduled product layout","Scheduled product layout"
+热销榜内容由控制器渲染,"Best-seller content is rendered by the controller"
+我的询价,"My quotes"
+查看询价进度与回复,"View quote status and replies"
+查看您提交的商品询价与处理状态,"Review your product quote requests and status"
+暂无询价记录,"No quote requests yet"
+SKU,SKU
+状态,Status
+时间,时间
+沟通,沟通
+查看沟通,查看沟通
+"询价沟通 #%{1}","询价沟通 #%{1}"
+"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
+"0 件结果","0 results"
+“%{1}”,“%{1}”
+"（筛选自 %{1} 件）","(filtered from %{1})"
+排序,Sort
+当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
+该分类下暂无已发布商品。,"No products have been published in this category yet."
+分页,分页
+"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
+"0 件商品","0 products"
+当前网站暂无已发布商品。,"There are currently no products published on the website."
+查看购物车,"View cart"
+新作入藏,"New to the Collection"
+"订阅 RSS","Subscribe to RSS"
+甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
+"共 %{1} 件新品","%{1} new arrivals"
+新品汉服,"New Hanfu Arrivals"
+新品,New
+查看商品,"View product"
+新品正在整理,"New arrivals are being curated"
+浏览全部商品,"Browse all products"
+本站人气排行,"Store popularity ranking"
+按店面热度排序的热销商品，帮你快速找到大家都在买的好物。,"Ranked by storefront popularity so you can quickly find what shoppers buy most."
+暂无热销商品,"No best sellers yet"
+当前网站暂无已发布的热销商品。,"This storefront has no published best sellers yet."
+"共 %{1} 件热销商品","%{1} best-selling products"
+排名,排名
+"已售 %{1}","%{1} sold"
+查看详情,查看详情
+请至少选择一个商品,请至少选择一个商品
+已添加,已添加
+全部加入购物车,全部加入购物车
+"Buy these items together","Buy these items together"
+当前商品,当前商品
+总价,总价
+精选好物，为你推荐,精选好物，为你推荐
 "Customers also viewed","Customers also viewed"
 Website,Website
 切换,切换
@@ -658,7 +693,6 @@ SPU,SPU
 全部类型,全部类型
 全部状态,"All statuses"
 "全部 Store","全部 Store"
-筛选,Filter
 ID,ID
 主图,Image
 来源,Source
@@ -1244,6 +1278,8 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 库存保存失败，商品修改已回滚,库存保存失败，商品修改已回滚
 发布校验未通过,发布校验未通过
 "商品类型 Provider 不可用：%{1}","商品类型 Provider 不可用：%{1}"
+上一页,上一页
+下一页,下一页
 "商品目录变更后清理前台/FPC 缓存失败：%{1}","商品目录变更后清理前台/FPC 缓存失败：%{1}"
 "万能产品 V2 身份盘点、迁移、验证与可回滚切换（仅 full clone）","万能产品 V2 身份盘点、迁移、验证与可回滚切换（仅 full clone）"
 "只读统计旧 1:1 与 V2 身份、缺 Offer、冲突及切换状态","只读统计旧 1:1 与 V2 身份、缺 Offer、冲突及切换状态"
@@ -1255,6 +1291,9 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "必须与当前 env 配置一致的 mig_clone_* 数据库","必须与当前 env 配置一致的 mig_clone_* 数据库"
 "cutover/rollback 必填的切换状态版本","cutover/rollback 必填的切换状态版本"
 "rollback 目标：dual_read（默认）或 legacy","rollback 目标：dual_read（默认）或 legacy"
+在商品详情页加购操作区域之后注入扩展内容，例如促销提示。,在商品详情页加购操作区域之后注入扩展内容，例如促销提示。
+在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。,在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。
+"产品网格区域 - 控制器渲染产品列表","产品网格区域 - 控制器渲染产品列表"
 "0 - 99 元","0 - 99 yuan"
 "100 - 299 元","100 - 299 yuan"
 "300 元以上","More than 300 yuan"
@@ -1319,7 +1358,6 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 归属站,归属站
 全选,全选
 "选择商品 #%{1}","选择商品 #%{1}"
-已发布商品,已发布商品
 选择规格,选择规格
 库存,Stock
 按项目确认,"Confirmed per project"
@@ -1363,7 +1401,6 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 编辑商品,"Edit product"
 保存商品,"Save product"
 保存商品设置,"Save product settings"
-筛选条件,筛选条件
 子分类,Subcategories
 价格区间,价格区间
 浏览该分类下的已发布商品，支持筛选与加入购物车。,浏览该分类下的已发布商品，支持筛选与加入购物车。

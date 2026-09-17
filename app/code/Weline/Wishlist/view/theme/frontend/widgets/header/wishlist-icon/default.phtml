@@ -119,7 +119,6 @@ $wishlistCount = $isPreviewMode ? 2 : 0;
 }
 .<?= $wc ?> .wishlist-count[hidden] { display: none !important; }
 .<?= $wc ?> .wishlist-label { font-size: var(--font-size-sm, .875rem); font-weight: 600; }
-@media (max-width: 767px) {
-    .<?= $wc ?> .wishlist-info { display: none; }
-}
+/* 顶栏工具区压缩：收藏仅图标+角标，文案留 title/aria */
+.<?= $wc ?> .wishlist-info { display: none; }
 </style>

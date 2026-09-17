@@ -956,7 +956,31 @@ class Core
 
     public static function snapshotGeneratedRouterFiles(): void
     {
-        foreach (Env::router_files_PATH as $routerFilepath) {
+        $paths = Env::router_files_PATH;
+        $total = \count($paths);
+        $printing = null;
+        if (\PHP_SAPI === 'cli' && $total > 0) {
+            try {
+                $printing = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Output\Cli\Printing::class
+                );
+            } catch (\Throwable) {
+                $printing = null;
+            }
+        }
+
+        $index = 0;
+        foreach ($paths as $routerFilepath) {
+            $index++;
+            if ($printing !== null) {
+                $printing->note(__(
+                    '   - 路由快照 [%{i}/%{total}]：%{file}…',
+                    ['i' => $index, 'total' => $total, 'file' => \basename((string)$routerFilepath)]
+                ));
+                if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                    \fflush(\STDOUT);
+                }
+            }
             if (!is_file($routerFilepath)) {
                 continue;
             }

@@ -113,6 +113,55 @@ class ThemeData
         }
     }
 
+    /** Empty / blank overlays must not replace the base image or text. */
+    public static function isBlankTranslationValue(mixed $value): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+        if (\is_string($value)) {
+            return \trim($value) === '';
+        }
+        if (\is_array($value)) {
+            if ($value === []) {
+                return true;
+            }
+            if (($value['type'] ?? null) === 'file-image') {
+                $usage = $value['usage'] ?? null;
+                if (!\is_array($usage)) {
+                    return true;
+                }
+                $assetId = \trim((string)($usage['asset_id'] ?? ''));
+
+                return $assetId === '';
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Encode a translation payload for dictionary storage; blank values return null (skip write).
+     */
+    public static function encodeTranslationForStorage(mixed $value): ?string
+    {
+        if (self::isBlankTranslationValue($value)) {
+            return null;
+        }
+        if (\is_string($value) && \str_starts_with($value, '{')) {
+            try {
+                $decoded = \json_decode($value, true, flags: JSON_THROW_ON_ERROR);
+                if (\is_array($decoded) && !self::isBlankTranslationValue($decoded)) {
+                    return self::encodeProjectedTranslationValue($decoded);
+                }
+            } catch (\JsonException) {
+                // keep as plain string below
+            }
+        }
+
+        return self::encodeProjectedTranslationValue($value);
+    }
+
     private static function currentFiber(): ?\Fiber
     {
         if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
@@ -1020,7 +1069,7 @@ class ThemeData
                 $definition = ['default' => $definition];
             }
             $uiType = $definition['ui_type'] ?? $definition['input'] ?? $definition['type'] ?? 'text';
-            $isTranslatable = !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']);
+            $isTranslatable = \Weline\Widget\Api\Param\ParamDefinition::isTranslatable($definition);
             $definitions[$name] = [
                 'name' => $definition['name'] ?? $definition['label'] ?? $name,
                 'label' => $definition['label'] ?? $definition['name'] ?? $name,
@@ -1068,7 +1117,7 @@ class ThemeData
         $candidateIndexes = [];
         if ($themeId !== null && (string)$themeId !== '') {
             foreach ($definitions as $paramName => $definition) {
-                if (!empty($definition['translate'])) {
+                if (ParamDefinition::isTranslatable(is_array($definition) ? $definition : [])) {
                     continue;
                 }
                 [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}");
@@ -1094,7 +1143,7 @@ class ThemeData
         $values = [];
         foreach ($definitions as $paramName => $definition) {
             $defaultValue = $definition['default'] ?? null;
-            if (!empty($definition['translate'])) {
+            if (ParamDefinition::isTranslatable(is_array($definition) ? $definition : [])) {
                 $values[$paramName] = self::getParamTranslation(
                     $identify,
                     $paramName,
@@ -1174,10 +1223,16 @@ class ThemeData
 
         foreach ($values as $paramName => $value) {
             $definition = $definitions[$paramName] ?? null;
-            $isTranslatable = $definition && !empty($definition['translate']);
+            $isTranslatable = is_array($definition) && ParamDefinition::isTranslatable($definition);
 
             if ($isTranslatable) {
-                self::setParamTranslation($identify, (string)$paramName, (string)$value, $scope, $locale);
+                self::setParamTranslation(
+                    $identify,
+                    (string)$paramName,
+                    self::encodeProjectedTranslationValue($value),
+                    $scope,
+                    $locale
+                );
                 continue;
             }
 
@@ -1201,7 +1256,7 @@ class ThemeData
         $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
         $definitions = self::getParamDefinitions($identify);
         $definition = $definitions[$paramName] ?? null;
-        $isTranslatable = $definition && !empty($definition['translate']);
+        $isTranslatable = is_array($definition) && ParamDefinition::isTranslatable($definition);
 
         if ($isTranslatable) {
             self::deleteParamTranslation($identify, $paramName, $effectiveScope, $locale);
@@ -2281,7 +2336,7 @@ class ThemeData
         }
         
         $definition = $definitions[$paramName];
-        $isTranslatable = !empty($definition['translate']);
+        $isTranslatable = ParamDefinition::isTranslatable($definition);
         
         if ($isTranslatable) {
             $value = self::getParamTranslation($identify, $paramName, 'default', $locale, $default);
@@ -2321,10 +2376,16 @@ class ThemeData
         }
         
         $definition = $definitions[$paramName];
-        $isTranslatable = !empty($definition['translate']);
+        $isTranslatable = ParamDefinition::isTranslatable($definition);
         
         if ($isTranslatable) {
-            return self::setParamTranslation($identify, $paramName, (string)$value, 'default', $locale);
+            return self::setParamTranslation(
+                $identify,
+                $paramName,
+                self::encodeProjectedTranslationValue($value),
+                'default',
+                $locale
+            );
         }
         
         $configIdentify = "{$identify}.param.{$paramName}.value";
@@ -2522,8 +2583,12 @@ class ThemeData
 
         foreach ($paths['top'] as $paramName) {
             $val = self::getParamTranslation($identify, $paramName, $translationScope, $locale);
-            if ($val !== '' && $val !== null) {
-                $baseConfig[$paramName] = self::decodeProjectedTranslationValue($val);
+            if ($val === null || $val === '') {
+                continue;
+            }
+            $decoded = self::decodeProjectedTranslationValue($val);
+            if (!self::isBlankTranslationValue($decoded)) {
+                $baseConfig[$paramName] = $decoded;
             }
         }
 
@@ -2538,8 +2603,12 @@ class ThemeData
                 foreach ($subFields as $fieldKey) {
                     $path = "{$arrayKey}.{$index}.{$fieldKey}";
                     $val = self::getPathTranslation($identify, $path, $translationScope, $locale);
-                    if ($val !== null) {
-                        $baseConfig[$arrayKey][$index][$fieldKey] = self::decodeProjectedTranslationValue($val);
+                    if ($val === null || $val === '') {
+                        continue;
+                    }
+                    $decoded = self::decodeProjectedTranslationValue($val);
+                    if (!self::isBlankTranslationValue($decoded)) {
+                        $baseConfig[$arrayKey][$index][$fieldKey] = $decoded;
                     }
                 }
             }
@@ -2574,11 +2643,11 @@ class ThemeData
                 continue;
             }
             $value = self::getParamTranslation($identify, $paramName, $scope, $locale);
-            if (!\str_starts_with($value, self::PROJECTED_TRANSLATION_JSON_PREFIX)) {
+            if (!\is_string($value) || !\str_starts_with($value, self::PROJECTED_TRANSLATION_JSON_PREFIX)) {
                 continue;
             }
             $decoded = self::decodeProjectedTranslationValue($value);
-            if (\is_array($decoded)) {
+            if (\is_array($decoded) && !self::isBlankTranslationValue($decoded)) {
                 $baseConfig[$paramName] = $decoded;
             }
         }
@@ -2605,8 +2674,11 @@ class ThemeData
         $normalConfig = [];
 
         foreach ($configData as $key => $value) {
-            if (str_contains($key, '.')) {
-                self::setPathTranslation($identify, $key, (string)$value, 'default', $locale);
+            if (str_contains((string)$key, '.')) {
+                $encoded = self::encodeTranslationForStorage($value);
+                if ($encoded !== null) {
+                    self::setPathTranslation($identify, (string)$key, $encoded, 'default', $locale);
+                }
             } else {
                 $normalConfig[$key] = $value;
             }
@@ -2614,8 +2686,12 @@ class ThemeData
 
         $resolvedLocale = self::currentConfigLocale($locale);
         foreach ($paths['top'] as $paramName) {
-            if (array_key_exists($paramName, $normalConfig) && is_scalar($normalConfig[$paramName])) {
-                self::setParamTranslation($identify, $paramName, (string)$normalConfig[$paramName], 'default', $resolvedLocale);
+            if (!array_key_exists($paramName, $normalConfig)) {
+                continue;
+            }
+            $encoded = self::encodeTranslationForStorage($normalConfig[$paramName]);
+            if ($encoded !== null) {
+                self::setParamTranslation($identify, $paramName, $encoded, 'default', $resolvedLocale);
             }
         }
 
@@ -2628,10 +2704,15 @@ class ThemeData
                     continue;
                 }
                 foreach ($subFields as $fieldKey) {
-                    if (array_key_exists($fieldKey, $item) && is_scalar($item[$fieldKey])) {
-                        $path = "{$arrayKey}.{$index}.{$fieldKey}";
-                        self::setPathTranslation($identify, $path, (string)$item[$fieldKey], 'default', $resolvedLocale);
+                    if (!array_key_exists($fieldKey, $item)) {
+                        continue;
                     }
+                    $encoded = self::encodeTranslationForStorage($item[$fieldKey]);
+                    if ($encoded === null) {
+                        continue;
+                    }
+                    $path = "{$arrayKey}.{$index}.{$fieldKey}";
+                    self::setPathTranslation($identify, $path, $encoded, 'default', $resolvedLocale);
                 }
             }
         }

@@ -70,7 +70,10 @@
         --weline-theme-shadow-sm: 0 1px 2px rgba(9, 16, 29, 0.08);
         --weline-theme-shadow-md: 0 10px 28px rgba(9, 16, 29, 0.14);
         --weline-theme-shadow-lg: 0 24px 64px rgba(9, 16, 29, 0.2);
-        --weline-font-sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        --weline-font-sans: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", "Noto Sans SC", "PingFang SC", serif;
+        --weline-font-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, "Times New Roman", serif;
+        --weline-font-display: "LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif SC", "Songti SC", serif;
+        --weline-font-ui: "Noto Serif SC", "Songti SC", "Noto Sans SC", "PingFang SC", serif;
         --weline-font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
         --weline-font-size-xs: 0.75rem;
         --weline-font-size-sm: 0.875rem;
@@ -356,7 +359,16 @@
         font-size: var(--weline-font-size-md);
         line-height: var(--weline-line-height);
     }
-    h1, h2, h3, h4, h5, h6 { margin: 0; color: var(--weline-theme-text); line-height: 1.25; }
+    h1, h2, h3, h4, h5, h6 {
+        margin: 0;
+        color: var(--weline-theme-text);
+        font-family: var(--weline-font-display, var(--weline-font-sans));
+        line-height: 1.25;
+        font-weight: var(--weline-font-weight-semibold, 600);
+    }
+    button, input, select, textarea {
+        font-family: var(--weline-font-ui, var(--weline-font-sans));
+    }
     p { margin-block: 0 var(--weline-space-4); }
     a { color: var(--weline-theme-primary); text-underline-offset: 0.16em; }
     a:hover { color: var(--weline-theme-primary-hover); }
@@ -1739,8 +1751,21 @@
             calc(var(--weline-space-4) + var(--weline-safe-area-bottom))
             calc(var(--weline-space-4) + var(--weline-safe-area-left));
     }
+    /* Local/container loading: host must be position:relative (see .w-busy). */
+    .w-loading.w-loading--local,
+    .w-loading[data-w-scope="local"] {
+        position: absolute;
+        inset: 0;
+        z-index: calc(var(--weline-z-overlay, 20) - 1);
+        padding: var(--weline-space-3);
+        border-radius: inherit;
+    }
     .w-loading[hidden] { display: none; }
     .w-loading__backdrop { position: absolute; inset: 0; background: color-mix(in srgb, var(--weline-theme-surface) 68%, transparent); backdrop-filter: blur(2px); }
+    .w-loading.w-loading--local > .w-loading__backdrop,
+    .w-loading[data-w-scope="local"] > .w-loading__backdrop {
+        border-radius: inherit;
+    }
     .w-loading__content {
         position: relative;
         display: flex;
@@ -1754,6 +1779,49 @@
         box-shadow: var(--weline-theme-shadow-lg);
         color: var(--weline-theme-text);
     }
+    /* Programmatic container busy (Weline.UI.setBusy): blocks interaction until cleared. */
+    .w-busy {
+        position: relative;
+    }
+    .w-busy[data-w-busy="true"] {
+        cursor: wait;
+    }
+    .w-busy[data-w-busy="true"] > *:not([data-w-busy-overlay]) {
+        pointer-events: none;
+        user-select: none;
+    }
+    .w-busy__overlay {
+        position: absolute;
+        inset: 0;
+        z-index: calc(var(--weline-z-overlay, 20) - 1);
+        display: grid;
+        place-items: center;
+        border-radius: inherit;
+        pointer-events: auto;
+    }
+    .w-busy__overlay[hidden] { display: none; }
+    .w-busy__backdrop {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: color-mix(in srgb, var(--weline-theme-surface) 72%, transparent);
+        backdrop-filter: blur(1px);
+    }
+    .w-busy__content {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--weline-space-2);
+        max-inline-size: min(24rem, 100%);
+        padding: var(--weline-space-3) var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        box-shadow: var(--weline-theme-shadow-md);
+        color: var(--weline-theme-text);
+        font-size: var(--weline-font-size-sm, 0.875rem);
+    }
+    .w-busy__message:empty { display: none; }
     .w-skeleton { min-height: 1rem; border-radius: var(--weline-radius-sm); background: linear-gradient(90deg, var(--weline-theme-surface-muted), var(--weline-theme-surface-hover), var(--weline-theme-surface-muted)); background-size: 200% 100%; animation: w-skeleton 1.2s ease-in-out infinite; }
     @keyframes w-spin { to { rotate: 1turn; } }
     @keyframes w-skeleton { to { background-position-x: -200%; } }
@@ -1792,6 +1860,22 @@
 @layer utilities {
     .w-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     [data-w-scroll-locked="true"] { overflow: hidden; }
+    /*
+     * Width utilities must live above @layer components so they beat
+     * .w-input/.w-select/.w-textarea { inline-size: 100% } in filter toolbars
+     * (w-cluster). Keep physical + logical aliases in sync.
+     */
+    [data-w-width="full"] { width: 100%; inline-size: 100%; }
+    [data-w-width="25"] { width: 25%; inline-size: 25%; }
+    [data-w-width="50"] { width: 50%; inline-size: 50%; }
+    [data-w-width="75"] { width: 75%; inline-size: 75%; }
+    [data-w-width="auto"] { width: auto; inline-size: auto; }
+    /* Filter toolbars: keep selects content-sized inside flex clusters. */
+    .w-cluster > :is(.w-select, .w-input)[data-w-width="auto"] {
+        width: auto;
+        inline-size: auto;
+        flex: 0 1 auto;
+    }
 }
 
 @media (max-width: 47.99rem), (pointer: coarse) {

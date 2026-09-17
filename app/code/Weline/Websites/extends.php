@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Websites\Extends\Module\Weline_SiteSetupAssistant\SetupTask\WebsitesDomainHttpsSetupTaskProvider;
+
 use Weline\Backend\Api\NotificationTopicProviderInterface;
 use Weline\Smtp\Api\MailChannelProviderInterface;
 use Weline\Websites\Extends\MailChannelProvider;
@@ -11,6 +14,10 @@ use Weline\Websites\Extends\NotificationTopicProvider;
  * Weline_Websites module extension contracts.
  */
 return [
+    SetupTaskProviderInterface::class => [
+        WebsitesDomainHttpsSetupTaskProvider::class,
+    ],
+
     NotificationTopicProviderInterface::class => [
         NotificationTopicProvider::class,
     ],

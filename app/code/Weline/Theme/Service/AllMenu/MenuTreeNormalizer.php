@@ -81,9 +81,18 @@ final class MenuTreeNormalizer
             if ($nodeId !== '') {
                 $item['id'] = $nodeId;
             }
-            $image = trim((string)($node['image'] ?? $node['img'] ?? $node['icon_url'] ?? ''));
-            if ($image !== '') {
-                $item['image'] = $image;
+            $imageRaw = $node['image'] ?? $node['img'] ?? $node['icon_url'] ?? null;
+            if (is_array($imageRaw) && ($imageRaw['type'] ?? '') === 'file-image') {
+                $item['image'] = $imageRaw;
+            } else {
+                $image = trim((string)($imageRaw ?? ''));
+                if ($image !== '' && $image !== 'Array') {
+                    $item['image'] = $image;
+                }
+            }
+            $imageFileHtml = trim((string)($node['image_file_html'] ?? ''));
+            if ($imageFileHtml !== '') {
+                $item['image_file_html'] = $imageFileHtml;
             }
             $banner = trim((string)($node['banner'] ?? ''));
             if ($banner !== '' && !str_starts_with($banner, 'data:image/')) {

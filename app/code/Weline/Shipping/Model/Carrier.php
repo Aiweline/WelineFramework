@@ -85,8 +85,13 @@ class Carrier extends AbstractModel
      */
     public function generateTrackingUrl(string $trackingNumber): string
     {
-        $template = $this->getData(self::schema_fields_TRACKING_URL_TEMPLATE);
-        return str_replace('{tracking_number}', urlencode($trackingNumber), $template);
+        $template = (string)$this->getData(self::schema_fields_TRACKING_URL_TEMPLATE);
+        /** @var \Weline\Shipping\Service\TrackingUrlResolver $resolver */
+        $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Shipping\Service\TrackingUrlResolver::class
+        );
+
+        return $resolver->resolve($trackingNumber, '', $template);
     }
     /**
      * 获取API配置

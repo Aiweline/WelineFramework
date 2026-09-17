@@ -205,6 +205,81 @@ $cacheNamespaces = trim((string)($field['cache-namespaces'] ?? $field['cache_nam
                     disabled
                     autocomplete="off"
                 >
+            <?php elseif (in_array($type, ['image', 'file'], true)): ?>
+                <?php
+                $embedImageId = 'wsc-embed-media-' . substr(hash('sha256', $key), 0, 16);
+                $embedMediaPicker = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
+                    && \function_exists('framework_view_process_block');
+                $embedImageExt = trim((string)($field['ext'] ?? ''));
+                if ($embedImageExt === '') {
+                    $embedImageExt = $type === 'image' ? 'jpg,jpeg,png,gif,webp,svg' : '*';
+                }
+                $embedMediaPath = trim((string)($field['media_path'] ?? ''));
+                if ($embedMediaPath === '') {
+                    $embedMediaPath = 'system-config';
+                }
+                $embedMediaBlock = [
+                    'class' => \Weline\MediaManager\Block\WelineMedia::class,
+                    'target' => $embedImageId,
+                    // Avoid reserved Template `title` (module name). Use picker_title.
+                    'picker_title' => (string)($type === 'image' ? __('选择图片') : __('选择文件')),
+                    'path' => $embedMediaPath,
+                    'value' => $effectiveValue,
+                    'preview' => '1',
+                    'multi' => '0',
+                    'ext' => $embedImageExt,
+                    'size' => 2097152,
+                    'width' => 64,
+                    'height' => 64,
+                    'identity_root' => (string)($field['identity_root'] ?? 'config'),
+                    'identity_code' => (string)($field['identity_code'] ?? $key),
+                    'identity_scope' => (string)($field['identity_scope'] ?? ''),
+                    'identity_kind' => (string)($field['identity_kind'] ?? 'media'),
+                    'identity_field' => (string)($field['identity_field'] ?? $key),
+                    'ref_mode' => (string)($field['ref_mode'] ?? 'single'),
+                    'strong_ref' => (string)($field['strong_ref'] ?? '1'),
+                    'owner_type' => 'config',
+                    'owner_id' => (string)($field['identity_code'] ?? $key),
+                ];
+                if (!empty($field['identity_ns'])) {
+                    $embedMediaBlock['identity_component'] = (string)$field['identity_ns'];
+                }
+                $embedLockPath = trim((string)($field['media_lock_path'] ?? ''));
+                if ($embedLockPath !== '') {
+                    $embedMediaBlock['lockPath'] = $embedLockPath;
+                }
+                $embedLockRoot = trim((string)($field['media_lock_root'] ?? ''));
+                if ($embedLockRoot !== '') {
+                    $embedMediaBlock['lockRoot'] = $embedLockRoot;
+                }
+                ?>
+                <?php if ($embedMediaPicker && !$disabled): ?>
+                    <input
+                        type="hidden"
+                        id="<?= htmlspecialchars($embedImageId, ENT_QUOTES, 'UTF-8') ?>"
+                        data-w-config-embed-control
+                        data-w-config-embed-media="1"
+                        value="<?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?>"
+                    >
+                    <?= framework_view_process_block($embedMediaBlock) ?>
+                    <?php if ($embedMediaPath !== '' && $embedMediaPath !== 'system-config'): ?>
+                        <div class="w-config-embed__media-path w-text" data-tone="muted" data-size="sm">
+                            <lang>素材目录</lang>：<code><?= htmlspecialchars($embedMediaPath, ENT_QUOTES, 'UTF-8') ?></code>
+                        </div>
+                    <?php endif; ?>
+                <?php elseif ($embedMediaPicker && $disabled && $effectiveValue !== ''): ?>
+                    <div class="w-text" data-size="sm" data-tone="muted"><?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?></div>
+                <?php else: ?>
+                    <input
+                        class="w-input"
+                        type="text"
+                        data-w-config-embed-control
+                        value="<?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?>"
+                        data-size="sm"
+                        placeholder="<?= htmlspecialchars((string)($type === 'image' ? __('图片路径或 URL') : __('文件路径或 URL')), ENT_QUOTES, 'UTF-8') ?>"
+                        <?= $disabled ? ' disabled' : '' ?>
+                    >
+                <?php endif; ?>
             <?php else: ?>
                 <input
                     class="w-input"

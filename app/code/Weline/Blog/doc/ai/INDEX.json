@@ -1,0 +1,20 @@
+{
+  "module": "Weline_Blog",
+  "skills": [
+    {
+      "skill_id": "doc:weline-blog-article",
+      "name": "weline-blog-article",
+      "aliases": [
+        "weline-blog-article",
+        "新建文章",
+        "写博客",
+        "审查文章",
+        "文章可行性",
+        "精写文章",
+        "blog article"
+      ],
+      "path": "app/code/Weline/Blog/doc/ai/skills/weline-blog-article/SKILL.md",
+      "description": "Blog article create/review/remediate: research, provenance images, all default-website locales, BlogPostAdminService."
+    }
+  ]
+}

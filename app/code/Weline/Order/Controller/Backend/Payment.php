@@ -13,7 +13,7 @@ namespace Weline\Order\Controller\Backend;
 
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Model\OrderPayment;
@@ -23,7 +23,7 @@ use Weline\Order\Service\PaymentService;
  * 支付管理控制器
  */
 #[Acl('Weline_Order::payment_manage', '订单收款记录', 'edit', '订单收款记录', 'Weline_Backend::payment_group')]
-class Payment extends BackendController
+class Payment extends BackendPageController
 {
     use OrderObjectAuthorizationTrait;
 

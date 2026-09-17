@@ -267,6 +267,43 @@ final class OrderFacadeTest extends TestCase
         self::assertSame(0, $facade->writeCount());
     }
 
+    public function testCreatePersistsBillingAddressFromOptions(): void
+    {
+        $facade = OrderFacade::forTesting();
+        $shipping = [
+            'name' => 'Ship User',
+            'phone' => '10000000001',
+            'address1' => '1 Ship St',
+            'city' => 'San Jose',
+            'province' => 'CA',
+            'postal_code' => '95131',
+            'country_code' => 'US',
+        ];
+        $billing = [
+            'name' => 'Bill User',
+            'phone' => '10000000002',
+            'address1' => '9 Bill Rd',
+            'city' => 'Austin',
+            'province' => 'TX',
+            'postal_code' => '78701',
+            'country_code' => 'US',
+        ];
+        $result = $facade->create(new CreateCheckoutGroupCommand(
+            idempotencyKey: 'billing-1',
+            requestHash: hash('sha256', 'billing-1'),
+            websiteId: 0,
+            storeId: 1,
+            currency: 'CNY',
+            lines: [['name' => 'A', 'qty_minor' => 1, 'unit_price_minor' => 1000, 'sku' => 'A']],
+            shippingAddress: $shipping,
+            options: ['billing_address' => $billing],
+        ));
+        $read = $facade->get($result->orderUuids[0]);
+        self::assertSame('Bill User', $read->billingAddress['name'] ?? null);
+        self::assertSame('9 Bill Rd', $read->toArray()['billing_address']['address1'] ?? null);
+        self::assertSame('Ship User', $read->shipping['address']['name'] ?? null);
+    }
+
     /**
      * @param list<array<string,mixed>> $lines
      */

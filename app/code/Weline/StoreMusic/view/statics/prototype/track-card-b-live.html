@@ -1,0 +1,99 @@
+<!DOCTYPE html><html lang="zh-Hans"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>B live fixture</title>
+<link rel="stylesheet" href="/Weline/Theme/view/statics/ui/components/weline-file-picker.css">
+<link rel="stylesheet" href="/Weline/Theme/view/statics/ui/pages/weline-theme-editor-widget-param.css">
+<link rel="stylesheet" href="/Weline/Theme/view/statics/ui/pages/weline-theme-editor-widget-config.css">
+<style>
+body{margin:0;padding:24px;background:#f4f5f7;font-family:system-ui,sans-serif}
+.wrap{max-width:280px;margin:0 auto;background:#fff;border:1px solid #d5d9e0;border-radius:12px;padding:14px;overflow:visible}
+.note{font-size:12px;color:#6b7380;margin-bottom:12px}
+.w-param-form .w-param-array-item{display:flex;align-items:flex-start;gap:8px;padding:10px;border-radius:10px;background:#e8eaee;min-width:0;overflow:visible}
+.w-param-array-content{flex:1;min-width:0}
+.w-param-array-fields{display:flex;flex-direction:column;gap:8px}
+.w-param-array-field{display:flex;flex-direction:column;gap:4px}
+.w-param-array-label{font-size:12px;color:#6b7380}
+.w-input,.w-textarea{width:100%;box-sizing:border-box;border:1px solid #d5d9e0;border-radius:8px;padding:8px 10px;font:inherit}
+.w-button{border:1px solid #d5d9e0;border-radius:8px;background:#fff;padding:4px 8px;cursor:pointer}
+.w-param-array-handle{border:0;background:transparent;cursor:grab}
+.theme-editor-container .array-item,.theme-editor-container .w-param-array-item{position:relative}
+.theme-editor-container .array-item-content,.theme-editor-container .w-param-array-content{flex:1 1 auto;min-width:0;max-width:100%;padding-inline-end:2rem}
+.theme-editor-container .array-item-actions,.theme-editor-container .w-param-array-item-actions{position:absolute;inset-block-start:.375rem;inset-inline-end:.375rem;z-index:3;margin:0}
+.w-param-array-item-actions .w-button{color:#c62828}
+</style>
+</head><body><div class="theme-editor-container"><div class="wrap"><p class="note">生产渲染 fixture · variant B 关进（min-width:0 + 全宽 Banner）</p><div class="w-param-form"><div class="w-param-array-item array-item" data-index="0" data-w-reorder-item><button type="button" class="w-param-array-handle array-item-handle" data-w-reorder-handle aria-label="拖拽或使用方向键排序" title="拖拽或使用方向键排序">⋮⋮</button><div class="w-param-array-content array-item-content"><div class="w-param-array-fields array-item-fields"><div class="w-param-array-field array-item-field"><label class="w-param-array-label array-item-label">曲目</label><div class="w-param-media-image" data-w-param-media="file-picker" data-media-kind="audio"><input type="hidden" id="cfg_test_0_url" class="w-param-array-item-input" data-field="url" value="/media/websites/default/default/store-music/HITA-赤伶.mp3" data-preview="cfg_test_0_url_preview" data-clear-label="清除曲目" data-preview-url="/media/websites/default/default/store-music/HITA-赤伶.mp3"><div class="w-file-picker" data-w-component="file-picker" data-w-target-id="cfg_test_0_url"
+     data-w-multiple="false" data-w-set-attr=""
+     data-w-value-mode=""
+     data-w-invalid-message="媒体选择器初始化失败，请刷新页面后重试。"
+     data-w-empty-message="暂无缩略图"
+     data-w-identity-missing="强引用选图缺少媒体身份：请由页面 Ambient 或标签显式设置 identity。"
+     data-w-bind-url="/weline_filemanager/backend/media-reference/bind"
+      data-w-ref-mode="single" data-w-owner-version="1" data-w-strong-ref="0">
+    <div id="cfg_test_0_url-preview" class="w-file-preview" data-w-file-preview         style="--w-file-preview-width: 96px; --w-file-preview-height: 96px;">
+                    <div class="w-file-preview__item w-file-preview__item--audio"
+                 data-w-file-item
+                 data-path="websites/default/default/store-music/HITA-赤伶.mp3"
+                 data-kind="audio"
+                 data-file-image-node=""
+                 draggable="true">
+                <div class="w-file-preview__media">
+                    <button type="button" class="w-file-preview__thumbnail" data-w-file-open
+                            aria-label="预览 HITA-赤伶">
+                                                    <span class="w-file-preview__glyph" data-kind="audio" title="HITA-赤伶" aria-hidden="true">
+                                ♪                            </span>
+                                            </button>
+                </div>
+                                    <div class="w-file-preview__meta">
+                        <span class="w-file-preview__name" title="HITA-赤伶">HITA-赤伶</span>
+                        <span class="w-file-preview__hint">点击更换曲目</span>
+                    </div>
+                                    <span class="w-file-preview__actions">
+                    <button type="button" class="w-button" data-w-file-move="previous" data-tone="quiet" data-size="sm"
+                            aria-label="向前移动"><svg class="w-icon" data-size="sm" data-icon="arrow-left" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M11 5l-7 7 7 7"/></svg></button>
+                    <button type="button" class="w-button" data-w-file-move="next" data-tone="quiet" data-size="sm"
+                            aria-label="向后移动"><svg class="w-icon" data-size="sm" data-icon="arrow-right" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M13 5l7 7-7 7"/></svg></button>
+                    <button type="button" class="w-button" data-w-file-remove data-tone="danger" data-size="sm"
+                            aria-label="移除 HITA-赤伶"><svg class="w-icon" data-size="sm" data-icon="close" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 5 14 14M19 5 5 19"/></svg></button>
+                </span>
+            </div>
+            </div>
+
+        <div class="w-stack" data-gap="xs">
+        <button type="button" class="w-button" data-w-file-picker-open data-tone="primary" data-size="sm">
+            <svg class="w-icon" data-size="sm" data-icon="folder" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v12H3z"/></svg><span>选择曲目</span>
+        </button>
+        <span class="w-text" data-size="sm" data-tone="muted">允许的文件类型：(mp3)</span>        <span class="w-text" data-size="sm" data-tone="muted">允许的文件大小：20 MB</span>
+                    </div>
+
+    <dialog id="cfg_test_0_url-file-picker-dialog" class="w-dialog w-file-picker__dialog" data-w-component="dialog"
+            data-w-file-picker-dialog data-state="closed" aria-labelledby="cfg_test_0_url-file-picker-title">
+        <div class="w-dialog__surface">
+            <header class="w-dialog__header">
+                <div>
+                    <h2 class="w-dialog__title" id="cfg_test_0_url-file-picker-title">选择曲目</h2>
+                    <p class="w-text" data-size="sm" data-tone="muted">
+                        允许的文件类型： mp3 · 允许的文件大小： 20 MB                    </p>
+                </div>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close data-tone="quiet" data-size="sm"
+                        aria-label="关闭"><svg class="w-icon" data-size="sm" data-icon="close" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 5 14 14M19 5 5 19"/></svg></button>
+            </header>
+            <div class="w-dialog__body w-file-picker__body">
+                <iframe id="cfg_test_0_url-file-manager-iframe" class="w-file-picker__frame" data-w-file-picker-frame
+                        src="about:blank" data-src="/media/backend/manager/iframe?isIframe=1&target=cfg_test_0_url&preview=1&startPath=store-music&lockPath=0&multi=0&ext=mp3&size=20971520&usage=0" title="选择曲目"></iframe>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="cfg_test_0_url-file-preview-dialog" class="w-dialog w-file-preview__dialog" data-w-component="dialog"
+            data-w-file-preview-dialog data-state="closed" aria-labelledby="cfg_test_0_url-file-preview-title">
+        <div class="w-dialog__surface">
+            <header class="w-dialog__header">
+                <h2 class="w-dialog__title" id="cfg_test_0_url-file-preview-title">预览</h2>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close data-tone="quiet" data-size="sm"
+                        aria-label="关闭"><svg class="w-icon" data-size="sm" data-icon="close" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 5 14 14M19 5 5 19"/></svg></button>
+            </header>
+            <div class="w-dialog__body w-file-preview__dialog-body">
+                <img data-w-file-preview-image alt="">
+            </div>
+        </div>
+    </dialog>
+</div>
+<button type="button" class="w-button w-param-media-image-select" hidden data-tone="primary" data-variant="outline" data-size="sm" data-target="cfg_test_0_url" data-default-dir="store-music" data-ext="mp3" data-size="20971520" data-usage="0" data-value-mode="" data-picker-title="选择曲目" data-media-kind="audio" title="选择曲目">选择曲目</button></div></div><div class="w-param-array-field array-item-field"><label class="w-param-array-label array-item-label">曲名</label><input type="text" class="w-input" value="HITA-赤伶" placeholder="" data-field="title"></div><div class="w-param-array-field array-item-field"><div class="w-param-field-header"><label class="w-param-label" for="config_demo_tracks_0_intro">简介</label><button type="button" class="w-button w-param-btn-i18n" data-tone="neutral" data-variant="outline" data-size="sm" aria-expanded="false" data-field="tracks.0.intro" data-layout-id="demo" data-array-key="tracks" data-array-index="0" title="编辑多语言"><span>多语言</span></button></div><div class="w-param-field-input"><textarea class="w-textarea" rows="2" placeholder="" data-field="intro">戏腔古风现象级爆款。昆曲念白与戏腔高潮刷屏全网，短视频时代最出圈的古风代表之一。</textarea></div><div class="w-param-i18n-panel" id="i18n_panel_demo_tracks_0_intro" data-field="tracks.0.intro" data-layout-id="demo" data-ui-type="textarea" data-array-key="tracks" data-array-index="0" data-state="closed" aria-hidden="true" hidden><div class="w-param-i18n-header"><span>多语言配置</span><div class="w-param-i18n-header-actions"><button type="button" class="w-button w-param-btn-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n data-field="tracks.0.intro" data-layout-id="demo" data-ui-type="textarea" data-array-key="tracks" data-array-index="0">AI翻译</button><button type="button" class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n data-field="tracks.0.intro" aria-label="关闭多语言配置"><w-icon name="close" size="sm"></w-icon></button></div></div><div class="w-param-i18n-body"></div><div class="w-param-i18n-footer"><button type="button" class="w-button" data-tone="primary" data-size="sm" data-save-i18n data-field="tracks.0.intro" data-layout-id="demo" data-ui-type="textarea" data-array-key="tracks" data-array-index="0">保存多语言</button></div></div></div></div></div><div class="w-param-array-item-actions array-item-actions"><button type="button" class="w-button w-param-array-remove" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" aria-label="删除">×</button></div></div></div></div></div></body></html>

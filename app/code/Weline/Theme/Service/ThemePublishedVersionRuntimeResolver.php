@@ -50,13 +50,8 @@ class ThemePublishedVersionRuntimeResolver
                 ];
             }
 
-            $published = $versions->findAnyPublishedVersion($themeId, $pageType);
-            if ($published instanceof ThemeLayoutVersion && $published->getVersionId() > 0) {
-                return [
-                    'themePublishedVersionId' => (string)$published->getVersionId(),
-                    'themePublishedVersion' => $published->getDisplayName(),
-                ];
-            }
+            // Hard cutover: no findAnyPublishedVersion cross-identity steal.
+            // Empty when this pageType has no published version in scope candidates.
         } catch (\Throwable) {
             return $empty;
         }

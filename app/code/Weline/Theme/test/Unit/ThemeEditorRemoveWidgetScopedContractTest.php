@@ -42,6 +42,23 @@ final class ThemeEditorRemoveWidgetScopedContractTest extends TestCase
         self::assertStringContainsString('node_uid: nodeUid', $editorJs);
         self::assertStringContainsString('queueRemovedLayoutNode(result', $editorJs);
         self::assertStringContainsString('widgetEl.remove();', $editorJs);
+        self::assertStringContainsString('function restoreSlotContentAfterWidgetRemoval(', $editorJs);
+        self::assertStringContainsString('restoreSlotContentAfterWidgetRemoval(slot, result);', $editorJs);
+        self::assertSame(
+            3,
+            substr_count($editorJs, 'restoreSlotContentAfterWidgetRemoval(slot, result);'),
+            'All three delete paths must use restoreSlotContentAfterWidgetRemoval'
+        );
+        self::assertStringNotContainsString(
+            'w-theme-editor-slot-placeholder__title">插槽原本为空',
+            $editorJs,
+            'Deleting a widget must not JS-backfill a fake empty-slot error placeholder'
+        );
+        self::assertStringNotContainsString(
+            'w-theme-editor-slot-placeholder__title">拖入部件到此插槽',
+            $editorJs,
+            'Deleting a widget must not JS-backfill a drag-into-empty-slot placeholder'
+        );
         self::assertStringContainsString("'op' => ThemePatchCommand::OP_REMOVE_NODE", $writeService);
         self::assertStringContainsString("summary: 'layout_node_removed'", $writeService);
     }

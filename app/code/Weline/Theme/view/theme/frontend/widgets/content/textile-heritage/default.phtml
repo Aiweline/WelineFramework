@@ -13,7 +13,7 @@
  * @widget.supports {["layout-homepage-brands","layout-cms-content","layout-default-content","brand-list","brands","textile-heritage"]}
  * @widget.compatible {true}
  * @param title {default="织艺谱系 · Textile Heritage",type="string",label="标题"}
- * @param brands {default=[],type="brand_logo_items",label="谱系项",description="每项包含名称、说明、真实图片、搜索链接与素材来源；默认由 Theme 提供"}
+ * @param brands {default=[],type="brand_logo_items",label="谱系项",description="每项包含名称、说明、真实图片、文章链接与素材来源；主链默认由 Theme Catalog 指向 blog/textile-*（@url / base 带语言货币）"}
  * @param columns {default="6",type="select",label="每行列数",options={4:"4列",5:"5列",6:"6列",8:"8列"}}
  * @param layout {default="grid",type="select",label="布局",options={grid:"网格",carousel:"横向滚动"}}
  * @param grayscale {default=false,type="bool",label="灰度效果"}
@@ -100,7 +100,22 @@ if ($brands === []) {
                     $caption = $translateDefaultCopy($caption, $captionEnglish !== '' ? $captionEnglish : $caption);
                 }
                 $image = LegacyMediaUrl::sanitize($brand['image'] ?? ($canonical['image'] ?? ''));
-                $link = LegacyMediaUrl::sanitize($brand['link'] ?? ($canonical['link'] ?? ''));
+                $imageHtml = trim((string)($brand['image_file_html'] ?? ''));
+                // Catalog owns article deep links; persisted brand lists may still carry legacy /search?q= or /blog/... URLs.
+                $catalogLink = trim((string)($canonical['link'] ?? ''));
+                $rawLink = trim((string)($catalogLink !== '' ? $catalogLink : ($brand['link'] ?? '')));
+                $linkIsAbsolute = false;
+                $linkPath = '';
+                if ($rawLink !== '') {
+                    if (preg_match('#^(?:https?:)?//#i', $rawLink) === 1) {
+                        $linkIsAbsolute = true;
+                        $linkPath = LegacyMediaUrl::sanitize($rawLink);
+                    } else {
+                        // blog/* (no leading slash) so @url / <base> apply locale+currency.
+                        $sanitizedLink = LegacyMediaUrl::sanitize($rawLink);
+                        $linkPath = ltrim($sanitizedLink !== '' ? $sanitizedLink : $rawLink, '/');
+                    }
+                }
                 $sourceUrl = LegacyMediaUrl::sanitize($brand['source_url'] ?? ($canonical['source_url'] ?? ''));
                 $licenseUrl = LegacyMediaUrl::sanitize($brand['license_url'] ?? ($canonical['license_url'] ?? ''));
                 $objectTitleSource = trim((string)($brand['object_title'] ?? ($canonical['object_title'] ?? $name)));
@@ -115,7 +130,7 @@ if ($brands === []) {
                     : '';
                 $collection = trim((string)($brand['collection'] ?? ($canonical['collection'] ?? '')));
                 $license = trim((string)($brand['license'] ?? ($canonical['license'] ?? '')));
-                if ($name === '' || $image === '') {
+                if ($name === '' || ($image === '' && $imageHtml === '')) {
                     continue;
                 }
                 ?>
@@ -123,16 +138,22 @@ if ($brands === []) {
                          data-technique="<?= $esc($name) ?>"
                          data-source-url="<?= $esc($sourceUrl) ?>"
                          data-license="<?= $esc($license) ?>">
-                    <?php if ($link !== ''): ?>
-                        <a class="heritage-primary" href="<?= $esc($link) ?>" title="<?= $esc($name) ?>">
+                    <?php if ($linkIsAbsolute && $linkPath !== ''): ?>
+                        <a class="heritage-primary" href="<?= $esc($linkPath) ?>" title="<?= $esc($name) ?>">
+                    <?php elseif ($linkPath !== ''): ?>
+                        <a class="heritage-primary" href="@url{$linkPath}" title="<?= $esc($name) ?>">
                     <?php else: ?>
                         <div class="heritage-primary">
                     <?php endif; ?>
                         <span class="heritage-media">
-                            <img class="heritage-image brand-logo"
-                                 src="<?= $esc($image) ?>"
-                                 alt="<?= $esc($objectTitle !== '' ? $objectTitle : $name) ?>"
-                                 width="400" height="400" loading="lazy" decoding="async">
+                            <?php if ($imageHtml !== ''): ?>
+                                <div class="heritage-image heritage-image--asset brand-logo"><?= $imageHtml ?></div>
+                            <?php else: ?>
+                                <img class="heritage-image brand-logo"
+                                     src="<?= $esc($image) ?>"
+                                     alt="<?= $esc($objectTitle !== '' ? $objectTitle : $name) ?>"
+                                     width="400" height="400" loading="lazy" decoding="async">
+                            <?php endif; ?>
                         </span>
                         <span class="heritage-copy brand-copy">
                             <span class="heritage-name brand-name"><?= $esc($name) ?></span>
@@ -140,7 +161,7 @@ if ($brands === []) {
                                 <span class="heritage-caption brand-caption"><?= $esc($caption) ?></span>
                             <?php endif; ?>
                         </span>
-                    <?= $link !== '' ? '</a>' : '</div>' ?>
+                    <?= $linkPath !== '' ? '</a>' : '</div>' ?>
 
                     <?php if ($sourceUrl !== ''): ?>
                         <a class="heritage-source" href="<?= $esc($sourceUrl) ?>" target="_blank" rel="noopener noreferrer"

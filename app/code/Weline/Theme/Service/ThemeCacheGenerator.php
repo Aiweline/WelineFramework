@@ -152,7 +152,12 @@ class ThemeCacheGenerator
 
         // 生成页面模板
         $content = $this->generatePageTemplate($layout, $pageType);
-        file_put_contents($cacheDir . 'pages' . DS . $pageType . '.phtml', $content, LOCK_EX);
+        $pagePath = $cacheDir . 'pages' . DS . $pageType . '.phtml';
+        $pageDir = dirname($pagePath);
+        if (!is_dir($pageDir) && !mkdir($pageDir, 0755, true) && !is_dir($pageDir)) {
+            throw new \RuntimeException('Unable to create theme page cache directory: ' . $pageDir);
+        }
+        file_put_contents($pagePath, $content, LOCK_EX);
     }
     
     /**

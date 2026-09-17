@@ -26,6 +26,7 @@
 
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetI18n;
@@ -125,9 +126,7 @@ if ($products === []) {
     return;
 }
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Product::css/widgets/you-may-like.css)?v=20260914-subtitle-i18n2"
-      data-no-extract="true">
+
 
 <section class="<?= $esc($wc) ?> weline-product-you-may-like<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
@@ -137,6 +136,10 @@ if ($products === []) {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-layout="<?= $esc($layout) ?>"
          data-columns="<?= $esc($columns) ?>">
+    <link rel="stylesheet"
+          href="@static(Weline_Product::css/widgets/you-may-like.css)?v=20260914-subtitle-i18n2"
+          data-no-extract="true">
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="wym-header">
         <h2 class="wym-title"><?= $esc($widgetTitle) ?></h2>
         <p class="wym-subtitle"><?= $esc($widgetSubtitle) ?></p>

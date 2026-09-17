@@ -1,0 +1,233 @@
+<?php
+/**
+ * 布局：HTML 站点地图（访客可读；XML 仍归 Seo /sitemap.xml）
+ *
+ * @meta.name {default="站点地图",name="站点地图",description="分组链接到常用公网壳页"}
+ * @meta.description {default="HTML 站点地图，便于访客浏览站点结构",name="站点地图说明",description="不生成 XML"}
+ * @param title {default="站点地图",name="页面标题",description="页面标题"}
+ * @param meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题"}
+ * @param meta_description {default="浏览本站主要页面入口，快速找到关于、帮助与政策说明。",name="SEO描述",description="SEO描述"}
+ * @param showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
+ * @param showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
+ * @param class {default="",name="额外 CSS 类",description="主内容额外 CSS 类"}
+ */
+use Weline\Theme\Helper\WidgetI18n;
+
+$meta = $this->getData('meta') ?? [];
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$title = (string)($meta['title'] ?? WidgetI18n::label('站点地图'));
+
+$groups = [
+    [
+        'heading' => WidgetI18n::label('购物与浏览'),
+        'links' => [
+            ['label' => WidgetI18n::label('首页'), 'url' => '/'],
+            ['label' => WidgetI18n::label('全部商品'), 'url' => '/products'],
+            ['label' => WidgetI18n::label('搜索'), 'url' => '/search'],
+            ['label' => WidgetI18n::label('博客'), 'url' => '/blog'],
+        ],
+    ],
+    [
+        'heading' => WidgetI18n::label('关于与支持'),
+        'links' => [
+            ['label' => WidgetI18n::label('关于我们'), 'url' => '/about'],
+            ['label' => WidgetI18n::label('联系我们'), 'url' => '/contact'],
+            ['label' => WidgetI18n::label('常见问题'), 'url' => '/faq'],
+            ['label' => WidgetI18n::label('指南'), 'url' => '/guide'],
+        ],
+    ],
+    [
+        'heading' => WidgetI18n::label('政策与条款'),
+        'links' => [
+            ['label' => WidgetI18n::label('服务条款'), 'url' => '/terms'],
+            ['label' => WidgetI18n::label('隐私政策'), 'url' => '/policy/privacy'],
+            ['label' => WidgetI18n::label('Cookie 政策'), 'url' => '/policy/cookie'],
+            ['label' => WidgetI18n::label('退款政策'), 'url' => '/policy/refund'],
+            ['label' => WidgetI18n::label('配送政策'), 'url' => '/policy/shipping'],
+            ['label' => WidgetI18n::label('无障碍声明'), 'url' => '/policy/accessibility'],
+            ['label' => WidgetI18n::label('免责声明'), 'url' => '/policy/disclaimer'],
+        ],
+    ],
+];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::sitemap::head-after</w:hook>
+    <style>
+        body.sitemap-layout {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--color-text-primary, #0f1111);
+            background: var(--color-bg-canvas, #ffffff);
+            font-family: "Amazon Ember", Arial, sans-serif;
+        }
+        .sitemap-page.weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .sitemap-page__main {
+            flex: 1 0 auto;
+            width: 100%;
+            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+        }
+        .sitemap-page__stage {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+        }
+        .sitemap-page__hero {
+            margin: 0 0 1.25rem;
+            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
+            border-radius: 8px;
+            background:
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
+                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+            color: #fff;
+        }
+        .sitemap-page__eyebrow {
+            margin: 0 0 0.4rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #febd69;
+        }
+        .sitemap-page__hero h1 {
+            margin: 0;
+            font-size: clamp(1.55rem, 3.2vw, 2.1rem);
+            line-height: 1.2;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .sitemap-page__hero-lead {
+            margin: 0.75rem 0 0;
+            max-width: 46rem;
+            line-height: 1.65;
+            color: #dddddd;
+        }
+        .sitemap-page__grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        .sitemap-page__card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+            padding: 1.15rem 1.25rem 1.35rem;
+        }
+        .sitemap-page__card h2 {
+            margin: 0 0 0.85rem;
+            font-size: 1.05rem;
+            font-weight: 700;
+            border-left: 4px solid #ff9900;
+            padding-left: 0.55rem;
+        }
+        .sitemap-page__card ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 0.45rem;
+        }
+        .sitemap-page__card a {
+            color: #007185;
+            text-decoration: none;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        .sitemap-page__card a:hover {
+            color: #c45500;
+            text-decoration: underline;
+        }
+        .sitemap-page__note {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #565959;
+        }
+        .sitemap-page__note a { color: #007185; }
+        @media (max-width: 900px) {
+            .sitemap-page__grid { grid-template-columns: 1fr; }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="sitemap-layout <?= $escape($meta['class'] ?? '') ?>">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::sitemap::body-start</w:hook>
+
+    <div class="weline-page-wrapper sitemap-page" data-testid="storefront-sitemap-page" data-layout="sitemap">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <main class="sitemap-page__main" id="main-content">
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-sitemap-content,layout-default-content,content,cms-content,faq"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="sitemap-page__content-root-slot">
+                <div class="sitemap-page__stage">
+                    <header class="sitemap-page__hero" aria-labelledby="sitemap-title" weline-code="theme.sitemap.hero">
+                        <p class="sitemap-page__eyebrow"><?= $escape(WidgetI18n::label('导航')) ?></p>
+                        <h1 id="sitemap-title"><?= $escape($title) ?></h1>
+                        <p class="sitemap-page__hero-lead"><?= $escape(WidgetI18n::label('按分组浏览本站主要页面。机器可读的 XML 站点地图请访问 /sitemap.xml。')) ?></p>
+                    </header>
+
+                    <w:slot id="sitemap-groups"
+                            name="站点地图分组"
+                            accept="layout-sitemap-groups,content,cms-content"
+                            reject="header,footer"
+                            multiple="true"
+                            position="content"
+                            class="sitemap-page__groups-slot"
+                            weline-code="theme.sitemap.groups">
+                        <div class="sitemap-page__grid">
+                            <?php foreach ($groups as $group): ?>
+                                <section class="sitemap-page__card" weline-code="theme.sitemap.group_card">
+                                    <h2><?= $escape($group['heading']) ?></h2>
+                                    <ul>
+                                        <?php foreach ($group['links'] as $link): ?>
+                                            <li>
+                                                <a href="<?= $escape((string)$link['url']) ?>"><?= $escape($link['label']) ?></a>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </section>
+                            <?php endforeach; ?>
+                        </div>
+                        <p class="sitemap-page__note">
+                            <?= $escape(WidgetI18n::label('需要机器可读索引时，请使用')) ?>
+                            <a href="/sitemap.xml">/sitemap.xml</a>
+                        </p>
+                    </w:slot>
+                </div>
+            </w:slot>
+        </main>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::sitemap::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

@@ -64,7 +64,6 @@ class Gateway extends FrontendController
         }
 
         $themeId = $area === 'backend' ? $backendThemeId : $frontendThemeId;
-        $autoLogin = $this->request->getParam('auto_login', '1');
         $scope = $this->request->getParam('scope');
         $pageType = (string)$this->request->getParam('page_type', 'homepage');
         $versionId = (int)$this->request->getParam('version_id', 0);
@@ -78,7 +77,6 @@ class Gateway extends FrontendController
         $result = $app->preparePreviewRedirect(
             $themeId,
             $area,
-            $autoLogin,
             $this->session,
             false,
             $scopeStr,

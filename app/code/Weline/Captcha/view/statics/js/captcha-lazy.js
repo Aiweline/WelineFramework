@@ -149,6 +149,32 @@
         return wrap.firstElementChild;
     }
 
+    /**
+     * innerHTML does not run <script>; providers append bind scripts as siblings.
+     * Re-insert so Google/Tencent can reveal badge or degrade to local_image.
+     */
+    function executeFragmentScripts(fromRoot, mountParent) {
+        if (!(fromRoot instanceof HTMLElement) || !(mountParent instanceof Node)) {
+            return;
+        }
+        var scripts = Array.prototype.slice.call(fromRoot.querySelectorAll('script'));
+        scripts.forEach(function (oldScript) {
+            var s = d.createElement('script');
+            Array.prototype.forEach.call(oldScript.attributes || [], function (attr) {
+                s.setAttribute(attr.name, attr.value);
+            });
+            if (oldScript.src) {
+                s.src = oldScript.src;
+            } else {
+                s.textContent = oldScript.textContent || '';
+            }
+            if (oldScript.parentNode) {
+                oldScript.parentNode.removeChild(oldScript);
+            }
+            mountParent.appendChild(s);
+        });
+    }
+
     function challengeUrl(route, intent, formId, prefer) {
         var segments = String(w.location.pathname || '').split('/').filter(Boolean);
         var maybeLocale = segments[0] || '';
@@ -355,7 +381,10 @@
             if (anchor.getAttribute && anchor.getAttribute('data-weline-captcha-lazy') === '1') {
                 anchor.setAttribute('data-loaded', '1');
             }
+            var mountParent = anchor.parentNode || d.body;
             anchor.replaceWith(node);
+            executeFragmentScripts(wrap, mountParent);
+            executeFragmentScripts(node, node);
             trackNewCaptchas(node);
             noteVisibility(node, isEffectivelyHidden(node));
             if (form instanceof HTMLFormElement && w.Weline && w.Weline.Form && typeof w.Weline.Form.mount === 'function') {

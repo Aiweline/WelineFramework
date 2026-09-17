@@ -42,13 +42,12 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
 
         self::assertStringContainsString('function mergeSharedChromeSlotWidgets(', $src);
         self::assertStringContainsString('function slotWidgetsBelongToSharedChrome(', $src);
-        self::assertStringContainsString('function sharedChromeCarrierIdentity(', $src);
-        self::assertStringContainsString('if ($pageType === ThemeLayout::PAGE_TYPE_HOME)', $src);
+        self::assertStringContainsString('function loadSharedChromeSlotWidgetsFromEntity(', $src);
+        self::assertStringContainsString('if ($pageType === ThemeLayout::PAGE_TYPE_HOME', $src);
+        self::assertStringContainsString('SharedChromeService::CHROME_SLOTS', $src);
         // Global chrome is authoritative: local business-layout copies must not win.
         self::assertStringContainsString('$slotWidgets[$slotId] = $widgets;', $src);
-        self::assertStringNotContainsString('if (empty($slotWidgets[$slotId]))', $src);
-        self::assertStringContainsString('ThemeVirtualLayout::TARGET_GLOBAL', $src);
-        self::assertStringContainsString('sharedChromeCarrierIdentity($this->currentLayoutIdentity($area))', $src);
+        self::assertStringContainsString('ThemeScopeVersionService', $src);
         self::assertStringContainsString("\$widgetArea === 'header' || \$widgetArea === 'footer'", $src);
         self::assertStringContainsString('本页本地 chrome 副本不得覆盖全局', $src);
     }

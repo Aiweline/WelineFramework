@@ -14,7 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Logout extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account.logout';
+    protected ?string $layoutType = 'account/logout';
 
     /**
      * 统一执行登出逻辑

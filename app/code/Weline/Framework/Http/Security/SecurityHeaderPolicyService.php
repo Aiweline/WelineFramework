@@ -289,6 +289,11 @@ final class SecurityHeaderPolicyService
         if (!$this->isMetaDelivery() || $html === '') {
             return $html;
         }
+        // JSON / 非文档正文禁止注入 CSP meta（否则会污染 application/json 并破坏 fetch().json()）
+        $lead = \ltrim(\substr($html, 0, 64));
+        if ($lead !== '' && ($lead[0] === '{' || $lead[0] === '[')) {
+            return $html;
+        }
         $csp = $this->resolveCurrentDocumentCsp();
         if ($csp === '') {
             return $html;

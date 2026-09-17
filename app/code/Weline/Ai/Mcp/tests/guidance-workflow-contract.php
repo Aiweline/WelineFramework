@@ -127,6 +127,25 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'weline_ui_theme_first'),
         false,
     ),
+    'hard_constraints include preview_storefront_delivery_parity' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'preview_storefront_delivery_parity'
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
+            && str_contains((string) ($rule['summary'] ?? ''), 'SAME business logic')
+            && str_contains((string) ($rule['summary'] ?? ''), 'early-return')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Hook')),
+        false,
+    ),
+    'hard_constraints include storefront_internal_url_via_url_helper' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'storefront_internal_url_via_url_helper'
+            && str_contains((string) ($rule['summary'] ?? ''), '@url')
+            && str_contains((string) ($rule['summary'] ?? ''), 'getUrl')
+            && str_contains((string) ($rule['doc'] ?? ''), '06-url')),
+        false,
+    ),
     'hard_constraints include theme_base_components_token_only' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'theme_base_components_token_only'),
@@ -291,6 +310,15 @@ $checks = [
             && ($rule['id'] ?? '') === 'e2e_playwright_headless_default'
             && str_contains((string) ($rule['summary'] ?? ''), 'headless')
             && str_contains((string) ($rule['summary'] ?? ''), '--headed')),
+        false,
+    ),
+    'hard_constraints include e2e_playwright_formal_runner_only' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'e2e_playwright_formal_runner_only'
+            && str_contains((string) ($rule['summary'] ?? ''), 'formal runner')
+            && str_contains((string) ($rule['summary'] ?? ''), 'node -e')
+            && str_contains((string) ($rule['summary'] ?? ''), 'chromium.launch')),
         false,
     ),
     'hard_constraints include browser_cache_disabled_on_open' => array_reduce(
@@ -462,6 +490,16 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'SIMPLE SKIP')),
         false,
     ),
+    'hard_constraints include plan_content_focus_only' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'plan_content_focus_only'
+            && str_contains((string) ($rule['summary'] ?? ''), '背景')
+            && str_contains((string) ($rule['summary'] ?? ''), '方案')
+            && str_contains((string) ($rule['summary'] ?? ''), '细节')
+            && str_contains((string) ($rule['summary'] ?? ''), 'topic drift')),
+        false,
+    ),
     'hard_constraints include requirement_acceptance_always' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -503,6 +541,8 @@ $checks = [
     ),
     'mcp instructions mention host Plan Mode' => str_contains(ToolService::instructions(), 'host_plan_mode_for_planning')
         && str_contains(ToolService::instructions(), 'requirement_acceptance_always'),
+    'mcp instructions mention plan_content_focus_only' => str_contains(ToolService::instructions(), 'plan_content_focus_only')
+        && str_contains(ToolService::instructions(), '背景+方案+细节'),
     'surfaces include requirement_clarify_use_case' => ($clarifySurface['id'] ?? '')
         === GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
     'pinned includes clarify use-case command doc' => in_array(
@@ -578,6 +618,11 @@ $checks = [
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_release_after_delivery'),
         false,
     ),
+    'webui surface requires e2e_playwright_formal_runner_only norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'e2e_playwright_formal_runner_only'),
+        false,
+    ),
     'hard_rules require browser operator self-test' => array_reduce(
         $hardRules,
         static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'host') && str_contains($rule, 'Browser')),
@@ -612,6 +657,29 @@ $checks = [
             && in_array('weline-theme-development', $norm['required_companion_skills'], true)),
         false,
     ),
+    'frontend norms include browser_api_binquery_default' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'browser_api_binquery_default'
+            && str_contains((string) ($norm['summary'] ?? ''), 'BinQuery')
+            && str_contains((string) ($norm['summary'] ?? ''), '回退')),
+        false,
+    ),
+    'frontend description mandates BinQuery only' => str_contains((string) ($frontend['description'] ?? ''), 'BinQuery')
+        && str_contains((string) ($frontend['description'] ?? ''), '原生')
+        && str_contains((string) ($frontend['description'] ?? ''), '回退'),
+    'frontend authoritative_docs include Weline.Api and BinQuery' => is_array($frontend['authoritative_docs'] ?? null)
+        && in_array('app/code/Weline/Frontend/doc/Weline.Api使用指南.md', $frontend['authoritative_docs'], true)
+        && in_array('app/code/Weline/Framework/doc/BinQuery/README.md', $frontend['authoritative_docs'], true),
+    'hard_constraints include weline_api_not_raw_fetch as BinQuery-only' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'weline_api_not_raw_fetch'
+            && str_contains((string) ($rule['summary'] ?? ''), 'BinQuery')
+            && str_contains((string) ($rule['summary'] ?? ''), 'fallback')
+            && str_contains((string) ($rule['summary'] ?? ''), 'fetch')),
+        false,
+    ),
     'frontend surface requires companion skills trio' => is_array($frontend['required_companion_skills'] ?? null)
         && in_array('frontend-design', $frontend['required_companion_skills'], true)
         && in_array('prototype', $frontend['required_companion_skills'], true)
@@ -628,6 +696,21 @@ $checks = [
     'frontend norms include weline_ui_floating_primitives' => array_reduce(
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'weline_ui_floating_primitives'),
+        false,
+    ),
+    'weline_ui_floating_primitives covers dialog and pickers' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static function (bool $ok, mixed $rule): bool {
+            if (!is_array($rule) || ($rule['id'] ?? '') !== 'weline_ui_floating_primitives') {
+                return $ok;
+            }
+            $summary = (string)($rule['summary'] ?? '');
+
+            return $ok
+                || (str_contains($summary, 'dialog')
+                    && str_contains($summary, 'picker')
+                    && str_contains($summary, 'Weline.UI.dialog'));
+        },
         false,
     ),
     'hard_rules require Weline UI theme' => array_reduce(
@@ -713,6 +796,15 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY')
             && str_contains((string) ($rule['summary'] ?? ''), 'prepare_project')
             && str_contains((string) ($rule['summary'] ?? ''), 'hard_constraints')),
+        false,
+    ),
+    'content_ops_skills_skip_mcp forbids prepare on product/blog ops' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'content_ops_skills_skip_mcp'
+            && str_contains((string) ($rule['summary'] ?? ''), '产品优化')
+            && str_contains((string) ($rule['summary'] ?? ''), '新建文章')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT call prepare_project')),
         false,
     ),
     'host_editor_rules mention coldstart generator' => array_reduce(
@@ -832,6 +924,29 @@ $checks = [
         is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
         true,
     ),
+    'mandatory_before_closeout includes default website locales translation' => in_array(
+        'default_website_locales_translated_when_user_asks_translation',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
+    'hard_constraints include user_mentions_translation_all_default_website_locales' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'user_mentions_translation_all_default_website_locales'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Website::ID_DEFAULT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'never stop at en_US')),
+        false,
+    ),
+    'mcp instructions mention default-website translation' => str_contains(
+        ToolService::instructions(),
+        'user_mentions_translation_all_default_website_locales',
+    ),
+    'module_i18n_csv surface requires default website locales' => array_reduce(
+        is_array($moduleI18nCsvSurface['norms'] ?? null) ? $moduleI18nCsvSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'user_mentions_translation_all_default_website_locales'),
+        false,
+    ),
     'pinned includes module upgrade gate doc' => in_array(
         'app/code/Weline/Framework/doc/3-开发/模块版本与升级门禁.md',
         $pinned,
@@ -948,6 +1063,15 @@ $checks = [
     'theme_layout_widget_owner norm exists' => array_reduce(
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'theme_layout_widget_owner'),
+        false,
+    ),
+    'hard_rules require preview storefront delivery parity' => array_reduce(
+        $hardRules,
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule)
+            && str_contains($rule, 'preview_storefront_delivery_parity')
+            && str_contains($rule, 'FORBIDDEN')
+            && str_contains($rule, 'SAME business logic')
+            && str_contains($rule, 'early-return')),
         false,
     ),
     'hard_rules require theme layout widget owner' => array_reduce(

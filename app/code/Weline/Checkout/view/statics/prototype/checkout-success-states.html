@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · 结账结果页状态（勿上生产）</title>
+  <style>
+    :root {
+      --bg: #f3efe8;
+      --surface: #fff;
+      --text: #1a1a1a;
+      --muted: #5c5c5c;
+      --border: #d9d4cb;
+      --success: #067d62;
+      --success-soft: #e4efe7;
+      --danger: #b12704;
+      --danger-soft: #f8e8e4;
+      --primary: #b84a3c;
+      --primary-fg: #fff;
+      --link: #2162a1;
+      --radius: 10px;
+      --space: 16px;
+      --max: 720px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px 16px 120px;
+    }
+    .note {
+      max-width: var(--max);
+      margin: 0 auto 20px;
+      padding: 12px 14px;
+      background: #fff8e6;
+      border: 1px solid #e6d7a8;
+      border-radius: 8px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .stage {
+      max-width: var(--max);
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+    }
+    .variant { display: none; }
+    .variant.is-on { display: block; }
+    h1 { margin: 0; font-size: 1.5rem; line-height: 1.25; }
+    p { margin: 8px 0 0; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+    .hero {
+      text-align: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .badge {
+      width: 96px;
+      height: 96px;
+      margin: 0 auto 14px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .badge--ok { background: var(--success-soft); color: var(--success); }
+    .badge--warn { background: var(--danger-soft); color: var(--danger); }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-top: 20px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .btn--primary { background: var(--primary); color: var(--primary-fg); border: 1px solid var(--primary); }
+    .btn--ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn--link { background: transparent; border: 0; color: var(--link); font-weight: 500; }
+    .strip {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #f7f5f1;
+    }
+    .strip .dot {
+      flex: 0 0 40px;
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 700;
+    }
+    .dot--ok { background: var(--success); }
+    .dot--warn { background: var(--danger); }
+    .messy-old {
+      text-align: center;
+      opacity: 0.95;
+    }
+    .messy-old .tiny {
+      width: 28px;
+      height: 28px;
+      margin: 0 auto 8px;
+      border-radius: 999px;
+      background: var(--success-soft);
+      color: var(--success);
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+    }
+    .messy-banner {
+      margin-top: 18px;
+      text-align: left;
+      background: #efe8dc;
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+    }
+    .messy-banner .x {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: var(--danger);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+    .messy-actions {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .messy-actions .dup {
+      width: 100%;
+      margin-top: 8px;
+      text-align: center;
+    }
+    .tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #eee;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 11px;
+      color: #444;
+    }
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #111;
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .switcher button {
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 999px;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .switcher strong { min-width: 220px; text-align: center; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>PROTOTYPE（抛出物）</strong>：结账结果页「状态单一 + 文案可读 + CTA 不重复」三变体。
+    问题问句：取消态时，如何避免「订单提交成功」与「已取消成功」同屏打架？
+    推荐落地：<code>A</code>。键盘 ← → 切换。
+  </div>
+
+  <!-- Variant A: content-owned single hero -->
+  <section class="variant is-on" data-variant="A" data-name="A · 单英雄（推荐）">
+    <div class="stage">
+      <span class="tag">取消态示例 · 内容自管英雄区</span>
+      <div class="hero">
+        <div class="badge badge--warn" aria-hidden="true">×</div>
+        <h1>支付已取消</h1>
+        <p>本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。</p>
+      </div>
+      <div class="row">
+        <a class="btn btn--primary" href="#">返回结账</a>
+        <a class="btn btn--ghost" href="#">继续购物</a>
+        <a class="btn btn--link" href="#">查看订单列表</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Variant B: compact strip -->
+  <section class="variant" data-variant="B" data-name="B · 紧凑条带">
+    <div class="stage">
+      <span class="tag">取消态示例 · 左图标条带</span>
+      <div class="strip">
+        <div class="dot dot--warn" aria-hidden="true">×</div>
+        <div>
+          <h1 style="font-size:1.25rem">支付已取消</h1>
+          <p>订单尚未付款。下一步：返回结账，或先继续逛逛。</p>
+        </div>
+      </div>
+      <div class="row">
+        <a class="btn btn--primary" href="#">返回结账</a>
+        <a class="btn btn--ghost" href="#">继续购物</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Variant C: current mess (control) -->
+  <section class="variant" data-variant="C" data-name="C · 现状对照（乱）">
+    <div class="stage messy-old">
+      <span class="tag">对照 · 布局壳 + 内容横幅叠两套语义</span>
+      <div class="tiny">✓</div>
+      <h1>订单提交成功！</h1>
+      <div class="messy-banner">
+        <div class="x">×</div>
+        <div>
+          <strong style="font-family:ui-sans-serif,system-ui,sans-serif">已取消成功</strong>
+          <p>支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。</p>
+        </div>
+      </div>
+      <div class="messy-actions">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <a class="btn btn--primary" href="#">返回结账</a>
+          <a class="btn btn--ghost" href="#">继续购物</a>
+        </div>
+        <a class="btn btn--link" href="#">返回订单列表</a>
+        <div class="dup"><a class="btn btn--ghost" href="#">继续购物</a></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="switcher" role="group" aria-label="原型变体切换">
+    <button type="button" data-dir="-1" aria-label="上一变体">←</button>
+    <strong id="label">A · 单英雄（推荐）</strong>
+    <button type="button" data-dir="1" aria-label="下一变体">→</button>
+  </div>
+
+  <script>
+    (function () {
+      var keys = ['A', 'B', 'C'];
+      var params = new URLSearchParams(location.search);
+      var current = (params.get('variant') || 'A').toUpperCase();
+      if (keys.indexOf(current) < 0) current = 'A';
+
+      function paint(key) {
+        current = key;
+        document.querySelectorAll('.variant').forEach(function (el) {
+          el.classList.toggle('is-on', el.getAttribute('data-variant') === key);
+        });
+        var on = document.querySelector('.variant[data-variant="' + key + '"]');
+        document.getElementById('label').textContent = on ? on.getAttribute('data-name') : key;
+        params.set('variant', key);
+        history.replaceState(null, '', location.pathname + '?' + params.toString());
+      }
+
+      function step(delta) {
+        var i = keys.indexOf(current);
+        paint(keys[(i + delta + keys.length) % keys.length]);
+      }
+
+      document.querySelectorAll('.switcher button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          step(Number(btn.getAttribute('data-dir')));
+        });
+      });
+      document.addEventListener('keydown', function (e) {
+        var t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.key === 'ArrowLeft') step(-1);
+        if (e.key === 'ArrowRight') step(1);
+      });
+      paint(current);
+    })();
+  </script>
+</body>
+</html>

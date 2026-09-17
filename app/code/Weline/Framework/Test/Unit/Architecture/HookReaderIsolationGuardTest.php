@@ -81,4 +81,13 @@ final class HookReaderIsolationGuardTest extends TestCase
             $source
         );
     }
+
+    public function testGetFileListWithMetaMergesFilesystemWhenRegistryNonEmpty(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Hook/Config/HookReader.php');
+        self::assertMatchesRegularExpression(
+            '/function getFileListWithMeta\(\): array\s*\{.*?getHookFilesFromRegistry\([^\)]*\);\s*if\s*\(\$data\s*===\s*\[\]\)\s*\{.*?\} else \{\s*\$data\s*=\s*self::mergeRegistryWithFilesystem\(/s',
+            $source
+        );
+    }
 }

@@ -12,6 +12,8 @@ use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Marketing\Model\Rule\LocalDescription;
+use Weline\Smtp\Service\MailTemplateSeeder;
+use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\DefaultLayoutSeeder;
@@ -31,6 +33,22 @@ class Upgrade implements UpgradeInterface
 
         $this->seedCartCouponSlot();
         $this->migrateScheduleWindowsToUtc();
+        $this->syncMailTemplatesToGlobalScope();
+    }
+
+    /**
+     * 将 Marketing 渠道默认邮件模板写入抽象默认站层（GLOBAL），供各站继承。
+     * Soft：Smtp 表未就绪时不阻断 upgrade。
+     */
+    private function syncMailTemplatesToGlobalScope(): void
+    {
+        try {
+            /** @var MailTemplateSeeder $seeder */
+            $seeder = ObjectManager::getInstance(MailTemplateSeeder::class);
+            $seeder->syncAll(SystemConfig::SCOPE_GLOBAL);
+        } catch (\Throwable $e) {
+            w_log_warning('Marketing MailTemplateSeeder syncAll: ' . $e->getMessage(), [], 'marketing');
+        }
     }
 
     private function migrateScheduleWindowsToUtc(): void

@@ -5,8 +5,10 @@
  * Keeps the established homepage slot ids while making the default Theme page
  * complete without any store/catalog module.
  *
- * @meta.name {default="水墨汉服商城首页",name="水墨汉服商城首页",description="云裳汉服国际独立站默认首页"}
- * @param.title {default="云裳汉服 · Hanfu Atelier",name="页面标题 · Page title",description="浏览器与搜索结果使用的首页标题"}
+ * @meta.name {default="首页",name="首页",description="默认商城首页（站名取自 Website 基础信息）"}
+ * @param.title {default="",name="页面标题 · Page title",description="留空则使用当前网站名称（Website 基础信息）"}
+ * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
+ * @param.meta_description {default="",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
  * @param.content {default="",name="Content HTML",description="Main content"}
  * @param.showHeader {default=true,name="Show Header",description="Whether to render header"}
  * @param.showFooter {default=true,name="Show Footer",description="Whether to render footer"}
@@ -22,6 +24,16 @@ $metaContent = (string)($meta['content'] ?? '');
 $isEditorPreview = (bool)($this->getData('editor_mode') ?? false)
     || (bool)($this->getData('theme_preview_content') ?? false)
     || in_array((string)($this->getData('layout_preview_mode') ?? ''), ['live', 'version', 'draft', 'default'], true);
+if (!$isEditorPreview) {
+    try {
+        $editorModeFlag = trim((string)(\Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Http\Request::class
+        )->getParam('editor_mode', '')));
+        $isEditorPreview = ($editorModeFlag === '1' || strtolower($editorModeFlag) === 'true');
+    } catch (\Throwable) {
+        $isEditorPreview = false;
+    }
+}
 $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
 
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
@@ -47,13 +59,25 @@ $translateThemeCopy = static function (string $source, string $english) use ($us
     return $useEnglishCopy && $translated === $source ? $english : $translated;
 };
 
-$defaultBrandTitle = '云裳汉服 · Hanfu Atelier';
-$localizedBrandTitle = $translateThemeCopy($defaultBrandTitle, 'Yunshang Hanfu · Hanfu Atelier');
+$defaultBrandTitle = '';
+try {
+    $siteBrand = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+    if ($siteBrand instanceof \Weline\Theme\Helper\SiteBrand) {
+        $defaultBrandTitle = trim($siteBrand->resolveFrontendSiteName());
+    }
+} catch (\Throwable) {
+    $defaultBrandTitle = '';
+}
+$localizedBrandTitle = $defaultBrandTitle !== ''
+    ? $translateThemeCopy($defaultBrandTitle, $defaultBrandTitle)
+    : '';
 $configuredTitle = trim((string)($meta['title'] ?? $this->getData('title') ?? ''));
 if ($configuredTitle === '' || preg_match('/^[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9_]*$/', $configuredTitle) === 1) {
     $configuredTitle = $defaultBrandTitle;
 }
-$semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle : $configuredTitle;
+$semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBrandTitle)
+    ? $localizedBrandTitle
+    : $configuredTitle;
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
@@ -96,6 +120,17 @@ $semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle 
         }
 
         .theme-layout-homepage .homepage-section:not(.homepage-hero):not(.homepage-promo) > * {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+        }
+
+        /* Editor preview may flatten widgets into content when nested shells are lost.
+           Keep the same版心 gutter for direct children (exclude full-bleed hero/promo). */
+        .theme-layout-homepage .homepage-content-slot > .widget-wrapper:not([data-widget-code="hero-slider"]):not([data-widget-code="promo-banner"]) {
             box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
@@ -242,7 +277,9 @@ $semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle 
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_trust">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/>
+                        <w:hook>
+                            Weline_Theme::frontend::layouts::homepage::trust
+                            <else/>
                             <w:widget type="content" name="trust-badges" />
                         </w:hook>
                     </w:slot>
@@ -253,6 +290,16 @@ $semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle 
             <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </main>
+
+        <w:slot id="homepage-bottom"
+                name="首页底部扩展"
+                accept="layout-homepage-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="homepage-layout__bottom-slot">
+        </w:slot>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>

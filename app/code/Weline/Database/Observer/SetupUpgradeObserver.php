@@ -86,34 +86,59 @@ class SetupUpgradeObserver implements ObserverInterface
                 return;
             }
             
-            $this->printing->info("发现 " . count($activeModules) . " 个激活的模块");
+            $moduleTotal = count($activeModules);
+            $this->printing->note(__('迁移检查：共 %{count} 个激活模块', ['count' => $moduleTotal]));
+            $this->flushCli();
             RegistryProgress::section('setup:upgrade database migration observer');
-            RegistryProgress::count('Database migration observer active modules', count($activeModules), 'modules');
+            RegistryProgress::count('Database migration observer active modules', $moduleTotal, 'modules');
             
             $totalMigrations = 0;
             $totalSuccess = 0;
             $totalFailed = 0;
+            $idleNoPending = 0;
+            $idleAlreadyRun = 0;
+            $deferredCursor = 0;
+            $modulesWithWork = 0;
             $moduleIndex = 0;
+            $heartbeatEvery = max(1, min(10, (int)ceil($moduleTotal / 12)));
+            $loopStartedAt = microtime(true);
 
-            // 遍历所有模块
+            // 遍历所有模块：无待执行迁移的模块静默计数，仅展开有工作/异常的模块
+            // 禁止 ANSI 底部悬浮进度条：在 Cursor/IDE 终端会把光标打回历史输出中间，造成「内容插到上面」。
             foreach ($activeModules as $moduleName) {
                 $moduleIndex++;
-                $this->printing->printing('');
-                $this->printing->info("检查模块: {$moduleName}");
-                RegistryProgress::module('Database migration module check', $moduleIndex, count($activeModules), $moduleName);
+                // 按间隔打主流程心跳，避免「共 N 模块」后假死。
+                if ($moduleIndex === 1 || $moduleIndex === $moduleTotal || ($moduleIndex % $heartbeatEvery) === 0) {
+                    $elapsed = microtime(true) - $loopStartedAt;
+                    $this->printing->note(__(
+                        '迁移检查进度 %{i}/%{total} · %{module} · 已用 %{sec}s',
+                        [
+                            'i' => $moduleIndex,
+                            'total' => $moduleTotal,
+                            'module' => $moduleName,
+                            'sec' => number_format($elapsed, 1),
+                        ]
+                    ));
+                    $this->flushCli();
+                }
+                RegistryProgress::module('Database migration module check', $moduleIndex, $moduleTotal, $moduleName);
 
                 try {
                     $lastSuccessfulMigration = null;
                     if ($migrationsAlreadyRun) {
-                        $this->printing->info("模块 {$moduleName} 文件迁移已执行，跳过二次扫描");
+                        $idleAlreadyRun++;
                     } else {
-                        // 获取模块的待执行迁移
                         $pendingMigrations = $this->getMigrationService()->getPendingMigrations($moduleName);
                         if (empty($pendingMigrations)) {
-                            $this->printing->info("模块 {$moduleName} 没有待执行的迁移");
+                            $idleNoPending++;
                         } else {
-                            $this->printing->info("模块 {$moduleName} 发现 " . count($pendingMigrations) . " 个待执行的迁移");
+                            $modulesWithWork++;
                             $count = count($pendingMigrations);
+                            $this->printing->note(__(
+                                '▶ %{module}：%{count} 个待执行迁移',
+                                ['module' => $moduleName, 'count' => $count]
+                            ));
+                            $this->flushCli();
                             $result = $this->executeModuleMigrations(
                                 $moduleName,
                                 $pendingMigrations,
@@ -143,7 +168,7 @@ class SetupUpgradeObserver implements ObserverInterface
                                 [$moduleName, $databaseVersion, $targetVersion]
                             ));
                         }
-                        $this->printing->info("模块 {$moduleName} Setup 脚本尚未完成，版本游标延后至 upgrade_after 提交");
+                        $deferredCursor++;
                         unset($pendingMigrations);
                         continue;
                     }
@@ -154,36 +179,67 @@ class SetupUpgradeObserver implements ObserverInterface
                     );
                     unset($pendingMigrations);
                 } catch (\Throwable $e) {
-                    $this->printing->error("模块 {$moduleName} 迁移执行异常: " . $e->getMessage());
+                    $this->printing->error(__('模块 %{module} 迁移执行异常: %{error}', [
+                        'module' => $moduleName,
+                        'error' => $e->getMessage(),
+                    ]));
                     RegistryProgress::log('Database migration module exception: ' . $moduleName . ' ' . $e->getMessage());
                     $totalFailed++;
                     throw $e;
                 } finally {
-                    $compaction = ObjectManager::relieveMemoryPressure(false);
-                    $cycles = function_exists('gc_collect_cycles') ? gc_collect_cycles() : 0;
-                    RegistryProgress::log(sprintf(
-                        'Database migration module finished: %s memory_stores=%d metadata_entries=%d gc_cycles=%d',
-                        $moduleName,
-                        (int)($compaction['memory_store_clears'] ?? 0),
-                        (int)($compaction['metadata_entries_cleared'] ?? 0),
-                        (int)$cycles
-                    ));
+                    // 每个模块都 GC 会把 118 模块检查拖慢；改为每 20 个或末尾一次。
+                    if (($moduleIndex % 20) === 0 || $moduleIndex === $moduleTotal) {
+                        $compaction = ObjectManager::relieveMemoryPressure(false);
+                        $cycles = function_exists('gc_collect_cycles') ? gc_collect_cycles() : 0;
+                        RegistryProgress::log(sprintf(
+                            'Database migration module compaction: %s memory_stores=%d metadata_entries=%d gc_cycles=%d',
+                            $moduleName,
+                            (int)($compaction['memory_store_clears'] ?? 0),
+                            (int)($compaction['metadata_entries_cleared'] ?? 0),
+                            (int)$cycles
+                        ));
+                    }
                 }
             }
-            
-            // 输出总体结果
-            $this->printing->printing('');
-            $this->printing->info("=== 系统升级迁移执行完成 ===");
-            $this->printing->info("总迁移数: {$totalMigrations}");
-            $this->printing->info("成功: {$totalSuccess}");
-            $this->printing->info("失败: {$totalFailed}");
-            
-            $this->printing->success("所有迁移执行成功");
+
+            $idleTotal = $idleNoPending + $idleAlreadyRun;
+            $this->printing->success(__(
+                '迁移检查完成：共 %{total} · 空闲 %{idle}（无待执行 %{none} / 已执行跳过 %{skip}）· 执行 %{work} 模块 %{migrations} 条 · 游标延后 %{defer} · 失败 %{failed} · 耗时 %{sec}s',
+                [
+                    'total' => $moduleTotal,
+                    'idle' => $idleTotal,
+                    'none' => $idleNoPending,
+                    'skip' => $idleAlreadyRun,
+                    'work' => $modulesWithWork,
+                    'migrations' => $totalMigrations,
+                    'defer' => $deferredCursor,
+                    'failed' => $totalFailed,
+                    'sec' => number_format(microtime(true) - $loopStartedAt, 1),
+                ]
+            ));
+            $this->flushCli();
+            if ($totalFailed === 0) {
+                $this->printing->success(__('所有迁移执行成功'));
+            }
             
         } catch (\Exception $e) {
             $this->printing->error("系统升级迁移执行失败: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    private function flushCli(): void
+    {
+        if (\defined('STDOUT') && \is_resource(STDOUT)) {
+            \fflush(STDOUT);
+        }
+        if (\defined('STDERR') && \is_resource(STDERR)) {
+            \fflush(STDERR);
+        }
+        if (function_exists('ob_flush')) {
+            @ob_flush();
+        }
+        flush();
     }
 
     /**

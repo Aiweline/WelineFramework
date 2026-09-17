@@ -70,6 +70,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
         $storeId = isset($filters['store_id']) ? (int)$filters['store_id'] : null;
         $nameFilter = strtolower(trim((string)($filters['name'] ?? '')));
         $skuFilter = strtolower(trim((string)($filters['sku'] ?? '')));
+        $keywordFilter = strtolower(trim((string)($filters['keyword'] ?? $filters['q'] ?? '')));
         $codeFilter = strtolower(trim((string)($filters['product_code'] ?? '')));
         $typeFilter = strtolower(trim((string)($filters['product_type'] ?? $filters['type'] ?? '')));
         $statusFilter = strtolower(trim((string)($filters['status'] ?? '')));
@@ -77,6 +78,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
         $ownerFilter = array_key_exists('owner_website_id', $filters)
             ? (int)$filters['owner_website_id']
             : null;
+        $idsFilter = $this->normalizeIdFilter($filters['product_ids'] ?? $filters['ids'] ?? null);
         // Selection projections only return the durable product id and update
         // marker.  Identity is authoritative for identity-dependent filters,
         // but resolving it for every published product adds one DB read per
@@ -87,14 +89,26 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
             || $ownerFilter !== null;
 
         $products = [];
-        foreach ($this->products->listAll($websiteId) as $product) {
-            $productId = (int)($product['product_id'] ?? 0);
-            if ($productId <= 0 || ($includeDetails && $storeId !== null
-                && !$this->storeProducts->isSelected($websiteId, $storeId, $productId))
-            ) {
-                continue;
+        if ($idsFilter !== []) {
+            foreach ($this->products->listByIds($websiteId, $idsFilter) as $product) {
+                $productId = (int)($product['product_id'] ?? 0);
+                if ($productId <= 0 || ($includeDetails && $storeId !== null
+                    && !$this->storeProducts->isSelected($websiteId, $storeId, $productId))
+                ) {
+                    continue;
+                }
+                $products[] = $product;
             }
-            $products[] = $product;
+        } else {
+            foreach ($this->products->listAll($websiteId) as $product) {
+                $productId = (int)($product['product_id'] ?? 0);
+                if ($productId <= 0 || ($includeDetails && $storeId !== null
+                    && !$this->storeProducts->isSelected($websiteId, $storeId, $productId))
+                ) {
+                    continue;
+                }
+                $products[] = $product;
+            }
         }
 
         $rows = [];
@@ -117,13 +131,13 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                 continue;
             }
             $offersByProduct = [];
-            $offerRows = $includeDetails || $skuFilter !== ''
+            $offerRows = $includeDetails || $skuFilter !== '' || $keywordFilter !== ''
                 ? $this->offers->listByProductIds($websiteId, $productIds) : [];
             foreach ($offerRows as $offer) {
                 $offersByProduct[(int)($offer['product_id'] ?? 0)][] = $offer;
             }
             $attributesByProduct = [];
-            $attributeRows = $includeDetails || $nameFilter !== '' || $sourceFilter !== ''
+            $attributeRows = $includeDetails || $nameFilter !== '' || $sourceFilter !== '' || $keywordFilter !== ''
                 ? $this->attributes->listExplicitRows($websiteId, 'product', $productIds, [0]) : [];
             foreach ($attributeRows as $attribute) {
                 $attributesByProduct[(int)($attribute['entity_id'] ?? 0)][] = $attribute;
@@ -139,26 +153,21 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                     $offers,
                 ));
                 $attributes = $attributesByProduct[$productId] ?? [];
-                $name = '';
-                $sourcePlatform = '';
-                $attributeSet = '';
-                $attributeSetLabel = '';
-                foreach ($attributes as $attribute) {
-                    $attributeCode = (string)($attribute['attribute_code'] ?? '');
-                    if (($attribute['cleared'] ?? false)) {
-                        continue;
-                    }
-                    $value = trim((string)($attribute['value'] ?? ''));
-                    if ($attributeCode === 'name' && $name === '') {
-                        $name = $value;
-                    } elseif ($attributeCode === 'source_platform' && $sourcePlatform === '') {
-                        $sourcePlatform = $value;
-                    } elseif ($attributeCode === 'attribute_set' && $attributeSet === '') {
-                        $attributeSet = $value;
-                    } elseif ($attributeCode === 'attribute_set_label' && $attributeSetLabel === '') {
-                        $attributeSetLabel = $value;
-                    }
-                }
+                $preferredLocale = trim((string)($filters['locale'] ?? $filters['locale_code'] ?? ''));
+                $nameCandidates = $this->attributeValuesByLocale($attributes, 'name');
+                $name = $this->pickLocalizedValue($nameCandidates, $preferredLocale);
+                $sourcePlatform = $this->pickLocalizedValue(
+                    $this->attributeValuesByLocale($attributes, 'source_platform'),
+                    $preferredLocale,
+                );
+                $attributeSet = $this->pickLocalizedValue(
+                    $this->attributeValuesByLocale($attributes, 'attribute_set'),
+                    $preferredLocale,
+                );
+                $attributeSetLabel = $this->pickLocalizedValue(
+                    $this->attributeValuesByLocale($attributes, 'attribute_set_label'),
+                    $preferredLocale,
+                );
                 $skus = array_values(array_filter(array_map(
                     static fn(array $offer): string => trim((string)($offer['sku'] ?? '')),
                     $offers,
@@ -169,9 +178,29 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
                 $status = (string)($product['status'] ?? 'draft');
                 $sourceLabel = $this->formatSourceLabel($sourcePlatform, $attributeSet, $attributeSetLabel);
 
-                if (($nameFilter !== '' && !str_contains(strtolower($name), $nameFilter))
+                if ($keywordFilter !== '') {
+                    $nameHit = false;
+                    foreach ($nameCandidates as $candidateName) {
+                        if (str_contains(strtolower($candidateName), $keywordFilter)) {
+                            $nameHit = true;
+                            break;
+                        }
+                    }
+                    $skuHit = $this->containsAny($skus, $keywordFilter);
+                    $codeHit = str_contains(
+                        strtolower((string)($product['product_code'] ?? $product['spu'] ?? '')),
+                        $keywordFilter
+                    );
+                    if (!$nameHit && !$skuHit && !$codeHit) {
+                        continue;
+                    }
+                } elseif (($nameFilter !== '' && !str_contains(strtolower($name), $nameFilter))
                     || ($skuFilter !== '' && !$this->containsAny($skus, $skuFilter))
-                    || ($statusFilter === '' && $includeDetails
+                ) {
+                    continue;
+                }
+
+                if (($statusFilter === '' && $includeDetails
                         && strtolower((string)$status) === Product::STATUS_ARCHIVED)
                     || ($statusFilter !== '' && strtolower($status) !== $statusFilter)
                     || !$this->matchesSourceFilter($sourceFilter, $sourcePlatform, $sourceLabel)
@@ -1551,6 +1580,107 @@ final class ProductAdminReadService implements ProductAdminReadInterface, \Welin
             }
         }
         return false;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $attributes
+     * @return array<string, string> locale => value
+     */
+    private function attributeValuesByLocale(array $attributes, string $code): array
+    {
+        $out = [];
+        foreach ($attributes as $attribute) {
+            if (($attribute['cleared'] ?? false)) {
+                continue;
+            }
+            if ((string)($attribute['attribute_code'] ?? '') !== $code) {
+                continue;
+            }
+            $value = trim((string)($attribute['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $locale = trim((string)($attribute['locale'] ?? ''));
+            // Keep first value per locale (store_id=0 rows sort first in listExplicitRows).
+            if (!array_key_exists($locale, $out)) {
+                $out[$locale] = $value;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Prefer requested locale, then default/empty, then zh/en — never alphabetical-first (ar before zh).
+     *
+     * @param array<string, string> $valuesByLocale
+     */
+    private function pickLocalizedValue(array $valuesByLocale, string $preferredLocale): string
+    {
+        if ($valuesByLocale === []) {
+            return '';
+        }
+        $preferredLocale = trim(str_replace('-', '_', $preferredLocale));
+        if ($preferredLocale !== '') {
+            foreach ($valuesByLocale as $locale => $value) {
+                if (strcasecmp(str_replace('-', '_', (string)$locale), $preferredLocale) === 0) {
+                    return $value;
+                }
+            }
+            $prefix = strtolower((string)strtok($preferredLocale, '_'));
+            if ($prefix !== '') {
+                foreach ($valuesByLocale as $locale => $value) {
+                    $normalized = strtolower(str_replace('-', '_', (string)$locale));
+                    if ($normalized === $prefix || str_starts_with($normalized, $prefix . '_')) {
+                        return $value;
+                    }
+                }
+            }
+        }
+        if (isset($valuesByLocale['']) && trim($valuesByLocale['']) !== '') {
+            return $valuesByLocale[''];
+        }
+        foreach (['zh_Hans_CN', 'zh_CN', 'zh_Hans', 'zh', 'en_US', 'en'] as $fallback) {
+            foreach ($valuesByLocale as $locale => $value) {
+                if (strcasecmp(str_replace('-', '_', (string)$locale), $fallback) === 0) {
+                    return $value;
+                }
+            }
+        }
+
+        return (string)reset($valuesByLocale);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function normalizeIdFilter(mixed $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        if (is_string($raw)) {
+            $parts = preg_split('/[\s,;]+/', $raw) ?: [];
+            $raw = $parts;
+        }
+        if (!is_array($raw)) {
+            $id = (int)$raw;
+
+            return $id > 0 ? [$id] : [];
+        }
+        $ids = [];
+        foreach ($raw as $item) {
+            if (is_array($item)) {
+                $id = (int)($item['product_id'] ?? $item['id'] ?? 0);
+            } else {
+                $id = (int)$item;
+            }
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function websiteId(int $websiteId): int

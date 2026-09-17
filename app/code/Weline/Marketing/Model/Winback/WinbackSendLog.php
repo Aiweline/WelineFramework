@@ -28,7 +28,7 @@ class WinbackSendLog extends Model
     #[Col(type: 'int', nullable: false, comment: '挽回活动ID')]
     public const schema_fields_CAMPAIGN_ID = 'campaign_id';
 
-    #[Col(type: 'varchar', length: 64, nullable: false, comment: '订单 UUID')]
+    #[Col(type: 'varchar', length: 128, nullable: false, comment: '主体键 order:{uuid}|qt:{token}|cart:{key}')]
     public const schema_fields_ORDER_UUID = 'order_uuid';
 
     #[Col(type: 'int', nullable: false, default: 1, comment: '步骤')]
@@ -39,6 +39,9 @@ class WinbackSendLog extends Model
 
     #[Col(type: 'varchar', length: 255, nullable: true, comment: '原因')]
     public const schema_fields_REASON = 'reason';
+
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: '已发激励券码')]
+    public const schema_fields_COUPON_CODE = 'coupon_code';
 
     #[Col(type: 'datetime', nullable: true, comment: '发送/判定时间')]
     public const schema_fields_SENT_AT = 'sent_at';

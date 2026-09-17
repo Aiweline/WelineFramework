@@ -51,15 +51,57 @@
 }
 
 .w-config-embed__field {
+  display: grid;
+  gap: var(--weline-space-3, 0.75rem);
+  min-inline-size: 0;
+  max-inline-size: 100%;
   border: 1px solid var(--weline-theme-border, var(--backend-color-border-default, transparent));
   border-radius: var(--weline-radius-md, 0.5rem);
-  padding: var(--weline-space-3, 0.75rem);
+  padding: var(--weline-space-5, 1.25rem);
   background: var(
     --weline-theme-surface-raised,
     var(--weline-theme-surface, var(--backend-color-card-bg, transparent))
   );
   color: var(--weline-theme-text, var(--backend-theme-text, inherit));
   box-shadow: none;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+.w-config-embed__field-meta,
+.w-config-embed__control,
+.w-config-embed__control .w-field__control {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.w-config-embed__field-meta .w-text,
+.w-config-embed__control .w-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Override foundation .w-field__control flex row so media path never sits beside the picker. */
+.w-config-embed__control.w-field > .w-field__control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--weline-space-2, 0.5rem);
+  justify-items: start;
+  align-content: start;
+}
+
+.w-config-embed__control .w-file-picker {
+  max-inline-size: 100%;
+}
+
+.w-config-embed__media-path {
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+.w-config-embed__media-path code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .w-config-embed__field.is-undeclared {

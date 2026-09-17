@@ -19,7 +19,6 @@
  * @meta::theme.group.frontend {default="前端组",name="前端组",description="前端组，用于给元素据分组用的，方便维护"}
  * @meta::theme.group.frontend.description {default="组件描述",name="组件描述",description="组件描述，用于描述组件的用途"}
  * @meta::theme.group.frontend.name {default="组件名称",name="组件名称",description="组件名称，用于描述组件的名称"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
  * @param {参数名} {default=默认值,name="参数名称",description="参数描述"}
  */
 ```
@@ -46,64 +45,6 @@
 @meta::theme.group.frontend {default="前端组",name="前端组",description="前端组，用于给元素据分组用的，方便维护"}
 @meta::theme.group.frontend.description {default="登录/注册等认证页面的专用布局",name="登录/注册等认证页面的专用布局",description="登录/注册等认证页面的专用布局，用于描述布局的用途"}
 ```
-
-### 预览登录标记
-
-#### @preview.login 标记
-
-`@preview.login` 标记用于指定布局文件在预览时是否需要自动登录。该标记主要用于布局文件（layouts），帮助预览系统自动判断是否需要登录测试账户。
-
-**格式**：
-```
-@preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
-```
-
-**说明**：
-- **标记名称**：`@preview.login`
-- **default**：默认值，`0` 表示不需要登录，`1` 表示需要登录
-- **option**：可选值说明（可选）
-- **name**：标记名称（可选）
-- **description**：标记描述（可选）
-- **默认值**：如果不指定 `default`，默认为 `0`（不需要登录）
-
-**使用场景**：
-- **需要登录的布局**：个人中心、订单列表、个人资料等需要登录才能查看的页面布局
-- **不需要登录的布局**：首页、登录页、注册页等不需要登录的页面布局
-
-**示例**：
-```php
-<?php
-/**
- * 布局：个人中心 - 认证页面布局
- * 
- * 登录/注册等认证页面的专用布局
- * 字段
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
- */
-```
-
-```php
-<?php
-/**
- * 布局：个人中心 - 仪表盘布局
- * 
- * 个人中心仪表盘布局，包含侧边栏导航和主内容区
- * 字段
- * @preview.login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
- */
-```
-
-**工作原理**：
-1. 预览系统会解析布局文件的 `@preview.login` 标记
-2. 如果标记值为 `1`，预览时会自动登录测试账户（`preview_theme`）
-3. 如果标记值为 `0`，预览时不会自动登录
-4. 用户也可以通过预览界面的"自动登录"开关手动控制
-
-**注意事项**：
-- 该标记仅在预览阶段生效，不影响正常使用
-- 如果布局文件没有该标记，默认值为 `0`（不需要登录）
-- 支持主题继承，会查找父主题的布局文件
-- 可以通过 URL 参数 `auto_login` 手动覆盖该设置
 
 ### 参数定义格式
 
@@ -223,7 +164,6 @@ $class = $this->getData('class') ?? '';
  * @meta::theme.group.frontend {default="前端组",name="前端组",description="前端组，用于给元素据分组用的，方便维护"}
  * @meta::theme.group.frontend.description {default="登录/注册等认证页面的专用布局",name="登录/注册等认证页面的专用布局",description="登录/注册等认证页面的专用布局，用于描述布局的用途"}
  * @meta::theme.group.frontend.name {default="个人中心认证页面布局",name="个人中心认证页面布局",description="个人中心认证页面布局，用于描述布局的名称"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
  * @param title {default="登录",name="页面标题",description="页面标题，用于设置页面标题",type=string}
  * @param content {default="",name="认证表单内容（HTML字符串）",description="认证表单内容（HTML字符串），用于设置页面内容",type=string}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类",type=string}
@@ -377,79 +317,11 @@ $data = (array)($this->getData('data') ?? []);
 - 验证参数类型
 - 自动生成默认值代码
 
-## 预览登录标记使用指南
-
-### 何时使用 @preview.login
-
-#### 需要设置为 `[default=1]` 的布局
-
-以下类型的布局应该设置 `@preview.login 是否需要登录 [default=1]`：
-
-- **个人中心相关**：仪表盘、个人资料、订单列表、地址管理等
-- **需要登录的功能页面**：购物车、结算页、收藏夹等
-- **会员专属页面**：会员中心、积分商城等
-
-**示例**：
-```php
-<?php
-/**
- * 布局：个人中心 - 仪表盘布局
- * 
- * @preview.login 是否需要登录 [default=1]
- */
-```
-
-#### 需要设置为 `[default=0]` 的布局
-
-以下类型的布局应该设置 `@preview.login 是否需要登录 [default=0]`：
-
-- **公开页面**：首页、产品列表、产品详情、分类页等
-- **认证页面**：登录页、注册页、忘记密码页等
-- **不需要登录的功能页面**：帮助中心、关于我们等
-
-**示例**：
-```php
-<?php
-/**
- * 布局：首页 - 默认布局
- * 
- * @preview.login 是否需要登录 [default=0]
- */
-```
-
-```php
-<?php
-/**
- * 布局：个人中心 - 认证页面布局
- * 
- * 登录/注册等认证页面的专用布局
- * 
- * @preview.login 是否需要登录 [default=0]
- */
-```
-
-### 预览系统行为
-
-1. **自动判断**：预览系统会根据布局文件的 `@preview.login` 标记自动决定是否需要登录
-2. **手动控制**：用户可以通过预览界面的"自动登录"开关手动控制
-3. **URL 参数**：可以通过 URL 参数 `auto_login=1` 或 `auto_login=0` 手动覆盖
-4. **优先级**：URL 参数 > 手动开关 > 布局文件标记
-
-### 测试账户信息
-
-预览系统使用的测试账户信息：
-- **用户名**：`preview_theme`
-- **邮箱**：`preview_theme@preview.local`
-- **密码**：首次访问时随机生成，并存储在 `Weline_Theme` 模块的系统配置中（可在后台系统配置中查看或重置）
-
-如果测试账户不存在，系统会自动创建并应用上述配置。
-
 ## 注意事项
 
 1. **PHP 变量表达式安全性**：确保 PHP 变量表达式在组件上下文中安全可用
 2. **类型一致性**：Meta 中定义的类型应与代码中的实际使用保持一致
 3. **向后兼容**：新格式应保持与旧格式的兼容性
 4. **文档同步**：Meta 信息应与代码实现保持同步
-5. **预览登录标记**：`@preview.login` 标记仅在预览阶段生效，不影响正常使用
-6. **主题继承**：`@preview.login` 标记支持主题继承，会查找父主题的布局文件
+5. **主题继承**：Meta 标记支持主题继承，会查找父主题布局文件
 

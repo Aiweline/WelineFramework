@@ -110,7 +110,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
         );
         self::assertStringContainsString("t('fileSizeExceeded'", $js);
         self::assertMatchesRegularExpression(
-            '/findOversizedUploadFile\(fileList\)[\s\S]*resolveUploadNameConflicts\(files, targetHash\)[\s\S]*requestUploadMetadata\(resolvedFiles\)/',
+            '/findOversizedUploadFile\(fileList\)[\s\S]*resolveUploadNameConflicts\(files, targetHash\)[\s\S]*requestUploadMetadata\(resolvedFiles, overwriteFlags\)/',
             $js
         );
         self::assertStringContainsString("t('uploadModePrompt')", $js);
@@ -122,9 +122,27 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('data-mmf-locale-loading-overlay', $js);
         self::assertStringContainsString("setLocaleWorkbenchBusy(true, 'translate')", $js);
         self::assertStringContainsString("t('localeTranslatingHint')", $js);
+        self::assertStringContainsString('function requestLocaleTempFill(code)', $js);
+        self::assertStringContainsString('function runAssetTranslateMissing(targetLocales, onSuccessMessage)', $js);
+        self::assertStringContainsString("payload.target_locales = targetLocales", $js);
+        self::assertStringContainsString("btn.addEventListener('dblclick'", $js);
+        self::assertStringContainsString("t('localeWorkbenchHint')", $js);
+        self::assertStringContainsString('data-mmf-locale-workbench-hint', $template);
         self::assertStringContainsString('function suggestUniqueUploadFileName(name, reservedNames)', $js);
+        self::assertStringContainsString('function ensureUploadFileExtension(name, originalName)', $js);
+        self::assertMatchesRegularExpression(
+            '/function confirmUploadName\([\s\S]*?ensureUploadFileExtension\(/',
+            $js
+        );
         self::assertStringContainsString('function resolveUploadNameConflicts(fileList, targetHash)', $js);
         self::assertStringContainsString("t('uploadNameConflictMessage'", $js);
+        self::assertStringContainsString("t('uploadOverwriteExisting')", $js);
+        self::assertStringContainsString("t('uploadOverwriteConfirmMessage'", $js);
+        self::assertStringContainsString("action: 'overwrite'", $js);
+        self::assertStringContainsString('overwriteFlags', $js);
+        self::assertStringContainsString("overwrite: true", $js);
+        self::assertStringContainsString('secondaryLabel: t(\'uploadOverwriteExisting\')', $js);
+        self::assertStringContainsString('mmf-dialog-secondary', $template);
         self::assertStringContainsString('function bindDirectoryDropTarget(el)', $js);
         self::assertStringContainsString("api({cmd: 'move', targets: eligible, target: destinationHash}", $js);
         self::assertStringContainsString('draggable="true"', $js);
@@ -168,7 +186,8 @@ final class ManagerJsBinQueryContractTest extends TestCase
         );
         self::assertStringContainsString("CONFIG.target = String(e.data.target).trim()", $source);
         self::assertStringContainsString("target: CONFIG.target || ''", $source);
-        self::assertStringContainsString('} else if (IFRAME_MODE) {', $source);
+        self::assertStringContainsString('function setupIframeMode(options)', $source);
+        self::assertStringContainsString('IFRAME_MODE = true', $source);
         self::assertStringNotContainsString(
             '} else if (IFRAME_MODE && GET_FILE_CALLBACK) {',
             $source,
@@ -224,6 +243,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString("kind: 'aspect_ratio'", $source);
         self::assertStringContainsString('function updateAspectRatioHint()', $source);
         self::assertStringContainsString("['aspect_ratio', 'aspectRatio']", $source);
+        self::assertStringContainsString('(absDiff / target) <= tolerance', $source);
         self::assertStringContainsString('aspectRatio:', (string)file_get_contents(
             BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
         ));
@@ -569,6 +589,31 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString("announceInteraction(t('moveFolderHint'", $script);
         self::assertStringContainsString('outline: 3px solid', $style);
         self::assertStringContainsString('outline: 2px dashed', $style);
+    }
+
+    public function testSelectMissingAssetMetadataPromptsInsteadOfToastOnly(): void
+    {
+        $script = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/statics/js/manager.js'
+        );
+        $connector = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/Service/ConnectorService.php'
+        );
+        $controller = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/Controller/Backend/Connector.php'
+        );
+
+        self::assertStringContainsString('function supplementAssetMetadataForSelection(file)', $script);
+        self::assertStringContainsString('function promptAssetLocaleMetadata(file)', $script);
+        self::assertStringContainsString("cmd: 'asset_ensure'", $script);
+        self::assertStringContainsString('blockedMetadataFiles', $script);
+        self::assertStringContainsString('supplementAssetMetadataForSelection(file)', $script);
+        self::assertDoesNotMatchRegularExpression(
+            '/if \(blockedByAssetMetadata\) \{\s*showError\(t\(\'assetMetadataRequired\'\)\);/',
+            $script,
+        );
+        self::assertStringContainsString("'asset_ensure' => \$this->handleStorageAssetEnsure", $connector);
+        self::assertStringContainsString("'asset_ensure',", $controller);
     }
 
     public function testTypedSelectionDoesNotExposeStorageLocationsOrResolvedUrls(): void

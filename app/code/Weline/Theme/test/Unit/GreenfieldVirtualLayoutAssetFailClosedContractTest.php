@@ -35,7 +35,6 @@ final class GreenfieldVirtualLayoutAssetFailClosedContractTest extends TestCase
         self::assertStringContainsString('isVirtualLayoutAssetAvailable()', $controller);
 
         foreach ([
-            dirname(__DIR__, 2) . '/view/statics/js/theme-editor.js',
             dirname(__DIR__, 2) . '/view/statics/ui/pages/weline-theme-editor.js',
         ] as $jsPath) {
             $js = (string)file_get_contents($jsPath);

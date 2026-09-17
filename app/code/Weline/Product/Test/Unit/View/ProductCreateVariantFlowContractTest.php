@@ -356,6 +356,8 @@ final class ProductCreateVariantFlowContractTest extends TestCase
             'data-product-create-media-picker-open',
             'data-w-component="dialog"',
             'data-product-create-media-picker-dialog',
+            'data-media-identity-root="product"',
+            'data-media-identity-scope=',
             'data-product-create-category-assignments',
             'w:catalog:category:select',
             'id="product-create-categories"',
@@ -365,6 +367,7 @@ final class ProductCreateVariantFlowContractTest extends TestCase
         ] as $marker) {
             self::assertStringContainsString($marker, $index);
         }
+        self::assertStringContainsString('appendCreatePickerIdentity', $script);
         self::assertStringNotContainsString('data-product-create-category-id', $index);
         self::assertStringNotContainsString('w-product-create__category-list', $index);
         foreach ([

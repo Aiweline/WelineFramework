@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Weline\SiteSetupAssistant\Api\SetupTaskStatusProviderInterface;
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
 
 return [
-    SetupTaskStatusProviderInterface::class => [
+    SetupTaskProviderInterface::class => [
     ],
 ];

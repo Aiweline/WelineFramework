@@ -14,9 +14,11 @@ namespace Weline\Smtp\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Smtp\Model\SmtpSendLog;
 use Weline\Smtp\Service\MailChannelCollector;
+use Weline\Smtp\Service\SmtpSendLogListPresenter;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 
 #[Acl('Weline_Smtp::system_smtp_log', 'SMTP 发件记录', 'check', '查看 SMTP 发送日志', 'Weline_Smtp::system_smtp')]
@@ -67,18 +69,22 @@ class Log extends BackendController
                 $channelNameMap[$code] = (string)($ch['name'] ?? $code);
             }
         }
+        /** @var SmtpSendLogListPresenter $presenter */
+        $presenter = ObjectManager::getInstance(SmtpSendLogListPresenter::class);
         foreach ($logs as &$log) {
             if (!is_array($log)) {
                 continue;
             }
-            $code = trim((string)($log['channel'] ?? ''));
-            $log['channel_label'] = $code === ''
-                ? (string)__('未标注渠道')
-                : (string)($channelNameMap[$code] ?? $code);
-            $logScope = trim((string)($log['storage_scope'] ?? ''));
-            $log['scope_label'] = $logScope === '' || $logScope === 'default.default.default'
-                ? (string)__('Global')
-                : $logScope;
+            $log = $presenter->presentRow($log, $channelNameMap);
+            $logId = (int)($log['id'] ?? 0);
+            $log['preview_url'] = $logId > 0
+                ? $this->_url->getBackendUrl('smtp/backend/log', [
+                    'log_id' => $logId,
+                    'embed' => '1',
+                ])
+                : '';
+            // 列表不传正文，避免模板误渲染 HTML / 减小 payload
+            unset($log['content'], $log['alt']);
         }
         unset($log);
 
@@ -92,12 +98,64 @@ class Log extends BackendController
         return $this->fetch();
     }
 
+    /**
+     * embed 预览页：直出独立 HTML，绕过 Theme fetch_file_* 布局包装。
+     */
+    private function respondEmbedDocument(): never
+    {
+        $this->layoutType = null;
+        $html = (string)$this->getTemplate()->fetch('Weline_Smtp::Backend/Log/embed');
+        $response = $this->request->getResponse();
+        $response->setHeader('Content-Type', 'text/html; charset=UTF-8');
+        $response->setBody($html);
+        throw new ResponseTerminateException($response);
+    }
+
     function get()
     {
-        # TODO 预览邮件
-        $log = $this->smtpSendLog->load($this->request->getGet('log_id', 0));
+        $logId = (int)$this->request->getGet('log_id', 0);
+        $embed = trim((string)$this->request->getGet('embed', '')) === '1';
+        $log = $this->smtpSendLog->load($logId);
+
+        if (!$log->getId()) {
+            if ($embed) {
+                $this->assign('embed_error', (string)__('发件记录不存在'));
+                $this->assign('log_view', []);
+                $this->respondEmbedDocument();
+            }
+            $this->getMessageManager()->addError(__('发件记录不存在'));
+
+            return $this->redirect($this->scopedListingUrl($this->resolveWorkScope(false), ''));
+        }
+
+        /** @var MailChannelCollector $channelCollector */
+        $channelCollector = ObjectManager::getInstance(MailChannelCollector::class);
+        $channelNameMap = [];
+        foreach ($channelCollector->collect() as $ch) {
+            $code = (string)($ch['code'] ?? '');
+            if ($code !== '') {
+                $channelNameMap[$code] = (string)($ch['name'] ?? $code);
+            }
+        }
+        /** @var SmtpSendLogListPresenter $presenter */
+        $presenter = ObjectManager::getInstance(SmtpSendLogListPresenter::class);
+        $row = $presenter->presentRow($log->getData(), $channelNameMap);
+
         $this->assign('log', $log);
-        return $this->fetch();
+        $this->assign('log_view', $row);
+        $this->assign('embed_error', '');
+        $this->assign('back_url', $this->scopedListingUrl(
+            $this->resolveWorkScope(false),
+            trim((string)($row['channel'] ?? ''))
+        ));
+
+        // embed=1：独立 HTML 文档供弹层 iframe（不包后台壳）
+        if ($embed) {
+            $this->respondEmbedDocument();
+        }
+
+        // get() 默认解析为 templates/Backend/Log，须显式指向阅读模板
+        return $this->fetch('Weline_Smtp::Backend/Log/get');
     }
 
     function postDelete()

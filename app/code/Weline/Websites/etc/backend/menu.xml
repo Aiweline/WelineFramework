@@ -26,14 +26,14 @@
         <menu source="Weline_Websites::store_management"
               name="store_management"
               title="&#21830;&#24215;&#31649;&#29702;"
-              action="websites/backend/scope-management/stores"
+              action="websites/admin/website/index?focus=stores"
               icon="store"
               order="12"/>
 
         <menu source="Weline_Websites::sales_channel_management"
               name="sales_channel_management"
               title="&#28192;&#36947;&#31649;&#29702;"
-              action="websites/backend/scope-management/channels"
+              action="websites/admin/website/index?focus=channels"
               icon="branch"
               order="14"/>
 

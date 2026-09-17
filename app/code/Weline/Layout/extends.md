@@ -27,7 +27,7 @@ class ProductLayoutProvider implements LayoutProviderInterface
     public function getLayoutTypes(): array
     {
         return [
-            'product_list' => [
+            'products' => [
                 'name' => '产品列表布局',
                 'description' => '用于产品列表页面的布局'
             ],
@@ -45,7 +45,7 @@ class ProductLayoutProvider implements LayoutProviderInterface
     public function getLayoutOptions(string $layoutType): array
     {
         $options = [
-            'product_list' => [
+            'products' => [
                 'grid' => [
                     'name' => '网格布局',
                     'template' => 'WeShop_Product::Frontend/Product/list-grid.phtml',
@@ -88,7 +88,7 @@ class ProductLayoutProvider implements LayoutProviderInterface
     public function getDefaultLayout(string $layoutType): string
     {
         $defaults = [
-            'product_list' => 'grid',
+            'products' => 'grid',
             'product_detail' => 'standard',
             'category' => 'grid'
         ];
@@ -167,13 +167,13 @@ $layoutService = ObjectManager::getInstance(LayoutService::class);
 $allTypes = $layoutService->getAllLayoutTypes();
 
 // 获取指定模块的布局选项
-$options = $layoutService->getLayoutOptions('WeShop_Product', 'product_list');
+$options = $layoutService->getLayoutOptions('WeShop_Product', 'products');
 
 // 应用布局
-$layoutService->applyLayout('WeShop_Product', 'product_list', 'grid', $product);
+$layoutService->applyLayout('WeShop_Product', 'products', 'grid', $product);
 
 // 获取当前布局
-$currentLayout = $layoutService->getCurrentLayout('WeShop_Product', 'product_list', $product);
+$currentLayout = $layoutService->getCurrentLayout('WeShop_Product', 'products', $product);
 ```
 
 ## 定时布局切换
@@ -186,7 +186,7 @@ use Weline\Layout\Model\LayoutSchedule;
 $schedule = ObjectManager::getInstance(LayoutSchedule::class);
 $schedule->setLayoutId($layoutId)
     ->setModuleCode('WeShop_Product')
-    ->setLayoutType('product_list')
+    ->setLayoutType('products')
     ->setStartTime('2024-01-15 00:00:00')
     ->setEndTime('2024-01-20 23:59:59')
     ->setIsRecurring(false)

@@ -12,12 +12,12 @@ declare(strict_types=1);
 return [
     'checkout-storefront-slots' => [
         'name' => '结账页模块槽位',
-        'description' => '结账模块页模板槽目录：快捷支付、收货地址、优惠券、订单留言、批发信用、成功页访客转化；供 Payment/Shipping/Marketing/Order/B2B/Customer 的 required default_injections 发现，禁止当作布局内容部件放置。',
+        'description' => '结账模块页模板槽目录：快捷支付、收货地址、税号、优惠券、订单留言、批发信用、成功页访客转化；供 Payment/Shipping/Tax/Marketing/Order/B2B/Customer 的 required default_injections 发现，禁止当作布局内容部件放置。',
         'type' => 'container',
         'code' => 'checkout-storefront-slots',
         'area' => 'frontend',
         'template' => 'Weline_Checkout::templates/frontend/widgets/checkout-storefront-slots.phtml',
-        'page_layouts' => ['checkout', 'checkout_success'],
+        'page_layouts' => ['checkout', 'checkout/success'],
         'position' => ['content'],
         'is_container' => true,
         'slots' => [
@@ -38,6 +38,16 @@ return [
                     'shipping-address',
                     'delivery-address',
                     'address',
+                ],
+                'max' => 1,
+            ],
+            'checkout-tax-identity' => [
+                'name' => '结账税号',
+                'accepts' => [
+                    'checkout-tax-identity',
+                    'tax-identity',
+                    'buyer-tax',
+                    'tax',
                 ],
                 'max' => 1,
             ],

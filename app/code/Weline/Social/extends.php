@@ -2,7 +2,14 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Social\Extends\Module\Weline_SiteSetupAssistant\SetupTask\SocialPlatformSetupTaskProvider;
+
 return [
+    SetupTaskProviderInterface::class => [
+        SocialPlatformSetupTaskProvider::class,
+    ],
+
     'type' => 'module',
     'documentation' => 'doc/extends.md',
     'extends' => [

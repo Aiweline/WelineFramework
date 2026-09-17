@@ -76,6 +76,7 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         $this->session->start();
 
         $registry = null;
+        $reuseSession = $context?->source === AuthenticatedLoginContext::SOURCE_TRUSTED_REUSE;
         try {
             $registry = $this->resolveDeviceRegistry();
             $this->revokePreviousDeviceForNewLogin($registry, $context);
@@ -84,8 +85,12 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             $this->failDeviceRegistration($throwable, 'pre_regenerate');
         }
 
-        $this->session->regenerate(true);
-        $this->rebindSiblingAreaDevicesAfterRotation($registry);
+        // trusted_reuse keeps the current session id so sibling-area logins
+        // (e.g. backend admin + frontend preview customer) share one cookie.
+        if (!$reuseSession) {
+            $this->session->regenerate(true);
+            $this->rebindSiblingAreaDevicesAfterRotation($registry);
+        }
 
         $deviceContext = null;
         try {
@@ -94,9 +99,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
                 if ($registry->supportsArea($deviceContext->area)) {
                     $binding = $registry->register($deviceContext, $context);
                     if (!$binding->valid) {
-                        throw new \RuntimeException((string)__(
-                            '认证设备登记失败。',
-                        ));
+                        $reason = $binding->reason !== '' ? $binding->reason : 'device_invalid';
+                        throw new \RuntimeException(
+                            (string)__('认证设备登记失败。') . ' (' . $reason . ')',
+                        );
                     }
                     $deviceContext = $deviceContext->withDeviceId($binding->deviceId);
                 }
@@ -106,7 +112,11 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             // under the new id on WLS/File/Redis strategies. Persist the
             // cleared auth keys as well so a failed device registration cannot
             // leave a recoverable authentication payload behind.
-            $this->clearAuthenticationState(true);
+            // trusted_reuse must NOT wipe an existing principal when register
+            // fails (preview takeover races): that is the storefront "掉线" path.
+            if (!$reuseSession) {
+                $this->clearAuthenticationState(true);
+            }
             $this->failDeviceRegistration($throwable, 'register');
         }
 
@@ -143,7 +153,8 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         ?AuthenticatedLoginContext $loginContext,
     ): void {
         if ($registry === null
-            || $loginContext?->source === AuthenticatedLoginContext::SOURCE_REMEMBERED) {
+            || $loginContext?->source === AuthenticatedLoginContext::SOURCE_REMEMBERED
+            || $loginContext?->source === AuthenticatedLoginContext::SOURCE_TRUSTED_REUSE) {
             return;
         }
 
@@ -214,12 +225,12 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             }
             $validation = $registry->validate($context);
             if ($validation->valid) {
-                if (($context->deviceId === null || $context->deviceId === '')
-                    && $validation->deviceId !== null
-                    && $validation->deviceId !== '') {
+                $boundDeviceId = $validation->deviceId !== null ? trim((string)$validation->deviceId) : '';
+                $currentDeviceId = $context->deviceId !== null ? trim((string)$context->deviceId) : '';
+                if ($boundDeviceId !== '' && $boundDeviceId !== $currentDeviceId) {
                     $this->session->set(
                         AuthenticatedDeviceContext::sessionKeyForArea($this->areaConfig->getArea()),
-                        $validation->deviceId,
+                        $boundDeviceId,
                     );
                     $this->session->save();
                 }
@@ -435,61 +446,13 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     }
 
     /**
-     * Shared WELINE_SESSID: regenerating for one auth area keeps sibling-area
-     * login keys + device public ids in the payload. Rebind those device rows
-     * onto the new session id before the next request hits session_rebound.
+     * After customer/admin Session cookies split, sibling areas no longer share
+     * one WELINE_SESSID payload. Keep as a no-op for call-site compatibility.
      */
     private function rebindSiblingAreaDevicesAfterRotation(
         ?AuthenticatedDeviceRegistryInterface $registry,
     ): void {
-        if ($registry === null) {
-            return;
-        }
-
-        $currentDeviceKey = AuthenticatedDeviceContext::sessionKeyForArea($this->areaConfig->getArea());
-        $seenDeviceKeys = [$currentDeviceKey => true];
-        $ttl = 3600;
-        if (\method_exists($this->session, 'getDefaultTtl')) {
-            $ttl = max(1, (int)$this->session->getDefaultTtl());
-        }
-        $sessionId = $this->session->getId();
-        if ($sessionId === '') {
-            return;
-        }
-
-        foreach (AreaConfig::getAvailableAreas() as $area) {
-            if (!$registry->supportsArea($area)) {
-                continue;
-            }
-            $deviceKey = AuthenticatedDeviceContext::sessionKeyForArea($area);
-            if (isset($seenDeviceKeys[$deviceKey])) {
-                continue;
-            }
-            $seenDeviceKeys[$deviceKey] = true;
-            $deviceId = $this->session->get($deviceKey);
-            if (!\is_string($deviceId) || trim($deviceId) === '') {
-                continue;
-            }
-            try {
-                $siblingConfig = new AreaConfig($area);
-            } catch (\Throwable) {
-                continue;
-            }
-            $principalId = $this->session->get($siblingConfig->getLoginIdKey());
-            if (!$this->isValidPrincipalId($principalId)) {
-                continue;
-            }
-            try {
-                $registry->rebindToCurrentSession(new AuthenticatedDeviceContext(
-                    area: $area,
-                    principalId: (string)$principalId,
-                    sessionId: $sessionId,
-                    sessionExpiresAt: time() + $ttl,
-                    deviceId: trim($deviceId),
-                ));
-            } catch (\Throwable) {
-            }
-        }
+        unset($registry);
     }
 
     /**
@@ -586,10 +549,18 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             return true;
         }
 
-        $cookieName = SessionCookieNameResolver::resolve();
+        $area = $this->areaConfig->getArea();
+        $cookieName = SessionCookieNameResolver::resolve(null, $area);
         $cookieValue = WelineEnv::getCookie($cookieName, null);
         if (\is_string($cookieValue) && \trim($cookieValue) !== '') {
             return true;
+        }
+
+        foreach (SessionCookieNameResolver::requestCookieCandidates(null, $area) as $candidate) {
+            $value = WelineEnv::getCookie($candidate, null);
+            if (\is_string($value) && \trim($value) !== '') {
+                return true;
+            }
         }
 
         $cookieHeader = '';
@@ -599,7 +570,16 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
                 ?: WelineEnv::get('server.http_cookie', '')
             );
         }
-        return $this->cookieHeaderContains($cookieHeader, $cookieName);
+        if ($this->cookieHeaderContains($cookieHeader, $cookieName)) {
+            return true;
+        }
+        foreach (SessionCookieNameResolver::requestCookieCandidates(null, $area) as $candidate) {
+            if ($this->cookieHeaderContains($cookieHeader, $candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveDeviceRegistry(): ?AuthenticatedDeviceRegistryInterface

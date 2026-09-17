@@ -36,11 +36,24 @@ class Customer extends Model implements AuthenticableInterface
     #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Must set password after guest convert')]
     public const schema_fields_must_set_password = 'must_set_password';
 
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Anonymous checkout-created account (no storefront login until upgraded)')]
+    public const schema_fields_is_anonymous = 'is_anonymous';
+
     public const schema_primary_key = 'customer_id';
     public const schema_primary_keys = ['customer_id'];
 
     public function _init(): void
     {
+    }
+
+    public function isAnonymousAccount(): bool
+    {
+        return (int) $this->getData(self::schema_fields_is_anonymous) === 1;
+    }
+
+    public function setAnonymousAccount(bool $flag): static
+    {
+        return $this->setData(self::schema_fields_is_anonymous, $flag ? 1 : 0);
     }
 
     public function getAttemptTimes(): int

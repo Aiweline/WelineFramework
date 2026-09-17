@@ -72,6 +72,10 @@ final class ProductSupplierAdminContractTest extends TestCase
         self::assertStringContainsString("'image_url' => (string)(\$row['image_url'] ?? '')", $service);
         self::assertStringNotContainsString('name="brand_ids[]"', $template);
         self::assertStringContainsString('data-testid="product-supplier-image"', $template);
+        self::assertStringContainsString('data-media-identity-root="product_supplier"', $template);
+        self::assertStringContainsString('data-media-identity-scope=', $template);
+        self::assertStringContainsString('identity_root=product_supplier', $template);
+        self::assertStringContainsString('media-identity-picker.js', $template);
     }
 
     public function testCreateWizardSelectsSupplierFromCatalog(): void

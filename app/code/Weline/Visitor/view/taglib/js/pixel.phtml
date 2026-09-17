@@ -737,18 +737,19 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             delete __visitorForwarderMeta[name];
         },
         emit: function (event) {
-            if (event && event.forwarding && event.forwarding.allowed === false) {
-                return;
-            }
-            Object.keys(__visitorForwarders).forEach(function (name) {
-                try {
-                    __visitorForwarders[name](event);
-                } catch (error) {
-                    if (window.DEV) {
-                        console.debug('Weline Visitor forwarder failed:', name, error && error.message ? error.message : error);
+            var blocked = !!(event && event.forwarding && event.forwarding.allowed === false);
+            if (!blocked) {
+                Object.keys(__visitorForwarders).forEach(function (name) {
+                    try {
+                        __visitorForwarders[name](event);
+                    } catch (error) {
+                        if (window.DEV) {
+                            console.debug('Weline Visitor forwarder failed:', name, error && error.message ? error.message : error);
+                        }
                     }
-                }
-            });
+                });
+            }
+            // 沙盒厂商 fanout / 转化去重黄标：即使 forwarding 被拦仍执行（监视流靠外层 publish）
             try {
                 if (typeof __fanoutPixelVendors === 'function') {
                     __fanoutPixelVendors(event);
@@ -1041,19 +1042,22 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     }
 
     /**
-     * @returns {''|'system'|'custom'}
+     * @returns {''|'system'|'custom'|'dedupe'}
      */
     function __sandboxHitKind(name, extras) {
         extras = extras && typeof extras === 'object' ? extras : {};
         name = String(name || extras.event_name || '').trim();
+        var forced = String(extras.hit_kind || extras.event_kind || '').trim().toLowerCase();
+        var source = String(extras.source || '').trim().toLowerCase();
+        if (forced === 'dedupe' || source === 'dedupe') {
+            return 'dedupe';
+        }
         if (!__sandboxIsCustomEventHit(name, extras)) {
             return '';
         }
-        var forced = String(extras.hit_kind || extras.event_kind || '').trim().toLowerCase();
         if (forced === 'system' || forced === 'custom') {
             return forced;
         }
-        var source = String(extras.source || '').trim().toLowerCase();
         if (source === 'lifecycle' || source === 'chain') {
             return 'system';
         }
@@ -1077,12 +1081,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return 'custom';
     }
 
+
     function __sandboxCompactParams(raw) {
         var out = {};
         var count = 0;
         function put(key, val) {
             key = String(key || '').trim();
-            if (!key || Object.prototype.hasOwnProperty.call(out, key) || count >= 40) {
+            if (!key || Object.prototype.hasOwnProperty.call(out, key) || count >= 64) {
                 return;
             }
             var t = typeof val;
@@ -1094,12 +1099,57 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                 count++;
             }
         }
+        function putEcommerceBag(bag) {
+            if (!bag || typeof bag !== 'object') {
+                return;
+            }
+            ['value', 'currency', 'grand_total', 'transaction_id', 'order_uuid', 'order_id', 'business_key'].forEach(function (k) {
+                if (bag[k] !== undefined && bag[k] !== null && bag[k] !== '') {
+                    put(k, bag[k]);
+                }
+            });
+            var items = Array.isArray(bag.items) ? bag.items : null;
+            if (!items && bag.ecommerce && typeof bag.ecommerce === 'object' && Array.isArray(bag.ecommerce.items)) {
+                items = bag.ecommerce.items;
+                if (bag.ecommerce.value !== undefined) {
+                    put('value', bag.ecommerce.value);
+                }
+                if (bag.ecommerce.currency) {
+                    put('currency', bag.ecommerce.currency);
+                }
+            }
+            if (!items || !items.length) {
+                return;
+            }
+            put('items_count', items.length);
+            try {
+                put('items', JSON.stringify(items).slice(0, 2500));
+            } catch (eItemsJson) {
+            }
+            for (var i = 0; i < items.length && i < 6; i++) {
+                var it = items[i];
+                if (!it || typeof it !== 'object') {
+                    continue;
+                }
+                var n = i + 1;
+                put('item_' + n + '_id', it.item_id || it.product_id || it.sku || '');
+                put('item_' + n + '_name', it.item_name || it.name || '');
+                if (it.price !== undefined && it.price !== null && it.price !== '') {
+                    put('item_' + n + '_price', it.price);
+                }
+                if (it.quantity !== undefined && it.quantity !== null && it.quantity !== '') {
+                    put('item_' + n + '_quantity', it.quantity);
+                } else if (it.qty !== undefined && it.qty !== null && it.qty !== '') {
+                    put('item_' + n + '_quantity', it.qty);
+                }
+            }
+        }
         function takeObject(obj, prefix) {
             if (!obj || typeof obj !== 'object') {
                 return;
             }
             Object.keys(obj).forEach(function (k) {
-                if (k === 'domElement' || k === 'element' || k === 'meta' || k === 'raw' || k === 'chain' || k === 'event') {
+                if (k === 'domElement' || k === 'element' || k === 'meta' || k === 'raw' || k === 'chain' || k === 'event' || k === 'items' || k === 'ecommerce') {
                     return;
                 }
                 var val = obj[k];
@@ -1119,7 +1169,10 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         if (!raw || typeof raw !== 'object') {
             return out;
         }
+        // GA4 电商字段优先：避免标量配额被噪音占满后丢掉 value/items
+        putEcommerceBag(raw);
         if (raw.params && typeof raw.params === 'object') {
+            putEcommerceBag(raw.params);
             takeObject(raw.params, '');
         }
         takeObject(raw, '');
@@ -2440,7 +2493,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.07.24-a12';
+    var PIXEL_SCRIPT_VERSION = '2026.09.16-sandbox-early-buffer';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -3474,11 +3527,43 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         };
     }
 
+    function __getOrderConfirmItems() {
+        var nodes = document.querySelectorAll
+            ? document.querySelectorAll('.amz-order-confirm__item, [data-order-item], [data-testid="order-item"]')
+            : [];
+        var items = [];
+        for (var i = 0; i < nodes.length && i < 20; i++) {
+            var node = nodes[i];
+            var productId = __firstAttr(node, ['data-product-id', 'data-item-id', 'data-id']);
+            var name = __firstAttr(node, ['data-product-name', 'data-name', 'data-item-name'])
+                || __firstText(node, ['.amz-order-confirm__item-title', '.product-title', '.product-name', 'h3', 'a', 'p']);
+            var price = __firstNumber(node, ['[data-price]', '[data-pixel-value]', '.amz-order-confirm__item-price', '.price-amount']);
+            var qtyText = __firstText(node, ['.amz-order-confirm__item-qty', '[data-qty]', '[data-quantity]']);
+            var quantity = __pixelNumber(qtyText);
+            if (quantity === null || quantity <= 0) {
+                quantity = 1;
+            }
+            if (!productId && !name && price === null) {
+                continue;
+            }
+            items.push({
+                product_id: productId,
+                item_id: productId || name,
+                name: name,
+                item_name: name,
+                price: price,
+                quantity: quantity,
+                qty: quantity
+            });
+        }
+        return items;
+    }
+
     function __getCheckoutMeta(eventName, element) {
         var meta = __getCartMeta(eventName, element);
         var shipping = __firstText(document, ['input[name*="shipping"]:checked + label', '[data-selected-shipping]', '.shipping-method.active', '.shipping-method.selected']);
         var payment = __firstText(document, ['input[name*="payment"]:checked + label', '[data-selected-payment]', '.payment-method.active', '.payment-method.selected']);
-        var orderId = __firstText(document, ['[data-order-id]', '[data-order-number]', '.order-number', '.order-id']);
+        var orderId = __firstText(document, ['[data-order-id]', '[data-order-number]', '.order-number', '.order-id', '.amz-order-confirm__order-no strong']);
         if (shipping !== '') {
             meta.shipping_method = shipping;
         }
@@ -3487,7 +3572,41 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         }
         if (orderId !== '') {
             meta.order_id = orderId;
-            meta.transaction_id = orderId;
+            meta.transaction_id = meta.transaction_id || orderId;
+        }
+        if (!meta.items || !meta.items.length) {
+            var confirmItems = __getOrderConfirmItems();
+            if (confirmItems.length) {
+                meta.items = confirmItems;
+                meta.cart_items_count = confirmItems.length;
+            }
+        }
+        var root = null;
+        try {
+            root = (element && element.closest && element.closest('[data-pixel-value], [data-pixel-currency], [data-testid="checkout-success"], [data-testid="payment-return"], [data-testid="payment-success"]'))
+                || document.querySelector('[data-testid="checkout-success"], [data-testid="payment-return"], [data-testid="payment-success"], [data-pixel-event="checkout_success"], [data-pixel-event="payment_success"]');
+        } catch (eRoot) {
+            root = null;
+        }
+        if (root) {
+            var pixelValue = __pixelNumber(root.getAttribute('data-pixel-value') || root.getAttribute('data-amount'));
+            var pixelCurrency = String(root.getAttribute('data-pixel-currency') || root.getAttribute('data-currency') || '').trim();
+            if ((meta.value === null || meta.value === undefined || meta.value === '') && pixelValue !== null) {
+                meta.value = pixelValue;
+                meta.grand_total = pixelValue;
+                meta.total = pixelValue;
+            }
+            if (!meta.currency && pixelCurrency) {
+                meta.currency = pixelCurrency;
+            }
+            var ou = String(root.getAttribute('data-order-uuid') || '').trim();
+            var tid = String(root.getAttribute('data-transaction-id') || '').trim();
+            if (ou && !meta.order_uuid) {
+                meta.order_uuid = ou;
+            }
+            if (tid && !meta.transaction_id) {
+                meta.transaction_id = tid;
+            }
         }
         return meta;
     }
@@ -3560,9 +3679,10 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     function __applyEventMetaToPayload(payload, meta) {
         var allowed = [
             'query', 'query_length', 'url_query', 'input_name', 'input_id', 'form_action', 'form_method', 'result_count', 'category', 'search_url', 'suggestion_text', 'suggestion_url', 'suggestion_position',
-            'product_id', 'item_id', 'sku', 'name', 'content_name', 'price', 'quantity', 'qty', 'value', 'items', 'selected_options', 'product_url',
+            'product_id', 'item_id', 'sku', 'name', 'content_name', 'price', 'quantity', 'qty', 'value', 'currency', 'items', 'selected_options', 'product_url',
             'total', 'grand_total', 'cart_total', 'cart_items_count',
             'shipping_method', 'payment_method', 'order_id', 'transaction_id',
+            'order_uuid', 'checkout_group_uuid', 'transaction_no',
             'href', 'link_text', 'from_url', 'from_path', 'to_url', 'to_path', 'same_origin'
         ];
         for (var i = 0; i < allowed.length; i++) {
@@ -4201,6 +4321,236 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         }
     }
 
+    function __getConversionDedupeRuntime() {
+        var cfg = window.__WelineVisitorTrackingConfig || {};
+        var block = (cfg && cfg.conversionDedupe) || {};
+        var enabled = block.enabled !== false && block.enabled !== 0 && block.enabled !== '0';
+        var ttlDays = parseInt(block.ttlDays, 10);
+        if (!isFinite(ttlDays) || ttlDays < 1) {
+            ttlDays = 180;
+        }
+        if (ttlDays > 730) {
+            ttlDays = 730;
+        }
+        var events = Array.isArray(block.events) ? block.events.slice() : [
+            'payment_success', 'checkout_success', 'checkout_failure', '*_checkout_success'
+        ];
+        return {
+            enabled: enabled,
+            ttlDays: ttlDays,
+            ttlMs: ttlDays * 86400000,
+            events: events
+        };
+    }
+
+    function __conversionDedupeEventMatches(eventName, events) {
+        var name = String(eventName || '').toLowerCase();
+        if (!name) {
+            return false;
+        }
+        for (var i = 0; i < events.length; i++) {
+            var candidate = String(events[i] || '').toLowerCase().trim();
+            if (!candidate) {
+                continue;
+            }
+            if (candidate === name) {
+                return true;
+            }
+            if (candidate === '*_checkout_success' && name.slice(-17) === '_checkout_success') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function __resolveConversionBusinessKey(meta) {
+        var bags = [];
+        if (meta && typeof meta === 'object') {
+            bags.push(meta);
+            if (meta.ecommerce && typeof meta.ecommerce === 'object') {
+                bags.push(meta.ecommerce);
+            }
+            if (meta.additionalInfo && typeof meta.additionalInfo === 'object') {
+                bags.push(meta.additionalInfo);
+                if (meta.additionalInfo.ecommerce && typeof meta.additionalInfo.ecommerce === 'object') {
+                    bags.push(meta.additionalInfo.ecommerce);
+                }
+            }
+        }
+        try {
+            var root = document.querySelector('[data-order-uuid],[data-checkout-group-uuid],[data-transaction-no]');
+            if (root) {
+                bags.push({
+                    order_uuid: root.getAttribute('data-order-uuid') || '',
+                    checkout_group_uuid: root.getAttribute('data-checkout-group-uuid') || '',
+                    transaction_id: root.getAttribute('data-transaction-no') || '',
+                    transaction_no: root.getAttribute('data-transaction-no') || ''
+                });
+            }
+        } catch (eDom) {
+        }
+        var fields = ['transaction_id', 'order_uuid', 'order_id', 'checkout_group_uuid', 'transaction_no'];
+        for (var f = 0; f < fields.length; f++) {
+            var field = fields[f];
+            for (var b = 0; b < bags.length; b++) {
+                var bag = bags[b];
+                if (!bag || bag[field] === undefined || bag[field] === null) {
+                    continue;
+                }
+                var value = String(bag[field]).trim();
+                if (value !== '') {
+                    return value.slice(0, 191);
+                }
+            }
+        }
+        return '';
+    }
+
+    function __conversionDedupeStorageKey(eventName, businessKey) {
+        var scope = 'default.default.default';
+        try {
+            scope = __resolvePixelStorageScope() || scope;
+        } catch (eScope) {
+        }
+        return 'weline_pixel_dedupe:' + scope + ':' + String(eventName || '') + ':' + String(businessKey || '');
+    }
+
+    /**
+     * 只读：转化键在 TTL 内是否已见过（不写 localStorage）。
+     */
+    function __isConversionDedupeDuplicate(eventName, meta) {
+        var runtime = __getConversionDedupeRuntime();
+        if (!runtime.enabled) {
+            return false;
+        }
+        if (!__conversionDedupeEventMatches(eventName, runtime.events)) {
+            return false;
+        }
+        var businessKey = __resolveConversionBusinessKey(meta);
+        if (!businessKey) {
+            return false;
+        }
+        var key = __conversionDedupeStorageKey(eventName, businessKey);
+        var now = Date.now();
+        try {
+            var raw = window.localStorage && window.localStorage.getItem(key);
+            if (!raw) {
+                return false;
+            }
+            var parsed = null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (eParse) {
+                parsed = null;
+            }
+            var expiresAt = 0;
+            if (parsed && typeof parsed === 'object') {
+                expiresAt = parseInt(parsed.expiresAt, 10) || 0;
+            } else if (/^\d+$/.test(String(raw))) {
+                expiresAt = now + runtime.ttlMs;
+            }
+            if (expiresAt > now) {
+                return true;
+            }
+            try {
+                window.localStorage.removeItem(key);
+            } catch (eRm) {
+            }
+        } catch (eLs) {
+            return false;
+        }
+        return false;
+    }
+
+    /**
+     * 首次沙盒发送成功前写入 TTL 键（供后续刷新判定重复）。
+     */
+    function __markConversionDedupeSeen(eventName, meta) {
+        var runtime = __getConversionDedupeRuntime();
+        if (!runtime.enabled) {
+            return;
+        }
+        if (!__conversionDedupeEventMatches(eventName, runtime.events)) {
+            return;
+        }
+        var businessKey = __resolveConversionBusinessKey(meta);
+        if (!businessKey) {
+            return;
+        }
+        var key = __conversionDedupeStorageKey(eventName, businessKey);
+        var now = Date.now();
+        try {
+            window.localStorage.setItem(key, JSON.stringify({
+                ts: now,
+                expiresAt: now + runtime.ttlMs
+            }));
+        } catch (eLs) {
+        }
+    }
+
+    /**
+     * @deprecated 保留别名：等价于「已是重复」只读检查；写键请用 __markConversionDedupeSeen。
+     */
+    function __shouldDropConversionDedupe(eventName, meta) {
+        return __isConversionDedupeDuplicate(eventName, meta);
+    }
+
+    /**
+     * 去重丢弃（仅沙盒厂商）：黄标记入监视流，不代替主 track 事件。
+     */
+    function __emitConversionDedupeSandbox(eventName, meta) {
+        try {
+            var sb = window.WelineEventSandbox || window.WelinePixelSandbox;
+            if (!sb || typeof sb.emit !== 'function') {
+                return;
+            }
+            var businessKey = __resolveConversionBusinessKey(meta || {});
+            var params = {
+                dedupe: true,
+                dedupe_dropped: true,
+                business_key: businessKey,
+                event: String(eventName || '')
+            };
+            if (meta && typeof meta === 'object') {
+                ['transaction_id', 'order_uuid', 'order_id', 'checkout_group_uuid', 'transaction_no', 'value', 'currency', 'grand_total', 'payment_method'].forEach(function (k) {
+                    if (meta[k] !== undefined && meta[k] !== null && meta[k] !== '') {
+                        params[k] = meta[k];
+                    }
+                });
+                var items = Array.isArray(meta.items) ? meta.items : null;
+                if (!items && meta.ecommerce && typeof meta.ecommerce === 'object' && Array.isArray(meta.ecommerce.items)) {
+                    items = meta.ecommerce.items;
+                    if (meta.ecommerce.value !== undefined && params.value === undefined) {
+                        params.value = meta.ecommerce.value;
+                    }
+                    if (meta.ecommerce.currency && !params.currency) {
+                        params.currency = meta.ecommerce.currency;
+                    }
+                }
+                if (items && items.length) {
+                    params.items = items.slice(0, 20);
+                    params.items_count = items.length;
+                }
+            }
+            sb.emit({
+                weline_event: eventName,
+                eventName: eventName,
+                name: eventName,
+                params: params,
+                timestampMs: Date.now(),
+                source: 'dedupe',
+                trigger: 'dedupe'
+            }, {
+                event_hit: true,
+                hit_kind: 'dedupe',
+                source: 'dedupe',
+                event_name: eventName
+            });
+        } catch (eEmit) {
+        }
+    }
+
+    
     window.WelinePixel = {
         endpoint: 'worker:visitor.trackPixel',
         script_version: PIXEL_SCRIPT_VERSION,
@@ -4298,6 +4648,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             if (suppressConversion && ['checkout_success', 'payment_success', 'purchase'].indexOf(normalizedEventName) > -1) {
                 return null;
             }
+            // 转化去重不拦截主 track：事件流/监视/后端上报照常；仅沙盒厂商 fanout 丢弃（见 __fanoutPixelVendors）。
             var payload = JSON.parse(JSON.stringify(this.init));
             var now = new Date();
             var domElement = options.element || (meta && meta.domElement) || null;
@@ -4386,6 +4737,11 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             }
 
             this.send(payload, options.url || this.url);
+            // 主 track 成功后再记键：本轮沙盒 fanout 仍放行，刷新后的沙盒发送才丢弃
+            try {
+                __markConversionDedupeSeen(normalizedEventName, mergedMeta);
+            } catch (eMark) {
+            }
             return payload;
         },
         target: function (event) {
@@ -4926,16 +5282,76 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return true;
     }
 
+    function __conversionMetaFromVendorEvent(event) {
+        var meta = {};
+        if (!event || typeof event !== 'object') {
+            return meta;
+        }
+        var bags = [event];
+        if (event.meta && typeof event.meta === 'object') {
+            bags.push(event.meta);
+        }
+        if (event.payload && typeof event.payload === 'object') {
+            bags.push(event.payload);
+        }
+        if (event.params && typeof event.params === 'object') {
+            bags.push(event.params);
+        }
+        if (event.additionalInfo && typeof event.additionalInfo === 'object') {
+            bags.push(event.additionalInfo);
+        }
+        if (event.payload && event.payload.additionalInfo && typeof event.payload.additionalInfo === 'object') {
+            bags.push(event.payload.additionalInfo);
+        }
+        ['transaction_id', 'order_uuid', 'order_id', 'checkout_group_uuid', 'transaction_no', 'value', 'currency', 'grand_total', 'payment_method', 'items'].forEach(function (k) {
+            for (var i = 0; i < bags.length; i++) {
+                var bag = bags[i];
+                if (bag[k] !== undefined && bag[k] !== null && bag[k] !== '') {
+                    meta[k] = bag[k];
+                    break;
+                }
+            }
+        });
+        return meta;
+    }
+
+    function __resolvePixelVendorArea(cfg) {
+        cfg = cfg || {};
+        var fromBody = '';
+        try {
+            fromBody = String((document.body && document.body.getAttribute('data-area')) || '').trim().toLowerCase();
+        } catch (eBody) {
+            fromBody = '';
+        }
+        if (fromBody === 'frontend' || fromBody === 'backend') {
+            return fromBody;
+        }
+        var path = '/';
+        try {
+            path = String((typeof location !== 'undefined' && location.pathname) || '/');
+        } catch (ePath) {
+            path = '/';
+        }
+        if (/^\/(admin|backend|weline_admin)\b/i.test(path)) {
+            return 'backend';
+        }
+        // 店面路径默认 frontend：避免 tracking config 误带 backend 导致沙盒厂商 scope 全灭、去重黄标不到
+        return 'frontend';
+    }
+
     function __fanoutPixelVendors(event) {
         var cfg = window.__WelineVisitorTrackingConfig || {};
         var vendors = Array.isArray(cfg.vendors) ? cfg.vendors : [];
         if (!vendors.length || !event) {
             return;
         }
-        var welineEvent = String((event.weline_event || event.name || '')).trim();
+        var welineEvent = String((event.weline_event || event.eventName || event.name || '')).trim();
         var path = (typeof location !== 'undefined' && location.pathname) ? location.pathname : '/';
-        var area = (cfg.area || (typeof document !== 'undefined' && document.body && document.body.getAttribute('data-area')) || 'frontend');
+        var area = __resolvePixelVendorArea(cfg);
         var injectSeen = {};
+        var dedupeMeta = __conversionMetaFromVendorEvent(event);
+        var sandboxDedupeEmitted = false;
+        var sandboxDedupeIsDup = __isConversionDedupeDuplicate(welineEvent, dedupeMeta);
         vendors.forEach(function (vendor) {
             if (!vendor || !vendor.enabled) {
                 return;
@@ -4963,6 +5379,14 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                 ga4_event: mapped
             });
             if (mode === 'sandbox') {
+                // 仅沙盒厂商去重：主事件流已由 publish 透传；重复则黄标并跳过沙盒 iframe
+                if (sandboxDedupeIsDup) {
+                    if (!sandboxDedupeEmitted) {
+                        __emitConversionDedupeSandbox(welineEvent, dedupeMeta);
+                        sandboxDedupeEmitted = true;
+                    }
+                    return;
+                }
                 if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.publishVendor === 'function') {
                     window.WelinePixelSandbox.publishVendor(code, payload, vendor);
                 } else if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.publish === 'function') {
@@ -4995,6 +5419,11 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         vendorFrames: (window.WelinePixelSandbox && window.WelinePixelSandbox.vendorFrames) || {},
         _lifecycleBridged: false,
         _emitSeq: 0,
+        // 监视晚于 SSR track 订阅时，靠环形缓冲回放，避免 checkout_success / 黄标丢在「全量数据流」外
+        _earlyBuffer: (window.WelinePixelSandbox && Array.isArray(window.WelinePixelSandbox._earlyBuffer))
+            ? window.WelinePixelSandbox._earlyBuffer
+            : [],
+        _earlyBufferMax: 100,
         ensureFrame: function () {
             if (this.iframe && this.iframe.isConnected) {
                 return this.iframe;
@@ -5130,12 +5559,16 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                     hitExtras.hit_kind = 'system';
                 }
             }
+            if (source === 'dedupe') {
+                eventHit = true;
+                hitExtras.hit_kind = 'dedupe';
+            }
             var hitKind = '';
             if (eventHit) {
                 hitKind = typeof __sandboxHitKind === 'function'
                     ? __sandboxHitKind(name, hitExtras)
                     : 'custom';
-                if (hitKind !== 'system' && hitKind !== 'custom') {
+                if (hitKind !== 'system' && hitKind !== 'custom' && hitKind !== 'dedupe') {
                     hitKind = 'custom';
                 }
             }
@@ -5161,6 +5594,15 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         },
         emit: function (raw, extras) {
             var envelope = this.normalizeEnvelope(raw, extras);
+            try {
+                this._earlyBuffer = Array.isArray(this._earlyBuffer) ? this._earlyBuffer : [];
+                this._earlyBuffer.push(envelope);
+                var maxBuf = this._earlyBufferMax || 100;
+                if (this._earlyBuffer.length > maxBuf) {
+                    this._earlyBuffer = this._earlyBuffer.slice(-maxBuf);
+                }
+            } catch (eBuf) {
+            }
             var list = Array.isArray(this.subscribers) ? this.subscribers.slice() : [];
             for (var i = 0; i < list.length; i++) {
                 try {
@@ -5183,9 +5625,14 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         },
         /**
          * 继电到后台「本会话沙盒」accumulate（与 Monitor 同源全量流，含 click 透传）。
+         * 仅监视/生命周期助手开启时继电；lifecycle 高频辅助事件按指纹去重，避免结账 DOM 同步风暴。
          */
         relayToAdminSession: function (envelope) {
             if (!envelope || typeof envelope !== 'object') {
+                return;
+            }
+            if (typeof __isSandboxMonitorActiveForAutoRegister === 'function'
+                && !__isSandboxMonitorActiveForAutoRegister()) {
                 return;
             }
             var websiteId = '';
@@ -5198,6 +5645,38 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             }
             if (!/^\d+$/.test(websiteId)) {
                 return;
+            }
+            var eventName = String(envelope.name || envelope.event_name || 'event');
+            var source = String(envelope.source || 'sandbox_stream');
+            var isLifecycle = source === 'lifecycle' || source === 'chain'
+                || eventName.indexOf('weline:checkout:fields-ready') !== -1;
+            if (isLifecycle) {
+                var rawDetail = envelope.raw && typeof envelope.raw === 'object' ? envelope.raw : {};
+                var params = envelope.params && typeof envelope.params === 'object' ? envelope.params : {};
+                var fp = [
+                    eventName,
+                    source,
+                    String(params.amount || rawDetail.amount || ''),
+                    String(params.currency || rawDetail.currency || ''),
+                    String(params.order_uuid || rawDetail.order_uuid || ''),
+                    String(params.checkout_group_uuid || rawDetail.checkout_group_uuid || ''),
+                    String(params.checkout_session_code || rawDetail.checkout_session_code || '')
+                ].join('|');
+                var fpSeen = window.__welineSandboxStreamRelayFp;
+                if (!fpSeen || typeof fpSeen !== 'object') {
+                    fpSeen = {};
+                    window.__welineSandboxStreamRelayFp = fpSeen;
+                }
+                var now = Date.now();
+                var prevFpAt = Number(fpSeen[fp] || 0);
+                if (prevFpAt && (now - prevFpAt) < 2500) {
+                    return;
+                }
+                fpSeen[fp] = now;
+                var fpKeys = Object.keys(fpSeen);
+                if (fpKeys.length > 120) {
+                    fpKeys.slice(0, fpKeys.length - 80).forEach(function (k) { delete fpSeen[k]; });
+                }
             }
             var seen = window.__welineSandboxStreamRelaySeen;
             if (!seen || typeof seen !== 'object') {
@@ -5220,15 +5699,15 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                 : (envelope.params && typeof envelope.params === 'object' ? envelope.params : {});
             var body = new URLSearchParams();
             body.set('website_id', websiteId);
-            body.set('weline_event', String(envelope.name || envelope.event_name || 'event'));
+            body.set('weline_event', eventName);
             body.set('third_party_event', String(envelope.third_party_event || envelope.event_name || ''));
-            body.set('source', String(envelope.source || 'sandbox_stream'));
+            body.set('source', source);
             body.set('hit_kind', String(envelope.hit_kind || ''));
             body.set('event_hit', envelope.event_hit ? '1' : '0');
             body.set('custom', String(envelope.hit_kind || '') === 'custom' ? '1' : '0');
             body.set('path', String((window.location && window.location.href) || ''));
             body.set('at', new Date().toISOString());
-            body.set('summary', String(envelope.source === 'click' ? 'click passthrough' : ''));
+            body.set('summary', String(source === 'click' ? 'click passthrough' : ''));
             try {
                 body.set('params_json', JSON.stringify(compact));
             } catch (eParams) {
@@ -5272,6 +5751,20 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             this.subscribers = Array.isArray(this.subscribers) ? this.subscribers : [];
             this.subscribers.push(fn);
             this.ensureLifecycleBridge();
+            // 回放缓冲：成功页 SSR track 常早于监视 subscribe
+            try {
+                var buf = Array.isArray(this._earlyBuffer) ? this._earlyBuffer.slice() : [];
+                for (var ri = 0; ri < buf.length; ri++) {
+                    try {
+                        fn(buf[ri]);
+                    } catch (eRep) {
+                        if (window.DEV) {
+                            console.debug('WelineEventSandbox replay failed', eRep);
+                        }
+                    }
+                }
+            } catch (eReplay) {
+            }
             var self = this;
             return function unsubscribe() {
                 self.unsubscribe(fn);
@@ -6155,18 +6648,19 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             delete __visitorForwarderMeta[name];
         },
         emit: function (event) {
-            if (event && event.forwarding && event.forwarding.allowed === false) {
-                return;
-            }
-            Object.keys(__visitorForwarders).forEach(function (name) {
-                try {
-                    __visitorForwarders[name](event);
-                } catch (error) {
-                    if (window.DEV) {
-                        console.debug('Weline Visitor forwarder failed:', name, error && error.message ? error.message : error);
+            var blocked = !!(event && event.forwarding && event.forwarding.allowed === false);
+            if (!blocked) {
+                Object.keys(__visitorForwarders).forEach(function (name) {
+                    try {
+                        __visitorForwarders[name](event);
+                    } catch (error) {
+                        if (window.DEV) {
+                            console.debug('Weline Visitor forwarder failed:', name, error && error.message ? error.message : error);
+                        }
                     }
-                }
-            });
+                });
+            }
+            // 沙盒厂商 fanout / 转化去重黄标：即使 forwarding 被拦仍执行（监视流靠外层 publish）
             try {
                 if (typeof __fanoutPixelVendors === 'function') {
                     __fanoutPixelVendors(event);
@@ -6459,19 +6953,22 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     }
 
     /**
-     * @returns {''|'system'|'custom'}
+     * @returns {''|'system'|'custom'|'dedupe'}
      */
     function __sandboxHitKind(name, extras) {
         extras = extras && typeof extras === 'object' ? extras : {};
         name = String(name || extras.event_name || '').trim();
+        var forced = String(extras.hit_kind || extras.event_kind || '').trim().toLowerCase();
+        var source = String(extras.source || '').trim().toLowerCase();
+        if (forced === 'dedupe' || source === 'dedupe') {
+            return 'dedupe';
+        }
         if (!__sandboxIsCustomEventHit(name, extras)) {
             return '';
         }
-        var forced = String(extras.hit_kind || extras.event_kind || '').trim().toLowerCase();
         if (forced === 'system' || forced === 'custom') {
             return forced;
         }
-        var source = String(extras.source || '').trim().toLowerCase();
         if (source === 'lifecycle' || source === 'chain') {
             return 'system';
         }
@@ -6495,12 +6992,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return 'custom';
     }
 
+
     function __sandboxCompactParams(raw) {
         var out = {};
         var count = 0;
         function put(key, val) {
             key = String(key || '').trim();
-            if (!key || Object.prototype.hasOwnProperty.call(out, key) || count >= 40) {
+            if (!key || Object.prototype.hasOwnProperty.call(out, key) || count >= 64) {
                 return;
             }
             var t = typeof val;
@@ -6512,12 +7010,57 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                 count++;
             }
         }
+        function putEcommerceBag(bag) {
+            if (!bag || typeof bag !== 'object') {
+                return;
+            }
+            ['value', 'currency', 'grand_total', 'transaction_id', 'order_uuid', 'order_id', 'business_key'].forEach(function (k) {
+                if (bag[k] !== undefined && bag[k] !== null && bag[k] !== '') {
+                    put(k, bag[k]);
+                }
+            });
+            var items = Array.isArray(bag.items) ? bag.items : null;
+            if (!items && bag.ecommerce && typeof bag.ecommerce === 'object' && Array.isArray(bag.ecommerce.items)) {
+                items = bag.ecommerce.items;
+                if (bag.ecommerce.value !== undefined) {
+                    put('value', bag.ecommerce.value);
+                }
+                if (bag.ecommerce.currency) {
+                    put('currency', bag.ecommerce.currency);
+                }
+            }
+            if (!items || !items.length) {
+                return;
+            }
+            put('items_count', items.length);
+            try {
+                put('items', JSON.stringify(items).slice(0, 2500));
+            } catch (eItemsJson) {
+            }
+            for (var i = 0; i < items.length && i < 6; i++) {
+                var it = items[i];
+                if (!it || typeof it !== 'object') {
+                    continue;
+                }
+                var n = i + 1;
+                put('item_' + n + '_id', it.item_id || it.product_id || it.sku || '');
+                put('item_' + n + '_name', it.item_name || it.name || '');
+                if (it.price !== undefined && it.price !== null && it.price !== '') {
+                    put('item_' + n + '_price', it.price);
+                }
+                if (it.quantity !== undefined && it.quantity !== null && it.quantity !== '') {
+                    put('item_' + n + '_quantity', it.quantity);
+                } else if (it.qty !== undefined && it.qty !== null && it.qty !== '') {
+                    put('item_' + n + '_quantity', it.qty);
+                }
+            }
+        }
         function takeObject(obj, prefix) {
             if (!obj || typeof obj !== 'object') {
                 return;
             }
             Object.keys(obj).forEach(function (k) {
-                if (k === 'domElement' || k === 'element' || k === 'meta' || k === 'raw' || k === 'chain' || k === 'event') {
+                if (k === 'domElement' || k === 'element' || k === 'meta' || k === 'raw' || k === 'chain' || k === 'event' || k === 'items' || k === 'ecommerce') {
                     return;
                 }
                 var val = obj[k];
@@ -6537,7 +7080,10 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         if (!raw || typeof raw !== 'object') {
             return out;
         }
+        // GA4 电商字段优先：避免标量配额被噪音占满后丢掉 value/items
+        putEcommerceBag(raw);
         if (raw.params && typeof raw.params === 'object') {
+            putEcommerceBag(raw.params);
             takeObject(raw.params, '');
         }
         takeObject(raw, '');
@@ -7812,7 +8358,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.07.24-a12';
+    var PIXEL_SCRIPT_VERSION = '2026.09.16-sandbox-early-buffer';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -8846,11 +9392,43 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         };
     }
 
+    function __getOrderConfirmItems() {
+        var nodes = document.querySelectorAll
+            ? document.querySelectorAll('.amz-order-confirm__item, [data-order-item], [data-testid="order-item"]')
+            : [];
+        var items = [];
+        for (var i = 0; i < nodes.length && i < 20; i++) {
+            var node = nodes[i];
+            var productId = __firstAttr(node, ['data-product-id', 'data-item-id', 'data-id']);
+            var name = __firstAttr(node, ['data-product-name', 'data-name', 'data-item-name'])
+                || __firstText(node, ['.amz-order-confirm__item-title', '.product-title', '.product-name', 'h3', 'a', 'p']);
+            var price = __firstNumber(node, ['[data-price]', '[data-pixel-value]', '.amz-order-confirm__item-price', '.price-amount']);
+            var qtyText = __firstText(node, ['.amz-order-confirm__item-qty', '[data-qty]', '[data-quantity]']);
+            var quantity = __pixelNumber(qtyText);
+            if (quantity === null || quantity <= 0) {
+                quantity = 1;
+            }
+            if (!productId && !name && price === null) {
+                continue;
+            }
+            items.push({
+                product_id: productId,
+                item_id: productId || name,
+                name: name,
+                item_name: name,
+                price: price,
+                quantity: quantity,
+                qty: quantity
+            });
+        }
+        return items;
+    }
+
     function __getCheckoutMeta(eventName, element) {
         var meta = __getCartMeta(eventName, element);
         var shipping = __firstText(document, ['input[name*="shipping"]:checked + label', '[data-selected-shipping]', '.shipping-method.active', '.shipping-method.selected']);
         var payment = __firstText(document, ['input[name*="payment"]:checked + label', '[data-selected-payment]', '.payment-method.active', '.payment-method.selected']);
-        var orderId = __firstText(document, ['[data-order-id]', '[data-order-number]', '.order-number', '.order-id']);
+        var orderId = __firstText(document, ['[data-order-id]', '[data-order-number]', '.order-number', '.order-id', '.amz-order-confirm__order-no strong']);
         if (shipping !== '') {
             meta.shipping_method = shipping;
         }
@@ -8859,7 +9437,41 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         }
         if (orderId !== '') {
             meta.order_id = orderId;
-            meta.transaction_id = orderId;
+            meta.transaction_id = meta.transaction_id || orderId;
+        }
+        if (!meta.items || !meta.items.length) {
+            var confirmItems = __getOrderConfirmItems();
+            if (confirmItems.length) {
+                meta.items = confirmItems;
+                meta.cart_items_count = confirmItems.length;
+            }
+        }
+        var root = null;
+        try {
+            root = (element && element.closest && element.closest('[data-pixel-value], [data-pixel-currency], [data-testid="checkout-success"], [data-testid="payment-return"], [data-testid="payment-success"]'))
+                || document.querySelector('[data-testid="checkout-success"], [data-testid="payment-return"], [data-testid="payment-success"], [data-pixel-event="checkout_success"], [data-pixel-event="payment_success"]');
+        } catch (eRoot) {
+            root = null;
+        }
+        if (root) {
+            var pixelValue = __pixelNumber(root.getAttribute('data-pixel-value') || root.getAttribute('data-amount'));
+            var pixelCurrency = String(root.getAttribute('data-pixel-currency') || root.getAttribute('data-currency') || '').trim();
+            if ((meta.value === null || meta.value === undefined || meta.value === '') && pixelValue !== null) {
+                meta.value = pixelValue;
+                meta.grand_total = pixelValue;
+                meta.total = pixelValue;
+            }
+            if (!meta.currency && pixelCurrency) {
+                meta.currency = pixelCurrency;
+            }
+            var ou = String(root.getAttribute('data-order-uuid') || '').trim();
+            var tid = String(root.getAttribute('data-transaction-id') || '').trim();
+            if (ou && !meta.order_uuid) {
+                meta.order_uuid = ou;
+            }
+            if (tid && !meta.transaction_id) {
+                meta.transaction_id = tid;
+            }
         }
         return meta;
     }
@@ -8932,9 +9544,10 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     function __applyEventMetaToPayload(payload, meta) {
         var allowed = [
             'query', 'query_length', 'url_query', 'input_name', 'input_id', 'form_action', 'form_method', 'result_count', 'category', 'search_url', 'suggestion_text', 'suggestion_url', 'suggestion_position',
-            'product_id', 'item_id', 'sku', 'name', 'content_name', 'price', 'quantity', 'qty', 'value', 'items', 'selected_options', 'product_url',
+            'product_id', 'item_id', 'sku', 'name', 'content_name', 'price', 'quantity', 'qty', 'value', 'currency', 'items', 'selected_options', 'product_url',
             'total', 'grand_total', 'cart_total', 'cart_items_count',
             'shipping_method', 'payment_method', 'order_id', 'transaction_id',
+            'order_uuid', 'checkout_group_uuid', 'transaction_no',
             'href', 'link_text', 'from_url', 'from_path', 'to_url', 'to_path', 'same_origin'
         ];
         for (var i = 0; i < allowed.length; i++) {
@@ -9568,6 +10181,236 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     }
 
 
+    function __getConversionDedupeRuntime() {
+        var cfg = window.__WelineVisitorTrackingConfig || {};
+        var block = (cfg && cfg.conversionDedupe) || {};
+        var enabled = block.enabled !== false && block.enabled !== 0 && block.enabled !== '0';
+        var ttlDays = parseInt(block.ttlDays, 10);
+        if (!isFinite(ttlDays) || ttlDays < 1) {
+            ttlDays = 180;
+        }
+        if (ttlDays > 730) {
+            ttlDays = 730;
+        }
+        var events = Array.isArray(block.events) ? block.events.slice() : [
+            'payment_success', 'checkout_success', 'checkout_failure', '*_checkout_success'
+        ];
+        return {
+            enabled: enabled,
+            ttlDays: ttlDays,
+            ttlMs: ttlDays * 86400000,
+            events: events
+        };
+    }
+
+    function __conversionDedupeEventMatches(eventName, events) {
+        var name = String(eventName || '').toLowerCase();
+        if (!name) {
+            return false;
+        }
+        for (var i = 0; i < events.length; i++) {
+            var candidate = String(events[i] || '').toLowerCase().trim();
+            if (!candidate) {
+                continue;
+            }
+            if (candidate === name) {
+                return true;
+            }
+            if (candidate === '*_checkout_success' && name.slice(-17) === '_checkout_success') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function __resolveConversionBusinessKey(meta) {
+        var bags = [];
+        if (meta && typeof meta === 'object') {
+            bags.push(meta);
+            if (meta.ecommerce && typeof meta.ecommerce === 'object') {
+                bags.push(meta.ecommerce);
+            }
+            if (meta.additionalInfo && typeof meta.additionalInfo === 'object') {
+                bags.push(meta.additionalInfo);
+                if (meta.additionalInfo.ecommerce && typeof meta.additionalInfo.ecommerce === 'object') {
+                    bags.push(meta.additionalInfo.ecommerce);
+                }
+            }
+        }
+        try {
+            var root = document.querySelector('[data-order-uuid],[data-checkout-group-uuid],[data-transaction-no]');
+            if (root) {
+                bags.push({
+                    order_uuid: root.getAttribute('data-order-uuid') || '',
+                    checkout_group_uuid: root.getAttribute('data-checkout-group-uuid') || '',
+                    transaction_id: root.getAttribute('data-transaction-no') || '',
+                    transaction_no: root.getAttribute('data-transaction-no') || ''
+                });
+            }
+        } catch (eDom) {
+        }
+        var fields = ['transaction_id', 'order_uuid', 'order_id', 'checkout_group_uuid', 'transaction_no'];
+        for (var f = 0; f < fields.length; f++) {
+            var field = fields[f];
+            for (var b = 0; b < bags.length; b++) {
+                var bag = bags[b];
+                if (!bag || bag[field] === undefined || bag[field] === null) {
+                    continue;
+                }
+                var value = String(bag[field]).trim();
+                if (value !== '') {
+                    return value.slice(0, 191);
+                }
+            }
+        }
+        return '';
+    }
+
+    function __conversionDedupeStorageKey(eventName, businessKey) {
+        var scope = 'default.default.default';
+        try {
+            scope = __resolvePixelStorageScope() || scope;
+        } catch (eScope) {
+        }
+        return 'weline_pixel_dedupe:' + scope + ':' + String(eventName || '') + ':' + String(businessKey || '');
+    }
+
+    /**
+     * 只读：转化键在 TTL 内是否已见过（不写 localStorage）。
+     */
+    function __isConversionDedupeDuplicate(eventName, meta) {
+        var runtime = __getConversionDedupeRuntime();
+        if (!runtime.enabled) {
+            return false;
+        }
+        if (!__conversionDedupeEventMatches(eventName, runtime.events)) {
+            return false;
+        }
+        var businessKey = __resolveConversionBusinessKey(meta);
+        if (!businessKey) {
+            return false;
+        }
+        var key = __conversionDedupeStorageKey(eventName, businessKey);
+        var now = Date.now();
+        try {
+            var raw = window.localStorage && window.localStorage.getItem(key);
+            if (!raw) {
+                return false;
+            }
+            var parsed = null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (eParse) {
+                parsed = null;
+            }
+            var expiresAt = 0;
+            if (parsed && typeof parsed === 'object') {
+                expiresAt = parseInt(parsed.expiresAt, 10) || 0;
+            } else if (/^\d+$/.test(String(raw))) {
+                expiresAt = now + runtime.ttlMs;
+            }
+            if (expiresAt > now) {
+                return true;
+            }
+            try {
+                window.localStorage.removeItem(key);
+            } catch (eRm) {
+            }
+        } catch (eLs) {
+            return false;
+        }
+        return false;
+    }
+
+    /**
+     * 首次沙盒发送成功前写入 TTL 键（供后续刷新判定重复）。
+     */
+    function __markConversionDedupeSeen(eventName, meta) {
+        var runtime = __getConversionDedupeRuntime();
+        if (!runtime.enabled) {
+            return;
+        }
+        if (!__conversionDedupeEventMatches(eventName, runtime.events)) {
+            return;
+        }
+        var businessKey = __resolveConversionBusinessKey(meta);
+        if (!businessKey) {
+            return;
+        }
+        var key = __conversionDedupeStorageKey(eventName, businessKey);
+        var now = Date.now();
+        try {
+            window.localStorage.setItem(key, JSON.stringify({
+                ts: now,
+                expiresAt: now + runtime.ttlMs
+            }));
+        } catch (eLs) {
+        }
+    }
+
+    /**
+     * @deprecated 保留别名：等价于「已是重复」只读检查；写键请用 __markConversionDedupeSeen。
+     */
+    function __shouldDropConversionDedupe(eventName, meta) {
+        return __isConversionDedupeDuplicate(eventName, meta);
+    }
+
+    /**
+     * 去重丢弃（仅沙盒厂商）：黄标记入监视流，不代替主 track 事件。
+     */
+    function __emitConversionDedupeSandbox(eventName, meta) {
+        try {
+            var sb = window.WelineEventSandbox || window.WelinePixelSandbox;
+            if (!sb || typeof sb.emit !== 'function') {
+                return;
+            }
+            var businessKey = __resolveConversionBusinessKey(meta || {});
+            var params = {
+                dedupe: true,
+                dedupe_dropped: true,
+                business_key: businessKey,
+                event: String(eventName || '')
+            };
+            if (meta && typeof meta === 'object') {
+                ['transaction_id', 'order_uuid', 'order_id', 'checkout_group_uuid', 'transaction_no', 'value', 'currency', 'grand_total', 'payment_method'].forEach(function (k) {
+                    if (meta[k] !== undefined && meta[k] !== null && meta[k] !== '') {
+                        params[k] = meta[k];
+                    }
+                });
+                var items = Array.isArray(meta.items) ? meta.items : null;
+                if (!items && meta.ecommerce && typeof meta.ecommerce === 'object' && Array.isArray(meta.ecommerce.items)) {
+                    items = meta.ecommerce.items;
+                    if (meta.ecommerce.value !== undefined && params.value === undefined) {
+                        params.value = meta.ecommerce.value;
+                    }
+                    if (meta.ecommerce.currency && !params.currency) {
+                        params.currency = meta.ecommerce.currency;
+                    }
+                }
+                if (items && items.length) {
+                    params.items = items.slice(0, 20);
+                    params.items_count = items.length;
+                }
+            }
+            sb.emit({
+                weline_event: eventName,
+                eventName: eventName,
+                name: eventName,
+                params: params,
+                timestampMs: Date.now(),
+                source: 'dedupe',
+                trigger: 'dedupe'
+            }, {
+                event_hit: true,
+                hit_kind: 'dedupe',
+                source: 'dedupe',
+                event_name: eventName
+            });
+        } catch (eEmit) {
+        }
+    }
+
+    
     window.WelinePixel = {
         endpoint: 'worker:visitor.trackPixel',
         script_version: PIXEL_SCRIPT_VERSION,
@@ -9652,6 +10495,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         track: function (eventName, meta, options) {
             options = options || {};
             var normalizedEventName = __normalizePixelEventName(eventName || 'behavior_event');
+            // 转化去重不拦截主 track：事件流/监视/后端上报照常；仅沙盒厂商 fanout 丢弃（见 __fanoutPixelVendors）。
             var payload = JSON.parse(JSON.stringify(this.init));
             var now = new Date();
             var domElement = options.element || (meta && meta.domElement) || null;
@@ -9740,6 +10584,11 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             }
 
             this.send(payload, options.url || this.url);
+            // 主 track 成功后再记键：本轮沙盒 fanout 仍放行，刷新后的沙盒发送才丢弃
+            try {
+                __markConversionDedupeSeen(normalizedEventName, mergedMeta);
+            } catch (eMark) {
+            }
             return payload;
         },
         target: function (event) {
@@ -10279,16 +11128,76 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return true;
     }
 
+    function __conversionMetaFromVendorEvent(event) {
+        var meta = {};
+        if (!event || typeof event !== 'object') {
+            return meta;
+        }
+        var bags = [event];
+        if (event.meta && typeof event.meta === 'object') {
+            bags.push(event.meta);
+        }
+        if (event.payload && typeof event.payload === 'object') {
+            bags.push(event.payload);
+        }
+        if (event.params && typeof event.params === 'object') {
+            bags.push(event.params);
+        }
+        if (event.additionalInfo && typeof event.additionalInfo === 'object') {
+            bags.push(event.additionalInfo);
+        }
+        if (event.payload && event.payload.additionalInfo && typeof event.payload.additionalInfo === 'object') {
+            bags.push(event.payload.additionalInfo);
+        }
+        ['transaction_id', 'order_uuid', 'order_id', 'checkout_group_uuid', 'transaction_no', 'value', 'currency', 'grand_total', 'payment_method', 'items'].forEach(function (k) {
+            for (var i = 0; i < bags.length; i++) {
+                var bag = bags[i];
+                if (bag[k] !== undefined && bag[k] !== null && bag[k] !== '') {
+                    meta[k] = bag[k];
+                    break;
+                }
+            }
+        });
+        return meta;
+    }
+
+    function __resolvePixelVendorArea(cfg) {
+        cfg = cfg || {};
+        var fromBody = '';
+        try {
+            fromBody = String((document.body && document.body.getAttribute('data-area')) || '').trim().toLowerCase();
+        } catch (eBody) {
+            fromBody = '';
+        }
+        if (fromBody === 'frontend' || fromBody === 'backend') {
+            return fromBody;
+        }
+        var path = '/';
+        try {
+            path = String((typeof location !== 'undefined' && location.pathname) || '/');
+        } catch (ePath) {
+            path = '/';
+        }
+        if (/^\/(admin|backend|weline_admin)\b/i.test(path)) {
+            return 'backend';
+        }
+        // 店面路径默认 frontend：避免 tracking config 误带 backend 导致沙盒厂商 scope 全灭、去重黄标不到
+        return 'frontend';
+    }
+
     function __fanoutPixelVendors(event) {
         var cfg = window.__WelineVisitorTrackingConfig || {};
         var vendors = Array.isArray(cfg.vendors) ? cfg.vendors : [];
         if (!vendors.length || !event) {
             return;
         }
-        var welineEvent = String((event.weline_event || event.name || '')).trim();
+        var welineEvent = String((event.weline_event || event.eventName || event.name || '')).trim();
         var path = (typeof location !== 'undefined' && location.pathname) ? location.pathname : '/';
-        var area = (cfg.area || (typeof document !== 'undefined' && document.body && document.body.getAttribute('data-area')) || 'frontend');
+        var area = __resolvePixelVendorArea(cfg);
         var injectSeen = {};
+        var dedupeMeta = __conversionMetaFromVendorEvent(event);
+        var sandboxDedupeEmitted = false;
+        var sandboxDedupeIsDup = __isConversionDedupeDuplicate(welineEvent, dedupeMeta);
         vendors.forEach(function (vendor) {
             if (!vendor || !vendor.enabled) {
                 return;
@@ -10316,6 +11225,14 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                 ga4_event: mapped
             });
             if (mode === 'sandbox') {
+                // 仅沙盒厂商去重：主事件流已由 publish 透传；重复则黄标并跳过沙盒 iframe
+                if (sandboxDedupeIsDup) {
+                    if (!sandboxDedupeEmitted) {
+                        __emitConversionDedupeSandbox(welineEvent, dedupeMeta);
+                        sandboxDedupeEmitted = true;
+                    }
+                    return;
+                }
                 if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.publishVendor === 'function') {
                     window.WelinePixelSandbox.publishVendor(code, payload, vendor);
                 } else if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.publish === 'function') {
@@ -10346,6 +11263,11 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         vendorFrames: (window.WelinePixelSandbox && window.WelinePixelSandbox.vendorFrames) || {},
         _lifecycleBridged: false,
         _emitSeq: 0,
+        // 监视晚于 SSR track 订阅时，靠环形缓冲回放，避免 checkout_success / 黄标丢在「全量数据流」外
+        _earlyBuffer: (window.WelinePixelSandbox && Array.isArray(window.WelinePixelSandbox._earlyBuffer))
+            ? window.WelinePixelSandbox._earlyBuffer
+            : [],
+        _earlyBufferMax: 100,
         ensureFrame: function () {
             if (this.iframe && this.iframe.isConnected) {
                 return this.iframe;
@@ -10475,12 +11397,16 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                     hitExtras.hit_kind = 'system';
                 }
             }
+            if (source === 'dedupe') {
+                eventHit = true;
+                hitExtras.hit_kind = 'dedupe';
+            }
             var hitKind = '';
             if (eventHit) {
                 hitKind = typeof __sandboxHitKind === 'function'
                     ? __sandboxHitKind(name, hitExtras)
                     : 'custom';
-                if (hitKind !== 'system' && hitKind !== 'custom') {
+                if (hitKind !== 'system' && hitKind !== 'custom' && hitKind !== 'dedupe') {
                     hitKind = 'custom';
                 }
             }
@@ -10506,6 +11432,15 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         },
         emit: function (raw, extras) {
             var envelope = this.normalizeEnvelope(raw, extras);
+            try {
+                this._earlyBuffer = Array.isArray(this._earlyBuffer) ? this._earlyBuffer : [];
+                this._earlyBuffer.push(envelope);
+                var maxBuf = this._earlyBufferMax || 100;
+                if (this._earlyBuffer.length > maxBuf) {
+                    this._earlyBuffer = this._earlyBuffer.slice(-maxBuf);
+                }
+            } catch (eBuf) {
+            }
             var list = Array.isArray(this.subscribers) ? this.subscribers.slice() : [];
             for (var i = 0; i < list.length; i++) {
                 try {
@@ -10528,9 +11463,14 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         },
         /**
          * 继电到后台「本会话沙盒」accumulate（与 Monitor 同源全量流，含 click 透传）。
+         * 仅监视/生命周期助手开启时继电；lifecycle 高频辅助事件按指纹去重，避免结账 DOM 同步风暴。
          */
         relayToAdminSession: function (envelope) {
             if (!envelope || typeof envelope !== 'object') {
+                return;
+            }
+            if (typeof __isSandboxMonitorActiveForAutoRegister === 'function'
+                && !__isSandboxMonitorActiveForAutoRegister()) {
                 return;
             }
             var websiteId = '';
@@ -10543,6 +11483,38 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             }
             if (!/^\d+$/.test(websiteId)) {
                 return;
+            }
+            var eventName = String(envelope.name || envelope.event_name || 'event');
+            var source = String(envelope.source || 'sandbox_stream');
+            var isLifecycle = source === 'lifecycle' || source === 'chain'
+                || eventName.indexOf('weline:checkout:fields-ready') !== -1;
+            if (isLifecycle) {
+                var rawDetail = envelope.raw && typeof envelope.raw === 'object' ? envelope.raw : {};
+                var paramsLc = envelope.params && typeof envelope.params === 'object' ? envelope.params : {};
+                var fp = [
+                    eventName,
+                    source,
+                    String(paramsLc.amount || rawDetail.amount || ''),
+                    String(paramsLc.currency || rawDetail.currency || ''),
+                    String(paramsLc.order_uuid || rawDetail.order_uuid || ''),
+                    String(paramsLc.checkout_group_uuid || rawDetail.checkout_group_uuid || ''),
+                    String(paramsLc.checkout_session_code || rawDetail.checkout_session_code || '')
+                ].join('|');
+                var fpSeen = window.__welineSandboxStreamRelayFp;
+                if (!fpSeen || typeof fpSeen !== 'object') {
+                    fpSeen = {};
+                    window.__welineSandboxStreamRelayFp = fpSeen;
+                }
+                var now = Date.now();
+                var prevFpAt = Number(fpSeen[fp] || 0);
+                if (prevFpAt && (now - prevFpAt) < 2500) {
+                    return;
+                }
+                fpSeen[fp] = now;
+                var fpKeys = Object.keys(fpSeen);
+                if (fpKeys.length > 120) {
+                    fpKeys.slice(0, fpKeys.length - 80).forEach(function (k) { delete fpSeen[k]; });
+                }
             }
             var seen = window.__welineSandboxStreamRelaySeen;
             if (!seen || typeof seen !== 'object') {
@@ -10562,15 +11534,15 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             }
             var body = new URLSearchParams();
             body.set('website_id', websiteId);
-            body.set('weline_event', String(envelope.name || envelope.event_name || 'event'));
+            body.set('weline_event', eventName);
             body.set('third_party_event', String(envelope.third_party_event || envelope.event_name || ''));
-            body.set('source', String(envelope.source || 'sandbox_stream'));
+            body.set('source', source);
             body.set('hit_kind', String(envelope.hit_kind || ''));
             body.set('event_hit', envelope.event_hit ? '1' : '0');
             body.set('custom', String(envelope.hit_kind || '') === 'custom' ? '1' : '0');
             body.set('path', String((window.location && window.location.href) || ''));
             body.set('at', new Date().toISOString());
-            body.set('summary', String(envelope.source === 'click' ? 'click passthrough' : ''));
+            body.set('summary', String(source === 'click' ? 'click passthrough' : ''));
             try {
                 body.set('params_json', JSON.stringify(envelope.params && typeof envelope.params === 'object' ? envelope.params : {}).slice(0, 4000));
             } catch (eParams) {
@@ -10614,6 +11586,20 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             this.subscribers = Array.isArray(this.subscribers) ? this.subscribers : [];
             this.subscribers.push(fn);
             this.ensureLifecycleBridge();
+            // 回放缓冲：成功页 SSR track 常早于监视 subscribe
+            try {
+                var buf = Array.isArray(this._earlyBuffer) ? this._earlyBuffer.slice() : [];
+                for (var ri = 0; ri < buf.length; ri++) {
+                    try {
+                        fn(buf[ri]);
+                    } catch (eRep) {
+                        if (window.DEV) {
+                            console.debug('WelineEventSandbox replay failed', eRep);
+                        }
+                    }
+                }
+            } catch (eReplay) {
+            }
             var self = this;
             return function unsubscribe() {
                 self.unsubscribe(fn);

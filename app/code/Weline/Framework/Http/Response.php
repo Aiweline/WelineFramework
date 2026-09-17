@@ -522,7 +522,21 @@ class Response implements ResponseInterface
             return;
         }
 
+        // Never rewrite binary query-bin packets. WQB1 payloads often embed preview HTML
+        // strings; mistaking them for documents prepends CSP <meta> and breaks magic.
+        if (\strncmp($this->body, 'WQB1', 4) === 0) {
+            return;
+        }
+
         $contentType = \strtolower((string)($this->getHeader('Content-Type') ?? ''));
+        if ($contentType !== ''
+            && (\str_contains($contentType, 'weline-query-bin')
+                || \str_contains($contentType, 'octet-stream')
+                || \str_contains($contentType, 'application/octet-stream'))
+        ) {
+            return;
+        }
+
         $looksHtml = $contentType === ''
             || \str_contains($contentType, 'text/html')
             || \str_contains($contentType, 'application/xhtml');

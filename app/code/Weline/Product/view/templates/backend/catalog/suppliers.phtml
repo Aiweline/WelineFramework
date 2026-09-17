@@ -109,10 +109,39 @@ foreach ($rows as $row) {
         'has_store' => $storeUrl !== '',
     ];
 }
+$websiteOptionsForScope = json_decode((string)($websiteOptionsJson ?? '[]'), true);
+if (!is_array($websiteOptionsForScope)) {
+    $websiteOptionsForScope = [];
+}
+$supplierMediaIdentityScope = 'default.default.default';
+foreach ($websiteOptionsForScope as $websiteOpt) {
+    if (!is_array($websiteOpt)) {
+        continue;
+    }
+    if ((int)($websiteOpt['website_id'] ?? -1) !== (int)$website_id) {
+        continue;
+    }
+    $websiteCode = trim((string)($websiteOpt['code'] ?? ''));
+    if ($websiteCode !== '' && !str_contains($websiteCode, '.') && !str_contains($websiteCode, ':')) {
+        $supplierMediaIdentityScope = strtolower($websiteCode) . '.default.default';
+    }
+    break;
+}
+$supplierMediaIdentityCode = trim((string)($editing['code'] ?? ''));
+if ($supplierMediaIdentityCode === '' || str_contains($supplierMediaIdentityCode, ':')) {
+    $supplierMediaIdentityCode = $editingId > 0 ? ('supplier-' . $editingId) : 'draft';
+}
 ?>
 <link rel="stylesheet" href="@static(Weline_Product::css/backend/catalog-entity-media.css)?v=20260901-entity-media">
 <div class="w-stack" data-gap="md" data-product-admin="suppliers" data-testid="product-supplier-admin"
-     data-product-entity-media-root>
+     data-product-entity-media-root
+     data-media-identity-root="product_supplier"
+     data-media-identity-code="<?= $escape($supplierMediaIdentityCode) ?>"
+     data-media-identity-scope="<?= $escape($supplierMediaIdentityScope) ?>"
+     data-media-identity-kind="image"
+     data-media-identity-field="image"
+     data-media-ref-mode="single"
+     data-media-code-input="#product-supplier-code">
     <template>Weline_Component::message.phtml</template>
 
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
@@ -377,11 +406,13 @@ foreach ($rows as $row) {
             <iframe class="w-product-media-picker__frame"
                     title="@lang(媒体库)"
                     data-product-entity-media-frame
-                    data-src="@backend-url('media/backend/manager/iframe')?target=product-supplier-image&multi=0&usage=1&ext=jpg,png,gif,webp"></iframe>
+                    data-src="@backend-url('media/backend/manager/iframe')?target=product-supplier-image&multi=0&usage=1&ext=jpg,png,gif,webp&identity_root=product_supplier&identity_kind=image&identity_field=image&ref_mode=single"></iframe>
         </div>
     </dialog>
 </div>
-<script src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260901-entity-media"></script>
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
+<script src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260916-media-identity"></script>
 <script>
 (function () {
     'use strict';

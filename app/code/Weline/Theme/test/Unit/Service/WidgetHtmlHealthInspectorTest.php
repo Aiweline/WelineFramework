@@ -54,6 +54,24 @@ final class WidgetHtmlHealthInspectorTest extends TestCase
         }
     }
 
+    public function testStoreMusicEmptySuppressedWhenPageAlreadyHasFloat(): void
+    {
+        $issues = $this->inspector->inspect('', ['code' => 'store-music', 'slot_id' => 'content']);
+        self::assertTrue($this->hasCode($issues, 'empty_html'));
+        $filtered = $this->inspector->suppressSatisfiedDualPathEmpty(
+            $issues,
+            ['code' => 'store-music'],
+            '<div data-store-music="1"></div>',
+        );
+        self::assertSame([], $filtered);
+        $kept = $this->inspector->suppressSatisfiedDualPathEmpty(
+            $issues,
+            ['code' => 'store-music'],
+            '<div class="no-float"></div>',
+        );
+        self::assertTrue($this->hasCode($kept, 'empty_html'));
+    }
+
     public function testDetectsUnclosedAndMismatch(): void
     {
         $unclosed = $this->inspector->inspect('<div class="a"><span>x');

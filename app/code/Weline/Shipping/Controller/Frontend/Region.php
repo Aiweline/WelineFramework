@@ -278,9 +278,18 @@ class Region extends FrontendController
 
     private function json(array $data, int $statusCode = 200): string
     {
-        http_response_code($statusCode);
-        header('Content-Type: application/json; charset=utf-8');
+        // WLS 持久进程必须写 Framework Response 头；原生 header() 不会进 Response，
+        // 正文会被当成 text/html 再被 CSP meta 污染，导致 address.js response.json() 失败并狂打 BinQuery。
+        $payload = json_encode($data, JSON_UNESCAPED_UNICODE);
+        if ($payload === false) {
+            $payload = '{"success":false,"message":"json encode failed","data":null}';
+            $statusCode = 500;
+        }
+        $response = $this->request->getResponse();
+        $response->setHttpResponseCode($statusCode);
+        $response->setHeader('Content-Type', 'application/json; charset=utf-8');
+        $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
 
-        return json_encode($data, JSON_UNESCAPED_UNICODE);
+        return $payload;
     }
 }

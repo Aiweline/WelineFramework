@@ -29,6 +29,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Php\FiberTaskBatch;
+use Weline\Framework\Setup\Model\Migration;
 use Weline\Framework\Setup\Service\SetupSourceFingerprint;
 
 /**
@@ -38,6 +39,9 @@ use Weline\Framework\Setup\Service\SetupSourceFingerprint;
 class SchemaDiffStage extends AbstractStage
 {
     private bool $sourceFingerprintSkipped = false;
+
+    /** @var array<string, string> prepare 产出、commit 成功后写入源指纹仓 */
+    private array $pendingSourceFingerprints = [];
 
     /** 不参与 SchemaDiff 的表（由 bootstrap 创建，表名不含前缀） */
     private const EXCLUDE_TABLES = [
@@ -174,6 +178,19 @@ class SchemaDiffStage extends AbstractStage
             $this->moduleCheckpointSources[$name] ??= [];
         }
 
+        // 源指纹全员命中但库内无 schema checkpoint：产物空，禁止跳过 prepare
+        if ($allFresh && !$this->schemaCheckpointsPresent()) {
+            $allFresh = false;
+            if (\PHP_SAPI === 'cli') {
+                try {
+                    ObjectManager::getInstance(Printing::class)->note(__(
+                        '   - Schema checkpoint 产物为空，忽略 Model 源指纹，强制 prepare 扫描'
+                    ));
+                } catch (\Throwable) {
+                }
+            }
+        }
+
         if ($allFresh) {
             $this->diffOps = [];
             $this->prepared = true;
@@ -190,20 +207,13 @@ class SchemaDiffStage extends AbstractStage
             return;
         }
 
-        /** @var array<string, true> $changedSchemaModules */
-        $changedSchemaModules = [];
-        foreach ($moduleFingerprints as $fpKey => $fp) {
-            $mod = \substr((string)$fpKey, \strlen('schema:'));
-            if ($forceRebind || !$sourceFingerprint->matches((string)$fpKey, (string)$fp)) {
-                $changedSchemaModules[$mod] = true;
-            }
-        }
-
+        // 禁止部分模块跳扫空 declarations（会误 DROP 未扫模块表）。
+        // 全员命中已在上方 allFresh 短路；此处必须全量解析 Model。
         $schemaFpPending = [];
         $schemaCollectBatch = new FiberTaskBatch(null, true, 'WELINE_SETUP_FIBER_CONCURRENCY');
         $schemaCollectBatch->mapModules(
             $modules,
-            function (string $moduleName, mixed $moduleData) use ($sourceFingerprint, $moduleFingerprints, $forceRebind): array {
+            function (string $moduleName, mixed $moduleData) use ($moduleFingerprints): array {
                 $module = new Module(\is_array($moduleData) ? $moduleData : []);
                 $name = $module->getName();
                 $fpKey = 'schema:' . $name;
@@ -213,13 +223,7 @@ class SchemaDiffStage extends AbstractStage
                     'declarations' => [],
                     'source_fp' => $fp,
                     'fp_key' => $fpKey,
-                    'skipped' => false,
                 ];
-                if (!$forceRebind && $fp !== '' && $sourceFingerprint->matches($fpKey, $fp)) {
-                    $bag['skipped'] = true;
-
-                    return $bag;
-                }
 
                 try {
                     $modelClasses = $this->moduleReader->readClass($module, 'Model');
@@ -285,11 +289,8 @@ class SchemaDiffStage extends AbstractStage
                 $this->moduleCheckpointSources[$moduleName] ??= [];
                 $fpKey = (string)($bag['fp_key'] ?? ('schema:' . $moduleName));
                 $fp = (string)($bag['source_fp'] ?? '');
-                if ($fp !== '' && empty($bag['skipped'])) {
+                if ($fp !== '') {
                     $schemaFpPending[$fpKey] = $fp;
-                }
-                if (!empty($bag['skipped'])) {
-                    return;
                 }
                 foreach (($bag['declarations'] ?? []) as $row) {
                     if (!\is_array($row)) {
@@ -370,15 +371,14 @@ class SchemaDiffStage extends AbstractStage
             }
         }
 
-        // 指纹仅在 prepare 成功末尾落盘，避免半成品跳过导致漏 DDL。
-        $store = $sourceFingerprint->loadStore();
+        // 源指纹仓仅在 commit 成功后落盘；prepare 失败/checkpoint 冲突不得写入，避免下次错误跳过。
+        $this->pendingSourceFingerprints = [];
         foreach ($moduleFingerprints as $fpKey => $fpVal) {
-            $store[(string)$fpKey] = (string)$fpVal;
+            $this->pendingSourceFingerprints[(string)$fpKey] = (string)$fpVal;
         }
         foreach ($schemaFpPending as $fpKey => $fpVal) {
-            $store[(string)$fpKey] = (string)$fpVal;
+            $this->pendingSourceFingerprints[(string)$fpKey] = (string)$fpVal;
         }
-        $sourceFingerprint->saveStore($store);
 
         $this->prepared = true;
         $this->clearErrors();
@@ -387,6 +387,26 @@ class SchemaDiffStage extends AbstractStage
     public function wasSourceFingerprintSkipped(): bool
     {
         return $this->sourceFingerprintSkipped;
+    }
+
+    /**
+     * 库内是否已有 schema checkpoint 产物。源指纹命中但 checkpoint 空时不得跳过 prepare。
+     */
+    private function schemaCheckpointsPresent(): bool
+    {
+        try {
+            /** @var Migration $migration */
+            $migration = ObjectManager::getInstance(Migration::class);
+            $total = (int)$migration
+                ->clear()
+                ->where(Migration::schema_fields_MIGRATION_TYPE, Migration::SCHEMA_CHECKPOINT_TYPE)
+                ->where(Migration::schema_fields_FILE, Migration::SCHEMA_CHECKPOINT_FILE)
+                ->total();
+
+            return $total > 0;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function validate(): bool
@@ -400,6 +420,14 @@ class SchemaDiffStage extends AbstractStage
             throw new Exception(__('阶段 %{1} 尚未准备，无法提交', [$this->getName()]));
         }
         if ($this->committed) {
+            return;
+        }
+
+        // 源指纹全员命中：无 DDL、无声明指纹重绑，禁止走 executor（避免空指纹触发 checkpoint 冲突假阳性）
+        if ($this->sourceFingerprintSkipped) {
+            $this->committed = true;
+            $this->clearErrors();
+
             return;
         }
 
@@ -427,6 +455,12 @@ class SchemaDiffStage extends AbstractStage
         } catch (\Throwable $e) {
             $this->addError(__('Schema 执行失败：%{1}', [$e->getMessage()]));
             throw new Exception(__('Schema 执行失败：%{1}', [$e->getMessage()]), 0, $e);
+        }
+
+        if ($this->pendingSourceFingerprints !== []) {
+            $fpService = new \Weline\Framework\Setup\Service\SetupSourceFingerprint();
+            $fpService->mergeUpdates($this->pendingSourceFingerprints);
+            $this->pendingSourceFingerprints = [];
         }
 
         $this->committed = true;

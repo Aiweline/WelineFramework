@@ -19,74 +19,6 @@ use Weline\Theme\Service\ThemePageTypeResolver;
  */
 class Router implements RouterInterface
 {
-    /**
-     * Public URLs shipped by the default Theme. These are fallback routes only:
-     * an existing generated frontend route always wins.
-     *
-     * @return array<string, array{layout_type: string, layout_option: string, title: string}>
-     */
-    private static function defaultPublicRouteMap(): array
-    {
-        return [
-            'products' => ['layout_type' => 'product_list', 'layout_option' => 'default', 'title' => '产品'],
-            'product-list' => ['layout_type' => 'product_list', 'layout_option' => 'default', 'title' => '产品'],
-            'categories' => ['layout_type' => 'category', 'layout_option' => 'default', 'title' => '分类'],
-            'category' => ['layout_type' => 'category', 'layout_option' => 'default', 'title' => '分类'],
-            'product' => ['layout_type' => 'product', 'layout_option' => 'default', 'title' => '商品'],
-            'cart' => ['layout_type' => 'cart', 'layout_option' => 'default', 'title' => '购物车'],
-            'checkout' => ['layout_type' => 'checkout', 'layout_option' => 'default', 'title' => '结账'],
-            'checkout/success' => ['layout_type' => 'checkout_success', 'layout_option' => 'default', 'title' => '下单成功'],
-            'checkout/failure' => ['layout_type' => 'checkout_failure', 'layout_option' => 'default', 'title' => '下单失败'],
-            'checkout/failer' => ['layout_type' => 'checkout_failer', 'layout_option' => 'default', 'title' => '下单失败'],
-            'account' => ['layout_type' => 'account', 'layout_option' => 'default', 'title' => '账户'],
-            'account/login' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '登录'],
-            'account/register' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '注册'],
-            'account/forgot' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '找回密码'],
-            'account/orders' => ['layout_type' => 'account_orders', 'layout_option' => 'default', 'title' => '订单'],
-            'account/profile' => ['layout_type' => 'account_profile', 'layout_option' => 'default', 'title' => '账户资料'],
-            'account/logout' => ['layout_type' => 'account_logout', 'layout_option' => 'default', 'title' => '退出登录'],
-            'login' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '登录'],
-            'register' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '注册'],
-            'contact' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '联系我们'],
-            'support' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '支持'],
-            'faq' => ['layout_type' => 'faq', 'layout_option' => 'default', 'title' => '常见问题'],
-            'guide/payment' => ['layout_type' => 'payment_guide', 'layout_option' => 'default', 'title' => '支付指南'],
-            'guide/shipping' => ['layout_type' => 'guide', 'layout_option' => 'default', 'title' => '配送指南'],
-            'guide/returns' => ['layout_type' => 'guide', 'layout_option' => 'default', 'title' => '退换指南'],
-            'about' => ['layout_type' => 'about', 'layout_option' => 'default', 'title' => '关于我们'],
-            'solutions' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '解决方案'],
-            'docs' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '文档'],
-            'page' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '页面'],
-            'policy' => ['layout_type' => 'policy', 'layout_option' => 'default', 'title' => '政策'],
-            'privacy' => ['layout_type' => 'policy', 'layout_option' => 'privacy', 'title' => '隐私政策'],
-            'terms' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
-            'term-condition' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
-            'terms-and-conditions' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
-            'cookie' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
-            // Footer legalLinks 使用 /cookies；保留 /cookie 兼容旧入口。
-            'cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
-            'cookie-policy' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
-            'refund' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退款政策'],
-            'returns' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退货政策'],
-            'disclaimer' => ['layout_type' => 'policy', 'layout_option' => 'disclaimer', 'title' => '免责声明'],
-            'policy/privacy' => ['layout_type' => 'policy', 'layout_option' => 'privacy', 'title' => '隐私政策'],
-            'policy/term-condition' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
-            'policy/terms' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
-            'policy/cookie' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
-            'policy/cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
-            'policy/refund' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退款政策'],
-            'policy/disclaimer' => ['layout_type' => 'policy', 'layout_option' => 'disclaimer', 'title' => '免责声明'],
-            'search' => ['layout_type' => 'search', 'layout_option' => 'default', 'title' => '搜索'],
-            'review' => ['layout_type' => 'review', 'layout_option' => 'default', 'title' => '评价'],
-            'qa' => ['layout_type' => 'qa', 'layout_option' => 'default', 'title' => '问答'],
-            'rma' => ['layout_type' => 'rma', 'layout_option' => 'default', 'title' => '退换货'],
-            'promotion' => ['layout_type' => 'promotion', 'layout_option' => 'default', 'title' => '促销活动'],
-            'activity' => ['layout_type' => 'activity', 'layout_option' => 'default', 'title' => '活动'],
-            'not-found' => ['layout_type' => 'not_found', 'layout_option' => 'default', 'title' => '页面未找到'],
-            '404' => ['layout_type' => 'not_found', 'layout_option' => 'default', 'title' => '页面未找到'],
-        ];
-    }
-
     public static function rewritePreviewThemeQuery(string &$path, array &$rule): void
     {
         if (!empty($rule['module'])) {
@@ -234,7 +166,7 @@ class Router implements RouterInterface
                 (
                     $normalizedPath === 'product'
                     || str_starts_with($normalizedPath, 'product/')
-                    || in_array($normalizedPath, ['products', 'product-list', 'category', 'categories'], true)
+                    || in_array($normalizedPath, ['products', 'category', 'categories'], true)
                     || str_starts_with($normalizedPath, 'category/')
                 )
                 && class_exists('Weline\\Product\\Controller\\Router')
@@ -266,26 +198,40 @@ class Router implements RouterInterface
             }
         }
 
-        $target = self::resolveDefaultPublicTarget($normalizedPath);
-        if ($target === null) {
+        // Reverse-infer layout/option from public path via layout_resolve (no alias table).
+        // Slug entity routes stay on module controllers; only fixed Theme shells land on Policy.
+        try {
+            /** @var \Weline\Theme\Service\LayoutResolveService $layoutResolve */
+            $layoutResolve = ObjectManager::getInstance(\Weline\Theme\Service\LayoutResolveService::class);
+            $resolved = $layoutResolve->resolveFromPath($normalizedPath);
+        } catch (\Throwable) {
+            return;
+        }
+        if (!(bool)($resolved['claimed'] ?? false)
+            || (string)($resolved['layout_path'] ?? '') === ''
+            || trim((string)($resolved['entity_slug'] ?? '')) !== ''
+        ) {
             return;
         }
 
+        $layoutOption = (string)($resolved['layout_option'] ?? 'default');
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+
         self::applyQueryOverrides($request, [
-            'page_type' => $target['layout_type'],
-            'layout_type' => $target['layout_type'],
-            'layout_option' => $target['layout_option'],
+            'page_type' => (string)$resolved['layout_path'],
+            'layout_type' => (string)$resolved['layout_path'],
+            'layout_option' => $layoutOption,
             'theme_public_route' => $normalizedPath,
-            'theme_page_title' => $target['title'],
         ]);
 
         $path = 'theme/frontend/policy';
     }
 
     /**
-     * Non-PageBuilder websites prefer Theme shell layouts for public aliases
-     * like /privacy and /about. Stale UrlManager rewrites to missing
-     * pagebuilder/frontend/page/view?page_id=… must not steal those paths.
+     * Non-PageBuilder websites: Theme shells claimed by layout_resolve with no entity slug.
+     * Stale UrlManager pagebuilder rewrites must not steal those paths.
      */
     public static function prefersShellPublicAlias(string $path): bool
     {
@@ -293,7 +239,17 @@ class Router implements RouterInterface
             return false;
         }
 
-        return self::resolveDefaultPublicTarget(self::normalizePublicPath($path)) !== null;
+        try {
+            /** @var \Weline\Theme\Service\LayoutResolveService $layoutResolve */
+            $layoutResolve = ObjectManager::getInstance(\Weline\Theme\Service\LayoutResolveService::class);
+            $resolved = $layoutResolve->resolveFromPath(self::normalizePublicPath($path));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return (bool)($resolved['claimed'] ?? false)
+            && (string)($resolved['layout_path'] ?? '') !== ''
+            && trim((string)($resolved['entity_slug'] ?? '')) === '';
     }
 
     /**
@@ -405,7 +361,7 @@ class Router implements RouterInterface
     private static function isInstalledModuleOwnedPublicRoute(string $normalizedPath): bool
     {
         if (class_exists('Weline\\Product\\Controller\\Router')) {
-            if (in_array($normalizedPath, ['products', 'product-list', 'category', 'categories'], true)) {
+            if (in_array($normalizedPath, ['products', 'category', 'categories'], true)) {
                 return true;
             }
             if (preg_match('#^category/.+#D', $normalizedPath) === 1) {
@@ -418,8 +374,9 @@ class Router implements RouterInterface
             if (preg_match('#^product/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath) === 1) {
                 return true;
             }
-            // /product?id=… or /product?slug=… belongs to Product Detail, not Theme shell.
-            if ($normalizedPath === 'product' && self::productQueryOwnsDetail()) {
+            // Bare /product always belongs to Product (Detail redirects when identity missing).
+            // Theme must not map it to the product layout Policy shell.
+            if ($normalizedPath === 'product') {
                 return true;
             }
         }
@@ -487,81 +444,6 @@ class Router implements RouterInterface
         }
 
         return false;
-    }
-
-    /**
-     * Bare /product with id or slug query is owned by Product Detail.
-     */
-    private static function productQueryOwnsDetail(): bool
-    {
-        try {
-            $ctx = \Weline\Framework\Context::current();
-            $productId = (int)($ctx->get('input.query.id') ?? 0);
-            $slug = strtolower(trim((string)($ctx->get('input.query.slug') ?? '')));
-            if ($productId > 0 || $slug !== '') {
-                return true;
-            }
-        } catch (\Throwable) {
-        }
-
-        if (isset($_GET['id']) && is_scalar($_GET['id']) && (int)$_GET['id'] > 0) {
-            return true;
-        }
-        if (isset($_GET['slug']) && is_scalar($_GET['slug']) && strtolower(trim((string)$_GET['slug'])) !== '') {
-            return true;
-        }
-
-        try {
-            /** @var Request $request */
-            $request = ObjectManager::getInstance(Request::class);
-            if ((int)$request->getParam('id', 0) > 0) {
-                return true;
-            }
-            if (strtolower(trim((string)$request->getParam('slug', ''))) !== '') {
-                return true;
-            }
-        } catch (\Throwable) {
-        }
-
-        return false;
-    }
-
-
-    /**
-     * @return array{layout_type: string, layout_option: string, title: string}|null
-     */
-    private static function resolveDefaultPublicTarget(string $normalizedPath): ?array
-    {
-        $routes = self::defaultPublicRouteMap();
-        // Weline_Faq owns /faq when enabled.
-        if (self::isFaqModuleEnabled()) {
-            unset($routes['faq']);
-        }
-        if (isset($routes[$normalizedPath])) {
-            return $routes[$normalizedPath];
-        }
-
-        if (str_starts_with($normalizedPath, 'product/')) {
-            return ['layout_type' => 'product', 'layout_option' => 'default', 'title' => '商品'];
-        }
-        if (str_starts_with($normalizedPath, 'category/')) {
-            return ['layout_type' => 'category', 'layout_option' => 'default', 'title' => '分类'];
-        }
-        if (str_starts_with($normalizedPath, 'page/')) {
-            return ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '页面'];
-        }
-
-        return null;
-    }
-
-    private static function isFaqModuleEnabled(): bool
-    {
-        try {
-            return (bool)Env::getInstance()->getModuleStatus('Weline_Faq');
-        } catch (\Throwable) {
-            return class_exists(\Weline\Faq\Controller\Router::class, false)
-                || is_file(dirname(__DIR__, 2) . '/Faq/register.php');
-        }
     }
 
     private static function generatedFrontendRouteExists(string $normalizedPath, Request $request): bool

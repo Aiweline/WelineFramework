@@ -106,12 +106,24 @@ final class MediaResumableUploadService
         $this->assertDirectoryExists($diskCode, $directory);
         $objectKey = trim(($directory === '' ? '' : $directory . '/') . $filename, '/');
         StorageObjectReference::assertObjectKey($objectKey);
-        if ($disk->exists($objectKey)) {
-            throw new \RuntimeException((string)__('目标文件已存在：%{1}', [$filename]));
-        }
 
         $localeMetadata = $this->decodeMetadata($input['metadata'] ?? null);
-        $localeMetadata = MediaAssetUploadService::normalizeMetadata($localeMetadata, $filename);
+        $overwrite = MediaAssetUploadService::isOverwriteFlag(
+            $localeMetadata['overwrite'] ?? ($input['overwrite'] ?? false),
+        );
+        if ($overwrite) {
+            unset($localeMetadata['overwrite']);
+            $localeMetadata = ['overwrite' => true];
+        } else {
+            $localeMetadata = MediaAssetUploadService::normalizeMetadata($localeMetadata, $filename);
+        }
+        if ($disk->exists($objectKey) && !$overwrite) {
+            throw new \RuntimeException((string)__('目标文件已存在：%{1}', [$filename]));
+        }
+        if ($overwrite && !$disk->exists($objectKey)) {
+            throw new \RuntimeException((string)__('目标文件不存在，无法覆盖：%{1}', [$filename]));
+        }
+
         $frozenInput = $this->accessContexts->freeze([
             'locale_code' => (string)($input['locale_code'] ?? ''),
         ], $actorId);
@@ -150,10 +162,14 @@ final class MediaResumableUploadService
             $allowedMimes,
             $allowedExtensions,
             $frozenInput,
+            $overwrite,
         ): array {
             $this->assertStagingQuota($actorId, $expectedSize, $diskCode, $objectKey);
-            if ($disk->exists($objectKey)) {
+            if ($disk->exists($objectKey) && !$overwrite) {
                 throw new \RuntimeException((string)__('目标文件已存在：%{1}', [$filename]));
+            }
+            if ($overwrite && !$disk->exists($objectKey)) {
+                throw new \RuntimeException((string)__('目标文件不存在，无法覆盖：%{1}', [$filename]));
             }
             [$sessionId, $directoryPath] = $this->createSessionDirectory();
             $stagePath = $directoryPath . 'upload.bin';
@@ -194,6 +210,7 @@ final class MediaResumableUploadService
                 'locale_code' => $access->localeCode,
                 'visibility' => $visibility,
                 'locale_metadata' => $localeMetadata,
+                'overwrite' => $overwrite,
                 'allowed_mimes' => $allowedMimes,
                 'allowed_extensions' => $allowedExtensions,
                 'frozen_input' => $frozenInput,
@@ -461,6 +478,7 @@ final class MediaResumableUploadService
             $frozenInput = is_array($manifest['frozen_input'] ?? null) ? $manifest['frozen_input'] : [];
             $access = $this->accessContexts->fromFrozen($frozenInput, $actorId);
             $visibility = (string)$manifest['visibility'];
+            $overwrite = !empty($manifest['overwrite']);
             if ($disk->exists($objectKey)) {
                 $recovered = $this->recoverCompletedAsset(
                     $diskCode,
@@ -473,17 +491,21 @@ final class MediaResumableUploadService
                     (array)$manifest['locale_metadata'],
                     $visibility,
                 );
-                if ($recovered === null) {
+                if ($recovered !== null) {
+                    $manifest['status'] = 'completed';
+                    $manifest['result'] = $this->boundedResult($recovered);
+                    $manifest['updated_at'] = time();
+                    $this->writeCompletedManifest($directoryPath, $manifest);
+                    if (is_file($stagePath) && !@unlink($stagePath)) {
+                        $this->diagnostics->operationResidue('media_resumable_recovered_stage_cleanup_failed');
+                    }
+                    return (array)$manifest['result'];
+                }
+                if (!$overwrite) {
                     throw new \RuntimeException((string)__('目标文件已存在：%{1}', [$filename]));
                 }
-                $manifest['status'] = 'completed';
-                $manifest['result'] = $this->boundedResult($recovered);
-                $manifest['updated_at'] = time();
-                $this->writeCompletedManifest($directoryPath, $manifest);
-                if (is_file($stagePath) && !@unlink($stagePath)) {
-                    $this->diagnostics->operationResidue('media_resumable_recovered_stage_cleanup_failed');
-                }
-                return (array)$manifest['result'];
+            } elseif ($overwrite) {
+                throw new \RuntimeException((string)__('目标文件不存在，无法覆盖：%{1}', [$filename]));
             }
             $assetMetadata = [
                 'upload_source' => 'media_manager_resumable',
@@ -509,11 +531,11 @@ final class MediaResumableUploadService
                     $directory,
                     $access->localeCode,
                     $access,
-                    (array)$manifest['locale_metadata'],
+                    $overwrite ? [] : (array)$manifest['locale_metadata'],
                     $visibility,
                     (array)$manifest['allowed_mimes'],
                     $expectedSize,
-                    [],
+                    $overwrite ? [['overwrite' => true]] : [],
                     (array)$manifest['allowed_extensions'],
                     $assetMetadata,
                 );
@@ -536,6 +558,14 @@ final class MediaResumableUploadService
             try {
                 $this->writeCompletedManifest($directoryPath, $manifest);
             } catch (\Throwable $throwable) {
+                if ($overwrite) {
+                    $this->diagnostics->operationResidue('media_resumable_overwrite_completion_receipt_failed');
+                    throw new \RuntimeException(
+                        (string)__('分块上传完成凭据写入失败；覆盖后的文件内容已写入，请人工核对。'),
+                        0,
+                        $throwable,
+                    );
+                }
                 try {
                     $this->assets->deleteObject($diskCode, $objectKey, $access);
                 } catch (\Throwable) {

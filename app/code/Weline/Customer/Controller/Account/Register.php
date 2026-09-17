@@ -16,7 +16,7 @@ use Weline\Framework\View\Template;
  */
 class Register extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account.auth';
+    protected ?string $layoutType = 'account/register';
 
     private readonly CustomerAuthReturnUrlService $authReturnUrlService;
 

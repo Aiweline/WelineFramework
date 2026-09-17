@@ -7,7 +7,7 @@ return [
     'item_schema' => [
         'author' => ['type' => 'string', 'label' => '姓名'],
         'avatar' => [
-            'type' => 'image',
+            'type' => 'media_image',
             'label' => '头像',
             'media_options' => [
                 'default_directory' => 'testimonial',

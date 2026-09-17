@@ -199,7 +199,18 @@ final class ProductCategoryAttributeService
             return '浏览' . $name . '相关商品与配件';
         }
 
-        return 'Browse ' . $name . ' products and accessories';
+        // Keep templates short and storefront-safe; name is already locale-localized by caller.
+        return match (true) {
+            str_starts_with($locale, 'ar') => 'تصفح منتجات وإكسسوارات ' . $name,
+            str_starts_with($locale, 'bn') => $name . ' পণ্য ও আনুষাঙ্গিক ব্রাউজ করুন',
+            str_starts_with($locale, 'es') => 'Explora productos y accesorios de ' . $name,
+            str_starts_with($locale, 'fr') => 'Parcourir les produits et accessoires ' . $name,
+            str_starts_with($locale, 'hi') => $name . ' उत्पाद और सहायक वस्तुएँ देखें',
+            str_starts_with($locale, 'id') => 'Jelajahi produk dan aksesoris ' . $name,
+            str_starts_with($locale, 'pt') => 'Navegue por produtos e acessórios de ' . $name,
+            str_starts_with($locale, 'ur') => $name . ' کی مصنوعات اور لوازمات دیکھیں',
+            default => 'Browse ' . $name . ' products and accessories',
+        };
     }
 
     /**

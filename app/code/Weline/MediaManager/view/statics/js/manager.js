@@ -419,6 +419,14 @@
                     CONFIG.focusAssetId = String(focusAssetId).trim().toLowerCase();
                 }
                 [
+                    'identity', 'identity_root', 'identity_code', 'identity_scope',
+                    'identity_kind', 'identity_field', 'identity_component', 'identity_locale',
+                    'identity_instance', 'ref_mode',
+                ].forEach(function (key) {
+                    var v = urlParams.get(key);
+                    if (v !== null && String(v).trim() !== '') CONFIG[key] = String(v).trim();
+                });
+                [
                     ['aspect_ratio', 'aspectRatio'],
                     ['aspectRatio', 'aspectRatio'],
                     ['aspect_ratio_tolerance', 'aspectRatioTolerance'],
@@ -1436,6 +1444,7 @@
             empty.appendChild(emptyIcon);
             empty.appendChild(emptyLabel);
             container.replaceChildren(empty);
+            reapplyIdentityFilterIfNeeded();
             return;
         }
 
@@ -1464,6 +1473,9 @@
             }
             html += '</div>';
             html += '<div class="mmf-item-name" title="' + escAttr(f.name) + '">' + escHtml(f.name) + '</div>';
+            if (!isDir && Number(f.reference_count || f.ref_count || 0) > 0) {
+                html += '<span class="mmf-ref-badge" data-mmf-ref-badge>' + escHtml('引用 ' + Number(f.reference_count || f.ref_count || 0)) + '</span>';
+            }
             if (selectionIssue) {
                 html += '<div class="mmf-item-hint">' + escHtml(selectionIssue.message) + '</div>';
             }
@@ -1474,6 +1486,7 @@
         bindThumbnailFallbacks(container);
         bindFileEvents(container);
         scheduleIframeLayoutHeightSync();
+        reapplyIdentityFilterIfNeeded();
     }
 
     function bindThumbnailFallbacks(container) {
@@ -1935,18 +1948,33 @@
         if (codes.indexOf(LOCALE_WORKBENCH.activeLocale) < 0 && codes.length) {
             LOCALE_WORKBENCH.activeLocale = codes[0];
         }
+        var sourceLocale = sourceLocaleForWorkbench();
+        var hint = qs('[data-mmf-locale-workbench-hint]');
+        if (hint) {
+            hint.textContent = t('localeWorkbenchHint');
+        }
         codes.forEach(function(code) {
             var row = LOCALE_WORKBENCH.localesByCode[code];
+            var missing = !(row && row.has_content);
             var btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'mmf-locale-tab' + (code === LOCALE_WORKBENCH.activeLocale ? ' is-active' : '');
             btn.setAttribute('role', 'tab');
             btn.setAttribute('aria-selected', code === LOCALE_WORKBENCH.activeLocale ? 'true' : 'false');
             btn.dataset.locale = code;
-            btn.textContent = code + (row && row.has_content ? '' : ' · ' + t('localeMissing'));
+            btn.textContent = code + (missing ? ' · ' + t('localeMissing') : '');
+            btn.title = code === sourceLocale
+                ? t('localeTabSourceTitle')
+                : (missing ? t('localeTabTempFillTitle') : t('localeTabSwitchTitle'));
             btn.addEventListener('click', function() {
                 LOCALE_WORKBENCH.activeLocale = code;
                 paintLocaleWorkbench();
+            });
+            btn.addEventListener('dblclick', function(e) {
+                e.preventDefault();
+                LOCALE_WORKBENCH.activeLocale = code;
+                paintLocaleWorkbench();
+                requestLocaleTempFill(code);
             });
             tabs.appendChild(btn);
         });
@@ -1971,6 +1999,76 @@
                 ].join(' · ');
             }
         }
+    }
+
+    function sourceLocaleForWorkbench() {
+        var file = FILES[LOCALE_WORKBENCH.hash] || {};
+        return String(file.locale_code || CONFIG.localeCode || 'zh_Hans_CN');
+    }
+
+    function runAssetTranslateMissing(targetLocales, onSuccessMessage) {
+        if (!LOCALE_WORKBENCH.assetId || !LOCALE_WORKBENCH.hash || LOCALE_WORKBENCH.busy) return;
+        setLocaleWorkbenchBusy(true, 'translate');
+        var startTranslate = function() {
+            var payload = {
+                cmd: 'asset_translate_missing',
+                target: LOCALE_WORKBENCH.hash,
+                asset_id: LOCALE_WORKBENCH.assetId,
+                locale_code: sourceLocaleForWorkbench()
+            };
+            if (targetLocales && targetLocales.length) {
+                payload.target_locales = targetLocales;
+            }
+            api(payload, function(data) {
+                setLocaleWorkbenchBusy(false);
+                if (data && data.errors && data.errors.length) {
+                    showError(data.errors.join('; '));
+                } else if (typeof onSuccessMessage === 'function') {
+                    showSuccess(onSuccessMessage(data));
+                } else {
+                    showSuccess(t('oneClickTranslateDone', {
+                        filled: (data && data.filled && data.filled.length) || 0,
+                        skipped: (data && data.skipped && data.skipped.length) || 0
+                    }));
+                }
+                LOCALE_WORKBENCH.localesByCode = localeRecordMap((data && data.locales) || []);
+                paintLocaleWorkbench();
+            }, function(err) {
+                setLocaleWorkbenchBusy(false);
+                showError(err || t('oneClickTranslateFailed'));
+            });
+        };
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(function() {
+                window.requestAnimationFrame(startTranslate);
+            });
+        } else {
+            startTranslate();
+        }
+    }
+
+    function requestLocaleTempFill(code) {
+        if (!LOCALE_WORKBENCH.assetId || !LOCALE_WORKBENCH.hash || LOCALE_WORKBENCH.busy) return;
+        var locale = String(code || '').trim();
+        if (!locale) return;
+        var source = sourceLocaleForWorkbench();
+        if (locale === source) {
+            showSuccess(t('localeTempFillSourceSkip'));
+            return;
+        }
+        var row = LOCALE_WORKBENCH.localesByCode[locale];
+        if (row && row.has_content) {
+            showSuccess(t('localeTempFillSkipped', { locale: locale }));
+            return;
+        }
+        runAssetTranslateMissing([locale], function(data) {
+            var filled = (data && data.filled && data.filled.length) || 0;
+            var skipped = (data && data.skipped && data.skipped.length) || 0;
+            if (filled > 0) {
+                return t('localeTempFillDone', { locale: locale });
+            }
+            return t('oneClickTranslateDone', { filled: filled, skipped: skipped });
+        });
     }
 
     function rememberLocaleButtonLabel(btn) {
@@ -2083,42 +2181,7 @@
         if (translateBtn && translateBtn.dataset.bound !== '1') {
             translateBtn.dataset.bound = '1';
             translateBtn.addEventListener('click', function() {
-                if (!LOCALE_WORKBENCH.assetId || !LOCALE_WORKBENCH.hash || LOCALE_WORKBENCH.busy) return;
-                setLocaleWorkbenchBusy(true, 'translate');
-                var startTranslate = function() {
-                    api({
-                        cmd: 'asset_translate_missing',
-                        target: LOCALE_WORKBENCH.hash,
-                        asset_id: LOCALE_WORKBENCH.assetId,
-                        locale_code: String(
-                            (FILES[LOCALE_WORKBENCH.hash] && FILES[LOCALE_WORKBENCH.hash].locale_code)
-                            || CONFIG.localeCode
-                            || 'zh_Hans_CN'
-                        )
-                    }, function(data) {
-                    setLocaleWorkbenchBusy(false);
-                    if (data && data.errors && data.errors.length) {
-                        showError(data.errors.join('; '));
-                    } else {
-                        showSuccess(t('oneClickTranslateDone', {
-                            filled: (data && data.filled && data.filled.length) || 0,
-                            skipped: (data && data.skipped && data.skipped.length) || 0
-                        }));
-                    }
-                    LOCALE_WORKBENCH.localesByCode = localeRecordMap((data && data.locales) || []);
-                    paintLocaleWorkbench();
-                }, function(err) {
-                    setLocaleWorkbenchBusy(false);
-                    showError(err || t('oneClickTranslateFailed'));
-                });
-                };
-                if (typeof window.requestAnimationFrame === 'function') {
-                    window.requestAnimationFrame(function() {
-                        window.requestAnimationFrame(startTranslate);
-                    });
-                } else {
-                    startTranslate();
-                }
+                runAssetTranslateMissing(null);
             });
         }
     }
@@ -2669,7 +2732,455 @@
             if (!CONFIG.lockRoot) return;
             setPathLockEnabled(!CONFIG.lockPath);
         });
+        bindViewModeSwitch();
+        bindReferencePanelActions();
+        initIdentityBar();
+    }
 
+    var VIEW_MODE = 'files'; // files | refs | trash
+
+    function bindViewModeSwitch() {
+        var buttons = document.querySelectorAll('[data-mmf-view-mode]');
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var mode = String(btn.getAttribute('data-mmf-view-mode') || 'files');
+                setViewMode(mode);
+            });
+        });
+        var trashBtn = qs('#mmf-btn-trash');
+        if (trashBtn) {
+            trashBtn.addEventListener('click', function () {
+                setViewMode(VIEW_MODE === 'trash' ? 'files' : 'trash');
+            });
+        }
+    }
+
+    function setViewMode(mode) {
+        VIEW_MODE = mode === 'refs' || mode === 'trash' ? mode : 'files';
+        document.querySelectorAll('[data-mmf-view-mode]').forEach(function (btn) {
+            btn.classList.toggle('is-active', btn.getAttribute('data-mmf-view-mode') === VIEW_MODE);
+        });
+        var wrap = qs('.mmf-wrap');
+        if (wrap) {
+            wrap.classList.toggle('mmf-view-refs', VIEW_MODE === 'refs');
+            wrap.classList.toggle('mmf-view-trash', VIEW_MODE === 'trash');
+        }
+        var tree = qs('.mmf-tree');
+        var refPanel = qs('#mmf-ref-panel');
+        var title = qs('.mmf-sidebar-title');
+        if (tree) tree.hidden = VIEW_MODE === 'refs';
+        if (refPanel) refPanel.hidden = VIEW_MODE !== 'refs';
+        if (title && VIEW_MODE !== 'refs') title.hidden = false;
+        if (title && VIEW_MODE === 'refs') title.hidden = true;
+        CONFIG.referenceViewMode = VIEW_MODE === 'refs';
+        CONFIG.trashViewMode = VIEW_MODE === 'trash';
+        if (VIEW_MODE === 'files' && typeof openDir === 'function' && CWD_HASH !== undefined) {
+            openDir(CWD_HASH);
+        }
+        updateStatus();
+    }
+
+    function mediaReferenceApiBase() {
+        return String(CONFIG.mediaReferenceBase || '/backend/weline_filemanager/backend/media-reference');
+    }
+
+    var IDENTITY_ACTIVE_TAGS = {};
+    var IDENTITY_CHIP_GROUPS = [
+        { id: 'root', labelKey: 'identityGroupRoot', keys: ['root'] },
+        { id: 'code', labelKey: 'identityGroupCode', keys: ['key', 'sku', 'theme', 'brand', 'post', 'category', 'mail', 'attribute', 'supplier', 'website', 'code'] },
+        { id: 'scope', labelKey: 'identityGroupScope', keys: ['scope'] },
+        { id: 'slot', labelKey: 'identityGroupSlot', keys: ['kind', 'field', 'component', 'locale', 'instance', 'role', 'ns', 'axis', 'option', 'layout', 'index'] },
+    ];
+
+    function parseCurrentIdentityTags() {
+        var tags = {};
+        var path = String(CONFIG.identity || '').trim();
+        if (path) {
+            var parts = path.split(':').filter(function (p) { return p !== ''; });
+            if (parts.length) {
+                tags.root = parts[0];
+                for (var i = 1; i + 1 < parts.length; i += 2) {
+                    var k = String(parts[i] || '').trim();
+                    var v = String(parts[i + 1] || '').trim();
+                    if (k && v) tags[k] = v;
+                }
+            }
+        }
+        if (!tags.root && CONFIG.identity_root) tags.root = String(CONFIG.identity_root).trim();
+        if (CONFIG.identity_scope) tags.scope = String(CONFIG.identity_scope).trim();
+        if (CONFIG.identity_code) {
+            var codeKey = 'code';
+            if (tags.root === 'product') codeKey = 'sku';
+            else if (tags.root === 'blog') codeKey = 'post';
+            else if (tags.root === 'catalog') codeKey = 'category';
+            else if (tags.root === 'config') codeKey = 'key';
+            else if (tags.root === 'smtp') codeKey = 'mail';
+            else if (tags.root === 'theme' || tags.root === 'widget') codeKey = 'theme';
+            else if (tags.root === 'product_brand') codeKey = 'brand';
+            else if (tags.root === 'product_supplier') codeKey = 'supplier';
+            else if (tags.root === 'eav') codeKey = 'attribute';
+            if (!tags[codeKey]) tags[codeKey] = String(CONFIG.identity_code).trim();
+        }
+        ['kind', 'field', 'component', 'locale', 'instance'].forEach(function (k) {
+            var confKey = 'identity_' + k;
+            if (CONFIG[confKey] && !tags[k]) tags[k] = String(CONFIG[confKey]).trim();
+        });
+        return tags;
+    }
+
+    function identityGroupLabel(group) {
+        var fallback = ({
+            identityGroupRoot: '大类',
+            identityGroupCode: '身份',
+            identityGroupScope: '范围',
+            identityGroupSlot: '槽位',
+        })[group.labelKey] || group.id;
+        var translated = t(group.labelKey);
+        return (translated && translated !== group.labelKey) ? translated : fallback;
+    }
+
+    function setIdentityHint(text) {
+        var el = qs('[data-mmf-identity-hint]');
+        if (el) el.textContent = text || '';
+    }
+
+    function syncRefPanelFromTags(tags) {
+        tags = tags || {};
+        var rootEl = qs('#mmf-ref-root');
+        var scopeEl = qs('#mmf-ref-scope');
+        var codeEl = qs('#mmf-ref-code');
+        var kindEl = qs('#mmf-ref-kind');
+        var componentEl = qs('#mmf-ref-component');
+        if (rootEl && tags.root) rootEl.value = tags.root;
+        if (scopeEl && tags.scope) scopeEl.value = tags.scope;
+        if (codeEl) {
+            codeEl.value = tags.key || tags.sku || tags.theme || tags.post || tags.category
+                || tags.brand || tags.mail || tags.attribute || tags.supplier || tags.code || '';
+        }
+        if (kindEl && tags.kind) kindEl.value = tags.kind;
+        if (componentEl && tags.component) componentEl.value = tags.component;
+    }
+
+    function applyIdentityFilter(tags, done) {
+        IDENTITY_ACTIVE_TAGS = tags && Object.keys(tags).length ? Object.assign({}, tags) : {};
+        var allBtn = qs('[data-mmf-identity-all]');
+        if (allBtn) {
+            var isAll = !Object.keys(IDENTITY_ACTIVE_TAGS).length;
+            allBtn.classList.toggle('is-active', isAll);
+            allBtn.setAttribute('aria-pressed', isAll ? 'true' : 'false');
+        }
+        qsa('[data-mmf-identity-chip]').forEach(function (chip) {
+            var k = chip.getAttribute('data-tag-key') || '';
+            var v = chip.getAttribute('data-tag-value') || '';
+            var on = !!(IDENTITY_ACTIVE_TAGS[k] && String(IDENTITY_ACTIVE_TAGS[k]) === String(v));
+            chip.classList.toggle('is-active', on);
+            chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (!Object.keys(IDENTITY_ACTIVE_TAGS).length) {
+            qsa('.mmf-item').forEach(function (el) { el.style.display = ''; });
+            setIdentityHint('');
+            setRefReport('');
+            if (done) done({ cleared: true, count: null });
+            return;
+        }
+        syncRefPanelFromTags(IDENTITY_ACTIVE_TAGS);
+        var qsParams = Object.keys(IDENTITY_ACTIVE_TAGS).map(function (k) {
+            return encodeURIComponent(k) + '=' + encodeURIComponent(IDENTITY_ACTIVE_TAGS[k]);
+        }).join('&');
+        setIdentityHint('…');
+        mediaReferenceFetch('GET', mediaReferenceApiBase() + '/by-tags?' + qsParams, null, function (res) {
+            var items = (res && res.items) || [];
+            var ids = {};
+            items.forEach(function (row) {
+                var id = String(row.asset_id || '');
+                if (id) ids[id] = true;
+            });
+            var idKeys = Object.keys(ids);
+            var visible = 0;
+            qsa('.mmf-item').forEach(function (el) {
+                var hash = el.getAttribute('data-hash') || '';
+                var file = FILES[hash];
+                var assetId = file && file.asset_id ? String(file.asset_id) : '';
+                var show = !idKeys.length ? false : !!(assetId && ids[assetId]);
+                if (file && file.mime === 'directory') show = true;
+                el.style.display = show ? '' : 'none';
+                if (show && !(file && file.mime === 'directory')) visible++;
+            });
+            var hitLabel = t('identityFilterHit');
+            if (!hitLabel || hitLabel === 'identityFilterHit') hitLabel = '命中引用';
+            var visLabel = t('identityFilterVisible');
+            if (!visLabel || visLabel === 'identityFilterVisible') visLabel = '当前可见';
+            var hint = hitLabel + ': ' + items.length
+                + (idKeys.length ? (' · ' + visLabel + ' ' + visible) : '');
+            setIdentityHint(hint);
+            setRefReport(hint);
+            if (done) done({ count: items.length, visible: visible });
+        }, function (err) {
+            setIdentityHint((err && err.message) || 'filter failed');
+            if (done) done({ error: err });
+        });
+    }
+
+    function reapplyIdentityFilterIfNeeded() {
+        if (Object.keys(IDENTITY_ACTIVE_TAGS).length) {
+            applyIdentityFilter(IDENTITY_ACTIVE_TAGS);
+        }
+    }
+
+    function identitySummaryText(tags) {
+        tags = tags || {};
+        var codeKeys = ['key', 'sku', 'theme', 'brand', 'post', 'category', 'mail', 'attribute', 'supplier', 'website', 'code'];
+        for (var i = 0; i < codeKeys.length; i++) {
+            var ck = codeKeys[i];
+            if (tags[ck]) return ck + ': ' + tags[ck];
+        }
+        if (tags.root && tags.scope) return tags.root + ' · ' + tags.scope;
+        if (tags.root) return String(tags.root);
+        if (tags.scope) return 'scope: ' + tags.scope;
+        return '';
+    }
+
+    function setIdentityBarExpanded(expanded) {
+        var bar = qs('#mmf-identity-bar');
+        var toggle = qs('[data-mmf-identity-toggle]');
+        var panel = qs('[data-mmf-identity-panel]');
+        if (!bar || !toggle || !panel) return;
+        bar.classList.toggle('is-collapsed', !expanded);
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        panel.hidden = !expanded;
+    }
+
+    function initIdentityBar() {
+        var bar = qs('#mmf-identity-bar');
+        var groupsEl = qs('[data-mmf-identity-groups]');
+        var allBtn = qs('[data-mmf-identity-all]');
+        var summaryEl = qs('[data-mmf-identity-summary]');
+        var toggle = qs('[data-mmf-identity-toggle]');
+        if (!bar || !groupsEl) return;
+
+        var tags = parseCurrentIdentityTags();
+        var hasTags = Object.keys(tags).length > 0;
+        bar.hidden = !hasTags;
+        if (!hasTags) return;
+
+        if (summaryEl) summaryEl.textContent = identitySummaryText(tags);
+        // 默认收起：只显示一行身份摘要；展开后才是标签筛选。
+        setIdentityBarExpanded(false);
+        if (toggle && !toggle.dataset.mmfIdentityToggleBound) {
+            toggle.dataset.mmfIdentityToggleBound = '1';
+            toggle.addEventListener('click', function () {
+                var open = toggle.getAttribute('aria-expanded') === 'true';
+                setIdentityBarExpanded(!open);
+            });
+        }
+
+        groupsEl.innerHTML = '';
+        IDENTITY_CHIP_GROUPS.forEach(function (group) {
+            var chips = [];
+            group.keys.forEach(function (key) {
+                if (!tags[key]) return;
+                chips.push({ key: key, value: tags[key] });
+            });
+            if (!chips.length) return;
+            var row = document.createElement('div');
+            row.className = 'mmf-identity-group';
+            row.setAttribute('data-mmf-identity-group', group.id);
+            var label = document.createElement('span');
+            label.className = 'mmf-identity-group__label';
+            label.textContent = identityGroupLabel(group);
+            row.appendChild(label);
+            chips.forEach(function (chipData) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mmf-identity-chip';
+                btn.setAttribute('data-mmf-identity-chip', '1');
+                btn.setAttribute('data-tag-key', chipData.key);
+                btn.setAttribute('data-tag-value', chipData.value);
+                btn.setAttribute('aria-pressed', 'false');
+                btn.title = chipData.key + ':' + chipData.value;
+                if (chipData.key !== 'root') {
+                    var keySpan = document.createElement('span');
+                    keySpan.className = 'mmf-identity-chip__key';
+                    keySpan.textContent = chipData.key + ':';
+                    btn.appendChild(keySpan);
+                }
+                var valSpan = document.createElement('span');
+                valSpan.className = 'mmf-identity-chip__val';
+                valSpan.textContent = chipData.value;
+                btn.appendChild(valSpan);
+                btn.addEventListener('click', function () {
+                    var next = Object.assign({}, IDENTITY_ACTIVE_TAGS);
+                    var active = next[chipData.key] && String(next[chipData.key]) === String(chipData.value);
+                    if (active) delete next[chipData.key];
+                    else next[chipData.key] = chipData.value;
+                    applyIdentityFilter(next);
+                });
+                row.appendChild(btn);
+            });
+            label.style.cursor = 'pointer';
+            label.title = (function () {
+                var h = t('identityFilterGroupHint');
+                return (!h || h === 'identityFilterGroupHint') ? '点击按本组全部标签过滤' : h;
+            })();
+            label.addEventListener('click', function () {
+                var next = {};
+                chips.forEach(function (c) { next[c.key] = c.value; });
+                applyIdentityFilter(next);
+            });
+            groupsEl.appendChild(row);
+        });
+
+        // 摘要在分组渲染后再写一次，避免配置晚到或缓存旧脚本时一行空白。
+        if (summaryEl) {
+            var summary = identitySummaryText(tags);
+            if (!summary) {
+                var firstChip = groupsEl.querySelector('[data-mmf-identity-chip][data-tag-key]');
+                if (firstChip) {
+                    var fk = firstChip.getAttribute('data-tag-key') || '';
+                    var fv = firstChip.getAttribute('data-tag-value') || '';
+                    summary = fk === 'root' ? fv : (fk + ': ' + fv);
+                }
+            }
+            summaryEl.textContent = summary;
+        }
+
+        if (allBtn) {
+            allBtn.addEventListener('click', function () {
+                applyIdentityFilter({});
+            });
+        }
+        syncRefPanelFromTags(tags);
+    }
+
+    function collectRefTags() {
+        var tags = {};
+        var root = (qs('#mmf-ref-root') || {}).value || '';
+        var scope = (qs('#mmf-ref-scope') || {}).value || '';
+        var code = (qs('#mmf-ref-code') || {}).value || '';
+        var kind = (qs('#mmf-ref-kind') || {}).value || '';
+        var component = (qs('#mmf-ref-component') || {}).value || '';
+        if (root) tags.root = root.trim();
+        if (scope) tags.scope = scope.trim();
+        if (code) {
+            var codeVal = code.trim();
+            if (root === 'product') tags.sku = codeVal;
+            else if (root === 'blog') tags.post = codeVal;
+            else if (root === 'catalog') tags.category = codeVal;
+            else if (root === 'config') tags.key = codeVal;
+            else if (root === 'smtp') tags.mail = codeVal;
+            else if (root === 'product_brand') tags.brand = codeVal;
+            else if (root === 'product_supplier') tags.supplier = codeVal;
+            else if (root === 'eav') tags.attribute = codeVal;
+            else if (root === 'theme' || root === 'widget') tags.theme = codeVal;
+            else tags.code = codeVal;
+        }
+        if (kind) tags.kind = kind.trim();
+        if (component) tags.component = component.trim();
+        return tags;
+    }
+
+    function setRefReport(text) {
+        var el = qs('#mmf-ref-report');
+        if (el) el.textContent = text || '';
+    }
+
+    function mediaReferenceFetch(method, url, body, onDone, onErr) {
+        var opts = {
+            method: method,
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        };
+        if (body != null) {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = JSON.stringify(body);
+        }
+        fetch(url, opts).then(function (res) {
+            return res.json().then(function (data) {
+                if (!res.ok || (data && data.ok === false)) {
+                    throw new Error((data && data.error) || ('HTTP ' + res.status));
+                }
+                return data;
+            });
+        }).then(function (data) {
+            if (onDone) onDone(data);
+        }).catch(function (err) {
+            if (onErr) onErr(err);
+            else setRefReport((err && err.message) || 'request failed');
+        });
+    }
+
+    function bindReferencePanelActions() {
+        var applyBtn = qs('#mmf-ref-apply');
+        var unbindBtn = qs('#mmf-ref-unbind-prefix');
+        var unrefBtn = qs('#mmf-ref-unreferenced');
+        var closeBtn = qs('#mmf-ref-close-scope');
+        if (applyBtn) applyBtn.addEventListener('click', function () {
+            applyIdentityFilter(collectRefTags());
+        });
+        if (unbindBtn) unbindBtn.addEventListener('click', function () {
+            var tags = collectRefTags();
+            if (!tags.root || !(tags.sku || tags.theme || tags.post || tags.category || tags.key || tags.mail || tags.brand || tags.supplier || tags.attribute || tags.code || tags.scope)) {
+                setRefReport('需要 root + code/scope');
+                return;
+            }
+            if (!window.confirm('确认仅卸载匹配引用（不删文件）？')) return;
+            var code = tags.sku || tags.theme || tags.post || tags.category || tags.key || tags.mail || tags.brand || tags.supplier || tags.attribute || tags.code || tags.scope;
+            mediaReferenceFetch('POST', mediaReferenceApiBase() + '/unbind', {
+                type: tags.root,
+                scope: tags.scope || CONFIG.identity_scope || 'default.default.default',
+                code: code,
+            }, function (res) {
+                setRefReport('已卸引用: ' + (res && res.removed != null ? res.removed : 0));
+            });
+        });
+        if (unrefBtn) unrefBtn.addEventListener('click', function () {
+            var count = 0;
+            qsa('.mmf-item').forEach(function (el) {
+                var hash = el.getAttribute('data-hash') || '';
+                var file = FILES[hash];
+                var refs = Number(file && (file.reference_count || file.ref_count) || 0);
+                var show = file && file.mime !== 'directory' && refs <= 0;
+                el.style.display = show ? '' : 'none';
+                if (show) count++;
+            });
+            setRefReport('无引用文件: ' + count);
+        });
+        if (closeBtn) closeBtn.addEventListener('click', function () {
+            var scope = ((qs('#mmf-ref-scope') || {}).value || '').trim();
+            if (!scope) {
+                setRefReport('关站需要填写 scope');
+                return;
+            }
+            if (!window.confirm('确认按范围清引用？\n' + scope)) return;
+            mediaReferenceFetch('POST', mediaReferenceApiBase() + '/delete-by-scope', {
+                scope: scope,
+                include_children: true,
+            }, function (res) {
+                setRefReport(
+                    '卸 ' + (res.removed || 0)
+                    + ' · 共享保留 ' + (res.shared_kept || 0)
+                    + ' · scope ' + (res.scope || scope)
+                );
+            });
+        });
+    }
+
+    function decorateReferenceBadge(fileEl, file) {
+        if (!(fileEl instanceof HTMLElement) || !file || !file.asset_id) return;
+        var count = Number(file.reference_count || file.ref_count || 0);
+        var badge = fileEl.querySelector('[data-mmf-ref-badge]');
+        if (count <= 0) {
+            if (badge) badge.remove();
+            return;
+        }
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'mmf-ref-badge';
+            badge.setAttribute('data-mmf-ref-badge', '');
+            fileEl.appendChild(badge);
+        }
+        badge.textContent = t('referenceCount') ? (t('referenceCount') + ' ' + count) : ('引用 ' + count);
+        badge.title = badge.textContent;
     }
 
     /* ─── upload ──────────────────────────────────────────────────────── */
@@ -3091,7 +3602,13 @@
 
     function matchesAspectRatio(fileWidth, fileHeight, ratioWidth, ratioHeight, tolerance) {
         if (!(fileWidth > 0 && fileHeight > 0 && ratioWidth > 0 && ratioHeight > 0)) return false;
-        return Math.abs((fileWidth / fileHeight) - (ratioWidth / ratioHeight)) <= tolerance;
+        var actual = fileWidth / fileHeight;
+        var target = ratioWidth / ratioHeight;
+        if (!(target > 0) || !Number.isFinite(actual) || !Number.isFinite(target)) return false;
+        var absDiff = Math.abs(actual - target);
+        // Absolute slack (legacy) OR relative slack (better for wide strips like 64:5 /
+        // 1909×150 vs 1920×150 ≈ 0.57% relative, which fails a tiny absolute 0.02).
+        return absDiff <= tolerance || (absDiff / target) <= tolerance;
     }
 
     function formatFileAspectLabel(width, height) {
@@ -3243,6 +3760,20 @@
         return {base: value.slice(0, dot), ext: value.slice(dot)};
     }
 
+    /**
+     * 冲突弹窗新名：扩展名以源文件为准。可带可不带；不带则补齐，带错则纠正，避免无扩展上传报错。
+     */
+    function ensureUploadFileExtension(name, originalName) {
+        var trimmed = String(name || '').trim();
+        if (!trimmed) return trimmed;
+        var expectedExt = splitUploadFileName(originalName).ext;
+        if (!expectedExt) return trimmed;
+        var match = trimmed.match(/\.[A-Za-z0-9]{1,16}$/);
+        if (!match) return trimmed + expectedExt;
+        if (match[0].toLowerCase() === expectedExt.toLowerCase()) return trimmed;
+        return trimmed.slice(0, -match[0].length) + expectedExt;
+    }
+
     function suggestUniqueUploadFileName(name, reservedNames) {
         var normalized = String(name || '');
         var lower = normalized.toLowerCase();
@@ -3310,9 +3841,26 @@
                 label: t('newName'),
                 value: suggestedName,
                 input: true,
+                okLabel: t('uploadConfirmNewName'),
+                secondaryLabel: t('uploadOverwriteExisting'),
+                onSecondary: function() {
+                    openManagerDialog({
+                        title: t('uploadOverwriteConfirmTitle'),
+                        message: t('uploadOverwriteConfirmMessage', {name: originalName}),
+                        input: false,
+                        destructive: true,
+                        okLabel: t('uploadOverwriteConfirm'),
+                        onOk: function() {
+                            finish({action: 'overwrite', name: originalName});
+                        },
+                        onCancel: function() {
+                            promptUploadRename(originalName, suggestedName).then(finish);
+                        }
+                    });
+                },
                 onOk: function(value) {
                     var trimmed = String(value || '').trim();
-                    finish(trimmed || null);
+                    finish(trimmed ? {action: 'rename', name: trimmed} : null);
                 },
                 onCancel: function() { finish(null); }
             });
@@ -3321,36 +3869,50 @@
 
     function confirmUploadName(originalName, reservedNames) {
         var suggestedName = suggestUniqueUploadFileName(originalName, reservedNames);
-        return promptUploadRename(originalName, suggestedName).then(function(confirmedName) {
+        return promptUploadRename(originalName, suggestedName).then(function(decision) {
+            if (!decision || !decision.name) return null;
+            if (decision.action === 'overwrite') {
+                return {name: String(decision.name), overwrite: true};
+            }
+            var confirmedName = ensureUploadFileExtension(String(decision.name), originalName);
             if (!confirmedName) return null;
             if (reservedNames[confirmedName.toLowerCase()]) {
                 showError(t('uploadNameStillExists', {name: confirmedName}));
                 return confirmUploadName(confirmedName, reservedNames);
             }
-            return confirmedName;
+            return {name: confirmedName, overwrite: false};
         });
     }
 
     function resolveUploadNameConflicts(fileList, targetHash) {
         var files = Array.prototype.slice.call(fileList || []);
+        var overwriteFlags = files.map(function() { return false; });
         return fetchDirectoryChildNames(targetHash).then(function(reservedNames) {
-            var chain = Promise.resolve(files);
+            var chain = Promise.resolve({files: files, overwriteFlags: overwriteFlags});
             files.forEach(function(file, index) {
-                chain = chain.then(function(currentFiles) {
-                    if (!currentFiles) return null;
+                chain = chain.then(function(current) {
+                    if (!current || !current.files) return null;
+                    var currentFiles = current.files;
+                    var flags = current.overwriteFlags;
                     var currentName = String(currentFiles[index].name || '');
                     var lowerName = currentName.toLowerCase();
                     if (!reservedNames[lowerName]) {
                         reservedNames[lowerName] = true;
-                        return currentFiles;
+                        return {files: currentFiles, overwriteFlags: flags};
                     }
-                    return confirmUploadName(currentName, reservedNames).then(function(confirmedName) {
-                        if (!confirmedName) return null;
-                        if (confirmedName !== currentName) {
-                            currentFiles[index] = renameUploadFile(currentFiles[index], confirmedName);
+                    return confirmUploadName(currentName, reservedNames).then(function(decision) {
+                        if (!decision || !decision.name) return null;
+                        if (decision.overwrite) {
+                            flags[index] = true;
+                            reservedNames[decision.name.toLowerCase()] = true;
+                            return {files: currentFiles, overwriteFlags: flags};
                         }
-                        reservedNames[confirmedName.toLowerCase()] = true;
-                        return currentFiles;
+                        if (decision.name !== currentName) {
+                            currentFiles[index] = renameUploadFile(currentFiles[index], decision.name);
+                        }
+                        reservedNames[decision.name.toLowerCase()] = true;
+                        flags[index] = false;
+                        return {files: currentFiles, overwriteFlags: flags};
                     });
                 });
             });
@@ -3720,17 +4282,37 @@
         return true;
     }
 
-    function requestUploadMetadata(fileList) {
+    function requestUploadMetadata(fileList, overwriteFlags) {
         var ui = window.Weline && window.Weline.UI;
         if (!ui || !ui.dialog || typeof ui.dialog.prompt !== 'function') {
             return Promise.reject(new Error(t('uploadMetadataRequired')));
         }
         var files = Array.prototype.slice.call(fileList || []);
+        var flags = Array.prototype.slice.call(overwriteFlags || []);
+        while (flags.length < files.length) flags.push(false);
         var metadata = [];
+        var needsCopy = false;
+        files.forEach(function(file, index) {
+            if (flags[index]) {
+                metadata[index] = {overwrite: true};
+            } else {
+                needsCopy = true;
+            }
+        });
+        if (!needsCopy) {
+            return Promise.resolve({
+                metadata: metadata,
+                mode: 'upload'
+            });
+        }
         var chain = Promise.resolve(true);
-        files.forEach(function(file) {
+        files.forEach(function(file, index) {
             chain = chain.then(function(continueUpload) {
                 if (!continueUpload) return false;
+                if (flags[index]) {
+                    metadata[index] = {overwrite: true};
+                    return true;
+                }
                 var name = String(file.name || '');
                 var displayName = name.replace(/\.[^.]+$/, '') || name;
                 return ui.dialog.prompt(t('uploadAltPromptForFile', {name: name}), {
@@ -3745,12 +4327,12 @@
                         field: {type: 'textarea', required: true}
                     }).then(function(descriptionResult) {
                         if (!descriptionResult || !descriptionResult.confirmed) return false;
-                        metadata.push({
+                        metadata[index] = {
                             display_name: displayName,
                             default_alt: String(altResult.value || '').trim(),
                             description: String(descriptionResult.value || '').trim(),
                             default_caption: ''
-                        });
+                        };
                         return true;
                     });
                 });
@@ -3856,9 +4438,11 @@
         }
 
         UPLOAD_PENDING = true;
-        resolveUploadNameConflicts(files, targetHash).then(function(resolvedFiles) {
-            if (!resolvedFiles) return null;
-            return requestUploadMetadata(resolvedFiles).then(function(uploadPlan) {
+        resolveUploadNameConflicts(files, targetHash).then(function(resolved) {
+            if (!resolved || !resolved.files) return null;
+            var resolvedFiles = resolved.files;
+            var overwriteFlags = resolved.overwriteFlags || [];
+            return requestUploadMetadata(resolvedFiles, overwriteFlags).then(function(uploadPlan) {
                 if (!uploadPlan || !uploadPlan.metadata) return null;
                 announceInteraction(t(source === 'paste' ? 'pasteUploadStarted' : 'uploadStarted', {
                     count: resolvedFiles.length
@@ -3873,7 +4457,9 @@
                     showSuccess(t('uploadComplete'));
                     var added = response && Array.isArray(response.added) ? response.added : [];
                     var after = uploadPlan.mode === 'translate'
-                        ? translateUploadedAssets(added)
+                        ? translateUploadedAssets(added.filter(function(item) {
+                            return !(item && item.overwritten);
+                        }))
                         : Promise.resolve();
                     return after.then(function() {
                         openDir(CWD_HASH);
@@ -3961,6 +4547,11 @@
 
     function deleteSelected() {
         if (!SELECTED.length) { showError(t('noItemsSelected')); return; }
+        // 引用管理模式：只提示卸引用，不走物理删
+        if (CONFIG.referenceViewMode) {
+            showError(t('useRefPanelUnbind') || '引用管理模式请使用左侧「卸引用前缀 / 关站清引用」，不会删除物理文件。');
+            return;
+        }
         var permitted = SELECTED.every(function(hash) {
             return itemCapability('delete', FILES[hash] || TREE[hash]);
         });
@@ -4244,18 +4835,15 @@
         else if (action === 'delete') deleteSelected();
     }
 
-    function editSelectedAssetMetadata() {
-        var file = SELECTED.length === 1 ? FILES[SELECTED[0]] : null;
+    function promptAssetLocaleMetadata(file) {
         var ui = window.Weline && window.Weline.UI;
-        if (!file || file.mime === 'directory' || !file.asset_id) {
-            showError(t('assetMetadataMissing'));
-            return;
+        if (!file || file.mime === 'directory') {
+            return Promise.reject(new Error(t('assetMetadataMissing')));
         }
         if (!ui || !ui.dialog || typeof ui.dialog.prompt !== 'function') {
-            showError(t('assetMetadataEditorUnavailable'));
-            return;
+            return Promise.reject(new Error(t('assetMetadataEditorUnavailable')));
         }
-        ui.dialog.prompt(t('assetDisplayNamePrompt'), {
+        return ui.dialog.prompt(t('assetDisplayNamePrompt'), {
             title: t('assetDisplayNameLabel'),
             confirmLabel: t('continue'),
             field: {type: 'text', required: true, value: String(file.display_name || file.name || '').trim()}
@@ -4288,31 +4876,81 @@
                     });
                 });
             });
-        }).then(function(metadata) {
-            if (!metadata) return;
+        });
+    }
+
+    function applyAssetDescriptionChange(file, data) {
+        var changed = data && data.changed && data.changed[file.hash];
+        if (!changed) return null;
+        FILES[file.hash] = Object.assign({}, FILES[file.hash] || file, changed);
+        updatePreviewPanel();
+        var details = qs('.mmf-details-overlay');
+        if (details && details.classList.contains('visible')) {
+            openAssetDetails(file.hash);
+        }
+        if (LOCALE_WORKBENCH.hash === String(file.hash || '')) {
+            renderLocaleWorkbench(FILES[file.hash]);
+        }
+        return FILES[file.hash];
+    }
+
+    function saveAssetLocaleMetadata(file, metadata) {
+        return new Promise(function(resolve, reject) {
+            if (!file || !metadata) {
+                reject(new Error(t('assetMetadataMissing')));
+                return;
+            }
+            if (file.asset_id) {
+                api({
+                    cmd: 'asset_metadata',
+                    target: file.hash,
+                    asset_id: String(file.asset_id),
+                    asset_revision: Number(file.asset_revision) || 1,
+                    locale_code: CONFIG.localeCode || 'zh_Hans_CN',
+                    display_name: metadata.display_name,
+                    default_alt: metadata.default_alt,
+                    description: metadata.description,
+                    default_caption: metadata.default_caption
+                }, function(data) {
+                    resolve(applyAssetDescriptionChange(file, data));
+                }, function(err) {
+                    reject(new Error(err || t('assetMetadataSaveFailed')));
+                });
+                return;
+            }
             api({
-                cmd: 'asset_metadata',
+                cmd: 'asset_ensure',
                 target: file.hash,
-                asset_id: String(file.asset_id),
-                asset_revision: Number(file.asset_revision),
                 locale_code: CONFIG.localeCode || 'zh_Hans_CN',
                 display_name: metadata.display_name,
                 default_alt: metadata.default_alt,
                 description: metadata.description,
                 default_caption: metadata.default_caption
             }, function(data) {
-                var changed = data && data.changed && data.changed[file.hash];
-                if (changed) {
-                    FILES[file.hash] = Object.assign({}, FILES[file.hash] || file, changed);
-                    updatePreviewPanel();
-                    var details = qs('.mmf-details-overlay');
-                    if (details && details.classList.contains('visible')) {
-                        openAssetDetails(file.hash);
-                    }
-                }
-                showSuccess(t('assetMetadataSaved'));
+                resolve(applyAssetDescriptionChange(file, data));
+            }, function(err) {
+                reject(new Error(err || t('assetMetadataSaveFailed')));
             });
-        }).catch(function(error) {
+        });
+    }
+
+    function supplementAssetMetadataForSelection(file) {
+        return promptAssetLocaleMetadata(file).then(function(metadata) {
+            if (!metadata) return null;
+            return saveAssetLocaleMetadata(file, metadata).then(function(updated) {
+                showSuccess(t('assetMetadataSaved'));
+                return updated;
+            });
+        });
+    }
+
+    function editSelectedAssetMetadata() {
+        var file = SELECTED.length === 1 ? FILES[SELECTED[0]] : null;
+        if (!file || file.mime === 'directory') {
+            showError(t('assetMetadataMissing'));
+            return;
+        }
+        supplementAssetMetadataForSelection(file).catch(function(error) {
             showError((error && error.message) || t('assetMetadataSaveFailed'));
         });
     }
@@ -4554,7 +5192,7 @@
         }
         
         var selectedFiles = [];
-        var blockedByAssetMetadata = false;
+        var blockedMetadataFiles = [];
         var selectionIssue = null;
         SELECTED.forEach(function (hash) {
             var f = FILES[hash];
@@ -4565,7 +5203,7 @@
                     return;
                 }
                 if (CURRENT_STORAGE.indexOf('::') >= 0 && (!f.asset_id || f.asset_selectable !== true)) {
-                    blockedByAssetMetadata = true;
+                    blockedMetadataFiles.push(f);
                     return;
                 }
                 selectedFiles.push(CONFIG.requireImageUsage
@@ -4579,8 +5217,24 @@
             return;
         }
 
-        if (blockedByAssetMetadata) {
-            showError(t('assetMetadataRequired'));
+        if (blockedMetadataFiles.length) {
+            SELECTION_CONFIRMING = true;
+            var chain = Promise.resolve(true);
+            blockedMetadataFiles.forEach(function(file) {
+                chain = chain.then(function(continueSupplement) {
+                    if (!continueSupplement) return false;
+                    return supplementAssetMetadataForSelection(file).then(function(updated) {
+                        return !!updated;
+                    });
+                });
+            });
+            chain.then(function(completed) {
+                SELECTION_CONFIRMING = false;
+                if (completed) confirmSelection();
+            }).catch(function(error) {
+                SELECTION_CONFIRMING = false;
+                showError((error && error.message) || t('assetMetadataSaveFailed'));
+            });
             return;
         }
         
@@ -4918,8 +5572,14 @@
         var inp = qs('.mmf-dialog-input', overlay);
         var okBtn = qs('.mmf-dialog-ok', overlay);
         var cancelBtn = qs('.mmf-dialog-cancel', overlay);
+        var secondaryBtn = qs('.mmf-dialog-secondary', overlay);
         var returnFocus = document.activeElement;
         var hasInput = options.input === true;
+        var hasSecondary = !!(options.secondaryLabel && typeof options.onSecondary === 'function' && secondaryBtn);
+        var defaultOkLabel = okBtn.getAttribute('data-default-label') || okBtn.textContent || 'OK';
+        if (!okBtn.getAttribute('data-default-label')) {
+            okBtn.setAttribute('data-default-label', defaultOkLabel);
+        }
         titleEl.textContent = options.title || '';
         messageEl.textContent = options.message || '';
         messageEl.hidden = !options.message;
@@ -4927,8 +5587,13 @@
         inp.value = hasInput ? (options.value || '') : '';
         inp.placeholder = hasInput ? (options.label || '') : '';
         inp.setAttribute('aria-label', hasInput ? (options.label || options.title || '') : '');
+        okBtn.textContent = options.okLabel || defaultOkLabel;
         okBtn.classList.toggle('mmf-btn-danger', options.destructive === true);
         okBtn.classList.toggle('mmf-btn-primary', options.destructive !== true);
+        if (secondaryBtn) {
+            secondaryBtn.hidden = !hasSecondary;
+            secondaryBtn.textContent = hasSecondary ? String(options.secondaryLabel || '') : '';
+        }
         overlay.setAttribute('aria-hidden', 'false');
         overlay.classList.add('visible');
         var closed = false;
@@ -4940,6 +5605,7 @@
             overlay.setAttribute('aria-hidden', 'true');
             okBtn.removeEventListener('click', handleOk);
             cancelBtn.removeEventListener('click', handleCancel);
+            if (secondaryBtn) secondaryBtn.removeEventListener('click', handleSecondary);
             overlay.removeEventListener('pointerdown', handleOverlay);
             document.removeEventListener('keydown', handleKey, true);
             if (DIALOG_CLEANUP === cleanup) DIALOG_CLEANUP = null;
@@ -4957,6 +5623,10 @@
             close(true);
             if (typeof options.onCancel === 'function') options.onCancel();
         }
+        function handleSecondary() {
+            close(true);
+            if (typeof options.onSecondary === 'function') options.onSecondary();
+        }
         function handleOverlay(e) {
             if (e.target === overlay) handleCancel();
         }
@@ -4973,7 +5643,7 @@
             }
             if (e.key !== 'Tab') return;
             var focusable = Array.prototype.slice.call(
-                dialog.querySelectorAll('button:not(:disabled), input:not([hidden]):not(:disabled)')
+                dialog.querySelectorAll('button:not([hidden]):not(:disabled), input:not([hidden]):not(:disabled)')
             );
             if (!focusable.length) return;
             var first = focusable[0];
@@ -4990,11 +5660,20 @@
         DIALOG_CLEANUP = cleanup;
         okBtn.addEventListener('click', handleOk);
         cancelBtn.addEventListener('click', handleCancel);
+        if (secondaryBtn && hasSecondary) {
+            secondaryBtn.addEventListener('click', handleSecondary);
+        }
         overlay.addEventListener('pointerdown', handleOverlay);
         document.addEventListener('keydown', handleKey, true);
         if (hasInput) {
             inp.focus();
-            inp.select();
+            var nameParts = splitUploadFileName(inp.value);
+            if (nameParts.ext && nameParts.base) {
+                // 只选中主名，扩展名固定可见，便于改名且不带扩展时仍可自动补齐
+                inp.setSelectionRange(0, nameParts.base.length);
+            } else {
+                inp.select();
+            }
         } else {
             cancelBtn.focus();
         }
@@ -6179,6 +6858,20 @@
             generation_id: selected.length === 1 ? selected[0].id : '',
             generation_ids: selected.map(function (g) { return g.id; })
         };
+        [
+            'identity', 'identity_root', 'identity_code', 'identity_scope',
+            'identity_kind', 'identity_field', 'identity_component', 'identity_locale',
+            'identity_instance',
+        ].forEach(function (key) {
+            if (CONFIG[key]) payload[key] = CONFIG[key];
+        });
+        // Fail-closed for strong business save_as without identity
+        if (saveMode === 'save_as' && CONFIG.requireIdentity === true
+            && !payload.identity && !(payload.identity_root && payload.identity_code)) {
+            setAiSaveBusy(false);
+            setAiSaveError(t('aiSaveIdentityRequired') || 'Media identity required for business save.');
+            return;
+        }
         apiPostJson(CONFIG.aiDrawSaveUrl, payload, function (res) {
             setAiSaveBusy(false);
             var saved = resolveAiSaveResult(res);
@@ -6271,6 +6964,7 @@
     window.WelineMediaManager = {
         init: init,
         setupIframeMode: setupIframeMode,
+        ensureUploadFileExtension: ensureUploadFileExtension,
         getSelected: function () {
             var files = [];
             SELECTED.forEach(function (hash) {

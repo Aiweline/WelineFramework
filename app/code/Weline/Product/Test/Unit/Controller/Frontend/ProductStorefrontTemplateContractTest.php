@@ -19,6 +19,7 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringContainsString("setGet('theme_public_route', \$surface['public_route'])", $controller);
         self::assertStringContainsString("assign('showToolbar', false)", $controller);
         self::assertStringContainsString('StorefrontCategoryListingFilter', $controller);
+        self::assertStringContainsString('StorefrontListingPager', $controller);
         self::assertStringContainsString("assign('storefront_offers_unfiltered'", $controller);
         self::assertStringContainsString("assign('storefront_listing_sort_options'", $controller);
         self::assertStringContainsString('paginate(', $controller);
@@ -38,6 +39,8 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-category-pager"', $category);
         self::assertStringContainsString('storefront_listing_page_options', $catalog);
         self::assertStringContainsString('storefront_listing_page_options', $category);
+        self::assertStringContainsString('is-ellipsis', $catalog);
+        self::assertStringContainsString('is-ellipsis', $category);
     }
 
     public function testProductControllerDoesNotReachIntoCartConcreteServices(): void
@@ -89,20 +92,24 @@ final class ProductStorefrontTemplateContractTest extends TestCase
     public function testProductListLayoutLeavesFiltersSlotForFiltersModuleInjection(): void
     {
         $layout = (string)file_get_contents(
-            BP . 'app/code/Weline/Theme/view/theme/frontend/layouts/product_list/default.phtml',
+            BP . 'app/code/Weline/Product/view/theme/frontend/layouts/products/default.phtml',
         );
 
         self::assertStringContainsString('id="list-filters"', $layout);
         self::assertStringContainsString('data-placeholder="list-filters"', $layout);
         self::assertStringContainsString('由 Filters 部件默认注入', $layout);
         self::assertStringNotContainsString(
-            "getHook('Weline_Theme::frontend::layouts::product-list::filters-sidebar'",
+            "getHook('Weline_Theme::frontend::layouts::products::filters-sidebar'",
             $layout,
         );
         self::assertStringContainsString('grid-template-columns: 240px minmax(0, 1fr)', $layout);
-        self::assertStringContainsString('max-width: var(--weline-layout-content-max-width, 1400px)', $layout);
+        self::assertStringContainsString('width: min(100%, var(--weline-layout-content-max-width));', $layout);
+        // No widget override: keep controller content / live catalog fallback (editor clears meta.content).
+        self::assertStringContainsString('<elseif condition="content"/>', $layout);
+        self::assertStringContainsString('Weline_Product::templates/frontend/catalog/index.phtml', $layout);
+        self::assertStringContainsString('publishedListingCandidates', $layout);
         self::assertFileDoesNotExist(
-            BP . 'app/code/Weline/Product/view/hooks/Weline_Theme/frontend/layouts/product-list/filters-sidebar.phtml',
+            BP . 'app/code/Weline/Product/view/hooks/Weline_Theme/frontend/layouts/products/filters-sidebar.phtml',
         );
     }
 

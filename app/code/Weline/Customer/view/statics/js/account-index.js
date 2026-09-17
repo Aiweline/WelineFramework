@@ -334,6 +334,7 @@
             section.classList.remove('d-none');
             section.hidden = false;
             section.removeAttribute('aria-busy');
+            section.removeAttribute('data-account-section-loading');
             clearPendingSectionFlag(sectionName);
             return section;
         }
@@ -430,6 +431,11 @@
                     }
                     loadDeclaredSidebarModules(sidebarContentMount);
                     revealAccountSection(sectionName);
+                } else if (!options._retriedEmpty) {
+                    // Rare race: worker returns success with empty hook HTML; retry once.
+                    delete loadedSidebarSections[sectionName];
+                    delete sidebarContentLoading[sectionName];
+                    return loadSidebarContent(sectionName, Object.assign({}, options, { force: true, _retriedEmpty: true }));
                 } else {
                     delete loadedSidebarSections[sectionName];
                     markSectionLoadFailed(sectionName, '');

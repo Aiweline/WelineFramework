@@ -1321,6 +1321,12 @@ AI用量审计恢复,AI用量审计恢复
 "%{1} 同步失败：%{2}","%{1} 同步失败：%{2}"
 "模型收集完成，共 %{1} 个模型","模型收集完成，共 %{1} 个模型"
 已跳过模型收集,已跳过模型收集
+AI生成失败（供应商：%{provider}，模型：%{model}）：%{detail},AI生成失败（供应商：%{provider}，模型：%{model}）：%{detail}
+AI生成失败（供应商：%{provider}）：%{detail},AI生成失败（供应商：%{provider}）：%{detail}
+AI生成失败（模型：%{model}）：%{detail},AI生成失败（模型：%{model}）：%{detail}
+AI流式生成失败（供应商：%{provider}，模型：%{model}）：%{detail},AI流式生成失败（供应商：%{provider}，模型：%{model}）：%{detail}
+AI流式生成失败（供应商：%{provider}）：%{detail},AI流式生成失败（供应商：%{provider}）：%{detail}
+AI流式生成失败（模型：%{model}）：%{detail},AI流式生成失败（模型：%{model}）：%{detail}
 "VectorEngine 图文模型测试响应为空","VectorEngine 图文模型测试响应为空"
 AI翻译繁忙：已断开僵死占用进程，请稍后重试。,AI翻译繁忙：已断开僵死占用进程，请稍后重试。
 "支持 .ico, .png","支持 .ico, .png"

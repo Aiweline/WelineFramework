@@ -83,4 +83,42 @@ class DetailDescriptionTextifierTest extends TestCore
         self::assertStringContainsString('Size suggestion chart', $mapped);
         self::assertStringContainsString('asset://aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', $mapped);
     }
+
+    public function testMeasurementChartAndProductInfoReplaceAssets(): void
+    {
+        $infoId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        $chartId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+        $html = '<div data-weline-product-description="1688">'
+            . '<img src="asset://' . $infoId . '">'
+            . '<img src="asset://' . $chartId . '">'
+            . '</div>';
+
+        $info = DetailDescriptionTextifier::buildProductInfoPanelZh(
+            ['名称' => '四季春', '尺码' => 'S-L'],
+            [[
+                'label' => '厚薄指数',
+                'options' => ['超薄', '微薄', '适中', '厚'],
+                'selected' => '微薄',
+            ]],
+        );
+        $chart = DetailDescriptionTextifier::buildMeasurementSizeChartZh([[
+            'title' => '大袖衫',
+            'headers' => ['尺码', 'S', 'M', 'L'],
+            'rows' => [
+                ['衣长', '112', '115', '118'],
+            ],
+        ]]);
+
+        $updated = DetailDescriptionTextifier::replaceAssetImageWithHtml($html, $infoId, $info);
+        $updated = DetailDescriptionTextifier::replaceAssetImageWithHtml($updated, $chartId, $chart);
+
+        self::assertStringContainsString('产品信息', $updated);
+        self::assertStringContainsString('weline-detail-text__scale-option--selected', $updated);
+        self::assertStringContainsString('微薄', $updated);
+        self::assertStringContainsString('尺码参考表', $updated);
+        self::assertStringContainsString('大袖衫', $updated);
+        self::assertStringContainsString('112', $updated);
+        self::assertStringNotContainsString('asset://' . $infoId, $updated);
+        self::assertStringNotContainsString('asset://' . $chartId, $updated);
+    }
 }

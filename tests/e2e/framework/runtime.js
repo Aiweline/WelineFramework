@@ -512,9 +512,6 @@ function buildThemePreviewPath(previewOptions = {}) {
   params.set('preview_mode', String(previewOptions.previewMode || 'live'));
   params.set('status', String(previewOptions.status || 'draft'));
 
-  if (previewOptions.autoLogin !== undefined) {
-    params.set('auto_login', String(previewOptions.autoLogin));
-  }
   if (previewOptions.scope) {
     params.set('scope', String(previewOptions.scope));
   }

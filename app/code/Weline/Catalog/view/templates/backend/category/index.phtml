@@ -235,6 +235,11 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     data-text-drop-after="<?= $escape(__('插入到下方')) ?>"
     data-image-max-bytes="<?= $escape($imageMaxBytes) ?>"
     data-banner-max-bytes="<?= $escape($bannerMaxBytes) ?>"
+    data-media-identity-root="catalog"
+    data-media-identity-code="<?= $escape($categoryPath !== '' ? $categoryPath : ('id-' . (string)$selectedId)) ?>"
+    data-media-identity-scope="default.default.default"
+    data-media-bind-url="@backend-url{'weline_filemanager/backend/media-reference/bind'}"
+    data-media-ref-mode="single"
     data-text-image-too-large="<?= $escape(__('分类图标过大（上限 %{1} KB）', [(string)(int)floor($imageMaxBytes / 1024)])) ?>"
     data-text-banner-too-large="<?= $escape(__('分类 Banner 过大（上限 %{1} KB）', [(string)(int)floor($bannerMaxBytes / 1024)])) ?>"
 >
@@ -552,9 +557,11 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
         <iframe class="w-product-media-picker__frame"
                 title="<?= $escape(__('媒体库')) ?>"
                 data-catalog-media-frame
-                data-src-image="@backend-url('media/backend/manager/iframe')?target=catalog-category-image&multi=0&usage=1&ext=jpg,png,gif,webp&size=<?= (int)$imageMaxBytes ?>&recommend_width=<?= (int)$imageRecW ?>&recommend_height=<?= (int)$imageRecH ?>&aspect_ratio=1"
-                data-src-banner="@backend-url('media/backend/manager/iframe')?target=catalog-category-banner&multi=0&usage=1&ext=jpg,png,gif,webp&size=<?= (int)$bannerMaxBytes ?>&recommend_width=<?= (int)$bannerRecW ?>&recommend_height=<?= (int)$bannerRecH ?>"></iframe>
+                data-src-image="@backend-url('media/backend/manager/iframe')?target=catalog-category-image&multi=0&usage=1&ext=jpg,png,gif,webp&size=<?= (int)$imageMaxBytes ?>&recommend_width=<?= (int)$imageRecW ?>&recommend_height=<?= (int)$imageRecH ?>&aspect_ratio=1&identity_root=catalog&identity_kind=image&identity_field=image&ref_mode=single"
+                data-src-banner="@backend-url('media/backend/manager/iframe')?target=catalog-category-banner&multi=0&usage=1&ext=jpg,png,gif,webp&size=<?= (int)$bannerMaxBytes ?>&recommend_width=<?= (int)$bannerRecW ?>&recommend_height=<?= (int)$bannerRecH ?>&identity_root=catalog&identity_kind=banner&identity_field=banner&ref_mode=single"></iframe>
     </div>
 </dialog>
 
-<script type="module" src="@static(Weline_Catalog::js/backend/category-admin.js)?v=20260912-tree1"></script>
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
+<script type="module" src="@static(Weline_Catalog::js/backend/category-admin.js)?v=20260916-media-identity"></script>

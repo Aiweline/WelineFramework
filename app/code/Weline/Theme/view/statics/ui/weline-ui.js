@@ -648,7 +648,7 @@ function resolveElevateScope(host) {
     if (scoped instanceof HTMLElement) return scoped;
     // Header / layout slots often form sibling stacking contexts (e.g.「全部」vs 分类).
     const layoutScope = host.closest(
-        '.header-categories, .header-nav-left-slot, .header-nav-right-slot, .header-nav-links-slot, .header-nav-fill, .header-main-nav',
+        '.header-categories, .header-nav-left-slot, .header-nav-right-slot, .header-nav-links-slot, .header-nav-fill, .header-nav-left-cluster, .header-nav-right-cluster, .header-main-nav',
     );
     if (layoutScope instanceof HTMLElement) return layoutScope;
     return host instanceof HTMLElement ? host : null;
@@ -837,20 +837,47 @@ function installElevateLayerRuntime() {
         queueMicrotask(() => syncElevateHost(host));
     }, true);
 
+    let elevateSyncScheduled = false;
+    const pendingElevateHosts = new Set();
+    const elevateObserveOptions = {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'data-state', 'aria-expanded'],
+    };
     const observer = new MutationObserver((records) => {
+        // Dense class churn (editor chrome / floating) would otherwise trip DEV delivery_storm.
+        try {
+            observer.disconnect();
+        } catch (_error) {
+        }
         for (const record of records) {
             if (!(record.target instanceof Element)) continue;
             const host = record.target.closest('[data-wf-host]') || (
                 record.target.hasAttribute('data-wf-host') ? record.target : null
             );
-            if (host instanceof HTMLElement) syncElevateHost(host);
+            if (host instanceof HTMLElement) pendingElevateHosts.add(host);
+        }
+        if (elevateSyncScheduled) return;
+        elevateSyncScheduled = true;
+        const flush = () => {
+            elevateSyncScheduled = false;
+            const batch = Array.from(pendingElevateHosts);
+            pendingElevateHosts.clear();
+            for (const host of batch) {
+                if (host.isConnected) syncElevateHost(host);
+            }
+            try {
+                observer.observe(document.documentElement, elevateObserveOptions);
+            } catch (_error) {
+            }
+        };
+        if (typeof queueMicrotask === 'function') {
+            queueMicrotask(flush);
+        } else {
+            setTimeout(flush, 0);
         }
     });
-    observer.observe(document.documentElement, {
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class', 'data-state', 'aria-expanded'],
-    });
+    observer.observe(document.documentElement, elevateObserveOptions);
 }
 
 function floatingPortalContains(record, target, visited = new Set()) {
@@ -2089,6 +2116,64 @@ function registerLoading() {
         element.setAttribute('aria-hidden', String(element.hidden));
         return { show, hide, element };
     });
+}
+
+/**
+ * Container busy overlay: blocks pointer/keyboard interaction until cleared.
+ * Prefer this for section-level reloads (checkout shipping methods, drawers, …).
+ *
+ * @param {Element|string|null|undefined} target
+ * @param {boolean} [busy=true]
+ * @param {{message?: string}|string} [options]
+ * @returns {boolean}
+ */
+function setBusy(target, busy = true, options = {}) {
+    const host = asElement(target);
+    if (!(host instanceof HTMLElement)) return false;
+    const opts = typeof options === 'string'
+        ? { message: options }
+        : (options && typeof options === 'object' ? options : {});
+    const message = String(opts.message || '').trim();
+    const ensureOverlay = () => {
+        let overlay = host.querySelector(':scope > [data-w-busy-overlay]');
+        if (overlay instanceof HTMLElement) return overlay;
+        host.classList.add('w-busy');
+        overlay = document.createElement('div');
+        overlay.className = 'w-busy__overlay';
+        overlay.dataset.wBusyOverlay = 'true';
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = '<div class="w-busy__backdrop" aria-hidden="true"></div>'
+            + '<div class="w-busy__content" role="status">'
+            + '<span class="w-spinner" aria-hidden="true"></span>'
+            + '<span class="w-busy__message" data-w-busy-message></span>'
+            + '</div>';
+        host.append(overlay);
+        return overlay;
+    };
+    const overlay = ensureOverlay();
+    const messageElement = overlay.querySelector('[data-w-busy-message]');
+    if (messageElement instanceof HTMLElement) {
+        messageElement.textContent = busy ? message : '';
+    }
+    if (busy) {
+        host.dataset.wBusy = 'true';
+        host.setAttribute('aria-busy', 'true');
+        if ('inert' in host) {
+            host.inert = true;
+        }
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        return true;
+    }
+    host.removeAttribute('data-w-busy');
+    host.setAttribute('aria-busy', 'false');
+    if ('inert' in host) {
+        host.inert = false;
+    }
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    return true;
 }
 
 function registerNavFilter() {
@@ -3562,24 +3647,72 @@ const createdUI = {
         error(message, options = {}) { return showToast(message, { ...options, tone: 'danger' }); },
         info(message, options = {}) { return showToast(message, { ...options, tone: 'info' }); },
     },
+    /** Section/container busy mask (non-interactive until cleared). */
+    setBusy,
+    busy: {
+        set: setBusy,
+        clear(target) { return setBusy(target, false); },
+    },
 };
 const UI = existingRuntime || createdUI;
+if (typeof UI.setBusy !== 'function') {
+    UI.setBusy = setBusy;
+}
+if (!UI.busy || typeof UI.busy.set !== 'function') {
+    UI.busy = {
+        set: setBusy,
+        clear(target) { return setBusy(target, false); },
+    };
+}
 
 function start() {
     initializeThemePreference();
     installElevateLayerRuntime();
     mount(document);
+    let uiMountScheduled = false;
+    const pendingUiMount = new Set();
+    const pendingUiUnmount = new Set();
+    const uiMountObserveOptions = { childList: true, subtree: true };
     observer = new MutationObserver((records) => {
+        // Dense widget hydrate must not deliver >40 times / ~250ms (DEV delivery_storm).
+        try {
+            observer.disconnect();
+        } catch (_error) {
+        }
         for (const record of records) {
             record.removedNodes.forEach((node) => {
-                if (node instanceof Element && !node.isConnected) unmount(node);
+                if (node instanceof Element && !node.isConnected) pendingUiUnmount.add(node);
             });
             record.addedNodes.forEach((node) => {
-                if (node instanceof Element && node.isConnected) mount(node);
+                if (node instanceof Element && node.isConnected) pendingUiMount.add(node);
             });
         }
+        if (uiMountScheduled) return;
+        uiMountScheduled = true;
+        const flush = () => {
+            uiMountScheduled = false;
+            const unmountBatch = Array.from(pendingUiUnmount);
+            const mountBatch = Array.from(pendingUiMount);
+            pendingUiUnmount.clear();
+            pendingUiMount.clear();
+            unmountBatch.forEach((node) => {
+                if (!node.isConnected) unmount(node);
+            });
+            mountBatch.forEach((node) => {
+                if (node.isConnected) mount(node);
+            });
+            try {
+                observer.observe(document.documentElement, uiMountObserveOptions);
+            } catch (_error) {
+            }
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => requestAnimationFrame(flush));
+        } else {
+            setTimeout(flush, 0);
+        }
     });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    observer.observe(document.documentElement, uiMountObserveOptions);
     document.dispatchEvent(new CustomEvent('weline:ui:ready', { detail: { version: UI.__version } }));
 }
 

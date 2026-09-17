@@ -377,10 +377,25 @@
             languageSwitcher.setAttribute('data-current-compact', displayName);
 
             if (activeOption) {
-                const optionFlag = activeOption.querySelector('.weline-choice-flag');
-                const currentFlag = languageSwitcher.querySelector('.weline-choice-current-flag');
+                // Weline UI 2 switcher uses data-country-flag / .w-language-switcher__flag;
+                // keep legacy .weline-choice-* selectors for older chrome.
+                const optionFlag = activeOption.querySelector(
+                    '[data-country-flag], .w-language-switcher__flag, .weline-choice-flag'
+                );
+                const currentFlag = languageSwitcher.querySelector(
+                    '[data-w-menu-trigger] [data-country-flag], [data-w-menu-trigger] .w-language-switcher__flag, .weline-choice-current-flag'
+                );
                 if (optionFlag && currentFlag) {
-                    currentFlag.innerHTML = optionFlag.innerHTML;
+                    const country = optionFlag.getAttribute('data-country-flag');
+                    if (country != null && currentFlag.hasAttribute('data-country-flag')) {
+                        currentFlag.setAttribute('data-country-flag', country);
+                    }
+                    // Panel options stay empty until open-hydrate. Never wipe a painted
+                    // SSR/hydrated trigger flag with empty option HTML (flash-then-gone).
+                    const optionPainted = optionFlag.querySelector('img.w-flag-icon, img, svg');
+                    if (optionPainted) {
+                        currentFlag.innerHTML = optionFlag.innerHTML;
+                    }
                 }
             }
         });

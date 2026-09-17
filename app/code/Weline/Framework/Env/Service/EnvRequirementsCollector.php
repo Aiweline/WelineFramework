@@ -14,6 +14,7 @@ namespace Weline\Framework\Env\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Env\Api\EnvRequirementsCollectorInterface;
 use Weline\Framework\Env\Api\Data\EnvRequirements;
+use Weline\Framework\Php\FiberTaskBatch;
 use Weline\Framework\System\Helper\InstallData;
 
 /**
@@ -234,15 +235,34 @@ class EnvRequirementsCollector implements EnvRequirementsCollectorInterface
         $requirements = new EnvRequirements();
 
         $modules = Env::getInstance()->getModuleList();
-        foreach ($modules as $moduleName => $module) {
-            $modulePath = $module['base_path'] ?? '';
-            if (empty($modulePath)) {
-                continue;
-            }
+        $batch = new FiberTaskBatch(null, true, 'WELINE_ENV_FIBER_CONCURRENCY');
+        $batch->mapModules(
+            $modules,
+            function (string $moduleName, mixed $module): ?EnvRequirements {
+                $modulePath = \is_array($module) ? (string)($module['base_path'] ?? '') : '';
+                if ($modulePath === '') {
+                    return null;
+                }
 
-            $moduleRequirements = $this->collectFromModule($moduleName, $modulePath);
-            $requirements->merge($moduleRequirements);
-        }
+                return $this->collectFromModule($moduleName, $modulePath);
+            },
+            static function (string $phase, array $ctx) use ($requirements): void {
+                if ($phase !== 'task' || !($ctx['ok'] ?? false)) {
+                    return;
+                }
+                $moduleRequirements = $ctx['result'] ?? null;
+                if ($moduleRequirements instanceof EnvRequirements) {
+                    $requirements->merge($moduleRequirements);
+                }
+            },
+            [
+                'env' => 'WELINE_ENV_FIBER_CONCURRENCY',
+                'fail_fast' => true,
+                'label' => 'env-requirements-collect',
+                'keep_results' => false,
+            ]
+        );
+        unset($batch, $modules);
 
         return $requirements;
     }

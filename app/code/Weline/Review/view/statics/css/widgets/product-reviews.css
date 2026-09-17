@@ -84,39 +84,40 @@
 .weline-review__media-capabilities {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--spacing-2, 0.5rem);
-    margin-top: var(--spacing-4, 1rem);
+    gap: var(--spacing-1, 0.25rem) var(--spacing-2, 0.5rem);
+    margin-top: var(--spacing-3, 0.75rem);
 }
 
 .weline-review__media-capabilities span {
     display: flex;
     align-items: center;
     gap: var(--spacing-2, 0.5rem);
-    min-height: 3.25rem;
-    padding: var(--spacing-3, 0.75rem) var(--spacing-4, 1rem);
+    min-height: 2rem;
+    padding: var(--spacing-1, 0.25rem) var(--spacing-3, 0.75rem);
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-bg-soft);
     color: var(--wr-muted);
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.35;
 }
 
 .weline-review__media-capabilities b {
     display: inline-grid;
     place-items: center;
-    min-width: 2.5rem;
-    height: 1.5rem;
+    min-width: 2rem;
+    height: 1.25rem;
     border-radius: var(--radius-sm, 0.25rem);
     background: var(--wr-accent);
     color: var(--color-text-light, #fff);
-    font-size: var(--font-size-xs, 0.75rem);
+    font-size: 0.625rem;
     letter-spacing: 0.04em;
 }
 
 .weline-review__layout {
     display: grid;
-    gap: var(--spacing-6, 1.5rem);
-    margin-top: var(--spacing-5, 1.25rem);
+    gap: var(--spacing-4, 1rem);
+    margin-top: var(--spacing-3, 0.75rem);
 }
 
 .weline-review--layout-stack .weline-review__layout {
@@ -137,7 +138,7 @@
 
 .weline-review__listing {
     display: grid;
-    gap: var(--spacing-4, 1rem);
+    gap: var(--spacing-3, 0.75rem);
     align-content: start;
 }
 
@@ -242,7 +243,7 @@
 .weline-review__item,
 .weline-review__empty {
     margin: 0;
-    padding: var(--spacing-4, 1rem);
+    padding: var(--spacing-3, 0.75rem);
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-bg-soft);
@@ -252,13 +253,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-2, 0.5rem);
 }
 
 .weline-review__stars {
     color: var(--wr-star);
-    font-size: var(--font-size-lg, 1.125rem);
-    letter-spacing: 0.06em;
+    font-size: var(--font-size-base, 1rem);
+    letter-spacing: 0.04em;
+    line-height: 1.2;
 }
 
 .weline-review__meta {
@@ -267,16 +269,18 @@
 }
 
 .weline-review__item h3 {
-    margin: var(--spacing-3, 0.75rem) 0 var(--spacing-2, 0.5rem);
+    margin: var(--spacing-2, 0.5rem) 0 var(--spacing-1, 0.25rem);
     color: var(--wr-ink);
-    font-size: var(--font-size-lg, 1.125rem);
+    font-size: var(--font-size-base, 1rem);
+    line-height: 1.35;
 }
 
 .weline-review__item-copy,
 .weline-review__empty {
     margin: 0;
     color: var(--wr-muted);
-    line-height: 1.7;
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.5;
     overflow-wrap: anywhere;
 }
 
@@ -420,31 +424,38 @@
 }
 
 .weline-review__score-list {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--spacing-2, 0.5rem);
-    margin-top: var(--spacing-3, 0.75rem);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-1, 0.25rem) var(--spacing-4, 1rem);
+    margin-top: var(--spacing-2, 0.5rem);
 }
 
 .weline-review__score {
-    padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
-    border-radius: var(--wr-radius);
-    background: var(--wr-bg);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2, 0.5rem);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
 }
 
 .weline-review__score-label {
-    display: block;
+    display: inline;
     color: var(--wr-muted);
     font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .weline-review__score-stars {
-    display: block;
-    margin-top: 0.25rem;
+    display: inline;
+    margin-top: 0;
     color: var(--wr-star);
-    font-size: var(--font-size-sm, 0.875rem);
-    letter-spacing: 0.04em;
+    font-size: var(--font-size-xs, 0.75rem);
+    letter-spacing: 0.03em;
+    line-height: 1.2;
 }
 
 .weline-review__form {
@@ -766,7 +777,7 @@
     }
 
     .weline-review__score-list {
-        grid-template-columns: 1fr;
+        gap: var(--spacing-1, 0.25rem) var(--spacing-3, 0.75rem);
     }
 
     .weline-review__upload {

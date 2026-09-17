@@ -230,8 +230,8 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'banner',
                     'config' => [
-                        'title' => '云裳汉服 · Hanfu Atelier',
-                        'subtitle' => '东方衣冠，为日常与礼仪而作 · Made for modern rituals',
+                        'title' => $this->resolveWebsiteBrandTitle(),
+                        'subtitle' => '为日常与仪式感而作 · Made for everyday rituals',
                         'auto_play' => true,
                         'interval' => 5000,
                     ],
@@ -259,7 +259,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '新裳入藏 · New Arrivals',
+                        'title' => '新品上市 · New Arrivals',
                         'limit' => 8,
                         'columns' => 4,
                     ],
@@ -348,7 +348,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '典藏热选 · Best Sellers',
+                        'title' => '热卖精选 · Best Sellers',
                         'limit' => 4,
                         'columns' => 4,
                         'layout' => 'carousel',
@@ -385,7 +385,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '按形制继续探索 · Explore More',
+                        'title' => '继续探索 · Explore More',
                         'limit' => 8,
                         'columns' => '4',
                         'layout' => 'grid',
@@ -422,7 +422,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '人气汉服 · Popular Hanfu',
+                        'title' => '人气商品 · Popular Picks',
                         'limit' => 8,
                         'columns' => 4,
                     ],
@@ -530,5 +530,22 @@ class DefaultLayoutSeeder
         }
 
         return $summary;
+    }
+
+    /**
+     * Hero 标题取自 Website 基础信息站名；未配置时留空，由前台 SiteBrand 再解析。
+     */
+    private function resolveWebsiteBrandTitle(): string
+    {
+        try {
+            /** @var \Weline\Theme\Helper\SiteBrand $siteBrand */
+            $siteBrand = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+            if ($siteBrand instanceof \Weline\Theme\Helper\SiteBrand) {
+                return trim($siteBrand->resolveFrontendSiteName());
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 }

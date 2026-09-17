@@ -4,7 +4,9 @@
   --w-store-music-surface: var(--color-surface, #fff);
   --w-store-music-muted: color-mix(in srgb, var(--w-store-music-ink) 55%, transparent);
   --w-store-music-shadow: var(--weline-theme-shadow-lg, 0 14px 32px color-mix(in srgb, var(--w-store-music-ink) 18%, transparent));
-  --w-store-music-z-wave: 8;
+  /* Below Customer social (2147483000) / StoreMusic widget; ABOVE page chrome.
+   * z=8 left bars painted but buried under opaque sections → 「开了波形却看不见」. */
+  --w-store-music-z-wave: 2147482900;
   /* Above Customer social quick bar (2147483000) so avatar is not covered */
   --w-store-music-z-widget: 2147483001;
 }
@@ -16,8 +18,9 @@
   height: 100%;
   pointer-events: none;
   z-index: var(--w-store-music-z-wave);
-  opacity: 0.4;
-  mix-blend-mode: multiply;
+  /* Above page chrome: keep readable; multiply on cream made bars nearly invisible. */
+  opacity: 0.55;
+  mix-blend-mode: normal;
 }
 
 /* Keep portrait player shell visible even if host tooling injects opacity/visibility.
@@ -76,9 +79,71 @@
   border-radius: 50%;
   overflow: visible;
   box-shadow: var(--w-store-music-shadow);
+  --w-store-music-level: 0;
+  /* Half of avatar box; JS overwrites with measured px for pixel-perfect concentricity. */
+  --w-spectrum-r: 2.75rem;
+}
+
+/* Polar spectrum: same box as avatar; bars pivot on avatar CENTER (not top:50%+bottom origin). */
+.w-store-music__spectrum {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.w-store-music.is-playing .w-store-music__spectrum {
+  opacity: 1;
+  visibility: visible;
+}
+
+.w-store-music__spectrum-bar {
+  --w-spectrum-len: calc(0.45rem + (var(--w-bar, 0) * 2.15rem));
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: 0.16rem;
+  /* Full spoke from center; inner segment transparent so only the outer ring paints. */
+  height: calc(var(--w-spectrum-r) + var(--w-spectrum-len));
+  margin-left: -0.08rem;
+  border-radius: 999px;
+  transform-origin: center bottom;
+  transform: rotate(var(--w-ang, 0deg));
+  background: linear-gradient(
+    to top,
+    transparent 0,
+    transparent var(--w-spectrum-r),
+    color-mix(
+      in srgb,
+      var(--w-store-music-accent) calc(55% + (var(--w-bar, 0) * 40%)),
+      transparent
+    ) var(--w-spectrum-r),
+    color-mix(
+      in srgb,
+      var(--w-store-music-accent) calc(55% + (var(--w-bar, 0) * 40%)),
+      transparent
+    ) 100%
+  );
+  box-shadow: none;
+  opacity: 0;
+  will-change: height, opacity;
+}
+
+.w-store-music.is-playing .w-store-music__spectrum-bar {
+  opacity: calc(0.55 + (var(--w-bar, 0) * 0.4));
+}
+
+.w-store-music:not(.is-playing) .w-store-music__spectrum-bar {
+  --w-bar: 0;
+  opacity: 0;
 }
 
 .w-store-music__face {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 5.5rem;
   height: 5.5rem;
@@ -87,6 +152,19 @@
   object-position: center 18%;
   border: 0.16rem solid color-mix(in srgb, var(--w-store-music-surface) 88%, var(--w-store-music-accent));
   background: color-mix(in srgb, var(--w-store-music-surface) 90%, var(--w-store-music-accent) 10%);
+  transform: none;
+  transform-origin: center center;
+}
+
+/* Optional vinyl spin — only when admin enables avatar_spin. */
+.w-store-music.is-playing.is-avatar-spin .w-store-music__face {
+  animation: w-store-music-spin 14s linear infinite;
+}
+
+.w-store-music:not(.is-playing) .w-store-music__face,
+.w-store-music:not(.is-avatar-spin) .w-store-music__face {
+  animation: none;
+  transform: none;
 }
 
 .w-store-music__avatar:focus-visible {
@@ -96,6 +174,15 @@
 
 .w-store-music__avatar.is-need-gesture {
   animation: w-store-music-pulse 1.6s ease-in-out infinite;
+}
+
+/* Ripple already signals presence — avoid scaling the shell while idle rings run. */
+.w-store-music:not(.is-playing) .w-store-music__avatar.is-need-gesture {
+  animation: w-store-music-pulse 1.6s ease-in-out infinite;
+}
+
+.w-store-music.is-playing .w-store-music__avatar.is-need-gesture {
+  animation: none;
 }
 
 .w-store-music__hint {
@@ -168,13 +255,51 @@
   text-overflow: ellipsis;
 }
 
+.w-store-music__intro-wrap {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
 .w-store-music__intro {
   font-size: 0.72rem;
+  line-height: 1.45;
   color: var(--w-store-music-muted);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: break-word;
+}
+
+.w-store-music__intro-wrap.is-expanded .w-store-music__intro {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.w-store-music__intro-toggle {
+  appearance: none;
+  border: 0;
+  padding: 0.05rem 0;
+  margin: 0;
+  align-self: start;
+  justify-self: start;
+  background: transparent;
+  color: var(--w-store-music-accent);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.w-store-music__intro-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--w-store-music-accent) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.2rem;
 }
 
 .w-store-music__dismiss {
@@ -292,6 +417,48 @@
   color: var(--w-store-music-muted);
 }
 
+.w-store-music__search {
+  display: block;
+  margin: 0;
+}
+
+.w-store-music__search-input {
+  appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 0.42rem 0.65rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: var(--w-store-music-surface);
+  color: var(--w-store-music-ink);
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w-store-music-ink) 10%, transparent);
+  outline: none;
+}
+
+.w-store-music__search-input::placeholder {
+  color: var(--w-store-music-muted);
+}
+
+.w-store-music__search-input:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--w-store-music-accent);
+}
+
+.w-store-music__search-empty {
+  margin: 0;
+  padding: 0.55rem 0.35rem;
+  text-align: center;
+  font-size: 0.68rem;
+  color: var(--w-store-music-muted);
+}
+
+.w-store-music__search-empty[hidden] {
+  display: none !important;
+}
+
 .w-store-music__playlist {
   list-style: none;
   margin: 0;
@@ -337,10 +504,37 @@
 .w-store-music__track-intro {
   grid-column: 1 / -1;
   font-size: 0.65rem;
+  line-height: 1.4;
   color: var(--w-store-music-muted);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+.w-store-music__track.is-intro-expanded .w-store-music__track-intro {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+  white-space: normal;
+}
+
+.w-store-music__track-intro-toggle {
+  grid-column: 1 / -1;
+  appearance: none;
+  border: 0;
+  padding: 0.05rem 0 0;
+  margin: 0;
+  justify-self: start;
+  background: transparent;
+  color: var(--w-store-music-accent);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
 }
 
 .w-store-music__track-mark {
@@ -419,9 +613,23 @@
   50% { transform: scale(1.04); }
 }
 
+@keyframes w-store-music-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .w-store-music__avatar.is-need-gesture {
-    animation: none;
+  .w-store-music__avatar.is-need-gesture,
+  .w-store-music.is-playing.is-avatar-spin .w-store-music__face {
+    animation: none !important;
+  }
+
+  .w-store-music.is-playing.is-avatar-spin .w-store-music__face {
+    transform: none;
+  }
+
+  .w-store-music__spectrum {
+    display: none !important;
   }
 }
 
@@ -430,6 +638,10 @@
   .w-store-music__face {
     width: 5rem;
     height: 5rem;
+  }
+
+  .w-store-music__avatar {
+    --w-spectrum-r: 2.5rem;
   }
 
   .w-store-music__panel {

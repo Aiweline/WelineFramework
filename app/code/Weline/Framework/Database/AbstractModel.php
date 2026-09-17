@@ -1993,8 +1993,12 @@ PAGINATION;
                 unset($this->unique_data[$this->_primary_key]);
                 $data[$this->_primary_key] = $check_result[$this->_primary_key];
             }
-            # 更新数据
-            $this->setData($data);
+            # 按字段合并回写，禁止 setData(array) 整表覆盖：
+            # 否则 getModelChangedData() 只含变更列时会抹掉未改字段（如 Website code），
+            # 后续 getCode()/ScopeIdentity 读到空串 →「网站身份无效」。
+            foreach ($data as $field => $value) {
+                $this->setData((string)$field, $value);
+            }
 
         } else {
             $unique_fields = array_keys($this->unique_data);

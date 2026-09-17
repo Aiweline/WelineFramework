@@ -27,5 +27,6 @@ final class PromotionStorefrontActiveDealResolverContractTest extends TestCase
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
         self::assertStringContainsString('function listActiveThemesForStorefront', $content);
+        self::assertStringContainsString('function listHubStorefrontProductIds', $content);
     }
 }

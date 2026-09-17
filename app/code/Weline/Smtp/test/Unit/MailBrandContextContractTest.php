@@ -179,6 +179,9 @@ final class MailBrandContextContractTest extends TestCase
             (int)$score->invoke($svc, 'p05113ef3.test.weline.com', false, true)
         );
         self::assertLessThan(0, (int)$score->invoke($svc, 'localhost', true, false));
+        self::assertLessThan(0, (int)$score->invoke($svc, 'e2e-test-1783791034.weline.test', true, true));
+        self::assertStringContainsString('isUndeliverableMailPublicHost', $src);
+        self::assertStringContainsString('resolveManagedLocalPublicSiteUrl', $src);
 
         $resolved = $svc->resolve('default.default.default');
         self::assertNotSame('http://localhost', $resolved['site_url']);
@@ -189,6 +192,9 @@ final class MailBrandContextContractTest extends TestCase
         self::assertStringContainsString('/pub/media/', (string)$resolved['site_logo_url']);
         if (str_contains((string)$resolved['site_url'], 'test.weline.com') || str_contains((string)$resolved['site_url'], 'weline.test')) {
             self::assertStringContainsString('p05113ef3', (string)$resolved['site_url']);
+            // CLI/Cron 无 HTTP_HOST 时也必须带本机 HTTPS 端口，否则邮件里 logo 裂图
+            self::assertMatchesRegularExpression('#:(?:[1-9][0-9]{2,4})(/|$)#', (string)$resolved['site_url']);
+            self::assertMatchesRegularExpression('#:(?:[1-9][0-9]{2,4})/#', (string)$resolved['site_logo_url']);
         }
     }
 
@@ -204,6 +210,27 @@ final class MailBrandContextContractTest extends TestCase
         self::assertStringContainsString('/pub/media/websites/', (string)$resolved['site_logo_url']);
         self::assertStringNotContainsString('theme/logo.svg', (string)$resolved['site_logo_url']);
         self::assertStringContainsString('<img', (string)$resolved['site_logo_img']);
+    }
+
+    public function testResolveInjectsMailShellBackgroundAbsoluteUrls(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/MailBrandContextService.php');
+        self::assertStringContainsString('resolveMailShellBackgrounds', $src);
+        self::assertStringContainsString('brand_header_bg_image', $src);
+        self::assertStringContainsString('getMailShellBackgrounds', $src);
+
+        $resolved = (new MailBrandContextService())->resolve('default.default.default');
+        self::assertArrayHasKey('brand_header_bg_image', $resolved);
+        self::assertArrayHasKey('brand_header_bg_css', $resolved);
+        self::assertArrayHasKey('brand_body_bg_image', $resolved);
+        self::assertArrayHasKey('brand_footer_bg_image', $resolved);
+        self::assertStringContainsString('background-color:', (string)$resolved['brand_header_bg_css']);
+        // 已配置壳背景时须注入绝对 /pub/media URL（邮件客户端直链原图）
+        if (trim((string)$resolved['brand_header_bg_image']) !== '') {
+            self::assertStringContainsString('/pub/media/', (string)$resolved['brand_header_bg_image']);
+            self::assertMatchesRegularExpression('#^https?://#i', (string)$resolved['brand_header_bg_image']);
+            self::assertStringContainsString('background-image:url(', (string)$resolved['brand_header_bg_css']);
+        }
     }
 
     public function testSendPathMergesBrandCodes(): void

@@ -2,6 +2,9 @@
 "构建预览 URL 事件","Build preview URL event"
 "Theme editor result after","Theme editor result after"
 "Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.","Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result."
+"Layout path resolve","Layout path resolve"
+"Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty.","Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty."
+"Layout preview sample","Layout preview sample"
 字体子集预热收集,"Font subset warm-up collection"
 "系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。","Triggered before system upgrade warm-up. Each module view/fonts is automatically scanned by default; additional paths or languages ​​can be appended to fonts / languages. Existing language subsets will skip rebuilding."
 "Theme 查询器不支持的操作：%{1}","Operations not supported by Theme queryer: %{1}"
@@ -170,6 +173,8 @@
 输入关键词搜索,"Enter keywords to search"
 复制失败,"Copy failed"
 关闭,Close
+页脚上方扩展,页脚上方扩展
+"footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。","footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。"
 页脚之前,"Before Footer"
 在渲染页脚组件之前触发，允许其他模块在页脚开始处注入内容。,"Triggered before rendering the footer component, allowing other modules to inject content at the beginning of the footer."
 页脚内容之前,"Before Footer Content"
@@ -589,6 +594,12 @@
 "Theme 布局身份哈希回填结果无效。","The Theme layout identity-hash backfill result is invalid."
 "Theme 布局身份哈希回填无数据进展。","The Theme layout identity-hash backfill made no progress."
 主题异常：,"Theme exception:"
+"正在推送主题预览 CDN 绕过规则…","正在推送主题预览 CDN 绕过规则…"
+"主题预览 CDN 绕过规则推送完成","主题预览 CDN 绕过规则推送完成"
+"主题预览 CDN 规则推送跳过：%{msg}","主题预览 CDN 规则推送跳过：%{msg}"
+"开始发布前台 404 静态页（website×locale，Fiber 协作）…","开始发布前台 404 静态页（website×locale，Fiber 协作）…"
+"前台 404 静态页发布完成：共 %{count} 个快照","前台 404 静态页发布完成：共 %{count} 个快照"
+"前台 404 静态页发布失败：%{msg}","前台 404 静态页发布失败：%{msg}"
 "Theme ResourceChange Observer 只接受 v1 契约","Theme ResourceChange Observer only accepts v1 contracts"
 "Theme 资源变更缓存刷新未全部成功","Theme resource change cache refresh was not successful"
 生产静态资源发布（含压缩）开始…,"Production static resource publishing (including compression) begins..."
@@ -626,22 +637,54 @@
 退出预览失败,"Exit Preview Failed"
 发布失败,"Publishing failed"
 网络错误，请重试,"Network error, please try again"
+发布需要有效的后台登录，请重新登录后台后再试。,"Publishing requires a valid admin login. Please sign in to the admin again and retry."
 确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。,"Confirm to publish the current preview content and exit? Once published, all visitors will see the latest changes."
 确认发布,"Confirm release"
 取消,Cancel
 发布预览,"Release Preview"
+新建版本并发布,新建版本并发布
+"有未发布改动，请输入版本名称后发布（可留空自动 {version}）","有未发布改动，请输入版本名称后发布（可留空自动 {version}）"
+版本名称,版本名称
+发布,release
+正在发布主题,"Publishing theme"
+检查发布条件…,"Checking publish conditions…"
+正在发布…,Publishing…
+步骤：,Step:
+请勿关闭或操作页面，以免发布中断。,"Do not close or interact with this page, or publishing may be interrupted."
+发布成功，正在打开已发布页面…,"Published successfully. Opening the live page…"
+发布收尾完成,"Publish finalize complete"
+正在清理预览会话并准备跳转…,"Clearing preview session and preparing redirect…"
+创建版本并发布…,"Creating version and publishing…"
+发布已完成，请手动刷新查看店面,"Publish finished. Please refresh manually to view the storefront."
+检查发布条件,"Checking publish conditions"
+创建发布版本,"Creating publish version"
+"发布 Scoped 草稿","Publishing scoped drafts"
+标记版本已发布,"Marking version as published"
+恢复历史版本,"Restoring historical version"
+"同步预览 Scope","Syncing preview scope"
+布局实体化,"Materializing layout"
+更新静态资源版本,"Updating static asset version"
+重建主题生成缓存,"Rebuilding theme generated cache"
+"清理运行时与 FPC 缓存","Clearing runtime and FPC cache"
+正在清理预览会话并准备跳转,"Clearing preview session and preparing redirect"
+正在生成跳转地址,"Generating redirect URL"
+发布成功，正在打开已发布页面,"Published successfully. Opening the live page"
+开始发布主题,"Starting theme publish"
+确认当前已发布布局,"Confirming current published layout"
+预览模式,"Preview Mode"
+发布并退出,"Publish & Exit"
+退出预览,"Exit Preview"
+FAQ/常见问题,FAQ
+指南,指南
+支付方式指南,支付方式指南
+政策页面,"Policy Page"
+服务异常,服务异常
+站点地图,站点地图
+购物车,Cart
+账户中心,Account
+订单尚未完成,订单尚未完成
+结账成功,结账成功
 页面,页面
-了解云裳汉服品牌故事、匠心工艺与传统服饰选购理念。,了解云裳汉服品牌故事、匠心工艺与传统服饰选购理念。
-联系云裳汉服客服，咨询订单、定制与批发合作。,联系云裳汉服客服，咨询订单、定制与批发合作。
-阅读本站隐私、Cookie、退款与相关法律政策说明。,阅读本站隐私、Cookie、退款与相关法律政策说明。
-了解我们如何收集、使用与保护您的个人信息。,了解我们如何收集、使用与保护您的个人信息。
-阅读使用本站服务前需要了解的条款与条件。,阅读使用本站服务前需要了解的条款与条件。
-查看配送、退换与购物相关说明，帮助顺利完成汉服选购。,查看配送、退换与购物相关说明，帮助顺利完成汉服选购。
-了解可用支付方式、账单与安全保障说明。,了解可用支付方式、账单与安全保障说明。
-查找订单、物流、退换与账户相关常见问题。,查找订单、物流、退换与账户相关常见问题。
-查看已选汉服商品、调整数量并进入结算。,查看已选汉服商品、调整数量并进入结算。
-登录或注册账户，管理订单与收藏。,登录或注册账户，管理订单与收藏。
-浏览%{1}相关信息，了解汉服选购与服务说明。,浏览%{1}相关信息，了解汉服选购与服务说明。
 "Theme 预览需要有效 Token 或后台登录状态。","Theme preview requires a valid token or an authenticated backend session."
 "Theme 预览缺少冻结的 ScopeIdentity。","Theme preview requires a frozen ScopeIdentity."
 "缺少预览 Token","Missing Preview Token"
@@ -654,6 +697,12 @@
 "No available frontend theme. Please activate or select one first.","No available frontend theme. Please activate or select one first."
 "Selected backend theme is unavailable, fallback to the active backend theme.","Selected backend theme is unavailable, fallback to the active backend theme."
 Default,Default
+有未发布改动，请新建版本后发布,"There are unpublished changes. Create a new version to publish."
+发布时自动创建,"Auto-create when publishing"
+布局已发布但版本标记失败，请再试一次发布,"Layout published but version mark failed. Please publish again."
+"Version not found","Version not found"
+"Version published","Version published"
+"Publish failed","Publish failed"
 未注册的主题目标类型：%{1},"Unregistered topic target type: %{1}"
 请选择主题,"Please select a theme"
 "主题 ID %{1} 不存在","Topic ID %{1} does not exist"
@@ -685,17 +734,17 @@ Default,Default
 布局已保存,"Layout saved"
 保存失败,"Save failed"
 产品布局模式不可编辑页头/页脚,产品布局模式不可编辑页头/页脚
-已改为本布局独立页头/页脚,已改为本布局独立页头/页脚
+本布局独立页头/页脚已移除；头尾仅跟随主题范围版本,本布局独立页头/页脚已移除；头尾仅跟随主题范围版本
 已恢复全部布局跟随全局页头/页脚,已恢复全部布局跟随全局页头/页脚
 已恢复跟随全局页头/页脚,已恢复跟随全局页头/页脚
 主题已发布,"Theme published"
-生成缓存失败，但布局已发布,"Cache generation failed, but layout has been published"
 草稿已撤销,"Draft revoked"
 撤销失败,"Undo failed"
 缺少部件模块或代码,"Missing widget module or code"
 缺少部件参数,"Missing widget parameter"
 "缺少布局节点 UID 或字段","缺少布局节点 UID 或字段"
 该部件没有配置项,"This component has no configuration items"
+无效的图片节点,无效的图片节点
 "Selected layout option is unavailable.","Selected layout option is unavailable."
 "Layout option draft validated.","Layout option draft validated."
 "No configurable layout fields.","No configurable layout fields."
@@ -768,8 +817,6 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 "Theme cache cleared","Theme cache cleared"
 "Theme 已完全初始化","Theme 已完全初始化"
 "Current draft resources reset","Current draft resources reset"
-"Publish failed","Publish failed"
-"Version published","Version published"
 "Missing version ID","Missing version ID"
 "Version deleted","Version deleted"
 "Cannot delete current or published version","Cannot delete current or published version"
@@ -794,6 +841,7 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 重命名失败,"Rename failed"
 缺少前端主题ID,"Missing frontend theme ID"
 "Preview started","Preview started"
+"缺少 layout_path","缺少 layout_path"
 "Missing navigation target","Missing navigation target"
 "Missing preview token","Missing preview token"
 "Preview token is invalid or expired","Preview token is invalid or expired"
@@ -806,6 +854,7 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 "删除 Scope 草稿已校验","The scope draft deletion has been validated."
 "另存 Scope 草稿已校验","The Save As scope draft has been validated."
 "主题盘 Scope 草稿已校验","The theme-disk scope draft has been validated."
+布局发布回执无效，请再试一次发布。若仍失败请刷新编辑器后重试,布局发布回执无效，请再试一次发布。若仍失败请刷新编辑器后重试
 可视化编辑,"Visual Editor"
 palette,palette
 编辑网站、店铺与渠道主题,"Edit website, store, and channel themes"
@@ -957,6 +1006,7 @@ CSS变量配置无效,"Invalid CSS variable configuration"
 更新,Update
 主题注册失败！,"Topic registration failed!"
 布局收集失败:,"Layout collection failed:"
+"Theme 范围版本身份无效。","Theme 范围版本身份无效。"
 "Theme 虚拟布局身份无效。","The Theme virtual-layout identity is invalid."
 手动保存,"Manual save"
 自动备份,"Auto Backup"
@@ -968,9 +1018,7 @@ CSS变量配置无效,"Invalid CSS variable configuration"
 产品页,"Product Page"
 产品列表页,"Product List Page"
 CMS页面,"CMS Page"
-购物车,Cart
 结算页,Checkout
-账户中心,Account
 Dashboard,Dashboard
 搜索页,"Search Page"
 博客详情,博客详情
@@ -978,14 +1026,13 @@ Dashboard,Dashboard
 活动页,"Event Page"
 结算成功页,"Payment Success Page"
 结算失败页,"Payment failure page"
-FAQ/常见问题,FAQ
 支付指南,支付指南
 指南页,指南页
-评价页,评价页
 问答页,问答页
 退换货页,退换货页
 政策页,政策页
 "404 页面","404 页面"
+服务异常页,服务异常页
 默认布局,"Default Layout"
 头部区域,"Header Area"
 横幅区域,"Banner Area"
@@ -1006,20 +1053,33 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-面包屑,"bread crumbs"
-搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 分类,Classification
-查看全部,"View all"
 汉服分类展示图,"Hanfu category showcase image"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
+查看全部,"View all"
+请填写视频地址,请填写视频地址
+请粘贴嵌入代码（iframe）或视频链接,请粘贴嵌入代码（iframe）或视频链接
+"请填写自托管视频地址（mp4 等）","请填写自托管视频地址（mp4 等）"
+无法识别该视频地址，请检查链接是否正确,无法识别该视频地址，请检查链接是否正确
+"YouTube 视频","YouTube 视频"
+"Vimeo 视频","Vimeo 视频"
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+"在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览","在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览"
+件商品,"items of goods"
+查看全部新品,"View all new products"
 商品,Products
 查看规格图,查看规格图
 减少数量,"Decrease quantity"
 数量,Quantity
 增加数量,"Increase quantity"
 购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
 继续购物,"Continue shopping"
 小计,Subtotal
 去结算,"Proceed to Checkout"
@@ -1033,7 +1093,23 @@ FAQ/常见问题,FAQ
 叠加优惠,"Stacked discount"
 自动优惠,"Automatic discount"
 关闭通知,"Close notification"
-7×24,24/7
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
+面包屑,"bread crumbs"
+点击配置此部件,"Click to configure this widget"
+无模板,"No template"
+选择作用范围,"Select scope."
+搜索作用范围,"Search scope."
+未找到匹配作用范围,"No matching scope found."
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1044,15 +1120,12 @@ FAQ/常见问题,FAQ
 图片,picture
 春季系列展示,"Spring Collection Showcase"
 可在属性面板替换为媒体库图片,"Can be replaced with media library images in the attribute panel."
-添加图片地址,"Add image address"
+从媒体库选择图片,从媒体库选择图片
 弹窗标题,"Popup Title"
 弹窗内容,"Pop-up content"
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1070,60 +1143,6 @@ NEW,NEW
 表单操作,"Form operations"
 栅格内容,"Raster content"
 末页,"Last page"
-促销活动,Promotions
-时令新章,时令新章
-新的活动正在筹备,新的活动正在筹备
-当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。,当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。
-浏览全部商品,"Shop All Hanfu"
-查看购物帮助,查看购物帮助
-指南,指南
-个人资料,"Personal information"
-这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,"This is the default placeholder for personal information. After the membership module is accessed, it will be replaced with the real information form, account security and address entry."
-登录,"Log in"
-订单确认,"Order Confirmation"
-订单提交成功！,"Order submitted successfully!"
-订单号：,"Order number:"
-查看订单,"View Orders"
-拖拽部件或容器到此处,"Drag a component or container here"
-"空白布局不会渲染 header、footer 或面包屑","Empty layout will not render header, footer or breadcrumbs"
-"Weline 首页","Weline Home Page"
-"干净的 Weline 首页","Clean Weline Home Page"
-一个克制、清晰的默认首页，适用于店铺、内容站点和模块驱动体验。,"A restrained, clear default homepage suitable for stores, content sites, and module-driven experiences."
-浏览,Browse
-联系,connect
-最新上架,"Latest arrival"
-用于精选商品或文章的区域。,"An area for featured products or articles."
-客户服务,"Customer Service"
-用于服务链接和支持内容的区域。,"Area for service links and supporting content."
-社区,Community
-用于社交渠道和品牌故事的区域。,"Area for social channels and brand story."
-重点,focus
-突出页面上最重要的优惠或故事。,"Highlight the most important offers or stories on the page."
-灵活,flexible
-这里可以放集合、活动或编辑内容区块。,"This is where you can place collections, activities, or editorial content blocks."
-可用,Available
-可选模块提供真实数据前，页面仍然保持完整。,"The page remains intact until the optional module provides real data."
-Category,Category
-"Custom category layout","Custom category layout"
-筛选,filter
-"分类筛选区域 - 由 Filters 部件默认注入","分类筛选区域 - 由 Filters 部件默认注入"
-"分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
-筛选条件,"Screening criteria"
-关闭筛选,"Close filter"
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
-"Scheduled category layout","Scheduled category layout"
-"分类导航 slot，可由分类模块或导航部件接管。","Classification navigation slot can be taken over by classification module or navigation component."
-"筛选 slot，可由筛选模块或筛选部件接管。","Filter slot, which can be taken over by a filter module or filter component."
-"这里是分类列表的默认展示区域。接入真实分类或商品模块后，会通过 hook 或部件替换为真实列表。","This is the default display area for category lists. After connecting to the real category or product module, it will be replaced with a real list through hooks or components."
-精彩活动进行中,"Exciting events are ongoing"
-这里是活动专题默认页面。,"This is the default page for event topics."
-活动亮点示例,"Event Highlight Example"
-在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。,"Display the core selling points of the promotion here, such as spend-and-save, discounts, flash sales, member exclusives, etc."
-活动商品示例,"Event Product Example"
-在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。,"Display the product list or product recommendation component participating in the promotion here, providing users with a quick purchase entry."
 抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
 您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
 请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
@@ -1131,68 +1150,13 @@ SORRY,SORRY
 前往首页继续购物,"Continue shopping on the home page"
 返回上一页,返回上一页
 推荐产品,"Recommended product"
-"Weline 默认页面","Weline default page"
-该页面尚未提供内容。,"Content is not yet available for this page."
-返回首页,"Return to home page"
 问答,问答
-选购答疑,选购答疑
-商品问答,商品问答
-关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。,关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。
-按分类选购,按分类选购
-联系客户服务,联系客户服务
-问答使用说明,问答使用说明
-商品问题,商品问题
-在商品详情页提问，问题会与具体款式关联，便于获得准确回复。,在商品详情页提问，问题会与具体款式关联，便于获得准确回复。
-订单与售后,订单与售后
-订单状态、退换与配送问题请通过帮助中心或账户订单页处理。,订单状态、退换与配送问题请通过帮助中心或账户订单页处理。
-公开信息提示,公开信息提示
-请勿在公开问题中填写电话、地址、订单号或其他个人信息。,请勿在公开问题中填写电话、地址、订单号或其他个人信息。
-Product,Product
-"Custom product layout","Custom product layout"
-已发布商品,已发布商品
-"产品主信息区域 - 由 Product 部件默认注入","产品主信息区域 - 由 Product 部件默认注入"
-"侧边栏区域 - 拖拽推荐部件到此处","Sidebar Area - Drag recommended widgets here"
-"产品详情标签区域 - 拖拽详情/评价/问答部件到此处","Product Details Tab Area - Drag Details/Reviews/Q&A widgets here"
-"Scheduled product layout","Scheduled product layout"
-结账,Checkout
-这里是单页结账的表单区域。接入结账模块后，会替换为真实地址、配送、支付和确认步骤。,"This is the form area for the single-page checkout. After accessing the checkout module, the real address, delivery, payment and confirmation steps will be replaced."
-联系信息与收货地址,"Contact information and shipping address"
-配送方式,"Shipping Method"
-支付与订单确认,"Payment and order confirmation"
-订单摘要,"Order summary"
-"摘要 slot，可由结账模块写入真实商品行与金额。","Summary slot, the real product line and amount can be written by the checkout module."
-配送,Delivery
-合计,total
-您已退出登录,"You are logged out"
-当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。,"The current session has ended. You can return to the home page to continue browsing, or log in again to enter the account center."
-重新登录,"Log in again"
-订单提交失败,"Order submission failed"
-很抱歉，您的订单提交失败，请稍后重试。,"We're sorry, your order submission failed. Please try again later."
-错误代码：,"Error code:"
-重试提交,"Retry Commit"
-返回购物车,"Return to cart"
-联系客服,"Contact support"
-温馨提示：,"Friendly reminder:"
-请检查您的网络连接是否正常,"Please check if your network connection is normal"
-请确认您的支付信息是否正确,"Please confirm that your payment information is correct"
-如问题持续存在，请联系客服寻求帮助,"If the issue persists, please contact customer support for assistance."
-搜索筛选,"Search and filter"
-结算结果,结算结果
-订单尚未完成,订单尚未完成
-本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。,本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。
-查看帮助中心,查看帮助中心
-"筛选器区域 - 由 Filters 部件默认注入","筛选器区域 - 由 Filters 部件默认注入"
-"工具栏区域 - 拖拽排序/视图部件到此处","Toolbar area - Drag and drop/view widgets here"
-"产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
-"分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
-您的购物车是空的,"Your shopping cart is empty"
-个人中心,"Personal center"
-登录页工具,"Login page tools"
-两步验证,两步验证
-两步验证页工具,两步验证页工具
-"这里预留账户导航 slot，可由会员模块接入真实菜单。","An account navigation slot is reserved here, and the real menu can be accessed by the membership module."
-我的订单,"My orders"
-这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。,"This is the default placeholder for the order list. After the order module is connected, it will be replaced with the real order form, status and operation entry."
+7×24,24/7
+服务暂时不可用,服务暂时不可用
+我们正在处理问题，请稍后再试。,我们正在处理问题，请稍后再试。
+您可以返回首页继续浏览，或稍后刷新本页。,您可以返回首页继续浏览，或稍后刷新本页。
+ERROR,ERROR
+前往首页,前往首页
 立即重试,"Retry now"
 "将在 %{seconds} 秒后自动重试...","Will automatically retry in %{seconds} seconds..."
 服务器错误,"Server Error"
@@ -1201,21 +1165,17 @@ Product,Product
 无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
 我的菜单,"my menu"
 账户及心愿单,"Accounts and Wishlists"
 账户,Account
+我的订单,"My orders"
 账户设置,"Account settings"
 退出登录,"Log out"
 语言,language
 货币,currency
-退货,"Return the goods"
-与我的订单,"With my order"
 关闭菜单,"Close menu"
 Weline,Weline
 网站Logo,"Site Logo"
@@ -1264,8 +1224,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-视频加载中...,"Video loading..."
 欢迎回来,"Welcome back"
 登录后继续浏览优惠与订单,"Continue browsing deals and orders after signing in"
 "安全登录 · 订单与优惠同步","Secure sign-in · Orders and offers stay in sync"
@@ -1300,34 +1258,18 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday & Work"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
+客户服务,"Customer Service"
 主导航,"Main navigation"
 分类菜单,"Category menu"
 快捷导航,"Quick navigation"
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
-安全支付,"Secure payment"
-SSL加密保护,"SSL encryption protection"
-无忧退款,"Worry-Free Refund"
-30天无理由退货,"30 days no reason to return"
-免费配送,"Free Shipping"
-满额包邮,"Free shipping for orders over the threshold"
-全天候客服,"24/7 Customer Support"
-7×24小时在线,"7×24 hours online"
-SSL安全,"SSL security"
-数据加密传输,"Encrypted Data Transmission"
-认证商家,"Certified Merchant"
-正品保证,"Genuine product guarantee"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
@@ -1342,7 +1284,6 @@ SSL安全,"SSL security"
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看全部新品,"View all new products"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 距离结束,"Ends in"
 精选轮播,"Featured Carousel"
@@ -1369,22 +1310,20 @@ Logo,Logo
 面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
-东方衣冠，全球配送,"Traditional elegance, delivered worldwide"
+全球配送，售后无忧,全球配送，售后无忧
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
 收藏,Favorite
-热门形制,"Popular Hanfu Styles"
+热门分类,"Popular Categories"
+热卖精选,热卖精选
 特色推荐,"Featured Recommendations"
 限时特惠,"Limited-Time Offer"
-汉服文化,"Hanfu Culture"
+博客,Blog
 热卖,"Hot selling."
 新品,"New Product"
+促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1584,7 +1523,6 @@ Scope,Scope
 暂无可用变量文件,"No variable files available"
 展开/收缩预览,"Expand/Collapse preview"
 主题预览,"Theme Preview"
-自动登录,Auto-login
 亮色,"bright color"
 暗色,"dark color"
 刷新,refresh
@@ -1607,8 +1545,9 @@ Scope,Scope
 显示,show
 隐藏,hide
 "-- 请选择 --","-- Please Select --"
-选择,Select
+从图库选择,从图库选择
 清除图片,"Clear Image"
+选择,Select
 JSON格式数组,"JSON format array"
 请使用JSON格式输入,"Please use JSON format"
 请选择一个主题,"Select a theme"
@@ -1617,7 +1556,6 @@ JSON格式数组,"JSON format array"
 作用范围,Scope
 基础信息,"Brand basics"
 发布当前版本到前台,"Publish current version to frontend"
-发布,release
 展开顶栏,"Expand toolbar"
 返回主题列表,"Back to theme list"
 "当前作用范围的网站基础信息（Favicon / Logo）","Website brand assets for the current Scope (Favicon / Logo)"
@@ -1627,6 +1565,10 @@ JSON格式数组,"JSON format array"
 恢复继承,"Restore inheritance"
 选择布局类型,"Select layout type"
 选择布局选项,"Select layout options"
+预览取样,预览取样
+选择店面取样路由,选择店面取样路由
+"活动首页 /promotion","活动首页 /promotion"
+"取样 deals /promotion/deals","取样 deals /promotion/deals"
 配置语言,"Configuration language"
 更多,More
 版本历史,"Version History"
@@ -1746,8 +1688,6 @@ Favicon,Favicon
 搜索变量名或色值,"Search variable name or color"
 另存为我的盘,"Save as my disk"
 保存当前我的盘,"Save current my disk"
-点击配置此部件,"Click to configure this widget"
-无模板,"No template"
 前台主题,"Frontend Theme"
 后台主题,"Backend Theme"
 已选,Selected
@@ -1838,9 +1778,6 @@ AI目录加载失败,"AI directory loading failed"
 "Theme 布局节点不存在。","The Theme layout node does not exist."
 "Theme 布局节点不属于当前编辑上下文。","The Theme layout node does not belong to the current editor context."
 "Theme 布局写入必须位于写意图事务内。","Theme layout writes must run inside a write-intent transaction."
-账户认证,"Account Authentication"
-订单列表,"order list"
-政策页面,"Policy Page"
 测试页,"Test Page"
 "-- 选择主题 --","-- Select Theme --"
 （已启用）,(enabled)
@@ -2004,7 +1941,6 @@ AI目录加载失败,"AI directory loading failed"
 "待发布的 Theme 布局版本不存在。","The Theme layout version to publish does not exist."
 "Theme 旧版本发布校验或投影失败。","Legacy Theme version validation or projection failed."
 "Theme 旧版本发布必须位于写意图事务内。","Legacy Theme version publication must run in a write-intent transaction."
-发布时自动创建,"Auto-create when publishing"
 初始版本,"Initial version"
 "Theme 布局保存失败。","Failed to save the Theme layout."
 "Theme 布局发布失败。","Failed to publish the Theme layout."
@@ -2022,6 +1958,11 @@ AI目录加载失败,"AI directory loading failed"
 "布局身份 Scope 与显式 ScopeIdentity 不一致。","The layout identity scope does not match the explicit ScopeIdentity."
 "布局发布必须显式指定 ScopeIdentity。","Layout publishing must specify ScopeIdentity explicitly."
 未命名,Untitled.
+"开始发布前台 404 静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核；已隔离升级词袋）","开始发布前台 404 静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核；已隔离升级词袋）"
+"前台 404 静态页 [%{done}/%{total}]：%{label}","前台 404 静态页 [%{done}/%{total}]：%{label}"
+"前台 404 静态页失败 [%{done}/%{total}]：%{label} — %{err}","前台 404 静态页失败 [%{done}/%{total}]：%{label} — %{err}"
+"前台 404 静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键","前台 404 静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键"
+"前台 404 静态页输入未变，跳过全量发布（%{count} 个 website×locale）","前台 404 静态页输入未变，跳过全量发布（%{count} 个 website×locale）"
 无效的盘引用,"Invalid disk reference"
 主题盘不存在,"The theme disk does not exist."
 "保存主题盘失败：Meta 写入被拒绝（请检查 config_value 长度与主题上下文）","Failed to save theme disk: Meta write refused (check config_value length with theme context)"
@@ -2029,10 +1970,12 @@ AI目录加载失败,"AI directory loading failed"
 "保存主题盘失败：配置值过长（%{len}/%{max}），请减少变更 Token 或缩短取值","Failed to save theme disk: configuration value is too long (%{len}/%{max}), please reduce the change token or shorten the value"
 "Theme 布局类型化值超过运行时解析上限。","Theme layout typed value exceeds the runtime resolution limit."
 "file-image 运行时适配器不可用。","The file-image runtime adapter is unavailable."
+"Theme 范围版本参数无效。","Theme 范围版本参数无效。"
+"Theme 范围发布版本无效。","Theme 范围发布版本无效。"
+"Theme 范围版本未持久化。","Theme 范围版本未持久化。"
+"Theme 范围修订源无效。","Theme 范围修订源无效。"
 "Weline UI 预览资源路径无效","Weline UI preview resource path is invalid"
-预览模式,"Preview Mode"
 当前页面处于主题预览中，普通导航和提交已暂停。,"The current page is in theme preview and normal navigation and submissions are paused."
-退出预览,"Exit Preview"
 "Theme does not support %{1} area.","Theme does not support %{1} area."
 生成主题预览图失败：%{1},"Failed to generate theme preview image: %{1}"
 "Chrome or Chromium browser was not found.","Chrome or Chromium browser was not found."
@@ -2068,8 +2011,8 @@ AI目录加载失败,"AI directory loading failed"
 全部,All
 官方商城帮助与客户服务,"Official mall help and customer service"
 "周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding public holidays)"
-"© %{1} Weline Framework. %{2}","© %{1} Weline Framework. %{2}"
 保留所有权利,"All rights reserved."
+"© %{1} %{2}","© %{1} %{2}"
 "严重错误：在 after_render 事件中检测到PHP代码\n\n位置信息：\n  源文件: %{1}\n  来源标识: %{2}\n\n错误说明：\n  在 after_render 事件中，PHP代码应该已经执行，渲染后的HTML中不应该再包含PHP标签。\n  如果仍然看到PHP代码，说明提取的内容来自编译后的模板文件，而不是渲染后的HTML。\n\n解决方案：\n  1. 确保在 after_render 事件中只处理渲染后的HTML内容\n  2. 不要从文件系统读取编译后的模板文件\n  3. 如果 script 标签包含PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Serious error: PHP code detected in the after_render event\n\nLocation information:\n Source file: %{1}\n Source identifier: %{2}\n\nError description:\n In the after_render event, the PHP code should have been executed, and the rendered HTML should no longer contain PHP tags. \n If you still see PHP code, it means that the extracted content comes from the compiled template file, not the rendered HTML. \n\nSolution:\n 1. Make sure to process only the rendered HTML content in the after_render event\n 2. Do not read the compiled template file from the file system\n 3. If the script tag contains PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
 "严重错误：发现内联样式或脚本残留\n\n位置信息：\n  源文件: %{1}\n  标签类型: <%{2}>\n  行号: 第 %{3} 行，第 %{4} 列\n  字符位置: %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  所有内联样式和脚本都应该被提取到外部文件中。\n  如果某些脚本需要保留在HTML中，请添加 data-no-extract=""true"" 属性。\n\n解决方案：\n  1. 检查为什么该标签没有被提取（可能是提取逻辑问题）\n  2. 如果确实需要保留在HTML中，添加 data-no-extract=""true"" 属性\n  3. 确保标签格式正确，可以被正则表达式匹配","Serious error: Found inline style or script residue\n\nPosition information:\n Source file: %{1}\n Tag type: <%{2}>\n Line number: Line %{3}, Column %{4}\n Character position: %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n All inline styles and scripts should be extracted into external files. \n If some script needs to remain in the HTML, add the data-no-extract=""true"" attribute. \n\nSolution:\n 1. Check why the tag is not extracted (maybe an extraction logic problem)\n 2. If it really needs to be retained in the HTML, add the data-no-extract=""true"" attribute\n 3. Make sure the tag is in the correct format and can be matched by the regular expression"
 "严重错误：编译后的%{1}文件中检测到PHP代码，这是不允许的\n\n位置信息：\n  源文件: %{2}\n  来源标识: %{3}\n  %{1}内容中的行号: 第 %{4} 行\n  PHP代码位置: 字符位置 %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  主题布局内不允许存在编译后还有PHP代码。\n  编译后的%{1}文件必须是纯%{1}，不能包含任何PHP代码。\n\n正确的做法：\n  1. 使用CSS变量：在模板中定义CSS变量，然后在CSS中使用 var()\n  2. 使用data属性：在HTML元素上设置data属性，然后在JS中读取\n  3. 使用window对象：在模板中设置 window.config = {...}，然后在JS中使用\n  4. 使用标签系统：使用框架提供的标签系统传递数据\n  5. 如果确实需要PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Fatal error: PHP code was detected in the compiled %{1} file, which is not allowed\n\nLocation information:\n Source file: %{2}\n Source identifier: %{3}\n %{1} Line number in content: Line %{4}\n PHP code position: Character position %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n Compiled PHP code is not allowed in the theme layout. \n The compiled %{1} file must be pure %{1} and cannot contain any PHP code. \n\nCorrect approach:\n 1. Use CSS variables: define CSS variables in the template, and then use var() in CSS\n 2. Use data attributes: set the data attribute on the HTML element, and then read it in JS\n 3. Use window objects: set window.config = {...} in the template, and then use it in JS\n 4. Use the tag system: use the tag system provided by the framework to pass data\n 5. If you really need PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
@@ -2429,7 +2372,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "主题整盘合编结束，共 %{n} 次","The theme compilation is completed, a total of %{n} times"
 当前主题未安装：激活失败！,"Current theme not installed: activation failed!"
 "theme:active 区域参数无效，可选 frontend、backend、global","Invalid area for theme:active; use frontend"
-无需再次激活,"No need to activate again"
 正在激活...,Activating...
 已成功激活主题：,"Successfully activated theme:"
 "theme:active 前台：%{1}","theme:active frontend: %{1}"
@@ -2453,6 +2395,163 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+自动登录,Auto-login
+评价页,评价页
+退货,"Return the goods"
+与我的订单,"With my order"
+"Weline 首页","Weline Home Page"
+"干净的 Weline 首页","Clean Weline Home Page"
+一个克制、清晰的默认首页，适用于店铺、内容站点和模块驱动体验。,"A restrained, clear default homepage suitable for stores, content sites, and module-driven experiences."
+浏览,Browse
+联系,connect
+最新上架,"Latest arrival"
+用于精选商品或文章的区域。,"An area for featured products or articles."
+用于服务链接和支持内容的区域。,"Area for service links and supporting content."
+社区,Community
+用于社交渠道和品牌故事的区域。,"Area for social channels and brand story."
+重点,focus
+突出页面上最重要的优惠或故事。,"Highlight the most important offers or stories on the page."
+灵活,flexible
+这里可以放集合、活动或编辑内容区块。,"This is where you can place collections, activities, or editorial content blocks."
+可用,Available
+可选模块提供真实数据前，页面仍然保持完整。,"The page remains intact until the optional module provides real data."
+精彩活动进行中,"Exciting events are ongoing"
+这里是活动专题默认页面。,"This is the default page for event topics."
+活动亮点示例,"Event Highlight Example"
+在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。,"Display the core selling points of the promotion here, such as spend-and-save, discounts, flash sales, member exclusives, etc."
+活动商品示例,"Event Product Example"
+在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。,"Display the product list or product recommendation component participating in the promotion here, providing users with a quick purchase entry."
+"Weline 默认页面","Weline default page"
+该页面尚未提供内容。,"Content is not yet available for this page."
+返回首页,"Return to home page"
+选购答疑,选购答疑
+商品问答,商品问答
+关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。,关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。
+按分类选购,按分类选购
+联系客户服务,联系客户服务
+问答使用说明,问答使用说明
+商品问题,商品问题
+在商品详情页提问，问题会与具体款式关联，便于获得准确回复。,在商品详情页提问，问题会与具体款式关联，便于获得准确回复。
+订单与售后,订单与售后
+订单状态、退换与配送问题请通过帮助中心或账户订单页处理。,订单状态、退换与配送问题请通过帮助中心或账户订单页处理。
+公开信息提示,公开信息提示
+请勿在公开问题中填写电话、地址、订单号或其他个人信息。,请勿在公开问题中填写电话、地址、订单号或其他个人信息。
+安全支付,"Secure payment"
+SSL加密保护,"SSL encryption protection"
+无忧退款,"Worry-Free Refund"
+30天无理由退货,"30 days no reason to return"
+免费配送,"Free Shipping"
+满额包邮,"Free shipping for orders over the threshold"
+全天候客服,"24/7 Customer Support"
+7×24小时在线,"7×24 hours online"
+SSL安全,"SSL security"
+数据加密传输,"Encrypted Data Transmission"
+认证商家,"Certified Merchant"
+正品保证,"Genuine product guarantee"
+"Modules provide a storefront sample route for shell_plus_slug layouts (e.g. promotion/deals) used by start-preview.","Modules provide a storefront sample route for shell_plus_slug layouts (e.g. promotion/deals) used by start-preview."
+"Layout canvas body hydrate (deprecated)","Layout canvas body hydrate (deprecated)"
+"Deprecated. Theme hydrates editor canvas via StorefrontSampleCanvasHydrator (preview_sample → real controller, content-only). Do not register module observers.","Deprecated. Theme hydrates editor canvas via StorefrontSampleCanvasHydrator (preview_sample → real controller, content-only). Do not register module observers."
+登录,"Log in"
+个人资料,"Personal information"
+这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,"This is the default placeholder for personal information. After the membership module is accessed, it will be replaced with the real information form, account security and address entry."
+您已退出登录,"You are logged out"
+当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。,"The current session has ended. You can return to the home page to continue browsing, or log in again to enter the account center."
+重新登录,"Log in again"
+"这里预留账户导航 slot，可由会员模块接入真实菜单。","An account navigation slot is reserved here, and the real menu can be accessed by the membership module."
+这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。,"This is the default placeholder for the order list. After the order module is connected, it will be replaced with the real order form, status and operation entry."
+账户认证,"Account Authentication"
+订单列表,"order list"
+时令新章,时令新章
+新的活动正在筹备,新的活动正在筹备
+当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。,当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。
+浏览全部商品,"Shop All Hanfu"
+查看购物帮助,查看购物帮助
+订单确认,"Order Confirmation"
+订单提交成功！,"Order submitted successfully!"
+订单号：,"Order number:"
+查看订单,"View Orders"
+拖拽部件或容器到此处,"Drag a component or container here"
+"空白布局不会渲染 header、footer 或面包屑","Empty layout will not render header, footer or breadcrumbs"
+Category,Category
+"Custom category layout","Custom category layout"
+筛选,filter
+"分类筛选区域 - 由 Filters 部件默认注入","分类筛选区域 - 由 Filters 部件默认注入"
+"分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
+筛选条件,"Screening criteria"
+关闭筛选,"Close filter"
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
+"Scheduled category layout","Scheduled category layout"
+"分类导航 slot，可由分类模块或导航部件接管。","Classification navigation slot can be taken over by classification module or navigation component."
+"筛选 slot，可由筛选模块或筛选部件接管。","Filter slot, which can be taken over by a filter module or filter component."
+"这里是分类列表的默认展示区域。接入真实分类或商品模块后，会通过 hook 或部件替换为真实列表。","This is the default display area for category lists. After connecting to the real category or product module, it will be replaced with a real list through hooks or components."
+Product,Product
+"Custom product layout","Custom product layout"
+已发布商品,已发布商品
+"产品主信息区域 - 由 Product 部件默认注入","产品主信息区域 - 由 Product 部件默认注入"
+"侧边栏区域 - 拖拽推荐部件到此处","Sidebar Area - Drag recommended widgets here"
+"产品详情标签区域 - 拖拽详情/评价/问答部件到此处","Product Details Tab Area - Drag Details/Reviews/Q&A widgets here"
+"Scheduled product layout","Scheduled product layout"
+结账,Checkout
+这里是单页结账的表单区域。接入结账模块后，会替换为真实地址、配送、支付和确认步骤。,"This is the form area for the single-page checkout. After accessing the checkout module, the real address, delivery, payment and confirmation steps will be replaced."
+联系信息与收货地址,"Contact information and shipping address"
+配送方式,"Shipping Method"
+支付与订单确认,"Payment and order confirmation"
+订单摘要,"Order summary"
+"摘要 slot，可由结账模块写入真实商品行与金额。","Summary slot, the real product line and amount can be written by the checkout module."
+配送,Delivery
+合计,total
+订单提交失败,"Order submission failed"
+很抱歉，您的订单提交失败，请稍后重试。,"We're sorry, your order submission failed. Please try again later."
+错误代码：,"Error code:"
+重试提交,"Retry Commit"
+返回购物车,"Return to cart"
+联系客服,"Contact support"
+温馨提示：,"Friendly reminder:"
+请检查您的网络连接是否正常,"Please check if your network connection is normal"
+请确认您的支付信息是否正确,"Please confirm that your payment information is correct"
+如问题持续存在，请联系客服寻求帮助,"If the issue persists, please contact customer support for assistance."
+搜索筛选,"Search and filter"
+结算结果,结算结果
+本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。,本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。
+查看帮助中心,查看帮助中心
+"筛选器区域 - 由 Filters 部件默认注入","筛选器区域 - 由 Filters 部件默认注入"
+"工具栏区域 - 拖拽排序/视图部件到此处","Toolbar area - Drag and drop/view widgets here"
+"产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
+"分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
+您的购物车是空的,"Your shopping cart is empty"
+个人中心,"Personal center"
+登录页工具,"Login page tools"
+两步验证,两步验证
+两步验证页工具,两步验证页工具
+添加图片地址,"Add image address"
+生成缓存失败，但布局已发布,"Cache generation failed, but layout has been published"
+视频加载中...,"Video loading..."
+"浏览%{1} %{2}件商品","浏览%{1} %{2}件商品"
+无需再次激活,"No need to activate again"
+搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
+热门形制,"Popular Hanfu Styles"
+汉服文化,"Hanfu Culture"
+"© %{1} Weline Framework. %{2}","© %{1} Weline Framework. %{2}"
+"开始发布前台 404 静态页（按语言逐个渲染，可能较慢）…","开始发布前台 404 静态页（按语言逐个渲染，可能较慢）…"
+"前台 404 静态页发布完成：共 %{count} 个语言","前台 404 静态页发布完成：共 %{count} 个语言"
+"开始发布前台 404 静态页：%{count} 个语言（已隔离升级词袋，避免首语言卡死）","开始发布前台 404 静态页：%{count} 个语言（已隔离升级词袋，避免首语言卡死）"
+"正在生成前台 404 静态页 [%{i}/%{total}]：%{lang}…","正在生成前台 404 静态页 [%{i}/%{total}]：%{lang}…"
+"前台 404 静态页生成为空，跳过：%{lang}（%{ms}ms）","前台 404 静态页生成为空，跳过：%{lang}（%{ms}ms）"
+"前台 404 静态页已生成：%{lang}（%{ms}ms）","前台 404 静态页已生成：%{lang}（%{ms}ms）"
+阅读本站隐私、Cookie、退款与相关法律政策说明。,阅读本站隐私、Cookie、退款与相关法律政策说明。
+了解我们如何收集、使用与保护您的个人信息。,了解我们如何收集、使用与保护您的个人信息。
+阅读使用本站服务前需要了解的条款与条件。,阅读使用本站服务前需要了解的条款与条件。
+查看配送、退换与购物相关说明，帮助顺利完成汉服选购。,查看配送、退换与购物相关说明，帮助顺利完成汉服选购。
+了解可用支付方式、账单与安全保障说明。,了解可用支付方式、账单与安全保障说明。
+查找订单、物流、退换与账户相关常见问题。,查找订单、物流、退换与账户相关常见问题。
+查看已选汉服商品、调整数量并进入结算。,查看已选汉服商品、调整数量并进入结算。
+登录或注册账户，管理订单与收藏。,登录或注册账户，管理订单与收藏。
+浏览%{1}相关信息，了解汉服选购与服务说明。,浏览%{1}相关信息，了解汉服选购与服务说明。
+"前台 404 静态页生成为空，跳过：%{lang}","前台 404 静态页生成为空，跳过：%{lang}"
+已改为本布局独立页头/页脚,已改为本布局独立页头/页脚
 告诉我们你需要什么，支持团队会将请求分派给合适的处理人。,"Tell us what you need and the support team will route the request to the appropriate handler."
 "周一至周五，9:00 - 18:00","Monday to Friday, 9:00 - 18:00"
 客户支持,"Customer support"
@@ -2597,7 +2696,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 品牌概览,"Brand snapshot"
 我们的故事,"Our story"
 从形制科普到可穿日常，我们把顾客对汉服的疑问，沉淀成更清晰的选购路径与更可靠的履约体验。,"From silhouette literacy to wearable daily looks, we turn Hanfu questions into clearer buying paths."
-为什么选择云裳,"Why Yunshang"
 好的汉服体验不靠运气：形制标注清楚、面料说明可信、尺码有据、物流可追踪。,"Great Hanfu shopping is not luck: clear silhouettes, honest fabrics, sized fits, trackable shipping."
 团队围绕「可穿的传统美学」打磨每一个关键路径——从首页发现到订单完成。,"Our team crafts every journey around wearable tradition—from discovery to order complete."
 我们的价值观,"Our values"
@@ -2802,9 +2900,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "在商品详情常显区渲染猜你喜欢内容。默认由 Theme you-may-like 经 default_injections 注入 product-you-may-like。","在商品详情常显区渲染猜你喜欢内容。默认由 Theme you-may-like 经 default_injections 注入 product-you-may-like。"
 根据您的浏览记录推荐,"Recommended based on your browsing history"
 在产品推荐区渲染最近浏览内容。,"Render recently viewed content in the product recommendation area."
-选择作用范围,"Select scope."
-搜索作用范围,"Search scope."
-未找到匹配作用范围,"No matching scope found."
 地址选择（搜索过滤与快捷添加共用）,地址选择（搜索过滤与快捷添加共用）
 添加,添加
 例如：中国,例如：中国
@@ -2915,7 +3010,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 准备好体验更好的购物了吗？,"Ready for a better shopping experience?"
 浏览精选商品，或联系支持团队了解更多合作与服务。,"Browse featured products, or contact support to learn about services and partnerships."
 浏览商品,"Browse products"
-"云裳汉服 · 满 ¥299 包邮 · 形制精选上新","Yunshang Hanfu · Free shipping over ¥299 · New curated styles"
 博客分类页布局,"Blog Category Page"
 指南文档布局,"Guide Page"
 支付方式指南布局,"Payment Guide Page"
@@ -2969,7 +3063,6 @@ CNY,CNY
 电脑办公,"computer office"
 智能设备,"smart device"
 欢迎光临！免费配送满,"Welcome! Free shipping on orders over"
-热门分类,"Popular Categories"
 美妆护肤,"Skincare & Cosmetics"
 品牌精选,"Brand selection"
 "保存到当前 Scope","Save to current Scope"
@@ -2978,7 +3071,6 @@ CNY,CNY
 搜索类型,"Search type"
 全部%{1},"All %{1}"
 热搜,"Hot search."
-"云裳 Hanfu Atelier","Yunshang · Hanfu Atelier"
 注册,Register
 您好,Hello
 "您好, %{1}","Hello, %{1}"
@@ -3056,9 +3148,6 @@ CNY,CNY
 "0 - 99 元","0 - 99 yuan"
 "100 - 299 元","100 - 299 yuan"
 "300 元以上","More than 300 yuan"
-"云裳汉服 · Hanfu Atelier","Yunshang Hanfu · Hanfu Atelier"
-"云裳汉服 · Hanfu Atelier | 水墨汉服商城首页","Yunshang Hanfu · Hanfu Atelier | Ink-Wash Hanfu Boutique"
-云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服、马面裙与传统配饰，服务日常、节庆与礼仪场景。,"Discover Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories for everyday wear, festivals, and ceremonies."
 暂无浏览记录,"No recently viewed items"
 用户名,用户名
 按形制探索适合日常、节庆与礼仪场景的女士汉服,"Explore women's Hanfu by historical style for everyday wear, festivals, and ceremonies."
@@ -3090,13 +3179,10 @@ CNY,CNY
 按重要时刻与穿着需求快速找到合适的一套,"Find the right ensemble for each moment and dress code."
 旅拍与演出,"Travel Shoots & Performance"
 品牌与文化,"Our Brand & Culture"
-认识云裳的审美、工艺与汉服穿着知识,"Discover Yunshang's aesthetic, craftsmanship, and guides to wearing Hanfu."
 汉服文化指南,"Hanfu Culture Guide"
 新手购物帮助,"First-Time Buyer Guide"
-云裳志,"Our Atelier"
 定制与合作,"Bespoke & Partnerships"
-云裳国际页脚,"Yunshang International Footer"
-云裳汉服独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。,"Global footer for the Yunshang Hanfu storefront, covering brand, service, legal, social, language, and currency links. Four standard columns preserve business extension slots and exclusively own the footer area."
+长安国际页脚,"Chang'an International Footer"
 2026春季新品上市,"2026 spring new product launch"
 探索最新时尚潮流,"Explore the latest fashion trends"
 全场满300减50,"Spend 300, Save 50 Storewide"
@@ -3508,7 +3594,6 @@ all,All
 这个页面已经预留模块内容、可视化布局部件和控制器输出的接入位置。,"This page has reserved access locations for module content, visual layout components, and controller output."
 了解我们,"Get to know us"
 人才招聘,Careers
-博客,Blog
 合作信息,Partnerships
 我要开店,"Start selling"
 加入联盟,"Join affiliate program"
@@ -3634,9 +3719,11 @@ Cart,Cart
 当前修改保存失败，无法打开预览,"Changes failed to save; the preview could not be opened."
 旧图片地址仅兼容显示，请从媒体库重新选择,"The legacy image URL is shown for compatibility only. Select the asset again from the media library"
 正在确认编辑权限,"Confirming edit access"
+正在准备编辑,"Preparing editor"
 无法确认编辑权限,"Unable to confirm edit access"
 当前页面正在被编辑,"This page is currently being edited"
 正在获取当前页面的编辑锁，请稍候。,"Acquiring the edit lock for this page. Please wait."
+正在获取编辑锁…,"Acquiring edit lock…"
 编辑锁服务暂时不可用，为避免覆盖其他管理员的修改，当前页面保持只读。,"The edit-lock service is temporarily unavailable. This page remains read-only to prevent overwriting another administrator's changes."
 正在编辑当前主题页面。为了避免互相覆盖，当前会话已被锁定为只读等待状态。,"is editing this Theme page. This session is read-only to prevent conflicting changes."
 锁定成功后将自动进入编辑。,"Editing will begin automatically after the lock is acquired."
@@ -3815,7 +3902,7 @@ Chiffon,Chiffon
 "Home, Garden & Furniture","Home, Garden & Furniture"
 浏览相关商品与配件,"Browse related products and accessories"
 浏览全部已发布商品,"Browse all published products"
-云裳,Yunshang
+长安,Chang'an
 清乾隆黄地龙袍（云锦织造）,"Qing Qianlong yellow-ground dragon robe (Yunjin weaving)"
 "银线嵌入宋锦实物织样（论文图 13）","Song brocade sample with silver-thread inlay (paper fig. 13)"
 唐代联珠对鸟纹蜀锦,"Tang dynasty Shu brocade with pearl roundel and paired birds"
@@ -3835,3 +3922,16 @@ Chiffon,Chiffon
 帮助中心分享预览图,"Help Center share preview image"
 帮助文章,"Help article"
 解决方案,Solutions
+立即保存,"Save now"
+已自动保存,"Saved automatically"
+保存中…,Saving…
+未选择主题，无法自动保存到当前版本,"No theme selected; cannot autosave to the current version"
+当前主题草稿版本不可用，无法自动保存,"Current theme draft revision is unavailable; cannot autosave"
+主题作用域不一致，已阻止跨主题写入,"Theme scope mismatch; blocked cross-theme write"
+购物政策,"Shopping Policy"
+法律与隐私,"Legal & Privacy"
+配送与售后,"Shipping & After-sales"
+政策与关于,"Policies & About"
+其他政策,"Other policies"
+无障碍声明,"Accessibility statement"
+配送政策,"Shipping policy"

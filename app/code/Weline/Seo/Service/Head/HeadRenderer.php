@@ -159,7 +159,7 @@ class HeadRenderer
         return match ($this->normalizePageType($pageType)) {
             'home' => 'framework',
             'product' => 'product',
-            'category', 'tag_collection', 'collection' => 'collection',
+            'category', 'tag_collection', 'collection', 'products' => 'collection',
             'search', 'search_results' => 'search',
             'blog_post', 'post', 'article', 'news', 'news_article' => 'article',
             'contact' => 'contact',
@@ -668,7 +668,7 @@ HTML;
 
     private function withPanelAssetVersion(string $url): string
     {
-        $version = '20260909-helpful-tip-clear-1';
+        $version = '20260915-about-breadcrumb-1';
         $jsPath = dirname(__DIR__, 2) . '/view/statics/seo-inspector/inspector.js';
         if (is_file($jsPath)) {
             $mtime = (int)@filemtime($jsPath);

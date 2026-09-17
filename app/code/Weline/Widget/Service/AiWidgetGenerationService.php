@@ -180,7 +180,7 @@ PHTML,
                 'param_examples' => [
                     'string' => ['type' => 'string', 'label' => '标题', 'default' => '关注我们', 'required' => false, 'description' => '显示标题'],
                     'url' => ['type' => 'url', 'label' => '链接', 'default' => '#', 'required' => false, 'description' => '点击跳转链接'],
-                    'image' => ['type' => 'image', 'label' => '图片', 'default' => '', 'required' => false, 'description' => '展示图片'],
+                    'image' => ['type' => 'media_image', 'label' => '图片', 'default' => '', 'required' => false, 'description' => '从媒体库选择展示图片'],
                     'select' => ['type' => 'select', 'label' => '样式', 'default' => 'simple', 'options' => ['simple' => '简洁', 'card' => '卡片'], 'required' => false],
                     'boolean' => ['type' => 'boolean', 'label' => '是否显示标题', 'default' => true, 'required' => false],
                     'array' => ['type' => 'array', 'label' => '项目', 'default' => [['label' => '示例', 'url' => '#']], 'required' => false],

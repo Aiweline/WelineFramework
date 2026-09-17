@@ -33,6 +33,19 @@ $jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
 };
 $agentName = htmlspecialchars((string)($agent['name'] ?? __('客服')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $agentLocale = htmlspecialchars((string)($agent['locale'] ?? 'zh_Hans_CN'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$sessionListTitle = static function (array $session): string {
+    $name = trim((string)($session['list_title'] ?? ''));
+    if ($name !== '') {
+        return $name;
+    }
+    $kind = (string)($session['customer_kind'] ?? '');
+    $displayName = trim((string)($session['customer_display_name'] ?? ''));
+    if ($kind === 'customer' && $displayName !== '') {
+        return $displayName;
+    }
+
+    return '#' . (int)($session['session_id'] ?? $session['id'] ?? 0);
+};
 ?>
 <link rel="stylesheet" href="@static(Weline_CustomerService::css/backend-console.css)">
 <link rel="stylesheet" href="@static(Weline_CustomerService::css/backend-statistics.css)">
@@ -207,11 +220,13 @@ $agentLocale = htmlspecialchars((string)($agent['locale'] ?? 'zh_Hans_CN'), ENT_
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($sessions as $session): ?>
+                                <?php $ownedTitle = $sessionListTitle($session); ?>
                                 <div class="session-item <?= !empty($session['unread_count']) ? 'unread' : '' ?>"
                                      data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
-                                     data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
+                                     data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
+                                     data-list-title="<?= htmlspecialchars($ownedTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
                                     <div class="session-header">
-                                        <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
+                                        <span class="session-id"><?= htmlspecialchars($ownedTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></span>
                                         <span class="session-header-meta">
                                             <?php if (!empty($session['unread_count'])): ?>
                                                 <span class="unread-badge"><?= (int)$session['unread_count'] ?></span>
@@ -263,11 +278,13 @@ $agentLocale = htmlspecialchars((string)($agent['locale'] ?? 'zh_Hans_CN'), ENT_
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($transferredSessions as $session): ?>
+                                <?php $transferredTitle = $sessionListTitle($session); ?>
                                 <div class="session-item transferred <?= !empty($session['unread_count']) ? 'unread' : '' ?>"
                                      data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
-                                     data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
+                                     data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
+                                     data-list-title="<?= htmlspecialchars($transferredTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
                                     <div class="session-header">
-                                        <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
+                                        <span class="session-id"><?= htmlspecialchars($transferredTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></span>
                                         <span class="session-header-meta">
                                             <span class="w-badge session-transfer-badge"
                                                   data-tone="info"
@@ -325,9 +342,11 @@ $agentLocale = htmlspecialchars((string)($agent['locale'] ?? 'zh_Hans_CN'), ENT_
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($waitingSessions as $session): ?>
-                                <div class="session-item waiting" data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
+                                <?php $waitingTitle = $sessionListTitle($session); ?>
+                                <div class="session-item waiting" data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
+                                     data-list-title="<?= htmlspecialchars($waitingTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
                                     <div class="session-header">
-                                        <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
+                                        <span class="session-id"><?= htmlspecialchars($waitingTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></span>
                                         <span class="w-badge session-status badge-waiting" data-tone="warning" data-size="sm"><?= __('等待中') ?></span>
                                     </div>
                                     <div class="session-preview">

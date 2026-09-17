@@ -415,6 +415,47 @@ final class DocSkillCatalog
                 '粘贴图',
                 '截图附件',
             ];
+        } elseif (preg_match('/产品优化|商品优化|整品优化/iu', $summary) === 1
+            && preg_match('/父|包含|子指令|子技能/u', $summary) === 1) {
+            $kind = 'product_pdp_url';
+            $extraTriggers = [
+                'product_pdp_url',
+                '/product/',
+                '产品优化',
+                '商品优化',
+                'product optimize',
+            ];
+        } elseif (preg_match('/翻译优化|商品翻译|多语补全|locale\s*leak|product\s*i18n/iu', $summary) === 1) {
+            $kind = 'product_pdp_url';
+            $extraTriggers = [
+                'product_pdp_url',
+                '/product/',
+                '翻译优化',
+                '商品翻译',
+                '多语补全',
+            ];
+        } elseif (preg_match('/新建文章|写博客|博客文章|审查文章|文章可行性|blog\s*article|\/blog\//iu', $summary) === 1) {
+            $kind = 'blog_article';
+            $extraTriggers = [
+                'blog_article',
+                '/blog/',
+                '新建文章',
+                '写博客',
+                '博客文章',
+                '审查文章',
+                '文章可行性',
+                '精写文章',
+            ];
+        } elseif (preg_match('/\/product\/|PDP|商品页|产品页|详情优化|商详优化/iu', $summary) === 1) {
+            $kind = 'product_pdp_url';
+            $extraTriggers = [
+                'product_pdp_url',
+                '/product/',
+                '详情优化',
+                '商详优化',
+                '详情页优化',
+                'PDP优化',
+            ];
         }
 
         return [

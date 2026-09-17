@@ -9,15 +9,22 @@ use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
- * Runs independent tasks in a small cooperative Fiber pool.
+ * 框架核心协作 Fiber 任务池（CLI / 系统批处理 / AI 并发流式的统一入口）。
  *
- * PHP Fibers are cooperative, not preemptive. This runner makes existing
- * SchedulerSystem::sleep/usleep/yieldDelay calls suspend the current Fiber in
- * CLI/system flows, allowing other ready tasks to continue.
+ * PHP Fiber 是协作式、非抢占、非多核：只有任务内 {@see self::yield()} /
+ * SchedulerSystem 延时 / {@see CurlStreamPump} I/O 才会切换。纯 CPU 且任务内
+ * 不 yield 时墙钟几乎等于串行，请改用本类做进度协作与 I/O 重叠，而非期待
+ * 线程级加速。
+ *
+ * 高层「收集/发布 + 主线程进度」请用 {@see FiberTaskBatch}。
+ * WLS Worker 事件循环调度器是 {@see \Weline\Server\Scheduler\FiberScheduler}，勿混用。
  */
 final class FiberTaskRunner
 {
-    private const DEFAULT_CONCURRENCY = 4;
+    public const DEFAULT_CONCURRENCY = 4;
+
+    public const ENV_CONCURRENCY = 'WELINE_FIBER_CONCURRENCY';
+
     private const IDLE_SLEEP_US = 1_000;
     private const MAX_SLEEP_US = 10_000;
     private const PUMP_BLOCKING_TICK_SECONDS = 0.05;
@@ -38,6 +45,31 @@ final class FiberTaskRunner
         private readonly int $defaultConcurrency = self::DEFAULT_CONCURRENCY,
         private readonly bool $preserveContext = true
     ) {
+    }
+
+    /**
+     * 解析并发度：显式覆盖 > 环境变量 > 默认值；结果至少为 1。
+     */
+    public static function concurrencyFromEnv(
+        ?int $override = null,
+        string $envName = self::ENV_CONCURRENCY,
+        int $default = self::DEFAULT_CONCURRENCY
+    ): int {
+        if ($override !== null) {
+            return \max(1, $override);
+        }
+        $fromEnv = \getenv($envName);
+        if ($fromEnv !== false && $fromEnv !== '') {
+            return \max(1, (int)$fromEnv);
+        }
+        if ($envName !== self::ENV_CONCURRENCY) {
+            $fallback = \getenv(self::ENV_CONCURRENCY);
+            if ($fallback !== false && $fallback !== '') {
+                return \max(1, (int)$fallback);
+            }
+        }
+
+        return \max(1, $default);
     }
 
     /**

@@ -8,7 +8,7 @@ return [
         'name' => ['type' => 'string', 'label' => '名称'],
         'caption' => ['type' => 'string', 'label' => '说明'],
         'image' => [
-            'type' => 'image',
+            'type' => 'media_image',
             'label' => 'Logo',
             'media_options' => [
                 'default_directory' => 'brand',

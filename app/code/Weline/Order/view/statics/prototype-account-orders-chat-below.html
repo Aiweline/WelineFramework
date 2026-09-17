@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — 账户订单沟通落位（勿当生产）</title>
+  <style>
+    :root {
+      --border: #e5e7eb;
+      --muted: #647084;
+      --text: #172033;
+      --surface: #fff;
+      --warn: #c45500;
+      --info: #007185;
+      --primary: #b84a3c;
+      --space: 12px;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 system-ui, sans-serif;
+      color: var(--text);
+      background: #f3f4f6;
+      padding: 24px 16px 96px;
+    }
+    .note {
+      max-width: 52rem;
+      margin: 0 auto 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .note strong { color: var(--text); }
+    .stage {
+      max-width: 52rem;
+      margin: 0 auto;
+    }
+    .group {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+      overflow: hidden;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.75rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,.35);
+      background: rgba(15,23,42,.04);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .badge.tob { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+    .badge.pay { color: #92400e; background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.4); }
+    .badge.ship { color: var(--info); background: color-mix(in srgb, var(--info) 14%, transparent); border-color: color-mix(in srgb, var(--info) 35%, transparent); }
+    .badge.hang { color: var(--info); background: color-mix(in srgb, var(--info) 12%, transparent); }
+    .badge.hang.current { outline: 2px solid color-mix(in srgb, var(--info) 55%, transparent); }
+    .detail {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.15rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 0.75rem;
+      background: rgba(240,193,75,.16);
+      color: #9a6b00;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.45rem 0.85rem;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      background: color-mix(in srgb, var(--primary) 88%, #000);
+      color: #fff;
+    }
+    .btn.secondary {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .chat-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .msgs {
+      list-style: none;
+      margin: 0;
+      padding: 8px;
+      max-height: 12rem;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      background: #f7f4ef;
+      border-radius: 8px;
+    }
+    .msg {
+      max-width: 92%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(15,17,17,.08);
+      background: #fff;
+    }
+    .msg.merchant { justify-self: start; background: color-mix(in srgb, #c45500 10%, #fff); }
+    .msg.customer { justify-self: end; background: color-mix(in srgb, var(--primary) 8%, #fff); }
+    .role { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+    .composer { display: grid; gap: 8px; }
+    .composer textarea {
+      width: 100%;
+      min-height: 4.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      resize: vertical;
+    }
+    .composer .btn { justify-self: end; }
+
+    /* ===== Variant A: current bug — hang/chat as flex sibling in summary row ===== */
+    .v-a .summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 0.55rem 0.75rem;
+      padding: 1rem 1.1rem;
+    }
+    .v-a .summary > strong { font-size: 1rem; font-weight: 800; }
+    .v-a .summary > .muted { color: var(--muted); }
+    .v-a .summary > .total { margin-inline-start: auto; font-weight: 800; }
+    .v-a .hang {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 18rem;
+      min-width: 14rem;
+      flex: 1 1 16rem;
+    }
+    .v-a .progress { display: flex; flex-wrap: wrap; gap: 4px; }
+
+    /* ===== Variant B: hang/chat full-width BELOW entire order record ===== */
+    .v-b .summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.55rem 0.75rem;
+      padding: 1rem 1.1rem;
+    }
+    .v-b .summary > strong { font-size: 1rem; font-weight: 800; }
+    .v-b .summary > .muted { color: var(--muted); }
+    .v-b .summary > .total { margin-inline-start: auto; font-weight: 800; }
+    .v-b .hang {
+      display: grid;
+      gap: 10px;
+      width: 100%;
+      padding: 0 1.1rem 1rem;
+      border-top: 1px dashed rgba(148,163,184,.35);
+      margin: 0;
+    }
+    .v-b .progress { display: flex; flex-wrap: wrap; gap: 4px; }
+    .v-b .hang-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .v-b .chat { width: 100%; }
+
+    /* ===== Variant C: below + toggle stays on summary row (collapsed hint) ===== */
+    .v-c .summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.55rem 0.75rem;
+      padding: 1rem 1.1rem;
+    }
+    .v-c .summary > strong { font-size: 1rem; font-weight: 800; }
+    .v-c .summary > .muted { color: var(--muted); }
+    .v-c .summary > .total { margin-inline-start: auto; font-weight: 800; }
+    .v-c .hang {
+      display: grid;
+      gap: 10px;
+      width: 100%;
+      padding: 0 1.1rem 1rem;
+      border-top: 1px dashed rgba(148,163,184,.35);
+    }
+    .v-c .hang[data-collapsed="1"] .chat-panel,
+    .v-c .hang[data-collapsed="1"] .progress-row { display: none; }
+    .v-c .progress-row { display: flex; flex-wrap: wrap; gap: 4px; }
+
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #111;
+      color: #fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,.28);
+      z-index: 50;
+      font-size: 13px;
+    }
+    .switcher button {
+      appearance: none;
+      border: 0;
+      background: #333;
+      color: #fff;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .switcher .label { min-width: 14rem; text-align: center; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <p class="note">
+    <strong>PROTOTYPE</strong>（throwaway）：账户「我的订单」沟通落位。
+    问题：沟通被塞进 summary 的 flex 行 → 宽屏挤到订单记录右侧。
+    目标：沟通在<strong>整条订单记录下面</strong>全宽展开。方向键 / 底栏切换 variant。
+  </p>
+
+  <div class="stage" id="stage" data-variant="B"></div>
+
+  <div class="switcher" role="toolbar" aria-label="原型变体切换">
+    <button type="button" data-prev aria-label="上一个">←</button>
+    <div class="label" data-label>B（下方全宽 · 推荐）</div>
+    <button type="button" data-next aria-label="下一个">→</button>
+  </div>
+
+  <template id="tpl-chat">
+    <div class="chat-panel">
+      <ul class="msgs">
+        <li class="msg merchant"><span class="role">商家</span>前台验收 1789192580707</li>
+        <li class="msg merchant"><span class="role">商家</span>客户身份探测 1789192596949</li>
+        <li class="msg customer"><span class="role">客户</span>客户身份探测2 1789192726361</li>
+        <li class="msg merchant"><span class="role">商家</span>商家对齐 1789192759795</li>
+        <li class="msg customer"><span class="role">客户</span>?</li>
+        <li class="msg customer"><span class="role">客户</span>? ? ?</li>
+      </ul>
+      <form class="composer" onsubmit="return false;">
+        <textarea placeholder="留言"></textarea>
+        <button class="btn" type="submit">发送</button>
+      </form>
+    </div>
+  </template>
+
+  <script>
+    const VARIANTS = [
+      { key: 'A', name: 'A（现状 · 右侧挤位）' },
+      { key: 'B', name: 'B（下方全宽 · 推荐）' },
+      { key: 'C', name: 'C（下方 + 行内开关）' },
+    ];
+
+    function progressHtml() {
+      return `
+        <span class="badge hang">待付定金</span>
+        <span class="badge hang current">待商家审批</span>
+        <span class="badge hang">待付尾款</span>
+        <span class="badge hang">已完成</span>
+        <span class="badge hang current">待商家审批</span>
+      `;
+    }
+
+    function chatHtml() {
+      return document.getElementById('tpl-chat').innerHTML;
+    }
+
+    function summaryCore() {
+      return `
+        <strong>G-985b4913</strong>
+        <span class="muted">1 笔订单</span>
+        <span class="badge tob">批发订单</span>
+        <span class="badge pay">待支付</span>
+        <span class="badge ship">待发货</span>
+        <span class="total">CNY 219.40</span>
+        <a class="detail" href="#">查看详情</a>
+        <span class="badge ship">待发货</span>
+      `;
+    }
+
+    function render(key) {
+      const stage = document.getElementById('stage');
+      stage.dataset.variant = key;
+      stage.className = 'stage v-' + key.toLowerCase();
+      let html = '';
+      if (key === 'A') {
+        html = `
+          <div class="group">
+            <div class="summary">
+              ${summaryCore()}
+              <div class="hang">
+                <div class="progress">${progressHtml()}</div>
+                <button class="btn secondary" type="button">收起沟通</button>
+                ${chatHtml()}
+              </div>
+            </div>
+          </div>`;
+      } else if (key === 'B') {
+        html = `
+          <div class="group">
+            <div class="summary">${summaryCore()}</div>
+            <div class="hang" data-testid="hang-below">
+              <div class="hang-meta">
+                <div class="progress">${progressHtml()}</div>
+                <button class="btn secondary" type="button">收起沟通</button>
+              </div>
+              <div class="chat">${chatHtml()}</div>
+            </div>
+          </div>`;
+      } else {
+        html = `
+          <div class="group">
+            <div class="summary">
+              ${summaryCore()}
+              <button class="btn secondary" type="button" data-c-toggle>收起沟通</button>
+            </div>
+            <div class="hang" data-collapsed="0">
+              <div class="progress-row">${progressHtml()}</div>
+              ${chatHtml()}
+            </div>
+          </div>`;
+      }
+      stage.innerHTML = html;
+      const toggle = stage.querySelector('[data-c-toggle]');
+      if (toggle) {
+        toggle.addEventListener('click', () => {
+          const hang = stage.querySelector('.hang');
+          const collapsed = hang.getAttribute('data-collapsed') === '1';
+          hang.setAttribute('data-collapsed', collapsed ? '0' : '1');
+          toggle.textContent = collapsed ? '收起沟通' : '订单沟通';
+        });
+      }
+      document.querySelector('[data-label]').textContent = VARIANTS.find((v) => v.key === key).name;
+      const url = new URL(location.href);
+      url.searchParams.set('variant', key);
+      history.replaceState(null, '', url);
+    }
+
+    function currentIndex() {
+      const key = (new URL(location.href).searchParams.get('variant') || 'B').toUpperCase();
+      const i = VARIANTS.findIndex((v) => v.key === key);
+      return i < 0 ? 1 : i;
+    }
+
+    function cycle(delta) {
+      const next = (currentIndex() + delta + VARIANTS.length) % VARIANTS.length;
+      render(VARIANTS[next].key);
+    }
+
+    document.querySelector('[data-prev]').addEventListener('click', () => cycle(-1));
+    document.querySelector('[data-next]').addEventListener('click', () => cycle(1));
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') cycle(-1);
+      if (e.key === 'ArrowRight') cycle(1);
+    });
+
+    render(VARIANTS[currentIndex()].key);
+  </script>
+</body>
+</html>

@@ -17,13 +17,15 @@ final class AccountLoginWidgetContractTest extends TestCase
         $loginForm = \dirname(__DIR__, 3) . '/view/templates/frontend/account/login.phtml';
         $customerWidgetPhp = \dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Customer/widget.php';
         $themeWidget = \dirname(__DIR__, 4) . '/Theme/view/theme/frontend/widgets/form/account-login/default.phtml';
-        $authLayout = \dirname(__DIR__, 4) . '/Theme/view/theme/frontend/layouts/account/auth.phtml';
+        $authLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/auth.phtml';
+        $loginLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/login/default.phtml';
 
         self::assertFileExists($shell);
         self::assertFileExists($loginForm);
         self::assertFileExists($customerWidgetPhp);
         self::assertFileExists($themeWidget);
         self::assertFileExists($authLayout);
+        self::assertFileExists($loginLayout);
 
         $customerWidgetSource = (string)\file_get_contents($customerWidgetPhp);
         self::assertStringContainsString("'account-social-login'", $customerWidgetSource);
@@ -73,9 +75,15 @@ final class AccountLoginWidgetContractTest extends TestCase
         self::assertStringNotContainsString('account-auth-layout__placeholder', $authSource);
         self::assertStringNotContainsString('@widget.default_injections', $authSource);
 
+        $loginLayoutSource = (string)\file_get_contents($loginLayout);
+        self::assertStringContainsString('account/login', $loginLayoutSource);
+        self::assertStringContainsString('__force_login_stage', $loginLayoutSource);
+        self::assertStringContainsString('layouts/account/auth.phtml', $loginLayoutSource);
+
         $loginController = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/Controller/Account/Login.php'
         );
+        self::assertStringContainsString("layoutType = 'account/login'", $loginController);
         self::assertStringContainsString('login-shell.phtml', $loginController);
     }
 }

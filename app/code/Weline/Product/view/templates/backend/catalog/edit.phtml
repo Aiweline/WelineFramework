@@ -74,6 +74,32 @@ $media = is_array($snapshot['media_assignments'] ?? null)
 $storeMediaOverrides = is_array($snapshot['store_media_overrides'] ?? null)
     ? $snapshot['store_media_overrides']
     : [];
+$mediaIdentityCode = trim((string)($identity['product_code'] ?? $product['sku'] ?? ''));
+if ($mediaIdentityCode === '') {
+    foreach ($offers as $offerRow) {
+        if (!is_array($offerRow)) {
+            continue;
+        }
+        $candidateSku = trim((string)($offerRow['sku'] ?? ''));
+        if ($candidateSku !== '') {
+            $mediaIdentityCode = $candidateSku;
+            break;
+        }
+    }
+}
+$mediaIdentityScope = 'default.default.default';
+foreach (is_array($website_options ?? null) ? $website_options : [] as $websiteOption) {
+    if (!is_array($websiteOption)) {
+        continue;
+    }
+    if ((int)($websiteOption['website_id'] ?? -1) === (int)$website_id) {
+        $websiteCode = trim((string)($websiteOption['code'] ?? $websiteOption['website_code'] ?? ''));
+        if ($websiteCode !== '') {
+            $mediaIdentityScope = strtolower($websiteCode) . '.default.default';
+        }
+        break;
+    }
+}
 $assignedCategoryIds = [];
 $categoryPositions = [];
 foreach ($categoryAssignments as $assignment) {
@@ -327,8 +353,19 @@ $statusLabelMap = [
 $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
 ?>
 <link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260908-description-preview">
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
 <div class="w-backend-page w-product-admin w-product-editor"
      data-product-admin="editor"
+     data-media-identity-root="product"
+     data-media-identity-code="<?= $escape($mediaIdentityCode) ?>"
+     data-media-identity-scope="<?= $escape($mediaIdentityScope) ?>"
+     data-media-identity-kind="media"
+     data-media-owner-type="product"
+     data-media-owner-id="<?= $escape($mediaIdentityCode !== '' ? $mediaIdentityCode : (string)$productEntityId) ?>"
+     data-media-owner-version="<?= $escape((string)($identity['version'] ?? 1)) ?>"
+     data-media-bind-url="@backend-url{'weline_filemanager/backend/media-reference/bind'}"
+     data-media-ref-mode="multi"
      data-edit-business="<?= $canEditBusiness ? '1' : '0' ?>"
      data-testid="product-edit-workbench">
     <script type="application/json" id="product-admin-state" data-no-extract="true"><?= $product_admin_state_json ?></script>
@@ -1469,7 +1506,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                     <iframe title="@lang(媒体库)"
                             src="about:blank"
                             data-product-media-picker-frame
-                            data-src="@backend-url('media/backend/manager/iframe')?target=product-media-picker&multi=1&usage=1&ext=jpg,png,gif,webp"></iframe>
+                            data-src="@backend-url('media/backend/manager/iframe')?target=product-media-picker&multi=1&usage=1&ext=jpg,png,gif,webp&identity_root=product&identity_code=<?= rawurlencode($mediaIdentityCode) ?>&identity_scope=<?= rawurlencode($mediaIdentityScope) ?>&identity_kind=media&ref_mode=multi"></iframe>
                 </div>
             </dialog>
 

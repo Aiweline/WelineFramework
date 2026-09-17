@@ -21,7 +21,7 @@
         return;
     }
     var node = document.currentScript;
-    var src = '/Weline/Visitor/view/statics/js/event-sandbox-monitor.js?v=20260911-event-sandbox-monitor9';
+    var src = '/Weline/Visitor/view/statics/js/event-sandbox-monitor.js?v=20260916-event-sandbox-monitor10';
     if (node && node.src) {
         src = String(node.src).replace('lifecycle-event-assistant.js', 'event-sandbox-monitor.js');
     }

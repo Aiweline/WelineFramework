@@ -13,7 +13,9 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         $taglib = $this->read('Taglib/LanguageSwitcher.php');
         $runtime = $this->read('view/statics/js/language-switcher.js');
 
-        self::assertStringContainsString('|markup=weline-ui-2-language-switcher-component-22', $taglib);
+        self::assertStringContainsString('weline-ui-2-language-switcher-', $taglib);
+        self::assertStringContainsString('SWITCHER_MARKUP_VERSION', $taglib);
+        self::assertSame('component-26-trigger-flag-ssr', \Weline\I18n\Taglib\LanguageSwitcher::SWITCHER_MARKUP_VERSION);
         self::assertStringContainsString('data-w-component="menu language-switcher"', $taglib);
         self::assertStringContainsString('data-w-anchor-mode="element"', $taglib);
         self::assertStringContainsString('data-w-language-search', $taglib);
@@ -27,6 +29,30 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertStringContainsString('w-language-switcher__footer', $runtime);
         self::assertStringContainsString('installGlobalLanguageOptionCapture', $runtime);
         self::assertStringContainsString('resolveSwitcherRootForOption', $runtime);
+        self::assertStringContainsString('isThemeEditorPreviewFrame', $runtime);
+        self::assertStringContainsString('postThemeEditorPreviewLocaleChange', $runtime);
+        self::assertStringContainsString("type: 'locale-change'", $runtime);
+        self::assertStringContainsString("source: 'weline-theme-preview'", $runtime);
+        self::assertStringContainsString('editor_mode', $runtime);
+        self::assertStringContainsString('syncLanguageSwitcherTriggerFlag', $runtime);
+        self::assertStringContainsString('Never wipe a painted trigger', $runtime);
+        self::assertStringContainsString("img.loading = 'eager'", $runtime);
+        self::assertStringContainsString("mode === 'trigger'", $runtime);
+        self::assertStringContainsString('CountryFlagMarkup::triggerHtml', $taglib);
+        self::assertStringContainsString('capture-editor', $runtime);
+        self::assertStringContainsString('traceLocaleSwitch', $runtime);
+        $captureFn = strpos($runtime, 'function installGlobalLanguageOptionCapture');
+        self::assertNotFalse($captureFn);
+        $captureBody = substr($runtime, $captureFn, 2200);
+        $editorCheck = strpos($captureBody, 'isThemeEditorPreviewFrame()');
+        $rootResolve = strpos($captureBody, 'resolveSwitcherRootForOption(option)');
+        self::assertNotFalse($editorCheck);
+        self::assertNotFalse($rootResolve);
+        self::assertLessThan(
+            $rootResolve,
+            $editorCheck,
+            'installGlobalLanguageOptionCapture must test editor frame before root resolve'
+        );
         self::assertStringContainsString('Prefer the panel nested under this switcher root', $runtime);
         self::assertStringContainsString('bindSearch', $runtime);
         self::assertStringContainsString('focusSearch', $runtime);
@@ -42,6 +68,20 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertStringContainsString('window.location.reload();', $runtime);
         self::assertStringNotContainsString('<script', $taglib);
         self::assertStringNotContainsString('window.WelineI18n', $runtime);
+
+        $i18nJs = file_get_contents(dirname(__DIR__, 4) . '/Framework/View/statics/js/i18n.js');
+        self::assertIsString($i18nJs);
+        self::assertStringContainsString('[data-country-flag], .w-language-switcher__flag, .weline-choice-flag', $i18nJs);
+        self::assertStringContainsString('[data-w-menu-trigger] [data-country-flag]', $i18nJs);
+        self::assertStringContainsString('Never wipe a painted', $i18nJs);
+        self::assertStringContainsString('optionPainted', $i18nJs);
+
+        $themeJs = file_get_contents(
+            dirname(__DIR__, 4) . '/Theme/view/theme/frontend/assets/js/theme.js'
+        );
+        self::assertIsString($themeJs);
+        self::assertStringContainsString('Never wipe a painted', $themeJs);
+        self::assertStringContainsString('optionPainted', $themeJs);
     }
 
     public function testLanguageRequestUsesTheSameScopedComponent(): void

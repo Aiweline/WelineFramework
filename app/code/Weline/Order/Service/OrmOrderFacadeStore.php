@@ -133,6 +133,15 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             Order::schema_fields_WEBSITE_ID => (int)($row['website_id'] ?? 0),
             Order::schema_fields_STORE_ID => (int)($row['store_id'] ?? 0),
             Order::schema_fields_CUSTOMER_ID => $row['customer_id'] ?? null,
+            Order::schema_fields_CUSTOMER_EMAIL => ($email = trim((string)($row['customer_email'] ?? ''))) !== ''
+                ? $email
+                : null,
+            Order::schema_fields_CUSTOMER_NAME => ($name = trim((string)($row['customer_name'] ?? ''))) !== ''
+                ? $name
+                : null,
+            Order::schema_fields_CUSTOMER_PHONE => ($phone = trim((string)($row['customer_phone'] ?? ''))) !== ''
+                ? $phone
+                : null,
             Order::schema_fields_STATUS => (string)$row['status'],
             Order::schema_fields_STATE => (string)$row['status'],
             Order::schema_fields_CURRENCY => (string)$row['currency'],
@@ -144,6 +153,9 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             Order::schema_fields_PAYMENT_METHOD => strtolower(trim((string)($row['payment_method'] ?? ''))),
             Order::schema_fields_SHIPPING_METHOD => (string)($shipping['method'] ?? ''),
             Order::schema_fields_SHIPPING_ADDRESS => $this->encode($shipping['address'] ?? []),
+            Order::schema_fields_BILLING_ADDRESS => $this->encode(
+                \is_array($row['billing_address'] ?? null) ? $row['billing_address'] : [],
+            ),
             Order::schema_fields_MONEY_SNAPSHOT_JSON => $this->encode($money),
             Order::schema_fields_CATALOG_SNAPSHOT_JSON => $this->encode($snapshots['catalog'] ?? ['lines' => $row['items'] ?? []]),
             Order::schema_fields_SCOPE_SNAPSHOT_JSON => $this->encode($row['scope'] ?? []),
@@ -285,6 +297,7 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             'items' => $items,
             'money' => $this->decode((string)$row->getData(Order::schema_fields_MONEY_SNAPSHOT_JSON)),
             'scope' => $this->decode((string)$row->getData(Order::schema_fields_SCOPE_SNAPSHOT_JSON)),
+            'billing_address' => $this->decode((string)$row->getData(Order::schema_fields_BILLING_ADDRESS)),
             'snapshots' => [
                 'money' => $this->decode((string)$row->getData(Order::schema_fields_MONEY_SNAPSHOT_JSON)),
                 'catalog' => $catalog,

@@ -61,20 +61,29 @@ final class AccountSessionModuleContractTest extends TestCase
         $js = $this->accountJs();
         self::assertStringContainsString('frontendSessionUserKey', $js);
         self::assertStringContainsString('weline_frontend_session_user', $js);
+        self::assertStringContainsString('frontendAuthPendingKey', $js);
+        self::assertStringContainsString('weline_frontend_auth_pending', $js);
+        self::assertStringContainsString('markAuthPending', $js);
+        self::assertStringContainsString('skipGuestNegativeCache', $js);
+        self::assertStringContainsString('optimistic_keep_login_signal', $js);
         self::assertStringContainsString('renewAt', $js);
         self::assertStringContainsString('isFrontendSessionCacheFresh', $js);
         self::assertStringContainsString('writeFrontendSessionCache', $js);
         self::assertStringContainsString('fromCache: true', $js);
         self::assertStringContainsString('fromAuthSignal: true', $js);
         self::assertStringContainsString('isLogoutAuthSignal', $js);
-        self::assertStringContainsString('force: false', $js);
+        // Bootstrap must not hardcode force:true on every page (editor preview may pass force).
+        self::assertStringContainsString('force: editorPreview', $js);
         self::assertStringNotContainsString('syncHeaderAccountChrome({ force: true })', $js);
         self::assertStringContainsString('sessionTtlMs', $js);
         self::assertStringContainsString('guestRecheckMs', $js);
-        self::assertStringContainsString('checkFrontendUserLogin({ force: true })', $js);
+        self::assertStringContainsString('checkFrontendUserLogin({', $js);
+        self::assertStringContainsString('force: true', $js);
+        // Force network after login uses skipGuestNegativeCache — still a force:true call.
+        self::assertStringContainsString('skipGuestNegativeCache', $js);
         self::assertStringContainsString('not signed in', $js);
         self::assertStringContainsString('writeFrontendSessionCache(status)', $js);
-        self::assertStringContainsString('const hasSignal = this.hasAuthRefreshSignal()', $js);
+        self::assertStringContainsString('const hasSignal = loginSignal || logoutSignal', $js);
         self::assertStringContainsString('skip account.current network only', $js);
         // Signed-in must come from isLogin/logged_in — never result.success alone.
         self::assertStringContainsString(

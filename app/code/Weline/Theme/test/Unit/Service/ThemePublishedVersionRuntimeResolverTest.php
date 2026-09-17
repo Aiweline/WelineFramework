@@ -16,9 +16,11 @@ final class ThemePublishedVersionRuntimeResolverTest extends TestCase
 
         self::assertStringContainsString('RequestContext::scopeIdentity()', $source);
         self::assertStringContainsString('fallbackStorageScopes', $source);
-        self::assertStringContainsString('findAnyPublishedVersion', $source);
+        self::assertStringNotContainsString('->findAnyPublishedVersion(', $source);
+        self::assertStringNotContainsString('$versions->findAnyPublishedVersion', $source);
         self::assertStringContainsString('identityCandidates', $source);
         self::assertStringContainsString('default.default.default', $source);
+        self::assertStringContainsString('no findAnyPublishedVersion cross-identity steal', $source);
     }
 
     public function testEditorShellKeepsEditorAreaIndependentFromPreviewArea(): void
@@ -33,9 +35,10 @@ final class ThemePublishedVersionRuntimeResolverTest extends TestCase
     {
         $workspace = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php');
 
-        self::assertStringContainsString("if ((\$result['blocked'] ?? false) === true) {", $workspace);
-        self::assertStringContainsString('return $result;', $workspace);
-        self::assertStringNotContainsString("throw new \\RuntimeException('theme_scope_structural_conflict');", $workspace);
+        $blockedOffset = \strpos($workspace, "if ((\$result['blocked'] ?? false) === true) {");
+        self::assertNotFalse($blockedOffset);
+        $snippet = \substr($workspace, $blockedOffset, 160);
+        self::assertStringContainsString('return $result;', $snippet);
     }
     public function testThemeEditorPublishFlushesScopedThemeCaches(): void
     {

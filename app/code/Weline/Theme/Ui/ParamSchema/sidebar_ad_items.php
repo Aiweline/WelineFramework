@@ -6,7 +6,7 @@ return [
     'base_type' => 'array',
     'item_schema' => [
         'image' => [
-            'type' => 'image',
+            'type' => 'media_image',
             'label' => '图片',
             'media_options' => [
                 'default_directory' => 'advertising',

@@ -42,11 +42,16 @@ final class PromotionStorefrontPageService
 
         $priceBand = (string)($themePage['price_band'] ?? '');
         $pickMode = (string)($themePage['product_pick_mode'] ?? PromotionThemeProductService::PICK_MODE_MANUAL);
-        $productIds = array_values(array_filter(array_map(
-            'intval',
-            is_array($themePage['product_ids'] ?? null) ? $themePage['product_ids'] : [],
-        )));
-        $items = $this->loadProducts($priceBand, $productIds, $pickMode);
+        $productIds = $pageType === 'index'
+            ? $this->themeService->listHubStorefrontProductIds()
+            : array_values(array_filter(array_map(
+                'intval',
+                is_array($themePage['product_ids'] ?? null) ? $themePage['product_ids'] : [],
+            )));
+        // Hub never shelves a generic catalog slice; only active-theme selections.
+        $items = $pageType === 'index'
+            ? $this->loadProductsByIds($productIds)
+            : $this->loadProducts($priceBand, $productIds, $pickMode);
         $deal = [
             'deal_discount_type' => (string)($themePage['deal_discount_type'] ?? PromotionThemeDealDiscountSyncService::DISCOUNT_NONE),
             'deal_discount_value' => (float)($themePage['deal_discount_value'] ?? 0),
@@ -62,6 +67,11 @@ final class PromotionStorefrontPageService
             'url' => $pageType !== 'index' ? $this->storefrontUrl($pageType) : '',
         ];
         $items = $this->applyStorefrontPricing($items, $deal, $campaignFallback, $themeId);
+        if ($pageType === 'index') {
+            // Activity homepage must not show catalog rows without a live deal badge.
+            $items = $this->keepDealMarkedItemsOnly($items);
+            $items = array_slice($items, 0, 12);
+        }
         $items = $this->stampCampaignEntryLinks($items, $themeId, $pageType);
 
         $slugUrls = $this->slugUrlsFromNavTabs($navTabs);
@@ -195,11 +205,36 @@ final class PromotionStorefrontPageService
             }
             if ($preferredThemeId > 0) {
                 $item['promotion_theme_id'] = $preferredThemeId;
+            } elseif ($item['has_deal']) {
+                $sourceThemeId = (int)($applied['primary_campaign']['source_id'] ?? 0);
+                if ($sourceThemeId > 0) {
+                    $item['promotion_theme_id'] = $sourceThemeId;
+                }
             }
             $priced[] = $item;
         }
 
         return $priced;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $items
+     * @return list<array<string, mixed>>
+     */
+    private function keepDealMarkedItemsOnly(array $items): array
+    {
+        $kept = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if (empty($item['has_deal'])) {
+                continue;
+            }
+            $kept[] = $item;
+        }
+
+        return $kept;
     }
 
     /**
@@ -212,8 +247,19 @@ final class PromotionStorefrontPageService
     {
         $themeId = max(0, $themeId);
         $pageSlug = strtolower(trim($pageSlug));
-        if ($themeId <= 0 && ($pageSlug === '' || $pageSlug === 'index')) {
-            return $items;
+        $isHub = $pageSlug === '' || $pageSlug === 'index';
+        if ($themeId <= 0 && $isHub) {
+            // Hub may still stamp per-card theme ids resolved by the price assembler.
+            $hasPerItemTheme = false;
+            foreach ($items as $probe) {
+                if (is_array($probe) && (int)($probe['promotion_theme_id'] ?? 0) > 0) {
+                    $hasPerItemTheme = true;
+                    break;
+                }
+            }
+            if (!$hasPerItemTheme) {
+                return $items;
+            }
         }
 
         $stamped = [];
@@ -221,8 +267,12 @@ final class PromotionStorefrontPageService
             if (!is_array($item)) {
                 continue;
             }
+            $itemThemeId = $themeId > 0
+                ? $themeId
+                : max(0, (int)($item['promotion_theme_id'] ?? 0));
+            $itemSlug = $isHub ? '' : $pageSlug;
             $url = trim((string)($item['url'] ?? ''));
-            if ($url !== '' && $url !== '#') {
+            if ($url !== '' && $url !== '#' && ($itemThemeId > 0 || $itemSlug !== '')) {
                 $parts = parse_url($url);
                 $path = (string)($parts['path'] ?? $url);
                 $query = [];
@@ -231,13 +281,13 @@ final class PromotionStorefrontPageService
                 }
                 $query = \Weline\Product\Helper\StorefrontCampaignEntry::mergeIntoQuery(
                     array_map('strval', $query),
-                    $themeId,
-                    $pageSlug,
+                    $itemThemeId,
+                    $itemSlug,
                 );
                 $item['url'] = $path . ($query !== [] ? ('?' . http_build_query($query)) : '');
             }
-            if ($themeId > 0) {
-                $item['promotion_theme_id'] = $themeId;
+            if ($itemThemeId > 0) {
+                $item['promotion_theme_id'] = $itemThemeId;
             }
             $stamped[] = $item;
         }

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Extends;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 
@@ -76,25 +77,28 @@ class ExtendsRegistry
      */
     public function refresh(): bool
     {
-        // 扫描所有扩展
-        RegistryProgress::log('Extends scan: all modules started');
-        $scannedData = $this->scanner->scanAllExtends();
-        RegistryProgress::count('Extends scan', count($scannedData), 'modules with extends data');
+        try {
+            RegistryProgress::log('Extends scan: all modules started');
+            $scannedData = $this->scanner->scanAllExtends();
+            RegistryProgress::count('Extends scan', count($scannedData), 'modules with extends data');
 
-        // 进行完备性检查
-        RegistryProgress::log('Extends completeness check started');
-        $completenessReport = $this->completenessChecker->checkAll($scannedData);
-        RegistryProgress::count('Extends completeness check', count($completenessReport), 'module reports');
+            RegistryProgress::log('Extends completeness check started');
+            $completenessReport = $this->completenessChecker->checkAll($scannedData);
+            RegistryProgress::count('Extends completeness check', count($completenessReport), 'module reports');
 
-        // 组织数据结构
-        RegistryProgress::log('Extends organize registry data');
-        $registry = $this->organizeRegistryData($scannedData, $completenessReport);
-        RegistryProgress::count('Extends registry', count($registry), 'modules organized');
-        unset($scannedData, $completenessReport);
-        RegistryProgress::log('Extends raw scan data released');
+            RegistryProgress::log('Extends organize registry data');
+            $registry = $this->organizeRegistryData($scannedData, $completenessReport);
+            RegistryProgress::count('Extends registry', count($registry), 'modules organized');
+            unset($scannedData, $completenessReport);
+            RegistryProgress::log('Extends raw scan data released');
 
-        // 保存注册表
-        return $this->saveRegistry($registry);
+            return $this->saveRegistry($registry);
+        } catch (\Throwable $e) {
+            RegistryProgress::log('Extends refresh aborted; keeping existing generated/extends.php');
+            throw $e instanceof \RuntimeException
+                ? $e
+                : new \RuntimeException('Extends registry refresh failed: ' . $e->getMessage(), 0, $e);
+        }
     }
     
     /**
@@ -517,29 +521,19 @@ class ExtendsRegistry
     {
         RegistryProgress::log('Extends save registry: generated/extends.php');
         $content = "<?php return " . w_var_export($registry, true) . ";\n";
+        (new GeneratedPhpArrayPublisher())->publishContent(
+            self::REGISTRY_FILE,
+            $content,
+            $registry,
+            GeneratedPhpArrayPublisher::countTopLevel(...),
+        );
 
-        // 确保目录存在
-        $dir = dirname(self::REGISTRY_FILE);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
+        $this->cachedRegistry = $registry;
+        $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        ExtendsData::clearCache();
+        RegistryProgress::log('Extends save registry finished');
 
-        $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
-
-        if ($result !== false) {
-            // 更新实例缓存
-            $this->cachedRegistry = $registry;
-            $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
-            
-            // 清除 ExtendsData 的静态缓存，确保其他使用 ExtendsData 的代码能立即看到新生成的文件
-            ExtendsData::clearCache();
-            RegistryProgress::log('Extends save registry finished');
-            
-            return true;
-        }
-
-        RegistryProgress::log('Extends save registry failed');
-        return false;
+        return true;
     }
 
     /**

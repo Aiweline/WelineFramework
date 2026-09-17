@@ -65,7 +65,7 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
             CheckoutSession::schema_fields_PAYLOAD_JSON => $json,
             CheckoutSession::schema_fields_CART_FINGERPRINT => $fingerprint !== '' ? $fingerprint : null,
             CheckoutSession::schema_fields_CHECKOUT_ENTRY => $checkoutEntry,
-            CheckoutSession::schema_fields_EXPIRES_AT => $expiresAt ?? $this->defaultExpiresAt($state),
+            CheckoutSession::schema_fields_EXPIRES_AT => $expiresAt ?? $this->resolveQuotedExpiresAt($state, $payload),
         ])->save();
     }
 
@@ -346,6 +346,24 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
             : CheckoutSession::TTL_QUOTED_SECONDS;
 
         return gmdate('Y-m-d H:i:s', time() + $ttl);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function resolveQuotedExpiresAt(string $state, array $payload): string
+    {
+        $base = $this->defaultExpiresAt($state);
+        if ($state !== CheckoutSession::STATE_QUOTED) {
+            return $base;
+        }
+        $email = CheckoutSessionContact::extractEmail($payload);
+        if ($email === '') {
+            return $base;
+        }
+        $withEmail = gmdate('Y-m-d H:i:s', time() + CheckoutSession::TTL_QUOTED_WITH_EMAIL_SECONDS);
+
+        return $withEmail > $base ? $withEmail : $base;
     }
 
     private function withinSubmittedSuccessGrace(CheckoutSession $row, string $state): bool

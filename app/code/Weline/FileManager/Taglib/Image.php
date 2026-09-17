@@ -59,6 +59,9 @@ final class Image implements TaglibInterface
     {
         return '<w:file:image usage="imageUsage" width="16" height="9" />'
             . ' or <w:file:image asset="assetId" alt="已确认的替代文本" aspect_ratio="16/9" complement="true" />'
-            . ' — 须设 UI 宽高或 aspect_ratio（HTML width/height 防 CLS），再由主题 CSS max-width:100%;height:auto 做响应式。';
+            . ' — <strong>媒体出图</strong>（把已存 file-image / asset 渲成 img），不是选图器。'
+            . '选图请用 &lt;w:file-manager /&gt; 或 WelineMedia（value_mode=file-image）。'
+            . '须设 UI 宽高或 aspect_ratio（HTML width/height 防 CLS），主题 CSS max-width:100%;height:auto。'
+            . '分工：app/code/Weline/FileManager/doc/file-manager-选图与file-image出图.md';
     }
 }

@@ -29,9 +29,12 @@ final class CheckoutPageTitleContractTest extends TestCase
         ];
 
         foreach ($successSources as $source) {
-            self::assertStringContainsString("\$this->request->setGet('theme_page_title', (string)__('结账成功'));", $source);
-            self::assertStringContainsString("\$this->assign('page_title', __('结账成功'));", $source);
-            self::assertStringContainsString("\$this->assign('title', __('结账成功'));", $source);
+            self::assertStringContainsString("__('结账成功')", $source);
+            self::assertStringContainsString("__('支付已取消')", $source);
+            self::assertStringContainsString("\$this->request->setGet('theme_page_title', \$title)", $source);
+            self::assertStringContainsString("\$this->assign('page_title', \$title)", $source);
+            self::assertStringContainsString("\$this->assign('title', \$title)", $source);
+            self::assertStringNotContainsString("__('已取消成功')", $source);
         }
 
         $legacy = (string)file_get_contents($controllerRoot . '/Frontend/Checkout.php');

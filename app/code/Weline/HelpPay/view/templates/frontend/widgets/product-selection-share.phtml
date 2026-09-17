@@ -16,13 +16,17 @@ try {
 $productId = max(0, (int) ($offer['product_id'] ?? $this->getData('card_product_id') ?? 0));
 $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
 ?>
-<button type="button"
-        class="product-native-detail__secondary weline-pixel::selection_share"
-        data-testid="product-selection-share"
-        data-pixel-event="selection_share"
-        data-helppay-selection-share="1"
-        data-product-id="<?= (int) $productId ?>"
-        data-helppay-i18n="<?= $escape($i18nJson) ?>"
-        data-weline-load="helpPayShare">
-    <?= $escape(__('分享给朋友')) ?>
-</button>
+<div class="w-helppay-cta w-helppay-cta--quiet"
+     data-testid="product-selection-share-wrap"
+     data-helppay-placement="product-selection-share"
+     data-weline-load="helpPayShare"
+     data-helppay-i18n="<?= $escape($i18nJson) ?>">
+    <button type="button"
+            class="w-helppay-cta__link weline-pixel::selection_share"
+            data-testid="product-selection-share"
+            data-pixel-event="selection_share"
+            data-helppay-selection-share="1"
+            data-product-id="<?= (int) $productId ?>">
+        <?= $escape(__('分享给朋友')) ?>
+    </button>
+</div>

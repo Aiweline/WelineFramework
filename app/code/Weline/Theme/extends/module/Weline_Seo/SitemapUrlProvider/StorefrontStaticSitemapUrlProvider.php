@@ -15,7 +15,7 @@ final class StorefrontStaticSitemapUrlProvider implements SitemapUrlProviderInte
     /** @var list<array{path:string,priority:string,changefreq:string,page_type:string}> */
     private const ROUTES = [
         ['path' => 'about', 'priority' => '0.6', 'changefreq' => 'monthly', 'page_type' => 'about'],
-        ['path' => 'products', 'priority' => '0.8', 'changefreq' => 'daily', 'page_type' => 'product_list'],
+        ['path' => 'products', 'priority' => '0.8', 'changefreq' => 'daily', 'page_type' => 'products'],
         ['path' => 'categories', 'priority' => '0.7', 'changefreq' => 'weekly', 'page_type' => 'category_index'],
         ['path' => 'best-sellers', 'priority' => '0.7', 'changefreq' => 'daily', 'page_type' => 'best_sellers'],
         ['path' => 'new-arrivals', 'priority' => '0.7', 'changefreq' => 'daily', 'page_type' => 'new_arrivals'],

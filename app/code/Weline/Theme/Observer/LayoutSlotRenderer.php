@@ -129,6 +129,16 @@ class LayoutSlotRenderer implements ObserverInterface
         if ($this->previewTokenService->isPreviewMode()) {
             // Preview HTML must never be published into the anonymous storefront FPC.
             \Weline\Framework\Cache\SharedResponseCachePolicy::forbid('theme_preview_mode');
+            // Editor canvas (editor_mode=1) must not inherit start-preview Token identity
+            // (same rule as ThemePreview\Content) — install typed editor_context instead.
+            if ($this->isEditorCanvasRequest()) {
+                $this->bootstrapEditorCanvasIdentity();
+            } else {
+                // Align processSlots identity with start-preview Token (scope/layout_option/target),
+                // same as theme-preview/content — otherwise storefront falls back to RequestContext
+                // defaults and draft edits from the visual editor never appear.
+                $this->installPreviewLayoutIdentityFromToken();
+            }
             $editorMode = $this->request->getParam('editor_mode');
             // frontend: editor_mode=1 的编辑器 iframe 不注入
             // backend: 预览环境即使 editor_mode=1 也要提供退出浮窗
@@ -138,6 +148,9 @@ class LayoutSlotRenderer implements ObserverInterface
                 $html = $this->injectPreviewExitButton($html);
                 $html = $this->injectPreviewInterceptor($html);
             }
+        } elseif ($this->isEditorCanvasRequest()) {
+            \Weline\Framework\Cache\SharedResponseCachePolicy::forbid('theme_editor_canvas');
+            $this->bootstrapEditorCanvasIdentity();
         }
 
         $allowBackendSlots = $area === 'backend' && $this->isBackendDashboardSlotRequest($template);
@@ -193,13 +206,33 @@ class LayoutSlotRenderer implements ObserverInterface
             return;
         }
 
+        // Storefront hard cut: fill from layout entities only — never processSlots/DB.
+        if ($area === 'frontend' && !$this->isEditorOrPreviewMode()) {
+            $html = $this->renderFromLayoutEntities($html, $themeId, $pageType, $status, $area);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
+            return;
+        }
+
+        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime $entityRuntime */
+        $entityRuntime = ObjectManager::getInstance(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime::class,
+        );
+        // Storefront may markSkipSlotProcessing for entity fill; editor/preview must still
+        // processSlots so draft/workspace nodes land in nested w:slot (e.g. homepage-brands).
+        if ($entityRuntime->shouldSkipSlotProcessing() && !$this->isEditorOrPreviewMode()) {
+            $html = $this->fillChromeFromEntity($html, $themeId, $area);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
+            return;
+        }
+
         // Non-editor preview: content renderer already filled wrappers — skip re-process
         // to avoid duplicates. Editor preview must still processSlots so CoW can drop
         // empty/shredded template shells and park wrapper inners through DOM safely.
-        if ($this->isThemePreviewContentRequest($template)
+        $skipFilledWrappers = $this->isThemePreviewContentRequest($template)
             && $this->htmlHasRenderedWidgetWrappers($html)
             && !$this->shouldShowEditorSlotDiagnostics()
-        ) {
+            && !$this->isEditorOrPreviewMode();
+        if ($skipFilledWrappers) {
             $html = $this->slotRenderer->finalizePreviewWidgetHealth($html);
             $event->setData('content', $this->finalizeFrontendHtml($html, $area));
             return;
@@ -296,8 +329,21 @@ class LayoutSlotRenderer implements ObserverInterface
 
     private function finalizeFrontendHtml(string $html, string $area): string
     {
-        if ($area !== 'frontend' || $html === '' || $this->isEditorIframePreviewRequest()) {
+        if ($area !== 'frontend' || $html === '') {
             return $html;
+        }
+
+        // Visual-editor canvas loads the real storefront route with editor_mode=1.
+        // Inject editor assets here (ThemePreview\Content is no longer the canvas shell).
+        if ($this->isEditorCanvasRequest()) {
+            try {
+                /** @var \Weline\Theme\Service\EditorModeAssetInjector $injector */
+                $injector = ObjectManager::getInstance(\Weline\Theme\Service\EditorModeAssetInjector::class);
+
+                return $injector->inject($html);
+            } catch (\Throwable) {
+                return $html;
+            }
         }
 
         if (\defined('PROD') && PROD) {
@@ -314,16 +360,131 @@ class LayoutSlotRenderer implements ObserverInterface
         }
     }
 
-    private function isEditorIframePreviewRequest(): bool
+    /**
+     * Storefront entity hard cut — no processSlots / getLayoutData fallback.
+     */
+    private function renderFromLayoutEntities(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $status,
+        string $area,
+    ): string {
+        try {
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $filler */
+            $filler = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+            );
+
+            return $filler->fill($html, $themeId, $pageType, $status, $area);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                \w_log_error('theme_layout_entity_storefront_fill_failed: ' . $e->getMessage(), [
+                    'theme_id' => $themeId,
+                    'page_type' => $pageType,
+                    'status' => $status,
+                    'area' => $area,
+                ], 'theme_layout_entity');
+            }
+            // Soft degrade: keep chrome injection even when page entity is missing.
+            $html = $this->fillChromeFromEntity($html, $themeId, $area);
+            if (\defined('DEV') && DEV) {
+                return $html . "\n<!-- theme_layout_entity_missing: "
+                    . \htmlspecialchars($e->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                    . " -->\n";
+            }
+            throw new \RuntimeException('theme_layout_entity_missing: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * When FetchFileBefore marks entity skip: still inject chrome into empty header/footer.
+     */
+    private function fillChromeFromEntity(string $html, int $themeId, string $area): string
+    {
+        try {
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $filler */
+            $filler = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+            );
+
+            return $filler->fillChromeOnly($html, $themeId, $area, false);
+        } catch (\Throwable) {
+            return $html;
+        }
+    }
+
+    private function isEditorCanvasRequest(): bool
     {
         $editorMode = \trim((string)$this->request->getParam('editor_mode', ''));
         if ($editorMode !== '1' && \strtolower($editorMode) !== 'true') {
             return false;
         }
 
-        $uri = \strtolower((string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''));
+        return true;
+    }
 
-        return \str_contains($uri, 'theme/frontend/theme-preview/content');
+    /**
+     * Install draft LayoutIdentity from typed editor_context on the real storefront route.
+     */
+    private function bootstrapEditorCanvasIdentity(): void
+    {
+        try {
+            if (RequestContext::get(LayoutIdentity::REQUEST_CONTEXT_KEY) instanceof LayoutIdentity) {
+                return;
+            }
+        } catch (\Throwable) {
+        }
+
+        $raw = $this->request->getParam('editor_context', null);
+        $decoded = $this->decodeEditorContextValue($raw);
+        if ($decoded === null) {
+            return;
+        }
+
+        try {
+            /** @var \Weline\Theme\Service\Scoped\ThemeEditorContextFactory $factory */
+            $factory = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeEditorContextFactory::class);
+            $typed = $factory->fromInput(['editor_context' => $decoded], 'layout');
+            if (!$typed instanceof \Weline\Theme\Api\Scoped\ThemeEditorContext) {
+                return;
+            }
+
+            /** @var \Weline\Theme\Service\ThemeLayoutScopeNormalizer $normalizer */
+            $normalizer = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutScopeNormalizer::class);
+            $scope = $normalizer->encodeStorageScope(
+                $typed->scope->storageScope,
+                $typed->scope->storeMode,
+            );
+            $locale = $typed->locale === 'default' ? '' : $typed->locale;
+            RequestContext::set(LayoutIdentity::REQUEST_CONTEXT_KEY, new LayoutIdentity(
+                $typed->layoutOption !== '' ? $typed->layoutOption : 'default',
+                $scope,
+                $typed->targetType !== '' ? $typed->targetType : 'global',
+                \max(0, (int)$typed->targetId),
+                $locale,
+            ));
+
+            /** @var PreviewContextService $previewContext */
+            $previewContext = ObjectManager::getInstance(PreviewContextService::class);
+            $previewContext->persistCurrentRequestContext([
+                'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+                'status' => (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
+                'frontend_theme_id' => $typed->themeId,
+                'theme_id' => $typed->themeId,
+                'editor_area' => PreviewContextService::AREA_FRONTEND,
+                'layout_option' => $typed->layoutOption,
+                'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+                'target_value' => $typed->layoutType,
+                'editor_context' => $typed->toArray(),
+            ]);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function isEditorIframePreviewRequest(): bool
+    {
+        return $this->isEditorCanvasRequest();
     }
 
     private function shouldDebugAccountSidebar(): bool
@@ -1256,7 +1417,7 @@ HTML;
      */
     private function detectStatus(): string
     {
-        $context = $this->authoritativePreviewContext();
+        $context = $this->resolveLivePreviewContext();
         if ($context !== null) {
             return ($context['status'] ?? ThemeLayout::STATUS_DRAFT) === ThemeLayout::STATUS_PUBLISHED
                 ? ThemeLayout::STATUS_PUBLISHED
@@ -1276,7 +1437,129 @@ HTML;
      */
     private function isEditorOrPreviewMode(): bool
     {
+        // Valid storefront preview Token must take the draft processSlots path even when
+        // PreviewContextService::hasAuthoritativePreviewContext() is momentarily false
+        // (cookie/scope carrier edge). Float chrome already keys off isPreviewMode().
+        if ($this->previewTokenService->isPreviewMode()) {
+            return true;
+        }
+
         return $this->authoritativePreviewContext() !== null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function resolveLivePreviewContext(): ?array
+    {
+        $context = $this->authoritativePreviewContext();
+        if (\is_array($context)) {
+            return $context;
+        }
+
+        if (!$this->previewTokenService->isPreviewMode()) {
+            return null;
+        }
+
+        $tokenData = $this->previewTokenService->getCurrentPreviewData();
+        if (!\is_array($tokenData)) {
+            return ['status' => ThemeLayout::STATUS_DRAFT];
+        }
+
+        $tokenContext = $tokenData['context'] ?? null;
+        if (\is_array($tokenContext)) {
+            return $tokenContext;
+        }
+
+        return [
+            'status' => ThemeLayout::STATUS_DRAFT,
+            'frontend_theme_id' => (int)($tokenData['theme_id'] ?? 0),
+            'layout_option' => 'default',
+            'scope' => PreviewContextService::DEFAULT_SCOPE,
+            'target_value' => (string)($tokenData['page_type'] ?? ThemeLayout::PAGE_TYPE_HOME),
+        ];
+    }
+
+    /**
+     * Freeze LayoutIdentity from the preview Token so SlotRenderer processSlots
+     * loads the same scoped draft workspace the visual editor just wrote.
+     */
+    private function installPreviewLayoutIdentityFromToken(): void
+    {
+        if (RequestContext::get(LayoutIdentity::REQUEST_CONTEXT_KEY) instanceof LayoutIdentity) {
+            return;
+        }
+
+        $context = $this->resolveLivePreviewContext();
+        if (!\is_array($context)) {
+            return;
+        }
+
+        try {
+            /** @var \Weline\Theme\Service\ThemeLayoutScopeNormalizer $normalizer */
+            $normalizer = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutScopeNormalizer::class);
+            $typed = $context['editor_context'] ?? null;
+            if (\is_string($typed) && $typed !== '') {
+                try {
+                    $typed = \json_decode($typed, true, flags: \JSON_THROW_ON_ERROR);
+                } catch (\Throwable) {
+                    $typed = null;
+                }
+            }
+
+            if (\is_array($typed) && $this->isTypedEditorContext($typed)) {
+                /** @var \Weline\Theme\Service\Scoped\ThemeEditorContextFactory $factory */
+                $factory = ObjectManager::getInstance(
+                    \Weline\Theme\Service\Scoped\ThemeEditorContextFactory::class,
+                );
+                $editorContext = $factory->fromInput(['editor_context' => $typed], 'layout');
+                $scope = $normalizer->encodeStorageScope(
+                    $editorContext->scope->storageScope,
+                    $editorContext->scope->storeMode,
+                );
+                $layoutOption = $editorContext->layoutOption !== '' ? $editorContext->layoutOption : 'default';
+                $targetType = $editorContext->targetType !== '' ? $editorContext->targetType : 'global';
+                $targetId = $targetType === 'global' ? 0 : \max(0, $editorContext->targetId);
+                $locale = $editorContext->locale === 'default' ? '' : $editorContext->locale;
+            } else {
+                $normalized = $normalizer->normalize([
+                    'scope' => (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
+                    'store_mode' => (string)($context['store_mode'] ?? 'normal'),
+                    'locale_code' => (string)($context['locale'] ?? $context['locale_code'] ?? ''),
+                ]);
+                $scope = $normalized['scope'];
+                $locale = $normalized['locale_code'];
+                $layoutOption = \trim((string)($context['layout_option'] ?? 'default'));
+                if ($layoutOption === '') {
+                    $layoutOption = 'default';
+                }
+                $targetType = \trim((string)(
+                    $context['theme_layout_target_type']
+                    ?? $context['theme_layout_source_target_type']
+                    ?? 'global'
+                ));
+                if ($targetType === '') {
+                    $targetType = 'global';
+                }
+                $targetId = $targetType === 'global'
+                    ? 0
+                    : \max(0, (int)(
+                        $context['theme_layout_target_id']
+                        ?? $context['theme_layout_source_target_id']
+                        ?? 0
+                    ));
+            }
+
+            RequestContext::set(LayoutIdentity::REQUEST_CONTEXT_KEY, new LayoutIdentity(
+                $layoutOption,
+                $scope,
+                $targetType,
+                $targetId,
+                $locale,
+            ));
+        } catch (\Throwable) {
+            // Best-effort: preview still continues with RequestContext ScopeIdentity fallback.
+        }
     }
 
     /**
@@ -1479,24 +1762,100 @@ HTML;
         $previewExitFailedJson = \json_encode((string)__('退出预览失败'), $previewMessageJsonFlags) ?: '"退出预览失败"';
         $previewPublishFailedJson = \json_encode((string)__('发布失败'), $previewMessageJsonFlags) ?: '"发布失败"';
         $previewNetworkErrorJson = \json_encode((string)__('网络错误，请重试'), $previewMessageJsonFlags) ?: '"网络错误，请重试"';
+        $previewPublishNeedsLoginJson = \json_encode(
+            (string)__('发布需要有效的后台登录，请重新登录后台后再试。'),
+            $previewMessageJsonFlags
+        ) ?: '"发布需要有效的后台登录，请重新登录后台后再试。"';
         $previewConfirmPublishJson = \json_encode((string)__('确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。'), $previewMessageJsonFlags) ?: '"确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。"';
         $previewConfirmOkJson = \json_encode((string)__('确认发布'), $previewMessageJsonFlags) ?: '"确认发布"';
         $previewConfirmCancelJson = \json_encode((string)__('取消'), $previewMessageJsonFlags) ?: '"取消"';
         $previewConfirmTitleJson = \json_encode((string)__('发布预览'), $previewMessageJsonFlags) ?: '"发布预览"';
+        $previewVersionTitleJson = \json_encode((string)__('新建版本并发布'), $previewMessageJsonFlags) ?: '"新建版本并发布"';
+        $previewVersionMessageJson = \json_encode((string)__('有未发布改动，请输入版本名称后发布（可留空自动 {version}）'), $previewMessageJsonFlags) ?: '"有未发布改动，请输入版本名称后发布（可留空自动 {version}）"';
+        $previewVersionPlaceholderJson = \json_encode((string)__('版本名称'), $previewMessageJsonFlags) ?: '"版本名称"';
+        $previewVersionOkJson = \json_encode((string)__('发布'), $previewMessageJsonFlags) ?: '"发布"';
+        $previewPublishingTitleJson = \json_encode((string)__('正在发布主题'), $previewMessageJsonFlags) ?: '"正在发布主题"';
+        $previewCheckingGateJson = \json_encode((string)__('检查发布条件…'), $previewMessageJsonFlags) ?: '"检查发布条件…"';
+        $previewPublishingJson = \json_encode((string)__('正在发布…'), $previewMessageJsonFlags) ?: '"正在发布…"';
+        $previewStepPrefixJson = \json_encode((string)__('步骤：'), $previewMessageJsonFlags) ?: '"步骤："';
+        $previewDoNotCloseJson = \json_encode((string)__('请勿关闭或操作页面，以免发布中断。'), $previewMessageJsonFlags) ?: '"请勿关闭或操作页面，以免发布中断。"';
+        $previewPublishSuccessRedirectJson = \json_encode((string)__('发布成功，正在打开已发布页面…'), $previewMessageJsonFlags) ?: '"发布成功，正在打开已发布页面…"';
+        $previewFinalizeDoneJson = \json_encode((string)__('发布收尾完成'), $previewMessageJsonFlags) ?: '"发布收尾完成"';
+        $previewExitPreviewRedirectJson = \json_encode((string)__('正在清理预览会话并准备跳转…'), $previewMessageJsonFlags) ?: '"正在清理预览会话并准备跳转…"';
+        $previewCreateVersionPublishingJson = \json_encode((string)__('创建版本并发布…'), $previewMessageJsonFlags) ?: '"创建版本并发布…"';
+        $previewPublishDoneManualRefreshJson = \json_encode((string)__('发布已完成，请手动刷新查看店面'), $previewMessageJsonFlags) ?: '"发布已完成，请手动刷新查看店面"';
+        $previewProgressByStep = [
+            'gate' => (string)__('检查发布条件'),
+            'create_version' => (string)__('创建发布版本'),
+            'scoped_publish' => (string)__('发布 Scoped 草稿'),
+            'mark_version' => (string)__('标记版本已发布'),
+            'restore_version' => (string)__('恢复历史版本'),
+            'preview_scope' => (string)__('同步预览 Scope'),
+            'bake' => (string)__('布局实体化'),
+            'static_version' => (string)__('更新静态资源版本'),
+            'generate_cache' => (string)__('重建主题生成缓存'),
+            'clear_cache' => (string)__('清理运行时与 FPC 缓存'),
+            'finalize_ok' => (string)__('发布收尾完成'),
+            'exit_preview' => (string)__('正在清理预览会话并准备跳转'),
+            'compose_redirect' => (string)__('正在生成跳转地址'),
+            'redirect' => (string)__('发布成功，正在打开已发布页面'),
+            'start' => (string)__('开始发布主题'),
+            'done' => (string)__('发布收尾完成'),
+        ];
+        $previewProgressSourceMap = [
+            '检查发布条件' => $previewProgressByStep['gate'],
+            '检查发布条件…' => (string)__('检查发布条件…'),
+            '创建发布版本' => $previewProgressByStep['create_version'],
+            '发布 Scoped 草稿' => $previewProgressByStep['scoped_publish'],
+            '标记版本已发布' => $previewProgressByStep['mark_version'],
+            '恢复历史版本' => $previewProgressByStep['restore_version'],
+            '同步预览 Scope' => $previewProgressByStep['preview_scope'],
+            '布局实体化' => $previewProgressByStep['bake'],
+            '更新静态资源版本' => $previewProgressByStep['static_version'],
+            '重建主题生成缓存' => $previewProgressByStep['generate_cache'],
+            '清理运行时与 FPC 缓存' => $previewProgressByStep['clear_cache'],
+            '发布收尾完成' => $previewProgressByStep['finalize_ok'],
+            '正在清理预览会话并准备跳转' => $previewProgressByStep['exit_preview'],
+            '正在清理预览会话并准备跳转…' => (string)__('正在清理预览会话并准备跳转…'),
+            '正在生成跳转地址' => $previewProgressByStep['compose_redirect'],
+            '发布成功，正在打开已发布页面' => $previewProgressByStep['redirect'],
+            '发布成功，正在打开已发布页面…' => (string)__('发布成功，正在打开已发布页面…'),
+            '开始发布主题' => $previewProgressByStep['start'],
+            '正在发布…' => (string)__('正在发布…'),
+            '正在发布主题' => (string)__('正在发布主题'),
+            '创建版本并发布…' => (string)__('创建版本并发布…'),
+            '确认当前已发布布局' => (string)__('确认当前已发布布局'),
+        ];
+        $previewProgressByStepJson = \json_encode($previewProgressByStep, $previewMessageJsonFlags) ?: '{}';
+        $previewProgressSourceMapJson = \json_encode($previewProgressSourceMap, $previewMessageJsonFlags) ?: '{}';
+        $previewLocale = \trim((string)($this->request->getParam('locale', '') ?: (\Weline\Framework\Runtime\RequestContext::locale() ?? '')));
+        if ($previewLocale === '' || \strcasecmp($previewLocale, 'default') === 0) {
+            $previewLocale = \trim((string)\Weline\Framework\App\State::getLangLocal());
+        }
+        if ($previewLocale === '' || \strcasecmp($previewLocale, 'default') === 0) {
+            $pathLocale = \Weline\Theme\Helper\WidgetI18n::localeFromRequestUri(
+                (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''))
+            );
+            $previewLocale = $pathLocale ?? 'zh_Hans_CN';
+        }
+        $previewLocaleJson = \json_encode($previewLocale, $previewMessageJsonFlags) ?: '"zh_Hans_CN"';
+        $previewModeLabel = \htmlspecialchars((string)__('预览模式'), \ENT_QUOTES, 'UTF-8');
+        $publishAndExitLabel = \htmlspecialchars((string)__('发布并退出'), \ENT_QUOTES, 'UTF-8');
+        $exitPreviewLabel = \htmlspecialchars((string)__('退出预览'), \ENT_QUOTES, 'UTF-8');
         $tokenJson = \json_encode((string)$token, $previewMessageJsonFlags) ?: '""';
         $exitPreviewUrlJson = \json_encode((string)$exitPreviewUrl, $previewMessageJsonFlags) ?: '""';
         $publishAndExitUrlJson = \json_encode((string)$publishAndExitUrl, $previewMessageJsonFlags) ?: '""';
-        
-        // 娴獥 HTML 鍜屽唴鑱旀牱寮?鑴氭湰
+
+        // 浮窗 HTML 与内联脚本（文案经 __() 注入，随当前店面语言）
         $floatHtml = <<<HTML
 <!-- Weline Theme Preview Exit Button -->
-<div id="weline-preview-exit-float" style="
+<div id="weline-preview-exit-float" data-w-preview-float="1" data-w-prompt-ui="theme-v405" style="
     position: fixed !important;
     bottom: 20px !important;
     right: 20px !important;
     left: auto !important;
     top: auto !important;
-    z-index: 2147483647 !important;
+    z-index: 2147483100 !important;
     background: linear-gradient(135deg, var(--backend-color-gradient-start, #667eea) 0%, var(--backend-color-gradient-end, #764ba2) 100%) !important;
     border-radius: 12px !important;
     box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4) !important;
@@ -1504,49 +1863,56 @@ HTML;
     cursor: move !important;
     user-select: none !important;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-    min-width: 140px !important;
+    min-width: 160px !important;
     transition: transform 0.2s, box-shadow 0.2s !important;
     margin: 0 !important;
     float: none !important;
     display: block !important;
     width: auto !important;
     height: auto !important;
+    pointer-events: auto !important;
 ">
-    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: white;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: white; pointer-events: none;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
         </svg>
-        <span style="font-weight: 600; font-size: 14px;">预览模式</span>
+        <span style="font-weight: 600; font-size: 14px;">{$previewModeLabel}</span>
     </div>
-    <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button id="weline-preview-exit-btn" style="
+    <div style="display: flex; flex-direction: column; gap: 8px; pointer-events: auto;">
+        <button type="button" id="weline-preview-publish-btn" style="
             padding: 8px 16px;
-            background: rgba(255,255,255,0.95);
-            color: #667eea;
+            background: rgba(255,255,255,0.98);
+            color: var(--backend-color-gradient-start, #667eea);
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.2s;
             width: 100%;
+            pointer-events: auto;
+            position: relative;
+            z-index: 1;
         ">
-            退出预览
+            {$publishAndExitLabel}
         </button>
-        <button id="weline-preview-publish-btn" style="
+        <button type="button" id="weline-preview-exit-btn" style="
             padding: 8px 16px;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.16);
             color: white;
-            border: 1px solid rgba(255,255,255,0.3);
+            border: 1px solid rgba(255,255,255,0.35);
             border-radius: 8px;
             cursor: pointer;
             font-size: 13px;
             font-weight: 500;
             transition: all 0.2s;
             width: 100%;
+            pointer-events: auto;
+            position: relative;
+            z-index: 1;
         ">
-            发布并退出
+            {$exitPreviewLabel}
         </button>
     </div>
     <div style="
@@ -1558,6 +1924,7 @@ HTML;
         height: 4px;
         background: rgba(255,255,255,0.5);
         border-radius: 2px;
+        pointer-events: none;
     "></div>
 </div>
 <script>
@@ -1572,10 +1939,28 @@ HTML;
         exitFailed: {$previewExitFailedJson},
         publishFailed: {$previewPublishFailedJson},
         networkError: {$previewNetworkErrorJson},
+        publishNeedsLogin: {$previewPublishNeedsLoginJson},
         confirmPublish: {$previewConfirmPublishJson},
         confirmOk: {$previewConfirmOkJson},
         confirmCancel: {$previewConfirmCancelJson},
-        confirmTitle: {$previewConfirmTitleJson}
+        confirmTitle: {$previewConfirmTitleJson},
+        versionTitle: {$previewVersionTitleJson},
+        versionMessage: {$previewVersionMessageJson},
+        versionPlaceholder: {$previewVersionPlaceholderJson},
+        versionOk: {$previewVersionOkJson},
+        publishingTitle: {$previewPublishingTitleJson},
+        checkingGate: {$previewCheckingGateJson},
+        publishing: {$previewPublishingJson},
+        stepPrefix: {$previewStepPrefixJson},
+        doNotClose: {$previewDoNotCloseJson},
+        publishSuccessRedirect: {$previewPublishSuccessRedirectJson},
+        finalizeDone: {$previewFinalizeDoneJson},
+        exitPreviewRedirect: {$previewExitPreviewRedirectJson},
+        createVersionPublishing: {$previewCreateVersionPublishingJson},
+        publishDoneManualRefresh: {$previewPublishDoneManualRefreshJson},
+        progressByStep: {$previewProgressByStepJson},
+        progressSourceMap: {$previewProgressSourceMapJson},
+        locale: {$previewLocaleJson}
     };
 
     function showPreviewMessage(message, type) {
@@ -1595,7 +1980,7 @@ HTML;
             'position:fixed',
             'right:20px',
             'bottom:100px',
-            'z-index:2147483647',
+            'z-index:2147483200',
             'max-width:320px',
             'padding:12px 16px',
             'border-radius:8px',
@@ -1610,19 +1995,221 @@ HTML;
         }, 3800);
     }
 
-    function confirmPreviewAction(message) {
-        try {
-            if (window.Weline && window.Weline.UI && window.Weline.UI.dialog && typeof window.Weline.UI.dialog.confirm === 'function') {
-                return Promise.resolve(window.Weline.UI.dialog.confirm(message));
-            }
-        } catch (e) {}
+    function setPreviewFloatInteractive(enabled) {
+        if (!floatEl) {
+            return;
+        }
+        floatEl.style.pointerEvents = enabled ? 'auto' : 'none';
+        floatEl.style.opacity = enabled ? '1' : '0.35';
+    }
 
+    var publishLockEl = null;
+    var publishLockPrevOverflow = '';
+    var publishLockSteps = [];
+
+    function resetPublishControls() {
+        if (publishBtn) {
+            publishBtn.disabled = false;
+            publishBtn.textContent = '发布并退出';
+        }
+        if (exitBtn) {
+            exitBtn.disabled = false;
+            exitBtn.textContent = '退出预览';
+        }
+        setPreviewFloatInteractive(true);
+    }
+
+    function closePublishProgressLock() {
+        if (publishLockEl) {
+            try { publishLockEl.remove(); } catch (e) {}
+            publishLockEl = null;
+        }
+        publishLockSteps = [];
+        try {
+            document.documentElement.style.overflow = publishLockPrevOverflow || '';
+        } catch (e) {}
+        publishLockPrevOverflow = '';
+    }
+
+    function updatePublishProgress(message, progress, step) {
+        if (!publishLockEl) {
+            return;
+        }
+        var pct = isFinite(Number(progress))
+            ? Math.max(0, Math.min(100, Math.round(Number(progress))))
+            : null;
+        var msg = String(message || '').trim() || previewMessages.publishing;
+        var stepKey = String(step || '').trim();
+        var titleEl = publishLockEl.querySelector('[data-w-publish-title]');
+        var msgEl = publishLockEl.querySelector('[data-w-publish-message]');
+        var pctEl = publishLockEl.querySelector('[data-w-publish-pct]');
+        var barEl = publishLockEl.querySelector('[data-w-publish-bar]');
+        var detailEl = publishLockEl.querySelector('[data-w-publish-detail]');
+        var listEl = publishLockEl.querySelector('[data-w-publish-steps]');
+        if (titleEl) {
+            titleEl.textContent = previewMessages.publishingTitle;
+        }
+        if (msgEl) {
+            msgEl.textContent = msg;
+        }
+        if (pctEl) {
+            pctEl.textContent = pct === null ? '' : (String(pct) + '%');
+        }
+        if (barEl) {
+            barEl.style.width = (pct === null ? 8 : pct) + '%';
+            barEl.setAttribute('aria-valuenow', pct === null ? '0' : String(pct));
+        }
+        if (detailEl) {
+            detailEl.textContent = stepKey
+                ? (previewMessages.stepPrefix + stepKey)
+                : previewMessages.doNotClose;
+        }
+        if (listEl && (msg || stepKey)) {
+            var line = (pct === null ? '' : ('[' + pct + '%] ')) + msg + (stepKey ? (' · ' + stepKey) : '');
+            if (!publishLockSteps.length || publishLockSteps[publishLockSteps.length - 1] !== line) {
+                publishLockSteps.push(line);
+                if (publishLockSteps.length > 8) {
+                    publishLockSteps.shift();
+                }
+                listEl.textContent = '';
+                for (var i = 0; i < publishLockSteps.length; i++) {
+                    var row = document.createElement('div');
+                    row.textContent = publishLockSteps[i];
+                    row.style.cssText = 'padding:2px 0;color:var(--weline-theme-color-text-muted,#64748b);font:12px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
+                    listEl.appendChild(row);
+                }
+                try { listEl.scrollTop = listEl.scrollHeight; } catch (e) {}
+            }
+        }
+        if (publishBtn) {
+            publishBtn.textContent = pct === null ? msg : (msg + ' (' + pct + '%)');
+        }
+    }
+
+    function openPublishProgressLock(initialMessage, initialProgress) {
+        if (publishLockEl) {
+            updatePublishProgress(initialMessage, initialProgress, '');
+            return;
+        }
+        try {
+            publishLockPrevOverflow = document.documentElement.style.overflow || '';
+            document.documentElement.style.overflow = 'hidden';
+        } catch (e) {}
+        setPreviewFloatInteractive(false);
+        if (exitBtn) {
+            exitBtn.disabled = true;
+        }
+        if (publishBtn) {
+            publishBtn.disabled = true;
+        }
+        publishLockSteps = [];
+        publishLockEl = document.createElement('div');
+        publishLockEl.setAttribute('data-w-preview-publish-lock', '1');
+        publishLockEl.setAttribute('role', 'alertdialog');
+        publishLockEl.setAttribute('aria-modal', 'true');
+        publishLockEl.setAttribute('aria-busy', 'true');
+        publishLockEl.setAttribute('aria-live', 'polite');
+        publishLockEl.style.cssText = [
+            'position:fixed',
+            'inset:0',
+            'z-index:2147483400',
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+            'background:rgba(15,23,42,0.72)',
+            'padding:24px',
+            'pointer-events:auto',
+            'cursor:wait'
+        ].join(';');
+        publishLockEl.addEventListener('click', function(event) {
+            try { event.preventDefault(); event.stopPropagation(); } catch (e) {}
+        }, true);
+        publishLockEl.addEventListener('keydown', function(event) {
+            try { event.preventDefault(); event.stopPropagation(); } catch (e) {}
+        }, true);
+
+        var card = document.createElement('div');
+        card.style.cssText = [
+            'width:min(440px,100%)',
+            'border-radius:12px',
+            'background:var(--weline-theme-color-surface,#fff)',
+            'color:var(--weline-theme-color-text,#0f172a)',
+            'box-shadow:0 24px 60px rgba(15,23,42,0.35)',
+            'padding:22px 22px 18px',
+            'font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif',
+            'pointer-events:none'
+        ].join(';');
+
+        var title = document.createElement('h3');
+        title.setAttribute('data-w-publish-title', '1');
+        title.textContent = previewMessages.publishingTitle;
+        title.style.cssText = 'margin:0 0 8px;font-size:18px;line-height:1.3;';
+
+        var message = document.createElement('p');
+        message.setAttribute('data-w-publish-message', '1');
+        message.style.cssText = 'margin:0 0 14px;color:var(--weline-theme-color-text-muted,#475569);';
+
+        var meta = document.createElement('div');
+        meta.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px;';
+        var detail = document.createElement('div');
+        detail.setAttribute('data-w-publish-detail', '1');
+        detail.style.cssText = 'flex:1;min-width:0;font-size:12px;color:var(--weline-theme-color-text-muted,#64748b);';
+        var pct = document.createElement('div');
+        pct.setAttribute('data-w-publish-pct', '1');
+        pct.style.cssText = 'font:600 13px/1 tabular-nums;color:var(--weline-theme-color-primary,#2563eb);';
+        meta.appendChild(detail);
+        meta.appendChild(pct);
+
+        var track = document.createElement('div');
+        track.style.cssText = [
+            'height:10px',
+            'border-radius:999px',
+            'background:var(--weline-theme-color-border,#e2e8f0)',
+            'overflow:hidden',
+            'margin:0 0 14px'
+        ].join(';');
+        var bar = document.createElement('div');
+        bar.setAttribute('data-w-publish-bar', '1');
+        bar.setAttribute('role', 'progressbar');
+        bar.setAttribute('aria-valuemin', '0');
+        bar.setAttribute('aria-valuemax', '100');
+        bar.style.cssText = [
+            'height:100%',
+            'width:0%',
+            'border-radius:inherit',
+            'background:var(--weline-theme-color-primary,#2563eb)',
+            'transition:width 0.25s ease'
+        ].join(';');
+        track.appendChild(bar);
+
+        var steps = document.createElement('div');
+        steps.setAttribute('data-w-publish-steps', '1');
+        steps.style.cssText = [
+            'max-height:140px',
+            'overflow:auto',
+            'border-top:1px solid var(--weline-theme-color-border,#e2e8f0)',
+            'padding-top:10px'
+        ].join(';');
+
+        card.appendChild(title);
+        card.appendChild(message);
+        card.appendChild(meta);
+        card.appendChild(track);
+        card.appendChild(steps);
+        publishLockEl.appendChild(card);
+        document.body.appendChild(publishLockEl);
+        updatePublishProgress(initialMessage || previewMessages.publishing, initialProgress, '');
+    }
+
+    function openPreviewModalOverlay(buildDialog, cancelValue) {
+        setPreviewFloatInteractive(false);
         return new Promise(function(resolve) {
             var overlay = document.createElement('div');
+            overlay.setAttribute('data-w-preview-modal', '1');
             overlay.style.cssText = [
                 'position:fixed',
                 'inset:0',
-                'z-index:2147483647',
+                'z-index:2147483200',
                 'display:flex',
                 'align-items:center',
                 'justify-content:center',
@@ -1630,6 +2217,27 @@ HTML;
                 'padding:20px'
             ].join(';');
 
+            function close(value) {
+                try { overlay.remove(); } catch (e) {}
+                setPreviewFloatInteractive(true);
+                resolve(value);
+            }
+
+            var dialog = buildDialog(close);
+            overlay.appendChild(dialog);
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) {
+                    close(cancelValue);
+                }
+            });
+            document.body.appendChild(overlay);
+        });
+    }
+
+    function confirmPreviewAction(message) {
+        // Always use local overlay above the preview float.
+        // Weline.UI.dialog can mount under z-index 100050 float → looks like “点不动”.
+        return openPreviewModalOverlay(function(close) {
             var dialog = document.createElement('div');
             dialog.setAttribute('role', 'dialog');
             dialog.setAttribute('aria-modal', 'true');
@@ -1663,27 +2271,18 @@ HTML;
             okBtn.textContent = previewMessages.confirmOk;
             okBtn.style.cssText = 'padding:8px 14px;border:1px solid #2563eb;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;';
 
-            function close(value) {
-                overlay.remove();
-                resolve(value);
-            }
-
             cancelBtn.addEventListener('click', function() { close(false); });
             okBtn.addEventListener('click', function() { close(true); });
-            overlay.addEventListener('click', function(event) {
-                if (event.target === overlay) {
-                    close(false);
-                }
-            });
 
             actions.appendChild(cancelBtn);
             actions.appendChild(okBtn);
             dialog.appendChild(title);
             dialog.appendChild(body);
             dialog.appendChild(actions);
-            overlay.appendChild(dialog);
-            document.body.appendChild(overlay);
-            okBtn.focus();
+            window.setTimeout(function() { try { okBtn.focus(); } catch (e) {} }, 0);
+            return dialog;
+        }, false).then(function(value) {
+            return value === true;
         });
     }
 
@@ -1795,7 +2394,7 @@ HTML;
             try {
                 return JSON.parse(trimmed);
             } catch (e) {
-                if (/data-login-form|管理员登录|admin\\/login|login-form/i.test(trimmed)) {
+                if (/data-login-form|管理员登录|admin\/login|login-form/i.test(trimmed)) {
                     throw new Error('login');
                 }
                 throw new Error('non-json:' + response.status);
@@ -1884,61 +2483,397 @@ HTML;
         navigateExitPreview();
     });
     
-    // 鍙戝竷骞堕€€鍑烘寜閽?
-    publishBtn.addEventListener('click', function() {
+    // 发布并退出：店面预览壳是 frontend Worker，禁止走 theme.editorRequest
+    //（auth=backend 需要 AREA_BACKEND + backendBinding，否则会 toast「不满足操作授权要求」
+    // 再被 catch 二次 toast「网络错误」）。与退出预览一致：同源 credentials fetch。
+    // Prefer SSE so bake + cache clear progress is visible; fall back to JSON.
+    function consumePublishSse(response, onProgress) {
+        if (!response || !response.body || typeof response.body.getReader !== 'function') {
+            return Promise.reject(new Error('stream'));
+        }
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder('utf-8');
+        var buffer = '';
+        var finalResult = null;
+        var streamError = null;
+        var lastProgress = null;
+
+        function dispatchBlock(rawBlock) {
+            var lines = String(rawBlock || '').split(new RegExp('\\\\r?\\\\n'));
+            var eventName = 'message';
+            var dataLines = [];
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (line.indexOf('event:') === 0) {
+                    eventName = line.slice(6).trim() || 'message';
+                } else if (line.indexOf('data:') === 0) {
+                    dataLines.push(line.slice(5).trim());
+                }
+            }
+            if (!dataLines.length) {
+                return;
+            }
+            var data = {};
+            try {
+                data = JSON.parse(dataLines.join('\\n'));
+            } catch (err) {
+                return;
+            }
+            if (eventName === 'progress' || eventName === 'start') {
+                lastProgress = data && typeof data === 'object' ? data : null;
+                if (typeof onProgress === 'function') {
+                    onProgress(data);
+                }
+                return;
+            }
+            if (eventName === 'error' || eventName === 'failed') {
+                streamError = data && typeof data === 'object' ? data : { success: false, message: 'publish failed' };
+                return;
+            }
+            if (eventName === 'done' || eventName === 'complete') {
+                finalResult = data && typeof data === 'object' ? data : { success: true, data: data };
+            }
+        }
+
+        function pump() {
+            return reader.read().then(function(chunk) {
+                if (chunk.done) {
+                    if (buffer.trim()) {
+                        dispatchBlock(buffer);
+                    }
+                    if (streamError) {
+                        return streamError;
+                    }
+                    if (finalResult) {
+                        if (finalResult.success === false) {
+                            return finalResult;
+                        }
+                        return {
+                            success: true,
+                            message: finalResult.message || 'ok',
+                            code: finalResult.code || 'theme_standard_publish_ok',
+                            data: finalResult.data || finalResult,
+                            redirect_url: (finalResult.data && finalResult.data.redirect_url) || finalResult.redirect_url
+                        };
+                    }
+                    // Stream ended after 100% progress without a done frame (proxy/buffer race).
+                    if (lastProgress && Number(lastProgress.progress) >= 100) {
+                        return {
+                            success: true,
+                            message: lastProgress.message || 'ok',
+                            code: 'theme_standard_publish_ok_stream_tail',
+                            data: {
+                                redirect_url: '/'
+                            }
+                        };
+                    }
+                    return Promise.reject(new Error('incomplete'));
+                }
+                buffer += decoder.decode(chunk.value, { stream: true });
+                var parts = buffer.split(new RegExp('\\\\r?\\\\n\\\\r?\\\\n'));
+                buffer = parts.pop() || '';
+                for (var j = 0; j < parts.length; j++) {
+                    dispatchBlock(parts[j]);
+                }
+                return pump();
+            });
+        }
+        return pump();
+    }
+
+    function resolvePublishProgressMessage(message, step) {
+        var stepKey = String(step || '').trim();
+        var byStep = previewMessages.progressByStep || {};
+        if (stepKey && byStep[stepKey]) {
+            return String(byStep[stepKey]);
+        }
+        var msg = String(message || '').trim();
+        var sourceMap = previewMessages.progressSourceMap || {};
+        if (msg && sourceMap[msg]) {
+            return String(sourceMap[msg]);
+        }
+        return msg || previewMessages.publishing;
+    }
+
+    function resolveStorefrontPublishLocale() {
+        var configured = String(previewMessages.locale || '').trim();
+        if (configured && configured !== 'default') {
+            return configured;
+        }
+        try {
+            var path = String(window.location && window.location.pathname || '');
+            var match = path.match(/\/(ar_SA|bn_BD|de_DE|en_US|es_ES|fr_FR|hi_IN|id_ID|ja_JP|ko_KR|pt_BR|ru_RU|th_TH|ur_PK|vi_VN|zh_Hans_CN|zh_Hant_TW|zh_CN)(?:\/|$)/);
+            if (match && match[1]) {
+                return match[1];
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    function postPublishAndExit(bodyObj) {
+        var payload = Object.assign({ stream: 1 }, bodyObj || {});
+        var locale = resolveStorefrontPublishLocale();
+        if (locale && !payload.locale) {
+            payload.locale = locale;
+        }
+        return fetch(publishUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'text/event-stream'
+            },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        }).then(function(response) {
+            var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+            if (contentType.indexOf('text/event-stream') !== -1) {
+                if (!response.ok) {
+                    return Promise.reject(new Error('non-json:' + response.status));
+                }
+                return consumePublishSse(response, function(event) {
+                    var step = event && event.step ? String(event.step) : '';
+                    var message = resolvePublishProgressMessage(
+                        event && event.message ? String(event.message) : '',
+                        step
+                    );
+                    var progress = Number(event && event.progress);
+                    if (!message && !step && !isFinite(progress)) {
+                        return;
+                    }
+                    if ((step === 'done' || step === 'finalize_ok') && !message) {
+                        message = previewMessages.finalizeDone;
+                    }
+                    if ((step === 'exit_preview' || step === 'compose_redirect' || step === 'redirect') && !message) {
+                        message = previewMessages.exitPreviewRedirect;
+                    }
+                    openPublishProgressLock(message || previewMessages.publishing, progress);
+                    updatePublishProgress(message || previewMessages.publishing, progress, step);
+                });
+            }
+            return parsePreviewJson(response);
+        });
+    }
+
+    /**
+     * Publish-and-exit must clear HttpOnly preview cookie via gateway?exit=1
+     * (document.cookie / SSE mid-stream Set-Cookie cannot). Same contract as Exit Preview.
+     */
+    function buildPublishExitNavigateUrl(redirectUrl) {
+        var target = String(redirectUrl || '/').trim() || '/';
+        try {
+            var parsed = new URL(target, window.location.origin);
+            if (parsed.origin === window.location.origin) {
+                target = parsed.pathname + parsed.search + parsed.hash;
+            }
+        } catch (e) {}
+        try {
+            var gateway = new URL(exitUrl, window.location.origin);
+            gateway.searchParams.set('exit', '1');
+            gateway.searchParams.set('redirect', target);
+            if (token) {
+                gateway.searchParams.set('token', token);
+            }
+            return gateway.toString();
+        } catch (e) {
+            var joinChar = exitUrl.indexOf('?') >= 0 ? '&' : '?';
+            return exitUrl + joinChar + 'exit=1&redirect=' + encodeURIComponent(target)
+                + (token ? '&token=' + encodeURIComponent(token) : '');
+        }
+    }
+
+    function tearDownPreviewFloatChrome() {
+        try {
+            if (floatEl && floatEl.parentNode) {
+                floatEl.remove();
+            }
+        } catch (e) {}
+        closePublishProgressLock();
+        setPreviewFloatInteractive(false);
+    }
+
+    function finishPublishRedirect(data) {
+        var redirectUrl = (data && data.redirect_url)
+            || (data && data.data && data.data.redirect_url)
+            || '/';
+        updatePublishProgress(previewMessages.publishSuccessRedirect, 100, 'redirect');
+        // Unmount float immediately so success never leaves Preview Mode chrome stuck.
+        tearDownPreviewFloatChrome();
+        clearPreviewClientState();
+        try { notifyParentPreviewExit(); } catch (e) {}
+        var navigateUrl = buildPublishExitNavigateUrl(redirectUrl);
+        try {
+            window.location.replace(navigateUrl);
+        } catch (e) {
+            window.location.href = navigateUrl;
+        }
+        // If navigation is blocked, still unlock after a short delay.
+        window.setTimeout(function() {
+            closePublishProgressLock();
+            resetPublishControls();
+            showPreviewMessage(previewMessages.publishDoneManualRefresh, 'success');
+        }, 8000);
+    }
+
+    function promptNewVersionName(nextNumber, suggestedName) {
+        var autoLabel = String(suggestedName || '').trim()
+            || (nextNumber ? ('v' + String(nextNumber)) : 'vN');
+        var message = String(previewMessages.versionMessage || '有未发布改动，请输入版本名称后发布（可留空自动 {version}）')
+            .split('{version}').join(autoLabel);
+        var title = previewMessages.versionTitle || '新建版本并发布';
+        var placeholder = previewMessages.versionPlaceholder || '版本名称';
+        var okLabel = previewMessages.versionOk || previewMessages.confirmOk || '发布';
+        var cancelLabel = previewMessages.confirmCancel || '取消';
+
+        return openPreviewModalOverlay(function(close) {
+            var dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.style.cssText = [
+                'width:min(420px,100%)',
+                'border-radius:10px',
+                'background:#fff',
+                'box-shadow:0 24px 60px rgba(15,23,42,0.3)',
+                'padding:20px',
+                'font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif',
+                'color:#0f172a'
+            ].join(';');
+
+            var titleEl = document.createElement('h3');
+            titleEl.textContent = title;
+            titleEl.style.cssText = 'margin:0 0 10px;font-size:18px;line-height:1.3;';
+
+            var body = document.createElement('p');
+            body.textContent = message;
+            body.style.cssText = 'margin:0 0 12px;color:#475569;';
+
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = placeholder;
+            input.autocomplete = 'off';
+            if (autoLabel && autoLabel !== 'vN') {
+                input.value = autoLabel;
+            }
+            input.style.cssText = 'width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:14px/1.4 inherit;margin:0 0 18px;';
+
+            var actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+            var cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.textContent = cancelLabel;
+            cancelBtn.style.cssText = 'padding:8px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;cursor:pointer;';
+
+            var okBtn = document.createElement('button');
+            okBtn.type = 'button';
+            okBtn.textContent = okLabel;
+            okBtn.style.cssText = 'padding:8px 14px;border:1px solid #2563eb;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;';
+
+            cancelBtn.addEventListener('click', function() { close(null); });
+            okBtn.addEventListener('click', function() { close(String(input.value || '')); });
+            input.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    close(String(input.value || ''));
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    close(null);
+                }
+            });
+
+            actions.appendChild(cancelBtn);
+            actions.appendChild(okBtn);
+            dialog.appendChild(titleEl);
+            dialog.appendChild(body);
+            dialog.appendChild(input);
+            dialog.appendChild(actions);
+            window.setTimeout(function() {
+                try {
+                    input.focus();
+                    if (input.value) {
+                        input.select();
+                    }
+                } catch (e) {}
+            }, 0);
+            return dialog;
+        }, null);
+    }
+
+    publishBtn.addEventListener('click', function(event) {
+        try { event.preventDefault(); event.stopPropagation(); } catch (e) {}
+        if (publishBtn.disabled) {
+            return;
+        }
         confirmPreviewAction(previewMessages.confirmPublish).then(function(confirmed) {
             if (!confirmed) {
                 return;
             }
-        
-        publishBtn.disabled = true;
-        publishBtn.textContent = '发布中...';
 
-        var publishBody = JSON.stringify({ token: token });
-        var publishPromise;
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
-            publishPromise = Promise.resolve(window.Weline.Api.resource('theme')).then(function(api) {
-                if (!api || typeof api.editorRequest !== 'function') {
-                    throw new Error('no-editor-request');
-                }
-                return api.editorRequest({
-                    url: publishUrl,
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    body: publishBody
-                });
-            });
-        } else {
-            publishPromise = fetch(publishUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json'
-                },
-                credentials: 'include',
-                body: publishBody
-            }).then(parsePreviewJson);
-        }
-
-        publishPromise
-        .then(function(payload) {
-            var data = unwrapPreviewPayload(payload);
-            if (data && data.success) {
-                clearPreviewClientState();
-                window.location.href = (data.redirect_url || (data.data && data.data.redirect_url) || '/');
-            } else {
-                showPreviewMessage((data && data.message) || previewMessages.publishFailed, 'error');
-                publishBtn.disabled = false;
-                publishBtn.textContent = '发布并退出';
+            openPublishProgressLock(previewMessages.checkingGate, 0);
+            publishBtn.disabled = true;
+            if (exitBtn) {
+                exitBtn.disabled = true;
             }
-        })
-        .catch(function(err) {
-            console.error('[WelinePreview] publish-and-exit failed:', err);
-            showPreviewMessage(previewMessages.networkError, 'error');
-            publishBtn.disabled = false;
-            publishBtn.textContent = '发布并退出';
-        });
+
+            postPublishAndExit({ token: token })
+            .then(function(payload) {
+                var data = unwrapPreviewPayload(payload);
+                if (data && data.success) {
+                    finishPublishRedirect(data);
+                    return;
+                }
+                if (data && data.code === 'theme_publish_requires_new_version') {
+                    closePublishProgressLock();
+                    var nextNo = data.data && data.data.next_version_number
+                        ? data.data.next_version_number
+                        : '';
+                    var suggested = data.data && data.data.suggested_version_name
+                        ? data.data.suggested_version_name
+                        : '';
+                    return promptNewVersionName(nextNo, suggested).then(function(versionName) {
+                        if (versionName === null) {
+                            resetPublishControls();
+                            return;
+                        }
+                        openPublishProgressLock(previewMessages.createVersionPublishing, 0);
+                        return postPublishAndExit({
+                            token: token,
+                            create_version: true,
+                            version_name: versionName
+                        }).then(function(retryPayload) {
+                            var retryData = unwrapPreviewPayload(retryPayload);
+                            if (retryData && retryData.success) {
+                                finishPublishRedirect(retryData);
+                                return;
+                            }
+                            closePublishProgressLock();
+                            showPreviewMessage(
+                                (retryData && retryData.message) || previewMessages.publishFailed,
+                                'error'
+                            );
+                            resetPublishControls();
+                        });
+                    });
+                }
+                closePublishProgressLock();
+                showPreviewMessage((data && data.message) || previewMessages.publishFailed, 'error');
+                resetPublishControls();
+            })
+            .catch(function(err) {
+                console.error('[WelinePreview] publish-and-exit failed:', err);
+                closePublishProgressLock();
+                var errKey = err && err.message ? String(err.message) : '';
+                var msg = previewMessages.networkError;
+                if (errKey === 'login') {
+                    msg = previewMessages.publishNeedsLogin;
+                } else if (errKey.indexOf('non-json:403') === 0 || errKey.indexOf('non-json:401') === 0) {
+                    msg = previewMessages.publishNeedsLogin;
+                } else if (errKey && errKey !== 'empty' && errKey.indexOf('non-json:') !== 0) {
+                    msg = errKey;
+                }
+                showPreviewMessage(msg, 'error');
+                resetPublishControls();
+            });
         });
     });
 })();

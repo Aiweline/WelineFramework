@@ -17,6 +17,7 @@ use Weline\Acl\Service\CollectedAclSourceIdsRegistry;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Log\LoggerFactory;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Php\FiberTaskBatch;
 
 class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
 {
@@ -34,6 +35,19 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
     
     /** @var array 待批量保存的方法级别权限 [moduleName => [aclData, ...]] */
     private array $pending_method_level_acls = [];
+
+    /** @var array<string, bool> checkParentExists 进程内缓存 */
+    private array $parentExistsCache = [];
+
+    /** @var array<string, bool>|null menu source_id 集合（懒加载一次） */
+    private ?array $menuSourceIdSet = null;
+
+    /** @var array<string, bool> 模块是否已有 menus 记录 */
+    private array $moduleHasMenusCache = [];
+
+    private const ACL_UPSERT_CHUNK = 400;
+
+    public const ENV_FIBER_CONCURRENCY = 'WELINE_ACL_FIBER_CONCURRENCY';
     
     /**
      * @var \Weline\Acl\Model\Acl
@@ -72,7 +86,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             return;
         }
 
-        // 支持跨模块一次派发：按 module 分组后逐个落库（setup:upgrade 路由收集 defer 场景）
+        // 支持跨模块一次派发：按 module 分组后 Fiber 协作收集（setup:upgrade defer 场景）
         $byModule = [];
         foreach ($eventDataArray as $eventData) {
             $module = (string)$eventData->getData('module');
@@ -83,8 +97,81 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         }
         $eventDataArray = [];
 
+        $printing = null;
+        $moduleTotal = \count($byModule);
+        if (\PHP_SAPI === 'cli' && $moduleTotal > 1) {
+            try {
+                $printing = ObjectManager::getInstance(\Weline\Framework\Output\Cli\Printing::class);
+            } catch (\Throwable) {
+                $printing = null;
+            }
+        }
+
+        $tasks = [];
         foreach ($byModule as $module => $moduleEvents) {
-            $this->processModuleControllerAttributes($module, $moduleEvents);
+            $tasks[$module] = $moduleEvents;
+        }
+        unset($byModule);
+
+        $batch = new FiberTaskBatch(null, true, self::ENV_FIBER_CONCURRENCY);
+        try {
+            $batch->mapModules(
+                $tasks,
+                function (string $module, mixed $moduleEvents): string {
+                    $this->processModuleControllerAttributes(
+                        $module,
+                        \is_array($moduleEvents) ? $moduleEvents : []
+                    );
+
+                    return $module;
+                },
+                static function (string $phase, array $ctx) use ($printing): void {
+                    if ($printing === null || $phase !== 'task') {
+                        return;
+                    }
+                    $printing->note(__(
+                        '   - ACL 收集 [%{i}/%{total}]：%{module}…',
+                        [
+                            'i' => (int)($ctx['done'] ?? 0),
+                            'total' => (int)($ctx['total'] ?? 0),
+                            'module' => (string)($ctx['key'] ?? ''),
+                        ]
+                    ));
+                    if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                        \fflush(\STDOUT);
+                    }
+                },
+                [
+                    'env' => self::ENV_FIBER_CONCURRENCY,
+                    'fail_fast' => true,
+                    'label' => 'acl-collect',
+                ]
+            );
+            unset($tasks);
+
+            // 全量收集完成后再一次（或分块）批量 upsert，避免每模块多次往返。
+            $this->flushAllPendingAclsBatched($printing);
+        } finally {
+            unset($tasks);
+            $this->releaseWorkingMemory();
+        }
+    }
+
+    /**
+     * 卸掉本观察者持有的大块工作集（pending / 菜单索引 / 父级缓存等）。
+     */
+    private function releaseWorkingMemory(): void
+    {
+        $this->loaded_controller_acl_names = [];
+        $this->pending_method_acls = [];
+        $this->pending_class_level_acls = [];
+        $this->pending_method_level_acls = [];
+        $this->parentExistsCache = [];
+        $this->menuSourceIdSet = null;
+        $this->moduleHasMenusCache = [];
+        $this->current_module = '';
+        if (\function_exists('gc_collect_cycles')) {
+            \gc_collect_cycles();
         }
     }
 
@@ -138,12 +225,9 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         }
         // 收集完成，释放事件大数组引用以降低内存峰值（后续仅用 pending_* 与 loaded_*）
         $eventDataArray = [];
-        
-        // 第三阶段：一次性批量保存（注意顺序：先类级别，后方法级别，确保父子关系正确）
-        $this->batchSaveClassLevelAcls($module);
-        $this->batchSaveMethodLevelAcls($module);
 
-        // 该模块已全部落库，释放本模块在内存中的缓存，避免 setup:upgrade 路由收集阶段随模块数线性增长导致内存溢出
+        // 不在此处按模块落库：execute() 末尾 flushAllPendingAclsBatched 一次批量 upsert。
+        // 释放仅用于收集期的内存索引。
         unset($this->loaded_controller_acl_names[$module], $this->pending_method_acls[$module]);
     } 
 
@@ -184,20 +268,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 // 控制器 #[Acl] 仅负责 pc 接口权限，type 固定为 pc
                 // type='menus' 仅由 MenuCollector（menu.xml）写入；侧栏菜单必须以 menu.xml 为准
                 // 不再保留既有 type='menus'，避免已从 menu.xml 移除的 controller ACL 仍显示在侧栏
-                $sourceId = $acl->getSourceId();
-                $aclParentSource = $acl->getParentSource();
-                if (empty($aclParentSource)) {
-                    // 仅当 parent_source 为空时，查询数据库保留 menu.xml 可能设置的 parent_source
-                    $existingRecords = $this->acl->reset()
-                        ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceId)
-                        ->fields(\Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
-                        ->select()
-                        ->fetchArray();
-                    $existingRecord = $existingRecords[0] ?? null;
-                    if ($existingRecord && !empty($existingRecord['parent_source'])) {
-                        $acl->setParentSource($existingRecord['parent_source']);
-                    }
-                }
+                // parent_source 空值保留交由批量 upsert 前一次性 SELECT 回填，禁止此处逐条查库。
                 $this->assertClassAclAttachedToMenu($acl);
                 
                 // 收集到批量保存数组，不立即保存
@@ -321,8 +392,16 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     }
                 }
             }
+
+            // 同批收集中已出现的 source_id 视为可用，避免逐条 checkParentExists 打库。
+            if ($this->isSourceKnownInBatch($specifiedParent)) {
+                if (!isset($this->loaded_controller_acl_names[$module][$className])) {
+                    $this->loaded_controller_acl_names[$module][$className] = $specifiedParent;
+                }
+                return;
+            }
             
-            // 检查是否在数据库中
+            // 检查是否在数据库中（带进程内缓存）
             if ($this->checkParentExists($specifiedParent)) {
                 // 父级权限在数据库中，确认使用
                 // 同时记录到内存中，供后续使用
@@ -346,8 +425,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         // 如果控制器没有类级别的权限，尝试通过权限ID模式推断父级权限
         $inferred_parent = $this->inferParentSource($acl->getSourceId());
         if (!empty($inferred_parent)) {
-            // 检查推断的父级权限是否在数据库中存在
-            if ($this->checkParentExists($inferred_parent)) {
+            if ($this->isSourceKnownInBatch($inferred_parent) || $this->checkParentExists($inferred_parent)) {
                 $acl->setParentSource($inferred_parent);
                 return;
             }
@@ -391,49 +469,76 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
     {
         $sourceId = (string)$acl->getSourceId();
         $parentSource = (string)$acl->getParentSource();
-
-        // 如果当前模块还没有任何菜单 ACL 记录（首次安装 / 菜单尚未同步），跳过严格校验，
-        // 避免安装顺序导致的“菜单未入库但类级 ACL 已扫描”误报。
         $module = (string)$acl->getModule();
-        if ($module !== '') {
-            $existingMenus = $this->acl->reset()
-                ->where(\Weline\Acl\Model\Acl::schema_fields_MODULE, $module)
-                ->where(\Weline\Acl\Model\Acl::schema_fields_TYPE, \Weline\Acl\Model\Acl::type_MENUS)
-                ->fields(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID)
-                ->limit(1)
-                ->select()
-                ->fetchArray();
-            if (empty($existingMenus)) {
-                return;
-            }
-        }
 
-        $sourceMenu = $this->acl->reset()
-            ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceId)
-            ->where(\Weline\Acl\Model\Acl::schema_fields_TYPE, \Weline\Acl\Model\Acl::type_MENUS)
-            ->fields(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID)
-            ->select()
-            ->fetchArray();
-        if (!empty($sourceMenu)) {
+        // 首次安装 / 菜单尚未同步：模块尚无 menus 记录时跳过严格校验。
+        if ($module !== '' && !$this->moduleHasMenuRecords($module)) {
             return;
         }
 
-        if ($parentSource !== '') {
-            $parentMenu = $this->acl->reset()
-                ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $parentSource)
-                ->where(\Weline\Acl\Model\Acl::schema_fields_TYPE, \Weline\Acl\Model\Acl::type_MENUS)
-                ->fields(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID)
-                ->select()
-                ->fetchArray();
-            if (!empty($parentMenu)) {
-                return;
-            }
+        $menuIds = $this->menuSourceIdSet();
+        if (isset($menuIds[$sourceId])) {
+            return;
+        }
+        if ($parentSource !== '' && isset($menuIds[$parentSource])) {
+            return;
         }
 
         throw new \Exception(__('框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}', [
             $sourceId,
             $parentSource ?: __('(空)'),
         ]));
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function menuSourceIdSet(): array
+    {
+        if ($this->menuSourceIdSet !== null) {
+            return $this->menuSourceIdSet;
+        }
+
+        $this->menuSourceIdSet = [];
+        try {
+            $rows = $this->acl->reset()
+                ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+                ->fields(Acl::schema_fields_SOURCE_ID)
+                ->select()
+                ->fetchArray();
+            foreach ($rows ?: [] as $row) {
+                $id = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+                if ($id !== '') {
+                    $this->menuSourceIdSet[$id] = true;
+                }
+            }
+        } catch (\Throwable) {
+            $this->menuSourceIdSet = [];
+        }
+
+        return $this->menuSourceIdSet;
+    }
+
+    private function moduleHasMenuRecords(string $module): bool
+    {
+        if (\array_key_exists($module, $this->moduleHasMenusCache)) {
+            return $this->moduleHasMenusCache[$module];
+        }
+
+        try {
+            $existingMenus = $this->acl->reset()
+                ->where(Acl::schema_fields_MODULE, $module)
+                ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+                ->fields(Acl::schema_fields_SOURCE_ID)
+                ->limit(1)
+                ->select()
+                ->fetchArray();
+            $this->moduleHasMenusCache[$module] = !empty($existingMenus);
+        } catch (\Throwable) {
+            $this->moduleHasMenusCache[$module] = false;
+        }
+
+        return $this->moduleHasMenusCache[$module];
     }
 
     /**
@@ -588,379 +693,290 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
     }
 
     /**
-     * 批量保存类级别权限
-     * 
-     * @param string $module 模块名
-     * @return void
-     * @throws \Exception
+     * 全量收集后一次性批量 upsert（类级先于方法级），减少按模块 DB 往返。
      */
+    private function flushAllPendingAclsBatched(?\Weline\Framework\Output\Cli\Printing $printing = null): void
+    {
+        $classRows = $this->flattenPendingAcls($this->pending_class_level_acls);
+        $methodRows = $this->flattenPendingAcls($this->pending_method_level_acls);
+        $this->pending_class_level_acls = [];
+        $this->pending_method_level_acls = [];
+
+        $classRows = $this->deduplicateAclsBySourceId($classRows);
+        $methodRows = $this->deduplicateAclsBySourceId($methodRows);
+        if ($classRows === [] && $methodRows === []) {
+            return;
+        }
+
+        $allIds = [];
+        foreach ([$classRows, $methodRows] as $group) {
+            foreach ($group as $row) {
+                $id = (string)($row['source_id'] ?? '');
+                if ($id !== '') {
+                    $allIds[$id] = true;
+                }
+            }
+        }
+        $meta = $this->loadExistingAclMeta(\array_keys($allIds));
+        unset($allIds);
+
+        $classPrepared = $this->prepareAclRowsForUpsert($classRows, $meta);
+        unset($classRows);
+        $methodPrepared = $this->prepareAclRowsForUpsert($methodRows, $meta);
+        unset($methodRows, $meta);
+
+        $total = \count($classPrepared) + \count($methodPrepared);
+        if ($printing !== null) {
+            $printing->note(__(
+                '   - ACL 批量 upsert：类级 %{c} + 方法级 %{m} = %{t} 条（每批 %{chunk}）…',
+                [
+                    'c' => \count($classPrepared),
+                    'm' => \count($methodPrepared),
+                    't' => $total,
+                    'chunk' => self::ACL_UPSERT_CHUNK,
+                ]
+            ));
+            if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                \fflush(\STDOUT);
+            }
+        }
+
+        $this->acl->reset()->clearData();
+        $this->acl->beginTransaction();
+        try {
+            $this->upsertAclRowsChunked($classPrepared, $printing, 'class');
+            $this->upsertAclRowsChunked($methodPrepared, $printing, 'method');
+            $this->acl->commit();
+            $ids = \array_merge(
+                \array_column($classPrepared, 'source_id'),
+                \array_column($methodPrepared, 'source_id'),
+            );
+            unset($classPrepared, $methodPrepared);
+            if ($ids !== []) {
+                CollectedAclSourceIdsRegistry::addMany($ids);
+            }
+            unset($ids);
+        } catch (\Exception $exception) {
+            unset($classPrepared, $methodPrepared);
+            $this->acl->rollBack();
+            if (DEV) {
+                p($exception->getMessage());
+            }
+            throw $exception;
+        }
+
+        if ($printing !== null) {
+            $printing->success(__('   - ACL 批量 upsert 完成：%{t} 条', ['t' => $total]));
+            if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                \fflush(\STDOUT);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, list<array<string, mixed>>> $pendingByModule
+     * @return list<array<string, mixed>>
+     */
+    private function flattenPendingAcls(array $pendingByModule): array
+    {
+        $rows = [];
+        foreach ($pendingByModule as $moduleRows) {
+            foreach ($moduleRows as $row) {
+                if (\is_array($row)) {
+                    $rows[] = $row;
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * O(n) 按 source_id 去重，后者覆盖前者。
+     *
+     * @param list<array<string, mixed>> $acls
+     * @return list<array<string, mixed>>
+     */
+    private function deduplicateAclsBySourceId(array $acls): array
+    {
+        $byId = [];
+        $noId = [];
+        foreach ($acls as $acl) {
+            $sourceId = (string)($acl['source_id'] ?? '');
+            if ($sourceId === '') {
+                $noId[] = $acl;
+                continue;
+            }
+            $byId[$sourceId] = $acl;
+        }
+
+        return \array_values(\array_merge(\array_values($byId), $noId));
+    }
+
+    /**
+     * @param list<string> $sourceIds
+     * @return array<string, array{parent_source: string, is_menu_xml: bool}>
+     */
+    private function loadExistingAclMeta(array $sourceIds): array
+    {
+        $meta = [];
+        $sourceIds = \array_values(\array_unique(\array_filter(\array_map('strval', $sourceIds))));
+        if ($sourceIds === []) {
+            return $meta;
+        }
+
+        foreach (\array_chunk($sourceIds, self::ACL_UPSERT_CHUNK) as $chunk) {
+            $rows = $this->acl->reset()
+                ->where(Acl::schema_fields_SOURCE_ID, $chunk, 'in')
+                ->select(
+                    Acl::schema_fields_SOURCE_ID . ','
+                    . Acl::schema_fields_PARENT_SOURCE . ','
+                    . Acl::schema_fields_TYPE . ','
+                    . Acl::schema_fields_ACL_ORIGIN
+                )
+                ->fetchArray();
+            foreach ($rows ?: [] as $row) {
+                $id = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+                if ($id === '') {
+                    continue;
+                }
+                $meta[$id] = [
+                    'parent_source' => (string)($row[Acl::schema_fields_PARENT_SOURCE] ?? ''),
+                    'is_menu_xml' => ((string)($row[Acl::schema_fields_TYPE] ?? '') === Acl::type_MENUS)
+                        && ((string)($row[Acl::schema_fields_ACL_ORIGIN] ?? '') === Acl::acl_origin_menu_xml),
+                ];
+            }
+        }
+
+        return $meta;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $acls
+     * @param array<string, array{parent_source: string, is_menu_xml: bool}> $meta
+     * @return list<array<string, mixed>>
+     */
+    private function prepareAclRowsForUpsert(array $acls, array $meta): array
+    {
+        $prepared = [];
+        foreach ($acls as $acl) {
+            $sourceId = (string)($acl['source_id'] ?? '');
+            if ($sourceId === '') {
+                continue;
+            }
+            if (!empty($meta[$sourceId]['is_menu_xml'])) {
+                continue;
+            }
+            $newParent = (string)($acl['parent_source'] ?? '');
+            if ($newParent === '' && !empty($meta[$sourceId]['parent_source'])) {
+                $acl['parent_source'] = $meta[$sourceId]['parent_source'];
+            }
+            $prepared[] = $acl;
+        }
+
+        return $prepared;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    private function upsertAclRowsChunked(array $rows, ?\Weline\Framework\Output\Cli\Printing $printing, string $label): void
+    {
+        if ($rows === []) {
+            return;
+        }
+        $chunks = \array_chunk($rows, self::ACL_UPSERT_CHUNK);
+        $totalChunks = \count($chunks);
+        foreach ($chunks as $i => $chunk) {
+            if ($printing !== null && $totalChunks > 1) {
+                $printing->note(__(
+                    '   - ACL upsert %{label} [%{i}/%{total}]：%{n} 条…',
+                    ['label' => $label, 'i' => $i + 1, 'total' => $totalChunks, 'n' => \count($chunk)]
+                ));
+                if (\defined('STDOUT') && \is_resource(\STDOUT)) {
+                    \fflush(\STDOUT);
+                }
+            }
+            $this->acl->reset()->clearData();
+            $this->acl->getQuery()->insert($chunk, 'source_id', '')->fetch();
+        }
+    }
+
     private function batchSaveClassLevelAcls(string $module): void
     {
-        if (!isset($this->pending_class_level_acls[$module]) || empty($this->pending_class_level_acls[$module])) {
-            return;
-        }
-        
-        // 🔧 修复：去重 pending_class_level_acls，只保留每个 source_id 的最新记录
-        // 因为同一个 source_id 可能因为不同的路由变体或多次扫描被收集多次
-        // 但 ACL 权限应该只保存一次，所以需要去重
-        $deduplicatedAcls = [];
-        $seenSourceIds = [];
-        $duplicateInfo = []; // 记录重复的详细信息（开发环境用）
-        
-        foreach ($this->pending_class_level_acls[$module] as $index => $acl) {
-            $sourceId = $acl['source_id'] ?? '';
-            if (!empty($sourceId)) {
-                // 如果已经见过这个 source_id
-                if (isset($seenSourceIds[$sourceId])) {
-                    // 开发环境：记录重复信息（限制条数，避免 setup:upgrade 时内存溢出）
-                    if (DEV) {
-                        $maxDupsToCollect = 10;
-                        if (!isset($duplicateInfo[$sourceId])) {
-                            $firstAcl = $seenSourceIds[$sourceId];
-                            $duplicateInfo[$sourceId] = [
-                                'first' => [
-                                    'index' => $firstAcl['index'] ?? 'unknown',
-                                    'class' => $firstAcl['class'] ?? '',
-                                    'method' => $firstAcl['method'] ?? '',
-                                    'route' => $firstAcl['route'] ?? '',
-                                    'router' => $firstAcl['router'] ?? '',
-                                ],
-                                'duplicates' => [],
-                                'duplicates_total' => 0,
-                            ];
-                        }
-                        $duplicateInfo[$sourceId]['duplicates_total']++;
-                        if (count($duplicateInfo[$sourceId]['duplicates']) < $maxDupsToCollect) {
-                            $duplicateInfo[$sourceId]['duplicates'][] = [
-                                'index' => $index,
-                                'class' => $acl['class'] ?? '',
-                                'method' => $acl['method'] ?? '',
-                                'route' => $acl['route'] ?? '',
-                                'router' => $acl['router'] ?? '',
-                            ];
-                        }
-                    }
-                    // 找到已存在的记录并替换
-                    foreach ($deduplicatedAcls as $existingIndex => $existingAcl) {
-                        if (($existingAcl['source_id'] ?? '') === $sourceId) {
-                            $deduplicatedAcls[$existingIndex] = $acl;
-                            break;
-                        }
-                    }
-                } else {
-                    // 第一次遇到这个 source_id
-                    // 开发环境：保存第一个 ACL 的引用，以便后续发现重复时使用
-                    if (DEV) {
-                        $seenSourceIds[$sourceId] = [
-                            'index' => $index,
-                            'class' => $acl['class'] ?? '',
-                            'method' => $acl['method'] ?? '',
-                            'route' => $acl['route'] ?? '',
-                            'router' => $acl['router'] ?? '',
-                        ];
-                    } else {
-                        $seenSourceIds[$sourceId] = true;
-                    }
-                    $deduplicatedAcls[] = $acl;
-                }
-            } else {
-                // 如果没有 source_id，保留（虽然这种情况不应该发生）
-                $deduplicatedAcls[] = $acl;
-            }
-        }
+        $rows = $this->pending_class_level_acls[$module] ?? [];
         unset($this->pending_class_level_acls[$module]);
-        
-        // 开发环境：如果发现重复，写入 acl 日志频道，不输出到控制台
-        if (DEV && !empty($duplicateInfo)) {
-            $maxSourceIds = 30;
-            $lines = [__('【ACL 重复检测】模块: %{1}', [$module]), __('发现以下重复的 source_id：')];
-            $n = 0;
-            foreach ($duplicateInfo as $sourceId => $info) {
-                if ($n >= $maxSourceIds) {
-                    $lines[] = "\n" . __('... 已省略更多重复（共 %{1} 个 source_id）', [count($duplicateInfo)]);
-                    break;
-                }
-                $lines[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
-                $first = $info['first'] ?? [];
-                $lines[] = __('  首次出现:');
-                $lines[] = __('    - 类: %{1}', [$first['class'] ?? '']);
-                $lines[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
-                $lines[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
-                $lines[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
-                $duplicates = $info['duplicates'] ?? [];
-                $totalDups = $info['duplicates_total'] ?? count($duplicates);
-                $lines[] = __('  重复出现 (%{1} 次):', [$totalDups]);
-                foreach ($duplicates as $dup) {
-                    $lines[] = __('    - 索引 #%{1}:', [$dup['index']]);
-                    $lines[] = __('      类: %{1}', [$dup['class']]);
-                    $lines[] = __('      方法: %{1}', [$dup['method']]);
-                    $lines[] = __('      路由: %{1}', [$dup['route']]);
-                    $lines[] = __('      路由器: %{1}', [$dup['router']]);
-                }
-                if ($totalDups > count($duplicates)) {
-                    $lines[] = __('    ... 已省略 %{1} 条', [$totalDups - count($duplicates)]);
-                }
-                $n++;
-            }
-            $lines[] = "\n" . __('路由系统会为同一 action 生成多个 URL 变体，属正常现象，ACL 已自动去重。');
-            LoggerFactory::create('acl')->warning(implode("\n", $lines));
-        }
-
-        // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
-        $deduplicatedAcls = $this->excludeMenuXmlSources($deduplicatedAcls);
-        if (empty($deduplicatedAcls)) {
+        if ($rows === []) {
             return;
         }
-        
+        $rows = $this->deduplicateAclsBySourceId($rows);
+        $meta = $this->loadExistingAclMeta(\array_column($rows, 'source_id'));
+        $prepared = $this->prepareAclRowsForUpsert($rows, $meta);
+        unset($rows, $meta);
+        if ($prepared === []) {
+            return;
+        }
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            // 控制器 ACL 统一为 type='pc'；type='menus' 仅由 MenuCollector（menu.xml）负责
-            // 批量保存时不再保留既有 type='menus'，确保侧栏菜单严格以 menu.xml 为准
-            // 仅保留 parent_source（当新数据为空时）
-            $sourceIds = array_column($deduplicatedAcls, 'source_id');
-            $existingParentMap = [];
-            if (!empty($sourceIds)) {
-                $existingRecords = $this->acl->reset()
-                    ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-                    ->select(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
-                    ->fetchArray();
-                foreach ($existingRecords as $record) {
-                    $existingParentMap[$record['source_id']] = $record['parent_source'] ?? '';
-                }
-            }
-            foreach ($deduplicatedAcls as &$acl) {
-                $sourceId = $acl['source_id'] ?? '';
-                if (!empty($sourceId) && isset($existingParentMap[$sourceId])) {
-                    $newParent = $acl['parent_source'] ?? '';
-                    if (empty($newParent) && $existingParentMap[$sourceId] !== '') {
-                        $acl['parent_source'] = $existingParentMap[$sourceId];
-                    }
-                }
-            }
-            unset($acl);
-
-            // acl 表对 source_id 有 UNIQUE，存在则按冲突键更新全部字段（方言由适配器生成）
-            $this->acl->reset()->clearData();
-            $this->acl->getQuery()->insert($deduplicatedAcls, 'source_id', '')->fetch();
+            $this->upsertAclRowsChunked($prepared, null, 'class');
             $this->acl->commit();
-            CollectedAclSourceIdsRegistry::add(...array_column($deduplicatedAcls, 'source_id'));
+            CollectedAclSourceIdsRegistry::addMany(\array_column($prepared, 'source_id'));
+            unset($prepared);
         } catch (\Exception $exception) {
+            unset($prepared);
             $this->acl->rollBack();
-            if (DEV) {
-                p($exception->getMessage());
-            }
             throw $exception;
         }
-        // 清空已保存的类级别权限
-        unset($this->pending_class_level_acls[$module]);
     }
 
-    /**
-     * 批量保存方法级别权限
-     * 
-     * @param string $module 模块名
-     * @return void
-     * @throws \Exception
-     */
     private function batchSaveMethodLevelAcls(string $module): void
     {
-        if (!isset($this->pending_method_level_acls[$module]) || empty($this->pending_method_level_acls[$module])) {
-            return;
-        }
-        
-        // 🔧 修复：去重 pending_method_level_acls，只保留每个 source_id 的最新记录
-        // 因为同一个 source_id 可能因为不同的路由变体（例如不同的 HTTP 方法）被收集多次
-        // 但 ACL 权限应该只保存一次，所以需要去重
-        $deduplicatedAcls = [];
-        $seenSourceIds = [];
-        $duplicateInfo = []; // 记录重复的详细信息（开发环境用）
-        
-        foreach ($this->pending_method_level_acls[$module] as $index => $acl) {
-            $sourceId = $acl['source_id'] ?? '';
-            if (!empty($sourceId)) {
-                // 如果已经见过这个 source_id
-                if (isset($seenSourceIds[$sourceId])) {
-                    // 开发环境：记录重复信息（限制 source_id 与条数，避免 setup:upgrade 时内存溢出）
-                    if (DEV) {
-                        $maxSourceIdsToCollect = 50;
-                        $maxDupsToCollect = 10;
-                        if (count($duplicateInfo) < $maxSourceIdsToCollect) {
-                            if (!isset($duplicateInfo[$sourceId])) {
-                                $firstAcl = $seenSourceIds[$sourceId];
-                                $duplicateInfo[$sourceId] = [
-                                    'first' => [
-                                        'index' => $firstAcl['index'] ?? 'unknown',
-                                        'class' => $firstAcl['class'] ?? '',
-                                        'method' => $firstAcl['method'] ?? '',
-                                        'route' => $firstAcl['route'] ?? '',
-                                        'router' => $firstAcl['router'] ?? '',
-                                    ],
-                                    'duplicates' => [],
-                                    'duplicates_total' => 0,
-                                ];
-                            }
-                            $duplicateInfo[$sourceId]['duplicates_total']++;
-                            if (count($duplicateInfo[$sourceId]['duplicates']) < $maxDupsToCollect) {
-                                $duplicateInfo[$sourceId]['duplicates'][] = [
-                                    'index' => $index,
-                                    'class' => $acl['class'] ?? '',
-                                    'method' => $acl['method'] ?? '',
-                                    'route' => $acl['route'] ?? '',
-                                    'router' => $acl['router'] ?? '',
-                                ];
-                            }
-                        }
-                    }
-                    // 找到已存在的记录并替换
-                    foreach ($deduplicatedAcls as $existingIndex => $existingAcl) {
-                        if (($existingAcl['source_id'] ?? '') === $sourceId) {
-                            $deduplicatedAcls[$existingIndex] = $acl;
-                            break;
-                        }
-                    }
-                } else {
-                    // 第一次遇到这个 source_id
-                    // 开发环境：保存第一个 ACL 的引用，以便后续发现重复时使用
-                    if (DEV) {
-                        $seenSourceIds[$sourceId] = [
-                            'index' => $index,
-                            'class' => $acl['class'] ?? '',
-                            'method' => $acl['method'] ?? '',
-                            'route' => $acl['route'] ?? '',
-                            'router' => $acl['router'] ?? '',
-                        ];
-                    } else {
-                        $seenSourceIds[$sourceId] = true;
-                    }
-                    $deduplicatedAcls[] = $acl;
-                }
-            } else {
-                // 如果没有 source_id，保留（虽然这种情况不应该发生）
-                $deduplicatedAcls[] = $acl;
-            }
-        }
-        // 去重已完成，立即释放原始大数组，减轻内存峰值（后续仅用 $deduplicatedAcls）
+        $rows = $this->pending_method_level_acls[$module] ?? [];
         unset($this->pending_method_level_acls[$module]);
-        
-        // 开发环境：如果发现重复，写入 acl 日志频道，不输出到控制台
-        if (DEV && !empty($duplicateInfo)) {
-            $maxSourceIds = 30;
-            $lines = [__('【ACL 重复检测】模块: %{1} (方法级别权限)', [$module]), __('发现以下重复的 source_id：')];
-            $n = 0;
-            foreach ($duplicateInfo as $sourceId => $info) {
-                if ($n >= $maxSourceIds) {
-                    $lines[] = "\n" . __('... 已省略更多重复（共 %{1} 个 source_id）', [count($duplicateInfo)]);
-                    break;
-                }
-                $lines[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
-                $first = $info['first'] ?? [];
-                $lines[] = __('  首次出现:');
-                $lines[] = __('    - 类: %{1}', [$first['class'] ?? '']);
-                $lines[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
-                $lines[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
-                $lines[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
-                $duplicates = $info['duplicates'] ?? [];
-                $totalDups = $info['duplicates_total'] ?? count($duplicates);
-                $lines[] = __('  重复出现 (%{1} 次):', [$totalDups]);
-                foreach ($duplicates as $dup) {
-                    $lines[] = __('    - 索引 #%{1}:', [$dup['index']]);
-                    $lines[] = __('      类: %{1}', [$dup['class']]);
-                    $lines[] = __('      方法: %{1}', [$dup['method']]);
-                    $lines[] = __('      路由: %{1}', [$dup['route']]);
-                    $lines[] = __('      路由器: %{1}', [$dup['router']]);
-                }
-                if ($totalDups > count($duplicates)) {
-                    $lines[] = __('    ... 已省略 %{1} 条', [$totalDups - count($duplicates)]);
-                }
-                $n++;
-            }
-            $lines[] = "\n" . __('路由系统会为同一 action 生成多个 URL 变体，属正常现象，ACL 已自动去重。');
-            LoggerFactory::create('acl')->warning(implode("\n", $lines));
-        }
-
-        // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
-        $deduplicatedAcls = $this->excludeMenuXmlSources($deduplicatedAcls);
-        if (empty($deduplicatedAcls)) {
+        if ($rows === []) {
             return;
         }
-        
+        $rows = $this->deduplicateAclsBySourceId($rows);
+        $meta = $this->loadExistingAclMeta(\array_column($rows, 'source_id'));
+        $prepared = $this->prepareAclRowsForUpsert($rows, $meta);
+        unset($rows, $meta);
+        if ($prepared === []) {
+            return;
+        }
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            // 方法级别 ACL 统一为 type='pc'；仅保留 parent_source（当新数据为空时）
-            $sourceIds = array_column($deduplicatedAcls, 'source_id');
-            $existingParentMap = [];
-            if (!empty($sourceIds)) {
-                $existingRecords = $this->acl->reset()
-                    ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-                    ->select(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
-                    ->fetchArray();
-                foreach ($existingRecords as $record) {
-                    $existingParentMap[$record['source_id']] = $record['parent_source'] ?? '';
-                }
-            }
-            foreach ($deduplicatedAcls as &$acl) {
-                $sourceId = $acl['source_id'] ?? '';
-                if (!empty($sourceId) && isset($existingParentMap[$sourceId])) {
-                    $newParent = $acl['parent_source'] ?? '';
-                    if (empty($newParent) && $existingParentMap[$sourceId] !== '') {
-                        $acl['parent_source'] = $existingParentMap[$sourceId];
-                    }
-                }
-            }
-            unset($acl);
-
-            // acl 表对 source_id 有 UNIQUE，存在则按冲突键更新全部字段（方言由适配器生成）
-            $this->acl->reset()->clearData();
-            $this->acl->getQuery()->insert($deduplicatedAcls, ['source_id'], '')->fetch();
+            $this->upsertAclRowsChunked($prepared, null, 'method');
             $this->acl->commit();
-            CollectedAclSourceIdsRegistry::add(...array_column($deduplicatedAcls, 'source_id'));
+            CollectedAclSourceIdsRegistry::addMany(\array_column($prepared, 'source_id'));
+            unset($prepared);
         } catch (\Exception $exception) {
+            unset($prepared);
             $this->acl->rollBack();
-            if (DEV) {
-                p($exception->getMessage());
-            }
             throw $exception;
         }
-        
-        // 清空已保存的方法级别权限
-        unset($this->pending_method_level_acls[$module]);
     }
 
-    /**
-     * 排除来源于 menu.xml 的菜单资源，避免被控制器 ACL 覆盖。
-     *
-     * @param array<int, array<string, mixed>> $acls
-     * @return array<int, array<string, mixed>>
-     */
-    private function excludeMenuXmlSources(array $acls): array
+    private function isSourceKnownInBatch(string $sourceId): bool
     {
-        if (empty($acls)) {
-            return $acls;
+        if ($sourceId === '') {
+            return false;
+        }
+        foreach ($this->pending_class_level_acls as $rows) {
+            foreach ($rows as $row) {
+                if ((string)($row['source_id'] ?? '') === $sourceId) {
+                    return true;
+                }
+            }
+        }
+        foreach ($this->loaded_controller_acl_names as $map) {
+            if (\in_array($sourceId, $map, true)) {
+                return true;
+            }
         }
 
-        $sourceIds = array_values(array_filter(array_map(static fn(array $acl): string => (string)($acl['source_id'] ?? ''), $acls)));
-        if (empty($sourceIds)) {
-            return $acls;
-        }
-
-        $existingMenuXml = $this->acl->reset()
-            ->where(Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-            ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_menu_xml)
-            ->fields(Acl::schema_fields_SOURCE_ID)
-            ->select()
-            ->fetchArray();
-        $excludeSourceIds = array_column($existingMenuXml, Acl::schema_fields_SOURCE_ID);
-        if (empty($excludeSourceIds)) {
-            return $acls;
-        }
-
-        return array_values(array_filter(
-            $acls,
-            static fn(array $acl): bool => !in_array((string)($acl['source_id'] ?? ''), $excludeSourceIds, true)
-        ));
+        return isset($this->parentExistsCache[$sourceId]) && $this->parentExistsCache[$sourceId];
     }
 
     /**
@@ -1018,15 +1034,31 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
      */
     private function checkParentExists(string $parentSourceId): bool
     {
+        if ($parentSourceId === '') {
+            return false;
+        }
+        if (\array_key_exists($parentSourceId, $this->parentExistsCache)) {
+            return $this->parentExistsCache[$parentSourceId];
+        }
+        if ($this->isSourceKnownInBatch($parentSourceId)) {
+            $this->parentExistsCache[$parentSourceId] = true;
+
+            return true;
+        }
+
         try {
             $parentAcl = clone $this->acl;
             $parentAcl->reset();
             $result = $parentAcl->where(Acl::schema_fields_SOURCE_ID, $parentSourceId)
                 ->find()
                 ->fetch();
-            return $result && $result->getId();
+            $exists = (bool)($result && $result->getId());
+            $this->parentExistsCache[$parentSourceId] = $exists;
+
+            return $exists;
         } catch (\Exception $e) {
-            // 如果查询出错，返回false
+            $this->parentExistsCache[$parentSourceId] = false;
+
             return false;
         }
     }
@@ -1043,14 +1075,11 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
     private function findClassLevelParent(string $className, string $currentSourceId, string $moduleName = ''): string
     {
         try {
-            // 首先从内存中查找（最快，按模块索引）
+            // 首先从内存中查找（最快，按模块索引）；同批 upsert 前不必再验库。
             if (!empty($moduleName) && isset($this->loaded_controller_acl_names[$moduleName][$className])) {
                 $parentSourceId = $this->loaded_controller_acl_names[$moduleName][$className];
                 if ($parentSourceId && $parentSourceId !== $currentSourceId) {
-                    // 验证父级权限是否在数据库中存在
-                    $exists = $this->checkParentExists($parentSourceId);                    if ($exists) {
-                        return $parentSourceId;
-                    }
+                    return $parentSourceId;
                 }
             }
             
@@ -1077,6 +1106,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     if (empty($method)) {
                         $parentSourceId = $item->getData(Acl::schema_fields_SOURCE_ID);
                         if ($parentSourceId && $parentSourceId !== $currentSourceId) {
+                            $this->parentExistsCache[(string)$parentSourceId] = true;
+
                             return $parentSourceId;
                         }
                     }
@@ -1094,6 +1125,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                             $parentPerm = $parentParts[1];
                             // 如果父级权限名是当前权限名的前缀，则认为是父级
                             if (strpos($currentPerm, $parentPerm . '_') === 0) {
+                                $this->parentExistsCache[(string)$parentSourceId] = true;
+
                                 return $parentSourceId;
                             }
                         }

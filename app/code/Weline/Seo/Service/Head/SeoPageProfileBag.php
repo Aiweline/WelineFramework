@@ -11,10 +11,26 @@ use Weline\Framework\Runtime\RequestContext;
  *
  * Theme layout materialization may unset Template data before Partials head
  * renders, so page-specific SEO must survive outside the Template bag.
+ *
+ * Layout explicit SEO params use a separate fallback bag so they never replace
+ * controller/entity page profiles (entity-first, layout-last).
  */
 final class SeoPageProfileBag
 {
     public const REQUEST_KEY = 'weline.seo.page_profile';
+
+    public const LAYOUT_FALLBACK_KEY = 'weline.seo.layout_fallback';
+
+    /** @var list<string> */
+    public const LAYOUT_FALLBACK_KEYS = [
+        'meta_title',
+        'meta_description',
+        'meta_keywords',
+        'canonical_url',
+        'robots',
+        'image',
+        'og_image',
+    ];
 
     /**
      * @param array<string, mixed> $profile
@@ -39,9 +55,55 @@ final class SeoPageProfileBag
         RequestContext::set(self::REQUEST_KEY, is_array($profile) ? $profile : []);
     }
 
+    /**
+     * Store Theme layout explicit SEO fields as low-priority fallback only.
+     * Does not touch the controller/entity page profile bag.
+     *
+     * @param array<string, mixed> $fields
+     */
+    public static function setLayoutFallback(array $fields): void
+    {
+        RequestContext::set(self::LAYOUT_FALLBACK_KEY, self::normalizeLayoutFallback($fields));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function pullLayoutFallback(): array
+    {
+        $value = RequestContext::get(self::LAYOUT_FALLBACK_KEY);
+
+        return is_array($value) ? $value : [];
+    }
+
+    /**
+     * Extract whitelist SEO fields from Theme layout meta.
+     * Never promotes designer labels (name / layout_name / layout_description)
+     * or chrome-only page title params — ops must set explicit meta_title.
+     *
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    public static function extractLayoutFallbackFromMeta(array $meta): array
+    {
+        $out = [];
+        foreach (['meta_title', 'meta_description', 'meta_keywords', 'canonical_url', 'robots', 'image', 'og_image'] as $key) {
+            if (!array_key_exists($key, $meta)) {
+                continue;
+            }
+            $text = self::normalizeFallbackText($meta[$key] ?? null);
+            if ($text !== '') {
+                $out[$key] = $text;
+            }
+        }
+
+        return $out;
+    }
+
     public static function reset(): void
     {
         RequestContext::remove(self::REQUEST_KEY);
+        RequestContext::remove(self::LAYOUT_FALLBACK_KEY);
     }
 
     /**
@@ -57,6 +119,7 @@ final class SeoPageProfileBag
     public static function fingerprint(): string
     {
         $payload = self::fingerprintPayload(self::pull());
+        $payload['layout_fallback'] = self::fingerprintPayload(self::pullLayoutFallback());
         $payload['request_path'] = self::currentRequestPath();
 
         return sha1((string) json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
@@ -74,6 +137,30 @@ final class SeoPageProfileBag
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $fields
+     * @return array<string, mixed>
+     */
+    private static function normalizeLayoutFallback(array $fields): array
+    {
+        return self::extractLayoutFallbackFromMeta($fields);
+    }
+
+    private static function normalizeFallbackText(mixed $value): string
+    {
+        if (is_array($value)) {
+            foreach (['default', 'name', 'value', 'label'] as $key) {
+                if (isset($value[$key]) && trim((string) $value[$key]) !== '') {
+                    return trim((string) $value[$key]);
+                }
+            }
+
+            return '';
+        }
+
+        return trim((string) $value);
     }
 
     /**
@@ -117,13 +204,15 @@ final class SeoPageProfileBag
 
         return [
             'page_type' => (string) ($profile['page_type'] ?? ''),
-            'title' => (string) ($profile['title'] ?? ''),
-            'description' => (string) ($profile['description'] ?? ''),
+            'title' => (string) ($profile['title'] ?? $profile['meta_title'] ?? ''),
+            'description' => (string) ($profile['description'] ?? $profile['meta_description'] ?? ''),
             'canonical_url' => (string) ($profile['canonical_url'] ?? $profile['canonical'] ?? ''),
-            'image' => (string) ($profile['image'] ?? ''),
+            'image' => (string) ($profile['image'] ?? $profile['og_image'] ?? ''),
             'robots' => (string) ($profile['robots'] ?? ''),
             'product_id' => (string) ($product['product_id'] ?? $product['id'] ?? $product['sku'] ?? ''),
             'item_list_count' => is_array($profile['item_list'] ?? null) ? count($profile['item_list']) : 0,
+            'breadcrumb_count' => is_array($profile['breadcrumbs'] ?? null) ? count($profile['breadcrumbs']) : 0,
+            'breadcrumb_trails_count' => is_array($profile['breadcrumb_trails'] ?? null) ? count($profile['breadcrumb_trails']) : 0,
         ];
     }
 }

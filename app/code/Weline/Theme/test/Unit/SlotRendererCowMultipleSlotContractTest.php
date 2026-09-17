@@ -30,6 +30,9 @@ final class SlotRendererCowMultipleSlotContractTest extends TestCase
         self::assertStringContainsString('header-wishlist', $src);
         self::assertStringContainsString("\$widgetCode === 'wishlist-icon'", $src);
         self::assertStringContainsString('if ($this->isMultipleSlotWrapperTag($wrapperOpenTag))', $src);
+        self::assertStringContainsString('slotInnerContainsNestedSlots', $src);
+        self::assertStringContainsString('multiple-rebuild', $src);
+        self::assertStringContainsString('nested data-wslot shells survive', $src);
         self::assertStringNotContainsString('function isMultipleSlotElement(', $src);
         self::assertStringNotContainsString('function processSlotFragmentWithDom(', $src);
         self::assertStringContainsString('assertSlotBoundaryMarkersPresent', $src);
@@ -50,7 +53,6 @@ final class SlotRendererCowMultipleSlotContractTest extends TestCase
     {
         foreach ([
             'view/statics/ui/pages/weline-theme-editor.js',
-            'view/statics/js/theme-editor.js',
         ] as $path) {
             $editor = $this->read($path);
             self::assertStringContainsString('syncLibraryTypeFilterChipsFromTab', $editor, $path);

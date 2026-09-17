@@ -9,7 +9,7 @@ use Weline\Product\Service\StorefrontSeoListingFacts;
 /**
  * Promotion-owned SEO facts for hub + theme storefront pages.
  *
- * UI page_type stays the theme slug (deals/sale/…); SEO page_type is product_list
+ * UI page_type stays the theme slug (deals/sale/…); SEO page_type is products
  * so HeadRenderer emits CollectionPage without colliding with tab highlighting.
  */
 final class PromotionSeoFactsBuilder
@@ -62,7 +62,7 @@ final class PromotionSeoFactsBuilder
         }
 
         return [
-            'page_type' => 'product_list',
+            'page_type' => 'products',
             'title' => $title,
             'description' => $description,
             'canonical_url' => $canonical,

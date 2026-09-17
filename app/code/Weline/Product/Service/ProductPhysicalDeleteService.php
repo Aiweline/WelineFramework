@@ -34,6 +34,8 @@ final class ProductPhysicalDeleteService
         private readonly AttributeValueRepository $attributeValues,
         private readonly ProductSupplierRepository $productSuppliers,
         private readonly mixed $inventory = null,
+        private readonly mixed $resourceChanges = null,
+        private readonly mixed $websites = null,
     ) {
     }
 
@@ -64,6 +66,8 @@ final class ProductPhysicalDeleteService
         if ($productIds === []) {
             return ['deleted' => 0, 'product_ids' => []];
         }
+
+        $this->emitMediaReferenceDeletes($websiteId, $existing);
 
         $offerRows = $this->offers->listByProductIds($websiteId, $productIds);
         $offerIds = array_values(array_unique(array_filter(array_map(
@@ -146,6 +150,74 @@ final class ProductPhysicalDeleteService
             }
             $link = $this->productSuppliers->findById($websiteId, $linkId);
             $link?->delete();
+        }
+    }
+
+    /**
+     * Emit resource_changed(delete) with resource.code=sku so FileManager unbinds refs.
+     * @param list<array<string,mixed>> $productRows
+     */
+    private function emitMediaReferenceDeletes(int $websiteId, array $productRows): void
+    {
+        try {
+            $factory = $this->resourceChanges;
+            if ($factory === null) {
+                if (!class_exists(\Weline\Framework\Event\ResourceChange\ResourceChangeFactory::class)) {
+                    return;
+                }
+                $factory = ObjectManager::getInstance(
+                    \Weline\Framework\Event\ResourceChange\ResourceChangeFactory::class
+                );
+            }
+            if (!$factory instanceof \Weline\Framework\Event\ResourceChange\ResourceChangeFactory) {
+                return;
+            }
+            $websiteCode = 'default';
+            try {
+                $websites = $this->websites;
+                if ($websites === null && interface_exists(\Weline\Website\Api\Data\WebsiteRepositoryInterface::class)) {
+                    $websites = ObjectManager::getInstance(\Weline\Website\Model\Website::class);
+                }
+                if (is_object($websites) && method_exists($websites, 'load')) {
+                    $site = clone $websites;
+                    $site->load($websiteId);
+                    $code = trim((string)$site->getData('code'));
+                    if ($code !== '') {
+                        $websiteCode = $code;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+            foreach ($productRows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $sku = trim((string)($row[\Weline\Product\Model\Shard\Product::schema_fields_SKU] ?? ''));
+                $productId = (int)($row[\Weline\Product\Model\Shard\Product::schema_fields_ID] ?? 0);
+                if ($sku === '' || $productId <= 0) {
+                    continue;
+                }
+                $change = $factory->create(
+                    'product',
+                    $productId,
+                    'delete',
+                    max(1, (int)($row[\Weline\Product\Model\Shard\Product::schema_fields_IDENTITY_VERSION] ?? 1)),
+                    $websiteId,
+                    $websiteCode,
+                    ['sku' => $sku],
+                    null,
+                    ['sku'],
+                    ['namespaces' => [], 'urls' => []],
+                    ['entry' => 'product_physical_delete'],
+                    null,
+                    0,
+                    $sku,
+                    null,
+                );
+                \w_changed($change);
+            }
+        } catch (\Throwable) {
+            // Media unbind is best-effort beside catalog cascade; never block physical delete.
         }
     }
 }

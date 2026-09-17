@@ -65,6 +65,10 @@ final class ProductBrandAdminContractTest extends TestCase
         self::assertStringContainsString("'image' => (string)(\$option['image_url'] ?? '')", $template);
         self::assertStringNotContainsString('name="supplier_ids[]"', $template);
         self::assertStringContainsString('data-testid="product-brand-logo"', $template);
+        self::assertStringContainsString('data-media-identity-root="product_brand"', $template);
+        self::assertStringContainsString('data-media-identity-scope=', $template);
+        self::assertStringContainsString('identity_root=product_brand', $template);
+        self::assertStringContainsString('media-identity-picker.js', $template);
         self::assertStringContainsString('replaceSuppliersForBrand', $this->read('Repository/SupplierBrandRepository.php'));
         $taglib = $this->read('Taglib/CatalogEntitySelect.php');
         self::assertStringContainsString('weline-product-catalog-select-chip-thumb', $taglib);

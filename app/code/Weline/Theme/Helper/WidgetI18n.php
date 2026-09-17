@@ -141,6 +141,18 @@ final class WidgetI18n
 
     private static function resolveStorefrontLocale(): string
     {
+        // Fiber-safe static publish sets request language override in Context only
+        // (no $_SERVER / WelineEnv mutation). Prefer that before path / globals.
+        try {
+            $forced = trim((string)State::getRequestLanguageOverride());
+            if ($forced !== ''
+                && preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $forced)
+            ) {
+                return $forced;
+            }
+        } catch (\Throwable) {
+        }
+
         // Path locale wins over RequestContext/KeyBuilder, which can lag on /{locale}/ pages.
         $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
         $pathLocale = self::localeFromRequestUri($requestUri);

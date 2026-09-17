@@ -41,6 +41,7 @@ return [
     'Weline_Theme::theme/frontend/widgets/header/help-center-link/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/order-tracking-link/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/notice-right-link/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/header/header-policy-links/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/top-bar/default.phtml',
 
     // --- 横幅 (banner) ---
@@ -64,6 +65,10 @@ return [
                 'label' => '广告图片',
                 'media_options' => [
                     'default_directory' => 'banner',
+                    'aspect_ratio' => '1920/150',
+                    'recommend_width' => '1920',
+                    'recommend_height' => '150',
+                    'aspect_ratio_tolerance' => '0.1',
                 ],
             ],
         ],

@@ -65,12 +65,28 @@ class ParamTypeRenderer implements ParamFormRendererInterface
     ];
 
     /**
+     * Optional business types (module may be absent). Keep Widget free of hard Product require.
+     *
+     * @var array<string, class-string<WidgetParamTypeInterface>>
+     */
+    private const OPTIONAL_TYPE_CLASSES = [
+        'product_picker' => 'Weline\\Product\\Ui\\ParamType\\ProductPickerType',
+    ];
+
+    /**
      * 类型归一：未在支持列表中的 type 视为 text
      */
     public function normalizeType(string $type): string
     {
         $type = strtolower(trim($type));
-        return isset(self::DEFAULT_TYPE_CLASSES[$type]) ? $type : 'text';
+        if (isset(self::DEFAULT_TYPE_CLASSES[$type])) {
+            return $type;
+        }
+        if (isset(self::OPTIONAL_TYPE_CLASSES[$type]) && class_exists(self::OPTIONAL_TYPE_CLASSES[$type])) {
+            return $type;
+        }
+
+        return 'text';
     }
 
     public function getRenderer(string $type): WidgetParamTypeInterface
@@ -79,7 +95,10 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         if (isset($this->typeRenderers[$type])) {
             return $this->typeRenderers[$type];
         }
-        $rendererClass = self::DEFAULT_TYPE_CLASSES[$type];
+        $rendererClass = self::DEFAULT_TYPE_CLASSES[$type]
+            ?? ((isset(self::OPTIONAL_TYPE_CLASSES[$type]) && class_exists(self::OPTIONAL_TYPE_CLASSES[$type]))
+                ? self::OPTIONAL_TYPE_CLASSES[$type]
+                : self::DEFAULT_TYPE_CLASSES['text']);
         $this->typeRenderers[$type] = ObjectManager::getInstance($rendererClass);
         return $this->typeRenderers[$type];
     }
@@ -130,7 +149,8 @@ class ParamTypeRenderer implements ParamFormRendererInterface
             ], $identityAttrs)) . '
                 ' . $groupsHtml . '
                 <div class="w-param-actions">
-                    <button type="submit" class="w-button w-param-btn-save-widget" data-tone="primary">' . __('保存配置') . '</button>
+                    <span class="w-theme-editor-autosave-status" data-widget-autosave-status="1" data-state="idle" hidden></span>
+                    <button type="submit" class="w-button w-param-btn-save-widget" data-tone="neutral" data-variant="outline">' . __('立即保存') . '</button>
                     <button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline"' . $deleteIdentitySuffix . '>' . __('删除') . '</button>
                 </div>
             ' . FormRenderer::close();
@@ -152,7 +172,9 @@ class ParamTypeRenderer implements ParamFormRendererInterface
             $actionsHtml = '<button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline"' . $deleteIdentitySuffix . '>' . __('删除') . '</button>' . $actionsHtml;
         }
         if ($showSaveButton) {
-            $actionsHtml = '<button type="submit" class="w-button w-param-btn-save-widget" data-tone="primary">' . __('保存配置') . '</button>' . $actionsHtml;
+            $actionsHtml = '<span class="w-theme-editor-autosave-status" data-widget-autosave-status="1" data-state="idle" hidden></span>'
+                . '<button type="submit" class="w-button w-param-btn-save-widget" data-tone="neutral" data-variant="outline">' . __('立即保存') . '</button>'
+                . $actionsHtml;
         }
 
         $actionsBlock = $actionsHtml !== '' ? '<div class="w-param-actions">' . $actionsHtml . '</div>' : '';
@@ -206,13 +228,27 @@ class ParamTypeRenderer implements ParamFormRendererInterface
             'advanced'=> ['label' => __('高级设置'), 'icon' => 'settings', 'collapsed' => true, 'fields' => []],
         ];
         $socialKeys = ['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'];
+        // Media/source URLs stay in 基本信息 — burying video_url in collapsed 链接配置 hid the only field YouTube needs.
+        $mediaSourceKeyExact = ['src', 'source', 'poster', 'file', 'path'];
+        $mediaSourceKeyPrefixes = ['video_', 'audio_', 'media_', 'stream_', 'file_', 'poster_', 'image_src', 'cover_'];
         foreach ($params as $key => $param) {
             if (isset($param['group']) && isset($groups[$param['group']])) {
                 $groups[$param['group']]['fields'][$key] = $param;
                 continue;
             }
-            $keyLower = strtolower($key);
-            if (in_array($keyLower, $socialKeys) || str_contains($keyLower, 'url') || str_contains($keyLower, 'link') || str_contains($keyLower, 'http')) {
+            $keyLower = strtolower((string)$key);
+            $isMediaSourceKey = in_array($keyLower, $mediaSourceKeyExact, true);
+            if (!$isMediaSourceKey) {
+                foreach ($mediaSourceKeyPrefixes as $prefix) {
+                    if (str_starts_with($keyLower, $prefix)) {
+                        $isMediaSourceKey = true;
+                        break;
+                    }
+                }
+            }
+            if ($isMediaSourceKey) {
+                $groups['basic']['fields'][$key] = $param;
+            } elseif (in_array($keyLower, $socialKeys, true) || str_contains($keyLower, 'url') || str_contains($keyLower, 'link') || str_contains($keyLower, 'http')) {
                 $groups['link']['fields'][$key] = $param;
             } elseif (str_contains($keyLower, 'style') || str_contains($keyLower, 'size') || str_contains($keyLower, 'color') || str_contains($keyLower, 'align') || str_contains($keyLower, 'gap') || str_contains($keyLower, 'margin') || str_contains($keyLower, 'padding')) {
                 $groups['style']['fields'][$key] = $param;
@@ -266,7 +302,14 @@ class ParamTypeRenderer implements ParamFormRendererInterface
 
     public function getRegisteredTypes(): array
     {
-        return array_keys(self::DEFAULT_TYPE_CLASSES);
+        $types = array_keys(self::DEFAULT_TYPE_CLASSES);
+        foreach (self::OPTIONAL_TYPE_CLASSES as $code => $class) {
+            if (class_exists($class)) {
+                $types[] = $code;
+            }
+        }
+
+        return $types;
     }
 
     private function resolveUiType(array $param): string

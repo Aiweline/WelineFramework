@@ -8,13 +8,16 @@
 不能删除基准货币,"Cannot delete base currency"
 货币已删除,"Currency deleted"
 删除失败：%{1},"Delete failed: %{1}"
+已检测到货币配置入口可用；请确认默认币与汇率源。,已检测到货币配置入口可用；请确认默认币与汇率源。
+站点可用货币、默认币与汇率源。,站点可用货币、默认币与汇率源。
+本地化,本地化
+货币与汇率,"Currency & exchange rates"
 id属性不能为空,id属性不能为空
 点击选择货币（可多选）,"Click to select currencies (multiple selection allowed)"
 点击选择货币,"Click to select a currency"
 搜索货币代码、名称或符号,"Search currency code, name or symbol"
 清空选择,"Clear selection"
 "Currency ResourceChange Observer 只接受 v1 契约","Currency ResourceChange Observer only accepts v1 contracts"
-货币与汇率,"Currency & exchange rates"
 查看本站支持的结算货币、基准币与汇率政策说明。,"View supported storefront currencies, the base currency, and exchange-rate policy."
 自动汇率,"Automatic rates"
 手动汇率,"Manual rates"

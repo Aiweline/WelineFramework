@@ -22,7 +22,8 @@ final class ProductCardAddToCartParams
      *     buy_now_button_class?: string,
      *     wrapper_class?: string,
      *     label?: string,
-     *     buy_now_label?: string
+     *     buy_now_label?: string,
+     *     css_owned_by_card?: bool
      * } $options
      * @return array<string, mixed>
      */
@@ -41,7 +42,8 @@ final class ProductCardAddToCartParams
      *     buy_now_button_class?: string,
      *     wrapper_class?: string,
      *     label?: string,
-     *     buy_now_label?: string
+     *     buy_now_label?: string,
+     *     css_owned_by_card?: bool
      * } $options
      * @return array<string, mixed>
      */
@@ -122,7 +124,8 @@ final class ProductCardAddToCartParams
      *     buy_now_button_class?: string,
      *     wrapper_class?: string,
      *     label?: string,
-     *     buy_now_label?: string
+     *     buy_now_label?: string,
+     *     css_owned_by_card?: bool
      * } $options
      * @return array<string, mixed>
      */
@@ -138,6 +141,8 @@ final class ProductCardAddToCartParams
             'card_add_to_cart_wrapper_class' => trim((string)($options['wrapper_class'] ?? '')),
             'card_add_to_cart_label' => trim((string)($options['label'] ?? '')),
             'card_buy_now_label' => trim((string)($options['buy_now_label'] ?? '')),
+            // Canonical <w:product:card> owns CTA chrome via product-card.css — skip second style tag.
+            'card_css_owned_by_product_card' => (bool)($options['css_owned_by_card'] ?? false),
         ];
     }
 

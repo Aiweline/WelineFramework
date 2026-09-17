@@ -22,6 +22,14 @@ final class MailTemplateShellContractTest extends TestCase
         self::assertStringContainsString('{{MAIL_BODY}}', $shellSrc);
         self::assertStringContainsString('{{var.site_logo_img|raw}}', $shellSrc);
         self::assertStringContainsString('{{var.brand_header_bg}}', $shellSrc);
+        self::assertStringContainsString('{{var.brand_header_bg_css}}', $shellSrc);
+        self::assertStringContainsString('{{var.brand_body_bg_css}}', $shellSrc);
+        self::assertStringContainsString('{{var.brand_footer_bg_css}}', $shellSrc);
+        self::assertStringContainsString('data-weline-mail-region="header"', $shellSrc);
+        self::assertStringContainsString('data-weline-mail-region="body"', $shellSrc);
+        self::assertStringContainsString('data-weline-mail-region="footer"', $shellSrc);
+        self::assertSame(1, substr_count(strtolower($shellSrc), 'data-weline-mail-region="footer"'));
+        self::assertStringContainsString('{{var.brand_display_name}}', $shellSrc);
         self::assertStringContainsString('<lang>需要帮助？</lang>', $shellSrc);
         self::assertStringContainsString('<lang>访问</lang>', $shellSrc);
         self::assertStringContainsString('<lang>此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。</lang>', $shellSrc);
@@ -76,6 +84,14 @@ final class MailTemplateShellContractTest extends TestCase
             self::assertStringNotContainsString('site_logo_img', $html, $file);
             self::assertStringNotContainsString('<script', strtolower($html), $file);
         }
+
+        $orderCreated = (string)file_get_contents($root . '/app/code/Weline/Order/view/email/order_created/zh_Hans_CN.html');
+        self::assertStringNotContainsString('width:38%', $orderCreated);
+        self::assertStringContainsString('width:1%', $orderCreated);
+        self::assertStringContainsString('white-space:nowrap', $orderCreated);
+        $catalog = (string)file_get_contents($smtp . '/Service/MailTemplateSeedCopyCatalog.php');
+        self::assertStringContainsString('width:1%', $catalog);
+        self::assertStringNotContainsString("width:38%;", $catalog);
 
         $provider = (string)file_get_contents($smtp . '/extends/module/Weline_Framework/Query/SmtpQueryProvider.php');
         self::assertStringContainsString('MailTemplateShellComposer', $provider);

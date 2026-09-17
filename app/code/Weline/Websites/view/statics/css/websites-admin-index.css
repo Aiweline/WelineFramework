@@ -160,6 +160,73 @@
         border-top: 1px solid var(--weline-theme-border);
     }
 
+    /* 站点范围树：折叠箭头对齐分类/EAV（无边框方钮，展开旋转） */
+    .w-websites-scope-admin .w-catalog-tree__toggle {
+        display: inline-grid;
+        inline-size: 1.5rem;
+        block-size: 1.5rem;
+        flex: 0 0 auto;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: var(--weline-radius-sm);
+        background: transparent;
+        color: var(--weline-theme-text-muted);
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        transition: transform var(--weline-motion-fast), color var(--weline-motion-fast), background-color var(--weline-motion-fast);
+        transform: rotate(0deg);
+    }
+
+    .w-websites-scope-admin .w-catalog-tree__toggle:hover {
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+    }
+
+    .w-websites-scope-admin .w-catalog-tree__toggle:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
+        outline-offset: 1px;
+    }
+
+    .w-websites-scope-admin .w-catalog-tree__toggle--spacer {
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .w-websites-scope-admin .w-catalog-tree__item[aria-expanded="true"] > .w-catalog-tree__row > .w-catalog-tree__toggle {
+        transform: rotate(90deg);
+        color: var(--weline-theme-text);
+    }
+
+    .w-websites-scope-admin .w-catalog-tree__action-item {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .w-websites-scope-admin .w-catalog-tree__add {
+        margin-inline-start: var(--weline-space-7);
+        margin-block: var(--weline-space-1);
+    }
+
+    .w-websites-scope-editor__header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+    }
+
+    .w-websites-scope-admin .w-catalog-tree__thumb {
+        inline-size: 1.25rem;
+        block-size: 1.25rem;
+        border-radius: var(--weline-radius-sm);
+        object-fit: cover;
+        flex: 0 0 auto;
+        background: var(--weline-theme-surface);
+    }
+
     @media (max-width: 48rem) {
         .w-website-admin__toolbar {
             grid-template-columns: 1fr;

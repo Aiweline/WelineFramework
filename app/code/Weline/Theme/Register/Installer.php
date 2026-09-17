@@ -294,7 +294,9 @@ class Installer implements RegisterInterface
                 $this->welineTheme->save();
             } else {
                 $this->welineTheme->clearQuery();
-                $res = $this->welineTheme->setId(0)
+                // Do not setId(0): Postgres would persist id=0 and break theme:active load semantics.
+                $this->welineTheme->unsetData(WelineTheme::schema_fields_ID);
+                $res = $this->welineTheme
                     ->setIsActive(true)
                     ->save();
                 if (!$res) {

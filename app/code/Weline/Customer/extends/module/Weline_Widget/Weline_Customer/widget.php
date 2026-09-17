@@ -166,7 +166,7 @@ return [
         ],
         'default_injections' => [
             [
-                'layout_type' => 'account.auth',
+                'layout_type' => 'account/login',
                 'layout_option' => 'default',
                 'slot' => 'account-login-social-providers',
                 'area' => 'content',
@@ -180,13 +180,13 @@ return [
                 ],
             ],
             [
-                'layout_type' => 'account_auth',
+                'layout_type' => 'account.auth',
                 'layout_option' => 'default',
                 'slot' => 'account-login-social-providers',
                 'area' => 'content',
                 'sort_order' => 0,
                 'required' => true,
-                'reason' => '登录表单社媒区默认注入（account_auth 布局别名）',
+                'reason' => '遗留 account.auth 壳默认注入社媒登录',
                 'config' => [
                     'enable_google' => true,
                     'enable_facebook' => true,

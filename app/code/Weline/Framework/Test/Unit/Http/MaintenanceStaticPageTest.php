@@ -29,8 +29,16 @@ final class MaintenanceStaticPageTest extends TestCase
             MaintenanceStaticPage::resolveLang('/pub/errors/maintenance/en_US.html')
         );
         self::assertSame(
+            'en_US',
+            MaintenanceStaticPage::resolveLang('/pub/errors/maintenance/shop/en_US.html')
+        );
+        self::assertSame(
             '/pub/errors/maintenance/en_US.html',
             MaintenanceStaticPage::publicHtmlUrl('en_US')
+        );
+        self::assertSame(
+            '/pub/errors/maintenance/shop/en_US.html',
+            MaintenanceStaticPage::publicHtmlUrl('en_US', 'shop')
         );
     }
 

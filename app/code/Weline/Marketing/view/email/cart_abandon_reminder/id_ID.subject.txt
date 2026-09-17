@@ -1,0 +1,1 @@
+Pengingat checkout · {{var.customer_name}}

@@ -1,7 +1,20 @@
 <?php
+/**
+ * Backend shipment management — Shopify-aligned Mark as fulfilled (optional tracking).
+ *
+ * @var list<array<string,mixed>> $candidates
+ * @var list<array<string,mixed>> $progress
+ * @var list<array<string,mixed>> $tracking_carriers
+ * @var list<array<string,mixed>> $label_services
+ * @var array<string,mixed> $shipping_ref
+ */
 $candidates = is_array($candidates ?? null) ? $candidates : [];
 $progress = is_array($progress ?? null) ? $progress : [];
+$tracking_carriers = is_array($tracking_carriers ?? null) ? $tracking_carriers : [];
+$label_services = is_array($label_services ?? null) ? $label_services : [];
+$shipping_ref = is_array($shipping_ref ?? null) ? $shipping_ref : [];
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$defaultCarrierId = (int)($shipping_ref['checkout_carrier_id'] ?? 0);
 ?>
 <div class="w-grid" data-testid="order-shipment-management" weline-code="order.backend.shipment.section_1">
   <div style="--w-span:12;">
@@ -10,7 +23,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     </div>
     <div><template>Weline_Component::message.phtml</template></div>
     <div class="w-alert" data-tone="info" style="--w-mb:var(--weline-space-4);">
-      <?= __('发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。') ?>
+      <?= __('对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。结账配送仅作参考。') ?>
     </div>
 
     <div class="w-stack" style="--w-gap:var(--weline-space-4); --w-mb:var(--weline-space-4);">
@@ -48,30 +61,39 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             </div>
 
             <w:form method="post" action="@backend-url{'order/backend/shipment/execute'}" class="w-stack" style="--w-gap:var(--weline-space-3);" data-testid="shipment-command-form">
+              <input type="hidden" name="fulfill_mode" value="manual">
               <input type="hidden" name="fulfillment_unit_uuid" value="<?= $escape($row['fulfillment_unit_uuid'] ?? '') ?>">
               <input type="hidden" name="expected_version" value="<?= (int)($row['fulfillment_version'] ?? 0) ?>">
               <input type="hidden" name="expected_grant_version" value="<?= (int)($row['expected_grant_version'] ?? 0) ?>">
+              <input type="hidden" name="idempotency_key" value="ship-ui-<?= bin2hex(random_bytes(12)) ?>">
               <div class="w-grid" style="--w-gap:var(--weline-space-3);">
                 <div style="--w-span:4;">
                   <label class="w-label"><?= __('承运商') ?></label>
-                  <input class="w-input" type="text" name="carrier" maxlength="100" placeholder="<?= __('例如：顺丰 / UPS') ?>" data-size="sm">
+                  <select class="w-input" name="carrier_id" data-size="sm" data-testid="shipment-carrier-select">
+                    <option value="0"><?= __('其他（手填名称）') ?></option>
+                    <?php foreach ($tracking_carriers as $c): ?>
+                      <option value="<?= (int)$c['carrier_id'] ?>" <?= $defaultCarrierId === (int)$c['carrier_id'] ? 'selected' : '' ?>>
+                        <?= $escape($c['carrier_name'] ?? $c['carrier_code'] ?? '') ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
                 </div>
-                <div style="--w-span:5;">
-                  <label class="w-label"><?= __('平台物流单号') ?> <span class="w-text" data-tone="danger">*</span></label>
-                  <input class="w-input" type="text" name="tracking_number" maxlength="100" required placeholder="<?= __('运单号') ?>" data-size="sm" data-testid="shipment-tracking-number">
+                <div style="--w-span:4;">
+                  <label class="w-label"><?= __('其他承运商名称') ?></label>
+                  <input class="w-input" type="text" name="carrier_name" maxlength="100" placeholder="<?= __('选「其他」时填写') ?>" data-size="sm">
+                </div>
+                <div style="--w-span:4;">
+                  <label class="w-label"><?= __('物流单号') ?> <span class="w-text" data-tone="muted" data-size="sm"><?= __('可选') ?></span></label>
+                  <input class="w-input" type="text" name="tracking_number" maxlength="100" placeholder="<?= __('留空则不发送发货邮件') ?>" data-size="sm" data-testid="shipment-tracking-number">
                 </div>
                 <div style="--w-span:3;">
                   <label class="w-label"><?= __('数量') ?></label>
                   <input class="w-input" type="number" min="1" max="<?= $remaining ?>" name="qty_minor" value="<?= min($remaining, max(1, (int)($row['remaining_qty_minor'] ?? 1))) ?>" required data-size="sm" aria-label="<?= __('发货数量') ?>">
                 </div>
-                <div style="--w-span:6;">
-                  <label class="w-label"><?= __('幂等键') ?></label>
-                  <input class="w-input" type="text" maxlength="128" pattern="[A-Za-z0-9._:\-]+" name="idempotency_key" value="ship-ui-<?= bin2hex(random_bytes(12)) ?>" required data-size="sm" aria-label="<?= __('幂等键') ?>">
-                </div>
-                <div style="--w-span:6;padding-top:1.5rem;--w-gap:var(--weline-space-3);" class="w-cluster" data-align="end" data-justify="between">
+                <div style="--w-span:9;padding-top:1.5rem;" class="w-cluster" data-align="end" data-justify="between">
                   <label class="w-check">
-                    <input type="checkbox" name="notify_customer" value="1" checked data-testid="shipment-notify-customer">
-                    <?= __('发送「已发货」邮件') ?>
+                    <input type="checkbox" name="notify_customer" value="1" data-testid="shipment-notify-customer">
+                    <?= __('有运单号时发送「已发货」邮件') ?>
                   </label>
                   <button class="w-button" type="submit" data-testid="shipment-submit" data-tone="primary" data-size="sm"><?= __('确认发货') ?></button>
                 </div>

@@ -11,11 +11,11 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page", "category"]}
- * @widget.supports {["layout-homepage-featured","layout-homepage-content","layout-product-list-recommendations","layout-category-recommendations","layout-cms-content","layout-default-content"]}
+ * @widget.supports {["layout-homepage-featured","layout-homepage-content","layout-products-recommendations","layout-category-recommendations","layout-cms-content","layout-default-content"]}
  *
  * @param title {default="推荐产品",type="string",label="标题"}
  * @param subtitle {default="为您精选的优质商品",type="string",label="副标题"}
- * @param product_ids {default="",type="string",label="产品ID",description="指定产品ID，逗号分隔"}
+ * @param product_ids {default="",type="product_picker",label="指定产品",description="搜索选择产品；留空则按推荐逻辑取品",i18n=false}
  * @param limit {default=8,type="number",label="显示数量"}
  * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
  * @param show_price {default=true,type="bool",label="显示价格"}
@@ -33,6 +33,7 @@
 
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
@@ -128,11 +129,11 @@ $cardShowCompare = !empty($shopperActions['show_compare']);
 $cardShowQuickview = !empty($shopperActions['show_quickview']);
 
 ?>
-
 <section class="<?= $esc($wc) ?> weline-product-card-shelf<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <?php if ($title || $subtitle): ?>
         <div class="widget-header">
             <?php if ($title): ?>
@@ -213,19 +214,24 @@ $cardShowQuickview = !empty($shopperActions['show_quickview']);
 }
 
 .<?= $wc ?> .products-wrapper {
+    overflow: visible;
+}
+
+.<?= $wc ?> .layout-carousel .products-wrapper {
     overflow: hidden;
 }
 
 .<?= $wc ?> .products-grid {
     display: grid;
     gap: var(--weline-space-5);
+    align-items: stretch;
 }
 
-.<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
-.<?= $wc ?> .products-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
-.<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
-.<?= $wc ?> .products-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
-.<?= $wc ?> .products-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
+.<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 
 .<?= $wc ?> .layout-carousel .products-grid {
     display: flex;
@@ -264,44 +270,7 @@ $cardShowQuickview = !empty($shopperActions['show_quickview']);
 .<?= $wc ?> .carousel-prev { left: var(--token-size-22px); }
 .<?= $wc ?> .carousel-next { right: var(--token-size-22px); }
 
-.<?= $wc ?> .product-card-purchase-actions {
-    display: grid;
-    gap: 6px;
-    width: 100%;
-}
-.<?= $wc ?> .btn-add-to-cart,
-.<?= $wc ?> .btn-buy-now {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--weline-space-2);
-    width: 100%;
-    min-height: 2.5rem;
-    border-radius: var(--weline-radius-lg);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: 700;
-    appearance: none;
-    -webkit-appearance: none;
-    box-sizing: border-box;
-}
-.<?= $wc ?> .btn-add-to-cart {
-    border: 1px solid var(--color-primary-border, var(--color-primary));
-    background: var(--color-primary-bg-subtle, #f8ede9);
-    color: var(--color-primary-text-emphasis, #7a3028);
-}
-.<?= $wc ?> .btn-buy-now {
-    border: 1px solid var(--color-primary-dark, #963b30);
-    background: var(--color-primary, #b84a3c);
-    color: var(--color-on-primary, #f7f4ef);
-}
-.<?= $wc ?> .btn-add-to-cart:hover {
-    background: color-mix(in srgb, var(--color-primary, #b84a3c) 16%, #ffffff);
-    border-color: var(--color-primary-hover, #963b30);
-}
-.<?= $wc ?> .btn-buy-now:hover {
-    background: var(--color-primary-hover, #963b30);
-}
+/* CTA 色/圆角由 canonical .weline-product-card / product-card.css 拥有；此处禁止第三套按钮皮 */
 
 @media (max-width: 1200px) {
     .<?= $wc ?> .products-grid.columns-5,

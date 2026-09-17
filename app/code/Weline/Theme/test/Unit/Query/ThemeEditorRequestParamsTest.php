@@ -256,6 +256,8 @@ class ThemeEditorRequestParamsTest extends TestCore
             "'/theme/backend/theme-editor/chrome-mode'" => 'getChromeMode()',
             "'/theme/backend/theme-editor/detach-chrome'" => 'postDetachChrome()',
             "'/theme/backend/theme-editor/restore-chrome'" => 'postRestoreChrome()',
+            "'/theme/backend/theme-editor/resolve-navigation'" => 'postResolveNavigation()',
+            "'/theme/backend/theme-editor/resolve-file-image-previews'" => 'postResolveFileImagePreviews()',
             "'/theme/backend/ai/agents'" => 'createDirectThemeAi()->getAgents()',
             "'/theme/backend/ai/publish'" => 'createDirectThemeAi()->postPublish()',
             "'/theme/backend/ai/prepare-refine'" => 'createDirectThemeAi()->postPrepareRefine()',

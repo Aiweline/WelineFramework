@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Router\FullPageCacheCoordinator;
-use Weline\Framework\Session\SessionFactory;
 use Weline\Theme\Helper\PreviewManager;
 
 /**
@@ -34,12 +33,6 @@ final class PreviewExitService
         $this->previewTokenService->clearPreviewCookie();
         $this->previewContextService->clearContext();
         PreviewManager::clearPreviewConfig();
-
-        try {
-            SessionFactory::getInstance()->createBackendSession()->delete('preview_auto_login');
-        } catch (\Throwable) {
-        }
-
         PreviewTokenService::resetRequestState();
 
         // Drop Process L1 payloads that may have been poisoned while preview cookie bypass was missing.

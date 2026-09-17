@@ -16,7 +16,6 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Api\Localization\LocaleCatalogInterface;
 use Weline\Theme\Helper\ComponentMetaParser;
-use Weline\Theme\Helper\ConfigLoader;
 use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
@@ -143,7 +142,6 @@ class Index extends BackendController
         $previewUrlFrontend = $url->getBackendUrl('theme/backend/index/preview', [
             'theme_id' => $theme->getId(),
             'area' => 'frontend',
-            'auto_login' => '1' // 默认开启自动登录
         ]);
         
         $previewUrlBackend = $url->getBackendUrl('theme/backend/index/preview', [
@@ -179,7 +177,6 @@ class Index extends BackendController
     {
         $themeId = (int)$this->request->getParam('theme_id', 0);
         $area = $this->request->getParam('area', 'frontend'); // frontend、backend 或 mobile
-        $autoLogin = $this->request->getParam('auto_login', '1'); // 是否自动登录，默认开启（1=开启，0=关闭）
         $pageType = (string)$this->request->getParam('page_type', 'homepage');
         $versionId = (int)$this->request->getParam('version_id', 0);
         $status = (string)$this->request->getParam('status', 'draft');
@@ -190,7 +187,6 @@ class Index extends BackendController
         $result = $previewEntry->preparePreviewRedirect(
             $themeId,
             (string)$area,
-            $autoLogin,
             $this->session,
             true,
             null,
@@ -230,59 +226,6 @@ class Index extends BackendController
         }
 
         return $this->fetchJson($this->error((string)($result['message'] ?? __('激活失败'))));
-    }
-
-    /**
-     * 根据布局文件的 @preview.login 标记判断是否需要自动登录
-     * 
-     * @param WelineTheme $theme 主题对象
-     * @param string $area 区域（frontend/backend）
-     * @return bool 是否需要自动登录
-     */
-    private function shouldAutoLoginByLayout(WelineTheme $theme, string $area): bool
-    {
-        try {
-            // 获取布局配置
-            $layoutConfig = ConfigLoader::getLayoutConfig($theme, $area);
-            
-            // 获取默认布局类型（通常是 'default'）
-            $layoutType = 'default';
-            $layoutOption = $layoutConfig[$layoutType] ?? 'default';
-            
-            // 构建布局文件路径
-            $themePath = $theme->getPath();
-            if (empty($themePath)) {
-                return false; // 默认不登录
-            }
-            
-            $layoutPath = rtrim($themePath, DS) . DS . 'view' . DS . 'theme' . DS . $area . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
-            $layoutPath = str_replace('\\', DS, $layoutPath);
-            
-            // 如果当前主题不存在，尝试父主题
-            if (!is_file($layoutPath)) {
-                $parentId = $theme->getParentId();
-                if ($parentId) {
-                    /** @var WelineTheme $parentTheme */
-                    $parentTheme = ObjectManager::getInstance(WelineTheme::class);
-                    $parentTheme->load($parentId);
-                    if ($parentTheme->getId()) {
-                        return $this->shouldAutoLoginByLayout($parentTheme, $area);
-                    }
-                }
-                
-                // 如果都找不到，使用默认值
-                return false;
-            }
-            
-            // 解析布局文件的 Meta 信息
-            $meta = ComponentMetaParser::parse($layoutPath);
-            
-            // 返回 preview_login 标记的值（默认 0，即不登录）
-            return isset($meta['preview_login']) && $meta['preview_login'] == 1;
-        } catch (\Exception $e) {
-            // 解析失败，默认不登录
-            return false;
-        }
     }
 
     /**

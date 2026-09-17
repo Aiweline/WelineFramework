@@ -379,17 +379,52 @@ class MigrationService
     public function getPendingMigrations(string $moduleName): array
     {
         RegistryProgress::log('Migration pending lookup started: ' . $moduleName);
-        $allMigrations = $this->getModuleMigrations($moduleName);
-        RegistryProgress::count('Migration script files for ' . $moduleName, count($allMigrations), 'files');
+        $migrationPath = $this->getMigrationPath($moduleName);
+        if ($migrationPath === '' || !is_dir($migrationPath)) {
+            RegistryProgress::count('Migration script files for ' . $moduleName, 0, 'files');
+            RegistryProgress::count('Pending migration script files for ' . $moduleName, 0, 'files');
+            return [];
+        }
+
+        $files = glob($migrationPath . '*.php') ?: [];
+        RegistryProgress::count('Migration script files for ' . $moduleName, count($files), 'files');
+        if ($files === []) {
+            RegistryProgress::count('Pending migration script files for ' . $moduleName, 0, 'files');
+            return [];
+        }
+
         $installedFiles = array_fill_keys($this->migrationModel->getInstalledMigrationFiles($moduleName), true);
         RegistryProgress::count('Installed migration script records for ' . $moduleName, count($installedFiles), 'files');
 
-        $pending = [];
-        foreach ($allMigrations as $migration) {
-            if (!isset($installedFiles[$migration['filename']])) {
-                $pending[] = $migration;
+        // 仅实例化尚未安装的脚本；已安装脚本只比文件名，避免 118 模块升级时反复 load+hash。
+        $pendingFiles = [];
+        foreach ($files as $file) {
+            $filename = basename((string)$file);
+            if (!isset($installedFiles[$filename])) {
+                $pendingFiles[] = (string)$file;
             }
         }
+        if ($pendingFiles === []) {
+            RegistryProgress::count('Pending migration script files for ' . $moduleName, 0, 'files');
+            return [];
+        }
+
+        $pending = [];
+        foreach ($pendingFiles as $file) {
+            $migration = $this->loadMigrationClass($file);
+            $pending[] = [
+                'file' => $file,
+                'filename' => basename($file),
+                'class' => $migration::class,
+                'version' => $migration->getVersion(),
+                'checksum' => hash_file('sha256', $file) ?: '',
+            ];
+        }
+
+        usort($pending, static function ($a, $b) {
+            $versionOrder = version_compare($a['version'], $b['version']);
+            return $versionOrder !== 0 ? $versionOrder : strcmp($a['filename'], $b['filename']);
+        });
 
         RegistryProgress::count('Pending migration script files for ' . $moduleName, count($pending), 'files');
         return $pending;

@@ -16,6 +16,7 @@ use Weline\Shipping\Api\Data\Shipping\ShippingTrackingRequest;
 use Weline\Shipping\Api\Data\Shipping\ShippingTrackingResult;
 use Weline\Shipping\Service\Provider\AbstractShippingProvider;
 use Weline\Shipping\Service\Provider\LocalTemplatePricingService;
+use Weline\Shipping\Service\TrackingUrlResolver;
 
 /**
  * Built-in local rate-template provider (default for manual carriers).
@@ -99,15 +100,21 @@ final class LocalRateTemplateProvider extends AbstractShippingProvider
     public function queryTracking(ShippingTrackingRequest $request): ShippingTrackingResult
     {
         $template = (string)($request->carrierSnapshot['tracking_url_template'] ?? '');
-        $url = $template !== ''
-            ? str_replace('{tracking_number}', rawurlencode($request->trackingNumber), $template)
-            : '';
+        /** @var TrackingUrlResolver $resolver */
+        $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(TrackingUrlResolver::class);
+        $url = $resolver->resolve($request->trackingNumber, '', $template);
 
         return ShippingTrackingResult::ok(
             'registered',
             '',
             $url,
-            [],
+            [
+                [
+                    'time' => date('Y-m-d H:i:s'),
+                    'status' => 'registered',
+                    'description' => (string)__('运单已登记，等待承运商更新轨迹'),
+                ],
+            ],
             [
                 'mode' => 'url_template',
                 'tracking_number' => $request->trackingNumber,

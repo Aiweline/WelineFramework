@@ -350,14 +350,17 @@ class ThemeResourceCatalog
         $filename = pathinfo((string)end($segments), PATHINFO_FILENAME);
 
         if (count($segments) === 1) {
+            // 简写：layouts/homepage.phtml → type=homepage, option=default
             return [$filename, 'default'];
         }
 
-        $type = (string)array_shift($segments);
-        $segments[count($segments) - 1] = $filename;
-        $option = implode('/', $segments);
+        // 末段文件名（去扩展名）= option；其前全部路径段 = layoutType（允许嵌套，如 account/login）
+        // 例：account/auth.phtml → account + auth
+        // 例：account/login/default.phtml → account/login + default
+        array_pop($segments);
+        $type = implode('/', $segments);
 
-        return [$type, $option === '' ? 'default' : $option];
+        return [$type === '' ? $filename : $type, $filename === '' ? 'default' : $filename];
     }
 
     private function loadAdjacentLayoutInfo(string $filePath): array

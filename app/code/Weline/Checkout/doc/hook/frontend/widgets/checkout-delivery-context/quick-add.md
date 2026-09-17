@@ -4,7 +4,7 @@
 
 未启用 Shipping 模块时，该 Hook 无内容，弹窗仅保留国家选择与已有地址列表。
 
-主题编辑器 `editor_mode=1` 预览下不渲染本 Hook（避免验证码与级联地址拖慢 iframe）；店面正常请求不受影响。
+主题编辑器 / theme-preview 与店面走同一路径：始终渲染本 Hook（`preview_storefront_delivery_parity`）。禁止仅为 `editor_mode` 跳过。
 
 表单要求：
 

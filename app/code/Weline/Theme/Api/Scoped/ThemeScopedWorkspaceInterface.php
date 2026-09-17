@@ -84,4 +84,7 @@ interface ThemeScopedWorkspaceInterface
 
     /** Runtime reads published releases only. */
     public function resolvePublishedTheme(ScopeContext $scope, string $area): ?ThemeResolvedValue;
+
+    /** Drop request-scoped workspace load/row memos after a write commits. */
+    public function invalidateRequestLoadCache(): void;
 }

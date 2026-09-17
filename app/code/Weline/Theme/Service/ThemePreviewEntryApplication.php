@@ -7,9 +7,7 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
-use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\ConfigLoader;
-use Weline\Theme\Helper\PreviewAccountManager;
 use Weline\Theme\Model\WelineTheme;
 
 final class ThemePreviewEntryApplication
@@ -25,7 +23,6 @@ final class ThemePreviewEntryApplication
     public function preparePreviewRedirect(
         int $themeId,
         string $area,
-        mixed $autoLogin,
         AuthenticatedSessionInterface $session,
         bool $appendPreviewThemeQueryOnFrontendUrl = true,
         ?string $scopeQuery = null,
@@ -54,20 +51,6 @@ final class ThemePreviewEntryApplication
 
         $session->set('preview_theme_id', $themeId);
         $session->set('preview_theme_area', $area);
-
-        $shouldAutoLogin = false;
-        if ($area === PreviewContextService::AREA_FRONTEND) {
-            if ($autoLogin !== null && $autoLogin !== '') {
-                $shouldAutoLogin = ($autoLogin === '1' || $autoLogin === 1 || $autoLogin === true);
-            } else {
-                $shouldAutoLogin = $this->shouldAutoLoginByLayout($theme, $area);
-            }
-        }
-
-        $session->set('preview_auto_login', $shouldAutoLogin);
-        if ($shouldAutoLogin) {
-            PreviewAccountManager::ensurePreviewUser($theme);
-        }
 
         /** @var Url $url */
         $url = ObjectManager::getInstance(Url::class);
@@ -186,48 +169,12 @@ final class ThemePreviewEntryApplication
             'ok' => true,
             'redirect' => $previewTokenService->getPreviewUrl(
                 $url->getFrontendUrl(
-                    $themePageTypeResolver->getPreviewRouteByPageType($resolvedPageType)
+                    // "/" for homepage — getFrontendUrl('') reuses REQUEST_URI (query-bin).
+                    $themePageTypeResolver->getFrontendUrlPathForPreview($resolvedPageType)
                 ),
                 $previewToken
             ),
         ];
-    }
-
-    private function shouldAutoLoginByLayout(WelineTheme $theme, string $area): bool
-    {
-        try {
-            $layoutConfig = ConfigLoader::getLayoutConfig($theme, $area);
-            $layoutType = 'default';
-            $layoutOption = $layoutConfig[$layoutType] ?? 'default';
-
-            $themePath = $theme->getPath();
-            if ($themePath === '') {
-                return false;
-            }
-
-            $layoutPath = \rtrim($themePath, \DS) . \DS . 'view' . \DS . 'theme' . \DS . $area . \DS . 'layouts' . \DS . $layoutType . \DS . $layoutOption . '.phtml';
-            $layoutPath = \str_replace('\\', \DS, $layoutPath);
-
-            if (!\is_file($layoutPath)) {
-                $parentId = $theme->getParentId();
-                if ($parentId) {
-                    /** @var WelineTheme $parentTheme */
-                    $parentTheme = ObjectManager::getInstance(WelineTheme::class);
-                    $parentTheme->load($parentId);
-                    if ($parentTheme->getId()) {
-                        return $this->shouldAutoLoginByLayout($parentTheme, $area);
-                    }
-                }
-
-                return false;
-            }
-
-            $meta = ComponentMetaParser::parse($layoutPath);
-
-            return isset($meta['preview_login']) && $meta['preview_login'] == 1;
-        } catch (\Throwable) {
-            return false;
-        }
     }
 
     private function resolvePreviewVersionId(int $themeId, string $pageType, string $status): ?int

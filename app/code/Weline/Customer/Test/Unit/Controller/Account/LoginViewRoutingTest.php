@@ -87,7 +87,7 @@ class LoginViewRoutingTest extends TestCase
         $this->assertSame('rendered-theme-login-page', $controller->getIndex());
     }
 
-    public function testLayoutTypeMatchesDefaultThemeAccountAuthLayouts(): void
+    public function testLayoutTypeMatchesPathAlignedAccountLoginLayout(): void
     {
         $reflection = new \ReflectionClass(Login::class);
         $property = $reflection->getProperty('layoutType');
@@ -95,7 +95,7 @@ class LoginViewRoutingTest extends TestCase
 
         $controller = new Login($this->createMock(Template::class));
 
-        $this->assertSame('account.auth', $property->getValue($controller));
+        $this->assertSame('account/login', $property->getValue($controller));
     }
 
     public function testRefererValidationAcceptsGenericInternalPathsOnly(): void

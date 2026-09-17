@@ -10,9 +10,9 @@
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content"]}
- * @widget.page_layouts {["category","product_list"]}
- * @widget.supports {["layout-category-recommendations","layout-product-list-recommendations","recommended-products","featured-products"]}
- * @widget.default_injections {[{ "layout_type":"category", "layout_option":"default", "slot":"category-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"分类页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} },{ "layout_type":"product_list", "layout_option":"default", "slot":"list-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"产品列表页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} }]}
+ * @widget.page_layouts {["category","products"]}
+ * @widget.supports {["layout-category-recommendations","layout-products-recommendations","recommended-products","featured-products"]}
+ * @widget.default_injections {[{ "layout_type":"category", "layout_option":"default", "slot":"category-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"分类页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} },{ "layout_type":"products", "layout_option":"default", "slot":"list-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"产品列表页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} }]}
  *
  * @param title {default="推荐产品",type="string",label="标题"}
  * @param limit {default=8,type="number",label="显示数量"}
@@ -25,6 +25,7 @@
 
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetI18n;
@@ -95,9 +96,7 @@ if ($products === []) {
     return;
 }
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Product::css/widgets/recommended-products.css)?v=20260906-wpr-chrome1"
-      data-no-extract="true">
+
 
 <section class="<?= $esc($wc) ?> weline-product-recommended<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
@@ -107,6 +106,10 @@ if ($products === []) {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-layout="<?= $esc($layout) ?>"
          data-columns="<?= $esc($columns) ?>">
+    <link rel="stylesheet"
+          href="@static(Weline_Product::css/widgets/recommended-products.css)?v=20260906-wpr-chrome1"
+          data-no-extract="true">
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="wpr-header">
         <h2 class="wpr-title"><?= $esc($widgetTitle) ?></h2>
         <p class="wpr-subtitle"><?= $esc((string)__('精选好物，为你推荐')) ?></p>

@@ -9,12 +9,9 @@
 
 namespace Weline\Theme\Console\Theme;
 
-use Weline\Framework\Exception\Core;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
-use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 class Active extends AbstractConsole
 {
@@ -49,27 +46,20 @@ class Active extends AbstractConsole
             $this->printing->note(__('当前主题:') . $theme_name);
             $this->printing->note(__('安装状态:已安装！'));
             $this->printing->note(__('激活状态:') . $status);
-            if ($alreadyActive) {
-                $this->printing->error(__('无需再次激活'));
-            } else {
-                $this->printing->note(__('正在激活...'));
+            $this->printing->note(__('正在激活...'));
+
+            // Always go through ThemeContextService so frontend activation also
+            // syncs published theme_binding (HTTP storefront authority).
+            $result = $this->themeContext->activateThemeForArea(
+                (int)$theme->getId(),
+                $activationArea ?? ThemeContextService::AREA_GLOBAL
+            );
+            if (!($result['success'] ?? false)) {
+                $this->printing->error((string)($result['message'] ?? __('激活失败')), __('主题'));
+
+                return;
             }
-            if (!$alreadyActive) {
-                if ($activationArea === null) {
-                    $theme->setIsActive(true);
-                } else {
-                    $theme->setData($field, 1);
-                }
-                try {
-                    $theme->save();
-                    $this->clearActivationRuntimeCaches((int)$theme->getId(), $activationArea);
-                    $this->printing->success(__('已成功激活主题：') . $theme_name);
-                } catch (\ReflectionException $e) {
-                    throw $e;
-                } catch (Core $e) {
-                    throw $e;
-                }
-            }
+            $this->printing->success(__('已成功激活主题：') . $theme_name);
         } else {
             $fe = $this->themeContext->resolveTheme(ThemeContextService::AREA_FRONTEND, null, false);
             $be = $this->themeContext->resolveTheme(ThemeContextService::AREA_BACKEND, null, false);
@@ -105,16 +95,5 @@ class Active extends AbstractConsole
                 '仅激活前台' => 'php bin/w theme:active WeShop_default frontend',
             ]
         );
-    }
-
-    private function clearActivationRuntimeCaches(int $themeId, ?string $area): void
-    {
-        try {
-            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
-                $themeId,
-                'theme_cli_active_' . ($area ?? 'global')
-            );
-        } catch (\Throwable) {
-        }
     }
 }

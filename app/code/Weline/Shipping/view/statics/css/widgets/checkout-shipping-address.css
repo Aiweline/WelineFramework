@@ -348,3 +348,38 @@
 .w-shipping-checkout-address[data-mode="picking"] [data-change-address] {
   font-weight: 600;
 }
+
+/* 账单地址：与收货平行的 collapsed / picking，互不共用 data-mode */
+.w-shipping-checkout-address[data-billing-mode="collapsed"] [data-billing-editor],
+.w-shipping-checkout-address[data-billing-mode="picking"] [data-billing-editor] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.w-shipping-checkout-address[data-billing-mode="collapsed"] [data-billing-card]:not(.is-selected) {
+  display: none;
+}
+
+.w-shipping-checkout-address[data-billing-mode="collapsed"] [data-add-billing-address] {
+  display: inline-block;
+}
+
+.w-shipping-checkout-address[data-billing-mode="collapsed"] [data-billing-radio] {
+  pointer-events: none;
+}
+
+.w-shipping-checkout-address[data-billing-mode="picking"] [data-change-billing-address] {
+  font-weight: 600;
+}
+
+.w-shipping-checkout-address[data-billing-mode="same"] [data-billing-saved],
+.w-shipping-checkout-address[data-billing-mode="same"] [data-billing-editor] {
+  display: none;
+}

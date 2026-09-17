@@ -8,29 +8,52 @@ use PHPUnit\Framework\TestCase;
 
 final class WebsiteAdminTemplateContractTest extends TestCase
 {
-    public function testIndexTemplateUsesDataTableComponent(): void
+    public function testIndexTemplateUsesScopeTreeShell(): void
     {
         $index = (string)file_get_contents(
             dirname(__DIR__, 4) . '/view/templates/Admin/Website/index.phtml',
         );
-        $datatable = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/view/templates/Admin/Website/datatable.phtml',
+        self::assertStringContainsString('data-testid="websites-scope-tree"', $index);
+        self::assertStringContainsString('data-w-component="tree"', $index);
+        self::assertStringContainsString('data-w-tree-toggle', $index);
+        self::assertStringContainsString('data-testid="websites-scope-editor"', $index);
+        self::assertStringContainsString('w-catalog-tree__thumb', $index);
+        self::assertStringContainsString('data-testid="websites-scope-tree-logo"', $index);
+        self::assertStringContainsString('data-testid="websites-scope-tree-scope"', $index);
+        self::assertStringContainsString('websites-scope-tree.js', $index);
+        self::assertStringContainsString('tree-editor-panel.phtml', $index);
+        // Logo 必须出现在范围徽章之前（DOM 源码顺序）
+        $logoPos = strpos($index, 'data-testid="websites-scope-tree-logo"');
+        $scopePos = strpos($index, 'data-testid="websites-scope-tree-scope"');
+        self::assertNotFalse($logoPos);
+        self::assertNotFalse($scopePos);
+        self::assertLessThan($scopePos, $logoPos);
+
+        $controller = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Controller/Admin/Website.php',
         );
-        self::assertStringContainsString('templates/Admin/Website/datatable.phtml', $index);
-        self::assertStringContainsString('<w:d-table', $datatable);
-        self::assertStringContainsString('mode="local"', $datatable);
-        self::assertStringContainsString('name="site_head"', $datatable);
-        self::assertStringContainsString('name="access_entry"', $datatable);
-        self::assertStringContainsString('name="market_cluster"', $datatable);
-        self::assertStringContainsString('name="store_channel_summary"', $datatable);
-        self::assertStringContainsString('website-admin-local-rows', $datatable);
-        self::assertStringContainsString('weline:datatable:row-action', $index);
-        self::assertStringContainsString("getElementById('w-datatable-website-admin-list')", $index);
-        self::assertStringContainsString('openWebsiteEditDrawer', $index);
+        self::assertStringContainsString('wantsTreeEditorPanel', $controller);
+        self::assertStringContainsString('treeEditorPanelAjax', $controller);
+
+        $asyncJs = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/statics/js/websites-scope-tree.js',
+        );
+        self::assertStringContainsString("searchParams.set('panel', '1')", $asyncJs);
+        self::assertStringContainsString('history.pushState', $asyncJs);
+        self::assertStringContainsString('preventDefault', $asyncJs);
+        self::assertStringContainsString('w-catalog-admin__layout', $index);
         self::assertStringContainsString('method="get"', $index);
-        self::assertStringNotContainsString('weline-websites-compact-table', $index);
+        self::assertStringNotContainsString('<w:d-table', $index);
+        self::assertStringNotContainsString('openWebsiteEditDrawer', $index);
         self::assertStringNotContainsString('alert(', $index);
         self::assertStringNotContainsString('confirm(', $index);
+
+        $panel = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/templates/Admin/Website/tree-editor-panel.phtml',
+        );
+        self::assertStringContainsString("fetch('Weline_Websites::templates/Admin/Website/form.phtml')", $panel);
+        self::assertStringContainsString('tree-create-store.phtml', $panel);
+        self::assertStringContainsString('tree-create-channel.phtml', $panel);
     }
 
     public function testDatatablePartialDoesNotContainMutableStoreInputs(): void
@@ -158,5 +181,53 @@ final class WebsiteAdminTemplateContractTest extends TestCase
         self::assertStringContainsString('is-embedded', $source);
         self::assertStringContainsString('if (!$isEmbeddedForm)', $source);
         self::assertStringContainsString('w-card__title', $source);
+    }
+
+    public function testTreeEmbeddedWebsiteFormShowsSaveActions(): void
+    {
+        $form = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/templates/Admin/Website/form.phtml',
+        );
+        self::assertStringContainsString('$treeReturnMode', $form);
+        self::assertStringContainsString('$showFormSaveActions = !$isEmbeddedForm || $treeReturnMode', $form);
+        self::assertStringContainsString('data-testid="website-form-save"', $form);
+        self::assertStringContainsString('id="website-admin-edit-form"', $form);
+        self::assertStringContainsString('if (!$isEmbeddedForm):', $form);
+        self::assertStringContainsString('Weline_Component::message.phtml', $form);
+
+        $panel = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/templates/Admin/Website/tree-editor-panel.phtml',
+        );
+        self::assertStringContainsString('data-testid="websites-scope-editor-save"', $panel);
+        self::assertStringContainsString('form="website-admin-edit-form"', $panel);
+        self::assertStringContainsString("editorKind === 'website'", $panel);
+    }
+
+    public function testEditSaveUsesSnapshotCodeForStartPageConfig(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Controller/Admin/Website.php',
+        );
+        self::assertStringContainsString('schema_fields_CODE', $source);
+        self::assertStringContainsString('saveStartPagePathConfig(', $source);
+        self::assertMatchesRegularExpression(
+            '/saveStartPagePathConfig\(\s*\$postWebsiteId,\s*trim\(\(string\)\(\$before\[/',
+            $source,
+        );
+    }
+
+    public function testTreeSaveRedirectPreservesWebsitesRouterAndNode(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Controller/Admin/Website.php',
+        );
+        self::assertStringContainsString('websitesAdminWebsiteIndexPath', $source);
+        self::assertStringContainsString("\$router . '/admin/website'", $source);
+        self::assertStringContainsString("\$router = 'websites'", $source);
+        self::assertStringContainsString("\$params['node'] = \$returnNode", $source);
+        self::assertStringContainsString('resolveTreeReturnTarget', $source);
+        self::assertStringContainsString('tree_return_url', $source);
+        self::assertStringContainsString('return_url', $source);
+        self::assertStringNotContainsString("redirect('*/admin/website/index', \$params)", $source);
     }
 }

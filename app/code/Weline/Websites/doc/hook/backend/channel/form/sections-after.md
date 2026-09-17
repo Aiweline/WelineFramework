@@ -12,3 +12,7 @@ Guidelines:
 - Channel templates must not call Shipping/SEO services directly.
 
 Payload keys available in the hook: `id`, `channel`, `channel_id`, `store_id`, `website_id`.
+
+## Built-in: 站点联系信息
+
+已保存渠道时嵌入 `website_contact`（锁 `scope_kind=channel`）；未保存仅提示。见 website hook 文档与 `SiteContactScopeMapper::forChannel`。

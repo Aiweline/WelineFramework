@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Framework\Http\Url;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
-use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\ProductCardUrl;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
@@ -19,7 +17,9 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
 final class ProductCardRenderer
 {
     private const CSS_FLAG = 'product.product_card_css_emitted';
-    private const CSS_VERSION = '20260908-product-card-rhythm2';
+    /** Kept for contracts / call sites; emission is now an inline <style> (body <link> is unreliable + ThemeEditor strips //link). */
+    public const CSS_LINK_MARKER = 'data-weline-product-card-css';
+    private const CSS_VERSION = '20260917-product-card-widget-css-only';
     /** Keep the first two desktop rows available without flooding the network. */
     private const INITIAL_VIEWPORT_IMAGE_COUNT = 8;
 
@@ -63,7 +63,8 @@ final class ProductCardRenderer
             ],
         );
 
-        return self::cssLinkOnce() . $html;
+        // CSS 只由货架/列表宿主显式 emitStylesheetLinkOnce()；禁止 render 再夹一套。
+        return $html;
     }
 
     /**
@@ -319,26 +320,45 @@ final class ProductCardRenderer
         return $default;
     }
 
-    private static function cssLinkOnce(): string
+    /**
+     * Allow preview / widget repair passes to emit card CSS again.
+     */
+    public static function resetProductCardCssEmission(): void
+    {
+        RequestContext::remove(self::CSS_FLAG);
+    }
+
+    /**
+     * 货架/列表宿主按需注入 canonical product-card.css（每请求一次）。
+     * 唯一入口：部件或 PLP 模板显式调用；render()/Taglib 不得再夹。
+     *
+     * 内联 <style> 随宿主走（body <link> 易被 FPC/预览消毒丢掉）。
+     */
+    public static function emitStylesheetLinkOnce(): string
     {
         if (RequestContext::has(self::CSS_FLAG)) {
             return '';
         }
         RequestContext::set(self::CSS_FLAG, true);
 
-        /** @var Template $template */
-        $template = ObjectManager::getInstance(Template::class);
-        $href = (string)$template->fetchTagSource(
-            DataInterface::dir_type_STATICS,
-            'Weline_Product::css/frontend/product-card.css'
-        );
-        if ($href !== '' && !str_contains($href, '?')) {
-            $href .= '?v=' . self::CSS_VERSION;
-        } elseif ($href !== '' && self::CSS_VERSION !== '') {
-            $href .= (str_contains($href, '?') ? '&' : '?') . 'wpc=' . rawurlencode(self::CSS_VERSION);
-        }
-        $href = htmlspecialchars($href, ENT_QUOTES, 'UTF-8');
+        return self::buildProductCardStyleTag();
+    }
 
-        return '<link rel="stylesheet" href="' . $href . '" data-weline-product-card-css="1" data-no-extract="true">' . "\n";
+    /**
+     * Inline CSS owned by the canonical product card (title/price/media/shopper chrome).
+     */
+    public static function buildProductCardStyleTag(): string
+    {
+        $cssPath = dirname(__DIR__) . '/view/statics/css/frontend/product-card.css';
+        $css = is_file($cssPath) ? (string)file_get_contents($cssPath) : '';
+        if ($css === '') {
+            return '';
+        }
+
+        return '<style ' . self::CSS_LINK_MARKER . '="1" '
+            . 'data-weline-product-card-version="' . htmlspecialchars(self::CSS_VERSION, ENT_QUOTES, 'UTF-8') . '" '
+            . 'data-no-extract="true">'
+            . $css
+            . '</style>' . "\n";
     }
 }

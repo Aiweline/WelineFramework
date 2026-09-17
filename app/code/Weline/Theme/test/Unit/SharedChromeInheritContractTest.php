@@ -24,11 +24,15 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('function resolveModes(', $src);
         self::assertStringContainsString('function resolveWriteLayoutType(', $src);
         self::assertStringContainsString('function detach(', $src);
+        self::assertStringContainsString('shared_chrome_detach_removed', $src);
         self::assertStringContainsString('function restore(', $src);
         self::assertStringContainsString('function restoreNonCarrierLayouts(', $src);
         self::assertStringContainsString('function forceInheritAndPublishNonCarriers(', $src);
         self::assertStringContainsString('ThemeLayout::PAGE_TYPE_HOME', $src);
-        self::assertStringContainsString('withLayoutType(ThemeLayout::PAGE_TYPE_HOME)', $src);
+        self::assertStringContainsString(
+            "'overall_mode' => \$isCarrier ? self::MODE_LOCAL : self::MODE_INHERIT",
+            $src,
+        );
         self::assertStringContainsString("workspace->publish(", $src);
     }
 
@@ -74,8 +78,9 @@ final class SharedChromeInheritContractTest extends TestCase
         $path = dirname(__DIR__, 2) . '/Setup/Upgrade.php';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("VERSION = '2.2.327'", $src);
+        self::assertStringContainsString("VERSION = '2.2.362'", $src);
         self::assertStringContainsString('ScopeIdentity::global()', $src);
+        self::assertStringContainsString('migrateThemeLayoutEntitiesCutover', $src);
         self::assertStringContainsString('ScopeHierarchyInterface', $src);
         self::assertStringContainsString('new ThemeEditorContext(', $src);
         self::assertStringContainsString('forceInheritAndPublishNonCarriers(', $src);
@@ -105,28 +110,50 @@ final class SharedChromeInheritContractTest extends TestCase
             substr_count($src, 'overwriteNonCarrierChromeAfterCarrierPublish('),
             'publish and publishBatch must both overwrite non-carrier chrome',
         );
+        self::assertStringContainsString('function publishPendingSiblingI18nLocales(', $src);
+        self::assertStringContainsString('publishPendingSiblingI18nLocales(', $src);
+        self::assertStringContainsString('sibling_i18n', $src);
     }
 
     public function testThemeEditorUiWiresSharedChromeInheritControls(): void
     {
         $js = file_get_contents(dirname(__DIR__, 2) . '/view/statics/ui/pages/weline-theme-editor.js');
         $tpl = file_get_contents(dirname(__DIR__, 2) . '/view/templates/backend/ThemeEditor/index.phtml');
+        $editor = file_get_contents(dirname(__DIR__, 2) . '/Controller/Backend/ThemeEditor.php');
+        $legacy = file_get_contents(dirname(__DIR__, 2) . '/view/statics/js/theme-editor.js');
         self::assertIsString($js);
         self::assertIsString($tpl);
+        self::assertIsString($editor);
+        self::assertIsString($legacy);
 
         self::assertStringContainsString('data-api-chrome-mode=', $tpl);
         self::assertStringContainsString('data-api-detach-chrome=', $tpl);
         self::assertStringContainsString('data-api-restore-chrome=', $tpl);
+        // Hard cutover: chrome-mode returns theme_scope_version; detach is fail-closed.
+        self::assertStringContainsString('theme_scope_version', $editor);
+        self::assertStringContainsString('theme_version_id', $editor);
+        self::assertStringContainsString('shared_chrome_detach_removed', $editor);
+        self::assertStringContainsString('chrome_authority', $editor);
+        self::assertStringContainsString("'status' => 'shared_chrome_detach_removed'", $editor);
+        self::assertStringContainsString('$chrome->detach(', $editor);
+        // Loaded UI bundle — always inherit, no detach CTA.
         self::assertStringContainsString('function fetchSharedChromeMode(', $js);
         self::assertStringContainsString('function resolveChromeWriteLayoutType(', $js);
         self::assertStringContainsString('function handleSharedChromeAction(', $js);
         self::assertStringContainsString('ensureSharedChromePanel(', $js);
-        self::assertStringContainsString("translateUiText('改为本布局独立')", $js);
+        self::assertStringContainsString('SHARED_CHROME_CARRIER_PAGE_TYPE', $js);
         self::assertStringContainsString("translateUiText('恢复全局继承')", $js);
         self::assertStringContainsString("translateUiText('清空其它布局本地 chrome')", $js);
         self::assertStringContainsString("translateUiText('恢复全部布局继承')", $js);
         self::assertStringContainsString('all_non_carrier', $js);
-        self::assertStringContainsString('SHARED_CHROME_CARRIER_PAGE_TYPE', $js);
+        self::assertStringNotContainsString("translateUiText('改为本布局独立')", $js);
+        self::assertStringContainsString('@static(Weline_Theme::ui/pages/weline-theme-editor.js)', $tpl);
+        self::assertStringNotContainsString('@static(Weline_Theme::js/theme-editor.js)', $tpl);
+        // Authority source remains js/theme-editor.js (compiled into the UI bundle).
+        // Do not replace it with a deprecation stub — that empties the loaded bundle.
+        self::assertStringContainsString('function fetchSharedChromeMode(', $legacy);
+        self::assertStringContainsString('function loadLayoutPreview(', $legacy);
+        self::assertGreaterThan(1000, substr_count($legacy, "\n") + 1, 'theme-editor.js must keep editor behavior');
     }
 
     public function testChromeDefaultInjectionsTargetHomepageCarrierOnly(): void

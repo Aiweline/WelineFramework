@@ -9,7 +9,6 @@ use Weline\Order\Model\OrderItem;
 
 $order = $this->getData('order');
 $items = $this->getData('items') ?? [];
-$shipments = $this->getData('shipments') ?? [];
 $history = $this->getData('history') ?? [];
 $customerPresent = $this->getData('customer_present') ?? [];
 
@@ -231,7 +230,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
             </div>
         </div>
 
-        <!-- 地址：已并入下方「为客户调整」折叠卡片，避免首屏展开 -->
+        <!-- 地址：编辑态在「订单办理 → 客户调整」页签内直编 -->
 
         <?php if (!empty($availableTransitions)): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-2);" data-testid="order-edit-status-actions">
@@ -261,6 +260,34 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
             </div>
             <div class="w-card__body" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
                 <?php
+                $customerAdjustFormVars = [
+                    'isEdit' => $isEdit,
+                    'orderId' => $orderId,
+                    'expected_grant_version' => $expected_grant_version ?? 0,
+                    'customerName' => $customerName,
+                    'customerEmail' => $customerEmail,
+                    'customerPhone' => $customerPhone,
+                    'isAnonymous' => $isAnonymous,
+                    'orderCustomerSelectValue' => $orderCustomerSelectValue,
+                    'orderCustomerSelectDisplay' => $orderCustomerSelectDisplay,
+                    'shippingForm' => $shippingForm,
+                    'billingForm' => $billingForm,
+                    'shippingSummary' => $shippingSummary,
+                    'billingSummary' => $billingSummary,
+                    'paymentChrome' => $paymentChrome,
+                    'paymentMethod' => $paymentMethod,
+                    'paymentMethodLabel' => $paymentMethodLabel,
+                    'paymentSummary' => $paymentSummary,
+                    'paymentHint' => $paymentHint,
+                    'paymentOptions' => $paymentOptions,
+                    'shippingMethod' => $shippingMethod,
+                    'shippingMethodLabel' => $shippingMethodLabel,
+                    'shippingMethodSummary' => $shippingMethodSummary,
+                    'shippingOptions' => $shippingOptions,
+                    'orderTotals' => $orderTotals,
+                    'currency' => $currency,
+                    'notesValue' => $notesValue,
+                ];
                 $opsTab = strtolower(trim((string)($_GET['tab'] ?? 'shipment')));
                 if (!in_array($opsTab, ['shipment', 'refund', 'comms', 'customer'], true)) {
                     $opsTab = 'shipment';
@@ -316,8 +343,9 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                          aria-labelledby="order-ops-tab-customer"
                          <?= $opsTab === 'customer' ? '' : 'hidden' ?>
                          data-testid="order-edit-ops-panel-customer">
-                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);"><?= __('联系人、地址与备注在下方「客户调整」区编辑。') ?></p>
-                        <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-order-ops-scroll-writable="1"><?= __('前往客户调整') ?></button>
+                        <div data-testid="order-edit-writable">
+                            <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/customer-adjust-form.phtml', $customerAdjustFormVars) ?>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -443,6 +471,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
 
 <div class="w-grid">
     <div style="--w-span:12;">
+        <?php if (!$isEdit): ?>
         <?php
         $writableSummaryParts = array_values(array_filter([
             trim($customerName) !== '' ? $customerName : null,
@@ -450,6 +479,34 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
             trim($shippingSummary) !== '' ? $shippingSummary : null,
         ]));
         $writableSummary = $writableSummaryParts !== [] ? implode(' · ', $writableSummaryParts) : (string)__('点击展开编辑客户、地址与备注');
+        $customerAdjustFormVars = [
+            'isEdit' => $isEdit,
+            'orderId' => $orderId,
+            'expected_grant_version' => $expected_grant_version ?? 0,
+            'customerName' => $customerName,
+            'customerEmail' => $customerEmail,
+            'customerPhone' => $customerPhone,
+            'isAnonymous' => $isAnonymous,
+            'orderCustomerSelectValue' => $orderCustomerSelectValue,
+            'orderCustomerSelectDisplay' => $orderCustomerSelectDisplay,
+            'shippingForm' => $shippingForm,
+            'billingForm' => $billingForm,
+            'shippingSummary' => $shippingSummary,
+            'billingSummary' => $billingSummary,
+            'paymentChrome' => $paymentChrome,
+            'paymentMethod' => $paymentMethod,
+            'paymentMethodLabel' => $paymentMethodLabel,
+            'paymentSummary' => $paymentSummary,
+            'paymentHint' => $paymentHint,
+            'paymentOptions' => $paymentOptions,
+            'shippingMethod' => $shippingMethod,
+            'shippingMethodLabel' => $shippingMethodLabel,
+            'shippingMethodSummary' => $shippingMethodSummary,
+            'shippingOptions' => $shippingOptions,
+            'orderTotals' => $orderTotals,
+            'currency' => $currency,
+            'notesValue' => $notesValue,
+        ];
         ?>
         <div class="w-card" style="--w-mb:var(--weline-space-2);" data-testid="order-edit-writable">
             <div class="w-disclosure" data-w-component="disclosure" data-state="closed">
@@ -461,7 +518,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                             data-w-disclosure-trigger
                             data-testid="order-edit-writable-toggle">
                         <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                            <strong><?= $isEdit ? __('客户调整') : __('新建订单') ?></strong>
+                            <strong><?= __('新建订单') ?></strong>
                             <span class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-writable-summary"><?= htmlspecialchars($writableSummary) ?></span>
                         </span>
                         <w:icon name="chevron-down" size="sm"></w:icon>
@@ -469,354 +526,12 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                 </div>
                 <div id="order-edit-writable-body" class="w-disclosure__panel" aria-labelledby="order-edit-writable-heading" data-w-disclosure-panel hidden>
                     <div class="w-disclosure__body" style="--w-pt:var(--weline-space-2);">
-                <w:form method="post" action="@backend-url{'order/backend/order/save'}">
-                    <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
-                    <?php if ($isEdit): ?>
-                        <input type="hidden" name="order_id" value="<?= $orderId ?>">
-                    <?php endif; ?>
-
-                    <div class="w-grid" style="--w-mb:var(--weline-space-2);--w-gap:var(--weline-space-2);">
-                        <div style="--w-span-md:3;" data-testid="order-edit-customer-select">
-                            <label class="w-field__label"><?= __('选择客户') ?></label>
-                            <?php if ($isEdit): ?>
-                                <w:customer:admin:select
-                                    id="order-edit-customer"
-                                    name="customer_id"
-                                    value="orderCustomerSelectValue"
-                                    display="orderCustomerSelectDisplay"
-                                    clearable="true"
-                                    allow-empty="true"
-                                    placeholder="@lang(搜索客户姓名或邮箱)"
-                                />
-                            <?php else: ?>
-                                <input type="number" name="customer_id" class="w-input" value="">
-                            <?php endif; ?>
-                            <?php if ($isAnonymous): ?>
-                                <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('当前为访客结账，可改为注册客户') ?></div>
-                            <?php endif; ?>
-                        </div>
-                        <div style="--w-span-md:3;">
-                            <label class="w-field__label"><?= __('客户姓名（展示）') ?></label>
-                            <input type="text" name="customer_name" class="w-input" value="<?= htmlspecialchars($customerName) ?>" required>
-                        </div>
-                        <div style="--w-span-md:3;">
-                            <label class="w-field__label"><?= __('客户邮箱') ?></label>
-                            <input type="email" name="customer_email" class="w-input" value="<?= htmlspecialchars($customerEmail) ?>">
-                        </div>
-                        <div style="--w-span-md:3;">
-                            <label class="w-field__label"><?= __('客户电话') ?></label>
-                            <input type="text" name="customer_phone" class="w-input" value="<?= htmlspecialchars($customerPhone) ?>">
-                        </div>
-                    </div>
-
-                    <div class="w-stack" style="--w-mb:var(--weline-space-2);--w-gap:var(--weline-space-2);" data-testid="order-edit-addresses">
-                        <div class="w-card" data-testid="order-edit-shipping-card">
-                            <div class="w-disclosure" data-w-component="disclosure" data-state="closed">
-                                <div id="order-edit-shipping-heading">
-                                    <button class="w-disclosure__trigger" type="button" aria-expanded="false"
-                                            aria-controls="order-edit-shipping-body"
-                                            data-w-target="#order-edit-shipping-body"
-                                            data-w-action="disclosure.toggle"
-                                            data-w-disclosure-trigger
-                                            data-testid="order-edit-shipping-toggle">
-                                        <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                                            <strong><?= __('收货地址') ?></strong>
-                                            <span class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-shipping-address"><?= htmlspecialchars($shippingSummary) ?></span>
-                                        </span>
-                                        <w:icon name="chevron-down" size="sm"></w:icon>
-                                    </button>
-                                </div>
-                                <div id="order-edit-shipping-body" class="w-disclosure__panel" aria-labelledby="order-edit-shipping-heading" data-w-disclosure-panel hidden>
-                                    <div class="w-disclosure__body">
-                                        <div class="w-grid" data-testid="order-edit-shipping-form">
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('收货人') ?></label>
-                                                <input type="text" name="shipping_name" class="w-input" value="<?= htmlspecialchars((string)($shippingForm['name'] ?? '')) ?>">
-                                            </div>
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('电话') ?></label>
-                                                <input type="text" name="shipping_phone" class="w-input" value="<?= htmlspecialchars((string)($shippingForm['phone'] ?? '')) ?>">
-                                            </div>
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('邮箱') ?></label>
-                                                <input type="email" name="shipping_email" class="w-input" value="<?= htmlspecialchars((string)($shippingForm['email'] ?? '')) ?>">
-                                            </div>
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('邮编') ?></label>
-                                                <input type="text" name="shipping_postcode" class="w-input" value="<?= htmlspecialchars((string)($shippingForm['postcode'] ?? '')) ?>" autocomplete="shipping postal-code" data-postal-first>
-                                            </div>
-                                            <div style="--w-span-md:12;">
-                                                <w:theme:address
-                                                    levels="country,province,city,district"
-                                                    code="order-edit-shipping"
-                                                    searchable="true"
-                                                    cascade="true"
-                                                    district="true"
-                                                    street="false"
-                                                    postal="false"
-                                                    postal-lookup="true"
-                                                    detail="false"
-                                                    country-name="shipping_country_code"
-                                                    province-name="shipping_province"
-                                                    city-name="shipping_city"
-                                                    district-name="shipping_district"
-                                                    country="<?= htmlspecialchars((string)($shippingForm['country_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                    province="<?= htmlspecialchars((string)($shippingForm['province'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                    city="<?= htmlspecialchars((string)($shippingForm['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                    district-filter="<?= htmlspecialchars((string)($shippingForm['district'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                />
-                                            </div>
-                                            <div style="--w-span-md:12;">
-                                                <label class="w-field__label"><?= __('详细地址') ?></label>
-                                                <input type="text" name="shipping_address1" class="w-input" value="<?= htmlspecialchars((string)($shippingForm['address1'] ?? '')) ?>" autocomplete="shipping street-address" placeholder="<?= __('门牌号 / 楼栋单元等') ?>">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="w-card" data-testid="order-edit-billing-card">
-                            <div class="w-disclosure" data-w-component="disclosure" data-state="closed">
-                                <div id="order-edit-billing-heading">
-                                    <button class="w-disclosure__trigger" type="button" aria-expanded="false"
-                                            aria-controls="order-edit-billing-body"
-                                            data-w-target="#order-edit-billing-body"
-                                            data-w-action="disclosure.toggle"
-                                            data-w-disclosure-trigger
-                                            data-testid="order-edit-billing-toggle">
-                                        <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                                            <strong><?= __('账单地址') ?></strong>
-                                            <span class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-billing-address"><?= htmlspecialchars($billingSummary) ?></span>
-                                        </span>
-                                        <w:icon name="chevron-down" size="sm"></w:icon>
-                                    </button>
-                                </div>
-                                <div id="order-edit-billing-body" class="w-disclosure__panel" aria-labelledby="order-edit-billing-heading" data-w-disclosure-panel hidden>
-                                    <div class="w-disclosure__body">
-                                        <div class="w-grid" data-testid="order-edit-billing-form">
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('账单姓名') ?></label>
-                                                <input type="text" name="billing_name" class="w-input" value="<?= htmlspecialchars((string)($billingForm['name'] ?? '')) ?>">
-                                            </div>
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('电话') ?></label>
-                                                <input type="text" name="billing_phone" class="w-input" value="<?= htmlspecialchars((string)($billingForm['phone'] ?? '')) ?>">
-                                            </div>
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('邮箱') ?></label>
-                                                <input type="email" name="billing_email" class="w-input" value="<?= htmlspecialchars((string)($billingForm['email'] ?? '')) ?>">
-                                            </div>
-                                            <div style="--w-span-md:4;">
-                                                <label class="w-field__label"><?= __('邮编') ?></label>
-                                                <input type="text" name="billing_postcode" class="w-input" value="<?= htmlspecialchars((string)($billingForm['postcode'] ?? '')) ?>" autocomplete="billing postal-code">
-                                            </div>
-                                            <?php
-                                            $billingHasRegion = trim((string)($billingForm['country_code'] ?? $billingForm['province'] ?? $billingForm['city'] ?? '')) !== '';
-                                            ?>
-                                            <?php if ($billingHasRegion): ?>
-                                            <div style="--w-span-md:12;">
-                                                <w:theme:address
-                                                    levels="country,province,city,district"
-                                                    code="order-edit-billing"
-                                                    searchable="true"
-                                                    cascade="true"
-                                                    district="true"
-                                                    street="false"
-                                                    postal="false"
-                                                    postal-lookup="false"
-                                                    detail="false"
-                                                    country-name="billing_country_code"
-                                                    province-name="billing_province"
-                                                    city-name="billing_city"
-                                                    district-name="billing_district"
-                                                    country="<?= htmlspecialchars((string)($billingForm['country_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                    province="<?= htmlspecialchars((string)($billingForm['province'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                    city="<?= htmlspecialchars((string)($billingForm['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                    district-filter="<?= htmlspecialchars((string)($billingForm['district'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                />
-                                            </div>
-                                            <?php else: ?>
-                                            <div style="--w-span-md:3;">
-                                                <label class="w-field__label"><?= __('国家代码') ?></label>
-                                                <input type="text" name="billing_country_code" class="w-input" maxlength="8" value="" placeholder="CN">
-                                            </div>
-                                            <div style="--w-span-md:3;">
-                                                <label class="w-field__label"><?= __('省/州') ?></label>
-                                                <input type="text" name="billing_province" class="w-input" value="">
-                                            </div>
-                                            <div style="--w-span-md:3;">
-                                                <label class="w-field__label"><?= __('城市') ?></label>
-                                                <input type="text" name="billing_city" class="w-input" value="">
-                                            </div>
-                                            <div style="--w-span-md:3;">
-                                                <label class="w-field__label"><?= __('区县') ?></label>
-                                                <input type="text" name="billing_district" class="w-input" value="">
-                                            </div>
-                                            <div style="--w-span-md:12;">
-                                                <p class="w-text" data-tone="muted" data-size="sm"><?= __('当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。') ?></p>
-                                            </div>
-                                            <?php endif; ?>
-                                            <div style="--w-span-md:12;">
-                                                <label class="w-field__label"><?= __('详细地址') ?></label>
-                                                <input type="text" name="billing_address1" class="w-input" value="<?= htmlspecialchars((string)($billingForm['address1'] ?? '')) ?>" autocomplete="billing street-address" placeholder="<?= __('门牌号 / 楼栋单元等') ?>">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="w-stack" style="--w-mb:var(--weline-space-2);--w-gap:var(--weline-space-2);" data-testid="order-edit-methods">
-                        <div class="w-card" data-testid="order-edit-payment-card">
-                            <div class="w-disclosure" data-w-component="disclosure" data-state="closed">
-                                <div id="order-edit-payment-heading">
-                                    <button class="w-disclosure__trigger" type="button" aria-expanded="false"
-                                            aria-controls="order-edit-payment-body"
-                                            data-w-target="#order-edit-payment-body"
-                                            data-w-action="disclosure.toggle"
-                                            data-w-disclosure-trigger
-                                            data-testid="order-edit-payment-toggle">
-                                        <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                                            <strong><?= __('支付方式') ?></strong>
-                                            <span class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-payment-summary"><?= htmlspecialchars($paymentSummary) ?></span>
-                                        </span>
-                                        <w:icon name="chevron-down" size="sm"></w:icon>
-                                    </button>
-                                </div>
-                                <div id="order-edit-payment-body" class="w-disclosure__panel" aria-labelledby="order-edit-payment-heading" data-w-disclosure-panel hidden>
-                                    <div class="w-disclosure__body">
-                                        <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="order-edit-payment-form">
-                                            <div>
-                                                <label class="w-field__label" for="order-edit-payment-method"><?= __('选择支付方式') ?></label>
-                                                <select id="order-edit-payment-method" name="payment_method" class="w-select" data-testid="order-edit-payment-method">
-                                                    <option value=""><?= __('未指定') ?></option>
-                                                    <?php
-                                                    $seen = [];
-                                                    foreach ($paymentOptions as $option):
-                                                        $code = strtolower(trim((string)($option['code'] ?? '')));
-                                                        $label = trim((string)($option['label'] ?? $code));
-                                                        if ($code === '' || isset($seen[$code])) {
-                                                            continue;
-                                                        }
-                                                        $seen[$code] = true;
-                                                        ?>
-                                                        <option value="<?= htmlspecialchars($code) ?>" <?= strtolower($paymentMethod) === $code ? 'selected' : '' ?>>
-                                                            <?= htmlspecialchars($label !== '' ? $label : $code) ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                    <?php if ($paymentMethod !== '' && !isset($seen[strtolower($paymentMethod)])): ?>
-                                                        <option value="<?= htmlspecialchars($paymentMethod) ?>" selected>
-                                                            <?= htmlspecialchars($paymentMethodLabel !== '' ? $paymentMethodLabel : $paymentMethod) ?>
-                                                        </option>
-                                                    <?php endif; ?>
-                                                </select>
-                                            </div>
-                                            <?php if ($paymentHint !== ''): ?>
-                                                <p class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-payment-hint"><?= htmlspecialchars($paymentHint) ?></p>
-                                            <?php elseif ($paymentMethod === ''): ?>
-                                                <p class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-payment-hint"><?= __('订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。') ?></p>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="w-card" data-testid="order-edit-shipping-method-card">
-                            <div class="w-disclosure" data-w-component="disclosure" data-state="closed">
-                                <div id="order-edit-shipping-method-heading">
-                                    <button class="w-disclosure__trigger" type="button" aria-expanded="false"
-                                            aria-controls="order-edit-shipping-method-body"
-                                            data-w-target="#order-edit-shipping-method-body"
-                                            data-w-action="disclosure.toggle"
-                                            data-w-disclosure-trigger
-                                            data-testid="order-edit-shipping-method-toggle">
-                                        <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                                            <strong><?= __('配送方式') ?></strong>
-                                            <span class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-shipping-method-summary"><?= htmlspecialchars($shippingMethodSummary) ?></span>
-                                        </span>
-                                        <w:icon name="chevron-down" size="sm"></w:icon>
-                                    </button>
-                                </div>
-                                <div id="order-edit-shipping-method-body" class="w-disclosure__panel" aria-labelledby="order-edit-shipping-method-heading" data-w-disclosure-panel hidden>
-                                    <div class="w-disclosure__body">
-                                        <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="order-edit-shipping-method-form">
-                                            <div>
-                                                <span class="w-field__label"><?= __('运输方式') ?></span>
-                                                <div class="w-text" data-testid="order-edit-shipping-method-name"><?= htmlspecialchars($shippingMethodLabel) ?></div>
-                                            </div>
-                                            <div>
-                                                <span class="w-field__label"><?= __('运费') ?></span>
-                                                <div class="w-text" data-testid="order-edit-shipping-method-fee"><?= htmlspecialchars((string)($orderTotals['currency'] ?? $currency)) ?> <?= number_format((float)($orderTotals['shipping_amount'] ?? $paymentChrome['shipping_amount'] ?? 0), 2) ?></div>
-                                            </div>
-                                            <div>
-                                                <label class="w-field__label" for="order-edit-shipping-method"><?= __('配送方式') ?></label>
-                                                <?php if ($shippingOptions !== []): ?>
-                                                    <select id="order-edit-shipping-method" name="shipping_method" class="w-select" data-testid="order-edit-shipping-method">
-                                                        <option value=""><?= __('未指定配送方式') ?></option>
-                                                        <?php
-                                                        $seenShip = [];
-                                                        foreach ($shippingOptions as $shipOption):
-                                                            if (!is_array($shipOption)) {
-                                                                continue;
-                                                            }
-                                                            $shipCode = trim((string)($shipOption['code'] ?? ''));
-                                                            if ($shipCode === '') {
-                                                                continue;
-                                                            }
-                                                            $seenShip[strtoupper($shipCode)] = true;
-                                                            $shipLabel = trim((string)($shipOption['label'] ?? $shipCode));
-                                                            ?>
-                                                            <option value="<?= htmlspecialchars($shipCode) ?>" <?= strtoupper($shippingMethod) === strtoupper($shipCode) ? 'selected' : '' ?>>
-                                                                <?= htmlspecialchars($shipLabel) ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                        <?php if ($shippingMethod !== '' && !isset($seenShip[strtoupper($shippingMethod)])): ?>
-                                                            <option value="<?= htmlspecialchars($shippingMethod) ?>" selected>
-                                                                <?= htmlspecialchars($shippingMethodLabel !== '' ? $shippingMethodLabel : $shippingMethod) ?>
-                                                            </option>
-                                                        <?php endif; ?>
-                                                    </select>
-                                                    <p class="w-text" data-tone="muted" data-size="sm"><?= __('系统代码') ?>：<?= htmlspecialchars($shippingMethod !== '' ? $shippingMethod : '—') ?></p>
-                                                <?php else: ?>
-                                                    <input id="order-edit-shipping-method" type="text" name="shipping_method" class="w-input" value="<?= htmlspecialchars($shippingMethod) ?>" data-testid="order-edit-shipping-method">
-                                                    <p class="w-text" data-tone="muted" data-size="sm"><?= __('未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。') ?></p>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="--w-mb:var(--weline-space-2);">
-                        <label class="w-field__label"><?= __('订单备注') ?></label>
-                        <textarea name="notes" class="w-textarea" rows="2" data-testid="order-edit-notes"><?= htmlspecialchars($notesValue) ?></textarea>
-                    </div>
-
-                    <?php if (!$isEdit): ?>
-                    <div style="--w-mb:var(--weline-space-4);">
-                        <label class="w-field__label"><?= __('订单项') ?></label>
-                        <div id="order-items"></div>
-                        <button type="button" class="w-button" id="add-item" data-tone="primary" data-size="sm" style="--w-mt:var(--weline-space-2);"><?= __('添加订单项') ?></button>
-                    </div>
-                    <?php endif; ?>
-
-                    <div class="w-cluster" data-justify="end">
-                        <?php if ($isEdit): ?>
-                            <a href="@backend-url{'order/backend/order/view'}?id=<?= $orderId ?>" class="w-button" data-tone="neutral"><?= __('查看详情') ?></a>
-                        <?php endif; ?>
-                        <a href="@backend-url{'order/backend/order/index'}" class="w-button" data-tone="neutral"><?= __('返回列表') ?></a>
-                        <button type="submit" class="w-button" data-tone="primary" data-testid="order-edit-save"><?= __('保存客户调整') ?></button>
-                    </div>
-                </w:form>
+                        <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/customer-adjust-form.phtml', $customerAdjustFormVars) ?>
                     </div>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <?php if ($isEdit): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-2);" data-testid="order-edit-more">
@@ -830,7 +545,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                             data-testid="order-edit-more-toggle">
                         <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
                             <strong><?= __('更多') ?></strong>
-                            <span class="w-text" data-tone="muted" data-size="sm"><?= __('沟通备注 · 取消 · 发货记录 · 历史') ?></span>
+                            <span class="w-text" data-tone="muted" data-size="sm"><?= __('沟通备注 · 取消 · 历史') ?></span>
                         </span>
                         <w:icon name="chevron-down" size="sm"></w:icon>
                     </button>
@@ -863,42 +578,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
             </div>
         </div>
 
-        <div class="w-card" style="--w-mb:0;" data-testid="order-edit-shipments">
-            <div class="w-card__header">
-                <h5 class="w-card__title" style="--w-mb:0;"><?= __('发货记录') ?></h5>
-            </div>
-            <div class="w-card__body">
-                <div class="w-table-wrap">
-                    <table class="w-table">
-                        <thead>
-                            <tr>
-                                <th><?= __('物流单号') ?></th>
-                                <th><?= __('承运商') ?></th>
-                                <th><?= __('状态') ?></th>
-                                <th><?= __('发货时间') ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($shipments)): ?>
-                                <tr>
-                                    <td colspan="4" class="w-text" data-align="center"><?= __('暂无发货记录') ?></td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($shipments as $shipment): ?>
-                                    <?php $shipmentData = is_object($shipment) ? $shipment->getData() : $shipment; ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars((string)($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_TRACKING_NUMBER] ?? '')) ?></td>
-                                        <td><?= htmlspecialchars((string)($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_CARRIER] ?? '')) ?></td>
-                                        <td><span class="w-badge" data-w-background="info"><?= htmlspecialchars((string)($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_STATUS] ?? '')) ?></span></td>
-                                        <td><?= htmlspecialchars((string)($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_SHIPPED_AT] ?? '')) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        <?php /* 发货记录只在「订单办理 → 发货」槽由 Shipping 注入，禁止此处再硬编码一份表 */ ?>
 
         <div class="w-card" style="--w-mb:0;" data-testid="order-edit-history">
             <div class="w-card__header">
@@ -979,6 +659,20 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
             panel.innerHTML = frag ? frag.outerHTML : html;
             panel.setAttribute('data-loaded', '1');
             panel.removeAttribute('data-loading');
+            // 异步面板注入后补装 data-weline-load（模块可选）
+            panel.querySelectorAll('[data-weline-load]').forEach(function (el) {
+                var name = el.getAttribute('data-weline-load');
+                if (!name || !window.Weline || typeof window.Weline.load !== 'function') {
+                    return;
+                }
+                window.Weline.load(name).then(function (mod) {
+                    if (mod && typeof mod.boot === 'function') {
+                        mod.boot({ el: el });
+                    } else if (mod && typeof mod.init === 'function') {
+                        mod.init({ el: el });
+                    }
+                }).catch(function () { /* optional module */ });
+            });
         }).catch(function () {
             panel.innerHTML = '<p class="w-text" data-tone="danger" data-size="sm">' + failedText + '</p>';
             panel.removeAttribute('data-loading');
@@ -989,23 +683,12 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
         var tab = ev.target && ev.target.closest ? ev.target.closest('[role="tab"]') : null;
         if (!tab || !root.contains(tab)) return;
         window.setTimeout(function () { loadPanel(tab); }, 0);
-        var scrollBtn = null;
     });
 
     root.querySelectorAll('[role="tab"][aria-selected="true"]').forEach(function (tab) {
         loadPanel(tab);
     });
 
-    root.addEventListener('click', function (ev) {
-        var btn = ev.target && ev.target.closest ? ev.target.closest('[data-order-ops-scroll-writable]') : null;
-        if (!btn) return;
-        var target = document.querySelector('[data-testid="order-edit-writable"]');
-        var toggle = document.querySelector('[data-testid="order-edit-writable-toggle"]');
-        if (toggle && toggle.getAttribute('aria-expanded') === 'false') {
-            toggle.click();
-        }
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
 })();
 </script>
 <?php endif; ?>

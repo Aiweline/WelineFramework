@@ -71,7 +71,12 @@ final class Search implements TaglibInterface
             if ($lockedType !== '' && $lockedType !== 'all') {
                 $showType = false;
             }
-            $placeholder = (string)($attributes['placeholder'] ?? __('输入关键词…'));
+            // 属性里写中文源串；此处再 __()，避免 Taglib 运行时属性拿不到 @lang 烘焙结果。
+            $placeholderRaw = trim((string)($attributes['placeholder'] ?? '输入关键词…'));
+            if ($placeholderRaw === '') {
+                $placeholderRaw = '输入关键词…';
+            }
+            $placeholder = (string)__($placeholderRaw);
             $query = trim((string)($attributes['value'] ?? ''));
             $showHot = ($attributes['show-hot-words'] ?? ($area === 'backend' ? 'false' : 'true')) !== 'false';
             $autoComplete = ($attributes['auto-complete'] ?? 'true') !== 'false';

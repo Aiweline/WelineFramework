@@ -164,7 +164,7 @@
     --loader-border-width: 3px;
     --container-max-width: var(--layout-max-width);
     /* 可视化 Banner 默认高度；部件实例可用主题 token 或历史 CSS 长度覆盖。 */
-    --size-hero-height: 500px;
+    --size-hero-height: 560px;
 
     /* ========== weshop / 历史桥接别名（布局不得空） ========== */
     --weshop-spacing-xs: var(--spacing-xs);

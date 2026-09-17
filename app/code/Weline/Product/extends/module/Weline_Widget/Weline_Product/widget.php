@@ -282,12 +282,12 @@ return [
         'code' => 'recommended-products',
         'area' => 'frontend',
         'template' => 'Weline_Product::templates/frontend/widgets/recommended-products.phtml',
-        'page_layouts' => ['category', 'product_list', 'not_found'],
+        'page_layouts' => ['category', 'products', 'not_found'],
         'position' => ['content'],
         'slot' => 'category-recommendations',
         'supports' => [
             'layout-category-recommendations',
-            'layout-product-list-recommendations',
+            'layout-products-recommendations',
             'layout-not-found-recommendations',
             'recommended-products',
             'featured-products',
@@ -310,7 +310,7 @@ return [
                 ],
             ],
             [
-                'layout_type' => 'product_list',
+                'layout_type' => 'products',
                 'layout_option' => 'default',
                 'slot' => 'list-recommendations',
                 'area' => 'content',

@@ -1,0 +1,61 @@
+<?php
+/**
+ * 网站管理右栏编辑面板（供整页 SSR 与 AJAX panel 共用）
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var string $editor_kind
+ * @var bool $editor_acl_ok
+ * @var string $editor_error
+ * @var string $editor_title
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE),
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$editorKind = (string)($editor_kind ?? '');
+$editorAclOk = (bool)($editor_acl_ok ?? false);
+$editorError = (string)($editor_error ?? '');
+$editorTitle = (string)($editor_title ?? __('范围编辑'));
+?>
+<header class="w-card__header w-websites-scope-editor__header"
+        data-websites-scope-editor-header>
+    <h2 class="w-card__title" id="websites-scope-editor-heading">
+        <w-icon name="edit" size="sm"></w-icon>
+        <?= $escape($editorTitle) ?>
+    </h2>
+    <?php if ($editorAclOk && $editorError === '' && $editorKind === 'website'): ?>
+        <button type="submit"
+                class="w-button"
+                data-tone="primary"
+                form="website-admin-edit-form"
+                data-testid="websites-scope-editor-save">
+            <w-icon name="save" size="sm"></w-icon>
+            <?= $escape(__('保存')) ?>
+        </button>
+    <?php endif; ?>
+</header>
+<div class="w-card__body" data-websites-scope-editor-body style="max-block-size:calc(100vh - 12rem);overflow:auto;">
+    <?php if ($editorError !== ''): ?>
+        <div class="w-alert" data-tone="danger" role="alert"><?= $escape($editorError) ?></div>
+    <?php elseif (!$editorAclOk && in_array($editorKind, ['website', 'store', 'channel', 'new_store', 'new_channel'], true)): ?>
+        <div class="w-alert" data-tone="warning" role="status">
+            <lang>当前账号无权编辑该节点</lang>
+        </div>
+    <?php elseif ($editorKind === 'website'): ?>
+        <?php echo $this->fetch('Weline_Websites::templates/Admin/Website/form.phtml'); ?>
+    <?php elseif ($editorKind === 'store'): ?>
+        <?php echo $this->fetch('Weline_Websites::templates/Backend/ScopeManagement/edit-store.phtml'); ?>
+    <?php elseif ($editorKind === 'channel'): ?>
+        <?php echo $this->fetch('Weline_Websites::templates/Backend/ScopeManagement/edit-channel.phtml'); ?>
+    <?php elseif ($editorKind === 'new_store'): ?>
+        <?php echo $this->fetch('Weline_Websites::templates/Admin/Website/tree-create-store.phtml'); ?>
+    <?php elseif ($editorKind === 'new_channel'): ?>
+        <?php echo $this->fetch('Weline_Websites::templates/Admin/Website/tree-create-channel.phtml'); ?>
+    <?php else: ?>
+        <div class="w-empty">
+            <w-icon name="globe" size="lg"></w-icon>
+            <p><lang>请从左侧选择网站、商店或渠道</lang></p>
+        </div>
+    <?php endif; ?>
+</div>

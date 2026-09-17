@@ -67,7 +67,7 @@ final class PromotionSitemapUrlProvider extends AbstractSitemapUrlProvider
                 'entity_type' => 'promotion',
                 'entity_id' => 0,
                 'metadata' => [
-                    'page_type' => 'product_list',
+                    'page_type' => 'products',
                     'source' => 'Weline_Promotion',
                 ],
             ]];
@@ -82,7 +82,7 @@ final class PromotionSitemapUrlProvider extends AbstractSitemapUrlProvider
             'entity_type' => 'promotion',
             'entity_id' => 0,
             'metadata' => [
-                'page_type' => 'product_list',
+                'page_type' => 'products',
                 'source' => 'Weline_Promotion',
             ],
         ]];
@@ -116,7 +116,7 @@ final class PromotionSitemapUrlProvider extends AbstractSitemapUrlProvider
                 'entity_type' => 'promotion_theme',
                 'entity_id' => $themeId,
                 'metadata' => [
-                    'page_type' => 'product_list',
+                    'page_type' => 'products',
                     'page_slug' => $slug,
                     'source' => 'Weline_Promotion',
                 ],

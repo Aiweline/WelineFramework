@@ -61,6 +61,34 @@ final class ResponseTest extends TestCase
         self::assertSame('<h1>hello</h1>', $response->getBody());
     }
 
+    public function testWqb1BodyIsNotRewrittenByDocumentCspMeta(): void
+    {
+        // Simulate a query-bin packet that embeds HTML (preview_html) and lost Content-Type.
+        $packet = 'WQB1' . "\x01" . '<html><head></head><body><section class="preview">x</section></body></html>';
+        $response = Response::fromContent($packet, 200, null);
+        // Force empty content-type path that previously mistook embedded HTML for a document.
+        $response->setHeader('Content-Type', '');
+
+        $http = $response->toHttpString(false);
+
+        self::assertStringContainsString($packet, $http);
+        self::assertStringNotContainsString('data-weline-csp="1"', $http);
+        self::assertSame(0, \strncmp($response->getBody(), 'WQB1', 4));
+    }
+
+    public function testJsonBodyIsNotRewrittenByDocumentCspMetaEvenWithHtmlContentType(): void
+    {
+        $json = '{"success":true,"data":["AQ"]}';
+        $response = Response::fromContent($json, 200, 'text/html; charset=utf-8');
+
+        $http = $response->toHttpString(false);
+
+        self::assertStringContainsString($json, $http);
+        // Content-Type 误标为 html 时，仍不得把 CSP meta 插进 JSON 正文
+        self::assertStringNotContainsString('data-weline-csp="1"', $response->getBody());
+        self::assertSame($json, $response->getBody());
+    }
+
     public function testResponseTerminateExceptionCanCarryFrameworkResponse(): void
     {
         $response = Response::json(['ok' => true], 202);

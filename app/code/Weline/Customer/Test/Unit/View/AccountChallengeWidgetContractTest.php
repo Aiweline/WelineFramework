@@ -16,7 +16,7 @@ final class AccountChallengeWidgetContractTest extends TestCase
         $shell = \dirname(__DIR__, 3) . '/view/templates/frontend/account/challenge-shell.phtml';
         $challengeForm = \dirname(__DIR__, 3) . '/view/templates/frontend/account/challenge.phtml';
         $themeWidget = \dirname(__DIR__, 4) . '/Theme/view/theme/frontend/widgets/form/account-challenge/default.phtml';
-        $challengeLayout = \dirname(__DIR__, 4) . '/Theme/view/theme/frontend/layouts/account/challenge.phtml';
+        $challengeLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/challenge.phtml';
 
         self::assertFileExists($shell);
         self::assertFileExists($challengeForm);

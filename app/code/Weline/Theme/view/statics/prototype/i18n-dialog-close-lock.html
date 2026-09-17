@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>i18n dialog close-lock fixture</title>
+  <link rel="stylesheet" href="/Weline/Widget/view/statics/css/widget-param-types.css">
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; background: #f4f5f7; }
+    .note { color: #6b7380; font-size: 13px; margin-bottom: 12px; }
+    .log { margin-top: 12px; font-size: 12px; white-space: pre-wrap; background: #fff; border: 1px solid #d5d9e0; border-radius: 8px; padding: 10px; min-height: 4rem; }
+  </style>
+</head>
+<body>
+  <p class="note">多语言弹窗：Theme UI dialog · 仅点关闭可关（禁 ESC / 遮罩）</p>
+  <button type="button" class="w-button w-param-btn-i18n" id="openBtn" data-tone="neutral" data-variant="outline" data-size="sm">多语言</button>
+  <dialog id="i18n_panel_demo_title" class="w-dialog w-param-i18n-panel w-param-i18n-dialog" data-w-component="dialog" data-w-closable="false" data-w-backdrop="static" data-field="title" data-state="closed" aria-labelledby="i18n_title" hidden>
+    <div class="w-dialog__surface">
+      <header class="w-dialog__header w-param-i18n-header">
+        <h2 class="w-dialog__title" id="i18n_title">多语言配置 · 页面标题</h2>
+        <button type="button" class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n aria-label="关闭多语言配置">×</button>
+      </header>
+      <div class="w-dialog__body w-param-i18n-body">
+        <p class="w-param-i18n-hint">侧栏放不下的语种表单统一在此编辑。点遮罩或 Esc 不应关闭。</p>
+        <label class="w-param-i18n-row">简体中文<textarea class="w-textarea i18n-input" data-locale="zh_Hans_CN" rows="2">长安汉服</textarea></label>
+        <label class="w-param-i18n-row">English<textarea class="w-textarea i18n-input" data-locale="en_US" rows="2">Chang'an Hanfu</textarea></label>
+      </div>
+      <footer class="w-dialog__footer w-param-i18n-footer">
+        <button type="button" class="w-button" data-tone="primary" data-size="sm" data-save-i18n>保存多语言</button>
+      </footer>
+    </div>
+  </dialog>
+  <div class="log" id="log">ready</div>
+  <script type="module">
+    import UI from '/Weline/Theme/view/statics/ui/weline-ui.js';
+    const dialog = document.getElementById('i18n_panel_demo_title');
+    const log = document.getElementById('log');
+    const push = (msg) => { log.textContent = `${new Date().toISOString().slice(11, 19)} ${msg}\n` + log.textContent; };
+    window.__i18nFixture = { UI, dialog, push, isOpen: () => !!dialog.open };
+    document.getElementById('openBtn').addEventListener('click', () => {
+      dialog.dataset.wClosable = 'false';
+      dialog.dataset.wBackdrop = 'static';
+      UI.mount(dialog);
+      UI.dialog.open(dialog);
+      push('opened');
+    });
+    dialog.querySelector('[data-close-i18n]').addEventListener('click', () => {
+      UI.dialog.close(dialog, 'i18n-close');
+      push('closed-by-button');
+    });
+    dialog.querySelector('[data-save-i18n]').addEventListener('click', () => {
+      push('saved-keep-open open=' + dialog.open);
+    });
+    dialog.addEventListener('close', () => push('native-close return=' + dialog.returnValue));
+    push('fixture-ready');
+  </script>
+</body>
+</html>

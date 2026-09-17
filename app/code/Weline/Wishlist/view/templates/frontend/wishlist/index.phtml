@@ -30,6 +30,7 @@ $wishlistAccountCss = (string)$this->fetchTagSource(
      data-i18n-remove-failed="<?= $esc((string)__('移除失败，请稍后重试')) ?>"
      data-i18n-added-cart="<?= $esc((string)__('已加入购物车')) ?>"
      weline-code="wishlist.page.section_1">
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="account-card__header storefront-wishlist__header">
         <div class="storefront-wishlist__header-row">
             <div>

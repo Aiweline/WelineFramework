@@ -198,12 +198,35 @@ if ($section === 'products') {
     $editLabel = (string)__('编辑');
     $editWebsiteId = (int)$website_id;
 }
+$websiteOptionsForScope = json_decode((string)($websiteOptionsJson ?? '[]'), true);
+if (!is_array($websiteOptionsForScope)) {
+    $websiteOptionsForScope = [];
+}
+$createMediaIdentityScope = 'default.default.default';
+foreach ($websiteOptionsForScope as $websiteOpt) {
+    if (!is_array($websiteOpt)) {
+        continue;
+    }
+    if ((int)($websiteOpt['website_id'] ?? -1) !== (int)$website_id) {
+        continue;
+    }
+    $websiteCode = trim((string)($websiteOpt['code'] ?? ''));
+    if ($websiteCode !== '' && !str_contains($websiteCode, '.') && !str_contains($websiteCode, ':')) {
+        $createMediaIdentityScope = strtolower($websiteCode) . '.default.default';
+    }
+    break;
+}
 ?>
 <link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260829-basics-grid">
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
 <div class="w-product-admin"
      data-product-admin="<?= $section === 'products' ? 'catalog' : 'legacy' ?>"
-     data-testid="product-management-<?= $escape($section) ?>">
+     data-testid="product-management-<?= $escape($section) ?>"
+     data-media-identity-root="product"
+     data-media-identity-code="draft"
+     data-media-identity-scope="<?= $escape($createMediaIdentityScope) ?>"
+     data-media-identity-kind="media"
+     data-media-code-input="#product-create-sku">
     <div class="w-card w-product-admin__hero">
         <div class="w-card__body w-cluster" data-align="start" data-justify="between" data-wrap="true">
             <div class="w-stack" data-gap="sm">
@@ -1001,7 +1024,7 @@ if ($section === 'products') {
                 <iframe class="w-product-media-picker__frame"
                         title="@lang(媒体库)"
                         data-product-create-media-picker-frame
-                        data-src="@backend-url('media/backend/manager/iframe')?target=product-create-media-picker&multi=1&usage=1&ext=jpg,png,gif,webp"></iframe>
+                        data-src="@backend-url('media/backend/manager/iframe')?target=product-create-media-picker&multi=1&usage=1&ext=jpg,png,gif,webp&identity_root=product&identity_kind=media&ref_mode=multi"></iframe>
             </div>
         </dialog>
 
@@ -1018,7 +1041,7 @@ if ($section === 'products') {
                 <iframe class="w-product-media-picker__frame"
                         title="@lang(媒体库)"
                         data-product-create-variant-image-frame
-                        data-src="@backend-url('media/backend/manager/iframe')?target=product-create-variant-image&multi=0&usage=1&ext=jpg,png,gif,webp"></iframe>
+                        data-src="@backend-url('media/backend/manager/iframe')?target=product-create-variant-image&multi=0&usage=1&ext=jpg,png,gif,webp&identity_root=product&identity_kind=variant&identity_field=variant_image&ref_mode=single"></iframe>
             </div>
         </dialog>
     <?php else: ?>
@@ -1074,5 +1097,7 @@ if ($section === 'products') {
         </div>
     <?php endif; ?>
 </div>
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
-<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260912-uuid-purge" defer data-no-extract="true"></script>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260916-media-identity" defer data-no-extract="true"></script>

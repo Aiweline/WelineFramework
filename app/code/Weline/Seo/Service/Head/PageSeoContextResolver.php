@@ -61,10 +61,11 @@ class PageSeoContextResolver
             $this->read($seo, ['site_name', 'siteName']),
             $this->read($meta, ['site_name', 'siteName']),
             $published['site_name'] ?? null,
-            'Weline Framework',
+            $this->resolveWebsiteSiteName(),
         ]);
 
         $layoutName = $this->layoutName($meta);
+        $layoutFallback = SeoPageProfileBag::pullLayoutFallback();
         $controllerTitle = $this->firstNonEmpty([
             $this->read($meta, ['controller_title']),
             $this->meaningfulTemplateTitle($template),
@@ -78,6 +79,8 @@ class PageSeoContextResolver
             $this->read($product, ['meta_name', 'meta_title', 'name', 'title']),
             $this->read($category, ['meta_title', 'name', 'title']),
             $this->read($page, ['meta_title', 'title', 'name']),
+            // Theme layout explicit SEO (meta_title) — after entity, before route defaults.
+            $this->read($layoutFallback, ['meta_title']),
             $layoutAwareTitle,
             $this->routeTitle($template),
             $siteName,
@@ -93,6 +96,7 @@ class PageSeoContextResolver
             $this->read($category, ['meta_description', 'description']),
             $this->read($page, ['meta_description', 'ai_description', 'description', 'excerpt']),
             $this->readTemplate($template, 'description'),
+            $this->read($layoutFallback, ['meta_description']),
         ]));
         if ($description === '') {
             $description = $this->defaultDescription((string) $title, (string) $siteName);
@@ -105,6 +109,7 @@ class PageSeoContextResolver
             $this->read($product, ['meta_keywords', 'keywords', 'tags']),
             $this->read($category, ['meta_keywords', 'keywords']),
             $this->read($page, ['meta_keywords', 'keywords', 'tags']),
+            $this->read($layoutFallback, ['meta_keywords']),
         ]);
 
         $url = $this->currentUrl($template);
@@ -118,6 +123,7 @@ class PageSeoContextResolver
             $this->read($product, ['canonical', 'url']),
             $this->read($category, ['canonical', 'url']),
             $this->read($page, ['canonical', 'url']),
+            $this->read($layoutFallback, ['canonical_url']),
             $options['canonical_url'] ?? null,
             $this->canonicalizeUrl($url),
         ]);
@@ -127,6 +133,7 @@ class PageSeoContextResolver
             $this->read($product, ['image']),
             $this->firstImage($this->read($product, ['images'])),
             $this->read($page, ['image', 'cover_image', 'featured_image']),
+            $this->read($layoutFallback, ['image', 'og_image']),
         ]));
         $imageAlt = $this->normalizeDescription($this->firstNonEmpty([
             $this->read($seo, ['image_alt', 'og_image_alt', 'twitter_image_alt']),
@@ -144,6 +151,7 @@ class PageSeoContextResolver
         $explicitRobots = (string) $this->firstNonEmpty([
             $this->read($seo, ['robots']),
             $this->read($meta, ['robots']),
+            $this->read($layoutFallback, ['robots']),
         ]);
 
         $context = [
@@ -1077,6 +1085,12 @@ class PageSeoContextResolver
         foreach (['schema_nodes', 'item_list', 'faqs', 'qa_list', 'feeds', 'breadcrumbs', 'breadcrumb_trails'] as $listKey) {
             if (isset($provided[$listKey]) && is_array($provided[$listKey]) && $this->isList($provided[$listKey])) {
                 if (in_array($listKey, ['breadcrumbs', 'breadcrumb_trails'], true)) {
+                    // Keep controller/bag trails when already published; providers only fill gaps.
+                    $existingCrumbs = $context[$listKey] ?? null;
+                    if (is_array($existingCrumbs) && $existingCrumbs !== [] && $this->isList($existingCrumbs)) {
+                        unset($provided[$listKey]);
+                        continue;
+                    }
                     $context[$listKey] = array_values($provided[$listKey]);
                 } else {
                     $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
@@ -1086,6 +1100,17 @@ class PageSeoContextResolver
                     $context[$listKey] = $listKey === 'feeds' ? $this->normalizeFeeds($merged) : $merged;
                 }
                 unset($provided[$listKey]);
+            }
+        }
+
+        // Entity/controller bag (+ resolver chain) wins over provider primary SEO text.
+        foreach (['title', 'description', 'keywords', 'canonical_url', 'robots', 'image', 'og_image', 'meta_title', 'meta_description'] as $scalarKey) {
+            if (!array_key_exists($scalarKey, $provided)) {
+                continue;
+            }
+            $existing = $context[$scalarKey] ?? null;
+            if (!is_array($existing) && $existing !== null && trim((string) $existing) !== '') {
+                unset($provided[$scalarKey]);
             }
         }
 
@@ -1135,5 +1160,28 @@ class PageSeoContextResolver
     private function isList(array $value): bool
     {
         return $value === [] || array_keys($value) === range(0, count($value) - 1);
+    }
+
+    private function resolveWebsiteSiteName(): string
+    {
+        try {
+            if (class_exists(\Weline\Theme\Helper\SiteBrand::class)) {
+                /** @var \Weline\Theme\Helper\SiteBrand $siteBrand */
+                $siteBrand = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+                $name = trim($siteBrand->resolveFrontendSiteName());
+                if ($name !== '' && !$siteBrand->isGenericBrandPlaceholder($name)) {
+                    return $name;
+                }
+            }
+            if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $name = trim((string)(\Weline\Websites\Data\WebsiteData::getName() ?? ''));
+                if ($name !== '') {
+                    return $name;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 }

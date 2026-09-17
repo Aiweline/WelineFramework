@@ -105,7 +105,12 @@ class PcController extends Core
                         : $this->_url->getFrontendUrl('/', [], false);
                     $this->request->getResponse()->redirect($fallbackUrl);
                 } else {
-                    $this->request->getResponse()->redirect($safeExternalUrl . (str_contains($safeExternalUrl, '?') ? '&' : '') . http_build_query($params));
+                    $query = http_build_query($params);
+                    $this->request->getResponse()->redirect(
+                        $query === ''
+                            ? $safeExternalUrl
+                            : ($safeExternalUrl . (str_contains($safeExternalUrl, '?') ? '&' : '?') . $query)
+                    );
                 }
             } else {
                 if (str_starts_with($url, '/')) {

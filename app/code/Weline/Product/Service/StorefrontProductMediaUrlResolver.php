@@ -380,6 +380,11 @@ final class StorefrontProductMediaUrlResolver
 
         self::sanitizeDescriptionChildren($root, $assetResolver);
         $output = '';
+        // Keep suite skip marker visible to Agents (root attrs are not serialized with children).
+        $weds = trim($root->getAttribute('data-weds'));
+        if ($weds === 'xq') {
+            $output .= '<!--weds:xq--><span data-weds="xq" hidden aria-hidden="true"></span>';
+        }
         foreach ($root->childNodes as $child) {
             $output .= (string)$document->saveHTML($child);
         }
@@ -461,6 +466,14 @@ final class StorefrontProductMediaUrlResolver
             }
 
             $tag = strtolower($child->tagName);
+            // Skip-marker span is re-emitted from root data-weds in renderDescriptionHtml.
+            if ($tag === 'span'
+                && trim($child->getAttribute('data-weds')) === 'xq'
+                && trim($child->textContent ?? '') === ''
+            ) {
+                $parent->removeChild($child);
+                continue;
+            }
             if (in_array($tag, self::DESCRIPTION_DROP_WITH_CONTENT, true)) {
                 $parent->removeChild($child);
                 continue;
@@ -516,6 +529,11 @@ final class StorefrontProductMediaUrlResolver
     {
         $class = trim($element->getAttribute('class'));
         $marker = trim($element->getAttribute('data-weline-detail-text'));
+        $orient = trim($element->getAttribute('data-weline-orient'));
+        $pad = trim($element->getAttribute('data-weline-pad'));
+        $weds = trim($element->getAttribute('data-weds'));
+        $hidden = $element->hasAttribute('hidden');
+        $ariaHidden = trim($element->getAttribute('aria-hidden'));
         while ($element->attributes->length > 0) {
             $attribute = $element->attributes->item(0);
             if ($attribute === null) {
@@ -529,6 +547,23 @@ final class StorefrontProductMediaUrlResolver
         }
         if ($marker !== '' && preg_match('/^[a-z0-9_-]{1,40}$/D', $marker) === 1) {
             $element->setAttribute('data-weline-detail-text', $marker);
+        }
+        // §3.1‑B：审图画幅标记（orientation / 竖→横扩图路径）可进前台验收
+        if ($orient !== '' && preg_match('/^(?:portrait|landscape|squareish|macro)$/D', $orient) === 1) {
+            $element->setAttribute('data-weline-orient', $orient);
+        }
+        if ($pad !== '' && preg_match('/^[a-z0-9_-]{1,48}$/D', $pad) === 1) {
+            $element->setAttribute('data-weline-pad', $pad);
+        }
+        // ecommerce-detail-suite skip marker (meaningless to buyers; Agents detect via HTML).
+        if ($weds === 'xq') {
+            $element->setAttribute('data-weds', 'xq');
+        }
+        if ($hidden) {
+            $element->setAttribute('hidden', 'hidden');
+        }
+        if ($ariaHidden === 'true') {
+            $element->setAttribute('aria-hidden', 'true');
         }
     }
 
@@ -548,7 +583,16 @@ final class StorefrontProductMediaUrlResolver
         $tokens = preg_split('/\s+/', trim($class)) ?: [];
         $kept = [];
         foreach ($tokens as $token) {
-            if (preg_match('/^weline-detail-text(?:__[a-z0-9-]+|--[a-z0-9-]+)?$/D', $token) === 1) {
+            // Allow semantic text panels + storefront layout helpers used inside description HTML.
+            if (preg_match(
+                '/^weline-detail-(?:text|prose|feature|figure|quiet|bento)(?:-[a-z0-9]+)*(?:__[a-z0-9-]+)?(?:--[a-z0-9-]+)?$/D',
+                $token,
+            ) === 1) {
+                $kept[] = $token;
+                continue;
+            }
+            // Aspect-first layout markers (ecommerce-detail-suite §3.1‑B).
+            if (preg_match('/^weline-detail-orient--(?:portrait|landscape|squareish|macro)$/D', $token) === 1) {
                 $kept[] = $token;
             }
         }
@@ -634,5 +678,449 @@ final class StorefrontProductMediaUrlResolver
         }
 
         return $result;
+    }
+
+    /**
+     * Storefront description layout: group image runs + prose, and replace broken OCR size blobs
+     * with a semantic measurement chart so 图文描述 is not a raw 1688 dump.
+     */
+    public static function normalizeDescriptionLayout(string $html): string
+    {
+        $html = trim($html);
+        if ($html === '') {
+            return '';
+        }
+
+        $document = new \DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $document->loadHTML(
+                '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+                . '<div id="weline-storefront-layout-root">' . $html . '</div>'
+                . '</body></html>',
+                LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return $html;
+        }
+
+        $xpath = new \DOMXPath($document);
+        $containers = $xpath->query('//*[@id="weline-storefront-layout-root"]');
+        $container = $containers !== false ? $containers->item(0) : null;
+        if (!$container instanceof \DOMElement) {
+            return $html;
+        }
+
+        // Already authored as feature/figure layout — keep as-is.
+        $existingFeatures = $xpath->query(
+            './/*[contains(concat(" ", normalize-space(@class), " "), " weline-detail-feature ")]',
+            $container,
+        );
+        if ($existingFeatures !== false && $existingFeatures->length > 0) {
+            return $html;
+        }
+
+        // Already figure-stack authored — always re-run pairing so aspect rules stay fresh
+        // (e.g. collage boards must become solo after rule updates).
+        $existingStacks = $xpath->query(
+            './/*[contains(concat(" ", normalize-space(@class), " "), " weline-detail-figure-stack ")]',
+            $container,
+        );
+        if ($existingStacks !== false && $existingStacks->length > 0) {
+            foreach ($existingStacks as $stackNode) {
+                if ($stackNode instanceof \DOMElement) {
+                    self::relayoutFigureStackPreservingImages($document, $stackNode);
+                }
+            }
+            $output = '';
+            foreach ($container->childNodes as $child) {
+                $output .= (string)$document->saveHTML($child);
+            }
+
+            return trim($output) !== '' ? trim($output) : $html;
+        }
+
+        // Prose-only authored blocks: keep. Mixed prose+raw imgs still need grouping below.
+        $hasProse = $xpath->query(
+            './/*[contains(concat(" ", normalize-space(@class), " "), " weline-detail-prose ")]',
+            $container,
+        );
+        $hasRawImg = $xpath->query('.//img', $container);
+        if ($hasProse !== false && $hasProse->length > 0
+            && ($hasRawImg === false || $hasRawImg->length === 0)
+        ) {
+            return $html;
+        }
+
+        $nodes = [];
+        for ($child = $container->firstChild; $child !== null; $child = $child->nextSibling) {
+            if ($child instanceof \DOMText && trim($child->textContent ?? '') === '') {
+                continue;
+            }
+            $nodes[] = $child;
+        }
+        if ($nodes === []) {
+            return $html;
+        }
+
+        while ($container->firstChild !== null) {
+            $container->removeChild($container->firstChild);
+        }
+
+        $i = 0;
+        $count = count($nodes);
+        while ($i < $count) {
+            $node = $nodes[$i];
+            if (self::isDescriptionImageNode($node)) {
+                $stack = $document->createElement('div');
+                $stack->setAttribute('class', 'weline-detail-figure-stack');
+                while ($i < $count && self::isDescriptionImageNode($nodes[$i])) {
+                    $stack->appendChild(self::unwrapLonelyImageParagraph($document, $nodes[$i]));
+                    $i++;
+                }
+                self::layoutFigureStackAsRows($document, $stack);
+                $container->appendChild($stack);
+                continue;
+            }
+
+            if (self::isBrokenOcrSizeBlock($node, $nodes, $i)) {
+                $consumed = 0;
+                $chartHtml = self::buildChartFromBrokenOcrBlock($node, $nodes, $i, $consumed);
+                $i += max(1, $consumed);
+                if ($chartHtml !== '') {
+                    $fragment = self::importHtmlFragment($document, $chartHtml);
+                    if ($fragment !== null) {
+                        $container->appendChild($fragment);
+                    }
+                }
+                continue;
+            }
+
+            $prose = $document->createElement('div');
+            $prose->setAttribute('class', 'weline-detail-prose');
+            while ($i < $count
+                && !self::isDescriptionImageNode($nodes[$i])
+                && !self::isBrokenOcrSizeBlock($nodes[$i], $nodes, $i)
+            ) {
+                $prose->appendChild($nodes[$i]->cloneNode(true));
+                $i++;
+            }
+            if ($prose->childNodes->length > 0) {
+                $container->appendChild($prose);
+            }
+        }
+
+        $output = '';
+        foreach ($container->childNodes as $child) {
+            $output .= (string)$document->saveHTML($child);
+        }
+
+        return trim($output) !== '' ? trim($output) : $html;
+    }
+
+    /**
+     * Flatten nested figure/row markup back to bare <img> nodes, then re-pair.
+     */
+    private static function relayoutFigureStackPreservingImages(\DOMDocument $document, \DOMElement $stack): void
+    {
+        $images = [];
+        $xpath = new \DOMXPath($document);
+        $imgNodes = $xpath->query('.//img', $stack);
+        if ($imgNodes !== false) {
+            foreach ($imgNodes as $img) {
+                if ($img instanceof \DOMElement) {
+                    $images[] = $img->cloneNode(true);
+                }
+            }
+        }
+        while ($stack->firstChild !== null) {
+            $stack->removeChild($stack->firstChild);
+        }
+        foreach ($images as $img) {
+            if ($img instanceof \DOMElement) {
+                $stack->appendChild($img);
+            }
+        }
+        self::layoutFigureStackAsRows($document, $stack);
+    }
+
+    /**
+     * Responsive gallery rows: pair similar portraits (1×2), keep ultra-tall/wide boards solo.
+     * Guided by masonry/grid skill principles; CSS Grid (not JS masonry) for a11y DOM order.
+     */
+    private static function layoutFigureStackAsRows(\DOMDocument $document, \DOMElement $stack): void
+    {
+        $images = [];
+        for ($child = $stack->firstChild; $child !== null; $child = $child->nextSibling) {
+            if ($child instanceof \DOMElement && strtolower($child->tagName) === 'img') {
+                $images[] = $child;
+            }
+        }
+        if ($images === []) {
+            return;
+        }
+
+        while ($stack->firstChild !== null) {
+            $stack->removeChild($stack->firstChild);
+        }
+
+        $pending = null;
+        foreach ($images as $img) {
+            $ratio = self::descriptionImageAspectRatio($img);
+            $pairable = self::isPairableDescriptionAspect($ratio);
+            if (!$pairable) {
+                if ($pending instanceof \DOMElement) {
+                    $stack->appendChild(self::wrapFigureRow($document, [$pending], 'solo'));
+                    $pending = null;
+                }
+                $stack->appendChild(self::wrapFigureRow($document, [$img], 'solo'));
+                continue;
+            }
+            if ($pending instanceof \DOMElement) {
+                $stack->appendChild(self::wrapFigureRow($document, [$pending, $img], 'pair'));
+                $pending = null;
+                continue;
+            }
+            $pending = $img;
+        }
+        if ($pending instanceof \DOMElement) {
+            $stack->appendChild(self::wrapFigureRow($document, [$pending], 'solo'));
+        }
+    }
+
+    /**
+     * @param list<\DOMElement> $images
+     */
+    private static function wrapFigureRow(\DOMDocument $document, array $images, string $kind): \DOMElement
+    {
+        $row = $document->createElement('div');
+        $row->setAttribute(
+            'class',
+            'weline-detail-figure-row weline-detail-figure-row--' . ($kind === 'pair' ? 'pair' : 'solo'),
+        );
+        foreach ($images as $img) {
+            $figure = $document->createElement('figure');
+            $figure->setAttribute('class', 'weline-detail-figure');
+            $figure->appendChild($img->cloneNode(true));
+            $row->appendChild($figure);
+        }
+
+        return $row;
+    }
+
+    private static function descriptionImageAspectRatio(\DOMElement $img): ?float
+    {
+        $src = trim($img->getAttribute('src'));
+        $width = self::positiveIntAttr($img->getAttribute('width'));
+        $height = self::positiveIntAttr($img->getAttribute('height'));
+
+        if ($src !== '' && str_starts_with($src, '/pub/media/')) {
+            $root = defined('BP') ? (string)BP : dirname(__DIR__, 5);
+            $path = $root . $src;
+            if (is_file($path)) {
+                $info = @getimagesize($path);
+                if (is_array($info) && ($info[0] ?? 0) > 0 && ($info[1] ?? 0) > 0) {
+                    $width = (int)$info[0];
+                    $height = (int)$info[1];
+                    // Correct misleading square placeholders from importer defaults.
+                    $img->setAttribute('width', (string)$width);
+                    $img->setAttribute('height', (string)$height);
+                }
+            }
+        }
+
+        if ($width === null || $height === null || $height < 1) {
+            return null;
+        }
+
+        return $width / $height;
+    }
+
+    private static function isPairableDescriptionAspect(?float $ratio): bool
+    {
+        if ($ratio === null) {
+            // Unknown: prefer pairing so CSS can still do 2-col on tablet+.
+            return true;
+        }
+        // Ultra-tall calligraphy boards and landscapes stay full-bleed solo.
+        if ($ratio < 0.58 || $ratio > 1.25) {
+            return false;
+        }
+        // Near-square / short boards are often 1688 multi-panel collages (baked
+        // vertical copy + decorative waves). Keep them solo full-width so CSS
+        // never squeezes/crops the internal layout into a half column.
+        if ($ratio >= 0.78) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static function isDescriptionImageNode(\DOMNode $node): bool
+    {
+        if ($node instanceof \DOMElement && strtolower($node->tagName) === 'img') {
+            return true;
+        }
+        if (!$node instanceof \DOMElement || !in_array(strtolower($node->tagName), ['p', 'div', 'span'], true)) {
+            return false;
+        }
+        $elementChildren = 0;
+        $img = null;
+        foreach ($node->childNodes as $child) {
+            if ($child instanceof \DOMText && trim($child->textContent ?? '') === '') {
+                continue;
+            }
+            if (!$child instanceof \DOMElement) {
+                return false;
+            }
+            $elementChildren++;
+            if (strtolower($child->tagName) !== 'img' || $elementChildren > 1) {
+                return false;
+            }
+            $img = $child;
+        }
+
+        return $img instanceof \DOMElement;
+    }
+
+    private static function unwrapLonelyImageParagraph(\DOMDocument $document, \DOMNode $node): \DOMNode
+    {
+        if ($node instanceof \DOMElement && strtolower($node->tagName) === 'img') {
+            return $node->cloneNode(true);
+        }
+        if ($node instanceof \DOMElement) {
+            foreach ($node->childNodes as $child) {
+                if ($child instanceof \DOMElement && strtolower($child->tagName) === 'img') {
+                    return $child->cloneNode(true);
+                }
+            }
+        }
+
+        return $node->cloneNode(true);
+    }
+
+    /**
+     * @param list<\DOMNode> $nodes
+     */
+    private static function isBrokenOcrSizeBlock(\DOMNode $node, array $nodes, int $index): bool
+    {
+        if (!$node instanceof \DOMElement) {
+            return false;
+        }
+        $tag = strtolower($node->tagName);
+        $text = trim(preg_replace('/\s+/u', ' ', $node->textContent ?? '') ?? '');
+        if ($tag === 'h3' && preg_match('/产品信息/u', $text) === 1 && preg_match('/[名皇]/u', $text) === 1) {
+            return true;
+        }
+        if ($tag === 'ul' && self::ocrSizeListLooksBroken($node)) {
+            $prev = $index > 0 ? $nodes[$index - 1] : null;
+            if ($prev instanceof \DOMElement && strtolower($prev->tagName) === 'h3') {
+                return false; // handled with heading
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static function ocrSizeListLooksBroken(\DOMElement $ul): bool
+    {
+        $rows = 0;
+        foreach ($ul->getElementsByTagName('li') as $li) {
+            $t = trim(preg_replace('/\s+/u', ' ', $li->textContent ?? '') ?? '');
+            if (preg_match('/^[SMLX]{1,3}\b/u', $t) === 1 && preg_match_all('/\d{2,3}/', $t) >= 3) {
+                $rows++;
+            }
+        }
+
+        return $rows >= 2;
+    }
+
+    /**
+     * @param list<\DOMNode> $nodes
+     */
+    private static function buildChartFromBrokenOcrBlock(\DOMNode $node, array $nodes, int $index, int &$consumed): string
+    {
+        $consumed = 1;
+        $rows = [];
+        $cursor = $index;
+        if ($node instanceof \DOMElement && strtolower($node->tagName) === 'h3') {
+            $cursor++;
+            $consumed++;
+        }
+        $ul = $nodes[$cursor] ?? null;
+        if ($ul instanceof \DOMElement && strtolower($ul->tagName) === 'ul') {
+            foreach ($ul->getElementsByTagName('li') as $li) {
+                $t = trim(preg_replace('/[«»""]/u', ' ', preg_replace('/\s+/u', ' ', $li->textContent ?? '') ?? '') ?? '');
+                if (preg_match('/^([SMLX]{1,3})\s+(.+)$/u', $t, $m) !== 1) {
+                    continue;
+                }
+                $nums = preg_match_all('/\d{1,3}/', $m[2], $nm) ? $nm[0] : [];
+                if (count($nums) < 3) {
+                    continue;
+                }
+                $rows[] = [$m[1], implode(' / ', $nums)];
+            }
+            $consumed = ($cursor - $index) + 1;
+            $next = $nodes[$cursor + 1] ?? null;
+            if ($next instanceof \DOMElement
+                && strtolower($next->tagName) === 'p'
+                && str_contains((string)$next->textContent, '手工测量')
+            ) {
+                $consumed++;
+            }
+        }
+        if ($rows === []) {
+            return '';
+        }
+
+        return DetailDescriptionTextifier::buildMeasurementSizeChartZh(
+            [[
+                'title' => '尺码参考',
+                'headers' => ['尺码', '尺寸明细(cm)'],
+                'rows' => $rows,
+            ]],
+            '尺码参考表',
+            '单位：厘米（cm）。以上数值来自详情图识别，手工测量可能存在 1–3 cm 误差。',
+        );
+    }
+
+    private static function importHtmlFragment(\DOMDocument $document, string $html): ?\DOMNode
+    {
+        $html = trim($html);
+        if ($html === '') {
+            return null;
+        }
+        $tmp = new \DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $tmp->loadHTML(
+                '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+                . '<div id="weline-import-root">' . $html . '</div>'
+                . '</body></html>',
+                LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return null;
+        }
+        $root = $tmp->getElementById('weline-import-root');
+        if (!$root instanceof \DOMElement || $root->firstChild === null) {
+            return null;
+        }
+        $wrapper = $document->createDocumentFragment();
+        foreach (iterator_to_array($root->childNodes) as $child) {
+            $wrapper->appendChild($document->importNode($child, true));
+        }
+
+        return $wrapper->childNodes->length > 0 ? $wrapper : null;
     }
 }

@@ -1083,14 +1083,24 @@
     }
 
     function notifyCreditChanged(root) {
+        var detail = {
+            apply_minor: readApplyMinor(),
+            cash_minor: cashDepositMinor(),
+            cart_type: readMode(),
+            root: root || null,
+        };
+        var sig = [
+            String(detail.apply_minor || 0),
+            detail.cash_minor === null || detail.cash_minor === undefined ? '' : String(detail.cash_minor),
+            String(detail.cart_type || '')
+        ].join('|');
+        if (creditState._notifySig === sig) {
+            return;
+        }
+        creditState._notifySig = sig;
         try {
             window.dispatchEvent(new CustomEvent('weline:b2b-credit-changed', {
-                detail: {
-                    apply_minor: readApplyMinor(),
-                    cash_minor: cashDepositMinor(),
-                    cart_type: readMode(),
-                    root: root || null,
-                },
+                detail: detail,
             }));
         } catch (eNotify) {}
     }

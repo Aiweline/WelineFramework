@@ -33,7 +33,7 @@ class PageHeadContextResolver
             $this->readTemplate($template, 'site_name'),
             $this->read($seo, ['site_name', 'siteName']),
             $this->read($meta, ['site_name', 'siteName']),
-            'Weline Framework',
+            $this->resolveWebsiteSiteName(),
         ]);
 
         $metaTitle = $this->firstNonEmpty([
@@ -474,5 +474,28 @@ class PageHeadContextResolver
         }
 
         return $context;
+    }
+
+    private function resolveWebsiteSiteName(): string
+    {
+        try {
+            if (class_exists(\Weline\Theme\Helper\SiteBrand::class)) {
+                /** @var \Weline\Theme\Helper\SiteBrand $siteBrand */
+                $siteBrand = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+                $name = trim($siteBrand->resolveFrontendSiteName());
+                if ($name !== '' && !$siteBrand->isGenericBrandPlaceholder($name)) {
+                    return $name;
+                }
+            }
+            if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $name = trim((string)(\Weline\Websites\Data\WebsiteData::getName() ?? ''));
+                if ($name !== '') {
+                    return $name;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 }

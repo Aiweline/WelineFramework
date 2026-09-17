@@ -12,9 +12,14 @@ use Weline\Checkout\Service\CheckoutHtmlRenderer;
  */
 final class CheckoutHtmlRendererTest extends TestCase
 {
+    private function renderer(): CheckoutHtmlRenderer
+    {
+        return new CheckoutHtmlRenderer(static fn (string $path): string => 'https://url.test/' . $path);
+    }
+
     public function testRenderItemsEscapesAndFormats(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderItems([
             [
                 'name' => '<script>alert(1)</script>',
@@ -63,7 +68,7 @@ final class CheckoutHtmlRendererTest extends TestCase
 
     public function testRenderItemsIncludesDealChromeWhenCompareAtPresent(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderItems([
             [
                 'name' => 'Student Hanfu',
@@ -91,12 +96,12 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('CNY 80.10', $html);
         self::assertStringContainsString('CNY 89.00', $html);
         self::assertStringContainsString('Today&#039;s Picks', $html);
-        self::assertStringContainsString('href="/promotion/deals"', $html);
+        self::assertStringContainsString('href="https://url.test/promotion/deals"', $html);
     }
 
     public function testRenderItemsUsesPlaceholderWhenImageMissing(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderItems([
             [
                 'name' => 'Hanfu',
@@ -112,7 +117,7 @@ final class CheckoutHtmlRendererTest extends TestCase
 
     public function testEmptyItemsMessage(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderItems([], 'CNY', 'EMPTY');
         self::assertStringContainsString('EMPTY', $html);
         self::assertStringContainsString('weline-checkout__empty', $html);
@@ -120,7 +125,7 @@ final class CheckoutHtmlRendererTest extends TestCase
 
     public function testMethodOptionsServerHtml(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderMethodOptions([
             ['code' => 'std', 'label' => 'Standard', 'amount' => 12.3],
         ], 'shipping_method', 'CNY', '', true);
@@ -132,29 +137,33 @@ final class CheckoutHtmlRendererTest extends TestCase
 
     public function testEmptyShippingMethodsRenderBlockingAlert(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderMethodOptions(
             [],
             'shipping_method',
             'CNY',
-            '当前地址下所选配送方案不可用，请调整收货地址或商品，或联系客服协助处理。',
+            '购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助补全商品重量后再结账。',
             true,
+            '暂时无法计算运费',
+            'missing_weight',
         );
         self::assertStringContainsString('w-alert', $html);
         self::assertStringContainsString('data-tone="warning"', $html);
         self::assertStringContainsString('role="alert"', $html);
         self::assertStringContainsString('data-checkout-method-empty="shipping_method"', $html);
-        self::assertStringContainsString('暂无可用配送方式', $html);
-        self::assertStringContainsString('当前地址下所选配送方案不可用', $html);
-        self::assertStringContainsString('联系客服', $html);
+        self::assertStringContainsString('data-reason-code="missing_weight"', $html);
+        self::assertStringContainsString('暂时无法计算运费', $html);
+        self::assertStringContainsString('缺少重量', $html);
+        self::assertStringNotContainsString('拒因码', $html);
         self::assertStringContainsString('dir="auto"', $html);
         self::assertStringContainsString('weline-checkout__method-alert-body', $html);
         self::assertStringNotContainsString('weline-checkout__empty', $html);
+        self::assertStringNotContainsString('请调整收货地址或商品', $html);
     }
 
     public function testEmptyPaymentMethodsRenderBlockingAlert(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderPaymentMethodOptions([], 'payment_method', '暂无可用支付方式。');
         self::assertStringContainsString('data-checkout-method-empty="payment_method"', $html);
         self::assertStringContainsString('暂无可用支付方式', $html);
@@ -163,7 +172,7 @@ final class CheckoutHtmlRendererTest extends TestCase
 
     public function testPaymentMethodOptionsIncludeLogoIntroAndGuideLink(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderPaymentMethodOptions([
             [
                 'code' => 'paypal',
@@ -181,7 +190,7 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('dir="auto"', $html);
         self::assertStringContainsString('weline-checkout__payment-intro-text', $html);
         self::assertStringContainsString('data-payment-details', $html);
-        self::assertStringContainsString('href="/guide/payment/paypal"', $html);
+        self::assertStringContainsString('href="https://url.test/guide/payment/paypal"', $html);
         self::assertStringContainsString('&lt;script&gt;', $html);
         self::assertStringNotContainsString('<script>alert', $html);
         self::assertStringContainsString('name="payment_method"', $html);
@@ -190,7 +199,7 @@ final class CheckoutHtmlRendererTest extends TestCase
 
     public function testPaymentMethodOptionsSupportSelectedIndexAndHelpPayAttrs(): void
     {
-        $r = new CheckoutHtmlRenderer();
+        $r = $this->renderer();
         $html = $r->renderPaymentMethodOptions(
             [
                 [
@@ -269,8 +278,18 @@ final class CheckoutHtmlRendererTest extends TestCase
         $providerSrc = (string)file_get_contents($providerPath);
         self::assertStringContainsString("'icon_url'", $providerSrc);
         self::assertStringContainsString("'guide_url'", $providerSrc);
-        self::assertStringContainsString('/guide/payment/', $providerSrc);
+        self::assertStringContainsString('storefrontUrl', $providerSrc);
+        self::assertStringContainsString('getUrl($route)', $providerSrc);
+        self::assertStringNotContainsString("'/guide/payment/' . rawurlencode", $providerSrc);
         self::assertStringContainsString('getCheckoutPaymentMethods', $providerSrc);
         self::assertStringContainsString('requires_billing', $providerSrc);
+    }
+
+    public function testRendererBuildsStorefrontHrefsViaUrlHelper(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/CheckoutHtmlRenderer.php');
+        self::assertStringContainsString('function storefrontHref', $src);
+        self::assertStringContainsString('getUrl($path)', $src);
+        self::assertStringNotContainsString("ltrim(\$guideUrl, '/')", $src);
     }
 }

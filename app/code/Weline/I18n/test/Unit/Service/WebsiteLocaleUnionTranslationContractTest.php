@@ -36,6 +36,9 @@ final class WebsiteLocaleUnionTranslationContractTest extends TestCase
         self::assertStringContainsString('onWebsiteLocalesChanged', $sync);
         self::assertStringContainsString('live union', $sync);
         self::assertStringContainsString('removed union members are skipped', $sync);
+        self::assertStringContainsString('LocalModelTranslationQueueService', $sync);
+        self::assertStringContainsString('enqueueLocalModelTranslation', $sync);
+        self::assertStringContainsString('_local_model', $sync);
         self::assertStringContainsString('WebsiteLocaleTranslationSync', $assignment);
         self::assertStringContainsString('WebsiteLocaleTranslationSync', $model);
         self::assertStringContainsString('ensureWebsiteUnionReady', $cron);

@@ -31,7 +31,9 @@ try {
 
 try {
     $deliveryService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Shipping\Service\DeliveryAddressService::class);
-    $deliveryAddresses = $deliveryService->getListByCustomer((int)$user->getId());
+    $deliveryAddresses = $deliveryService->getListByCustomer((int)$user->getId(), [
+        'purpose_receiving' => 1,
+    ]);
 } catch (\Throwable) {
     $deliveryLoadError = (string)__('收货地址加载失败，请稍后重试');
 }
@@ -61,6 +63,8 @@ $addressData = static function ($address, string $idField, string $type) use ($a
         'street' => (string)$address->getData('street'),
         'postal_code' => (string)$address->getData('postal_code'),
         'is_default' => $address->isDefault() ? 1 : 0,
+        'purpose_checkout' => method_exists($address, 'hasPurposeCheckout') && $address->hasPurposeCheckout() ? 1 : (int)$address->getData('purpose_checkout'),
+        'purpose_receiving' => method_exists($address, 'hasPurposeReceiving') && $address->hasPurposeReceiving() ? 1 : (int)$address->getData('purpose_receiving'),
         'full_address' => (string)$address->getFullAddress(),
     ]);
 };
@@ -128,12 +132,15 @@ $renderAddressCard = function (array $address, string $contactLabel) use ($escap
     <?php
 };
 
-$renderAddressForm = function (string $idField, string $typeLabel, string $contactLabel, string $addressCode) use ($escape): void {
+$renderAddressForm = function (string $idField, string $typeLabel, string $contactLabel, string $addressCode, bool $dualCheckoutCheckbox = false) use ($escape): void {
     ?>
     <div class="account-address-form-wrap" data-address-form-wrap hidden>
         <w:form class="account-address-form" data-address-form>
             <input type="hidden" name="<?= $idField ?>" value="">
             <input type="hidden" name="is_enabled" value="1">
+            <?php if ($dualCheckoutCheckbox): ?>
+                <input type="hidden" name="purpose_source" value="receiving">
+            <?php endif; ?>
             <header class="account-address-form__header">
                 <div>
                     <h3 class="account-address-form__title" data-address-form-title><lang>新增</lang><?= $typeLabel ?></h3>
@@ -172,6 +179,12 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
                 <input type="checkbox" name="is_default" value="1">
                 <span><lang>设为默认地址</lang></span>
             </label>
+            <?php if ($dualCheckoutCheckbox): ?>
+            <label class="account-address-form__checkbox" data-also-use-checkout-wrap>
+                <input type="checkbox" name="also_use_checkout" value="1" data-also-use-checkout>
+                <span><lang>同时用作结账地址</lang></span>
+            </label>
+            <?php endif; ?>
             <div class="account-address-form__actions">
                 <button type="submit" class="account-address-form__submit"><lang>保存地址</lang></button>
                 <button type="button" class="account-address-form__cancel" data-address-cancel><lang>取消</lang></button>
@@ -205,7 +218,7 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
                 <strong><lang>还没有收货地址</lang></strong>
                 <span><lang>点击“新增收货地址”，直接在当前页面维护。顶部「配送至」选择的地址也会出现在这里。</lang></span>
             </div>
-            <?php $renderAddressForm('delivery_address_id', (string)__('收货地址'), (string)__('收货人'), 'account-delivery-address'); ?>
+            <?php $renderAddressForm('delivery_address_id', (string)__('收货地址'), (string)__('收货人'), 'account-delivery-address', true); ?>
         </div>
     </div>
 </section>

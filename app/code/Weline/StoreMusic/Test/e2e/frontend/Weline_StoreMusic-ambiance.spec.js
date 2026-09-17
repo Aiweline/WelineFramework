@@ -16,6 +16,15 @@ const {
   moduleCase,
 } = require('../../../../../../../tests/e2e/framework');
 
+// The refresh-resume contract must be exercised independently of a browser
+// profile that globally rejects autoplay. Production still surfaces the
+// existing user-gesture recovery UI when that policy is enforced.
+test.use({
+  launchOptions: {
+    args: ['--ignore-certificate-errors', '--autoplay-policy=no-user-gesture-required'],
+  },
+});
+
 const MODULE = 'Weline_StoreMusic';
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE = path.resolve(__dirname, 'store-music-fixture.php');
@@ -74,7 +83,7 @@ async function openPetPanel(page) {
   await clearPetClickBlockers(page);
   await page.waitForFunction(() => {
     const root = document.querySelector('[data-store-music]');
-    return !!(root && root.dataset.storeMusicBooted === '1');
+    return !!(root && root.dataset.storeMusicBooted);
   }, { timeout: 20000 }).catch(() => {});
   const mascot = page.locator('[data-testid="store-music-mascot"]');
   await expect(mascot).toHaveCount(1);
@@ -135,12 +144,13 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
 
   test.afterAll(() => {
     try {
-      // Prefer durable real playlist restore (e2e tokens often snapshot e2e-over-e2e).
-      runFixture('restore');
+      // Always prefer durable real playlist — never leave E2E 甲/乙 on the shop.
+      runFixture('restore', { token: 'last-real' });
       const status = runFixture('status');
       const blob = JSON.stringify(status || {});
       const stillE2e = /store-music-e2e|E2E\s*曲目/.test(blob);
-      if (stillE2e) {
+      const inactive = !status || status.active !== true || status.enabled !== true || !status.track;
+      if (stillE2e || inactive) {
         runFixture('restore', { token: 'last-real' });
       }
     } catch (e) {
@@ -329,9 +339,24 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
       }
       // Authoritative stop intent (UI pause may be blocked by autoplay policy in CI).
       await page.evaluate(() => {
-        Object.keys(localStorage)
-          .filter((k) => k.includes('storeMusic') && k.endsWith('.want_play'))
-          .forEach((k) => localStorage.setItem(k, '0'));
+        Object.keys(localStorage).forEach((k) => {
+          if (!k.includes('storeMusic')) {
+            return;
+          }
+          if (k.endsWith('.want_play')) {
+            localStorage.setItem(k, '0');
+          }
+          if (k.endsWith('.user_stopped')) {
+            localStorage.setItem(k, '1');
+          }
+        });
+        const root = document.querySelector('[data-store-music]');
+        if (root) {
+          const website = root.getAttribute('data-website-id') || '0';
+          const store = root.getAttribute('data-store-id') || '0';
+          localStorage.setItem(`weline.storeMusic.${website}.${store}.want_play`, '0');
+          localStorage.setItem(`weline.storeMusic.${website}.${store}.user_stopped`, '1');
+        }
         try {
           const shared = window.__WelineStoreMusicSharedAudio;
           if (shared) {
@@ -380,7 +405,13 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
       const waveVisible = await page.evaluate(() => {
         const c = document.querySelector('[data-store-music-wave]');
         if (!c) return false;
-        return !c.hidden && getComputedStyle(c).display !== 'none';
+        if (c.hidden || getComputedStyle(c).display === 'none') return false;
+        const z = Number.parseInt(getComputedStyle(c).zIndex, 10);
+        // Must sit above page chrome (legacy z=8 was buried under opaque sections).
+        if (!Number.isFinite(z) || z < 1000) return false;
+        // Prefer body mount so fixed stacking escapes zero-size host ancestors.
+        if (c.parentElement !== document.body) return false;
+        return true;
       });
       // Soft-pass if autoplay policy blocks play; still require ink cover + canvas node.
       if (await page.locator('.w-store-music.is-playing').count()) {
@@ -449,7 +480,7 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
     { module: MODULE, id: 'STOREMUSIC-E2E-CH10-PEER-QUIET-TAKEOVER' },
     '前后端通路：新标签检测到他页在播则静默；本页▶/切歌可接管且前页硬停',
     async ({ browser }) => {
-      const enabled = runFixture('enable', { delay_seconds: 1 });
+      const enabled = runFixture('enable', { delay_seconds: 1, format: 'real' });
       expect(enabled.ok).toBe(true);
       const context = await browser.newContext();
       const pageA = await context.newPage();
@@ -461,10 +492,16 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
         if (await playA.count()) {
           await playA.click();
         }
-        await pageA.waitForTimeout(700);
+        await pageA.waitForFunction(
+          () => {
+            const shared = window.__WelineStoreMusicSharedAudio;
+            return !!(shared && !shared.paused && shared.src && shared.currentTime > 0.2);
+          },
+          { timeout: 15000 },
+        );
         const aPlaying = await pageA.evaluate(() => {
           const shared = window.__WelineStoreMusicSharedAudio;
-          return !!(shared && !shared.paused && shared.src);
+          return !!(shared && !shared.paused && shared.src && shared.currentTime > 0.2);
         });
         expect(aPlaying, 'page A should be playing before B loads').toBe(true);
 
@@ -472,12 +509,18 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
         await pageB.waitForTimeout(1800);
         const bSoft = await pageB.evaluate(() => {
           const shared = window.__WelineStoreMusicSharedAudio;
+          const root = document.querySelector('.w-store-music');
+          const pause = document.querySelector('[data-testid="store-music-pause"]');
           const playing = !!(shared && !shared.paused && shared.src);
-          const rootPlaying = !!document.querySelector('.w-store-music.is-playing');
-          return { playing, rootPlaying };
+          const rootPlaying = !!(root && root.classList.contains('is-playing'));
+          const remotePlaying = !!(root && root.classList.contains('is-remote-playing'));
+          const pauseVisible = !!(pause && !pause.hidden);
+          return { playing, rootPlaying, remotePlaying, pauseVisible };
         });
         expect(bSoft.playing, 'soft-loaded B must not autoplay over A').toBe(false);
         expect(bSoft.rootPlaying, 'soft-loaded B UI must not be is-playing').toBe(false);
+        expect(bSoft.remotePlaying, 'soft-loaded B must mirror the remote playing state').toBe(true);
+        expect(bSoft.pauseVisible, 'soft-loaded B must show the remote pause state').toBe(true);
 
         await openPetPanel(pageB);
         const statusB = ((await pageB.locator('[data-testid="store-music-status"]').textContent()) || '').trim();
@@ -516,6 +559,235 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
       } finally {
         await context.close();
       }
+    },
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'STOREMUSIC-E2E-CH11-REFRESH-QUIET-TAB' },
+    '前后端通路：旁观标签刷新后仍只同步状态，不得抢走播放拥有权',
+    async ({ browser }) => {
+      const enabled = runFixture('enable', { delay_seconds: 1, format: 'real' });
+      expect(enabled.ok).toBe(true);
+      const context = await browser.newContext();
+      const pageA = await context.newPage();
+      const pageB = await context.newPage();
+      try {
+        await gotoWithWidget(pageA, `/?store_music_e2e=${TOKEN}-refresh-owner-a`, true);
+        await openPetPanel(pageA);
+        const playA = pageA.locator('[data-testid="store-music-play"]:not([hidden])');
+        if (await playA.count()) {
+          await playA.click();
+        }
+        await pageA.waitForFunction(
+          () => {
+            const shared = window.__WelineStoreMusicSharedAudio;
+            return !!(shared && !shared.paused && shared.src && shared.currentTime > 0.2);
+          },
+          { timeout: 15000 },
+        );
+        const before = await pageA.evaluate(() => {
+          const shared = window.__WelineStoreMusicSharedAudio;
+          return !!(shared && !shared.paused && shared.src && shared.currentTime > 0.2);
+        });
+        expect(before, 'page A should own audible playback before B loads').toBe(true);
+
+        await gotoWithWidget(pageB, `/?store_music_e2e=${TOKEN}-refresh-owner-b`, true);
+        await pageB.waitForTimeout(1500);
+        await pageB.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+        await pageB.waitForFunction(
+          () => !!document.querySelector('[data-store-music]'),
+          { timeout: 20000 },
+        );
+        await pageB.waitForTimeout(1800);
+
+        const after = await Promise.all([
+          pageA.evaluate(() => {
+            const shared = window.__WelineStoreMusicSharedAudio;
+            return !!(shared && !shared.paused && shared.src);
+          }),
+          pageB.evaluate(() => {
+            const shared = window.__WelineStoreMusicSharedAudio;
+            const root = document.querySelector('.w-store-music');
+            return {
+              audible: !!(shared && !shared.paused && shared.src),
+              remotePlaying: !!(root && root.classList.contains('is-remote-playing')),
+            };
+          }),
+        ]);
+        expect(after[0], 'the original owner must stay audible after a quiet tab refresh').toBe(true);
+        expect(after[1].audible, 'the refreshed quiet tab must not create a second audible source').toBe(false);
+        expect(after[1].remotePlaying, 'the refreshed quiet tab must keep mirroring remote state').toBe(true);
+      } finally {
+        await context.close();
+      }
+    },
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'STOREMUSIC-E2E-CH12-REFRESH-OWNER' },
+    '前后端通路：当前播放页刷新后自动恢复播放拥有权与进度',
+    async ({ page }) => {
+      const enabled = runFixture('enable', { delay_seconds: 1, format: 'real' });
+      expect(enabled.ok).toBe(true);
+      await gotoWithWidget(page, `/?store_music_e2e=${TOKEN}-refresh-owner`, true);
+      await openPetPanel(page);
+      const play = page.locator('[data-testid="store-music-play"]:not([hidden])');
+      if (await play.count()) {
+        await play.click();
+      }
+      await page.waitForFunction(
+        () => {
+          const shared = window.__WelineStoreMusicSharedAudio;
+          return !!(shared && !shared.paused && shared.currentTime > 0.2);
+        },
+        { timeout: 15000 },
+      );
+      const before = await page.evaluate(() => {
+        const shared = window.__WelineStoreMusicSharedAudio;
+        return {
+          audible: !!(shared && !shared.paused && shared.src),
+          currentTime: shared ? Number(shared.currentTime || 0) : 0,
+        };
+      });
+      expect(before.audible, 'the owner tab should be audible before refresh').toBe(true);
+
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+      const reloadStartedAt = Date.now();
+      await page.waitForFunction(
+        () => !!document.querySelector('[data-store-music]'),
+        { timeout: 20000 },
+      );
+      await page.waitForFunction(
+        () => {
+          const shared = window.__WelineStoreMusicSharedAudio;
+          const root = document.querySelector('.w-store-music');
+          const gen = window.WelineStoreMusic && window.WelineStoreMusic.SCRIPT_GEN;
+          const live = window.__WelineStoreMusicLive;
+          return !!(
+            gen
+            && String(gen).indexOf('61speccenter2') !== -1
+            && shared
+            && !shared.paused
+            && shared.currentTime > 0.2
+            && root
+            && root.classList.contains('is-playing')
+            && !(live && live.needGesture)
+          );
+        },
+        { timeout: 15000 },
+      );
+      const resumeMs = Date.now() - reloadStartedAt;
+
+      const after = await page.evaluate(() => {
+        const shared = window.__WelineStoreMusicSharedAudio;
+        const root = document.querySelector('.w-store-music');
+        return {
+          audible: !!(shared && !shared.paused && shared.src),
+          currentTime: shared ? Number(shared.currentTime || 0) : 0,
+          localPlaying: !!(root && root.classList.contains('is-playing')),
+          needGesture: !!(window.__WelineStoreMusicLive && window.__WelineStoreMusicLive.needGesture),
+          gen: window.WelineStoreMusic && window.WelineStoreMusic.SCRIPT_GEN,
+        };
+      });
+      expect(after.audible, 'the owner tab must resume audible playback after refresh').toBe(true);
+      expect(after.localPlaying, 'the refreshed owner tab must restore local playing UI').toBe(true);
+      expect(after.needGesture, 'sticky refresh must not require a click to resume').toBe(false);
+      expect(after.currentTime, 'the refreshed owner tab should retain playback progress').toBeGreaterThan(0.2);
+      expect(resumeMs, 'sticky refresh must resume without waiting for full window load').toBeLessThan(8000);
+    },
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'STOREMUSIC-E2E-CH13-CACHED-RESUME-ASAP' },
+    '前后端通路：已有本地进度且未明确停止时立即续播，不等待首次进入延迟',
+    async ({ page }) => {
+      const enabled = runFixture('enable', { delay_seconds: 3, format: 'real' });
+      expect(enabled.ok).toBe(true);
+
+      await page.addInitScript(() => {
+        try {
+          const key = 'weline.storeMusic.0.0.';
+          localStorage.removeItem(`${key}want_play`);
+          localStorage.setItem(`${key}user_stopped`, '0');
+          localStorage.setItem(`${key}dismissed`, '0');
+          localStorage.setItem(
+            `${key}progress`,
+            JSON.stringify({
+              url: '/media/store-music/HITA-赤伶.mp3',
+              time: 1.2,
+              index: 0,
+              updated: Date.now(),
+            }),
+          );
+        } catch (_error) {
+          // Playwright also evaluates init scripts on an opaque about:blank.
+          // The real storefront origin runs the same script again with storage.
+        }
+        window.__welineStoreMusicCachedResumeProbe = { domContentLoadedAt: 0 };
+        document.addEventListener('DOMContentLoaded', () => {
+          window.__welineStoreMusicCachedResumeProbe.domContentLoadedAt = performance.now();
+        }, { once: true });
+      });
+
+      await gotoWithWidget(page, `/?store_music_e2e=${TOKEN}-cached-resume-asap`, true);
+      await page.waitForFunction(
+        () => {
+          const shared = window.__WelineStoreMusicSharedAudio;
+          return !!(shared && !shared.paused && shared.src && shared.currentTime > 0.2);
+        },
+        { timeout: 15000 },
+      );
+
+      const resume = await page.evaluate(() => {
+        const shared = window.__WelineStoreMusicSharedAudio;
+        const probe = window.__welineStoreMusicCachedResumeProbe || {};
+        return {
+          elapsedFromDomContentLoaded: performance.now() - Number(probe.domContentLoadedAt || performance.now()),
+          currentTime: shared ? Number(shared.currentTime || 0) : 0,
+          localPlaying: !!document.querySelector('.w-store-music.is-playing'),
+        };
+      });
+      expect(resume.elapsedFromDomContentLoaded, 'cached resume must bypass the cold-entry delay').toBeLessThan(1800);
+      expect(resume.currentTime, 'cached resume should restore the saved position').toBeGreaterThan(0.2);
+      expect(resume.localPlaying, 'cached resume should show local playing state').toBe(true);
+    },
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'STOREMUSIC-E2E-SEARCH' },
+    '前后端通路：播放列表搜索可过滤曲目并支持空态与清空恢复',
+    async ({ page }) => {
+      const enabled = runFixture('enable', { delay_seconds: 1 });
+      expect(enabled.ok).toBe(true);
+      await gotoWithWidget(page, `/?store_music_e2e=${TOKEN}-search`, true);
+      await openPetPanel(page);
+      const search = page.locator('[data-testid="store-music-search"]');
+      await expect(search).toBeVisible();
+      const rowsBefore = await page.locator('[data-store-music-track]').count();
+      expect(rowsBefore).toBeGreaterThan(1);
+
+      const firstTitle = (await page.locator('[data-store-music-track] .w-store-music__track-title').first().innerText()).trim();
+      // Prefer a character unique to the first row when fixture uses 甲/乙.
+      let needle = '甲';
+      if (!firstTitle.includes(needle)) {
+        needle = firstTitle.slice(0, Math.min(2, firstTitle.length));
+      }
+      await search.fill(needle);
+      await expect.poll(async () => page.locator('[data-store-music-track]').count()).toBeLessThan(rowsBefore);
+      await expect(page.locator('[data-store-music-track]').first()).toBeVisible();
+      await expect(page.locator('[data-testid="store-music-search-empty"]')).toBeHidden();
+
+      await search.fill('___no_match_store_music_xyz___');
+      await expect(page.locator('[data-testid="store-music-search-empty"]')).toBeVisible();
+      await expect(page.locator('[data-store-music-track]')).toHaveCount(0);
+
+      await search.fill('');
+      await expect.poll(async () => page.locator('[data-store-music-track]').count()).toBe(rowsBefore);
+      await expect(page.locator('[data-testid="store-music-search-empty"]')).toBeHidden();
     },
   );
 

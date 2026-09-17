@@ -69,12 +69,12 @@ class ThemeDirectoryResolverTest extends TestCore
      */
     public function testExtractAreaRelativePathDesignTheme(): void
     {
-        $path = 'app/design/WeShop/motor/frontend/layouts/account_auth/default.phtml';
+        $path = 'app/design/WeShop/motor/frontend/layouts/homepage/default.phtml';
         $result = $this->resolver->extractAreaRelativePath($path);
 
         $this->assertNotNull($result);
         $this->assertSame('frontend', $result['area']);
-        $this->assertSame('layouts' . DS . 'account_auth' . DS . 'default.phtml', $result['relative_path']);
+        $this->assertSame('layouts' . DS . 'homepage' . DS . 'default.phtml', $result['relative_path']);
     }
 
     /**
@@ -375,12 +375,12 @@ class ThemeDirectoryResolverTest extends TestCore
             $this->markTestSkipped('Theme 11 not found.');
         }
 
-        $modulePath = 'Weline_Theme::theme/frontend/layouts/account_auth/default.phtml';
+        $modulePath = 'Weline_Theme::theme/frontend/layouts/homepage/default.phtml';
         $resolvedPath = $this->resolver->resolveThemeTemplatePath($modulePath, $theme);
 
         // 应该解析到 motor 主题的 layouts
         $this->assertStringContainsString('WeShop' . DS . 'motor', $resolvedPath);
         $this->assertStringContainsString('layouts', $resolvedPath);
-        $this->assertStringContainsString('account_auth', $resolvedPath);
+        $this->assertStringContainsString('homepage', $resolvedPath);
     }
 }

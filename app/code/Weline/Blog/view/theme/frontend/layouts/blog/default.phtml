@@ -1,0 +1,456 @@
+<?php
+/**
+ * Layout: blog/default — Amazon-style blog article detail.
+ *
+ * @meta.name {default="博客详情页布局",name="博客详情页布局",description="亚马逊风格博客文章详情布局"}
+ * @meta.description {default="包含面包屑、文章正文与相关推荐的可部件化布局",name="描述",description="博客文章详情页布局"}
+ * @param.title {default="博客文章",name="页面标题",description="页面标题"}
+ * @param.content {default="",name="文章内容",description="文章内容 HTML"}
+ * @param.showHeader {default=true,name="是否显示header",description="是否显示顶栏"}
+ * @param.showFooter {default=true,name="是否显示footer",description="是否显示底栏"}
+ * @param.showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示主题面包屑"}
+ * @param.showReviews {default=true,name="是否显示评论容器",description="是否显示博客评论容器槽（由评论模块 default_injections 注入）"}
+ * @param.class {default="",name="额外CSS类",description="主内容额外 CSS 类"}
+ */
+$meta = $this->getData('meta') ?? [];
+$coerceBool = static function (mixed $value, bool $default): bool {
+    if ($value === null) {
+        return $default;
+    }
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value) || is_float($value)) {
+        return ((int)$value) !== 0;
+    }
+    $normalized = strtolower(trim((string)$value));
+    if ($normalized === '' || $normalized === 'default') {
+        return $default;
+    }
+    if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+        return true;
+    }
+    if (in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+        return false;
+    }
+    return $default;
+};
+$showReviews = $coerceBool($meta['showReviews'] ?? $this->getData('showReviews'), true);
+$meta['showReviews'] = $showReviews;
+$this->assign('meta', $meta);
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::blog::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+    <style>
+        .weline-page-wrapper.blog-layout {
+            background: #eaeded;
+            color: #0f1111;
+        }
+        .blog-layout__main {
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin: 0 auto;
+            padding: var(--weline-space-4, 1rem) var(--weline-layout-content-padding-inline) var(--weline-space-8, 2rem);
+            box-sizing: border-box;
+        }
+        .blog-layout__panel {
+            background: #fff;
+            border: 1px solid #d5d9d9;
+            border-radius: 8px;
+            padding: 1rem 1.25rem 1.5rem;
+        }
+        .amazon-blog-article__breadcrumb {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            align-items: center;
+            margin: 0 0 0.75rem;
+            color: #565959;
+            font-size: 12px;
+        }
+        .amazon-blog-article__breadcrumb a {
+            color: var(--color-link);
+            text-decoration: none;
+        }
+        .amazon-blog-article__breadcrumb a:hover { text-decoration: underline; color: var(--color-link-hover); }
+        .amazon-blog-article__title-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--weline-space-3, 0.75rem);
+            margin: 0 0 0.5rem;
+        }
+        .amazon-blog-article__title-row .amazon-blog-article__title { margin: 0; flex: 1 1 12rem; }
+        .amazon-blog-article__title-row .amazon-blog-listing__rss { flex-shrink: 0; text-decoration: none; }
+        .amazon-blog-article__title {
+            margin: 0 0 0.5rem;
+            font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+            font-weight: 700;
+            line-height: 1.25;
+            color: #0f1111;
+        }
+        .amazon-blog-article__byline {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin: 0 0 0.75rem;
+            color: #565959;
+            font-size: 13px;
+        }
+        .amazon-blog-article__author-card {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.75rem 1rem;
+            align-items: start;
+            margin: 0 0 1rem;
+            padding: 0.875rem 1rem;
+            border: 1px solid #d5d9d9;
+            border-radius: 8px;
+            background: #f7fafa;
+        }
+        .amazon-blog-article__author-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: #232f3e;
+            color: #fff;
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .amazon-blog-article__author-body { min-width: 0; }
+        .amazon-blog-article__author-label {
+            margin: 0 0 0.15rem;
+            color: #565959;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .amazon-blog-article__author-name {
+            margin: 0 0 0.5rem;
+            font-size: 15px;
+            font-weight: 700;
+            color: #0f1111;
+        }
+        .amazon-blog-article__meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+            gap: 0.35rem 1rem;
+            margin: 0;
+            font-size: 12px;
+            color: #565959;
+        }
+        .amazon-blog-article__meta-grid dt {
+            margin: 0;
+            font-weight: 600;
+            color: #0f1111;
+        }
+        .amazon-blog-article__meta-grid dd { margin: 0; }
+        .amazon-blog-article__keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin: 0 0 1rem;
+        }
+        .amazon-blog-article__keyword {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+            border: 1px solid #d5d9d9;
+            background: #fff;
+            color: var(--color-link);
+            font-size: 12px;
+            text-decoration: none;
+        }
+        .amazon-blog-article__keyword:hover {
+            border-color: var(--color-link-hover);
+            color: var(--color-link-hover);
+        }
+        .blog-layout__reviews {
+            margin-top: 1rem;
+        }
+        .blog-layout__reviews-container {
+            background: #fff;
+            border: 1px solid #d5d9d9;
+            border-radius: 8px;
+            padding: 1rem 1.25rem 1.5rem;
+        }
+        .amazon-blog-article__category {
+            color: var(--color-link);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .amazon-blog-article__category:hover { color: var(--color-link-hover); text-decoration: underline; }
+        .amazon-blog-article__excerpt {
+            margin: 0 0 1rem;
+            color: #0f1111;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .amazon-blog-article__cover {
+            margin: 0 0 1.25rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #d5d9d9;
+            background: #f3f4f6;
+        }
+        .amazon-blog-article__cover img {
+            display: block;
+            width: 100%;
+            max-height: 420px;
+            object-fit: cover;
+        }
+        .amazon-blog-article__content {
+            font-size: 15px;
+            line-height: 1.7;
+            color: #0f1111;
+        }
+        .amazon-blog-article__content p { margin: 0 0 1rem; }
+        .amazon-blog-article__content img { max-width: 100%; height: auto; border-radius: 4px; }
+        .amazon-blog-article__content .hanfu-article-figure {
+            max-width: 100%;
+            margin: 1.5rem 0;
+            overflow: hidden;
+            box-sizing: border-box;
+            border: 1px solid #d5d9d9;
+            border-radius: 8px;
+            background: #f7fafa;
+        }
+        .amazon-blog-article__content .hanfu-article-figure img {
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 3 / 2;
+            object-fit: cover;
+            border-radius: 0;
+        }
+        .amazon-blog-article__content .hanfu-article-figure figcaption {
+            padding: 0.75rem 1rem;
+            color: #565959;
+            font-size: clamp(0.8125rem, 1.8vw, 0.875rem);
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+        .amazon-blog-article__content .hanfu-article-figure__provenance {
+            color: #565959;
+            font-size: 0.875em;
+            overflow-wrap: anywhere;
+        }
+        .amazon-blog-article__content .hanfu-article-figure a {
+            color: var(--color-link);
+            text-decoration: underline;
+            text-underline-offset: 0.15em;
+        }
+        .amazon-blog-article__content .hanfu-article-figure a:hover {
+            color: var(--color-link-hover);
+        }
+        .amazon-blog-article__content .hanfu-article-figure a:focus-visible {
+            outline: 2px solid var(--color-link);
+            outline-offset: 2px;
+        }
+        .amazon-blog-article__content h2,
+        .amazon-blog-article__content h3 {
+            margin: 1.5rem 0 0.75rem;
+            line-height: 1.3;
+        }
+        .amazon-blog-article__related {
+            margin-top: 2rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid #e7e7e7;
+        }
+        .amazon-blog-article__related h2 {
+            margin: 0 0 0.75rem;
+            font-size: 1.125rem;
+            font-weight: 700;
+        }
+        .amazon-blog-listing__grid--related,
+        .amazon-blog-listing__grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .blog-storefront__card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
+            border: 1px solid #d5d9d9;
+            border-radius: 8px;
+            background: #fff;
+        }
+        .blog-storefront__card.is-clickable { cursor: pointer; }
+        .blog-storefront__card.is-clickable:hover { border-color: #bbb; }
+        .blog-storefront__card-hit { position: absolute; inset: 0; z-index: 1; }
+        .blog-storefront__media {
+            position: relative;
+            height: 140px;
+            overflow: hidden;
+            background: #f3f4f6;
+        }
+        .blog-storefront__media img {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover;
+        }
+        .blog-storefront__body {
+            position: relative; z-index: 1;
+            display: grid; gap: 4px;
+            padding: 8px 10px 10px;
+        }
+        .blog-storefront__body h2,
+        .blog-storefront__body h3,
+        .blog-storefront__card-title {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 2.5em;
+        }
+        .blog-storefront__excerpt {
+            margin: 0;
+            color: #565959;
+            font-size: 12px;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        @media (max-width: 1024px) {
+            .amazon-blog-listing__grid--related { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 768px) {
+            .amazon-blog-listing__grid--related { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .blog-layout__panel { padding: 0.875rem 0.875rem 1.25rem; }
+        }
+        @media (max-width: 520px) {
+            .amazon-blog-listing__grid--related { grid-template-columns: 1fr; }
+            .amazon-blog-article__content .hanfu-article-figure {
+                margin: 1.25rem 0;
+                border-radius: 6px;
+            }
+            .amazon-blog-article__content .hanfu-article-figure figcaption {
+                padding: 0.625rem 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::blog::body-start</w:hook>
+
+    <div class="weline-page-wrapper blog-layout">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::blog::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::blog::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <if condition="meta.showBreadcrumb">
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::blog::content-before</w:hook>
+
+            <main class="blog-layout__main <?= htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                  id="main-content"
+                  data-layout="blog">
+                <w:hook>Weline_Theme::frontend::layouts::blog::main-before</w:hook>
+                <w:slot id="content"
+                        name="内容区"
+                        accept="layout-blog-content,layout-default-content,content,blog-article,blog-related"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="blog-layout__content-slot">
+                    <div class="blog-layout__panel" weline-code="theme.blog.article">
+                        <w:slot id="blog-article"
+                                name="文章正文区"
+                                accept="layout-blog-article,blog-article,content"
+                                multiple="true"
+                                position="content">
+                            <if condition="meta.content">
+                                {{meta.content}}
+                            <elseif condition="content"/>
+                                {{content}}
+                            <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData('meta.contentTemplate')); ?>
+                            <elseif condition="contentTemplate"/>
+                                <?php echo $this->fetch($this->getData('contentTemplate')); ?>
+                            <else/>
+                                <w:hook>Weline_Theme::frontend::layouts::blog::article</w:hook>
+                            </if>
+                        </w:slot>
+                    </div>
+                </w:slot>
+
+                <if condition="meta.showReviews">
+                    <section class="blog-layout__reviews" id="blog-reviews" weline-code="theme.blog.section_reviews">
+                        <div class="blog-layout__reviews-container">
+                            <w:hook>Weline_Theme::frontend::layouts::blog::reviews-before</w:hook>
+                            <w:slot id="blog-reviews"
+                                    name="博客评论"
+                                    accept="layout-blog-reviews,blog-reviews,review,reviews"
+                                    multiple="true"
+                                    position="content"
+                                    wrapper="div"
+                                    class="blog-layout__reviews-slot">
+                                <w:hook>Weline_Theme::frontend::layouts::blog::reviews-slot-content</w:hook>
+                            </w:slot>
+                            <w:hook>Weline_Theme::frontend::layouts::blog::reviews-after</w:hook>
+                        </div>
+                    </section>
+                </if>
+
+                <w:hook>Weline_Theme::frontend::layouts::blog::main-after</w:hook>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::blog::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+        <w:slot id="blog-bottom"
+                name="博客底部扩展"
+                accept="layout-blog-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="blog-layout__bottom-slot">
+        </w:slot>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::blog::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::blog::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::blog::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

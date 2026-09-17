@@ -2,6 +2,14 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Weline_Theme::layout_resolve">
+        <observer name="Weline_Checkout::layout_resolve"
+                  instance="Weline\Checkout\Observer\LayoutResolveObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="40"/>
+    </event>
+
     <!-- 订单创建后观察者示例 -->
     <event name="Weline_Checkout::checkout::create_order::after">
         <observer name="Weline_Checkout::checkout_order_created_observer" 

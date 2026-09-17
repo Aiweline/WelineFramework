@@ -16,7 +16,7 @@ final class LazyCaptchaClientRuntime
 {
     public const REQUEST_INJECTED_KEY = 'captcha.client_runtime.injected';
 
-    public const SCRIPT_SOURCE = 'Weline_Captcha::js/captcha-lazy.js?v=20260909-mo-guard1';
+    public const SCRIPT_SOURCE = 'Weline_Captcha::js/captcha-lazy.js?v=20260915-script-exec1';
 
     public const STYLESHEET_SOURCE = 'Weline_Captcha::css/captcha-local.css?v=20260910-google-ready1';
 
@@ -65,7 +65,7 @@ final class LazyCaptchaClientRuntime
         }
 
         // Match storefront module static URL shape used by Theme/Currency assets.
-        return '/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260909-mo-guard1';
+        return '/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260915-script-exec1';
     }
 
     public static function resolveStylesheetUrl(): string

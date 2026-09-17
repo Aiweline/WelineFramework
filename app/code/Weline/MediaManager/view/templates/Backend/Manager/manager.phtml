@@ -116,7 +116,7 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
 </style>
 </notempty>
 <css>Weline_MediaManager::css/manager.css</css>
-<script src="@static(Weline_MediaManager::js/manager.js)&v=20260914-rm-targets" defer></script>
+<script src="@static(Weline_MediaManager::js/manager.js)&v=20260916-identity-bar-collapse2" defer></script>
 
 <div class="mmf-wrap<notempty name="is_iframe"> mmf-iframe-mode</notempty>">
     <div class="mmf-chrome-backdrop" data-mmf-chrome-backdrop hidden aria-hidden="true"></div>
@@ -146,10 +146,56 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
             <div class="mmf-search-results" id="mmf-search-results" role="listbox" hidden></div>
         </div>
         <ul class="mmf-tree" role="tree"></ul>
+        <div class="mmf-ref-panel" id="mmf-ref-panel" hidden>
+            <div class="mmf-sidebar-title"><lang>引用标签筛</lang></div>
+            <label class="mmf-field"><span><lang>大类</lang></span>
+                <select id="mmf-ref-root">
+                    <option value="">—</option>
+                    <option value="product">product</option>
+                    <option value="widget">widget</option>
+                    <option value="theme">theme</option>
+                    <option value="catalog">catalog</option>
+                    <option value="blog">blog</option>
+                    <option value="config">config</option>
+                    <option value="smtp">smtp</option>
+                </select>
+            </label>
+            <label class="mmf-field"><span>scope</span><input type="text" id="mmf-ref-scope" placeholder="default.default.default"></label>
+            <label class="mmf-field"><span>sku / code</span><input type="text" id="mmf-ref-code" placeholder="SKU / theme / slug"></label>
+            <label class="mmf-field"><span>kind</span><input type="text" id="mmf-ref-kind" placeholder="media / detail"></label>
+            <label class="mmf-field"><span>component</span><input type="text" id="mmf-ref-component" placeholder="banner"></label>
+            <div class="mmf-ref-actions">
+                <button type="button" class="mmf-btn mmf-btn-primary" id="mmf-ref-apply"><lang>筛选</lang></button>
+                <button type="button" class="mmf-btn" id="mmf-ref-unbind-prefix"><lang>卸引用前缀</lang></button>
+                <button type="button" class="mmf-btn" id="mmf-ref-unreferenced"><lang>无引用</lang></button>
+                <button type="button" class="mmf-btn mmf-btn-danger" id="mmf-ref-close-scope"><lang>关站清引用</lang></button>
+            </div>
+            <div class="mmf-ref-report" id="mmf-ref-report" aria-live="polite"></div>
+        </div>
     </div>
 
     <!-- 主区域 -->
     <div class="mmf-main">
+        <div class="mmf-identity-bar is-collapsed" id="mmf-identity-bar" data-mmf-identity-bar hidden>
+            <button type="button"
+                    class="mmf-identity-bar__toggle"
+                    data-mmf-identity-toggle
+                    aria-expanded="false"
+                    aria-controls="mmf-identity-panel">
+                <span class="mmf-identity-bar__chevron" aria-hidden="true">&#9662;</span>
+                <span class="mmf-identity-bar__title"><lang>当前身份引用</lang></span>
+                <span class="mmf-identity-bar__summary" data-mmf-identity-summary></span>
+            </button>
+            <div class="mmf-identity-bar__panel" id="mmf-identity-panel" data-mmf-identity-panel hidden>
+                <div class="mmf-identity-bar__head">
+                    <button type="button" class="mmf-identity-chip mmf-identity-chip--all is-active" data-mmf-identity-all aria-pressed="true">
+                        <lang>全部</lang>
+                    </button>
+                    <span class="mmf-identity-bar__hint" data-mmf-identity-hint aria-live="polite"></span>
+                </div>
+                <div class="mmf-identity-bar__groups" data-mmf-identity-groups role="group" aria-label="@lang{身份标签组}"></div>
+            </div>
+        </div>
         <!-- 工具栏 -->
         <div class="mmf-toolbar">
             <button type="button" class="mmf-btn mmf-btn-chrome" id="mmf-btn-folders" data-mmf-toggle-sidebar title="@lang{目录}" aria-expanded="false" aria-controls="mmf-sidebar">
@@ -170,6 +216,18 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
             </button>
             <button type="button" class="mmf-btn mmf-btn-danger" id="mmf-btn-delete" title="@lang{Delete}">
                 &#x1F5D1;&#xFE0F; <lang>Delete</lang>
+            </button>
+            <span class="mmf-toolbar-sep"></span>
+            <div class="mmf-mode-switch" role="group" aria-label="@lang{管理视图}">
+                <button type="button" class="mmf-btn is-active" id="mmf-mode-files" data-mmf-view-mode="files" title="@lang{文件管理}">
+                    <lang>文件管理</lang>
+                </button>
+                <button type="button" class="mmf-btn" id="mmf-mode-refs" data-mmf-view-mode="refs" title="@lang{引用管理}">
+                    <lang>引用管理</lang>
+                </button>
+            </div>
+            <button type="button" class="mmf-btn" id="mmf-btn-trash" title="@lang{垃圾箱}">
+                &#x1F5D1; <lang>垃圾箱</lang>
             </button>
             <span class="mmf-toolbar-sep"></span>
             <button type="button" class="mmf-btn" id="mmf-btn-refresh" title="@lang{Refresh}">
@@ -248,6 +306,7 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
                     <div class="mmf-preview-name"></div>
                     <div class="mmf-locale-workbench" data-mmf-locale-workbench hidden>
                         <div class="mmf-locale-workbench-title"><lang>多语言翻译</lang></div>
+                        <div class="mmf-locale-workbench-hint" data-mmf-locale-workbench-hint></div>
                         <div class="mmf-locale-tabs" data-mmf-locale-tabs role="tablist"></div>
                         <div class="mmf-locale-editor" data-mmf-locale-editor>
                             <label class="mmf-locale-field">
@@ -324,6 +383,7 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
         <input type="text" class="mmf-dialog-input" autocomplete="off">
         <div class="mmf-dialog-actions">
             <button type="button" class="mmf-btn mmf-dialog-cancel"><lang>Cancel</lang></button>
+            <button type="button" class="mmf-btn mmf-dialog-secondary" hidden></button>
             <button type="button" class="mmf-btn mmf-btn-primary mmf-dialog-ok"><lang>OK</lang></button>
         </div>
     </div>
@@ -536,6 +596,7 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
             themeMode: <?= $mmfJson($this->getData('theme_mode') ?: 'light') ?>,
             localeCode: <?= $mmfJson($this->getData('locale_code') ?: 'zh_Hans_CN') ?>,
             connectorFormKey: <?= $mmfJson($this->getData('connector_form_key')) ?>,
+            mediaReferenceBase: <?= $mmfJson($this->getData('media_reference_base') ?: '') ?>,
             requireImageUsage: <?= $mmfBool($this->getData('require_image_usage')) ? 'true' : 'false' ?>,
             aspectRatio: <?= $mmfJson($this->getData('aspect_ratio')) ?>,
             aspectRatioTolerance: <?= $mmfJson($this->getData('aspect_ratio_tolerance')) ?>,
@@ -659,13 +720,25 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
                 localeTranslating: <?= $mmfJson(__('正在补缺翻译…')) ?>,
                 localeTranslatingHint: <?= $mmfJson(__('正在调用 AI 补缺其它语言，请稍候…')) ?>,
                 localeMissing: <?= $mmfJson(__('未翻译')) ?>,
+                localeWorkbenchHint: <?= $mmfJson(__('单击切换语言；双击未翻译语言可临时补齐（草稿）')) ?>,
+                localeTabTempFillTitle: <?= $mmfJson(__('双击：临时补齐该语言（草稿）')) ?>,
+                localeTabSwitchTitle: <?= $mmfJson(__('单击切换；已有文案，双击不会覆盖')) ?>,
+                localeTabSourceTitle: <?= $mmfJson(__('源语言')) ?>,
+                localeTempFillDone: <?= $mmfJson(__('已临时补齐 %{locale}（草稿）')) ?>,
+                localeTempFillSkipped: <?= $mmfJson(__('%{locale} 已有文案，已跳过')) ?>,
+                localeTempFillSourceSkip: <?= $mmfJson(__('源语言无需补齐')) ?>,
                 aiAutoTranslationOn: <?= $mmfJson(__('已开启 AI 自动翻译（每小时定时补缺）')) ?>,
                 aiAutoTranslationQueued: <?= $mmfJson(__('已开启并立即入队补缺 #%{id}，请到任务队列查看进度')) ?>,
                 aiAutoTranslationOff: <?= $mmfJson(__('已关闭 AI 自动翻译')) ?>,
                 aiAutoTranslationSaveFailed: <?= $mmfJson(__('AI 自动翻译配置保存失败')) ?>,
                 uploadNameConflictTitle: <?= $mmfJson(__('文件名已存在')) ?>,
-                uploadNameConflictMessage: <?= $mmfJson(__('当前文件夹已有「%{name}」。系统已生成不重复的文件名，请确认或修改后上传：')) ?>,
+                uploadNameConflictMessage: <?= $mmfJson(__('当前文件夹已有「%{name}」。可改用不重复的文件名，或覆盖已有文件并保留其多语言文案：')) ?>,
                 uploadNameStillExists: <?= $mmfJson(__('「%{name}」仍与现有文件重名，请换一个名称')) ?>,
+                uploadOverwriteExisting: <?= $mmfJson(__('覆盖已有')) ?>,
+                uploadOverwriteConfirmTitle: <?= $mmfJson(__('确认覆盖')) ?>,
+                uploadOverwriteConfirmMessage: <?= $mmfJson(__('将替换「%{name}」的文件内容；已有多语言文案将保留。此操作不可撤销。')) ?>,
+                uploadOverwriteConfirm: <?= $mmfJson(__('确认覆盖')) ?>,
+                uploadConfirmNewName: <?= $mmfJson(__('确定')) ?>,
                 assetMetadataMissing: <?= $mmfJson(__('当前文件尚未建立可编辑的资源实体')) ?>,
                 assetMetadataEditorUnavailable: <?= $mmfJson(__('资源信息编辑器尚未就绪')) ?>,
                 assetDisplayNamePrompt: <?= $mmfJson(__('请填写当前语言下的资源名称。')) ?>,
@@ -761,7 +834,14 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
                 aiRefEmpty: <?= $mmfJson(__('请从左侧列表选择一张图片作为参考')) ?>,
                 aiOutputLabel: <?= $mmfJson(__('生成结果')) ?>,
                 aiRefDirEmpty: <?= $mmfJson(__('当前目录暂无图片，请先上传或切换到包含图片的文件夹')) ?>,
-                aiRefPreview: <?= $mmfJson(__('放大预览')) ?>
+                aiRefPreview: <?= $mmfJson(__('放大预览')) ?>,
+                identityGroupRoot: <?= $mmfJson(__('大类')) ?>,
+                identityGroupCode: <?= $mmfJson(__('身份')) ?>,
+                identityGroupScope: <?= $mmfJson(__('范围')) ?>,
+                identityGroupSlot: <?= $mmfJson(__('槽位')) ?>,
+                identityFilterHit: <?= $mmfJson(__('命中引用')) ?>,
+                identityFilterVisible: <?= $mmfJson(__('当前可见')) ?>,
+                identityFilterGroupHint: <?= $mmfJson(__('点击按本组全部标签过滤')) ?>
             }
         });
     });

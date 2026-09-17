@@ -105,7 +105,10 @@ final class ProductDetailTemplateContractTest extends TestCase
 
         self::assertStringContainsString('$descriptionHtml', $template);
         self::assertStringContainsString('ensureDescriptionImageAlts', $template);
+        self::assertStringContainsString('normalizeDescriptionLayout', $template);
         self::assertStringContainsString('data-testid="product-description-body"', $template);
+        self::assertStringContainsString('object-fit: contain', $template);
+        self::assertStringNotContainsString('aspect-ratio: 3 / 4', $template);
         self::assertLessThan(
             strpos($template, 'data-testid="product-description"'),
             strpos($template, 'data-testid="product-specifications"'),
@@ -128,6 +131,12 @@ final class ProductDetailTemplateContractTest extends TestCase
             $template,
         );
         self::assertStringContainsString('.product-native-detail__description-body img', $template);
+        self::assertMatchesRegularExpression(
+            '/\.product-native-detail__description,\s*\n\s*\.product-native-detail__specifications\s*\{[^}]*max-width:\s*100%;/s',
+            $template,
+            '关于该商品描述区须与主列同宽，禁止 64rem 二次收窄',
+        );
+        self::assertStringNotContainsString('max-width: min(100%, 64rem)', $template);
         self::assertStringContainsString('.weline-detail-text--size-chart', $template);
         self::assertStringContainsString('.weline-detail-text__columns', $template);
         self::assertStringContainsString('.product-native-detail__qty-label', $template);
@@ -137,8 +146,31 @@ final class ProductDetailTemplateContractTest extends TestCase
         );
         self::assertStringContainsString('.product-native-detail__qty-select', $template);
         self::assertMatchesRegularExpression(
-            '/\.product-native-detail__qty-select\s*\{[^}]*inline-size:\s*auto/s',
+            '/\.product-native-detail__qty-select\s*\{(?:[^{}]|\{[^}]*\})*inline-size:\s*auto/s',
             $template,
+        );
+    }
+
+    public function testDetailTemplateExposesAfterGalleryHookUnderMediaColumn(): void
+    {
+        $template = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml',
+        );
+
+        self::assertStringContainsString('product-native-detail__media-column', $template);
+        self::assertStringContainsString(
+            "getHook('Weline_Product::frontend::product::detail::after-gallery')",
+            $template,
+        );
+        self::assertLessThan(
+            (int) strpos($template, "getHook('Weline_Product::frontend::product::detail::after-gallery')"),
+            (int) strpos($template, 'data-testid="product-gallery"'),
+            'after-gallery 须紧随图库之后',
+        );
+        self::assertLessThan(
+            (int) strpos($template, 'product-native-detail__buy-column'),
+            (int) strpos($template, "getHook('Weline_Product::frontend::product::detail::after-gallery')"),
+            'after-gallery 须在购买列之前',
         );
     }
 
@@ -165,6 +197,9 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('syncImageZoomSource', $template);
         self::assertStringContainsString('id="product-purchase-actions"', $template);
         self::assertStringContainsString('product-purchase-actions', $template);
+        self::assertStringContainsString('product-native-detail__actions', $template);
+        self::assertStringContainsString('flex: 1 1 calc(50% - (var(--weline-space-2, 0.5rem) / 2))', $template);
+        self::assertStringContainsString('min-inline-size: 0', $template);
         self::assertStringContainsString('@param show_brand', $template);
         self::assertStringContainsString('@param show_supplier', $template);
         self::assertStringContainsString('data-testid="product-brand"', $template);

@@ -21,7 +21,7 @@ final class ThemeSocialSameAsSeoContextServiceTest extends TestCase
                     'widget_type' => 'footer-container',
                     'config' => [
                         'social_items' => [
-                            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/yunshang.hanfu'],
+                            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changan.hanfu'],
                             ['name' => 'Dead', 'icon' => 'fab fa-x', 'url' => '#'],
                         ],
                     ],
@@ -35,10 +35,10 @@ final class ThemeSocialSameAsSeoContextServiceTest extends TestCase
             [[
                 'name' => 'Instagram',
                 'icon' => 'fab fa-instagram',
-                'url' => 'https://www.instagram.com/yunshang.hanfu',
+                'url' => 'https://www.instagram.com/changan.hanfu',
             ]],
             FooterDefaultLinksHelper::normalizeSocialItems([
-                ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/yunshang.hanfu'],
+                ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changan.hanfu'],
                 ['name' => 'Dead', 'icon' => 'fab fa-x', 'url' => '#'],
             ])
         );

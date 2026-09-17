@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Blog 前台部件：评论容器 + 页脚了解我们扩展（博客/新闻中心链接）+ 页头导航扩展。
+ * Blog 前台部件：评论容器 + 页脚了解我们扩展（博客/新闻中心链接）+ 页头右侧导航扩展。
  * Theme layouts/partials 禁止内嵌本模块 <w:widget>；靠 default_injections / 拖入补空槽。
  */
 return [
     'header-blog-link' => [
         'name' => '页头博客链接',
-        'description' => '页头导航扩展槽：博客列表入口；默认注入 header-nav-extensions（分类后方）。',
+        'description' => '页头右侧导航扩展槽：博客列表入口；默认注入 header-nav-extensions（与快捷导航同簇）。',
         'type' => 'navigation',
         'code' => 'header-blog-link',
         'area' => 'frontend',
@@ -28,7 +28,7 @@ return [
             'area' => 'header',
             'sort_order' => 0,
             'required' => true,
-            'reason' => '页头分类后方默认展示博客入口',
+            'reason' => '页头右侧扩展槽默认展示博客入口（与今日特价等同簇）',
             'config' => [
                 'label' => '博客',
             ],
