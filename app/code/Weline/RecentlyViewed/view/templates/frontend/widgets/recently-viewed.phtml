@@ -11,7 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
- * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-product-list-recommendations","layout-search-recommendations","recently-viewed"]}
+ * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-products-recommendations","layout-search-recommendations","recently-viewed"]}
  * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-recently-viewed", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认最近浏览槽", "config":{"title":"最近浏览","limit":24,"columns":"6","layout":"carousel"} }]}
  *
  * @param title {default="最近浏览",type="string",label="标题"}
@@ -122,19 +122,16 @@ $cardShowCompare = !empty($shopperActions['show_compare']);
 $cardShowQuickview = !empty($shopperActions['show_quickview']);
 
 if ($products === []) {
-    // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty HTML as a warning toast.
+    // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
+    // HTML as a warning toast. Keep visually hidden so storefront still "hides".
     ?>
 <section class="<?= $esc($wc) ?> weline-recently-viewed<?= $isPreviewMode ? ' is-preview' : '' ?> is-empty"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-testid="recently-viewed-empty">
-    <header class="wrv-header">
-        <h2 class="wrv-title"><?= $esc($widgetTitle) ?></h2>
-        <p class="wrv-subtitle"><?= $esc((string)__('浏览商品后会显示在这里')) ?></p>
-    </header>
-    <p class="wrv-empty"><?= $esc((string)__('暂无浏览记录')) ?></p>
-</section>
+         data-testid="recently-viewed-empty"
+         hidden
+         aria-hidden="true"></section>
     <?php
     return;
 }
@@ -142,6 +139,7 @@ if ($products === []) {
 <link rel="stylesheet"
       href="@static(Weline_RecentlyViewed::css/widgets/recently-viewed.css)?v=20260912-bg-transparent"
       data-no-extract="true">
+
 
 <section class="<?= $esc($wc) ?> weline-recently-viewed<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
@@ -151,6 +149,7 @@ if ($products === []) {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-layout="<?= $esc($layout) ?>"
          data-columns="<?= $esc($columns) ?>">
+    <?= \Weline\Product\Service\ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="wrv-header">
         <h2 class="wrv-title"><?= $esc($widgetTitle) ?></h2>
         <p class="wrv-subtitle"><?= $esc(WidgetI18n::label('Based on your recent browsing')) ?></p>

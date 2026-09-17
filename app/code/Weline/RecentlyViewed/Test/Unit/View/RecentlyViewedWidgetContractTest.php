@@ -25,7 +25,7 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertSame(24, (int)(($widget['params']['limit']['default'] ?? 0)));
     }
 
-    public function testEmptyPathEmitsNonEmptyShellWithTestId(): void
+    public function testEmptyPathEmitsHiddenNonEmptyShellWithTestId(): void
     {
         $path = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/recently-viewed.phtml';
         self::assertFileExists($path);
@@ -34,8 +34,11 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('@widget.default_injections', $source);
         self::assertStringContainsString('product-recently-viewed', $source);
         self::assertStringContainsString('data-testid="recently-viewed-empty"', $source);
-        self::assertStringContainsString('暂无浏览记录', $source);
+        self::assertStringContainsString('hidden', $source);
+        self::assertStringContainsString('aria-hidden="true"', $source);
+        self::assertStringNotContainsString('暂无浏览记录', $source);
         self::assertStringContainsString('Never return a blank string', $source);
+        self::assertStringContainsString('Keep visually hidden', $source);
         self::assertStringContainsString('RecentlyViewedService', $source);
         self::assertStringContainsString('data-weline-load="recentlyViewed"', $source);
         self::assertStringContainsString('"limit":24', $source);
@@ -45,6 +48,7 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('density="standard"', $source);
         self::assertStringContainsString('class="wpc-listing-card wrv-card"', $source);
         self::assertStringContainsString('show-sku="true"', $source);
+        self::assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $source);
         self::assertStringNotContainsString('density="shelf"', $source);
         self::assertStringNotContainsString('ProductCardRenderer::render', $source);
         self::assertStringContainsString("\$product['slug']", $source);
@@ -54,7 +58,7 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertDoesNotMatchRegularExpression(
             '/if\s*\(\s*(?:empty\(\s*\$products\s*\)|\$products\s*===\s*\[\])\s*\)\s*\{\s*return\s*;\s*\}/s',
             $source,
-            'Empty product list must render a shell, not bare return.',
+            'Empty product list must render a hidden shell, not bare return.',
         );
 
         $hiCsv = dirname(__DIR__, 3) . '/i18n/hi_IN.csv';
