@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Shipping',
-    "version" => '2.9.2',
+    "version" => '2.9.14',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',
@@ -30,5 +30,7 @@ return [
         'shipping.carrier_coverage.default' => \Weline\Shipping\Service\DefaultCarrierCoverageProvider::class,
         \Weline\Order\Api\OrderShippingMethodCatalogInterface::class
             => \Weline\Shipping\Integration\Order\OrderShippingMethodCatalog::class,
+        \Weline\Order\Api\OrderShippingFulfillmentGatewayInterface::class
+            => \Weline\Shipping\Integration\Order\OrderShippingFulfillmentGateway::class,
     ],
 ];

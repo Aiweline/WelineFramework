@@ -1,0 +1,117 @@
+<?php
+/**
+ * 促销活动默认布局：Theme 只提供共享壳层与业务内容槽。
+ *
+ * @meta.name {default="促销活动默认布局",name="促销活动默认布局",description="促销活动页面的共享头尾与内容槽"}
+ * @meta.description {default="共享站点 chrome、促销业务槽与底部扩展槽",name="描述",description="商品、价格与活动状态由 Promotion 模块提供；底部 slot 可挂载其他部件"}
+ * @param title {default="促销活动",name="页面标题",description="用于主内容区的无障碍名称"}
+ * @param content {default="",name="主要内容（HTML）",description="由业务模块或编辑器注入的内容"}
+ * @param contentTemplate {default="",name="内容模板",description="由业务模块提供的模板标识"}
+ * @param showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
+ * @param showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
+ * @param class {default="",name="额外 CSS 类",description="主内容额外 CSS 类"}
+ */
+$meta = $this->getData('meta') ?? [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$title = (string)($meta['title'] ?? __('促销活动'));
+$rawContent = (string)($this->getData('meta.content') ?: $this->getData('content') ?: ($meta['content'] ?? ''));
+$contentTemplate = (string)($this->getData('meta.contentTemplate') ?: ($meta['contentTemplate'] ?? ''));
+$renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
+    ? (string)$this->fetch($contentTemplate)
+    : '';
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::promotion::head-after</w:hook>
+    <style>
+        body.w-theme-promotion-layout { margin: 0; min-height: 100vh; color: var(--weline-layout-text-primary); background: var(--weline-layout-surface-secondary); }
+        .w-theme-promotion-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .w-theme-promotion-main { flex: 1 0 auto; width: 100%; }
+        .w-theme-promotion-stage {
+            box-sizing: border-box;
+            display: grid;
+            gap: var(--weline-layout-spacing-2xl);
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding: var(--weline-layout-spacing-2xl) var(--weline-layout-content-padding-inline) var(--weline-layout-spacing-3xl);
+        }
+        .w-theme-promotion-bottom:not(:has(*)) { display: none; }
+        .w-theme-promotion-empty { position: relative; overflow: hidden; display: grid; gap: 1rem; padding: clamp(2rem, 6vw, 4.75rem); border: 1px solid color-mix(in srgb, var(--weline-layout-text-primary) 14%, transparent); border-radius: 1rem; background: linear-gradient(135deg, color-mix(in srgb, var(--weline-layout-surface-primary) 94%, #d8ccb7), var(--weline-layout-surface-primary)); box-shadow: 0 1.25rem 4rem rgba(30, 27, 22, .08); }
+        .w-theme-promotion-empty::after { content: ''; position: absolute; inset: auto -8% -45% auto; width: min(26rem, 55vw); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(131, 43, 36, .11), transparent 68%); pointer-events: none; }
+        .w-theme-promotion-empty__eyebrow { margin: 0; color: #83302a; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+        .w-theme-promotion-empty h1 { margin: 0; max-width: 18ch; font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(1.8rem, 4vw, 3.2rem); line-height: 1.2; font-weight: 600; }
+        .w-theme-promotion-empty p { margin: 0; max-width: 42rem; color: var(--weline-layout-text-secondary); line-height: 1.8; }
+        .w-theme-promotion-empty__actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .25rem; }
+        .w-theme-promotion-empty__link { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; padding-inline: 1.2rem; border: 1px solid currentColor; border-radius: 999px; color: var(--weline-layout-text-primary); text-decoration: none; font-weight: 700; }
+        .w-theme-promotion-empty__link--primary { border-color: #83302a; background: #83302a; color: #fff; }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="w-theme-promotion-layout <?= $escape($meta['class'] ?? '') ?>">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::promotion::body-start</w:hook>
+    <div class="weline-page-wrapper w-theme-promotion-shell" data-layout="promotion">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+        <main class="w-theme-promotion-main" id="main-content" aria-label="<?= $escape($title) ?>">
+            <div class="w-theme-promotion-stage">
+                <w:slot id="content"
+                        name="促销业务内容"
+                        accept="promotion-main,promotion-content,promotion-products,content"
+                        reject="header,footer,navigation"
+                        multiple="true"
+                        position="content">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::promotion::content
+                        <else/>
+                        <?php if (trim($rawContent) !== ''): ?>
+                            <?= $rawContent ?>
+                        <?php elseif (trim($renderedTemplateContent) !== ''): ?>
+                            <?= $renderedTemplateContent ?>
+                        <?php else: ?>
+                            <section weline-code="theme-promotion-empty" class="w-theme-promotion-empty" data-testid="storefront-promotion-empty" aria-labelledby="promotion-empty-title">
+                                <p class="w-theme-promotion-empty__eyebrow"><?= $escape(__('时令新章')) ?></p>
+                                <h1 id="promotion-empty-title"><?= $escape(__('新的活动正在筹备')) ?></h1>
+                                <p><?= $escape(__('当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。')) ?></p>
+                                <div class="w-theme-promotion-empty__actions">
+                                    <a class="w-theme-promotion-empty__link w-theme-promotion-empty__link--primary" href="@url{'categories'}"><?= $escape(__('浏览全部商品')) ?></a>
+                                    <a class="w-theme-promotion-empty__link" href="@url{'faq'}"><?= $escape(__('查看购物帮助')) ?></a>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </w:hook>
+                </w:slot>
+                <w:slot id="promotion-bottom"
+                        name="促销底部扩展"
+                        accept="promotion-bottom,layout-content-after,banner,content,container,product,category,carousel"
+                        reject="header,footer,navigation"
+                        multiple="true"
+                        append="true"
+                        position="content"
+                        class="w-theme-promotion-bottom">
+                    <w:hook>Weline_Theme::frontend::layouts::promotion::content-after</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+                </w:slot>
+            </div>
+        </main>
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+    <w:hook>Weline_Theme::frontend::layouts::promotion::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

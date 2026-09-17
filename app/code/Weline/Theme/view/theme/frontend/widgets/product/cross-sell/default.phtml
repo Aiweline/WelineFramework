@@ -27,6 +27,7 @@
  */
 
 
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\ThemeDemoCatalog;
@@ -67,10 +68,12 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 
 ?>
 
+
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <h3 class="widget-title">
         <w:icon name="link" size="sm"></w:icon>
         <?= htmlspecialchars($title) ?>

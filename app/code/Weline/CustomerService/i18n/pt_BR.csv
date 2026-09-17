@@ -16,13 +16,20 @@
 "Language updated.","Language updated."
 "Please enter a valid email address.","Please enter a valid email address."
 "Session token is required.","Session token is required."
-人机验证服务暂不可用，已切换为本地图码，请填写后重试,人机验证服务暂不可用，已切换为本地图码，请填写后重试
+人机验证服务暂不可用，已切换为本地图码，请填写后重试,"Serviço de captcha indisponível; mudou para código local—preencha e tente de novo"
 人机验证未完成，请再试一次,人机验证未完成，请再试一次
-人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
+人机验证失败或已过期，请重试,"Captcha falhou ou expirou, tente de novo"
 "Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
 "Verification email has been sent.","Verification email has been sent."
 "Customer Service Query","Customer Service Query"
 "Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
+在线客服,"Atendimento online"
+默认已启用在线客服（当前范围无覆盖关闭）。,默认已启用在线客服（当前范围无覆盖关闭）。
+已继承上级范围启用在线客服。,已继承上级范围启用在线客服。
+已启用在线客服入口。,已启用在线客服入口。
+"启用前台客服与默认语言；可选 AI 模型。","启用前台客服与默认语言；可选 AI 模型。"
+服务,服务
+在线客服入口,在线客服入口
 客服聊天,"Chat de atendimento"
 获取会话失败：%{1},"Falha ao obter sessão: %{1}"
 消息内容不能为空,"O conteúdo da mensagem não pode estar vazio"
@@ -32,7 +39,7 @@
 语言代码不能为空,"O código do idioma não pode estar vazio"
 语言设置成功,"Idioma definido com sucesso"
 设置语言失败：%{1},"Falha ao definir idioma: %{1}"
-人机验证加载失败，请稍后重试,人机验证加载失败，请稍后重试
+人机验证加载失败，请稍后重试,"Falha ao carregar o captcha, tente mais tarde"
 邮箱地址不能为空,"O endereço de email não pode estar vazio"
 邮箱格式不正确,"Formato de email inválido"
 会话令牌不能为空,"O token de sessão não pode estar vazio"
@@ -145,7 +152,6 @@ settings,settings
 加载更早消息失败，请稍后重试,加载更早消息失败，请稍后重试
 正在加载最新消息…,正在加载最新消息…
 在下方输入框发送第一条回复。,在下方输入框发送第一条回复。
-会话,Sessão
 输入消息...,"Digite uma mensagem..."
 发送,Enviar
 正在加载更早消息…,正在加载更早消息…
@@ -181,10 +187,10 @@ settings,settings
 删除失败,"Falha ao excluir"
 保存失败,"Falha ao salvar"
 请先选择会话,请先选择会话
-正在上传…,正在上传…
-上传失败,上传失败
+正在上传…,Enviando…
+上传失败,"Falha no upload"
 发送失败,"Falha ao enviar"
-上传失败，请稍后重试,上传失败，请稍后重试
+上传失败，请稍后重试,"Falha no upload, tente mais tarde"
 发送失败，请稍后重试,发送失败，请稍后重试
 确定要接单此会话吗？,"Aceitar esta sessão?"
 确认接单,确认接单
@@ -195,7 +201,7 @@ settings,settings
 关闭,Fechar
 关闭失败,"Falha ao fechar"
 关闭失败，请稍后重试,关闭失败，请稍后重试
-刚刚,"Agora mesmo"
+刚刚,Agora
 分钟前,"minutos atrás"
 小时前,"horas atrás"
 已关闭,Fechado
@@ -206,25 +212,23 @@ settings,settings
 分钟,minutos
 最长,"Mais longo"
 秒,segundos
-打开验证链接,"Open verification link"
-提示,提示
-请注意,请注意
-操作失败,操作失败
-知道了,知道了
-人机验证凭证异常，请刷新页面后重试,人机验证凭证异常，请刷新页面后重试
-请求参数过长，请刷新页面后重试,请求参数过长，请刷新页面后重试
-上传参数异常，请刷新页面后重试,上传参数异常，请刷新页面后重试
-点击修改邮箱身份,"Clique para editar a identidade de e-mail"
-当前登录身份,当前登录身份
-邮箱已绑定：%{1}，可以继续聊天,"Email bound: %{1}. You can continue chatting."
-邮箱已绑定，可以继续聊天,"Email bound. You can continue chatting."
-绑定成功,"Binding successful"
-今天,今天
-昨天,昨天
-客服新消息,客服新消息
-您有一条新的客服回复,您有一条新的客服回复
-请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,"Aguarde a resposta do suporte antes de enviar de novo. E-mail verificado dispensa a espera e permite mensagens contínuas."
-等待客服回复…,等待客服回复…
+打开验证链接,"Abrir link de verificação"
+提示,Aviso
+请注意,Atenção
+操作失败,"Operação falhou"
+知道了,Entendi
+人机验证凭证异常，请刷新页面后重试,"Token de captcha anormal; atualize e tente de novo"
+请求参数过长，请刷新页面后重试,"Parâmetros da solicitação longos demais; atualize e tente de novo"
+上传参数异常，请刷新页面后重试,"Parâmetros de upload inválidos; atualize e tente de novo"
+点击修改邮箱身份,"Clique para alterar a identidade de e-mail"
+当前登录身份,"Identidade de login atual"
+邮箱已绑定：%{1}，可以继续聊天,"E-mail vinculado: %{1}. Você pode continuar."
+邮箱已绑定，可以继续聊天,"E-mail vinculado. Você pode continuar."
+绑定成功,"Vinculação bem-sucedida"
+今天,Hoje
+昨天,Ontem
+请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,"Aguarde uma resposta antes de enviar. Após verificar o e-mail, pode enviar sem esperar."
+等待客服回复…,"Aguardando resposta…"
 客服服务,"Serviço de atendimento"
 我的语言,"Meu idioma"
 显示模式,"Modo de exibição"
@@ -235,38 +239,39 @@ settings,settings
 仅显示译文,"Apenas tradução"
 原文+译文,"Original + Tradução"
 仅显示原文,"Apenas original"
-截图,Captura
-客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
-已取消截图,已取消截图
-截图失败，请改用图片上传或粘贴,截图失败，请改用图片上传或粘贴
-在页面上拖拽选择要截取的区域,在页面上拖拽选择要截取的区域
-重选,重选
-完成,完成
-已选中区域，可点击「完成」发送,已选中区域，可点击「完成」发送
-请先拖拽选择截图区域,请先拖拽选择截图区域
-生成中…,生成中…
-正在生成截图…,正在生成截图…
-请在弹出窗口选择「这个标签页」以截取,请在弹出窗口选择「这个标签页」以截取
-生成失败，请重选区域或改用图片上传,生成失败，请重选区域或改用图片上传
-欢迎使用客服服务,欢迎使用客服服务
-会员,会员
-访客,访客
+截图,"Captura de tela"
+客服会话初始化失败，请稍后重试,"Falha ao iniciar a sessão, tente mais tarde"
+已取消截图,"Captura cancelada"
+截图失败，请改用图片上传或粘贴,"Falha na captura—envie ou cole uma imagem"
+在页面上拖拽选择要截取的区域,"Arraste na página para selecionar a área"
+重选,Resselecionar
+完成,Concluído
+已选中区域，可点击「完成」发送,"Área selecionada—clique 「Concluído」 para enviar"
+请先拖拽选择截图区域,"Arraste primeiro para selecionar a área da captura"
+生成中…,Gerando…
+正在生成截图…,"Gerando captura…"
+请在弹出窗口选择「这个标签页」以截取,"No diálogo, escolha 「Esta aba」 para capturar"
+生成失败，请重选区域或改用图片上传,"Falha ao gerar—resselecione ou envie uma imagem"
+欢迎使用客服服务,"Bem-vindo ao atendimento"
+会员,Membro
+访客,Visitante
 客服,Agente
-图片加载失败,"Failed to load image"
-在线客服,在线客服
+图片加载失败,"Falha ao carregar a imagem"
+客服新消息,"Nova mensagem do atendimento"
+您有一条新的客服回复,"Você tem uma nova resposta do atendimento"
 "AI 智能客服","Serviço IA"
-离线,离线
-网站正在维护，请稍后再试,网站正在维护，请稍后再试
-请稍候,请稍候
-请填写下方图码后发送验证邮件,请填写下方图码后发送验证邮件
-云端人机验证暂不可用，请填写下方本地图码后再次发送,云端人机验证暂不可用，请填写下方本地图码后再次发送
-云端人机验证暂不可用，已切换为本地图码，请填写后重试,云端人机验证暂不可用，已切换为本地图码，请填写后重试
-请填写本地图码,请填写本地图码
-人机验证尚未就绪，请稍后重试,人机验证尚未就绪，请稍后重试
-请输入有效的邮箱地址,"Por favor digite um endereço de email válido"
-会话未初始化，请刷新页面重试,"Sessão não inicializada"
-人机验证尚未就绪，正在刷新，请稍后重试,人机验证尚未就绪，正在刷新，请稍后重试
-验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
+离线,Offline
+网站正在维护，请稍后再试,"Site em manutenção, tente mais tarde"
+请稍候,Aguarde
+请填写下方图码后发送验证邮件,"Preencha o código abaixo e envie o e-mail de verificação"
+云端人机验证暂不可用，请填写下方本地图码后再次发送,"Captcha na nuvem indisponível; preencha o código local abaixo e envie de novo"
+云端人机验证暂不可用，已切换为本地图码，请填写后重试,"Captcha na nuvem indisponível; mudou para código local—preencha e tente de novo"
+请填写本地图码,"Preencha o código local"
+人机验证尚未就绪，请稍后重试,"Captcha não pronto, tente mais tarde"
+请输入有效的邮箱地址,"Digite um e-mail válido"
+会话未初始化，请刷新页面重试,"Sessão não inicializada, atualize e tente de novo"
+人机验证尚未就绪，正在刷新，请稍后重试,"Captcha não pronto, atualizando—tente mais tarde"
+验证邮件已发送，请查收您的邮箱,"E-mail de verificação enviado, confira sua caixa de entrada"
 此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Use o botão flutuante para conversar"
 邮箱绑定验证,"Verificação de email"
 验证成功,Verificado
@@ -274,16 +279,16 @@ settings,settings
 已成功绑定到客服会话。,"Vinculado à sessão"
 返回首页,Início
 验证失败,Falhou
-邮箱已绑定,"Email bound"
-正在同步到客服聊天窗口…,"Syncing to the customer service chat…"
-已绑定邮箱,"Email vinculado"
-回到商城继续聊天,"Back to store to continue chatting"
-关闭此页,"Close this page"
-原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。,"The original chat window will show your bound email. If this page does not close automatically"
+邮箱已绑定,"E-mail vinculado"
+正在同步到客服聊天窗口…,"Sincronizando com a janela do chat…"
+已绑定邮箱,"E-mail vinculado"
+回到商城继续聊天,"Voltar à loja para continuar"
+关闭此页,"Fechar esta página"
+原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。,"A janela original mostrará o e-mail vinculado. Se esta página não fechar sozinha, feche-a e continue."
 返回上一页,返回上一页
 如有问题，请,"Se tiver perguntas"
 联系客服,"Contatar serviço"
-已同步。可关闭此页，返回原页面继续聊天。,"Synced. You can close this page and continue chatting on the original tab."
+已同步。可关闭此页，返回原页面继续聊天。,"Sincronizado. Você pode fechar esta página e continuar na aba original."
 配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。,配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。
 在统一配置中心打开,在统一配置中心打开
 作用范围,作用范围
@@ -409,23 +414,25 @@ settings,settings
 无效的附件消息,无效的附件消息
 图片：%{1},图片：%{1}
 文件：%{1},文件：%{1}
+输入回复…,输入回复…
+会话,Sessão
 检测中...,Verificando...
 修改邮箱身份,"Editar identidade de e-mail"
 验证邮箱,"Verificar e-mail"
-接收客服回复与优惠通知,接收客服回复与优惠通知
-留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
-仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
-接收通知的邮箱,接收通知的邮箱
-请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
-稍后再说,稍后再说
-发送验证邮件,"Enviar email de verificação"
+接收客服回复与优惠通知,"Receber respostas do atendimento e avisos de ofertas"
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,"Após deixar o e-mail, o atendimento pode enviar a resposta desta consulta, o progresso do orçamento e as ofertas disponíveis."
+仅用于本次客服咨询相关通知，不是简报订阅。,"Apenas para avisos desta consulta, não é assinatura de newsletter."
+接收通知的邮箱,"E-mail para avisos"
+请输入用于接收客服通知的邮箱,"Digite o e-mail para avisos do atendimento"
+稍后再说,"Mais tarde"
+发送验证邮件,"Enviar e-mail de verificação"
 "客服服务 - 邮箱绑定验证","Serviço de atendimento - Verificação de email"
 绑定成功后，您将收到客服回复的邮件通知,"Receba notificações após vincular"
-无法截取所选区域，请改用图片上传或粘贴截图,无法截取所选区域，请改用图片上传或粘贴截图
-正在截取当前页面…,正在截取当前页面…
-无法截取当前页面，请改用图片上传或粘贴截图,无法截取当前页面，请改用图片上传或粘贴截图
-拖拽选择要发送的区域,拖拽选择要发送的区域
-当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图,当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图
+无法截取所选区域，请改用图片上传或粘贴截图,"Não foi possível capturar a área—envie ou cole uma imagem"
+正在截取当前页面…,"Capturando a página…"
+无法截取当前页面，请改用图片上传或粘贴截图,"Não foi possível capturar a página—envie ou cole uma imagem"
+拖拽选择要发送的区域,"Arraste para selecionar a área a enviar"
+当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图,"Este navegador não oferece captura—envie ou cole uma imagem"
 目标客服,目标客服
 未关闭的会话将转给所选客服,未关闭的会话将转给所选客服
 "即将删除客服「__AGENT__」，其名下有 __COUNT__ 个未关闭会话，请选择转让目标或释放回等待池。","即将删除客服「__AGENT__」，其名下有 __COUNT__ 个未关闭会话，请选择转让目标或释放回等待池。"
@@ -458,3 +465,4 @@ English,English
 客服系统,"Sistema de atendimento"
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
+繁體中文,"Chinês tradicional"

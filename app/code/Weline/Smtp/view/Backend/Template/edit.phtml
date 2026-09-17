@@ -45,6 +45,23 @@ if (!is_string($previewSamplesJson)) {
     $previewSamplesJson = '{}';
 }
 
+$shellRegions = is_array($this->getData('shell_regions') ?? null)
+    ? $this->getData('shell_regions')
+    : ['header' => '', 'footer' => []];
+$mailEditorFonts = is_array($this->getData('mail_editor_fonts') ?? null)
+    ? $this->getData('mail_editor_fonts')
+    : [];
+$shellRegionsJson = json_encode($shellRegions, $jsonFlags);
+$mailFontsJson = json_encode($mailEditorFonts, $jsonFlags);
+if (!is_string($shellRegionsJson)) {
+    $shellRegionsJson = '{}';
+}
+if (!is_string($mailFontsJson)) {
+    $mailFontsJson = '[]';
+}
+$mailConfigUrl = $this->getBackendUrl('smtp/backend/mail-config', ['target_scope' => $selectedScope]);
+
+
 $varsContent = [];
 $varsIdentity = [];
 $varsTone = [];
@@ -94,40 +111,121 @@ $renderVarButtons = static function (array $list) use ($h): void {
     padding-block-end: var(--weline-space-3, 0.75rem);
     border-block-end: 1px solid var(--weline-theme-border, var(--color-border-default, #d4cfc5));
 }
-.w-smtp-edit-main {
+.w-smtp-visual-editor {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.95fr);
-    gap: var(--weline-space-4, 1rem);
-    align-items: start;
+    gap: var(--weline-space-3, 0.75rem);
 }
-@media (max-width: 1100px) {
-    .w-smtp-edit-main {
-        grid-template-columns: 1fr;
-    }
-    .w-smtp-edit-preview {
-        position: static !important;
-    }
-}
-.w-smtp-edit-preview {
-    position: sticky;
-    inset-block-start: var(--weline-space-3, 0.75rem);
-    display: grid;
+.w-smtp-ve-region-tabs {
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--weline-space-2, 0.5rem);
 }
-.w-smtp-edit-preview-frame {
+.w-smtp-ve-region-tab {
     border: 1px solid var(--weline-theme-border, var(--color-border-default, #d4cfc5));
-    background: var(--weline-theme-surface-muted, var(--color-bg-secondary, #ede9e1));
+    background: var(--weline-theme-surface, #fffefa);
     border-radius: var(--weline-radius-md, 8px);
-    padding: var(--weline-space-3, 0.75rem);
-    min-block-size: 28rem;
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    font: inherit;
+    cursor: pointer;
 }
-.w-smtp-edit-preview-frame iframe {
+.w-smtp-ve-region-tab.is-active {
+    border-color: var(--weline-theme-primary, #b84a3c);
+    box-shadow: inset 0 -2px 0 var(--weline-theme-primary, #b84a3c);
+    font-weight: 600;
+}
+.w-smtp-ve-canvas {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    border: 1px solid var(--weline-theme-border, var(--color-border-default, #d4cfc5));
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.35), rgba(255,255,255,0)),
+        var(--weline-theme-surface-muted, var(--color-bg-secondary, #ede9e1));
+    border-radius: var(--weline-radius-md, 8px);
+    padding: var(--weline-space-4, 1rem) var(--weline-space-3, 0.75rem);
+    min-block-size: 32rem;
+}
+/* 整体/分区预览：按真实邮件宽度居中，避免拉满后台变成「小贴纸」 */
+.w-smtp-ve-canvas iframe {
     display: block;
     width: 100%;
-    min-block-size: 32rem;
+    max-width: 40rem; /* ~640：600 邮件卡 + 边距 */
+    min-block-size: 36rem;
+    margin: 0 auto;
     border: 0;
-    background: transparent;
+    background: #fff;
     border-radius: var(--weline-radius-sm, 4px);
+    box-shadow:
+        0 0 0 1px rgba(28, 28, 28, 0.06),
+        0 16px 40px rgba(28, 28, 28, 0.12);
+}
+.w-smtp-ve-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    border: 1px solid var(--weline-theme-border, var(--color-border-default, #d4cfc5));
+    border-radius: var(--weline-radius-md, 8px);
+    background: var(--weline-theme-surface, #fffefa);
+}
+.w-smtp-ve-toolbar[hidden] { display: none !important; }
+.w-smtp-ve-toolbar.is-floating {
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    top: 0;
+    max-width: min(18.5rem, calc(100% - 1rem));
+    max-height: calc(100% - 1rem);
+    overflow: auto;
+    box-shadow: 0 10px 28px rgba(28, 28, 28, 0.16);
+    background: rgba(255, 254, 250, 0.98);
+    backdrop-filter: blur(6px);
+}
+.w-smtp-ve-toolbar .w-field { --w-mb: 0; --w-min-inline-size: auto; }
+.w-smtp-ve-toolbar #smtp-ve-var-hint {
+    flex: 1 1 100%;
+    margin: 0;
+}
+/* 颜色控件：避开 .w-field 浮动标签把「文字色」挤成 8px 宽不可见 */
+.w-smtp-ve-toolbar .w-smtp-ve-swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    min-inline-size: 4.75rem;
+}
+.w-smtp-ve-toolbar .w-smtp-ve-swatch > span {
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--weline-theme-text-muted, #526077);
+    white-space: nowrap;
+}
+.w-smtp-ve-toolbar .w-smtp-ve-swatch-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.w-smtp-ve-toolbar input[type="color"].w-smtp-ve-color-input {
+    box-sizing: border-box;
+    width: 2.75rem;
+    height: 2rem;
+    min-width: 2.75rem;
+    padding: 0;
+    border: 1px solid var(--weline-theme-border, #d4cfc5);
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+}
+.w-smtp-ve-toolbar .w-smtp-ve-color-hex {
+    width: 5.5rem;
+    min-height: 2rem;
+    font: inherit;
+    font-size: 12px;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--weline-theme-border, #d4cfc5);
+    border-radius: 6px;
+    background: #fff;
 }
 .w-smtp-edit-vars {
     display: flex;
@@ -169,7 +267,7 @@ $renderVarButtons = static function (array $list) use ($h): void {
 
     <form id="smtp-template-save-form" method="post" action="<?= $h($saveUrl) ?>" class="w-stack" style="--w-gap:var(--weline-space-4);" data-testid="smtp-template-save-form">
         <input type="hidden" name="template_id" value="<?= $templateId ?>"/>
-        <input type="hidden" name="channel_code" value="<?= $h($channel) ?>"/>
+        <input type="hidden" name="mail_channel" value="<?= $h($channel) ?>" data-testid="smtp-template-mail-channel"/>
         <input type="hidden" name="storage_scope" id="smtp-tpl-storage-scope" value="<?= $h($selectedScope) ?>"/>
         <input type="hidden" name="q" value="<?= $h($returnQ) ?>" data-testid="smtp-template-return-q"/>
         <input type="hidden" name="locales" value="<?= $h($returnLocales) ?>" data-testid="smtp-template-return-locales"/>
@@ -246,7 +344,8 @@ $renderVarButtons = static function (array $list) use ($h): void {
                     if (localeInput && localeInput.value) {
                         url.searchParams.set('locale', String(localeInput.value || '').trim());
                     }
-                    var channelInput = document.querySelector('#smtp-template-save-form input[name="channel_code"]');
+                    var channelInput = document.querySelector('#smtp-template-save-form input[name="mail_channel"]')
+                        || document.querySelector('#smtp-template-save-form input[name="channel_code"]');
                     var channel = channelInput && channelInput.value
                         ? String(channelInput.value || '').trim()
                         : (url.searchParams.get('channel') || '');
@@ -284,7 +383,9 @@ $renderVarButtons = static function (array $list) use ($h): void {
         <section class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="smtp-template-vars">
             <div class="w-text" data-weight="semibold"><?= __('插入变量') ?></div>
             <p class="w-text" data-tone="muted" data-size="sm" data-testid="smtp-template-shell-hint">
-                <?= __('页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。') ?>
+                <?= __('三区切换后点击任意文字，对其父级改文字色/背景/字号/字体/对齐；变量文案不可改字。页头/正文/页尾背景图与真信一致，在') ?>
+                <a class="w-link" href="<?= $h($mailConfigUrl) ?>" data-testid="smtp-template-mail-config-link"><?= __('邮件配置') ?></a>
+                <?= __('中更换后刷新本页即可。') ?>
             </p>
             <?php if ($varsContent !== []): ?>
                 <div class="w-smtp-edit-vars" data-testid="smtp-template-vars-content">
@@ -312,40 +413,95 @@ $renderVarButtons = static function (array $list) use ($h): void {
             <?php endif; ?>
         </section>
 
-        <div class="w-smtp-edit-main" data-testid="smtp-template-edit-workspace">
-            <section class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="smtp-template-editor-column">
-                <label class="w-field__label" for="smtp-tpl-body"><?= __('正文') ?></label>
-                <div class="w-smtp-template-editor w-smtp-edit-panel" data-testid="smtp-template-editor-shell">
-                    <textarea class="w-input" id="smtp-tpl-body" name="body_html" rows="16" editor data-testid="smtp-template-body"><?= $h($bodyHtml) ?></textarea>
-                    <w:editor-manager container-id="smtp-tpl-body"/>
-                </div>
-            </section>
+        <input type="hidden" name="shell_regions_json" id="smtp-shell-regions-json" value=""/>
+        <textarea class="w-input" id="smtp-tpl-body" name="body_html" rows="4" hidden data-testid="smtp-template-body"><?= $h($bodyHtml) ?></textarea>
 
-            <aside class="w-smtp-edit-preview" data-testid="smtp-template-live-preview">
-                <div class="w-cluster" data-justify="between" data-align="center">
-                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
-                        <h2 class="w-heading" data-level="3"><?= __('实时预览') ?></h2>
-                        <p class="w-text" data-tone="muted" data-size="sm"><?= __('含固定页头/页尾；编辑后自动刷新。') ?></p>
+        <section class="w-smtp-visual-editor w-smtp-edit-panel" data-testid="smtp-visual-editor">
+            <div class="w-cluster" data-justify="between" data-align="center">
+                <h2 class="w-heading" data-level="3"><?= __('可视化编辑') ?></h2>
+                <p class="w-text" data-tone="muted" data-size="sm"><?= __('「整体」按真信宽度预览；页头/正文/页尾可点选改样式（变量文案不可改字）。') ?></p>
+            </div>
+
+            <div class="w-smtp-ve-region-tabs" role="tablist" aria-label="<?= $h(__('邮件区域')) ?>" data-testid="smtp-ve-region-tabs">
+                <button type="button" class="w-smtp-ve-region-tab is-active" role="tab" data-region="all" aria-selected="true" data-testid="smtp-ve-tab-all"><?= __('整体') ?></button>
+                <button type="button" class="w-smtp-ve-region-tab" role="tab" data-region="header" data-testid="smtp-ve-tab-header"><?= __('页头') ?></button>
+                <button type="button" class="w-smtp-ve-region-tab" role="tab" data-region="body" data-testid="smtp-ve-tab-body"><?= __('正文') ?></button>
+                <button type="button" class="w-smtp-ve-region-tab" role="tab" data-region="footer" data-testid="smtp-ve-tab-footer"><?= __('页尾') ?></button>
+            </div>
+
+            <div class="w-smtp-ve-canvas" data-testid="smtp-template-live-preview">
+                <div class="w-smtp-ve-toolbar is-floating" id="smtp-ve-toolbar" data-testid="smtp-ve-style-toolbar" hidden>
+                    <span class="w-text" data-size="sm" data-weight="semibold" id="smtp-ve-selection-label"><?= __('未选中') ?></span>
+                    <p class="w-text" data-size="sm" data-tone="warning" id="smtp-ve-var-hint" data-testid="smtp-ve-var-hint" hidden></p>
+                    <div class="w-smtp-ve-swatch" data-testid="smtp-ve-text-color-field">
+                        <span><?= __('文字颜色') ?></span>
+                        <div class="w-smtp-ve-swatch-row">
+                            <input type="color" id="smtp-ve-color" class="w-smtp-ve-color-input" data-testid="smtp-ve-color" value="#1c1c1c" title="<?= $h(__('文字颜色')) ?>" aria-label="<?= $h(__('文字颜色')) ?>"/>
+                            <input type="text" id="smtp-ve-color-hex" class="w-smtp-ve-color-hex" data-testid="smtp-ve-color-hex" value="#1c1c1c" maxlength="7" spellcheck="false" aria-label="<?= $h(__('文字颜色十六进制')) ?>"/>
+                        </div>
                     </div>
+                    <div class="w-smtp-ve-swatch" data-testid="smtp-ve-bg-color-field">
+                        <span><?= __('背景色') ?></span>
+                        <div class="w-smtp-ve-swatch-row">
+                            <input type="color" id="smtp-ve-bg" class="w-smtp-ve-color-input" data-testid="smtp-ve-bg" value="#ffffff" title="<?= $h(__('背景色')) ?>" aria-label="<?= $h(__('背景色')) ?>"/>
+                        </div>
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="smtp-ve-font-size"><?= __('字号') ?></label>
+                        <select id="smtp-ve-font-size" class="w-input" data-testid="smtp-ve-font-size">
+                            <option value=""><?= __('默认') ?></option>
+                            <option value="11px">11px</option>
+                            <option value="12px">12px</option>
+                            <option value="13px">13px</option>
+                            <option value="14px">14px</option>
+                            <option value="15px">15px</option>
+                            <option value="16px">16px</option>
+                            <option value="18px">18px</option>
+                            <option value="20px">20px</option>
+                            <option value="24px">24px</option>
+                            <option value="28px">28px</option>
+                            <option value="30px">30px</option>
+                            <option value="32px">32px</option>
+                        </select>
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="smtp-ve-font-family"><?= __('字体') ?></label>
+                        <select id="smtp-ve-font-family" class="w-input" data-testid="smtp-ve-font-family">
+                            <option value=""><?= __('默认') ?></option>
+                            <?php foreach ($mailEditorFonts as $font): ?>
+                                <option value="<?= $h((string)($font['stack'] ?? '')) ?>"><?= $h((string)($font['label'] ?? '')) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="smtp-ve-align-left" data-testid="smtp-ve-align-left"><?= __('左对齐') ?></button>
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="smtp-ve-align-center" data-testid="smtp-ve-align-center"><?= __('居中') ?></button>
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="smtp-ve-align-right" data-testid="smtp-ve-align-right"><?= __('右对齐') ?></button>
                 </div>
-                <div class="w-smtp-edit-preview-frame">
-                    <iframe id="smtp-tpl-preview" title="<?= $h(__('邮件实时预览')) ?>" data-testid="smtp-template-preview-iframe"
-                            sandbox="allow-same-origin"></iframe>
-                </div>
-            </aside>
-        </div>
+                <iframe id="smtp-tpl-preview" title="<?= $h(__('邮件可视化编辑')) ?>" data-testid="smtp-template-preview-iframe"
+                        sandbox="allow-same-origin"></iframe>
+            </div>
+        </section>
 
         <details class="w-smtp-edit-panel" data-testid="smtp-template-advanced">
-            <summary><?= __('高级：纯文本') ?></summary>
-            <div class="w-field" style="margin-block-start:var(--weline-space-2, 0.5rem);">
-                <label class="w-field__label" for="smtp-tpl-text"><?= __('纯文本（可选）') ?></label>
-                <textarea class="w-input" id="smtp-tpl-text" name="body_text" rows="4"><?= $h((string)$template->getData('body_text')) ?></textarea>
+            <summary><?= __('高级：源码 / 纯文本') ?></summary>
+            <div class="w-stack" style="margin-block-start:var(--weline-space-2, 0.5rem); --w-gap:var(--weline-space-3);">
+                <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="smtp-template-editor-column">
+                    <label class="w-field__label" for="smtp-tpl-body-source"><?= __('正文 HTML 源码') ?></label>
+                    <div class="w-smtp-template-editor" data-testid="smtp-template-editor-shell">
+                        <textarea class="w-input" id="smtp-tpl-body-source" rows="14" spellcheck="false" data-testid="smtp-template-body-source"><?= $h($bodyHtml) ?></textarea>
+                    </div>
+                    <p class="w-text" data-tone="muted" data-size="sm"><?= __('纯 HTML 源码（无富文本编辑器）。日常请用上方可视化；仅排障或粘贴片段时改这里。') ?></p>
+                </div>
+                <div class="w-field" style="--w-mb:0;">
+                    <label class="w-field__label" for="smtp-tpl-text"><?= __('纯文本（可选）') ?></label>
+                    <textarea class="w-input" id="smtp-tpl-text" name="body_text" rows="4"><?= $h((string)$template->getData('body_text')) ?></textarea>
+                </div>
             </div>
         </details>
     </form>
 
     <form id="smtp-template-reset-form" method="post" action="<?= $h($resetUrl) ?>" data-testid="smtp-template-reset-form" hidden>
-        <input type="hidden" name="channel_code" value="<?= $h($channel) ?>"/>
+        <input type="hidden" name="mail_channel" value="<?= $h($channel) ?>"/>
         <input type="hidden" name="locale" value="<?= $h($locale) ?>"/>
         <input type="hidden" name="storage_scope" value="<?= $h($selectedScope) ?>"/>
         <input type="hidden" name="target_scope" value="<?= $h($selectedScope) ?>"/>
@@ -373,40 +529,25 @@ $renderVarButtons = static function (array $list) use ($h): void {
 </div>
 <script>
 (function () {
-    var body = document.getElementById('smtp-tpl-body');
+    var bodyField = document.getElementById('smtp-tpl-body');
+    var bodySource = document.getElementById('smtp-tpl-body-source');
+    var shellRegionsField = document.getElementById('smtp-shell-regions-json');
     var subjectEl = document.getElementById('smtp-tpl-subject');
     var frame = document.getElementById('smtp-tpl-preview');
     var shellHtml = <?= $previewShellJson ?>;
     var samples = <?= $previewSamplesJson ?> || {};
-    var timer = null;
+    var initialBody = bodyField ? String(bodyField.value || '') : '';
+    var activeRegion = 'all';
+    var selectedEl = null;
+    var selectedIsVar = false;
+    var selectedVarCode = '';
+    var editorReady = false;
+    var toolbar = document.getElementById('smtp-ve-toolbar');
+    var selectionLabel = document.getElementById('smtp-ve-selection-label');
+    var varHint = document.getElementById('smtp-ve-var-hint');
 
-    function insertToken(token) {
-        var editable = document.querySelector('.w-smtp-template-editor .ck-editor__editable, .ck-editor__editable');
-        var editor = editable && editable.ckeditorInstance;
-        if (editor && editor.model) {
-            editor.editing.view.focus();
-            editor.model.change(function (writer) {
-                editor.model.insertContent(writer.createText(token));
-            });
-            schedulePreview();
-            return;
-        }
-        if (!body) return;
-        body.focus();
-        var start = body.selectionStart || body.value.length;
-        var end = body.selectionEnd || start;
-        body.value = body.value.slice(0, start) + token + body.value.slice(end);
-        body.dispatchEvent(new Event('input', {bubbles: true}));
-        schedulePreview();
-    }
-
-    function getEditorHtml() {
-        var editable = document.querySelector('.w-smtp-template-editor .ck-editor__editable, .ck-editor__editable');
-        var editor = editable && editable.ckeditorInstance;
-        if (editor && editor.getData) {
-            return String(editor.getData() || '');
-        }
-        return body ? String(body.value || '') : '';
+    function escapeAttr(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
 
     function stripScripts(html) {
@@ -466,14 +607,95 @@ $renderVarButtons = static function (array $list) use ($h): void {
         map['font-family'] = map['font-family'] || 'Arial,Helvetica,sans-serif';
         map['font-size'] = map['font-size'] || '15px';
         map['font-weight'] = map['font-weight'] || '700';
-        map.color = contrastTextColor(bgHex) + ' !important';
+        if (bgHex) {
+            map.color = contrastTextColor(bgHex) + ' !important';
+        } else if (!map.color) {
+            map.color = '#ffffff !important';
+            map.background = map.background || map['background-color'] || '#16333f';
+            map['background-color'] = map['background-color'] || '#16333f';
+        }
         map['text-decoration'] = 'none !important';
         map.border = map.border || '0';
         map['text-decoration-line'] = 'none';
+        map['border-radius'] = map['border-radius'] || '4px';
         anchor.setAttribute('style', styleMapToString(map));
     }
 
-    /** CKEditor 常把邮件按钮收成裸 a；预览侧补回邮件安全内联样式。 */
+    function looksLikeMailCta(anchor) {
+        if (!anchor) return false;
+        var href = String(anchor.getAttribute('href') || '').toLowerCase();
+        var text = String(anchor.textContent || '').trim();
+        if (/checkout|pay|cart|payment|token=/i.test(href)) return true;
+        if (/支付|结账|付款|pay|checkout|继续/i.test(text)) return true;
+        return false;
+    }
+
+    /** 预览态：把条件块（#if var.x … /if）包成可还原标记；假值隐藏但仍保留 DOM 以便保存写回 */
+    function renderPreviewIfBlocks(html) {
+        var out = String(html || '');
+        out = out.replace(/\{\{\s*#if\s+var\.([A-Za-z][A-Za-z0-9_.]*?)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g, function (_m, path, inner) {
+            var val = samples && Object.prototype.hasOwnProperty.call(samples, path) ? samples[path] : '';
+            var truthy = !(val == null || (typeof val === 'string' && String(val).trim() === ''));
+            var safe = escapeAttr(path);
+            var style = truthy ? '' : ' style="display:none!important"';
+            return '<div data-weline-mail-if="' + safe + '"' + style + '>' + inner + '</div>';
+        });
+        // 残留未配对标签：预览隐藏原文，避免漏到画布
+        out = out.replace(/\{\{\s*#if\s+[^}]+\}\}/g, '');
+        out = out.replace(/\{\{\s*\/if\s*\}\}/g, '');
+        return out;
+    }
+
+    function restoreMailIfBlocks(html) {
+        var raw = String(html || '');
+        if (!raw || raw.indexOf('data-weline-mail-if') < 0) return raw;
+        try {
+            var doc = new DOMParser().parseFromString('<div id="weline-mail-if-restore-root">' + raw + '</div>', 'text/html');
+            var root = doc.getElementById('weline-mail-if-restore-root');
+            if (!root) return raw;
+            // 先内层后外层（若未来支持嵌套）
+            var nodes = Array.prototype.slice.call(root.querySelectorAll('[data-weline-mail-if]')).reverse();
+            nodes.forEach(function (el) {
+                var path = String(el.getAttribute('data-weline-mail-if') || '').trim();
+                if (!path || !/^[A-Za-z][A-Za-z0-9_.]*$/.test(path)) {
+                    el.outerHTML = el.innerHTML;
+                    return;
+                }
+                el.outerHTML = '{' + '{#if var.' + path + '}}' + el.innerHTML + '{' + '{/if}}';
+            });
+            return root.innerHTML;
+        } catch (e) {
+            return raw;
+        }
+    }
+
+    /** 预览态：清掉历史富文本残留的空表 / 单独省略号段，不写回保存 */
+    function scrubPreviewDebris(html) {
+        var raw = String(html || '');
+        if (!raw) return '';
+        try {
+            var doc = new DOMParser().parseFromString('<div id="weline-mail-scrub-root">' + raw + '</div>', 'text/html');
+            var root = doc.getElementById('weline-mail-scrub-root');
+            if (!root) return raw;
+            Array.prototype.slice.call(root.querySelectorAll('p,div')).forEach(function (el) {
+                var t = String(el.textContent || '').replace(/\u00a0/g, ' ').trim();
+                if (t === '…' || t === '...' || t === '') {
+                    if (!el.querySelector('img,table,a[href]')) el.parentNode && el.parentNode.removeChild(el);
+                }
+            });
+            Array.prototype.slice.call(root.querySelectorAll('table')).forEach(function (table) {
+                var t = String(table.textContent || '').replace(/\u00a0/g, ' ').trim();
+                var cells = table.querySelectorAll('td,th');
+                if (cells.length <= 1 && (t === '' || t === '…' || t === '...') && !table.querySelector('img')) {
+                    table.parentNode && table.parentNode.removeChild(table);
+                }
+            });
+            return root.innerHTML;
+        } catch (e) {
+            return raw;
+        }
+    }
+
     function normalizeEmailBody(html) {
         var raw = stripScripts(html);
         if (!raw) return '';
@@ -495,15 +717,28 @@ $renderVarButtons = static function (array $list) use ($h): void {
             });
             Array.prototype.slice.call(root.querySelectorAll('td')).forEach(function (td) {
                 var bg = extractTdBackground(td);
-                if (!bg) return;
-                if (!td.getAttribute('bgcolor')) td.setAttribute('bgcolor', bg);
-                var tdStyle = String(td.getAttribute('style') || '');
-                if (!/background(-color)?\s*:/i.test(tdStyle)) {
-                    td.setAttribute('style', (tdStyle ? tdStyle.replace(/;?\s*$/, ';') : '') + 'background:' + bg + ';');
+                if (bg) {
+                    if (!td.getAttribute('bgcolor')) td.setAttribute('bgcolor', bg);
+                    var tdStyle = String(td.getAttribute('style') || '');
+                    if (!/background(-color)?\s*:/i.test(tdStyle)) {
+                        td.setAttribute('style', (tdStyle ? tdStyle.replace(/;?\s*$/, ';') : '') + 'background:' + bg + ';');
+                    }
+                    Array.prototype.slice.call(td.querySelectorAll('a')).forEach(function (a) {
+                        ensureCtaAnchorStyle(a, bg);
+                    });
                 }
-                Array.prototype.slice.call(td.querySelectorAll('a')).forEach(function (a) {
-                    ensureCtaAnchorStyle(a, bg);
-                });
+                // 恢复键值表左列 nowrap（编辑器常剥掉导致中文竖排）
+                var st = String(td.getAttribute('style') || '');
+                if (/width\s*:\s*1%/i.test(st) && !/white-space\s*:/i.test(st)) {
+                    td.setAttribute('style', st.replace(/;?\s*$/, ';') + 'white-space:nowrap;');
+                }
+            });
+            // 裸 CTA（不在色底 TD 内）被编辑器剥样式后补回按钮态
+            Array.prototype.slice.call(root.querySelectorAll('a')).forEach(function (a) {
+                if (!looksLikeMailCta(a)) return;
+                var st = String(a.getAttribute('style') || '');
+                if (/padding\s*:/i.test(st) && /background/i.test(st)) return;
+                ensureCtaAnchorStyle(a, '');
             });
             var out = root.innerHTML;
             tokens.forEach(function (item) {
@@ -515,89 +750,795 @@ $renderVarButtons = static function (array $list) use ($h): void {
         }
     }
 
-    function applySamples(html) {
-        var out = String(html || '');
+    function wrapSampleValue(code, value, isRaw) {
+        var safeCode = escapeAttr(code);
+        var rawAttr = isRaw ? ' data-weline-mail-var-raw="1"' : '';
+        return '<span data-weline-mail-var="' + safeCode + '"' + rawAttr
+            + ' contenteditable="false">' + String(value == null ? '' : value) + '</span>';
+    }
+
+    function replaceSamplesInChunk(chunk, wrap) {
+        var out = String(chunk || '');
         Object.keys(samples).forEach(function (code) {
             var value = samples[code] == null ? '' : String(samples[code]);
             var reRaw = new RegExp('\\{\\{\\s*var\\.' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\|\\s*raw\\s*\\}\\}', 'g');
             var rePlain = new RegExp('\\{\\{\\s*var\\.' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\}\\}', 'g');
-            out = out.replace(reRaw, value);
-            out = out.replace(rePlain, value);
+            if (wrap) {
+                out = out.replace(reRaw, function () { return wrapSampleValue(code, value, true); });
+                out = out.replace(rePlain, function () { return wrapSampleValue(code, value, false); });
+            } else {
+                out = out.replace(reRaw, value);
+                out = out.replace(rePlain, value);
+            }
         });
         return out;
     }
 
-    function renderPreview() {
-        if (!frame) return;
+    function applySamples(html) {
+        // 标签属性/样式内只做纯替换；标签外文本才包 data-weline-mail-var（避免破坏 HTML）
+        var src = String(html || '');
+        var out = '';
+        var re = /(<[^>]*>)|([^<]+)/g;
+        var m;
+        while ((m = re.exec(src)) !== null) {
+            if (m[1]) out += replaceSamplesInChunk(m[1], false);
+            else out += replaceSamplesInChunk(m[2], true);
+        }
+        return out;
+    }
+
+    function restoreMailVarsHtml(html) {
+        var raw = String(html || '');
+        if (!raw || raw.indexOf('data-weline-mail-var') < 0) return raw;
+        try {
+            var doc = new DOMParser().parseFromString('<div id="weline-mail-restore-root">' + raw + '</div>', 'text/html');
+            var root = doc.getElementById('weline-mail-restore-root');
+            if (!root) return raw;
+            Array.prototype.slice.call(root.querySelectorAll('[data-weline-mail-var]')).forEach(function (span) {
+                var code = String(span.getAttribute('data-weline-mail-var') || '').trim();
+                if (!code) return;
+                var isRaw = span.getAttribute('data-weline-mail-var-raw') === '1';
+                var token = '{' + '{var.' + code + (isRaw ? '|raw' : '') + '}}';
+                var style = String(span.getAttribute('style') || '')
+                    .replace(/(?:^|;)\s*cursor\s*:\s*[^;]*/gi, '')
+                    .replace(/^;+|;+$/g, '')
+                    .trim();
+                if (style) {
+                    span.outerHTML = '<span style="' + style.replace(/"/g, '&quot;') + '">' + token + '</span>';
+                } else {
+                    span.outerHTML = token;
+                }
+            });
+            return root.innerHTML;
+        } catch (e) {
+            return raw;
+        }
+    }
+
+    function getIframeDoc() {
+        return frame && frame.contentDocument ? frame.contentDocument : null;
+    }
+
+    function regionNodes(doc, region) {
+        return doc ? Array.prototype.slice.call(doc.querySelectorAll('[data-weline-mail-region="' + region + '"]')) : [];
+    }
+
+    function buildMailHtml(bodyHtml) {
         var subject = subjectEl ? String(subjectEl.value || '') : '';
-        var bodyHtml = normalizeEmailBody(getEditorHtml());
         var html = String(shellHtml || '');
-        html = html.split('{' + '{MAIL_BODY}}').join(bodyHtml);
+        var body = scrubPreviewDebris(normalizeEmailBody(bodyHtml));
+        html = html.split('{' + '{MAIL_BODY}}').join(body);
         html = html.split('{' + '{PREHEADER}}').join(subject.replace(/[<>&]/g, function (c) {
             return ({'<': '&lt;', '>': '&gt;', '&': '&amp;'})[c] || c;
         }));
+        // 先求条件块再填样例，避免 #if 原文漏到画布
+        html = renderPreviewIfBlocks(html);
         html = applySamples(html);
-        html = stripScripts(html);
+        return stripScripts(html);
+    }
+
+    function injectEditorStyles(doc) {
+        if (!doc || !doc.head) return;
+        var style = doc.getElementById('w-smtp-ve-style');
+        if (!style) {
+            style = doc.createElement('style');
+            style.id = 'w-smtp-ve-style';
+            doc.head.appendChild(style);
+        }
+        // 选中高亮 + 预览约束（按真信宽度；页头 Logo 规则须写在通用 img 规则之后）
+        style.textContent = ''
+            + 'html,body{margin:0;overflow-x:hidden;}'
+            + 'tr.w-smtp-ve-row-hidden{display:none!important;}'
+            + '[contenteditable="true"]:focus{outline:none;}'
+            + '.w-smtp-ve-selected{'
+            + 'outline:2px dashed #b84a3c !important;'
+            + 'outline-offset:-6px !important;'
+            + 'box-shadow:inset 0 0 0 6px transparent;'
+            + '}'
+            + 'table[role="presentation"]{max-width:100% !important;}'
+            + 'table[width="600"],table[style*="max-width:600"]{'
+            + 'width:100% !important;max-width:600px !important;'
+            + '}'
+            + '[data-weline-mail-region] img{max-width:100% !important;height:auto !important;}'
+            // 页头两列：Logo 固定窄列 + 文案列吃满剩余；禁止 anywhere 逐字竖排
+            // 保留 shell 注入的 background-image（邮件配置三区背景图），与真信一致
+            + '[data-weline-mail-region="header"]{'
+            + 'width:100% !important;'
+            + 'overflow:hidden !important;'
+            + 'background-repeat:no-repeat !important;'
+            + 'background-size:cover !important;'
+            + 'background-position:center !important;'
+            + '}'
+            + '[data-weline-mail-region="body"],'
+            + '[data-weline-mail-region="footer"]{'
+            + 'background-repeat:no-repeat !important;'
+            + 'background-size:cover !important;'
+            + 'background-position:center !important;'
+            + '}'
+            + '[data-weline-mail-region="header"] > table{'
+            + 'width:100% !important;'
+            + 'max-width:100% !important;'
+            + 'table-layout:fixed !important;'
+            + '}'
+            + '[data-weline-mail-region="header"] > table > tbody > tr > td:first-child,'
+            + '[data-weline-mail-region="header"] > table > tr > td:first-child{'
+            + 'width:72px !important;'
+            + 'max-width:72px !important;'
+            + 'white-space:nowrap !important;'
+            + 'vertical-align:middle !important;'
+            + '}'
+            + '[data-weline-mail-region="header"] > table > tbody > tr > td:last-child,'
+            + '[data-weline-mail-region="header"] > table > tr > td:last-child{'
+            + 'width:auto !important;'
+            + 'vertical-align:middle !important;'
+            + 'word-break:normal !important;'
+            + 'overflow-wrap:break-word !important;'
+            + '}'
+            + '[data-weline-mail-region="header"] img{'
+            + 'max-height:56px !important;width:auto !important;max-width:64px !important;height:auto !important;'
+            + 'display:block !important;'
+            + '}'
+            // 正文内联样式被剥光时的预览兜底（不写回邮件，仅画布可读）
+            + '[data-weline-mail-region="body"] h1{'
+            + 'margin:0 0 16px;font-family:Georgia,Palatino,serif;font-size:26px;line-height:1.25;font-weight:600;color:#16333f;'
+            + '}'
+            + '[data-weline-mail-region="body"] p{margin:0 0 12px;}'
+            + '[data-weline-mail-region="body"] a[href]{'
+            + 'color:#16333f;'
+            + '}'
+            // 键值表左列：若剥掉 nowrap，width:1% 会逐字竖排
+            + '[data-weline-mail-region="body"] table td[style*="width:1%"],'
+            + '[data-weline-mail-region="body"] table td[style*="width: 1%"]{'
+            + 'white-space:nowrap !important;'
+            + 'min-width:4.5em !important;'
+            + 'width:1% !important;'
+            + 'vertical-align:top !important;'
+            + 'word-break:keep-all !important;'
+            + 'overflow-wrap:normal !important;'
+            + '}';
+    }
+
+    function clearActiveSelection() {
+        var doc = getIframeDoc();
+        if (selectedEl && selectedEl.removeAttribute) {
+            try { selectedEl.removeAttribute('contenteditable'); } catch (e) {}
+        }
+        selectedEl = null;
+        selectedIsVar = false;
+        selectedVarCode = '';
+        clearSelectionMark(doc);
+        hideFloatingToolbar();
+        if (varHint) { varHint.hidden = true; varHint.textContent = ''; }
+        if (selectionLabel) {
+            selectionLabel.textContent = isAllRegionView()
+                ? '<?= $h(__('整体预览：点击任意区域文字可调样式')) ?>'
+                : '<?= $h(__('点击文字以调整样式')) ?>';
+        }
+    }
+
+    function clearSelectionMark(doc) {
+        if (!doc) return;
+        Array.prototype.slice.call(doc.querySelectorAll('.w-smtp-ve-selected')).forEach(function (el) {
+            el.classList.remove('w-smtp-ve-selected');
+        });
+    }
+
+    function regionRow(node) {
+        return node && node.closest ? node.closest('tr') : null;
+    }
+
+    function isAllRegionView() {
+        return activeRegion === 'all';
+    }
+
+    function resolveRegionRoot(node) {
+        if (!node || !node.closest) return null;
+        if (isAllRegionView()) return node.closest('[data-weline-mail-region]');
+        return node.closest('[data-weline-mail-region="' + activeRegion + '"]');
+    }
+
+    function setActiveRegion(region) {
+        activeRegion = region || 'body';
+        document.querySelectorAll('.w-smtp-ve-region-tab').forEach(function (tab) {
+            var on = tab.getAttribute('data-region') === activeRegion;
+            tab.classList.toggle('is-active', on);
+            tab.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        var doc = getIframeDoc();
+        if (!doc) return;
+        injectEditorStyles(doc);
+        var showAll = isAllRegionView();
+        var seenRows = [];
+        ['header', 'body', 'footer'].forEach(function (name) {
+            regionNodes(doc, name).forEach(function (node) {
+                node.removeAttribute('contenteditable');
+                var row = regionRow(node);
+                if (row && seenRows.indexOf(row) < 0) {
+                    seenRows.push(row);
+                    row.classList.toggle('w-smtp-ve-row-hidden', !showAll && name !== activeRegion);
+                }
+            });
+        });
+        if (seenRows.length && seenRows[0].parentElement) {
+            Array.prototype.slice.call(seenRows[0].parentElement.children).forEach(function (tr) {
+                if (!tr || String(tr.tagName || '').toUpperCase() !== 'TR') return;
+                if (tr.querySelector('[data-weline-mail-region]')) return;
+                // 区间装饰行：整体视图全显；分区时仅正文保留（避免页头/页尾夹缝露馅）
+                tr.classList.toggle('w-smtp-ve-row-hidden', !showAll && activeRegion !== 'body');
+            });
+        }
+        clearActiveSelection();
+        if (selectionLabel) {
+            selectionLabel.textContent = showAll
+                ? '<?= $h(__('整体预览：点击任意区域文字可调样式')) ?>'
+                : '<?= $h(__('点击文字以调整样式')) ?>';
+        }
+    }
+
+    function pickStyleTarget(el, regionRoot) {
+        if (!el || !regionRoot) return null;
+        if (el.nodeType === 3) el = el.parentElement;
+        if (!el || !regionRoot.contains(el)) return null;
+        var varNode = el.closest ? el.closest('[data-weline-mail-var]') : null;
+        if (varNode && regionRoot.contains(varNode)) {
+            // 变量点选：提到外层块（div/td/标题），便于框选整段并出工具条
+            var styleEl = varNode;
+            var p = varNode.parentElement;
+            while (p && p !== regionRoot) {
+                var pTag = String(p.tagName || '').toUpperCase();
+                if (pTag === 'DIV' || pTag === 'TD' || pTag === 'TH' || pTag === 'P' || /^H[1-6]$/.test(pTag)) {
+                    styleEl = p;
+                    break;
+                }
+                p = p.parentElement;
+            }
+            return { el: styleEl, isVar: true, varCode: String(varNode.getAttribute('data-weline-mail-var') || '') };
+        }
+        var cur = el;
+        while (cur && cur !== regionRoot) {
+            var tag = String(cur.tagName || '').toUpperCase();
+            if (tag && tag !== 'TABLE' && tag !== 'TBODY' && tag !== 'THEAD' && tag !== 'TR') {
+                return { el: cur, isVar: false, varCode: '' };
+            }
+            cur = cur.parentElement;
+        }
+        return { el: regionRoot, isVar: false, varCode: '' };
+    }
+
+    function rgbToHex(rgb) {
+        var m = String(rgb || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?/i);
+        if (!m) return expandHex(rgb) || '';
+        if (m[4] !== undefined && parseFloat(m[4]) === 0) return '';
+        function pad(n) {
+            var h = Number(n).toString(16);
+            return h.length === 1 ? '0' + h : h;
+        }
+        return '#' + pad(m[1]) + pad(m[2]) + pad(m[3]);
+    }
+
+    function syncToolbarFromSelection() {
+        if (!selectedEl || !toolbar) return;
+        var doc = getIframeDoc();
+        var win = doc && doc.defaultView ? doc.defaultView : window;
+        var style = win.getComputedStyle(selectedEl);
+        var colorInput = document.getElementById('smtp-ve-color');
+        var bgInput = document.getElementById('smtp-ve-bg');
+        var sizeSelect = document.getElementById('smtp-ve-font-size');
+        var fontSelect = document.getElementById('smtp-ve-font-family');
+        var textHex = expandHex(selectedEl.style.getPropertyValue('color'))
+            || rgbToHex(selectedEl.style.color)
+            || rgbToHex(style.color)
+            || '#1c1c1c';
+        var bgHex = expandHex(selectedEl.style.getPropertyValue('background-color'))
+            || rgbToHex(selectedEl.style.backgroundColor)
+            || rgbToHex(style.backgroundColor)
+            || '#ffffff';
+        if (colorInput) colorInput.value = textHex;
+        var colorHexInput = document.getElementById('smtp-ve-color-hex');
+        if (colorHexInput) colorHexInput.value = textHex;
+        if (bgInput) bgInput.value = bgHex;
+        if (sizeSelect) {
+            var fs = selectedEl.style.fontSize || '';
+            if (!fs && style.fontSize) {
+                var px = Math.round(parseFloat(style.fontSize));
+                if (px > 0) fs = px + 'px';
+            }
+            sizeSelect.value = fs;
+            if (fs && !Array.prototype.some.call(sizeSelect.options, function (o) { return o.value === fs; })) {
+                var opt = document.createElement('option');
+                opt.value = fs;
+                opt.textContent = fs;
+                sizeSelect.appendChild(opt);
+                sizeSelect.value = fs;
+            }
+        }
+        if (fontSelect) {
+            var ff = selectedEl.style.fontFamily || style.fontFamily || '';
+            fontSelect.value = '';
+            Array.prototype.slice.call(fontSelect.options).forEach(function (opt) {
+                if (!opt.value) return;
+                var needle = opt.value.replace(/["']/g, '').split(',')[0].trim().toLowerCase();
+                if (needle && ff.toLowerCase().indexOf(needle) >= 0) fontSelect.value = opt.value;
+            });
+        }
+    }
+
+    function hideFloatingToolbar() {
+        if (!toolbar) return;
+        toolbar.hidden = true;
+        toolbar.style.left = '';
+        toolbar.style.top = '';
+        toolbar.style.visibility = '';
+    }
+
+    /**
+     * iframe 内元素 getBoundingClientRect 在标准 Chromium 为顶层视口坐标，
+     * 部分嵌入 WebView 则为 iframe 文档局部坐标。统一换算到顶层视口，避免工具条飞出。
+     */
+    function getViewportRectForEl(el) {
+        var r = el.getBoundingClientRect();
+        var out = { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+        if (!el || !frame) return out;
+        try {
+            if (el.ownerDocument !== frame.contentDocument) return out;
+        } catch (e) {
+            return out;
+        }
+        var fr = frame.getBoundingClientRect();
+        var midX = r.left + r.width / 2;
+        var midY = r.top + r.height / 2;
+        var insideFrame = midX >= (fr.left - 1) && midX <= (fr.right + 1)
+            && midY >= (fr.top - 1) && midY <= (fr.bottom + 1);
+        if (insideFrame) return out;
+        return {
+            top: fr.top + r.top,
+            left: fr.left + r.left,
+            right: fr.left + r.right,
+            bottom: fr.top + r.bottom,
+            width: r.width,
+            height: r.height
+        };
+    }
+
+    function positionFloatingToolbar() {
+        if (!toolbar || !selectedEl || !frame || toolbar.hidden) return;
+        var canvas = frame.closest('.w-smtp-ve-canvas') || frame.parentElement;
+        if (!canvas) return;
+        var elRect = getViewportRectForEl(selectedEl);
+        var canvasRect = canvas.getBoundingClientRect();
+        if (!elRect.width && !elRect.height) return;
+
+        toolbar.style.visibility = 'hidden';
+        toolbar.hidden = false;
+        var gap = 10;
+        var pad = 8;
+        var tw = toolbar.offsetWidth || 280;
+        var th = toolbar.offsetHeight || 160;
+
+        var elTop = elRect.top - canvasRect.top;
+        var elLeft = elRect.left - canvasRect.left;
+        var elRight = elRect.right - canvasRect.left;
+        var elBottom = elRect.bottom - canvasRect.top;
+
+        // 优先右侧；不够则左侧；再贴内边
+        var left = elRight + gap;
+        if (left + tw > canvasRect.width - pad) {
+            left = elLeft - tw - gap;
+        }
+        if (left < pad) {
+            left = Math.max(pad, Math.min(canvasRect.width - tw - pad, elLeft));
+        }
+
+        var top = elTop;
+        if (top + th > canvasRect.height - pad) {
+            top = Math.max(pad, canvasRect.height - th - pad);
+        }
+        if (top < pad) top = pad;
+        if (left < elRight && left + tw > elLeft && top < elBottom && top + th > elTop) {
+            var below = elBottom + gap;
+            if (below + th <= canvasRect.height - pad) {
+                top = below;
+                left = Math.max(pad, Math.min(canvasRect.width - tw - pad, elLeft));
+            }
+        }
+
+        toolbar.style.left = Math.round(left) + 'px';
+        toolbar.style.top = Math.round(top) + 'px';
+        toolbar.style.visibility = '';
+    }
+
+    function showSelection(info) {
+        var doc = getIframeDoc();
+        clearSelectionMark(doc);
+        selectedEl = info && info.el ? info.el : null;
+        selectedIsVar = !!(info && info.isVar);
+        selectedVarCode = info && info.varCode ? String(info.varCode) : '';
+        if (!selectedEl || !toolbar) {
+            hideFloatingToolbar();
+            return;
+        }
+        selectedEl.classList.add('w-smtp-ve-selected');
+        toolbar.hidden = false;
+        if (selectionLabel) {
+            selectionLabel.textContent = selectedEl.tagName.toLowerCase()
+                + (selectedIsVar ? (' · {' + '{var.' + selectedVarCode + '}}') : '');
+        }
+        if (varHint) {
+            if (selectedIsVar) {
+                varHint.hidden = false;
+                varHint.textContent = '<?= $h(__('此段为变量渲染：可改文字色、背景、字号、字体与左右对齐，不可修改文字内容。')) ?>'
+                    + (selectedVarCode ? (' (' + selectedVarCode + ')') : '');
+            } else {
+                varHint.hidden = true;
+                varHint.textContent = '';
+            }
+        }
+        selectedEl.setAttribute('contenteditable', selectedIsVar ? 'false' : 'true');
+        Array.prototype.slice.call(selectedEl.querySelectorAll('[data-weline-mail-var]')).forEach(function (n) {
+            n.setAttribute('contenteditable', 'false');
+        });
+        syncToolbarFromSelection();
+        // 等布局稳定后再贴边（含字号等控件撑开）
+        requestAnimationFrame(function () {
+            positionFloatingToolbar();
+            requestAnimationFrame(positionFloatingToolbar);
+        });
+    }
+
+    function applyTextColor(el, value) {
+        if (!el || !value) return;
+        var hex = expandHex(value) || String(value || '').trim();
+        if (!hex) return;
+        function paint(node) {
+            if (!node || !node.style) return;
+            node.style.setProperty('color', hex, 'important');
+            if (node.hasAttribute && node.hasAttribute('color')) node.setAttribute('color', hex);
+            // 邮件客户端更认 style 里的 hex；顺带写回属性串，避免只剩 computed
+            var st = String(node.getAttribute('style') || '');
+            if (/color\s*:/i.test(st)) {
+                st = st.replace(/color\s*:[^;]*/ig, 'color:' + hex + ' !important');
+            } else {
+                st = (st ? st.replace(/;?\s*$/, ';') : '') + 'color:' + hex + ' !important';
+            }
+            node.setAttribute('style', st.replace(/;;+/g, ';').replace(/^;|;$/g, ''));
+        }
+        paint(el);
+        Array.prototype.slice.call(el.querySelectorAll('*')).forEach(function (node) {
+            var tag = String(node.tagName || '').toUpperCase();
+            if (tag === 'BR' || tag === 'HR' || tag === 'IMG' || tag === 'SVG' || tag === 'PATH') return;
+            var st = String(node.getAttribute('style') || '');
+            var hasOwnColor = /color\s*:/i.test(st) || node.hasAttribute('color');
+            var isTextish = /^(A|SPAN|FONT|STRONG|B|EM|I|U|P|H1|H2|H3|H4|H5|H6|DIV|TD|TH|LI|LABEL|SMALL|LABEL)$/.test(tag)
+                || node.hasAttribute('data-weline-mail-var');
+            if (hasOwnColor || isTextish || node.hasAttribute('data-weline-mail-var')) {
+                paint(node);
+            }
+        });
+    }
+
+    function serializeRegionHtml(node) {
+        if (!node) return '';
+        // 克隆后去掉选中高亮 class，避免写入模板
+        var clone = node.cloneNode(true);
+        Array.prototype.slice.call(clone.querySelectorAll('.w-smtp-ve-selected')).forEach(function (el) {
+            el.classList.remove('w-smtp-ve-selected');
+        });
+        clone.classList.remove('w-smtp-ve-selected');
+        return restoreMailIfBlocks(restoreMailVarsHtml(String(clone.innerHTML || '').trim()));
+    }
+
+    function readBodyFromIframe() {
+        var doc = getIframeDoc();
+        if (!doc) return initialBody;
+        var bodyCell = doc.querySelector('[data-weline-mail-region="body"]');
+        return bodyCell ? serializeRegionHtml(bodyCell) : initialBody;
+    }
+
+    function readShellRegionsFromIframe() {
+        var doc = getIframeDoc();
+        if (!doc) return { header: '', footer: [] };
+        var headerCell = doc.querySelector('[data-weline-mail-region="header"]');
+        var footerCells = doc.querySelectorAll('[data-weline-mail-region="footer"]');
+        return {
+            header: headerCell ? serializeRegionHtml(headerCell) : '',
+            footer: Array.prototype.map.call(footerCells, function (td) { return serializeRegionHtml(td); })
+        };
+    }
+
+    function sanitizeMailRegionRows(doc) {
+        // 壳合并若误切嵌套 </td>，会在区域 TR 上残留无 region 的兄弟 TD（页头竖条重影）
+        if (!doc) return;
+        Array.prototype.forEach.call(doc.querySelectorAll('[data-weline-mail-region]'), function (td) {
+            var tr = td.parentElement;
+            if (!tr || String(tr.tagName || '').toUpperCase() !== 'TR') return;
+            Array.prototype.slice.call(tr.children).forEach(function (sib) {
+                if (sib === td) return;
+                if (String(sib.tagName || '').toUpperCase() !== 'TD') return;
+                if (sib.hasAttribute('data-weline-mail-region')) return;
+                if (sib.parentNode) sib.parentNode.removeChild(sib);
+            });
+        });
+    }
+
+    function applyRegionsToIframe(regions) {
+        var doc = getIframeDoc();
+        if (!doc || !regions) return;
+        var headerCell = doc.querySelector('[data-weline-mail-region="header"]');
+        if (headerCell && regions.header) headerCell.innerHTML = applySamples(regions.header);
+        var footerCells = doc.querySelectorAll('[data-weline-mail-region="footer"]');
+        var footers = (regions.footer && regions.footer.length) ? regions.footer : [];
+        if (footerCells.length === 1 && footers.length > 1) {
+            var joined = [];
+            for (var fi = 0; fi < footers.length; fi++) {
+                if (footers[fi]) joined.push(footers[fi]);
+            }
+            if (joined.length) footerCells[0].innerHTML = applySamples(joined.join('\n'));
+        } else {
+            Array.prototype.forEach.call(footerCells, function (td, idx) {
+                if (footers[idx]) td.innerHTML = applySamples(footers[idx]);
+            });
+        }
+        sanitizeMailRegionRows(doc);
+    }
+
+    var syncingFromVisual = false;
+
+    function syncFormFields(rebuild) {
+        if (rebuild && editorReady) {
+            initialBody = readBodyFromIframe();
+            var preservedRegions = readShellRegionsFromIframe();
+            renderVisualEditor(initialBody);
+            var tries = 0;
+            (function waitRestore() {
+                var doc = getIframeDoc();
+                if (doc && doc.__smtpVeBound) {
+                    applyRegionsToIframe(preservedRegions);
+                    setActiveRegion(activeRegion);
+                    return;
+                }
+                if (tries++ > 20) return;
+                setTimeout(waitRestore, 60);
+            })();
+            return;
+        }
+        var bodyHtml = normalizeEmailBody(readBodyFromIframe());
+        if (bodyField) bodyField.value = bodyHtml;
+        // 样式微调时只同步隐藏字段与纯文本源码框，避免冲掉选中态
+        if (bodySource && bodySource.value !== bodyHtml) {
+            syncingFromVisual = true;
+            bodySource.value = bodyHtml;
+            syncingFromVisual = false;
+        }
+        if (shellRegionsField) shellRegionsField.value = JSON.stringify(readShellRegionsFromIframe());
+    }
+
+    function applyStyle(prop, value) {
+        if (!selectedEl) return;
+        if (prop === 'textAlign') {
+            selectedEl.style.textAlign = value;
+            if (selectedEl.tagName === 'TD') {
+                selectedEl.setAttribute('align', value === 'right' ? 'right' : (value === 'center' ? 'center' : 'left'));
+            }
+        } else if (prop === 'color') {
+            applyTextColor(selectedEl, value);
+        } else if (prop === 'backgroundColor') {
+            selectedEl.style.backgroundColor = value;
+            if (selectedEl.tagName === 'TD' && value) selectedEl.setAttribute('bgcolor', value);
+        } else if (prop === 'fontSize') {
+            selectedEl.style.fontSize = value || '';
+        } else if (prop === 'fontFamily') {
+            selectedEl.style.fontFamily = value || '';
+        }
+        syncFormFields(false);
+        positionFloatingToolbar();
+    }
+
+    function bindIframeEditor() {
+        var doc = getIframeDoc();
+        if (!doc || !doc.body) return false;
+        if (doc.__smtpVeBound) return true;
+        doc.__smtpVeBound = true;
+        injectEditorStyles(doc);
+        sanitizeMailRegionRows(doc);
+        doc.addEventListener('click', function (e) {
+            var t = e.target;
+            if (t && t.nodeType === 3) t = t.parentElement;
+            if (!t || !t.closest) return;
+            var regionRoot = resolveRegionRoot(t);
+            if (!regionRoot) {
+                clearActiveSelection();
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            var info = pickStyleTarget(t, regionRoot);
+            if (info && info.el) showSelection(info);
+            else clearActiveSelection();
+        });
+        doc.addEventListener('beforeinput', function (e) {
+            if (selectedIsVar) e.preventDefault();
+        });
+        doc.addEventListener('input', function () {
+            if (selectedIsVar) return;
+            syncFormFields(false);
+        });
+        doc.addEventListener('scroll', function () {
+            positionFloatingToolbar();
+        }, true);
+        setActiveRegion(activeRegion);
+        return true;
+    }
+
+    function renderVisualEditor(bodyHtml) {
+        if (!frame) return;
+        var html = buildMailHtml(bodyHtml || initialBody);
         var doc = frame.contentDocument;
         if (!doc) return;
+        try { doc.__smtpVeBound = false; } catch (e) {}
         doc.open();
         doc.write(html);
         doc.close();
+        editorReady = false;
+        try {
+            var after = getIframeDoc();
+            if (after) after.__smtpVeBound = false;
+        } catch (e2) {}
+        var tries = 0;
+        (function waitDoc() {
+            if (bindIframeEditor() || tries++ > 20) {
+                editorReady = true;
+                setActiveRegion(activeRegion);
+                return;
+            }
+            setTimeout(waitDoc, 60);
+        })();
     }
 
-    function schedulePreview() {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(renderPreview, 220);
+    function insertToken(token) {
+        var doc = getIframeDoc();
+        if (!doc) return;
+        var region = null;
+        if (selectedEl && selectedEl.closest) {
+            region = selectedEl.closest('[data-weline-mail-region]');
+        }
+        if (!region) {
+            var prefer = isAllRegionView() ? 'body' : activeRegion;
+            region = doc.querySelector('[data-weline-mail-region="' + prefer + '"]');
+        }
+        if (!region) return;
+        if (selectedEl && !selectedIsVar && region.contains(selectedEl)) {
+            selectedEl.focus();
+            try { doc.execCommand('insertText', false, token); } catch (e) { selectedEl.innerHTML += token; }
+        } else {
+            region.innerHTML += token;
+        }
+        syncFormFields(false);
     }
 
     document.querySelectorAll('[data-var-code]').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var code = btn.getAttribute('data-var-code') || '';
-            insertToken('{' + '{var.' + code + '}}');
+            insertToken('{' + '{var.' + (btn.getAttribute('data-var-code') || '') + '}}');
+        });
+    });
+    document.querySelectorAll('.w-smtp-ve-region-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            setActiveRegion(tab.getAttribute('data-region') || 'body');
         });
     });
 
-    if (subjectEl) {
-        subjectEl.addEventListener('input', schedulePreview);
+    var colorInput = document.getElementById('smtp-ve-color');
+    var colorHexInput = document.getElementById('smtp-ve-color-hex');
+    var bgInput = document.getElementById('smtp-ve-bg');
+    var sizeSelect = document.getElementById('smtp-ve-font-size');
+    var fontSelect = document.getElementById('smtp-ve-font-family');
+    function onTextColorPicked(raw) {
+        var hex = expandHex(raw) || '';
+        if (!hex) return;
+        if (colorInput) colorInput.value = hex;
+        if (colorHexInput) colorHexInput.value = hex;
+        applyStyle('color', hex);
     }
-    if (body) {
-        body.addEventListener('input', schedulePreview);
+    if (colorInput) {
+        colorInput.addEventListener('input', function () { onTextColorPicked(colorInput.value); });
+        colorInput.addEventListener('change', function () { onTextColorPicked(colorInput.value); });
     }
+    if (colorHexInput) {
+        colorHexInput.addEventListener('change', function () { onTextColorPicked(colorHexInput.value); });
+        colorHexInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onTextColorPicked(colorHexInput.value);
+            }
+        });
+    }
+    if (bgInput) {
+        bgInput.addEventListener('input', function () { applyStyle('backgroundColor', bgInput.value); });
+        bgInput.addEventListener('change', function () { applyStyle('backgroundColor', bgInput.value); });
+    }
+    if (sizeSelect) sizeSelect.addEventListener('change', function () { applyStyle('fontSize', sizeSelect.value); });
+    if (fontSelect) fontSelect.addEventListener('change', function () { applyStyle('fontFamily', fontSelect.value); });
+    var alignLeft = document.getElementById('smtp-ve-align-left');
+    var alignCenter = document.getElementById('smtp-ve-align-center');
+    var alignRight = document.getElementById('smtp-ve-align-right');
+    if (alignLeft) alignLeft.addEventListener('click', function () { applyStyle('textAlign', 'left'); });
+    if (alignCenter) alignCenter.addEventListener('click', function () { applyStyle('textAlign', 'center'); });
+    if (alignRight) alignRight.addEventListener('click', function () { applyStyle('textAlign', 'right'); });
+
+    if (subjectEl) subjectEl.addEventListener('input', function () { syncFormFields(true); });
     var refreshBtn = document.getElementById('smtp-tpl-preview-refresh');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', function () {
-            renderPreview();
+    if (refreshBtn) refreshBtn.addEventListener('click', function () { syncFormFields(true); });
+    if (bodySource) {
+        bodySource.addEventListener('input', function () {
+            if (syncingFromVisual) return;
+            initialBody = String(bodySource.value || '');
+            if (bodyField) bodyField.value = initialBody;
+            renderVisualEditor(initialBody);
         });
     }
 
-    function bindEditor() {
-        var editable = document.querySelector('.w-smtp-template-editor .ck-editor__editable, .ck-editor__editable');
-        var editor = editable && editable.ckeditorInstance;
-        if (!editor || !editor.model || editor.__smtpPreviewBound) {
-            return !!editor;
-        }
-        editor.__smtpPreviewBound = true;
-        editor.model.document.on('change:data', schedulePreview);
-        schedulePreview();
-        return true;
+    // 高级区仅为纯 textarea，展开时把可视化正文灌入源码，避免两套内容漂移
+    var advancedPanel = document.querySelector('[data-testid="smtp-template-advanced"]');
+    if (advancedPanel) {
+        advancedPanel.addEventListener('toggle', function () {
+            if (!advancedPanel.open || !bodySource) return;
+            var html = normalizeEmailBody(readBodyFromIframe() || initialBody);
+            initialBody = html;
+            if (bodyField) bodyField.value = html;
+            syncingFromVisual = true;
+            bodySource.value = html;
+            syncingFromVisual = false;
+        });
     }
-
-    var tries = 0;
-    (function waitEditor() {
-        if (bindEditor() || tries++ > 40) {
-            schedulePreview();
-            return;
-        }
-        setTimeout(waitEditor, 250);
-    })();
 
     var saveForm = document.getElementById('smtp-template-save-form');
     if (saveForm) {
         saveForm.addEventListener('submit', function () {
-            if (!body) return;
-            var html = normalizeEmailBody(getEditorHtml());
-            body.value = html;
+            syncFormFields(false);
+            if (bodyField) bodyField.value = normalizeEmailBody(readBodyFromIframe());
         });
     }
+
+    window.addEventListener('resize', function () { positionFloatingToolbar(); });
+    window.addEventListener('scroll', function () { positionFloatingToolbar(); }, true);
+    document.addEventListener('mousedown', function (e) {
+        if (!toolbar || toolbar.hidden) return;
+        var t = e.target;
+        if (!t) return;
+        if (toolbar.contains(t)) return;
+        if (frame && (t === frame || frame.contains(t))) return;
+        clearActiveSelection();
+    }, true);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && toolbar && !toolbar.hidden) {
+            clearActiveSelection();
+        }
+    });
+    if (toolbar) {
+        toolbar.addEventListener('mousedown', function (e) {
+            e.stopPropagation();
+        });
+    }
+
+    renderVisualEditor(initialBody);
 })();
 </script>

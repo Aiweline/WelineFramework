@@ -18,10 +18,10 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountLayoutPhpFilesDoNotUseLegacyPublicChrome(): void
     {
-        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts';
+        $base = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts';
         $patterns = [
             $base . '/account/*.phtml',
-            $base . '/account_auth/*.phtml',
+            $base . '/account/*/*.phtml',
         ];
         $files = [];
         foreach ($patterns as $pattern) {
@@ -47,7 +47,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountChallengeLayoutEmbedsThemeChallengeWidget(): void
     {
-        $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/challenge.phtml';
+        $path = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account/challenge.phtml';
 
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
@@ -65,7 +65,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountAuthLayoutRendersThemePartialsHeaderAndFooterByDefault(): void
     {
-        $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/auth.phtml';
+        $path = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account/auth.phtml';
 
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
@@ -102,7 +102,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountDashboardMainContentUsesPageWidthContainer(): void
     {
-        $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/dashboard.phtml';
+        $path = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account/dashboard.phtml';
 
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
@@ -121,7 +121,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountMainPanelIsNotNestedWhiteCardShell(): void
     {
-        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $base = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account';
         $cases = [
             $base . '/dashboard.phtml' => '.account-main',
             $base . '/default.phtml' => '.account-main-content',
@@ -157,7 +157,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountLayoutsLargeScreenSpacingUsesThemeTokenFallbacks(): void
     {
-        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $base = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account';
         $files = [
             $base . '/dashboard.phtml',
             $base . '/default.phtml',
@@ -193,7 +193,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountDashboardRendersTheControllerOwnedDocumentTitle(): void
     {
-        $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/dashboard.phtml';
+        $path = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account/dashboard.phtml';
 
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
@@ -206,7 +206,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountLayoutsDoNotRenderBreadcrumb(): void
     {
-        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $base = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account';
         $files = [
             $base . '/default.phtml',
             $base . '/dashboard.phtml',
@@ -225,7 +225,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
 
     public function testAccountLayoutsKeepContentFallbackHosts(): void
     {
-        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $base = dirname(__DIR__, 3) . '/Customer/view/theme/frontend/layouts/account';
         $files = [
             $base . '/default.phtml',
             $base . '/dashboard.phtml',

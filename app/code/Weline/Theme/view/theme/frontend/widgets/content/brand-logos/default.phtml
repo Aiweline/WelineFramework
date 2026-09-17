@@ -102,14 +102,29 @@ if ($usesCraftDirectory && class_exists(\Weline\Theme\Service\TextileHeritageCat
             <div class="brands-grid columns-<?= $esc($columns) ?>">
                 <?php foreach ($brands as $brand): ?>
                     <?php
-                    $brandLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($brand['link'] ?? '');
+                    $rawBrandLink = trim((string)($brand['link'] ?? ''));
+                    $brandLinkIsAbsolute = false;
+                    $brandLinkPath = '';
+                    if ($rawBrandLink !== '') {
+                        if (preg_match('#^(?:https?:)?//#i', $rawBrandLink) === 1) {
+                            $brandLinkIsAbsolute = true;
+                            $brandLinkPath = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($rawBrandLink);
+                        } else {
+                            $sanitizedBrandLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($rawBrandLink);
+                            $brandLinkPath = ltrim($sanitizedBrandLink !== '' ? $sanitizedBrandLink : $rawBrandLink, '/');
+                        }
+                    }
                     $brandImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($brand['image'] ?? '');
                     $brandImageHtml = trim((string)($brand['image_file_html'] ?? ''));
                     $brandName = trim((string)($brand['name'] ?? ''));
                     $brandCaption = trim((string)($brand['caption'] ?? ''));
                     ?>
-                    <?php if ($brandLink !== ''): ?>
-                        <a href="<?= $esc($brandLink) ?>"
+                    <?php if ($brandLinkIsAbsolute && $brandLinkPath !== ''): ?>
+                        <a href="<?= $esc($brandLinkPath) ?>"
+                           class="brand-item"
+                           title="<?= $esc($brandName) ?>">
+                    <?php elseif ($brandLinkPath !== ''): ?>
+                        <a href="@url{$brandLinkPath}"
                            class="brand-item"
                            title="<?= $esc($brandName) ?>">
                     <?php else: ?>
@@ -140,7 +155,7 @@ if ($usesCraftDirectory && class_exists(\Weline\Theme\Service\TextileHeritageCat
                                 <span class="brand-name"><?= $esc($brandName) ?></span>
                             <?php endif; ?>
                         <?php endif; ?>
-                    <?= $brandLink !== '' ? '</a>' : '</div>' ?>
+                    <?= $brandLinkPath !== '' ? '</a>' : '</div>' ?>
                 <?php endforeach; ?>
             </div>
         </div>

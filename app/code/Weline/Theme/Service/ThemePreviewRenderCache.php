@@ -104,7 +104,8 @@ final class ThemePreviewRenderCache
         $targetType = \trim($targetType) !== '' ? \trim($targetType) : 'global';
 
         $parts = [
-            'v3', // Regenerate HTML produced before the quote/raw-text-safe slot scanner.
+            // v10: editor canvas = layout shell + slots (homepage model); no controller hydrate.
+            'v10',
             (string)\max(0, $themeId),
             $layoutType,
             $layoutOption,
@@ -113,13 +114,26 @@ final class ThemePreviewRenderCache
             (string)\max(0, (int)($versionId ?? 0)),
             $targetType,
             (string)\max(0, $targetId),
+            $this->resolveEditorModeFingerprint(),
             $this->resolvePublicRouteFingerprint(),
+            $this->resolveCanvasBodyFingerprint(),
             $editorContext instanceof ThemeEditorContext
                 ? $this->resourceRevisionFingerprint($editorContext, $status)
                 : 'legacy',
         ];
 
         return 'theme.preview.shell.' . \substr(\hash('sha256', \implode("\0", $parts)), 0, 32);
+    }
+
+    private function resolveEditorModeFingerprint(): string
+    {
+        try {
+            $flag = \strtolower(\trim((string)$this->request->getParam('editor_mode', '')));
+
+            return ($flag === '1' || $flag === 'true') ? 'editor' : 'shell';
+        } catch (\Throwable) {
+            return 'shell';
+        }
     }
 
     private function resolvePublicRouteFingerprint(): string
@@ -134,6 +148,20 @@ final class ThemePreviewRenderCache
             return $route !== '' ? $route : '-';
         } catch (\Throwable) {
             return '-';
+        }
+    }
+
+    private function resolveCanvasBodyFingerprint(): string
+    {
+        try {
+            $slug = \strtolower(\trim((string)$this->request->getParam('preview_entity_slug', '')));
+            if ($slug === '') {
+                $slug = \strtolower(\trim((string)$this->request->getParam('sample_slug', '')));
+            }
+
+            return $slug !== '' ? 'body:' . $slug : 'body:auto';
+        } catch (\Throwable) {
+            return 'body:auto';
         }
     }
 

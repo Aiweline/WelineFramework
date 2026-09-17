@@ -4,6 +4,7 @@ use Weline\Theme\Helper\WidgetI18n;
 $checkoutPageSubtitle = (string)($this->getData('checkout_page_subtitle') ?? '');
 $copy = [
     'loading' => (string)__('正在加载结账信息...'),
+    'loading_shipping' => (string)__('正在更新配送方式...'),
     'load_failed' => (string)__('结账信息加载失败，请稍后重试。'),
     'empty_cart' => (string)__('购物车为空，请先加入商品。'),
     'submit' => (string)__('提交订单'),
@@ -84,6 +85,34 @@ $copy = [
                         position="content"
                         class="weline-checkout__shipping-address-slot"
                         weline-code="checkout.checkout.shipping_address_slot">
+                    <?php
+                    // Soft fallback when Theme placement/bake lags; Shipping owns the template.
+                    // SlotRenderer replaces this when Weline_Shipping::checkout-shipping-address is injected.
+                    if (is_file(BP . '/app/code/Weline/Shipping/view/templates/frontend/widgets/checkout-shipping-address.phtml')) {
+                        echo $this->fetch('Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml');
+                    }
+                    ?>
+                </w:slot>
+            </section>
+
+            <section class="weline-checkout__tax-identity-host"
+                     data-tax-identity-host
+                     hidden
+                     weline-code="checkout.checkout.index.section_tax_identity">
+                <w:slot id="checkout-tax-identity"
+                        name="<?= __('结账税号') ?>"
+                        accept="checkout-tax-identity,tax-identity,buyer-tax,tax"
+                        multiple="false"
+                        position="content"
+                        class="weline-checkout__tax-identity-slot"
+                        weline-code="checkout.checkout.tax_identity_slot">
+                    <?php
+                    // Soft fallback when Theme placement lags; Tax owns the template.
+                    // SlotRenderer replaces this when Weline_Tax::checkout-tax-identity is injected.
+                    if (is_file(BP . '/app/code/Weline/Tax/view/templates/frontend/widgets/checkout-tax-identity.phtml')) {
+                        echo $this->fetch('Weline_Tax::templates/frontend/widgets/checkout-tax-identity.phtml');
+                    }
+                    ?>
                 </w:slot>
             </section>
 
@@ -168,6 +197,10 @@ $copy = [
                 <div role="listitem" data-checkout-credit-row hidden>
                     <span><?= WidgetI18n::label('批发信用抵扣') ?></span>
                     <strong data-credit-amount="">0.00</strong>
+                </div>
+                <div role="listitem" data-checkout-tax-row hidden>
+                    <span><?= __('关税与税费（预估）') ?></span>
+                    <strong data-tax-amount="">0.00</strong>
                 </div>
                 <div role="listitem" data-checkout-cod-fee-row hidden>
                     <span><?= WidgetI18n::label('货到付款手续费') ?></span>
@@ -483,6 +516,21 @@ $copy = [
     .weline-checkout__shipping-address-slot {
         display: block;
         margin-top: 16px;
+    }
+    /* Tax identity: no panel chrome; host stays collapsed until EU country sync shows it. */
+    .weline-checkout__tax-identity-host {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .weline-checkout__tax-identity-host[hidden],
+    .weline-checkout__tax-identity-host:has([data-tax-identity-root][hidden]) {
+        display: none !important;
+    }
+    .weline-checkout__tax-identity-slot {
+        display: block;
     }
     .weline-checkout__option {
         grid-template-columns: 20px minmax(0, 1fr) auto;
@@ -975,6 +1023,8 @@ $copy = [
     const depositAmountNode = root.querySelector('[data-deposit-amount]');
     const creditRowNode = root.querySelector('[data-checkout-credit-row]');
     const creditAmountNode = root.querySelector('[data-credit-amount]');
+    const taxRowNode = root.querySelector('[data-checkout-tax-row]');
+    const taxAmountNode = root.querySelector('[data-tax-amount]');
     const codFeeRowNode = root.querySelector('[data-checkout-cod-fee-row]');
     const codFeeAmountNode = root.querySelector('[data-cod-fee-amount]');
     const grandTotalLabelNode = root.querySelector('[data-grand-total-label]');
@@ -1010,11 +1060,23 @@ $copy = [
         } catch (error) {
         }
     }
+    // Winback continue_checkout_url: /checkout?quote_token=… → persist before getData.
+    (function adoptQuoteTokenFromUrl() {
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const fromUrl = text(params.get('quote_token')).trim();
+            if (fromUrl) {
+                persistQuoteToken(fromUrl);
+            }
+        } catch (error) {
+        }
+    })();
     let checkoutState = {
         currency: 'CNY',
         cart: {},
         shippingMethods: [],
         paymentMethods: [],
+        taxEstimate: null,
         identity: {
             checkout_mode: 'guest',
             is_guest_checkout: true,
@@ -1566,6 +1628,32 @@ $copy = [
         return Number(method.cod_fee || method.fee_major || 0) || 0;
     }
 
+    /** Server-enriched duty/tax on selected shipping method (never invent rates in browser). */
+    function selectedTaxAmount() {
+        const code = selectedValue('shipping_method');
+        const method = checkoutState.shippingMethods.find(function (entry) {
+            return entry && entry.code === code;
+        });
+        if (method) {
+            const minor = Number(method.tax_amount_minor || 0);
+            if (minor > 0) {
+                return minor / 100;
+            }
+            const major = Number(method.tax_amount || 0) || 0;
+            if (major > 0) {
+                return major;
+            }
+        }
+        const preview = checkoutState.taxEstimate;
+        if (preview && typeof preview === 'object') {
+            const previewMinor = Number(preview.tax_amount_minor || 0);
+            if (previewMinor > 0) {
+                return previewMinor / 100;
+            }
+        }
+        return 0;
+    }
+
     /**
      * P2E-003：只注入服务端 HTML，禁止 createElement 拼商品/选项 DOM。
      */
@@ -1732,6 +1820,11 @@ $copy = [
         } else {
             root.removeAttribute('data-checkout-session-code');
         }
+        const fieldsSig = [amount, currency, orderUuid, groupUuid, sessionCode].join('|');
+        if (root.getAttribute('data-lifecycle-fields-sig') === fieldsSig) {
+            return;
+        }
+        root.setAttribute('data-lifecycle-fields-sig', fieldsSig);
         try {
             window.dispatchEvent(new CustomEvent('weline:checkout:fields-ready', {
                 detail: {
@@ -1810,6 +1903,16 @@ $copy = [
                 setText(creditAmountNode, money(0));
             }
         }
+        const tax = tob ? 0 : selectedTaxAmount();
+        if (taxRowNode && taxAmountNode) {
+            if (tax > 0) {
+                taxRowNode.hidden = false;
+                setText(taxAmountNode, money(tax));
+            } else {
+                taxRowNode.hidden = true;
+                setText(taxAmountNode, money(0));
+            }
+        }
         const codFee = tob ? 0 : selectedCodFeeAmount();
         if (codFeeRowNode && codFeeAmountNode) {
             if (codFee > 0) {
@@ -1828,7 +1931,7 @@ $copy = [
         }
         const payable = tob
             ? Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor)
-            : Math.max(0, subtotal + shipping - discount + codFee);
+            : Math.max(0, subtotal + shipping - discount + tax + codFee);
         setText(grandTotalNode, money(payable));
         syncLifecycleDomFields({ amount: payable.toFixed(2) });
     }
@@ -1845,6 +1948,9 @@ $copy = [
         checkoutState.cart = applyPendingDiscountToCart(data.cart || {});
         checkoutState.shippingMethods = Array.isArray(data.shipping_methods) ? data.shipping_methods : [];
         checkoutState.paymentMethods = Array.isArray(data.payment_methods) ? data.payment_methods : [];
+        checkoutState.taxEstimate = data.tax_estimate && typeof data.tax_estimate === 'object'
+            ? data.tax_estimate
+            : null;
         checkoutState.identity = data.identity || checkoutState.identity || {
             checkout_mode: 'guest',
             is_guest_checkout: true,
@@ -1901,6 +2007,7 @@ $copy = [
         applyServerHtml(itemsBox, data.items_html);
         applyServerHtml(shippingBox, data.shipping_methods_html);
         applyServerHtml(paymentBox, data.payment_methods_html);
+        setShippingMethodsBusy(false);
         syncMethodBlockPanels();
         renderTotals();
         if (submitButton) {
@@ -2108,15 +2215,46 @@ $copy = [
     let reloadTimer = null;
     let cartReloadFailures = 0;
     let emptyCartInvalidateDone = false;
+
+    function shippingMethodsBusyHost() {
+        if (!shippingBox) {
+            return null;
+        }
+        return shippingBox.closest('.weline-checkout__panel') || shippingBox;
+    }
+
+    function setShippingMethodsBusy(busy) {
+        const host = shippingMethodsBusyHost();
+        if (!host) {
+            return;
+        }
+        const message = busy ? (copy.loading_shipping || copy.loading || '') : '';
+        if (window.Weline && window.Weline.UI && typeof window.Weline.UI.setBusy === 'function') {
+            window.Weline.UI.setBusy(host, !!busy, { message: message });
+            return;
+        }
+        // Theme UI not ready: still block interaction.
+        host.setAttribute('aria-busy', busy ? 'true' : 'false');
+        host.style.pointerEvents = busy ? 'none' : '';
+        host.style.opacity = busy ? '0.72' : '';
+        host.style.cursor = busy ? 'wait' : '';
+    }
+
     function scheduleReload(options) {
         const opts = options && typeof options === 'object' ? options : {};
         const hardOnFailure = opts.hardOnFailure !== false;
+        const busyShipping = opts.busyShipping !== false;
+        if (busyShipping) {
+            setShippingMethodsBusy(true);
+        }
         window.clearTimeout(reloadTimer);
         reloadTimer = window.setTimeout(function () {
             loadCheckoutWithRetry().then(function () {
                 cartReloadFailures = 0;
+                setShippingMethodsBusy(false);
             }).catch(function (error) {
                 cartReloadFailures += 1;
+                setShippingMethodsBusy(false);
                 setMessage(error.message || copy.load_failed, 'error');
                 // Mini-cart already mutated the cart; soft getData failure would leave
                 // checkout summary mismatched — fall back to a full page refresh.
@@ -2214,6 +2352,16 @@ $copy = [
             quote_token: readStoredQuoteToken(),
             cart_type: checkoutCartType(),
             selling_mode: checkoutCartType(),
+            buyer_tax_identity: (function () {
+                const vat = form.querySelector('[data-tax-vat-id], [name="tax_identity[tax_id]"], [name="buyer_tax_identity[vat_id]"]');
+                const taxId = vat ? String(vat.value || '').trim() : '';
+                return taxId ? { vat_id: taxId, tax_id: taxId } : {};
+            })(),
+            tax_identity: (function () {
+                const vat = form.querySelector('[data-tax-vat-id], [name="tax_identity[tax_id]"], [name="buyer_tax_identity[vat_id]"]');
+                const taxId = vat ? String(vat.value || '').trim() : '';
+                return taxId ? { tax_id: taxId, tax_id_type: 'eu_vat' } : {};
+            })(),
         });
         if (!frozen || frozen.success === false) {
             const widget = window.WelineShippingCheckoutAddress;
@@ -2240,18 +2388,22 @@ $copy = [
             && window.WelineB2BCheckoutTob.cashDepositMinor() === 0) {
             paymentMethod = paymentMethod || 'fake_card';
         }
-        const result = await api.submitV2({
+        const submitPayload = {
             quote_token: quoteToken,
             payment_method: paymentMethod,
             idempotency_key: idempotencyKey,
             country_code: address.country_code,
             guest_token: guestToken(),
-            express_checkout: !!opts.express_checkout,
             b2b_credit_apply_minor: (window.WelineB2BCheckoutTob
                 && typeof window.WelineB2BCheckoutTob.readApplyMinor === 'function')
                 ? window.WelineB2BCheckoutTob.readApplyMinor()
                 : 0,
-        });
+        };
+        // Traditional checkout must omit this flag; only express/smart-button paths set it.
+        if (opts.express_checkout) {
+            submitPayload.express_checkout = true;
+        }
+        const result = await api.submitV2(submitPayload);
         if (!result || result.success === false) {
             throw new Error(text(result && result.message) || copy.load_failed);
         }
@@ -2375,14 +2527,24 @@ $copy = [
     }
 
     // tob 信用勾选/输入变更后刷新摘要抵扣行与本次应付定金。
+    // 防重入：renderTotals→DOM 变更可能再触发 credit sync，避免 credit-changed 风暴。
+    let creditTotalsBusy = false;
     window.addEventListener('weline:b2b-credit-changed', function () {
-        renderTotals();
+        if (creditTotalsBusy) {
+            return;
+        }
+        creditTotalsBusy = true;
+        try {
+            renderTotals();
+        } finally {
+            creditTotalsBusy = false;
+        }
     });
 
     // Soft-reload shipping methods/totals only; never hard-refresh — that wipes
     // the just-rendered address card before the next paint can settle.
     window.addEventListener('weline:checkout:address-updated', function () {
-        scheduleReload({ hardOnFailure: false });
+        scheduleReload({ hardOnFailure: false, busyShipping: true });
     });
 
     // Mini-cart (header drawer) and checkout-summary coupon share this event.

@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 
 /**
  * 驱动注册表服务
@@ -103,52 +104,32 @@ class DriverRegistry
      */
     public function updateDrivers(array $drivers): bool
     {
-        // 确保目录存在
         $driverFile = BP . DIRECTORY_SEPARATOR . self::DRIVER_FILE;
-        $driverDir = dirname($driverFile);
-        
-        if (!is_dir($driverDir)) {
-            if (!mkdir($driverDir, 0755, true)) {
-                w_log_error("创建驱动映射目录失败: {$driverDir}");
-                return false;
-            }
-        }
-        
+
         // 合并现有驱动（保留扩展驱动）
         $existingDrivers = $this->getAllDrivers();
         $mergedDrivers = array_merge($existingDrivers ?? [], $drivers);
-        
-        // 生成文件内容
+
         $content = "<?php\n";
         $content .= "/**\n";
         $content .= " * 数据库驱动映射文件\n";
         $content .= " * 此文件由系统自动生成，请勿手动修改\n";
         $content .= " * 生成时间: " . date('Y-m-d H:i:s') . "\n";
         $content .= " */\n\n";
-        $content .= "return [\n";
-        
-        foreach ($mergedDrivers as $driverType => $className) {
-            $content .= "    '{$driverType}' => '{$className}',\n";
-        }
-        
-        $content .= "];\n";
-        
-        // 写入文件
+        $content .= "return " . var_export($mergedDrivers, true) . ";\n";
+
         try {
-            $result = file_put_contents($driverFile, $content, LOCK_EX);
-            
-            if ($result === false) {
-                w_log_error("写入驱动映射文件失败: {$driverFile}");
-                return false;
-            }
-            
-            // 更新缓存
+            (new GeneratedPhpArrayPublisher())->publishContent(
+                $driverFile,
+                $content,
+                $mergedDrivers,
+                GeneratedPhpArrayPublisher::countTopLevel(...),
+            );
             $this->cache = $mergedDrivers;
-            $this->mtime = filemtime($driverFile);
-            
+            $this->mtime = file_exists($driverFile) ? filemtime($driverFile) : null;
             return true;
-        } catch (\Exception $e) {
-            w_log_error("写入驱动映射文件异常: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            w_log_error('写入驱动映射失败: ' . $e->getMessage());
             return false;
         }
     }

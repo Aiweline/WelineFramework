@@ -25,6 +25,7 @@ $mediaInputId = 'store-music-media-' . substr(hash('sha256', $selectedScope . $p
 $hasMedia = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
     && \function_exists('framework_view_process_block');
 ?>
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
 <div class="store-music-config w-stack"
      style="--w-gap:var(--weline-space-6);"
      data-testid="store-music-config"
@@ -39,7 +40,7 @@ $hasMedia = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
     <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
         <div class="w-stack" style="--w-gap:var(--weline-space-1);">
             <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                <lang>配置写入当前作用范围；可多选曲目、拖拽排序，并为简介按语言填写。启用且至少一首曲目后，店面左下角显示进店音乐浮层。</lang>
+                <lang>优先在主题编辑器「部件配置」中编辑进店音乐。本页写入当前作用范围的系统配置，作 Hook 兜底；部件曲目为空时店面回退读取此处。可多选曲目、拖拽排序，并为简介按语言填写。</lang>
             </p>
         </div>
         <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
@@ -82,18 +83,50 @@ $hasMedia = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
                data-store-music-playlist-input="1"
                data-last-value="<?= htmlspecialchars($playlistValue, ENT_QUOTES, 'UTF-8') ?>">
         <?php if ($hasMedia): ?>
+            <?php
+            $storeMusicIdentityScope = strtolower(trim($selectedScope));
+            if ($storeMusicIdentityScope === '' || substr_count($storeMusicIdentityScope, '.') !== 2) {
+                $storeMusicIdentityScope = 'default.default.default';
+            }
+            $storeMusicIdentityCode = $playlistKey !== '' ? $playlistKey : 'store_music/music/playlist';
+            $storeMusicIdentityPath = '';
+            try {
+                $storeMusicIdentity = \Weline\FileManager\Service\MediaReference\ConfigMediaReferenceTemplates::config(
+                    $storeMusicIdentityScope,
+                    $storeMusicIdentityCode,
+                    [
+                        'kind' => 'media',
+                        'component' => $configModule,
+                    ]
+                );
+                $storeMusicIdentityPath = $storeMusicIdentity->path;
+            } catch (\Throwable) {
+                $storeMusicIdentityPath = '';
+            }
+            ?>
             <?= framework_view_process_block([
                 'class' => \Weline\MediaManager\Block\WelineMedia::class,
                 'target' => $mediaInputId,
-                'title' => (string)__('选择进店音乐（可多选）'),
+                'picker_title' => (string)__('选择进店音乐（可多选）'),
                 'path' => 'store-music',
                 'value' => $mediaValue,
                 'preview' => '1',
                 'multi' => '1',
                 'ext' => 'mp3,wav,ogg,oga,m4a,aac,flac,opus,wma,weba',
                 'size' => 20971520,
-                'width' => 64,
-                'height' => 64,
+                'width' => 96,
+                'height' => 72,
+                'identity' => $storeMusicIdentityPath,
+                'identity_root' => 'config',
+                'identity_code' => $storeMusicIdentityCode,
+                'identity_scope' => $storeMusicIdentityScope,
+                'identity_kind' => 'media',
+                'identity_field' => $storeMusicIdentityCode,
+                'identity_component' => $configModule,
+                'ref_mode' => 'multi',
+                'strong_ref' => '1',
+                'owner_type' => 'config',
+                'owner_id' => $storeMusicIdentityCode,
             ]) ?>
         <?php else: ?>
             <input class="w-input"
@@ -191,7 +224,7 @@ $hasMedia = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
     <w:config:embed
         module="Weline_StoreMusic"
         area="frontend"
-        fields="store_music/general/enabled,store_music/music/delay_seconds,store_music/music/try_autoplay,store_music/music/loop,store_music/music/default_volume,store_music/visual/waveform_default"
+        fields="store_music/general/enabled,store_music/music/delay_seconds,store_music/music/try_autoplay,store_music/music/loop,store_music/music/default_volume,store_music/visual/avatar_spin,store_music/visual/waveform_default"
         locale="default"
     />
 </div>

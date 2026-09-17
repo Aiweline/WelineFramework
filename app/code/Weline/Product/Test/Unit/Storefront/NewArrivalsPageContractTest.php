@@ -83,7 +83,7 @@ final class NewArrivalsPageContractTest extends TestCase
 
         self::assertTrue($controller->hasMethod('index'));
         self::assertTrue($catalog->hasMethod('newArrivalCards'));
-        self::assertStringContainsString("\$this->layoutType = 'product_list'", (string)$controllerSource);
+        self::assertStringContainsString("\$this->layoutType = 'products'", (string)$controllerSource);
         self::assertStringContainsString('newArrivalCards(24, 3650)', (string)$controllerSource);
         self::assertStringContainsString('cards(24)', (string)$controllerSource);
         self::assertIsArray($catalogLines);

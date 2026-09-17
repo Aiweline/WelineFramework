@@ -27,7 +27,21 @@ final class CheckoutShippingMethodsHomologyContractTest extends TestCase
         self::assertStringContainsString('website_id', $src);
         self::assertStringContainsString('store_id', $src);
         self::assertStringContainsString('channel_id', $src);
+        self::assertStringContainsString('labelForDutyNoticeCode', $src);
+        self::assertStringContainsString('ShippingIncotermService', $src);
+        self::assertStringContainsString('__($rawLabel)', $src);
+        self::assertStringNotContainsString(
+            "? (\$description . ' · ' . \$dutyNotice)",
+            $src,
+        );
         self::assertStringContainsString('当前地址下所选配送方案不可用', $src);
         self::assertStringContainsString('或联系客服协助处理', $src);
+
+        $express = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ExpressCheckoutFlowService.php',
+        );
+        self::assertStringContainsString('labelForDutyNoticeCode', $express);
+        self::assertStringContainsString('ShippingIncotermService', $express);
+        self::assertStringContainsString("__(\$label)", $express);
     }
 }

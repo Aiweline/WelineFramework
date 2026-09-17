@@ -74,16 +74,19 @@ final class ThemeHomepageWidgetWidthContractTest extends TestCase
         );
     }
 
-    public function testHeroSliderKeepsSelfContainedFullHeight(): void
+    public function testHeroSliderKeepsSelfContainedAdaptiveAspect(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/banner/hero-slider/default.phtml';
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        $this->assertStringContainsString(
-            "\$height = \\Weline\\Theme\\Helper\\SiteBlockConfig::length(\$this->getData('height'), 'var(--size-hero-height)');",
-            $content
-        );
+        $this->assertStringContainsString("\$useAdaptiveHeight", $content);
+        $this->assertStringContainsString('--wc-hero-aspect:', $content);
+        $this->assertStringContainsString('object-fit: unset', $content);
+        $this->assertStringContainsString('.slide.active', $content);
+        $this->assertStringNotContainsString('style="height: <?= $esc($height) ?>;"', $content);
+        $this->assertStringNotContainsString('object-position: 68% center', $content);
+        $this->assertStringNotContainsString('aspect-ratio: 3 / 4', $content);
         $this->assertDoesNotMatchRegularExpression('/\$height\s*=\s*[^;]*120px/', $content);
         $this->assertStringNotContainsString('$compactPreview', $content);
         $this->assertStringNotContainsString('.widget-preview-canvas', $content);

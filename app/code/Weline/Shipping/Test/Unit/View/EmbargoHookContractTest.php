@@ -34,7 +34,11 @@ final class EmbargoHookContractTest extends TestCase
         $shared = (string)file_get_contents($base . 'view/templates/backend/partials/embargo-form-section.phtml');
         self::assertStringContainsString('extensions[shipping][embargo]', $shared);
         self::assertStringContainsString('data-w-address', $shared);
-        self::assertStringContainsString('__welineShippingEmbargoReady', $shared);
+        self::assertStringContainsString('data-address-lazy', $shared);
+        self::assertStringContainsString('bootWhenOpen', $shared);
+        self::assertStringContainsString('ensureAddressScript', $shared);
+        self::assertStringContainsString('20260917-open-load1', $shared);
+        self::assertStringNotContainsString('data-shipping-address-direct', $shared);
         self::assertStringContainsString('selection', $shared);
         self::assertStringContainsString("'multi'", $shared);
         self::assertStringContainsString('搜索并添加国家/地区', $shared);

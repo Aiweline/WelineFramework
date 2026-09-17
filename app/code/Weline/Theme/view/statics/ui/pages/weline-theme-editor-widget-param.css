@@ -28,13 +28,14 @@
 .w-param-form .w-param-array-empty, .w-param-form .w-param-array-handle, .w-param-form .w-param-array-label,
 .w-param-form .w-param-array-count { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); }
 
-.w-param-form .w-param-group, .w-param-form .w-param-array, .w-param-form .w-param-i18n-panel {
+.w-param-form .w-param-group, .w-param-form .w-param-array {
     border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); overflow: hidden;
 }
 .w-param-form .w-param-group { margin-bottom: .75rem; }
 .w-param-form .w-param-group:last-of-type { margin-bottom: 0; }
-.w-param-form .w-param-group-title, .w-param-form .w-param-actions, .w-param-form .w-param-array-actions,
-.w-param-form .w-param-i18n-panel { background: var(--weline-theme-surface-muted); }
+.w-param-form .w-param-group-title, .w-param-form .w-param-actions, .w-param-form .w-param-array-actions {
+    background: var(--weline-theme-surface-muted);
+}
 .w-param-form .w-param-group-title {
     display: flex; align-items: center; gap: .5rem; width: 100%; margin: 0; padding: .75rem 1rem;
     appearance: none; color: var(--weline-theme-text); border: 0; border-bottom: 1px solid var(--weline-theme-border); cursor: pointer;
@@ -92,9 +93,9 @@
 .w-param-form .w-param-datetime-shortcuts { display: flex; flex-wrap: wrap; gap: var(--weline-space-1); margin-block-start: .5rem; }
 
 .w-param-form .w-param-image { display: flex; flex-direction: column; gap: .75rem; }
-.w-param-form .w-param-image-preview { position: relative; display: flex; align-items: center; justify-content: center; min-height: 120px; border: 2px dashed var(--weline-theme-border); border-radius: var(--weline-radius-md); background: var(--weline-theme-surface-muted); overflow: hidden; }
-.w-param-form .w-param-image-preview.w-param-has-image { border-style: solid; background: var(--weline-theme-surface); }
-.w-param-form .w-param-image-preview img { max-width: 100%; max-height: 200px; border-radius: 6px; object-fit: contain; }
+.w-param-form .w-param-image-preview { position: relative; display: flex; align-items: flex-start; justify-content: center; min-height: 120px; border: 2px dashed var(--weline-theme-border); border-radius: var(--weline-radius-md); background: var(--weline-theme-surface-muted); overflow: hidden; }
+.w-param-form .w-param-image-preview.w-param-has-image { border-style: solid; background: var(--weline-theme-surface); min-height: 0; align-items: flex-start; aspect-ratio: auto; }
+.w-param-form .w-param-image-preview img { display: block; width: 100%; max-width: 100%; height: auto; max-height: none; border-radius: 6px; object-fit: unset; }
 .w-param-form .w-param-image-aspect-badge {
     position: absolute;
     top: 8px;
@@ -123,14 +124,419 @@
 .w-param-form .w-param-array-fields, .w-param-form .w-param-array-field { display: flex; flex-direction: column; gap: .5rem; }
 .w-param-form .w-param-array-field { gap: .25rem; }
 
-.w-param-form .w-param-i18n-panel { margin-top: .75rem; }
+
+/* 数组项删除钮：右上角悬浮，不挤占左侧内容 */
+.w-param-form .w-param-array-item {
+    position: relative;
+}
+.w-param-form .w-param-array-content {
+    padding-inline-end: 2rem;
+}
+.w-param-form .w-param-array-item-actions {
+    position: absolute;
+    inset-block-start: 0.5rem;
+    inset-inline-end: 0.5rem;
+    z-index: 3;
+    margin: 0;
+}
+/* 多语言：Theme UI dialog 定高关进容器，body 内滚动（防撑破） */
+.w-param-i18n-dialog.w-dialog:not([open]),
+dialog.w-param-i18n-panel:not([open]) {
+    display: none;
+}
+.w-param-i18n-dialog.w-dialog[open],
+dialog.w-param-i18n-panel[open] {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    inline-size: min(36rem, calc(100vw - 2rem));
+    max-inline-size: calc(100vw - 2rem);
+    /* 定高：仅 max-block-size 时部分浏览器仍按内容撑开，footer/语种会溢出壳外 */
+    block-size: min(85dvh, 40rem);
+    max-block-size: min(85dvh, 40rem);
+    margin: auto;
+    padding: 0;
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg, var(--weline-radius-md));
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
+    box-shadow: var(--weline-shadow-lg, 0 1rem 2.5rem color-mix(in srgb, var(--weline-theme-text) 18%, transparent));
+    overflow: hidden;
+}
+.w-param-i18n-dialog > .w-dialog__surface,
+dialog.w-param-i18n-panel > .w-dialog__surface {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+    max-block-size: 100%;
+    overflow: hidden;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+.w-param-i18n-dialog .w-dialog__header,
+.w-param-i18n-dialog .w-param-i18n-header,
+dialog.w-param-i18n-panel .w-dialog__header,
+dialog.w-param-i18n-panel .w-param-i18n-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-2, .5rem);
+    flex: 0 0 auto;
+    padding: .75rem 1rem;
+    border-bottom: 1px solid var(--weline-theme-border);
+    background: var(--weline-theme-surface-muted);
+}
+.w-param-i18n-dialog .w-dialog__title,
+dialog.w-param-i18n-panel .w-dialog__title {
+    margin: 0;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 600;
+    color: var(--weline-theme-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.w-param-i18n-dialog .w-param-i18n-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    flex: 0 0 auto;
+}
+.w-param-i18n-dialog .w-dialog__body,
+.w-param-i18n-dialog .w-param-i18n-body,
+dialog.w-param-i18n-panel .w-dialog__body,
+dialog.w-param-i18n-panel .w-param-i18n-body,
+dialog.w-param-i18n-panel .i18n-panel-body {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    max-block-size: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: .75rem 1rem;
+}
+.w-param-i18n-dialog .w-dialog__footer,
+.w-param-i18n-dialog .w-param-i18n-footer,
+dialog.w-param-i18n-panel .w-dialog__footer,
+dialog.w-param-i18n-panel .w-param-i18n-footer,
+dialog.w-param-i18n-panel .i18n-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+    flex: 0 0 auto;
+    padding: .75rem 1rem;
+    border-top: 1px solid var(--weline-theme-border);
+    background: var(--weline-theme-surface);
+}
+.w-param-i18n-dialog .w-param-i18n-row,
+dialog.w-param-i18n-panel .w-param-i18n-row {
+    display: grid;
+    gap: .35rem;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    margin-bottom: .75rem;
+}
+.w-param-i18n-dialog .w-param-i18n-row:last-child,
+dialog.w-param-i18n-panel .w-param-i18n-row:last-child {
+    margin-bottom: 0;
+}
+.w-param-i18n-dialog .w-param-i18n-label,
+dialog.w-param-i18n-panel .w-param-i18n-label {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    width: auto;
+}
+.w-param-i18n-dialog .w-param-i18n-row :is(.w-param-input, .w-param-textarea, .i18n-input, input, textarea),
+dialog.w-param-i18n-panel .w-param-i18n-row :is(.w-param-input, .w-param-textarea, .i18n-input, input, textarea) {
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+}
+.w-param-i18n-dialog .w-param-textarea,
+dialog.w-param-i18n-panel .w-param-textarea {
+    min-height: 3rem;
+    max-height: 8rem;
+    resize: vertical;
+}
+.w-param-form .w-param-i18n-panel { margin-top: 0; }
 .w-param-form .w-param-i18n-header, .w-param-form .w-param-i18n-footer { padding: .5rem .75rem; border-color: var(--weline-theme-border); background: var(--weline-theme-surface); font-size: var(--weline-font-size-sm); font-weight: 500; }
 .w-param-form .w-param-i18n-header { border-bottom: 1px solid var(--weline-theme-border); }
 .w-param-form .w-param-i18n-footer { justify-content: flex-end; border-top: 1px solid var(--weline-theme-border); text-align: right; }
 .w-param-form .w-param-i18n-body { padding: .75rem; }
+.w-param-form .w-param-i18n-row .w-param-textarea {
+    width: 100%;
+    min-height: 4.5rem;
+    resize: vertical;
+}
+.w-param-form .w-param-i18n-hint {
+    margin: 0 0 .5rem;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.4;
+}
 .w-param-form .w-param-i18n-row { margin-bottom: .5rem; }
 .w-param-form .w-param-i18n-row:last-child { margin-bottom: 0; }
 .w-param-form .w-param-i18n-label { flex-shrink: 0; width: 100px; font-size: .875rem; }
+
+/* 图片多语言：紧凑横排（语种头 + 小缩略图 + 选择）
+ * 选择器同时覆盖表单内面板与 Weline.UI.dialog 移出 .w-param-form 后的 dialog。 */
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-row--media.w-param-i18n-row--compact {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--weline-space-2, .5rem);
+    padding: var(--weline-space-2, .5rem) 0;
+    margin: 0;
+    border-bottom: 1px solid var(--weline-theme-border);
+    overflow: hidden;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-row--media.w-param-i18n-row--compact:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-2, .5rem);
+    min-width: 0;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-row--compact .w-param-i18n-label {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    width: auto;
+    min-width: 0;
+    flex: 1;
+    margin: 0;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 500;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-locale-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--weline-theme-text);
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media-status {
+    flex-shrink: 0;
+    padding: .1rem .45rem;
+    border-radius: var(--weline-radius-sm);
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.4;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media-status[data-state="custom"] {
+    background: color-mix(in srgb, var(--weline-theme-primary) 12%, transparent);
+    color: var(--weline-theme-primary);
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact {
+    width: 100%;
+    min-width: 0;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-media-image {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--weline-space-2, .5rem);
+    width: 100%;
+    min-width: 0;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-image-preview {
+    position: relative;
+    flex: 0 0 3rem;
+    width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
+    max-width: 3rem;
+    margin: 0;
+    border-width: 1px;
+    border-style: dashed;
+    border-radius: var(--weline-radius-sm);
+    overflow: hidden;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-image-preview.w-param-has-image {
+    border-style: solid;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-image-preview img {
+    max-width: 100%;
+    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: calc(var(--weline-radius-sm) - 1px);
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-image-placeholder {
+    display: none;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-image-actions {
+    position: static !important;
+    inset: auto !important;
+    display: inline-flex !important;
+    align-items: center;
+    gap: .35rem;
+    opacity: 1 !important;
+    flex: 1;
+    min-width: 0;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-image-aspect-badge {
+    display: none;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-param-media-image[data-w-param-media="file-picker"] {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--weline-space-2, .5rem);
+    width: 100%;
+    min-width: 0;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-picker {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--weline-space-2, .5rem);
+    flex: 1;
+    min-width: 0;
+}
+/* 覆盖 file-picker 默认 max(7.5rem, …) 大卡片，压成行内 3rem 方图 */
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-preview {
+    display: flex;
+    flex: 0 0 3rem;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: 3rem;
+    min-width: 3rem;
+    max-width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
+    max-height: 3rem;
+    margin: 0;
+    overflow: hidden;
+    --w-file-preview-width: 3rem;
+    --w-file-preview-height: 3rem;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-preview__item {
+    position: relative;
+    display: block;
+    flex: 0 0 3rem;
+    inline-size: 3rem !important;
+    block-size: 3rem !important;
+    min-inline-size: 3rem;
+    min-block-size: 3rem;
+    max-inline-size: 3rem;
+    max-block-size: 3rem;
+    margin: 0;
+    overflow: hidden;
+    border-radius: var(--weline-radius-sm);
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-preview__media {
+    inline-size: 100%;
+    block-size: 100%;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-preview__thumbnail img {
+    object-fit: cover;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-preview__name {
+    display: none;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-picker .w-stack {
+    flex: 1;
+    min-width: 0;
+    gap: .25rem;
+}
+:is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel) .w-param-i18n-media--compact .w-file-picker .w-text {
+    display: none;
+}
+
+/* 数组项媒体/音频：侧栏全宽 Banner 选曲（关进容器；兼容 w-param-array-field 与主题编辑器 array-item-field） */
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-param-media-image[data-w-param-media="file-picker"],
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-param-media-image[data-media-kind="audio"],
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-param-media-image[data-w-param-media="file-picker"],
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-param-media-image[data-media-kind="audio"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-2, .5rem);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-picker,
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-picker {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--weline-space-2, .5rem);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-preview,
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-preview {
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    --w-file-preview-width: 100%;
+    --w-file-preview-height: 2.5rem;
+}
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-preview__item[data-kind="audio"],
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-preview__item[data-kind="file"],
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-preview__item--audio,
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-preview__item--file,
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-preview__item[data-kind="audio"],
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-preview__item[data-kind="file"],
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-preview__item--audio,
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-preview__item--file {
+    flex: 1 1 auto;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    overflow: hidden;
+}
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-picker:has(.w-file-preview__item) > .w-stack,
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-picker:has(.w-file-preview__item) > .w-stack {
+    display: none;
+}
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-picker > .w-stack,
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-picker > .w-stack {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: .25rem;
+}
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-picker > .w-stack > .w-text,
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-picker > .w-stack > .w-text {
+    display: none;
+}
+.w-param-form :is(.w-param-array-field, .array-item-field) .w-file-picker > .w-stack > .w-button[data-w-file-picker-open],
+.theme-editor-container :is(.w-param-array-field, .array-item-field) .w-file-picker > .w-stack > .w-button[data-w-file-picker-open] {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.w-param-form :is(.w-param-array-item, .array-item, .w-param-array-content, .array-item-content, .w-param-array-fields, .array-item-fields, .w-param-array-field, .array-item-field),
+.theme-editor-container :is(.w-param-array-item, .array-item, .w-param-array-content, .array-item-content, .w-param-array-fields, .array-item-fields, .w-param-array-field, .array-item-field) {
+    min-width: 0;
+    max-width: 100%;
+}
 
 .w-param-form .w-query-select { display: grid; gap: var(--weline-space-2); }
 .w-param-form .w-query-select__status { min-height: 1.25rem; color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); }
@@ -463,4 +869,28 @@
     .w-param-form *,
     .w-ai-widget-panel * { scroll-behavior: auto; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+}
+
+
+/* 进店曲目 Banner 关进（unlayered：压过 @layer / 旧 chip min-width） */
+.theme-editor-container :is(.array-item-field, .w-param-array-field) .w-file-preview__item[data-kind="audio"],
+.theme-editor-container :is(.array-item-field, .w-param-array-field) .w-file-preview__item--audio,
+.w-param-form :is(.array-item-field, .w-param-array-field) .w-file-preview__item[data-kind="audio"],
+.w-param-form :is(.array-item-field, .w-param-array-field) .w-file-preview__item--audio {
+    flex: 1 1 auto !important;
+    inline-size: 100% !important;
+    max-inline-size: 100% !important;
+    min-inline-size: 0 !important;
+    overflow: hidden !important;
+}
+.theme-editor-container :is(.array-item-field, .w-param-array-field) .w-file-preview,
+.w-param-form :is(.array-item-field, .w-param-array-field) .w-file-preview {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+.theme-editor-container :is(.array-item, .w-param-array-item, .array-item-content, .w-param-array-content),
+.w-param-form :is(.array-item, .w-param-array-item, .array-item-content, .w-param-array-content) {
+    min-width: 0;
+    max-width: 100%;
 }

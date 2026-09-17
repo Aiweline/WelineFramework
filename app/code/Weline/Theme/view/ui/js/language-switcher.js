@@ -103,6 +103,25 @@ function rebuildPathWithLocale(pathname, locale, websiteMount = '') {
     return `/${out.join('/')}`;
 }
 
+function normalizeLangCode(value) {
+    return String(value || '').trim().replace(/-/g, '_');
+}
+
+function sameLang(a, b) {
+    const left = normalizeLangCode(a).toLowerCase();
+    const right = normalizeLangCode(b).toLowerCase();
+    return left !== '' && right !== '' && left === right;
+}
+
+function pathLocale(pathname) {
+    for (const part of String(pathname || '/').split('/').filter(Boolean)) {
+        if (LOCALE_PATH_PATTERN.test(part)) {
+            return part;
+        }
+    }
+    return '';
+}
+
 /**
  * Resolve navigation target for a language option.
  * Prefer window.urlWithLang (backend) / live pathname rebuild over option.href,
@@ -113,6 +132,18 @@ function resolveLanguageNavigationHref(locale, optionHref, websiteMount = '') {
     if (!lang) {
         return String(optionHref || '').trim();
     }
+
+    let hrefFromRebuild = '';
+    try {
+        const rebuiltPath = rebuildPathWithLocale(window.location.pathname, lang, websiteMount);
+        hrefFromRebuild = new URL(
+            `${rebuiltPath}${window.location.search || ''}`,
+            window.location.href,
+        ).href;
+    } catch (_error) {
+    }
+
+    let hrefFromUrlWithLang = '';
     try {
         if (typeof window.urlWithLang === 'function') {
             const built = String(window.urlWithLang(
@@ -120,17 +151,33 @@ function resolveLanguageNavigationHref(locale, optionHref, websiteMount = '') {
                 lang,
             ) || '').trim();
             if (built) {
-                return new URL(built, window.location.href).href;
+                hrefFromUrlWithLang = new URL(built, window.location.href).href;
             }
         }
     } catch (_error) {
     }
-    try {
-        const rebuiltPath = rebuildPathWithLocale(window.location.pathname, lang, websiteMount);
-        const target = new URL(window.location.href);
-        target.pathname = rebuiltPath;
-        return target.href;
-    } catch (_error) {
+
+    const effectiveLang = pathLocale(window.location.pathname)
+        || document.documentElement.getAttribute('data-lang')
+        || '';
+    const localeChanging = effectiveLang !== '' && !sameLang(effectiveLang, lang);
+
+    if (hrefFromUrlWithLang && hrefFromRebuild && localeChanging) {
+        try {
+            const omittedPath = new URL(hrefFromUrlWithLang).pathname;
+            const explicitPath = new URL(hrefFromRebuild).pathname;
+            if (omittedPath !== explicitPath) {
+                return hrefFromRebuild;
+            }
+        } catch (_error) {
+        }
+    }
+
+    if (hrefFromUrlWithLang) {
+        return hrefFromUrlWithLang;
+    }
+    if (hrefFromRebuild) {
+        return hrefFromRebuild;
     }
     return String(optionHref || '').trim();
 }
@@ -338,6 +385,291 @@ function bindLanguageRequestForm(UI, form, requestDialog) {
     });
 }
 
+/**
+ * Resolve the switcher root for a language option. Chrome partial cache may
+ * clone the same markup into header/sidebar/footer with duplicate ids; portaled
+ * menu panels are no longer contained by root.
+ */
+function resolveSwitcherRootForOption(option) {
+    const direct = option.closest('[data-i18n-switcher]');
+    if (direct instanceof HTMLElement) {
+        return direct;
+    }
+    const panelEl = option.closest('[data-w-menu-panel]');
+    if (!(panelEl instanceof HTMLElement)) {
+        return null;
+    }
+    const toggleId = String(panelEl.getAttribute('aria-labelledby') || '').trim();
+    const panelId = String(panelEl.id || '').trim();
+    const roots = [...document.querySelectorAll('[data-i18n-switcher]')];
+
+    for (const root of roots) {
+        const trigger = root.querySelector('[data-w-menu-trigger]');
+        if (!(trigger instanceof HTMLElement)) {
+            continue;
+        }
+        const nestedPanel = root.querySelector('[data-w-menu-panel]');
+        if (nestedPanel === panelEl) {
+            return root;
+        }
+        if (toggleId !== ''
+            && trigger.id === toggleId
+            && panelId !== ''
+            && trigger.getAttribute('aria-controls') === panelId
+            && trigger.getAttribute('aria-expanded') === 'true') {
+            return root;
+        }
+    }
+
+    if (toggleId === '') {
+        return null;
+    }
+
+    const candidates = roots.filter((root) => {
+        const trigger = root.querySelector('[data-w-menu-trigger]');
+        return trigger instanceof HTMLElement && trigger.id === toggleId;
+    });
+    const openCandidates = candidates.filter((root) => {
+        const trigger = root.querySelector('[data-w-menu-trigger]');
+        return trigger?.getAttribute('aria-expanded') === 'true';
+    });
+    if (openCandidates.length === 1) {
+        return openCandidates[0];
+    }
+    if (candidates.length === 1) {
+        return candidates[0];
+    }
+    return null;
+}
+
+/**
+ * Theme Editor preview iframe: never location.assign away from the canvas.
+ * Parent owns locale via postMessage('locale-change') → setActiveConfigLocale.
+ */
+function traceLocaleSwitch(stage, detail = {}) {
+    const entry = {
+        t: Date.now(),
+        stage: String(stage || ''),
+        href: String(window.location.href || ''),
+        ...(detail && typeof detail === 'object' ? detail : {}),
+    };
+    try {
+        const bag = window.__WelineLocaleSwitchTrace || (window.__WelineLocaleSwitchTrace = []);
+        bag.push(entry);
+        if (bag.length > 80) {
+            bag.splice(0, bag.length - 80);
+        }
+    } catch (_error) {
+    }
+    try {
+        if (window.parent && window.parent !== window) {
+            const parentBag = window.parent.__WelineLocaleSwitchTrace
+                || (window.parent.__WelineLocaleSwitchTrace = []);
+            parentBag.push({ ...entry, from: 'iframe' });
+            if (parentBag.length > 80) {
+                parentBag.splice(0, parentBag.length - 80);
+            }
+        }
+    } catch (_error) {
+    }
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                source: 'weline-theme-preview',
+                type: 'locale-switch-trace',
+                entry,
+            }, window.location.origin);
+        }
+    } catch (_error) {
+    }
+    try {
+        console.info('[WelineLocaleSwitch]', entry.stage, entry);
+    } catch (_error) {
+    }
+}
+
+function isThemeEditorPreviewFrame() {
+    try {
+        if (window.parent === window) {
+            return false;
+        }
+        const params = new URLSearchParams(window.location.search || '');
+        const editorMode = String(params.get('editor_mode') || '').trim().toLowerCase();
+        if (editorMode === '1' || editorMode === 'true' || editorMode === 'on') {
+            return true;
+        }
+        const shell = String(params.get('shell') || '').trim().toLowerCase();
+        if (shell === 'theme-editor') {
+            return true;
+        }
+        if (params.has('interaction_mode') || params.has('editor_context')) {
+            return true;
+        }
+        const path = String(window.location.pathname || '');
+        if (/theme[-_]?preview/i.test(path)) {
+            return true;
+        }
+        const root = document.documentElement;
+        if (root?.dataset?.wEditorInteraction) {
+            return true;
+        }
+        if (document.body?.classList?.contains('editor-mode')) {
+            return true;
+        }
+        // Same-origin Theme Editor shell is the strongest signal for live canvas.
+        try {
+            const parentDoc = window.parent.document;
+            if (parentDoc?.getElementById('themeEditor')
+                || parentDoc?.getElementById('previewFrame')) {
+                return true;
+            }
+        } catch (_crossOrigin) {
+        }
+    } catch (_error) {
+    }
+    return false;
+}
+
+function postThemeEditorPreviewLocaleChange(locale) {
+    const code = String(locale || '').trim();
+    if (!code || window.parent === window) {
+        traceLocaleSwitch('post-skip', { locale: code, reason: 'empty-or-top' });
+        return;
+    }
+    try {
+        traceLocaleSwitch('post-locale-change', { locale: code });
+        window.parent.postMessage({
+            source: 'weline-theme-preview',
+            type: 'locale-change',
+            locale: code,
+        }, window.location.origin);
+    } catch (error) {
+        traceLocaleSwitch('post-error', {
+            locale: code,
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
+}
+
+function syncLanguageSwitcherTriggerFlag(root, option) {
+    if (!(root instanceof HTMLElement) || !(option instanceof Element)) {
+        return;
+    }
+    const optionFlag = option.querySelector('[data-country-flag], .w-language-switcher__flag');
+    const triggerFlag = root.querySelector('[data-w-menu-trigger] [data-country-flag], [data-w-menu-trigger] .w-language-switcher__flag');
+    if (!(optionFlag instanceof HTMLElement) || !(triggerFlag instanceof HTMLElement)) {
+        return;
+    }
+    const country = optionFlag.getAttribute('data-country-flag');
+    if (country != null) {
+        triggerFlag.setAttribute('data-country-flag', country);
+    }
+    // Panel options stay empty until open-hydrate. Never wipe a painted trigger with "".
+    const optionImg = optionFlag.querySelector('img.w-flag-icon');
+    if (optionImg) {
+        triggerFlag.replaceChildren(optionImg.cloneNode(true));
+        return;
+    }
+    const code = normalizeCountryFlagCode(country);
+    if (!code) {
+        return;
+    }
+    const existing = triggerFlag.querySelector('img.w-flag-icon');
+    if (existing && normalizeCountryFlagCode(triggerFlag.getAttribute('data-country-flag')) === code) {
+        return;
+    }
+    triggerFlag.replaceChildren();
+    const cached = readFlagCache(code);
+    if (cached?.svg) {
+        paintCountryFlagSlot(triggerFlag, cached.svg);
+        return;
+    }
+    scheduleCountryFlagHydration([root], { mode: 'trigger' });
+}
+
+function navigateLanguageOption(option, root) {
+    const locale = String(option.dataset.lang || '').trim();
+    if (!locale) {
+        return;
+    }
+    if (isThemeEditorPreviewFrame()) {
+        postThemeEditorPreviewLocaleChange(locale);
+        return;
+    }
+    writeLanguagePreference(locale, root.dataset.websiteId || '');
+    const panelEl = option.closest('[data-w-menu-panel]');
+    refreshLanguageOptionHrefs(
+        root,
+        panelEl instanceof HTMLElement ? panelEl : root.querySelector('[data-w-menu-panel]'),
+    );
+    const href = resolveLanguageNavigationHref(
+        locale,
+        option.getAttribute('href') || '',
+        root.dataset.websiteMount || '',
+    );
+    if (!href) {
+        return;
+    }
+    try {
+        const target = new URL(href, window.location.href);
+        const currentUrl = new URL(window.location.href);
+        if (target.origin === currentUrl.origin
+            && target.pathname === currentUrl.pathname
+            && target.search === currentUrl.search
+            && target.hash === currentUrl.hash) {
+            window.location.reload();
+            return;
+        }
+        window.location.assign(target.href);
+    } catch (_error) {
+        window.location.assign(href);
+    }
+}
+
+function installGlobalLanguageOptionCapture() {
+    if (window.__WelineLanguageOptionCapture) {
+        return;
+    }
+    window.__WelineLanguageOptionCapture = true;
+    document.addEventListener('click', (event) => {
+        const option = event.target instanceof Element
+            ? event.target.closest('[data-language-option][data-lang]')
+            : null;
+        if (!(option instanceof HTMLAnchorElement)) {
+            return;
+        }
+        const locale = String(option.dataset.lang || '').trim();
+        // Editor canvas MUST win before root resolution / default navigation.
+        // Portaled menus can make resolveSwitcherRootForOption return null; previously
+        // that early-return skipped preventDefault and left the iframe on a bare storefront URL.
+        if (isThemeEditorPreviewFrame()) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            traceLocaleSwitch('capture-editor', {
+                locale,
+                rootResolved: false,
+                target: String(event.target?.nodeName || ''),
+            });
+            postThemeEditorPreviewLocaleChange(locale);
+            return;
+        }
+        const root = resolveSwitcherRootForOption(option);
+        if (!(root instanceof HTMLElement)) {
+            traceLocaleSwitch('capture-no-root', { locale });
+            return;
+        }
+        const navigation = String(root.dataset.i18nNavigation || 'path').toLowerCase();
+        if (navigation === 'emit') {
+            return;
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        traceLocaleSwitch('capture-navigate', { locale });
+        navigateLanguageOption(option, root);
+    }, true);
+}
+
 const FLAG_CACHE_PREFIX = 'weline.i18n.flag.v1.';
 const FLAG_SCOPE_PREFIX = 'weline.i18n.supported-locales.v1.';
 const FLAG_GROUP_SIZE = 6;
@@ -466,7 +798,8 @@ function paintCountryFlagSlot(slot, svg) {
     img.className = 'w-flag-icon';
     img.alt = '';
     img.decoding = 'async';
-    img.loading = 'lazy';
+    // Trigger chrome is above the fold; lazy data-URIs can stay blank in some Chromium paths.
+    img.loading = 'eager';
     img.width = 24;
     img.height = 18;
     img.src = svgToDataUri(svg);
@@ -597,9 +930,15 @@ function enqueueFlagHydration(scopes = [], options = {}) {
 }
 
 function scheduleCountryFlagHydration(scopes = [], options = {}) {
+    const mode = String(options.mode || 'trigger');
     const run = () => {
         void enqueueFlagHydration(scopes, options);
     };
+    // Visible trigger must not wait on idle — empty slot reserves width and looks broken.
+    if (mode === 'trigger') {
+        queueMicrotask(run);
+        return;
+    }
     if (typeof window.requestIdleCallback === 'function') {
         window.requestIdleCallback(run, { timeout: 1800 });
         return;
@@ -608,16 +947,25 @@ function scheduleCountryFlagHydration(scopes = [], options = {}) {
 }
 
 export function register(UI) {
+    installGlobalLanguageOptionCapture();
     UI.define('language-switcher', ({ element: root, listen, emit }) => {
         const resolvePanel = () => {
+            // Prefer the panel nested under this switcher root. Chrome partial cache
+            // reuses switcher markup across header/sidebar/footer, so duplicate
+            // aria-controls ids would bind every instance to the first panel.
+            const nested = root.querySelector('[data-w-menu-panel]');
+            if (nested instanceof HTMLElement) {
+                return nested;
+            }
             const trigger = root.querySelector('[data-w-menu-trigger]');
             const panelId = String(trigger?.getAttribute('aria-controls') || '').trim();
             if (panelId) {
                 const byId = document.getElementById(panelId);
-                if (byId instanceof HTMLElement) return byId;
+                if (byId instanceof HTMLElement) {
+                    return byId;
+                }
             }
-            const nested = root.querySelector('[data-w-menu-panel]');
-            return nested instanceof HTMLElement ? nested : null;
+            return null;
         };
 
         let panel = resolvePanel();
@@ -724,12 +1072,19 @@ export function register(UI) {
 
         const updateSelection = (locale) => {
             panel = resolvePanel() || panel;
+            let activeOption = null;
             panel?.querySelectorAll('[data-language-option]').forEach((option) => {
                 const active = option.dataset.lang === locale;
                 option.setAttribute('aria-checked', String(active));
                 option.dataset.state = active ? 'active' : 'idle';
+                if (active) {
+                    activeOption = option;
+                }
             });
             if (current) current.textContent = shortLocale(locale);
+            if (activeOption) {
+                syncLanguageSwitcherTriggerFlag(root, activeOption);
+            }
         };
 
         const onLanguageClick = (event) => {
@@ -737,14 +1092,19 @@ export function register(UI) {
                 ? event.target.closest('[data-language-option]')
                 : null;
             if (!(option instanceof HTMLAnchorElement)) return;
-            // Menu panel is portaled to <body>; do not require root.contains(option).
-            panel = resolvePanel() || panel;
-            const inRoot = root.contains(option);
-            const inPanel = panel instanceof HTMLElement && panel.contains(option);
-            if (!inRoot && !inPanel) return;
+            const owningRoot = resolveSwitcherRootForOption(option);
+            if (owningRoot !== root) return;
             const locale = String(option.dataset.lang || '').trim();
             if (!locale) return;
             const navigation = String(root.dataset.i18nNavigation || 'path').toLowerCase();
+
+            if (isThemeEditorPreviewFrame()) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                traceLocaleSwitch('panel-click-editor', { locale });
+                postThemeEditorPreviewLocaleChange(locale);
+                return;
+            }
 
             if (navigation === 'emit') {
                 event.preventDefault();
@@ -760,31 +1120,7 @@ export function register(UI) {
 
             event.preventDefault();
             event.stopImmediatePropagation();
-            writeLanguagePreference(locale, root.dataset.websiteId || '');
-            refreshLanguageOptionHrefs(root, panel);
-            const optionHref = String(option.getAttribute('href') || option.href || '').trim();
-            const href = resolveLanguageNavigationHref(
-                locale,
-                optionHref,
-                root.dataset.websiteMount || '',
-            );
-            if (!href) {
-                return;
-            }
-            try {
-                const target = new URL(href, window.location.href);
-                const currentUrl = new URL(window.location.href);
-                if (target.origin === currentUrl.origin
-                    && target.pathname === currentUrl.pathname
-                    && target.search === currentUrl.search
-                    && target.hash === currentUrl.hash) {
-                    window.location.reload();
-                    return;
-                }
-                window.location.assign(target.href);
-            } catch (_error) {
-                window.location.assign(href);
-            }
+            navigateLanguageOption(option, root);
         };
 
         const restoreDraft = () => {
@@ -890,7 +1226,6 @@ export function register(UI) {
         bindPanelClick();
         bindSearch();
         bindRequest();
-        // First paint: only the visible trigger flag (avoid 4× full-catalog SVG fetch).
         scheduleCountryFlagHydration([root], { mode: 'trigger' });
 
         listen(root, 'weline:ui:menu:open', () => {

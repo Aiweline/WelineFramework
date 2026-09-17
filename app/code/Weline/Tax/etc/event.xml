@@ -2,4 +2,31 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Weline_Checkout::checkout::validate::before">
+        <observer name="Weline_Tax::checkout_buyer_tax_identity"
+                  instance="Weline\Tax\Observer\CheckoutBuyerTaxIdentityObserver"
+                  delivery="sync"
+                  failure="isolated"
+                  disabled="false"
+                  shared="true"
+                  sort="40"/>
+    </event>
+    <event name="Weline_Checkout::checkout::freeze_quote::enrich">
+        <observer name="Weline_Tax::checkout_freeze_quote_buyer_tax_identity"
+                  instance="Weline\Tax\Observer\CheckoutFreezeQuoteBuyerTaxIdentityObserver"
+                  delivery="sync"
+                  failure="critical"
+                  disabled="false"
+                  shared="false"
+                  sort="40"/>
+    </event>
+    <event name="Weline_Checkout::checkout::shipping_methods::enrich">
+        <observer name="Weline_Tax::checkout_shipping_methods_enrich_duty"
+                  instance="Weline\Tax\Observer\CheckoutShippingMethodsEnrichDutyObserver"
+                  delivery="sync"
+                  failure="isolated"
+                  disabled="false"
+                  shared="false"
+                  sort="200"/>
+    </event>
 </config>

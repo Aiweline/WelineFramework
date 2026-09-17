@@ -227,12 +227,12 @@ final class BlogSeoFactsBuilder
         return [
             'url' => $origin !== '' ? $origin . '/about' : '/about',
             'sameAs' => [
-                'https://www.instagram.com/yunshang.hanfu',
+                'https://www.instagram.com/changan.hanfu',
             ],
             'jobTitle' => 'Hanfu editorial research',
             'bio' => $isChinese
-                ? '云裳汉服编辑部：形制、面料与文化语境研究。'
-                : 'Yunshang Hanfu editorial desk: silhouette, fabric, and cultural context research.',
+                ? '本店编辑部：形制、面料与文化语境研究。'
+                : 'Editorial desk: silhouette, fabric, and cultural context research.',
         ];
     }
 

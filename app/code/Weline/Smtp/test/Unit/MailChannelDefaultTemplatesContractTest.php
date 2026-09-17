@@ -41,7 +41,10 @@ final class MailChannelDefaultTemplatesContractTest extends TestCase
                 $filesFor('order_shipped'),
                 $filesFor('order_refund'),
             )],
-            ['Marketing', 'extends/MailChannelProvider.php', $filesFor('unpaid_order_reminder')],
+            ['Marketing', 'extends/MailChannelProvider.php', array_merge(
+                $filesFor('unpaid_order_reminder'),
+                $filesFor('checkout_abandon_reminder'),
+            )],
             ['Backend', 'Extends/MailChannelProvider.php', $filesFor('notification')],
             ['Product', 'extends/MailChannelProvider.php', array_merge(
                 $filesFor('product_update'),

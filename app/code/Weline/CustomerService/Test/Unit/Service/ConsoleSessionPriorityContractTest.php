@@ -57,6 +57,34 @@ final class ConsoleSessionPriorityContractTest extends TestCase
         self::assertStringContainsString('defaultSessionId', $tpl);
         self::assertStringContainsString('sortConsoleSessionsByPriority', $service);
         self::assertStringContainsString('enrichConsoleSessionRows', $service);
+        self::assertStringContainsString('consoleSessionListTitle', $service);
+        self::assertStringContainsString('customer_display_name', $service);
+        self::assertStringContainsString('sessionListTitle', $js);
+        self::assertStringContainsString('customer_kind', $tpl);
+        self::assertStringContainsString('list_title', $tpl);
         self::assertStringContainsString('等待最久', $proto);
+    }
+
+    public function testConsoleSessionListTitlePrefersCustomerName(): void
+    {
+        $ref = new \ReflectionClass(ChatService::class);
+        /** @var ChatService $service */
+        $service = $ref->newInstanceWithoutConstructor();
+
+        self::assertSame('张三', $service->consoleSessionListTitle([
+            'session_id' => 6,
+            'customer_kind' => 'customer',
+            'customer_display_name' => '张三',
+        ]));
+        self::assertSame('#6', $service->consoleSessionListTitle([
+            'session_id' => 6,
+            'customer_kind' => 'guest',
+            'customer_display_name' => 'guest@example.com',
+        ]));
+        self::assertSame('#6', $service->consoleSessionListTitle([
+            'session_id' => 6,
+            'customer_kind' => 'customer',
+            'customer_display_name' => '',
+        ]));
     }
 }

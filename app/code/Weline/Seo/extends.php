@@ -2,10 +2,17 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Seo\Extends\Module\Weline_SiteSetupAssistant\SetupTask\SeoWebsiteAccountSetupTaskProvider;
+
 use Weline\Backend\Api\NotificationTopicProviderInterface;
 use Weline\Seo\Extends\NotificationTopicProvider;
 
 return [
+    SetupTaskProviderInterface::class => [
+        SeoWebsiteAccountSetupTaskProvider::class,
+    ],
+
     NotificationTopicProviderInterface::class => [
         NotificationTopicProvider::class,
     ],

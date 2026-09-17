@@ -54,9 +54,10 @@ return [
             ],
             'logo' => [
                 'default' => '',
-                'type' => 'image',
+                'type' => 'media_image',
                 'label' => '快捷支付 Logo',
                 'description' => '覆盖默认 PayPal 快捷支付 logo；留空则使用系统配置或默认资源。',
+                'i18n' => false,
             ],
         ],
     ],
@@ -109,8 +110,9 @@ return [
             ],
             'logo' => [
                 'default' => '',
-                'type' => 'image',
+                'type' => 'media_image',
                 'label' => '快捷支付 Logo',
+                'i18n' => false,
             ],
         ],
     ],

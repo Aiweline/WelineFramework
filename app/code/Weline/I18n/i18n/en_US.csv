@@ -685,6 +685,7 @@ AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务
 "网站语言 %{1} 自动安装失败，仍会尝试纳入 AI 翻译目标：%{2}","网站语言 %{1} 自动安装失败，仍会尝试纳入 AI 翻译目标：%{2}"
 "持久化 AI 翻译并集配置失败（运行时并集仍生效）：%{1}","持久化 AI 翻译并集配置失败（运行时并集仍生效）：%{1}"
 "网站语言变更后 AI 翻译入队失败：%{1}","网站语言变更后 AI 翻译入队失败：%{1}"
+"网站语言变更后 LocalModel 翻译入队失败：%{1}","网站语言变更后 LocalModel 翻译入队失败：%{1}"
 当前站点未开放语言支持申请,"The current site does not open language support applications"
 请输入有效的邮箱地址,"Please enter a valid email address"
 请至少选择一种希望支持的语言,"Please select at least one language you wish to support"

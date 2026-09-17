@@ -35,6 +35,8 @@
 
 所以新增菜单前，先确认父级 source 真存在。
 
+菜单 `source` 改名/搬家时，收集器会按同模块 route（无 route 用 title）自动一对一推断并迁移；一般不用改 XML。仅配对歧义时再写 `renamed_from` 或维护 `SourceIdRenameMap`。
+
 ## 4. 菜单与 `#[Acl]` 要成对看
 
 一个后台能力通常至少有两层入口：

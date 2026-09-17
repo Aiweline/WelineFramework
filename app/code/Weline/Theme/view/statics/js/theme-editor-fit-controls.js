@@ -1,6 +1,10 @@
 /**
  * Fit Theme Editor toolbar Scope / language (and sibling selects) to available
  * toolbar space. Long Scope labels ellipsize; secondary selects overflow to「更多」.
+ *
+ * Uses an off-screen text mirror for native <select> width measurement. Fit runs
+ * only on real layout/input changes — never from its own title/width writes
+ * (those used to re-enter via MutationObserver / ResizeObserver and flash the mirror).
  */
 (function () {
     'use strict';
@@ -11,6 +15,9 @@
 
     let mirror = null;
     let scheduled = 0;
+    /** True while fitAll / overflow layout is applying side effects we must ignore. */
+    let suppressObserve = false;
+    let lastMirrorKey = '';
 
     function ensureMirror() {
         if (mirror && mirror.isConnected) return mirror;
@@ -27,6 +34,7 @@
             'display:inline-block',
         ].join(';');
         document.body.appendChild(mirror);
+        lastMirrorKey = '';
         return mirror;
     }
 
@@ -43,18 +51,43 @@
     function measureText(text, source) {
         const el = ensureMirror();
         const style = window.getComputedStyle(source);
-        el.style.font = style.font;
-        el.style.fontSize = style.fontSize;
-        el.style.fontWeight = style.fontWeight;
-        el.style.fontFamily = style.fontFamily;
-        el.style.letterSpacing = style.letterSpacing;
-        el.style.textTransform = style.textTransform;
-        el.textContent = String(text || '').replace(/\s+/g, ' ').trim() || '—';
+        const content = String(text || '').replace(/\s+/g, ' ').trim() || '—';
+        const key = [
+            content,
+            style.font,
+            style.fontSize,
+            style.fontWeight,
+            style.fontFamily,
+            style.letterSpacing,
+            style.textTransform,
+        ].join('\u0001');
+        if (key !== lastMirrorKey) {
+            el.style.font = style.font;
+            el.style.fontSize = style.fontSize;
+            el.style.fontWeight = style.fontWeight;
+            el.style.fontFamily = style.fontFamily;
+            el.style.letterSpacing = style.letterSpacing;
+            el.style.textTransform = style.textTransform;
+            el.textContent = content;
+            lastMirrorKey = key;
+        }
         return Math.ceil(el.getBoundingClientRect().width || el.offsetWidth || 0);
     }
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    function setAttrIfChanged(el, name, value) {
+        if (!(el instanceof HTMLElement)) return;
+        if (el.getAttribute(name) === value) return;
+        el.setAttribute(name, value);
+    }
+
+    function setStyleIfChanged(el, prop, value) {
+        if (!(el instanceof HTMLElement)) return;
+        if (el.style.getPropertyValue(prop) === value) return;
+        el.style.setProperty(prop, value);
     }
 
     function fitNativeSelect(select) {
@@ -64,11 +97,12 @@
         const textWidth = measureText(label, select);
         const chrome = horizontalChrome(select, SELECT_EXTRA_FALLBACK_PX);
         const next = clamp(textWidth + chrome + FIT_SAFETY_PX, 96, MAX_SELECT_PX);
-        select.style.setProperty('inline-size', `${next}px`);
-        select.style.setProperty('width', `${next}px`);
-        select.style.setProperty('max-inline-size', `${MAX_SELECT_PX}px`);
+        const size = `${next}px`;
+        setStyleIfChanged(select, 'inline-size', size);
+        setStyleIfChanged(select, 'width', size);
+        setStyleIfChanged(select, 'max-inline-size', `${MAX_SELECT_PX}px`);
         select.dataset.wFitWidth = '1';
-        if (label) {
+        if (label && select.title !== label) {
             select.title = label;
         }
     }
@@ -87,7 +121,9 @@
             'flex',
             'flex-basis',
         ].forEach((prop) => {
-            el.style.removeProperty(prop);
+            if (el.style.getPropertyValue(prop)) {
+                el.style.removeProperty(prop);
+            }
         });
     }
 
@@ -107,16 +143,10 @@
         ).replace(/\s+/g, ' ').trim();
         // Disabled <button> often suppresses native title tooltips — hang tip on wrappers too.
         if (tip) {
-            if (display instanceof HTMLElement) {
-                display.setAttribute('title', tip);
-            }
-            if (trigger instanceof HTMLElement) {
-                trigger.setAttribute('title', tip);
-            }
-            if (tree instanceof HTMLElement) {
-                tree.setAttribute('title', tip);
-            }
-            field.setAttribute('title', tip);
+            setAttrIfChanged(display, 'title', tip);
+            setAttrIfChanged(trigger, 'title', tip);
+            setAttrIfChanged(tree, 'title', tip);
+            setAttrIfChanged(field, 'title', tip);
         }
 
         clearInlineBoxSize(field);
@@ -124,7 +154,9 @@
         clearInlineBoxSize(trigger);
         if (display instanceof HTMLElement) {
             ['max-inline-size', 'min-inline-size', 'width', 'inline-size'].forEach((prop) => {
-                display.style.removeProperty(prop);
+                if (display.style.getPropertyValue(prop)) {
+                    display.style.removeProperty(prop);
+                }
             });
         }
         delete field.dataset.wFitWidth;
@@ -157,13 +189,36 @@
     function scheduleFit() {
         cancelAnimationFrame(scheduled);
         scheduled = requestAnimationFrame(() => {
-            fitAll();
-            requestAnimationFrame(() => {
+            suppressObserve = true;
+            try {
                 fitAll();
-                // Overflow may have skipped while「更多」was open; one more pass after paint.
-                setTimeout(relayoutOverflow, 0);
-            });
+                requestAnimationFrame(() => {
+                    try {
+                        fitAll();
+                        setTimeout(() => {
+                            try {
+                                relayoutOverflow();
+                            } finally {
+                                suppressObserve = false;
+                            }
+                        }, 0);
+                    } catch (err) {
+                        suppressObserve = false;
+                        throw err;
+                    }
+                });
+            } catch (err) {
+                suppressObserve = false;
+                throw err;
+            }
         });
+    }
+
+    function onObservedChange() {
+        // Drop ResizeObserver / MutationObserver callbacks caused by our own
+        // width/title writes — re-queuing them was the continuous mirror flash.
+        if (suppressObserve) return;
+        scheduleFit();
     }
 
     function bind() {
@@ -182,18 +237,20 @@
 
         const scopeField = root.querySelector('.toolbar-select-field-scope');
         if (scopeField && typeof MutationObserver === 'function') {
-            const observer = new MutationObserver(scheduleFit);
+            const observer = new MutationObserver(onObservedChange);
             observer.observe(scopeField, {
                 subtree: true,
                 characterData: true,
                 childList: true,
                 attributes: true,
-                attributeFilter: ['value', 'data-value', 'aria-label', 'title'],
+                // Do not watch `title`: fitScopeField writes title for tooltips and
+                // must not re-trigger itself.
+                attributeFilter: ['value', 'data-value', 'aria-label', 'data-title-label', 'class'],
             });
         }
 
         if (typeof ResizeObserver === 'function') {
-            const resizeObserver = new ResizeObserver(scheduleFit);
+            const resizeObserver = new ResizeObserver(onObservedChange);
             resizeObserver.observe(root);
             const toolbar = root.querySelector('.editor-toolbar');
             if (toolbar) resizeObserver.observe(toolbar);
@@ -201,9 +258,9 @@
             if (left) resizeObserver.observe(left);
         }
 
-        window.addEventListener('resize', scheduleFit);
-        document.addEventListener('weline:scope-change', scheduleFit);
-        document.addEventListener('weline:theme-editor:scope-changed', scheduleFit);
+        window.addEventListener('resize', onObservedChange);
+        document.addEventListener('weline:scope-change', onObservedChange);
+        document.addEventListener('weline:theme-editor:scope-changed', onObservedChange);
 
         window.Weline = window.Weline || {};
         window.Weline.Theme = window.Weline.Theme || {};

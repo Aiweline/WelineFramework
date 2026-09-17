@@ -282,6 +282,10 @@
     font-weight: 650;
     color: var(--cs-text);
     font-size: 0.875rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .session-header-meta {

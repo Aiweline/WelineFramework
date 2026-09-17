@@ -70,7 +70,11 @@ final class ThemeBrandBasicsIdentityProvider implements BrandBasicsIdentityProvi
     private function loadWebsite(ScopeIdentity $identity): array
     {
         $website = $this->requireWebsite($identity);
-        $description = \trim((string)($this->backendConfig->getConfig('site_description', 'Weline_Backend') ?? ''));
+        $description = \trim((string)$website->getDescription());
+        if ($description === '') {
+            // 兼容旧数据：升级前简介写在 Backend 全局配置。
+            $description = \trim((string)($this->backendConfig->getConfig('site_description', 'Weline_Backend') ?? ''));
+        }
 
         return [
             'label' => (string)__('网站身份'),
@@ -110,10 +114,12 @@ final class ThemeBrandBasicsIdentityProvider implements BrandBasicsIdentityProvi
         $description = $this->normalizeDescription($values['description'] ?? '');
 
         $website->setName($name);
+        $website->setDescription($description);
         if (!$website->save()) {
             throw new \RuntimeException((string)__('网站名称保存失败'));
         }
 
+        // 镜像到 Backend，兼容仍读全局 site_name / site_description 的旧链路。
         if (!$this->backendConfig->setConfig('site_name', $name, 'Weline_Backend')) {
             throw new \RuntimeException((string)__('网站名称同步到后台配置失败'));
         }

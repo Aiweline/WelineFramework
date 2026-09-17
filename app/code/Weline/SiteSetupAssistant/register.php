@@ -8,8 +8,8 @@ Register::register(
     Register::MODULE,
     'Weline_SiteSetupAssistant',
     __DIR__,
-    '0.1.0-prototype',
-    '建站助手：按站点范围展示上线/迁站贴士与任务进度（原型阶段）。',
+    '0.3.4',
+    '建站助手：默认全站；胶囊提示各站未完成并可切站。',
     [
         'Weline_Backend',
         'Weline_Dashboard',

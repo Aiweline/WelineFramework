@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Cdn\Extends\Module\Weline_SiteSetupAssistant\SetupTask\CdnCloudflareSetupTaskProvider;
+
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
@@ -16,6 +19,10 @@ declare(strict_types=1);
  * - WarmupProvider: CDN缓存预热URL提供者
  */
 return [
+    SetupTaskProviderInterface::class => [
+        CdnCloudflareSetupTaskProvider::class,
+    ],
+
     'type' => 'module', // module 或 theme
     'documentation' => 'extends.md', // 文档文件路径（相对于模块根目录）
     'extends' => [

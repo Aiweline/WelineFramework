@@ -98,9 +98,16 @@ class MenuCollector
         }
         self::$collecting = true;
         try {
-            return $this->doCollectInternal($modulesFilter);
+            $result = $this->doCollectInternal($modulesFilter);
+            $this->menuReader->commitPendingFingerprints();
+
+            return $result;
+        } catch (\Throwable $e) {
+            $this->menuReader->discardPendingFingerprints();
+            throw $e;
         } finally {
             self::$collecting = false;
+            MenuXmlReader::clearForceFullRequest();
         }
     }
 
@@ -116,7 +123,7 @@ class MenuCollector
         $file_sources = array_keys($file_menus);
 
         // 保护：未指定模块且文件端为空时，不执行破坏性操作
-        // （含 menu.xml 指纹全命中跳过解析 → 空 file_menus）
+        // （指纹全命中跳过解析 → 空 file_menus；但 DB 产物为空时 MenuXmlReader 已强制重读）
         if (empty($modulesFilter) && empty($file_menus)) {
             return [$modules_xml_menus, [], $modules_info, count($file_menus), []];
         }
@@ -130,25 +137,32 @@ class MenuCollector
             }
         }
 
-        // Role grants must be rewritten before the menu diff can remove retired
-        // source ids. `menu:collect` does not run the route-collection observers,
-        // so doing this only in the ACL route catalog loses existing role grants.
-        ObjectManager::getInstance(SourceIdRenameMigrator::class)
-            ->migrate(SourceIdRenameMap::ROLE_ACCESS);
+        // 搬家：自动推断（同模块 route/title 一对一）+ 可选 renamed_from 覆盖；须在 diff 删旧 id 前完成。
+        $renameMap = \array_merge(
+            SourceIdRenameMap::ROLE_ACCESS,
+            $this->inferAutoRenameMap($file_menus, $effectiveFilter),
+            $this->collectXmlRenameMap($file_menus)
+        );
+        ObjectManager::getInstance(SourceIdRenameMigrator::class)->migrate($renameMap);
+        $this->migrateRenamedMenuRows($renameMap);
+        $file_menus = $this->remapParentsThroughRenameMap($file_menus, $renameMap);
 
         // 流式遍历 DB，不构建完整 db_menus，直接产出 diff 与 seen_db_sources，避免大表内存溢出
         [$diff, $seen_db_sources] = $this->streamDbAndComputeDiff($file_menus, $file_sources, $effectiveFilter, $disabledModules);
         $this->validateMenuParentChain($file_menus, $seen_db_sources);
 
         $this->executeBatch($diff, $file_menus);
-        $this->syncLegacyMenuTable($file_menus);
+        $this->syncLegacyMenuTable($file_menus, $effectiveFilter);
+        $this->queueDestinationFingerprints(
+            $effectiveFilter !== [] ? $effectiveFilter : \array_keys($modules_xml_menus)
+        );
 
         return [$modules_xml_menus, [], $modules_info, count($file_menus), $diff];
     }
 
     /**
-     * 框架约定校验：menu.xml 中声明的 parent_source 必须可追溯到真实菜单节点。
-     * 若父级不存在，直接中断收集，避免产生“断层菜单 ACL”。
+     * 框架约定校验：menu.xml 的 parent_source 必须能在「本轮文件 + 本轮 DB + 全局 ACL 库」中找到。
+     * 增量时 seen_db_sources 不全，缺失父级一律批量读库对比，不以内存集合臆断断层。
      *
      * @param array<string, array> $fileMenus
      * @param array<string, true> $seenDbSources 流式收集时仅保留 DB 中出现的 source_id 集合，不保留整行
@@ -162,24 +176,38 @@ class MenuCollector
 
         $knownSources = [];
         foreach ($fileMenus as $source => $menu) {
-            $knownSources[$source] = true;
+            $knownSources[(string)$source] = true;
         }
         foreach ($seenDbSources as $source => $_) {
-            $knownSources[$source] = true;
+            $knownSources[(string)$source] = true;
+        }
+
+        $missingParents = [];
+        foreach ($fileMenus as $source => $menu) {
+            $parentSource = \trim((string)($menu['parent_source'] ?? ''));
+            if ($parentSource === '' || isset($knownSources[$parentSource])) {
+                continue;
+            }
+            $missingParents[$parentSource] = true;
+        }
+
+        // 读库对比：批量查出全局 ACL 里真实存在的跨模块父级
+        if ($missingParents !== []) {
+            foreach ($this->menuRegistry->filterExistingManagedSources(\array_keys($missingParents)) as $sid => $_) {
+                $knownSources[$sid] = true;
+                unset($missingParents[$sid]);
+            }
         }
 
         foreach ($fileMenus as $source => $menu) {
-            $parentSource = (string)($menu['parent_source'] ?? '');
-            if ($parentSource === '') {
-                continue;
-            }
-            if (isset($knownSources[$parentSource])) {
+            $parentSource = \trim((string)($menu['parent_source'] ?? ''));
+            if ($parentSource === '' || isset($knownSources[$parentSource])) {
                 continue;
             }
 
             $module = (string)($menu['module'] ?? 'unknown');
             throw new \Exception(
-                __('框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。', [
+                __('框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}（文件与数据库均未找到）。请修复 menu.xml 的 parent/source 链。', [
                     $source,
                     $module,
                     $parentSource,
@@ -222,6 +250,7 @@ class MenuCollector
                     );
                     $menu['scope_group'] = (string)($menu['scope_group'] ?? $menu['scopeGroup'] ?? '');
                     $menu['api_exposable'] = $this->normalizeMenuBoolean($menu['api_exposable'] ?? $menu['apiExposable'] ?? false);
+                    $menu['renamed_from'] = \trim((string)($menu['renamed_from'] ?? $menu['renamedFrom'] ?? ''));
                     unset($menu['parent'], $menu['action']);
 
                     $menu = $this->replaceModuleAction($menu, $modules_info);
@@ -266,6 +295,252 @@ class MenuCollector
     private function normalizeParentSource(string $parentSource): string
     {
         return self::LEGACY_PARENT_SOURCE_MAP[$parentSource] ?? $parentSource;
+    }
+
+    /**
+     * @param array<string, array> $fileMenus
+     * @return array<string, string> old => new
+     */
+    private function collectXmlRenameMap(array $fileMenus): array
+    {
+        $map = [];
+        foreach ($fileMenus as $newSource => $menu) {
+            $old = \trim((string)($menu['renamed_from'] ?? ''));
+            $newSource = (string)$newSource;
+            if ($old === '' || $old === $newSource) {
+                continue;
+            }
+            $map[$old] = $newSource;
+        }
+
+        return $map;
+    }
+
+    /**
+     * 自动推断 source 搬家：DB 有、文件无 与 文件有、DB 无 的节点，在同模块内按稳定键一对一配对。
+     * 优先 route（非空）；分组/无路由则用 title。键冲突（多对一）不配对，避免误迁。
+     * 无需手写 renamed_from；显式 renamed_from 仍可覆盖。
+     *
+     * @param array<string, array> $fileMenus
+     * @param string[] $modulesFilter
+     * @return array<string, string> old => new
+     */
+    private function inferAutoRenameMap(array $fileMenus, array $modulesFilter): array
+    {
+        if ($fileMenus === []) {
+            return [];
+        }
+
+        $fileSources = [];
+        foreach (\array_keys($fileMenus) as $source) {
+            $fileSources[(string)$source] = true;
+        }
+
+        $dbRows = $this->menuRegistry->listManagedMenus($modulesFilter);
+        $dbOnly = []; // source_id => row
+        foreach ($dbRows as $row) {
+            $sourceId = (string)($row['source_id'] ?? '');
+            if ($sourceId === '' || isset($fileSources[$sourceId])) {
+                continue;
+            }
+            $dbOnly[$sourceId] = $row;
+        }
+        if ($dbOnly === []) {
+            return [];
+        }
+
+        $dbSourceSet = [];
+        foreach ($dbRows as $row) {
+            $sid = (string)($row['source_id'] ?? '');
+            if ($sid !== '') {
+                $dbSourceSet[$sid] = true;
+            }
+        }
+
+        $fileOnly = [];
+        foreach ($fileMenus as $source => $menu) {
+            $source = (string)$source;
+            if ($source === '' || isset($dbSourceSet[$source])) {
+                continue;
+            }
+            $fileOnly[$source] = $menu;
+        }
+        if ($fileOnly === []) {
+            return [];
+        }
+
+        $indexFile = $this->buildRenameMatchIndex($fileOnly, true);
+        $indexDb = $this->buildRenameMatchIndex($dbOnly, false);
+
+        $map = [];
+        $usedNew = [];
+        foreach ($indexDb as $key => $oldSources) {
+            if (\count($oldSources) !== 1) {
+                continue;
+            }
+            $newSources = $indexFile[$key] ?? [];
+            if (\count($newSources) !== 1) {
+                continue;
+            }
+            $old = $oldSources[0];
+            $new = $newSources[0];
+            if ($old === $new || isset($usedNew[$new])) {
+                continue;
+            }
+            $map[$old] = $new;
+            $usedNew[$new] = true;
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<string, array> $rows source => menu/db row
+     * @return array<string, list<string>> matchKey => source ids
+     */
+    private function buildRenameMatchIndex(array $rows, bool $fromFile): array
+    {
+        $index = [];
+        foreach ($rows as $source => $row) {
+            $source = (string)$source;
+            $module = \trim((string)($row['module'] ?? ''));
+            if ($module === '') {
+                continue;
+            }
+            $route = \strtolower(\trim((string)($row['route'] ?? ''), '/'));
+            if ($route !== '') {
+                $key = 'r|' . $module . '|' . $route;
+            } else {
+                $title = \trim((string)($fromFile
+                    ? ($row['title'] ?? $row['name'] ?? $row['source_name'] ?? '')
+                    : ($row['source_name'] ?? $row['title'] ?? $row['name'] ?? '')));
+                if ($title === '') {
+                    continue;
+                }
+                $key = 't|' . $module . '|' . $title;
+            }
+            $index[$key][] = $source;
+        }
+
+        return $index;
+    }
+
+    /**
+     * @param array<string, string> $renameMap old => new
+     */
+    private function migrateRenamedMenuRows(array $renameMap): void
+    {
+        if ($renameMap === []) {
+            return;
+        }
+        foreach ($renameMap as $old => $new) {
+            $this->menuRegistry->renameManagedMenuSource($old, $new);
+            $this->renameLegacyMenuSource($old, $new);
+        }
+    }
+
+    private function renameLegacyMenuSource(string $oldSource, string $newSource): void
+    {
+        /** @var Menu $menuModel */
+        $menuModel = ObjectManager::getInstance(Menu::class, [], false);
+        $childCount = (int)$menuModel->reset()
+            ->where(Menu::schema_fields_PARENT_SOURCE, $oldSource)
+            ->total();
+        if ($childCount > 0) {
+            $menuModel->reset()
+                ->where(Menu::schema_fields_PARENT_SOURCE, $oldSource)
+                ->update([Menu::schema_fields_PARENT_SOURCE => $newSource])
+                ->fetch();
+        }
+
+        $existingNew = ObjectManager::getInstance(Menu::class, [], false)
+            ->reset()
+            ->where(Menu::schema_fields_SOURCE, $newSource)
+            ->find()
+            ->fetch();
+        if ((string)$existingNew->getData(Menu::schema_fields_SOURCE) === $newSource) {
+            ObjectManager::getInstance(Menu::class, [], false)
+                ->reset()
+                ->where(Menu::schema_fields_SOURCE, $oldSource)
+                ->delete()
+                ->fetch();
+
+            return;
+        }
+
+        $old = ObjectManager::getInstance(Menu::class, [], false)
+            ->reset()
+            ->where(Menu::schema_fields_SOURCE, $oldSource)
+            ->find()
+            ->fetch();
+        if ((string)$old->getData(Menu::schema_fields_SOURCE) !== $oldSource) {
+            return;
+        }
+
+        $row = [
+            Menu::schema_fields_NAME => (string)$old->getData(Menu::schema_fields_NAME),
+            Menu::schema_fields_TITLE => (string)$old->getData(Menu::schema_fields_TITLE),
+            Menu::schema_fields_SOURCE => $newSource,
+            Menu::schema_fields_PID => (int)$old->getData(Menu::schema_fields_PID),
+            Menu::schema_fields_LEVEL => (int)$old->getData(Menu::schema_fields_LEVEL),
+            Menu::schema_fields_PATH => (string)$old->getData(Menu::schema_fields_PATH),
+            Menu::schema_fields_PARENT_SOURCE => (string)$old->getData(Menu::schema_fields_PARENT_SOURCE),
+            Menu::schema_fields_ACTION => (string)$old->getData(Menu::schema_fields_ACTION),
+            Menu::schema_fields_MODULE => (string)$old->getData(Menu::schema_fields_MODULE),
+            Menu::schema_fields_ICON => (string)$old->getData(Menu::schema_fields_ICON),
+            Menu::schema_fields_ORDER => (int)$old->getData(Menu::schema_fields_ORDER),
+            Menu::schema_fields_IS_SYSTEM => (int)$old->getData(Menu::schema_fields_IS_SYSTEM),
+            Menu::schema_fields_IS_ENABLE => (int)$old->getData(Menu::schema_fields_IS_ENABLE),
+            Menu::schema_fields_IS_BACKEND => (int)$old->getData(Menu::schema_fields_IS_BACKEND),
+        ];
+        ObjectManager::getInstance(Menu::class, [], false)
+            ->reset()
+            ->clearData()
+            ->setData($row)
+            ->save();
+        ObjectManager::getInstance(Menu::class, [], false)
+            ->reset()
+            ->where(Menu::schema_fields_SOURCE, $oldSource)
+            ->delete()
+            ->fetch();
+    }
+
+    /**
+     * @param array<string, array> $fileMenus
+     * @param array<string, string> $renameMap
+     * @return array<string, array>
+     */
+    private function remapParentsThroughRenameMap(array $fileMenus, array $renameMap): array
+    {
+        if ($renameMap === []) {
+            return $fileMenus;
+        }
+        foreach ($fileMenus as $source => $menu) {
+            $parent = (string)($menu['parent_source'] ?? '');
+            if ($parent !== '' && isset($renameMap[$parent])) {
+                $fileMenus[$source]['parent_source'] = $renameMap[$parent];
+            }
+        }
+
+        return $fileMenus;
+    }
+
+    /**
+     * @param list<string>|array<int|string, string> $modules
+     */
+    private function queueDestinationFingerprints(array $modules): void
+    {
+        $updates = [];
+        foreach ($modules as $module) {
+            $module = \trim((string)$module);
+            if ($module === '') {
+                continue;
+            }
+            $updates['menu:dest:' . $module] = $this->menuRegistry->destinationFingerprint($module);
+        }
+        if ($updates !== []) {
+            $this->menuReader->mergePendingFingerprints($updates);
+        }
     }
 
     private function normalizeMenuBoolean(mixed $value): int
@@ -472,26 +747,36 @@ class MenuCollector
 
     /**
      * Keep the legacy m_menu table aligned for older admin helpers that still read it.
+     * 删除范围必须与本轮 diff 模块范围一致：增量/指纹跳过时不得 not-in 清掉未参与模块的菜单。
      *
      * @param array<string, array> $fileMenus
+     * @param string[] $modulesFilter 非空时仅同步这些模块的 legacy 行
      */
-    private function syncLegacyMenuTable(array $fileMenus): void
+    private function syncLegacyMenuTable(array $fileMenus, array $modulesFilter = []): void
     {
         $fileSources = array_keys($fileMenus);
 
-        if (empty($fileSources)) {
-            /** @var Menu $menuModel */
-            $menuModel = ObjectManager::getInstance(Menu::class, [], false);
-            $menuModel->reset()->delete()->fetch();
+        /** @var Menu $menuModel */
+        $menuModel = ObjectManager::getInstance(Menu::class, [], false);
+
+        if ($fileSources === []) {
+            // 指定模块且文件端为空：只清该范围内的 legacy；禁止无过滤整表 delete。
+            if ($modulesFilter !== []) {
+                $menuModel->reset()
+                    ->where(Menu::schema_fields_MODULE, $modulesFilter, 'in')
+                    ->delete()
+                    ->fetch();
+            }
+
             return;
         }
 
-        /** @var Menu $menuModel */
-        $menuModel = ObjectManager::getInstance(Menu::class, [], false);
-        $menuModel->reset()
-            ->where(Menu::schema_fields_SOURCE, $fileSources, 'not in')
-            ->delete()
-            ->fetch();
+        $deleter = $menuModel->reset()
+            ->where(Menu::schema_fields_SOURCE, $fileSources, 'not in');
+        if ($modulesFilter !== []) {
+            $deleter->where(Menu::schema_fields_MODULE, $modulesFilter, 'in');
+        }
+        $deleter->delete()->fetch();
 
         $sourceMeta = [];
         foreach ($this->topologicalSortAdd($fileSources, $fileMenus) as $source) {

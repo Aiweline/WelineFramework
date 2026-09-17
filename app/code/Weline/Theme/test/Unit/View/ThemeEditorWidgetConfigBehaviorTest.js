@@ -86,7 +86,7 @@ function saveContext(file, { rejectTitle = '', holdOwnership = null } = {}) {
     return { context, requests, save: (title, locale = '') => context.requestSaveWidgetConfig({ node_uid: uid, config: { title }, locale }, locale) };
 }
 
-for (const relative of ['js/theme-editor.js', 'ui/pages/weline-theme-editor.js']) {
+for (const relative of ['ui/pages/weline-theme-editor.js']) {
     const file = path.join(statics, relative);
 
     test(`${relative}: selection retains UID and legacy identities for parameter autosave`, async () => {

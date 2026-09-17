@@ -17,7 +17,7 @@ final class MailTemplateCtaNormalizeContractTest extends TestCase
 
         $edit = (string)file_get_contents(dirname(__DIR__, 2) . '/view/Backend/Template/edit.phtml');
         self::assertStringContainsString('function normalizeEmailBody', $edit);
-        self::assertStringContainsString('normalizeEmailBody(getEditorHtml())', $edit);
+        self::assertStringContainsString('normalizeEmailBody(readBodyFromIframe())', $edit);
 
         $controller = (string)file_get_contents(dirname(__DIR__, 2) . '/Controller/Backend/Template.php');
         self::assertStringContainsString('normalizeEmailHtml', $controller);

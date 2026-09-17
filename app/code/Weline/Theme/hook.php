@@ -9,6 +9,11 @@
  */
 return [
     // ==================== Theme Frontend Partials - Footer ====================
+    'Weline_Theme::frontend::partials::footer::above' => [
+        'name' => __('页脚上方扩展'),
+        'description' => __('footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。'),
+        'doc' => 'frontend/partials/footer/above.md',
+    ],
     'Weline_Theme::frontend::partials::footer::before' => [
         'name' => __('页脚之前'),
         'description' => __('在渲染页脚组件之前触发，允许其他模块在页脚开始处注入内容。'),
@@ -544,141 +549,141 @@ return [
     ],
     
     // ==================== Theme Frontend Layouts - Product List ====================
-    'Weline_Theme::frontend::layouts::product-list::head-before' => [
+    'Weline_Theme::frontend::layouts::products::head-before' => [
         'name' => __('产品列表布局头部之前'),
         'description' => __('在渲染产品列表布局的 <head> 标签之前触发，允许其他模块在头部开始处注入内容。'),
-        'doc' => 'frontend/layouts/product_list/head-before.md',
+        'doc' => 'frontend/layouts/products/head-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::head-after' => [
+    'Weline_Theme::frontend::layouts::products::head-after' => [
         'name' => __('产品列表布局头部之后'),
         'description' => __('在渲染产品列表布局的 <head> 标签之后触发，允许其他模块在头部结束处注入内容。'),
-        'doc' => 'frontend/layouts/product_list/head-after.md',
+        'doc' => 'frontend/layouts/products/head-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::body-start' => [
+    'Weline_Theme::frontend::layouts::products::body-start' => [
         'name' => __('产品列表布局 Body 开始'),
         'description' => __('在渲染产品列表布局的 <body> 标签开始处触发，允许其他模块在 body 开始处注入内容。'),
-        'doc' => 'frontend/layouts/product_list/body-start.md',
+        'doc' => 'frontend/layouts/products/body-start.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::content-before' => [
+    'Weline_Theme::frontend::layouts::products::content-before' => [
         'name' => __('产品列表布局内容之前'),
         'description' => __('在渲染产品列表布局的主要内容之前触发，允许其他模块在内容开始处注入内容。'),
-        'doc' => 'frontend/layouts/product_list/content-before.md',
+        'doc' => 'frontend/layouts/products/content-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::content' => [
+    'Weline_Theme::frontend::layouts::products::content' => [
         'name' => __('产品列表布局内容'),
         'description' => __('覆盖产品列表布局的主内容区域，允许商品模块提供列表、筛选、分页或空状态。'),
-        'doc' => 'frontend/layouts/product_list/content.md',
+        'doc' => 'frontend/layouts/products/content.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::header-before' => [
+    'Weline_Theme::frontend::layouts::products::header-before' => [
         'name' => __('产品列表布局页头之前'),
         'description' => __('在产品列表布局页头之前触发，允许模块注入公告、导航辅助或埋点。'),
-        'doc' => 'frontend/layouts/product_list/header-before.md',
+        'doc' => 'frontend/layouts/products/header-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::header-after' => [
+    'Weline_Theme::frontend::layouts::products::header-after' => [
         'name' => __('产品列表布局页头之后'),
         'description' => __('在产品列表布局页头之后触发，允许模块注入横幅、提示或布局辅助内容。'),
-        'doc' => 'frontend/layouts/product_list/header-after.md',
+        'doc' => 'frontend/layouts/products/header-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::breadcrumb-before' => [
+    'Weline_Theme::frontend::layouts::products::breadcrumb-before' => [
         'name' => __('产品列表面包屑之前'),
         'description' => __('在产品列表布局面包屑之前触发。'),
-        'doc' => 'frontend/layouts/product_list/breadcrumb-before.md',
+        'doc' => 'frontend/layouts/products/breadcrumb-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::breadcrumb-after' => [
+    'Weline_Theme::frontend::layouts::products::breadcrumb-after' => [
         'name' => __('产品列表面包屑之后'),
         'description' => __('在产品列表布局面包屑之后触发。'),
-        'doc' => 'frontend/layouts/product_list/breadcrumb-after.md',
+        'doc' => 'frontend/layouts/products/breadcrumb-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::filters-before' => [
+    'Weline_Theme::frontend::layouts::products::filters-before' => [
         'name' => __('产品列表筛选之前'),
         'description' => __('在产品列表筛选区域之前触发。'),
-        'doc' => 'frontend/layouts/product_list/filters-before.md',
+        'doc' => 'frontend/layouts/products/filters-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::filters-sidebar' => [
+    'Weline_Theme::frontend::layouts::products::filters-sidebar' => [
         'name' => __('产品列表筛选侧栏'),
         'description' => __('在商品列表页左侧渲染分类与价格等筛选侧栏。必须运行时 getHook，禁止布局编译期写死。'),
-        'doc' => 'frontend/layouts/product_list/filters-sidebar.md',
+        'doc' => 'frontend/layouts/products/filters-sidebar.md',
         'slot' => true,
     ],
-    'Weline_Theme::frontend::layouts::product-list::filters-after' => [
+    'Weline_Theme::frontend::layouts::products::filters-after' => [
         'name' => __('产品列表筛选之后'),
         'description' => __('在产品列表筛选区域之后触发。'),
-        'doc' => 'frontend/layouts/product_list/filters-after.md',
+        'doc' => 'frontend/layouts/products/filters-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::toolbar-before' => [
+    'Weline_Theme::frontend::layouts::products::toolbar-before' => [
         'name' => __('产品列表工具栏之前'),
         'description' => __('在产品列表工具栏之前触发。'),
-        'doc' => 'frontend/layouts/product_list/toolbar-before.md',
+        'doc' => 'frontend/layouts/products/toolbar-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::toolbar-content' => [
+    'Weline_Theme::frontend::layouts::products::toolbar-content' => [
         'name' => __('产品列表工具栏内容'),
         'description' => __('覆盖或补充产品列表排序、视图切换、分页大小等工具栏内容。'),
-        'doc' => 'frontend/layouts/product_list/toolbar-content.md',
+        'doc' => 'frontend/layouts/products/toolbar-content.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::toolbar-after' => [
+    'Weline_Theme::frontend::layouts::products::toolbar-after' => [
         'name' => __('产品列表工具栏之后'),
         'description' => __('在产品列表工具栏之后触发。'),
-        'doc' => 'frontend/layouts/product_list/toolbar-after.md',
+        'doc' => 'frontend/layouts/products/toolbar-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::grid-before' => [
+    'Weline_Theme::frontend::layouts::products::grid-before' => [
         'name' => __('产品列表网格之前'),
         'description' => __('在产品列表网格之前触发。'),
-        'doc' => 'frontend/layouts/product_list/grid-before.md',
+        'doc' => 'frontend/layouts/products/grid-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::grid-content' => [
+    'Weline_Theme::frontend::layouts::products::grid-content' => [
         'name' => __('产品列表网格内容'),
         'description' => __('覆盖或补充产品列表网格内容。'),
-        'doc' => 'frontend/layouts/product_list/grid-content.md',
+        'doc' => 'frontend/layouts/products/grid-content.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::grid-after' => [
+    'Weline_Theme::frontend::layouts::products::grid-after' => [
         'name' => __('产品列表网格之后'),
         'description' => __('在产品列表网格之后触发。'),
-        'doc' => 'frontend/layouts/product_list/grid-after.md',
+        'doc' => 'frontend/layouts/products/grid-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::pagination-before' => [
+    'Weline_Theme::frontend::layouts::products::pagination-before' => [
         'name' => __('产品列表分页之前'),
         'description' => __('在产品列表分页之前触发。'),
-        'doc' => 'frontend/layouts/product_list/pagination-before.md',
+        'doc' => 'frontend/layouts/products/pagination-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::pagination-content' => [
+    'Weline_Theme::frontend::layouts::products::pagination-content' => [
         'name' => __('产品列表分页内容'),
         'description' => __('覆盖或补充产品列表分页内容。'),
-        'doc' => 'frontend/layouts/product_list/pagination-content.md',
+        'doc' => 'frontend/layouts/products/pagination-content.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::pagination-after' => [
+    'Weline_Theme::frontend::layouts::products::pagination-after' => [
         'name' => __('产品列表分页之后'),
         'description' => __('在产品列表分页之后触发。'),
-        'doc' => 'frontend/layouts/product_list/pagination-after.md',
+        'doc' => 'frontend/layouts/products/pagination-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::recommendations-before' => [
+    'Weline_Theme::frontend::layouts::products::recommendations-before' => [
         'name' => __('产品列表推荐之前'),
         'description' => __('在产品列表推荐区域之前触发。'),
-        'doc' => 'frontend/layouts/product_list/recommendations-before.md',
+        'doc' => 'frontend/layouts/products/recommendations-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::recommendations-after' => [
+    'Weline_Theme::frontend::layouts::products::recommendations-after' => [
         'name' => __('产品列表推荐之后'),
         'description' => __('在产品列表推荐区域之后触发。'),
-        'doc' => 'frontend/layouts/product_list/recommendations-after.md',
+        'doc' => 'frontend/layouts/products/recommendations-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::footer-before' => [
+    'Weline_Theme::frontend::layouts::products::footer-before' => [
         'name' => __('产品列表页脚之前'),
         'description' => __('在产品列表布局页脚之前触发。'),
-        'doc' => 'frontend/layouts/product_list/footer-before.md',
+        'doc' => 'frontend/layouts/products/footer-before.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::footer-after' => [
+    'Weline_Theme::frontend::layouts::products::footer-after' => [
         'name' => __('产品列表页脚之后'),
         'description' => __('在产品列表布局页脚之后触发。'),
-        'doc' => 'frontend/layouts/product_list/footer-after.md',
+        'doc' => 'frontend/layouts/products/footer-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::content-after' => [
+    'Weline_Theme::frontend::layouts::products::content-after' => [
         'name' => __('产品列表布局内容之后'),
         'description' => __('在渲染产品列表布局的主要内容之后触发，允许其他模块在内容结束处注入内容。'),
-        'doc' => 'frontend/layouts/product_list/content-after.md',
+        'doc' => 'frontend/layouts/products/content-after.md',
     ],
-    'Weline_Theme::frontend::layouts::product-list::body-end' => [
+    'Weline_Theme::frontend::layouts::products::body-end' => [
         'name' => __('产品列表布局 Body 结束'),
         'description' => __('在渲染产品列表布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。'),
-        'doc' => 'frontend/layouts/product_list/body-end.md',
+        'doc' => 'frontend/layouts/products/body-end.md',
     ],
     
     // ==================== Theme Frontend Layouts - Product (通用) ====================

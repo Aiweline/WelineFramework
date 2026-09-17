@@ -1,0 +1,123 @@
+<?php
+/**
+ * Default cart layout.
+ *
+ * Keep the page chrome aligned with the default homepage layout: Theme partial
+ * header/footer own the global shell, while cart modules provide page content.
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::cart::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+</head>
+<body>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::cart::body-start</w:hook>
+
+<div class="weline-page-wrapper">
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::cart::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::cart::header-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
+
+    <div class="weline-main-content">
+        <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::cart::content-before</w:hook>
+
+        <main class="cart-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cart-main" data-layout="cart">
+            <w:hook>Weline_Theme::frontend::layouts::cart::main-before</w:hook>
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-cart-content,layout-default-content,content,cart-content,cross-sell,up-sell,recently-viewed,you-may-like,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="cart-main__content-root-slot">
+            <w:slot id="cart-content"
+                    name="购物车主内容"
+                    accept="layout-cart-content,cart-content,content"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="cart-main__content-slot">
+                <w:hook>Weline_Theme::frontend::layouts::cart::content-before</w:hook>
+                <if condition="meta.content">
+                    {{meta.content}}
+                    <elseif condition="content"/>
+                    {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                    <?php echo $this->getChildHtml('content'); ?>
+                </if>
+                <w:hook>Weline_Theme::frontend::layouts::cart::content-after</w:hook>
+            </w:slot>
+            <w:slot id="cart-recommendations"
+                    name="购物车推荐区"
+                    accept="layout-cart-recommendations,cross-sell,up-sell,recently-viewed,you-may-like,product-carousel"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="cart-main__recommendations" weline-code="theme.cart.cart_recommendations">
+                <!-- Product cross-sell 经 default_injections 注入；禁止内嵌非 Theme <w:widget> -->
+                <w:hook>Weline_Theme::frontend::layouts::cart::recommendations</w:hook>
+            </w:slot>
+            </w:slot>
+            <w:hook>Weline_Theme::frontend::layouts::cart::main-after</w:hook>
+        </main>
+
+        <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    </div>
+
+
+    <w:slot id="cart-bottom"
+            name="购物车底部扩展"
+            accept="layout-cart-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="content"
+            class="cart-bottom-slot">
+    </w:slot>
+
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::cart::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:hook>Weline_Theme::frontend::layouts::cart::footer-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+</div>
+
+<w:hook>Weline_Theme::frontend::layouts::cart::body-end</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+<style>
+    .weline-page-wrapper {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+
+    .weline-main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .cart-main {
+        width: 100%;
+        flex: 1;
+    }
+</style>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

@@ -58,6 +58,33 @@ $heroTone = $paymentCancelled ? 'danger' : 'success';
 $orderCurrency = is_array($orderV2) ? (string)($orderV2['currency'] ?? '') : '';
 $shipping = is_array($orderV2) && is_array($orderV2['shipping'] ?? null) ? $orderV2['shipping'] : [];
 $shippingAddress = is_array($shipping['address'] ?? null) ? $shipping['address'] : [];
+$billingAddress = is_array($orderV2) && is_array($orderV2['billing_address'] ?? null)
+    ? $orderV2['billing_address']
+    : [];
+$formatAddressLines = static function (array $address): array {
+    return array_values(array_filter([
+        trim((string)($address['address'] ?? '')),
+        trim((string)($address['address1'] ?? '')),
+        trim((string)($address['address2'] ?? '')),
+        implode(' ', array_filter([
+            trim((string)($address['district'] ?? '')),
+            trim((string)($address['city'] ?? '')),
+            trim((string)($address['province'] ?? '')),
+            trim((string)($address['postal_code'] ?? '')),
+        ], static fn(string $v): bool => $v !== '')),
+        trim((string)($address['country_code'] ?? $address['country'] ?? '')),
+    ], static fn(string $v): bool => $v !== ''));
+};
+$addressHasContent = static function (array $address) use ($formatAddressLines): bool {
+    if ($address === []) {
+        return false;
+    }
+    $name = trim((string)($address['name'] ?? ''));
+    $phone = trim((string)($address['phone'] ?? $address['telephone'] ?? $address['mobile'] ?? ''));
+    $email = trim((string)($address['email'] ?? ''));
+
+    return $name !== '' || $phone !== '' || $email !== '' || $formatAddressLines($address) !== [];
+};
 $shippingName = trim((string)($shippingAddress['name'] ?? ''));
 $shippingPhone = trim((string)($shippingAddress['phone'] ?? ''));
 $shippingEmail = trim((string)($shippingAddress['email'] ?? ''));
@@ -68,18 +95,15 @@ if ($shippingMethod === '') {
 if ($shippingMethod === '') {
     $shippingMethod = trim((string)($shipping['method'] ?? ''));
 }
-$shippingLines = array_values(array_filter([
-    trim((string)($shippingAddress['address'] ?? '')),
-    trim((string)($shippingAddress['address1'] ?? '')),
-    trim((string)($shippingAddress['address2'] ?? '')),
-    implode(' ', array_filter([
-        trim((string)($shippingAddress['district'] ?? '')),
-        trim((string)($shippingAddress['city'] ?? '')),
-        trim((string)($shippingAddress['province'] ?? '')),
-        trim((string)($shippingAddress['postal_code'] ?? '')),
-    ], static fn(string $v): bool => $v !== '')),
-    trim((string)($shippingAddress['country_code'] ?? '')),
-], static fn(string $v): bool => $v !== ''));
+$shippingLines = $formatAddressLines($shippingAddress);
+$showBillingAddress = $addressHasContent($billingAddress);
+$billingName = trim((string)($billingAddress['name'] ?? ''));
+$billingPhone = trim((string)($billingAddress['phone'] ?? $billingAddress['telephone'] ?? $billingAddress['mobile'] ?? ''));
+$billingLines = $showBillingAddress ? $formatAddressLines($billingAddress) : [];
+$billingSameAsShipping = $showBillingAddress
+    && $shippingName === $billingName
+    && $shippingPhone === $billingPhone
+    && $shippingLines === $billingLines;
 $orderItemsRaw = is_array($orderV2) && is_array($orderV2['items'] ?? null) ? $orderV2['items'] : [];
 $orderItemsDisplay = $this->getData('order_v2_items_display');
 $orderItems = is_array($orderItemsDisplay) && $orderItemsDisplay !== []
@@ -115,6 +139,50 @@ if ($orderCurrency !== '' && $money !== []) {
         ];
     }
 }
+/** GA4 对齐：转化事件 value / currency / items（与 purchase 参数一致） */
+$pixelCurrency = $orderCurrency;
+$pixelValue = '';
+if ($orderCurrency !== '' && array_key_exists('grand_total_minor', $money)) {
+    $pixelValue = number_format(((int)$money['grand_total_minor']) / 100, 2, '.', '');
+}
+$pixelItems = [];
+foreach ($orderItems as $pixelItemRow) {
+    if (!is_array($pixelItemRow)) {
+        continue;
+    }
+    $pid = trim((string)($pixelItemRow['product_id'] ?? ''));
+    $sku = trim((string)($pixelItemRow['sku'] ?? ''));
+    $itemId = $pid !== '' ? $pid : $sku;
+    $itemName = trim((string)($pixelItemRow['name'] ?? $pixelItemRow['product_name'] ?? $sku));
+    $qty = (int)($pixelItemRow['qty'] ?? $pixelItemRow['quantity'] ?? 0);
+    if ($qty <= 0) {
+        $qty = 1;
+    }
+    $unitMinor = (int)($pixelItemRow['unit_price_minor'] ?? 0);
+    if ($unitMinor <= 0 && isset($pixelItemRow['row_total_minor'])) {
+        $unitMinor = (int)round(((int)$pixelItemRow['row_total_minor']) / $qty);
+    }
+    $price = $unitMinor > 0 ? round($unitMinor / 100, 2) : null;
+    if ($itemId === '' && $itemName === '' && $price === null) {
+        continue;
+    }
+    $ga4Item = [
+        'item_id' => $itemId,
+        'item_name' => $itemName,
+        'product_id' => $pid !== '' ? $pid : $itemId,
+        'quantity' => $qty,
+    ];
+    if ($sku !== '') {
+        $ga4Item['sku'] = $sku;
+    }
+    if ($price !== null) {
+        $ga4Item['price'] = $price;
+    }
+    $pixelItems[] = $ga4Item;
+    if (count($pixelItems) >= 20) {
+        break;
+    }
+}
 ?>
 <main class="amz-order-confirm amz-order-confirm--<?= $escape($heroTone) ?> checkout-success-page<?= $paymentCancelled ? ' checkout-success-page--cancelled' : ' weline-pixel::checkout_success' ?>"
     weline-code="checkout.checkout.success.section_1"
@@ -124,6 +192,12 @@ if ($orderCurrency !== '' && $money !== []) {
     <?php if (!$paymentCancelled): ?>
     data-pixel-event="checkout_success"
     data-payment-outcome="paid"
+    <?php if ($pixelValue !== ''): ?>
+    data-pixel-value="<?= $escape($pixelValue) ?>"
+    <?php endif; ?>
+    <?php if ($pixelCurrency !== ''): ?>
+    data-pixel-currency="<?= $escape($pixelCurrency) ?>"
+    <?php endif; ?>
     <?php else: ?>
     data-payment-outcome="cancel"
     data-cancel-state="<?= $escape($cancelAlready ? 'already' : 'done') ?>"
@@ -131,17 +205,17 @@ if ($orderCurrency !== '' && $money !== []) {
     data-order-uuid="<?= $escape($requestOrderUuid) ?>"
     data-checkout-group-uuid="<?= $escape($requestCheckoutGroupUuid) ?>"
 >
-    <header class="amz-order-confirm__banner">
+    <header class="amz-order-confirm__banner amz-order-confirm__banner--hero">
         <div class="amz-order-confirm__banner-inner">
             <span class="amz-order-confirm__check" aria-hidden="true"><?= $paymentCancelled ? '×' : '✓' ?></span>
             <div class="amz-order-confirm__banner-copy">
                 <?php if ($paymentCancelled): ?>
                     <?php if ($cancelAlready): ?>
-                        <h1><?= $escape(__('已取消')) ?></h1>
-                        <p><?= $escape(__('该支付已取消，无需再次操作。')) ?></p>
+                        <h1><?= $escape(__('支付已取消')) ?></h1>
+                        <p><?= $escape(__('该支付此前已取消，无需再次操作。')) ?></p>
                     <?php else: ?>
-                        <h1><?= $escape(__('已取消成功')) ?></h1>
-                        <p><?= $escape(__('支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。')) ?></p>
+                        <h1><?= $escape(__('支付已取消')) ?></h1>
+                        <p><?= $escape(__('本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。')) ?></p>
                     <?php endif; ?>
                 <?php elseif ($paidAck): ?>
                     <h1><?= $escape(__('订单已支付')) ?></h1>
@@ -165,11 +239,11 @@ if ($orderCurrency !== '' && $money !== []) {
         </div>
     </header>
 
-    <?php if (!$paymentCancelled && ($shippingAddress !== [] || $orderV2StatusLabel !== '' || $orderV2TotalLabel !== '')): ?>
+    <?php if (!$paymentCancelled && ($shippingAddress !== [] || $showBillingAddress || $orderV2StatusLabel !== '' || $orderV2TotalLabel !== '')): ?>
     <section class="amz-order-confirm__panel" weline-code="checkout.checkout.success.meta">
-        <div class="amz-order-confirm__meta-grid">
+        <div class="amz-order-confirm__meta-grid<?= $showBillingAddress ? ' amz-order-confirm__meta-grid--with-billing' : '' ?>">
             <?php if ($shippingAddress !== []): ?>
-            <div class="amz-order-confirm__meta-block">
+            <div class="amz-order-confirm__meta-block" data-testid="checkout-success-shipping-address">
                 <h2><?= $escape(__('配送地址')) ?></h2>
                 <?php if ($shippingName !== ''): ?>
                     <p class="amz-order-confirm__meta-strong"><?= $escape($shippingName) ?></p>
@@ -179,6 +253,24 @@ if ($orderCurrency !== '' && $money !== []) {
                 <?php endforeach; ?>
                 <?php if ($shippingPhone !== ''): ?>
                     <p><?= $escape($shippingPhone) ?></p>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            <?php if ($showBillingAddress): ?>
+            <div class="amz-order-confirm__meta-block" data-testid="checkout-success-billing-address">
+                <h2><?= $escape(__('结账地址')) ?></h2>
+                <?php if ($billingSameAsShipping): ?>
+                    <p class="amz-order-confirm__meta-strong"><?= $escape(__('与配送地址相同')) ?></p>
+                <?php else: ?>
+                    <?php if ($billingName !== ''): ?>
+                        <p class="amz-order-confirm__meta-strong"><?= $escape($billingName) ?></p>
+                    <?php endif; ?>
+                    <?php foreach ($billingLines as $line): ?>
+                        <p><?= $escape($line) ?></p>
+                    <?php endforeach; ?>
+                    <?php if ($billingPhone !== ''): ?>
+                        <p><?= $escape($billingPhone) ?></p>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
             <?php endif; ?>
@@ -235,7 +327,12 @@ if ($orderCurrency !== '' && $money !== []) {
                 $rowLabel = $orderCurrency !== '' ? $formatMoney($orderCurrency, $rowMinor) : '';
                 $itemName = (string)($item['name'] ?? $item['product_name'] ?? $item['sku'] ?? '');
                 ?>
-                <li class="amz-order-confirm__item">
+                <li class="amz-order-confirm__item"
+                    data-order-item="1"
+                    <?php if ($productId > 0): ?>data-product-id="<?= $escape((string)$productId) ?>"<?php endif; ?>
+                    <?php if ($itemName !== ''): ?>data-product-name="<?= $escape($itemName) ?>"<?php endif; ?>
+                    <?php if ($unitMinor > 0): ?>data-price="<?= $escape(number_format($unitMinor / 100, 2, '.', '')) ?>"<?php endif; ?>
+                    <?php if ($qty > 0): ?>data-qty="<?= $escape((string)$qty) ?>"<?php endif; ?>>
                     <div class="amz-order-confirm__item-media">
                         <?php if ($imageSrc !== ''): ?>
                         <img src="<?= $escape($imageSrc) ?>"
@@ -361,7 +458,7 @@ if ($orderCurrency !== '' && $money !== []) {
         </a>
         <a href="@url{'customer/account/index'}#orders"
            class="amz-order-confirm__btn amz-order-confirm__btn--link weline-pixel::view_orders">
-            <?= $escape(__('返回订单列表')) ?>
+            <?= $escape(__('查看订单列表')) ?>
         </a>
         <?php else: ?>
         <a href="@url{'products'}"
@@ -378,7 +475,7 @@ if ($orderCurrency !== '' && $money !== []) {
         <?php endif; ?>
         <a href="@url{'customer/account/index'}#orders"
            class="amz-order-confirm__btn amz-order-confirm__btn--link weline-pixel::view_orders">
-            <?= $escape(__('返回订单列表')) ?>
+            <?= $escape(__('查看订单列表')) ?>
         </a>
         <?php endif; ?>
     </nav>
@@ -408,33 +505,43 @@ if ($orderCurrency !== '' && $money !== []) {
     line-height: 1.5;
 }
 .amz-order-confirm__banner {
-    background: var(--amz-banner-bg);
-    border: 1px solid var(--amz-border);
-    border-radius: 8px;
-    margin-bottom: 14px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin-bottom: 0;
+}
+.amz-order-confirm__banner--hero {
+    text-align: center;
+    padding-bottom: var(--weline-space-5, 20px);
+    margin-bottom: var(--weline-space-5, 20px);
+    border-bottom: 1px solid var(--amz-border);
 }
 .amz-order-confirm__banner-inner {
     display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    padding: 20px 22px;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--weline-space-4, 14px);
+    padding: var(--weline-space-2, 8px) 0 0;
+    max-width: min(100%, var(--size-content-640, 40rem));
+    margin-inline: auto;
 }
 .amz-order-confirm__check {
     flex-shrink: 0;
-    width: 32px;
-    height: 32px;
+    width: var(--size-panel-120, 7.5rem);
+    height: var(--size-panel-120, 7.5rem);
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: var(--amz-success);
-    color: #fff;
-    font-size: 18px;
+    background: var(--weline-theme-success-surface, var(--color-success-surface, #e4efe7));
+    color: var(--amz-success);
+    font-size: calc(var(--size-panel-120, 7.5rem) * 0.42);
     font-weight: 700;
     line-height: 1;
-    margin-top: 2px;
+    margin-top: 0;
 }
 .amz-order-confirm--danger .amz-order-confirm__check {
-    background: #b12704;
+    background: var(--weline-theme-danger-surface, var(--color-danger-surface, #f8e8e4));
+    color: var(--color-danger, #b12704);
 }
 .amz-order-confirm h1,
 .amz-order-confirm h2,
@@ -442,24 +549,28 @@ if ($orderCurrency !== '' && $money !== []) {
     margin: 0;
     color: inherit;
 }
+.amz-order-confirm__banner-copy {
+    width: 100%;
+}
 .amz-order-confirm__banner-copy h1 {
-    font-size: 22px;
+    font-size: var(--weline-font-size-2xl, 1.5rem);
     font-weight: 700;
     line-height: 1.25;
 }
 .amz-order-confirm__banner-copy > p {
-    margin-top: 6px;
+    margin-top: var(--weline-space-2, 8px);
     color: var(--amz-muted);
+    font-size: var(--weline-font-size-sm, 14px);
 }
 .amz-order-confirm__order-no {
-    margin-top: 10px !important;
+    margin-top: var(--weline-space-3, 10px) !important;
     color: var(--amz-text) !important;
-    font-size: 15px;
+    font-size: var(--weline-font-size-sm, 15px);
 }
 .amz-order-confirm__order-no strong { font-weight: 700; }
 .amz-order-confirm__email-hint {
-    margin-top: 4px !important;
-    font-size: 13px;
+    margin-top: var(--weline-space-1, 4px) !important;
+    font-size: var(--weline-font-size-xs, 13px);
 }
 .amz-order-confirm__email-hint span { color: var(--amz-link); }
 .amz-order-confirm__panel {
@@ -473,6 +584,9 @@ if ($orderCurrency !== '' && $money !== []) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px;
+}
+.amz-order-confirm__meta-grid--with-billing {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .amz-order-confirm__meta-block h2 {
     font-size: 16px;
@@ -632,10 +746,11 @@ if ($orderCurrency !== '' && $money !== []) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: var(--weline-space-3, 12px) var(--weline-space-4, 16px);
-    margin-top: var(--weline-space-4, 16px);
-    padding-top: var(--weline-space-4, 16px);
-    border-top: 1px solid var(--amz-border);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
 }
 .amz-order-confirm__btn {
     display: inline-flex;
@@ -676,14 +791,15 @@ if ($orderCurrency !== '' && $money !== []) {
     padding: 0 var(--weline-space-1, 4px);
     min-height: 2.5rem;
     font-weight: 500;
-    margin-inline-start: auto;
+    margin-inline-start: 0;
 }
 .amz-order-confirm__btn--link:hover {
     color: var(--color-link-hover, var(--amz-link));
     text-decoration: underline;
 }
 @media (max-width: 720px) {
-    .amz-order-confirm__meta-grid { grid-template-columns: 1fr; gap: 18px; }
+    .amz-order-confirm__meta-grid,
+    .amz-order-confirm__meta-grid--with-billing { grid-template-columns: 1fr; gap: 18px; }
     .amz-order-confirm__item { grid-template-columns: 64px minmax(0, 1fr); }
     .amz-order-confirm__item-price { grid-column: 2; padding-top: 0; }
     .amz-order-confirm__item-media { width: 64px; height: 64px; }
@@ -701,3 +817,45 @@ if ($orderCurrency !== '' && $money !== []) {
     }
 }
 </style>
+<?php if (!$paymentCancelled): ?>
+<?php
+$transactionNoParam = trim((string)$this->request->getParam('transaction_no'));
+?>
+<script>
+(function () {
+    var orderUuid = <?= json_encode($requestOrderUuid, JSON_UNESCAPED_UNICODE) ?>;
+    var checkoutGroupUuid = <?= json_encode($requestCheckoutGroupUuid, JSON_UNESCAPED_UNICODE) ?>;
+    var transactionNo = <?= json_encode($transactionNoParam, JSON_UNESCAPED_UNICODE) ?>;
+    var orderId = <?= json_encode($orderV2DisplayNumber, JSON_UNESCAPED_UNICODE) ?>;
+    if (!orderUuid && !checkoutGroupUuid && !transactionNo && !orderId) {
+        return;
+    }
+    var attempts = 0;
+    var maxAttempts = 80;
+    function fire() {
+        attempts += 1;
+        if (typeof window.WelinePixel === 'undefined' || typeof window.WelinePixel.track !== 'function') {
+            if (attempts < maxAttempts) {
+                window.setTimeout(fire, 50);
+            }
+            return;
+        }
+        window.WelinePixel.track('checkout_success', {
+            order_uuid: orderUuid,
+            checkout_group_uuid: checkoutGroupUuid,
+            transaction_id: transactionNo || orderUuid || checkoutGroupUuid || orderId,
+            order_id: orderId || orderUuid,
+            value: <?= json_encode($pixelValue !== '' ? (float)$pixelValue : null, JSON_UNESCAPED_UNICODE) ?>,
+            currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
+            grand_total: <?= json_encode($pixelValue !== '' ? (float)$pixelValue : null, JSON_UNESCAPED_UNICODE) ?>,
+            items: <?= json_encode($pixelItems, JSON_UNESCAPED_UNICODE) ?>
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fire);
+    } else {
+        fire();
+    }
+})();
+</script>
+<?php endif; ?>

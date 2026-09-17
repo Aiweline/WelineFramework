@@ -30,6 +30,12 @@ final class ThemeAmazonProductCardWidgetContractTest extends TestCase
         $this->assertStringContainsString('weline-product-card-shelf', $content);
         $this->assertStringContainsString('<w:product:card', $content);
         $this->assertStringContainsString('density="standard"', $content);
+        $this->assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $content);
+        // CSS 必须落在 section 内；写在 wrapper 外层会被槽位装配剥掉。
+        $this->assertMatchesRegularExpression(
+            '/<section\b[\s\S]*?>\s*<\?= ProductCardRenderer::emitStylesheetLinkOnce\(\) \?>/s',
+            $content
+        );
         $this->assertStringNotContainsString('weline-amz-card-widget', $content);
         $this->assertStringNotContainsString('amazon-product-card.css', $content);
         $this->assertStringNotContainsString('name="pin"', $content);
@@ -47,5 +53,13 @@ final class ThemeAmazonProductCardWidgetContractTest extends TestCase
         $this->assertStringContainsString('--wpc-price:', $content);
         $this->assertStringContainsString('.wpc-cta', $content);
         $this->assertStringContainsString('flex-direction: column', $content);
+    }
+
+    public function testThemeCssDoesNotDefineProductCardBodyRules(): void
+    {
+        $themeCss = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/view/theme/frontend/assets/css/theme.css'
+        );
+        self::assertStringNotContainsString('.weline-product-card .wpc-body', $themeCss);
     }
 }

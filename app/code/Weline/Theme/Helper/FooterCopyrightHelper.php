@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\Framework\Manager\ObjectManager;
+
 /**
  * 页脚版权文案解析（支持主题 meta 与 i18n）
  */
@@ -14,7 +16,12 @@ class FooterCopyrightHelper
     {
         $raw = trim((string) ($raw ?? ''));
         if ($raw === '') {
-            return __('© %{1} Weline Framework. %{2}', [date('Y'), __('保留所有权利')]);
+            $siteName = self::resolveSiteName();
+            if ($siteName !== '') {
+                return '© ' . date('Y') . ' ' . $siteName . '. ' . __('保留所有权利');
+            }
+
+            return __('© %{1} %{2}', [date('Y'), __('保留所有权利')]);
         }
 
         $raw = str_replace('{year}', (string) date('Y'), $raw);
@@ -26,5 +33,22 @@ class FooterCopyrightHelper
         }
 
         return $copyright;
+    }
+
+    private static function resolveSiteName(): string
+    {
+        try {
+            if (class_exists(SiteBrand::class)) {
+                /** @var SiteBrand $siteBrand */
+                $siteBrand = ObjectManager::getInstance(SiteBrand::class);
+                $name = trim($siteBrand->resolveFrontendSiteName());
+                if ($name !== '' && !$siteBrand->isGenericBrandPlaceholder($name)) {
+                    return $name;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 }

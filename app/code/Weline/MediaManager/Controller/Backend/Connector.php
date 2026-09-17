@@ -31,6 +31,7 @@ class Connector extends BackendController
         'rm',
         'upload',
         'asset_metadata',
+        'asset_ensure',
         'asset_translate_missing',
         'translation_config',
         'upload_session_start',

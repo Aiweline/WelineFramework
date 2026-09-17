@@ -21,6 +21,8 @@ final class PromotionStorefrontPageServiceAssemblerPricingContractTest extends T
         self::assertStringContainsString("'has_deal' => false",
             $src,
         );
+        self::assertStringContainsString('keepDealMarkedItemsOnly', $src);
+        self::assertStringContainsString('listHubStorefrontProductIds', $src);
         self::assertStringNotContainsString(
             'Shelf themes may list price-band products while selection is empty; keep page deal + campaign name.',
             $src,

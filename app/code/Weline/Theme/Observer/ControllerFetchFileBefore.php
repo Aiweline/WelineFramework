@@ -107,24 +107,65 @@ class ControllerFetchFileBefore implements ObserverInterface
         return count(self::$runtimeCache);
     }
 
-    private function resolveFastAccountAuthLayout(DataObject $eventData, Template $template, string $contentTemplateFileName): void
+    /**
+     * Path-aligned account layouts: customer/account/{action} → layoutType account/{action} + option default.
+     * Legacy account.auth still resolves to layouts/account/auth.phtml (Multipass / 旧入口).
+     *
+     * @return array<string, array{type:string,option:string}>
+     */
+    private function accountPathAlignedLayouts(): array
     {
-        $layoutTemplate = 'Weline_Theme::theme/frontend/layouts/account/auth.phtml';
+        return [
+            'account.auth' => ['type' => 'account', 'option' => 'auth'],
+            'account/login' => ['type' => 'account/login', 'option' => 'default'],
+            'account/register' => ['type' => 'account/register', 'option' => 'default'],
+            'account/forgot-password' => ['type' => 'account/forgot-password', 'option' => 'default'],
+            'account/set-password' => ['type' => 'account/set-password', 'option' => 'default'],
+            'account/social-login' => ['type' => 'account/social-login', 'option' => 'default'],
+        ];
+    }
+
+    private function resolveFastAccountAuthLayout(
+        DataObject $eventData,
+        Template $template,
+        string $contentTemplateFileName,
+        string $layoutTypePath = 'account',
+        string $layoutOption = 'auth'
+    ): void {
+        $layoutTypePath = trim(str_replace('\\', '/', $layoutTypePath), '/');
+        $layoutOption = trim($layoutOption);
+        if ($layoutTypePath === '') {
+            $layoutTypePath = 'account';
+        }
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+        // Nested path layouts live under Customer; legacy auth option too.
+        $layoutTemplate = 'Weline_Customer::theme/frontend/layouts/'
+            . $layoutTypePath . '/' . $layoutOption . '.phtml';
         $eventData->setData('contentTemplate', $contentTemplateFileName);
         $eventData->setData('layoutTemplate', $layoutTemplate);
         $eventData->setData('fileName', $contentTemplateFileName);
-        $eventData->setData('layoutType', 'account');
-        $eventData->setData('layoutOption', 'auth');
+        $eventData->setData('layoutType', $layoutTypePath);
+        $eventData->setData('layoutOption', $layoutOption);
 
         $template->setData('contentTemplate', $contentTemplateFileName);
         $template->setData('layoutTemplate', $layoutTemplate);
         $template->setData('fileName', $contentTemplateFileName);
+        $template->setData('layoutType', $layoutTypePath);
+        $template->setData('layoutOption', $layoutOption);
         $meta = $template->getData('meta');
         if (!\is_array($meta)) {
             $meta = [];
         }
-        $meta['layoutType'] = 'account';
-        $meta['layoutOption'] = 'auth';
+        $meta['layoutType'] = $layoutTypePath;
+        $meta['layoutOption'] = $layoutOption;
+        if ($layoutTypePath === 'account/login') {
+            $meta['__force_login_stage'] = true;
+        }
+        if ($layoutTypePath === 'account/register') {
+            $meta['__force_register_stage'] = true;
+        }
         // Default storefront chrome on; preserve explicit controller meta.
         if (!\array_key_exists('showHeader', $meta)) {
             $meta['showHeader'] = true;
@@ -137,7 +178,7 @@ class ControllerFetchFileBefore implements ObserverInterface
 
     private function resolveFastAccountChallengeLayout(DataObject $eventData, Template $template, string $contentTemplateFileName): void
     {
-        $layoutTemplate = 'Weline_Theme::theme/frontend/layouts/account/challenge.phtml';
+        $layoutTemplate = 'Weline_Customer::theme/frontend/layouts/account/challenge.phtml';
         $eventData->setData('contentTemplate', $contentTemplateFileName);
         $eventData->setData('layoutTemplate', $layoutTemplate);
         $eventData->setData('fileName', $contentTemplateFileName);
@@ -147,6 +188,8 @@ class ControllerFetchFileBefore implements ObserverInterface
         $template->setData('contentTemplate', $contentTemplateFileName);
         $template->setData('layoutTemplate', $layoutTemplate);
         $template->setData('fileName', $contentTemplateFileName);
+        $template->setData('layoutType', 'account');
+        $template->setData('layoutOption', 'challenge');
         $meta = $template->getData('meta');
         if (!\is_array($meta)) {
             $meta = [];
@@ -173,7 +216,29 @@ class ControllerFetchFileBefore implements ObserverInterface
 
         $layoutType = $eventData->getData('layoutType');
         if (empty($layoutType)) {
-            return;
+            try {
+                /** @var \Weline\Theme\Service\LayoutResolveService $layoutResolve */
+                $layoutResolve = ObjectManager::getInstance(\Weline\Theme\Service\LayoutResolveService::class);
+                $resolved = $layoutResolve->resolveFromRequest(
+                    ObjectManager::getInstance(Request::class)
+                );
+                if (($resolved['claimed'] ?? false) && ($resolved['layout_path'] ?? '') !== '') {
+                    $option = (string)($resolved['layout_option'] ?? 'default');
+                    if ($option === '') {
+                        $option = 'default';
+                    }
+                    $layoutType = (string)$resolved['layout_path'] . '.' . $option;
+                    $eventData->setData('layoutType', $layoutType);
+                    if (($resolved['entity_slug'] ?? '') !== '') {
+                        $eventData->setData('layout_entity_slug', (string)$resolved['entity_slug']);
+                    }
+                }
+            } catch (\Throwable) {
+                return;
+            }
+            if (empty($layoutType)) {
+                return;
+            }
         }
 
         $request = ObjectManager::getInstance(Request::class);
@@ -181,8 +246,16 @@ class ControllerFetchFileBefore implements ObserverInterface
         $isBackendRequest = $this->isBackendRequest($request, $controller);
         $fileName = $eventData->getData('fileName');
         $contentTemplateFileName = $fileName;
-        if ((string)$layoutType === 'account.auth') {
-            $this->resolveFastAccountAuthLayout($eventData, Template::getInstance(), (string)$contentTemplateFileName);
+        $accountPathLayouts = $this->accountPathAlignedLayouts();
+        if (isset($accountPathLayouts[(string)$layoutType])) {
+            $spec = $accountPathLayouts[(string)$layoutType];
+            $this->resolveFastAccountAuthLayout(
+                $eventData,
+                Template::getInstance(),
+                (string)$contentTemplateFileName,
+                $spec['type'],
+                $spec['option']
+            );
             return;
         }
         if ((string)$layoutType === 'account.challenge') {
@@ -246,11 +319,14 @@ class ControllerFetchFileBefore implements ObserverInterface
         try {
 
             // 解析布局类型和选项
-            // 支持格式：'account.auth' (布局类型.布局选项) 或 'account' (仅布局类型)
+            // - 点号：'account.auth' → layoutType=account, option=auth（扁平 option）
+            // - 斜杠嵌套：'account/login' → layoutType=account/login，option 另取（默认 default）
+            //   对应文件 layouts/account/login/default.phtml
+            // - 仅类型：'homepage' → layoutType=homepage
             $layoutOption = null;
             $explicitLayoutOption = $this->resolveExplicitLayoutOption($eventData, $request);
             
-            // 检查是否包含点号
+            // 检查是否包含点号（嵌套 layoutType 用 /，不在此拆分）
             $dotPos = strpos($layoutType, '.');
             if ($dotPos !== false) {
                 // 包含点号，分割为布局类型和布局选项
@@ -361,6 +437,18 @@ class ControllerFetchFileBefore implements ObserverInterface
                 }
             }
             if ($resolvedLayoutPath) {
+                if ($area === 'frontend') {
+                    try {
+                        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime $entityRuntime */
+                        $entityRuntime = ObjectManager::getInstance(
+                            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime::class,
+                        );
+                        // Hard cut: storefront LayoutSlotRenderer fills from entities.
+                        $entityRuntime->markSkipSlotProcessing(true);
+                    } catch (\Throwable) {
+                        // Runtime mark is best-effort; storefront still hard-cuts in LayoutSlotRenderer.
+                    }
+                }
                 $layoutTargets = $this->resolveVirtualLayoutTargets($request);
                 $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
                 if (!empty($layoutTargets)) {
@@ -538,6 +626,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
                 $template->setData('meta', $metaData);
+                $this->publishLayoutSeoFallback($metaData);
                 $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $layoutStaticMeta;
                 if ($runtimeCacheAllowed && $runtimeParamsCacheKey !== null) {
                     self::runtimeCacheSet($runtimeParamsCacheKey, $layoutStaticMeta);
@@ -973,6 +1062,25 @@ class ControllerFetchFileBefore implements ObserverInterface
             }
         }
         return false;
+    }
+
+    /**
+     * Publish Theme layout explicit SEO params into the independent layout-fallback bag
+     * so Partials head can read them after layout unsetData(). Never replaces entity bag.
+     *
+     * @param array<string, mixed> $metaData
+     */
+    private function publishLayoutSeoFallback(array $metaData): void
+    {
+        if (!class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
+            return;
+        }
+        try {
+            $fallback = \Weline\Seo\Service\Head\SeoPageProfileBag::extractLayoutFallbackFromMeta($metaData);
+            \Weline\Seo\Service\Head\SeoPageProfileBag::setLayoutFallback($fallback);
+        } catch (\Throwable) {
+            // SEO module optional at runtime; layout still renders without fallback bridge.
+        }
     }
 
     /**

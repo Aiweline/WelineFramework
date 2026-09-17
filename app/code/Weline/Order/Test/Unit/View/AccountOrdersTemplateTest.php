@@ -148,6 +148,17 @@ final class AccountOrdersTemplateTest extends TestCase
         $source = (string) file_get_contents($template);
         self::assertStringContainsString('account-order-hang.phtml', $source);
         self::assertStringContainsString('$detailHang', $source);
+        self::assertStringContainsString('account-orders__hang', $source);
+        self::assertStringContainsString('data-account-orders-hang="true"', $source);
+        self::assertStringContainsString('account-orders__accordion', $source);
+        self::assertStringContainsString('data-testid="account-orders-accordion"', $source);
+        self::assertStringContainsString('account-orders__panel', $source);
+        self::assertStringContainsString('data-chat-embedded="1"', $source);
+        // Hang lives in the accordion panel (below summary), not inside the summary flex row.
+        self::assertMatchesRegularExpression(
+            '/account-orders__panel[\s\S]*?account-orders__hang/s',
+            $source
+        );
 
         $view = new class {
             /** @param array<string, scalar> $params */

@@ -34,7 +34,12 @@ final class LiveSourceSet
     /** @param list<string> $sourceIds */
     public static function addMany(array $sourceIds): void
     {
-        self::add(...$sourceIds);
+        foreach ($sourceIds as $id) {
+            $id = \trim((string)$id);
+            if ($id !== '') {
+                self::$sourceIds[$id] = true;
+            }
+        }
     }
 
     /** @return list<string> */

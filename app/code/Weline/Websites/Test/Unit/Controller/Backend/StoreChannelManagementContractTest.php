@@ -13,8 +13,8 @@ final class StoreChannelManagementContractTest extends TestCase
         $menu = (string)file_get_contents(BP . 'app/code/Weline/Websites/etc/backend/menu.xml');
         $controller = (string)file_get_contents(BP . 'app/code/Weline/Websites/Controller/Backend/ScopeManagement.php');
         $expected = [
-            'Weline_Websites::store_management' => ['stores', 'postCreateStore', 'websites/backend/scope-management/stores'],
-            'Weline_Websites::sales_channel_management' => ['channels', 'postCreateChannel', 'websites/backend/scope-management/channels'],
+            'Weline_Websites::store_management' => ['stores', 'postCreateStore', 'websites/admin/website/index?focus=stores'],
+            'Weline_Websites::sales_channel_management' => ['channels', 'postCreateChannel', 'websites/admin/website/index?focus=channels'],
         ];
         foreach ($expected as $source => [$getMethod, $postMethod, $action]) {
             self::assertSame(1, substr_count($menu, 'source="' . $source . '"'));
@@ -28,14 +28,18 @@ final class StoreChannelManagementContractTest extends TestCase
                 $controller,
             );
         }
+        self::assertStringContainsString("redirect('websites/admin/website'", $controller);
+        self::assertStringContainsString("['focus' => 'stores']", $controller);
+        self::assertStringContainsString("['focus' => 'channels']", $controller);
+        self::assertStringContainsString('return_url', $controller);
+        self::assertStringContainsString('isSafeWebsitesTreeReturnUrl', $controller);
         self::assertStringContainsString('function editStore(): string', $controller);
         self::assertStringContainsString('function editChannel(): string', $controller);
         self::assertStringContainsString('function postUpdateStore(): string', $controller);
         self::assertStringContainsString('function postUpdateChannel(): string', $controller);
         self::assertStringContainsString('Weline_Websites::store_save_after', $controller);
         self::assertStringContainsString('Weline_Websites::channel_save_after', $controller);
-        self::assertStringNotContainsString('self::STORE_SOURCE', $controller);
-        self::assertStringNotContainsString('self::CHANNEL_SOURCE', $controller);
+        self::assertStringContainsString('WebsiteScopeTreeService', $controller);
         self::assertStringContainsString("postNonNegativeInt('store_id', 0)", $controller);
         self::assertStringContainsString("postNonNegativeInt('channel_id', 0)", $controller);
         self::assertStringNotContainsString("postPositiveInt('store_id')", $controller);

@@ -1,7 +1,7 @@
 <?php
 /**
  * 建站助手悬浮部件（backend-float）
- * 注入后台 default/dashboard 壳层；展开态按站点 localStorage；全部完成后不渲染。
+ * 默认全站；主界面胶囊提示各站未完成数，点击切站。不默认跟随仪表盘子站。
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -10,201 +10,45 @@ $variant = strtoupper(trim((string)($_GET['variant'] ?? 'B')));
 if (!in_array($variant, ['A', 'B', 'C'], true)) {
     $variant = 'B';
 }
-$websiteId = (int)($dashboard_website_id ?? $this->getData('dashboard_website_id') ?? $this->getData('website_id') ?? ($_GET['website_id'] ?? 0));
-$websiteLabel = (string)($dashboard_website_display ?? $this->getData('dashboard_website_display') ?? $this->getData('website_name') ?? '');
-if ($websiteLabel === '') {
-    $websiteLabel = '#' . $websiteId;
-}
 
-$backendPrefix = '';
+// 悬浮助手固定全站：不跟随仪表盘/其它页的 website_id（避免默认落到子站）
+$progressPath = '';
 try {
     $env = \Weline\Framework\App\Env::getInstance()->getConfig('router')['area_routes']['backend']['prefix'] ?? '';
-    $backendPrefix = is_string($env) ? trim($env, '/') : '';
+    $prefix = is_string($env) ? trim($env, '/') : '';
+    $action = 'weline_sitesetupassistant/backend/progress/index';
+    $progressPath = $prefix !== '' ? '/' . $prefix . '/' . $action : '/' . $action;
 } catch (\Throwable) {
-    $backendPrefix = '';
+    $progressPath = '/weline_sitesetupassistant/backend/progress/index';
 }
-$cfg = static function (string $module, string $area, string $guideKey, string $title = '') use ($backendPrefix): string {
-    $q = http_build_query(array_filter([
-        'module' => $module,
-        'area' => $area,
-        'guide_key' => $guideKey,
-        'guide_title' => $title !== '' ? $title : null,
-    ], static fn($v) => $v !== null && $v !== ''));
-    $path = 'weline_systemconfig/backend/config?' . $q;
-    return $backendPrefix !== '' ? '/' . $backendPrefix . '/' . $path : '/' . $path;
-};
-$page = static function (string $action) use ($backendPrefix): string {
-    $action = ltrim($action, '/');
-    return $backendPrefix !== '' ? '/' . $backendPrefix . '/' . $action : '/' . $action;
-};
 
-$tips = [
-    [
-        'code' => 'smtp',
-        'category' => (string)__('通信'),
-        'title' => (string)__('配置 SMTP 发信'),
-        'tip' => (string)__('新站/迁站后先测通发信；若已有配置或继承上层配置，须发送测试邮件确认。'),
-        'status' => 'todo',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $page('smtp/backend/config'),
-        'module' => 'Weline_Smtp',
-    ],
-    [
-        'code' => 'captcha',
-        'category' => (string)__('安全'),
-        'title' => (string)__('开启人机验证'),
-        'tip' => (string)__('按国家路由腾讯云 / Google Enterprise / 本地图码；迁站请同步允许域名。'),
-        'status' => 'todo',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $cfg('Weline_Captcha', 'backend', 'captcha/tencent/app_id,captcha/google/site_key', (string)__('人机验证')),
-        'module' => 'Weline_Captcha',
-    ],
-    [
-        'code' => 'social_login',
-        'category' => (string)__('账户'),
-        'title' => (string)__('社媒登录（Google / Facebook / Instagram）'),
-        'tip' => (string)__('登记 Origin 与回调 URI，再激活前台入口。迁站必改回调域名。'),
-        'status' => 'doing',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $cfg('Weline_Customer', 'frontend', 'customer/social_login/google/client_id,customer/social_login/facebook/client_id', (string)__('社媒登录')),
-        'module' => 'Weline_Customer',
-    ],
-    [
-        'code' => 'social_platform',
-        'category' => (string)__('社媒运营'),
-        'title' => (string)__('社媒平台运营凭据'),
-        'tip' => (string)__('发帖/授权用的各平台 App 凭据，与顾客登录凭据分开。'),
-        'status' => 'todo',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $cfg('Weline_Social', 'backend', 'social/platform/facebook/app_id', (string)__('社媒平台')),
-        'module' => 'Weline_Social',
-    ],
-    [
-        'code' => 'paypal',
-        'category' => (string)__('支付'),
-        'title' => (string)__('PayPal 收款'),
-        'tip' => (string)__('沙盒连通后切 Live；迁站核对 return/cancel/webhook。'),
-        'status' => 'todo',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $cfg('Weline_Payment', 'backend', 'payment/method/paypal/enabled,payment/method/paypal/live_client_id', (string)__('PayPal')),
-        'module' => 'Weline_Payment',
-    ],
-    [
-        'code' => 'seo_bind',
-        'category' => (string)__('SEO'),
-        'title' => (string)__('SEO 站点账户绑定'),
-        'tip' => (string)__('绑定 Search Console / 分析账户后才能推送与诊断。'),
-        'status' => 'done',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $page('seo/backend/website-account'),
-        'module' => 'Weline_Seo',
-    ],
-    [
-        'code' => 'shipping',
-        'category' => (string)__('物流'),
-        'title' => (string)__('发货地址与承运商'),
-        'tip' => (string)__('至少一条可用发货地址 + 承运商/费用模板，结账才能选配送。'),
-        'status' => 'todo',
-        'scenarios' => ['new'],
-        'href' => $page('shipping/backend/shippingaddress/index'),
-        'module' => 'Weline_Shipping',
-    ],
-    [
-        'code' => 'currency',
-        'category' => (string)__('本地化'),
-        'title' => (string)__('货币与汇率'),
-        'tip' => (string)__('站点可用货币、默认币与汇率源。'),
-        'status' => 'doing',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $page('currency/backend/config/index'),
-        'module' => 'Weline_Currency',
-    ],
-    [
-        'code' => 'visitor_pixel',
-        'category' => (string)__('增长'),
-        'title' => (string)__('访客像素追踪'),
-        'tip' => (string)__('开启像素后才能在仪表盘看真实转化漏斗。'),
-        'status' => 'todo',
-        'scenarios' => ['new'],
-        'href' => $cfg('Weline_Visitor', 'backend', 'visitor/tracking/pixel_enabled', (string)__('像素追踪')),
-        'module' => 'Weline_Visitor',
-    ],
-    [
-        'code' => 'customer_service',
-        'category' => (string)__('服务'),
-        'title' => (string)__('在线客服入口'),
-        'tip' => (string)__('启用前台客服与默认语言；可选 AI 模型。'),
-        'status' => 'todo',
-        'scenarios' => ['new'],
-        'href' => $cfg('Weline_CustomerService', 'frontend', 'customer_service/general/enabled', (string)__('在线客服')),
-        'module' => 'Weline_CustomerService',
-    ],
-    [
-        'code' => 'cdn',
-        'category' => (string)__('基建'),
-        'title' => (string)__('CDN / Cloudflare OAuth'),
-        'tip' => (string)__('加速与证书联动时需要 OAuth Client。'),
-        'status' => 'todo',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $cfg('Weline_Cdn', 'backend', 'cdn/cloudflare/oauth_client_id', (string)__('Cloudflare')),
-        'module' => 'Weline_Cdn',
-    ],
-    [
-        'code' => 'domain_https',
-        'category' => (string)__('基建'),
-        'title' => (string)__('域名与 HTTPS'),
-        'tip' => (string)__('域名池可建站、证书签发；迁站重点核对解析与回调白名单。'),
-        'status' => 'done',
-        'scenarios' => ['new', 'migrate'],
-        'href' => $page('websites/admin/domain/index'),
-        'module' => 'Weline_Websites',
-    ],
-];
-
-// 模块 Extends 覆盖状态（SMTP：自有/继承配置 → 待确认；测试通过 → 已完成）
+$tips = [];
+$siteCapsules = [];
+$websiteLabel = (string)__('全站');
 try {
-    /** @var \Weline\SiteSetupAssistant\Service\SetupTaskStatusCollector $statusCollector */
-    $statusCollector = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\SiteSetupAssistant\Service\SetupTaskStatusCollector::class
+    /** @var \Weline\SiteSetupAssistant\Service\SetupTaskCollector $taskCollector */
+    $taskCollector = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\SiteSetupAssistant\Service\SetupTaskCollector::class
     );
-    $statusByCode = $statusCollector->collectByCode([
-        'website_id' => $websiteId,
-        'website_code' => '',
-        'storage_scope' => '',
-    ]);
-    foreach ($tips as &$tipRow) {
-        $code = (string)($tipRow['code'] ?? '');
-        if ($code === '' || !isset($statusByCode[$code])) {
-            continue;
-        }
-        $override = $statusByCode[$code];
-        if (isset($override['status'])) {
-            $tipRow['status'] = (string)$override['status'];
-        }
-        if (!empty($override['tip'])) {
-            $tipRow['tip'] = (string)$override['tip'];
-        }
-        if (!empty($override['title'])) {
-            $tipRow['title'] = (string)$override['title'];
-        }
-        if (!empty($override['href'])) {
-            $tipRow['href'] = (string)$override['href'];
-        }
-        if (!empty($override['meta']) && is_array($override['meta'])) {
-            $tipRow['meta'] = $override['meta'];
-        }
-    }
-    unset($tipRow);
+    $tips = $taskCollector->collectGlobalOverview();
+    $siteCapsules = $taskCollector->summarizeIncompleteSites($tips);
 } catch (\Throwable) {
+    $tips = [];
+    $siteCapsules = [];
 }
 
 $total = count($tips);
-$done = count(array_filter($tips, static fn(array $t): bool => $t['status'] === 'done'));
-$todo = count(array_filter($tips, static fn(array $t): bool => $t['status'] === 'todo'));
-$doing = count(array_filter($tips, static fn(array $t): bool => $t['status'] === 'doing'));
+$done = count(array_filter($tips, static fn(array $t): bool => ($t['status'] ?? '') === 'done'));
+$todo = count(array_filter($tips, static fn(array $t): bool => ($t['status'] ?? '') === 'todo'));
+$doing = count(array_filter($tips, static fn(array $t): bool => ($t['status'] ?? '') === 'doing'));
 $pct = $total > 0 ? (int)round(($done / $total) * 100) : 0;
 $remaining = $todo + $doing;
-$allDone = $remaining <= 0;
+$capsuleRemainingSum = 0;
+foreach ($siteCapsules as $cap) {
+    $capsuleRemainingSum += (int)($cap['remaining'] ?? 0);
+}
+$fabRemaining = max($remaining, $capsuleRemainingSum);
+$allDone = $capsuleRemainingSum <= 0 && $remaining <= 0;
 
 $statusLabel = static function (string $s): string {
     return match ($s) {
@@ -214,13 +58,20 @@ $statusLabel = static function (string $s): string {
     };
 };
 
-$buildVariantUrl = static function (string $v) use ($websiteId): string {
-    $params = $_GET;
-    $params['variant'] = $v;
-    $params['website_id'] = (string)$websiteId;
+$buildUrl = static function (array $overrides) use ($progressPath): string {
+    $params = [];
+    if (array_key_exists('website_id', $overrides) && $overrides['website_id'] !== null && $overrides['website_id'] !== '') {
+        $params['website_id'] = (string)$overrides['website_id'];
+    }
+    if (isset($overrides['variant'])) {
+        $params['variant'] = (string)$overrides['variant'];
+    }
     $q = http_build_query($params);
-    $path = strtok((string)($_SERVER['REQUEST_URI'] ?? ''), '?') ?: '';
-    return $path . ($q !== '' ? '?' . $q : '');
+    return $progressPath . ($q !== '' ? '?' . $q : '');
+};
+
+$buildVariantUrl = static function (string $v) use ($buildUrl): string {
+    return $buildUrl(['variant' => $v]);
 };
 
 if ($allDone) {
@@ -232,8 +83,9 @@ if ($allDone) {
      id="ssa-float-root"
      data-ssa-float="1"
      data-ssa-variant="<?= $h($variant) ?>"
-     data-ssa-website-id="<?= $h((string)$websiteId) ?>"
-     data-ssa-remaining="<?= $h((string)$remaining) ?>"
+     data-ssa-dimension="global"
+     data-ssa-website-id="global"
+     data-ssa-remaining="<?= $h((string)$fabRemaining) ?>"
      hidden>
     <div class="ssa-float__panel" data-ssa-panel hidden>
         <div class="ssa-float__head">
@@ -243,6 +95,28 @@ if ($allDone) {
                 <p class="ssa-float__meta"><?= $h(__('进度 %{1}/%{2} · 还差 %{3} 项', [(string)$done, (string)$total, (string)$remaining])) ?></p>
             </div>
             <button type="button" class="ssa-float__icon-btn" data-ssa-close aria-label="<?= $h(__('收起助手')) ?>">×</button>
+        </div>
+
+        <div class="ssa-float__capsules" data-testid="ssa-float-capsules" role="navigation" aria-label="<?= $h(__('站点未完成提示')) ?>">
+            <a class="ssa-float__capsule is-active"
+               href="<?= $h($buildUrl([])) ?>"
+               data-website-id="global">
+                <span><?= $h(__('全站')) ?></span>
+            </a>
+            <?php foreach ($siteCapsules as $cap): ?>
+                <?php
+                $capId = (int)($cap['website_id'] ?? -1);
+                $capRem = (int)($cap['remaining'] ?? 0);
+                $capLabel = (string)($cap['label'] ?? ('#' . $capId));
+                ?>
+                <a class="ssa-float__capsule"
+                   href="<?= $h($buildUrl(['website_id' => (string)$capId])) ?>"
+                   data-website-id="<?= $h((string)$capId) ?>"
+                   title="<?= $h(__('切到该站')) ?>">
+                    <span>#<?= $h((string)$capId) ?> <?= $h($capLabel) ?></span>
+                    <em><?= $h((string)$capRem) ?></em>
+                </a>
+            <?php endforeach; ?>
         </div>
 
         <div class="ssa-float__meter" role="progressbar" aria-valuenow="<?= $h((string)$pct) ?>" aria-valuemin="0" aria-valuemax="100">
@@ -311,7 +185,7 @@ if ($allDone) {
         <?php endif; ?>
 
         <div class="ssa-float__foot">
-            <span data-ssa-state>variant=<?= $h($variant) ?>; website=<?= $h((string)$websiteId) ?>; open=?</span>
+            <span data-ssa-state>variant=<?= $h($variant) ?>; dim=global; website=global; open=?</span>
             <div class="ssa-float__variants" aria-label="<?= $h(__('面板布局原型')) ?>">
                 <a href="<?= $h($buildVariantUrl('A')) ?>" class="<?= $variant === 'A' ? 'is-active' : '' ?>">A</a>
                 <a href="<?= $h($buildVariantUrl('B')) ?>" class="<?= $variant === 'B' ? 'is-active' : '' ?>">B</a>
@@ -325,7 +199,7 @@ if ($allDone) {
             data-ssa-toggle
             aria-expanded="false">
         <span class="ssa-float__fab-label"><?= $h(__('建站助手')) ?></span>
-        <span class="ssa-float__badge" title="<?= $h(__('未完成项')) ?>"><?= $h((string)$remaining) ?></span>
+        <span class="ssa-float__badge" title="<?= $h(__('未完成项')) ?>"><?= $h((string)$fabRemaining) ?></span>
     </button>
 </div>
 
@@ -424,6 +298,53 @@ if ($allDone) {
     margin: 0.2rem 0 0;
     color: var(--ssa-muted);
     font-size: 0.75rem;
+}
+#ssa-float-root .ssa-float__capsules {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.65rem 0 0;
+}
+#ssa-float-root .ssa-float__capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    max-width: 100%;
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--ssa-border);
+    background: var(--ssa-soft);
+    color: var(--ssa-text);
+    text-decoration: none;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+#ssa-float-root .ssa-float__capsule span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#ssa-float-root .ssa-float__capsule em {
+    flex: 0 0 auto;
+    font-style: normal;
+    min-width: 1.1rem;
+    padding: 0 0.28rem;
+    border-radius: 999px;
+    background: var(--ssa-primary);
+    color: var(--ssa-surface);
+    text-align: center;
+    font-size: 0.65rem;
+    font-variant-numeric: tabular-nums;
+}
+#ssa-float-root .ssa-float__capsule:hover,
+#ssa-float-root .ssa-float__capsule.is-active {
+    border-color: var(--ssa-primary);
+    color: var(--ssa-primary);
+}
+#ssa-float-root .ssa-float__capsule.is-active {
+    background: color-mix(in srgb, var(--ssa-primary) 14%, transparent);
 }
 #ssa-float-root .ssa-float__icon-btn {
     border: 1px solid var(--ssa-border);
@@ -576,9 +497,9 @@ if ($allDone) {
         document.body.appendChild(root);
     }
 
-    var websiteId = root.getAttribute('data-ssa-website-id') || '0';
+    var websiteId = root.getAttribute('data-ssa-website-id') || 'global';
     var remaining = parseInt(root.getAttribute('data-ssa-remaining') || '0', 10) || 0;
-    var storageKey = 'weline.ssa.float.open.v1.w' + websiteId;
+    var storageKey = 'weline.ssa.float.open.v2.' + websiteId;
     var panel = root.querySelector('[data-ssa-panel]');
     var toggle = root.querySelector('[data-ssa-toggle]');
     var closeBtn = root.querySelector('[data-ssa-close]');

@@ -235,19 +235,24 @@ function node(
     string $id,
     string $ur,
 ): array {
+    // Leaf summaries/descriptions must not reuse English for non-EN locales (locale leak).
+    // Names are locale-true below; summary/description for Top8 are filled by
+    // scripts/data/category-i18n-pack.v1.php + remediate-category-i18n-complete.php after seed,
+    // or by passing full $t/$x packs for parent nodes. Until remediated, leave non-EN
+    // summary/description empty so storefront falls back to name-only instead of EN dump.
     return [
         'code' => $code,
         'i18n' => [
             'zh_Hans_CN' => ['name' => $zhName, 'summary' => $zhSummary, 'description' => $zhDesc],
             'en_US' => ['name' => $enName, 'summary' => $enSummary, 'description' => $enDesc],
-            'hi_IN' => ['name' => $hi, 'summary' => $enSummary, 'description' => $enDesc],
-            'es_ES' => ['name' => $es, 'summary' => $enSummary, 'description' => $enDesc],
-            'ar_SA' => ['name' => $ar, 'summary' => $enSummary, 'description' => $enDesc],
-            'fr_FR' => ['name' => $fr, 'summary' => $enSummary, 'description' => $enDesc],
-            'bn_BD' => ['name' => $bn, 'summary' => $enSummary, 'description' => $enDesc],
-            'pt_BR' => ['name' => $pt, 'summary' => $enSummary, 'description' => $enDesc],
-            'id_ID' => ['name' => $id, 'summary' => $enSummary, 'description' => $enDesc],
-            'ur_PK' => ['name' => $ur, 'summary' => $enSummary, 'description' => $enDesc],
+            'hi_IN' => ['name' => $hi, 'summary' => '', 'description' => ''],
+            'es_ES' => ['name' => $es, 'summary' => '', 'description' => ''],
+            'ar_SA' => ['name' => $ar, 'summary' => '', 'description' => ''],
+            'fr_FR' => ['name' => $fr, 'summary' => '', 'description' => ''],
+            'bn_BD' => ['name' => $bn, 'summary' => '', 'description' => ''],
+            'pt_BR' => ['name' => $pt, 'summary' => '', 'description' => ''],
+            'id_ID' => ['name' => $id, 'summary' => '', 'description' => ''],
+            'ur_PK' => ['name' => $ur, 'summary' => '', 'description' => ''],
         ],
         'children' => [],
     ];

@@ -81,8 +81,6 @@ settings,settings
 "Save affiliate data","Save affiliate data"
 "Open affiliate save route","Open affiliate save route"
 "mdi mdi-content-save-outline","mdi mdi-content-save-outline"
-我的分销,我的分销
-分享、转化与佣金,分享、转化与佣金
 加载中,加载中
 去登录,去登录
 分享好物，赚取佣金,分享好物，赚取佣金
@@ -95,10 +93,13 @@ settings,settings
 "分销 API 不支持分享链接操作","分销 API 不支持分享链接操作"
 分销数据加载失败,分销数据加载失败
 分销分享,分销分享
+赚取佣金,赚取佣金
 分销分享链接,分销分享链接
 复制,复制
 分享,分享
 分享到社交平台,分享到社交平台
+我的分销,我的分销
+分享、转化与佣金,分享、转化与佣金
 当前访问范围,当前访问范围
 账户范围,账户范围
 分销数据暂时无法加载，请稍后重试。,分销数据暂时无法加载，请稍后重试。

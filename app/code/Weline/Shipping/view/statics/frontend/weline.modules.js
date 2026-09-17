@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     shippingCheckoutAddress: {
         paths: [
-            "Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20260914-picker-all-addr1"
+            "Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20260916-phone-intl1"
         ],
         globalVar: "WelineShippingCheckoutAddress",
         description: "结账收货地址部件"
@@ -16,7 +16,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     shippingAccountAddress: {
         paths: [
             // Sticky Frontend assetVersion alone does not bust this module; bump ?v= when delete/confirm logic changes.
-            "Weline_Shipping::frontend/js/account-address-v3.js?v=20260908-delete-promise-resolve"
+            "Weline_Shipping::frontend/js/account-address-v3.js?v=20260916-purpose-tags2"
         ],
         globalVar: null,
         description: "账户中心发货/收货地址维护"

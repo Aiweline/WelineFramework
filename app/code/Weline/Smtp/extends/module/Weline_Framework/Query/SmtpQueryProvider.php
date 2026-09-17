@@ -219,6 +219,7 @@ class SmtpQueryProvider implements QueryProviderInterface
             $content = $renderer->render($bodyTpl, $vars, $allowed);
             $content = $shellComposer->wrap($content, $resolvedLocale !== '' ? $resolvedLocale : $ctx['locale'], [
                 'preheader' => $subject,
+                'storage_scope' => $storageScope,
             ]);
             // 壳内还有 {{var.site_*}} 等品牌变量，再渲染一次
             $content = $renderer->render($content, $vars, $allowed);

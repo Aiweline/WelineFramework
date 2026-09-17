@@ -911,7 +911,7 @@ function americasAmountMinor(float $weightKg): int
 
 function heavyIntlFirstBracketMinor(): int
 {
-    $brackets = SeedWeightBracketFactory::fromLinear(200, 40, SeedWeightBracketFactory::HEAVY_BOUNDS);
+    $brackets = SeedWeightBracketFactory::fromLinear(220, 45, SeedWeightBracketFactory::HEAVY_BOUNDS);
 
     return (int)round(((float)$brackets[0]['price']) * 100);
 }

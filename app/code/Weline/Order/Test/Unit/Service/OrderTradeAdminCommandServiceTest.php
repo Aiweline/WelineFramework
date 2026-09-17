@@ -53,16 +53,58 @@ final class OrderTradeAdminCommandServiceTest extends TestCase
         self::assertSame(64, strlen($first['request_hash']));
     }
 
-    public function testShipmentRequiresTrackingNumber(): void
+    public function testShipmentAllowsEmptyTrackingForManualMode(): void
+    {
+        $seen = [];
+        $service = new OrderTradeAdminCommandService(
+            shipmentCommand: static function (
+                string $unitUuid,
+                int $qty,
+                int $version,
+                string $idempotencyKey,
+                string $requestHash,
+            ) use (&$seen): array {
+                $seen[] = $requestHash;
+
+                return [
+                    'ok' => true,
+                    'replayed' => false,
+                    'fulfilled_qty_minor' => 1,
+                ];
+            },
+        );
+        $result = $service->ship(
+            '00000000-0000-4000-8000-000000000101',
+            1,
+            0,
+            'ship-idem-empty',
+            [
+                'fulfill_mode' => 'manual',
+                'tracking_number' => '',
+                'carrier_name' => 'Other',
+                'notify_customer' => true,
+            ],
+        );
+        self::assertFalse($result['replayed']);
+        self::assertSame(64, strlen($result['request_hash']));
+    }
+
+    public function testShipmentRejectsOverlongTracking(): void
     {
         $service = new OrderTradeAdminCommandService(
             shipmentCommand: static fn(): array => ['ok' => true, 'replayed' => false],
         );
         try {
-            $service->ship('00000000-0000-4000-8000-000000000101', 1, 0, 'ship-idem-empty');
-            self::fail('Missing tracking must fail closed.');
+            $service->ship(
+                '00000000-0000-4000-8000-000000000101',
+                1,
+                0,
+                'ship-idem-long',
+                ['tracking_number' => str_repeat('A', 101)],
+            );
+            self::fail('Overlong tracking must fail closed.');
         } catch (OrderTradeAdminCommandException $exception) {
-            self::assertSame('shipment_tracking_required', $exception->errorCode());
+            self::assertSame('shipment_tracking_too_long', $exception->errorCode());
         }
     }
 

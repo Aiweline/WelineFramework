@@ -83,15 +83,99 @@ extractCheck(
     '审图 command_id is stable (not cmd:-)'
 );
 
-$rules = HardConstraintsCatalog::package()['rules'] ?? [];
-$hasShentuRule = false;
-foreach ($rules as $rule) {
-    if (is_array($rule) && ($rule['id'] ?? '') === 'user_image_attachment_triggers_shentu') {
-        $hasShentuRule = true;
+$detailOptimizeCmd = null;
+$productOptimizeCmd = null;
+foreach ($commands as $command) {
+    $path = (string) ($command['path'] ?? '');
+    if (str_contains($path, 'product/详情优化.md')) {
+        $detailOptimizeCmd = $command;
+    }
+    if (str_contains($path, 'product/产品优化.md')) {
+        $productOptimizeCmd = $command;
+    }
+}
+extractCheck(is_array($detailOptimizeCmd), 'includes 详情优化 command file');
+extractCheck(is_array($productOptimizeCmd), 'includes 产品优化 parent command file');
+$i18nOptimizeCmd = null;
+foreach ($commands as $command) {
+    $path = (string) ($command['path'] ?? '');
+    if (str_contains($path, 'product/翻译优化.md')) {
+        $i18nOptimizeCmd = $command;
+    }
+}
+extractCheck(is_array($i18nOptimizeCmd), 'includes 翻译优化 command file');
+extractCheck(
+    is_array($i18nOptimizeCmd)
+    && ($i18nOptimizeCmd['hard_trigger']['kind'] ?? '') === 'product_pdp_url'
+    && in_array('翻译优化', $i18nOptimizeCmd['triggers'] ?? [], true),
+    '翻译优化 command hard_trigger kind is product_pdp_url and triggers include 翻译优化'
+);
+extractCheck(
+    is_array($detailOptimizeCmd)
+    && ($detailOptimizeCmd['hard_trigger']['kind'] ?? '') === 'product_pdp_url',
+    '详情优化 command hard_trigger kind is product_pdp_url'
+);
+extractCheck(
+    is_array($productOptimizeCmd)
+    && ($productOptimizeCmd['hard_trigger']['kind'] ?? '') === 'product_pdp_url',
+    '产品优化 command hard_trigger kind is product_pdp_url'
+);
+extractCheck(
+    is_array($detailOptimizeCmd)
+    && in_array('详情优化', $detailOptimizeCmd['triggers'] ?? [], true)
+    && in_array('商详优化', $detailOptimizeCmd['triggers'] ?? [], true)
+    && !in_array('产品优化', $detailOptimizeCmd['triggers'] ?? [], true)
+    && !in_array('商品优化', $detailOptimizeCmd['triggers'] ?? [], true)
+    && in_array('/product/', $detailOptimizeCmd['triggers'] ?? [], true),
+    '详情优化 child triggers exclude 产品/商品优化 parent keywords'
+);
+extractCheck(
+    is_array($productOptimizeCmd)
+    && in_array('产品优化', $productOptimizeCmd['triggers'] ?? [], true)
+    && in_array('商品优化', $productOptimizeCmd['triggers'] ?? [], true)
+    && in_array('/product/', $productOptimizeCmd['triggers'] ?? [], true),
+    '产品优化 parent triggers include 产品/商品优化 and /product/'
+);
+
+$blogArticleCmd = null;
+foreach ($commands as $command) {
+    if (str_contains((string) ($command['path'] ?? ''), 'blog/新建文章.md')) {
+        $blogArticleCmd = $command;
         break;
     }
 }
+extractCheck(is_array($blogArticleCmd), 'includes 新建文章 command file');
+extractCheck(
+    is_array($blogArticleCmd)
+    && ($blogArticleCmd['hard_trigger']['kind'] ?? '') === 'blog_article',
+    '新建文章 command hard_trigger kind is blog_article'
+);
+extractCheck(
+    is_array($blogArticleCmd)
+    && in_array('新建文章', $blogArticleCmd['triggers'] ?? [], true)
+    && in_array('审查文章', $blogArticleCmd['triggers'] ?? [], true)
+    && in_array('/blog/', $blogArticleCmd['triggers'] ?? [], true),
+    '新建文章 triggers include 新建/审查文章 and /blog/'
+);
+
+$rules = HardConstraintsCatalog::package()['rules'] ?? [];
+$hasShentuRule = false;
+$hasProductOptimizeRule = false;
+$hasBlogArticleRule = false;
+foreach ($rules as $rule) {
+    if (is_array($rule) && ($rule['id'] ?? '') === 'user_image_attachment_triggers_shentu') {
+        $hasShentuRule = true;
+    }
+    if (is_array($rule) && ($rule['id'] ?? '') === 'product_optimize_triggers_detail_suite') {
+        $hasProductOptimizeRule = true;
+    }
+    if (is_array($rule) && ($rule['id'] ?? '') === 'blog_article_methodology_gate') {
+        $hasBlogArticleRule = true;
+    }
+}
 extractCheck($hasShentuRule, 'hard constraints include user_image_attachment_triggers_shentu');
+extractCheck($hasProductOptimizeRule, 'hard constraints include product_optimize_triggers_detail_suite');
+extractCheck($hasBlogArticleRule, 'hard constraints include blog_article_methodology_gate');
 
 $policy = McpSkillCatalog::policy($repository);
 $total = (int) ($policy['catalog_counts']['total'] ?? 0);

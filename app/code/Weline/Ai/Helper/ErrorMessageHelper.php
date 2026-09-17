@@ -151,5 +151,86 @@ class ErrorMessageHelper
             : __('供应商账户信息不完整，请检查配置');
         return self::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]);
     }
+
+    /**
+     * 包装 AI 调用失败文案，强制带上供应商与模型，便于后台 toast / SSE 排查。
+     *
+     * @param string $detail 下游原始错误（如 API请求失败: …）
+     * @param string|null $providerCode 供应商代码（如 ollama / openai）
+     * @param string|null $modelCode 模型代码
+     * @param string|null $modelName 模型显示名
+     * @param string $kind generate|stream
+     */
+    public static function formatAiCallFailureMessage(
+        string $detail,
+        ?string $providerCode = null,
+        ?string $modelCode = null,
+        ?string $modelName = null,
+        string $kind = 'generate'
+    ): string {
+        $detail = trim($detail);
+        $provider = trim((string)$providerCode);
+        $code = trim((string)$modelCode);
+        $name = trim((string)$modelName);
+        $modelLabel = $code;
+        if ($name !== '' && $code !== '' && strcasecmp($name, $code) !== 0) {
+            $modelLabel = $name . ' (' . $code . ')';
+        } elseif ($modelLabel === '' && $name !== '') {
+            $modelLabel = $name;
+        }
+
+        $isStream = $kind === 'stream';
+        if ($provider !== '' && $modelLabel !== '') {
+            return self::translateAiFailure(
+                $isStream
+                    ? 'AI流式生成失败（供应商：%{provider}，模型：%{model}）：%{detail}'
+                    : 'AI生成失败（供应商：%{provider}，模型：%{model}）：%{detail}',
+                [
+                    'provider' => $provider,
+                    'model' => $modelLabel,
+                    'detail' => $detail,
+                ]
+            );
+        }
+        if ($provider !== '') {
+            return self::translateAiFailure(
+                $isStream
+                    ? 'AI流式生成失败（供应商：%{provider}）：%{detail}'
+                    : 'AI生成失败（供应商：%{provider}）：%{detail}',
+                [
+                    'provider' => $provider,
+                    'detail' => $detail,
+                ]
+            );
+        }
+        if ($modelLabel !== '') {
+            return self::translateAiFailure(
+                $isStream
+                    ? 'AI流式生成失败（模型：%{model}）：%{detail}'
+                    : 'AI生成失败（模型：%{model}）：%{detail}',
+                [
+                    'model' => $modelLabel,
+                    'detail' => $detail,
+                ]
+            );
+        }
+
+        return $isStream
+            ? ('AI流式生成失败: ' . $detail)
+            : ('AI生成失败: ' . $detail);
+    }
+
+    /**
+     * @param array<string, scalar|null> $vars
+     */
+    private static function translateAiFailure(string $template, array $vars): string
+    {
+        $text = \function_exists('__') ? (string)\__($template, $vars) : $template;
+        foreach ($vars as $key => $value) {
+            $text = str_replace('%{' . $key . '}', (string)$value, $text);
+        }
+
+        return $text;
+    }
 }
 

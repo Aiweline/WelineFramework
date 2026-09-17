@@ -6,14 +6,14 @@ namespace Weline\Order\Controller\Backend;
 
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Service\OrderTradeAdminCommandException;
 use Weline\Order\Service\OrderTradeAdminCommandService;
 
 #[Acl('Weline_Order::invoice_controller', '订单发票控制器', 'file', '支付 effect 驱动的订单发票管理', 'Weline_Backend::order_group')]
-final class Invoice extends BackendController
+final class Invoice extends BackendPageController
 {
     use OrderObjectAuthorizationTrait;
 

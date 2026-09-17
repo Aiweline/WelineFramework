@@ -48,6 +48,12 @@ final class FpmStrategy implements SessionStrategyInterface
     /** Explicit session.cookie_partitioned from env (null = auto) */
     private mixed $configuredCookiePartitioned;
 
+    /** Session Cookie 基名（客户 / 后台分族） */
+    private string $cookieLegacyName;
+
+    /** Session area for candidate reads */
+    private string $sessionArea;
+
     /**
      * 构造函数
      *
@@ -66,6 +72,19 @@ final class FpmStrategy implements SessionStrategyInterface
         $this->configuredCookieSameSite = \trim((string)($config['cookie_samesite'] ?? ''));
         $this->configuredCookiePartitioned = $config['cookie_partitioned'] ?? null;
         $this->cookieSameSite = $this->configuredCookieSameSite !== '' ? $this->configuredCookieSameSite : 'Lax';
+        $legacy = \trim((string)($config['cookie_legacy_name'] ?? ''));
+        $this->cookieLegacyName = $legacy !== ''
+            ? $legacy
+            : \Weline\Framework\Session\SessionCookieNameResolver::LEGACY_NAME;
+        $this->sessionArea = \trim((string)($config['session_area'] ?? ''));
+    }
+
+    private function resolveCookieName(): string
+    {
+        return \Weline\Framework\Session\SessionCookieNameResolver::resolve(
+            null,
+            $this->sessionArea !== '' ? $this->sessionArea : null,
+        );
     }
 
     private function resolveCookiePath(): string
@@ -124,7 +143,7 @@ final class FpmStrategy implements SessionStrategyInterface
             \session_write_close();
         }
 
-        \session_name(\Weline\Framework\Session\SessionCookieNameResolver::resolve());
+        \session_name($this->resolveCookieName());
 
         if ($sessionId !== null && $sessionId !== '') {
             if (\session_status() === PHP_SESSION_ACTIVE && \session_id() !== $sessionId) {
@@ -182,7 +201,7 @@ final class FpmStrategy implements SessionStrategyInterface
             if (\ini_get('session.use_cookies')) {
                 $params = \session_get_cookie_params();
                 \setcookie(
-                    \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
+                    $this->resolveCookieName(),
                     '',
                     \time() - 42000,
                     $params['path'],
@@ -244,7 +263,7 @@ final class FpmStrategy implements SessionStrategyInterface
         // PHP setcookie() does not accept CHIPS "Partitioned"; emit Set-Cookie manually.
         if (\str_contains($sameSite, 'Partitioned')) {
             $parts = [
-                \rawurlencode(\Weline\Framework\Session\SessionCookieNameResolver::resolve()) . '=' . \rawurlencode($sessionId),
+                \rawurlencode($this->resolveCookieName()) . '=' . \rawurlencode($sessionId),
             ];
             if ($expires > 0) {
                 $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $expires);
@@ -268,7 +287,7 @@ final class FpmStrategy implements SessionStrategyInterface
         }
         
         \setcookie(
-            \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
+            $this->resolveCookieName(),
             $sessionId,
             [
                 'expires' => $expires,
@@ -287,7 +306,9 @@ final class FpmStrategy implements SessionStrategyInterface
     private function syncToFrameworkSession(array $data): void
     {
         try {
-            $session = SessionFactory::getInstance()->createSession();
+            $session = SessionFactory::getInstance()->createSession(
+                $this->sessionArea !== '' ? $this->sessionArea : null,
+            );
             // During Session::start(), initialize() runs before the framework session is marked started.
             // Syncing back at that point re-enters start() and can recurse until memory is exhausted.
             if (!$session->isStarted()) {
@@ -307,7 +328,9 @@ final class FpmStrategy implements SessionStrategyInterface
     private function clearFrameworkSession(): void
     {
         try {
-            $session = SessionFactory::getInstance()->createSession();
+            $session = SessionFactory::getInstance()->createSession(
+                $this->sessionArea !== '' ? $this->sessionArea : null,
+            );
             $session->clear();
         } catch (\Throwable $e) {
             // Session 未初始化时静默忽略

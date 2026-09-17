@@ -258,4 +258,22 @@
                   sort="10"/>
     </event>
 
+    <!-- Path↔layout fallback after module observers (sort high). -->
+    <event name="Weline_Theme::layout_resolve">
+        <observer name="Weline_Theme::layout_resolve_path_layout"
+                  instance="Weline\Theme\Observer\LayoutResolveObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="900"/>
+    </event>
+
+    <!-- Layout→storefront path via module_name + getModuleInfo router (after slug samples). -->
+    <event name="Weline_Theme::layout_preview_sample">
+        <observer name="Weline_Theme::layout_preview_sample_module_router"
+                  instance="Weline\Theme\Observer\LayoutPreviewSampleObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="900"/>
+    </event>
+
 </config>

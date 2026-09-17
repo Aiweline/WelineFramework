@@ -857,7 +857,8 @@ class ThemeQueryProvider implements QueryProviderInterface
         $themeEditor = null;
 
         // query-bin 下 meta.type=request 时，ThemeEditor::fetchJson 会抛 ResponseTerminateException。
-        // 与 AdminControllerBridge 一致：直调期间标记 admin_bridge，并吸收 2xx 终止体。
+        // 与 AdminControllerBridge 一致：直调期间标记 admin_bridge，并吸收终止体（含非 2xx），
+        // 禁止把 Terminate 再抛给 WlsRuntime（否则会变成 text/html，破坏 WQB1）。
         $context = Context::getCurrent();
         $previousMetaType = null;
         if ($context !== null) {
@@ -865,6 +866,8 @@ class ThemeQueryProvider implements QueryProviderInterface
             $context->set('meta.type', 'admin_bridge');
         }
 
+        $response = null;
+        $terminateStatus = null;
         try {
             $response = match ($path) {
                 '/theme/backend/theme-editor/widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgets(),
@@ -913,7 +916,10 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/render-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postRenderWidget(),
                 '/theme/backend/theme-editor/save-compiled-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveCompiledLayout(),
                 '/theme/backend/theme-editor/start-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postStartPreview(),
+                '/theme/backend/theme-editor/preview-sample' => ($themeEditor ??= $this->createDirectThemeEditor())->postPreviewSample(),
                 '/theme/backend/theme-editor/exit-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postExitPreview(),
+                '/theme/backend/theme-editor/resolve-navigation' => ($themeEditor ??= $this->createDirectThemeEditor())->postResolveNavigation(),
+                '/theme/backend/theme-editor/resolve-file-image-previews' => ($themeEditor ??= $this->createDirectThemeEditor())->postResolveFileImagePreviews(),
                 '/theme/backend/theme-editor/publish-and-exit' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublishAndExit(),
                 '/theme/backend/theme-editor/check-lock' => $method === 'POST'
                     ? ($themeEditor ??= $this->createDirectThemeEditor())->postCheckLock()
@@ -957,11 +963,18 @@ class ThemeQueryProvider implements QueryProviderInterface
                 default => $this->dispatchThemeConfigController($path, $method, $requestParams),
             };
         } catch (ResponseTerminateException $e) {
-            $status = $e->getStatusCode();
-            if ($status < 200 || $status >= 300) {
-                throw $e;
-            }
+            // Absorb ALL terminates (incl. non-2xx). Rethrowing lets WlsRuntime emit raw
+            // HTML and the Frontend worker reports Invalid Weline binary magic / got HTML
+            // instead of WQB1 (seen when save-widget preview nested-render terminates).
             $response = $e->getBody();
+            $terminateStatus = $e->getStatusCode();
+        } catch (\Throwable $e) {
+            // Never let uncaught Error/Exception escape query-bin as storefront HTML
+            // (worker then reports Invalid Weline binary magic / got HTML instead of WQB1).
+            return [
+                'success' => false,
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : $e::class,
+            ];
         } finally {
             if ($context !== null) {
                 $context->set('meta.type', $previousMetaType);
@@ -977,9 +990,43 @@ class ThemeQueryProvider implements QueryProviderInterface
             if (json_last_error() === JSON_ERROR_NONE) {
                 return $decoded;
             }
+            $trimmed = ltrim($response);
+            $isHtml = $trimmed !== '' && ($trimmed[0] === '<' || str_starts_with($trimmed, '<!'));
+            // paramrender form / layout-preview 等接口本身就返回 HTML；须包装给 apiText，
+            // 不能当成登录页/错误页。其它路径上的意外 HTML（嵌套渲染 terminate）仍拒绝。
+            if ($isHtml && $this->editorBridgeAllowsHtmlResponse($path)) {
+                return [
+                    'success' => true,
+                    'html' => $response,
+                ];
+            }
+            if ($isHtml) {
+                return [
+                    'success' => false,
+                    'message' => 'Editor bridge received HTML instead of JSON (login redirect or error page).',
+                    'http_status' => $terminateStatus ?? null,
+                    'path' => $path,
+                ];
+            }
+            if (isset($terminateStatus) && ($terminateStatus < 200 || $terminateStatus >= 300)) {
+                return [
+                    'success' => false,
+                    'message' => $trimmed !== '' ? $trimmed : ('Editor bridge terminate status ' . $terminateStatus),
+                    'http_status' => $terminateStatus,
+                ];
+            }
         }
 
         return $response;
+    }
+
+    private function editorBridgeAllowsHtmlResponse(string $path): bool
+    {
+        return in_array($path, [
+            '/theme/backend/theme-editor/layout-preview',
+            '/theme/backend/widget/paramrender/form',
+            '/theme/backend/widget/paramrender/field',
+        ], true);
     }
 
     private function createDirectThemeEditor(): \Weline\Theme\Controller\Backend\ThemeEditor

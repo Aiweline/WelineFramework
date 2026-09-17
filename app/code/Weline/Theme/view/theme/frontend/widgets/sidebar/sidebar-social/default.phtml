@@ -16,7 +16,7 @@
  * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置",type=string}
  * @param icon_style {default="colored",name="图标样式",description="图标显示样式",type=select,options={colored:"彩色",mono:"单色",outline:"线框"}}
  * @param gap {default="10px",name="图标间距",description="图标之间的间距",type=string}
- * @param wechat_qr {default="",name="微信二维码",description="微信公众号二维码图片URL",type=string}
+ * @param wechat_qr {default="",name="微信二维码",description="从媒体库选择微信公众号二维码",type=media_image}
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -39,7 +39,8 @@ $gap = $this->getData('gap') ?? '10px';
 if (preg_match('/^(\d{1,3}(?:\.\d{1,2})?)(px|rem|em)$/', trim((string)$gap)) !== 1) {
     $gap = '10px';
 }
-$wechatQr = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('wechat_qr') ?? '');
+$wechatQr = LegacyMediaUrl::sanitize($this->getData('wechat_qr') ?? '');
+$wechatQrFileHtml = trim((string)($this->getData('wechat_qr_file_html') ?? ''));
 
 $safeHref = static function (mixed $url): string {
     $url = LegacyMediaUrl::sanitize($url);
@@ -90,7 +91,7 @@ if (empty($socials)) {
     }
 }
 
-if ($socials === [] && $wechatQr === '' && !$isPreviewMode) {
+if ($socials === [] && $wechatQr === '' && $wechatQrFileHtml === '' && !$isPreviewMode) {
     return;
 }
 ?>
@@ -116,13 +117,17 @@ if ($socials === [] && $wechatQr === '' && !$isPreviewMode) {
             </a>
         <?php endforeach; ?>
     </div>
-    <?php if ($wechatQr !== ''): ?>
+    <?php if ($wechatQrFileHtml !== '' || $wechatQr !== ''): ?>
         <div class="wechat-qr">
             <p class="qr-label">
                 <?= SocialIconHelper::renderIcon('wechat', ['class' => 'wechat-icon', 'width' => '18', 'height' => '18']) ?>
                 <?= __('微信扫码关注') ?>
             </p>
-            <img src="<?= $esc($wechatQr) ?>" alt="<?= __('微信二维码') ?>" class="qr-image">
+            <?php if ($wechatQrFileHtml !== ''): ?>
+                <div class="qr-image qr-image--asset"><?= $wechatQrFileHtml ?></div>
+            <?php else: ?>
+                <img src="<?= $esc($wechatQr) ?>" alt="<?= __('微信二维码') ?>" class="qr-image">
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 </section>
@@ -214,6 +219,14 @@ if ($socials === [] && $wechatQr === '' && !$isPreviewMode) {
     border-radius: var(--weline-radius-md);
     display: block;
     margin: 0 auto;
+}
+
+.<?= $wc ?> .qr-image--asset :is(img, picture, .w-file-image) {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+    border-radius: inherit;
+    display: block;
 }
 
 .widget-preview-canvas .<?= $wc ?>,

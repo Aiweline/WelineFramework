@@ -14,7 +14,7 @@ return [
         'code' => 'account-mail-register',
         'area' => 'frontend',
         'template' => 'Weline_Mail::templates/frontend/widgets/account-mail-register.phtml',
-        'page_layouts' => ['account.auth', 'account_auth'],
+        'page_layouts' => ['account/register', 'account.auth'],
         'position' => ['content'],
         'slot' => 'account-register-extras',
         'supports' => [

@@ -67,6 +67,29 @@ final class TemplateInlineWidgetMergerTest extends TestCase
         self::assertSame('extra', $plan[1]['widget']['widget_code']);
     }
 
+    public function testPlanInterleavesAdditionBeforeTemplateWhenSortZero(): void
+    {
+        $merger = new TemplateInlineWidgetMerger();
+        $plan = $merger->plan(
+            [
+                ['ref' => 'tpl:trust', 'html' => '<div data-ref="trust">Trust</div>'],
+            ],
+            [
+                [
+                    'widget_code' => 'team-grid',
+                    'sort_order' => 0,
+                    'config' => [],
+                ],
+            ]
+        );
+
+        self::assertCount(2, $plan);
+        self::assertSame('layout', $plan[0]['kind']);
+        self::assertSame('team-grid', $plan[0]['widget']['widget_code']);
+        self::assertSame('template', $plan[1]['kind']);
+        self::assertStringContainsString('data-ref="trust"', (string)$plan[1]['html']);
+    }
+
     public function testFullSlotOverrideUsesLayoutOrderOnly(): void
     {
         $merger = new TemplateInlineWidgetMerger();

@@ -8,12 +8,13 @@ namespace Weline\Framework\Http;
  * Zero-DB loader for pre-generated storefront 404 pages under pub/errors/storefront-not-found/.
  *
  * Hot 404 responses read these files directly — no theme slot queries or product catalog reads per request.
+ * Layout: {websiteCode}/{lang}.html plus legacy flat {lang}.html and _host_map.php.
  */
 final class StorefrontNotFoundStaticPage
 {
     public const DEFAULT_LANG = 'zh_Hans_CN';
 
-    private const STATIC_SUBDIR = 'pub/errors/storefront-not-found';
+    public const KIND = 'storefront-not-found';
 
     /**
      * Resolve locale for a storefront 404 response.
@@ -80,26 +81,35 @@ final class StorefrontNotFoundStaticPage
         return self::resolveLang($path, $queryString, $cookieHeader);
     }
 
-    public static function staticFilePath(string $lang): string
+    public static function staticFilePath(string $lang, string $websiteCode = ''): string
     {
-        $base = \defined('PUB') ? \rtrim((string)PUB, \DIRECTORY_SEPARATOR) : ((\defined('BP') ? BP : '') . 'pub');
-
-        return $base . \DIRECTORY_SEPARATOR . 'errors' . \DIRECTORY_SEPARATOR . 'storefront-not-found'
-            . \DIRECTORY_SEPARATOR . $lang . '.html';
+        return StaticErrorPageMap::websiteLocaleFile(self::KIND, $websiteCode, $lang, '.html');
     }
 
-    public static function publicHtmlUrl(string $lang): string
+    public static function publicHtmlUrl(string $lang, string $websiteCode = ''): string
     {
         $lang = self::normalizeLangCode($lang);
+        if ($lang === '') {
+            $lang = self::DEFAULT_LANG;
+        }
+        $code = StaticErrorPageMap::sanitizeWebsiteCode($websiteCode);
+        if ($code !== '') {
+            return '/pub/errors/storefront-not-found/' . \rawurlencode($code) . '/' . \rawurlencode($lang) . '.html';
+        }
 
-        return $lang !== ''
-            ? '/pub/errors/storefront-not-found/' . \rawurlencode($lang) . '.html'
-            : '/pub/errors/storefront-not-found/' . \rawurlencode(self::DEFAULT_LANG) . '.html';
+        return '/pub/errors/storefront-not-found/' . \rawurlencode($lang) . '.html';
     }
 
     public static function resolveLangFromStaticPath(string $path): string
     {
         $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+        if (\preg_match('#/pub/errors/storefront-not-found/([^/]+)/([^/]+)\.html$#i', $pathOnly, $matches) === 1) {
+            $maybeCode = (string)($matches[1] ?? '');
+            $maybeLang = self::normalizeLangCode(\rawurldecode((string)($matches[2] ?? '')));
+            if ($maybeLang !== '' && StaticErrorPageMap::sanitizeWebsiteCode($maybeCode) === $maybeCode) {
+                return $maybeLang;
+            }
+        }
         if (\preg_match('#/pub/errors/storefront-not-found/([^/]+)\.html$#i', $pathOnly, $matches) === 1) {
             $lang = self::normalizeLangCode(\rawurldecode((string)($matches[1] ?? '')));
             if ($lang !== '') {
@@ -110,26 +120,28 @@ final class StorefrontNotFoundStaticPage
         return '';
     }
 
-    public static function loadHtml(?string $lang = null, string $path = '/', string $queryString = '', string $cookieHeader = ''): ?string
-    {
+    public static function loadHtml(
+        ?string $lang = null,
+        string $path = '/',
+        string $queryString = '',
+        string $cookieHeader = '',
+        string $host = '',
+        ?string $websiteCode = null,
+    ): ?string {
         if (!\defined('BP')) {
             return null;
         }
 
         $lang = $lang !== null && $lang !== '' ? $lang : self::resolveLang($path, $queryString, $cookieHeader);
 
-        foreach (self::langFallbackChain($lang) as $candidate) {
-            $file = self::staticFilePath($candidate);
-            if (!\is_file($file) || !\is_readable($file)) {
-                continue;
-            }
-            $html = @\file_get_contents($file);
-            if (\is_string($html) && $html !== '') {
-                return $html;
-            }
-        }
-
-        return null;
+        return StaticErrorPageMap::loadWithFallback(
+            self::KIND,
+            $lang,
+            $host,
+            $path,
+            false,
+            $websiteCode,
+        );
     }
 
     /**
@@ -137,26 +149,7 @@ final class StorefrontNotFoundStaticPage
      */
     public static function langFallbackChain(string $lang): array
     {
-        $chain = [];
-        foreach ([$lang, self::DEFAULT_LANG, 'en_US'] as $candidate) {
-            if ($candidate === '' || \in_array($candidate, $chain, true)) {
-                continue;
-            }
-            $chain[] = $candidate;
-        }
-
-        $dir = (\defined('PUB') ? \rtrim((string)PUB, \DIRECTORY_SEPARATOR) : ((\defined('BP') ? BP : '') . 'pub'))
-            . \DIRECTORY_SEPARATOR . 'errors' . \DIRECTORY_SEPARATOR . 'storefront-not-found';
-        if (\is_dir($dir)) {
-            foreach (\glob($dir . \DIRECTORY_SEPARATOR . '*.html') ?: [] as $file) {
-                $code = \basename((string)$file, '.html');
-                if (!\in_array($code, $chain, true)) {
-                    $chain[] = $code;
-                }
-            }
-        }
-
-        return $chain;
+        return StaticErrorPageMap::langFallbackChain(self::KIND, $lang);
     }
 
     public static function normalizeLangCode(string $code): string
@@ -182,25 +175,5 @@ final class StorefrontNotFoundStaticPage
         }
 
         return MaintenanceStaticPage::normalizeLangCode($code);
-    }
-
-    private static function readCookieValue(string $cookieHeader, string $name): string
-    {
-        if ($cookieHeader === '' || $name === '') {
-            return '';
-        }
-
-        foreach (\explode(';', $cookieHeader) as $part) {
-            $part = \trim($part);
-            if ($part === '' || !\str_contains($part, '=')) {
-                continue;
-            }
-            [$key, $value] = \array_map('trim', \explode('=', $part, 2));
-            if ($key === $name) {
-                return \urldecode($value);
-            }
-        }
-
-        return '';
     }
 }

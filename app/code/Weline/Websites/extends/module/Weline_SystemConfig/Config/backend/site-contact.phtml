@@ -1,0 +1,47 @@
+<?php
+/**
+ * @meta.title {default="站点联系信息",description="客服电话、地址与服务时间；Global 为默认，Website / Store 可覆盖（含渠道层，按继承回退）"}
+ * @meta.description {default="邮件页尾、关于我们与帮助页共用。未在下级范围填写时自动继承上级；全局默认值为成都阿玛云科技英文地址。"}
+ * @config.area {backend}
+ * @config.sort {25}
+ * @config.acl {Weline_Websites::website_edit}
+ */
+?>
+
+<w:config:group
+    code="website_contact"
+    label="站点联系信息"
+    description="按 Global → Website → Store（含渠道）继承。仅地址必填默认；电话与服务时间可按站店覆盖。"
+    sort="10"
+>
+    <w:config:field
+        key="website/contact/address"
+        label="联系地址（英文）"
+        description="对外展示与邮件页尾地址。留空则继承上级范围；全局建议填写公司英文地址。"
+        type="textarea"
+        value-type="string"
+        default="Chengdu Amayun Technology Co., Ltd., China (Sichuan) Pilot Free Trade Zone, Chengdu High-tech Zone, Chengdu, Sichuan, P.R. China"
+        scope="global,website,store"
+        validation="max:512"
+    />
+    <w:config:field
+        key="website/contact/phone"
+        label="客服电话"
+        description="对外客服电话。留空继承上级；未配置时邮件页尾可不展示号码。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:64"
+    />
+    <w:config:field
+        key="website/contact/service_hours"
+        label="服务时间"
+        description="客服服务时间文案。留空继承上级或使用系统默认时段。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:191"
+    />
+</w:config:group>

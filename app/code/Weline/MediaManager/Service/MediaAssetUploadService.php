@@ -109,10 +109,17 @@ final class MediaAssetUploadService
             if (is_array($metadataByFile[$index] ?? null)) {
                 $itemMetadata = array_replace($itemMetadata, $metadataByFile[$index]);
             }
-            $file['metadata'] = self::normalizeMetadata(
-                array_replace($defaultMetadata, $itemMetadata),
-                $file['name'],
-            );
+            $overwrite = self::isOverwriteFlag($itemMetadata['overwrite'] ?? false);
+            $file['overwrite'] = $overwrite;
+            if ($overwrite) {
+                // Inherit existing locales; do not require fresh alt/description.
+                $file['metadata'] = ['overwrite' => true];
+            } else {
+                $file['metadata'] = self::normalizeMetadata(
+                    array_replace($defaultMetadata, $itemMetadata),
+                    $file['name'],
+                );
+            }
         }
         unset($file);
 
@@ -141,27 +148,42 @@ final class MediaAssetUploadService
                     $mime = $file['detected_mime'];
                     $width = $file['width'];
                     $height = $file['height'];
-                    $asset = $this->assets->upload(
-                        $diskCode,
-                        $objectKey,
-                        $source->stream(),
-                        $name,
-                        $mime,
-                        $localeCode,
-                        $access,
-                        $file['metadata'],
-                        $visibility,
-                        array_replace(['upload_source' => 'media_manager'], $assetMetadata),
-                        $width,
-                        $height,
-                    );
-                    $uploadedKeys[] = $objectKey;
+                    if (!empty($file['overwrite'])) {
+                        $asset = $this->assets->replaceContent(
+                            $diskCode,
+                            $objectKey,
+                            $source->stream(),
+                            $name,
+                            $mime,
+                            $localeCode,
+                            $access,
+                            $width,
+                            $height,
+                        );
+                    } else {
+                        $asset = $this->assets->upload(
+                            $diskCode,
+                            $objectKey,
+                            $source->stream(),
+                            $name,
+                            $mime,
+                            $localeCode,
+                            $access,
+                            $file['metadata'],
+                            $visibility,
+                            array_replace(['upload_source' => 'media_manager'], $assetMetadata),
+                            $width,
+                            $height,
+                        );
+                        $uploadedKeys[] = $objectKey;
+                    }
                     $added[] = array_replace($asset, [
                         'name' => $name,
                         'mime' => $mime,
                         'size' => $file['size'],
                         'width' => $width,
                         'height' => $height,
+                        'overwritten' => !empty($file['overwrite']),
                     ]);
                 } finally {
                     $source->close();
@@ -275,6 +297,21 @@ final class MediaAssetUploadService
             throw new \InvalidArgumentException((string)__('文件资源必须填写显示名称、默认 alt 和资源描述：%{1}', [$name]));
         }
         return $normalized;
+    }
+
+    public static function isOverwriteFlag(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (int)$value === 1;
+        }
+        if (!is_string($value)) {
+            return false;
+        }
+        $normalized = strtolower(trim($value));
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     private static function metadataText(

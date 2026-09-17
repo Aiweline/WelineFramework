@@ -6,6 +6,7 @@ namespace Weline\Order\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Order\Service\CustomerPurchaseFactsService;
 use Weline\Order\Service\UnpaidOrderSignalService;
 
 /**
@@ -27,6 +28,10 @@ final class OrderSignalsQueryProvider implements QueryProviderInterface
             'list_unpaid_orders' => $service->listUnpaid($params),
             'get_unpaid_order' => [
                 'item' => $service->getUnpaid($params),
+            ],
+            'get_customer_purchase_summary' => [
+                'item' => ObjectManager::getInstance(CustomerPurchaseFactsService::class)
+                    ->summarize((int)($params['customer_id'] ?? 0)),
             ],
             default => throw new \InvalidArgumentException('Unsupported order_signals operation: ' . $operation),
         };
@@ -73,6 +78,21 @@ final class OrderSignalsQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'params' => [
                         ['name' => 'order_uuid', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'get_customer_purchase_summary',
+                    'description' => (string)__('客户已付订单计数与最近活跃时间'),
+                    'frontend' => false,
+                    'backend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Order::order_list',
+                    ],
+                    'mode' => 'read',
+                    'params' => [
+                        ['name' => 'customer_id', 'type' => 'int', 'required' => true],
                     ],
                 ],
             ],

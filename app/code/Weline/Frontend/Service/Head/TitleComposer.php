@@ -20,7 +20,7 @@ class TitleComposer
     public function compose($template, array $context): string
     {
         $policy = $this->applyPolicyProviders($template, $context, $this->defaultPolicy());
-        $siteName = $this->normalizeText($context['site_name'] ?? 'Weline Framework');
+        $siteName = $this->normalizeText($context['site_name'] ?? '');
         $pageTitle = $this->normalizeText($this->firstNonEmpty([
             $context['seo_title'] ?? null,
             $context['meta_title'] ?? null,

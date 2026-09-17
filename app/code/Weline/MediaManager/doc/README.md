@@ -58,7 +58,8 @@ because MediaManager does not own or directly operate the Ai scenario schema.
 - Browser business uploads use `Weline.Api.resource('media_manager').connector`;
   neither raw XHR nor process-global request mutation is part of the upload path.
 - Uploads are capped at 14 MiB per request (within the default 16 MiB WLS body budget), preflight target-name collisions,
-  validate the configured extension against detected MIME, and never overwrite.
+  validate the configured extension against detected MIME, and reject same-name targets unless the client sends an explicit
+  per-file `overwrite` flag after the conflict confirmation UI. Overwrite replaces bytes in place and keeps FileAsset locales.
 - Wildcard upload permits a safe passive-content list; active browser content is
   accepted only when an embedding picker explicitly lists its extension.
 - Remote storage names and paths are validated before the provider is resolved; root mutation, traversal, control characters, and rename-overwrite are rejected.

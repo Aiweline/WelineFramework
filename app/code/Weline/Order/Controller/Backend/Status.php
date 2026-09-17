@@ -14,7 +14,7 @@ namespace Weline\Order\Controller\Backend;
 use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -27,7 +27,7 @@ use Weline\Order\Service\OrderStatusService;
  * 订单状态管理控制器
  */
 #[Acl('Weline_Order::status_controller', '订单状态控制器', 'circle', '订单状态管理', 'Weline_Backend::order_group')]
-class Status extends BackendController
+class Status extends BackendPageController
 {
     private OrderStatusService $statusService;
     private EventsManager $eventsManager;

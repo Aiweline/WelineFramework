@@ -199,6 +199,95 @@ final class FileAssetLibrary implements FileAssetLibraryInterface
         }
     }
 
+    public function registerExistingObject(
+        string $diskCode,
+        string $objectKey,
+        string $originalName,
+        string $mimeType,
+        string $localeCode,
+        FileAccessContext $access,
+        array $localeMetadata,
+        string $visibility = self::VISIBILITY_PUBLIC,
+        array $metadata = [],
+        ?int $width = null,
+        ?int $height = null,
+    ): array {
+        $canonical = $this->storage->canonicalizeDiskCode($diskCode);
+        $objectKey = trim($objectKey, '/');
+        $localeCode = $this->normalizeLocale($localeCode);
+        $this->assertStalePrivateIdentityAccess($canonical, $objectKey, $access);
+        $this->assertUploadAccess($visibility, $metadata, $access);
+        $existing = $this->findStoredByObject($canonical, $objectKey);
+        if ($existing instanceof FileAsset && !$existing->isDeleted()) {
+            $this->accessPolicy->assertCanManage($existing, $access);
+            if ($this->uploads->hasRequiredMetadata($localeMetadata)) {
+                return $this->saveMetadata(
+                    $existing->getAssetId(),
+                    $canonical,
+                    $objectKey,
+                    $localeCode,
+                    $access,
+                    max(1, (int)$existing->getData(FileAsset::schema_fields_ASSET_REVISION)),
+                    array_replace($localeMetadata, [
+                        'translation_state' => FileAssetLibraryInterface::TRANSLATION_REVIEWED,
+                        'translation_origin' => FileAssetLibraryInterface::TRANSLATION_MANUAL,
+                    ]),
+                );
+            }
+            return $this->describe($canonical, $objectKey, $localeCode, $access);
+        }
+        $asset = $this->uploads->registerExisting(
+            $canonical,
+            $objectKey,
+            $originalName,
+            $mimeType,
+            $localeCode,
+            array_replace($localeMetadata, [
+                'translation_state' => (string)($localeMetadata['translation_state']
+                    ?? FileAssetLibraryInterface::TRANSLATION_REVIEWED),
+                'translation_origin' => (string)($localeMetadata['translation_origin']
+                    ?? FileAssetLibraryInterface::TRANSLATION_MANUAL),
+            ]),
+            $visibility,
+            $metadata,
+            $width,
+            $height,
+        );
+
+        return $this->describe($asset->getDiskCode(), $asset->getObjectKey(), $localeCode, $access);
+    }
+
+    public function replaceContent(
+        string $diskCode,
+        string $objectKey,
+        mixed $source,
+        string $originalName,
+        string $mimeType,
+        string $localeCode,
+        FileAccessContext $access,
+        ?int $width = null,
+        ?int $height = null,
+    ): array {
+        $canonical = $this->storage->canonicalizeDiskCode($diskCode);
+        $objectKey = trim($objectKey, '/');
+        $localeCode = $this->normalizeLocale($localeCode);
+        $existing = $this->findStoredByObject($canonical, $objectKey);
+        if (!$existing instanceof FileAsset || $existing->isDeleted()) {
+            throw new \RuntimeException((string)__('目标文件不存在，无法覆盖。'));
+        }
+        $this->accessPolicy->assertCanManage($existing, $access);
+        $asset = $this->uploads->replaceContent(
+            $existing,
+            $source,
+            $originalName,
+            $mimeType,
+            $width,
+            $height,
+        );
+
+        return $this->describe($asset->getDiskCode(), $asset->getObjectKey(), $localeCode, $access);
+    }
+
     public function saveMetadata(
         string $assetId,
         string $diskCode,

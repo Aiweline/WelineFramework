@@ -441,12 +441,37 @@ class Partials extends Block
                 return null;
             }
 
+            $websiteScope = '';
+            if ($area === 'frontend') {
+                try {
+                    $identity = \Weline\Framework\Runtime\RequestContext::scopeIdentity();
+                    if ($identity instanceof \Weline\Framework\Runtime\ScopeIdentity) {
+                        $scopes = \Weline\Framework\Manager\ObjectManager::getInstance(
+                            \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class
+                        );
+                        $websiteScope = (string)$scopes->contextFromIdentity($identity)->storageScope;
+                    }
+                } catch (\Throwable) {
+                    $websiteScope = '';
+                }
+                if ($websiteScope === '') {
+                    try {
+                        if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                            $websiteScope = \trim((string)(\Weline\Websites\Data\WebsiteData::getCode() ?? ''));
+                        }
+                    } catch (\Throwable) {
+                        $websiteScope = '';
+                    }
+                }
+            }
+
             return KeyBuilder::environmentHash([
                 // v9: language-switcher SSR no longer inlines flags; bust stale SVG chrome.
                 // v12：账户与购物车共享中性首屏，旧编译时固化的购物车摘要必须失效。
                 // v13：CJK identity 不再挡住词典后，旧 header/footer 中文壳必须失效。
+                // v14：前台 chrome 按 website/storage scope 分桶，避免静态 404 多站串行串 header logo。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v13-guest-chrome',
+                'schema' => 'chrome-partial-v14-guest-chrome-scope',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -460,7 +485,7 @@ class Partials extends Block
                 'theme_color_mode' => (string)($themeData['colorMode'] ?? ''),
                 'website_id' => $area === 'backend'
                     ? (string)(($this->request->getData('website_id') ?? $this->request->getParam('website_id', '0')) ?: '0')
-                    : '',
+                    : $websiteScope,
                 'auth' => $authContext,
                 'auth_mode' => $policy['auth'],
                 // Theme-preview request language override must win over storefront

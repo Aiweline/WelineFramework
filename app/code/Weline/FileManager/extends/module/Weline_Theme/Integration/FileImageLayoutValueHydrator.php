@@ -37,22 +37,49 @@ final class FileImageLayoutValueHydrator implements LayoutValueHydratorInterface
         if ($locale === '' || $locale !== $usage->localeCode) {
             // Theme editor preview may switch layout locale while media remains
             // stamped with the site-default locale. Soft-fallback for preview only;
-            // publish/render stay strict so production never serves cross-locale usage.
-            if ($purpose === 'preview' && $usage->localeCode !== '') {
+            // all-language frontend layouts also leave locale empty so each
+            // mergeTranslatedPaths overlay can hydrate with its own usage stamp.
+            if ($usage->localeCode !== '' && ($purpose === 'preview' || $locale === '')) {
                 $locale = $usage->localeCode;
             } else {
                 throw new \RuntimeException((string)__('图片语境语言与当前布局语言不一致。'));
             }
         }
+        $purpose = (string)($context['purpose'] ?? 'render');
         $access = new FileAccessContext(
             $scope,
             $locale,
             isset($context['actor_id']) ? (int)$context['actor_id'] : null,
             is_array($context['roles'] ?? null) ? array_values($context['roles']) : [],
-            (string)($context['purpose'] ?? 'render'),
+            $purpose,
             max(1, (int)($context['policy_revision'] ?? 1)),
         );
-        $resolved = $this->assets->resolveImage($usage, $access);
+        try {
+            $resolved = $this->assets->resolveImage($usage, $access);
+        } catch (\Throwable $e) {
+            // Publish/save validators stay fail-closed. Runtime render/preview must not
+            // 500 the whole page when a layout still points at a deleted/orphan asset
+            // (e.g. draft en_US i18n overlay after the file row was removed).
+            if (!in_array($purpose, ['render', 'preview'], true)) {
+                throw $e;
+            }
+            if (\function_exists('w_log_warning')) {
+                w_log_warning(sprintf(
+                    '[file-image] layout hydrate skipped missing asset %s (purpose=%s): %s',
+                    $usage->assetId,
+                    $purpose,
+                    $e->getMessage(),
+                ));
+            }
+
+            return new HydratedLayoutValue('', [
+                'file_usage' => $usage->toArray(),
+                'file_html' => '',
+                'file_alt' => '',
+                'file_asset_id' => $usage->assetId,
+                'file_missing' => true,
+            ]);
+        }
 
         return new HydratedLayoutValue($resolved->src, [
             'file_usage' => $usage->toArray(),

@@ -104,6 +104,23 @@ class SessionFactoryTest extends TestCase
         $this->assertEquals('frontend', $session->getArea());
     }
 
+    public function testFrontendAndBackendSessionsUseDistinctUnderlyingSessions(): void
+    {
+        $frontend = $this->factory->createFrontendSession();
+        $backend = $this->factory->createBackendSession();
+
+        $frontend->getSession()->start();
+        $backend->getSession()->start();
+
+        $this->assertNotSame($frontend->getSession(), $backend->getSession());
+        $frontend->getSession()->set('WF_FRONTEND_USER_ID', '47');
+        $backend->getSession()->set('WF_BACKEND_USER_ID', '1');
+        $this->assertSame('47', $frontend->getSession()->get('WF_FRONTEND_USER_ID'));
+        $this->assertNull($backend->getSession()->get('WF_FRONTEND_USER_ID'));
+        $this->assertSame('1', $backend->getSession()->get('WF_BACKEND_USER_ID'));
+        $this->assertNull($frontend->getSession()->get('WF_BACKEND_USER_ID'));
+    }
+
     public function testCreateApiSession(): void
     {
         $session = $this->factory->createApiSession();

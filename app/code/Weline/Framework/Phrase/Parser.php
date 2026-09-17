@@ -502,6 +502,7 @@ class Parser
     public static function clearWorkerCaches(): void
     {
         self::$words = [];
+        self::$usedWords = [];
         self::$workerWordsCache = [];
         self::$workerLocaleWordsCache = [];
         self::$workerModuleWordsCache = [];
@@ -526,6 +527,18 @@ class Parser
         self::$loadedLang = null;
         self::$isLoadingWords = false;
         self::$translationResolutionDepth = 0;
+    }
+
+    /**
+     * Clear the request-scoped "used phrases" bag without dropping dictionary caches.
+     *
+     * Long CLI flows (setup:upgrade) accumulate every __() into $usedWords. Embedding that
+     * bag into storefront runtime JSON (Frontend head) can explode memory and stall for minutes.
+     */
+    public static function clearUsedWords(): void
+    {
+        self::$usedWords = [];
+        self::$currentRequestTranslatedWords = [];
     }
 
     private static function buildWordsFromWorkerCache(string $lang, array $modules, bool $includeGlobalDictionary = true): array

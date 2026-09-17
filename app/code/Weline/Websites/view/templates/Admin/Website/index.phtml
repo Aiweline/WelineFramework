@@ -1,13 +1,18 @@
 <?php
 /**
- * 网站管理（DataTable 列表）
+ * 网站管理：左树（Website→Store→Channel）+ 右编辑（对齐分类管理）
  *
  * @var \Weline\Framework\View\Template $this
- * @var list<array<string,mixed>> $table_rows
- * @var string $row_actions_json
- * @var string $pagination
- * @var int $total
+ * @var list<array<string,mixed>> $scope_tree
  * @var string $search
+ * @var string $selected_node
+ * @var string $editor_kind
+ * @var bool $editor_acl_ok
+ * @var string $editor_error
+ * @var int $editor_website_id
+ * @var int $editor_store_id
+ * @var int $editor_channel_id
+ * @var string $focus
  */
 $escape = static fn(mixed $value): string => htmlspecialchars(
     is_scalar($value) || $value === null ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE),
@@ -15,19 +20,193 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
     'UTF-8',
 );
 $searchValue = trim((string)($search ?? ''));
-$totalCount = (int)($total ?? 0);
+$selectedNode = (string)($selected_node ?? '');
+$editorKind = (string)($editor_kind ?? '');
+$editorAclOk = (bool)($editor_acl_ok ?? false);
+$editorError = (string)($editor_error ?? '');
+$tree = is_array($scope_tree ?? null) ? $scope_tree : [];
+$focusValue = trim((string)($focus ?? ''));
+$template = $this;
+
+$treeUrl = static function (array $params = []) use ($template, $searchValue, $focusValue): string {
+    $query = [];
+    $search = array_key_exists('search', $params) ? $params['search'] : $searchValue;
+    $focus = array_key_exists('focus', $params) ? $params['focus'] : $focusValue;
+    if (is_string($search) && $search !== '') {
+        $query['search'] = $search;
+    }
+    if (is_string($focus) && $focus !== '') {
+        $query['focus'] = $focus;
+    }
+    foreach (['node', 'new'] as $key) {
+        if (!array_key_exists($key, $params)) {
+            continue;
+        }
+        $value = $params[$key];
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $query[$key] = (string)$value;
+    }
+    $base = (string)$template->getUrl('*/admin/website/index');
+    return $query === [] ? $base : ($base . '?' . http_build_query($query));
+};
+
+$renderItems = null;
+$renderTree = function (array $nodes) use (&$renderItems): void {
+    if ($nodes === []) {
+        return;
+    }
+    echo '<ul class="w-tree" role="group">';
+    $renderItems($nodes);
+    echo '</ul>';
+};
+
+$renderItems = function (array $nodes) use (&$renderItems, $escape, $selectedNode, $treeUrl): void {
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $kind = (string)($node['kind'] ?? '');
+        $id = (int)($node['id'] ?? 0);
+        $key = (string)($node['node'] ?? ($kind . ':' . $id));
+        $name = (string)($node['name'] ?? '');
+        $code = (string)($node['code'] ?? '');
+        $logo = trim((string)($node['logo'] ?? ''));
+        $aclOk = (bool)($node['acl_ok'] ?? false);
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+        $hasChildren = $children !== [];
+        $showAddStore = $kind === 'website' && $aclOk;
+        $showAddChannel = $kind === 'store' && $aclOk;
+        $hasGroup = $hasChildren || $showAddStore || $showAddChannel;
+        $isSelected = $selectedNode === $key;
+        $icon = $kind === 'website' ? 'globe' : ($kind === 'store' ? 'store' : 'branch');
+        $rowState = $isSelected ? 'selected' : ($aclOk ? 'idle' : 'locked');
+
+        echo '<li class="w-catalog-tree__item" data-scope-node data-kind="' . $escape($kind) . '" data-id="' . $id . '" role="treeitem"'
+            . ($hasGroup ? ' aria-expanded="true"' : '') . '>';
+        echo '<div class="w-tree__row w-catalog-tree__row" data-state="' . $escape($rowState) . '">';
+        if ($hasGroup) {
+            echo '<button class="w-catalog-tree__toggle" type="button" data-w-tree-toggle aria-label="'
+                . $escape(__('折叠/展开')) . '"><w-icon name="chevron-right" size="sm"></w-icon></button>';
+        } else {
+            echo '<span class="w-catalog-tree__toggle w-catalog-tree__toggle--spacer" aria-hidden="true"></span>';
+        }
+        echo '<a class="w-catalog-tree__link" href="' . $escape($treeUrl(['node' => $key])) . '"'
+            . ($isSelected ? ' aria-current="page"' : '') . '>';
+        // Logo 在范围徽章前（对齐分类树 thumb）；无 Logo 时保留 kind 图标
+        if ($logo !== '') {
+            echo '<img class="w-catalog-tree__thumb" src="' . $escape($logo) . '" alt="" width="20" height="20" loading="lazy"'
+                . ' data-testid="websites-scope-tree-logo">';
+        } else {
+            echo '<w-icon name="' . $escape($icon) . '" size="sm"></w-icon>';
+        }
+        echo '<span>' . $escape($name !== '' ? $name : $code) . '</span>';
+        if ($code !== '') {
+            echo '<span class="w-badge" data-tone="neutral" data-testid="websites-scope-tree-scope">' . $escape($code) . '</span>';
+        }
+        if (!$aclOk) {
+            echo '<span class="w-badge" data-tone="warning">' . $escape(__('只读')) . '</span>';
+        }
+        echo '</a></div>';
+
+        if ($hasGroup) {
+            echo '<ul class="w-tree" role="group">';
+            if ($showAddStore) {
+                echo '<li class="w-catalog-tree__action-item" role="none">'
+                    . '<a class="w-catalog-tree__add" href="' . $escape($treeUrl(['node' => $key, 'new' => 'store'])) . '">'
+                    . '<w-icon name="plus" size="sm"></w-icon>' . $escape(__('新建商店')) . '</a></li>';
+            }
+            if ($showAddChannel) {
+                echo '<li class="w-catalog-tree__action-item" role="none">'
+                    . '<a class="w-catalog-tree__add" href="' . $escape($treeUrl(['node' => $key, 'new' => 'channel'])) . '">'
+                    . '<w-icon name="plus" size="sm"></w-icon>' . $escape(__('新建渠道')) . '</a></li>';
+            }
+            if ($hasChildren) {
+                $renderItems($children);
+            }
+            echo '</ul>';
+        }
+        echo '</li>';
+    }
+};
+
+$editorTitle = match ($editorKind) {
+    'website' => __('编辑网站'),
+    'store' => __('编辑商店'),
+    'channel' => __('编辑渠道'),
+    'new_store' => __('新建商店'),
+    'new_channel' => __('新建渠道'),
+    default => __('范围编辑'),
+};
+$editorTitle = (string)($editor_title ?? $editorTitle);
 ?>
-<link rel="stylesheet" href="@static(Weline_Websites::css/websites-admin-index.css)?v=20260828-website-admin-dt">
-<div class="w-website-admin" data-testid="website-management">
-    <div class="w-card w-website-admin__toolbar">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-catalogs.css)">
+<link rel="stylesheet" href="@static(Weline_Websites::css/websites-admin-index.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-websites-admin.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-language-select.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-currency-select.css)">
+<style>
+/* scope-tree toggle cache-bust inline (static URL double-?v 易吃旧 CSS) */
+.w-websites-scope-admin .w-catalog-tree__toggle {
+    display: inline-grid;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--weline-radius-sm);
+    background: transparent;
+    color: var(--weline-theme-text-muted);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    transition: transform var(--weline-motion-fast), color var(--weline-motion-fast), background-color var(--weline-motion-fast);
+    transform: rotate(0deg);
+}
+.w-websites-scope-admin .w-catalog-tree__toggle:hover {
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text);
+}
+.w-websites-scope-admin .w-catalog-tree__toggle:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
+    outline-offset: 1px;
+}
+.w-websites-scope-admin .w-catalog-tree__toggle--spacer {
+    visibility: hidden;
+    pointer-events: none;
+}
+.w-websites-scope-admin .w-catalog-tree__item[aria-expanded="true"] > .w-catalog-tree__row > .w-catalog-tree__toggle {
+    transform: rotate(90deg);
+    color: var(--weline-theme-text);
+}
+.w-websites-scope-admin .w-catalog-tree__action-item {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.w-websites-scope-admin .w-catalog-tree__add {
+    margin-inline-start: var(--weline-space-7);
+    margin-block: var(--weline-space-1);
+}
+.w-websites-scope-admin .w-catalog-admin__editor[data-loading="1"] {
+    opacity: 0.72;
+    pointer-events: none;
+}
+</style>
+
+<section class="w-backend-page w-catalog-admin w-websites-scope-admin"
+         data-testid="website-management"
+         data-websites-scope-tree>
+    <div class="w-card w-website-admin__toolbar" style="margin-block-end:var(--weline-space-5);">
         <div class="w-website-admin__intro">
             <h4>
                 <w:icon name="globe" size="sm"></w:icon>
                 <lang>网站管理</lang>
             </h4>
             <p class="w-website-admin__intro-meta">
-                <lang>管理多站点、域名、语言与货币配置</lang>
-                · <?= $escape($totalCount) ?>
+                <lang>按 Website → Store → Channel 树管理站点范围</lang>
             </p>
         </div>
         <div class="w-website-admin__actions">
@@ -43,26 +222,32 @@ $totalCount = (int)($total ?? 0);
         </div>
         <form method="get"
               class="w-website-admin__filter"
-              action="@url{'*/admin/website'}"
+              action="@url{'*/admin/website/index'}"
               data-testid="website-admin-filter-form"
               style="grid-column: 1 / -1;">
+            <?php if ($focusValue !== ''): ?>
+                <input type="hidden" name="focus" value="<?= $escape($focusValue) ?>">
+            <?php endif; ?>
+            <?php if ($selectedNode !== ''): ?>
+                <input type="hidden" name="node" value="<?= $escape($selectedNode) ?>">
+            <?php endif; ?>
             <div class="w-website-admin__filter-grid">
                 <div class="w-website-admin__filter-field w-website-admin__filter-field--search">
-                    <label class="w-field__label" for="search-input"><lang>搜索</lang></label>
+                    <label class="w-field__label" for="search-input"><lang>过滤站点</lang></label>
                     <input type="search"
                            id="search-input"
                            name="search"
                            class="w-input"
-                           placeholder="@lang(搜索名称、代码或URL)"
+                           placeholder="@lang(搜索名称或代码)"
                            value="<?= $escape($searchValue) ?>">
                 </div>
                 <div class="w-website-admin__filter-actions">
                     <button type="submit" class="w-button" data-tone="primary">
                         <w:icon name="search" size="sm"></w:icon>
-                        <lang>搜索</lang>
+                        <lang>过滤</lang>
                     </button>
                     <?php if ($searchValue !== ''): ?>
-                        <a href="@url{'*/admin/website'}"
+                        <a href="<?= $escape($treeUrl(['search' => '', 'node' => $selectedNode !== '' ? $selectedNode : null])) ?>"
                            class="w-button"
                            data-tone="neutral"
                            data-variant="outline">
@@ -75,166 +260,40 @@ $totalCount = (int)($total ?? 0);
         </form>
     </div>
 
-    <div class="w-grid">
-        <div style="--w-span:12;">
-            <template>Weline_Component::message.phtml</template>
-        </div>
-    </div>
+    <template>Weline_Component::message.phtml</template>
 
-    <div class="w-card w-website-admin__guide">
-        <div class="w-card__body">
-            <button type="button"
-                    class="w-website-admin__guide-toggle"
-                    id="weline-websites-guide-toggle"
-                    aria-expanded="false"
-                    aria-controls="weline-websites-guide-body">
-                <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                    <w:icon name="help" size="sm"></w:icon>
-                    <strong><lang>使用说明</lang></strong>
-                </span>
-                <w:icon name="chevron-down" size="sm" id="weline-websites-guide-icon"></w:icon>
-            </button>
-            <div class="w-website-admin__guide-body" id="weline-websites-guide-body">
-                <ul>
-                    <li><strong><lang>网站</lang>：</strong><lang>代表一个独立站点，可配置多个域名、语言与货币</lang></li>
-                    <li><strong><lang>Store / SalesChannel</lang>：</strong><lang>列表只读展示摘要，修改请前往商店管理</lang></li>
-                    <li><strong><lang>字段配置</lang>：</strong><lang>可将时区等辅助信息合并到站点列</lang></li>
-                </ul>
+    <div class="w-catalog-admin__layout">
+        <aside class="w-card w-catalog-admin__tree-card" aria-labelledby="websites-scope-tree-heading">
+            <header class="w-card__header">
+                <h2 class="w-card__title" id="websites-scope-tree-heading">
+                    <w-icon name="folder" size="sm"></w-icon>
+                    <lang>站点范围树</lang>
+                </h2>
+            </header>
+            <div class="w-card__body">
+                <?php if ($tree === []): ?>
+                    <div class="w-empty" data-testid="websites-scope-tree-empty">
+                        <w-icon name="globe" size="lg"></w-icon>
+                        <p><lang>暂无网站</lang></p>
+                    </div>
+                <?php else: ?>
+                    <nav class="w-catalog-tree"
+                         aria-label="<?= $escape(__('站点范围树')) ?>"
+                         role="tree"
+                         data-w-component="tree"
+                         data-testid="websites-scope-tree">
+                        <?php $renderTree($tree); ?>
+                    </nav>
+                <?php endif; ?>
             </div>
-        </div>
+        </aside>
+
+        <main class="w-card w-catalog-admin__editor" aria-labelledby="websites-scope-editor-heading"
+              data-testid="websites-scope-editor"
+              data-editor-kind="<?= $escape($editorKind) ?>">
+            <?php echo $this->fetch('Weline_Websites::templates/Admin/Website/tree-editor-panel.phtml'); ?>
+        </main>
     </div>
-
-    <div class="w-card w-website-admin__table-card" id="website-admin-table-container">
-        <?= $this->fetch('Weline_Websites::templates/Admin/Website/datatable.phtml') ?>
-    </div>
-
-    <button type="button"
-            class="w-visually-hidden"
-            id="website-edit-drawer-open"
-            data-w-action="drawer.open"
-            data-w-target="#website_edit_drawer"
-            aria-hidden="true"
-            tabindex="-1"></button>
-    <section class="w-drawer w-remote-drawer"
-             id="website_edit_drawer"
-             data-w-component="drawer remote-drawer"
-             data-w-side="end"
-             data-size="lg"
-             data-state="closed"
-             data-w-keep-mounted="true"
-             data-w-remote-save="true"
-             tabindex="-1"
-             aria-labelledby="website_edit_drawer-title"
-             aria-hidden="true"
-             hidden>
-        <header class="w-drawer__header">
-            <h2 class="w-drawer__title" id="website_edit_drawer-title">
-                <w:icon name="edit" size="sm"></w:icon>
-                <lang>编辑网站</lang>
-            </h2>
-            <button type="button"
-                    class="w-button"
-                    data-tone="quiet"
-                    data-size="sm"
-                    data-w-close
-                    data-w-action="drawer.close"
-                    data-w-target="#website_edit_drawer"
-                    aria-label="@lang(关闭)"></button>
-        </header>
-        <div class="w-drawer__body">
-            <div class="w-toolbar w-remote-drawer__toolbar">
-                <button type="button" class="w-button" data-tone="neutral" data-w-remote-action="reload">
-                    <w:icon name="refresh" size="sm"></w:icon>
-                    <lang>刷新</lang>
-                </button>
-                <button type="button" class="w-button" data-tone="primary" data-w-remote-action="submit">
-                    <w:icon name="save" size="sm"></w:icon>
-                    <lang>保存</lang>
-                </button>
-            </div>
-            <iframe class="w-remote-drawer__frame"
-                    data-w-remote-frame
-                    data-src="about:blank"
-                    title="@lang(编辑网站)"></iframe>
-        </div>
-    </section>
-</div>
-
-<js:part name="w-delete"/>
-<script>
-(function () {
-    'use strict';
-
-    var guideToggle = document.getElementById('weline-websites-guide-toggle');
-    if (guideToggle) {
-        guideToggle.addEventListener('click', function () {
-            var body = document.getElementById('weline-websites-guide-body');
-            var icon = document.getElementById('weline-websites-guide-icon');
-            if (!body) {
-                return;
-            }
-            var expanded = body.classList.toggle('is-open');
-            guideToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-            if (icon) {
-                icon.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
-            }
-        });
-    }
-
-    var tableEl = document.getElementById('w-datatable-website-admin-list')
-        || document.querySelector('#website-admin-table-container [data-w-component="data-table"]');
-    if (!tableEl) {
-        return;
-    }
-
-    function openWebsiteEditDrawer(editUrl) {
-        if (editUrl === '') {
-            return;
-        }
-        var drawer = document.getElementById('website_edit_drawer');
-        var frame = drawer ? drawer.querySelector('[data-w-remote-frame]') : null;
-        if (!frame) {
-            window.location.href = editUrl;
-            return;
-        }
-        frame.setAttribute('data-src', editUrl);
-        frame.src = editUrl;
-        if (window.Weline && window.Weline.UI && typeof window.Weline.UI.drawer.open === 'function') {
-            window.Weline.UI.drawer.open('#website_edit_drawer');
-            return;
-        }
-        var opener = document.getElementById('website-edit-drawer-open');
-        if (opener) {
-            opener.click();
-        }
-    }
-
-    tableEl.addEventListener('weline:datatable:row-action', function (event) {
-        var detail = event.detail || {};
-        var action = String(detail.action || '');
-        var row = detail.row || {};
-        if (action === 'edit') {
-            openWebsiteEditDrawer(String(row.edit_url || ''));
-            return;
-        }
-        if (action === 'delete') {
-            var websiteId = String(row.website_id || '');
-            if (websiteId === '') {
-                return;
-            }
-            var tempBtn = document.createElement('button');
-            tempBtn.type = 'button';
-            tempBtn.setAttribute('w-delete', 'true');
-            tempBtn.setAttribute('data-provider', 'websites');
-            tempBtn.setAttribute('data-operation', 'deleteWebsite');
-            tempBtn.setAttribute('w-var-website_id', websiteId);
-            tempBtn.setAttribute('w-msg', <?= json_encode((string)__('您确定要删除此网站吗？'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>);
-            tempBtn.style.position = 'fixed';
-            tempBtn.style.left = '-9999px';
-            document.body.appendChild(tempBtn);
-            tempBtn.click();
-            tempBtn.remove();
-        }
-    });
-})();
-</script>
+</section>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-websites-form.js)"></script>
+<script src="@static(Weline_Websites::js/websites-scope-tree.js)" defer></script>

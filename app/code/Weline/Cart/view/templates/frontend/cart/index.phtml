@@ -24,6 +24,7 @@ $copy = [
     'shippingNote' => (string)__('税费与运费将在结算时计算'),
     'subtotalItems' => (string)__('小计（%1 件商品）'),
     'unitPrice' => (string)__('单价'),
+    'siblingBrowse' => (string)__('浏览%1 %2件商品'),
 ];
 ?>
 <link rel="stylesheet"
@@ -607,6 +608,13 @@ $copy = [
         return copy.subtotal + ' (' + count + ')';
     }
 
+    function siblingBrowseLabel(label, count) {
+        const template = String(copy.siblingBrowse || '浏览%1 %2件商品');
+        return template
+            .replace(/%\{1\}|%1/g, String(label || ''))
+            .replace(/%\{2\}|%2/g, String(count));
+    }
+
     function formatLineOptions(item) {
         const options = item && Array.isArray(item.options) ? item.options : [];
         const parts = [];
@@ -905,7 +913,7 @@ $copy = [
             if (row.switchable === false && row.gate) {
                 btn.setAttribute('data-cart-sibling-gate', String(row.gate));
             }
-            btn.textContent = '浏览' + label + ' ' + count + '件商品';
+            btn.textContent = siblingBrowseLabel(label, count);
             btn.addEventListener('click', function (event) {
                 event.preventDefault();
                 event.stopPropagation();

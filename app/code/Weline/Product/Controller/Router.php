@@ -56,7 +56,7 @@ final class Router implements RouterInterface
             return;
         }
 
-        if (in_array($normalizedPath, ['products', 'product-list'], true)) {
+        if ($normalizedPath === 'products') {
             $path = self::CATALOG_ROUTE;
             $rule['module'] = 'Weline_Product';
             return;
@@ -114,13 +114,10 @@ final class Router implements RouterInterface
             return;
         }
 
-        // /product?id=… or /product?slug=… — claim before Theme shell can steal bare "product".
+        // Bare /product — always claim Detail (redirects to catalog when identity missing).
+        // Leaving it unclaimed lets Theme Policy render the empty product layout shell.
         if ($normalizedPath === 'product') {
             [$querySlug, $queryProductId] = self::queryIdentity();
-            if ($queryProductId <= 0 && $querySlug === '') {
-                return;
-            }
-
             $path = self::DETAIL_ROUTE;
             $rule['module'] = 'Weline_Product';
             if ($queryProductId > 0) {
@@ -129,6 +126,8 @@ final class Router implements RouterInterface
             if ($querySlug !== '') {
                 \Weline\Framework\Context::current()->set('input.query.slug', $querySlug);
             }
+
+            return;
         }
     }
 

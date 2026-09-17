@@ -43,6 +43,9 @@ final class TextileHeritageWidgetContractTest extends TestCase
             self::assertNotSame('', trim((string)$item['license']));
             self::assertStringStartsWith('https://', (string)$item['license_url']);
             self::assertFileExists($root . '/view/statics/images/textile-heritage/' . basename($image));
+            self::assertStringStartsWith('blog/textile-', (string)$item['link']);
+            self::assertStringNotContainsString('/search?', (string)$item['link']);
+            self::assertFalse(str_starts_with((string)$item['link'], '/'));
         }
     }
 
@@ -61,6 +64,11 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertStringContainsString('decoding="async"', $template);
         self::assertStringContainsString('heritage-source', $template);
         self::assertStringNotContainsString('<script', $template);
+        self::assertStringContainsString('Catalog owns article deep links', $template);
+        self::assertStringContainsString("\$catalogLink !== '' ? \$catalogLink", $template);
+        self::assertStringContainsString('@url{$linkPath}', $template);
+        self::assertStringNotContainsString('href="<?= $esc($link) ?>"', $template);
+        self::assertStringContainsString('data-testid="textile-heritage"', $template);
         self::assertStringContainsString('repeat(6, minmax(0, 1fr))', $css);
         self::assertStringContainsString('repeat(3, minmax(0, 1fr))', $css);
         self::assertStringContainsString('repeat(2, minmax(0, 1fr))', $css);

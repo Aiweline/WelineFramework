@@ -40,7 +40,7 @@
         </tr>
         <!-- 页尾：信任与客服（品牌浅底 + 主色标题） -->
         <tr>
-          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:20px 28px 10px;font-family:Arial,Helvetica,sans-serif;background:{{var.brand_footer_bg}};border-top:1px solid {{var.brand_border}};">
+          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:20px 28px 22px;font-family:Arial,Helvetica,sans-serif;background:{{var.brand_footer_bg}};border-top:1px solid {{var.brand_border}};">
             <div style="font-size:13px;font-weight:700;color:{{var.brand_footer_heading}};margin:0 0 8px;">需要帮助？</div>
             <div style="font-size:12px;line-height:1.75;color:{{var.brand_muted}};">
               访问 <a href="{{var.site_url}}" style="color:{{var.brand_link}};text-decoration:underline;">{{var.site_url}}</a><br>
@@ -49,12 +49,10 @@
               服务时间：{{var.service_hours}}<br>
               地址：{{var.contact_address}}
             </div>
-          </td>
-        </tr>
-        <tr>
-          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:8px 28px 24px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:{{var.brand_muted}};background:{{var.brand_footer_bg}};">
-            {{var.site_name}} · {{var.store_name}} · {{var.channel_name}}<br>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid {{var.brand_border}};font-size:11px;line-height:1.65;color:{{var.brand_muted}};">
+              {{var.brand_display_name}}<br>
             此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。
+            </div>
           </td>
         </tr>
       </table>

@@ -19,8 +19,17 @@ final class CheckoutMissingWeightShippingContractTest extends TestCase
         self::assertStringNotContainsString('function chargeableWeightMinor(', $src);
         self::assertStringNotContainsString('? $weightMinor : 500', $src);
         self::assertStringContainsString('quoteLineWeight()->resolveLineWeightMinor($item)', $src);
-        self::assertStringContainsString("quoteDiagnostics['missing_weight']", $src);
-        self::assertStringContainsString('请联系客服协助处理后再试', $src);
+        self::assertStringContainsString('CheckoutShippingUnavailablePresenter', $src);
+        self::assertStringContainsString('shipping_unavailable', $src);
+        self::assertStringContainsString('$shippingEmptyReason', $src);
+        self::assertFileExists(dirname(__DIR__, 3) . '/Service/CheckoutShippingUnavailablePresenter.php');
+        $presenter = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/CheckoutShippingUnavailablePresenter.php',
+        );
+        self::assertStringContainsString('暂时无法计算运费', $presenter);
+        self::assertStringContainsString("'reason_code' => 'missing_weight'", $presenter);
+        self::assertStringContainsString('缺少重量', $presenter);
+        self::assertStringNotContainsString('拒因码', $presenter);
         self::assertStringNotContainsString('->getLastQuoteDiagnostics()', $src);
     }
 

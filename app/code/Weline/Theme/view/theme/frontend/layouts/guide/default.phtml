@@ -7,8 +7,9 @@
  *
  * @meta.name {default="指南文档布局",name="指南文档布局",description="亚马逊风格政策/指南页壳层"}
  * @meta.description {default="页面包裹器 + 主题宽度正文区，供 guide 内容模板注入",name="描述",description="避免正文贴页头页脚"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="指南页通常允许访客访问"}
  * @param.title {default="指南",name="页面标题",description="页面标题"}
+ * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
+ * @param.meta_description {default="查看配送、退换与购物相关说明，帮助顺利完成汉服选购。",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
  * @param.showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
  * @param.showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
  * @param.class {default="",name="额外 CSS 类",description="主内容额外 CSS 类"}
@@ -92,11 +93,33 @@ $title = (string)($meta['title'] ?? __('指南'));
                             <?= $rawContent ?>
                         <?php elseif ($contentTemplate !== ''): ?>
                             <?= $this->fetch($contentTemplate) ?>
+                        <?php else: ?>
+                            <div class="guide-default-widget-stack" weline-code="theme.guide.widget_stack">
+                                <w:widget type="content" name="section-heading" />
+                                <w:widget type="faq" name="faq-accordion" />
+                                <w:widget type="content" name="contact-info" />
+                            </div>
                         <?php endif; ?>
                     </w:hook>
                 </w:slot>
             </div>
         </main>
+
+
+        <w:slot id="guide-bottom"
+                name="指南页底部扩展"
+                accept="layout-guide-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges,contact-info"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="guide-bottom-slot">
+            <w:hook>
+                Weline_Theme::frontend::layouts::guide::bottom
+                <else/>
+                <w:widget type="content" name="contact-info" />
+            </w:hook>
+        </w:slot>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>

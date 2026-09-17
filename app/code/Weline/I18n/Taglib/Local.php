@@ -221,7 +221,7 @@ BULK;
                 $action = $request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', ['model' => $model, 'field' => $field]);
             }
 
-            $cssUrl = htmlspecialchars(self::resolveModuleStaticUrl('Weline_I18n::css/local-translation.css?v=20260828-trigger-primary1'), ENT_QUOTES);
+            $cssUrl = htmlspecialchars(self::resolveModuleStaticUrl('Weline_I18n::css/local-translation.css?v=20260916-trigger-bg2'), ENT_QUOTES);
             $closeText = __('关闭');
             $titileText = __('多语言翻译');
             $refreshText = __('刷新');
@@ -248,9 +248,9 @@ BULK;
             return match ($tag_key) {
                 'tag', 'tag-start' => <<<TAG
                     <link rel="stylesheet" href="{$cssUrl}">
-                    <span class="w-local-translation__wrap"{$bulkParticipantAttrs}>
+                    <div class="w-local-translation__wrap"{$bulkParticipantAttrs}>
                     <button type="button" class="w-button w-local-translation__trigger" aria-controls='{$idName}' data-w-target='#{$idName}' data-w-action="drawer.open" data-tone="quiet" data-size="sm">
-                        <span>{$name}</span>
+                        <div class="w-local-translation__trigger-text">{$name}</div>
                         <w-icon name="language" size="sm"></w-icon>
                     </button>
                     <div class="w-drawer w-drawer--dock w-local-translation-drawer" tabindex='-1' id='{$idName}' aria-labelledby='{$idName}Label'
@@ -330,7 +330,7 @@ BULK;
                             </div>
                         </div>
                     </div>
-                    </span>
+                    </div>
 TAG,
                 'tag-end' => '',
             };

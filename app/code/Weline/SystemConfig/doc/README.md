@@ -128,7 +128,7 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 
 | 要点 | 行为 |
 |------|------|
-| Scope | 只信 URL（`target_scope` 或分段 code）；无 Session；缺省 Global |
+| Scope | URL（`target_scope`/分段）或 Tag 强制属性；无 Session；缺省 Global |
 | 保存 | 变更即 `system_config.setScopedConfig` + toast；务必带 `locale=default` |
 | ACL | 无 UPDATE 灰显；未声明红标不阻断同级；敏感只读深链 |
 | 选择 | `field`/`fields` → `group` → 整 `module`+`area` |

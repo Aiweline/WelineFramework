@@ -149,6 +149,180 @@ final class FileAssetUploadService
         }
     }
 
+    /**
+     * Create a FileAsset row for an object that already exists on the disk.
+     *
+     * @param array{display_name?:string,default_alt?:string,description?:string,default_caption?:string,translation_state?:string,translation_origin?:string} $localeMetadata
+     * @param array<string,mixed> $metadata
+     */
+    public function registerExisting(
+        string $diskCode,
+        string $objectKey,
+        string $originalName,
+        string $mimeType,
+        string $localeCode,
+        array $localeMetadata,
+        string $visibility = FileAsset::VISIBILITY_PUBLIC,
+        array $metadata = [],
+        ?int $width = null,
+        ?int $height = null,
+    ): FileAsset {
+        $localeCode = FileAssetManager::normalizeLocale($localeCode);
+        $disk = $this->storage->disk($diskCode);
+        $objectKey = trim($objectKey, '/');
+        $visibility = strtolower(trim($visibility));
+        $this->assertVisibilitySupported($disk, $objectKey, $visibility, $metadata);
+        if (!$disk->exists($objectKey)) {
+            throw new \RuntimeException((string)__('存储对象不存在。'));
+        }
+        $existing = $this->findExisting($disk->diskCode(), $objectKey);
+        if ($existing instanceof FileAsset && !$existing->isDeleted()) {
+            return $existing;
+        }
+        $stat = $disk->stat($objectKey);
+        $mimeType = trim($mimeType) !== '' ? trim($mimeType) : (string)($stat->mimeType ?? 'application/octet-stream');
+        $sha256 = $this->hashExistingObject($disk, $objectKey);
+        $asset = null;
+        $persist = function () use (
+            &$asset,
+            $disk,
+            $stat,
+            $objectKey,
+            $originalName,
+            $mimeType,
+            $sha256,
+            $width,
+            $height,
+            $localeCode,
+            $visibility,
+            $metadata,
+            $localeMetadata,
+            $existing,
+        ): void {
+            $this->snapshotGuard->assertWritable($disk->snapshot());
+            if ($existing instanceof FileAsset) {
+                $this->purgeSoftDeleted($this->lockSoftDeletedForReuse($existing));
+            }
+            $asset = clone $this->assets;
+            $asset->clearData();
+            $asset->setData(FileAsset::schema_fields_DISK_CODE, $disk->diskCode());
+            $asset->setData(FileAsset::schema_fields_OBJECT_KEY, $objectKey);
+            $asset->setData(FileAsset::schema_fields_ORIGINAL_NAME, trim($originalName) !== '' ? trim($originalName) : basename($objectKey));
+            $asset->setData(FileAsset::schema_fields_MIME_TYPE, $mimeType);
+            $asset->setData(FileAsset::schema_fields_BYTES, $stat->bytes);
+            $asset->setData(FileAsset::schema_fields_SHA256, $sha256);
+            $asset->setData(FileAsset::schema_fields_WIDTH, $width !== null && $width > 0 ? $width : null);
+            $asset->setData(FileAsset::schema_fields_HEIGHT, $height !== null && $height > 0 ? $height : null);
+            $asset->setData(FileAsset::schema_fields_DEFAULT_LOCALE, $localeCode);
+            $asset->setData(FileAsset::schema_fields_VISIBILITY, $visibility);
+            $asset->setData(FileAsset::schema_fields_LIFECYCLE_STATE, FileAsset::STATE_DRAFT);
+            $asset->setData(FileAsset::schema_fields_METADATA, json_encode(
+                $metadata === [] ? ['source' => 'register_existing'] : $metadata,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            ));
+            $asset->save();
+
+            $savedLocale = $this->saveLocale($asset, $localeCode, $localeMetadata);
+            if ($savedLocale->isReviewed() && $this->hasRequiredMetadata($localeMetadata)) {
+                $asset->setData(FileAsset::schema_fields_LIFECYCLE_STATE, FileAsset::STATE_READY);
+                $asset->save();
+            }
+        };
+        $connection = $this->assets->getConnection();
+        if ($this->transactions->isActive($connection)) {
+            if (!$this->transactions->isWriteIntent($connection)) {
+                throw new \LogicException((string)__('文件资源注册必须从根边界使用写意图事务。'));
+            }
+            $this->transactions->withSavepoint($connection, 'file_asset_register_existing', $persist);
+        } else {
+            $this->transactions->runWrite($connection, $persist);
+        }
+        if (!$asset instanceof FileAsset || $asset->getAssetId() === '') {
+            throw new \RuntimeException((string)__('文件资源写入结果无效。'));
+        }
+        return $asset;
+    }
+
+    /**
+     * Replace storage bytes for an existing live FileAsset without touching locales.
+     *
+     * @param resource $source
+     */
+    public function replaceContent(
+        FileAsset $existing,
+        mixed $source,
+        string $originalName,
+        string $mimeType,
+        ?int $width = null,
+        ?int $height = null,
+    ): FileAsset {
+        if (!is_resource($source)) {
+            throw new \InvalidArgumentException((string)__('上传源必须是流。'));
+        }
+        if ($existing->getAssetId() === '' || $existing->isDeleted()) {
+            throw new \RuntimeException((string)__('目标文件不存在，无法覆盖。'));
+        }
+        $disk = $this->storage->disk($existing->getDiskCode());
+        $objectKey = $existing->getObjectKey();
+        $rawMetadata = trim((string)$existing->getData(FileAsset::schema_fields_METADATA));
+        $assetMetadata = [];
+        if ($rawMetadata !== '') {
+            try {
+                $decoded = json_decode($rawMetadata, true, 64, JSON_THROW_ON_ERROR);
+                $assetMetadata = is_array($decoded) ? $decoded : [];
+            } catch (\JsonException) {
+                throw new \RuntimeException((string)__('文件资源扩展元数据 JSON 无效。'));
+            }
+        }
+        $this->assertVisibilitySupported(
+            $disk,
+            $objectKey,
+            $existing->getVisibility(),
+            $assetMetadata,
+        );
+        [$stat, $sourceSha256] = $this->writeAndHash($disk, $objectKey, $source, $mimeType, true);
+
+        $asset = null;
+        $persist = function () use (
+            &$asset,
+            $existing,
+            $disk,
+            $stat,
+            $originalName,
+            $mimeType,
+            $sourceSha256,
+            $width,
+            $height,
+        ): void {
+            $this->snapshotGuard->assertWritable($disk->snapshot());
+            $current = $this->lockLiveAssetForReplace($existing);
+            $current->setData(FileAsset::schema_fields_ORIGINAL_NAME, trim($originalName));
+            $current->setData(
+                FileAsset::schema_fields_MIME_TYPE,
+                trim($mimeType) ?: ($stat->mimeType ?? 'application/octet-stream'),
+            );
+            $current->setData(FileAsset::schema_fields_BYTES, $stat->bytes);
+            $current->setData(FileAsset::schema_fields_SHA256, $sourceSha256);
+            $current->setData(FileAsset::schema_fields_WIDTH, $width !== null && $width > 0 ? $width : null);
+            $current->setData(FileAsset::schema_fields_HEIGHT, $height !== null && $height > 0 ? $height : null);
+            $current->save();
+            $asset = $current;
+        };
+        $connection = $this->assets->getConnection();
+        if ($this->transactions->isActive($connection)) {
+            if (!$this->transactions->isWriteIntent($connection)) {
+                throw new \LogicException((string)__('文件资源覆盖必须从根边界使用写意图事务。'));
+            }
+            $this->transactions->withSavepoint($connection, 'file_asset_replace_content', $persist);
+        } else {
+            $this->transactions->runWrite($connection, $persist);
+        }
+        if (!$asset instanceof FileAsset || $asset->getAssetId() === '') {
+            throw new \RuntimeException((string)__('文件资源覆盖结果无效。'));
+        }
+        return $asset;
+    }
+
     /** @param array<string,mixed> $metadata */
     public function saveLocale(FileAsset $asset, string $localeCode, array $metadata): FileAssetLocale
     {
@@ -262,6 +436,30 @@ final class FileAssetUploadService
         return in_array($type, ['mysql', 'mariadb', 'pgsql', 'postgres', 'postgresql'], true);
     }
 
+    private function lockLiveAssetForReplace(FileAsset $expected): FileAsset
+    {
+        $query = clone $this->assets;
+        $query->clearData()->reset()
+            ->where(FileAsset::schema_fields_ID, $expected->getAssetId())
+            ->limit(1);
+        if ($this->supportsForUpdate()) {
+            $query->additional('FOR UPDATE');
+        }
+        $items = array_values($query->select()->fetch()->getItems());
+        $current = $items[0] ?? null;
+        if (!$current instanceof FileAsset
+            || $current->getAssetId() === ''
+            || $current->isDeleted()
+            || !hash_equals($expected->getDiskCode(), $current->getDiskCode())
+            || !hash_equals($expected->getObjectKey(), $current->getObjectKey())
+            || (int)$expected->getData(FileAsset::schema_fields_ASSET_REVISION)
+                !== (int)$current->getData(FileAsset::schema_fields_ASSET_REVISION)
+        ) {
+            throw new \RuntimeException((string)__('目标文件资源状态已变化，请刷新后重试。'));
+        }
+        return $current;
+    }
+
     /**
      * Upload and hash the exact same byte sequence in one bounded pass.
      *
@@ -273,10 +471,11 @@ final class FileAssetUploadService
         string $objectKey,
         mixed $source,
         string $mimeType,
+        bool $overwrite = false,
     ): array
     {
         $handle = $disk->openWrite($objectKey, [
-            'overwrite' => false,
+            'overwrite' => $overwrite,
             'content_type' => $mimeType,
         ]);
         $hash = hash_init('sha256');
@@ -311,6 +510,31 @@ final class FileAssetUploadService
                 }
             }
             throw $throwable;
+        }
+    }
+
+    private function hashExistingObject(StorageDiskInterface $disk, string $objectKey): string
+    {
+        $handle = $disk->openRead($objectKey);
+        $hash = hash_init('sha256');
+        $emptyReads = 0;
+        try {
+            while (!$handle->eof()) {
+                $chunk = $handle->read(1024 * 1024);
+                if ($chunk === '') {
+                    if (++$emptyReads >= 3) {
+                        throw new \RuntimeException((string)__('读取存储对象时连续无数据进展。'));
+                    }
+                    SchedulerSystem::yield();
+                    continue;
+                }
+                $emptyReads = 0;
+                hash_update($hash, $chunk);
+                SchedulerSystem::yield();
+            }
+            return hash_final($hash);
+        } finally {
+            $handle->close();
         }
     }
 

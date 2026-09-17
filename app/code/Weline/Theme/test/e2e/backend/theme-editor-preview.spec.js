@@ -104,7 +104,12 @@ test.describe('Theme editor iframe preview integration', () => {
     });
 
     const previewFrame = page.locator('#previewFrame');
-    await expect(previewFrame).toHaveAttribute('src', /theme-preview\/content|layout-preview/, { timeout: 60000 });
+    // Live canvas: storefront URL with editor_mode/shell; legacy content gateway still accepted.
+    await expect(previewFrame).toHaveAttribute(
+      'src',
+      /(?:theme-preview\/content|layout-preview|[?&](?:editor_mode=1|shell=theme-editor))/,
+      { timeout: 60000 }
+    );
 
     const frame = page.frameLocator('#previewFrame');
     await frame.locator('body').first().waitFor({ state: 'visible', timeout: 60000 });
@@ -117,6 +122,10 @@ test.describe('Theme editor iframe preview integration', () => {
     await expect(dropdown).toHaveCount(1);
     const displayBefore = await dropdown.evaluate((el) => getComputedStyle(el).display);
     expect(displayBefore).not.toBe('none');
+
+    // 预览不再注入任何预览账号；账户保持游客壳。
+    await expect(account).toHaveAttribute('data-auth-state', 'guest', { timeout: 60000 });
+    await expect(account.locator('.account-guest')).toBeVisible();
 
     const megaItem = frame.locator('.category-item--mega, .category-item.has-children').first();
     if (await megaItem.count()) {

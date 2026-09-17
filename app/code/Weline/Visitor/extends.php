@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Visitor\Extends\Module\Weline_SiteSetupAssistant\SetupTask\VisitorPixelSetupTaskProvider;
+
 /*
  * Weline_Visitor 扩展规约：像素事件供应商壳（对齐万能支付）。
  */
@@ -14,6 +17,10 @@ use Weline\Visitor\Interface\EventChainProviderInterface;
 use Weline\Visitor\Interface\PixelEventVendorInterface;
 
 return [
+    SetupTaskProviderInterface::class => [
+        VisitorPixelSetupTaskProvider::class,
+    ],
+
     NotificationTopicProviderInterface::class => [
         NotificationTopicProvider::class,
     ],

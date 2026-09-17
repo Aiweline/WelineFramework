@@ -56,4 +56,25 @@ final class ControllerAttributesTest extends TestCase
         self::assertSame('', $method->invoke($observer, 'Demo_Module::ai_market'));
         self::assertSame('', $method->invoke($observer, 'Demo_Module::config'));
     }
+
+    public function testDeduplicateAclsBySourceIdKeepsLastRow(): void
+    {
+        $observer = new ControllerAttributes($this->createMock(Acl::class));
+        $method = new ReflectionMethod($observer, 'deduplicateAclsBySourceId');
+        $method->setAccessible(true);
+
+        $deduped = $method->invoke($observer, [
+            ['source_id' => 'A::x', 'route' => 'old'],
+            ['source_id' => 'A::y', 'route' => 'y'],
+            ['source_id' => 'A::x', 'route' => 'new'],
+        ]);
+
+        self::assertCount(2, $deduped);
+        $byId = [];
+        foreach ($deduped as $row) {
+            $byId[$row['source_id']] = $row['route'];
+        }
+        self::assertSame('new', $byId['A::x']);
+        self::assertSame('y', $byId['A::y']);
+    }
 }

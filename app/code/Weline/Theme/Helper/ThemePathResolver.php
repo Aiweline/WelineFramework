@@ -168,10 +168,21 @@ class ThemePathResolver implements ThemePathResolverInterface
     public function buildThemePath(string $modulePath, string $themePath): string
     {
         $ds = DS;
+        $normalized = str_replace(['/', '\\'], $ds, $modulePath);
+
+        // Weline_Theme::theme/{area}/... → {design}/{area}/...
+        if (preg_match('/^Weline_Theme::theme[\\\\\/](frontend|backend)[\\\\\/](.+)$/i', $modulePath, $matches) === 1
+            || preg_match('/^Weline_Theme::theme[\\\\\/](frontend|backend)[\\\\\/](.+)$/i', $normalized, $matches) === 1
+        ) {
+            return rtrim(str_replace(['/', '\\'], $ds, $themePath), $ds)
+                . $ds . $matches[1]
+                . $ds . str_replace(['/', '\\'], $ds, $matches[2]);
+        }
+
         $needle = $ds . 'theme' . $ds;
-        $pos = strpos($modulePath, $needle);
+        $pos = strpos($normalized, $needle);
         if ($pos !== false) {
-            $afterTheme = substr($modulePath, $pos + strlen($needle));
+            $afterTheme = substr($normalized, $pos + strlen($needle));
             $themeFilePath = rtrim(str_replace(['/', '\\'], $ds, $themePath), $ds) . $ds . str_replace(['/', '\\'], $ds, $afterTheme);
             return $themeFilePath;
         }

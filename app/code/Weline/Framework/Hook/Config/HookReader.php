@@ -450,9 +450,15 @@ class HookReader extends ModuleFileReader
         if (isset(self::$staticFileListCache[$cache_key])) {
             $data = self::$staticFileListCache[$cache_key];
         } else {
+            // Same as getFileList(): a non-empty but incomplete generated/hooks.php
+            // (partial incremental rebuild) must not hide on-disk contributors.
+            // Template::getHook prefers WithMeta when non-empty — without FS merge,
+            // modules like Weline_CustomerService body-end never render.
             $data = $this->getHookFilesFromRegistry($hookName);
             if ($data === []) {
                 $data = $this->getHookFilesFromFilesystem();
+            } else {
+                $data = self::mergeRegistryWithFilesystem($data, $this->getHookFilesFromFilesystem());
             }
             self::$staticFileListCache[$cache_key] = $data;
         }

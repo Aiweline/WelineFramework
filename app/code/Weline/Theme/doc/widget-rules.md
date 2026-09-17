@@ -50,7 +50,7 @@
 | `home` | 首页 |
 | `category` | 分类页 |
 | `product` | 产品页 |
-| `product_list` | 产品列表页 |
+| `products` | 产品列表页 |
 | `cms` | CMS页面 |
 | `cart` | 购物车 |
 | `checkout` | 结算页 |

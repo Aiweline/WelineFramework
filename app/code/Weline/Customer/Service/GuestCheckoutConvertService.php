@@ -7,6 +7,7 @@ namespace Weline\Customer\Service;
 use Weline\Checkout\Api\CheckoutSessionStoreInterface;
 use Weline\Checkout\Service\CheckoutSessionAccessService;
 use Weline\Customer\Model\Customer;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Api\Data\OrderReadResult;
 use Weline\Order\Api\OrderFacadeInterface;
 
@@ -51,10 +52,19 @@ final class GuestCheckoutConvertService
         $orderUuids = $context['order_uuids'];
         $email = (string)$context['email'];
         if ($this->ordersAlreadyBound($orderUuids)) {
+            if ($this->findBoundAnonymousForEmail($orderUuids, $email) !== null) {
+                return $this->result('eligible', (string)\__('可以登录并保存订单'), null, $email, [], true);
+            }
+
             return $this->result('already_bound', (string)\__('订单已关联账户'), null, $email);
         }
 
         if ($this->accounts->findByEmail($email) !== null) {
+            $existing = $this->accounts->findByEmail($email);
+            if ($existing instanceof Customer && $existing->isAnonymousAccount()) {
+                return $this->result('eligible', (string)\__('可以登录并保存订单'), null, $email, [], true);
+            }
+
             return $this->result(
                 'login_required',
                 (string)\__('该邮箱已有账户，请登录'),
@@ -92,15 +102,47 @@ final class GuestCheckoutConvertService
         $orderUuids = $context['order_uuids'];
         $email = (string)$context['email'];
         if ($this->ordersAlreadyBound($orderUuids)) {
+            $bound = $this->findBoundAnonymousForEmail($orderUuids, $email);
+            if ($bound === null) {
+                return $this->result(
+                    'already_bound',
+                    (string)\__('订单已关联账户'),
+                    '/customer/account/index#orders',
+                    $email,
+                );
+            }
+            $bound->setAnonymousAccount(false)
+                ->setMustSetPassword(true)
+                ->save();
+            $this->accounts->loginCustomer($bound);
+            $attached = $this->orders->attachCustomerToGuestOrders((int)$bound->getId(), $orderUuids);
+
             return $this->result(
-                'already_bound',
-                (string)\__('订单已关联账户'),
-                '/customer/account/index#orders',
+                'converted',
+                (string)\__('已为您创建账户，请设置密码'),
+                '/customer/account/set-password',
                 $email,
+                $attached,
             );
         }
 
         if ($this->accounts->findByEmail($email) !== null) {
+            $existing = $this->accounts->findByEmail($email);
+            if ($existing instanceof Customer && $existing->isAnonymousAccount()) {
+                $existing->setAnonymousAccount(false)
+                    ->setMustSetPassword(true)
+                    ->save();
+                $this->accounts->loginCustomer($existing);
+                $attached = $this->orders->attachCustomerToGuestOrders((int)$existing->getId(), $orderUuids);
+
+                return $this->result(
+                    'converted',
+                    (string)\__('已为您创建账户，请设置密码'),
+                    '/customer/account/set-password',
+                    $email,
+                    $attached,
+                );
+            }
             return $this->result(
                 'login_required',
                 (string)\__('该邮箱已有账户，请登录'),
@@ -120,6 +162,57 @@ final class GuestCheckoutConvertService
             $email,
             $attached,
         );
+    }
+
+    /**
+     * When paid-bind already attached an anonymous customer for this email,
+     * upgrade that account instead of treating the order as permanently bound.
+     *
+     * @param list<string> $orderUuids
+     */
+    private function findBoundAnonymousForEmail(array $orderUuids, string $email): ?Customer
+    {
+        $email = $this->accounts->normalizeEmail($email);
+        foreach ($orderUuids as $uuid) {
+            try {
+                $order = $this->orders->get($uuid);
+            } catch (\Throwable) {
+                continue;
+            }
+            $customerId = $order->customerId !== null ? (int)$order->customerId : 0;
+            if ($customerId <= 0) {
+                continue;
+            }
+            $customer = $this->accounts->findByEmail($email);
+            if (!$customer instanceof Customer || (int)$customer->getId() !== $customerId) {
+                $customer = $this->customerById($customerId);
+            }
+            if ($customer instanceof Customer
+                && $customer->isAnonymousAccount()
+                && $this->accounts->normalizeEmail($customer->getEmail()) === $email
+            ) {
+                return $customer;
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
+    private function customerById(int $customerId): ?Customer
+    {
+        if ($customerId <= 0) {
+            return null;
+        }
+        try {
+            $customer = ObjectManager::getInstance(Customer::class);
+            $customer->load($customerId);
+
+            return $customer->getId() ? $customer : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

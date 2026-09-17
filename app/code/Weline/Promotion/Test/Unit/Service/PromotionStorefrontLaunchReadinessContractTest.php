@@ -102,6 +102,7 @@ final class PromotionStorefrontLaunchReadinessContractTest extends TestCase
             $template,
         );
         self::assertStringContainsString('<w:product:card', $template);
+        self::assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $template);
         self::assertStringNotContainsString('amazon-product-card.css', $template);
     }
 

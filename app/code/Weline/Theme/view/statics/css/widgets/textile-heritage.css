@@ -41,7 +41,8 @@
     flex-direction: column;
     align-items: center;
     padding: var(--weline-space-5);
-    overflow: hidden;
+    /* Keep labels/source readable; only the media frame clips imagery. */
+    overflow: visible;
     border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     border-radius: var(--weline-radius-lg);
     background: var(--weline-theme-surface-raised);
@@ -90,6 +91,14 @@
     transition: filter var(--weline-theme-transition-base), transform var(--weline-theme-transition-base);
 }
 
+.weline-textile-heritage .heritage-image--asset :is(img, picture, .w-file-image) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
 .weline-textile-heritage .heritage-primary:hover .heritage-image { transform: scale(1.04); }
 
 .weline-textile-heritage .heritage-copy {
@@ -113,21 +122,38 @@
     line-height: var(--weline-layout-line-height-relaxed);
 }
 
+/* 藏品许可默认安静：不与织艺名抢层次，悬停/聚焦再露出 */
 .weline-textile-heritage .heritage-source {
     display: block;
     width: 100%;
     min-width: 0;
-    margin-block-start: var(--weline-space-3);
+    margin-block-start: var(--weline-space-2);
     overflow: hidden;
+    opacity: 0;
+    max-height: 0;
     text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
     text-decoration: none;
+    transition: opacity var(--weline-theme-transition-base), max-height var(--weline-theme-transition-base), color var(--weline-theme-transition-base);
 }
 
-.weline-textile-heritage .heritage-source:hover {
+.weline-textile-heritage .heritage-card:hover .heritage-source,
+.weline-textile-heritage .heritage-card:focus-within .heritage-source {
+    opacity: 1;
+    max-height: 2.5em;
+}
+
+.weline-textile-heritage .heritage-source:hover,
+.weline-textile-heritage .heritage-source:focus-visible {
     color: var(--weline-theme-primary);
     text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .weline-textile-heritage .heritage-source {
+        transition: none;
+    }
 }
 
 .weline-textile-heritage.is-grayscale .heritage-image { filter: grayscale(100%); }

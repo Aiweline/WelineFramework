@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 
@@ -133,29 +134,33 @@ class EventRegistry implements EventRegistryInterface
      */
     public function refresh(): bool
     {
-        // 扫描所有事件规约
-        RegistryProgress::log('Event scan: event.php specs started');
-        $scannedData = $this->scanner->scanAllEvents();
-        RegistryProgress::count('Event spec scan', count($scannedData), 'modules with event specs');
+        // Build entirely in memory. Persist only after a complete success so a
+        // mid-scan failure never deletes or overwrites generated/events.php.
+        try {
+            RegistryProgress::log('Event scan: event.php specs started');
+            $scannedData = $this->scanner->scanAllEvents();
+            RegistryProgress::count('Event spec scan', count($scannedData), 'modules with event specs');
 
-        // 收集所有观察者信息
-        RegistryProgress::log('Event observer collection started');
-        $observersData = $this->collectObservers();
-        RegistryProgress::count('Event observer collection', count($observersData), 'events with observers');
+            RegistryProgress::log('Event observer collection started');
+            $observersData = $this->collectObservers();
+            RegistryProgress::count('Event observer collection', count($observersData), 'events with observers');
 
-        // 组织数据结构，按事件名索引（如果发现冲突会抛出异常）
-        RegistryProgress::log('Event organize registry data');
-        $registry = $this->organizeRegistryData($scannedData, $observersData);
-        RegistryProgress::count('Event registry', count($registry['events'] ?? []), 'events organized');
+            RegistryProgress::log('Event organize registry data');
+            $registry = $this->organizeRegistryData($scannedData, $observersData);
+            RegistryProgress::count('Event registry', count($registry['events'] ?? []), 'events organized');
 
-        // 扫描所有观察者并合并到事件信息中
-        RegistryProgress::log('Event merge observers into registry');
-        $this->mergeObserversIntoRegistry($registry, $observersData);
-        unset($scannedData, $observersData);
-        RegistryProgress::log('Event raw scan data released');
+            RegistryProgress::log('Event merge observers into registry');
+            $this->mergeObserversIntoRegistry($registry, $observersData);
+            unset($scannedData, $observersData);
+            RegistryProgress::log('Event raw scan data released');
 
-        // 保存注册表
-        return $this->saveRegistry($registry);
+            return $this->saveRegistry($registry);
+        } catch (\Throwable $e) {
+            RegistryProgress::log('Event refresh aborted; keeping existing generated/events.php');
+            throw $e instanceof \RuntimeException
+                ? $e
+                : new \RuntimeException('Event registry refresh failed: ' . $e->getMessage(), 0, $e);
+        }
     }
     
     /**
@@ -168,68 +173,67 @@ class EventRegistry implements EventRegistryInterface
      */
     public function refreshForModules(array $moduleNames): bool
     {
-        // 1. 加载现有注册表
-        RegistryProgress::log('Event incremental: loading current registry');
-        $registry = $this->getRegistry(true);
-        
-        // 确保注册表结构完整
-        if (!isset($registry['events'])) {
-            $registry['events'] = [];
-        }
-        if (!isset($registry['event_to_module'])) {
-            $registry['event_to_module'] = [];
-        }
-        if (!isset($registry['dynamic_patterns'])) {
-            $registry['dynamic_patterns'] = [];
-        }
+        // Mutate a memory copy only; persist after full success so disk stays intact on failure.
+        try {
+            RegistryProgress::log('Event incremental: loading current registry');
+            $registry = $this->getRegistry(true);
 
-        // 过滤已卸载/禁用模块的残留数据，避免对无效模块继续做冲突/规约校验
-        $this->purgeInactiveModulesFromRegistry($registry);
-
-        // 目标模块可能是事件 owner。清除 owner 事件前先保留其他模块已经注册的观察者，
-        // 否则一次模块定向升级会把跨模块监听关系从增量注册表中永久抹掉。
-        $foreignObservers = $this->captureForeignObserversForOwnedEntries($registry, $moduleNames);
-        
-        // 2. 清除目标模块的旧数据
-        RegistryProgress::log('Event incremental: clearing modules ' . implode(', ', $moduleNames));
-        $this->clearModuleData($registry, $moduleNames);
-        
-        // 3. 扫描目标模块的新数据
-        RegistryProgress::log('Event incremental: scanning target event specs');
-        $newScannedData = $this->scanner->scanModules($moduleNames);
-        RegistryProgress::count('Event incremental spec scan', count($newScannedData), 'modules with event specs');
-        RegistryProgress::log('Event incremental: collecting target observers');
-        $newObserversData = $this->collectObserversForModules($moduleNames);
-        RegistryProgress::count('Event incremental observer collection', count($newObserversData), 'events with observers');
-        
-        // 4. 合并新数据到注册表
-        RegistryProgress::log('Event incremental: merging scanned data');
-        $this->mergeScannedDataIntoRegistry($registry, $newScannedData, $newObserversData);
-        $this->restoreForeignObservers($registry, $foreignObservers);
-        unset($newScannedData, $newObserversData, $foreignObservers);
-        RegistryProgress::log('Event incremental raw scan data released');
-        
-        // 5. 重新排序所有观察者
-        foreach (['events', 'dynamic_patterns'] as $section) {
-            foreach ($registry[$section] as &$eventInfo) {
-                if (isset($eventInfo['observers']) && count($eventInfo['observers']) > 1) {
-                    usort($eventInfo['observers'], static function ($a, $b): int {
-                        $sort = ((int)($a['sort'] ?? 10000)) <=> ((int)($b['sort'] ?? 10000));
-                        if ($sort !== 0) {
-                            return $sort;
-                        }
-
-                        $left = (string)($a['observer_key'] ?? (($a['instance'] ?? '') . '::' . ($a['name'] ?? '')));
-                        $right = (string)($b['observer_key'] ?? (($b['instance'] ?? '') . '::' . ($b['name'] ?? '')));
-                        return $left <=> $right;
-                    });
-                }
+            if (!isset($registry['events'])) {
+                $registry['events'] = [];
             }
-            unset($eventInfo);
+            if (!isset($registry['event_to_module'])) {
+                $registry['event_to_module'] = [];
+            }
+            if (!isset($registry['dynamic_patterns'])) {
+                $registry['dynamic_patterns'] = [];
+            }
+
+            $this->purgeInactiveModulesFromRegistry($registry);
+
+            // Preserve foreign observers before clearing owner-owned entries.
+            $foreignObservers = $this->captureForeignObserversForOwnedEntries($registry, $moduleNames);
+
+            RegistryProgress::log('Event incremental: clearing modules ' . implode(', ', $moduleNames));
+            $this->clearModuleData($registry, $moduleNames);
+
+            RegistryProgress::log('Event incremental: scanning target event specs');
+            $newScannedData = $this->scanner->scanModules($moduleNames);
+            RegistryProgress::count('Event incremental spec scan', count($newScannedData), 'modules with event specs');
+            RegistryProgress::log('Event incremental: collecting target observers');
+            $newObserversData = $this->collectObserversForModules($moduleNames);
+            RegistryProgress::count('Event incremental observer collection', count($newObserversData), 'events with observers');
+
+            RegistryProgress::log('Event incremental: merging scanned data');
+            $this->mergeScannedDataIntoRegistry($registry, $newScannedData, $newObserversData);
+            $this->restoreForeignObservers($registry, $foreignObservers);
+            unset($newScannedData, $newObserversData, $foreignObservers);
+            RegistryProgress::log('Event incremental raw scan data released');
+
+            foreach (['events', 'dynamic_patterns'] as $section) {
+                foreach ($registry[$section] as &$eventInfo) {
+                    if (isset($eventInfo['observers']) && count($eventInfo['observers']) > 1) {
+                        usort($eventInfo['observers'], static function ($a, $b): int {
+                            $sort = ((int)($a['sort'] ?? 10000)) <=> ((int)($b['sort'] ?? 10000));
+                            if ($sort !== 0) {
+                                return $sort;
+                            }
+
+                            $left = (string)($a['observer_key'] ?? (($a['instance'] ?? '') . '::' . ($a['name'] ?? '')));
+                            $right = (string)($b['observer_key'] ?? (($b['instance'] ?? '') . '::' . ($b['name'] ?? '')));
+                            return $left <=> $right;
+                        });
+                    }
+                }
+                unset($eventInfo);
+            }
+
+            return $this->saveRegistry($registry);
+        } catch (\Throwable $e) {
+            RegistryProgress::log('Event incremental refresh aborted; keeping existing generated/events.php');
+            throw $e instanceof \RuntimeException
+                ? $e
+                : new \RuntimeException('Event registry incremental refresh failed: ' . $e->getMessage(), 0, $e);
         }
-        
-        // 6. 保存注册表
-        return $this->saveRegistry($registry);
     }
 
     /**
@@ -487,10 +491,17 @@ class EventRegistry implements EventRegistryInterface
                     });
                 }
             }
-        } catch (\Exception $e) {
-            w_log_warning(__('收集模块观察者失败: %{1}', [$e->getMessage()]), [], 'event_registry.log');
+        } catch (\Throwable $e) {
+            // Do not return an empty map after failure: incremental clear+merge would
+            // then persist a wiped module slice onto disk.
+            w_log_error('收集模块观察者失败: ' . $e->getMessage());
+            throw new \RuntimeException(
+                'Event observer collection failed for modules: ' . $e->getMessage(),
+                0,
+                $e,
+            );
         }
-        
+
         return $observersData;
     }
     
@@ -676,9 +687,15 @@ class EventRegistry implements EventRegistryInterface
                     });
                 }
             }
-        } catch (\Exception $e) {
-            // 如果收集观察者失败，记录错误但不中断流程
+        } catch (\Throwable $e) {
+            // Never return an empty observer map after a mid-scan failure: that would
+            // wipe generated/events.php and blank the storefront (no layout wrap).
             w_log_error('收集观察者失败: ' . $e->getMessage());
+            throw new \RuntimeException(
+                'Event observer collection failed: ' . $e->getMessage(),
+                0,
+                $e,
+            );
         }
         
         return $observersData;
@@ -925,38 +942,92 @@ class EventRegistry implements EventRegistryInterface
     /**
      * 保存注册表
      *
+     * Never deletes the live file first. Incomplete / unsafe payloads refuse to
+     * write so the previous generated/events.php stays in place.
+     *
      * @param array $registry 注册表数据
      * @return bool
+     * @throws \RuntimeException when persist is refused or atomic write fails
      */
     public function saveRegistry(array $registry): bool
     {
+        $this->assertRegistryReadyToPersist($registry);
+
         RegistryProgress::log('Event save registry: generated/events.php');
         $content = "<?php return " . var_export($registry, true) . ";\n";
+        (new GeneratedPhpArrayPublisher())->publishContent(self::REGISTRY_FILE, $content);
 
-        // 确保目录存在
-        $dir = dirname(self::REGISTRY_FILE);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        $this->cachedRegistry = $registry;
+        $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        self::$runtimeRegistryCache = $registry;
+        self::$runtimeRegistryMtime = $this->cachedFileMtime;
+        EventData::clearCache();
+        RegistryProgress::log('Event save registry finished');
+
+        return true;
+    }
+
+    /**
+     * Refuse persist when the payload is incomplete or would wipe a healthy observer map.
+     *
+     * @param array<string, mixed> $registry
+     * @param array<string, mixed>|null $existingSnapshot for tests; null reads disk
+     * @throws \RuntimeException
+     */
+    public function assertRegistryReadyToPersist(array $registry, ?array $existingSnapshot = null): void
+    {
+        if (!isset($registry['events']) || !is_array($registry['events'])) {
+            throw new \RuntimeException(
+                'Event registry persist refused: missing events section; keeping existing generated/events.php'
+            );
         }
 
-        $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
-
-        if ($result !== false) {
-            // 更新实例缓存
-            $this->cachedRegistry = $registry;
-            $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
-            self::$runtimeRegistryCache = $registry;
-            self::$runtimeRegistryMtime = $this->cachedFileMtime;
-            
-            // 清除 EventData 的静态缓存，确保其他使用 EventData 的代码能立即看到新生成的文件
-            EventData::clearCache();
-            RegistryProgress::log('Event save registry finished');
-            
-            return true;
+        $existing = $existingSnapshot;
+        if ($existing === null) {
+            $existing = $this->loadPersistedRegistrySnapshot();
+        }
+        if ($existing === null) {
+            return;
         }
 
-        RegistryProgress::log('Event save registry failed');
-        return false;
+        $oldWithObservers = self::countEventsWithObservers($existing);
+        $newWithObservers = self::countEventsWithObservers($registry);
+        if ($oldWithObservers > 0 && $newWithObservers === 0) {
+            throw new \RuntimeException(
+                'Event registry persist refused: new registry has 0 events with observers'
+                . " but existing file has {$oldWithObservers}; keeping existing generated/events.php"
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $registry
+     */
+    public static function countEventsWithObservers(array $registry): int
+    {
+        $count = 0;
+        foreach (['events', 'dynamic_patterns'] as $section) {
+            foreach (($registry[$section] ?? []) as $eventInfo) {
+                if (!empty($eventInfo['observers']) && is_array($eventInfo['observers'])) {
+                    ++$count;
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadPersistedRegistrySnapshot(): ?array
+    {
+        if (!is_file(self::REGISTRY_FILE)) {
+            return null;
+        }
+        $data = include self::REGISTRY_FILE;
+
+        return is_array($data) ? $data : null;
     }
 
     /**

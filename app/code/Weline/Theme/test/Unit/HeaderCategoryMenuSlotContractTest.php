@@ -21,7 +21,14 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
         self::assertStringContainsString('<w:widget type="navigation" name="category-menu"', $source);
         self::assertStringContainsString('<w:slot id="header-nav-extensions"', $source);
         self::assertStringContainsString('multiple="true"', $source);
-        self::assertStringContainsString('accept="header-blog-link,header-nav-link,layout-header-nav-extensions"', $source);
+        self::assertStringContainsString('accept="header-blog-link,header-deals-link,header-contact-service-link,header-nav-link,layout-header-nav-extensions"', $source);
+        self::assertStringContainsString('class="header-nav-left-cluster"', $source);
+        self::assertStringContainsString('class="header-nav-right-cluster"', $source);
+        self::assertMatchesRegularExpression(
+            '/header-nav-right-cluster[\s\S]*header-nav-extensions[\s\S]*header-nav-right-slot/s',
+            $source,
+            '博客扩展槽须在右侧大簇内、快捷导航之前'
+        );
         self::assertStringNotContainsString('id="categories-list"', $source);
         self::assertStringNotContainsString('id="categories-overflow-wrapper"', $source);
         self::assertStringNotContainsString('<nav class="categories-nav"', $source);
@@ -52,7 +59,18 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml';
         $source = (string)file_get_contents($path);
+        self::assertStringContainsString('.header-nav-left-cluster {', $source);
+        self::assertStringContainsString('.header-nav-right-cluster {', $source);
         self::assertStringContainsString('.header-nav-extensions {', $source);
         self::assertStringContainsString('.header-nav-extensions:empty {', $source);
+        self::assertStringContainsString(
+            '.header-nav-right-cluster > .header-nav-right-slot:has(#nav-links-list:empty)',
+            $source
+        );
+        self::assertStringContainsString('id="nav-more-wrapper"', $source);
+        self::assertStringContainsString(
+            '.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"]',
+            $source
+        );
     }
 }

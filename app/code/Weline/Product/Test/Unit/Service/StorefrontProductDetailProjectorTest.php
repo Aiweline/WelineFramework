@@ -576,7 +576,8 @@ final class StorefrontProductDetailProjectorTest extends TestCase
             self::assertSame($expected, $listing['specifications'], $value);
             self::assertCount(1, $filter->apply([$listing], ['hanfu_chao_dai' => 'Ming Style']));
             self::assertSame('English product', $listing['name']);
-            self::assertSame('', $listing['description']);
+            // Default/website description stays visible when en_US has no own row.
+            self::assertSame('无英文说明', $listing['description']);
             self::assertArrayNotHasKey('source_catalog', $listing);
 
             $many = $projector->projectMany([$offer, array_replace($offer, ['offer_id' => 902])], $rows, [], 0, 'en_US');

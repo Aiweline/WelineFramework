@@ -141,6 +141,104 @@ final class DetailDescriptionTextifier
     }
 
     /**
+     * Measurement size reference chart (cm) for garment parts (zh).
+     *
+     * @param list<array{title:string,headers:list<string>,rows:list<list<string>>}> $tables
+     */
+    public static function buildMeasurementSizeChartZh(
+        array $tables,
+        string $title = '尺码参考表',
+        string $note = '单位：厘米（cm）。手工测量可能存在 1–3 cm 误差。',
+    ): string {
+        return self::sanitizeFragment(
+            '<div class="weline-detail-text weline-detail-text--size-chart" data-weline-detail-text="measurement-chart">'
+            . '<h3>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h3>'
+            . '<p class="weline-detail-text__note">' . htmlspecialchars($note, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'
+            . '<div class="weline-detail-text__columns">'
+            . self::measurementColumns($tables)
+            . '</div>'
+            . '</div>'
+        );
+    }
+
+    /**
+     * @param list<array{title:string,headers:list<string>,rows:list<list<string>>}> $tables
+     */
+    public static function buildMeasurementSizeChartEn(
+        array $tables,
+        string $title = 'Size reference chart',
+        string $note = 'Unit: centimeters (cm). Hand measurements may vary by 1–3 cm.',
+    ): string {
+        return self::sanitizeFragment(
+            '<div class="weline-detail-text weline-detail-text--size-chart" data-weline-detail-text="measurement-chart">'
+            . '<h3>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h3>'
+            . '<p class="weline-detail-text__note">' . htmlspecialchars($note, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'
+            . '<div class="weline-detail-text__columns">'
+            . self::measurementColumns($tables)
+            . '</div>'
+            . '</div>'
+        );
+    }
+
+    /**
+     * Product information + comfort scales baked from listing graphics (zh).
+     *
+     * @param array<string, string> $basics
+     * @param list<array{label:string,options:list<string>,selected:string}> $comfort
+     */
+    public static function buildProductInfoPanelZh(
+        array $basics,
+        array $comfort,
+        string $title = '产品信息',
+        string $basicsTitle = '基本信息',
+        string $comfortTitle = '舒适度信息',
+    ): string {
+        return self::sanitizeFragment(
+            '<div class="weline-detail-text weline-detail-text--product-info" data-weline-detail-text="product-info">'
+            . '<h3>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h3>'
+            . '<h4>' . htmlspecialchars($basicsTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h4>'
+            . self::definitionList($basics)
+            . '<h4>' . htmlspecialchars($comfortTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h4>'
+            . self::comfortScales($comfort)
+            . '</div>'
+        );
+    }
+
+    /**
+     * @param array<string, string> $basics
+     * @param list<array{label:string,options:list<string>,selected:string}> $comfort
+     */
+    public static function buildProductInfoPanelEn(
+        array $basics,
+        array $comfort,
+        string $title = 'Product information',
+        string $basicsTitle = 'Basics',
+        string $comfortTitle = 'Comfort & fit',
+    ): string {
+        return self::sanitizeFragment(
+            '<div class="weline-detail-text weline-detail-text--product-info" data-weline-detail-text="product-info">'
+            . '<h3>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h3>'
+            . '<h4>' . htmlspecialchars($basicsTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h4>'
+            . self::definitionList($basics)
+            . '<h4>' . htmlspecialchars($comfortTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h4>'
+            . self::comfortScales($comfort)
+            . '</div>'
+        );
+    }
+
+    public static function buildSectionHeading(string $heading, string $marker = 'section-heading'): string
+    {
+        $marker = preg_replace('/[^a-z0-9-]/', '', strtolower(trim($marker))) ?: 'section-heading';
+
+        return self::sanitizeFragment(
+            '<div class="weline-detail-text weline-detail-text--section" data-weline-detail-text="'
+            . htmlspecialchars($marker, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">'
+            . '<h3>' . htmlspecialchars(trim($heading), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h3>'
+            . '</div>'
+        );
+    }
+
+    /**
      * Couples / gender-split weight-based size suggestion chart (zh).
      *
      * @param list<array{label:string,min_jin:int,max_jin:int,size:string}> $women
@@ -186,6 +284,84 @@ final class DetailDescriptionTextifier
             . '<p class="weline-detail-text__foot">' . htmlspecialchars($footer, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'
             . '</div>'
         );
+    }
+
+    /**
+     * @param list<array{title:string,headers:list<string>,rows:list<list<string>>}> $tables
+     */
+    private static function measurementColumns(array $tables): string
+    {
+        $html = '';
+        foreach ($tables as $table) {
+            $title = trim((string)($table['title'] ?? ''));
+            $headers = is_array($table['headers'] ?? null) ? $table['headers'] : [];
+            $rows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+            $headCells = '';
+            foreach ($headers as $header) {
+                $headCells .= '<th>' . htmlspecialchars((string)$header, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</th>';
+            }
+            $body = '';
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $body .= '<tr>';
+                foreach ($row as $i => $cell) {
+                    $tag = $i === 0 ? 'th' : 'td';
+                    $body .= '<' . $tag . '>' . htmlspecialchars((string)$cell, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</' . $tag . '>';
+                }
+                $body .= '</tr>';
+            }
+            $html .= '<div class="weline-detail-text__col">'
+                . ($title !== '' ? '<h4>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h4>' : '')
+                . '<table><thead><tr>' . $headCells . '</tr></thead><tbody>' . $body . '</tbody></table>'
+                . '</div>';
+        }
+
+        return $html;
+    }
+
+    /**
+     * @param array<string, string> $items
+     */
+    private static function definitionList(array $items): string
+    {
+        $rows = '';
+        foreach ($items as $label => $value) {
+            $rows .= '<tr><th>' . htmlspecialchars((string)$label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '</th><td>' . htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '</td></tr>';
+        }
+
+        return '<table class="weline-detail-text__defs"><tbody>' . $rows . '</tbody></table>';
+    }
+
+    /**
+     * @param list<array{label:string,options:list<string>,selected:string}> $scales
+     */
+    private static function comfortScales(array $scales): string
+    {
+        $html = '<ul class="weline-detail-text__scales">';
+        foreach ($scales as $scale) {
+            $label = trim((string)($scale['label'] ?? ''));
+            $selected = trim((string)($scale['selected'] ?? ''));
+            $options = is_array($scale['options'] ?? null) ? $scale['options'] : [];
+            $chips = '';
+            foreach ($options as $option) {
+                $option = trim((string)$option);
+                $class = $option !== '' && $option === $selected
+                    ? ' class="weline-detail-text__scale-option weline-detail-text__scale-option--selected"'
+                    : ' class="weline-detail-text__scale-option"';
+                $chips .= '<li' . $class . '>' . htmlspecialchars($option, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</li>';
+            }
+            $html .= '<li class="weline-detail-text__scale">'
+                . '<strong>' . htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</strong>'
+                . '<ul class="weline-detail-text__scale-options">' . $chips . '</ul>'
+                . '</li>';
+        }
+        $html .= '</ul>';
+
+        return $html;
     }
 
     /**
@@ -403,7 +579,10 @@ final class DetailDescriptionTextifier
         $tokens = preg_split('/\s+/', trim($class)) ?: [];
         $kept = [];
         foreach ($tokens as $token) {
-            if (preg_match('/^weline-detail-text(?:__[a-z0-9-]+|--[a-z0-9-]+)?$/D', $token) === 1) {
+            if (preg_match(
+                '/^weline-detail-(?:text|prose|feature|figure|quiet|bento)(?:-[a-z0-9]+)*(?:__[a-z0-9-]+)?(?:--[a-z0-9-]+)?$/D',
+                $token,
+            ) === 1) {
                 $kept[] = $token;
             }
         }

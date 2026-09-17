@@ -40,6 +40,24 @@ class ParamDefinitionNormalizerTest extends TestCore
         $this->assertTrue($definitions['accent']['translate']);
     }
 
+    public function testMediaImageDefaultsToTranslatableWithoutExplicitFlag(): void
+    {
+        $normalizer = new ParamDefinitionNormalizer();
+        $definitions = $normalizer->normalizeDefinitions([
+            'banner' => [
+                'type' => 'media_image',
+                'label' => 'Banner',
+            ],
+            'logo' => [
+                'type' => 'image',
+                'i18n' => false,
+            ],
+        ]);
+
+        $this->assertTrue($definitions['banner']['i18n']);
+        $this->assertFalse($definitions['logo']['i18n']);
+    }
+
     public function testExtractParamAnnotationsParsesUiTypeAndStructuredOptions(): void
     {
         $normalizer = new ParamDefinitionNormalizer();

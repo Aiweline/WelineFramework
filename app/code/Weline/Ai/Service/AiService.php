@@ -1732,6 +1732,7 @@ class AiService
         $params['request_id'] = $this->resolveUsageRequestId($params);
         $account = null;
         $usage = [];
+        $providerCode = null;
         try {
             // 1. 获取供应商代码
             $providerCode = $this->accountService->getProviderByModel($model);
@@ -1889,7 +1890,10 @@ class AiService
             } elseif (function_exists('w_log_error')) {
                 w_log_error('AI API调用失败: ' . $e->getMessage());
             }
-            throw $this->wrapAiBillingExceptionIfNeeded($e, "AI生成失败: " . $e->getMessage());
+            throw $this->wrapAiBillingExceptionIfNeeded(
+                $e,
+                $this->formatAiCallFailureMessage($model, $e->getMessage(), 'generate', $providerCode)
+            );
         }
     }
 
@@ -1916,6 +1920,7 @@ class AiService
         $params['request_id'] = $this->resolveUsageRequestId($params);
         $account = null;
         $usage = [];
+        $providerCode = null;
         
         try {
             // 1. 获取供应商代码
@@ -1987,8 +1992,30 @@ class AiService
             w_log_error("AI流式API调用失败: " . $e->getMessage());
             // 清理 ANSI 颜色码后再抛出，避免前端显示乱码
             $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
-            throw new Exception("AI流式生成失败: " . $cleanMessage);
+            throw new Exception(
+                $this->formatAiCallFailureMessage($model, (string)$cleanMessage, 'stream', $providerCode)
+            );
         }
+    }
+
+    /**
+     * @param 'generate'|'stream' $kind
+     */
+    private function formatAiCallFailureMessage(
+        AiModel $model,
+        string $detail,
+        string $kind = 'generate',
+        ?string $providerCode = null
+    ): string {
+        $provider = trim((string)($providerCode ?: $this->accountService->getProviderByModel($model) ?: $model->getSupplier()));
+
+        return ErrorMessageHelper::formatAiCallFailureMessage(
+            $detail,
+            $provider !== '' ? $provider : null,
+            $model->getModelCode() !== '' ? $model->getModelCode() : null,
+            $model->getName() !== '' ? $model->getName() : null,
+            $kind
+        );
     }
 
     /**

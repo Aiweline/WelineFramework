@@ -16,13 +16,20 @@
 "Language updated.","Language updated."
 "Please enter a valid email address.","Please enter a valid email address."
 "Session token is required.","Session token is required."
-人机验证服务暂不可用，已切换为本地图码，请填写后重试,人机验证服务暂不可用，已切换为本地图码，请填写后重试
+人机验证服务暂不可用，已切换为本地图码，请填写后重试,"Layanan captcha tidak tersedia, beralih ke kode lokal—isi lalu coba lagi"
 人机验证未完成，请再试一次,人机验证未完成，请再试一次
-人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
+人机验证失败或已过期，请重试,"Captcha gagal atau kedaluwarsa, coba lagi"
 "Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
 "Verification email has been sent.","Verification email has been sent."
 "Customer Service Query","Customer Service Query"
 "Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
+在线客服,"Layanan pelanggan online"
+默认已启用在线客服（当前范围无覆盖关闭）。,默认已启用在线客服（当前范围无覆盖关闭）。
+已继承上级范围启用在线客服。,已继承上级范围启用在线客服。
+已启用在线客服入口。,已启用在线客服入口。
+"启用前台客服与默认语言；可选 AI 模型。","启用前台客服与默认语言；可选 AI 模型。"
+服务,服务
+在线客服入口,在线客服入口
 客服聊天,客服聊天
 获取会话失败：%{1},获取会话失败：%{1}
 消息内容不能为空,消息内容不能为空
@@ -32,7 +39,7 @@
 语言代码不能为空,语言代码不能为空
 语言设置成功,语言设置成功
 设置语言失败：%{1},设置语言失败：%{1}
-人机验证加载失败，请稍后重试,人机验证加载失败，请稍后重试
+人机验证加载失败，请稍后重试,"Captcha gagal dimuat, coba lagi nanti"
 邮箱地址不能为空,邮箱地址不能为空
 邮箱格式不正确,邮箱格式不正确
 会话令牌不能为空,会话令牌不能为空
@@ -98,7 +105,7 @@ settings,settings
 您不是客服人员,您不是客服人员
 获取会话列表失败：%{1},获取会话列表失败：%{1}
 无权访问此会话,无权访问此会话
-发送成功,发送成功
+发送成功,"Berhasil dikirim"
 会话已被分配,会话已被分配
 已达到最大会话数限制,已达到最大会话数限制
 分配成功,分配成功
@@ -122,7 +129,7 @@ settings,settings
 查看客服工作台,查看客服工作台
 确认操作,确认操作
 确定,确定
-取消,取消
+取消,Batal
 等待中,等待中
 暂无消息,暂无消息
 接单,接单
@@ -145,9 +152,8 @@ settings,settings
 加载更早消息失败，请稍后重试,加载更早消息失败，请稍后重试
 正在加载最新消息…,正在加载最新消息…
 在下方输入框发送第一条回复。,在下方输入框发送第一条回复。
-会话,会话
-输入消息...,输入消息...
-发送,发送
+输入消息...,"Ketik pesan..."
+发送,Kirim
 正在加载更早消息…,正在加载更早消息…
 上滑加载更早消息,上滑加载更早消息
 没有更早的消息了,没有更早的消息了
@@ -181,11 +187,11 @@ settings,settings
 删除失败,删除失败
 保存失败,保存失败
 请先选择会话,请先选择会话
-正在上传…,正在上传…
-上传失败,上传失败
-发送失败,发送失败
-上传失败，请稍后重试,上传失败，请稍后重试
-发送失败，请稍后重试,发送失败，请稍后重试
+正在上传…,Mengunggah…
+上传失败,"Unggah gagal"
+发送失败,"Gagal mengirim"
+上传失败，请稍后重试,"Unggah gagal, coba lagi nanti"
+发送失败，请稍后重试,"Gagal mengirim, coba lagi nanti"
 确定要接单此会话吗？,确定要接单此会话吗？
 确认接单,确认接单
 分配失败,分配失败
@@ -195,9 +201,9 @@ settings,settings
 关闭,关闭
 关闭失败,关闭失败
 关闭失败，请稍后重试,关闭失败，请稍后重试
-刚刚,刚刚
-分钟前,分钟前
-小时前,小时前
+刚刚,"Baru saja"
+分钟前,"menit yang lalu"
+小时前,"jam yang lalu"
 已关闭,已关闭
 进行中,进行中
 最快,最快
@@ -206,67 +212,66 @@ settings,settings
 分钟,分钟
 最长,最长
 秒,秒
-打开验证链接,打开验证链接
-提示,提示
-请注意,请注意
-操作失败,操作失败
-知道了,知道了
-人机验证凭证异常，请刷新页面后重试,人机验证凭证异常，请刷新页面后重试
-请求参数过长，请刷新页面后重试,请求参数过长，请刷新页面后重试
-上传参数异常，请刷新页面后重试,上传参数异常，请刷新页面后重试
-点击修改邮箱身份,"Klik untuk mengedit identitas email"
-当前登录身份,当前登录身份
-邮箱已绑定：%{1}，可以继续聊天,邮箱已绑定：%{1}，可以继续聊天
-邮箱已绑定，可以继续聊天,邮箱已绑定，可以继续聊天
-绑定成功,绑定成功
-今天,今天
-昨天,昨天
-客服新消息,客服新消息
-您有一条新的客服回复,您有一条新的客服回复
-请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,"Tunggu balasan dukungan sebelum mengirim lagi. Email terverifikasi melewati tunggu dan memungkinkan pesan beruntun."
-等待客服回复…,等待客服回复…
+打开验证链接,"Buka tautan verifikasi"
+提示,Tip
+请注意,"Harap diperhatikan"
+操作失败,"Operasi gagal"
+知道了,Mengerti
+人机验证凭证异常，请刷新页面后重试,"Token captcha tidak normal, segarkan halaman lalu coba lagi"
+请求参数过长，请刷新页面后重试,"Parameter permintaan terlalu panjang, segarkan halaman lalu coba lagi"
+上传参数异常，请刷新页面后重试,"Parameter unggah tidak normal, segarkan halaman lalu coba lagi"
+点击修改邮箱身份,"Klik untuk mengubah identitas email"
+当前登录身份,"Identitas login saat ini"
+邮箱已绑定：%{1}，可以继续聊天,"Email terikat: %{1}. Anda dapat melanjutkan obrolan."
+邮箱已绑定，可以继续聊天,"Email terikat. Anda dapat melanjutkan obrolan."
+绑定成功,"Pengikatan berhasil"
+今天,"Hari ini"
+昨天,Kemarin
+请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,"Tunggu balasan layanan pelanggan sebelum mengirim. Setelah verifikasi email, Anda bisa melewati tunggu dan mengirim beruntun."
+等待客服回复…,"Menunggu balasan layanan pelanggan…"
 客服服务,"Layanan pelanggan"
-我的语言,我的语言
-显示模式,显示模式
-欢迎使用客服服务！,欢迎使用客服服务！
-请输入您的问题，我们的客服将尽快为您解答。,请输入您的问题，我们的客服将尽快为您解答。
+我的语言,"Bahasa saya"
+显示模式,"Mode tampilan"
+欢迎使用客服服务！,"Selamat datang di layanan pelanggan!"
+请输入您的问题，我们的客服将尽快为您解答。,"Silakan tulis pertanyaan Anda, tim kami akan segera menjawab."
 设置,Pengaturan
 收起,Ciutkan
-仅显示译文,仅显示译文
-原文+译文,原文+译文
-仅显示原文,仅显示原文
+仅显示译文,"Hanya terjemahan"
+原文+译文,"Asli + terjemahan"
+仅显示原文,"Hanya asli"
 截图,"Tangkapan layar"
-客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
-已取消截图,已取消截图
-截图失败，请改用图片上传或粘贴,截图失败，请改用图片上传或粘贴
-在页面上拖拽选择要截取的区域,在页面上拖拽选择要截取的区域
-重选,重选
-完成,完成
-已选中区域，可点击「完成」发送,已选中区域，可点击「完成」发送
-请先拖拽选择截图区域,请先拖拽选择截图区域
-生成中…,生成中…
-正在生成截图…,正在生成截图…
-请在弹出窗口选择「这个标签页」以截取,请在弹出窗口选择「这个标签页」以截取
-生成失败，请重选区域或改用图片上传,生成失败，请重选区域或改用图片上传
-欢迎使用客服服务,欢迎使用客服服务
-会员,会员
-访客,访客
-客服,客服
-图片加载失败,图片加载失败
-在线客服,在线客服
-"AI 智能客服","AI 智能客服"
-离线,离线
-网站正在维护，请稍后再试,网站正在维护，请稍后再试
-请稍候,请稍候
-请填写下方图码后发送验证邮件,请填写下方图码后发送验证邮件
-云端人机验证暂不可用，请填写下方本地图码后再次发送,云端人机验证暂不可用，请填写下方本地图码后再次发送
-云端人机验证暂不可用，已切换为本地图码，请填写后重试,云端人机验证暂不可用，已切换为本地图码，请填写后重试
-请填写本地图码,请填写本地图码
-人机验证尚未就绪，请稍后重试,人机验证尚未就绪，请稍后重试
-请输入有效的邮箱地址,请输入有效的邮箱地址
-会话未初始化，请刷新页面重试,会话未初始化，请刷新页面重试
-人机验证尚未就绪，正在刷新，请稍后重试,人机验证尚未就绪，正在刷新，请稍后重试
-验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
+客服会话初始化失败，请稍后重试,"Inisialisasi sesi layanan pelanggan gagal, coba lagi nanti"
+已取消截图,"Tangkapan layar dibatalkan"
+截图失败，请改用图片上传或粘贴,"Tangkapan layar gagal—unggah atau tempel gambar"
+在页面上拖拽选择要截取的区域,"Seret di halaman untuk memilih area yang akan ditangkap"
+重选,"Pilih ulang"
+完成,Selesai
+已选中区域，可点击「完成」发送,"Area dipilih—klik 「Selesai」 untuk mengirim"
+请先拖拽选择截图区域,"Seret dulu untuk memilih area tangkapan layar"
+生成中…,Membuat…
+正在生成截图…,"Membuat tangkapan layar…"
+请在弹出窗口选择「这个标签页」以截取,"Di dialog, pilih 「Tab ini」 untuk menangkap"
+生成失败，请重选区域或改用图片上传,"Gagal membuat—pilih ulang area atau unggah gambar"
+欢迎使用客服服务,"Selamat datang di layanan pelanggan"
+会员,Anggota
+访客,Pengunjung
+客服,Agen
+图片加载失败,"Gagal memuat gambar"
+客服新消息,"Pesan baru layanan pelanggan"
+您有一条新的客服回复,"Anda punya balasan baru dari layanan pelanggan"
+"AI 智能客服","Layanan pelanggan AI"
+离线,Offline
+网站正在维护，请稍后再试,"Situs dalam pemeliharaan, coba lagi nanti"
+请稍候,"Harap tunggu"
+请填写下方图码后发送验证邮件,"Isi kode di bawah lalu kirim email verifikasi"
+云端人机验证暂不可用，请填写下方本地图码后再次发送,"Captcha cloud tidak tersedia, isi kode lokal di bawah lalu kirim lagi"
+云端人机验证暂不可用，已切换为本地图码，请填写后重试,"Captcha cloud tidak tersedia, beralih ke kode lokal—isi lalu coba lagi"
+请填写本地图码,"Harap isi kode lokal"
+人机验证尚未就绪，请稍后重试,"Captcha belum siap, coba lagi nanti"
+请输入有效的邮箱地址,"Masukkan alamat email yang valid"
+会话未初始化，请刷新页面重试,"Sesi belum diinisialisasi, segarkan halaman dan coba lagi"
+人机验证尚未就绪，正在刷新，请稍后重试,"Captcha belum siap, sedang disegarkan—coba lagi nanti"
+验证邮件已发送，请查收您的邮箱,"Email verifikasi terkirim, periksa kotak masuk Anda"
 此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。
 邮箱绑定验证,邮箱绑定验证
 验证成功,验证成功
@@ -274,16 +279,16 @@ settings,settings
 已成功绑定到客服会话。,已成功绑定到客服会话。
 返回首页,返回首页
 验证失败,验证失败
-邮箱已绑定,邮箱已绑定
-正在同步到客服聊天窗口…,正在同步到客服聊天窗口…
-已绑定邮箱,已绑定邮箱
-回到商城继续聊天,回到商城继续聊天
-关闭此页,关闭此页
-原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。,原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。
+邮箱已绑定,"Email terikat"
+正在同步到客服聊天窗口…,"Menyinkronkan ke jendela obrolan layanan pelanggan…"
+已绑定邮箱,"Email terikat"
+回到商城继续聊天,"Kembali ke toko untuk melanjutkan obrolan"
+关闭此页,"Tutup halaman ini"
+原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。,"Jendela obrolan asli akan menampilkan email terikat. Jika halaman ini tidak tertutup otomatis, tutup dan lanjutkan obrolan."
 返回上一页,返回上一页
 如有问题，请,如有问题，请
 联系客服,联系客服
-已同步。可关闭此页，返回原页面继续聊天。,已同步。可关闭此页，返回原页面继续聊天。
+已同步。可关闭此页，返回原页面继续聊天。,"Tersinkron. Anda dapat menutup halaman ini dan melanjutkan obrolan di tab asli."
 配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。,配置写入当前作用范围；切换范围后页面会按新范围加载。语言留空则跟随网站默认语言。
 在统一配置中心打开,在统一配置中心打开
 作用范围,作用范围
@@ -409,13 +414,22 @@ settings,settings
 无效的附件消息,无效的附件消息
 图片：%{1},图片：%{1}
 文件：%{1},文件：%{1}
-检测中...,检测中...
-修改邮箱身份,"Edit identitas email"
+输入回复…,输入回复…
+会话,会话
+检测中...,Memeriksa...
+修改邮箱身份,"Ubah identitas email"
 验证邮箱,"Verifikasi email"
-接收客服回复与优惠通知,接收客服回复与优惠通知
-留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
-仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
-接收通知的邮箱,接收通知的邮箱
-请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
-稍后再说,稍后再说
-发送验证邮件,发送验证邮件
+接收客服回复与优惠通知,"Terima balasan layanan pelanggan dan notifikasi penawaran"
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,"Setelah meninggalkan email, layanan pelanggan dapat mengirim balasan konsultasi ini, progres kuota, dan penawaran ke email Anda."
+仅用于本次客服咨询相关通知，不是简报订阅。,"Hanya untuk notifikasi konsultasi layanan pelanggan ini, bukan langganan buletin."
+接收通知的邮箱,"Email untuk notifikasi"
+请输入用于接收客服通知的邮箱,"Masukkan email untuk menerima notifikasi layanan pelanggan"
+稍后再说,"Nanti saja"
+发送验证邮件,"Kirim email verifikasi"
+简体中文,"Tionghoa Sederhana"
+繁體中文,"Tionghoa Tradisional"
+拖拽选择要发送的区域,"Seret untuk memilih area yang akan dikirim"
+当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图,"Browser ini tidak mendukung tangkapan layar—unggah atau tempel gambar"
+正在截取当前页面…,"Sedang menangkap halaman ini…"
+无法截取当前页面，请改用图片上传或粘贴截图,"Tidak dapat menangkap halaman ini—unggah atau tempel gambar"
+无法截取所选区域，请改用图片上传或粘贴截图,"Tidak dapat menangkap area yang dipilih—unggah atau tempel gambar"

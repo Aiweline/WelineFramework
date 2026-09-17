@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="Weline_FileManager::media_reference_resource_changed"
+                  instance="Weline\FileManager\Observer\MediaReferenceResourceChanged"
+                  delivery="async"
+                  retry="standard"
+                  coalesce="latest"
+                  timeout="60"
+                  disabled="false"
+                  shared="true"
+                  sort="200"/>
+    </event>
+</config>

@@ -7,8 +7,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {footer-container}
- * @widget.name {云裳国际页脚}
- * @widget.description {云裳汉服独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。}
+ * @widget.name {全局页脚}
+ * @widget.description {独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。}
  * @widget.type {footer}
  * @widget.area {frontend}
  * @widget.position {["footer"]}
@@ -67,17 +67,15 @@ $showSocial = (bool)($this->getData('show_social') ?? true);
 $showLegal = (bool)($this->getData('show_legal') ?? true);
 $socialItems = FooterDefaultLinksHelper::normalizeSocialItems($this->getData('social_items'));
 $legalLinks = FooterDefaultLinksHelper::normalizeLegalLinks($this->getData('legal_links'));
-$themeFallbackSiteLogoText = '云裳 Hanfu Atelier';
+$themeFallbackSiteLogoText = '';
 /** @var SiteBrand $siteBrand */
 $siteBrand = ObjectManager::getInstance(SiteBrand::class);
 $siteLogoText = $siteBrand instanceof SiteBrand
     ? $siteBrand->resolveFrontendSiteName(
         trim((string)($this->getData('site_logo_text') ?? '')),
-        $themeFallbackSiteLogoText,
     )
     : WidgetI18n::label(
         trim((string)($this->getData('site_logo_text') ?? '')),
-        $themeFallbackSiteLogoText,
     );
 $localizedSiteLogoText = $siteLogoText;
 $localizedRights = WidgetI18n::label('保留所有权利');
@@ -87,8 +85,8 @@ if ($rawCopyright === null || trim((string)$rawCopyright) === '') {
 } else {
     $copyrightText = FooterCopyrightHelper::resolve((string)$rawCopyright);
     $copyrightText = str_replace(
-        [$themeFallbackSiteLogoText, 'Weline', '韦林', '保留所有权利'],
-        [$localizedSiteLogoText, $localizedSiteLogoText, $localizedSiteLogoText, $localizedRights],
+        ['Weline', '韦林', '保留所有权利'],
+        [$localizedSiteLogoText, $localizedSiteLogoText, $localizedRights],
         $copyrightText,
     );
 }

@@ -1,0 +1,710 @@
+<?php
+/**
+ * 布局：商品详情页
+ *
+ * 电商商品详情页布局，包含产品图片画廊、产品信息、详情标签、相关产品推荐等区域
+ * 支持右侧固定边栏、标签页切换、相关产品轮播等功能
+ *
+ * @meta.name {default="商品详情页布局",name="商品详情页布局",description="电商商品详情页布局，包含产品图片、信息、详情标签和推荐区域"}
+ * @meta.description {default="商品详情页布局，包含产品图片画廊、产品信息、规格标签、详情标签页、相关产品推荐，支持右侧固定边栏和响应式设计",name="商品详情页布局",description="商品详情页布局，包含产品图片画廊、产品信息、规格标签、详情标签页、相关产品推荐，支持右侧固定边栏和响应式设计"}
+ * @meta.category {default="catalog",name="商品详情",description="布局所属分类"}
+ * @param title {default="商品详情",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
+ * @param showSidebar {default=false,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
+ * @param showRelatedProducts {default=false,name="是否显示相关产品",description="是否显示相关产品推荐区域（相关/热销/搭配）；猜你喜欢与最近浏览为常显槽，不受此开关控制；默认关闭"}
+ * @param showReviews {default=true,name="是否显示评论容器",description="是否显示商品评论容器槽（由评论模块 default_injections 注入，布局不直接加载部件）"}
+ * @param showFaq {default=true,name="是否显示 FAQ 容器",description="是否显示商品 FAQ 容器槽（由 Faq 模块 default_injections 注入，布局不直接加载部件）"}
+ * @param showTabs {default=false,name="是否显示详情标签",description="是否显示产品详情标签区域"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
+ * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ *
+ * 产品主信息由 Weline_Product product-info 部件经 default_injections 注入 product-main；
+ * 布局只保留 slot 与预览占位，禁止内嵌 w:widget 或控制器内容模板渲染主信息。
+ */
+$meta = $this->getData('meta') ?? [];
+$colors = $this->getData('colors') ?? [];
+
+// 新增参数
+$coerceBool = static function (mixed $value, bool $default): bool {
+    if ($value === null) {
+        return $default;
+    }
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value) || is_float($value)) {
+        return ((int)$value) !== 0;
+    }
+    $normalized = strtolower(trim((string)$value));
+    if ($normalized === '' || $normalized === 'default') {
+        return $default;
+    }
+    if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+        return true;
+    }
+    if (in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+        return false;
+    }
+    return $default;
+};
+$showSidebar = $coerceBool($meta['showSidebar'] ?? $this->getData('showSidebar'), false);
+$showRelatedProducts = $coerceBool($meta['showRelatedProducts'] ?? $this->getData('showRelatedProducts'), false);
+$showReviews = $coerceBool($meta['showReviews'] ?? $this->getData('showReviews'), true);
+$showFaq = $coerceBool($meta['showFaq'] ?? $this->getData('showFaq'), true);
+// Product main info + description/specs live in the product-info widget; tabs stay off by default.
+$showTabs = $coerceBool($meta['showTabs'] ?? $this->getData('showTabs'), false);
+
+$meta['showSidebar'] = $showSidebar;
+$meta['showRelatedProducts'] = $showRelatedProducts;
+$meta['showReviews'] = $showReviews;
+$meta['showFaq'] = $showFaq;
+$meta['showTabs'] = $showTabs;
+$this->assign('meta', $meta);
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+</head>
+<body>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product::body-start</w:hook>
+    
+    <div class="weline-page-wrapper">
+        <!-- ========== HEADER 区域（使用 partials，内部已配置 widget slot） ========== -->
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product::header-before</w:hook>
+            
+            <!-- Header 通过 Partials Block 加载，slot 已在 partials/header/default.phtml 中配置 -->
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            
+            <w:hook>Weline_Theme::frontend::layouts::product::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <!-- 面包屑导航区域 -->
+        <if condition="meta.showBreadcrumb">
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product::breadcrumb-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            <w:hook>Weline_Theme::frontend::layouts::product::breadcrumb-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+        </if>
+        
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product::content-before</w:hook>
+
+            <!-- ========== 商品详情页主体区域 ========== -->
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-product-content,layout-default-content,content,product-detail,product-main,product-sidebar,product-tabs,product-reviews,product-faq,related-products,you-may-like,bestsellers,recently-viewed,cross-sell"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="product-detail-layout__content-root-slot">
+            <main class="product-detail-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-detail-main" data-layout="product-detail">
+                <div class="product-detail-layout__container">
+                    <div class="product-detail-layout__wrapper">
+                        <!-- ========== 产品主内容区域 ========== -->
+                        <w:slot id="product-main"
+                                name="产品主内容区域"
+                                accept="layout-product-main,product-gallery,product-info,product-options,add-to-cart,product-detail"
+                                multiple="true"
+                                position="content"
+                                class="product-detail-layout__main-content">
+                            <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
+                            <!-- 仅 slot + 预览占位；product-info 由 Product default_injections 注入，禁止布局内嵌 w:widget -->
+                            <div class="product-detail-layout__placeholder product-detail-layout__placeholder--product-info"
+                                 data-placeholder="product-main">
+                                <div class="product-detail-layout__preview-mock" aria-hidden="true">
+                                    <div class="product-detail-layout__preview-media">
+                                        <span>FCDC</span>
+                                    </div>
+                                    <div class="product-detail-layout__preview-body">
+                                        <p class="product-detail-layout__preview-eyebrow"><lang>已发布商品</lang></p>
+                                        <div class="product-detail-layout__preview-title">
+                                            <span>R43</span>
+                                            <span>Storefront</span>
+                                            <span>Product</span>
+                                        </div>
+                                        <p class="product-detail-layout__preview-sku">SKU: R43-STORE-PREVIEW</p>
+                                    </div>
+                                </div>
+                                <span class="product-detail-layout__placeholder-text"><lang>产品主信息区域 - 由 Product 部件默认注入</lang></span>
+                            </div>
+                            <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
+                        </w:slot>
+
+                        <!-- ========== 产品侧边栏区域 ========== -->
+                        <if condition="meta.showSidebar">
+                            <aside class="product-detail-layout__sidebar">
+                                <w:slot id="product-sidebar"
+                                        name="产品侧边栏"
+                                        accept="layout-product-sidebar,related-products,up-sell,cross-sell,recently-viewed,bestsellers,sidebar-ads"
+                                        multiple="true"
+                                        position="sidebar">
+                                    <w:hook>Weline_Theme::frontend::layouts::product::sidebar-before</w:hook>
+                                    <div class="product-detail-layout__placeholder" data-placeholder="product-sidebar">
+                                        <div class="product-detail-layout__placeholder-icon">
+                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </div>
+                                        <span class="product-detail-layout__placeholder-text"><lang>侧边栏区域 - 拖拽推荐部件到此处</lang></span>
+                                    </div>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::sidebar-after</w:hook>
+                                </w:slot>
+                            </aside>
+                        </if>
+                    </div>
+                </div>
+            </main>
+
+            <!-- ========== 商品评论容器（仅 slot；部件由 Review default_injections 注入，禁止布局直接 w:widget） ========== -->
+            <if condition="meta.showReviews">
+                <section class="product-detail-layout__reviews" id="product-reviews" weline-code="theme.product.section_reviews">
+                    <div class="product-detail-layout__reviews-container">
+                        <w:hook>Weline_Theme::frontend::layouts::product::reviews-before</w:hook>
+                        <w:slot id="product-reviews"
+                                name="商品评论"
+                                accept="layout-product-reviews,product-reviews,review,reviews"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__reviews-slot">
+                            <w:hook>Weline_Theme::frontend::layouts::product::reviews-slot-content</w:hook>
+                        </w:slot>
+                        <w:hook>Weline_Theme::frontend::layouts::product::reviews-after</w:hook>
+                    </div>
+                </section>
+            </if>
+
+            <!-- ========== 商品 FAQ 容器（仅 slot；部件由 Faq default_injections 注入，禁止布局直接 w:widget） ========== -->
+            <if condition="meta.showFaq">
+                <section class="product-detail-layout__faq" id="product-faq" weline-code="theme.product.section_faq">
+                    <div class="product-detail-layout__faq-container">
+                        <w:hook>Weline_Theme::frontend::layouts::product::faq-before</w:hook>
+                        <w:slot id="product-faq"
+                                name="商品 FAQ"
+                                accept="layout-product-faq,product-faq,faq"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__faq-slot">
+                            <w:hook>Weline_Theme::frontend::layouts::product::faq-slot-content</w:hook>
+                        </w:slot>
+                        <w:hook>Weline_Theme::frontend::layouts::product::faq-after</w:hook>
+                    </div>
+                </section>
+            </if>
+
+            <!-- ========== 产品详情标签区域 ========== -->
+            <if condition="meta.showTabs">
+                <section class="product-detail-layout__tabs" weline-code="theme.product.section_1">
+                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-before</w:hook>
+                    <div class="product-detail-layout__tabs-container">
+                        <w:hook>Weline_Theme::frontend::layouts::product::tabs-content<else/>
+                            <div class="product-detail-layout__placeholder" data-placeholder="product-tabs">
+                                <div class="product-detail-layout__placeholder-icon">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </div>
+                                <span class="product-detail-layout__placeholder-text"><lang>产品详情标签区域 - 拖拽详情/评价/问答部件到此处</lang></span>
+                            </div>
+                        </w:hook>
+                        <w:slot id="product-tabs"
+                                name="产品详情标签区域"
+                                accept="layout-product-tabs,product-description,product-specs,product-reviews,product-qa"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__tabs-slot">
+                            <w:hook>Weline_Theme::frontend::layouts::product::tabs-slot-content</w:hook>
+                        </w:slot>
+                    </div>
+                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-after</w:hook>
+                </section>
+            </if>
+
+            <!-- ========== 相关产品推荐区域（相关/热销/搭配；默认关闭，不含猜你喜欢/最近浏览） ========== -->
+            <if condition="meta.showRelatedProducts">
+                <section class="product-detail-layout__related" weline-code="theme.product.section_2">
+                    <div class="product-detail-layout__related-container">
+                        <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::product::recommendations-content<else/>
+                            <div class="product-detail-layout__recommendations-stack">
+                                <w:slot id="product-related-products"
+                                        name="相关产品列表"
+                                        accept="related-products,you-may-like,product-carousel"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="div"
+                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--related">
+                                    <w:hook>Weline_Theme::frontend::layouts::product::related-products</w:hook>
+                                </w:slot>
+                                <w:slot id="product-bestsellers"
+                                        name="热销商品"
+                                        accept="bestsellers,product-carousel"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="div"
+                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--bestsellers">
+                                    <w:hook>Weline_Theme::frontend::layouts::product::bestsellers</w:hook>
+                                </w:slot>
+                                <w:slot id="product-cross-sell"
+                                        name="搭配推荐"
+                                        accept="cross-sell,up-sell,product-carousel"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="div"
+                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--cross-sell">
+                                    <w:hook>Weline_Theme::frontend::layouts::product::cross-sell</w:hook>
+                                </w:slot>
+                            </div>
+                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::product::related-after</w:hook>
+                    </div>
+                </section>
+            </if>
+
+            <!-- ========== 猜你喜欢 / 最近浏览（常显；部件经 default_injections 注入，禁止布局内嵌 w:widget） ========== -->
+            <section class="product-detail-layout__personalization" weline-code="theme.product.section_personalization">
+                <div class="product-detail-layout__personalization-container">
+                    <w:hook>Weline_Theme::frontend::layouts::product::personalization-before</w:hook>
+                    <div class="product-detail-layout__personalization-stack">
+                        <w:slot id="product-you-may-like"
+                                name="猜你喜欢"
+                                accept="you-may-like,product-carousel"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__related-slot product-detail-layout__related-slot--you-may-like">
+                            <w:hook>Weline_Theme::frontend::layouts::product::you-may-like</w:hook>
+                        </w:slot>
+                        <w:slot id="product-recently-viewed"
+                                name="最近浏览"
+                                accept="recently-viewed,product-carousel"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__related-slot product-detail-layout__related-slot--recently-viewed">
+                            <w:hook>Weline_Theme::frontend::layouts::product::recently-viewed</w:hook>
+                        </w:slot>
+                    </div>
+                    <w:hook>Weline_Theme::frontend::layouts::product::personalization-after</w:hook>
+                </div>
+            </section>
+
+            </w:slot>
+
+            <w:hook>Weline_Theme::frontend::layouts::product::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+        
+        <!-- ========== FOOTER 区域（使用 partials，内部已配置 widget slot） ========== -->
+
+        <w:slot id="product-bottom"
+                name="商品详情底部扩展"
+                accept="layout-product-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="product-bottom-slot">
+        </w:slot>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product::footer-before</w:hook>
+            
+            <!-- Footer 通过 Partials Block 加载，slot 已在 partials/footer/default.phtml 中配置 -->
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            
+            <w:hook>Weline_Theme::frontend::layouts::product::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::product::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <style>
+    /* ========================================
+       商品详情页布局样式
+       BEM 命名规范，使用主题 CSS 变量
+       ======================================== */
+
+    /* ---- 页面主体 ---- */
+    .product-detail-layout__main {
+        padding-block: var(--spacing-2, var(--weline-space-2, 0.5rem)) 0;
+    }
+
+    .product-detail-layout__container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__wrapper {
+        display: flex;
+        gap: var(--spacing-6);
+        flex-wrap: wrap;
+    }
+
+    /* ---- 主内容区域 ---- */
+    .product-detail-layout__main-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* ---- 侧边栏 ---- */
+    .product-detail-layout__sidebar {
+        width: var(--sidebar-width);
+        flex-shrink: 0;
+        position: sticky;
+        top: calc(var(--header-height) + var(--spacing-4));
+        max-height: calc(100vh - var(--header-height) - var(--spacing-8));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    /* ---- 详情标签区域 ---- */
+    .product-detail-layout__tabs {
+        padding: var(--spacing-6) 0;
+        background-color: var(--color-bg-secondary);
+    }
+
+    .product-detail-layout__tabs-container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__tabs-slot {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* ---- 评论容器区域 ---- */
+    .product-detail-layout__reviews {
+        padding: var(--spacing-6) 0;
+    }
+
+    .product-detail-layout__reviews-container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__reviews-slot {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__reviews-slot > .widget-wrapper {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* ---- FAQ 容器区域 ---- */
+    .product-detail-layout__faq {
+        padding: var(--spacing-6) 0;
+    }
+
+    .product-detail-layout__faq-container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__faq-slot {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__faq-slot > .widget-wrapper {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* ---- 相关产品区域 ---- */
+    .product-detail-layout__related {
+        padding: var(--spacing-6) 0;
+    }
+
+    .product-detail-layout__related-container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__recommendations-stack {
+        width: 100%;
+    }
+
+    /* ---- 猜你喜欢 / 最近浏览常显区（与主内容同宽） ---- */
+    .product-detail-layout__personalization {
+        padding: var(--spacing-6) 0;
+    }
+
+    .product-detail-layout__personalization-container {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__personalization-stack {
+        width: 100%;
+    }
+
+    .product-detail-layout__personalization-stack > .product-detail-layout__related-slot,
+    .product-detail-layout__personalization .product-detail-layout__related-slot {
+        width: 100%;
+        min-width: 0;
+        margin-block: var(--spacing-4, 1rem) 0;
+    }
+
+    .product-detail-layout__personalization .product-detail-layout__related-slot > .widget-wrapper {
+        width: 100%;
+        min-width: 0;
+        display: block;
+    }
+
+    .product-detail-layout__related-slot {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__related-slot > .widget-wrapper {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__related-slot > .widget-wrapper > .widget-products {
+        max-width: none !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .product-detail-layout__related .widget-products,
+    .product-detail-layout__related .widget-wrapper > .widget-products,
+    .product-detail-layout__main ~ .widget-products,
+    .weline-main-content > .widget-products {
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin: 0 auto;
+        padding: var(--spacing-6) var(--weline-layout-content-padding-inline);
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__related .widget-products .products-grid,
+    .product-detail-layout__main ~ .widget-products .products-grid,
+    .weline-main-content > .widget-products .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(var(--size-panel-220), 1fr));
+        gap: var(--spacing-4);
+        width: 100%;
+    }
+
+    .product-detail-layout__related .widget-products .product-card,
+    .product-detail-layout__main ~ .widget-products .product-card,
+    .weline-main-content > .widget-products .product-card {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        overflow: hidden;
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+        border-radius: var(--radius-lg);
+        background: var(--weline-layout-surface-primary);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+
+    /*
+     * Some product-detail render paths currently nest the global footer
+     * under the detail container in the final DOM. When that happens,
+     * force the footer to break out of the centered container and span
+     * the viewport width so the visible layout stays correct.
+     */
+    .product-detail-layout__container > .weline-footer,
+    .product-detail-layout__container > footer.font-display {
+        width: 100vw;
+        max-width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+    }
+
+    /* ---- 占位符 ---- */
+    .product-detail-layout__placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-4);
+        padding: var(--spacing-8) var(--spacing-4);
+        text-align: center;
+        color: var(--color-text-tertiary);
+    }
+
+    .product-detail-layout__placeholder--product-info {
+        align-items: stretch;
+        gap: var(--spacing-4);
+        min-height: 420px;
+        padding: var(--spacing-4);
+        text-align: left;
+        color: inherit;
+        background: #fff;
+    }
+
+    .product-detail-layout__preview-mock {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(220px, .85fr);
+        border: 1px solid #d1d5db;
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .product-detail-layout__preview-media {
+        display: grid;
+        min-height: 320px;
+        place-items: center;
+        background: #f3f4f6;
+        color: #9ca3af;
+        font-size: 48px;
+        font-weight: 900;
+        letter-spacing: .04em;
+    }
+
+    .product-detail-layout__preview-body {
+        display: grid;
+        align-content: center;
+        gap: 16px;
+        padding: 40px 36px;
+    }
+
+    .product-detail-layout__preview-eyebrow {
+        margin: 0;
+        color: #b91c1c;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .product-detail-layout__preview-title {
+        display: grid;
+        gap: 2px;
+        color: #111827;
+        font-size: clamp(28px, 4vw, 48px);
+        font-weight: 900;
+        line-height: 1.05;
+    }
+
+    .product-detail-layout__preview-sku {
+        margin: 0;
+        color: #6b7280;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .product-detail-layout__placeholder-icon {
+        color: var(--color-text-disabled);
+    }
+
+    .product-detail-layout__placeholder-text {
+        font-size: var(--font-size-sm);
+        text-align: center;
+    }
+
+    @media (max-width: 840px) {
+        .product-detail-layout__preview-mock {
+            grid-template-columns: 1fr;
+        }
+
+        .product-detail-layout__preview-media {
+            min-height: 220px;
+            font-size: 36px;
+        }
+
+        .product-detail-layout__preview-body {
+            padding: 28px 20px;
+        }
+    }
+
+    /* ---- 编辑模式样式由 editor-mode.css 统一管理 ---- */
+
+    /* ---- 响应式设计 ---- */
+    @media (max-width: 992px) {
+        .product-detail-layout__wrapper {
+            flex-direction: column;
+        }
+
+        .product-detail-layout__sidebar {
+            width: 100%;
+            position: static;
+            max-height: none;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .product-detail-layout__main {
+            padding-block: var(--spacing-1, var(--weline-space-1, 0.25rem)) 0;
+        }
+
+        .product-detail-layout__container {
+            padding: 0 var(--weline-layout-content-padding-inline);
+        }
+
+        .product-detail-layout__wrapper {
+            gap: var(--spacing-4);
+        }
+
+        .product-detail-layout__tabs,
+        .product-detail-layout__reviews,
+        .product-detail-layout__faq,
+        .product-detail-layout__related,
+        .product-detail-layout__personalization {
+            padding: var(--spacing-5) 0;
+        }
+
+        .product-detail-layout__tabs-container,
+        .product-detail-layout__related-container,
+        .product-detail-layout__personalization-container {
+            padding: 0 var(--weline-layout-content-padding-inline);
+        }
+    }
+    </style>
+
+    <!-- 编辑模式脚本由 ThemeEditor 控制器注入 -->
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

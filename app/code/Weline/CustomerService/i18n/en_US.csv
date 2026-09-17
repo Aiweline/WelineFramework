@@ -16,13 +16,20 @@
 "Language updated.","Language updated."
 "Please enter a valid email address.","Please enter a valid email address."
 "Session token is required.","Session token is required."
-人机验证服务暂不可用，已切换为本地图码，请填写后重试,人机验证服务暂不可用，已切换为本地图码，请填写后重试
+人机验证服务暂不可用，已切换为本地图码，请填写后重试,"Captcha service unavailable; switched to local code—fill it and try again"
 人机验证未完成，请再试一次,"Captcha was not completed. Please try again."
 人机验证失败或已过期，请重试,"Captcha verification failed or expired. Please try again."
 "Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
 "Verification email has been sent.","Verification email has been sent."
 "Customer Service Query","Customer Service Query"
 "Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
+在线客服,"Online customer service"
+默认已启用在线客服（当前范围无覆盖关闭）。,默认已启用在线客服（当前范围无覆盖关闭）。
+已继承上级范围启用在线客服。,已继承上级范围启用在线客服。
+已启用在线客服入口。,已启用在线客服入口。
+"启用前台客服与默认语言；可选 AI 模型。","启用前台客服与默认语言；可选 AI 模型。"
+服务,服务
+在线客服入口,在线客服入口
 客服聊天,"Customer Service Chat"
 获取会话失败：%{1},"Failed to get session: %{1}"
 消息内容不能为空,"Message content cannot be empty"
@@ -145,7 +152,6 @@ settings,settings
 加载更早消息失败，请稍后重试,加载更早消息失败，请稍后重试
 正在加载最新消息…,正在加载最新消息…
 在下方输入框发送第一条回复。,在下方输入框发送第一条回复。
-会话,Session
 输入消息...,"Type a message..."
 发送,Send
 正在加载更早消息…,正在加载更早消息…
@@ -181,10 +187,10 @@ settings,settings
 删除失败,"Deletion failed"
 保存失败,"Failed to save"
 请先选择会话,请先选择会话
-正在上传…,正在上传…
-上传失败,上传失败
+正在上传…,Uploading…
+上传失败,"Upload failed"
 发送失败,"Failed to send"
-上传失败，请稍后重试,上传失败，请稍后重试
+上传失败，请稍后重试,"Upload failed, please try again later"
 发送失败，请稍后重试,"Failed to send, please try again later"
 确定要接单此会话吗？,"Are you sure you want to accept this session?"
 确认接单,"Confirm order"
@@ -211,20 +217,18 @@ settings,settings
 请注意,"Please note"
 操作失败,"Operation failed"
 知道了,"Got it"
-人机验证凭证异常，请刷新页面后重试,人机验证凭证异常，请刷新页面后重试
-请求参数过长，请刷新页面后重试,请求参数过长，请刷新页面后重试
-上传参数异常，请刷新页面后重试,上传参数异常，请刷新页面后重试
-点击修改邮箱身份,"Click to edit email identity"
-当前登录身份,当前登录身份
+人机验证凭证异常，请刷新页面后重试,"Captcha token error; refresh the page and try again"
+请求参数过长，请刷新页面后重试,"Request parameters too long; refresh and try again"
+上传参数异常，请刷新页面后重试,"Upload parameters invalid; refresh and try again"
+点击修改邮箱身份,"Click to change email identity"
+当前登录身份,"Current login identity"
 邮箱已绑定：%{1}，可以继续聊天,"Email bound: %{1}. You can continue chatting."
 邮箱已绑定，可以继续聊天,"Email bound. You can continue chatting."
 绑定成功,"Binding successful"
-今天,今天
-昨天,昨天
-客服新消息,客服新消息
-您有一条新的客服回复,您有一条新的客服回复
-请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,"Please wait for support to reply before sending again. Verified email skips the wait and allows continuous messages."
-等待客服回复…,等待客服回复…
+今天,Today
+昨天,Yesterday
+请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。,"Wait for a customer service reply before sending. After verifying email, you can skip the wait and send consecutively."
+等待客服回复…,"Waiting for customer service…"
 客服服务,"Customer Service"
 我的语言,"My Language"
 显示模式,"Display Mode"
@@ -249,23 +253,24 @@ settings,settings
 请在弹出窗口选择「这个标签页」以截取,"In the dialog, choose This Tab to capture"
 生成失败，请重选区域或改用图片上传,"Failed to generate. Reselect an area or upload an image"
 欢迎使用客服服务,"Welcome to customer service"
-会员,会员
-访客,访客
+会员,Member
+访客,Visitor
 客服,Agent
 图片加载失败,"Failed to load image"
-在线客服,"Online customer service"
+客服新消息,"New customer service message"
+您有一条新的客服回复,"You have a new customer service reply"
 "AI 智能客服","AI Customer Service"
 离线,Offline
-网站正在维护，请稍后再试,网站正在维护，请稍后再试
-请稍候,请稍候
-请填写下方图码后发送验证邮件,请填写下方图码后发送验证邮件
-云端人机验证暂不可用，请填写下方本地图码后再次发送,云端人机验证暂不可用，请填写下方本地图码后再次发送
-云端人机验证暂不可用，已切换为本地图码，请填写后重试,云端人机验证暂不可用，已切换为本地图码，请填写后重试
-请填写本地图码,请填写本地图码
-人机验证尚未就绪，请稍后重试,人机验证尚未就绪，请稍后重试
+网站正在维护，请稍后再试,"The site is under maintenance, please try again later"
+请稍候,"Please wait"
+请填写下方图码后发送验证邮件,"Fill in the code below, then send the verification email"
+云端人机验证暂不可用，请填写下方本地图码后再次发送,"Cloud captcha unavailable; fill the local code below and send again"
+云端人机验证暂不可用，已切换为本地图码，请填写后重试,"Cloud captcha unavailable; switched to local code—fill it and try again"
+请填写本地图码,"Please fill in the local code"
+人机验证尚未就绪，请稍后重试,"Captcha not ready, please try again later"
 请输入有效的邮箱地址,"Please enter a valid email address"
 会话未初始化，请刷新页面重试,"Session not initialized, please refresh the page and try again"
-人机验证尚未就绪，正在刷新，请稍后重试,人机验证尚未就绪，正在刷新，请稍后重试
+人机验证尚未就绪，正在刷新，请稍后重试,"Captcha not ready, refreshing—try again shortly"
 验证邮件已发送，请查收您的邮箱,"Verification email sent, please check your email"
 此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"This page is for standalone chat interface. The actual chat function is available through the floating button in the bottom right corner."
 邮箱绑定验证,"Email binding verification"
@@ -409,6 +414,8 @@ settings,settings
 无效的附件消息,无效的附件消息
 图片：%{1},图片：%{1}
 文件：%{1},文件：%{1}
+输入回复…,输入回复…
+会话,Session
 检测中...,Checking...
 修改邮箱身份,"Edit email identity"
 验证邮箱,"Verify email"
@@ -421,11 +428,11 @@ settings,settings
 发送验证邮件,"Send Verification Email"
 "客服服务 - 邮箱绑定验证","Customer Service - Email Binding Verification"
 绑定成功后，您将收到客服回复的邮件通知,"After successful binding, you will receive email notifications for customer service replies"
-无法截取所选区域，请改用图片上传或粘贴截图,无法截取所选区域，请改用图片上传或粘贴截图
-正在截取当前页面…,正在截取当前页面…
-无法截取当前页面，请改用图片上传或粘贴截图,无法截取当前页面，请改用图片上传或粘贴截图
-拖拽选择要发送的区域,拖拽选择要发送的区域
-当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图,当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图
+无法截取所选区域，请改用图片上传或粘贴截图,"Could not capture the selected area—upload or paste an image"
+正在截取当前页面…,"Capturing the current page…"
+无法截取当前页面，请改用图片上传或粘贴截图,"Could not capture this page—upload or paste an image"
+拖拽选择要发送的区域,"Drag to select the area to send"
+当前浏览器不支持屏幕截图，请改用图片上传或粘贴截图,"This browser does not support screen capture—upload or paste an image"
 由「%{1}」转让而来,由「%{1}」转让而来
 由其他客服转让而来,由其他客服转让而来
 目标客服,目标客服
@@ -459,3 +466,4 @@ English,English
 页脚联系客服链接,"Footer Contact Support Link"
 "页脚帮助中心扩展槽：联系客服入口；点击打开悬浮客服聊天；默认注入 footer-help-links。","Footer help extras: contact support opens floating chat; default inject footer-help-links."
 页脚帮助中心默认展示联系客服（打开悬浮聊天）,"Footer help center defaults to Contact Support (open floating chat)"
+繁體中文,"Traditional Chinese"

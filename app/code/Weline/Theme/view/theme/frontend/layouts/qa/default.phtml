@@ -4,7 +4,6 @@
  *
  * @meta.name {default="问答页默认布局",name="问答页默认布局",description="问答页面的共享头尾与内容槽"}
  * @meta.description {default="共享站点 chrome、语义主内容和问答业务槽",name="描述",description="问答数据与结构化内容由业务模块提供"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="问答页通常允许访客访问"}
  * @param title {default="问答",name="页面标题",description="用于主内容区的无障碍名称"}
  * @param content {default="",name="主要内容（HTML）",description="由业务模块或编辑器注入的内容"}
  * @param contentTemplate {default="",name="内容模板",description="由业务模块提供的模板标识"}
@@ -76,36 +75,27 @@ $renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
                         <?php elseif (trim($renderedTemplateContent) !== ''): ?>
                             <?= $renderedTemplateContent ?>
                         <?php else: ?>
-                            <section weline-code="theme-qa-fallback" class="w-theme-qa-fallback" data-testid="storefront-qa-page" aria-labelledby="qa-page-title">
-                                <div class="w-theme-qa-fallback__intro">
-                                    <p class="w-theme-qa-fallback__eyebrow"><?= $escape(__('选购答疑')) ?></p>
-                                    <h1 id="qa-page-title"><?= $escape(__('商品问答')) ?></h1>
-                                    <p class="w-theme-qa-fallback__lead"><?= $escape(__('关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。')) ?></p>
-                                    <div class="w-theme-qa-fallback__actions">
-                                        <a class="w-theme-qa-fallback__link w-theme-qa-fallback__link--primary" href="@url{'categories'}"><?= $escape(__('按分类选购')) ?></a>
-                                        <a class="w-theme-qa-fallback__link" href="@url{'contact'}"><?= $escape(__('联系客户服务')) ?></a>
-                                    </div>
-                                </div>
-                                <div class="w-theme-qa-fallback__grid" aria-label="<?= $escape(__('问答使用说明')) ?>">
-                                    <article class="w-theme-qa-fallback__card">
-                                        <h2><?= $escape(__('商品问题')) ?></h2>
-                                        <p><?= $escape(__('在商品详情页提问，问题会与具体款式关联，便于获得准确回复。')) ?></p>
-                                    </article>
-                                    <article class="w-theme-qa-fallback__card">
-                                        <h2><?= $escape(__('订单与售后')) ?></h2>
-                                        <p><?= $escape(__('订单状态、退换与配送问题请通过帮助中心或账户订单页处理。')) ?></p>
-                                    </article>
-                                    <article class="w-theme-qa-fallback__card">
-                                        <h2><?= $escape(__('公开信息提示')) ?></h2>
-                                        <p><?= $escape(__('请勿在公开问题中填写电话、地址、订单号或其他个人信息。')) ?></p>
-                                    </article>
-                                </div>
-                            </section>
+                            <div class="w-theme-qa-widget-stack" weline-code="theme.qa.widget_stack" data-testid="storefront-qa-page">
+                                <w:widget type="content" name="section-heading" />
+                                <w:widget type="faq" name="faq-accordion" />
+                                <w:widget type="content" name="contact-info" />
+                            </div>
                         <?php endif; ?>
                     </w:hook>
                 </w:slot>
             </div>
         </main>
+
+        <w:slot id="qa-bottom"
+                name="问答页底部扩展"
+                accept="layout-qa-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="qa-bottom-slot">
+        </w:slot>
+
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>

@@ -57,6 +57,15 @@ final class ThemeBrandBasicsContractTest extends TestCase
         self::assertStringContainsString('theme-brand-basics.js', $js);
         self::assertStringContainsString('theme-editor-chrome.js', $js);
         self::assertStringContainsString('theme-editor-fit-controls.js', $js);
+        // Fit mirror must not re-enter from its own title/width writes (DevTools flash loop).
+        $fitSource = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/theme-editor-fit-controls.js'
+        );
+        self::assertStringContainsString('suppressObserve', $fitSource);
+        self::assertStringContainsString('lastMirrorKey', $fitSource);
+        self::assertStringContainsString("Do not watch `title`", $fitSource);
+        self::assertStringContainsString('suppressObserve', $js);
+        self::assertStringContainsString('lastMirrorKey', $js);
         self::assertStringContainsString('btnThemeBrandBasics', $js);
         self::assertStringContainsString('weline-media-manager-select', $js);
         self::assertStringContainsString('openBrandMediaDialog', $js);

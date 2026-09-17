@@ -66,6 +66,14 @@ class DeliveryAddressService
         if (isset($filters['is_default'])) {
             $model->where(DeliveryAddress::schema_fields_IS_DEFAULT, $filters['is_default']);
         }
+
+        if (isset($filters['purpose_checkout'])) {
+            $model->where(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, (int)$filters['purpose_checkout']);
+        }
+
+        if (isset($filters['purpose_receiving'])) {
+            $model->where(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, (int)$filters['purpose_receiving']);
+        }
         
         if (isset($filters['keyword']) && $filters['keyword']) {
             $keyword = "%{$filters['keyword']}%";
@@ -148,6 +156,8 @@ class DeliveryAddressService
         if ($this->countByCustomer($customerId) === 0) {
             $data[DeliveryAddress::schema_fields_IS_DEFAULT] = 1;
         }
+
+        $data = $this->normalizePurposeFlagsForCreate($data);
         
         $model = $this->getModel()->reset();
         $model->setData($data);
@@ -184,6 +194,7 @@ class DeliveryAddressService
         
         $data = $this->addressFormatter->normalize($data);
         $this->validate($data, $id);
+        $data = $this->normalizePurposeFlagsForUpdate($data, $model);
         
         // 如果设置为默认，取消该客户的其他默认地址
         if (!empty($data[DeliveryAddress::schema_fields_IS_DEFAULT])) {
@@ -281,14 +292,21 @@ class DeliveryAddressService
      * @param int $customerId
      * @return DeliveryAddress|null
      */
-    public function getDefaultByCustomer(int $customerId): ?DeliveryAddress
+    public function getDefaultByCustomer(int $customerId, array $filters = []): ?DeliveryAddress
     {
         $model = $this->getModel()->reset()
             ->where(DeliveryAddress::schema_fields_CUSTOMER_ID, $customerId)
             ->where(DeliveryAddress::schema_fields_IS_DEFAULT, 1)
-            ->where(DeliveryAddress::schema_fields_IS_ENABLED, 1)
-            ->find()
-            ->fetch();
+            ->where(DeliveryAddress::schema_fields_IS_ENABLED, 1);
+
+        if (isset($filters['purpose_checkout'])) {
+            $model->where(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, (int)$filters['purpose_checkout']);
+        }
+        if (isset($filters['purpose_receiving'])) {
+            $model->where(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, (int)$filters['purpose_receiving']);
+        }
+
+        $model = $model->find()->fetch();
         
         return $model->getId() ? $model : null;
     }
@@ -386,6 +404,8 @@ class DeliveryAddressService
             DeliveryAddress::schema_fields_POSTAL_CODE,
             DeliveryAddress::schema_fields_IS_DEFAULT,
             DeliveryAddress::schema_fields_IS_ENABLED,
+            DeliveryAddress::schema_fields_PURPOSE_CHECKOUT,
+            DeliveryAddress::schema_fields_PURPOSE_RECEIVING,
         ]);
 
         if (!$data) {
@@ -439,6 +459,8 @@ class DeliveryAddressService
             DeliveryAddress::schema_fields_STREET_ID => true,
             DeliveryAddress::schema_fields_IS_DEFAULT => true,
             DeliveryAddress::schema_fields_IS_ENABLED => true,
+            DeliveryAddress::schema_fields_PURPOSE_CHECKOUT => true,
+            DeliveryAddress::schema_fields_PURPOSE_RECEIVING => true,
         ];
 
         if (isset($integerFields[$field])) {
@@ -476,6 +498,213 @@ class DeliveryAddressService
             'district_region_id' => (int)($data[DeliveryAddress::schema_fields_DISTRICT_REGION_ID] ?? 0),
             'street' => (string)($data[DeliveryAddress::schema_fields_STREET] ?? ''),
         ]);
+    }
+
+    /**
+     * 新建：未传用途时双标；传了则按 purpose_source / also_use_* 落库。
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function normalizePurposeFlagsForCreate(array $data): array
+    {
+        $hasPurposeHint = array_key_exists(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, $data)
+            || array_key_exists(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, $data)
+            || array_key_exists('also_use_checkout', $data)
+            || array_key_exists('also_use_receiving', $data)
+            || array_key_exists('purpose_source', $data);
+        if (!$hasPurposeHint) {
+            $data[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT] = 1;
+            $data[DeliveryAddress::schema_fields_PURPOSE_RECEIVING] = 1;
+
+            return $data;
+        }
+
+        $resolved = self::resolvePurposeWriteFlags($data, true, null);
+        $data[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT] = $resolved[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT];
+        $data[DeliveryAddress::schema_fields_PURPOSE_RECEIVING] = $resolved[DeliveryAddress::schema_fields_PURPOSE_RECEIVING];
+
+        return $data;
+    }
+
+    /**
+     * 更新：只加标不摘标；未传用途相关键则不改用途字段。
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function normalizePurposeFlagsForUpdate(array $data, DeliveryAddress $existing): array
+    {
+        $touchesPurpose = array_key_exists(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, $data)
+            || array_key_exists(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, $data)
+            || array_key_exists('also_use_checkout', $data)
+            || array_key_exists('also_use_receiving', $data)
+            || array_key_exists('purpose_source', $data);
+        if (!$touchesPurpose) {
+            unset(
+                $data[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT],
+                $data[DeliveryAddress::schema_fields_PURPOSE_RECEIVING],
+            );
+
+            return $data;
+        }
+
+        $resolved = self::resolvePurposeWriteFlags($data, false, $existing);
+        $data[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT] = $resolved[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT];
+        $data[DeliveryAddress::schema_fields_PURPOSE_RECEIVING] = $resolved[DeliveryAddress::schema_fields_PURPOSE_RECEIVING];
+
+        return $data;
+    }
+
+    /**
+     * 演示/清空结账簿：摘掉账户库结账标（绕过「只加标不摘标」写路径）。
+     * 双标 → 仅收货；仅结账 → 改为仅收货（保留物理行，便于对比列表）。
+     *
+     * @return int 更新行数
+     */
+    public function stripCheckoutPurposeForCustomer(int $customerId): int
+    {
+        $customerId = max(0, $customerId);
+        if ($customerId <= 0) {
+            return 0;
+        }
+
+        $updated = 0;
+        foreach ($this->getListByCustomer($customerId, [
+            'is_enabled' => 1,
+            'purpose_checkout' => 1,
+        ]) as $model) {
+            if (!$model instanceof DeliveryAddress) {
+                continue;
+            }
+            $model->setData(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, 0);
+            if (!$model->hasPurposeReceiving()) {
+                $model->setData(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, 1);
+            }
+            $model->save();
+            $updated++;
+        }
+
+        return $updated;
+    }
+
+    /**
+     * 下单成功：为指定账户地址加上结账标（只加不摘）。
+     */
+    public function ensureCheckoutPurposeForAddressId(int $addressId, ?int $customerId = null): bool
+    {
+        $addressId = max(0, $addressId);
+        if ($addressId <= 0) {
+            return false;
+        }
+        $model = $this->getModel()->reset()->load($addressId);
+        if (!$model instanceof DeliveryAddress || !(int)$model->getId()) {
+            return false;
+        }
+        if ($customerId !== null && $customerId > 0
+            && (int)$model->getData(DeliveryAddress::schema_fields_CUSTOMER_ID) !== $customerId) {
+            return false;
+        }
+        if ($model->hasPurposeCheckout()) {
+            return false;
+        }
+        $model->setData(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, 1);
+        $model->save();
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{purpose_checkout: int, purpose_receiving: int}
+     */
+    public static function resolvePurposeWriteFlags(array $data, bool $isCreate, ?DeliveryAddress $existing): array
+    {
+        $existingCheckout = $existing ? ($existing->hasPurposeCheckout() ? 1 : 0) : 0;
+        $existingReceiving = $existing ? ($existing->hasPurposeReceiving() ? 1 : 0) : 0;
+        $source = strtolower(trim((string)($data['purpose_source'] ?? '')));
+
+        if ($source === 'checkout') {
+            if (array_key_exists('also_use_receiving', $data)) {
+                $receiving = self::isTruthy($data['also_use_receiving']);
+            } elseif (array_key_exists(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, $data)) {
+                $receiving = self::isTruthy($data[DeliveryAddress::schema_fields_PURPOSE_RECEIVING]);
+            } else {
+                // 显式 purpose_source 且未传勾选：视为未勾选（表单 checkbox 省略）。
+                $receiving = false;
+            }
+            if ($isCreate) {
+                return [
+                    DeliveryAddress::schema_fields_PURPOSE_CHECKOUT => 1,
+                    DeliveryAddress::schema_fields_PURPOSE_RECEIVING => $receiving ? 1 : 0,
+                ];
+            }
+
+            return [
+                DeliveryAddress::schema_fields_PURPOSE_CHECKOUT => 1,
+                DeliveryAddress::schema_fields_PURPOSE_RECEIVING => ($receiving || $existingReceiving) ? 1 : 0,
+            ];
+        }
+
+        if ($source === 'receiving') {
+            if (array_key_exists('also_use_checkout', $data)) {
+                $alsoCheckout = self::isTruthy($data['also_use_checkout']);
+            } elseif (array_key_exists(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, $data)) {
+                $alsoCheckout = self::isTruthy($data[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT]);
+            } else {
+                $alsoCheckout = false;
+            }
+            if ($isCreate) {
+                return [
+                    DeliveryAddress::schema_fields_PURPOSE_CHECKOUT => $alsoCheckout ? 1 : 0,
+                    DeliveryAddress::schema_fields_PURPOSE_RECEIVING => 1,
+                ];
+            }
+
+            return [
+                DeliveryAddress::schema_fields_PURPOSE_CHECKOUT => ($alsoCheckout || $existingCheckout) ? 1 : 0,
+                DeliveryAddress::schema_fields_PURPOSE_RECEIVING => 1,
+            ];
+        }
+
+        $checkout = array_key_exists(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, $data)
+            ? (self::isTruthy($data[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT]) ? 1 : 0)
+            : ($isCreate ? 1 : $existingCheckout);
+        $receiving = array_key_exists(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, $data)
+            ? (self::isTruthy($data[DeliveryAddress::schema_fields_PURPOSE_RECEIVING]) ? 1 : 0)
+            : ($isCreate ? 1 : $existingReceiving);
+
+        if (!$isCreate) {
+            $checkout = max($checkout, $existingCheckout);
+            $receiving = max($receiving, $existingReceiving);
+        }
+
+        if ($checkout === 0 && $receiving === 0) {
+            $checkout = 1;
+            $receiving = 1;
+        }
+
+        return [
+            DeliveryAddress::schema_fields_PURPOSE_CHECKOUT => $checkout,
+            DeliveryAddress::schema_fields_PURPOSE_RECEIVING => $receiving,
+        ];
+    }
+
+    public static function isTruthy(mixed $value): bool
+    {
+        if ($value === true || $value === 1 || $value === '1') {
+            return true;
+        }
+        if ($value === false || $value === 0 || $value === '0' || $value === null || $value === '') {
+            return false;
+        }
+        if (is_string($value)) {
+            $lower = strtolower(trim($value));
+
+            return in_array($lower, ['true', 'yes', 'on'], true);
+        }
+
+        return (bool)$value;
     }
 }
 

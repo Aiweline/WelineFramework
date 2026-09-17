@@ -321,6 +321,11 @@ const CustomerServiceWidget = (function() {
         settingsOpen: false,
         serviceStatus: 'offline', // online, ai, offline
         unreadCount: 0,
+        /** 顾客侧已读水位：大于此 id 的客服消息计为未读 */
+        lastReadMessageId: 0,
+        /** 与已读水位绑定的会话，防止串会话 */
+        savedSessionId: 0,
+        messageBaselineReady: false,
         lastDayKey: '',
         identity: {
             kind: 'guest',
@@ -553,29 +558,8 @@ const CustomerServiceWidget = (function() {
     }
 
     function notifyIncomingAgentMessage(message) {
-        state.unreadCount += 1;
-        updateUnreadBadge();
-        const preview = String(message.display_content || message.content || '').slice(0, 80);
-        if (typeof window.Notification === 'undefined') {
-            return;
-        }
-        const show = function () {
-            try {
-                new Notification(__('客服新消息'), {
-                    body: preview || __('您有一条新的客服回复'),
-                    tag: 'cs-agent-' + String(message.message_id || Date.now())
-                });
-            } catch (_e) {}
-        };
-        if (Notification.permission === 'granted') {
-            show();
-        } else if (Notification.permission === 'default') {
-            Notification.requestPermission().then(function (permission) {
-                if (permission === 'granted') {
-                    show();
-                }
-            }).catch(function () {});
-        }
+        // 未读数由 applyUnreadFromMessages 按已读水位重算；此处只补桌面通知
+        maybeDesktopNotify(message);
     }
     
     /**
@@ -596,6 +580,14 @@ const CustomerServiceWidget = (function() {
                 // Storefront path locale wins for chrome on /{locale}/ pages (Phrase/localStorage lag).
                 state.locale = storefrontLocale || parsed.locale || defaultLocale;
                 state.displayMode = parsed.displayMode || 'translated';
+                state.lastReadMessageId = normalizePositiveInt(parsed.lastReadMessageId);
+                state.savedSessionId = normalizePositiveInt(parsed.sessionId);
+                // 只有已建立已读水位时才恢复未读数，避免脏计数把「已看过」又堆回来
+                if (state.lastReadMessageId > 0) {
+                    state.unreadCount = Math.max(0, parseInt(parsed.unreadCount, 10) || 0);
+                } else {
+                    state.unreadCount = 0;
+                }
             } catch (e) {
                 console.error('Failed to load saved state:', e);
             }
@@ -607,9 +599,16 @@ const CustomerServiceWidget = (function() {
         updateWidgetLocaleText();
         bindMiniCartLayerState();
         bindEmailBoundSync();
+        // 先按本地未读水位画角标，避免刷新后要等脚本/接口才「突然没了」
+        updateUnreadBadge();
         // Warm screenshot engine so confirm is not blocked on first script fetch.
         ensureModernScreenshot().catch(function () { /* optional */ });
         ensureHtml2Canvas().catch(function () { /* optional */ });
+
+        // 有历史会话时，收起态也后台盯消息，客服回复可出现未读跳动/条数
+        if (state.sessionToken) {
+            startBackgroundUnreadWatch();
+        }
     }
     
     /**
@@ -918,6 +917,14 @@ const CustomerServiceWidget = (function() {
                 if (data.data.identity) {
                     applySessionIdentity(data.data.identity);
                 }
+
+                // 已读水位与会话绑定：换会话则从零水位，避免串会话幽灵未读
+                const sid = normalizePositiveInt(state.sessionId);
+                if (state.savedSessionId > 0 && sid > 0 && state.savedSessionId !== sid) {
+                    state.lastReadMessageId = 0;
+                    state.unreadCount = 0;
+                }
+                state.savedSessionId = sid;
                 
                 saveState();
                 initUIState();
@@ -986,19 +993,29 @@ const CustomerServiceWidget = (function() {
         
         const widget = document.getElementById('customer-service-widget');
         if (state.isOpen) {
+            // 收起前强制把当前会话全部打成已读，下次从零累积
+            await markChatReadFromServer();
             state.isOpen = false;
             chatWindow.style.display = 'none';
             chatButton.style.display = 'flex';
             widget?.classList.remove('is-open');
-            stopPolling();
+            // 收起后仍轮询消息，才能弹出未读条数与呼吸动画；仅停状态轮询
+            stopStatusPolling();
+            if (state.sessionId) {
+                startPolling();
+            }
+            updateUnreadBadge();
         } else {
             state.isOpen = true;
+            // 一点开就清空提示，并立刻抬已读水位（用当前已知最大 id），
+            // 禁止先把 unread=0 + 旧水位写入 localStorage（刷新会按旧水位重算回未读）
             state.unreadCount = 0;
-            updateUnreadBadge();
+            markChatRead();
             chatWindow.style.display = 'flex';
             chatButton.style.display = 'none';
             widget?.classList.add('is-open');
             await activateChat();
+            await markChatReadFromServer();
         }
     }
     
@@ -1965,16 +1982,20 @@ const CustomerServiceWidget = (function() {
                             <p>${__('请输入您的问题，我们的客服将尽快为您解答。')}</p>
                         </div>
                     `;
+                    state.messageBaselineReady = true;
                 } else {
+                    let maxId = 0;
                     messages.forEach(msg => {
                         addMessage(msg, false);
+                        maxId = Math.max(maxId, normalizePositiveInt(msg && msg.message_id));
                     });
-                    
-                    if (messages.length > 0) {
-                        state.lastMessageId = messages[messages.length - 1].message_id;
-                    }
-                    
+                    state.lastMessageId = Math.max(normalizePositiveInt(state.lastMessageId), maxId);
+                    state.messageBaselineReady = true;
                     scrollToBottom();
+                }
+                // 开窗加载完成即视为已读
+                if (state.isOpen) {
+                    markChatRead();
                 }
             }
         } catch (error) {
@@ -2238,63 +2259,330 @@ const CustomerServiceWidget = (function() {
         
         state.isPolling = true;
         
-        state.pollInterval = setInterval(async () => {
-            try {
-                const data = await (await getCustomerServiceApi()).messages({
-                    session_id: state.sessionId,
-                    locale: state.locale,
-                    limit: 10,
-                    offset: 0
-                }, {silent: true});
-                
-                if (data.success && data.guest_send) {
-                    applyGuestSendGate(data.guest_send);
-                }
+        state.pollInterval = setInterval(function () {
+            pollIncomingMessages();
+        }, 3000);
+        // 立即跑一轮，避免收起后最多等 3s 才看到未读
+        pollIncomingMessages();
+    }
 
-                if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-                    const messagesContainer = document.getElementById('cs-chat-messages');
-                    if (!messagesContainer) {
-                        return;
-                    }
-                    const existingIds = new Set(
-                        Array.from(messagesContainer.querySelectorAll('.cs-message'))
-                            .map(el => parseInt(el.dataset.messageId))
-                    );
-                    
-                    let hasNew = false;
-                    data.data.forEach(msg => {
-                        const messageId = parseInt(msg.message_id, 10) || 0;
-                        if (messageId > 0 && !existingIds.has(messageId)
-                            && (msg.sender_type === 'agent' || msg.sender_type === 'system')) {
-                            addMessage(msg);
-                            existingIds.add(messageId);
-                            hasNew = true;
-                            
-                            if (!state.isOpen && msg.sender_type === 'agent') {
-                                notifyIncomingAgentMessage(msg);
-                            }
-                        }
-                    });
-                    
-                    if (hasNew && data.data.length > 0) {
-                        state.lastMessageId = data.data[data.data.length - 1].message_id;
+    /**
+     * 收起态后台盯未读：同步已读水位差并开轮询。
+     */
+    async function startBackgroundUnreadWatch() {
+        try {
+            const ready = await ensureSessionReady();
+            if (!ready || !state.sessionId || state.isOpen) {
+                return;
+            }
+            await syncUnreadFromServer();
+            startPolling();
+        } catch (error) {
+            console.error('Failed to start background unread watch:', error);
+        }
+    }
+
+    /**
+     * 当前会话里「已看到」的最大 message_id（内存水位 + DOM）。
+     */
+    function getLatestSeenMessageId() {
+        let maxId = Math.max(
+            normalizePositiveInt(state.lastMessageId),
+            normalizePositiveInt(state.lastReadMessageId)
+        );
+        const root = document.getElementById('cs-chat-messages');
+        if (root) {
+            root.querySelectorAll('.cs-message[data-message-id]').forEach(function (el) {
+                maxId = Math.max(maxId, normalizePositiveInt(el.getAttribute('data-message-id')));
+            });
+        }
+        return maxId;
+    }
+
+    /**
+     * 打开/收起：本地立刻清空未读，并把已读水位抬到当前已见最大 id。
+     */
+    function markChatRead() {
+        const latest = getLatestSeenMessageId();
+        if (latest > 0) {
+            state.lastMessageId = Math.max(normalizePositiveInt(state.lastMessageId), latest);
+            state.lastReadMessageId = Math.max(normalizePositiveInt(state.lastReadMessageId), latest);
+        }
+        state.unreadCount = 0;
+        saveState();
+        updateUnreadBadge();
+    }
+
+    /**
+     * 向服务端拉最新一页，强制：未读=0，已读水位=该页最大 message_id。
+     * 「点开看过 = 看完」，下次只统计水位之后的新客服消息。
+     */
+    async function markChatReadFromServer() {
+        state.unreadCount = 0;
+        updateUnreadBadge();
+        // 先按内存/DOM 抬水位并落盘，避免异步完成前刷新带着「未读0+旧水位」
+        markChatRead();
+
+        if (!state.sessionId) {
+            const ready = await ensureSessionReady();
+            if (!ready || !state.sessionId) {
+                saveState();
+                return;
+            }
+        }
+
+        try {
+            const data = await (await getCustomerServiceApi()).messages({
+                session_id: state.sessionId,
+                locale: state.locale,
+                limit: 100,
+                offset: 0
+            }, {silent: true});
+
+            if (!(data && data.success && Array.isArray(data.data))) {
+                saveState();
+                return;
+            }
+
+            let maxId = getLatestSeenMessageId();
+            data.data.forEach(function (msg) {
+                maxId = Math.max(maxId, messageRowId(msg));
+            });
+
+            if (maxId > 0) {
+                state.lastMessageId = Math.max(normalizePositiveInt(state.lastMessageId), maxId);
+                state.lastReadMessageId = maxId;
+            }
+            state.unreadCount = 0;
+            state.messageBaselineReady = true;
+            saveState();
+            updateUnreadBadge();
+        } catch (error) {
+            console.error('Failed to mark chat read from server:', error);
+            state.unreadCount = 0;
+            saveState();
+            updateUnreadBadge();
+        }
+    }
+
+    /** 兼容 message_id / id 字段 */
+    function messageRowId(msg) {
+        if (!msg || typeof msg !== 'object') {
+            return 0;
+        }
+        return normalizePositiveInt(msg.message_id || msg.id);
+    }
+
+    /**
+     * 按 lastReadMessageId 重算未读：只统计「已读水位之后」的客服 agent 消息。
+     * @param {Array<any>} rows
+     * @param {{quiet?: boolean}} [options]
+     */
+    function applyUnreadFromMessages(rows, options) {
+        const opts = options || {};
+        const list = Array.isArray(rows) ? rows : [];
+        let maxId = Math.max(0, normalizePositiveInt(state.lastMessageId));
+        list.forEach(function (msg) {
+            const messageId = messageRowId(msg);
+            if (messageId > maxId) {
+                maxId = messageId;
+            }
+        });
+        state.lastMessageId = maxId;
+        state.messageBaselineReady = true;
+
+        // 开窗即表示用户正在看：水位抬到最新，未读清零
+        if (state.isOpen) {
+            if (maxId > 0) {
+                state.lastReadMessageId = Math.max(normalizePositiveInt(state.lastReadMessageId), maxId);
+            }
+            state.unreadCount = 0;
+            saveState();
+            updateUnreadBadge();
+            return;
+        }
+
+        const lastRead = normalizePositiveInt(state.lastReadMessageId);
+        // 还没有已读水位：只打基线，不把历史消息一次性堆成未读
+        if (lastRead <= 0) {
+            if (maxId > 0) {
+                state.lastReadMessageId = maxId;
+            }
+            state.unreadCount = 0;
+            saveState();
+            updateUnreadBadge();
+            return;
+        }
+
+        // 水位已覆盖当前页最大 id：强制清零（防止脏 unreadCount 残留）
+        if (maxId > 0 && lastRead >= maxId) {
+            state.unreadCount = 0;
+            saveState();
+            updateUnreadBadge();
+            return;
+        }
+
+        let unread = 0;
+        let latestAgent = null;
+        list.forEach(function (msg) {
+            const messageId = messageRowId(msg);
+            if (messageId <= lastRead) {
+                return;
+            }
+            if (String(msg && msg.sender_type || '') !== 'agent') {
+                return;
+            }
+            unread += 1;
+            if (!latestAgent || messageId > messageRowId(latestAgent)) {
+                latestAgent = msg;
+            }
+        });
+
+        const prev = Math.max(0, Number(state.unreadCount) || 0);
+        state.unreadCount = unread;
+        saveState();
+        updateUnreadBadge();
+
+        if (!opts.quiet && unread > prev && latestAgent) {
+            maybeDesktopNotify(latestAgent);
+        }
+    }
+
+    function maybeDesktopNotify(message) {
+        if (typeof window.Notification === 'undefined') {
+            return;
+        }
+        const preview = String(message.display_content || message.content || '').slice(0, 80);
+        const show = function () {
+            try {
+                new Notification(__('客服新消息'), {
+                    body: preview || __('您有一条新的客服回复'),
+                    tag: 'cs-agent-' + String(message.message_id || Date.now())
+                });
+            } catch (_e) {}
+        };
+        if (Notification.permission === 'granted') {
+            show();
+        } else if (Notification.permission === 'default') {
+            Notification.requestPermission().then(function (permission) {
+                if (permission === 'granted') {
+                    show();
+                }
+            }).catch(function () {});
+        }
+    }
+
+    /**
+     * 拉取最新消息页，按已读水位恢复/刷新未读态（刷新后仍有动作）。
+     */
+    async function syncUnreadFromServer() {
+        if (!state.sessionId) {
+            return;
+        }
+        try {
+            const data = await (await getCustomerServiceApi()).messages({
+                session_id: state.sessionId,
+                locale: state.locale,
+                limit: 50,
+                offset: 0
+            }, {silent: true});
+            if (data && data.success && data.guest_send) {
+                applyGuestSendGate(data.guest_send);
+            }
+            if (!(data && data.success && Array.isArray(data.data))) {
+                state.messageBaselineReady = true;
+                updateUnreadBadge();
+                return;
+            }
+            applyUnreadFromMessages(data.data, {quiet: true});
+        } catch (error) {
+            console.error('Failed to sync unread from server:', error);
+            state.messageBaselineReady = true;
+            updateUnreadBadge();
+        }
+    }
+
+    function normalizePositiveInt(value) {
+        const parsed = parseInt(value, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }
+
+    async function pollIncomingMessages() {
+        if (!state.sessionId) {
+            return;
+        }
+        try {
+            const data = await (await getCustomerServiceApi()).messages({
+                session_id: state.sessionId,
+                locale: state.locale,
+                limit: 50,
+                offset: 0
+            }, {silent: true});
+
+            if (data.success && data.guest_send) {
+                applyGuestSendGate(data.guest_send);
+            }
+
+            if (!(data.success && Array.isArray(data.data))) {
+                if (!state.messageBaselineReady) {
+                    state.messageBaselineReady = true;
+                }
+                return;
+            }
+
+            const messagesContainer = document.getElementById('cs-chat-messages');
+            const existingIds = new Set(
+                messagesContainer
+                    ? Array.from(messagesContainer.querySelectorAll('.cs-message'))
+                        .map(function (el) { return normalizePositiveInt(el.dataset.messageId); })
+                        .filter(function (id) { return id > 0; })
+                    : []
+            );
+
+            const ordered = data.data.slice().sort(function (a, b) {
+                return normalizePositiveInt(a && a.message_id) - normalizePositiveInt(b && b.message_id);
+            });
+            const lastRead = normalizePositiveInt(state.lastReadMessageId);
+
+            ordered.forEach(function (msg) {
+                const messageId = normalizePositiveInt(msg && msg.message_id);
+                if (messageId <= 0) {
+                    return;
+                }
+                const missingInDom = !existingIds.has(messageId);
+                const senderType = String(msg.sender_type || '');
+                if (messagesContainer && missingInDom && (senderType === 'agent' || senderType === 'system' || state.isOpen)) {
+                    // 未读水位之后的客服/系统消息，或开窗时补齐
+                    if (state.isOpen || messageId > lastRead || senderType === 'system') {
+                        addMessage(msg, state.isOpen);
+                        existingIds.add(messageId);
                     }
                 }
-            } catch (error) {
-                console.error('Polling error:', error);
-            }
-        }, 3000); // 濮?缁夋帟鐤嗙拠顫濞?
+            });
+
+            applyUnreadFromMessages(ordered);
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
     }
     
     /**
      * 閸嬫粍顒涙潪顔款嚄
      */
     function stopPolling() {
+        stopMessagePolling();
+        stopStatusPolling();
+    }
+
+    function stopMessagePolling() {
         if (state.pollInterval) {
             clearInterval(state.pollInterval);
             state.pollInterval = null;
-            state.isPolling = false;
         }
+        state.isPolling = false;
+    }
+
+    function stopStatusPolling() {
         if (state.statusPollInterval) {
             clearInterval(state.statusPollInterval);
             state.statusPollInterval = null;
@@ -2356,21 +2644,55 @@ const CustomerServiceWidget = (function() {
     }
 
     /**
-     * 閺囧瓨鏌婇張顏囶嚢瀵扮晫鐝?
+     * 更新未读角标、绿点与浮钮呼吸态。
      */
     function updateUnreadBadge() {
         const badge = document.getElementById('cs-unread-badge');
-        if (!badge) {
-            return;
-        }
+        const presenceDot = document.getElementById('cs-presence-dot');
+        const chatButton = document.getElementById('cs-chat-button');
+        const widget = document.getElementById('customer-service-widget');
         const count = Math.max(0, Number(state.unreadCount) || 0);
-        
-        if (count > 0 && !state.isOpen) {
-            badge.textContent = String(count > 99 ? '99+' : count);
-            badge.style.display = 'flex';
-        } else {
-            badge.style.display = 'none';
+        const showUnread = count > 0 && !state.isOpen;
+
+        if (badge) {
+            badge.classList.toggle('is-visible', showUnread);
+            if (showUnread) {
+                badge.textContent = String(count > 99 ? '99+' : count);
+                badge.style.display = 'flex';
+                badge.setAttribute('aria-hidden', 'false');
+            } else {
+                badge.textContent = '';
+                badge.style.display = 'none';
+                badge.setAttribute('aria-hidden', 'true');
+            }
         }
+
+        if (presenceDot) {
+            if (showUnread) {
+                presenceDot.hidden = false;
+            } else {
+                presenceDot.hidden = true;
+            }
+        }
+
+        if (chatButton) {
+            chatButton.classList.toggle('has-unread', showUnread);
+            chatButton.setAttribute('data-unread-count', showUnread ? String(count) : '0');
+        }
+
+        if (widget) {
+            widget.classList.toggle('has-unread', showUnread);
+        }
+
+        // 页签标题闪动，避免浮钮被挡住时完全无感知
+        try {
+            if (showUnread) {
+                const base = String(document.title || '').replace(/^\(\d+\+?\)\s*/, '');
+                document.title = '(' + (count > 99 ? '99+' : String(count)) + ') ' + base;
+            } else if (/^\(\d+\+?\)\s/.test(document.title)) {
+                document.title = document.title.replace(/^\(\d+\+?\)\s*/, '');
+            }
+        } catch (_e) {}
     }
     
     /**
@@ -3019,8 +3341,11 @@ const CustomerServiceWidget = (function() {
     function saveState() {
         localStorage.setItem('cs_widget_state', JSON.stringify({
             sessionToken: state.sessionToken,
+            sessionId: normalizePositiveInt(state.sessionId),
             locale: state.locale,
-            displayMode: state.displayMode
+            displayMode: state.displayMode,
+            lastReadMessageId: normalizePositiveInt(state.lastReadMessageId),
+            unreadCount: Math.max(0, Number(state.unreadCount) || 0)
         }));
     }
     
@@ -3034,7 +3359,21 @@ const CustomerServiceWidget = (function() {
         changeDisplayMode,
         showBindPrompt,
         closeBindModal,
-        sendBindEmail
+        sendBindEmail,
+        /** 强制拉取一轮增量（收起态未读验收/自检） */
+        pollIncomingMessages,
+        /** @returns {{sessionId:number|null,isOpen:boolean,isPolling:boolean,lastMessageId:number,lastReadMessageId:number,unreadCount:number,messageBaselineReady:boolean}} */
+        getUnreadDebugState: function () {
+            return {
+                sessionId: state.sessionId,
+                isOpen: state.isOpen,
+                isPolling: state.isPolling,
+                lastMessageId: state.lastMessageId,
+                lastReadMessageId: state.lastReadMessageId,
+                unreadCount: state.unreadCount,
+                messageBaselineReady: state.messageBaselineReady
+            };
+        }
     };
 })();
 

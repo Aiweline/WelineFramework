@@ -37,6 +37,7 @@ final class Winback extends BackendController
     public function getAdd(): string
     {
         $this->assign('campaign', null);
+        $this->assign('allowed_types', WinbackCampaign::allowedTypes());
 
         return $this->fetch('form');
     }
@@ -54,6 +55,7 @@ final class Winback extends BackendController
             return $this->redirect('*/backend/winback/index');
         }
         $this->assign('campaign', $model);
+        $this->assign('allowed_types', WinbackCampaign::allowedTypes());
 
         return $this->fetch('form');
     }
@@ -63,6 +65,10 @@ final class Winback extends BackendController
     {
         $id = (int)$this->request->getParam('id', 0);
         $name = trim((string)$this->request->getParam('name', ''));
+        $type = trim((string)$this->request->getParam('type', WinbackCampaign::TYPE_UNPAID_ORDER_REMINDER));
+        if (!in_array($type, WinbackCampaign::allowedTypes(), true)) {
+            $type = WinbackCampaign::TYPE_UNPAID_ORDER_REMINDER;
+        }
         $status = trim((string)$this->request->getParam('status', WinbackCampaign::STATUS_DISABLED));
         if (!in_array($status, [WinbackCampaign::STATUS_ENABLED, WinbackCampaign::STATUS_DISABLED], true)) {
             $status = WinbackCampaign::STATUS_DISABLED;
@@ -72,6 +78,8 @@ final class Winback extends BackendController
         $stepInterval = max(1, (int)$this->request->getParam('step_interval_hours', 24));
         $cooldown = max(0, (int)$this->request->getParam('cooldown_hours', 168));
         $websiteId = max(0, (int)$this->request->getParam('website_id', 0));
+        $incentiveRuleId = max(0, (int)$this->request->getParam('incentive_rule_id', 0));
+        $segmentId = max(0, (int)$this->request->getParam('segment_id', 0));
 
         if ($name === '') {
             Message::error(__('请填写活动名称'));
@@ -93,13 +101,15 @@ final class Winback extends BackendController
         $now = gmdate('Y-m-d H:i:s');
         $data = [
             WinbackCampaign::schema_fields_NAME => $name,
-            WinbackCampaign::schema_fields_TYPE => WinbackCampaign::TYPE_UNPAID_ORDER_REMINDER,
+            WinbackCampaign::schema_fields_TYPE => $type,
             WinbackCampaign::schema_fields_STATUS => $status,
             WinbackCampaign::schema_fields_ABANDON_AFTER_HOURS => $abandon,
             WinbackCampaign::schema_fields_MAX_STEPS => $maxSteps,
             WinbackCampaign::schema_fields_STEP_INTERVAL_HOURS => $stepInterval,
             WinbackCampaign::schema_fields_COOLDOWN_HOURS => $cooldown,
             WinbackCampaign::schema_fields_WEBSITE_ID => $websiteId,
+            WinbackCampaign::schema_fields_INCENTIVE_RULE_ID => $incentiveRuleId,
+            WinbackCampaign::schema_fields_SEGMENT_ID => $segmentId,
             WinbackCampaign::schema_fields_UPDATED_AT => $now,
         ];
         if (!$model->getId()) {

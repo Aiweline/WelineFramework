@@ -79,6 +79,9 @@ SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，�
 - `Taglib/BuildSite` 只能调用 `Weline\Component\Api\OffCanvasRendererInterface`；Component
   内部 renderer 负责实例化 OffCanvas Block 并保持 `__init() -> render()` 顺序，Websites
   不得再引用 Component Block 或其模板实现。
+- 网站 `edit`/`add` 保存：OffCanvas iframe 表单继续 302 到 success/error；Api/XHR/worker（含
+  `X-Weline-Api` / `Accept: application/json` / worker Referer）必须返回 JSON，禁止 302，避免
+  `redirect:manual` 重试风暴。默认站 `id=0` 语义不变。
 - 建站编排、域名购买、证书申请、DNS/CDN 切换都有专门服务和 QueryProvider，不要在控制器里重新拼一条“旁路流程”。
 - Store 商品复制页面只能调用 `Weline.Api.resource('product_copy')`；
   `createDraft → preview → commit(request_hash)` 是强制顺序，页面不得用

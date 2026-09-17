@@ -134,6 +134,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
                         ['name' => 'lock_path', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'lock_root', 'type' => 'string', 'required' => false, 'max_length' => 1024],
                         ['name' => 'locale_code', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        ['name' => 'target_locales', 'type' => 'array', 'required' => false, 'max_items' => 64],
                         ['name' => 'asset_id', 'type' => 'string', 'required' => false, 'max_length' => 36],
                         ['name' => 'asset_revision', 'type' => 'int', 'required' => false, 'min' => 1],
                         ['name' => 'display_name', 'type' => 'string', 'required' => false, 'max_length' => 255],

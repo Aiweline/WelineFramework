@@ -6,6 +6,7 @@ namespace Weline\Payment\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Interface\PaymentCustomerGuideInterface;
 
@@ -13,7 +14,10 @@ class PaymentCustomerGuideRegistry
 {
     public const EXTENSION_PATH = 'extends/module/Weline_Payment/PaymentCustomerGuide/';
 
-    private ObjectManager $objectManager;
+    private ?ObjectManager $objectManager = null;
+
+    /** @var (callable(string):string)|null */
+    private $urlBuilder;
 
     /**
      * @var array<string, array<string, mixed>>|null
@@ -21,9 +25,13 @@ class PaymentCustomerGuideRegistry
     private ?array $cachedEntries = null;
     private ?int $cachedExtendsMtime = null;
 
-    public function __construct(?ObjectManager $objectManager = null)
+    /**
+     * @param (callable(string):string)|null $urlBuilder
+     */
+    public function __construct(?ObjectManager $objectManager = null, ?callable $urlBuilder = null)
     {
-        $this->objectManager = $objectManager ?? ObjectManager::getInstance();
+        $this->objectManager = $objectManager;
+        $this->urlBuilder = $urlBuilder;
     }
 
     /**
@@ -76,17 +84,33 @@ class PaymentCustomerGuideRegistry
 
     public function buildGuideUrl(string $methodCode): string
     {
-        return '/' . $this->buildGuideRoute($methodCode);
+        return $this->storefrontUrl($this->buildGuideRoute($methodCode));
     }
 
     public function buildPolicyUrl(string $methodCode): string
     {
-        return '/' . $this->buildPolicyRoute($methodCode);
+        return $this->storefrontUrl($this->buildPolicyRoute($methodCode));
     }
 
     public function buildAgreementUrl(string $methodCode): string
     {
-        return '/' . $this->buildAgreementRoute($methodCode);
+        return $this->storefrontUrl($this->buildAgreementRoute($methodCode));
+    }
+
+    private function storefrontUrl(string $route): string
+    {
+        if ($this->urlBuilder !== null) {
+            return (string) ($this->urlBuilder)($route);
+        }
+        /** @var Url $url */
+        $url = $this->om()->getInstance(Url::class);
+
+        return $url->getUrl($route);
+    }
+
+    private function om(): ObjectManager
+    {
+        return $this->objectManager ??= ObjectManager::getInstance();
     }
 
     /**
@@ -111,7 +135,7 @@ class PaymentCustomerGuideRegistry
             }
 
             try {
-                $guide = $this->objectManager->getInstance($className);
+                $guide = $this->om()->getInstance($className);
                 if (!$guide instanceof PaymentCustomerGuideInterface) {
                     continue;
                 }

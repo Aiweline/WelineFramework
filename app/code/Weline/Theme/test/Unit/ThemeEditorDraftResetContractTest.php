@@ -52,7 +52,6 @@ final class ThemeEditorDraftResetContractTest extends TestCase
     {
         foreach ([
             'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js',
-            'app/code/Weline/Theme/view/statics/js/theme-editor.js',
         ] as $relative) {
             $source = $this->read($relative);
             self::assertStringContainsString('apiResetDraftResources', $source, $relative);

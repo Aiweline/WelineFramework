@@ -48,11 +48,36 @@
         transition: opacity var(--weline-motion-normal) ease, visibility var(--weline-motion-normal) ease, transform var(--weline-motion-normal) ease, bottom var(--weline-motion-normal) ease;
     }
 
+    /* 右下角社交快速登录条会盖住浮钮：整体上移，避免未读跳动/角标不可见 */
+    body:has(.weline-social-quick-bar:not([hidden])) .customer-service-widget:not(.is-open) {
+        bottom: calc(
+            var(--weline-space-5)
+            + var(--weline-safe-area-bottom)
+            + var(--weline-product-sticky-purchase-clearance, 0px)
+            + 10.5rem
+        );
+    }
+
+    /* 未读或会话打开时盖过社交登录条（其 z-index 为 2147483000） */
+    .customer-service-widget.has-unread,
+    .customer-service-widget:has(.cs-chat-button.has-unread),
+    .customer-service-widget.is-open {
+        z-index: 2147483001;
+    }
+
     .customer-service-widget.customer-service-widget--mini-cart-open {
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
         transform: translateY(var(--weline-space-2));
+    }
+
+    /* 有未读时即使迷你购物车打开也保持可见提示 */
+    .customer-service-widget.customer-service-widget--mini-cart-open.has-unread {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: none;
     }
 
     .cs-chat-button {
@@ -65,10 +90,12 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        box-shadow: var(--cs-shadow);
-        transition: transform var(--weline-motion-normal) ease, box-shadow var(--weline-motion-normal) ease, background-color var(--weline-motion-fast) ease;
+        /* 勿把 transform 放进 transition，否则会冲掉 has-unread 呼吸动画 */
+        transition: box-shadow var(--weline-motion-normal) ease, background-color var(--weline-motion-fast) ease;
         position: relative;
         color: var(--cs-header-text);
+        transform-origin: center center;
+        will-change: transform;
     }
 
     .cs-chat-button .cs-icon {
@@ -82,6 +109,46 @@
         box-shadow: var(--cs-shadow-lg);
     }
 
+    /* 有未读消息：明确呼吸 + 光晕，必须看得见「有动作」 */
+    .cs-chat-button.has-unread {
+        animation: cs-chat-button-breathe 1.15s ease-in-out infinite;
+        transition: box-shadow var(--weline-motion-normal) ease, background-color var(--weline-motion-fast) ease;
+    }
+
+    .cs-chat-button.has-unread:hover {
+        animation-play-state: running;
+    }
+
+    @keyframes cs-chat-button-breathe {
+        0%,
+        100% {
+            transform: scale(1);
+            box-shadow: var(--cs-shadow), 0 0 0 0 color-mix(in srgb, var(--weline-theme-danger, #e11d48) 45%, transparent);
+        }
+        50% {
+            transform: scale(1.18);
+            box-shadow: var(--cs-shadow-lg), 0 0 0 10px color-mix(in srgb, var(--weline-theme-danger, #e11d48) 0%, transparent);
+        }
+    }
+
+    .cs-presence-dot {
+        position: absolute;
+        top: 0.15rem;
+        inset-inline-end: 0.15rem;
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: var(--weline-radius-round);
+        background: var(--cs-success, #22c55e);
+        border: 2px solid var(--cs-header-bg, #131921);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--cs-success, #22c55e) 35%, transparent);
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    .cs-presence-dot[hidden] {
+        display: none !important;
+    }
+
     .cs-badge {
         position: absolute;
         top: -0.3rem;
@@ -92,12 +159,32 @@
         min-width: 1.25rem;
         height: 1.25rem;
         padding-inline: 0.2rem;
-        display: flex;
+        display: none;
         align-items: center;
         justify-content: center;
         font-size: var(--weline-font-size-xs);
         font-weight: 700;
         line-height: 1;
+        z-index: 3;
+    }
+
+    .cs-badge.is-visible {
+        display: flex !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .cs-chat-button.has-unread {
+            animation: cs-chat-button-breathe-reduced 1.6s ease-in-out infinite;
+        }
+        @keyframes cs-chat-button-breathe-reduced {
+            0%,
+            100% {
+                box-shadow: var(--cs-shadow), 0 0 0 0 color-mix(in srgb, var(--weline-theme-danger, #e11d48) 50%, transparent);
+            }
+            50% {
+                box-shadow: var(--cs-shadow-lg), 0 0 0 8px color-mix(in srgb, var(--weline-theme-danger, #e11d48) 0%, transparent);
+            }
+        }
     }
 
     .cs-status-label {

@@ -42,7 +42,7 @@ final class FaqViewLayoutFetchContractTest extends TestCase
     public function testFaqLayoutPrefersMetaContentForArticles(): void
     {
         $layout = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Theme/view/theme/frontend/layouts/faq/default.phtml'
+            dirname(__DIR__, 3) . '/view/theme/frontend/layouts/faq/default.phtml'
         );
 
         self::assertStringContainsString("\$meta['content']", $layout);

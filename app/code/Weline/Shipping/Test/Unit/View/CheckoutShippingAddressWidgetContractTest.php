@@ -46,14 +46,28 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('name="address1"', $template);
         self::assertStringContainsString('name="postal_code"', $template);
         self::assertStringContainsString('data-weline-load="shippingCheckoutAddress"', $template);
-        self::assertStringContainsString('checkout-shipping-address.js?v=20260914-picker-all-addr1', $modules);
+        self::assertStringContainsString('checkout-shipping-address.js?v=20260916-phone-intl1', $modules);
         self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
         self::assertStringContainsString('data-field-error-for="phone"', $template);
         self::assertStringContainsString("'err_name'", $template);
-        self::assertStringContainsString('checkout-shipping-address.css)?v=20260910-csa-embargo1', $template);
+        self::assertStringContainsString("'err_phone_invalid'", $template);
+        self::assertStringContainsString('data-phone-field', $template);
+        self::assertStringContainsString('checkout-shipping-address.css)?v=20260916-phone-intl1', $template);
+        self::assertStringContainsString('id="checkout-shipping-address-editor"', $template);
+        self::assertStringContainsString('LazyCaptchaClientRuntime::onceScriptHtml', $template);
         self::assertStringNotContainsString('name="country_code" type="text"', $template);
         self::assertStringNotContainsString('<input name="province"', $template);
         self::assertStringNotContainsString('<input name="city"', $template);
+        self::assertStringContainsString('code="checkout-billing-address"', $template);
+        self::assertStringContainsString('meta-prefix="billing_"', $template);
+        self::assertStringContainsString('name="billing_postal_code"', $template);
+        self::assertStringContainsString('data-billing-address-cascade', $template);
+        self::assertStringContainsString('data-use-billing-address', $template);
+        self::assertStringContainsString('data-billing-saved', $template);
+        self::assertStringContainsString('data-change-billing-address', $template);
+        self::assertStringContainsString('data-add-billing-address', $template);
+        self::assertStringContainsString('data-cancel-billing-edit', $template);
+        self::assertStringNotContainsString('name="billing_country_code" type="text"', $template);
     }
 
     public function testCheckoutShippingAddressSupportsCollapsedRadioEditAddAndBillingSame(): void
@@ -78,8 +92,30 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('data-billing-same', $template);
         self::assertStringContainsString('data-billing-editor', $template);
         self::assertStringContainsString('name="billing_name"', $template);
+        self::assertStringContainsString('applyBillingCascade', $js);
+        self::assertStringContainsString('checkout-billing-address', $js);
+        self::assertStringContainsString('BILLING_ADDRESS_CODE', $js);
+        self::assertStringContainsString('commitBillingAddress', $js);
+        self::assertStringContainsString('data-use-billing-address', $js);
+        self::assertStringContainsString('renderBillingSavedAddresses', $js);
+        self::assertStringContainsString('openBillingPicker', $js);
+        self::assertStringContainsString('selectBillingSaved', $js);
+        self::assertStringContainsString('openBillingNew', $js);
+        self::assertStringContainsString('activateBillingBook', $js);
+        self::assertStringContainsString('selectDeliveryAddress', $js);
+        // 账单选址不得改写收货配送会话
+        self::assertStringContainsString('禁止调用 selectDeliveryAddress', $js);
+        self::assertStringContainsString('sanitizePhoneInput', $js);
+        self::assertStringContainsString('isValidPhone', $js);
+        self::assertStringContainsString('applyPhoneFieldSanitize', $js);
+        self::assertStringContainsString('err_phone_invalid', $js);
 
         self::assertStringContainsString('data-use-edited-address', $template);
+        self::assertStringContainsString('ensureCaptchaTokenBeforeSave', $js);
+        self::assertStringContainsString('weline:form:prepare-submit', $js);
+        self::assertStringContainsString('weline:captcha:degrade', $js);
+        self::assertStringContainsString("prefer = 'local_image'", $js);
+        self::assertStringContainsString("prefer === 'local_image'", $js);
         self::assertStringContainsString('w-shipping-checkout-address__editor-action-buttons', $template);
         self::assertSame(
             1,

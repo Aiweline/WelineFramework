@@ -517,6 +517,29 @@ if (!function_exists('w_changed')) {
     }
 }
 
+if (!function_exists('w_scope')) {
+    /**
+     * 构建媒体引用身份（MediaReferenceIdentity.v1）。
+     * 与 w_changed 同级心智：禁止手拼 identity path。
+     *
+     * @param string|null $scope storage_scope；Web/Ambient 可省略（null/''），CLI 必须显式传入
+     * @param array<string, mixed> $other slot（kind/field/instance/code_key…）
+     */
+    function w_scope(
+        ?string $scope,
+        string $type,
+        string $code,
+        array $other = [],
+    ): \Weline\FileManager\Service\MediaReference\MediaReferenceIdentity {
+        /** @var \Weline\FileManager\Service\MediaReference\MediaReferenceIdentityBuilder $builder */
+        $builder = ObjectManager::getInstance(
+            \Weline\FileManager\Service\MediaReference\MediaReferenceIdentityBuilder::class
+        );
+
+        return $builder->build($scope, $type, $code, $other);
+    }
+}
+
 if (!function_exists('w_cache')) {
     /**
      * 获取缓存池

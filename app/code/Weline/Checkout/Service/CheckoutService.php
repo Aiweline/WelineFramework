@@ -108,6 +108,11 @@ class CheckoutService
 
         $data = $this->normalizeCheckoutIdentity($data);
         $errors = [];
+        if (!empty($data['_buyer_tax_errors']) && \is_array($data['_buyer_tax_errors'])) {
+            foreach ($data['_buyer_tax_errors'] as $taxErr) {
+                $errors[] = (string)$taxErr;
+            }
+        }
         $sellabilityErrorCode = '';
 
         if (!empty($data['is_guest_checkout'])) {

@@ -3,7 +3,16 @@
 namespace Weline\MediaManager\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseTerminateException;
 
+/**
+ * Media thumbnail endpoint: /media/image/{relative}?w=&h=&c=
+ *
+ * Generates/caches under pub/media/thumbnail/… and returns raw image bytes.
+ * Must use framework Response (not PHP header()+string) so Response::normalize
+ * does not wrap the body as text/html and prepend CSP meta.
+ */
 class Image extends FrontendController
 {
     public function getIndex()
@@ -17,10 +26,10 @@ class Image extends FrontendController
         // 缩略图的宽度
         $width = $this->request->getGet('w') ?: 50;
         // 缩略图的高度
-        $height = $this->request->getGet('h') ?: 50;  // 缩略图的高度
+        $height = $this->request->getGet('h') ?: 50;
         // 缩略图的裁剪方式
         $crop = $this->request->getGet('c') ?: 'o';
-        $crop = in_array($crop, ['o', 'k']) ? $crop : 'o';
+        $crop = in_array($crop, ['o', 'k'], true) ? $crop : 'o';
         // 缩略图的路径
         $pathInfo = pathinfo($sourcePath);
         $filePrePath = dirname(str_replace($mediaPath, $mediaPath . 'thumbnail' . DS, $sourcePath));
@@ -36,23 +45,40 @@ class Image extends FrontendController
             }
         }
         if (file_exists($thumbnailPath)) {
-            $length = filesize($thumbnailPath);
-            $filemtime = date('D, d M Y H:i:s', filemtime($thumbnailPath));
-            $expires = date('D, d M Y H:i:s', filemtime($thumbnailPath));
-            header('Content-Type:image/jpeg');
-            header("Content-Length:{$length}");
-            header("Last-Modified:{$filemtime}");
-            header("Expires:{$expires}");
-            return file_get_contents($thumbnailPath);
+            $body = (string)file_get_contents($thumbnailPath);
+            $mtime = (int)filemtime($thumbnailPath);
+            $mime = self::mimeForExtension((string)($pathInfo['extension'] ?? ''));
+            $response = Response::fromContent($body, 200, $mime);
+            $response->setHeader('Content-Length', (string)strlen($body));
+            $response->setHeader('Last-Modified', gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+            $response->setHeader('Expires', gmdate('D, d M Y H:i:s', $mtime + 86400) . ' GMT');
+            $response->setHeader('Cache-Control', 'public, max-age=86400');
+            $response->setHeader('X-Content-Type-Options', 'nosniff');
+            throw new ResponseTerminateException($response);
         }
         $this->redirect(404);
         return '';
+    }
+
+    private static function mimeForExtension(string $extension): string
+    {
+        return match (strtolower($extension)) {
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'bmp' => 'image/bmp',
+            'svg' => 'image/svg+xml',
+            default => 'image/jpeg',
+        };
     }
 
     private static function generateThumbnail($sourcePath, $thumbnailPath, $width, $height, $crop = 'o'): bool
     {
         // 获取原始图片的信息
         $imageInfo = getimagesize($sourcePath);
+        if ($imageInfo === false) {
+            return false;
+        }
         $imageType = $imageInfo[2];
         // 根据图片类型使用适当的GD函数打开原始图片
         switch ($imageType) {
@@ -77,8 +103,13 @@ class Image extends FrontendController
                 // 可以根据需要添加对其他图片格式的支持
             default:
                 return false; // 不支持的图片格式
-        }    // 创建缩略图图像资源
-        $thumbnailImage = imagecreatetruecolor($width, $height);    // 将原始图片复制到缩略图图像资源中，并调整大小
+        }
+        if ($sourceImage === false) {
+            return false;
+        }
+        // 创建缩略图图像资源
+        $thumbnailImage = imagecreatetruecolor($width, $height);
+        // 将原始图片复制到缩略图图像资源中，并调整大小
         $color = imagecolorallocate($thumbnailImage, 255, 255, 255); //2.上色
         imagecolortransparent($thumbnailImage, $color); //3.设置透明色
         imagefill($thumbnailImage, 0, 0, $color);//4.填充透明色
@@ -141,5 +172,5 @@ class Image extends FrontendController
         imagedestroy($sourceImage);
         imagedestroy($thumbnailImage);
         return $thumbnailSuccess;
-    }// 使用示例
+    }
 }

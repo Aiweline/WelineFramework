@@ -28,10 +28,11 @@ final class ThemeStaticVersionPublishContractTest extends TestCase
         $editor = $this->read('app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
         self::assertStringContainsString('bumpStaticVersion($themeId)', $editor);
         self::assertGreaterThanOrEqual(
-            2,
+            1,
             substr_count($editor, 'bumpStaticVersion($themeId)'),
-            'Compat publish and publish-and-exit must both bump static version.',
+            'Standard publish finalize must bump static version.',
         );
+        self::assertStringContainsString('finalizeStandardLayoutPublish(', $editor);
     }
 
     public function testThemeStorefrontTemplatesDoNotHardcodeStaticQueryVersions(): void

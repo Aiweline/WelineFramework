@@ -105,16 +105,20 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     public function load(ThemeEditorContext $context, bool $includeDraft = true): array
     {
         $cacheKey = $this->requestLoadCacheKey($context, $includeDraft);
-        if (RequestContext::isInitialized()) {
+        // Never reuse or refill request memo while a write transaction is open:
+        // prepare/apply paths can otherwise re-cache a pre-publish snapshot and
+        // make post-commit assertCurrentScopedLayoutPublished fail closed.
+        $allowRequestCache = !$this->transactions->isActive($this->workspaces->getConnection());
+        if ($allowRequestCache && RequestContext::isInitialized()) {
             $cached = RequestContext::get($cacheKey, null);
             if (\is_array($cached)) {
                 return $cached;
             }
         }
 
-        $workspace = $this->findWorkspace($context);
+        $workspace = $this->findWorkspace($context, false, $allowRequestCache);
         $parent = $this->parentPublishedState($context);
-        $published = $this->publishedState($context);
+        $published = $this->publishedState($context, $allowRequestCache);
         $ownRelease = $workspace instanceof ThemeScopeWorkspace
             ? $this->loadRelease((int)$workspace->getData(ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID))
             : null;
@@ -176,7 +180,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             'published_source_scope' => $published['source_scope'],
         ];
 
-        $this->rememberRequestLoad($cacheKey, $state);
+        if ($allowRequestCache) {
+            $this->rememberRequestLoad($cacheKey, $state);
+        }
 
         return $state;
     }
@@ -196,7 +202,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $changes = $this->assertCommands($context, $changes);
         $expectedParentReleaseId = $this->nullablePositiveInt($expectedParentReleaseId);
 
-        return $this->transactions->runWrite(
+        $result = $this->transactions->runWrite(
             $this->workspaces->getConnection(),
             function () use (
                 $context,
@@ -284,6 +290,16 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 ];
             },
         );
+
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+            && \is_array($result['draft_payload'] ?? null)
+        ) {
+            $this->bakeLayoutEntityAfterWrite($context, $result, $changes);
+        }
+
+        $this->flushRequestLoadCache();
+
+        return $result;
     }
 
     public function replaceEffectivePayload(
@@ -302,7 +318,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $this->assertActor($actorId, $actorName);
         $expectedParentReleaseId = $this->nullablePositiveInt($expectedParentReleaseId);
 
-        return $this->transactions->runWrite(
+        $result = $this->transactions->runWrite(
             $this->workspaces->getConnection(),
             function () use (
                 $context,
@@ -378,6 +394,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 ];
             },
         );
+        $this->flushRequestLoadCache();
+
+        return $result;
     }
 
     public function publish(
@@ -519,7 +538,16 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             return $result;
         }
 
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+            && (int)($result['release_id'] ?? 0) > 0
+            && \is_array($result['payload'] ?? null)
+        ) {
+            $this->bakeLayoutEntityAfterWrite($context, $result, $result['changes'] ?? []);
+        }
+
         $result['descendants'] = $this->propagateToDescendants($context, $actorId, $actorName);
+
+        $this->flushRequestLoadCache();
 
         return $result;
     }
@@ -533,7 +561,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $this->flushRequestLoadCache();
         $this->assertActor($actorId, $actorName);
 
-        return $this->transactions->runWrite(
+        $result = $this->transactions->runWrite(
             $this->workspaces->getConnection(),
             function () use ($batch, $actorId, $actorName, $reason): array {
                 $prepared = [];
@@ -606,6 +634,68 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 return $receipt;
             },
         );
+        $this->flushRequestLoadCache();
+        // publishBatch 事务内只 projectPublished；布局实体化（r{releaseId}）必须在提交后完成，
+        // 否则店面硬切找不到 bake 目录，仍显示旧预览/旧 Hook。
+        $this->bakePublishedLayoutResourcesFromBatchReceipt($result);
+
+        return $result;
+    }
+
+    /**
+     * Materialize layout entity trees for every layout resource in a batch receipt.
+     *
+     * @param array<string,mixed> $result
+     */
+    private function bakePublishedLayoutResourcesFromBatchReceipt(array $result): void
+    {
+        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $coordinator */
+        $coordinator = ObjectManager::getInstance(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class,
+        );
+        foreach ((array)($result['resources'] ?? []) as $receipt) {
+            if (!\is_array($receipt)) {
+                continue;
+            }
+            if ((string)($receipt['resource_type'] ?? '') !== ThemeEditorContext::RESOURCE_LAYOUT) {
+                continue;
+            }
+            $releaseId = (int)($receipt['release_id'] ?? $receipt['effective_release_id'] ?? 0);
+            if ($releaseId <= 0) {
+                continue;
+            }
+            $contextClaims = \is_array($receipt['context'] ?? null) ? $receipt['context'] : [];
+            $themeId = (int)($contextClaims['theme_id'] ?? $result['theme_id'] ?? 0);
+            $scopeArr = \is_array($contextClaims['scope'] ?? null) ? $contextClaims['scope'] : [];
+            $scope = \trim((string)($scopeArr['storage_scope'] ?? $receipt['scope'] ?? ''));
+            $layoutType = \trim((string)($contextClaims['layout_type'] ?? ''));
+            $identityHash = \trim((string)($contextClaims['identity_hash'] ?? $receipt['identity_hash'] ?? ''));
+            if ($themeId < 1 || $scope === '' || $layoutType === '' || $identityHash === '') {
+                throw new \RuntimeException('theme_layout_entity_bake_identity_invalid:batch_receipt');
+            }
+            $payload = \is_array($receipt['payload'] ?? null) ? $receipt['payload'] : null;
+            if ($payload === null) {
+                $release = $this->loadRelease($releaseId);
+                $payload = $release instanceof ThemeScopeRelease ? $release->payload() : null;
+            }
+            if (!\is_array($payload)) {
+                throw new \RuntimeException(
+                    'theme_layout_entity_bake_payload_missing:release:' . $releaseId,
+                );
+            }
+            $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : $payload;
+            $coordinator->afterLayoutWrite(
+                $themeId,
+                $scope,
+                $layoutType,
+                $identityHash,
+                $nodes,
+                [],
+                true,
+                $releaseId,
+                (int)($receipt['revision_id'] ?? 0),
+            );
+        }
     }
 
     public function rollbackReleaseBatch(
@@ -621,7 +711,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $this->flushRequestLoadCache();
         $this->assertActor($actorId, $actorName);
 
-        return $this->transactions->runWrite(
+        $result = $this->transactions->runWrite(
             $this->workspaces->getConnection(),
             function () use ($sourceBatchId, $context, $actorId, $actorName, $reason): array {
                 $source = $this->loadReleaseBatch($sourceBatchId, true);
@@ -726,6 +816,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 return $receipt;
             },
         );
+        $this->flushRequestLoadCache();
+
+        return $result;
     }
 
     public function updateReleaseBatchCacheState(int $batchId, string $state, ?array $error = null): array
@@ -1115,6 +1208,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             'parent_release_id' => $parentReleaseId,
             'fingerprint' => (string)$release->getData(ThemeScopeRelease::schema_fields_FINGERPRINT),
             'content_digest' => (string)($prepared['content_digest'] ?? ''),
+            'payload' => $effective,
             'scope' => $context->scope->storageScope,
             'actor_id' => $actorId,
             'committed_at' => $committedAt,
@@ -1626,6 +1720,62 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         ])->save();
 
         return $workspace;
+    }
+
+    /**
+     * Layout entity bake gate after successful write/publish (ObjectManager to avoid circular DI).
+     *
+     * @param array<string, mixed> $result
+     * @param list<\Weline\Theme\Api\Scoped\ThemePatchCommand>|list<array<string,mixed>> $changes
+     */
+    private function bakeLayoutEntityAfterWrite(
+        ThemeEditorContext $context,
+        array $result,
+        array $changes = [],
+    ): void {
+        if ($context->resourceType !== ThemeEditorContext::RESOURCE_LAYOUT) {
+            return;
+        }
+
+        try {
+            $themeId = $context->identityThemeId();
+            $scope = $context->scope->storageScope;
+            $payload = $result['draft_payload'] ?? $result['payload'] ?? null;
+            if (!\is_array($payload)) {
+                throw new \RuntimeException('theme_layout_entity_bake_payload_missing');
+            }
+            $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : $payload;
+            $releaseId = $this->nullablePositiveInt($result['release_id'] ?? null);
+            // 只要有 release_id 就按已发布物化到 r{id}。publish 结果常同时带 payload/draft_payload，
+            // 不能因 draft_payload 键存在就当成草稿，否则店面永远找不到 r{releaseId}。
+            $published = $releaseId !== null && $releaseId > 0;
+            $draftRevisionId = (int)($result['revision_id'] ?? 0);
+            $commands = $changes !== []
+                ? $changes
+                : (\is_array($result['changes'] ?? null) ? $result['changes'] : []);
+
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $coordinator */
+            $coordinator = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class,
+            );
+            $coordinator->afterLayoutWrite(
+                $themeId,
+                $scope,
+                $context->identityLayoutType(),
+                $context->identityHash(),
+                $nodes,
+                $commands,
+                $published,
+                $releaseId,
+                $draftRevisionId,
+            );
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                'theme_layout_entity_bake_gate_failed: ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
     }
 
     private function findWorkspace(ThemeEditorContext $context, bool $lockingRead = false, bool $allowRequestCache = true): ?ThemeScopeWorkspace
@@ -2640,6 +2790,11 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         \w_changed($change);
     }
 
+    public function invalidateRequestLoadCache(): void
+    {
+        $this->flushRequestLoadCache();
+    }
+
     private function flushRequestLoadCache(): void
     {
         if (!RequestContext::isInitialized()) {
@@ -2664,6 +2819,19 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             }
         }
         RequestContext::remove(self::REQUEST_WORKSPACE_CACHE_KEYS);
+
+        // Fail-closed sweep: tracked key lists can lag behind direct sets
+        // (e.g. published-snapshot suffixes). Drop every scoped memo by prefix.
+        foreach (RequestContext::all() as $key => $_value) {
+            if (!\is_string($key) || $key === '') {
+                continue;
+            }
+            if (\str_starts_with($key, self::REQUEST_LOAD_CACHE_PREFIX)
+                || \str_starts_with($key, self::REQUEST_WORKSPACE_CACHE_PREFIX)
+            ) {
+                RequestContext::remove($key);
+            }
+        }
     }
 
     private function json(mixed $value): string

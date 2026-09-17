@@ -73,15 +73,16 @@
 
 同一次标签内：未声明字段与合法字段可并存；未声明不可编辑，不阻断同级保存。
 
-## 6. Scope（只信 URL）
+## 6. Scope（URL 或 Tag 属性）
 
-- 从当前请求 GET 解析：`target_scope`，或 `scope`，以及可选 `website_code` / `store_code` / `channel_code`。
+- 默认从当前请求 GET 解析：`target_scope`，或 `scope`，以及可选 `website_code` / `store_code` / `channel_code`。
+- **实体编辑页**可在标签上声明强制范围：`target_scope`、`website_code`、`store_code`、`channel_code`、`scope_kind`。任一有值时**整段覆盖 URL**（`ConfigEmbedResolver::scopeInputFromAttributes`），避免业务页无 query 时误写 Global。
 - 走 `SystemConfigTargetScopeService::resolveFromInput(..., allowSessionFallback: false)`。
 - **禁止 Session / 页面类型推断**。
-- URL 无范围 → **Global**（`default.default.default`）。
-- 字段声明的 `scope=`（如 `global,website,store`）会再限制：当前 URL 范围不在允许列表 → `scope_denied`，控件禁用并 tip。
+- URL 与 Tag 均无范围 → **Global**（`default.default.default`）。
+- 字段声明的 `scope=`（如 `global,website,store`）会再限制：当前范围不在允许列表 → `scope_denied`，控件禁用并 tip。
 
-业务页若需要非 Global：页面自身必须把 Scope 放进地址栏（与配置中心一致），embed 才会写到正确范围。
+业务页若需要非 Global：要么把 Scope 放进地址栏，要么在 `config:embed` 上显式写死实体范围（网站/店/渠编辑页推荐后者）。
 
 ## 7. 保存与前端行为
 

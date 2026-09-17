@@ -120,4 +120,44 @@ final class ThemeEditorContextTest extends TestCase
         self::assertSame('global', $binding['target_type']);
         self::assertSame(0, $binding['target_id']);
     }
+
+    public function testNestedPathLayoutTypesAreAcceptedLikeAccountLogin(): void
+    {
+        $scope = new ScopeContext(
+            identity: ScopeIdentity::website(0, 'default'),
+            storageScope: 'default.default.default',
+            storeMode: ScopeIdentity::MODE_NORMAL,
+            fallbackStorageScopes: ['default.default.default'],
+        );
+
+        foreach (['account/login', 'checkout/success', 'checkout/failure'] as $layoutType) {
+            $context = new ThemeEditorContext(
+                scope: $scope,
+                area: 'frontend',
+                resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+                themeId: 3,
+                layoutType: $layoutType,
+            );
+            self::assertSame($layoutType, $context->layoutType);
+            self::assertSame($layoutType, $context->toArray()['layout_type']);
+        }
+    }
+
+    public function testInvalidLayoutTypeStillRejected(): void
+    {
+        $scope = new ScopeContext(
+            identity: ScopeIdentity::website(0, 'default'),
+            storageScope: 'default.default.default',
+            storeMode: ScopeIdentity::MODE_NORMAL,
+            fallbackStorageScopes: ['default.default.default'],
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('theme_editor_context_layout_type_invalid');
+        new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            layoutType: '/checkout/success',
+        );
+    }
 }

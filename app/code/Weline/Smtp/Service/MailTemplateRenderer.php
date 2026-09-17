@@ -6,6 +6,7 @@ namespace Weline\Smtp\Service;
 
 /**
  * 白名单 {{var.path}} 替换；默认 HTML escape；{{var.x|raw}} 显式不转义。
+ * 支持非嵌套 {{#if var.path}}...{{/if}}（空字符串/null/false 视为假）。
  * 另：把 CKEditor 剥掉的邮件 CTA 内联样式补回（预览/发信一致）。
  */
 class MailTemplateRenderer
@@ -17,6 +18,7 @@ class MailTemplateRenderer
     public function render(string $template, array $vars, array $allowedKeys = []): string
     {
         $html = $this->normalizeEmailHtml($template);
+        $html = $this->renderIfBlocks($html, $vars, $allowedKeys);
 
         return (string)preg_replace_callback(
             '/\{\{\s*var\.([A-Za-z][A-Za-z0-9_.]*?)(?:\|(raw))?\s*\}\}/',
@@ -38,6 +40,54 @@ class MailTemplateRenderer
             },
             $html
         );
+    }
+
+    /**
+     * 非嵌套条件块：真值保留内文，假值整段去掉（避免 CTA 条件标签漏到收件正文）。
+     *
+     * @param array<string, mixed> $vars
+     * @param list<string> $allowedKeys
+     */
+    private function renderIfBlocks(string $html, array $vars, array $allowedKeys): string
+    {
+        $out = (string)preg_replace_callback(
+            '/\{\{\s*#if\s+var\.([A-Za-z][A-Za-z0-9_.]*?)\s*\}\}(.*?)\{\{\s*\/if\s*\}\}/s',
+            function (array $m) use ($vars, $allowedKeys): string {
+                $path = $m[1];
+                $inner = $m[2];
+                if ($allowedKeys !== [] && !$this->isAllowed($path, $allowedKeys)) {
+                    return '';
+                }
+                $value = $this->lookup($vars, $path);
+
+                return $this->isTruthy($value) ? $inner : '';
+            },
+            $html
+        );
+
+        // 未闭合/未知写法：剥掉残留标签，避免泄漏到邮件客户端
+        $out = (string)preg_replace('/\{\{\s*#if\s+[^}]+\}\}/', '', $out);
+        $out = (string)preg_replace('/\{\{\s*\/if\s*\}\}/', '', $out);
+
+        return $out;
+    }
+
+    private function isTruthy(mixed $value): bool
+    {
+        if ($value === null || $value === false) {
+            return false;
+        }
+        if (\is_string($value)) {
+            return \trim($value) !== '';
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (float)$value != 0.0;
+        }
+        if (\is_array($value)) {
+            return $value !== [];
+        }
+
+        return (bool)$value;
     }
 
     /**

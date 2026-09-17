@@ -8,20 +8,21 @@ use PHPUnit\Framework\TestCase;
 
 final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
 {
-    public function testHomepageMetadataNamesTheHanfuStorefront(): void
+    public function testHomepageMetadataUsesGenericShellName(): void
     {
         $layout = $this->readProjectFile('view/theme/frontend/layouts/homepage/default.phtml');
 
         self::assertStringContainsString(
-            '@meta.name {default="水墨汉服商城首页"',
+            '@meta.name {default="首页"',
             $layout
         );
         self::assertStringContainsString(
-            '@param.title {default="云裳汉服 · Hanfu Atelier"',
+            '@param.title {default=""',
             $layout
         );
+        self::assertStringContainsString('resolveFrontendSiteName()', $layout);
+        self::assertStringNotContainsString('水墨汉服商城首页', $layout);
         self::assertStringNotContainsString('default="Homepage Default"', $layout);
-        self::assertStringNotContainsString('default="Home"', $layout);
         self::assertStringContainsString('WidgetI18n::label($source)', $layout);
         self::assertStringContainsString('$useEnglishCopy = !$isChineseLocale;', $layout);
         self::assertStringNotContainsString('$this->setData(\'meta_title\'', $layout);
@@ -32,7 +33,10 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
             'extends/module/Weline_Seo/SeoProfileProvider/HanfuHomepageSeoProfileProvider.php'
         );
         self::assertStringContainsString('implements SeoProfileProviderInterface', $provider);
-        self::assertStringContainsString('Ink-Wash Hanfu Boutique', $provider);
+        self::assertStringContainsString("PAGE_LABEL_EN = 'Home'", $provider);
+        self::assertStringContainsString('SiteBrand', $provider);
+        self::assertStringNotContainsString('changan.hanfu', $provider);
+        self::assertStringNotContainsString("SITE_NAME_ZH = '", $provider);
     }
 
     public function testDefaultHeroUsesLocaleCatalogBeforeReviewedEnglishFallback(): void
@@ -80,28 +84,36 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         self::assertSame(3, substr_count($hero, "'link' => '/products'"));
         self::assertStringContainsString('ProductCardUrl::splitForTaglib($slideLink)', $hero);
         self::assertStringContainsString('$this->getUrl($slideLinkParts[\'url_path\'])', $hero);
+        self::assertStringContainsString("'kicker' => \$translateDefaultCopy(\$default['kicker_zh'], \$default['kicker_en'])", $hero);
+        self::assertStringContainsString('data-tone="<?= $esc($tone) ?>"', $hero);
+        self::assertStringContainsString('.slide.active .slide-subtitle', $hero);
+        self::assertStringNotContainsString('backdrop-filter: blur', $hero);
     }
 
-    public function testLayoutSeederUsesHanfuSpecificBilingualCommerceCopy(): void
+    public function testLayoutSeederUsesNeutralBilingualCommerceCopy(): void
     {
         $seeder = $this->readProjectFile('Service/DefaultLayoutSeeder.php');
 
         foreach ([
-            '云裳汉服 · Hanfu Atelier',
-            '东方衣冠，为日常与礼仪而作 · Made for modern rituals',
+            'resolveWebsiteBrandTitle()',
+            '为日常与仪式感而作 · Made for everyday rituals',
             '本季精选 · Seasonal Edit',
-            '新裳入藏 · New Arrivals',
+            '新品上市 · New Arrivals',
             '同风格推荐 · You May Also Like',
             '最近浏览 · Recently Viewed',
-            '典藏热选 · Best Sellers',
+            '热卖精选 · Best Sellers',
             '为你推荐 · Recommended',
-            '按形制继续探索 · Explore More',
+            '继续探索 · Explore More',
             '搭配成套 · Complete the Look',
-            '人气汉服 · Popular Hanfu',
+            '人气商品 · Popular Picks',
         ] as $copy) {
             self::assertStringContainsString($copy, $seeder);
         }
 
+        self::assertStringNotContainsString('东方衣冠', $seeder);
+        self::assertStringNotContainsString('新裳入藏', $seeder);
+        self::assertStringNotContainsString('人气汉服', $seeder);
+        self::assertStringNotContainsString("'title' => '长安汉服 · Hanfu Atelier'", $seeder);
         self::assertStringNotContainsString('欢迎来到我们的商店', $seeder);
         self::assertStringNotContainsString('发现最新产品和优惠', $seeder);
     }
@@ -127,14 +139,10 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
     {
         $footer = $this->readProjectFile('view/theme/frontend/widgets/container/footer/default.phtml');
 
-        self::assertStringContainsString(
-            '$localizedSiteLogoText = trim((string)__($defaultSiteLogoText))',
-            $footer
-        );
-        self::assertStringContainsString(
-            '$localizedSiteLogoText . \'. \' . (string)__(\'保留所有权利\')',
-            $footer
-        );
+        self::assertStringContainsString('resolveFrontendSiteName(', $footer);
+        self::assertStringContainsString('SiteBrand', $footer);
+        self::assertStringContainsString("\$localizedRights = WidgetI18n::label('保留所有权利')", $footer);
+        self::assertStringContainsString("\$localizedSiteLogoText . '. ' . \$localizedRights", $footer);
     }
 
     public function testBestsellerDemoCatalogIsLimitedToEditorPreview(): void

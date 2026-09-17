@@ -65,6 +65,10 @@ final class GoogleRecaptchaEnterpriseRenderJsContractTest extends TestCase
         self::assertStringNotContainsString('client_fail', $source);
         self::assertStringContainsString('grecaptcha.enterprise.ready(function(){reveal();', $source);
         self::assertStringContainsString('document.head.appendChild(s);', $source);
+        self::assertStringContainsString('var formId=', $source);
+        self::assertStringContainsString('data-form-id=', $source);
+        self::assertStringContainsString('data-shipping-editor', $source);
+        self::assertStringContainsString('form.tagName==="FORM"', $source);
 
         $css = (string)file_get_contents(\dirname(__DIR__, 3) . '/view/statics/css/captcha-local.css');
         self::assertStringContainsString('.weline-captcha-google-trust', $css);

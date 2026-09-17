@@ -279,9 +279,14 @@ class ControllerFetchFileAfter implements ObserverInterface
     private function renderFastAccountAuthLayout(Template $template, string $layoutTemplate, string $contentHtml): ?string
     {
         $normalizedLayout = \str_replace('\\', '/', $layoutTemplate);
-        if (!\str_contains($normalizedLayout, 'Weline_Theme::theme/frontend/layouts/account/auth.phtml')
-            && !\str_contains($normalizedLayout, 'Weline_Theme::theme/frontend/layouts/account_auth/default.phtml')
-        ) {
+        $isAccountAuthFamily = \str_contains($normalizedLayout, '/layouts/account/auth.phtml')
+            || \str_contains($normalizedLayout, '/layouts/account/login/')
+            || \str_contains($normalizedLayout, '/layouts/account/register/')
+            || \str_contains($normalizedLayout, '/layouts/account/forgot-password/')
+            || \str_contains($normalizedLayout, '/layouts/account/set-password/')
+            || \str_contains($normalizedLayout, '/layouts/account/social-login/')
+            || \str_contains($normalizedLayout, '/layouts/account_auth/default.phtml');
+        if (!$isAccountAuthFamily) {
             return null;
         }
 
@@ -301,7 +306,20 @@ class ControllerFetchFileAfter implements ObserverInterface
             }
             $locale = (string)($template->getData('locale') ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
             $lang = \str_replace('_', '-', $locale);
-            $title = (string)($template->getData('title') ?: ($meta['title'] ?? 'Weline Framework'));
+            $title = (string)($template->getData('title') ?: ($meta['title'] ?? ''));
+            if ($title === '') {
+                try {
+                    if (class_exists(\Weline\Theme\Helper\SiteBrand::class)) {
+                        /** @var \Weline\Theme\Helper\SiteBrand $siteBrand */
+                        $siteBrand = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+                        $title = trim($siteBrand->resolveFrontendSiteName());
+                    }
+                } catch (\Throwable) {
+                }
+            }
+            if ($title === '') {
+                $title = 'Store';
+            }
             $description = (string)($meta['description'] ?? '');
 
             $langEsc = \htmlspecialchars($lang, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -496,8 +514,8 @@ HTML;
             'debug' => $isDev,
             'theme' => [
                 'area' => 'frontend',
-                'layoutType' => 'account.auth',
-                'layoutOption' => null,
+                'layoutType' => (string)($meta['layoutType'] ?? 'account/login'),
+                'layoutOption' => $meta['layoutOption'] ?? 'default',
             ],
         ];
 
@@ -822,14 +840,21 @@ HTML;
         if (!empty($targetPreviewMeta) || $hasTargetPreviewContent) {
             $metaData = array_merge($metaData, $targetPreviewMeta);
         }
-        $preserveAssignedContentMeta = $hasTargetPreviewContent
-            || $this->shouldPreserveAssignedContentMeta($template, $contentTemplate, $metaData);
+        $isEditorPreviewTemplate = (bool)$template->getData('editor_mode')
+            || (bool)$template->getData('theme_preview_content')
+            || in_array((string)$template->getData('layout_preview_mode'), ['live', 'version', 'draft', 'default'], true);
+        // Editor must keep nested w:slot shells; never preserve prebuilt meta.content dumps.
+        $preserveAssignedContentMeta = !$isEditorPreviewTemplate
+            && ($hasTargetPreviewContent
+                || $this->shouldPreserveAssignedContentMeta($template, $contentTemplate, $metaData));
         if ($contentRenderKey !== '') {
             unset($metaData['content']);
             $metaData['contentRenderKey'] = $contentRenderKey;
         } else {
             unset($metaData['contentRenderKey']);
-            if (!$preserveAssignedContentMeta) {
+            if ($isEditorPreviewTemplate) {
+                unset($metaData['content']);
+            } elseif (!$preserveAssignedContentMeta) {
                 $metaData['content'] = $contentHtml;
             }
         }
@@ -857,7 +882,11 @@ HTML;
             $template->setData('content', $contentHtml);
             $template->setData('contentRenderKey', null);
         }
-        $template->setData('contentTemplate', $contentTemplate);
+        $effectiveContentTemplate = trim((string)($metaData['contentTemplate'] ?? $contentTemplate));
+        $template->setData(
+            'contentTemplate',
+            $effectiveContentTemplate !== '' ? $effectiveContentTemplate : $contentTemplate
+        );
 
         return $contentRenderKey;
     }
@@ -1208,18 +1237,25 @@ HTML;
 
     private function buildLayoutFetchData(string $layoutTemplate, string $contentHtml, string $contentRenderKey): array
     {
+        $template = $this->getTemplateInstance();
+        $editorFlags = [
+            'editor_mode' => $template->getData('editor_mode'),
+            'theme_preview_content' => $template->getData('theme_preview_content'),
+            'layout_preview_mode' => $template->getData('layout_preview_mode'),
+        ];
+
         if ($this->isBackendLayoutTemplate($layoutTemplate)) {
-            return [
+            return \array_merge($editorFlags, [
                 'contentRenderKey' => $contentRenderKey,
                 // Keep rendered body as resolveLayoutContent fallback when the
                 // PreparedContentStore key is missing mid-layout (blank main).
                 'content' => $contentHtml,
-            ];
+            ]);
         }
 
-        return [
+        return \array_merge($editorFlags, [
             'content' => $contentHtml,
-        ];
+        ]);
     }
 
     private function isBackendLayoutTemplate(string $layoutTemplate): bool

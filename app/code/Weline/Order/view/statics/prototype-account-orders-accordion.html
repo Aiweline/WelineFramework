@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — 订单记录手风琴（草图 · 等确认 · 勿当生产）</title>
+  <style>
+    :root {
+      --border: #e5e7eb;
+      --muted: #647084;
+      --text: #172033;
+      --warn: #c45500;
+      --info: #007185;
+      --primary: #b84a3c;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 system-ui, sans-serif;
+      color: var(--text);
+      background: #f3f4f6;
+      padding: 24px 16px 96px;
+    }
+    .note {
+      max-width: 52rem;
+      margin: 0 auto 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .note strong { color: var(--text); }
+    .wire {
+      max-width: 52rem;
+      margin: 0 auto 18px;
+      padding: 12px 14px;
+      border: 1px dashed #94a3b8;
+      border-radius: 10px;
+      background: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre;
+      color: #334155;
+      overflow-x: auto;
+    }
+    .stage { max-width: 52rem; margin: 0 auto; display: grid; gap: 12px; }
+    .group {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+      overflow: hidden;
+    }
+    .badge {
+      display: inline-flex; align-items: center; min-height: 1.75rem;
+      padding: 0.2rem 0.65rem; border-radius: 999px;
+      border: 1px solid rgba(148,163,184,.35); background: rgba(15,23,42,.04);
+      font-size: 12px; font-weight: 800; white-space: nowrap;
+    }
+    .badge.tob { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+    .badge.pay { color: #92400e; background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.4); }
+    .badge.ship { color: var(--info); background: color-mix(in srgb, var(--info) 14%, transparent); border-color: color-mix(in srgb, var(--info) 35%, transparent); }
+    .badge.hang { color: var(--info); background: color-mix(in srgb, var(--info) 12%, transparent); }
+    .badge.hang.current { outline: 2px solid color-mix(in srgb, var(--info) 55%, transparent); }
+    .badge.unread { color: #fff; background: var(--primary); border-color: var(--primary); min-width: 1.4rem; justify-content: center; padding-inline: 0.35rem; }
+    .detail {
+      display: inline-flex; align-items: center; min-height: 2.15rem;
+      padding: 0.35rem 0.85rem; border-radius: 0.75rem;
+      background: rgba(240,193,75,.16); color: #9a6b00;
+      text-decoration: none; font-size: 13px; font-weight: 800;
+    }
+    .btn {
+      appearance: none; border: 0; border-radius: 8px;
+      padding: 0.45rem 0.85rem; font: inherit; font-weight: 700;
+      cursor: pointer; background: color-mix(in srgb, var(--primary) 88%, #000); color: #fff;
+    }
+    .btn.ghost {
+      background: #fff; color: var(--text); border: 1px solid var(--border);
+    }
+    .summary {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: 0.55rem 0.75rem; padding: 1rem 1.1rem;
+    }
+    .summary > strong { font-size: 1rem; font-weight: 800; }
+    .summary > .muted { color: var(--muted); }
+    .summary > .total { margin-inline-start: auto; font-weight: 800; }
+    .chev {
+      display: inline-grid; place-items: center;
+      width: 1.75rem; height: 1.75rem; border-radius: 999px;
+      border: 1px solid var(--border); background: #fff;
+      font-size: 12px; color: var(--muted); flex: 0 0 auto;
+      transition: transform .15s ease;
+    }
+    .group[open] .chev, .group.is-open .chev { transform: rotate(180deg); }
+    .body {
+      display: grid; gap: 10px;
+      padding: 0 1.1rem 1rem;
+      border-top: 1px dashed rgba(148,163,184,.35);
+    }
+    .hang-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .progress { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chat-panel {
+      border: 1px solid var(--border); border-radius: 10px; background: #fff;
+      padding: 12px; display: grid; gap: 10px;
+    }
+    .msgs {
+      list-style: none; margin: 0; padding: 8px; max-height: 11rem; overflow: auto;
+      display: grid; gap: 8px; background: #f7f4ef; border-radius: 8px;
+    }
+    .msg {
+      max-width: 92%; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid rgba(15,17,17,.08); background: #fff;
+    }
+    .msg.merchant { justify-self: start; background: color-mix(in srgb, #c45500 10%, #fff); }
+    .msg.customer { justify-self: end; background: color-mix(in srgb, var(--primary) 8%, #fff); }
+    .role { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+    .composer { display: grid; gap: 8px; }
+    .composer textarea {
+      width: 100%; min-height: 4rem; border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; font: inherit; resize: vertical;
+    }
+    .composer .btn { justify-self: end; }
+
+    /* A: 整卡 <details>，点整行展开 */
+    .v-a details.group > summary.summary {
+      list-style: none; cursor: pointer;
+    }
+    .v-a details.group > summary.summary::-webkit-details-marker { display: none; }
+
+    /* B: 行内「沟通」开关，面板在记录正下方 */
+    .v-b .body[hidden] { display: none !important; }
+
+    /* C: 列表互斥手风琴（同时只开一条） */
+    .v-c details.group > summary.summary {
+      list-style: none; cursor: pointer;
+    }
+    .v-c details.group > summary.summary::-webkit-details-marker { display: none; }
+
+    .switcher {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 999px; background: #111; color: #fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,.28); z-index: 50; font-size: 13px;
+    }
+    .switcher button {
+      appearance: none; border: 0; background: #333; color: #fff;
+      width: 2rem; height: 2rem; border-radius: 999px; cursor: pointer; font-weight: 700;
+    }
+    .switcher .label { min-width: 16rem; text-align: center; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <p class="note">
+    <strong>PROTOTYPE 草图</strong>（等你确认后再开发）：把<strong>整条订单记录</strong>做成手风琴。
+    收起 = 只看见订单摘要行；展开 = 挂单进度 + 沟通在<strong>该记录正下方</strong>全宽展开（不是右侧）。
+    底栏 / ← → 切变体。
+  </p>
+
+  <div class="wire" id="wire" aria-label="ASCII 线稿"></div>
+  <div class="stage" id="stage" data-variant="A"></div>
+
+  <div class="switcher" role="toolbar" aria-label="原型变体切换">
+    <button type="button" data-prev aria-label="上一个">←</button>
+    <div class="label" data-label>A（整卡手风琴 · 推荐）</div>
+    <button type="button" data-next aria-label="下一个">→</button>
+  </div>
+
+  <template id="tpl-chat">
+    <div class="chat-panel">
+      <ul class="msgs">
+        <li class="msg merchant"><span class="role">商家</span>前台验收 1789192580707</li>
+        <li class="msg merchant"><span class="role">商家</span>客户身份探测 1789192596949</li>
+        <li class="msg customer"><span class="role">客户</span>客户身份探测2 1789192726361</li>
+        <li class="msg merchant"><span class="role">商家</span>商家对齐 1789192759795</li>
+        <li class="msg customer"><span class="role">客户</span>?</li>
+        <li class="msg customer"><span class="role">客户</span>? ? ?</li>
+      </ul>
+      <form class="composer" onsubmit="return false;">
+        <textarea placeholder="留言"></textarea>
+        <button class="btn" type="submit">发送</button>
+      </form>
+    </div>
+  </template>
+
+  <script>
+    const VARIANTS = [
+      { key: 'A', name: 'A（整卡手风琴 · 推荐）' },
+      { key: 'B', name: 'B（行内「沟通」开关）' },
+      { key: 'C', name: 'C（列表互斥 · 只开一条）' },
+    ];
+
+    const WIRES = {
+      A: `【A 整卡手风琴】点摘要行开/关；展开内容在记录下方
+
+┌──────────────────────────────────────────────┐
+│ ▾ G-985b4913  批发/待支付  CNY 219.40  详情 │  ← 摘要行（点击）
+├──────────────────────────────────────────────┤
+│ 待付定金 · 待商家审批 · 待付尾款 · 已完成     │
+│ ┌──────────────────────────────────────────┐ │
+│ │ 商家… / 客户… / 留言 / 发送              │ │  ← 沟通全宽
+│ └──────────────────────────────────────────┘ │
+└──────────────────────────────────────────────┘
+
+收起时只剩一行摘要；无右侧栏。`,
+      B: `【B 行内开关】摘要常显；「订单沟通」按钮控制下方面板
+
+┌──────────────────────────────────────────────┐
+│ G-985… 徽章 金额 详情   [订单沟通 2]         │  ← 摘要不收起
+├──────────────────────────────────────────────┤
+│ （点开后）挂单进度 + 沟通面板 · 全宽          │
+└──────────────────────────────────────────────┘`,
+      C: `【C 互斥列表】多条记录；同时只允许一条展开
+
+┌─ ▸ G-111… 收起 ─────────────────────────────┐
+┌─ ▾ G-985… 展开 · 下方沟通 ──────────────────┐
+│   进度 + 消息井 + 留言                       │
+└──────────────────────────────────────────────┘
+┌─ ▸ G-222… 收起 ─────────────────────────────┐`,
+    };
+
+    function progressHtml() {
+      return `
+        <span class="badge hang">待付定金</span>
+        <span class="badge hang current">待商家审批</span>
+        <span class="badge hang">待付尾款</span>
+        <span class="badge hang">已完成</span>
+      `;
+    }
+
+    function chatHtml() {
+      return document.getElementById('tpl-chat').innerHTML;
+    }
+
+    function summaryBits(opts) {
+      const { withChevron = true, withChatBtn = false, unread = 0, open = false } = opts || {};
+      return `
+        ${withChevron ? `<span class="chev" aria-hidden="true">${open ? '▴' : '▾'}</span>` : ''}
+        <strong>G-985b4913</strong>
+        <span class="muted">1 笔订单</span>
+        <span class="badge tob">批发订单</span>
+        <span class="badge pay">待支付</span>
+        <span class="badge ship">待发货</span>
+        <span class="total">CNY 219.40</span>
+        <a class="detail" href="#" onclick="event.preventDefault(); event.stopPropagation();">查看详情</a>
+        ${withChatBtn ? `
+          <button type="button" class="btn ghost" data-toggle-chat>
+            ${open ? '收起沟通' : '订单沟通'}
+            ${unread ? `<span class="badge unread">${unread}</span>` : ''}
+          </button>
+        ` : (unread ? `<span class="badge unread" title="未读">${unread}</span>` : '')}
+      `;
+    }
+
+    function bodyHtml() {
+      return `
+        <div class="body">
+          <div class="hang-meta">
+            <div class="progress">${progressHtml()}</div>
+            <span class="badge hang current">待商家审批</span>
+          </div>
+          ${chatHtml()}
+        </div>
+      `;
+    }
+
+    function cardA(open) {
+      return `
+        <details class="group" ${open ? 'open' : ''}>
+          <summary class="summary">${summaryBits({ open, unread: 2 })}</summary>
+          ${bodyHtml()}
+        </details>
+      `;
+    }
+
+    function cardB(open) {
+      return `
+        <div class="group ${open ? 'is-open' : ''}" data-b-card>
+          <div class="summary">
+            ${summaryBits({ withChevron: false, withChatBtn: true, open, unread: 2 })}
+          </div>
+          <div class="body" ${open ? '' : 'hidden'}>
+            <div class="hang-meta">
+              <div class="progress">${progressHtml()}</div>
+            </div>
+            ${chatHtml()}
+          </div>
+        </div>
+      `;
+    }
+
+    function cardC(id, label, open) {
+      return `
+        <details class="group" data-c-id="${id}" ${open ? 'open' : ''}>
+          <summary class="summary">
+            <span class="chev" aria-hidden="true">${open ? '▴' : '▾'}</span>
+            <strong>${label}</strong>
+            <span class="muted">1 笔订单</span>
+            <span class="badge tob">批发订单</span>
+            <span class="total">CNY 219.40</span>
+            <a class="detail" href="#" onclick="event.preventDefault(); event.stopPropagation();">查看详情</a>
+          </summary>
+          ${bodyHtml()}
+        </details>
+      `;
+    }
+
+    function render(key) {
+      const stage = document.getElementById('stage');
+      const wire = document.getElementById('wire');
+      stage.dataset.variant = key;
+      stage.className = 'stage v-' + key.toLowerCase();
+      wire.textContent = WIRES[key];
+
+      if (key === 'A') {
+        stage.innerHTML = cardA(true);
+      } else if (key === 'B') {
+        stage.innerHTML = cardB(true);
+        const card = stage.querySelector('[data-b-card]');
+        const btn = stage.querySelector('[data-toggle-chat]');
+        const body = card.querySelector('.body');
+        btn.addEventListener('click', () => {
+          const willOpen = body.hasAttribute('hidden');
+          body.toggleAttribute('hidden', !willOpen);
+          card.classList.toggle('is-open', willOpen);
+          btn.innerHTML = willOpen
+            ? '收起沟通 <span class="badge unread">2</span>'
+            : '订单沟通 <span class="badge unread">2</span>';
+        });
+      } else {
+        stage.innerHTML = [
+          cardC('1', 'G-111a0001', false),
+          cardC('2', 'G-985b4913', true),
+          cardC('3', 'G-222c0003', false),
+        ].join('');
+        stage.querySelectorAll('details.group').forEach((el) => {
+          el.addEventListener('toggle', () => {
+            if (!el.open) return;
+            stage.querySelectorAll('details.group').forEach((other) => {
+              if (other !== el) other.open = false;
+            });
+          });
+        });
+      }
+
+      document.querySelector('[data-label]').textContent = VARIANTS.find((v) => v.key === key).name;
+      const url = new URL(location.href);
+      url.searchParams.set('variant', key);
+      history.replaceState(null, '', url);
+    }
+
+    function currentIndex() {
+      const key = (new URL(location.href).searchParams.get('variant') || 'A').toUpperCase();
+      const i = VARIANTS.findIndex((v) => v.key === key);
+      return i < 0 ? 0 : i;
+    }
+    function cycle(delta) {
+      const next = (currentIndex() + delta + VARIANTS.length) % VARIANTS.length;
+      render(VARIANTS[next].key);
+    }
+
+    document.querySelector('[data-prev]').addEventListener('click', () => cycle(-1));
+    document.querySelector('[data-next]').addEventListener('click', () => cycle(1));
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') cycle(-1);
+      if (e.key === 'ArrowRight') cycle(1);
+    });
+
+    render(VARIANTS[currentIndex()].key);
+  </script>
+</body>
+</html>

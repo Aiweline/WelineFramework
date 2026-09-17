@@ -6,8 +6,9 @@
  * 字段
  * @meta.name {default="政策页面默认布局",name="政策页面默认布局",description="政策页面默认布局，用于描述布局的名称"}
  * @meta.description {default="政策页面默认布局，适用于隐私政策、服务条款等内容页面",name="政策页面默认布局",description="用于展示网站隐私政策、服务条款、退款政策等文本内容"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
  * @param title {default="政策页面",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
+ * @param meta_description {default="阅读本站隐私、Cookie、退款与相关法律政策说明。",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
  * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置政策正文内容"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
@@ -294,6 +295,22 @@ $meta = $this->getData('meta') ?? [];
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
         
+
+        <w:slot id="policy-bottom"
+                name="政策页底部扩展"
+                accept="layout-policy-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges,contact-info"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="policy-bottom-slot">
+            <w:hook>
+                Weline_Theme::frontend::layouts::policy::bottom
+                <else/>
+                <w:widget type="content" name="contact-info" />
+            </w:hook>
+        </w:slot>
+
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::policy::footer-before</w:hook>

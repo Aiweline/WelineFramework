@@ -105,7 +105,7 @@ final class AcceptedOfferDetailEnricherTest extends TestCase
                                 'componentType' => 'detail_od_property',
                                 'componentData' => json_encode([
                                     'data' => [
-                                        'propsList' => [['name' => '品牌', 'value' => '云裳']],
+                                        'propsList' => [['name' => '品牌', 'value' => '长安']],
                                     ],
                                 ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                             ]],
@@ -127,7 +127,7 @@ final class AcceptedOfferDetailEnricherTest extends TestCase
         self::assertSame(['1002105110427'], $structuredIds);
         self::assertSame('mtop_public_detail', $result['offers'][0]['detail_status']);
         self::assertSame(['S', 'M'], $result['offers'][0]['specifications']['尺码']);
-        self::assertSame('云裳', $result['offers'][0]['source_brand_name']);
+        self::assertSame('长安', $result['offers'][0]['source_brand_name']);
         self::assertSame('https://cbu01.alicdn.com/mtop-main.jpg', $result['offers'][0]['image_urls'][1]);
         self::assertSame(1, $result['accepted_detail_enrichment']['enriched']);
         self::assertSame([], $result['accepted_detail_enrichment']['errors']);

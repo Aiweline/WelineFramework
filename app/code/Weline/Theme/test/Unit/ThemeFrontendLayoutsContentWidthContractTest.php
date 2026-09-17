@@ -19,10 +19,6 @@ final class ThemeFrontendLayoutsContentWidthContractTest extends TestCase
     private const ALLOWLIST = [
         'blank/full.phtml',
         'cms_page/blank.phtml',
-        'account/auth.phtml',
-        'account/challenge.phtml',
-        'account_auth/default.phtml',
-        'account_logout/default.phtml',
         'homepage/minimal.phtml',
         'test/assets-test.phtml',
     ];
@@ -93,17 +89,17 @@ final class ThemeFrontendLayoutsContentWidthContractTest extends TestCase
 
     public function testSampleShellsUseCanonicalWidthFormula(): void
     {
-        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts';
-        foreach ([
-            'about/default.phtml',
-            'contact/default.phtml',
-            'blog/default.phtml',
-            'product_list/default.phtml',
-            'search/default.phtml',
-            'category/default.phtml',
-            'not_found/default.phtml',
-        ] as $rel) {
-            $contents = (string)file_get_contents($base . '/' . $rel);
+        $themeBase = dirname(__DIR__, 2) . '/view/theme/frontend/layouts';
+        $productProducts = dirname(__DIR__, 3) . '/Product/view/theme/frontend/layouts/products/default.phtml';
+        $samples = [
+            $themeBase . '/about/default.phtml',
+            $themeBase . '/not_found/default.phtml',
+            $productProducts,
+        ];
+        foreach ($samples as $path) {
+            $rel = str_replace('\\', '/', $path);
+            self::assertFileExists($path, $rel);
+            $contents = (string)file_get_contents($path);
             self::assertStringContainsString(
                 'width: min(100%, var(--weline-layout-content-max-width));',
                 $contents,

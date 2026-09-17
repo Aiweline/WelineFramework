@@ -79,11 +79,43 @@ final class ThemeRuntimeLayoutResolver
         if ($layout === []) {
             return [];
         }
+
+        return $this->overlayLocaleOnLayout(
+            $layout,
+            $themeId,
+            $pageType,
+            $status,
+            $area,
+            $identity,
+            $overlayLocale,
+        );
+    }
+
+    /**
+     * Apply RESOURCE_I18N translations onto an already-built area/widget layout.
+     * Used by storefront entity hard-cut fill (baked structure) and DB layout paths.
+     *
+     * @param array<string,mixed> $layout
+     * @param array<string,mixed> $identity
+     * @return array<string,mixed>
+     */
+    public function overlayLocaleOnLayout(
+        array $layout,
+        int $themeId,
+        string $pageType,
+        string $status = ThemeLayout::STATUS_PUBLISHED,
+        string $area = 'frontend',
+        array $identity = [],
+        ?string $overlayLocale = null,
+    ): array {
+        if ($layout === []) {
+            return [];
+        }
         $locale = \trim((string)($overlayLocale ?? ''));
-        if ($locale === '') {
+        if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
             $locale = \trim((string)($identity['locale_code'] ?? $identity['locale'] ?? ''));
         }
-        if ($locale === '') {
+        if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
             try {
                 $locale = \trim((string)(RequestContext::locale() ?? ''));
             } catch (\Throwable) {
@@ -94,16 +126,34 @@ final class ThemeRuntimeLayoutResolver
             return $layout;
         }
 
-        $context = $this->buildContext($themeId, $pageType, $area, $identity)
-            ->withLocale($locale);
+        try {
+            $context = $this->buildContext($themeId, $pageType, $area, $identity)
+                ->withLocale($locale);
 
-        return $this->previewResolver->applyLayoutLocaleOverlay(
-            $layout,
-            $context,
-            $status === ThemeLayout::STATUS_PUBLISHED
-                ? ThemeLayout::STATUS_PUBLISHED
-                : ThemeLayout::STATUS_DRAFT,
-        );
+            return $this->previewResolver->applyLayoutLocaleOverlay(
+                $layout,
+                $context,
+                $status === ThemeLayout::STATUS_PUBLISHED
+                    ? ThemeLayout::STATUS_PUBLISHED
+                    : ThemeLayout::STATUS_DRAFT,
+            );
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning(
+                    'theme_runtime_locale_overlay_failed: ' . $e->getMessage(),
+                    [
+                        'theme_id' => $themeId,
+                        'page_type' => $pageType,
+                        'locale' => $locale,
+                        'scope' => (string)($identity['scope'] ?? ''),
+                        'exception' => $e::class,
+                    ],
+                    'theme_runtime_i18n',
+                );
+            }
+
+            return $layout;
+        }
     }
 
     /**

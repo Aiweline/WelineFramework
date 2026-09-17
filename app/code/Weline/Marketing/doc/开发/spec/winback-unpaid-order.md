@@ -13,6 +13,7 @@
 - When 发信前 `get_unpaid_order` 为空（已付/不可挽回），系统 shall 记 `skipped` 且 reason=`already_paid_or_ineligible`。
 - When 仍未付且 `reachable` 且 `continue_pay_url` 非空，系统 shall 经 `smtp.send` 渠道 `Weline_Marketing::unpaid_order_reminder` 发信，并写 `WinbackSendLog`（campaign+order+step 唯一）。
 - When 发信，系统 shall 使用订单信号 DTO 的 `locale`（来自下单 scope 快照）选择模板语言；仅当快照无有效 locale 时回退网站默认语言。
+- When 发信且 DTO 含 `line_items`，系统 shall 经 `WinbackMailItemsHtmlBuilder` 注入 `items_html`（图/标题/规格/数量单价/小计），模板以 `{{var.items_html|raw}}` 渲染。
 - When 仍未付但不可达（无 continue-pay URL），系统 shall 记 `skipped` 且 reason=`unreachable`。
 - While Phase 1，系统 shall 默认 `max_steps=1`；Marketing shall 仅经 `order_signals` / SMTP 契约，禁止 use Order/Checkout 内部 Model。
 
@@ -37,3 +38,10 @@
 
 - 多步骤阶梯文案、短信/站内信、复杂受众规则。
 - 复用促销 `weline_marketing_campaign` 表。
+
+## 多步与激励（REQ-MARKETING-0011）
+
+- `max_steps` / `step_interval_hours`：下一步需上一步 sent 且间隔满足。
+- step≥2 且 `incentive_rule_id>0`：发随机券，写入 SendLog.`coupon_code`，邮件 `{{#if var.coupon_code}}`。
+- 新日志主体键 `order:{uuid}`。
+- 可选 `segment_id`：不匹配 skip `segment_mismatch`。

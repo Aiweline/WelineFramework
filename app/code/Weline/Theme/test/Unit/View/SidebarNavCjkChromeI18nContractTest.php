@@ -33,15 +33,17 @@ final class SidebarNavCjkChromeI18nContractTest extends TestCase
         self::assertStringContainsString('WidgetI18n::localeFromRequestUri', $src);
         self::assertStringContainsString('WidgetI18n::label($name)', $src);
         self::assertStringNotContainsString("preg_match('#/(en_US|zh_Hans_CN|zh_CN|zh_Hant_TW)", $src);
+        self::assertStringContainsString('data-mega-panel-lazy', $src);
+        self::assertStringContainsString('data-mega-lazy-payload', $src);
     }
 
     public function testHeaderNavFragmentCacheBumpedForCjkChromeFix(): void
     {
         $path = dirname(__DIR__, 3) . '/Service/StorefrontHeaderNavFragmentCache.php';
         $src = (string)file_get_contents($path);
-        self::assertStringContainsString('mega_panel.v6.', $src);
-        self::assertStringContainsString('sidebar_nav.v6.', $src);
-        self::assertStringNotContainsString('mega_panel.v5.', $src);
-        self::assertStringNotContainsString('sidebar_nav.v5.', $src);
+        self::assertStringContainsString('mega_panel.v7.', $src);
+        self::assertStringContainsString('sidebar_nav.v7.', $src);
+        self::assertStringNotContainsString('mega_panel.v6.', $src);
+        self::assertStringNotContainsString('sidebar_nav.v6.', $src);
     }
 }

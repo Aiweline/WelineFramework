@@ -15,12 +15,14 @@ final class AccountRegisterWidgetContractTest extends TestCase
     {
         $registerForm = \dirname(__DIR__, 3) . '/view/templates/frontend/account/register.phtml';
         $themeWidget = \dirname(__DIR__, 4) . '/Theme/view/theme/frontend/widgets/form/account-register/default.phtml';
-        $authLayout = \dirname(__DIR__, 4) . '/Theme/view/theme/frontend/layouts/account/auth.phtml';
+        $authLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/auth.phtml';
+        $registerLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/register/default.phtml';
         $widgetPhp = \dirname(__DIR__, 4) . '/Theme/extends/module/Weline_Widget/Weline_Theme/widget.php';
 
         self::assertFileExists($registerForm);
         self::assertFileExists($themeWidget);
         self::assertFileExists($authLayout);
+        self::assertFileExists($registerLayout);
         self::assertFileExists($widgetPhp);
 
         $themeSource = (string) \file_get_contents($themeWidget);

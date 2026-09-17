@@ -44,6 +44,9 @@
 客户邮箱,"Customer Email"
 状态,Status
 原状态,原状态
+订单金额,订单金额
+货币,currency
+"商品明细 HTML（|raw）","商品明细 HTML（|raw）"
 备注,Comment
 附加说明,附加说明
 订单创建通知,订单创建通知
@@ -68,6 +71,7 @@
 "只读未付订单事实，供营销挽回使用（无遗弃 TTL、无触达）。","只读未付订单事实，供营销挽回使用（无遗弃 TTL、无触达）。"
 列出未付零售订单事实供营销挽回,列出未付零售订单事实供营销挽回
 发信前再验订单是否仍未付,发信前再验订单是否仍未付
+客户已付订单计数与最近活跃时间,客户已付订单计数与最近活跃时间
 退款接口不支持该操作：%{1},"The refund interface does not support this operation: %{1}"
 系统订单追踪,"System order tracking"
 暂无第三方物流商时，按订单履约状态展示系统追踪。,"Shows system tracking from fulfillment status when no carrier provider is bound."
@@ -130,13 +134,30 @@
 开发物流中继未启用,开发物流中继未启用
 【演示】开发中继探针,【演示】开发中继探针
 【演示】中继探针节点,【演示】中继探针节点
+发货操作失败，请稍后重试。,"The shipping operation failed, please try again later."
+物流单号已更新，并已尝试通知客户,物流单号已更新，并已尝试通知客户
+物流单号已更新,物流单号已更新
+更新物流单号失败,更新物流单号失败
+已交由物流商履约（发货通道已锁定）,已交由物流商履约（发货通道已锁定）
+已改回商家自履约,已改回商家自履约
+切换履约通道失败,切换履约通道失败
 发货命令已幂等重放,发货命令已幂等重放
 发货已提交；已按勾选尝试发送「已发货」邮件给客户,发货已提交；已按勾选尝试发送「已发货」邮件给客户
+发货已提交（无运单号，未发送发货邮件；可稍后补充）,发货已提交（无运单号，未发送发货邮件；可稍后补充）
+发货已提交（无客户邮箱，未发信）,发货已提交（无客户邮箱，未发信）
+发货已提交（未勾选或未能发送通知邮件）,发货已提交（未勾选或未能发送通知邮件）
 发货已提交（未勾选通知客户，未发邮件）,发货已提交（未勾选通知客户，未发邮件）
-发货操作失败，请稍后重试。,"The shipping operation failed, please try again later."
-请填写平台物流单号后再发货,请填写平台物流单号后再发货
+请填写物流单号,请填写物流单号
 "物流单号过长，请控制在 100 字以内","物流单号过长，请控制在 100 字以内"
-"承运商名称过长，请控制在 100 字以内","承运商名称过长，请控制在 100 字以内"
+请选择有效的承运商,请选择有效的承运商
+订单已交由物流商履约，请使用打单发货,订单已交由物流商履约，请使用打单发货
+打单需要包裹重量（克），或先维护商品重量,打单需要包裹重量（克），或先维护商品重量
+收货地址不完整，无法打单,收货地址不完整，无法打单
+缺少发货明细，无法打单,缺少发货明细，无法打单
+没有可用的物流商打单服务,没有可用的物流商打单服务
+履约失败且取消运单未确认，已进入补偿队列,履约失败且取消运单未确认，已进入补偿队列
+物流商打单失败，请稍后重试或改用手工登记,物流商打单失败，请稍后重试或改用手工登记
+发货记录不存在,"Shipment record does not exist"
 订单发货控制器,"Order Shipping Controller"
 truck,truck
 订单仓维履约管理,"Order warehouse maintenance and fulfillment management"
@@ -145,6 +166,10 @@ list,list
 查看可履约单元和进度,"View fulfillable units and progress"
 提交发货,"Submit shipment"
 "按仓维 CAS 提交部分或全部发货","Submit partial or complete shipments according to warehouse CAS"
+补充物流单号,补充物流单号
+后补运单号,后补运单号
+切换履约通道,切换履约通道
+商家自履约或物流商履约,商家自履约或物流商履约
 退款操作失败，请稍后重试。,"The refund operation failed, please try again later."
 订单退款控制器,"Order Refund Controller"
 cash,cash
@@ -181,7 +206,6 @@ close,close
 "支付 ID","Payment ID"
 支付方式,"Payment Method"
 金额,Amount
-货币,currency
 交易号,"Transaction number"
 创建时间,"Created At"
 订单异常与补偿,"Order exceptions and compensation"
@@ -250,8 +274,6 @@ switch,switch
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
 我的订单,"My Orders"
-退货,Return
-与我的订单,"And My Orders"
 订单留言,"Order note"
 如有特殊要求请留言,"Leave a message if you have special requirements"
 查看订单进度与支付状态,"View order progress and payment status"
@@ -277,26 +299,41 @@ SKU,SKU
 暂无订单,"No orders yet"
 查看详情,"View Details"
 订单明细,"Order details"
+退货,Return
+与我的订单,"And My Orders"
 查询失败,"Query failed"
 物流单号,"Tracking Number"
 当前,Current
-填写承运商与平台物流单号后提交发货；勾选通知时会向客户邮箱发送「已发货」邮件。,填写承运商与平台物流单号后提交发货；勾选通知时会向客户邮箱发送「已发货」邮件。
-数量按履约单元扣减；成功后写入发货记录与仓维进度账本。,数量按履约单元扣减；成功后写入发货记录与仓维进度账本。
+结账配送（参考）,结账配送（参考）
+未指定,未指定
+"对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。","对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。"
+物流商履约（已锁定打单通道）,物流商履约（已锁定打单通道）
+改回商家自履约,改回商家自履约
+商家自履约,商家自履约
+交由物流商履约,交由物流商履约
 本单暂无可发货履约单元（可能已全部发出，或尚未生成履约单元）。,本单暂无可发货履约单元（可能已全部发出，或尚未生成履约单元）。
 待发货包裹,待发货包裹
 发货仓,发货仓
 平台履约（未绑仓库）,平台履约（未绑仓库）
 进度,进度
-履约单元,"fulfillment unit"
 承运商,Carrier
-"例如：顺丰 / UPS / DHL","例如：顺丰 / UPS / DHL"
-平台物流单号,平台物流单号
-填写对外给客户的运单号,填写对外给客户的运单号
-本次发货数量,本次发货数量
-发货数量,"Shipment quantity"
-发货后发送「已发货」邮件给客户,发货后发送「已发货」邮件给客户
+其他（手填名称）,其他（手填名称）
+其他承运商名称,其他承运商名称
+选「其他」时填写,选「其他」时填写
+可选，可后补,可选，可后补
+留空则不发送发货邮件,留空则不发送发货邮件
+本次数量,本次数量
+有运单号时发送「已发货」邮件,有运单号时发送「已发货」邮件
 确认发货,确认发货
-本单发货进度,本单发货进度
+通过物流商打单,通过物流商打单
+打单服务,打单服务
+重量（克）,重量（克）
+缺商品重时必填,缺商品重时必填
+打单成功后通知客户,打单成功后通知客户
+确认打单并发货,确认打单并发货
+订单发货记录,订单发货记录
+履约进度账本,履约进度账本
+履约单元,"fulfillment unit"
 版本,Version
 时间,Time
 本单可退项；占额由服务端重算。,本单可退项；占额由服务端重算。
@@ -316,6 +353,36 @@ SKU,SKU
 批发订单沟通,批发订单沟通
 打开完整详情,打开完整详情
 状态流转,"Status flow"
+选择客户,选择客户
+当前为访客结账，可改为注册客户,当前为访客结账，可改为注册客户
+客户姓名（展示）,客户姓名（展示）
+客户电话,"Customer Phone"
+收货地址,收货地址
+收货人,收货人
+电话,电话
+邮箱,邮箱
+邮编,邮编
+详细地址,详细地址
+"门牌号 / 楼栋单元等","门牌号 / 楼栋单元等"
+账单地址,账单地址
+账单姓名,账单姓名
+国家代码,国家代码
+省/州,省/州
+城市,城市
+区县,区县
+当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。,当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。
+选择支付方式,选择支付方式
+订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。,订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。
+配送方式,"Shipping Method"
+运输方式,运输方式
+未指定配送方式,未指定配送方式
+系统代码,系统代码
+未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。,未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。
+订单备注,"Order Notes"
+订单项,"Order Items"
+添加订单项,"Add Order Item"
+返回列表,返回列表
+保存客户调整,保存客户调整
 订单列表,"Order List"
 新建订单,"Create Order"
 "搜索订单号、分组号 G-xxx、UUID、客户","搜索订单号、分组号 G-xxx、UUID、客户"
@@ -342,27 +409,20 @@ SKU,SKU
 系统,System
 订单基本信息,"Order Information"
 客户姓名,"Customer Name"
-客户电话,"Customer Phone"
 折扣,Discount
 批发信用优惠,批发信用优惠
 汇率快照,汇率快照
 现金定金,现金定金
 状态操作,"Status Actions"
 更新状态,"Update Status"
-收货地址,收货地址
 暂无收货地址,暂无收货地址
-账单地址,账单地址
 暂无账单地址,暂无账单地址
 配送服务,配送服务
-未指定配送方式,未指定配送方式
 备注与履约方式,备注与履约方式
-配送方式,"Shipping Method"
 点击复制服务码,点击复制服务码
-订单备注,"Order Notes"
 （无备注）,（无备注）
 已复制服务码,已复制服务码
 复制失败，请手动选择,复制失败，请手动选择
-订单项,"Order Items"
 结账快照,结账快照
 价格快照,价格快照
 行优惠,行优惠
@@ -374,20 +434,17 @@ SKU,SKU
 原价未记录,原价未记录
 活动价,活动价
 无活动记录,无活动记录
-订单发货记录,订单发货记录
 订单历史,"Order History"
 是否通知客户,"Customer Notified"
 暂无历史记录,"No History Records"
 是,Yes
 否,No
-未指定,未指定
 管理订单,管理订单
 订单摘要,订单摘要
 结账组号,结账组号
 商品行数,商品行数
 商品数量累计,商品数量累计
 商品行累计,商品行累计
-运输方式,运输方式
 优惠项目,优惠项目
 无优惠项目,无优惠项目
 累计校验：行累计与商品小计不一致，请核对快照,累计校验：行累计与商品小计不一致，请核对快照
@@ -403,42 +460,15 @@ SKU,SKU
 切换到此页签时异步加载本单发货。,切换到此页签时异步加载本单发货。
 切换到此页签时异步加载本单退款。,切换到此页签时异步加载本单退款。
 切换到此页签时异步加载支付与沟通。,切换到此页签时异步加载支付与沟通。
-联系人、地址与备注在下方「客户调整」区编辑。,联系人、地址与备注在下方「客户调整」区编辑。
-前往客户调整,前往客户调整
 结账快照不可改行,结账快照不可改行
 点击展开编辑客户、地址与备注,点击展开编辑客户、地址与备注
-选择客户,选择客户
-当前为访客结账，可改为注册客户,当前为访客结账，可改为注册客户
-客户姓名（展示）,客户姓名（展示）
-收货人,收货人
-电话,电话
-邮箱,邮箱
-邮编,邮编
-详细地址,详细地址
-"门牌号 / 楼栋单元等","门牌号 / 楼栋单元等"
-账单姓名,账单姓名
-国家代码,国家代码
-省/州,省/州
-城市,城市
-区县,区县
-当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。,当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。
-选择支付方式,选择支付方式
-订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。,订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。
-系统代码,系统代码
-未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。,未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。
-添加订单项,"Add Order Item"
-返回列表,返回列表
-保存客户调整,保存客户调整
 更多,更多
-"沟通备注 · 取消 · 发货记录 · 历史","沟通备注 · 取消 · 发货记录 · 历史"
+"沟通备注 · 取消 · 历史","沟通备注 · 取消 · 历史"
 追加沟通备注,追加沟通备注
 写入订单历史，可选通知客户,写入订单历史，可选通知客户
 添加备注,添加备注
 取消原因,取消原因
 确认取消,确认取消
-发货记录,"Shipment Records"
-发货时间,"Shipped At"
-暂无发货记录,"No Shipment Records"
 "支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。","支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。"
 商品名称,"Product Name"
 删除,Delete
@@ -485,17 +515,16 @@ SKU,SKU
 保存失败,"Save Failed"
 保存失败，请重试,"Save failed. Please try again"
 订单发货管理,"Order delivery management"
-发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。,发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。
+"对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。结账配送仅作参考。","对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。结账配送仅作参考。"
 待发货履约单元,"Fulfillment unit to be shipped"
 暂无可发货履约单元,"There is currently no delivery fulfillment unit"
 包裹,包裹
 已发/总量,"Issued/total amount"
-"例如：顺丰 / UPS","例如：顺丰 / UPS"
-运单号,运单号
-幂等键,"idempotent keys"
-发送「已发货」邮件,发送「已发货」邮件
+可选,可选
+发货数量,"Shipment quantity"
 仓维发货进度账本,"Warehouse delivery progress ledger"
 订单,Order
+幂等键,"idempotent keys"
 暂无进度记录,"No progress record yet"
 订单退款管理,"Order refund management"
 "退款金额由服务端按冻结订单项重算；提交会在同一事务内占用可退数量与金额，并生成 PaymentRefund 和确定性 outbox。","The refund amount is recalculated by the server based on frozen order items; submission will occupy the refundable quantity and amount in the same transaction, and generate PaymentRefund and deterministic outbox."
@@ -580,7 +609,6 @@ Outbox,Outbox
 退款金额不能超过支付金额,"Refund amount cannot exceed payment amount"
 只有已支付的订单才能发货,"Only paid orders can be shipped"
 订单已发货,"Order shipped"
-发货记录不存在,"Shipment record does not exist"
 订单已完成,"Order completed"
 "订单留言过长，请控制在 1000 字以内","Order note is too long. Please keep it within 1000 characters."
 订单留言已保存，将在结账时带入,"Order note saved; it will be applied at checkout"
@@ -640,6 +668,8 @@ Outbox,Outbox
 当前订单状态不能接受支付成功通知,"The current order status cannot accept payment success notification"
 订单支付状态已被并发修改,"The order payment status has been modified concurrently"
 支付成功，订单进入处理,"The payment is successful and the order is processed"
+其他,其他
+"承运商 #%{1}","承运商 #%{1}"
 "仓库 #%{1}","仓库 #%{1}"
 "仓库 #%{1}（默认）","仓库 #%{1}（默认）"
 已发完,已发完
@@ -698,6 +728,30 @@ Outbox,Outbox
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","The old Checkout writer has been disabled by the cutover gate (mode=%{1})"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)"
+联系人、地址与备注在下方「客户调整」区编辑。,联系人、地址与备注在下方「客户调整」区编辑。
+前往客户调整,前往客户调整
+本单发货进度,本单发货进度
+"沟通备注 · 取消 · 发货记录 · 历史","沟通备注 · 取消 · 发货记录 · 历史"
+发货记录,"Shipment Records"
+发货时间,"Shipped At"
+暂无发货记录,"No Shipment Records"
+"发货记录 / 补充运单号","发货记录 / 补充运单号"
+待补运单号,待补运单号
+通知,通知
+补充,补充
+发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。,发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。
+"例如：顺丰 / UPS","例如：顺丰 / UPS"
+平台物流单号,平台物流单号
+运单号,运单号
+发送「已发货」邮件,发送「已发货」邮件
+请填写平台物流单号后再发货,请填写平台物流单号后再发货
+"承运商名称过长，请控制在 100 字以内","承运商名称过长，请控制在 100 字以内"
+填写承运商与平台物流单号后提交发货；勾选通知时会向客户邮箱发送「已发货」邮件。,填写承运商与平台物流单号后提交发货；勾选通知时会向客户邮箱发送「已发货」邮件。
+数量按履约单元扣减；成功后写入发货记录与仓维进度账本。,数量按履约单元扣减；成功后写入发货记录与仓维进度账本。
+"例如：顺丰 / UPS / DHL","例如：顺丰 / UPS / DHL"
+填写对外给客户的运单号,填写对外给客户的运单号
+本次发货数量,本次发货数量
+发货后发送「已发货」邮件给客户,发货后发送「已发货」邮件给客户
 本单待发履约单元；提交后写入仓维进度账本。,本单待发履约单元；提交后写入仓维进度账本。
 仓库,storehouse
 本单暂无可发货履约单元,本单暂无可发货履约单元

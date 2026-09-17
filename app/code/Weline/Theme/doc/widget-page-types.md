@@ -23,7 +23,7 @@
 | `contact` | `layouts/contact/` | 联系我们 | `/contact`, `/support` |
 | `category` | `layouts/category/` | 分类/目录页 | `/category/electronics` |
 | `product` | `layouts/product/` | 产品详情页 | `/product/iphone-15` |
-| `product_list` | `layouts/product_list/` | 产品列表页 | `/products` |
+| `products` | `layouts/products/` | 产品列表页 | `/products` |
 | `cart` | `layouts/cart/` | 购物车页 | `/cart` |
 | `checkout` | `layouts/checkout/` | 结账页 | `/checkout` |
 | `search` | `layouts/search/` | 搜索结果页 | `/search?q=phone` |

@@ -297,12 +297,6 @@
             return String(tokenSearchEl.value || '').trim().toLowerCase();
         };
 
-        const matchesTokenSearch = (name, value, query) => {
-            if (!query) return true;
-            return String(name || '').toLowerCase().includes(query)
-                || String(value || '').toLowerCase().includes(query);
-        };
-
         const updateTokenCount = (shown, total, filtered) => {
             if (!(tokenCountEl instanceof HTMLElement)) return;
             if (!total) {
@@ -314,6 +308,81 @@
             tokenCountEl.textContent = filtered
                 ? `显示 ${shown} / ${total}`
                 : `${total} 个变量`;
+        };
+
+        const matchesTokenSearch = (name, value, query) => {
+            if (!query) return true;
+            return String(name || '').toLowerCase().includes(query)
+                || String(value || '').toLowerCase().includes(query);
+        };
+
+        const FONT_PRESET_OPTIONS = {
+            '--font-family-base': [
+                { id: 'noto-serif-sc', label: '思源宋体（正文默认）', stack: '"Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", "Noto Sans SC", "PingFang SC", serif' },
+                { id: 'lxgw-wenkai', label: '霞鹜文楷', stack: '"LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif SC", "Songti SC", serif' },
+                { id: 'noto-sans-sc', label: '思源黑体', stack: '"Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif' },
+                { id: 'songti-system', label: '系统宋体', stack: '"Songti SC", "STSong", "SimSun", "Noto Serif SC", serif' },
+            ],
+            '--font-family-display': [
+                { id: 'lxgw-wenkai', label: '霞鹜文楷（标题默认）', stack: '"LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif SC", "Songti SC", serif' },
+                { id: 'zcool-xiaowei', label: '站酷小薇', stack: '"ZCOOL XiaoWei", "LXGW WenKai", "Kaiti SC", "Noto Serif SC", "Songti SC", serif' },
+                { id: 'kaiti-system', label: '系统楷体', stack: '"Kaiti SC", "STKaiti", "KaiTi", "LXGW WenKai", "Noto Serif SC", serif' },
+                { id: 'noto-serif-sc', label: '思源宋体', stack: '"Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", "Noto Sans SC", "PingFang SC", serif' },
+            ],
+            '--font-family-ui': [
+                { id: 'noto-serif-sc', label: '思源宋体（界面默认）', stack: '"Noto Serif SC", "Songti SC", "Noto Sans SC", "PingFang SC", serif' },
+                { id: 'lxgw-wenkai', label: '霞鹜文楷', stack: '"LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif SC", "Songti SC", serif' },
+                { id: 'noto-sans-sc', label: '思源黑体', stack: '"Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif' },
+            ],
+            '--font-family-serif': [
+                { id: 'noto-serif-sc', label: '思源宋体', stack: '"Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, "Times New Roman", serif' },
+                { id: 'songti-system', label: '系统宋体', stack: '"Songti SC", "STSong", "SimSun", "Noto Serif SC", serif' },
+            ],
+        };
+
+        const normalizeFontStack = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
+        const matchFontPresetId = (tokenName, value) => {
+            const opts = FONT_PRESET_OPTIONS[tokenName] || [];
+            const needle = normalizeFontStack(value);
+            const hit = opts.find((item) => normalizeFontStack(item.stack) === needle);
+            return hit ? hit.id : '';
+        };
+
+        const appendFontPresetSelect = (controls, tokenName, textInput) => {
+            const opts = FONT_PRESET_OPTIONS[tokenName];
+            if (!opts || !opts.length) {
+                return;
+            }
+            const select = document.createElement('select');
+            select.className = 'w-select w-theme-disk-token__font-preset';
+            select.dataset.size = 'sm';
+            select.setAttribute('aria-label', `${tokenName} 字体预设`);
+            const custom = document.createElement('option');
+            custom.value = '';
+            custom.textContent = '自定义…';
+            select.append(custom);
+            opts.forEach((item) => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = item.label;
+                option.dataset.stack = item.stack;
+                select.append(option);
+            });
+            select.value = matchFontPresetId(tokenName, textInput.value);
+            select.addEventListener('change', () => {
+                const chosen = opts.find((item) => item.id === select.value);
+                if (!chosen) {
+                    return;
+                }
+                textInput.value = chosen.stack;
+                draft.tokens[tokenName] = chosen.stack;
+                scheduleAppearancePreviewTokens();
+            });
+            textInput.addEventListener('input', () => {
+                select.value = matchFontPresetId(tokenName, textInput.value);
+            });
+            controls.append(select);
         };
 
         /**
@@ -452,6 +521,7 @@
                         controls.append(colorInput);
                     }
                     controls.append(textInput);
+                    appendFontPresetSelect(controls, name, textInput);
                     card.append(label, controls);
                     tokensEl.append(card);
                 });

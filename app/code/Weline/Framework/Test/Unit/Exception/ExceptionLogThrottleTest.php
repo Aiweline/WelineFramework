@@ -26,10 +26,19 @@ final class ExceptionLogThrottleTest extends TestCase
             0,
             $provider
         );
+        $wrappedWithTarget = new \RuntimeException(
+            'AI生成失败（供应商：ollama，模型：translategemma）：API请求失败: Failed to connect to 127.0.0.1 port 11434 after 2 ms: Could not connect to server',
+            0,
+            $provider
+        );
 
         self::assertSame(
             ExceptionFingerprint::generateFloodKey($provider),
             ExceptionFingerprint::generateFloodKey($wrapped)
+        );
+        self::assertSame(
+            ExceptionFingerprint::generateFloodKey($provider),
+            ExceptionFingerprint::generateFloodKey($wrappedWithTarget)
         );
         self::assertSame(
             'connect_failed:127.0.0.1:11434',

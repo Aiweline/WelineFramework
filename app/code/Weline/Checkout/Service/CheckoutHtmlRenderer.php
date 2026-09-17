@@ -4,12 +4,26 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Service;
 
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
+
 /**
  * Server-side checkout HTML fragments（P2E-003）.
  * Product/option DOM is generated here; browser JS must not createElement for items.
  */
 final class CheckoutHtmlRenderer
 {
+    /** @var (callable(string):string)|null */
+    private $urlBuilder;
+
+    /**
+     * @param (callable(string):string)|null $urlBuilder
+     */
+    public function __construct(?callable $urlBuilder = null)
+    {
+        $this->urlBuilder = $urlBuilder;
+    }
+
     /**
      * @param list<array<string, mixed>> $items
      */
@@ -68,7 +82,7 @@ final class CheckoutHtmlRenderer
             if ($hasDeal && $original > 0 && $campaignLabel !== '') {
                 if ($campaignUrl !== '') {
                     $priceHtml .= '<a class="weline-checkout__item-price-campaign" href="'
-                        . $this->e($campaignUrl) . '">' . $this->e($campaignLabel) . '</a>';
+                        . $this->e($this->storefrontHref($campaignUrl)) . '">' . $this->e($campaignLabel) . '</a>';
                 } else {
                     $priceHtml .= '<span class="weline-checkout__item-price-campaign">'
                         . $this->e($campaignLabel) . '</span>';
@@ -232,9 +246,11 @@ final class CheckoutHtmlRenderer
         string $currency = 'CNY',
         string $emptyMessage = '',
         bool $showPrice = false,
+        string $emptyTitle = '',
+        string $emptyReasonCode = '',
     ): string {
         if ($methods === []) {
-            return $this->renderMethodEmptyAlert($inputName, $emptyMessage);
+            return $this->renderMethodEmptyAlert($inputName, $emptyMessage, $emptyTitle, $emptyReasonCode);
         }
         $html = '';
         foreach ($methods as $index => $method) {
@@ -306,9 +322,7 @@ final class CheckoutHtmlRenderer
                 $checked = $index === $selectedIndex;
             }
 
-            if ($guideUrl !== '' && !str_starts_with($guideUrl, '/') && !preg_match('#^https?://#i', $guideUrl)) {
-                $guideUrl = '/' . ltrim($guideUrl, '/');
-            }
+            $guideUrl = $this->storefrontHref($guideUrl);
 
             $logoHtml = $iconUrl !== ''
                 ? '<img class="weline-checkout__payment-logo" src="' . $this->e($iconUrl) . '" alt="'
@@ -376,8 +390,12 @@ final class CheckoutHtmlRenderer
      * Empty shipping/payment options must be an obvious blocking alert — plain grey
      * body text is easy to miss and users cannot tell why checkout is stuck.
      */
-    private function renderMethodEmptyAlert(string $inputName, string $emptyMessage): string
-    {
+    private function renderMethodEmptyAlert(
+        string $inputName,
+        string $emptyMessage,
+        string $emptyTitle = '',
+        string $emptyReasonCode = '',
+    ): string {
         $msg = trim($emptyMessage);
         if ($msg === '') {
             $msg = $inputName === 'payment_method'
@@ -386,20 +404,53 @@ final class CheckoutHtmlRenderer
         } else {
             $msg = (string)__($msg);
         }
-        $title = $inputName === 'payment_method'
-            ? (string)__('暂无可用支付方式')
-            : (string)__('暂无可用配送方式');
+        $title = trim($emptyTitle);
+        if ($title === '') {
+            $title = $inputName === 'payment_method'
+                ? (string)__('暂无可用支付方式')
+                : (string)__('暂无可用配送方式');
+        } else {
+            $title = (string)__($title);
+        }
+        $reason = strtolower(trim($emptyReasonCode));
 
         return '<div class="w-alert weline-checkout__method-alert"'
             . ' data-tone="warning"'
             . ' role="alert"'
             . ' data-checkout-method-empty="' . $this->e($inputName) . '"'
+            . ($reason !== '' ? ' data-reason-code="' . $this->e($reason) . '"' : '')
             . ' data-testid="checkout-method-empty-' . $this->e($inputName) . '">'
             . '<div class="w-alert__content">'
             . '<div class="w-alert__title">' . $this->e($title) . '</div>'
             . '<p class="weline-checkout__method-alert-body" dir="auto">' . $this->e($msg) . '</p>'
             . '</div>'
             . '</div>';
+    }
+
+    /**
+     * 站内 href 走 Url::getUrl；外链原样。
+     */
+    private function storefrontHref(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+        if (preg_match('#^(https?:)?//#i', $raw) || str_starts_with($raw, 'mailto:') || str_starts_with($raw, '#')) {
+            return $raw;
+        }
+        // 已带语言/货币前缀的生成结果不再二次 getUrl。
+        if (str_starts_with($raw, '/') && !preg_match('#^/(guide|promotion|customer|checkout|cart|product|order)/#', $raw)) {
+            return $raw;
+        }
+        $path = ltrim($raw, '/');
+        if ($this->urlBuilder !== null) {
+            return (string) ($this->urlBuilder)($path);
+        }
+        /** @var Url $url */
+        $url = ObjectManager::getInstance(Url::class);
+
+        return $url->getUrl($path);
     }
 
     private function money(string $currency, float $amount): string

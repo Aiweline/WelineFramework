@@ -2395,6 +2395,7 @@ body.w-product-eav-drawer-open {
     flex-shrink: 0;
 }
 
+.w-product-local-label__trigger .w-local-translation__trigger-text,
 .w-product-local-label__trigger .w-local-translation__trigger > span:first-child {
     position: absolute;
     width: 1px;

@@ -89,6 +89,11 @@
     pointer-events: none;
 }
 
+/* While lines mutate, ignore backdrop hits so remove/qty cannot collapse the drawer. */
+.header-cart.is-drawer-busy .mini-cart-drawer__overlay {
+    pointer-events: none;
+}
+
 .header-cart .mini-cart-drawer__busy-label.visually-hidden {
     position: absolute;
     width: 1px;

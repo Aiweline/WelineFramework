@@ -321,7 +321,12 @@ final class CheckoutGroupSubmitService
         $alloc = $this->allocation->allocate($orders, $amountMinor);
         try {
             $tax = $this->taxAdvisor !== null
-                ? $this->taxAdvisor->quoteTax($orders, $scope, $address, $currency)
+                ? $this->taxAdvisor->quoteTax($orders, $scope, $address, $currency, [
+                    'duty_notice' => (string)($quoteArray['duty_notice'] ?? ''),
+                    'incoterm' => (string)($quoteArray['incoterm'] ?? ''),
+                    'shipping_amount_minor' => $amountMinor,
+                    'origin_country' => (string)($scope['origin_country'] ?? $scope['seller_country'] ?? 'CN'),
+                ])
                 : [
                     'mode' => self::TAX_STUB_MODE,
                     'engine' => 'none',
@@ -446,6 +451,12 @@ final class CheckoutGroupSubmitService
             'currency' => $currency,
             'scope' => $scope,
             'cart_type' => strtolower(trim((string)($payload['cart_type'] ?? $payload['order_type'] ?? 'toc'))) ?: 'toc',
+            'tax_identity' => \is_array($clientHints['tax_identity'] ?? null)
+                ? $clientHints['tax_identity']
+                : (\is_array($clientHints['buyer_tax_identity'] ?? null) ? $clientHints['buyer_tax_identity'] : []),
+            'buyer_tax_identity' => \is_array($clientHints['buyer_tax_identity'] ?? null)
+                ? $clientHints['buyer_tax_identity']
+                : (\is_array($clientHints['tax_identity'] ?? null) ? $clientHints['tax_identity'] : []),
         ];
         $events = $this->events();
         if ($events !== null) {
@@ -598,6 +609,7 @@ final class CheckoutGroupSubmitService
                 throw new CheckoutV2ConflictException($e->errorCode(), $e->getMessage(), $e->context(), $e);
             }
         }
+        $this->assertBuyerTaxIdentityOnSubmit($session);
 
         $this->assertSessionDiscountQuote($session, $paymentMethod);
         $session = $this->applyAssetDiscountToSession($session, $customerId, $b2bCreditApplyMinor);
@@ -721,6 +733,19 @@ final class CheckoutGroupSubmitService
         $discount = $discountsBanned ? [] : (is_array($session['discount'] ?? null) ? $session['discount'] : []);
         $discountMinor = $discountsBanned ? 0 : (int)($discount['amount_minor'] ?? 0);
         $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
+        $guestEmail = CheckoutSessionContact::extractEmail($session);
+        $guestName = CheckoutSessionContact::extractCustomerName($session);
+        $shippingAddress = is_array($session['address'] ?? null) ? $session['address'] : [];
+        if ($guestEmail !== '' && trim((string)($shippingAddress['email'] ?? '')) === '') {
+            $shippingAddress['email'] = $guestEmail;
+        }
+        $guestPhone = trim((string)(
+            $shippingAddress['phone']
+            ?? $shippingAddress['telephone']
+            ?? $shippingAddress['mobile']
+            ?? $shippingAddress['contact_phone']
+            ?? ''
+        ));
         $cmd = new CreateCheckoutGroupCommand(
             idempotencyKey: $idempotencyKey,
             requestHash: (string) $session['request_hash'],
@@ -731,7 +756,7 @@ final class CheckoutGroupSubmitService
             lines: $commandLines,
             shippingMethod: (string) $session['service_code'],
             shippingAmountMinor: $ownerShip,
-            shippingAddress: $session['address'],
+            shippingAddress: $shippingAddress,
             options: [
                 'tax_mode' => (string) ($tax['mode'] ?? self::TAX_STUB_MODE),
                 'tax_amount_minor' => (int) ($tax['tax_amount_minor'] ?? 0),
@@ -744,7 +769,11 @@ final class CheckoutGroupSubmitService
                 'inventory_reservations' => $reservations,
                 'billing_address' => is_array($session['billing_address'] ?? null)
                     ? $session['billing_address']
-                    : $session['address'],
+                    : $shippingAddress,
+                'guest_email' => $guestEmail,
+                'customer_email' => $guestEmail,
+                'customer_name' => $guestName,
+                'customer_phone' => $guestPhone,
                 'cart_type' => $cartType,
                 'order_type' => $cartType,
                 'checkout_entry' => CheckoutEntry::normalize(
@@ -919,6 +948,38 @@ final class CheckoutGroupSubmitService
     private function forgetSession(string $token): void
     {
         $this->sessionStore->delete($token);
+    }
+
+    /**
+     * Re-validate Tax-owned buyer identity before submit (#22).
+     *
+     * @param array<string,mixed> $session
+     */
+    private function assertBuyerTaxIdentityOnSubmit(array $session): void
+    {
+        if (!class_exists(\Weline\Tax\Service\BuyerTaxIdentityService::class)) {
+            return;
+        }
+        try {
+            /** @var \Weline\Tax\Service\BuyerTaxIdentityService $svc */
+            $svc = ObjectManager::getInstance(\Weline\Tax\Service\BuyerTaxIdentityService::class);
+        } catch (\Throwable) {
+            return;
+        }
+        $billing = \is_array($session['billing_address'] ?? null)
+            ? $session['billing_address']
+            : (\is_array($session['address'] ?? null) ? $session['address'] : []);
+        $identity = \is_array($session[\Weline\Tax\Service\BuyerTaxIdentityService::PAYLOAD_KEY] ?? null)
+            ? $session[\Weline\Tax\Service\BuyerTaxIdentityService::PAYLOAD_KEY]
+            : [];
+        $desc = $svc->describeForAddress($billing, $identity, false);
+        if ($desc['errors'] !== []) {
+            throw new CheckoutV2ConflictException(
+                (string)($desc['errors'][0] ?? 'buyer_tax_vat_invalid'),
+                __('买方税号校验未通过，请检查税号格式'),
+                ['errors' => $desc['errors']],
+            );
+        }
     }
 
     /** @param array<string, mixed> $clientHints */

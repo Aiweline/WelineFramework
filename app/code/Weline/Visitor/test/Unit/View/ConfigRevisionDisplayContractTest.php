@@ -38,8 +38,10 @@ final class ConfigRevisionDisplayContractTest extends TestCase
         self::assertStringContainsString('getConfigRevision', $mon);
         self::assertStringContainsString('configScope', $cfg);
         self::assertStringContainsString('buildConfigScopeContext', $cfg);
-        self::assertStringContainsString('20260911-event-sandbox-monitor9', $mon);
+        self::assertStringContainsString('20260916-event-sandbox-monitor10', $mon);
+        self::assertStringContainsString('weline:pixel-sandbox:event', $mon);
+        self::assertStringContainsString('_earlyBuffer', $mon);
         self::assertStringContainsString('getConfigRevision', $alias);
-        self::assertStringContainsString('monitor9', $alias);
+        self::assertStringContainsString('monitor10', $alias);
     }
 }

@@ -60,6 +60,20 @@ final readonly class ResourceChange
         return (string)$this->data['resource']['action'];
     }
 
+    public function resourceCode(): ?string
+    {
+        $code = $this->data['resource']['code'] ?? null;
+
+        return is_string($code) && $code !== '' ? $code : null;
+    }
+
+    public function resourceScope(): ?string
+    {
+        $scope = $this->data['resource']['scope'] ?? null;
+
+        return is_string($scope) && $scope !== '' ? $scope : null;
+    }
+
     public function websiteId(): int
     {
         return (int)$this->data['website']['id'];
@@ -102,7 +116,7 @@ final readonly class ResourceChange
             throw new AsyncEventValidationException(__('资源变更 resource 必须是数组'));
         }
         $resource = $data['resource'];
-        self::assertObjectKeys($resource, ['type', 'id', 'action', 'revision'], [], 'resource');
+        self::assertObjectKeys($resource, ['type', 'id', 'action', 'revision'], ['code', 'scope'], 'resource');
         $type = $resource['type'];
         $id = $resource['id'];
         $action = $resource['action'];
@@ -112,6 +126,21 @@ final readonly class ResourceChange
         }
         if (!preg_match('/^[a-z][a-z0-9._-]{0,63}$/', $type) || $id === '' || strlen($id) > 191) {
             throw new AsyncEventValidationException(__('资源变更资源身份无效'));
+        }
+        if (array_key_exists('code', $resource)) {
+            $code = $resource['code'];
+            if (!is_string($code) || $code === '' || strlen($code) > 191 || str_contains($code, ':')) {
+                throw new AsyncEventValidationException(__('资源变更 resource.code 无效'));
+            }
+        }
+        if (array_key_exists('scope', $resource)) {
+            $scope = $resource['scope'];
+            if (!is_string($scope) || $scope === '' || strlen($scope) > 191
+                || preg_match('/^[a-z0-9][a-z0-9._-]{0,190}$/D', $scope) !== 1
+                || substr_count($scope, '.') !== 2
+            ) {
+                throw new AsyncEventValidationException(__('资源变更 resource.scope 必须是三点分 storage_scope'));
+            }
         }
         if (!in_array($action, self::ACTIONS, true) || $revision < 1) {
             throw new AsyncEventValidationException(__('资源变更 action 或 revision 无效'));

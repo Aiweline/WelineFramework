@@ -1,6 +1,6 @@
 <?php
 /**
- * Affiliate share entry for product detail pages.
+ * Affiliate share in PDP buybox (after purchase CTAs), collapsed by default.
  *
  * @hook-priority 180
  * @hook-sort-order 0
@@ -50,6 +50,7 @@ if (!$shareEnabled) {
 }
 
 $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productId), 0, 8);
+$panelId = $rootId . '-panel';
 $loginUrl = '';
 $applyUrl = '';
 try {
@@ -110,7 +111,7 @@ $shareI18n = [
 $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <div id="<?= htmlspecialchars($rootId, ENT_QUOTES, 'UTF-8') ?>"
-     class="affiliate-share-panel"
+     class="affiliate-share-panel affiliate-share-panel--buybox"
      data-affiliate-share-root="1"
      data-product-id="<?= (int) $productId ?>"
      data-affiliate-channel="product_detail"
@@ -120,59 +121,66 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
      data-affiliate-i18n="<?= htmlspecialchars($shareI18nJson, ENT_QUOTES, 'UTF-8') ?>"
      data-weline-load="api,account,affiliateProductShare"
      data-testid="affiliate-share-panel">
-    <div class="affiliate-share-head">
-        <span class="affiliate-share-title"><?= __('分销分享') ?></span>
-        <span class="affiliate-share-status" data-affiliate-share-status aria-live="polite"></span>
-    </div>
+    <details class="affiliate-share-disclosure">
+        <summary class="affiliate-share-summary"
+                 aria-controls="<?= htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8') ?>">
+            <span class="affiliate-share-title"><?= __('分销分享') ?></span>
+            <span class="affiliate-share-summary-hint"><?= __('赚取佣金') ?></span>
+            <span class="affiliate-share-status" data-affiliate-share-status aria-live="polite"></span>
+            <span class="affiliate-share-chevron" aria-hidden="true"></span>
+        </summary>
 
-    <?php /* FPC 游客壳：佣金申请广告；社媒图标始终作为默认分享入口（信任+可点） */ ?>
-    <div class="affiliate-share-guest"
-         data-affiliate-share-guest
-         data-testid="affiliate-share-guest">
-        <p class="affiliate-share-promo-title"><?= htmlspecialchars($shareI18n['promoTitle'], ENT_QUOTES, 'UTF-8') ?></p>
-        <p class="affiliate-share-promo-body"><?= htmlspecialchars($shareI18n['promoBody'], ENT_QUOTES, 'UTF-8') ?></p>
-        <a class="w-button affiliate-share-apply-cta"
-           data-variant="outline"
-           data-tone="neutral"
-           data-size="sm"
-           data-affiliate-share-apply-cta
-           data-testid="affiliate-share-apply-cta"
-           href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?>">
-            <?= htmlspecialchars($shareI18n['applyCta'], ENT_QUOTES, 'UTF-8') ?>
-        </a>
-    </div>
+        <div id="<?= htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8') ?>" class="affiliate-share-disclosure-body">
+            <?php /* FPC 游客壳：佣金申请广告；社媒图标始终作为默认分享入口（信任+可点） */ ?>
+            <div class="affiliate-share-guest"
+                 data-affiliate-share-guest
+                 data-testid="affiliate-share-guest">
+                <p class="affiliate-share-promo-title"><?= htmlspecialchars($shareI18n['promoTitle'], ENT_QUOTES, 'UTF-8') ?></p>
+                <p class="affiliate-share-promo-body"><?= htmlspecialchars($shareI18n['promoBody'], ENT_QUOTES, 'UTF-8') ?></p>
+                <a class="w-button affiliate-share-apply-cta"
+                   data-variant="outline"
+                   data-tone="neutral"
+                   data-size="sm"
+                   data-affiliate-share-apply-cta
+                   data-testid="affiliate-share-apply-cta"
+                   href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?>">
+                    <?= htmlspecialchars($shareI18n['applyCta'], ENT_QUOTES, 'UTF-8') ?>
+                </a>
+            </div>
 
-    <div class="affiliate-share-ready" data-affiliate-share-ready hidden>
-        <div class="affiliate-share-body">
-            <textarea class="affiliate-share-link"
-                      rows="3"
-                      readonly
-                      spellcheck="false"
-                      aria-label="<?= htmlspecialchars((string) __('分销分享链接'), ENT_QUOTES, 'UTF-8') ?>"
-                      data-affiliate-share-link></textarea>
-            <button type="button" class="affiliate-share-copy" data-affiliate-share-copy disabled><?= __('复制') ?></button>
-            <button type="button" class="affiliate-share-native" data-affiliate-share-native disabled><?= __('分享') ?></button>
+            <div class="affiliate-share-ready" data-affiliate-share-ready hidden>
+                <div class="affiliate-share-body">
+                    <input class="affiliate-share-link"
+                           type="text"
+                           readonly
+                           spellcheck="false"
+                           aria-label="<?= htmlspecialchars((string) __('分销分享链接'), ENT_QUOTES, 'UTF-8') ?>"
+                           data-affiliate-share-link>
+                    <button type="button" class="affiliate-share-copy" data-affiliate-share-copy disabled><?= __('复制') ?></button>
+                    <button type="button" class="affiliate-share-native" data-affiliate-share-native disabled><?= __('分享') ?></button>
+                </div>
+            </div>
+
+            <div class="affiliate-share-platforms"
+                 data-affiliate-share-platforms
+                 data-testid="affiliate-share-platforms"
+                 aria-label="<?= htmlspecialchars((string) __('分享到社交平台'), ENT_QUOTES, 'UTF-8') ?>">
+                <?php foreach ($freePlatforms as $platform): ?>
+                    <?php $code = (string) $platform['platform']; ?>
+                    <a class="affiliate-share-platform affiliate-share-platform--<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
+                       href="<?= htmlspecialchars((string)$platform['url'], ENT_QUOTES, 'UTF-8') ?>"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       aria-label="<?= htmlspecialchars((string)$platform['label'], ENT_QUOTES, 'UTF-8') ?>"
+                       title="<?= htmlspecialchars((string)$platform['label'], ENT_QUOTES, 'UTF-8') ?>"
+                       data-affiliate-default-platform="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                        <span class="affiliate-share-platform__logo"><?= $platformSvg[$code] ?? '' ?></span>
+                        <span class="affiliate-share-platform__label"><?= htmlspecialchars((string)$platform['short'], ENT_QUOTES, 'UTF-8') ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
         </div>
-    </div>
-
-    <div class="affiliate-share-platforms"
-         data-affiliate-share-platforms
-         data-testid="affiliate-share-platforms"
-         aria-label="<?= htmlspecialchars((string) __('分享到社交平台'), ENT_QUOTES, 'UTF-8') ?>">
-        <?php foreach ($freePlatforms as $platform): ?>
-            <?php $code = (string) $platform['platform']; ?>
-            <a class="affiliate-share-platform affiliate-share-platform--<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
-               href="<?= htmlspecialchars((string)$platform['url'], ENT_QUOTES, 'UTF-8') ?>"
-               target="_blank"
-               rel="noopener noreferrer"
-               aria-label="<?= htmlspecialchars((string)$platform['label'], ENT_QUOTES, 'UTF-8') ?>"
-               title="<?= htmlspecialchars((string)$platform['label'], ENT_QUOTES, 'UTF-8') ?>"
-               data-affiliate-default-platform="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
-                <span class="affiliate-share-platform__logo"><?= $platformSvg[$code] ?? '' ?></span>
-                <span class="affiliate-share-platform__label"><?= htmlspecialchars((string)$platform['short'], ENT_QUOTES, 'UTF-8') ?></span>
-            </a>
-        <?php endforeach; ?>
-    </div>
+    </details>
 </div>
 
 <style>
@@ -191,42 +199,61 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     --affiliate-share-success-soft: var(--color-success-bg-subtle, var(--weline-theme-success-subtle, #e7f4ea));
     --affiliate-share-warning: var(--color-warning, var(--weline-theme-warning, #7a3e00));
     --affiliate-share-warning-soft: var(--color-warning-bg-subtle, var(--weline-theme-warning-subtle, #fff4e5));
-    margin-top: 1rem;
-    padding: .9rem;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
-    border-radius: var(--weline-theme-radius-lg, 8px);
-    background: var(--affiliate-share-surface);
-    box-shadow: var(--weline-theme-shadow-sm, 0 1px 2px rgba(15, 17, 17, .08));
 }
-.affiliate-share-head {
+.affiliate-share-panel--buybox {
+    margin-top: .65rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.affiliate-share-disclosure {
+    margin: 0;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+    border-radius: var(--weline-theme-radius-md, 6px);
+    background: var(--affiliate-share-surface);
+    overflow: hidden;
+}
+.affiliate-share-summary {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: .75rem;
-    margin-bottom: .65rem;
+    gap: .4rem .55rem;
+    min-height: 2.4rem;
+    padding: .45rem .7rem;
+    cursor: pointer;
+    list-style: none;
+    color: var(--affiliate-share-text);
 }
+.affiliate-share-summary::-webkit-details-marker { display: none; }
+.affiliate-share-summary::marker { content: ''; }
 .affiliate-share-title {
     flex: 0 0 auto;
-    color: var(--affiliate-share-text);
-    font-size: .95rem;
+    font-size: .85rem;
     font-weight: 700;
     line-height: 1.25;
-    writing-mode: horizontal-tb;
     white-space: nowrap;
+}
+.affiliate-share-summary-hint {
+    flex: 0 1 auto;
+    min-width: 0;
+    color: var(--affiliate-share-muted);
+    font-size: .75rem;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .affiliate-share-status {
     flex: 1 1 auto;
     min-width: 0;
-    min-height: 1.15rem;
-    padding: .1rem .45rem;
+    min-height: 1rem;
+    padding: .05rem .35rem;
     border-radius: var(--weline-theme-radius-md, 6px);
     color: var(--affiliate-share-muted);
-    font-size: .78rem;
-    line-height: 1.35;
+    font-size: .72rem;
+    line-height: 1.3;
     text-align: right;
-    white-space: normal;
     overflow-wrap: anywhere;
-    writing-mode: horizontal-tb;
 }
 .affiliate-share-status.is-loading {
     background: var(--affiliate-share-surface-subtle);
@@ -240,6 +267,26 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     background: var(--affiliate-share-warning-soft);
     color: var(--affiliate-share-warning);
 }
+.affiliate-share-chevron {
+    flex: 0 0 auto;
+    width: .55rem;
+    height: .55rem;
+    margin-left: .15rem;
+    border-right: 1.5px solid var(--affiliate-share-muted);
+    border-bottom: 1.5px solid var(--affiliate-share-muted);
+    transform: rotate(45deg);
+    transition: transform .15s ease;
+}
+.affiliate-share-disclosure[open] .affiliate-share-chevron {
+    transform: rotate(-135deg);
+    margin-top: .2rem;
+}
+.affiliate-share-disclosure-body {
+    display: grid;
+    gap: .55rem;
+    padding: 0 .7rem .7rem;
+    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+}
 .affiliate-share-login-link {
     color: inherit;
     font-weight: 700;
@@ -247,8 +294,9 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
 }
 .affiliate-share-guest {
     display: grid;
-    gap: .55rem;
-    padding: .75rem .8rem;
+    gap: .35rem;
+    margin-top: .65rem;
+    padding: .55rem .6rem;
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-primary-border);
     border-radius: var(--weline-theme-radius-md, 6px);
     background: var(--affiliate-share-primary-soft);
@@ -259,15 +307,15 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
 .affiliate-share-promo-title {
     margin: 0;
     color: var(--affiliate-share-text);
-    font-size: .9rem;
+    font-size: .82rem;
     font-weight: 700;
     line-height: 1.35;
 }
 .affiliate-share-promo-body {
     margin: 0;
     color: var(--affiliate-share-muted);
-    font-size: .8rem;
-    line-height: 1.45;
+    font-size: .72rem;
+    line-height: 1.4;
 }
 .affiliate-share-apply-cta {
     justify-self: start;
@@ -276,36 +324,33 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
 .affiliate-share-ready[hidden] {
     display: none !important;
 }
-.affiliate-share-platforms {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: .5rem;
-    margin-top: .85rem;
-    padding-top: .75rem;
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+.affiliate-share-ready {
+    margin-top: .65rem;
 }
 .affiliate-share-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: .5rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .4rem;
 }
 .affiliate-share-link {
-    grid-column: 1 / -1;
     min-width: 0;
     width: 100%;
-    min-height: 4.6rem;
-    padding: .55rem .65rem;
+    height: 2.2rem;
+    padding: 0 .55rem;
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
     border-radius: var(--weline-theme-radius-md, 6px);
     background: var(--affiliate-share-surface);
     color: var(--affiliate-share-text);
-    font-size: .78rem;
-    line-height: 1.35;
+    font-size: .72rem;
+    line-height: 2.2rem;
     overflow: hidden;
-    overflow-wrap: anywhere;
-    resize: none;
-    white-space: normal;
-    word-break: break-all;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.affiliate-share-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .4rem;
 }
 .affiliate-share-copy,
 .affiliate-share-native,
@@ -313,18 +358,22 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.35rem;
-    padding: 0 .7rem;
+    min-height: 2.2rem;
+    padding: 0 .55rem;
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-primary);
     border-radius: var(--weline-theme-radius-md, 6px);
     background: var(--affiliate-share-surface);
     color: var(--affiliate-share-primary);
     cursor: pointer;
-    font-size: .85rem;
+    font-size: .8rem;
     font-weight: 700;
     line-height: 1.2;
     text-decoration: none;
     transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.affiliate-share-body {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
 }
 .affiliate-share-copy:hover:not(:disabled),
 .affiliate-share-native:hover:not(:disabled),
@@ -352,13 +401,17 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     color: var(--affiliate-share-muted);
     cursor: not-allowed;
 }
+.affiliate-share-platforms {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .35rem;
+}
 .affiliate-share-platform {
     min-width: 0;
     flex-direction: column;
-    gap: .3rem;
-    justify-content: center;
-    padding: .55rem .25rem;
-    min-height: 3.4rem;
+    gap: .2rem;
+    padding: .4rem .15rem;
+    min-height: 2.8rem;
     border-color: var(--affiliate-share-border);
     color: var(--affiliate-share-text);
 }
@@ -367,15 +420,15 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.2rem;
+    height: 1.2rem;
     line-height: 0;
 }
 .affiliate-share-platform__logo .affiliate-share-platform__mark,
 .affiliate-share-platform__logo svg {
     display: block;
-    width: 1.35rem;
-    height: 1.35rem;
+    width: 1.1rem;
+    height: 1.1rem;
 }
 .affiliate-share-platform__label {
     flex: 0 1 auto;
@@ -384,25 +437,25 @@ $shareI18nJson = (string) json_encode($shareI18n, JSON_UNESCAPED_UNICODE | JSON_
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: .65rem;
+    font-size: .62rem;
     font-weight: 700;
     line-height: 1.15;
     text-align: center;
 }
 @media (max-width: 640px) {
-    .affiliate-share-head {
-        align-items: flex-start;
-        flex-direction: column;
+    .affiliate-share-summary {
+        flex-wrap: wrap;
     }
     .affiliate-share-status {
+        flex-basis: 100%;
         text-align: left;
-        white-space: normal;
+        order: 3;
     }
     .affiliate-share-body {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
     }
-    .affiliate-share-platforms {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+    .affiliate-share-link {
+        grid-column: 1 / -1;
     }
     .affiliate-share-copy,
     .affiliate-share-native,

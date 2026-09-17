@@ -50,11 +50,11 @@ final class MailTemplateContractTest extends TestCase
         self::assertStringContainsString('htmlspecialchars', $renderer);
     }
 
-    public function testModuleRequiresEditors(): void
+    public function testModuleDoesNotRequireCkEditor(): void
     {
         $module = include dirname(__DIR__, 2) . '/etc/module.php';
         self::assertIsArray($module);
-        self::assertArrayHasKey('Weline_EditorManager', $module['requires'] ?? []);
-        self::assertArrayHasKey('Weline_CKEditorEditorManager', $module['requires'] ?? []);
+        self::assertArrayNotHasKey('Weline_EditorManager', $module['requires'] ?? []);
+        self::assertArrayNotHasKey('Weline_CKEditorEditorManager', $module['requires'] ?? []);
     }
 }

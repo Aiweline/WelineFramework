@@ -83,12 +83,97 @@
     overflow: hidden;
 }
 
+/* Variant A: whole-card accordion — click summary to expand hang+chat below. */
+[data-account-orders="true"] .account-orders__accordion {
+    display: block;
+    margin: 0;
+    border: 0;
+    background: transparent;
+}
+
+[data-account-orders="true"] .account-orders__accordion > .account-orders__summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+[data-account-orders="true"] .account-orders__accordion > .account-orders__summary::-webkit-details-marker {
+    display: none;
+}
+
+[data-account-orders="true"] .account-orders__chevron {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ao-muted);
+    font-size: 0.65rem;
+    line-height: 1;
+    transition: transform 0.15s ease;
+}
+
+[data-account-orders="true"] .account-orders__chevron::before {
+    content: "▾";
+}
+
+[data-account-orders="true"] .account-orders__accordion[open] > .account-orders__summary .account-orders__chevron {
+    transform: rotate(180deg);
+}
+
+[data-account-orders="true"] .account-orders__panel {
+    display: grid;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
 [data-account-orders="true"] .account-orders__summary {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.55rem 0.75rem;
     padding: 1rem 1.1rem;
+}
+
+[data-account-orders="true"] .account-orders__badge--unread {
+    background: color-mix(in srgb, var(--color-primary, #b84a3c) 88%, #000);
+    border-color: transparent;
+    color: #fff;
+    min-width: 1.4rem;
+    justify-content: center;
+    padding-inline: 0.35rem;
+}
+
+/* Hang progress + order chat: full-width below the order summary row (never side column). */
+[data-account-orders="true"] .account-orders__hang {
+    display: grid;
+    gap: var(--spacing-sm, 0.5rem);
+    width: 100%;
+    min-width: 0;
+    padding: 0 1.1rem 1rem;
+    border-top: 1px dashed rgba(148, 163, 184, 0.35);
+}
+
+[data-account-orders="true"] .account-orders__hang .b2b-account-hang {
+    margin-top: 0;
+    width: 100%;
+}
+
+[data-account-orders="true"] .account-orders__hang .b2b-order-chat,
+[data-account-orders="true"] .account-orders__hang .b2b-order-chat__panel {
+    width: 100%;
+    max-width: none;
+}
+
+/* Embedded in card accordion: hide nested chat toggle; panel stays open with the card. */
+[data-account-orders="true"] .account-orders__hang[data-chat-embedded="1"] .b2b-order-chat__toolbar {
+    display: none;
+}
+
+[data-account-orders="true"] .account-orders__accordion[open] .account-orders__hang[data-chat-embedded="1"] .b2b-order-chat__panel[hidden] {
+    display: flex !important;
 }
 
 [data-account-orders="true"] .account-orders__summary > strong {

@@ -219,6 +219,7 @@ final class ConnectorService
                 'rm' => $this->handleStorageRemove($storage, $src, $manager, $actorId),
                 'upload' => $this->handleStorageUpload($storage, $src, $uploadedFiles, $opts, $manager, $actorId),
                 'asset_metadata' => $this->handleStorageAssetMetadata($storage, $src, $actorId, $manager),
+                'asset_ensure' => $this->handleStorageAssetEnsure($storage, $src, $actorId, $manager),
                 'asset_locales' => $this->handleStorageAssetLocales($storage, $src, $actorId, $manager),
                 'asset_translate_missing' => $this->handleStorageAssetTranslateMissing($storage, $src, $actorId, $manager),
                 'translation_config' => $this->handleTranslationConfig($src),
@@ -252,7 +253,6 @@ final class ConnectorService
         $directory = $this->decodeStorageTarget($src, true);
         $this->assertLockedRelativePath($src, $directory);
         $this->ensureStorageDirectoryExists($storage, $directory, $manager);
-        $this->assertUploadDestinationsAvailable($storage, $directory, $files, $manager);
         $locale = $this->requiredLocale($src);
         // Resolve the frozen request/access context before writing anything so
         // an invalid Worker or controller context cannot leave orphaned files.
@@ -264,6 +264,7 @@ final class ConnectorService
             'default_caption' => $src['default_caption'] ?? '',
         ];
         $metadataByFile = $this->parseUploadMetadata($src['upload_metadata'] ?? []);
+        $this->assertUploadDestinationsAvailable($storage, $directory, $files, $manager, $metadataByFile);
         $requestedVisibility = strtolower(trim((string)($src['visibility'] ?? '')));
         $visibility = $requestedVisibility !== ''
             ? $requestedVisibility
@@ -395,6 +396,45 @@ final class ConnectorService
     }
 
     /** @return array<string,mixed> */
+    private function handleStorageAssetEnsure(
+        string $storage,
+        array $src,
+        ?int $actorId,
+        StorageDirectoryManagerInterface $manager,
+    ): array {
+        $this->assertStorageCapability($storage, 'browse', $manager);
+        $path = $this->decodeStorageTarget($src, false);
+        $entry = $this->findStorageEntry($storage, $path, $manager);
+        if ($entry === null || ($entry['type'] ?? '') === 'directory') {
+            throw new \InvalidArgumentException((string)__('目标文件不存在'));
+        }
+        $locale = $this->requiredLocale($src);
+        $access = $this->fileAccessContext($locale, $actorId);
+        $fileInfo = $this->buildStorageFileInfo($entry);
+        $description = $this->getAssetLibrary()->registerExistingObject(
+            $storage,
+            $path,
+            (string)($fileInfo['name'] ?? basename($path)),
+            (string)($fileInfo['mime'] ?? ($entry['mime'] ?? 'application/octet-stream')),
+            $locale,
+            $access,
+            [
+                'display_name' => $src['display_name'] ?? '',
+                'default_alt' => $src['default_alt'] ?? '',
+                'description' => $src['description'] ?? '',
+                'default_caption' => $src['default_caption'] ?? '',
+                'translation_state' => FileAssetLibraryInterface::TRANSLATION_REVIEWED,
+                'translation_origin' => FileAssetLibraryInterface::TRANSLATION_MANUAL,
+            ],
+            FileAssetLibraryInterface::VISIBILITY_PUBLIC,
+            ['source' => 'media_manager_asset_ensure'],
+            isset($fileInfo['width']) ? (int)$fileInfo['width'] : null,
+            isset($fileInfo['height']) ? (int)$fileInfo['height'] : null,
+        );
+        return ['changed' => [$this->encodeHash($path) => $description]];
+    }
+
+    /** @return array<string,mixed> */
     private function handleStorageOpen(
         string $storage,
         array $src,
@@ -483,7 +523,13 @@ final class ConnectorService
         }
         $sourceLocale = $this->requiredLocale($src);
         $access = $this->fileAccessContext($sourceLocale, $actorId);
-        $result = $this->getLocaleTranslations()->translateMissing($assetId, $sourceLocale, $access, null);
+        $targetLocales = $this->optionalTargetLocales($src);
+        $result = $this->getLocaleTranslations()->translateMissing(
+            $assetId,
+            $sourceLocale,
+            $access,
+            $targetLocales,
+        );
         $path = $this->decodeStorageTarget($src, false);
         $description = null;
         try {
@@ -625,7 +671,7 @@ final class ConnectorService
                 'path' => $objectKey,
                 'name' => basename($objectKey),
                 'type' => 'file',
-                'size' => max(0, (int)$asset->getData(\Weline\FileManager\Model\FileAsset::schema_fields_BYTES)),
+                'size' => max(0, (int)$asset->getData('bytes')),
                 'mime_type' => $asset->getMimeType(),
                 'last_modified' => null,
             ];
@@ -730,6 +776,60 @@ final class ConnectorService
             throw new \InvalidArgumentException((string)__('媒体文件操作缺少显式语言。'));
         }
         return $this->normalizeLocale($locale);
+    }
+
+    /**
+     * Optional gap-fill scope. Null = all installed targets (one-click / upload).
+     * Accepts list, JSON list string, or comma-separated locale codes.
+     *
+     * @param array<string,mixed> $src
+     * @return list<string>|null
+     */
+    private function optionalTargetLocales(array $src): ?array
+    {
+        if (!array_key_exists('target_locales', $src)) {
+            return null;
+        }
+        $raw = $src['target_locales'];
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        if (is_string($raw)) {
+            $trimmed = trim($raw);
+            if ($trimmed === '') {
+                return null;
+            }
+            if ($trimmed[0] === '[') {
+                $decoded = json_decode($trimmed, true);
+                if (!is_array($decoded)) {
+                    throw new \InvalidArgumentException((string)__('目标语言列表格式无效。'));
+                }
+                $raw = $decoded;
+            } else {
+                $raw = preg_split('/\s*,\s*/', $trimmed) ?: [];
+            }
+        }
+        if (!is_array($raw)) {
+            throw new \InvalidArgumentException((string)__('目标语言列表格式无效。'));
+        }
+        $out = [];
+        foreach ($raw as $code) {
+            if (!is_string($code) && !is_numeric($code)) {
+                continue;
+            }
+            $locale = trim((string)$code);
+            if ($locale === '') {
+                continue;
+            }
+            // Keep raw codes here; translateMissing() normalizes each target.
+            $out[] = $locale;
+        }
+        $out = array_values(array_unique($out));
+        if ($out === []) {
+            throw new \InvalidArgumentException((string)__('目标语言列表不能为空。'));
+        }
+
+        return $out;
     }
 
     /** @return array<string,mixed> */
@@ -1312,26 +1412,36 @@ final class ConnectorService
         return $metadata;
     }
 
-    /** @param array<string,mixed> $files */
+    /** @param array<string,mixed> $files @param list<array<string,mixed>> $metadataByFile */
     private function assertUploadDestinationsAvailable(
         string $storage,
         string $directory,
         array $files,
         StorageDirectoryManagerInterface $manager,
+        array $metadataByFile = [],
     ): void {
         $existing = [];
         foreach ($manager->list($storage, $directory, false) as $entry) {
             $existing[mb_strtolower((string)($entry['name'] ?? basename((string)($entry['path'] ?? ''))))] = true;
         }
         $planned = [];
-        foreach ($this->uploadedFileNames($files) as $name) {
+        $names = $this->uploadedFileNames($files);
+        foreach ($names as $index => $name) {
             $name = $this->sanitizeLeafName($name);
             if ($name === null) {
                 throw new \InvalidArgumentException((string)__('上传文件名无效。'));
             }
             $key = mb_strtolower($name);
-            if (isset($existing[$key]) || isset($planned[$key])) {
+            $itemMeta = is_array($metadataByFile[$index] ?? null) ? $metadataByFile[$index] : [];
+            $overwrite = MediaAssetUploadService::isOverwriteFlag($itemMeta['overwrite'] ?? false);
+            if (isset($planned[$key])) {
                 throw new \InvalidArgumentException((string)__('目标文件已存在：%{1}', [$name]));
+            }
+            if (isset($existing[$key]) && !$overwrite) {
+                throw new \InvalidArgumentException((string)__('目标文件已存在：%{1}', [$name]));
+            }
+            if ($overwrite && !isset($existing[$key])) {
+                throw new \InvalidArgumentException((string)__('目标文件不存在，无法覆盖：%{1}', [$name]));
             }
             $planned[$key] = true;
         }

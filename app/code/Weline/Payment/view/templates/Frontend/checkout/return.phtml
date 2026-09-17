@@ -96,6 +96,51 @@ $shippingLines = array_values(array_filter([
 $transactionNo = $transaction ? (string) $transaction->getData('transaction_no') : '';
 $pixelValue = $transaction ? (string) $transaction->getData('amount') : '';
 $pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
+if ($pixelCurrency === '' && $orderCurrency !== '') {
+    $pixelCurrency = $orderCurrency;
+}
+$orderMoney = is_array($orderV2['money'] ?? null) ? $orderV2['money'] : [];
+if ($pixelValue === '' && $orderCurrency !== '' && array_key_exists('grand_total_minor', $orderMoney)) {
+    $pixelValue = number_format(((int) $orderMoney['grand_total_minor']) / 100, 2, '.', '');
+}
+$pixelItems = [];
+foreach ($orderItemsDisplay as $pixelItemRow) {
+    if (!is_array($pixelItemRow)) {
+        continue;
+    }
+    $pid = trim((string) ($pixelItemRow['product_id'] ?? ''));
+    $sku = trim((string) ($pixelItemRow['sku'] ?? ''));
+    $itemId = $pid !== '' ? $pid : $sku;
+    $itemName = trim((string) ($pixelItemRow['name'] ?? $pixelItemRow['product_name'] ?? $sku));
+    $qty = (int) ($pixelItemRow['qty'] ?? $pixelItemRow['quantity'] ?? 0);
+    if ($qty <= 0) {
+        $qty = 1;
+    }
+    $unitMinor = (int) ($pixelItemRow['unit_price_minor'] ?? 0);
+    if ($unitMinor <= 0 && isset($pixelItemRow['row_total_minor'])) {
+        $unitMinor = (int) round(((int) $pixelItemRow['row_total_minor']) / $qty);
+    }
+    $price = $unitMinor > 0 ? round($unitMinor / 100, 2) : null;
+    if ($itemId === '' && $itemName === '' && $price === null) {
+        continue;
+    }
+    $ga4Item = [
+        'item_id' => $itemId,
+        'item_name' => $itemName,
+        'product_id' => $pid !== '' ? $pid : $itemId,
+        'quantity' => $qty,
+    ];
+    if ($sku !== '') {
+        $ga4Item['sku'] = $sku;
+    }
+    if ($price !== null) {
+        $ga4Item['price'] = $price;
+    }
+    $pixelItems[] = $ga4Item;
+    if (count($pixelItems) >= 20) {
+        break;
+    }
+}
 $heroTone = $paymentReturnCancelled
     ? 'danger'
     : ($isSuccess ? 'success' : (($isPending || $isProcessing) ? 'pending' : ($paymentReturnEmpty ? 'info' : 'danger')));
@@ -753,25 +798,33 @@ if ($paymentReturnCancelled) {
 </style>
 <?php if ($paymentSuccessTerminal && $transactionNo !== ''): ?>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    if (typeof window.WelinePixel === 'undefined') {
-        return;
-    }
-    var dedupeKey = 'weline_pixel_dedupe:payment_success:' + <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>;
-    try {
-        if (window.sessionStorage.getItem(dedupeKey)) {
+(function () {
+    var attempts = 0;
+    var maxAttempts = 80;
+    function fire() {
+        attempts += 1;
+        if (typeof window.WelinePixel === 'undefined' || typeof window.WelinePixel.track !== 'function') {
+            if (attempts < maxAttempts) {
+                window.setTimeout(fire, 50);
+            }
             return;
         }
-    } catch (e) {}
-    window.WelinePixel.track('payment_success', {
-        transaction_id: <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>,
-        value: <?= json_encode($pixelValue, JSON_UNESCAPED_UNICODE) ?>,
-        currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
-        payment_method: <?= json_encode($paymentMethodLabel, JSON_UNESCAPED_UNICODE) ?>
-    });
-    try {
-        window.sessionStorage.setItem(dedupeKey, '1');
-    } catch (e) {}
-});
+        window.WelinePixel.track('payment_success', {
+            transaction_id: <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>,
+            order_uuid: <?= json_encode($orderUuid, JSON_UNESCAPED_UNICODE) ?>,
+            order_id: <?= json_encode($orderV2DisplayNumber !== '' ? $orderV2DisplayNumber : $orderUuid, JSON_UNESCAPED_UNICODE) ?>,
+            value: <?= json_encode($pixelValue !== '' ? (float) $pixelValue : null, JSON_UNESCAPED_UNICODE) ?>,
+            currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
+            grand_total: <?= json_encode($pixelValue !== '' ? (float) $pixelValue : null, JSON_UNESCAPED_UNICODE) ?>,
+            items: <?= json_encode($pixelItems, JSON_UNESCAPED_UNICODE) ?>,
+            payment_method: <?= json_encode($paymentMethodLabel, JSON_UNESCAPED_UNICODE) ?>
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fire);
+    } else {
+        fire();
+    }
+})();
 </script>
 <?php endif; ?>

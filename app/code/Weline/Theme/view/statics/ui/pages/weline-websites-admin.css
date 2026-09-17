@@ -12,9 +12,37 @@
         padding: 0;
     }
 
+    /* 树右栏内嵌：保存条粘底，长表单滚动时仍可提交 */
+    .w-website-form.is-embedded .w-website-form__actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        margin-inline: calc(-1 * var(--weline-space-4));
+        margin-block-end: calc(-1 * var(--weline-space-2));
+        padding: var(--weline-space-3) var(--weline-space-4);
+        border-block-start: 1px solid var(--weline-theme-border);
+        background: color-mix(in srgb, var(--weline-theme-surface) 92%, transparent);
+        backdrop-filter: blur(8px);
+    }
+
     .w-website-form__sections {
         display: grid;
         gap: var(--weline-space-3);
+    }
+
+    /* LocalModel preview slot under stacked label — chrome lives on <local> trigger. */
+    .w-website-form .w-website-local-preview {
+        display: block;
+        box-sizing: border-box;
+        max-inline-size: 100%;
+        min-inline-size: 0;
+        margin-block-end: var(--weline-space-3);
+    }
+
+    .w-website-form .w-website-local-preview .w-local-translation__wrap,
+    .w-website-form .w-website-local-preview .w-local-translation__trigger {
+        max-inline-size: 100%;
+        min-inline-size: 0;
     }
 
     .w-website-form__sections > .w-disclosure {

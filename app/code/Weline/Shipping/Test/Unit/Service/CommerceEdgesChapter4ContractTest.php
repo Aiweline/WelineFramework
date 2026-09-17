@@ -21,6 +21,13 @@ final class CommerceEdgesChapter4ContractTest extends TestCase
         self::assertSame('ddu', $svc->normalize(''));
         self::assertNotSame('', $svc->dutyNotice('ddp'));
         self::assertNotSame($svc->dutyNotice('ddp'), $svc->dutyNotice('ddu'));
+        self::assertSame(ShippingIncotermService::NOTICE_DDU, $svc->dutyNotice('ddu'));
+        self::assertStringNotContainsString('_', $svc->labelForDutyNoticeCode(ShippingIncotermService::NOTICE_DDU));
+        self::assertStringContainsString('关税', $svc->labelForDutyNoticeCode(ShippingIncotermService::NOTICE_DDU));
+        self::assertNotSame(
+            ShippingIncotermService::NOTICE_DDU,
+            $svc->labelForDutyNoticeCode(ShippingIncotermService::NOTICE_DDU),
+        );
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/Provider/LocalTemplatePricingService.php',
         );

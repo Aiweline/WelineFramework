@@ -14,7 +14,7 @@ use Weline\Framework\View\Template;
  */
 class SetPassword extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account.auth';
+    protected ?string $layoutType = 'account/set-password';
 
     public function __construct(
         private readonly Template $template,

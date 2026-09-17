@@ -84,6 +84,7 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
      * @param list<array<string, mixed>> $orders bucketed checkout orders
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $address
+     * @param array<string, mixed> $shippingContext
      * @return array<string, mixed>
      */
     public function quoteTax(
@@ -91,13 +92,14 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
         array $scope,
         array $address,
         string $currency,
+        array $shippingContext = [],
     ): array {
         $websiteId = (int) ($scope['website_id'] ?? 0);
         $storeId = (int) ($scope['store_id'] ?? 0);
         $channelId = (int) ($scope['channel_id'] ?? 0);
         if (!$this->isEffectivelyOn($websiteId, $storeId, $channelId)) {
             $rolloutMode = $this->rollout->mode(self::CAPABILITY);
-            return [
+            $sales = [
                 'mode' => 'none',
                 'engine' => 'none',
                 'tax_amount_minor' => 0,
@@ -114,6 +116,8 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
                 'channel_id' => $channelId,
                 'scope_key' => '',
             ];
+
+            return $this->mergeDutyEstimate($sales, $orders, $scope, $address, $currency, $shippingContext);
         }
 
         $request = $this->request($orders, $scope, $address, $currency);
@@ -163,7 +167,7 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
             }
         }
 
-        return [
+        $sales = [
             'mode' => 'engine',
             'engine' => (string) ($result['source'] ?? TaxEngine::SOURCE_ENGINE),
             'tax_amount_minor' => (int) $result['tax_amount_minor'],
@@ -178,6 +182,93 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
             'channel_id' => $channelId,
             'scope_key' => (string) $result['scope_key'],
         ];
+
+        return $this->mergeDutyEstimate($sales, $orders, $scope, $address, $currency, $shippingContext);
+    }
+
+    /**
+     * Duty estimates are independent of sales-tax rollout (off/shadow still charge DDU).
+     *
+     * @param array<string,mixed> $sales
+     * @param list<array<string,mixed>> $orders
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $address
+     * @param array<string,mixed> $shippingContext
+     * @return array<string,mixed>
+     */
+    private function mergeDutyEstimate(
+        array $sales,
+        array $orders,
+        array $scope,
+        array $address,
+        string $currency,
+        array $shippingContext,
+    ): array {
+        $goodsMinor = isset($shippingContext['goods_subtotal_minor'])
+            ? max(0, (int)$shippingContext['goods_subtotal_minor'])
+            : $this->ordersGoodsMinor($orders);
+        $shippingMinor = max(0, (int)($shippingContext['shipping_amount_minor'] ?? 0));
+        $dest = (string)($address['country_code'] ?? $address['country'] ?? '');
+        $origin = (string)(
+            $shippingContext['origin_country']
+            ?? $scope['origin_country']
+            ?? $scope['seller_country']
+            ?? 'CN'
+        );
+        $estimate = (new DutyEstimateService())->estimate([
+            'goods_subtotal_minor' => $goodsMinor,
+            'shipping_amount_minor' => $shippingMinor,
+            'destination_country' => $dest,
+            'origin_country' => $origin,
+            'duty_notice' => (string)($shippingContext['duty_notice'] ?? ''),
+            'currency' => $currency,
+        ]);
+
+        $salesTax = max(0, (int)($sales['tax_amount_minor'] ?? 0));
+        $dutyCharged = max(0, (int)$estimate['charged_minor']);
+        $lines = is_array($sales['lines'] ?? null) ? $sales['lines'] : [];
+        foreach ($estimate['lines'] as $line) {
+            $lines[] = $line;
+        }
+
+        $sales['tax_amount_minor'] = $salesTax + $dutyCharged;
+        $sales['sales_tax_amount_minor'] = $salesTax;
+        $sales['duty_amount_minor'] = (int)$estimate['duty_amount_minor'];
+        $sales['import_tax_amount_minor'] = (int)$estimate['import_tax_amount_minor'];
+        $sales['duty_charged_minor'] = $dutyCharged;
+        $sales['duty_notice'] = (string)$estimate['duty_notice'];
+        $sales['duty_estimate_reason'] = (string)$estimate['reason'];
+        $sales['lines'] = $lines;
+        if ($dutyCharged > 0 && (string)($sales['note'] ?? '') === 'mode_off_stub') {
+            $sales['note'] = 'mode_off_stub_plus_duty_estimate';
+        }
+
+        return $sales;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $orders
+     */
+    private function ordersGoodsMinor(array $orders): int
+    {
+        $sum = 0;
+        foreach ($orders as $order) {
+            if (!is_array($order)) {
+                continue;
+            }
+            $items = $order['items'] ?? $order['lines'] ?? null;
+            if (!is_array($items)) {
+                continue;
+            }
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $sum += max(0, (int)($item['row_total_minor'] ?? 0));
+            }
+        }
+
+        return $sum;
     }
 
     /**
@@ -242,6 +333,23 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
                     'session_scope_key' => $sessionScopeKey,
                     'live_scope_key' => $liveScopeKey,
                 ],
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $identity
+     * @param array<string, mixed> $billingAddress
+     */
+    public function validateTaxIdentity(array $identity, array $billingAddress): void
+    {
+        $service = new BuyerTaxIdentityService();
+        $desc = $service->describeForAddress($billingAddress, $identity, false);
+        if ($desc['errors'] !== []) {
+            throw new TaxConflictException(
+                'checkout_tax_identity_invalid',
+                __('买家税号无效，请检查后重试'),
+                ['errors' => $desc['errors']],
             );
         }
     }

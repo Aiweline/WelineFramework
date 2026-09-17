@@ -848,7 +848,16 @@ dev=true,开发=真
 部分文件写入失败：%{1},部分文件写入失败：%{1}
 "回滚文件 %{1} 失败：%{2}","回滚文件 %{1} 失败：%{2}"
 "清理模块 %{1} 路由失败：%{2}","清理模块 %{1} 路由失败：%{2}"
+无法创建路由回滚临时目录：%{1},无法创建路由回滚临时目录：%{1}
+备份路由文件失败：%{1},备份路由文件失败：%{1}
+"- route_update：正在批量写入控制器 ACL（可能较慢）…","- route_update：正在批量写入控制器 ACL（可能较慢）…"
+"- route_update：ACL 写入完成","- route_update：ACL 写入完成"
+"- route_update：增量模式，刷新路由快照…","- route_update：增量模式，刷新路由快照…"
+"- route_update：提交完成（增量）","- route_update：提交完成（增量）"
 批量模式未启用，无法提交路由更新,批量模式未启用，无法提交路由更新
+"- route_update：正在落盘路由文件…","- route_update：正在落盘路由文件…"
+"- route_update：路由文件已写入，正在生成运行时快照…","- route_update：路由文件已写入，正在生成运行时快照…"
+"- route_update：提交完成","- route_update：提交完成"
 路由文件写入失败：%{1},路由文件写入失败：%{1}
 "回滚路由文件 %{1} 失败：%{2}","回滚路由文件 %{1} 失败：%{2}"
 "阶段 %{1} 已注册","阶段 %{1} 已注册"
@@ -869,6 +878,8 @@ dev=true,开发=真
 阶段更新失败：%{1},阶段更新失败：%{1}
 "operation_id 长度不能超过 64 字符","operation_id 长度不能超过 64 字符"
 "SchemaDiffStage 不能重新绑定到其他 operation_id","SchemaDiffStage 不能重新绑定到其他 operation_id"
+"- Schema checkpoint 产物为空，忽略 Model 源指纹，强制 prepare 扫描","- Schema checkpoint 产物为空，忽略 Model 源指纹，强制 prepare 扫描"
+"- SchemaDiff：全部模块 Model 源指纹未变，跳过 prepare 扫描","- SchemaDiff：全部模块 Model 源指纹未变，跳过 prepare 扫描"
 "模块 %{1} 读取 Model 列表失败：%{2}","模块 %{1} 读取 Model 列表失败：%{2}"
 "Schema 执行失败：%{1}","Schema 执行失败：%{1}"
 "模块 %{1} 的表 %{2} 与 %{3} 产生相同 Schema checkpoint 身份 %{4}","模块 %{1} 的表 %{2} 与 %{3} 产生相同 Schema checkpoint 身份 %{4}"
@@ -880,15 +891,33 @@ dev=true,开发=真
 "阶段 %{1} 尚未准备","阶段 %{1} 尚未准备"
 无效的安装模块对象,无效的安装模块对象
 无效的升级模块对象,无效的升级模块对象
+"模块安装/升级阶段：无待执行 Install/Upgrade 脚本，跳过","模块安装/升级阶段：无待执行 Install/Upgrade 脚本，跳过"
+"模块安装/升级阶段开始：Install %{install} · Upgrade %{upgrade}（共 %{total}）","模块安装/升级阶段开始：Install %{install} · Upgrade %{upgrade}（共 %{total}）"
+"ModuleSetup [%{i}/%{total}] Install %{module}…","ModuleSetup [%{i}/%{total}] Install %{module}…"
+"ModuleSetup [%{i}/%{total}] Install %{module} 完成（%{ms}ms）","ModuleSetup [%{i}/%{total}] Install %{module} 完成（%{ms}ms）"
 "模块 %{1} 安装失败：%{2}","模块 %{1} 安装失败：%{2}"
 "模块安装失败：%{1}。注意：前置 Schema 可能已应用，Setup 脚本仍待重跑（setup_version 未推进）。","模块安装失败：%{1}。注意：前置 Schema 可能已应用，Setup 脚本仍待重跑（setup_version 未推进）。"
+"ModuleSetup [%{i}/%{total}] Upgrade %{module}…","ModuleSetup [%{i}/%{total}] Upgrade %{module}…"
+"ModuleSetup [%{i}/%{total}] Upgrade %{module} 完成（%{ms}ms）","ModuleSetup [%{i}/%{total}] Upgrade %{module} 完成（%{ms}ms）"
 "模块 %{1} 升级失败：%{2}","模块 %{1} 升级失败：%{2}"
 "模块升级失败：%{1}。注意：前置 Schema 可能已应用，Setup 脚本仍待重跑（setup_version 未推进）。","模块升级失败：%{1}。注意：前置 Schema 可能已应用，Setup 脚本仍待重跑（setup_version 未推进）。"
+"模块安装/升级阶段完成：共 %{total} · 耗时 %{sec}s","模块安装/升级阶段完成：共 %{total} · 耗时 %{sec}s"
 "模块 %{1} 的 Install 类 %{2} 无法加载","模块 %{1} 的 Install 类 %{2} 无法加载"
 "模块 %{1} 的 %{2} 必须实现 %{3}","模块 %{1} 的 %{2} 必须实现 %{3}"
 "模块 %{1} 的 %{2} 缺少可调用的 setup(Data\Setup, Data\Context) 方法","模块 %{1} 的 %{2} 缺少可调用的 setup(Data\Setup, Data\Context) 方法"
 "模块 %{1} 的 Upgrade 类 %{2} 无法加载","模块 %{1} 的 Upgrade 类 %{2} 无法加载"
 "模块 %{1} 的 %{2} 必须实现 %{3}，并提供 setup()（不是 upgrade()）","模块 %{1} 的 %{2} 必须实现 %{3}，并提供 setup()（不是 upgrade()）"
+"- 阶段耗时：%{name} %{duration}（累计 %{elapsed}）","- 阶段耗时：%{name} %{duration}（累计 %{elapsed}）"
+"- 内存 [%{label}]：当前 %{cur}MB / 峰值 %{peak}MB","- 内存 [%{label}]：当前 %{cur}MB / 峰值 %{peak}MB"
+系统更新耗时概览,系统更新耗时概览
+状态：中断/失败（部分阶段）,状态：中断/失败（部分阶段）
+"总墙钟：%{wall} (%{ms} ms)","总墙钟：%{wall} (%{ms} ms)"
+"阶段 Top：","阶段 Top："
+其他,其他
+"内存峰值：%{peak} MB（real） / 当前 %{cur} MB","内存峰值：%{peak} MB（real） / 当前 %{cur} MB"
+"CPU：不可用（无 getrusage）","CPU：不可用（无 getrusage）"
+"CPU：用户 %{user}s + 系统 %{sys}s = %{total}s；平均占用 %{avg}%；观测峰值 %{peak}%","CPU：用户 %{user}s + 系统 %{sys}s = %{total}s；平均占用 %{avg}%；观测峰值 %{peak}%"
+operation：%{id},operation：%{id}
 模块不存在或者被删除！,模块不存在或者被删除！
 "DI 与框架编译完成：%{1} 个模块，%{2} 个 QueryProvider，%{3} 个延迟 Provider。","DI 与框架编译完成：%{1} 个模块，%{2} 个 QueryProvider，%{3} 个延迟 Provider。"
 "已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}","已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}"
@@ -959,8 +988,14 @@ dev=true,开发=真
 后台任务启动失败，改为同步执行...,后台任务启动失败，改为同步执行...
 "后台任务启动异常: %{1}，改为同步执行...","后台任务启动异常: %{1}，改为同步执行..."
 正在生成优化缓存...,正在生成优化缓存...
+"- optimize stamp 新鲜且本轮无模块源变更，跳过 classmap / framework:compile / reflection（可用 --force-optimize 强制）","- optimize stamp 新鲜且本轮无模块源变更，跳过 classmap / framework:compile / reflection（可用 --force-optimize 强制）"
+"- 已跳过类映射缓存（stamp）","- 已跳过类映射缓存（stamp）"
+"- 已跳过框架运行时编译（stamp）","- 已跳过框架运行时编译（stamp）"
+"- 已跳过反射/工厂编译（stamp）","- 已跳过反射/工厂编译（stamp）"
+"✓ 优化缓存生成完成（stamp 跳过）。","✓ 优化缓存生成完成（stamp 跳过）。"
 "- 已跳过类映射缓存（--skip-classmap）","- 已跳过类映射缓存（--skip-classmap）"
 "✓ 优化缓存生成完成。","✓ 优化缓存生成完成。"
+"- 路由磁盘产物缺失或为空，忽略 Controller 源指纹，强制全量重扫","- 路由磁盘产物缺失或为空，忽略 Controller 源指纹，强制全量重扫"
 "- classmap 无变化，跳过重新生成","- classmap 无变化，跳过重新生成"
 "- 类映射缓存已生成，共 %{1} 个类","- 类映射缓存已生成，共 %{1} 个类"
 "- 跳过 PSR-4 缓存生成：Composer autoload 未找到","- 跳过 PSR-4 缓存生成：Composer autoload 未找到"
@@ -999,6 +1034,7 @@ dev=true,开发=真
 "优先阶段过滤：%{1}（schema 三阶段全量路径仍必执行）","优先阶段过滤：%{1}（schema 三阶段全量路径仍必执行）"
 "--route：复用已安装数据库结构，不执行声明式 Schema 更新。","--route：复用已安装数据库结构，不执行声明式 Schema 更新。"
 委托部分更新已运行！,委托部分更新已运行！
+"- 路由源指纹命中（全跳=%{all}，变更模块 %{n}），保留磁盘路由文件供 seed/跳扫","- 路由源指纹命中（全跳=%{all}，变更模块 %{n}），保留磁盘路由文件供 seed/跳扫"
 "清理模块 %{1} 的缓存...","清理模块 %{1} 的缓存..."
 已清理：%{1},已清理：%{1}
 指定模块缓存清理完成,指定模块缓存清理完成
@@ -1021,15 +1057,20 @@ dev=true,开发=真
 "收集模块升级任务：%{1}（%{2} → %{3}）","收集模块升级任务：%{1}（%{2} → %{3}）"
 收集模块安装任务：%{1},收集模块安装任务：%{1}
 收集模块开发环境重跑安装脚本：%{1},收集模块开发环境重跑安装脚本：%{1}
-"- 批量收集数据库更新任务...","- 批量收集数据库更新任务..."
+"- 批量收集数据库更新任务（Fiber 按模块）...","- 批量收集数据库更新任务（Fiber 按模块）..."
+"- 数据库任务 Fiber 收集：%{total} 模块，并发 %{c}","- 数据库任务 Fiber 收集：%{total} 模块，并发 %{c}"
 "- 仅更新路由模式，跳过数据库更新任务收集","- 仅更新路由模式，跳过数据库更新任务收集"
+"- 路由 Controller 源指纹全员命中，跳过 route prepare/collect/commit","- 路由 Controller 源指纹全员命中，跳过 route prepare/collect/commit"
+"- 收集菜单（路由全跳仍需 menu.xml / 启停集合同步）...","- 收集菜单（路由全跳仍需 menu.xml / 启停集合同步）..."
+"菜单预收集失败（可能影响 ACL 断言）：%{1}","菜单预收集失败（可能影响 ACL 断言）：%{1}"
 "- 提前提交 Framework 数据库引导（供 SchemaDiff 使用）...","- 提前提交 Framework 数据库引导（供 SchemaDiff 使用）..."
 "- 提前提交 EavSchema...","- 提前提交 EavSchema..."
 "- 提前提交 SchemaDiff（确保表在路由收集前已创建）...","- 提前提交 SchemaDiff（确保表在路由收集前已创建）..."
 "- 收集菜单（先于路由，供 ACL 断言校验 parent_source）...","- 收集菜单（先于路由，供 ACL 断言校验 parent_source）..."
-"菜单预收集失败（可能影响 ACL 断言）：%{1}","菜单预收集失败（可能影响 ACL 断言）：%{1}"
-"- 批量收集路由注册任务...","- 批量收集路由注册任务..."
-"模块 %{1} 路由注册失败：%{2}","模块 %{1} 路由注册失败：%{2}"
+"- 批量收集路由注册任务（Fiber 协作）...","- 批量收集路由注册任务（Fiber 协作）..."
+"- 路由 Fiber 收集：%{total} 模块，并发 %{c}","- 路由 Fiber 收集：%{total} 模块，并发 %{c}"
+"- 路由扫描进度：[%{i}/%{total}] %{module}","- 路由扫描进度：[%{i}/%{total}] %{module}"
+模块路由注册失败：%{1},模块路由注册失败：%{1}
 "✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入","✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入"
 "路由收集后 ACL 同步失败：%{1}","路由收集后 ACL 同步失败：%{1}"
 "✓ 所有阶段准备完成","✓ 所有阶段准备完成"
@@ -1045,10 +1086,11 @@ dev=true,开发=真
 "- 提交 SchemaDiff 阶段（%{1}）（表结构先于 Install 种子数据）...","- 提交 SchemaDiff 阶段（%{1}）（表结构先于 Install 种子数据）..."
 "- SchemaDiff 阶段已在 pending registration 前提交，跳过重复执行","- SchemaDiff 阶段已在 pending registration 前提交，跳过重复执行"
 "- 执行模块文件迁移（MigrationService，位于 ModuleSetup 之前）...","- 执行模块文件迁移（MigrationService，位于 ModuleSetup 之前）..."
-"- 提交模块安装/升级阶段（%{1}）...","- 提交模块安装/升级阶段（%{1}）..."
+"- 模块文件迁移检查结束，进入 ModuleSetup…","- 模块文件迁移检查结束，进入 ModuleSetup…"
+"- 提交模块安装/升级阶段（%{1}），待执行任务 %{2} 个...","- 提交模块安装/升级阶段（%{1}），待执行任务 %{2} 个..."
 检测到模块安装/升级，重新收集后续任务...,检测到模块安装/升级，重新收集后续任务...
 "- 重新收集数据库更新任务...","- 重新收集数据库更新任务..."
-"- 重新收集路由注册任务...","- 重新收集路由注册任务..."
+"- 重新收集路由注册任务（Fiber 协作）...","- 重新收集路由注册任务（Fiber 协作）..."
 "- 为模块 %{1} 注册路由...","- 为模块 %{1} 注册路由..."
 "模块 %{1} 路由重新注册失败：%{2}，继续执行...","模块 %{1} 路由重新注册失败：%{2}，继续执行..."
 "- 重新验证更新的阶段...","- 重新验证更新的阶段..."
@@ -1057,6 +1099,7 @@ dev=true,开发=真
 "- 提交数据库更新阶段（%{1}）...","- 提交数据库更新阶段（%{1}）..."
 "- 跳过数据库更新阶段提交（databaseStage 未创建）","- 跳过数据库更新阶段提交（databaseStage 未创建）"
 "- 提交路由更新阶段（%{1}）...","- 提交路由更新阶段（%{1}）..."
+"- 路由更新阶段已提交","- 路由更新阶段已提交"
 "- 提交文件更新阶段（%{1}）...","- 提交文件更新阶段（%{1}）..."
 "✓ 所有阶段更新完成！","✓ 所有阶段更新完成！"
 阶段提交失败：%{1},阶段提交失败：%{1}
@@ -1091,6 +1134,8 @@ dev=true,开发=真
 兼容选项：保持同步执行优化（现在已是默认行为）,兼容选项：保持同步执行优化（现在已是默认行为）
 "DEV 下显式重跑全模块 Install.php（默认关闭）","DEV 下显式重跑全模块 Install.php（默认关闭）"
 "DEV only：同版本 Schema checkpoint 冲突时 supersede 旧记录并重绑；与 -f/--force（跳过环境检测）无关","DEV only：同版本 Schema checkpoint 冲突时 supersede 旧记录并重绑；与 -f/--force（跳过环境检测）无关"
+"强制重跑 classmap / reflection / framework:compile（忽略 optimize stamp）","强制重跑 classmap / reflection / framework:compile（忽略 optimize stamp）"
+"强制全量重解析 menu.xml 并写入 ACL 菜单（清除 menu:* 指纹；不跳过环境检测）","强制全量重解析 menu.xml 并写入 ACL 菜单（清除 menu:* 指纹；不跳过环境检测）"
 "跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新","跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新"
 "仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段","仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段"
 "仅运行 schema_diff 阶段（测试声明式表）","仅运行 schema_diff 阶段（测试声明式表）"
@@ -1099,6 +1144,9 @@ dev=true,开发=真
 "跳过 composer dump-autoload","跳过 composer dump-autoload"
 "跳过反射编译（加快 s:up）","跳过反射编译（加快 s:up）"
 跳过框架运行时编译,跳过框架运行时编译
+强制重跑收尾优化,强制重跑收尾优化
+强制重收集菜单,强制重收集菜单
+强制升级并重收集菜单,强制升级并重收集菜单
 显式在后台执行优化,显式在后台执行优化
 兼容旧脚本的同步参数,兼容旧脚本的同步参数
 "DEV 同版本 Schema 重绑","DEV 同版本 Schema 重绑"
@@ -1985,6 +2033,8 @@ Transport,运输
 "资源变更 resource 必须是数组","资源变更 resource 必须是数组"
 "资源变更 resource 字段类型无效","资源变更 resource 字段类型无效"
 资源变更资源身份无效,资源变更资源身份无效
+"资源变更 resource.code 无效","资源变更 resource.code 无效"
+"资源变更 resource.scope 必须是三点分 storage_scope","资源变更 resource.scope 必须是三点分 storage_scope"
 "资源变更 action 或 revision 无效","资源变更 action 或 revision 无效"
 "删除资源变更的 after 必须为 null","删除资源变更的 after 必须为 null"
 "资源变更 website 上下文无效","资源变更 website 上下文无效"
@@ -2021,8 +2071,9 @@ Transport,运输
 "Start Time",开始时间
 "End Time",结束时间
 Duration,期间
+"升级后观察者开始 [%{step}/%{total}] sort=%{sort} %{name} (%{class})","升级后观察者开始 [%{step}/%{total}] sort=%{sort} %{name} (%{class})"
+"升级后观察者完成 [%{step}/%{total}] sort=%{sort} %{name}，耗时 %{ms}ms","升级后观察者完成 [%{step}/%{total}] sort=%{sort} %{name}，耗时 %{ms}ms"
 事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）,事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）
-"收集模块观察者失败: %{1}","收集模块观察者失败: %{1}"
 跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）,跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）
 跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）,跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）
 跳过缺少属性的配置文件：%{1},跳过缺少属性的配置文件：%{1}
@@ -2140,7 +2191,8 @@ Duration,期间
 "- 缺少文档：%{count}","- 缺少文档：%{count}"
 缺少文档的事件列表：,缺少文档的事件列表：
 "✖ 写入事件注册表失败。","✖ 写入事件注册表失败。"
-"✖ 事件注册表重建失败：事件名冲突","✖ 事件注册表重建失败：事件名冲突"
+"✖ 事件注册表重建失败（已保留现有 generated/events.php）","✖ 事件注册表重建失败（已保留现有 generated/events.php）"
+"重建失败（已保留现有 generated/events.php）：%{1}","重建失败（已保留现有 generated/events.php）：%{1}"
 "Hook 未定义或未注册：%{1}。请在模块 hook.php 中定义规约。","Hook 未定义或未注册：%{1}。请在模块 hook.php 中定义规约。"
 source_id与parent_source不能相同！,source_id与parent_source不能相同！
 "Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。","Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。"
@@ -2366,19 +2418,31 @@ Operation：%{1}.%{2},操作：%{1}.%{2}
 "FPC 缺少已冻结的 Storefront 命名空间指纹","FPC 缺少已冻结的 Storefront 命名空间指纹"
 开始更新所有模块的路由...,开始更新所有模块的路由...
 开始更新指定模块的路由：%{1},开始更新指定模块的路由：%{1}
+"模块 %{1} 路由注册失败：%{2}","模块 %{1} 路由注册失败：%{2}"
 %{1}：分析路由...,%{1}：分析路由...
 %{1}：路由分析完成...,%{1}：路由分析完成...
 验证并提交路由更新...,验证并提交路由更新...
 路由更新验证失败：%{1},路由更新验证失败：%{1}
 "- 正在写入 ACL 与路由文件...","- 正在写入 ACL 与路由文件..."
 "✓ 路由文件写入完成！","✓ 路由文件写入完成！"
+"- 写入路由文件 [%{i}/%{total}]：%{file}（%{count} 条）…","- 写入路由文件 [%{i}/%{total}]：%{file}（%{count} 条）…"
+无法打开临时文件：%{1},无法打开临时文件：%{1}
+无法原子写入文件：%{1},无法原子写入文件：%{1}
 无法原子写入文件：%{1}：%{2},无法原子写入文件：%{1}：%{2}
+"- 路由快照 [%{i}/%{total}]：%{file}…","- 路由快照 [%{i}/%{total}]：%{file}…"
 "%{1}: 控制器方法 %{2} 不存在!","%{1}: 控制器方法 %{2} 不存在!"
 未找到任何路由文件。请先运行路由生成命令。,未找到任何路由文件。请先运行路由生成命令。
 "路由列表 (共 %{1} 条)","路由列表 (共 %{1} 条)"
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+"模块 %{1} Schema 收集失败：%{2}","模块 %{1} Schema 收集失败：%{2}"
+"- 批量收集数据库更新任务...","- 批量收集数据库更新任务..."
+"- 批量收集路由注册任务...","- 批量收集路由注册任务..."
+"- 重新收集路由注册任务...","- 重新收集路由注册任务..."
+"- 提交模块安装/升级阶段（%{1}）...","- 提交模块安装/升级阶段（%{1}）..."
+"收集模块观察者失败: %{1}","收集模块观察者失败: %{1}"
+"✖ 事件注册表重建失败：事件名冲突","✖ 事件注册表重建失败：事件名冲突"
 "- 正在写入路由文件...","- 正在写入路由文件..."
 有界面模式（默认会自动追加）,有界面模式（默认会自动追加）
 "无界面模式（设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（设置 PLAYWRIGHT_HEADLESS=1）"

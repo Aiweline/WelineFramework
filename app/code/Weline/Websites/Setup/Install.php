@@ -9,6 +9,7 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Websites\Service\DefaultWebsiteService;
+use Weline\Websites\Service\WebsiteBrandIdentitySeedService;
 
 class Install implements InstallInterface
 {
@@ -20,5 +21,8 @@ class Install implements InstallInterface
         /** @var DefaultWebsiteService $defaultWebsiteService */
         $defaultWebsiteService = ObjectManager::getInstance(DefaultWebsiteService::class);
         $defaultWebsiteService->ensureDefaultWebsite();
+        /** @var WebsiteBrandIdentitySeedService $brandIdentitySeed */
+        $brandIdentitySeed = ObjectManager::getInstance(WebsiteBrandIdentitySeedService::class);
+        $brandIdentitySeed->ensureDefaultWebsiteBrandIdentity();
     }
 }

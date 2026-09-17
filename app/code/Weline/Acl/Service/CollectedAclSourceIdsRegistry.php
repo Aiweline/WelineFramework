@@ -9,19 +9,28 @@ namespace Weline\Acl\Service;
  */
 class CollectedAclSourceIdsRegistry
 {
-    /** @var string[] */
+    /** @var array<string, true> */
     private static array $sourceIds = [];
 
     public static function add(string ...$sourceIds): void
     {
+        self::addMany($sourceIds);
+    }
+
+    /**
+     * @param list<string> $sourceIds
+     */
+    public static function addMany(array $sourceIds): void
+    {
         foreach ($sourceIds as $id) {
+            $id = \trim((string)$id);
             if ($id !== '') {
                 self::$sourceIds[$id] = true;
             }
         }
     }
 
-    /** @return string[] */
+    /** @return list<string> */
     public static function getAll(): array
     {
         return array_keys(self::$sourceIds);

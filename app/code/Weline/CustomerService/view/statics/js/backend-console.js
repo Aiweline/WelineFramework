@@ -70,6 +70,7 @@ const CustomerServiceConsole = (function() {
         pageSize: 50,
         autoSelectDone: false,
         unreadBySession: {},
+        sessionTitleById: {},
         titleAlertTimer: null,
         baseDocumentTitle: typeof document !== 'undefined' ? document.title : ''
     };
@@ -122,6 +123,7 @@ const CustomerServiceConsole = (function() {
 
         // 侧栏互斥须最先绑定：避免后续轮询/心跳异常时跳过
         initSessionGroupAccordion();
+        seedSessionTitlesFromDom();
         
         // 绑定事件
         bindEvents();
@@ -274,15 +276,16 @@ const CustomerServiceConsole = (function() {
         const myItems = sortSessionsByPriority(Array.isArray(sessions) ? sessions : []);
 
         detectIncomingSessionAlerts(myItems.concat(transferredItems));
+        rememberSessionTitles(myItems.concat(transferredItems, waitingItems));
 
         // 更新等待分配的会话
         const waitingList = document.getElementById('waiting-sessions-list');
         if (waitingList) {
             if (waitingItems.length > 0) {
                 waitingList.innerHTML = waitingItems.map(session => `
-                    <div class="session-item waiting" data-session-id="${sessionRowId(session)}">
+                    <div class="session-item waiting" data-session-id="${sessionRowId(session)}" data-list-title="${escapeHtml(sessionListTitle(session))}">
                         <div class="session-header">
-                            <span class="session-id">#${sessionRowId(session)}</span>
+                            <span class="session-id">${escapeHtml(sessionListTitle(session))}</span>
                             <span class="w-badge session-status badge-waiting" data-tone="warning" data-size="sm">${__('等待中')}</span>
                         </div>
                         <div class="session-preview">
@@ -510,6 +513,7 @@ const CustomerServiceConsole = (function() {
 
     function renderOwnedSessionItem(session, transferred) {
         const sessionId = sessionRowId(session);
+        const listTitle = sessionListTitle(session);
         const transferBadge = transferred
             ? `<span class="w-badge session-transfer-badge" data-tone="info" data-size="sm" title="${escapeHtml(session.transfer_badge_title || __('转让会话'))}">${__('转让')}</span>`
             : '';
@@ -526,9 +530,10 @@ const CustomerServiceConsole = (function() {
         return `
             <div class="session-item ${transferred ? 'transferred' : ''} ${session.unread_count > 0 ? 'unread' : ''} ${sessionId === state.currentSessionId ? 'active' : ''}"
                  data-session-id="${sessionId}"
-                 data-load-session-id="${sessionId}">
+                 data-load-session-id="${sessionId}"
+                 data-list-title="${escapeHtml(listTitle)}">
                 <div class="session-header">
-                    <span class="session-id">#${sessionId}</span>
+                    <span class="session-id">${escapeHtml(listTitle)}</span>
                     <span class="session-header-meta">
                         ${transferBadge}
                         ${session.unread_count > 0 ? `<span class="unread-badge">${session.unread_count}</span>` : ''}
@@ -719,6 +724,7 @@ const CustomerServiceConsole = (function() {
         const container = document.getElementById('chat-container');
         const loading = !!options.loading;
         const hasMore = options.hasMore === true || (Array.isArray(messages) && messages.length >= state.pageSize);
+        const headerTitle = resolveSessionTitle(sessionId, options.listTitle);
         
         let bodyHtml;
         if (loading) {
@@ -732,7 +738,7 @@ const CustomerServiceConsole = (function() {
         container.innerHTML = `
             <div class="chat-header">
                 <div class="chat-header-info">
-                    <h3>${__('会话')} #${sessionId}</h3>
+                    <h3>${escapeHtml(headerTitle)}</h3>
                 </div>
                 <div class="chat-header-actions">
                     <button type="button" class="w-button btn-close-session" data-tone="danger" data-variant="outline" data-size="sm" data-close-session-id="${sessionId}">
@@ -1702,6 +1708,74 @@ const CustomerServiceConsole = (function() {
             return 0;
         }
         return normalizePositiveInt(session.session_id || session.id);
+    }
+
+    function sessionListTitle(session) {
+        if (!session || typeof session !== 'object') {
+            return '#0';
+        }
+        const listTitle = String(session.list_title || '').trim();
+        if (listTitle !== '') {
+            return listTitle;
+        }
+        const kind = String(session.customer_kind || '');
+        const name = String(session.customer_display_name || '').trim();
+        const sessionId = sessionRowId(session);
+        if (kind === 'customer' && name !== '') {
+            return name;
+        }
+        return '#' + sessionId;
+    }
+
+    function rememberSessionTitles(sessions) {
+        (Array.isArray(sessions) ? sessions : []).forEach(function (session) {
+            const sessionId = sessionRowId(session);
+            if (sessionId <= 0) {
+                return;
+            }
+            state.sessionTitleById[sessionId] = sessionListTitle(session);
+        });
+    }
+
+    function seedSessionTitlesFromDom() {
+        document.querySelectorAll('.session-item[data-session-id]').forEach(function (item) {
+            const sessionId = normalizePositiveInt(item.getAttribute('data-session-id'));
+            if (sessionId <= 0) {
+                return;
+            }
+            const fromAttr = String(item.getAttribute('data-list-title') || '').trim();
+            if (fromAttr !== '') {
+                state.sessionTitleById[sessionId] = fromAttr;
+                return;
+            }
+            const label = item.querySelector('.session-id');
+            if (label && String(label.textContent || '').trim() !== '') {
+                state.sessionTitleById[sessionId] = String(label.textContent).trim();
+            }
+        });
+    }
+
+    function resolveSessionTitle(sessionId, fallbackTitle) {
+        sessionId = normalizePositiveInt(sessionId);
+        const fromOption = String(fallbackTitle || '').trim();
+        if (fromOption !== '') {
+            return fromOption;
+        }
+        if (sessionId > 0 && state.sessionTitleById[sessionId]) {
+            return String(state.sessionTitleById[sessionId]);
+        }
+        const item = document.querySelector('.session-item[data-session-id="' + sessionId + '"]');
+        if (item) {
+            const fromAttr = String(item.getAttribute('data-list-title') || '').trim();
+            if (fromAttr !== '') {
+                return fromAttr;
+            }
+            const label = item.querySelector('.session-id');
+            if (label && String(label.textContent || '').trim() !== '') {
+                return String(label.textContent).trim();
+            }
+        }
+        return sessionId > 0 ? ('#' + sessionId) : '#0';
     }
     
     /**

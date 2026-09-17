@@ -103,9 +103,13 @@ Theme 等渲染层需要当前后台页面标题和面包屑时，使用
 
 - 后台菜单唯一来源是各模块 `etc/backend/menu.xml`。数据库里的菜单 ACL 是收集结果，不是手工维护源。
 - 菜单收集由 `Observer/UpgradeMenu.php` 和 `Service/MenuCollector.php` 驱动；系统升级后会全量收集。不要手改 `weline_acl(type=menus)` 来“修菜单”。
+- `MenuCollector` 采用 scoped diff：指纹跳过的模块不进入删除范围；legacy `menu` 表同步与 ACL 使用同一模块过滤器。源指纹在 ACL/legacy 落库成功后才提交。
+- 跳过解析需 **源指纹 + 产物指纹**（`menu:dest:{module}`）同时命中；仅源命中而 ACL 漂移会强制重收集。
+- 菜单 `source` 搬家时，收集器会按同模块 **route**（无 route 则用 **title**）自动一对一推断并迁移授权/ACL；一般不用改 XML。仅歧义时再写 `renamed_from` 或 `SourceIdRenameMap`。
 - `MenuCollector` 会校验 `parent_source` 链路是否真实存在。父级断层会直接抛异常中断收集，而不是默默忽略。
 - 后台控制器访问控制靠 `#[Acl]`。新增后台页时，菜单、控制器类/动作 Acl、模板入口要一起看，不要只补其中一半。
 - 后台页面里的业务请求同样走 `Weline.Api.*`；不能因为是后台页面就退回原生 Ajax。
+- `Weline.Api` 禁止直打会 302 的 HTML 表单 URL（如 `websites/admin/website/edit|add`）；此类保存应走 OffCanvas iframe `requestSubmit` 或 `adminRequest`。Api 传输对同 URL 有飞行闸门与 redirect 冷却，3xx 稳定码为 `http_redirect`。
 - `view/templates` 是源模板，`view/tpl` 是编译/生成产物；修页面时只能改源模板。
 - `模块::key` 校验提示使用 `Vendor_Module::header` 作为占位示例；示例模块名不构成运行时依赖，也不能伪装成已安装的 `Weline_*` 模块。
 - 模块开放了通知渠道适配器、主题局部 hook、通知 topic/provider 等扩展点。遇到扩展需求，优先挂在这些稳定入口，不要直接改核心模板。

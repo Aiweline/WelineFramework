@@ -14,8 +14,8 @@
  * @widget.page_layouts {["*"]}
  * @widget.exclusive {true}
  *
- * @param logo_text {default="Weline Store",type="string",label="Logo文字"}
- * @param logo_image {default="",type="image",label="Logo图片",description="Logo图片URL，留空显示文字"}
+ * @param logo_text {default="",type="string",label="Logo文字",description="留空则使用当前网站名称"}
+ * @param logo_image {default="",type="media_image",label="Logo图片",description="从媒体库选择 Logo，留空显示文字",i18n=false}
  * @param sticky {default=true,type="bool",label="吸顶效果"}
  * @param bg_color {default="var(--weline-theme-surface)",type="color",label="背景颜色"}
  * @param text_color {default="var(--weline-theme-text)",type="color",label="文字颜色"}
@@ -30,6 +30,8 @@
  * @param shadow {default=true,type="bool",label="显示阴影"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteBrand;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -39,7 +41,18 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 
 $config = $config ?? [];
 $isPreviewMode = (bool)($config['preview_mode'] ?? false);
-$logoText = $config['logo_text'] ?? 'Weline Store';
+$configuredLogoText = trim((string)($config['logo_text'] ?? ''));
+$logoText = $configuredLogoText;
+try {
+    $siteBrand = ObjectManager::getInstance(SiteBrand::class);
+    if ($siteBrand instanceof SiteBrand) {
+        $logoText = $siteBrand->resolveFrontendSiteName($configuredLogoText);
+    }
+} catch (\Throwable) {
+}
+if ($logoText === '') {
+    $logoText = 'Store';
+}
 $logoImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($config['logo_image'] ?? '');
 $logoImageFileHtml = (string)($config['logo_image_file_html'] ?? '');
 $sticky = (bool)($config['sticky'] ?? true);
@@ -72,7 +85,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
     <div class="header-topbar">
         <div class="w-container">
             <div class="topbar-left">
-                <span class="topbar-text"><?= __('东方衣冠，全球配送') ?></span>
+                <span class="topbar-text"><?= __('全球配送，售后无忧') ?></span>
             </div>
             <div class="topbar-right">
                 <a href="@url{'faq'}" class="topbar-link"><?= __('帮助中心') ?></a>
@@ -160,12 +173,12 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                     <div class="nav-dropdown">
                         <div class="dropdown-inner">
                             <div class="dropdown-column">
-                                <h4 class="dropdown-title"><?= __('热门形制') ?></h4>
+                                <h4 class="dropdown-title"><?= __('热门分类') ?></h4>
                                 <ul class="dropdown-list">
-                                    <li><a href="@url{'search'|['q' => '明制汉服']}"><?= __('明制汉服') ?></a></li>
-                                    <li><a href="@url{'search'|['q' => '宋制汉服']}"><?= __('宋制汉服') ?></a></li>
-                                    <li><a href="@url{'search'|['q' => '唐制汉服']}"><?= __('唐制汉服') ?></a></li>
-                                    <li><a href="@url{'search'|['q' => '汉服配饰']}"><?= __('汉服配饰') ?></a></li>
+                                    <li><a href="@url{'products'}"><?= __('全部商品') ?></a></li>
+                                    <li><a href="@url{'categories'}"><?= __('商品分类') ?></a></li>
+                                    <li><a href="@url{'new-arrivals'}"><?= __('新品上市') ?></a></li>
+                                    <li><a href="@url{'best-sellers'}"><?= __('热卖精选') ?></a></li>
                                 </ul>
                             </div>
                             <div class="dropdown-column">
@@ -173,7 +186,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                                 <ul class="dropdown-list">
                                     <li><a href="@url{'products'|['filter' => 'new']}"><?= __('新品上市') ?></a></li>
                                     <li><a href="@url{'promotion/deals'}"><?= __('限时特惠') ?></a></li>
-                                    <li><a href="@url{'blog'}"><?= __('汉服文化') ?></a></li>
+                                    <li><a href="@url{'blog'}"><?= __('博客') ?></a></li>
                                 </ul>
                             </div>
                         </div>

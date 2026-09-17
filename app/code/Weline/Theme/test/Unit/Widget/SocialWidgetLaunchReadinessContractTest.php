@@ -38,13 +38,13 @@ final class SocialWidgetLaunchReadinessContractTest extends TestCase
     public function testConfiguredHttpsSocialLinkStillRenders(): void
     {
         $customLinks = json_encode([
-            ['platform' => 'instagram', 'url' => 'https://www.instagram.com/yunshang.hanfu'],
+            ['platform' => 'instagram', 'url' => 'https://www.instagram.com/changan.hanfu'],
         ], JSON_THROW_ON_ERROR);
 
         foreach (self::WIDGETS as $widget) {
             $html = $this->render($widget, ['custom_links' => $customLinks]);
             self::assertStringContainsString(
-                'href="https://www.instagram.com/yunshang.hanfu"',
+                'href="https://www.instagram.com/changan.hanfu"',
                 $html,
                 $widget,
             );

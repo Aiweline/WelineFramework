@@ -14,12 +14,12 @@ final class GreenfieldLegacyLayoutIdApiContractTest extends TestCase
     public function testLegacyNumericLayoutIdApisAreFailClosedStubs(): void
     {
         $servicePath = dirname(__DIR__, 2) . '/Service/ThemeLayoutService.php';
-        $editorJs = dirname(__DIR__, 2) . '/view/statics/js/theme-editor.js';
+        $legacyJs = dirname(__DIR__, 2) . '/view/statics/js/theme-editor.js';
         $uiJs = dirname(__DIR__, 2) . '/view/statics/ui/pages/weline-theme-editor.js';
         $editorPhp = dirname(__DIR__, 2) . '/Controller/Backend/ThemeEditor.php';
 
         $service = (string)file_get_contents($servicePath);
-        $js = (string)file_get_contents($editorJs);
+        $legacy = (string)file_get_contents($legacyJs);
         $ui = (string)file_get_contents($uiJs);
         $editor = (string)file_get_contents($editorPhp);
 
@@ -48,31 +48,25 @@ final class GreenfieldLegacyLayoutIdApiContractTest extends TestCase
             '/function getWidgetByLayoutId\(int \$layoutId\): \?array\s*\{[^}]*->load\(/s',
             $service
         );
+        self::assertStringContainsString('layout_id_api_removed', $service);
+        self::assertStringContainsString("throw new \\InvalidArgumentException('layout_id_api_removed')", $service);
 
-        self::assertStringContainsString(
-            'Only send positive layout_id for pre-drop numeric rows',
-            $js
-        );
-        self::assertStringContainsString(
-            'Only send positive layout_id for pre-drop numeric rows',
-            $ui
-        );
-        self::assertStringContainsString(
-            'do not put hex node_uid into layout_id',
-            $js
-        );
-        self::assertStringContainsString(
-            'do not put hex node_uid into layout_id',
-            $ui
-        );
-        self::assertStringContainsString(
-            'layout_id: validNodeUid(layoutId) ? 0 : layoutId',
-            $js
-        );
-        self::assertStringContainsString(
-            'layout_id: validNodeUid(layoutId) ? 0 : layoutId',
-            $ui
-        );
+        // Authority source + compiled UI bundle must keep the same layout_id guards.
+        foreach ([$legacy, $ui] as $js) {
+            self::assertStringContainsString(
+                'Only send positive layout_id for pre-drop numeric rows',
+                $js
+            );
+            self::assertStringContainsString(
+                'do not put hex node_uid into layout_id',
+                $js
+            );
+            self::assertStringContainsString(
+                'layout_id: validNodeUid(layoutId) ? 0 : layoutId',
+                $js
+            );
+        }
+
         self::assertStringContainsString(
             'numeric layout_id path is dead after DROP',
             $editor

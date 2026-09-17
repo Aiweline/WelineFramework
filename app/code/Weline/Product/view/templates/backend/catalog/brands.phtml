@@ -72,6 +72,28 @@ $displayableImageUrl = static function (string $url): string {
     return str_starts_with($url, '/') ? $url : '';
 };
 $logoDisplayUrl = $displayableImageUrl($logoUrl);
+$websiteOptionsForScope = json_decode((string)($websiteOptionsJson ?? '[]'), true);
+if (!is_array($websiteOptionsForScope)) {
+    $websiteOptionsForScope = [];
+}
+$brandMediaIdentityScope = 'default.default.default';
+foreach ($websiteOptionsForScope as $websiteOpt) {
+    if (!is_array($websiteOpt)) {
+        continue;
+    }
+    if ((int)($websiteOpt['website_id'] ?? -1) !== (int)$website_id) {
+        continue;
+    }
+    $websiteCode = trim((string)($websiteOpt['code'] ?? ''));
+    if ($websiteCode !== '' && !str_contains($websiteCode, '.') && !str_contains($websiteCode, ':')) {
+        $brandMediaIdentityScope = strtolower($websiteCode) . '.default.default';
+    }
+    break;
+}
+$brandMediaIdentityCode = trim((string)($editing['code'] ?? ''));
+if ($brandMediaIdentityCode === '' || str_contains($brandMediaIdentityCode, ':')) {
+    $brandMediaIdentityCode = $editingId > 0 ? ('brand-' . $editingId) : 'draft';
+}
 foreach ($rows as $row) {
     if (!is_array($row)) {
         continue;
@@ -106,7 +128,14 @@ foreach ($rows as $row) {
 ?>
 <link rel="stylesheet" href="@static(Weline_Product::css/backend/catalog-entity-media.css)?v=20260901-entity-media">
 <div class="w-stack" data-gap="md" data-product-admin="brands" data-testid="product-brand-admin"
-     data-product-entity-media-root>
+     data-product-entity-media-root
+     data-media-identity-root="product_brand"
+     data-media-identity-code="<?= $escape($brandMediaIdentityCode) ?>"
+     data-media-identity-scope="<?= $escape($brandMediaIdentityScope) ?>"
+     data-media-identity-kind="logo"
+     data-media-identity-field="logo"
+     data-media-ref-mode="single"
+     data-media-code-input="#product-brand-code">
     <template>Weline_Component::message.phtml</template>
 
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
@@ -319,11 +348,13 @@ foreach ($rows as $row) {
             <iframe class="w-product-media-picker__frame"
                     title="@lang(媒体库)"
                     data-product-entity-media-frame
-                    data-src="@backend-url('media/backend/manager/iframe')?target=product-brand-logo&multi=0&usage=1&ext=jpg,png,gif,webp"></iframe>
+                    data-src="@backend-url('media/backend/manager/iframe')?target=product-brand-logo&multi=0&usage=1&ext=jpg,png,gif,webp&identity_root=product_brand&identity_kind=logo&identity_field=logo&ref_mode=single"></iframe>
         </div>
     </dialog>
 </div>
-<script src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260901-entity-media"></script>
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
+<script src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260916-media-identity"></script>
 <script>
 (function () {
     'use strict';

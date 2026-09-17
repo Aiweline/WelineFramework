@@ -48,7 +48,13 @@ final class SiteBlockConfig
         if (str_starts_with($value, 'tel:')) {
             return preg_match('/^tel:\+?[0-9 ()-]+$/D', $value) === 1 ? $value : '';
         }
-        return LegacyMediaUrl::sanitize($value);
+        $sanitized = LegacyMediaUrl::sanitize($value);
+        if ($sanitized === '') {
+            return '';
+        }
+
+        // Path-relative stays for <base href="@url{'/'}">; /path and same-origin absolutes get lang/currency.
+        return StorefrontHref::localize($sanitized);
     }
 
     /** Override per-use alt text on trusted, hydrated FileAsset HTML; keep its sources and attributes. */

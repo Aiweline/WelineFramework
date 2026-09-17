@@ -4,6 +4,17 @@
     var guestTokenStorageKey = 'weline.cart.guest_token';
     var openClass = 'is-drawer-open';
     var cartRefreshTimer = null;
+    // Ignore backdrop closes briefly after line mutate — DOM refresh / busy pointer-events
+    // can retarget the same gesture onto the full-screen overlay and collapse the drawer.
+    var suppressBackdropCloseUntil = 0;
+
+    function noteDrawerLineInteraction() {
+        suppressBackdropCloseUntil = Date.now() + 700;
+    }
+
+    function shouldSuppressBackdropClose(root) {
+        return isDrawerBusy(root) || Date.now() < suppressBackdropCloseUntil;
+    }
 
     function drawerBusyCount(root) {
         return Math.max(0, Number(root.getAttribute('data-mini-cart-busy-count') || 0));
@@ -867,7 +878,10 @@
                 btn.className = 'mini-cart-drawer__btn mini-cart-drawer__btn--secondary';
                 btn.setAttribute('data-mini-cart-sibling', type);
                 btn.setAttribute('data-mini-cart-sibling-switch', type);
-                btn.textContent = '浏览' + label + ' ' + count + '件商品';
+                var siblingTpl = attr(root, 'data-i18n-sibling-browse', '浏览%1 %2件商品');
+                btn.textContent = String(siblingTpl)
+                    .replace(/%\{1\}|%1/g, label)
+                    .replace(/%\{2\}|%2/g, String(count));
                 btn.addEventListener('click', function (event) {
                     if (event && typeof event.preventDefault === 'function') {
                         event.preventDefault();
@@ -1121,6 +1135,10 @@
 
         if (els.overlay) {
             els.overlay.addEventListener('click', function () {
+                // Line remove/qty can retarget onto the backdrop; keep drawer open and refresh.
+                if (shouldSuppressBackdropClose(root)) {
+                    return;
+                }
                 setDrawerOpen(root, false);
             });
         }
@@ -1286,6 +1304,8 @@
         if (!canMutate(root) || !itemId || !line || isDrawerBusy(root)) {
             return;
         }
+        var keepDrawerOpen = isDrawerOpen(root) && !isCheckoutPath();
+        noteDrawerLineInteraction();
         return runWithDrawerBusy(root, async function () {
             var api = await waitForCartApi();
             var token = guestToken();
@@ -1322,6 +1342,12 @@
             // and the two surfaces do not appear out of sync.
             if (isCheckoutPath()) {
                 setDrawerOpen(root, false);
+                return;
+            }
+            // Storefront: remove/qty must refresh in place — never collapse the drawer.
+            noteDrawerLineInteraction();
+            if (keepDrawerOpen && !isDrawerOpen(root)) {
+                setDrawerOpen(root, true);
             }
         });
     }
@@ -1555,11 +1581,15 @@
 
             if (target.closest('[data-remove-item]')) {
                 event.preventDefault();
+                event.stopPropagation();
+                noteDrawerLineInteraction();
                 mutateLine(root, line, itemId, 0, true);
                 return;
             }
             if (target.closest('[data-qty-decrease]')) {
                 event.preventDefault();
+                event.stopPropagation();
+                noteDrawerLineInteraction();
                 var nextQty = Math.max(1, currentQty - 1);
                 if (nextQty === currentQty) {
                     return;
@@ -1569,6 +1599,8 @@
             }
             if (target.closest('[data-qty-increase]')) {
                 event.preventDefault();
+                event.stopPropagation();
+                noteDrawerLineInteraction();
                 mutateLine(root, line, itemId, Math.min(999, currentQty + 1), false);
             }
         });
@@ -1821,7 +1853,7 @@
         } catch (err) {
             assetVersion = '';
         }
-        var cssStamp = '20260908-theme-minicart-generic';
+        var cssStamp = '20260915-minicart-remove-keep-open';
         var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
         if (assetVersion) {
             href += '&_weline_dev=' + encodeURIComponent(assetVersion);

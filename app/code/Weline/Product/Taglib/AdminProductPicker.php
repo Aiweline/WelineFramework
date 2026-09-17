@@ -100,6 +100,11 @@ final class AdminProductPicker implements TaglibInterface
         };
     }
 
+    private const ASSET_BUST = '20260916-product-picker-float5';
+
+
+
+
     /** @param array<string, mixed> $attributes */
     private static function buildCompileMarkup(array $attributes): string
     {
@@ -107,17 +112,14 @@ final class AdminProductPicker implements TaglibInterface
         $class = htmlspecialchars(trim('w-product-admin-picker ' . (string)($attributes['class'] ?? '')), ENT_QUOTES, 'UTF-8');
         $labelsJson = htmlspecialchars(json_encode(self::labels(), JSON_UNESCAPED_UNICODE) ?: '{}', ENT_QUOTES, 'UTF-8');
         $cssUrl = htmlspecialchars(
-            self::resolveModuleStaticUrl('Weline_Product::css/backend/product-admin-picker.css') . '?v=20260828-product-picker3',
+            self::resolveModuleStaticUrl('Weline_Product::css/backend/product-admin-picker.css') . '?v=' . self::ASSET_BUST,
             ENT_QUOTES,
         );
         $jsUrl = htmlspecialchars(
-            self::resolveModuleStaticUrl('Weline_Product::js/backend/product-admin-picker.js') . '?v=20260828-product-picker3',
+            self::resolveModuleStaticUrl('Weline_Product::js/backend/product-admin-picker.js') . '?v=' . self::ASSET_BUST,
             ENT_QUOTES,
         );
-        $help = htmlspecialchars((string)\__('通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。'), ENT_QUOTES, 'UTF-8');
-        $searchLabel = htmlspecialchars((string)\__('搜索商品'), ENT_QUOTES, 'UTF-8');
-        $placeholder = htmlspecialchars((string)\__('名称或 SKU'), ENT_QUOTES, 'UTF-8');
-        $searchButton = htmlspecialchars((string)\__('搜索'), ENT_QUOTES, 'UTF-8');
+        $inner = self::buildPickerInnerHtml($id);
 
         return <<<HTML
 <link rel="stylesheet" href="{$cssUrl}" data-no-extract="true">
@@ -134,18 +136,7 @@ final class AdminProductPicker implements TaglibInterface
      data-search-url="<?= htmlspecialchars(trim((string)(\$Taglib__search_url ?? '')), ENT_QUOTES, 'UTF-8') ?>"
      data-cross-website="<?= (!empty(\$Taglib__cross_website) || trim((string)(\$Taglib__search_url ?? '')) !== '') ? '1' : '0' ?>"
      data-labels="{$labelsJson}">
-    <p class="w-product-admin-picker__help">{$help}</p>
-    <div class="w-grid" style="--w-gap:var(--weline-space-3);">
-        <div style="--w-span-md:8;">
-            <label class="w-field__label" for="{$id}-keyword">{$searchLabel}</label>
-            <div class="w-cluster">
-                <input id="{$id}-keyword" class="w-input" type="search" maxlength="120" placeholder="{$placeholder}" data-product-admin-picker-keyword>
-                <button class="w-button" type="button" data-tone="neutral" data-product-admin-picker-search>{$searchButton}</button>
-            </div>
-        </div>
-    </div>
-    <div class="w-product-admin-picker__results" data-product-admin-picker-results aria-live="polite"></div>
-    <div class="w-product-admin-picker__selected" data-product-admin-picker-selected></div>
+{$inner}
 </div>
 HTML;
     }
@@ -168,17 +159,14 @@ HTML;
         $crossWebsite = self::isTruthy($attributes['cross-website'] ?? false) || $searchUrl !== '';
         $labelsJson = $escape(json_encode(self::labels(), JSON_UNESCAPED_UNICODE) ?: '{}');
         $cssUrl = $escape(
-            self::resolveModuleStaticUrl('Weline_Product::css/backend/product-admin-picker.css') . '?v=20260828-product-picker3',
+            self::resolveModuleStaticUrl('Weline_Product::css/backend/product-admin-picker.css') . '?v=' . self::ASSET_BUST,
         );
         $jsUrl = $escape(
-            self::resolveModuleStaticUrl('Weline_Product::js/backend/product-admin-picker.js') . '?v=20260828-product-picker3',
+            self::resolveModuleStaticUrl('Weline_Product::js/backend/product-admin-picker.js') . '?v=' . self::ASSET_BUST,
         );
-        $help = $escape((string)\__('通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。'));
-        $searchLabel = $escape((string)\__('搜索商品'));
-        $placeholder = $escape((string)\__('名称或 SKU'));
-        $searchButton = $escape((string)\__('搜索'));
         $idEsc = $escape($id);
         $classEsc = $escape($class);
+        $inner = self::buildPickerInnerHtml($idEsc);
 
         return <<<HTML
 <link rel="stylesheet" href="{$cssUrl}" data-no-extract="true">
@@ -195,19 +183,56 @@ HTML;
      data-search-url="{$escape($searchUrl)}"
      data-cross-website="{$escape($crossWebsite ? '1' : '0')}"
      data-labels="{$labelsJson}">
+{$inner}
+</div>
+HTML;
+    }
+
+    private static function buildPickerInnerHtml(string $idEsc): string
+    {
+        $help = htmlspecialchars((string)\__('通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。'), ENT_QUOTES, 'UTF-8');
+        $open = htmlspecialchars((string)\__('选择商品'), ENT_QUOTES, 'UTF-8');
+        $title = htmlspecialchars((string)\__('选择商品'), ENT_QUOTES, 'UTF-8');
+        $close = htmlspecialchars((string)\__('关闭'), ENT_QUOTES, 'UTF-8');
+        $done = htmlspecialchars((string)\__('完成'), ENT_QUOTES, 'UTF-8');
+        $searchLabel = htmlspecialchars((string)\__('搜索商品'), ENT_QUOTES, 'UTF-8');
+        $placeholder = htmlspecialchars((string)\__('名称或 SKU'), ENT_QUOTES, 'UTF-8');
+        $searchButton = htmlspecialchars((string)\__('搜索'), ENT_QUOTES, 'UTF-8');
+        $defaultHint = htmlspecialchars((string)\__('打开后默认展示已发布商品，可输入关键词缩小范围。'), ENT_QUOTES, 'UTF-8');
+
+        return <<<HTML
     <p class="w-product-admin-picker__help">{$help}</p>
-    <div class="w-grid" style="--w-gap:var(--weline-space-3);">
-        <div style="--w-span-md:8;">
-            <label class="w-field__label" for="{$idEsc}-keyword">{$searchLabel}</label>
-            <div class="w-cluster">
-                <input id="{$idEsc}-keyword" class="w-input" type="search" maxlength="120" placeholder="{$placeholder}" data-product-admin-picker-keyword>
-                <button class="w-button" type="button" data-tone="neutral" data-product-admin-picker-search>{$searchButton}</button>
+    <div class="w-product-admin-picker__shell w-cluster" data-align="center" data-justify="start">
+        <button type="button" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" data-product-admin-picker-open>{$open}</button>
+    </div>
+    <div class="w-product-admin-picker__selected" data-product-admin-picker-selected></div>
+    <dialog class="w-dialog w-product-admin-picker__dialog" data-product-admin-picker-dialog
+            aria-labelledby="{$idEsc}-dialog-title" data-w-component="dialog" data-state="closed"
+            data-size="lg" data-w-closable="true" data-w-backdrop="dismissible">
+        <header class="w-dialog__header">
+            <h2 class="w-dialog__title" id="{$idEsc}-dialog-title">{$title}</h2>
+            <button type="button" class="w-button" data-w-action="dialog.close" data-w-close
+                    data-tone="quiet" data-size="sm" aria-label="{$close}">{$close}</button>
+        </header>
+        <div class="w-dialog__body w-product-admin-picker__dialog-body">
+            <div class="w-stack" data-gap="md">
+                <div>
+                    <label class="w-field__label" for="{$idEsc}-keyword">{$searchLabel}</label>
+                    <div class="w-cluster">
+                        <input id="{$idEsc}-keyword" class="w-input" type="search" maxlength="120" placeholder="{$placeholder}" data-product-admin-picker-keyword>
+                        <button class="w-button" type="button" data-tone="neutral" data-product-admin-picker-search>{$searchButton}</button>
+                    </div>
+                    <p class="w-product-admin-picker__hint w-text" data-tone="muted">{$defaultHint}</p>
+                </div>
+                <div class="w-product-admin-picker__results" data-product-admin-picker-results aria-live="polite">
+                    <p class="w-text" data-tone="muted">{$defaultHint}</p>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="w-product-admin-picker__results" data-product-admin-picker-results aria-live="polite"></div>
-    <div class="w-product-admin-picker__selected" data-product-admin-picker-selected></div>
-</div>
+        <footer class="w-dialog__footer">
+            <button type="button" class="w-button" data-tone="primary" data-product-admin-picker-done>{$done}</button>
+        </footer>
+    </dialog>
 HTML;
     }
 
@@ -218,11 +243,17 @@ HTML;
             'search' => (string)\__('搜索'),
             'remove' => (string)\__('移除'),
             'add' => (string)\__('添加'),
+            'open' => (string)\__('选择商品'),
+            'done' => (string)\__('完成'),
+            'dialogTitle' => (string)\__('选择商品'),
+            'loading' => (string)\__('正在加载已发布商品…'),
             'empty' => (string)\__('当前范围暂无可选商品，请检查 website / 店铺范围或商品发布状态。'),
             'selectedTitle' => (string)\__('已选商品'),
             'name' => (string)\__('名称'),
             'scopeRequired' => (string)\__('选品前请先选择 Website（0 为默认网站，可正常选品）。'),
             'website' => (string)\__('网站'),
+            'image' => (string)\__('图'),
+            'price' => (string)\__('价格'),
         ];
     }
 

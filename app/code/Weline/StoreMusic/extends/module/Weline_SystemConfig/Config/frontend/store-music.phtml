@@ -1,7 +1,7 @@
 <?php
 /**
  * @meta.title {default="进店音乐",description="店铺进店 BGM、延迟自动播放与波形氛围（支持 Global / Website / Store）"}
- * @meta.description {default="配置进店曲目与播放行为。音频建议在「进店音乐」业务配置页用媒体库选择（mp3/wav/ogg/m4a/aac/flac/opus 等，最大约 20MB）；统一配置中心也可编辑开关与数值字段。"}
+ * @meta.description {default="Hook 兜底与迁移回退：优先在主题编辑器选中「进店音乐」部件，于「部件配置」中编辑曲目与播放行为。此处仍可维护系统级歌单；部件曲目为空时店面回退读取本配置。"}
  * @meta.icon {default="music"}
  * @meta.sort {default=58}
  * @config.acl {Weline_StoreMusic::config}
@@ -71,16 +71,25 @@
     <w:config:field
         key="store_music/music/default_volume"
         label="默认音量"
-        description="0–100。进店氛围建议保持轻微（约 8–15）。"
+        description="0–100。进店氛围请保持轻声（建议 6–10，默认 8）。"
         type="number"
         value-type="int"
-        default="12"
+        default="8"
         scope="global,website,store"
         validation="min:0|max:100"
     />
 </w:config:group>
 
-<w:config:group code="store_music_visual" label="视觉氛围" description="全页音乐波形默认状态（访客可在浮层上开关）。" sort="30">
+<w:config:group code="store_music_visual" label="视觉氛围" description="头像动效与全页波形默认状态（访客可在浮层上开关波形）。" sort="30">
+    <w:config:field
+        key="store_music/visual/avatar_spin"
+        label="播放时旋转头像"
+        description="开启后播放中头像匀速旋转；默认关闭。关闭时使用边缘向外脉冲，播放强度驱动波浪。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store"
+    />
     <w:config:field
         key="store_music/visual/waveform_default"
         label="默认开启波形背景"

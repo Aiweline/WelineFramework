@@ -1,8 +1,26 @@
 ﻿进店音乐,"Música de la tienda"
-settings,settings
+settings,Ajustes
 进店音乐与氛围播放配置,"Ajustes de música y ambiente de la tienda"
 查看进店音乐配置,"Ver ajustes de música de la tienda"
 查看进店音乐曲目与播放配置,"Ver pistas y ajustes de reproducción"
+"优先在主题编辑器「部件配置」中编辑进店音乐。本页写入当前作用范围的系统配置，作 Hook 兜底；部件曲目为空时店面回退读取此处。可多选曲目、拖拽排序，并为简介按语言填写。","优先在主题编辑器「部件配置」中编辑进店音乐。本页写入当前作用范围的系统配置，作 Hook 兜底；部件曲目为空时店面回退读取此处。可多选曲目、拖拽排序，并为简介按语言填写。"
+在统一配置中心打开,"Abrir en el centro de configuración unificado"
+作用范围,Ámbito
+进店曲目,"Pistas de entrada"
+"可多选 mp3 / wav / ogg / m4a / aac / flac / opus / wma 等，单文件最大约 20MB。拖动手柄调整顺序；简介按下方语言分别填写。变更后自动写入当前范围。","Selección múltiple mp3 / wav / ogg / m4a / aac / flac / opus / wma, etc. Máx. ≈20 MB por archivo. Arrastra para reordenar; rellena intros por idioma. Se guarda automáticamente en el ámbito actual."
+简介编辑语言,"Idioma de edición de la intro"
+切换语言后可为每首曲目填写对应简介；店面按访客语言展示。,"Tras cambiar de idioma, rellena la intro de cada pista; la tienda muestra el idioma del visitante."
+尚未选择曲目。请用上方媒体库添加多首进店音乐。,"Aún no hay pistas. Añade música de entrada con la biblioteca de medios de arriba."
+拖拽排序,"Arrastrar para reordenar"
+曲名,Título
+简介,Intro
+选择进店音乐（可多选）,"Seleccionar música de entrada (múltiple)"
+配置写入当前作用范围；可多选曲目、拖拽排序，并为简介按语言填写。启用且至少一首曲目后，店面左下角显示进店音乐浮层。,"La configuración se aplica al ámbito actual. Selección múltiple, arrastra para ordenar e intros por idioma. Con al menos una pista activa, el widget aparece abajo a la izquierda."
+选择作用范围,"Seleccionar ámbito"
+搜索作用范围,"Buscar ámbitos"
+折叠,Contraer
+展开,Expandir
+未找到匹配作用范围,"No se encontraron ámbitos coincidentes"
 播放控制,"Controles de reproducción"
 上一首,Anterior
 播放,Reproducir
@@ -22,25 +40,13 @@ settings,settings
 已在其他页面播放,"Reproduciendo en otra página"
 播放列表,"Lista de reproducción"
 "共 {n} 首","{n} pistas"
+展开简介,"Ver introducción"
+收起简介,"Ocultar introducción"
 点开选曲,"Abrir selector de pistas"
 选择曲目聆听,"Elige una pista para escuchar"
 音量,Volumen
-配置写入当前作用范围；可多选曲目、拖拽排序，并为简介按语言填写。启用且至少一首曲目后，店面左下角显示进店音乐浮层。,"La configuración se aplica al ámbito actual. Selección múltiple, arrastra para ordenar e intros por idioma. Con al menos una pista activa, el widget aparece abajo a la izquierda."
-在统一配置中心打开,"Abrir en el centro de configuración unificado"
-作用范围,Ámbito
-进店曲目,"Pistas de entrada"
-"可多选 mp3 / wav / ogg / m4a / aac / flac / opus / wma 等，单文件最大约 20MB。拖动手柄调整顺序；简介按下方语言分别填写。变更后自动写入当前范围。","Selección múltiple mp3 / wav / ogg / m4a / aac / flac / opus / wma, etc. Máx. ≈20 MB por archivo. Arrastra para reordenar; rellena intros por idioma. Se guarda automáticamente en el ámbito actual."
-简介编辑语言,"Idioma de edición de la intro"
-切换语言后可为每首曲目填写对应简介；店面按访客语言展示。,"Tras cambiar de idioma, rellena la intro de cada pista; la tienda muestra el idioma del visitante."
-尚未选择曲目。请用上方媒体库添加多首进店音乐。,"Aún no hay pistas. Añade música de entrada con la biblioteca de medios de arriba."
-拖拽排序,"Arrastrar para reordenar"
-曲名,Título
-简介,Intro
-选择进店音乐（可多选）,"Seleccionar música de entrada (múltiple)"
-选择作用范围,"Seleccionar ámbito"
-搜索作用范围,"Buscar ámbitos"
-折叠,Contraer
-展开,Expandir
-未找到匹配作用范围,"No se encontraron ámbitos coincidentes"
 进店氛围音乐,"Música de ambiente de la tienda"
 关闭选曲,"Cerrar selector de pistas"
+搜索歌曲…,"Buscar canciones…"
+未找到匹配曲目,"No hay coincidencias"
+搜索播放列表,"Buscar en la lista"

@@ -174,6 +174,29 @@ final class AllMenuNavTreeContractTest extends TestCase
         self::assertSame('file-image', $tree[0]['image']['type'] ?? null);
     }
 
+    public function testToNavItemsKeepsFileImageWithoutCastingToArrayString(): void
+    {
+        $normalizer = new MenuTreeNormalizer();
+        $fileImage = [
+            'type' => 'file-image',
+            'usage' => ['version' => 1, 'asset_id' => 'a1', 'locale_code' => 'zh_Hans_CN'],
+        ];
+        $nav = $normalizer->toNavItems([
+            [
+                'tag' => 'custom',
+                'name' => '关于我们',
+                'url' => '/about',
+                'image' => $fileImage,
+                'image_file_html' => '<img src="/x.jpg" alt="">',
+            ],
+        ]);
+
+        self::assertSame('file-image', $nav[0]['image']['type'] ?? null);
+        self::assertSame('a1', $nav[0]['image']['usage']['asset_id'] ?? null);
+        self::assertStringContainsString('<img', (string)($nav[0]['image_file_html'] ?? ''));
+        self::assertNotSame('Array', $nav[0]['image'] ?? null);
+    }
+
     public function testToNavItemsResolvesNameAndDescriptionI18n(): void
     {
         $normalizer = new MenuTreeNormalizer();

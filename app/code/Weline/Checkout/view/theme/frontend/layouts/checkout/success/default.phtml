@@ -1,0 +1,234 @@
+<?php
+/**
+ * 布局：结账成功页
+ *
+ * layoutType=checkout/success，option=default → layouts/checkout/success/default.phtml
+ * 订单提交成功后的确认页面布局
+ * 字段
+ * @meta.name {default="结账成功页面布局",name="结账成功页面布局",description="结账成功页面布局，用于描述布局的名称"}
+ * @meta.description {default="订单提交成功后的确认页面布局",name="订单提交成功后的确认页面布局",description="订单提交成功后的确认页面布局，用于描述布局的用途"}
+ * @param title {default="订单确认",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param orderNumber {default="",name="订单号",description="订单号，用于显示订单号"}
+ * @param orderDetails {default="",name="订单详情（HTML字符串，可选）",description="订单详情（HTML字符串，可选），用于设置订单详情"}
+ * @param continueShopping {default="/",name="继续购物链接",description="继续购物链接，用于设置继续购物链接"}
+ * @param viewOrder {default="",name="查看订单链接（可选）",description="查看订单链接（可选），用于设置查看订单链接"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ */
+?>
+<?php
+$title = $this->getData('title') ?? __('订单确认');
+$content = $this->getData('content') ?? '';
+$orderNumber = $this->getData('orderNumber') ?? '';
+$orderDetails = $this->getData('orderDetails') ?? '';
+$continueShopping = $this->getData('continueShopping') ?? '/';
+$viewOrder = $this->getData('viewOrder') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        body.checkout-success-layout {
+            margin: 0;
+            background: var(--weline-layout-surface-secondary);
+            color: var(--weline-layout-text-primary);
+        }
+
+        .checkout-success-main {
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin: 0 auto;
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-content-padding-inline) calc(var(--weline-layout-spacing-3xl) * 1.125);
+        }
+
+        .checkout-success-content {
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-lg);
+            background: var(--weline-layout-surface-primary);
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-spacing-xl);
+            text-align: center;
+            box-shadow: var(--weline-theme-shadow-md);
+        }
+
+        /* 店面控制器内容自管成功/取消英雄区时，布局壳不再叠第二套文案与 CTA */
+        .checkout-success-content--passthrough {
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            padding: 0;
+            text-align: initial;
+            box-shadow: none;
+        }
+
+        .success-icon {
+            width: var(--size-panel-120);
+            height: var(--size-panel-120);
+            margin: 0 auto var(--weline-layout-spacing-lg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--weline-layout-radius-full);
+            background: var(--weline-theme-success-surface);
+            color: var(--weline-theme-success);
+        }
+
+        .success-icon .w-icon,
+        .success-icon .w-icon[data-size] {
+            inline-size: calc(var(--size-panel-120) * 0.72);
+            block-size: calc(var(--size-panel-120) * 0.72);
+            stroke-width: 2.4;
+        }
+
+        .success-title {
+            margin: 0;
+            font-size: var(--weline-layout-font-size-4xl);
+            line-height: var(--weline-layout-line-height-tight);
+        }
+
+        .order-number,
+        .order-details {
+            margin-top: var(--weline-layout-spacing-md);
+            color: var(--weline-layout-text-secondary);
+            line-height: var(--weline-layout-line-height-relaxed);
+        }
+
+        .success-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--weline-layout-spacing-sm);
+            justify-content: center;
+            margin-top: var(--weline-layout-spacing-lg);
+        }
+
+        .w-btn {
+            min-height: var(--size-control-42);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 var(--weline-layout-spacing-lg);
+            border-radius: var(--weline-layout-radius-md);
+            text-decoration: none;
+            font-weight: var(--weline-layout-font-weight-bold);
+        }
+
+        .w-btn-primary {
+            color: var(--weline-theme-on-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-link-color);
+            background: var(--weline-layout-link-color);
+        }
+
+        .w-btn-secondary {
+            color: var(--weline-layout-text-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-strong);
+            background: var(--weline-layout-surface-primary);
+        }
+
+        .checkout-success-recommendations {
+            margin-top: var(--weline-layout-spacing-xl);
+        }
+
+        @media (max-width: 640px) {
+            .checkout-success-main {
+                width: min(100%, var(--weline-layout-content-max-width));
+                max-width: 100%;
+            padding-block: var(--size-control-md) var(--size-control-2xl);
+                padding-inline: var(--weline-layout-content-padding-inline);
+            }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="checkout-success-layout">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    
+    <main class="checkout-success-main <?= htmlspecialchars($class ?? '') ?>" id="checkout-success-main" data-layout="checkout/success">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-checkout-success-content,layout-default-content,content,checkout-success-content,order-summary,success-state,product-carousel,recently-viewed,you-may-like"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-success-main__content-root-slot">
+        <w:slot id="checkout-success-content"
+                name="结算成功内容"
+                accept="layout-checkout-success-content,checkout-success,order-confirmation,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-success-container">
+            <?php if ($content): ?>
+            <div class="checkout-success-content checkout-success-content--passthrough">
+                {{content}}
+            </div>
+            <?php else: ?>
+            <div class="checkout-success-content">
+                <div class="success-icon">
+                    <w:icon name="check" size="xl"></w:icon>
+                </div>
+                <h1 class="success-title"><?= __('订单提交成功！') ?></h1>
+
+                <?php if ($orderNumber): ?>
+                    <p class="order-number">
+                        <?= __('订单号：') ?><strong><?= htmlspecialchars($orderNumber) ?></strong>
+                    </p>
+                <?php endif; ?>
+
+                <?php if ($orderDetails): ?>
+                    <div class="order-details">
+                        {{orderDetails}}
+                    </div>
+                <?php endif; ?>
+
+                <div class="success-actions">
+                    <?php if ($viewOrder): ?>
+                        <a href="<?= htmlspecialchars($viewOrder) ?>" class="w-btn w-btn-primary">
+                            <?= __('查看订单') ?>
+                        </a>
+                    <?php endif; ?>
+                    <a href="<?= htmlspecialchars($continueShopping) ?>" class="w-btn w-btn-secondary">
+                        <?= __('继续购物') ?>
+                    </a>
+                </div>
+            </div>
+            <?php endif; ?>
+        </w:slot>
+        <w:slot id="checkout-success-recommendations"
+                name="结算成功推荐区"
+                accept="layout-checkout-success-recommendations,featured-products,bestsellers,new-arrivals,you-may-like,product-carousel"
+                multiple="true"
+                position="content"
+                wrapper="section"
+                class="checkout-success-recommendations" weline-code="theme.checkout_success.checkout_success_recommendations">
+            <w:hook>Weline_Theme::frontend::layouts::checkout_success::recommendations</w:hook>
+        </w:slot>
+        </w:slot>
+    </main>
+    
+
+    <w:slot id="checkout-success-bottom"
+            name="结算成功底部扩展"
+            accept="layout-checkout-success-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="content"
+            class="checkout-success-bottom-slot">
+    </w:slot>
+
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>
+

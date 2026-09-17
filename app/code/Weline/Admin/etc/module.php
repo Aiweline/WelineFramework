@@ -2,15 +2,17 @@
 
 return [
     "name" => 'Weline_Admin',
-    "version" => '2.0.2',
+    "version" => '2.0.6',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
         'Weline_Framework' => '^2.4',
+        'Weline_I18n' => '*',
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
         'Weline_Captcha' => '*',
+        'Weline_Search' => '*',
     ],
     "provides" => [
         \Weline\Admin\Api\Notification\SystemNotificationDirectoryInterface::class => \Weline\Admin\Service\SystemNotificationDirectory::class,

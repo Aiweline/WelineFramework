@@ -281,4 +281,11 @@ final class SecurityHeaderPolicyServiceTest extends TestCase
             $compact
         );
     }
+
+    public function testEnsureDocumentCspMetaSkipsJsonBodies(): void
+    {
+        $json = '{"success":true,"data":["AQ","KP"]}';
+        self::assertSame($json, $this->service->ensureDocumentCspMeta($json));
+        self::assertSame('[1,2]', $this->service->ensureDocumentCspMeta('[1,2]'));
+    }
 }

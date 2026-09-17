@@ -29,6 +29,12 @@ class CheckoutSession extends Model
     public const TTL_QUOTED_SECONDS = 1800;
 
     /**
+     * Engineering retention for quoted sessions that already have a reachable email
+     * (Marketing abandon windows are often hours/days; business TTL stays in Marketing).
+     */
+    public const TTL_QUOTED_WITH_EMAIL_SECONDS = 604800;
+
+    /**
      * Success-page capability window after submit/payment return.
      * Must outlive PayPal (and similar) browser round-trips and email link revisits.
      */

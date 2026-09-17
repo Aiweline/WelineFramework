@@ -57,6 +57,50 @@ interface FileAssetLibraryInterface
     ): array;
 
     /**
+     * Register an object that already exists on disk as a FileAsset.
+     *
+     * Does not rewrite storage bytes. Used for legacy / disk-direct files that
+     * remain visible in MediaManager but were never selectable.
+     *
+     * @param array<string,mixed> $localeMetadata
+     * @param array<string,mixed> $metadata
+     * @return array<string,mixed>
+     */
+    public function registerExistingObject(
+        string $diskCode,
+        string $objectKey,
+        string $originalName,
+        string $mimeType,
+        string $localeCode,
+        FileAccessContext $access,
+        array $localeMetadata,
+        string $visibility = self::VISIBILITY_PUBLIC,
+        array $metadata = [],
+        ?int $width = null,
+        ?int $height = null,
+    ): array;
+
+    /**
+     * Replace bytes of an existing FileAsset in place.
+     *
+     * Keeps the same asset_id and all locale rows; updates technical fields only.
+     *
+     * @param resource $source
+     * @return array<string,mixed>
+     */
+    public function replaceContent(
+        string $diskCode,
+        string $objectKey,
+        mixed $source,
+        string $originalName,
+        string $mimeType,
+        string $localeCode,
+        FileAccessContext $access,
+        ?int $width = null,
+        ?int $height = null,
+    ): array;
+
+    /**
      * @param array<string,mixed> $metadata
      * @param int $expectedRevision Revision returned by describe(); stale edits fail closed.
      * @return array<string,mixed>

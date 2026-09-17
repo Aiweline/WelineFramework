@@ -31,6 +31,40 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('https://example.com/banner.jpg', $html);
         $this->assertStringContainsString('Hero Title', $html);
         $this->assertStringNotContainsString('暂无项目，点击下方按钮添加', $html);
+        $this->assertStringContainsString('data-w-param-media="file-picker"', $html);
+        $this->assertStringContainsString('data-field="image"', $html);
+        $this->assertStringContainsString('w-param-array-item-input', $html);
+        $this->assertStringNotContainsString('w-param-image-placeholder', $html);
+        if (str_contains($html, 'w-file-picker')) {
+            $this->assertStringContainsString('data-w-value-mode="file-image"', $html);
+            $this->assertStringContainsString('data-w-file-picker-open', $html);
+        }
+    }
+
+    public function testRenderFormDropsNestedListJunkArrayItems(): void
+    {
+        $renderer = new ParamTypeRenderer();
+        $params = [
+            'slides' => [
+                'type' => 'array',
+                'label' => '轮播图片',
+                'item_schema' => [
+                    'image' => ['type' => 'media_image', 'label' => '图片'],
+                    'title' => ['type' => 'string', 'label' => '标题'],
+                ],
+            ],
+        ];
+        $config = [
+            // Corrupted persisted shape: a non-empty nested list as an item.
+            'slides' => [['bad', 'list'], ['title' => 'OK']],
+        ];
+
+        $html = $renderer->renderForm(10, $params, $config);
+
+        $this->assertStringContainsString('OK', $html);
+        $this->assertStringContainsString('data-index="0"', $html);
+        $this->assertStringNotContainsString('data-index="1"', $html);
+        $this->assertStringNotContainsString('bad', $html);
     }
 
     public function testRenderFieldBackfillsJsonEncodedMultipleSelectValues(): void
@@ -72,6 +106,11 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         ], '/media/banner.jpg', 10);
         $this->assertStringContainsString('w-param-media-image', $imageHtml);
         $this->assertStringContainsString('w-param-media-image-select', $imageHtml);
+        // Prefer WelineMedia/file-picker when block render succeeds (HTTP backend context).
+        if (str_contains($imageHtml, 'w-file-picker')) {
+            $this->assertStringContainsString('data-w-value-mode="file-image"', $imageHtml);
+            $this->assertStringContainsString('data-w-file-picker-open', $imageHtml);
+        }
     }
 
     public function testProcessConfigPreservesExplicitEmptyString(): void
@@ -193,9 +232,16 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
             ],
         ], '', 687);
         $this->assertStringContainsString('data-aspect-ratio="16:9"', $ratioHtml);
-        $this->assertStringContainsString('aspect-ratio:16 / 9', $ratioHtml);
-        $this->assertStringContainsString('w-param-image-aspect-badge', $ratioHtml);
-        $this->assertStringContainsString('data-recommend-w="1920"', $ratioHtml);
+        if (str_contains($ratioHtml, 'w-file-picker')) {
+            $this->assertStringContainsString('data-w-value-mode="file-image"', $ratioHtml);
+            $this->assertStringContainsString('推荐比例：16:9', $ratioHtml);
+            $this->assertStringContainsString('建议尺寸：1920 × 1080 px', $ratioHtml);
+            $this->assertStringNotContainsString('w-param-image-aspect-badge', $ratioHtml);
+        } else {
+            $this->assertStringContainsString('aspect-ratio:16 / 9', $ratioHtml);
+            $this->assertStringContainsString('w-param-image-aspect-badge', $ratioHtml);
+            $this->assertStringContainsString('data-recommend-w="1920"', $ratioHtml);
+        }
 
         $derivedHtml = $renderer->renderField('banner_image', [
             'type' => 'media_image',
@@ -449,5 +495,53 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('data-w-icon-apply', $html);
         $this->assertStringNotContainsString('<i class=', $html);
         $this->assertStringNotContainsString('style="display:none', $html);
+    }
+
+    public function testVideoUrlStaysInBasicGroupNotCollapsedLinkGroup(): void
+    {
+        $renderer = new ParamTypeRenderer();
+        $html = $renderer->renderForm(42, [
+            'video_type' => [
+                'type' => 'select',
+                'label' => '视频类型',
+                'options' => ['youtube' => 'YouTube'],
+            ],
+            'video_url' => [
+                'type' => 'url',
+                'label' => '视频地址',
+            ],
+            'embed_code' => [
+                'type' => 'textarea',
+                'label' => '嵌入代码',
+            ],
+            'homepage_url' => [
+                'type' => 'url',
+                'label' => '主页链接',
+            ],
+        ], [
+            'video_url' => 'https://www.youtube.com/watch?v=Xv6HAscPv24',
+            'homepage_url' => 'https://example.com',
+        ]);
+
+        $videoPos = strpos($html, 'name="video_url"');
+        $homePos = strpos($html, 'name="homepage_url"');
+        $linkClosedPos = strpos($html, 'data-state="closed"');
+
+        $this->assertNotFalse($videoPos);
+        $this->assertNotFalse($homePos);
+        $this->assertNotFalse($linkClosedPos);
+        $this->assertLessThan($linkClosedPos, $videoPos, 'video_url must appear before collapsed 链接配置');
+        $this->assertGreaterThan($linkClosedPos, $homePos, 'homepage_url stays in collapsed 链接配置');
+        $this->assertStringContainsString('data-state="open"', $html);
+    }
+
+    public function testArrayEditorsMountFilePickerAfterClone(): void
+    {
+        $script = (string)file_get_contents(BP . '/app/code/Weline/Widget/view/statics/js/widget-param-types.js');
+        $this->assertStringContainsString('function seedFilePickerPreviewFromInput', $script);
+        $this->assertStringContainsString('function mountParamComponents', $script);
+        $this->assertStringContainsString('mountParamComponents(div)', $script);
+        $this->assertStringContainsString('function buildMediaLibraryPickerHtml', $script);
+        $this->assertStringContainsString('renderMediaLibraryPickerHtml: buildMediaLibraryPickerHtml', $script);
     }
 }

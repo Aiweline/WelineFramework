@@ -8,11 +8,14 @@ identity/metadata layer. Physical objects remain owned by `Weline_Storage` disks
 Cross-module code may depend only on `Weline\FileManager\Api\*`:
 
 - `FileManagerInterface`, `FileManager`, `Api\Block\FileManager`: picker extension
-  and rendering contracts.
+  and rendering contracts. **Selection** in templates: `<w:file-manager />`
+  (path mode) or MediaManager `WelineMedia` with `value_mode=file-image` for typed
+  layout/widget nodes — see [`doc/file-manager-选图与file-image出图.md`](file-manager-选图与file-image出图.md).
 - `FileAssetManagerInterface`: page rendering and image-usage validation. This
   established interface still exposes legacy model return types for compatibility.
-  Storefront images use `<w:file:image>` with UI `width`/`height` or `aspect_ratio`
-  (see `doc/file-image-cls-尺寸与响应式.md`).
+  **Display** storefront/admin images with `<w:file:image>` and UI `width`/`height`
+  or `aspect_ratio` (see `doc/file-image-cls-尺寸与响应式.md`). Do not use
+  `file:image` as a media picker.
 - `FileAssetLibraryInterface`: the data-only management boundary for asset lookup,
   upload, localized metadata, revision-guarded asset provenance metadata,
   authorized reference counts, URL resolution, move and delete. New management
@@ -66,12 +69,26 @@ its own contextual `ImageUsage` alt snapshot.
 
 - Upload writes the Storage object with `overwrite=false`, then persists FileAsset and
   locale metadata. Persistence failure removes the just-written object.
+- `replaceContent` overwrites an existing live object (`overwrite=true`), updates technical
+  FileAsset fields, and keeps the same `asset_id` plus all locale rows.
 - File and directory moves update canonical object keys. Metadata persistence failure
   attempts to roll the physical move back.
 - Delete refuses referenced assets. FileAsset is disabled before physical deletion so
   a partial provider failure fails closed for later rendering.
 - Cross-module callers receive safe arrays from `FileAssetLibraryInterface`; model,
   repository and provider credentials remain internal.
+
+## Media reference identity
+
+Occupancy identity follows **MediaReferenceIdentity.v1**. Build only via `w_scope` /
+`window.w_scope` — never hand-paste paths. Authoritative docs:
+
+- Protocol: [`doc/media-reference-identity-protocol.md`](media-reference-identity-protocol.md)
+- Skill: [`doc/ai/skills/media-reference-identity/SKILL.md`](ai/skills/media-reference-identity/SKILL.md)
+- Spec: [`doc/开发/spec/media-reference-identity.md`](开发/spec/media-reference-identity.md)
+
+Swap/clear image = unbind references only; physical delete uses soft-delete (`deleted_at`)
+and requires zero references.
 
 ## Verification
 

@@ -47,6 +47,10 @@ $formSubtitle = $postId > 0
 $currentStatus = (string)($postRow['status'] ?? '');
 $currentStatusLabel = $statusLabels[$currentStatus] ?? $currentStatus;
 $coverPanelClass = $coverImageValue !== '' ? 'has-cover' : 'is-empty';
+$coverIdentityScope = trim((string)($media_identity_scope ?? 'default.default.default'));
+if ($coverIdentityScope === '' || substr_count($coverIdentityScope, '.') !== 2) {
+    $coverIdentityScope = 'default.default.default';
+}
 $hasTitle = trim((string)($postRow['title'] ?? '')) !== '';
 $coverPreviewUrl = '';
 if ($coverImageValue !== '') {
@@ -60,6 +64,7 @@ if ($coverImageValue !== '') {
 }
 ?>
 <link rel="stylesheet" href="@static(Weline_Blog::css/backend/blog-post-admin.css)?v=20260827-cover-picker-v1">
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
 <div class="w-blog-post-form" data-testid="blog-admin-form">
     <div class="w-card w-blog-post-form__hero">
         <div class="w-blog-post-form__hero-main">
@@ -226,6 +231,13 @@ if ($coverImageValue !== '') {
                                         size="2048000"
                                         w="140"
                                         h="140"
+                                        identity_root="blog"
+                                        identity_code="<?= $escape((string)($postRow['url_key'] ?? $postRow['slug'] ?? ($postId > 0 ? (string)$postId : 'draft'))) ?>"
+                                        identity_scope="<?= $escape($coverIdentityScope) ?>"
+                                        identity_kind="cover"
+                                        identity_field="cover"
+                                        ref_mode="single"
+                                        strong_ref="1"
                                     />
                                 </div>
                             </div>

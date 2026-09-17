@@ -11,25 +11,25 @@ use Weline\Seo\Model\SeoSubject;
 use Weline\Seo\Service\Seed\HanfuSubjectSeedService;
 
 /**
- * 云裳汉服真实主体种子契约。
+ * 长安汉服真实主体种子契约。
  *
  * @package Weline_Seo
  */
 class HanfuSubjectSeedServiceTest extends TestCore
 {
-    public function testSeedCatalogMatchesLiveYunshangHanfu(): void
+    public function testSeedCatalogMatchesLiveChanganHanfu(): void
     {
         $this->assertSame(SeoSubject::SUBJECT_TYPE_WEBSITE, HanfuSubjectSeedService::SEED_SUBJECT_TYPE);
         $this->assertSame(0, HanfuSubjectSeedService::SEED_ENTITY_ID);
         $this->assertSame(900001, HanfuSubjectSeedService::LEGACY_DEMO_ENTITY_ID);
-        $this->assertSame('云裳汉服 · Hanfu Atelier', HanfuSubjectSeedService::SEED_TITLE);
+        $this->assertSame('长安汉服 · Hanfu Atelier', HanfuSubjectSeedService::SEED_TITLE);
         $this->assertStringContainsString('明制、宋制、唐制汉服与马面裙', HanfuSubjectSeedService::SEED_DESCRIPTION);
         $this->assertStringNotContainsString('示例', HanfuSubjectSeedService::SEED_TITLE);
         $this->assertStringNotContainsString('示例', HanfuSubjectSeedService::SEED_DESCRIPTION);
         $this->assertStringNotContainsString('example.com', HanfuSubjectSeedService::SEED_DESCRIPTION);
 
         $names = array_column(HanfuSubjectSeedService::SEED_KEYWORDS, 'keyword');
-        $this->assertContains('云裳汉服', $names);
+        $this->assertContains('长安汉服', $names);
         $this->assertContains('明制汉服', $names);
         $this->assertContains('马面裙', $names);
         $this->assertNotContains('汉服租赁', $names);
@@ -73,7 +73,7 @@ class HanfuSubjectSeedServiceTest extends TestCore
         $this->assertIsArray($keywords);
         $this->assertCount(count(HanfuSubjectSeedService::SEED_KEYWORDS), $keywords);
         $names = array_map(static fn(array $row): string => (string)($row[SeoKeyword::schema_fields_KEYWORD] ?? ''), $keywords);
-        $this->assertContains('云裳汉服', $names);
+        $this->assertContains('长安汉服', $names);
         $this->assertNotContains('汉服租赁', $names);
 
         $legacy = ObjectManager::getInstance(SeoSubject::class);
@@ -108,7 +108,7 @@ class HanfuSubjectSeedServiceTest extends TestCore
         $subject = $this->loadSeedSubject();
         $this->assertGreaterThan(0, (int)$subject->getId());
 
-        $customTitle = '运营自改云裳主体';
+        $customTitle = '运营自改长安主体';
         $subject->setTitle($customTitle)
             ->setData(SeoSubject::schema_fields_MODULE, 'Operator_Custom')
             ->setData(SeoSubject::schema_fields_SCOPE, 'live')

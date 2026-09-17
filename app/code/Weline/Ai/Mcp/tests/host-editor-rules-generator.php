@@ -16,6 +16,11 @@ $checks['coldstart mdc mandates prepare_project'] = str_contains($mdc, 'prepare_
 $checks['coldstart mdc has generator marker'] = str_contains($mdc, HostEditorRulesGenerator::GENERATOR_MARKER);
 $checks['coldstart mdc forbids hand edit'] = str_contains($mdc, '禁止 Agent 手改')
     || str_contains($mdc, 'do not hand-edit');
+$checks['coldstart mdc requires re-prepare on context loss'] = str_contains($mdc, '上下文丢失自愈')
+    && str_contains($mdc, '重新')
+    && str_contains($mdc, 'prepare_project');
+$checks['coldstart mdc forbids hand-writing rules to remember guidance'] = str_contains($mdc, '禁止为「记住引导」而手写')
+    && str_contains($mdc, '.cursor/rules');
 
 $tmpRoot = sys_get_temp_dir() . '/weline-host-editor-rules-' . bin2hex(random_bytes(4));
 mkdir($tmpRoot, 0775, true);

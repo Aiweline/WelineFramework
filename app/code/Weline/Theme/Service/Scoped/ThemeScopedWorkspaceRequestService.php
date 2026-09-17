@@ -9,6 +9,7 @@ use Weline\Theme\Api\Scoped\ThemePatchCommand;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeScopeReleaseBatch;
+use Weline\Theme\Model\ThemeScopeWorkspace;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\ThemeContextService;
@@ -31,6 +32,7 @@ final class ThemeScopedWorkspaceRequestService
         private readonly ThemeRuntimeCacheCleaner $cacheCleaner,
         private readonly ThemeLayoutVersionService $layoutVersions,
         private readonly SharedChromeService $sharedChrome,
+        private readonly ThemeScopeWorkspace $workspaceRows,
     ) {
     }
 
@@ -147,6 +149,7 @@ final class ThemeScopedWorkspaceRequestService
             $publishedThemeId > 0 ? $publishedThemeId : null,
             'theme_scoped_publish',
         );
+        $this->workspace->invalidateRequestLoadCache();
 
         return $result;
     }
@@ -203,6 +206,17 @@ final class ThemeScopedWorkspaceRequestService
         if ($chromeOverwrite !== null) {
             $result['shared_chrome_overwrite'] = $chromeOverwrite;
         }
+        $siblingI18n = $this->publishPendingSiblingI18nLocales(
+            $context,
+            $actorId,
+            $actorName,
+            $this->note($input['reason'] ?? '', 'reason'),
+        );
+        if ($siblingI18n !== []) {
+            $result['sibling_i18n'] = $siblingI18n;
+        }
+
+        $this->workspace->invalidateRequestLoadCache();
 
         return $this->finalizeBatchCacheState(
             $result,
@@ -264,6 +278,116 @@ final class ThemeScopedWorkspaceRequestService
      *
      * @return array<string,mixed>|null
      */
+    /**
+     * Publish other locales' pending RESOURCE_I18N drafts for the same page identity.
+     * Batch publish only covers the editor's current locale; sibling locales otherwise
+     * stay draft and storefront keeps showing structure-locale media (e.g. zh banner on /en_US/).
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function publishPendingSiblingI18nLocales(
+        ThemeEditorContext $context,
+        string $actorId,
+        string $actorName,
+        string $reason,
+    ): array {
+        $published = [];
+        $batchLocale = \trim((string)$context->locale);
+        $i18nBase = $context->withResource(ThemeEditorContext::RESOURCE_I18N);
+        foreach ($this->siblingI18nLocales($context) as $locale) {
+            if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
+                continue;
+            }
+            if ($batchLocale !== '' && \strcasecmp($locale, $batchLocale) === 0) {
+                continue;
+            }
+            $sibling = $i18nBase->withLocale($locale);
+            try {
+                $state = $this->workspace->load($sibling, true);
+            } catch (\Throwable) {
+                continue;
+            }
+            $draftRevisionId = (int)($state['draft_revision_id'] ?? 0);
+            $publishedRevisionId = (int)($state['published_revision_id'] ?? 0);
+            if ($draftRevisionId <= 0 || $draftRevisionId === $publishedRevisionId) {
+                continue;
+            }
+            $siblingReason = \trim($reason) !== ''
+                ? ($reason . '_sibling_i18n_' . $locale)
+                : ('sibling_i18n_publish_' . $locale);
+            try {
+                $receipt = $this->workspace->publish(
+                    context: $sibling,
+                    expectedRevision: (int)($state['revision'] ?? 0),
+                    expectedParentReleaseId: $this->nullableId($state['expected_parent_release_id'] ?? null),
+                    actorId: $actorId,
+                    actorName: $actorName,
+                    reason: $siblingReason,
+                );
+            } catch (\Throwable $e) {
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning(
+                        'theme_sibling_i18n_publish_skipped: ' . $e->getMessage(),
+                        [
+                            'locale' => $locale,
+                            'layout_type' => $context->layoutType,
+                            'theme_id' => $context->themeId,
+                        ],
+                        'theme_scoped_i18n',
+                    );
+                }
+                continue;
+            }
+            if (!empty($receipt['blocked'])) {
+                continue;
+            }
+            $published[] = [
+                'locale' => $locale,
+                'release_id' => $receipt['release_id'] ?? null,
+                'revision' => $receipt['revision'] ?? null,
+            ];
+        }
+
+        return $published;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function siblingI18nLocales(ThemeEditorContext $context): array
+    {
+        try {
+            $rows = (clone $this->workspaceRows)->clearData()->clearQuery()
+                ->where(ThemeScopeWorkspace::schema_fields_THEME_ID, $context->themeId)
+                ->where(ThemeScopeWorkspace::schema_fields_AREA, $context->area)
+                ->where(ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE, ThemeEditorContext::RESOURCE_I18N)
+                ->where(ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE, $context->layoutType)
+                ->where(ThemeScopeWorkspace::schema_fields_LAYOUT_OPTION, $context->layoutOption)
+                ->where(ThemeScopeWorkspace::schema_fields_SCOPE, $context->scope->storageScope)
+                ->where(ThemeScopeWorkspace::schema_fields_TARGET_TYPE, $context->targetType)
+                ->where(ThemeScopeWorkspace::schema_fields_TARGET_ID, $context->targetId)
+                ->select()
+                ->fetch()
+                ->getItems();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $locales = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_object($row) || !\method_exists($row, 'getData')) {
+                continue;
+            }
+            $locale = \trim((string)$row->getData(ThemeScopeWorkspace::schema_fields_LOCALE));
+            if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
+                continue;
+            }
+            $locales[$locale] = $locale;
+        }
+
+        return \array_values($locales);
+    }
+
     private function publishSharedChromeCarrierIfPending(
         ThemeEditorContext $context,
         string $actorId,

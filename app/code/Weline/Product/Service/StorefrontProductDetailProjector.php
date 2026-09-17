@@ -381,12 +381,16 @@ final class StorefrontProductDetailProjector
             foreach ($byCode as $code => $rows) {
                 // Public specification values are EAV identities, including legacy
                 // Han source values. Resolve their labels before any display policy.
+                // Long-form description may also keep the default/source locale body
+                // when the current storefront locale has no matching translation —
+                // hiding the whole PDP detail block is worse than showing default copy.
                 $value = $this->resolvePresentableAttribute(
                     $rows,
                     $storeId,
                     $locale,
                     $localeFallbacks,
-                    $this->isPublicSpecificationCode($code),
+                    $this->isPublicSpecificationCode($code)
+                        || $this->allowsHanContentFallback($code),
                 );
                 if (!$value->isExplicit()) {
                     continue;
@@ -665,7 +669,8 @@ final class StorefrontProductDetailProjector
                 $storeId,
                 $locale,
                 $localeFallbacks,
-                $this->isPublicSpecificationCode($code),
+                $this->isPublicSpecificationCode($code)
+                    || $this->allowsHanContentFallback($code),
             );
             if (!$value->isExplicit()) {
                 continue;
@@ -1033,13 +1038,24 @@ final class StorefrontProductDetailProjector
     }
 
     /**
+     * PDP long-form description may keep default/source (often Han) copy on
+     * non-Han storefront locales when no matching locale row exists. Names and
+     * SEO fields still skip Han so chips/meta stay locale-safe.
+     */
+    private function allowsHanContentFallback(string $code): bool
+    {
+        return strtolower(trim($code)) === 'description';
+    }
+
+    /**
      * Skip an incompatible Han-script fallback and continue along the already
      * approved locale / scope chain. A cleared row still terminates inheritance.
      *
      * @param list<array<string, mixed>> $rows
      * @param list<string> $localeFallbacks
      * @param bool $allowHanIdentity When true, keep Han option/axis identity values
-     *        on non-Han storefront locales (swatch chips need the source codes).
+     *        on non-Han storefront locales (swatch chips need the source codes),
+     *        or keep default/source long-form description bodies.
      */
     private function resolvePresentableAttribute(
         array $rows,

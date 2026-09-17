@@ -37,8 +37,8 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ],
         ]);
 
-        self::assertStringContainsString('theme.header.mega_panel.v6.zh_Hans_CN.top.', $top);
-        self::assertStringContainsString('theme.header.mega_panel.v6.zh_Hans_CN.drawer.', $drawer);
+        self::assertStringContainsString('theme.header.mega_panel.v7.zh_Hans_CN.top.', $top);
+        self::assertStringContainsString('theme.header.mega_panel.v7.zh_Hans_CN.drawer.', $drawer);
         self::assertStringContainsString('.banner1.', $top);
         self::assertStringContainsString('.banner0.', $bannerOff);
         self::assertNotSame($top, $drawer);

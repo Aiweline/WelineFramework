@@ -26,7 +26,7 @@ class ShippingAddress extends AbstractModel
     public const schema_fields_NAME = 'name';
     #[Col('varchar', 100, nullable: false, comment: '联系人姓名')]
     public const schema_fields_CONTACT_NAME = 'contact_name';
-    #[Col('varchar', 20, nullable: false, comment: '联系电话')]
+    #[Col('varchar', 32, nullable: false, comment: '联系电话')]
     public const schema_fields_CONTACT_PHONE = 'contact_phone';
     #[Col('varchar', 50, nullable: false, default: '中国', comment: '国家')]
     public const schema_fields_COUNTRY = 'country';

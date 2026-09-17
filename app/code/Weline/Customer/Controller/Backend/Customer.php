@@ -12,7 +12,7 @@ use Weline\Frontend\Api\User\FrontendUserAdministrationInterface;
 use Weline\Frontend\Api\User\FrontendUserMutationResult;
 use Weline\Frontend\Api\User\FrontendUserSaveCommand;
 
-#[Acl('Weline_Customer::customer', '前端客户', 'users', '前端客户', 'Weline_Backend::customer_group')]
+#[Acl('Weline_Customer::customer', '前端客户', 'users', '前端客户', 'Weline_Customer::customer_index')]
 class Customer extends BackendController
 {
     public function __construct(

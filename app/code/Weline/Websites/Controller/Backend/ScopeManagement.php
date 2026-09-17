@@ -9,7 +9,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Service\StoreChannelAdminService;
-use Weline\Websites\Service\WebsiteSelectOptions;
+use Weline\Websites\Service\WebsiteScopeTreeService;
 
 final class ScopeManagement extends BackendController
 {
@@ -20,77 +20,58 @@ final class ScopeManagement extends BackendController
     #[Acl('Weline_Websites::store_management', '商店管理', 'store', '管理 Store', 'Weline_Websites::website_service')]
     public function stores(): string
     {
-        return $this->renderSection('stores');
+        return (string)$this->redirect('websites/admin/website', ['focus' => 'stores']);
     }
 
     #[Acl('Weline_Websites::sales_channel_management', '渠道管理', 'branch', '管理 Sales Channel', 'Weline_Websites::website_service')]
     public function channels(): string
     {
-        return $this->renderSection('channels');
+        return (string)$this->redirect('websites/admin/website', ['focus' => 'channels']);
     }
 
     #[Acl('Weline_Websites::store_management', '编辑商店', 'edit', '编辑 Store')]
     public function editStore(): string
     {
         $storeId = max(0, (int)$this->request->getGet('store_id', 0));
-        $row = null;
-        $error = '';
-        try {
-            $row = $this->admin->getStore($storeId);
-            if ($row === null) {
-                throw new \InvalidArgumentException(__('商店不存在'));
-            }
-        } catch (\Throwable $exception) {
-            $this->request->getResponse()->setCode(404);
-            $error = (string)$exception->getMessage();
-        }
-        $this->assign('section', 'stores');
-        $this->assign('entity', $row ?? []);
-        $this->assign('error', $error);
-        $this->assign('website_id', (int)($row['website_id'] ?? 0));
-        return (string)$this->fetch('edit-store');
+        return (string)$this->redirect(
+            'websites/admin/website',
+            ['node' => WebsiteScopeTreeService::formatNode('store', $storeId)],
+        );
     }
 
     #[Acl('Weline_Websites::sales_channel_management', '编辑渠道', 'edit', '编辑 Sales Channel')]
     public function editChannel(): string
     {
         $channelId = max(0, (int)$this->request->getGet('channel_id', 0));
-        $row = null;
-        $error = '';
-        try {
-            $row = $this->admin->getChannel($channelId);
-            if ($row === null) {
-                throw new \InvalidArgumentException(__('渠道不存在'));
-            }
-        } catch (\Throwable $exception) {
-            $this->request->getResponse()->setCode(404);
-            $error = (string)$exception->getMessage();
-        }
-        $this->assign('section', 'channels');
-        $this->assign('entity', $row ?? []);
-        $this->assign('error', $error);
-        $this->assign('website_id', (int)($row['website_id'] ?? 0));
-        return (string)$this->fetch('edit-channel');
+        return (string)$this->redirect(
+            'websites/admin/website',
+            ['node' => WebsiteScopeTreeService::formatNode('channel', $channelId)],
+        );
     }
 
     #[Acl('Weline_Websites::store_management', '创建商店', 'plus', '创建 Store')]
     public function postCreateStore(): string
     {
         $websiteId = 0;
+        $newStoreId = 0;
         try {
             $websiteId = $this->postNonNegativeInt('website_id', 0);
-            $this->admin->createStore(
+            $created = $this->admin->createStore(
                 $websiteId,
                 $this->postString('code', 64),
                 $this->postString('name', 128),
                 $this->postString('store_mode', 16),
                 trim((string)$this->request->getPost('url', '')) ?: null,
             );
+            $newStoreId = (int)$created->id;
             $this->getMessageManager()->addSuccess(__('商店已创建'));
         } catch (\Throwable $exception) {
             $this->getMessageManager()->addError(__('创建商店失败：%{1}', [$exception->getMessage()]));
         }
-        return (string)$this->redirect(
+        return $this->redirectAfterMutation(
+            $newStoreId > 0
+                ? WebsiteScopeTreeService::formatNode('store', $newStoreId)
+                : WebsiteScopeTreeService::formatNode('website', $websiteId),
             'websites/backend/scope-management/stores',
             ['website_id' => $websiteId],
         );
@@ -100,19 +81,26 @@ final class ScopeManagement extends BackendController
     public function postCreateChannel(): string
     {
         $websiteId = 0;
+        $storeId = 0;
+        $newChannelId = 0;
         try {
             $websiteId = $this->postNonNegativeInt('website_id', 0);
-            $this->admin->createChannel(
+            $storeId = $this->postNonNegativeInt('store_id', 0);
+            $created = $this->admin->createChannel(
                 $websiteId,
-                $this->postNonNegativeInt('store_id', 0),
+                $storeId,
                 $this->postString('code', 64),
                 $this->postString('name', 128),
             );
+            $newChannelId = (int)$created->id;
             $this->getMessageManager()->addSuccess(__('渠道已创建'));
         } catch (\Throwable $exception) {
             $this->getMessageManager()->addError(__('创建渠道失败：%{1}', [$exception->getMessage()]));
         }
-        return (string)$this->redirect(
+        return $this->redirectAfterMutation(
+            $newChannelId > 0
+                ? WebsiteScopeTreeService::formatNode('channel', $newChannelId)
+                : WebsiteScopeTreeService::formatNode('store', $storeId),
             'websites/backend/scope-management/channels',
             ['website_id' => $websiteId],
         );
@@ -152,15 +140,16 @@ final class ScopeManagement extends BackendController
         } catch (\Throwable $exception) {
             $this->getMessageManager()->addError(__('保存商店失败：%{1}', [$exception->getMessage()]));
         }
-        if ($storeId > 0) {
-            return (string)$this->redirect(
-                'websites/backend/scope-management/edit-store',
-                ['store_id' => $storeId],
-            );
-        }
-        return (string)$this->redirect(
-            'websites/backend/scope-management/stores',
-            ['website_id' => $websiteId],
+        return $this->redirectAfterMutation(
+            $storeId > 0
+                ? WebsiteScopeTreeService::formatNode('store', $storeId)
+                : '',
+            $storeId > 0
+                ? 'websites/backend/scope-management/edit-store'
+                : 'websites/backend/scope-management/stores',
+            $storeId > 0
+                ? ['store_id' => $storeId]
+                : ['website_id' => $websiteId],
         );
     }
 
@@ -197,41 +186,112 @@ final class ScopeManagement extends BackendController
         } catch (\Throwable $exception) {
             $this->getMessageManager()->addError(__('保存渠道失败：%{1}', [$exception->getMessage()]));
         }
-        if ($channelId > 0) {
-            return (string)$this->redirect(
-                'websites/backend/scope-management/edit-channel',
-                ['channel_id' => $channelId],
-            );
-        }
-        return (string)$this->redirect(
-            'websites/backend/scope-management/channels',
-            ['website_id' => $websiteId],
+        return $this->redirectAfterMutation(
+            $channelId > 0
+                ? WebsiteScopeTreeService::formatNode('channel', $channelId)
+                : '',
+            $channelId > 0
+                ? 'websites/backend/scope-management/edit-channel'
+                : 'websites/backend/scope-management/channels',
+            $channelId > 0
+                ? ['channel_id' => $channelId]
+                : ['website_id' => $websiteId],
         );
     }
 
-    private function renderSection(string $section): string
+    /**
+     * @param array<string, scalar> $legacyParams
+     */
+    private function redirectAfterMutation(string $treeNode, string $legacyPath, array $legacyParams): string
     {
-        $websiteId = max(0, (int)$this->request->getGet('website_id', 0));
-        $rows = [];
-        $stores = [];
-        $error = '';
-        try {
-            $stores = $this->admin->listStores($websiteId);
-            $rows = $section === 'stores' ? $stores : $this->admin->listChannels($websiteId);
-        } catch (\Throwable $exception) {
-            $this->request->getResponse()->setCode(503);
-            $error = (string)__('Scope 数据读取失败：%{1}', [$exception->getMessage()]);
+        $returnTo = trim((string)$this->request->getPost('return_to', ''));
+        if ($returnTo === 'tree' || $returnTo === '') {
+            // 默认回树：列表入口已重定向，写路径也统一回树深链。
+            $node = trim((string)$this->request->getPost('return_node', ''));
+            if ($node === '' || WebsiteScopeTreeService::parseNode($node) === null) {
+                $node = $treeNode;
+            }
+            $postedReturnUrl = trim((string)$this->request->getPost('return_url', ''));
+            if ($postedReturnUrl !== '' && $this->isSafeWebsitesTreeReturnUrl($postedReturnUrl)) {
+                return (string)$this->redirect($this->withTreeNodeQuery($postedReturnUrl, $node));
+            }
+            $params = [];
+            if ($node !== '') {
+                $params['node'] = $node;
+            }
+            // 不可依赖空的 `*` 展开（偶发缺 websites frontName → 404）。
+            return (string)$this->redirect('websites/admin/website', $params);
         }
-        $this->assign('section', $section);
-        $this->assign('website_id', $websiteId);
-        $this->assign('rows', $rows);
-        $this->assign('stores', $stores);
-        $this->assign('error', $error);
-        $pack = WebsiteSelectOptions::forSelect((string)$websiteId);
-        $this->assign('websiteSelectValue', (string)$websiteId);
-        $this->assign('websiteSelectDisplay', $pack['display']);
-        $this->assign('websiteSelectOptionsJson', $pack['options_json']);
-        return (string)$this->fetch('index');
+        return (string)$this->redirect($legacyPath, $legacyParams);
+    }
+
+    private function withTreeNodeQuery(string $url, string $node): string
+    {
+        if ($node === '') {
+            return $url;
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return $url;
+        }
+        $query = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $query);
+        }
+        $query['node'] = $node;
+        $rebuild = '';
+        if (!empty($parts['scheme'])) {
+            $rebuild .= $parts['scheme'] . '://';
+        }
+        if (!empty($parts['host'])) {
+            $rebuild .= $parts['host'];
+            if (isset($parts['port'])) {
+                $rebuild .= ':' . (int)$parts['port'];
+            }
+        }
+        $rebuild .= (string)($parts['path'] ?? '');
+        $rebuild .= '?' . http_build_query($query);
+
+        return $rebuild;
+    }
+
+    private function isSafeWebsitesTreeReturnUrl(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '' || preg_match('/[\x00-\x1F\x7F]/', $url) === 1) {
+            return false;
+        }
+
+        if (str_starts_with($url, '/')) {
+            $path = (string)(parse_url($url, PHP_URL_PATH) ?: $url);
+
+            return (bool)preg_match('#/websites/admin/website(?:/index)?$#', rtrim($path, '/'));
+        }
+
+        if (!preg_match('#^https?://#i', $url)) {
+            return (bool)preg_match('#^websites/admin/website(?:/index)?(?:\?|$)#', $url);
+        }
+
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return false;
+        }
+
+        try {
+            $reqHost = (string)(parse_url(
+                (string)$this->request->getUrlBuilder()->getCurrentUrl([], false),
+                PHP_URL_HOST
+            ) ?: '');
+        } catch (\Throwable) {
+            $reqHost = '';
+        }
+        if ($reqHost === '' || strcasecmp((string)$parts['host'], $reqHost) !== 0) {
+            return false;
+        }
+
+        $path = rtrim((string)($parts['path'] ?? ''), '/');
+
+        return (bool)preg_match('#/websites/admin/website(?:/index)?$#', $path);
     }
 
     /**
@@ -250,15 +310,6 @@ final class ScopeManagement extends BackendController
         $value = trim((string)$this->request->getPost($key, ''));
         if ($value === '' || strlen($value) > $maxLength) {
             throw new \InvalidArgumentException(__('%{1} 不能为空且最多 %{2} 字符', [$key, $maxLength]));
-        }
-        return $value;
-    }
-
-    private function postPositiveInt(string $key): int
-    {
-        $value = $this->postNonNegativeInt($key, 0);
-        if ($value <= 0) {
-            throw new \InvalidArgumentException(__('%{1} 必须是正整数', [$key]));
         }
         return $value;
     }

@@ -16,7 +16,7 @@ final class SitemapCrawlerDescriptionLengthPolicyTest extends TestCase
     public function testEightyNineCharsDoesNotCreateLengthIssue(): void
     {
         $issues = $this->auditMetaWithDescription(
-            '云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合；提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的款式。'
+            '长安汉服水墨中国风独立站，精选明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合；提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的款式。'
         );
 
         self::assertArrayNotHasKey('description_length', $issues);
@@ -67,7 +67,7 @@ final class SitemapCrawlerDescriptionLengthPolicyTest extends TestCase
         $pageIssueIds = [];
         $facts = [
             'url' => 'https://example.test/',
-            'title' => '云裳汉服 · Hanfu Atelier | 水墨汉服商城首页',
+            'title' => '长安汉服 · Hanfu Atelier | 水墨汉服商城首页',
             'description' => $description,
         ];
         $args = [$facts, &$issues, &$pageIssueIds];

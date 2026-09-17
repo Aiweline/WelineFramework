@@ -236,7 +236,7 @@ $verifiedSuppliers = [
         'name' => '儒文服饰（曹县）',
         'store_url' => 'https://www.1688.com/factory/b2b-221876933683243132.html',
         'description' => '1688 工厂黄页 title 核验：舞台表演服定制。',
-        'brand_codes' => ['huashangjiuzhou', 'yunshang'],
+        'brand_codes' => ['huashangjiuzhou', 'changan'],
         'default_moq' => 10,
         'default_lead_time_days' => 10,
     ],

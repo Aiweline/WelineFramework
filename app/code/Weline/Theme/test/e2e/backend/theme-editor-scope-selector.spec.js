@@ -17,19 +17,21 @@ async function expectAuthorizedScopedPreview(page) {
   const preview = page.locator('#previewFrame');
   await expect.poll(
     () => preview.getAttribute('src'),
-    { timeout: 60000, message: 'frontend editor canvas must load theme-preview/content without live preview token' },
-  ).toMatch(/theme\/frontend\/theme-preview\/content/);
+    { timeout: 60000, message: 'frontend editor canvas must load storefront path with editor_mode (path=layout)' },
+  ).toMatch(/editor_mode=1/);
   await expect.poll(
     () => preview.getAttribute('src'),
-    { timeout: 60000, message: 'editor canvas must keep editor_mode=1' },
-  ).toContain('editor_mode=1');
+    { timeout: 60000, message: 'editor canvas must not use theme-preview/content as storefront path' },
+  ).not.toContain('theme/frontend/theme-preview/content');
   await expect.poll(
     () => preview.getAttribute('src'),
     { timeout: 60000, message: 'editor canvas must not activate live storefront preview token' },
   ).not.toContain('weline_preview_token=');
   await page.waitForFunction(() => {
     const frame = document.querySelector('#previewFrame');
-    if (!(frame instanceof HTMLIFrameElement) || !frame.src.includes('theme/frontend/theme-preview/content')) return false;
+    if (!(frame instanceof HTMLIFrameElement) || !frame.src) return false;
+    if (!frame.src.includes('editor_mode=1')) return false;
+    if (frame.src.includes('theme/frontend/theme-preview/content')) return false;
     if (frame.src.includes('weline_preview_token=')) return false;
     try {
       return frame.contentDocument?.readyState === 'complete';
@@ -54,8 +56,8 @@ async function expectAuthorizedScopedPreview(page) {
     }
   });
   expect(report.sameOrigin, JSON.stringify(report, null, 2)).toBeTruthy();
-  expect(report.src).toContain('theme/frontend/theme-preview/content');
   expect(report.src).toContain('editor_mode=1');
+  expect(report.src).not.toContain('theme/frontend/theme-preview/content');
   expect(report.src).not.toContain('weline_preview_token=');
   expect(report.hasExitFloat).toBeFalsy();
   expect(report.htmlLength).toBeGreaterThan(100);

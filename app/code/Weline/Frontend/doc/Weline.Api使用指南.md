@@ -2,6 +2,9 @@
 
 ## 一、边界
 
+**默认且唯一传输**：站内业务数据走 BinQuery——`theme.js → Weline.Api.resource|graph|stream → worker/query-bin`。  
+禁止把 BinQuery 写成 HTTP 控制器失败后的 catch 回退；禁止「先 fetch 业务 REST，再降级 Api」。无 `Weline.Api` 时本地降级（空数据/离线），不得发明第二套原生请求通道。
+
 浏览器业务接口只能通过已发布的 QueryProvider、Graph 或 Stream 契约访问：
 
 - 普通读取/写入：`api.resource(provider).operation(params)`。

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>i18n dialog overflow contain fixture</title>
+  <link rel="stylesheet" href="/Weline/Widget/view/statics/css/widget-param-types.css">
+  <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/pages/weline-theme-editor-widget-config.css">
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; background: #f4f5f7; min-height: 120vh; }
+    .note { color: #6b7380; font-size: 13px; margin-bottom: 12px; }
+    .log { margin-top: 12px; font-size: 12px; white-space: pre-wrap; background: #fff; border: 1px solid #d5d9e0; border-radius: 8px; padding: 10px; min-height: 4rem; }
+    .w-param-form { max-width: 22rem; }
+  </style>
+</head>
+<body>
+  <p class="note">多语言弹窗撑破回归：语种很多时，footer 必须仍在 dialog 壳内，body 内部滚动。</p>
+  <div class="w-param-form">
+    <button type="button" class="w-button w-param-btn-i18n" id="openBtn" data-tone="neutral" data-variant="outline" data-size="sm">多语言</button>
+    <dialog id="i18n_panel_overflow" class="w-dialog w-param-i18n-panel w-param-i18n-dialog i18n-edit-panel" data-w-component="dialog" data-w-closable="false" data-w-backdrop="static" data-field="intro" data-state="closed" aria-labelledby="i18n_overflow_title" hidden>
+      <div class="w-dialog__surface">
+        <header class="w-dialog__header w-param-i18n-header i18n-panel-header">
+          <h2 class="w-dialog__title" id="i18n_overflow_title">多语言配置 · 简介</h2>
+          <div class="w-param-i18n-header-actions">
+            <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">AI翻译</button>
+            <button type="button" class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n aria-label="关闭多语言配置">×</button>
+          </div>
+        </header>
+        <div class="w-dialog__body w-param-i18n-body i18n-panel-body" id="i18nBody"></div>
+        <footer class="w-dialog__footer w-param-i18n-footer i18n-panel-footer">
+          <button type="button" class="w-button" data-tone="primary" data-size="sm" data-save-i18n>保存多语言</button>
+        </footer>
+      </div>
+    </dialog>
+  </div>
+  <div class="log" id="log">ready</div>
+  <script type="module">
+    import UI from '/Weline/Theme/view/statics/ui/weline-ui.js';
+    const locales = [
+      ['zh_Hans_CN', '简体中文'], ['zh_Hant_TW', '繁體中文'], ['en_US', 'English'],
+      ['ja_JP', '日本語'], ['ko_KR', '한국어'], ['fr_FR', 'Français'],
+      ['de_DE', 'Deutsch'], ['es_ES', 'Español'], ['pt_BR', 'Português'],
+      ['ru_RU', 'Русский'], ['ar_SA', 'العربية'], ['th_TH', 'ไทย'],
+      ['vi_VN', 'Tiếng Việt'], ['id_ID', 'Bahasa Indonesia'], ['ms_MY', 'Bahasa Melayu'],
+      ['it_IT', 'Italiano'], ['nl_NL', 'Nederlands'], ['pl_PL', 'Polski'],
+      ['tr_TR', 'Türkçe'], ['hi_IN', 'हिन्दी']
+    ];
+    const body = document.getElementById('i18nBody');
+    body.innerHTML = locales.map(([code, name]) => (
+      `<div class="w-param-i18n-row">`
+      + `<label class="w-param-i18n-label"><span class="w-param-i18n-locale-name">${name}</span><span class="lang-code">${code}</span></label>`
+      + `<textarea class="w-textarea w-param-textarea i18n-input" data-locale="${code}" rows="3">${name} sample copy for overflow containment regression.</textarea>`
+      + `</div>`
+    )).join('');
+    const dialog = document.getElementById('i18n_panel_overflow');
+    const log = document.getElementById('log');
+    const push = (msg) => { log.textContent = `${new Date().toISOString().slice(11, 19)} ${msg}\n` + log.textContent; };
+    const measure = () => {
+      const d = dialog.getBoundingClientRect();
+      const surface = dialog.querySelector('.w-dialog__surface').getBoundingClientRect();
+      const header = dialog.querySelector('.w-dialog__header').getBoundingClientRect();
+      const bodyEl = dialog.querySelector('.w-dialog__body');
+      const bodyBox = bodyEl.getBoundingClientRect();
+      const footer = dialog.querySelector('.w-dialog__footer').getBoundingClientRect();
+      const cs = getComputedStyle(dialog);
+      const bodyCs = getComputedStyle(bodyEl);
+      const footerInside = footer.bottom <= d.bottom + 1 && footer.top >= d.top - 1;
+      const headerInside = header.top >= d.top - 1 && header.bottom <= d.bottom + 1;
+      const bodyScrolls = bodyEl.scrollHeight > bodyEl.clientHeight + 2;
+      const capped = d.height <= Math.min(window.innerHeight * 0.85, 40 * 16) + 2;
+      const overflowY = cs.overflowY;
+      const bodyOverflowY = bodyCs.overflowY;
+      const pass = footerInside && headerInside && bodyScrolls && capped && (overflowY === 'hidden' || overflowY === 'clip') && (bodyOverflowY === 'auto' || bodyOverflowY === 'scroll');
+      window.__i18nOverflow = {
+        pass,
+        dialogH: Math.round(d.height),
+        surfaceH: Math.round(surface.height),
+        bodyScrollH: bodyEl.scrollHeight,
+        bodyClientH: bodyEl.clientHeight,
+        footerInside,
+        headerInside,
+        bodyScrolls,
+        capped,
+        overflowY,
+        bodyOverflowY,
+        footerBottom: Math.round(footer.bottom),
+        dialogBottom: Math.round(d.bottom)
+      };
+      push(JSON.stringify(window.__i18nOverflow));
+      return window.__i18nOverflow;
+    };
+    window.__i18nOverflowFixture = { UI, dialog, measure };
+    document.getElementById('openBtn').addEventListener('click', () => {
+      dialog.dataset.wClosable = 'false';
+      dialog.dataset.wBackdrop = 'static';
+      UI.mount(dialog);
+      UI.dialog.open(dialog);
+      requestAnimationFrame(() => requestAnimationFrame(measure));
+    });
+    dialog.querySelector('[data-close-i18n]').addEventListener('click', () => {
+      UI.dialog.close(dialog, 'i18n-close');
+      push('closed-by-button');
+    });
+    push('fixture-ready locales=' + locales.length);
+  </script>
+</body>
+</html>

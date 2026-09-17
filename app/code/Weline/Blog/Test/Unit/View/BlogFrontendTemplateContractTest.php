@@ -46,6 +46,8 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertStringContainsString('amazon-blog-article__content', $template);
         self::assertStringContainsString('amazon-blog-article__author-inline', $template);
         self::assertStringContainsString('amazon-blog-article__keywords', $template);
+        self::assertStringContainsString('@url{$rPath}', $template);
+        self::assertStringNotContainsString("href=\"<?= \$escape(\$rUrl) ?>\"", $template);
 
         $form = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/post-admin/form.phtml');
         self::assertStringContainsString('Weline\\Blog\\Model\\Post\\LocalDescription', $form);
@@ -79,7 +81,7 @@ final class BlogFrontendTemplateContractTest extends TestCase
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
+        self::assertSame('homepage', $injection['layout_type'] ?? null);
         self::assertSame('header-nav-extensions', $injection['slot'] ?? null);
         self::assertSame('header', $injection['area'] ?? null);
         self::assertSame(0, (int)($injection['sort_order'] ?? -1));
@@ -91,6 +93,8 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="header-blog-link"', $template);
         self::assertStringContainsString("@url{'blog'}", $template);
         self::assertStringContainsString('@widget.slot {header-nav-extensions}', $template);
+        self::assertStringContainsString('右侧扩展槽', $injection['reason'] ?? '');
+        self::assertStringContainsString('与快捷导航同簇', (string)($widget['description'] ?? ''));
     }
 
     public function testFooterBlogLinkWidgetRegistersDefaultInjection(): void
@@ -105,7 +109,7 @@ final class BlogFrontendTemplateContractTest extends TestCase
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
+        self::assertSame('homepage', $injection['layout_type'] ?? null);
         self::assertSame('footer-about-links', $injection['slot'] ?? null);
         self::assertSame('footer', $injection['area'] ?? null);
         self::assertSame(0, (int)($injection['sort_order'] ?? -1));
@@ -120,7 +124,7 @@ final class BlogFrontendTemplateContractTest extends TestCase
         $widget = $widgets['footer-news-link'];
         self::assertSame('footer-about-links', $widget['slot'] ?? null);
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
+        self::assertSame('homepage', $injection['layout_type'] ?? null);
         self::assertSame('footer-about-links', $injection['slot'] ?? null);
         self::assertSame('footer', $injection['area'] ?? null);
         self::assertSame('news', $injection['config']['category_slug'] ?? null);

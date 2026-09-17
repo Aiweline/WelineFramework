@@ -12,7 +12,6 @@ final class ThemeScopedReleaseBatchEditorContractTest extends TestCase
     {
         $root = \dirname(__DIR__, 3);
         foreach ([
-            '/view/statics/js/theme-editor.js',
             '/view/statics/ui/pages/weline-theme-editor.js',
         ] as $relative) {
             $source = (string)\file_get_contents($root . $relative);
@@ -42,7 +41,6 @@ final class ThemeScopedReleaseBatchEditorContractTest extends TestCase
     {
         $root = \dirname(__DIR__, 3);
         foreach ([
-            '/view/statics/js/theme-editor.js',
             '/view/statics/ui/pages/weline-theme-editor.js',
         ] as $relative) {
             $source = (string)\file_get_contents($root . $relative);

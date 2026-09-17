@@ -484,7 +484,7 @@
     function normalizeOptions(options) {
         var requestOptions = Object.assign({}, options || {});
         var method = String(requestOptions.method || 'GET').toUpperCase();
-        var headers = normalizeHeaders(requestOptions.headers || {});
+        var headers = ensureApiJsonHeaders(requestOptions.headers || {});
         var serializedBody = method === 'GET' || method === 'HEAD'
             ? null
             : serializeBody(requestOptions.body, headers);
@@ -495,7 +495,7 @@
             body: serializedBody,
             credentials: requestOptions.credentials || 'same-origin',
             cache: requestOptions.cache || 'no-store',
-            redirect: requestOptions.redirect || 'follow'
+            redirect: requestOptions.redirect || 'manual'
         };
     }
 
@@ -698,7 +698,129 @@
             data: null,
             maintenance: false
         };
+        var data = response && response.data ? response.data : null;
+        if (data && typeof data === 'object') {
+            if (data.code) {
+                error.code = data.code;
+            }
+            if (data.location) {
+                error.location = data.location;
+            }
+        }
+        if (!error.code && error.status >= 300 && error.status < 400) {
+            error.code = 'http_redirect';
+        }
         return error;
+    }
+
+    // Same method+pathname: at most 1 in-flight; redirect/repeated fails open a cool-down.
+    var REQUEST_CIRCUIT_MAX_IN_FLIGHT = 1;
+    var REQUEST_CIRCUIT_FAIL_THRESHOLD = 3;
+    var REQUEST_CIRCUIT_COOLDOWN_MS = 15000;
+    var requestCircuitState = Object.create(null);
+
+    function circuitKey(method, url) {
+        var pathname = String(url || '');
+        try {
+            pathname = new URL(url, window.location.origin).pathname;
+        } catch (_error) {
+        }
+        return String(method || 'GET').toUpperCase() + ' ' + pathname;
+    }
+
+    function isBackendHtmlFormUrl(url) {
+        try {
+            var pathname = new URL(url, window.location.origin).pathname;
+            return /\/websites\/admin\/website\/(edit|add)(?:\/|$)/i.test(pathname);
+        } catch (_error) {
+            return false;
+        }
+    }
+
+    function headerHas(headers, name) {
+        var target = String(name).toLowerCase();
+        return Object.keys(headers || {}).some(function (key) {
+            return String(key).toLowerCase() === target;
+        });
+    }
+
+    function ensureApiJsonHeaders(headers) {
+        var normalized = normalizeHeaders(headers || {});
+        if (!headerHas(normalized, 'Accept')) {
+            normalized.Accept = 'application/json';
+        }
+        if (!headerHas(normalized, 'X-Weline-Api')) {
+            normalized['X-Weline-Api'] = '1';
+        }
+        if (!headerHas(normalized, 'X-Requested-With')) {
+            normalized['X-Requested-With'] = 'XMLHttpRequest';
+        }
+        return normalized;
+    }
+
+    function warnCircuitOnce(state, key, reason) {
+        var now = Date.now();
+        if (state.warnedAt && (now - state.warnedAt) < REQUEST_CIRCUIT_COOLDOWN_MS) {
+            return;
+        }
+        state.warnedAt = now;
+        if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+            console.warn('[Weline.Api] circuit open for ' + key + ' (' + reason + ')');
+        }
+    }
+
+    function acquireRequestCircuit(key) {
+        var now = Date.now();
+        var state = requestCircuitState[key];
+        if (!state) {
+            state = requestCircuitState[key] = {
+                inFlight: 0,
+                fails: 0,
+                coolUntil: 0,
+                warnedAt: 0
+            };
+        }
+        if (state.coolUntil > now) {
+            var coolError = new Error('[Weline.Api] circuit open; cooling down for ' + key);
+            coolError.code = 'circuit_open';
+            coolError.status = 0;
+            warnCircuitOnce(state, key, 'cooldown');
+            return coolError;
+        }
+        if (state.inFlight >= REQUEST_CIRCUIT_MAX_IN_FLIGHT) {
+            var busyError = new Error('[Weline.Api] too many in-flight requests for ' + key);
+            busyError.code = 'circuit_inflight';
+            busyError.status = 0;
+            warnCircuitOnce(state, key, 'inflight');
+            return busyError;
+        }
+        state.inFlight += 1;
+        return null;
+    }
+
+    function releaseRequestCircuit(key, ok, error) {
+        var state = requestCircuitState[key];
+        if (!state) {
+            return;
+        }
+        state.inFlight = Math.max(0, state.inFlight - 1);
+        if (ok) {
+            state.fails = 0;
+            return;
+        }
+        var code = error && error.code ? String(error.code) : '';
+        var status = error && error.status ? Number(error.status) : 0;
+        if (code === 'http_redirect' || (status >= 300 && status < 400)) {
+            state.fails = REQUEST_CIRCUIT_FAIL_THRESHOLD;
+            state.coolUntil = Date.now() + REQUEST_CIRCUIT_COOLDOWN_MS;
+            warnCircuitOnce(state, key, 'http_redirect');
+            return;
+        }
+        state.fails += 1;
+        if (state.fails >= REQUEST_CIRCUIT_FAIL_THRESHOLD) {
+            state.coolUntil = Date.now() + REQUEST_CIRCUIT_COOLDOWN_MS;
+            warnCircuitOnce(state, key, 'fail_threshold');
+        }
     }
 
     function isObjectPayload(data) {
@@ -847,7 +969,7 @@
             method: method,
             credentials: requestOptions.credentials || 'same-origin',
             cache: requestOptions.cache || 'no-store',
-            redirect: requestOptions.redirect || 'follow',
+            redirect: requestOptions.redirect || 'manual',
             headers: headers
         };
 
@@ -856,6 +978,34 @@
         }
 
         return window.fetch(requestUrl, fetchOptions).then(function (response) {
+            var status = response.status || 0;
+            if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+                var location = '';
+                try {
+                    location = response.headers.get('location') || '';
+                } catch (_error) {
+                    location = '';
+                }
+                var redirectPayload = {
+                    ok: false,
+                    status: status,
+                    statusText: response.statusText || '',
+                    data: {
+                        success: false,
+                        message: 'Backend request redirected instead of returning API body (HTTP '
+                            + status
+                            + (location ? ', ' + location : '')
+                            + ').',
+                        code: 'http_redirect',
+                        location: location
+                    },
+                    headers: collectHeaders(response.headers),
+                    url: response.url || requestUrl,
+                    redirected: true,
+                    maintenance: false
+                };
+                throw buildError(redirectPayload.data.message, redirectPayload, requestUrl);
+            }
             return parseFetchResponseBody(response).then(function (bodyData) {
                 var body = normalizeBusinessResult(bodyData);
                 var transportResponse = {
@@ -1009,12 +1159,41 @@
 
     BackendApiClient.prototype.send = function (url, options, responseMode) {
         var requestUrl = sameOriginUrl(url);
-        var requestOptions = normalizeOptions(options);
+        var inputOptions = (arguments.length > 1 && arguments[1] && typeof arguments[1] === 'object')
+            ? arguments[1]
+            : {};
+        var allowFlag = inputOptions.allowHtmlForm;
+        var allowHtmlForm = allowFlag === true || allowFlag === 1 || allowFlag === 'true';
+        if (!allowHtmlForm && isBackendHtmlFormUrl(requestUrl)) {
+            var blocked = buildError(
+                '[Weline.Api] refused HTML form URL; use iframe submit or adminRequest, or pass allowHtmlForm:true.',
+                {
+                    ok: false,
+                    status: 0,
+                    statusText: '',
+                    data: {success: false, message: 'html_form_refused', code: 'html_form_refused'},
+                    maintenance: false
+                },
+                requestUrl
+            );
+            blocked.code = 'html_form_refused';
+            if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+                console.warn(blocked.message, requestUrl, new Error().stack);
+            }
+            return Promise.reject(blocked);
+        }
+
+        var requestOptions = normalizeOptions(inputOptions);
         var mode = responseMode || 'body';
         var client = this;
         var messageId = this.nextId();
         var timeoutMs = Math.max(1000, parseInt((options && options.timeoutMs) || this.config.requestTimeoutMs || 60000, 10));
         var pending = this.pending;
+        var key = circuitKey(requestOptions.method, requestUrl);
+        var circuitError = acquireRequestCircuit(key);
+        if (circuitError) {
+            return Promise.reject(circuitError);
+        }
 
         return this.ensureWorker().then(function (worker) {
             return new Promise(function (resolve, reject) {
@@ -1060,6 +1239,12 @@
             });
         }).catch(function () {
             return directFetch(requestUrl, requestOptions, mode);
+        }).then(function (result) {
+            releaseRequestCircuit(key, true);
+            return result;
+        }, function (error) {
+            releaseRequestCircuit(key, false, error);
+            return Promise.reject(error);
         });
     };
 
@@ -1081,6 +1266,12 @@
         window.clearTimeout(pending.timeoutId);
 
         var body = normalizeBusinessResult(message.body);
+        if (message.code && isObjectPayload(body) && !body.code) {
+            body.code = message.code;
+        }
+        if (message.location && isObjectPayload(body) && !body.location) {
+            body.location = message.location;
+        }
         var transportResponse = {
             ok: !!message.ok,
             status: message.status || 0,

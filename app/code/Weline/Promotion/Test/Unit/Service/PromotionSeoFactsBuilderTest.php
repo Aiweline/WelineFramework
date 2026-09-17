@@ -11,7 +11,7 @@ final class PromotionSeoFactsBuilderTest extends TestCase
     public function testSourceContractLocksProductListOwnership(): void
     {
         $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/PromotionSeoFactsBuilder.php');
-        self::assertStringContainsString("'page_type' => 'product_list'", $src);
+        self::assertStringContainsString("'page_type' => 'products'", $src);
         self::assertStringContainsString("'promotion_page_slug'", $src);
         self::assertStringContainsString('itemListFromCards', $src);
         self::assertStringContainsString('withHomeBreadcrumb', $src);

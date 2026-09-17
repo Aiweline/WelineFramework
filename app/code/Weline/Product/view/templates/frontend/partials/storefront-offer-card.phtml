@@ -14,4 +14,5 @@ if ((int)($product['id'] ?? 0) <= 0) {
     return;
 }
 ?>
+<?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
 <w:product:card product="product" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card" wishlist-pixel="true" />

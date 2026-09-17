@@ -23,8 +23,10 @@ final class BackendOrderShipmentsService
 
     /**
      * @return list<array{
+     *     shipment_id: int,
      *     tracking_number: string,
      *     carrier: string,
+     *     provider_code: string,
      *     status: string,
      *     status_label: string,
      *     status_tone: string,
@@ -51,8 +53,10 @@ final class BackendOrderShipmentsService
             }
             $status = strtolower(trim((string)($data[OrderShipment::schema_fields_STATUS] ?? '')));
             $rows[] = [
+                'shipment_id' => (int)($data[OrderShipment::schema_fields_ID] ?? 0),
                 'tracking_number' => trim((string)($data[OrderShipment::schema_fields_TRACKING_NUMBER] ?? '')),
                 'carrier' => trim((string)($data[OrderShipment::schema_fields_CARRIER] ?? '')),
+                'provider_code' => trim((string)($data[OrderShipment::schema_fields_TRACKING_PROVIDER_CODE] ?? '')),
                 'status' => $status,
                 'status_label' => $this->statusLabel($status),
                 'status_tone' => $this->statusTone($status),

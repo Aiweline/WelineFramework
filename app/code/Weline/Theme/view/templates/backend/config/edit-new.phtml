@@ -215,13 +215,9 @@ $themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $them
                         <div class="card">
                             <div class="card-header py-2">
                                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                    <!-- 左侧：预览标题和自动登录 -->
+                                    <!-- 左侧：预览标题 -->
                                     <div class="d-flex align-items-center gap-2">
                                         <h6 class="mb-0"><?= __('主题预览') ?></h6>
-                                        <div class="form-check form-switch mb-0">
-                                            <input class="form-check-input" type="checkbox" id="autoLoginSwitch" checked>
-                                            <label class="form-check-label small" for="autoLoginSwitch"><?= __('自动登录') ?></label>
-                                        </div>
                                     </div>
                                     
                                     <!-- 右侧：控制按钮 -->

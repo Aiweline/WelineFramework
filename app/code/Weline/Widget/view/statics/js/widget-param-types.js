@@ -201,10 +201,83 @@
             initColorPickers(forms[i]);
             initImagePreview(forms[i]);
             initMediaImagePicker(forms[i]);
+            initProductAdminPickers(forms[i]);
             initGroupToggles(forms[i]);
             var ui = getUi();
             if (ui) ui.mount(forms[i]);
         }
+    }
+
+    function initProductAdminPickers(container) {
+        var scope = container || doc;
+        ensureProductAdminPickerAssets(scope, function () {
+            var api = window.Weline && window.Weline.Product && window.Weline.Product.AdminPicker;
+            if (api && typeof api.mount === 'function') {
+                api.mount(scope);
+            }
+        });
+    }
+
+    function ensureProductAdminPickerAssets(container, done) {
+        var finish = typeof done === 'function' ? done : function () {};
+        if (window.Weline && window.Weline.Product && window.Weline.Product.AdminPicker
+            && typeof window.Weline.Product.AdminPicker.mount === 'function') {
+            finish();
+            return;
+        }
+
+        var cssStub = container && container.querySelector
+            ? container.querySelector('link[href*="product-admin-picker"], [data-picker-css]')
+            : null;
+        var cssHref = '';
+        if (cssStub) {
+            cssHref = cssStub.getAttribute('href') || cssStub.getAttribute('data-picker-css') || '';
+        }
+        if (cssHref && !doc.querySelector('link[data-weline-product-admin-picker-css]')) {
+            var link = doc.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = cssHref;
+            link.setAttribute('data-weline-product-admin-picker-css', '1');
+            doc.head.appendChild(link);
+        }
+
+        var existing = doc.querySelector('script[data-weline-product-admin-picker]');
+        if (existing) {
+            var tries = 0;
+            var timer = window.setInterval(function () {
+                tries += 1;
+                if (window.Weline && window.Weline.Product && window.Weline.Product.AdminPicker) {
+                    window.clearInterval(timer);
+                    finish();
+                    return;
+                }
+                if (tries >= 40) {
+                    window.clearInterval(timer);
+                    finish();
+                }
+            }, 50);
+            return;
+        }
+
+        var stub = container && container.querySelector
+            ? container.querySelector('script[src*="product-admin-picker"], [data-picker-js]')
+            : null;
+        var src = '';
+        if (stub) {
+            src = String(stub.getAttribute('src') || stub.getAttribute('data-picker-js') || '').trim();
+        }
+        if (!src) {
+            finish();
+            return;
+        }
+
+        var script = doc.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.setAttribute('data-weline-product-admin-picker', '1');
+        script.onload = function () { finish(); };
+        script.onerror = function () { finish(); };
+        doc.head.appendChild(script);
     }
 
     function readMediaImagePreviewUrl(input, preview, node) {
@@ -280,6 +353,292 @@
         }
     }
 
+    /** Seed w-file-picker preview when cloning array items with a typed file-image value. */
+    function seedFilePickerPreviewFromInput(input, explicitPreviewUrl) {
+        if (!input || !input.closest) return;
+        var wrap = input.closest('.w-param-media-image[data-w-param-media="file-picker"]');
+        if (!wrap) return;
+        var preview = q(wrap, '[data-w-file-preview]');
+        if (!preview) return;
+        var node = parseFileImageNode(input.value);
+        if (!node) return;
+        if (q(preview, '[data-w-file-item]')) return;
+        var url = sanitizeLegacyImagePreviewUrl(String(
+            explicitPreviewUrl
+            || input.getAttribute('data-preview-url')
+            || input.dataset.previewUrl
+            || ''
+        ).trim());
+        if (!url) return;
+        var assetId = node.usage && node.usage.asset_id ? String(node.usage.asset_id) : '';
+        var item = doc.createElement('div');
+        item.className = 'w-file-preview__item';
+        item.setAttribute('data-w-file-item', '');
+        item.dataset.path = assetId;
+        item.dataset.kind = 'image';
+        item.dataset.fileImageNode = JSON.stringify(node);
+        item.draggable = true;
+        var media = doc.createElement('div');
+        media.className = 'w-file-preview__media';
+        var thumb = doc.createElement('button');
+        thumb.type = 'button';
+        thumb.className = 'w-file-preview__thumbnail';
+        thumb.setAttribute('data-w-file-open', '');
+        thumb.setAttribute('aria-label', assetId || 'preview');
+        var img = doc.createElement('img');
+        img.src = url;
+        img.alt = assetId || 'preview';
+        img.draggable = false;
+        thumb.appendChild(img);
+        media.appendChild(thumb);
+        var name = doc.createElement('span');
+        name.className = 'w-file-preview__name';
+        name.title = assetId;
+        name.textContent = assetId || 'image';
+        var actions = doc.createElement('span');
+        actions.className = 'w-file-preview__actions';
+        var removeBtn = doc.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'w-button';
+        removeBtn.dataset.tone = 'danger';
+        removeBtn.dataset.size = 'sm';
+        removeBtn.setAttribute('data-w-file-remove', '');
+        removeBtn.setAttribute('aria-label', 'Remove');
+        removeBtn.textContent = '\u00d7';
+        actions.appendChild(removeBtn);
+        item.appendChild(media);
+        item.appendChild(name);
+        item.appendChild(actions);
+        preview.appendChild(item);
+        preview.hidden = false;
+        preview.removeAttribute('hidden');
+    }
+
+    function mountParamComponents(scope) {
+        var ui = getUi();
+        if (!ui || !scope || typeof ui.mount !== 'function') return;
+        try {
+            ui.mount(scope);
+        } catch (_err) {}
+    }
+
+    function resolveFileManagerConnectorBase() {
+        var themeEl = doc.getElementById('themeEditor');
+        return String(
+            (themeEl && (themeEl.getAttribute('data-file-manager-connector-base') || themeEl.dataset.fileManagerConnectorBase))
+            || ''
+        ).trim();
+    }
+
+    function buildMediaManagerIframeSrc(targetId, options) {
+        options = options || {};
+        var base = resolveFileManagerConnectorBase();
+        if (!base || !targetId) return '';
+        var params = [
+            'isIframe=1',
+            'target=' + encodeURIComponent(targetId),
+            'preview=1',
+            'startPath=' + encodeURIComponent(options.path || options.defaultDir || 'banner'),
+            'lockPath=' + encodeURIComponent(options.lockPath != null ? String(options.lockPath) : '0'),
+            'multi=0',
+            'ext=' + encodeURIComponent(options.ext || 'jpg,jpeg,png,gif,webp'),
+            'size=' + encodeURIComponent(String(options.size || 5242880)),
+            'usage=' + encodeURIComponent(String(options.usage != null ? options.usage : '1'))
+        ];
+        if (options.aspectRatio) params.push('aspect_ratio=' + encodeURIComponent(String(options.aspectRatio)));
+        if (options.recommendW) params.push('recommend_width=' + encodeURIComponent(String(options.recommendW)));
+        if (options.recommendH) params.push('recommend_height=' + encodeURIComponent(String(options.recommendH)));
+        if (options.aspectTolerance) params.push('aspect_ratio_tolerance=' + encodeURIComponent(String(options.aspectTolerance)));
+        return base + (base.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
+    }
+
+    function escAttr(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    /**
+     * Client-side WelineMedia/file-picker shell (typed file-image).
+     * options: fieldId, fieldKey, value, fieldParam, includeName, arrayItem, defaultDir, openLabel
+     */
+    function buildMediaLibraryPickerHtml(options) {
+        options = options || {};
+        var fieldId = String(options.fieldId || '').trim();
+        var fieldKey = String(options.fieldKey || '').trim();
+        var fieldParam = options.fieldParam && typeof options.fieldParam === 'object' ? options.fieldParam : {};
+        var mediaOptions = fieldParam.media_options && typeof fieldParam.media_options === 'object'
+            ? fieldParam.media_options
+            : {};
+        var node = parseFileImageNode(options.value);
+        var storedValue = node
+            ? JSON.stringify(node)
+            : ((typeof options.value === 'string' || typeof options.value === 'number')
+                ? String(options.value).trim()
+                : '');
+        var previewUrl = sanitizeLegacyImagePreviewUrl(
+            options.previewUrl
+            || (options.value && options.value.preview_url)
+            || ''
+        );
+        if (!previewUrl && !node) {
+            previewUrl = sanitizeLegacyImagePreviewUrl(storedValue);
+        }
+        var defaultDir = mediaOptions.default_directory || fieldParam.default_directory || options.defaultDir || 'banner';
+        var recommendW = mediaOptions.recommend_width || fieldParam.recommend_width || '';
+        var recommendH = mediaOptions.recommend_height || fieldParam.recommend_height || '';
+        var aspectRatio = String(mediaOptions.aspect_ratio || fieldParam.aspect_ratio || options.aspectRatio || '').trim();
+        var aspectTolerance = mediaOptions.aspect_ratio_tolerance || fieldParam.aspect_ratio_tolerance || '';
+        var ext = String(mediaOptions.ext || fieldParam.ext || options.ext || 'jpg,jpeg,png,gif,webp').trim();
+        var size = mediaOptions.size || fieldParam.size || options.size || 5242880;
+        if (!/^\d+(?:\.\d+)?\s*[:xX×\/]\s*\d+(?:\.\d+)?$/.test(aspectRatio)) {
+            aspectRatio = '';
+        } else {
+            aspectRatio = aspectRatio.replace(/\s+/g, '');
+        }
+        var iframeSrc = buildMediaManagerIframeSrc(fieldId, {
+            path: defaultDir,
+            aspectRatio: aspectRatio,
+            recommendW: recommendW,
+            recommendH: recommendH,
+            aspectTolerance: aspectTolerance,
+            lockPath: options.lockPath,
+            ext: ext,
+            size: size,
+        });
+        if (!fieldId || !iframeSrc) {
+            return '';
+        }
+
+        var mediaKind = String(mediaOptions.kind || options.mediaKind || '').trim().toLowerCase();
+        var isAudio = mediaKind === 'audio';
+        var valueMode = String(mediaOptions.value_mode != null ? mediaOptions.value_mode : (isAudio ? '' : 'file-image'));
+        if (!isAudio && valueMode === '') valueMode = 'file-image';
+        var openLabel = options.openLabel
+            || mediaOptions.picker_title
+            || (isAudio ? '选择曲目' : '从图库选择');
+        var clearLabel = isAudio ? '清除曲目' : '清除图片';
+        var omitName = options.includeName === false || options.arrayItem === true;
+        var inputClass = options.arrayItem ? 'w-param-array-item-input' : String(options.inputClass || '').trim();
+        var usage = mediaOptions.usage != null ? mediaOptions.usage : (isAudio ? '0' : '1');
+        var sizeAlias = isAudio ? '20 MB' : '5 MB';
+        if (String(size) === '20971520') sizeAlias = '20 MB';
+        if (String(size) === '5242880') sizeAlias = '5 MB';
+
+        // Rebuild iframe with audio usage / defaults
+        iframeSrc = buildMediaManagerIframeSrc(fieldId, {
+            path: defaultDir,
+            aspectRatio: isAudio ? '' : aspectRatio,
+            recommendW: isAudio ? '' : recommendW,
+            recommendH: isAudio ? '' : recommendH,
+            aspectTolerance: isAudio ? '' : aspectTolerance,
+            lockPath: options.lockPath,
+            ext: ext,
+            size: size,
+            usage: usage
+        });
+        if (!fieldId || !iframeSrc) {
+            return '';
+        }
+
+        var html = '<div class="w-param-media-image" data-w-param-media="file-picker"'
+            + (isAudio ? ' data-media-kind="audio"' : '') + '>';
+        html += '<input type="hidden" id="' + escAttr(fieldId) + '"';
+        if (!omitName && fieldKey) html += ' name="' + escAttr(fieldKey) + '"';
+        if (inputClass) html += ' class="' + escAttr(inputClass) + '"';
+        if (fieldKey) html += ' data-field="' + escAttr(fieldKey) + '"';
+        if (options.detailField) html += ' data-detail-field="' + escAttr(String(options.detailField)) + '"';
+        html += ' value="' + escAttr(storedValue) + '" data-preview="' + escAttr(fieldId) + '_preview" data-clear-label="' + escAttr(clearLabel) + '"';
+        if (previewUrl) html += ' data-preview-url="' + escAttr(previewUrl) + '"';
+        html += '>';
+
+        html += '<div class="w-file-picker" data-w-component="file-picker" data-w-target-id="' + escAttr(fieldId) + '"'
+            + ' data-w-multiple="false" data-w-value-mode="' + escAttr(valueMode) + '"'
+            + ' data-w-invalid-message="媒体选择器初始化失败，请刷新页面后重试。"'
+            + ' data-w-empty-message="暂无缩略图"';
+        if (!isAudio && aspectRatio) {
+            html += ' data-aspect-ratio="' + escAttr(aspectRatio) + '" data-w-aspect-ratio="' + escAttr(aspectRatio) + '"';
+        }
+        if (!isAudio && aspectTolerance) {
+            html += ' data-w-aspect-ratio-tolerance="' + escAttr(String(aspectTolerance)) + '"';
+        }
+        html += '>';
+        if (isAudio) {
+            html += '<div id="' + escAttr(fieldId) + '-preview" class="w-file-preview" data-w-file-preview'
+                + ' style="--w-file-preview-width: 100%; --w-file-preview-height: 2.5rem;">';
+            if (storedValue) {
+                var audioPath = String(storedValue).replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '').replace(/^\/media\//, 'media/');
+                var audioName = audioPath.split('/').pop() || audioPath;
+                audioName = audioName.replace(/\.[^.]+$/, '') || audioName;
+                html += '<div class="w-file-preview__item w-file-preview__item--audio" data-w-file-item data-path="' + escAttr(audioPath)
+                    + '" data-kind="audio" draggable="true">'
+                    + '<div class="w-file-preview__media"><button type="button" class="w-file-preview__thumbnail" data-w-file-open'
+                    + ' aria-label="' + escAttr(audioName) + '"><span class="w-file-preview__glyph" data-kind="audio" title="'
+                    + escAttr(audioName) + '" aria-hidden="true">♪</span></button></div>'
+                    + '<div class="w-file-preview__meta"><span class="w-file-preview__name" title="' + escAttr(audioName) + '">'
+                    + escAttr(audioName) + '</span><span class="w-file-preview__hint">点击更换曲目</span></div>'
+                    + '<span class="w-file-preview__actions">'
+                    + '<button type="button" class="w-button" data-w-file-move="previous" data-tone="quiet" data-size="sm" aria-label="向前移动">←</button>'
+                    + '<button type="button" class="w-button" data-w-file-move="next" data-tone="quiet" data-size="sm" aria-label="向后移动">→</button>'
+                    + '<button type="button" class="w-button" data-w-file-remove data-tone="danger" data-size="sm" aria-label="移除">×</button>'
+                    + '</span></div>';
+            }
+            html += '</div>';
+        } else {
+            html += '<div id="' + escAttr(fieldId) + '-preview" class="w-file-preview" data-w-file-preview'
+                + ' style="--w-file-preview-width: 96px; --w-file-preview-height: 96px;">';
+            if (node && previewUrl) {
+                var assetId = node.usage && node.usage.asset_id ? String(node.usage.asset_id) : 'image';
+                html += '<div class="w-file-preview__item" data-w-file-item data-path="' + escAttr(assetId)
+                    + '" data-kind="image" data-file-image-node="' + escAttr(JSON.stringify(node)) + '" draggable="true">'
+                    + '<div class="w-file-preview__media"><button type="button" class="w-file-preview__thumbnail" data-w-file-open'
+                    + ' aria-label="' + escAttr(assetId) + '"><img src="' + escAttr(previewUrl) + '" alt="' + escAttr(assetId) + '" draggable="false"></button></div>'
+                    + '<span class="w-file-preview__name" title="' + escAttr(assetId) + '">' + escAttr(assetId) + '</span>'
+                    + '<span class="w-file-preview__actions"><button type="button" class="w-button" data-w-file-remove data-tone="danger" data-size="sm" aria-label="Remove">×</button></span>'
+                    + '</div>';
+            }
+            html += '</div>';
+        }
+        html += '<div class="w-stack" data-gap="xs">';
+        html += '<button type="button" class="w-button" data-w-file-picker-open data-tone="primary" data-size="sm"><span>'
+            + escAttr(openLabel) + '</span></button>';
+        html += '<span class="w-text" data-size="sm" data-tone="muted">允许的文件类型：(' + escAttr(ext) + ')</span>';
+        html += '<span class="w-text" data-size="sm" data-tone="muted">允许的文件大小：' + escAttr(sizeAlias) + '</span>';
+        if (!isAudio && aspectRatio) {
+            html += '<span class="w-text" data-size="sm" data-tone="muted">推荐比例：' + escAttr(aspectRatio) + '</span>';
+        }
+        if (!isAudio && recommendW && recommendH) {
+            html += '<span class="w-text" data-size="sm" data-tone="muted">建议尺寸：'
+                + escAttr(String(recommendW)) + ' × ' + escAttr(String(recommendH)) + ' px</span>';
+        }
+        html += '</div>';
+        html += '<dialog id="' + escAttr(fieldId) + '-file-picker-dialog" class="w-dialog w-file-picker__dialog" data-w-component="dialog"'
+            + ' data-w-file-picker-dialog data-state="closed" aria-labelledby="' + escAttr(fieldId) + '-file-picker-title">'
+            + '<div class="w-dialog__surface"><header class="w-dialog__header"><div>'
+            + '<h2 class="w-dialog__title" id="' + escAttr(fieldId) + '-file-picker-title">' + escAttr(openLabel) + '</h2>'
+            + '</div><button type="button" class="w-button" data-w-action="dialog.close" data-w-close data-tone="quiet" data-size="sm" aria-label="关闭">×</button></header>'
+            + '<div class="w-dialog__body w-file-picker__body">'
+            + '<iframe id="' + escAttr(fieldId) + '-file-manager-iframe" class="w-file-picker__frame" data-w-file-picker-frame'
+            + ' src="about:blank" data-src="' + escAttr(iframeSrc) + '" title="' + escAttr(openLabel) + '"></iframe>'
+            + '</div></div></dialog>';
+        html += '<dialog id="' + escAttr(fieldId) + '-file-preview-dialog" class="w-dialog w-file-preview__dialog" data-w-component="dialog"'
+            + ' data-w-file-preview-dialog data-state="closed" aria-labelledby="' + escAttr(fieldId) + '-file-preview-title">'
+            + '<div class="w-dialog__surface"><header class="w-dialog__header">'
+            + '<h2 class="w-dialog__title" id="' + escAttr(fieldId) + '-file-preview-title">预览</h2>'
+            + '<button type="button" class="w-button" data-w-action="dialog.close" data-w-close data-tone="quiet" data-size="sm" aria-label="关闭">×</button></header>'
+            + '<div class="w-dialog__body w-file-preview__dialog-body"><img data-w-file-preview-image alt=""></div></div></dialog>';
+        html += '<button type="button" class="w-button w-param-media-image-select" hidden data-tone="primary" data-variant="outline" data-size="sm" data-target="'
+            + escAttr(fieldId) + '"' + (fieldKey ? ' data-field="' + escAttr(fieldKey) + '"' : '')
+            + (defaultDir ? ' data-default-dir="' + escAttr(defaultDir) + '"' : '')
+            + (isAudio ? ' data-media-kind="audio"' : '')
+            + (ext ? ' data-ext="' + escAttr(ext) + '"' : '')
+            + '>' + escAttr(isAudio ? '选择曲目' : '选择') + '</button>';
+        html += '</div></div>';
+        return html;
+    }
+
     function parseFileImageNode(value) {
         var node = value;
         if (typeof node === 'string') {
@@ -326,6 +685,15 @@
         return node ? JSON.stringify(node) : '';
     }
 
+    /** Prefer typed file-image; fall back to media path/url for audio and legacy picks. */
+    function selectedMediaFieldValue(file) {
+        var typed = selectedFileImageValue(file);
+        if (typed) return typed;
+        if (!file || typeof file !== 'object') return '';
+        var path = String(file.url || file.path || file.src || '').trim();
+        return path;
+    }
+
     function selectedMediaPreviewUrl(file) {
         if (!file || typeof file !== 'object') return '';
         return sanitizeLegacyImagePreviewUrl(
@@ -333,9 +701,28 @@
         );
     }
 
-    function resolvePickerLocale(themeEl) {
+    function titleFromMediaPath(path) {
+        var raw = String(path || '').trim();
+        if (!raw) return '';
+        try {
+            var pathname = raw;
+            if (/^https?:\/\//i.test(raw)) {
+                pathname = new URL(raw, window.location.origin).pathname || raw;
+            }
+            var base = decodeURIComponent(pathname.split('/').pop() || '');
+            base = base.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_+]+/g, ' ').trim();
+            return base.slice(0, 120);
+        } catch (_e) {
+            return '';
+        }
+    }
+
+    function resolvePickerLocale(themeEl, btn) {
         var locale = '';
-        try { locale = new URLSearchParams(window.location.search).get('locale') || ''; } catch (error) {}
+        if (btn && btn.getAttribute) {
+            locale = btn.getAttribute('data-locale-code') || btn.dataset.localeCode || '';
+        }
+        try { if (!locale) locale = new URLSearchParams(window.location.search).get('locale') || ''; } catch (error) {}
         if (!locale && themeEl) {
             locale = themeEl.getAttribute('data-config-locale')
                 || themeEl.getAttribute('data-locale-code')
@@ -454,6 +841,66 @@
         return { lockRoot: lockRoot, startPath: startPath };
     }
 
+
+    function resolveWidgetMediaIdentity(themeEl, btn, fieldHint) {
+        var form = btn && btn.closest ? btn.closest('.w-param-form') : null;
+        var fieldEl = btn && btn.closest ? btn.closest('.w-param-field[data-field-key], .w-param-array') : null;
+        var widgetItem = form && form.closest ? form.closest('[data-widget-code], .widget-item[data-widget-code], [data-instance-uid]') : null;
+        var themeCode = (themeEl && (themeEl.getAttribute('data-media-identity-code') || themeEl.getAttribute('data-theme-id'))) || '';
+        var scope = (themeEl && (themeEl.getAttribute('data-media-identity-scope') || themeEl.getAttribute('data-scope'))) || '';
+        var component = (widgetItem && (widgetItem.getAttribute('data-widget-code') || widgetItem.getAttribute('data-component')))
+            || (form && form.getAttribute('data-widget-code'))
+            || '';
+        var field = fieldHint
+            || (fieldEl && (fieldEl.getAttribute('data-field-key') || fieldEl.getAttribute('data-field')))
+            || (btn && btn.getAttribute('data-field'))
+            || 'image';
+        var instance = (widgetItem && (widgetItem.getAttribute('data-instance-uid') || widgetItem.getAttribute('data-instance')))
+            || (form && form.getAttribute('data-instance-uid'))
+            || '';
+        var locale = resolvePickerLocale(themeEl, btn);
+        var layout = (themeEl && (themeEl.getAttribute('data-layout-type') || themeEl.getAttribute('data-page-type'))) || '';
+        var option = (themeEl && themeEl.getAttribute('data-layout-option')) || '';
+        var helper = window.Weline && window.Weline.MediaIdentityPicker;
+        if (helper && themeCode) {
+            return helper.buildIdentity({
+                root: 'widget',
+                code: themeCode,
+                scope: scope || null,
+                component: component || undefined,
+                field: field || undefined,
+                instance: instance || undefined,
+                locale: locale || undefined,
+                layout: layout || undefined,
+                option: option || undefined,
+            });
+        }
+        return {
+            root: 'widget',
+            code: themeCode,
+            scope: scope,
+            path: '',
+            slot: { component: component, field: field, instance: instance, locale: locale, layout: layout, option: option },
+        };
+    }
+
+    function appendWidgetMediaIdentityParams(params, themeEl, btn, fieldHint) {
+        var identity = resolveWidgetMediaIdentity(themeEl, btn, fieldHint);
+        if (!identity) return null;
+        if (identity.path) params.push('identity=' + encodeURIComponent(identity.path));
+        if (identity.root) params.push('identity_root=' + encodeURIComponent(identity.root));
+        if (identity.code) params.push('identity_code=' + encodeURIComponent(identity.code));
+        if (identity.scope) params.push('identity_scope=' + encodeURIComponent(identity.scope));
+        var slot = identity.slot || {};
+        Object.keys(slot).forEach(function (k) {
+            if (slot[k]) params.push('identity_' + k + '=' + encodeURIComponent(String(slot[k])));
+        });
+        params.push('ref_mode=single');
+        params.push('strong_ref=1');
+        return identity;
+    }
+
+
     function getSelectedMediaValue(files) {
         if (!files || !files.length) return '';
         var file = files[0] || {};
@@ -472,10 +919,43 @@
         return values;
     }
 
+    function emitParamValueChange(target, extraDetail) {
+        if (!target) return;
+        var carrier = target;
+        if (!(carrier instanceof HTMLInputElement
+            || carrier instanceof HTMLTextAreaElement
+            || carrier instanceof HTMLSelectElement)) {
+            carrier = target.querySelector
+                ? (target.querySelector('input[type="hidden"][name], input[name], textarea[name], select[name], input.i18n-input, textarea.i18n-input')
+                    || target)
+                : target;
+        }
+        if (carrier && typeof carrier.dispatchEvent === 'function'
+            && (carrier instanceof HTMLInputElement
+                || carrier instanceof HTMLTextAreaElement
+                || carrier instanceof HTMLSelectElement)) {
+            carrier.dispatchEvent(new Event('input', { bubbles: true }));
+            carrier.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        var field = (target.closest && target.closest('.w-param-field[data-field-key], .w-param-array, .w-param-i18n-panel'))
+            || (carrier && carrier.closest && carrier.closest('.w-param-field[data-field-key], .w-param-array, .w-param-i18n-panel'))
+            || target;
+        var detail = Object.assign({
+            fieldKey: (field && field.dataset && (field.dataset.fieldKey || field.dataset.field || field.dataset.key)) || '',
+            carrier: carrier || null,
+        }, extraDetail || {});
+        var eventTarget = field || carrier || target;
+        if (eventTarget && typeof eventTarget.dispatchEvent === 'function') {
+            eventTarget.dispatchEvent(new CustomEvent('weline:param:valuechange', {
+                bubbles: true,
+                composed: true,
+                detail: detail,
+            }));
+        }
+    }
+
     function dispatchMediaInputChange(input) {
-        if (!input) return;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        emitParamValueChange(input, { source: 'media' });
     }
 
     function bindMediaManagerMessages(targetId, frame, onSelect, onCancel) {
@@ -587,15 +1067,29 @@
                 var recommendW = btn.getAttribute('data-recommend-w') || '';
                 var recommendH = btn.getAttribute('data-recommend-h') || '';
                 var aspectRatio = btn.getAttribute('data-aspect-ratio') || '';
+                var aspectTolerance = btn.getAttribute('data-aspect-ratio-tolerance') || '';
+                var ext = btn.getAttribute('data-ext') || 'jpg,png,gif,webp';
+                var usage = btn.getAttribute('data-usage');
+                if (usage == null || usage === '') usage = '1';
+                var pickerTitle = btn.getAttribute('data-picker-title') || '\u9009\u62e9\u5a92\u4f53';
                 var themeEl = doc.getElementById('themeEditor');
                 var baseUrl = (themeEl && themeEl.getAttribute('data-file-manager-connector-base')) || '';
                 if (!baseUrl || !targetId) return;
                 var closeId = 'w-param-media-close-' + (targetId.replace(/[^a-z0-9_-]/gi, '_')) + '-' + Date.now();
-                var params = ['target=' + encodeURIComponent(targetId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
+                var pickerLocale = resolvePickerLocale(themeEl, btn);
+                var params = [
+                    'target=' + encodeURIComponent(targetId),
+                    'close=' + encodeURIComponent(closeId),
+                    'ext=' + encodeURIComponent(ext),
+                    'usage=' + encodeURIComponent(usage),
+                    'locale_code=' + encodeURIComponent(pickerLocale)
+                ];
                 appendThemeMediaScopeLockParams(params, themeEl, defaultDir);
+                appendWidgetMediaIdentityParams(params, themeEl, btn);
                 if (recommendW) params.push('recommend_width=' + encodeURIComponent(recommendW));
                 if (recommendH) params.push('recommend_height=' + encodeURIComponent(recommendH));
                 if (aspectRatio) params.push('aspect_ratio=' + encodeURIComponent(aspectRatio));
+                if (aspectTolerance) params.push('aspect_ratio_tolerance=' + encodeURIComponent(aspectTolerance));
                 if (aspectRatio) {
                     try {
                         var ui = window.Weline && window.Weline.UI;
@@ -610,11 +1104,20 @@
                     targetId: targetId,
                     closeId: closeId,
                     url: url,
-                    title: '\u9009\u62e9\u5a92\u4f53',
+                    title: pickerTitle,
                     onSelect: function (value, files) {
                         var input = doc.getElementById(targetId);
                         var file = files && files[0] ? files[0] : null;
-                        var storedValue = selectedFileImageValue(file);
+                        var storedValue = selectedMediaFieldValue(file);
+                        if (storedValue && pickerLocale) {
+                            try {
+                                var node = JSON.parse(storedValue);
+                                if (node && node.usage && typeof node.usage === 'object') {
+                                    node.usage.locale_code = pickerLocale;
+                                    storedValue = JSON.stringify(node);
+                                }
+                            } catch (_stampErr) {}
+                        }
                         if (input && storedValue) {
                             input.value = storedValue;
                             var previewUrl = selectedMediaPreviewUrl(file);
@@ -627,6 +1130,17 @@
                             }
                             updateMediaImagePreview(input);
                             mediaSelectionChanged = true;
+                        }
+                        var pendingIdentity = resolveWidgetMediaIdentity(themeEl, btn);
+                        var helperBind = window.Weline && window.Weline.MediaIdentityPicker;
+                        if (helperBind && pendingIdentity && pendingIdentity.path) {
+                            helperBind.bindSelection(pendingIdentity, files || [], {
+                                bindUrl: (themeEl && themeEl.getAttribute('data-media-bind-url')) || '',
+                                ownerType: 'widget',
+                                ownerId: pendingIdentity.code,
+                                ownerVersion: 1,
+                                refMode: 'single',
+                            });
                         }
                     },
                     onClose: function () {
@@ -659,12 +1173,14 @@
                     var placeholder = q(preview, '.w-param-image-placeholder');
                     if (placeholder) placeholder.hidden = false;
                 }
-                if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
+                if (input) emitParamValueChange(input, { source: 'media-clear' });
             });
         });
     }
 
     function initGroupToggles(container) {
+        // 主题编辑器内：只同步初态，点击由 document 委托（避免双 toggle「点不动」）。
+        // 编辑器外（独立 w-param-form）：仍由本函数绑 click。
         if (container.closest && container.closest('[data-theme-editor-config-modal="1"]')) return;
         qa(container, '.w-param-group-title').forEach(function (title) {
             if (title.dataset.wParamInited) return;
@@ -679,6 +1195,8 @@
                 if (fields) fields.hidden = !expanded;
             }
             setExpanded(title.getAttribute('aria-expanded') !== 'false' && !(group && group.classList.contains('w-param-collapsed')));
+            var inThemeEditorShell = !!(title.closest && title.closest('#themeEditor, #widgetConfigModal'));
+            if (inThemeEditorShell) return;
             title.addEventListener('click', function () {
                 setExpanded(title.getAttribute('aria-expanded') !== 'true');
             });
@@ -1055,8 +1573,7 @@
             function persist() {
                 hiddenInput.value = JSON.stringify(state.tree || []);
                 try {
-                    hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    emitParamValueChange(hiddenInput, { source: 'nav-tree' });
                 } catch (e) {}
             }
 
@@ -1144,6 +1661,20 @@
             }
 
             function renderDetailMediaImage(inputId, node) {
+                var picker = buildMediaLibraryPickerHtml({
+                    fieldId: inputId,
+                    fieldKey: 'image',
+                    value: node.image,
+                    previewUrl: imagePreviewFromNode(node.image),
+                    includeName: false,
+                    defaultDir: 'nav',
+                    openLabel: labels.image_pick || '从图库选择',
+                    detailField: 'image',
+                    fieldParam: { default_directory: 'nav' },
+                });
+                if (picker) {
+                    return '<div class="w-nav-tree-detail-image">' + picker + '</div>';
+                }
                 var stored = serializeImageFormValue(node.image);
                 var previewUrl = imagePreviewFromNode(node.image);
                 var hasImage = stored !== '';
@@ -1218,7 +1749,10 @@
                     + '</div></div></div>'
                     + renderDetail();
                 bind();
-                if (state.detailPath) initMediaImagePicker(mount);
+                if (state.detailPath) {
+                    initMediaImagePicker(mount);
+                    mountParamComponents(mount);
+                }
             }
 
             function parsePath(str) {
@@ -1375,7 +1909,8 @@
                             if (field === 'image') {
                                 var raw = input.value || '';
                                 var imageNode = parseFileImageNode(raw);
-                                hit.node[field] = imageNode || raw;
+                                // Persist typed nodes only; legacy URL strings fail WidgetImage contract.
+                                hit.node[field] = imageNode || '';
                                 return;
                             }
                             hit.node[field] = input.value;
@@ -1492,7 +2027,29 @@
                             if (fieldEl.tagName === 'INPUT' && fieldEl.type === 'checkbox') fieldEl.checked = !!val;
                             else {
                                 var imageNode = parseFileImageNode(val);
-                                fieldEl.value = imageNode ? JSON.stringify(imageNode) : val;
+                                if (imageNode) {
+                                    fieldEl.value = JSON.stringify(imageNode);
+                                } else if (val === null || val === undefined) {
+                                    fieldEl.value = '';
+                                } else if (typeof val === 'object') {
+                                    // Locale map / junk object: show preferred locale text, never [object Object].
+                                    var localePick = '';
+                                    if (!Array.isArray(val)) {
+                                        localePick = val.zh_Hans_CN || val.zh_CN || val.default || val.en_US || '';
+                                        if (!localePick) {
+                                            Object.keys(val).some(function (k) {
+                                                if (typeof val[k] === 'string' && String(val[k]).trim() !== '') {
+                                                    localePick = val[k];
+                                                    return true;
+                                                }
+                                                return false;
+                                            });
+                                        }
+                                    }
+                                    fieldEl.value = localePick ? String(localePick) : '';
+                                } else {
+                                    fieldEl.value = String(val);
+                                }
                             }
                         }
                         html = el.innerHTML;
@@ -1533,23 +2090,37 @@
                 itemsEl.appendChild(div);
                 qa(div, 'input[type="hidden"][data-preview]').forEach(function (input) {
                     updateMediaImagePreview(input);
+                    seedFilePickerPreviewFromInput(input);
                 });
                 initMediaImagePicker(div);
+                mountParamComponents(div);
                 var empty = q(wrapper, '.w-param-array-empty');
                 if (empty) empty.hidden = true;
+                notifyArrayValueChanged();
             }
-            function addItemWithImage(imageFieldKey, imageValue, previewUrl) {
+            function addItemWithImage(imageFieldKey, imageValue, previewUrl, extras) {
+                if (!imageFieldKey) return;
                 var imageNode = parseFileImageNode(imageValue);
-                if (!imageNode || !imageFieldKey) return;
+                var fieldValue = imageNode || (typeof imageValue === 'string' ? String(imageValue).trim() : '');
+                if (!fieldValue) return;
+                extras = extras && typeof extras === 'object' ? extras : {};
                 var items = getItems();
                 if (maxItems !== null && items.length >= maxItems) return;
                 var newItem = {};
                 if (itemSchema && Object.keys(itemSchema).length > 0) {
                     Object.keys(itemSchema).forEach(function (fk) {
-                        newItem[fk] = fk === imageFieldKey ? imageNode : (itemSchema[fk].default !== undefined ? itemSchema[fk].default : '');
+                        if (fk === imageFieldKey) {
+                            newItem[fk] = fieldValue;
+                            return;
+                        }
+                        if (Object.prototype.hasOwnProperty.call(extras, fk) && extras[fk] !== '') {
+                            newItem[fk] = extras[fk];
+                            return;
+                        }
+                        newItem[fk] = itemSchema[fk].default !== undefined ? itemSchema[fk].default : '';
                     });
                 } else {
-                    newItem = imageNode;
+                    newItem = fieldValue;
                 }
                 items.push(newItem);
                 setItems(items);
@@ -1568,11 +2139,13 @@
                         input.setAttribute('data-preview-url', previewUrl);
                     }
                     updateMediaImagePreview(input);
+                    seedFilePickerPreviewFromInput(input, previewUrl);
                 });
                 initMediaImagePicker(div);
+                mountParamComponents(div);
                 var empty = q(wrapper, '.w-param-array-empty');
                 if (empty) empty.hidden = true;
-                hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+                notifyArrayValueChanged();
             }
             function removeItem(itemEl) {
                 var items = getItems();
@@ -1586,6 +2159,7 @@
                     var empty = q(wrapper, '.w-param-array-empty');
                     if (empty) empty.hidden = false;
                 }
+                notifyArrayValueChanged();
             }
             function reindexArrayItemIdentity(itemEl, newIndex) {
                 var nestedIdentity = q(itemEl, '[data-array-index]');
@@ -1631,19 +2205,32 @@
                     reindexArrayItemIdentity(itemEls[j], j);
                 }
             }
-            function syncFromDom() {
-                var itemEls = qa(wrapper, '.w-param-array-item');
-                var items = [];
-                for (var k = 0; k < itemEls.length; k++) {
-                    var it = collectItemFromNode(itemEls[k]);
-                    if (it !== null) items.push(it);
+            function syncFromDom(event) {
+                if (wrapper.__wParamArraySyncing) return;
+                if (event && event.target === hiddenInput) return;
+                wrapper.__wParamArraySyncing = true;
+                try {
+                    var itemEls = qa(wrapper, '.w-param-array-item');
+                    var items = [];
+                    for (var k = 0; k < itemEls.length; k++) {
+                        var it = collectItemFromNode(itemEls[k]);
+                        if (it !== null) items.push(it);
+                    }
+                    var previous = hiddenInput ? String(hiddenInput.value || '') : '';
+                    setItems(items);
+                    var next = hiddenInput ? String(hiddenInput.value || '') : '';
+                    // Always emit so Theme Editor capture listeners see deep nested edits
+                    // even when intermediate handlers stopPropagation.
+                    if (previous !== next || !event) {
+                        notifyArrayValueChanged();
+                    }
+                } finally {
+                    wrapper.__wParamArraySyncing = false;
                 }
-                setItems(items);
             }
             function notifyArrayValueChanged() {
                 if (!hiddenInput) return;
-                hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
-                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                emitParamValueChange(hiddenInput, { source: 'array' });
             }
 
             if (addBtn) addBtn.addEventListener('click', addItem);
@@ -1657,6 +2244,12 @@
                     var recommendW = addWithMediaBtn.getAttribute('data-recommend-w') || '';
                     var recommendH = addWithMediaBtn.getAttribute('data-recommend-h') || '';
                     var aspectRatio = addWithMediaBtn.getAttribute('data-aspect-ratio') || '';
+                    var aspectTolerance = addWithMediaBtn.getAttribute('data-aspect-ratio-tolerance') || '';
+                    var ext = addWithMediaBtn.getAttribute('data-ext') || 'jpg,png,gif,webp';
+                    var usage = addWithMediaBtn.getAttribute('data-usage');
+                    if (usage == null || usage === '') usage = '1';
+                    var pickerTitle = addWithMediaBtn.getAttribute('data-picker-title') || '\u6279\u91cf\u9009\u62e9\u5a92\u4f53';
+                    var mediaKind = addWithMediaBtn.getAttribute('data-media-kind') || '';
                     var themeEl = doc.getElementById('themeEditor');
                     var baseUrl = (themeEl && themeEl.getAttribute('data-file-manager-connector-base')) || '';
                     if (!baseUrl) return;
@@ -1668,11 +2261,20 @@
                     tempInput.className = 'w-visually-hidden';
                     doc.body.appendChild(tempInput);
                     var closeId = 'w-param-media-close-' + tempId.replace(/[^a-z0-9_-]/gi, '_');
-                    var params = ['target=' + encodeURIComponent(tempId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'multi=1', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
+                    var params = [
+                        'target=' + encodeURIComponent(tempId),
+                        'close=' + encodeURIComponent(closeId),
+                        'ext=' + encodeURIComponent(ext),
+                        'multi=1',
+                        'usage=' + encodeURIComponent(usage),
+                        'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))
+                    ];
                     appendThemeMediaScopeLockParams(params, themeEl, defaultDir);
+                    appendWidgetMediaIdentityParams(params, themeEl, addWithMediaBtn, imageFieldKey);
                     if (recommendW) params.push('recommend_width=' + encodeURIComponent(recommendW));
                     if (recommendH) params.push('recommend_height=' + encodeURIComponent(recommendH));
                     if (aspectRatio) params.push('aspect_ratio=' + encodeURIComponent(aspectRatio));
+                    if (aspectTolerance) params.push('aspect_ratio_tolerance=' + encodeURIComponent(aspectTolerance));
                     if (aspectRatio) {
                         try {
                             var uiToast = window.Weline && window.Weline.UI;
@@ -1686,12 +2288,21 @@
                         targetId: tempId,
                         closeId: closeId,
                         url: url,
-                        title: '\u6279\u91cf\u9009\u62e9\u5a92\u4f53',
+                        title: pickerTitle,
                         onSelect: function (value, files) {
                             (files || []).forEach(function (file) {
-                                var selectedValue = selectedFileImageValue(file);
+                                var selectedValue = selectedMediaFieldValue(file);
                                 if (!selectedValue) return;
-                                addItemWithImage(imageFieldKey, selectedValue, selectedMediaPreviewUrl(file));
+                                var extras = {};
+                                if (mediaKind === 'audio' || imageFieldKey === 'url') {
+                                    var autoTitle = titleFromMediaPath(
+                                        typeof selectedValue === 'string' && selectedValue.charAt(0) === '{'
+                                            ? (file && (file.url || file.path)) || selectedValue
+                                            : selectedValue
+                                    );
+                                    if (autoTitle) extras.title = autoTitle;
+                                }
+                                addItemWithImage(imageFieldKey, selectedValue, selectedMediaPreviewUrl(file), extras);
                             });
                             tempInput.value = '';
                             delete tempInput.dataset.previewUrl;
@@ -1907,7 +2518,15 @@
             mount: initForms,
             mountMedia: function (root) {
                 initMediaImagePicker(root || doc);
+                mountParamComponents(root || doc);
             },
+            updateMediaPreview: function (input) {
+                updateMediaImagePreview(input);
+                seedFilePickerPreviewFromInput(input);
+            },
+            emitValueChange: emitParamValueChange,
+            renderMediaLibraryPickerHtml: buildMediaLibraryPickerHtml,
+            mountComponents: mountParamComponents,
         });
     }
 })();

@@ -238,6 +238,27 @@ class ThemeDirectoryResolver
         if (preg_match('/^(.+?)::(.+)$/', $modulePathForMatch, $matches)) {
             $moduleName = $matches[1];
             $relativePath = $matches[2];
+            $relativeNormalized = str_replace('\\', '/', $relativePath);
+
+            // Weline_Theme::theme/{area}/... → design 主题 {area}/...（layouts/partials/widgets）
+            if ($moduleName === self::THEME_DEFAULT_MODULE
+                && preg_match('#^theme/(frontend|backend)/(.+)$#', $relativeNormalized, $themeMatch) === 1
+            ) {
+                $area = $themeMatch[1];
+                $areaRelative = str_replace('/', DS, $themeMatch[2]);
+                foreach ($this->getAreaDirectories($area, $theme) as $directory) {
+                    $candidate = $this->normalizePath($directory['path'] . DS . $areaRelative);
+                    if (is_file($candidate)) {
+                        return $candidate;
+                    }
+                    if (str_ends_with($candidate, DS . 'default.phtml')) {
+                        $fallback = dirname($candidate, 2) . DS . basename(dirname($candidate)) . '.phtml';
+                        if (is_file($fallback)) {
+                            return $fallback;
+                        }
+                    }
+                }
+            }
 
             // 构建主题模块覆盖路径
             // app/design/WeShop/motor/Weline_Customer/templates/frontend/account/login.phtml

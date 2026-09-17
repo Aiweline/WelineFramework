@@ -121,10 +121,10 @@ moduleDescribe(test, MODULE, 'SMTP 邮件模板计划链路', () => {
       await expect(page.locator('[data-testid="smtp-template-edit"]').first()).toBeVisible({ timeout: 30000 });
       await expect(page.locator('[data-testid="smtp-template-back-listing"]').first()).toBeVisible({ timeout: 15000 });
       await expect(page.locator('[data-testid="smtp-template-edit-toolbar"]').first()).toBeVisible({ timeout: 15000 });
-      await expect(page.locator('[data-testid="smtp-template-edit-workspace"]').first()).toBeVisible({ timeout: 15000 });
       await expect(page.locator('[data-testid="smtp-template-save"]').first()).toBeVisible();
-      const ck = page.locator('.ck-editor, [data-w-component="ckeditor"]').first();
-      await expect(ck).toBeVisible({ timeout: 45000 });
+      await expect(page.locator('[data-testid="smtp-visual-editor"]').first()).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('.ck-editor, [data-w-component="ckeditor"]')).toHaveCount(0);
+      await expect(page.locator('w\\:editor-manager, [data-testid="smtp-template-body-source"]').first()).toBeAttached();
       const hint = await page.locator('[data-testid="smtp-template-shell-hint"]').innerText().catch(() => '');
       expect(/页头|页尾|Logo|信任/i.test(hint + bodyText)).toBeTruthy();
       const varsHtml = await page.locator('[data-testid="smtp-template-vars"]').evaluate((el) => el.textContent || '').catch(() => '');
@@ -134,6 +134,24 @@ moduleDescribe(test, MODULE, 'SMTP 邮件模板计划链路', () => {
       await expect(page.locator('[data-testid="smtp-template-live-preview"]').first()).toBeVisible({ timeout: 15000 });
       await expect(page.locator('[data-testid="smtp-template-preview-iframe"]').first()).toBeVisible({ timeout: 15000 });
       await page.waitForTimeout(800);
+      // 页尾须单格：一张背景图 cover，禁止双 TR 纵向接缝
+      const footerMeta = await page.locator('[data-testid="smtp-template-preview-iframe"]').first().evaluate((el) => {
+        const frame = /** @type {HTMLIFrameElement} */ (el);
+        const doc = frame.contentDocument;
+        if (!doc) return { count: -1, bgImages: [] };
+        const cells = Array.from(doc.querySelectorAll('[data-weline-mail-region="footer"]'));
+        return {
+          count: cells.length,
+          bgImages: cells.map((td) => {
+            const s = window.getComputedStyle(td);
+            return { bg: s.backgroundImage, size: s.backgroundSize, repeat: s.backgroundRepeat };
+          }),
+        };
+      });
+      expect(footerMeta.count).toBe(1);
+      if (footerMeta.bgImages[0] && footerMeta.bgImages[0].bg && footerMeta.bgImages[0].bg !== 'none') {
+        expect(String(footerMeta.bgImages[0].repeat || '')).toMatch(/no-repeat/i);
+      }
       const previewText = await page.locator('[data-testid="smtp-template-preview-iframe"]').first().evaluate((el) => {
         const frame = /** @type {HTMLIFrameElement} */ (el);
         const doc = frame.contentDocument;

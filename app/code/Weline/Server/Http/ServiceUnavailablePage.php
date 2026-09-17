@@ -51,7 +51,7 @@ final class ServiceUnavailablePage
             $queryString = (string)(\parse_url($path, \PHP_URL_QUERY) ?: '');
             $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
             $cookieHeader = (string)($headers['cookie'] ?? '');
-            $body = MaintenanceStaticPage::loadJson(null, $pathOnly, $queryString, $cookieHeader)
+            $body = MaintenanceStaticPage::loadJson(null, $pathOnly, $queryString, $cookieHeader, (string)($headers['host'] ?? ''))
                 ?? self::jsonBody($variant, $retryAfter);
             $contentType = 'application/json; charset=utf-8';
         } else {
@@ -105,7 +105,13 @@ final class ServiceUnavailablePage
             $queryString = (string)(\parse_url($path, \PHP_URL_QUERY) ?: '');
             $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
             $cookieHeader = (string)($headers['cookie'] ?? '');
-            $static = MaintenanceStaticPage::loadHtml(null, $pathOnly, $queryString, $cookieHeader);
+            $static = MaintenanceStaticPage::loadHtml(
+                null,
+                $pathOnly,
+                $queryString,
+                $cookieHeader,
+                (string)($headers['host'] ?? ''),
+            );
             if ($static !== null && $static !== '') {
                 return $static;
             }

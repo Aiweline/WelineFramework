@@ -23,13 +23,13 @@ $stateOptions = [
     <?php if ($load_error !== ''): ?><div class="w-alert" data-testid="checkout-session-load-error" data-tone="danger"><?= $escape($load_error) ?></div><?php endif; ?>
     <div class="w-card"><div class="w-card__body">
       <form method="get" class="w-cluster" data-wrap="true" data-align="center" data-testid="checkout-session-filter" style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);">
-        <select name="state" class="w-select" aria-label="<?= __('结账进度') ?>">
+        <select name="state" class="w-select" data-w-width="auto" data-shrink="false" style="inline-size:auto;width:auto;" aria-label="<?= __('结账进度') ?>">
           <option value=""><?= __('全部进度') ?></option>
           <?php foreach ($stateOptions as $value => $label): ?>
             <option value="<?= $escape($value) ?>" <?= $state === $value ? 'selected' : '' ?>><?= $escape($label) ?></option>
           <?php endforeach; ?>
         </select>
-        <select name="checkout_entry" class="w-select" data-testid="checkout-session-entry-filter" aria-label="<?= __('结账来源') ?>">
+        <select name="checkout_entry" class="w-select" data-w-width="auto" data-shrink="false" style="inline-size:auto;width:auto;" data-testid="checkout-session-entry-filter" aria-label="<?= __('结账来源') ?>">
           <option value=""><?= __('全部来源') ?></option>
           <?php foreach ($checkout_entry_rows as $row): ?>
             <?php $code = (string)($row['code'] ?? ''); if ($code === '') { continue; } ?>
@@ -37,11 +37,11 @@ $stateOptions = [
           <?php endforeach; ?>
           <option value="unknown" <?= $checkout_entry === 'unknown' ? 'selected' : '' ?>><?= __('未标记') ?></option>
         </select>
-        <label class="w-text" data-testid="checkout-session-error-only">
+        <label class="w-text" data-testid="checkout-session-error-only" data-shrink="false">
           <input type="checkbox" name="error" value="1" <?= $error_only ? 'checked' : '' ?>>
           <?= __('只看卡住的结账') ?>
         </label>
-        <button class="w-button" type="submit" data-tone="primary"><?= __('筛选') ?></button>
+        <button class="w-button" type="submit" data-tone="primary" data-shrink="false"><?= __('筛选') ?></button>
       </form>
       <div class="w-table-wrap"><table class="w-table"><thead><tr>
         <th><?= __('来源') ?></th>

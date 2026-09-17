@@ -1,6 +1,9 @@
 # Weline_Product — AI Index
 
 - README：`doc/README.md`
+- **产品优化（父）**：`doc/ai/skills/ecommerce-product-optimize/`（指令 `dev/ai-command/product/产品优化.md`）——主图/规格图管线后 **必须**调子
+- **详情优化（子）**：`doc/ai/skills/ecommerce-detail-suite/`（指令 `dev/ai-command/product/详情优化.md`）+ `companions/weline-image-pipeline.md`——详情 SOP；**不是**与父同入口
+- **模块知识定位器**：`doc/ai/skills/weline-product-knowledge/`（分片/身份/Provider/Copy 等；不含详情拓图 SOP）
 - 万能产品总体计划：`doc/万能产品完善计划.md`（v1.0，IMPLEMENTING）
 - 当前证据：Product `1.0.23`；PostgreSQL V2 身份已切到
   `v2_authoritative` version 6（26 Product / 26 Offer / 0 conflict）；跨站

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE — preview-toolbar borrow both sides</title>
+  <style>
+    :root {
+      --w-theme-editor-active-config-panel-width: 260px;
+      --w-theme-editor-active-widget-panel-width: 260px;
+      --w-theme-editor-bg-card: #fff;
+      --w-theme-editor-border: #e5e7eb;
+    }
+    body { font-family: system-ui, sans-serif; margin: 1rem; background: #f3f4f6; }
+    .note { font-size: 12px; color: #64748b; margin-bottom: 12px; }
+    .preview-toolbar.editor-preview-toolbar {
+      display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0;
+      width: 900px; max-width: 100%; min-width: 0; background: #fff;
+      border: 1px solid #cbd5e1;
+    }
+    .preview-toolbar-gutter {
+      min-width: 0; background: #fff; border-bottom: 1px solid var(--w-theme-editor-border);
+    }
+    .preview-toolbar-gutter--config {
+      flex: 0 0 var(--w-theme-editor-active-config-panel-width);
+      width: var(--w-theme-editor-active-config-panel-width);
+      max-width: var(--w-theme-editor-active-config-panel-width);
+      border-right: 1px solid var(--w-theme-editor-border);
+      background: #fee2e2;
+    }
+    .preview-toolbar-gutter--widget {
+      flex: 0 0 var(--w-theme-editor-active-widget-panel-width);
+      width: var(--w-theme-editor-active-widget-panel-width);
+      max-width: var(--w-theme-editor-active-widget-panel-width);
+      border-left: 1px solid var(--w-theme-editor-border);
+      background: #fee2e2;
+    }
+    .preview-toolbar.editor-preview-toolbar.preview-toolbar--borrow-gutters .preview-toolbar-gutter--config,
+    .preview-toolbar.editor-preview-toolbar.preview-toolbar--borrow-gutters .preview-toolbar-gutter--widget {
+      flex-basis: 0; width: 0; max-width: 0; border: 0; overflow: hidden;
+    }
+    .preview-toolbar-main {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      flex: 1 1 0%; min-width: 0; padding: 4px 10px;
+    }
+    .chip {
+      flex: 0 0 auto; white-space: nowrap; padding: 4px 10px;
+      border: 1px solid #94a3b8; border-radius: 4px; background: #eff6ff; font-size: 12px;
+    }
+    #report { margin-top: 12px; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+    #report.pass { color: #047857; }
+    #report.fail { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <p class="note">PROTOTYPE / throwaway：验证「中间不够先向两边借 gutter；整条仍不够才更多」。红块=gutter。</p>
+  <div class="preview-toolbar editor-preview-toolbar" id="toolbar">
+    <div class="preview-toolbar-gutter preview-toolbar-gutter--config" aria-hidden="true"></div>
+    <div class="preview-toolbar-main" id="main">
+      <span class="chip">实时预览</span>
+      <span class="chip">结构视图</span>
+      <span class="chip">预览</span>
+      <span class="chip">编辑</span>
+      <span class="chip">重置</span>
+      <span class="chip">默认</span>
+      <span class="chip">插槽</span>
+      <span class="chip">部件</span>
+      <span class="chip">禁链</span>
+      <span class="chip">恢复原始布局</span>
+      <span class="chip">清理 Theme 缓存</span>
+      <span class="chip">刷新</span>
+      <span class="chip">全屏</span>
+      <span class="chip" id="extraA">额外A</span>
+      <span class="chip" id="extraB">额外B很长占位</span>
+      <span class="chip" id="extraC">额外C再长一点</span>
+    </div>
+    <div class="preview-toolbar-gutter preview-toolbar-gutter--widget" aria-hidden="true"></div>
+  </div>
+  <div id="report">measuring…</div>
+  <script>
+    // Mirrors production decision (no fullWidth gate).
+    function unborrowedMiddleWidth(toolbar, main) {
+      if (!toolbar.classList.contains('preview-toolbar--borrow-gutters')) {
+        return main.clientWidth;
+      }
+      const style = getComputedStyle(toolbar);
+      const configW = Number.parseFloat(style.getPropertyValue('--w-theme-editor-active-config-panel-width')) || 0;
+      const widgetW = Number.parseFloat(style.getPropertyValue('--w-theme-editor-active-widget-panel-width')) || 0;
+      return Math.max(0, toolbar.clientWidth - configW - widgetW);
+    }
+    function needWidth(main) {
+      const gap = Number.parseFloat(getComputedStyle(main).columnGap || getComputedStyle(main).gap) || 0;
+      const kids = [...main.children];
+      let sum = 0;
+      kids.forEach((el, i) => {
+        if (i) sum += gap;
+        sum += Math.ceil(el.getBoundingClientRect().width);
+      });
+      return sum;
+    }
+    function syncBorrow(toolbar, main) {
+      const need = needWidth(main);
+      const middleWidth = unborrowedMiddleWidth(toolbar, main);
+      const borrowing = toolbar.classList.contains('preview-toolbar--borrow-gutters');
+      const slack = 2;
+      const shouldBorrow = borrowing
+        ? (need > middleWidth - slack)
+        : (need > middleWidth + slack);
+      toolbar.classList.toggle('preview-toolbar--borrow-gutters', shouldBorrow);
+      return { need, middleWidth, fullWidth: toolbar.clientWidth, shouldBorrow };
+    }
+
+    const toolbar = document.getElementById('toolbar');
+    const main = document.getElementById('main');
+    // start unborrowed
+    toolbar.classList.remove('preview-toolbar--borrow-gutters');
+    const before = {
+      configW: document.querySelector('.preview-toolbar-gutter--config').getBoundingClientRect().width,
+      widgetW: document.querySelector('.preview-toolbar-gutter--widget').getBoundingClientRect().width,
+      mainW: main.clientWidth,
+    };
+    const decision = syncBorrow(toolbar, main);
+    // force layout after class
+    void toolbar.offsetWidth;
+    const after = {
+      configW: document.querySelector('.preview-toolbar-gutter--config').getBoundingClientRect().width,
+      widgetW: document.querySelector('.preview-toolbar-gutter--widget').getBoundingClientRect().width,
+      mainW: main.clientWidth,
+      borrowing: toolbar.classList.contains('preview-toolbar--borrow-gutters'),
+    };
+    const stillNeedOverflow = decision.need > after.mainW + 1;
+    const pass = after.borrowing === true
+      && after.configW < 1
+      && after.widgetW < 1
+      && before.configW > 100
+      && before.widgetW > 100
+      && after.mainW > before.mainW
+      && (stillNeedOverflow || decision.need <= after.mainW + 1);
+
+    const report = document.getElementById('report');
+    report.className = pass ? 'pass' : 'fail';
+    report.textContent = JSON.stringify({
+      pass,
+      before,
+      decision,
+      after,
+      stillNeedOverflow,
+      rule: 'borrow both sides when middle insufficient; overflow only if full still short',
+    }, null, 2);
+    document.title = pass ? 'PASS borrow-both-sides' : 'FAIL borrow-both-sides';
+  </script>
+</body>
+</html>

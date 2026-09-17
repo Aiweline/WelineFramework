@@ -1,0 +1,52 @@
+﻿进店音乐,Shop-Musik
+settings,Einstellungen
+进店音乐与氛围播放配置,"Shop-Musik- und Atmosphäre-Wiedergabeeinstellungen"
+查看进店音乐配置,"Shop-Musik-Einstellungen anzeigen"
+查看进店音乐曲目与播放配置,"Shop-Musik-Titel und Wiedergabeeinstellungen anzeigen"
+"优先在主题编辑器「部件配置」中编辑进店音乐。本页写入当前作用范围的系统配置，作 Hook 兜底；部件曲目为空时店面回退读取此处。可多选曲目、拖拽排序，并为简介按语言填写。","优先在主题编辑器「部件配置」中编辑进店音乐。本页写入当前作用范围的系统配置，作 Hook 兜底；部件曲目为空时店面回退读取此处。可多选曲目、拖拽排序，并为简介按语言填写。"
+在统一配置中心打开,"Im zentralen Konfigurationscenter öffnen"
+作用范围,Geltungsbereich
+进店曲目,Eingangstitel
+"可多选 mp3 / wav / ogg / m4a / aac / flac / opus / wma 等，单文件最大约 20MB。拖动手柄调整顺序；简介按下方语言分别填写。变更后自动写入当前范围。","Mehrfachauswahl mp3 / wav / ogg / m4a / aac / flac / opus / wma usw. Max. ca. 20 MB je Datei. Mit Griffen sortieren; Intros unten je Sprache. Änderungen speichern automatisch."
+简介编辑语言,Intro-Bearbeitungssprache
+切换语言后可为每首曲目填写对应简介；店面按访客语言展示。,"Nach Sprachwechsel Intro je Titel ausfüllen; Shop zeigt Besuchersprache."
+尚未选择曲目。请用上方媒体库添加多首进店音乐。,"Noch keine Titel. Oben Mediathek nutzen, um Eingangsmusik hinzuzufügen."
+拖拽排序,"Per Drag sortieren"
+曲名,Titel
+简介,Intro
+选择进店音乐（可多选）,"Eingangsmusik wählen (Mehrfachauswahl)"
+配置写入当前作用范围；可多选曲目、拖拽排序，并为简介按语言填写。启用且至少一首曲目后，店面左下角显示进店音乐浮层。,"Einstellungen gelten für den aktuellen Bereich. Mehrere Titel wählen, per Drag sortieren und Intros je Sprache ausfüllen. Bei Aktivierung mit mindestens einem Titel erscheint das Widget unten links."
+选择作用范围,"Bereich wählen"
+搜索作用范围,"Bereiche suchen"
+折叠,Einklappen
+展开,Ausklappen
+未找到匹配作用范围,"Keine passenden Bereiche"
+播放控制,Wiedergabesteuerung
+上一首,Zurück
+播放,Wiedergeben
+停止,Stopp
+停止播放,"Wiedergabe stoppen"
+下一首,Weiter
+"请先同意营销 Cookie 后再播放","Marketing-Cookies akzeptieren, bevor Wiedergabe startet"
+点击开启音乐,"Tippen zum Abspielen"
+点击开启声音,"Tippen zum Einschalten des Tons"
+波形不可用,"Wellenform nicht verfügbar"
+开启波形,"Wellenform aktivieren"
+关闭波形,"Wellenform deaktivieren"
+播放中,"Wird abgespielt"
+当前浏览器暂不支持此音频格式,"Dieser Browser unterstützt dieses Audioformat nicht"
+音频加载失败，请换一首曲目或格式,"Audio konnte nicht geladen werden. Anderen Titel oder anderes Format versuchen."
+已关闭自动播放，点击播放可重新开启,"Autoplay ist aus. Zum Fortsetzen auf Wiedergabe tippen."
+已在其他页面播放,"Wird auf einer anderen Seite abgespielt"
+播放列表,Wiedergabeliste
+"共 {n} 首","{n} Titel"
+展开简介,"Intro anzeigen"
+收起简介,"Intro ausblenden"
+点开选曲,"Titelwahl öffnen"
+选择曲目聆听,"Titel zum Anhören wählen"
+音量,Lautstärke
+进店氛围音乐,Shop-Atmosphäre-Musik
+关闭选曲,"Titelwahl schließen"
+搜索歌曲…,"Titel suchen…"
+未找到匹配曲目,"Keine passenden Titel"
+搜索播放列表,"Wiedergabeliste durchsuchen"

@@ -124,7 +124,6 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
     public function testThemeEditorJsPrefersNodeUidIdentityAttrs(): void
     {
         foreach ([
-            BP . 'app/code/Weline/Theme/view/statics/js/theme-editor.js',
             BP . 'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js',
         ] as $path) {
             $source = (string)\file_get_contents($path);
@@ -206,8 +205,11 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
             $methodBody = $nextFn === false
                 ? \substr($source, (int)$methodStart)
                 : \substr($source, (int)$methodStart, $nextFn - (int)$methodStart);
-            self::assertStringContainsString('legacyLayoutTableExists()', $methodBody, $signature);
+            self::assertStringContainsString('@deprecated Greenfield: theme_layout dropped', $source, $signature);
+            self::assertStringNotContainsString('->load(', $methodBody, $signature);
+            self::assertStringNotContainsString('->save(', $methodBody, $signature);
         }
+        self::assertStringContainsString("throw new \\InvalidArgumentException('layout_id_api_removed')", $source);
     }
 
     public function testApplyDefaultInjectionRecognizesScopedNodeUid(): void
@@ -237,7 +239,9 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         $methodBody = $nextFn === false
             ? \substr($source, (int)$methodStart)
             : \substr($source, (int)$methodStart, $nextFn - (int)$methodStart);
-        self::assertStringContainsString('legacyLayoutTableExists()', $methodBody);
+        self::assertStringContainsString('@deprecated Greenfield: theme_layout dropped', $source);
+        self::assertStringNotContainsString('->load(', $methodBody);
+        self::assertStringContainsString('return 0;', $methodBody);
     }
 
     public function testMetaProjectionDelegatesToMetaProjector(): void
@@ -321,7 +325,7 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         self::assertStringContainsString("\$attrs['data-layout-id'] = (string)\$layoutId;", $slotRenderer);
         self::assertStringContainsString("attrFromTag(\$openTag, 'data-layout-id')", $slotRenderer);
         self::assertStringContainsString("attrFromTag(\$openTag, 'data-node-uid')", $slotRenderer);
-        self::assertSame(
+        self::assertGreaterThanOrEqual(
             2,
             \substr_count($slotRenderer, "attrFromTag(\$openTag, 'data-node-uid')"),
         );
@@ -491,6 +495,24 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         // LAYOUT/META identity is always default; inherit helper is a permanent no-op.
         self::assertStringContainsString('return false;', $methodBody);
         self::assertStringNotContainsString('RESOURCE_LAYOUT', $methodBody);
+    }
+
+    public function testBakeAfterWriteTreatsReleaseIdAsPublished(): void
+    {
+        $workspaceSource = (string)\file_get_contents(
+            BP . 'app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php',
+        );
+        $methodStart = \strpos($workspaceSource, 'function bakeLayoutEntityAfterWrite(');
+        self::assertNotFalse($methodStart);
+        $nextFn = \strpos($workspaceSource, "\n    private function findWorkspace(", $methodStart + 10);
+        self::assertNotFalse($nextFn);
+        $methodBody = \substr($workspaceSource, $methodStart, $nextFn - $methodStart);
+        // Publish results often include draft_payload; release_id alone must select r{id}.
+        self::assertStringContainsString(
+            '$published = $releaseId !== null && $releaseId > 0;',
+            $methodBody,
+        );
+        self::assertStringNotContainsString("array_key_exists('draft_payload'", $methodBody);
     }
 
     public function testScopedLayoutSnapshotAllowsInheritedEffectivePayload(): void

@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Framework shell default header navigation (generic ecommerce).
+ * Design themes override this file under app/design/.../partials/header/nav-defaults.phtml.
+ *
+ * @return list<array<string, mixed>>
+ */
+
+use Weline\Theme\Helper\HeaderDefaultNavItems;
+
+return HeaderDefaultNavItems::genericDefaults();

@@ -45,6 +45,16 @@ final class StorefrontFilterPanelPrefetchTest extends TestCase
         RequestContext::cleanup();
     }
 
+    public function testIsListingLikePathGatesNonListingRoutes(): void
+    {
+        self::assertTrue(StorefrontFilterPanelService::isListingLikePath('categories'));
+        self::assertTrue(StorefrontFilterPanelService::isListingLikePath('en_US/CNY/products'));
+                self::assertTrue(StorefrontFilterPanelService::isListingLikePath('category/hanfu/song'));
+        self::assertFalse(StorefrontFilterPanelService::isListingLikePath('product/some-sku'));
+        self::assertFalse(StorefrontFilterPanelService::isListingLikePath('cart'));
+        self::assertFalse(StorefrontFilterPanelService::isListingLikePath(''));
+    }
+
     public function testCachedPanelWarmsOnlyDisplayedWordsInBoundedBatchesAndReusesThem(): void
     {
         $panel = $this->panel();

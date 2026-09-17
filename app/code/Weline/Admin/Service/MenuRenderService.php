@@ -20,6 +20,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Http\Request;
+use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\Theme\Service\Ui\IconRegistry;
 
 /**
@@ -49,6 +50,11 @@ class MenuRenderService
      * @var array<string, array<string, string>>
      */
     private array $moduleLocaleWords = [];
+
+    /**
+     * @var list<string>|null
+     */
+    private ?array $activeLocaleCodes = null;
 
     /**
      * @var array<string, array{expires: float, data: array}>
@@ -193,7 +199,7 @@ class MenuRenderService
     }
 
     /**
-     * 格式化菜单 URL
+     * 格式化菜单 URL（走 Url::getBackendUrl，含非默认货币/语言路径段）
      * 
      * @param array $menuData 菜单数据
      * @return string
@@ -201,15 +207,23 @@ class MenuRenderService
     public function formatMenuUrl(array $menuData): string
     {
         $isBackend = $menuData['is_backend'] ?? true;
-        $urlPrefix = $isBackend ? $this->getBackendUrlPrefix() : $this->getFrontendUrlPrefix();
-        $urlPrefix = rtrim($urlPrefix, '/');
-        $route = $menuData['route'] ?? '';
-        
-        return $urlPrefix . '/' . $route;
+        $route = trim((string)($menuData['route'] ?? ''), '/');
+        if (!$isBackend) {
+            $urlPrefix = rtrim($this->getFrontendUrlPrefix(), '/');
+
+            return $route === '' ? ($urlPrefix === '' ? '/' : $urlPrefix) : $urlPrefix . '/' . $route;
+        }
+
+        $urlBuilder = $this->getRequest()->getUrlBuilder();
+        if ($route === '') {
+            return rtrim($urlBuilder->getBackendUrl('/'), '/');
+        }
+
+        return $urlBuilder->getBackendUrl($route);
     }
     
     /**
-     * 使用缓存的 URL 前缀格式化菜单 URL（仅在 renderMenu 内部使用）
+     * 渲染过程中用缓存的「区域根」拼接路由，与 getBackendUrl(route) 等价且避免重复解析。
      * 
      * @param array $menuData 菜单数据
      * @return string
@@ -217,10 +231,18 @@ class MenuRenderService
     private function formatMenuUrlCached(array $menuData): string
     {
         $isBackend = $menuData['is_backend'] ?? true;
-        $urlPrefix = $isBackend ? ($this->cachedBackendUrlPrefix ?? $this->getBackendUrlPrefix()) : ($this->cachedFrontendUrlPrefix ?? $this->getFrontendUrlPrefix());
-        $urlPrefix = rtrim($urlPrefix, '/');
-        $route = $menuData['route'] ?? '';
-        
+        $route = trim((string)($menuData['route'] ?? ''), '/');
+        if (!$isBackend) {
+            $urlPrefix = rtrim($this->cachedFrontendUrlPrefix ?? $this->getFrontendUrlPrefix(), '/');
+
+            return $route === '' ? ($urlPrefix === '' ? '/' : $urlPrefix) : $urlPrefix . '/' . $route;
+        }
+
+        $urlPrefix = rtrim($this->cachedBackendUrlPrefix ?? $this->getBackendUrlPrefix(), '/');
+        if ($route === '') {
+            return $urlPrefix;
+        }
+
         return $urlPrefix . '/' . $route;
     }
 
@@ -493,6 +515,7 @@ class MenuRenderService
         $cacheKey = implode('|', [
             (string)(($user && $user->getId()) ? (int)$user->getId() : 0),
             State::getLangLocal(),
+            implode(',', $this->getActiveLocaleCodes()),
             $this->cachedBackendUrlPrefix,
             $this->cachedFrontendUrlPrefix,
             $currentUrl,
@@ -554,11 +577,11 @@ class MenuRenderService
 
     private function renderMenuNode(array $menu, bool $topLevel): string
     {
-        $sourceId = htmlspecialchars((string)($menu['source_id'] ?? ''), ENT_QUOTES, 'UTF-8');
-        $title = $this->translateMenuTitle(
-            (string)($menu['source_name'] ?? ''),
-            (string)($menu['source_id'] ?? '')
-        );
+        $rawSourceId = (string)($menu['source_id'] ?? '');
+        $rawSourceName = (string)($menu['source_name'] ?? '');
+        $sourceId = htmlspecialchars($rawSourceId, ENT_QUOTES, 'UTF-8');
+        $title = $this->translateMenuTitle($rawSourceName, $rawSourceId);
+        $searchAttr = $this->renderSearchTextAttribute($rawSourceName, $rawSourceId);
         $nodes = array_values(array_filter(
             is_array($menu['nodes'] ?? null) ? $menu['nodes'] : [],
             fn(array $node): bool => ($node['type'] ?? '') === 'menus' && $this->isMenuEnabled($node)
@@ -569,13 +592,13 @@ class MenuRenderService
 
         if ($route === '' && $topLevel) {
             if (!$hasNodes) {
-                $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '">';
+                $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '"' . $searchAttr . '>';
                 $html .= $icon . '<span>' . $title . '</span></li>';
                 return $html;
             }
             // Top-level group with children: keep one hoverable icon in collapsed rail.
             $open = $this->hasActiveChild($nodes);
-            $html = '<li class="w-backend-nav__entry w-backend-nav__entry--group" data-source="' . $sourceId . '">';
+            $html = '<li class="w-backend-nav__entry w-backend-nav__entry--group" data-source="' . $sourceId . '"' . $searchAttr . '>';
             $html .= '<details class="w-backend-nav__disclosure"' . ($open ? ' open' : '') . '>';
             $html .= '<summary class="w-backend-nav__item w-backend-nav__item--group">';
             $html .= $icon . '<span>' . $title . '</span>' . $this->renderIcon('chevron-down', 'sm');
@@ -589,20 +612,30 @@ class MenuRenderService
 
         if (!$hasNodes) {
             if ($route === '') {
-                return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><span class="w-backend-nav__item" aria-disabled="true">'
+                return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"' . $searchAttr . '><span class="w-backend-nav__item" aria-disabled="true">'
                     . $icon . '<span>' . $title . '</span></span></li>';
             }
             $url = htmlspecialchars($this->formatMenuUrlCached($menu), ENT_QUOTES, 'UTF-8');
-            return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><a class="w-backend-nav__item" href="'
+            return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"' . $searchAttr . '><a class="w-backend-nav__item" href="'
                 . $url . '"' . $current . '>' . $icon . '<span>' . $title . '</span></a></li>';
         }
 
         $open = $active || $hasActiveChild;
-        $html = '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><details class="w-backend-nav__disclosure"'
+        $html = '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"' . $searchAttr . '><details class="w-backend-nav__disclosure"'
             . ($open ? ' open' : '') . '><summary class="w-backend-nav__item"' . $current . '>';
         $html .= $icon . '<span>' . $title . '</span>' . $this->renderIcon('chevron-down', 'sm');
         $html .= '</summary><ul class="w-backend-nav__list">' . $this->renderSubMenu($nodes) . '</ul></details></li>';
         return $html;
+    }
+
+    private function renderSearchTextAttribute(string $sourceName, string $sourceId): string
+    {
+        $searchText = $this->buildCrossLocaleSearchText($sourceName, $sourceId);
+        if ($searchText === '') {
+            return '';
+        }
+
+        return ' data-search-text="' . htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') . '"';
     }
 
     private function renderIcon(string $name, string $size = 'md'): string
@@ -638,22 +671,170 @@ class MenuRenderService
             return '';
         }
 
-        $moduleName = $this->extractModuleNameFromSource($sourceId);
-        if ($moduleName !== '') {
-            $moduleWords = $this->getModuleLocaleWords($moduleName, State::getLangLocal());
-            $moduleTranslate = trim((string)($moduleWords[$title] ?? ''));
-            if ($moduleTranslate !== '' && $moduleTranslate !== $title) {
-                return htmlspecialchars($moduleTranslate);
+        return htmlspecialchars($this->resolveDisplayTitle($title, $sourceId), ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * 当前界面语言下的菜单展示标题（未转义）。
+     */
+    public function resolveDisplayTitle(string $title, string $sourceId = ''): string
+    {
+        $title = trim($title);
+        if ($title === '') {
+            return '';
+        }
+
+        $resolved = $this->resolveMenuTitleRaw($title, $sourceId, State::getLangLocal());
+        if ($resolved === $title) {
+            $phrase = trim((string)__($title));
+            if ($phrase !== '') {
+                $resolved = $phrase;
             }
         }
 
-        $generatedWords = $this->getGeneratedLocaleWords(State::getLangLocal());
-        $generatedTranslate = trim((string)($generatedWords[$title] ?? ''));
-        if ($generatedTranslate !== '' && $generatedTranslate !== $title) {
-            return htmlspecialchars($generatedTranslate);
+        return $resolved;
+    }
+
+    /**
+     * 侧栏 / 顶栏共用：source 原文 + 全部已启用 locale 译文（缺译回退原文）。
+     */
+    public function buildCrossLocaleSearchText(string $sourceName, string $sourceId = ''): string
+    {
+        $sourceName = trim($sourceName);
+        if ($sourceName === '') {
+            return '';
         }
 
-        return htmlspecialchars((string)__($title));
+        $parts = [];
+        $seen = [];
+        $push = static function (string $text) use (&$parts, &$seen): void {
+            $text = trim($text);
+            if ($text === '') {
+                return;
+            }
+            $key = function_exists('mb_strtolower') ? mb_strtolower($text) : strtolower($text);
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $parts[] = $text;
+        };
+
+        $push($sourceName);
+        foreach ($this->getActiveLocaleCodes() as $localeCode) {
+            $push($this->resolveMenuTitleRaw($sourceName, $sourceId, $localeCode));
+        }
+        $push($this->resolveDisplayTitle($sourceName, $sourceId));
+
+        return implode(' ', $parts);
+    }
+
+    /**
+     * 顶栏万能搜索：可导航菜单项（含跨语言 search_text）。
+     *
+     * @param array<int, array<string, mixed>>|null $menus
+     * @return list<array{source_id:string,title:string,url:string,search_text:string}>
+     */
+    public function collectNavigableMenuSearchItems(?array $menus = null): array
+    {
+        $menus ??= $this->getMenuTree();
+        $this->cachedBackendUrlPrefix = $this->getBackendUrlPrefix();
+        $this->cachedFrontendUrlPrefix = $this->getFrontendUrlPrefix();
+
+        $items = [];
+        $this->walkNavigableMenuSearchItems($menus, $items);
+
+        return $items;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $menus
+     * @param list<array{source_id:string,title:string,url:string,search_text:string}> $items
+     */
+    private function walkNavigableMenuSearchItems(array $menus, array &$items): void
+    {
+        foreach ($menus as $menu) {
+            if (!$this->isMenuEnabled($menu)) {
+                continue;
+            }
+
+            $route = trim((string)($menu['route'] ?? ''));
+            $sourceId = (string)($menu['source_id'] ?? '');
+            $sourceName = (string)($menu['source_name'] ?? '');
+            if ($route !== '' && $sourceId !== '') {
+                $items[] = [
+                    'source_id' => $sourceId,
+                    'title' => $this->resolveDisplayTitle($sourceName, $sourceId),
+                    'url' => $this->formatMenuUrlCached($menu),
+                    'search_text' => $this->buildCrossLocaleSearchText($sourceName, $sourceId),
+                ];
+            }
+
+            $nodes = array_values(array_filter(
+                is_array($menu['nodes'] ?? null) ? $menu['nodes'] : [],
+                static fn(array $node): bool => ($node['type'] ?? '') === 'menus',
+            ));
+            if ($nodes !== []) {
+                $this->walkNavigableMenuSearchItems($nodes, $items);
+            }
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getActiveLocaleCodes(): array
+    {
+        if ($this->activeLocaleCodes !== null) {
+            return $this->activeLocaleCodes;
+        }
+
+        $codes = [];
+        try {
+            if (class_exists(ActiveLocaleCodeProvider::class)) {
+                $codes = ObjectManager::getInstance(ActiveLocaleCodeProvider::class)->getInstalledActiveCodes();
+            }
+        } catch (\Throwable) {
+            $codes = [];
+        }
+
+        if ($codes === []) {
+            $codes = array_values(array_unique(array_filter([
+                State::getLangLocal(),
+                'en_US',
+                'zh_Hans_CN',
+            ], static fn(string $code): bool => trim($code) !== '')));
+        }
+
+        return $this->activeLocaleCodes = $codes;
+    }
+
+    /**
+     * 指定 locale 下的菜单标题；无译文时回退 source 原文。
+     */
+    public function resolveMenuTitleRaw(string $title, string $sourceId, string $localeCode): string
+    {
+        $title = trim($title);
+        if ($title === '') {
+            return '';
+        }
+
+        $moduleName = $this->extractModuleNameFromSource($sourceId);
+        if ($moduleName !== '') {
+            $moduleWords = $this->getModuleLocaleWords($moduleName, $localeCode);
+            $moduleTranslate = trim((string)($moduleWords[$title] ?? ''));
+            if ($moduleTranslate !== '') {
+                return $moduleTranslate;
+            }
+        }
+
+        $generatedWords = $this->getGeneratedLocaleWords($localeCode);
+        $generatedTranslate = trim((string)($generatedWords[$title] ?? ''));
+        if ($generatedTranslate !== '') {
+            return $generatedTranslate;
+        }
+
+        return $title;
     }
 
     private function extractModuleNameFromSource(string $sourceId): string

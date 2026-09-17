@@ -88,10 +88,10 @@ class ExceptionFingerprint
             return '';
         }
 
-        // Strip common AI wrapper prefixes repeatedly.
+        // Strip common AI wrapper prefixes repeatedly (incl. provider/model annotations).
         for ($i = 0; $i < 4; $i++) {
             $next = preg_replace(
-                '/^(AI生成失败|API请求失败|API调用失败|流式API调用失败)[:：]\s*/u',
+                '/^(AI生成失败|AI流式生成失败|API请求失败|API调用失败|流式API调用失败)(?:（[^）]*）)?[:：]\s*/u',
                 '',
                 $message
             );

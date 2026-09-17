@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Marketing',
-    "version" => '1.2.11',
+    "version" => '1.3.2',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',
@@ -13,6 +13,9 @@ return [
         'Weline_Theme' => '*',
         'Weline_Widget' => '*',
         'Weline_Order' => '*',
+        'Weline_Checkout' => '*',
+        'Weline_Cart' => '*',
+        'Weline_Customer' => '*',
         'Weline_Smtp' => '*',
         'Weline_Cron' => '*',
     ],

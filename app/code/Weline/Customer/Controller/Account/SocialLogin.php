@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class SocialLogin extends FrontendController
 {
-    protected ?string $layoutType = 'account.auth';
+    protected ?string $layoutType = 'account/social-login';
 
     public function getStart()
     {

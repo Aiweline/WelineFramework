@@ -38,6 +38,7 @@
     root.setAttribute('data-shipping-mounted', '1');
 
     var ADDRESS_CODE = 'checkout-shipping-address';
+    var BILLING_ADDRESS_CODE = 'checkout-billing-address';
     var form = root.closest('form');
     var editor = root.querySelector('[data-shipping-editor]');
     var billingEditor = root.querySelector('[data-billing-editor]');
@@ -204,7 +205,7 @@
                 return;
             }
             // 每次进入 picking 都拉全量地址簿（含其它国家），避免仅当前配送国 1 条时误以为「没有其它地址」。
-            var result = await api.getDeliveryContext({ list_all_addresses: true }, {silent: true});
+            var result = await api.getDeliveryContext({ list_all_addresses: true, address_purpose: 'checkout' }, {silent: true});
             var ctx = (result && (result.data || result)) || {};
             if (Array.isArray(ctx.addresses) && ctx.addresses.length) {
                 // 隔离弹窗：合并本地未入库卡，避免「更换地址」刷新冲掉本单刚编辑的地址。
@@ -253,11 +254,75 @@
             return;
         }
         var next = text(value).trim();
+        if (isPhoneFieldName(name) || (input.matches && input.matches('[data-phone-field]'))) {
+            next = sanitizePhoneInput(next);
+        }
         if (input.value === next) {
             return;
         }
         input.value = next;
         input.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+
+    /** 全球电话：数字 + 可选前导 +，分隔符空格 - () . /；字母一律剔除 */
+    function sanitizePhoneInput(value) {
+        return text(value).replace(/[^0-9+\-\s().\/]/g, '');
+    }
+
+    function isPhoneFieldName(name) {
+        var key = text(name).trim();
+        return key === 'phone' || key === 'billing_phone' || key === 'contact_phone';
+    }
+
+    /** 与后端 AddressValidationService::isValidInternationalPhone 对齐（E.164 位数 7–15） */
+    function isValidPhone(value) {
+        var phone = text(value).trim();
+        if (phone === '' || phone.length > 32) {
+            return false;
+        }
+        if (!/^\+?[0-9\-\s().\/]+$/.test(phone)) {
+            return false;
+        }
+        if (phone.indexOf('+') > 0) {
+            return false;
+        }
+        if ((phone.match(/\+/g) || []).length > 1) {
+            return false;
+        }
+        if (!/^\+?[0-9]/.test(phone)) {
+            return false;
+        }
+        var digits = phone.replace(/\D/g, '');
+        return digits.length >= 7 && digits.length <= 15;
+    }
+
+    function applyPhoneFieldSanitize(input) {
+        if (!input) {
+            return false;
+        }
+        var raw = String(input.value || '');
+        var next = sanitizePhoneInput(raw);
+        if (raw === next) {
+            return false;
+        }
+        var start = typeof input.selectionStart === 'number' ? input.selectionStart : next.length;
+        var removed = 0;
+        var i = 0;
+        var j = 0;
+        while (i < start && i < raw.length) {
+            if (j < next.length && raw.charAt(i) === next.charAt(j)) {
+                j += 1;
+            } else {
+                removed += 1;
+            }
+            i += 1;
+        }
+        input.value = next;
+        var pos = Math.max(0, start - removed);
+        try {
+            input.setSelectionRange(pos, pos);
+        } catch (_e) {}
+        return true;
     }
 
     function readShippingSnapshot() {
@@ -443,7 +508,7 @@
             if (!api || typeof api.selectDeliveryAddress !== 'function') {
                 return;
             }
-            var result = await api.selectDeliveryAddress({id: id}, {silent: true});
+            var result = await api.selectDeliveryAddress({id: id, address_purpose: 'checkout'}, {silent: true});
             var ctx = (result && (result.data || result)) || {};
             if (ctx.checkout_address) {
                 fillShipping(Object.assign({}, payload, ctx.checkout_address, {
@@ -459,10 +524,18 @@
         if (card) {
             selectSaved(card);
         }
+        resetAlsoUseReceivingDefault();
         setMode('edit');
         setMessage('', false);
         if (editor && typeof editor.scrollIntoView === 'function') {
             editor.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+    }
+
+    function resetAlsoUseReceivingDefault() {
+        var box = root.querySelector('[data-also-use-receiving]');
+        if (box) {
+            box.checked = true;
         }
     }
 
@@ -486,6 +559,7 @@
             address1: '',
             postal_code: ''
         }, {clearEmpty: true});
+        resetAlsoUseReceivingDefault();
         setMode('new');
         setMessage('', false);
         if (editor && typeof editor.scrollIntoView === 'function') {
@@ -727,6 +801,12 @@
             return null;
         }
         var escaped = key.replace(/"/g, '');
+        if (key.indexOf('billing_') === 0 && billingEditor) {
+            var billingScoped = billingEditor.querySelector('[name="' + escaped + '"]');
+            if (billingScoped) {
+                return billingScoped;
+            }
+        }
         if (editor) {
             var scoped = editor.querySelector('[data-shipping-field][name="' + escaped + '"]');
             if (scoped) {
@@ -811,7 +891,7 @@
             el.textContent = '';
             el.hidden = true;
         });
-        root.querySelectorAll('[data-shipping-field].is-invalid').forEach(function (input) {
+        root.querySelectorAll('[data-shipping-field].is-invalid, [data-billing-field].is-invalid').forEach(function (input) {
             input.classList.remove('is-invalid');
             input.removeAttribute('aria-invalid');
             input.removeAttribute('aria-describedby');
@@ -901,8 +981,11 @@
         if (!text(snap.name).trim()) {
             errors.name = t('err_name', '请填写收货人。');
         }
-        if (!text(snap.phone).trim()) {
+        var phone = text(snap.phone).trim();
+        if (!phone) {
             errors.phone = t('err_phone', '请填写电话。');
+        } else if (!isValidPhone(phone)) {
+            errors.phone = t('err_phone_invalid', '电话号码格式不正确');
         }
         if (!text(snap.address1).trim()) {
             errors.address1 = t('err_address1', '请填写详细地址。');
@@ -1029,6 +1112,45 @@
         });
     }
 
+    function captchaBinder() {
+        return document.getElementById('checkout-shipping-address-editor')
+            || root.querySelector('[data-shipping-editor], [data-address-editor]')
+            || root;
+    }
+
+    function readCaptchaProvider() {
+        var el = root.querySelector('[data-weline-captcha-provider]');
+        return el ? text(el.getAttribute('data-weline-captcha-provider')).trim() : '';
+    }
+
+    function readCaptchaResponse() {
+        var el = root.querySelector('[data-weline-captcha-provider]');
+        var scope = el || root;
+        var input = scope.querySelector('[name="captcha_response"]');
+        return input ? text(input.value).trim() : '';
+    }
+
+    function bindCaptchaLifecycle() {
+        if (root.dataset.captchaLifeBound === '1') {
+            return;
+        }
+        root.dataset.captchaLifeBound = '1';
+        root.addEventListener('weline:captcha:degrade', function (event) {
+            var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+            if (text(detail.prefer) !== 'local_image') {
+                return;
+            }
+            if (typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
+            }
+            ensureLazyCaptcha(true, 'local_image').then(function () {
+                setMessage(t('captcha_degraded', '云端人机验证暂不可用，已切换为本地图码，请填写后重试。'), true);
+            }).catch(function () {
+                setMessage(t('captcha_degrade_failed', '人机验证加载失败，请稍后重试。'), true);
+            });
+        });
+    }
+
     async function refreshGuestCaptchaOnOpen() {
         if (text(root.getAttribute('data-is-logged-in')) === '1') {
             return;
@@ -1037,6 +1159,7 @@
         if (!target) {
             return;
         }
+        bindCaptchaLifecycle();
         try {
             if (window.Weline && window.Weline.Captcha && typeof window.Weline.Captcha.refresh === 'function') {
                 await window.Weline.Captcha.refresh(target);
@@ -1052,17 +1175,21 @@
         }
     }
 
-    async function ensureLazyCaptcha(force) {
+    async function ensureLazyCaptcha(force, prefer) {
         var host = root.querySelector('[data-weline-captcha-lazy]');
         var existing = root.querySelector('[data-weline-captcha-provider], .weline-captcha');
         if (!force && host && host.getAttribute('data-loaded') === '1') {
             return;
         }
-        if (!force && !host && existing) {
+        if (!force && !host && existing && !prefer) {
             return;
         }
         if (window.Weline && window.Weline.Captcha && typeof window.Weline.Captcha.refresh === 'function' && (host || existing)) {
-            await window.Weline.Captcha.refresh(host || existing);
+            if (prefer === 'local_image' && typeof window.Weline.Captcha.degradeToLocal === 'function') {
+                await window.Weline.Captcha.degradeToLocal(host || existing);
+                return;
+            }
+            await window.Weline.Captcha.refresh(host || existing, prefer || undefined);
             return;
         }
         if (!host && !existing) {
@@ -1076,10 +1203,14 @@
             return;
         }
         var anchor = host || existing;
-        var result = await api.getDeliveryCaptchaChallenge({
+        var challengeParams = {
             intent: (host && host.getAttribute('data-intent')) || 'checkout.save_delivery_address',
             form_id: (host && host.getAttribute('data-form-id')) || 'checkout-shipping-address-editor'
-        }, {silent: true});
+        };
+        if (prefer === 'local_image') {
+            challengeParams.prefer = 'local_image';
+        }
+        var result = await api.getDeliveryCaptchaChallenge(challengeParams, {silent: true});
         var challenge = result && (result.data || result) || {};
         var html = text(challenge.html);
         if (!html || !anchor) {
@@ -1091,10 +1222,105 @@
         if (!node) {
             return;
         }
+        // Keep scripts that providers append after the captcha root.
+        var scripts = [];
+        Array.prototype.forEach.call(wrap.querySelectorAll('script'), function (script) {
+            scripts.push(script);
+        });
         anchor.replaceWith(node);
+        scripts.forEach(function (oldScript) {
+            if (oldScript.parentNode === wrap || !document.contains(oldScript)) {
+                var s = document.createElement('script');
+                if (oldScript.src) {
+                    s.src = oldScript.src;
+                    s.async = oldScript.async;
+                    s.defer = oldScript.defer;
+                } else {
+                    s.textContent = oldScript.textContent || '';
+                }
+                (node.parentNode || root).appendChild(s);
+            }
+        });
+        bindCaptchaLifecycle();
         if (window.Weline && window.Weline.Form && typeof window.Weline.Form.mount === 'function') {
             window.Weline.Form.mount(root);
         }
+    }
+
+    /**
+     * Google/腾讯 token 由 prepare-submit 异步写入；地址保存走 API，不能空票直发。
+     * SDK 失败会 degrade → 本地图码，本次保存中止并提示用户填写。
+     */
+    async function ensureCaptchaTokenBeforeSave() {
+        bindCaptchaLifecycle();
+        await ensureLazyCaptcha();
+        var provider = readCaptchaProvider();
+        if (!provider) {
+            return;
+        }
+        if (provider === 'local_image') {
+            if (readCaptchaResponse() === '') {
+                throw new Error(t('captcha_required', '请填写验证码'));
+            }
+            return;
+        }
+        if (provider !== 'google_enterprise' && provider !== 'tencent_captcha') {
+            return;
+        }
+        if (readCaptchaResponse() !== '') {
+            return;
+        }
+        var binder = captchaBinder();
+        if (text(binder.dataset.welineCaptchaPending) === '1') {
+            throw new Error(t('captcha_pending', '人机验证尚未就绪，请稍后重试'));
+        }
+        await new Promise(function (resolve, reject) {
+            var settled = false;
+            var timer = window.setTimeout(function () {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                cleanup();
+                reject(new Error(t('captcha_pending', '人机验证尚未就绪，请稍后重试')));
+            }, 12000);
+            function cleanup() {
+                binder.removeEventListener('weline:form:verified', onVerified);
+                binder.removeEventListener('weline:captcha:degrade', onDegrade);
+                window.clearTimeout(timer);
+            }
+            function onVerified() {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                cleanup();
+                resolve();
+            }
+            function onDegrade() {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                cleanup();
+                reject(new Error(t('captcha_degraded', '云端人机验证暂不可用，已切换为本地图码，请填写后重试。')));
+            }
+            binder.addEventListener('weline:form:verified', onVerified);
+            binder.addEventListener('weline:captcha:degrade', onDegrade);
+            binder.dispatchEvent(new CustomEvent('weline:form:prepare-submit', {
+                bubbles: true,
+                cancelable: true,
+                detail: {
+                    form: binder,
+                    intent: 'checkout.save_delivery_address'
+                }
+            }));
+            if (readCaptchaResponse() !== '') {
+                settled = true;
+                cleanup();
+                resolve();
+            }
+        });
     }
 
     function applyDeliveryContext(ctx) {
@@ -1128,7 +1354,10 @@
         }
         var selectedId = text(root.getAttribute('data-selected-id'));
         var isNew = mode() === 'new' || selectedId === '';
+        var alsoReceiving = root.querySelector('[data-also-use-receiving]');
         var payload = {
+            purpose_source: 'checkout',
+            also_use_receiving: alsoReceiving ? (alsoReceiving.checked ? 1 : 0) : 1,
             address: {
                 id: isNew ? '' : selectedId,
                 contact_name: snap.name,
@@ -1139,13 +1368,15 @@
                 city: snap.city,
                 district: snap.district,
                 street: snap.address1,
-                postal_code: snap.postal_code
+                postal_code: snap.postal_code,
+                purpose_source: 'checkout',
+                also_use_receiving: alsoReceiving ? (alsoReceiving.checked ? 1 : 0) : 1
             }
         };
         var useBtn = root.querySelector('[data-use-edited-address]');
         if (text(root.getAttribute('data-is-logged-in')) !== '1') {
             try {
-                await ensureLazyCaptcha();
+                await ensureCaptchaTokenBeforeSave();
                 appendCaptchaFields(payload, root);
             } catch (e) {
                 setMessage(e.message || '验证码加载失败，请稍后重试。', true);
@@ -1235,7 +1466,7 @@
         if (!billingEditor) {
             return;
         }
-        billingEditor.querySelectorAll('[data-billing-field]').forEach(function (input) {
+        billingEditor.querySelectorAll('input, select, textarea').forEach(function (input) {
             input.disabled = !on;
             if (on) {
                 input.removeAttribute('disabled');
@@ -1243,24 +1474,537 @@
                 input.setAttribute('disabled', 'disabled');
             }
         });
-        if (on) {
-            billingEditor.removeAttribute('hidden');
-        } else {
-            billingEditor.setAttribute('hidden', 'hidden');
+        billingEditor.querySelectorAll('button').forEach(function (btn) {
+            btn.disabled = !on;
+        });
+        if (on && window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {
+            window.WelineThemeAddress.boot();
         }
     }
 
-    function syncBillingFromShipping() {
-        var snap = readShippingSnapshot();
-        setField('billing_name', snap.name, billingEditor);
-        setField('billing_phone', snap.phone, billingEditor);
-        setField('billing_email', snap.email, billingEditor);
-        setField('billing_country_code', snap.country_code || 'CN', billingEditor);
-        setField('billing_province', snap.province, billingEditor);
-        setField('billing_city', snap.city, billingEditor);
-        setField('billing_district', snap.district, billingEditor);
-        setField('billing_address1', snap.address1, billingEditor);
-        setField('billing_postal_code', snap.postal_code, billingEditor);
+    function billingSavedBox() {
+        return root.querySelector('[data-billing-saved]');
+    }
+
+    function billingCardsHost() {
+        return root.querySelector('[data-billing-cards]');
+    }
+
+    function billingMode() {
+        return text(root.getAttribute('data-billing-mode') || 'same');
+    }
+
+    function setBillingMessage(message, isError) {
+        var el = root.querySelector('[data-billing-message]');
+        if (!el) {
+            return;
+        }
+        var textMsg = text(message).trim();
+        if (!textMsg) {
+            el.hidden = true;
+            el.textContent = '';
+            el.removeAttribute('data-tone');
+            return;
+        }
+        el.hidden = false;
+        el.textContent = textMsg;
+        el.setAttribute('data-tone', isError ? 'danger' : 'success');
+    }
+
+    function syncBillingChangeLabel(next) {
+        var btn = root.querySelector('[data-change-billing-address]');
+        if (!btn) {
+            return;
+        }
+        var count = billingCardsHost()
+            ? billingCardsHost().querySelectorAll('[data-billing-card]').length
+            : 0;
+        var picking = next === 'picking';
+        var show = picking || count > 1 || text(root.getAttribute('data-billing-list-loaded')) !== '1';
+        btn.hidden = !show && count <= 1;
+        btn.setAttribute('aria-expanded', picking ? 'true' : 'false');
+        btn.textContent = picking
+            ? t('done_change', '收起地址列表')
+            : t('change_address', '更换地址');
+    }
+
+    function setBillingMode(next) {
+        root.setAttribute('data-billing-mode', next);
+        var saved = billingSavedBox();
+        var cancelBtn = root.querySelector('[data-cancel-billing-edit]');
+        if (!billingEditor) {
+            return;
+        }
+        if (next === 'same') {
+            billingEditor.setAttribute('hidden', 'hidden');
+            if (saved) {
+                saved.hidden = true;
+            }
+            if (cancelBtn) {
+                cancelBtn.hidden = true;
+            }
+            syncBillingChangeLabel(next);
+            return;
+        }
+        if (saved) {
+            saved.hidden = false;
+        }
+        if (next === 'collapsed' || next === 'picking') {
+            billingEditor.setAttribute('hidden', 'hidden');
+            if (cancelBtn) {
+                cancelBtn.hidden = true;
+            }
+        } else {
+            billingEditor.removeAttribute('hidden');
+            if (cancelBtn) {
+                var hasCards = !!(billingCardsHost() && billingCardsHost().querySelector('[data-billing-card]'));
+                cancelBtn.hidden = !hasCards;
+            }
+        }
+        syncBillingChangeLabel(next);
+    }
+
+    function readBillingSnapshot() {
+        if (!form) {
+            return {};
+        }
+        var data = new FormData(form);
+        return {
+            id: text(data.get('billing_address_id') || root.getAttribute('data-billing-selected-id')).trim(),
+            name: text(data.get('billing_name')).trim(),
+            phone: text(data.get('billing_phone')).trim(),
+            email: text(data.get('billing_email')).trim(),
+            country_code: text(data.get('billing_country_code')).trim().toUpperCase() || 'CN',
+            country: text(data.get('billing_country')).trim(),
+            province: text(data.get('billing_province')).trim(),
+            province_code: text(data.get('billing_province_code')).trim(),
+            province_region_id: text(data.get('billing_province_region_id')).trim(),
+            city: text(data.get('billing_city')).trim(),
+            city_code: text(data.get('billing_city_code')).trim(),
+            city_region_id: text(data.get('billing_city_region_id')).trim(),
+            district: text(data.get('billing_district')).trim(),
+            district_code: text(data.get('billing_district_code')).trim(),
+            district_region_id: text(data.get('billing_district_region_id')).trim(),
+            street: text(data.get('billing_street')).trim(),
+            address1: text(data.get('billing_address1')).trim(),
+            postal_code: text(data.get('billing_postal_code')).trim()
+        };
+    }
+
+    function applyBillingCascade(address) {
+        if (!window.WelineThemeAddress || typeof window.WelineThemeAddress.applyValues !== 'function') {
+            return Promise.resolve(false);
+        }
+        return window.WelineThemeAddress.applyValues(BILLING_ADDRESS_CODE, {
+            country_code: text(address.country_code).trim().toUpperCase(),
+            country: text(address.country || address.country_name || address.country_code).trim(),
+            province: text(address.province || '').trim(),
+            city: text(address.city || '').trim(),
+            district: text(address.district || '').trim(),
+            street: text(address.street || '').trim()
+        });
+    }
+
+    function fillBilling(address, options) {
+        options = options || {};
+        address = address || {};
+        var clearEmpty = !!options.clearEmpty;
+        function put(name, value) {
+            if (!clearEmpty && text(value).trim() === '') {
+                return;
+            }
+            setField(name, value, billingEditor);
+        }
+        put('billing_name', address.name || address.contact_name || '');
+        put('billing_phone', address.phone || address.contact_phone || '');
+        put('billing_email', address.email || '');
+        put('billing_postal_code', address.postal_code || '');
+        put('billing_address1', address.address1 || address.street || '');
+        if (address.id || address.delivery_address_id) {
+            root.setAttribute('data-billing-selected-id', text(address.id || address.delivery_address_id));
+            var idInput = form && form.querySelector('[name="billing_address_id"]');
+            if (!idInput && billingEditor) {
+                idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'billing_address_id';
+                idInput.setAttribute('data-billing-field', '');
+                billingEditor.appendChild(idInput);
+            }
+            if (idInput) {
+                idInput.value = text(address.id || address.delivery_address_id);
+            }
+        }
+        applyBillingCascade(address);
+    }
+
+    function markBillingSelected(id) {
+        root.setAttribute('data-billing-selected-id', text(id));
+        var host = billingCardsHost();
+        if (!host) {
+            return;
+        }
+        host.querySelectorAll('[data-billing-card]').forEach(function (card) {
+            var on = text(card.getAttribute('data-address-id')) === text(id);
+            card.classList.toggle('is-selected', on);
+            var radio = card.querySelector('[data-billing-radio]');
+            if (radio) {
+                radio.checked = on;
+            }
+        });
+    }
+
+    function collectBillingAddressesFromCards() {
+        var out = [];
+        var host = billingCardsHost();
+        if (!host) {
+            return out;
+        }
+        host.querySelectorAll('[data-billing-card]').forEach(function (card) {
+            var payload = {};
+            try {
+                payload = JSON.parse(card.getAttribute('data-address-json') || '{}') || {};
+            } catch (e) {
+                payload = {};
+            }
+            var id = text(payload.id || card.getAttribute('data-address-id'));
+            if (id === '') {
+                return;
+            }
+            payload.id = id;
+            payload.is_selected = card.classList.contains('is-selected');
+            out.push(payload);
+        });
+        return out;
+    }
+
+    function renderBillingSavedAddresses(ctx) {
+        var host = billingCardsHost();
+        var saved = billingSavedBox();
+        if (!host || !saved) {
+            return;
+        }
+        var addresses = ctx && Array.isArray(ctx.addresses) ? ctx.addresses.slice() : [];
+        if (!addresses.length) {
+            return;
+        }
+        var selectedId = text(
+            root.getAttribute('data-billing-selected-id')
+            || (ctx.selected && (ctx.selected.id || ctx.selected.delivery_address_id))
+            || ''
+        );
+        var email = text((ctx.checkout_address && ctx.checkout_address.email) || initial.email || '');
+        var editLabel = t('edit', '编辑');
+        host.textContent = '';
+        addresses.forEach(function (address) {
+            var payload = buildCardPayload(address, email);
+            var id = payload.id;
+            if (id === '') {
+                return;
+            }
+            if (selectedId === '') {
+                selectedId = id;
+            }
+            var isSelected = id === selectedId;
+            var card = document.createElement('label');
+            card.className = 'w-shipping-checkout-address__card' + (isSelected ? ' is-selected' : '');
+            card.setAttribute('data-billing-card', '');
+            card.setAttribute('data-address-id', id);
+            card.setAttribute('data-address-json', JSON.stringify(payload));
+
+            var radio = document.createElement('input');
+            radio.className = 'w-shipping-checkout-address__radio';
+            radio.type = 'radio';
+            radio.name = 'billing_address_pick';
+            radio.value = id;
+            radio.checked = isSelected;
+            radio.setAttribute('data-billing-radio', '');
+            card.appendChild(radio);
+
+            var body = document.createElement('span');
+            body.className = 'w-shipping-checkout-address__card-body';
+            var nameEl = document.createElement('strong');
+            nameEl.className = 'w-shipping-checkout-address__card-name';
+            nameEl.textContent = payload.name;
+            nameEl.hidden = payload.name === '';
+            body.appendChild(nameEl);
+            var metaEl = document.createElement('span');
+            metaEl.className = 'w-shipping-checkout-address__card-meta';
+            metaEl.textContent = payload.phone;
+            metaEl.hidden = payload.phone === '';
+            body.appendChild(metaEl);
+            var lineEl = document.createElement('span');
+            lineEl.className = 'w-shipping-checkout-address__card-line';
+            lineEl.textContent = cardLineFromPayload(payload);
+            body.appendChild(lineEl);
+            card.appendChild(body);
+
+            var editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'w-shipping-checkout-address__card-edit';
+            editBtn.setAttribute('data-edit-billing-address', '');
+            editBtn.setAttribute('data-address-id', id);
+            editBtn.textContent = editLabel;
+            card.appendChild(editBtn);
+
+            host.appendChild(card);
+        });
+        if (selectedId) {
+            markBillingSelected(selectedId);
+        }
+        var count = host.querySelectorAll('[data-billing-card]').length;
+        root.setAttribute('data-billing-has-saved', count ? '1' : '0');
+        root.setAttribute('data-billing-address-count', String(count));
+        saved.hidden = count === 0;
+        syncBillingChangeLabel(billingMode());
+    }
+
+    function selectBillingSaved(card) {
+        if (!card) {
+            return;
+        }
+        var id = text(card.getAttribute('data-address-id'));
+        var payload = {};
+        try {
+            payload = JSON.parse(card.getAttribute('data-address-json') || '{}') || {};
+        } catch (e) {
+            payload = {};
+        }
+        // 账单选址仅写本区字段，禁止调用 selectDeliveryAddress（那会改收货配送会话）。
+        markBillingSelected(id);
+        fillBilling(payload, {clearEmpty: true});
+        setBillingMode('collapsed');
+        setBillingMessage('', false);
+    }
+
+    function openBillingEdit(card) {
+        if (card) {
+            selectBillingSaved(card);
+        }
+        setBillingEnabled(true);
+        setBillingMode('edit');
+        setBillingMessage('', false);
+        if (billingEditor && typeof billingEditor.scrollIntoView === 'function') {
+            billingEditor.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+    }
+
+    function openBillingNew() {
+        var host = billingCardsHost();
+        if (host) {
+            host.querySelectorAll('[data-billing-radio]').forEach(function (radio) {
+                radio.checked = false;
+            });
+            host.querySelectorAll('[data-billing-card]').forEach(function (card) {
+                card.classList.remove('is-selected');
+            });
+        }
+        root.setAttribute('data-billing-selected-id', '');
+        fillBilling({
+            name: '',
+            phone: '',
+            email: text(initial.email || ''),
+            country_code: 'CN',
+            country: '',
+            province: '',
+            city: '',
+            district: '',
+            address1: '',
+            postal_code: ''
+        }, {clearEmpty: true});
+        setBillingEnabled(true);
+        setBillingMode('new');
+        setBillingMessage('', false);
+        if (billingEditor && typeof billingEditor.scrollIntoView === 'function') {
+            billingEditor.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+    }
+
+    function cancelBillingEdit() {
+        var selectedId = text(root.getAttribute('data-billing-selected-id'));
+        var host = billingCardsHost();
+        var card = selectedId && host
+            ? host.querySelector('[data-billing-card][data-address-id="' + selectedId.replace(/"/g, '') + '"]')
+            : (host && host.querySelector('[data-billing-card].is-selected'));
+        if (card) {
+            selectBillingSaved(card);
+            return;
+        }
+        var first = host && host.querySelector('[data-billing-card]');
+        if (first) {
+            selectBillingSaved(first);
+            return;
+        }
+        setBillingMode('new');
+    }
+
+    function collapseBillingList() {
+        var selectedId = text(root.getAttribute('data-billing-selected-id'));
+        if (selectedId !== '') {
+            markBillingSelected(selectedId);
+        }
+        setBillingMode('collapsed');
+    }
+
+    async function openBillingPicker() {
+        setBillingMode('picking');
+        var btn = root.querySelector('[data-change-billing-address]');
+        if (btn) {
+            btn.disabled = true;
+        }
+        try {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                root.setAttribute('data-billing-list-loaded', '1');
+                return;
+            }
+            var api = await window.Weline.Api.resource('checkout');
+            if (!api || typeof api.getDeliveryContext !== 'function') {
+                root.setAttribute('data-billing-list-loaded', '1');
+                return;
+            }
+            // 只读拉地址簿给账单挑选；不 selectDeliveryAddress，不碰收货会话。
+            var result = await api.getDeliveryContext({ list_all_addresses: true, address_purpose: 'checkout' }, {silent: true});
+            var ctx = (result && (result.data || result)) || {};
+            if (Array.isArray(ctx.addresses) && ctx.addresses.length) {
+                var serverIds = {};
+                ctx.addresses.forEach(function (row) {
+                    serverIds[text(row.id || row.delivery_address_id || '')] = true;
+                });
+                collectBillingAddressesFromCards().forEach(function (local) {
+                    var lid = text(local.id);
+                    if (lid !== '' && !serverIds[lid] && lid.indexOf('billing_local_') === 0) {
+                        ctx.addresses.push(Object.assign({}, local, {is_selected: false}));
+                    }
+                });
+                renderBillingSavedAddresses(ctx);
+            }
+            root.setAttribute('data-billing-list-loaded', '1');
+            syncBillingChangeLabel('picking');
+        } catch (e) {
+            setBillingMessage(t('load_addresses_failed', '地址列表加载失败，请稍后重试。'), true);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+            }
+        }
+    }
+
+    function validateBillingFields(snap) {
+        var address = snap || readBillingSnapshot();
+        var errors = {};
+        if (!text(address.name).trim()) {
+            errors.billing_name = t('err_name', '请填写收货人。');
+        }
+        var phone = text(address.phone).trim();
+        if (!phone) {
+            errors.billing_phone = t('err_phone', '请填写电话。');
+        } else if (!isValidPhone(phone)) {
+            errors.billing_phone = t('err_phone_invalid', '电话号码格式不正确');
+        }
+        if (!text(address.address1).trim()) {
+            errors.billing_address1 = t('err_address1', '请填写详细地址。');
+        }
+        if (Object.keys(errors).length) {
+            if (applyFieldErrors(errors)) {
+                focusFirstFieldError();
+            } else {
+                var firstKey = Object.keys(errors)[0];
+                setBillingMessage(errors[firstKey], true);
+            }
+            return false;
+        }
+        clearFieldErrorFor('billing_phone');
+        setBillingMessage('', false);
+        return true;
+    }
+
+    function commitBillingAddress() {
+        var snap = readBillingSnapshot();
+        if (!validateBillingFields(snap)) {
+            return;
+        }
+        var id = text(snap.id || root.getAttribute('data-billing-selected-id'));
+        if (id === '' || billingMode() === 'new') {
+            id = 'billing_local_' + Date.now().toString(36);
+        }
+        snap.id = id;
+        var merged = collectBillingAddressesFromCards();
+        var found = false;
+        merged.forEach(function (row) {
+            if (text(row.id) === id) {
+                Object.keys(snap).forEach(function (key) {
+                    row[key] = snap[key];
+                });
+                row.is_selected = true;
+                found = true;
+            } else {
+                row.is_selected = false;
+            }
+        });
+        if (!found) {
+            merged.push(Object.assign({}, snap, {is_selected: true}));
+        }
+        renderBillingSavedAddresses({
+            addresses: merged,
+            selected: snap,
+            checkout_address: snap
+        });
+        markBillingSelected(id);
+        fillBilling(snap, {clearEmpty: true});
+        setBillingMode('collapsed');
+        setBillingMessage(t('billing_saved', '账单地址已保存。'), false);
+        root.setAttribute('data-billing-list-loaded', '0');
+        syncBillingChangeLabel('collapsed');
+    }
+
+    async function activateBillingBook() {
+        setBillingEnabled(true);
+        setBillingMessage('', false);
+        var host = billingCardsHost();
+        var hasCards = !!(host && host.querySelector('[data-billing-card]'));
+        if (hasCards) {
+            var selected = host.querySelector('[data-billing-card].is-selected')
+                || host.querySelector('[data-billing-card]');
+            if (selected) {
+                selectBillingSaved(selected);
+            } else {
+                setBillingMode('collapsed');
+            }
+            return;
+        }
+        // 首次展开：只读拉地址簿；有则选卡收起，无则空白编辑。
+        try {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                var api = await window.Weline.Api.resource('checkout');
+                if (api && typeof api.getDeliveryContext === 'function') {
+                    var result = await api.getDeliveryContext({ list_all_addresses: true, address_purpose: 'checkout' }, {silent: true});
+                    var ctx = (result && (result.data || result)) || {};
+                    if (Array.isArray(ctx.addresses) && ctx.addresses.length) {
+                        renderBillingSavedAddresses(ctx);
+                        var first = billingCardsHost() && billingCardsHost().querySelector('[data-billing-card]');
+                        if (first) {
+                            selectBillingSaved(first);
+                            root.setAttribute('data-billing-list-loaded', ctx.addresses.length <= 1 ? '1' : '0');
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // fall through to blank editor
+        }
+        fillBilling({
+            name: '',
+            phone: '',
+            email: text(initial.email || ''),
+            country_code: 'CN',
+            country: '',
+            province: '',
+            city: '',
+            district: '',
+            address1: '',
+            postal_code: ''
+        }, {clearEmpty: true});
+        setBillingMode('new');
     }
 
     function onBillingSameChange() {
@@ -1268,10 +2012,11 @@
         var same = !box || box.checked;
         if (same) {
             setBillingEnabled(false);
+            setBillingMode('same');
+            setBillingMessage('', false);
             return;
         }
-        syncBillingFromShipping();
-        setBillingEnabled(true);
+        activateBillingBook();
     }
 
     function bootAddress() {
@@ -1346,13 +2091,28 @@
     }
     function onAddressFieldEvent(event) {
         var target = event.target;
-        if (target && target.matches && target.matches('[data-shipping-field][name]')) {
+        if (!(target && target.matches)) {
+            return;
+        }
+        if (target.matches('[data-phone-field], [name="phone"], [name="billing_phone"]')) {
+            applyPhoneFieldSanitize(target);
+        }
+        if (target.matches('[data-shipping-field][name], [data-billing-field][name]')) {
             clearFieldErrorFor(target.name);
         }
         // Postal→cascade lookup: <w:theme:address postal-lookup> / address.js
     }
     root.addEventListener('input', onAddressFieldEvent);
     root.addEventListener('change', onAddressFieldEvent);
+    root.addEventListener('beforeinput', function (event) {
+        var target = event.target;
+        if (!(target && target.matches && target.matches('[data-phone-field], [name="phone"], [name="billing_phone"]'))) {
+            return;
+        }
+        if (typeof event.data === 'string' && event.data !== '' && /[^0-9+\-\s().\/]/.test(event.data)) {
+            event.preventDefault();
+        }
+    });
 
     root.addEventListener('change', function (event) {
         var target = event.target;
@@ -1366,8 +2126,64 @@
             window.setTimeout(onBillingSameChange, 0);
         }
     });
+    root.addEventListener('change', function (event) {
+        var radio = event.target && event.target.closest ? event.target.closest('[data-billing-radio]') : null;
+        var box = billingSavedBox();
+        if (!radio || !box || !box.contains(radio)) {
+            return;
+        }
+        var card = radio.closest('[data-billing-card]');
+        if (card) {
+            selectBillingSaved(card);
+        }
+    });
+    root.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target && target.closest)) {
+            return;
+        }
+        var editBilling = target.closest('[data-edit-billing-address]');
+        var billingBox = billingSavedBox();
+        if (editBilling && billingBox && billingBox.contains(editBilling)) {
+            event.preventDefault();
+            event.stopPropagation();
+            openBillingEdit(editBilling.closest('[data-billing-card]'));
+            return;
+        }
+        var addBilling = target.closest('[data-add-billing-address]');
+        if (addBilling && root.contains(addBilling)) {
+            event.preventDefault();
+            openBillingNew();
+            return;
+        }
+        var changeBilling = target.closest('[data-change-billing-address]');
+        if (changeBilling && root.contains(changeBilling)) {
+            event.preventDefault();
+            if (billingMode() === 'picking') {
+                collapseBillingList();
+                return;
+            }
+            openBillingPicker();
+            return;
+        }
+        var cancelBilling = target.closest('[data-cancel-billing-edit]');
+        if (cancelBilling && root.contains(cancelBilling)) {
+            event.preventDefault();
+            cancelBillingEdit();
+            return;
+        }
+        var useBilling = target.closest('[data-use-billing-address]');
+        if (useBilling && root.contains(useBilling)) {
+            event.preventDefault();
+            commitBillingAddress();
+        }
+    });
 
     setBillingEnabled(false);
+    setBillingMode('same');
+    root.setAttribute('data-billing-list-loaded', '0');
+    root.setAttribute('data-billing-has-saved', '0');
+    root.setAttribute('data-billing-selected-id', '');
     if (text(root.getAttribute('data-has-saved')) === '1') {
         var addressCount = parseInt(root.getAttribute('data-address-count') || '0', 10) || 0;
         if (addressCount <= 1) {
@@ -1388,9 +2204,9 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20260914-picker-all-addr1');
+    root.setAttribute('data-shipping-js-rev', '20260916-phone-intl1');
     var api = {
-        rev: '20260914-picker-all-addr1',
+        rev: '20260916-phone-intl1',
         root: root,
         mount: mount,
         applyFieldErrors: applyFieldErrors,
@@ -1409,7 +2225,7 @@
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20260914-picker-all-addr1',
+        rev: '20260916-phone-intl1',
         root: null,
         mount: mount,
         applyFieldErrors: function () {},

@@ -2,6 +2,7 @@
 
 namespace Weline\Backend\Console\Menu;
 
+use Weline\Backend\Config\MenuXmlReader;
 use Weline\Backend\Service\MenuCollector;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -22,6 +23,10 @@ class Collect implements CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         $moduleNames = $this->parseModuleArgs($args);
+        $force = isset($args['force']) || isset($args['f']);
+        if ($force) {
+            MenuXmlReader::requestForceFull('menu:collect -f');
+        }
 
         // 1. 刷新模块列表（不调用 reload，避免 CLI 下配置重载影响 Scanner 路径解析）
         $this->printing->note(__('刷新模块列表...'));
@@ -50,8 +55,10 @@ class Collect implements CommandInterface
             $msg = __('未从 menu.xml 解析到任何菜单。');
             if ($rawConfigCount === 0) {
                 $msg .= __(' Scanner 未发现任何 menu.xml 文件，请执行：php bin/w setup:upgrade --route');
+            } elseif (!$force) {
+                $msg .= __(' 若源指纹全命中会跳过解析（DB 已有菜单时）。请执行：php bin/w menu:collect -f');
             } else {
-                $msg .= __(' 发现 %{1} 个配置文件但解析失败，请检查 XML 格式。', [$rawConfigCount]);
+                $msg .= __(' 发现 %{1} 个配置文件但解析结果为空，请检查 XML 格式。', [$rawConfigCount]);
             }
             $this->printing->error($msg);
         } else {
@@ -153,16 +160,19 @@ class Collect implements CommandInterface
             $this->tip(),
             [
                 '-m, --module=<模块名>' => '仅收集指定模块的菜单（增量更新）',
+                '-f, --force' => '强制全量重解析 menu.xml（清除 menu:* 源指纹，忽略跳过）',
                 '-h, --help' => '显示帮助信息',
             ],
             [
                 '指定 -m 时仅处理指定模块的 menu.xml，其他模块的菜单保持不变。',
+                '源指纹命中且 ACL 菜单非空时默认跳过解析；改 menu.xml 后指纹会变；若仍跳过请用 -f。',
             ],
             [
                 '全量收集' => 'php bin/w menu:collect',
+                '强制全量收集' => 'php bin/w menu:collect -f',
                 '增量收集指定模块' => 'php bin/w menu:collect -m Weline_Backend',
             ],
-            'php bin/w menu:collect [-m|--module=<模块名>]'
+            'php bin/w menu:collect [-m|--module=<模块名>] [-f|--force]'
         );
     }
 

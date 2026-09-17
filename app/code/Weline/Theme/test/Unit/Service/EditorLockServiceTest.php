@@ -18,7 +18,7 @@ final class EditorLockServiceTest extends TestCase
     private function themeEditorJsSource(): string
     {
         return (string) \file_get_contents(
-            \dirname(__DIR__, 3) . '/view/statics/js/theme-editor.js',
+            \dirname(__DIR__, 3) . '/view/statics/ui/pages/weline-theme-editor.js',
         );
     }
 
@@ -48,5 +48,34 @@ final class EditorLockServiceTest extends TestCase
         self::assertStringContainsString('function isEditorLockBlockedByOther(', $source);
         self::assertStringContainsString('is_locked_by_other', $source);
         self::assertStringContainsString('dataset.editorUserId', $source);
+    }
+
+    public function testLockIdentityAllowsNestedPageTypesLikeThemeEditorContext(): void
+    {
+        $source = $this->editorLockServiceSource();
+
+        self::assertStringContainsString('Align with ThemeEditorContext layoutType', $source);
+        self::assertStringContainsString('#^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,127}$#D', $source);
+        self::assertStringContainsString("!str_contains(\$pageType, '//')", $source);
+        self::assertStringNotContainsString('/^[a-z][a-z0-9_.:-]{0,63}$/D', $source);
+
+        foreach (['homepage', 'account/login', 'checkout/success', 'checkout/failure'] as $pageType) {
+            self::assertSame(
+                1,
+                preg_match('#^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,127}$#D', $pageType),
+                $pageType . ' must pass nested lock identity regex',
+            );
+            self::assertFalse(str_contains($pageType, '//'));
+            self::assertFalse(str_starts_with($pageType, '/'));
+            self::assertFalse(str_ends_with($pageType, '/'));
+        }
+
+        foreach (['', '/account', 'account/', 'account//login', "acc\0ount"] as $pageType) {
+            $ok = preg_match('#^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,127}$#D', $pageType) === 1
+                && !str_contains($pageType, '//')
+                && !str_starts_with($pageType, '/')
+                && !str_ends_with($pageType, '/');
+            self::assertFalse($ok, json_encode($pageType) . ' must remain rejected');
+        }
     }
 }

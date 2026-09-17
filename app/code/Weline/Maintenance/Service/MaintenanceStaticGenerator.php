@@ -4,14 +4,22 @@ declare(strict_types=1);
 
 namespace Weline\Maintenance\Service;
 
-use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\MaintenanceStaticPage;
+use Weline\Framework\Http\StaticErrorPageMap;
+use Weline\Framework\Http\StaticErrorPagePublisher;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Php\FiberTaskRunner;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Http\StaticErrorPagePublishFingerprint;
 
 /**
  * Generates maintenance HTML/JSON snapshots under pub/errors/maintenance/.
  *
- * No template compilation, no database — safe to run before maintenance Worker takes over.
+ * Publishes website×locale files via StaticErrorPagePublisher (cooperative Fibers).
+ * No template compilation required for the HTML shell — safe before Worker takeover.
  */
 final class MaintenanceStaticGenerator
 {
@@ -19,21 +27,239 @@ final class MaintenanceStaticGenerator
 
     private static ?array $langMapping = null;
 
+    /** @var array{website_id: int, website_code: string, website_url: string}|null */
+    private ?array $publishSite = null;
+
     public function publishAll(int $retryAfter = 60): array
     {
-        $written = [];
-        $locales = $this->discoverAvailableLocales();
-        foreach ($locales as $lang) {
-            $htmlFile = MaintenanceStaticPage::staticFilePath($lang, false);
-            $jsonFile = MaintenanceStaticPage::staticFilePath($lang, true);
-            $this->saveStaticFile($htmlFile, $this->buildHtml($lang));
-            $this->saveStaticFile($jsonFile, $this->buildJson($lang, $retryAfter));
-            $written[] = $lang;
+        $printing = null;
+        try {
+            if (PHP_SAPI === 'cli') {
+                $printing = ObjectManager::getInstance(Printing::class);
+            }
+        } catch (\Throwable) {
+            $printing = null;
         }
 
-        $this->pruneObsoleteStaticFiles($locales);
+        $skippedLabels = $this->trySkipEntirePublishAll($retryAfter, $printing);
+        if ($skippedLabels !== null) {
+            return $skippedLabels;
+        }
 
-        return $written;
+        $publisher = new StaticErrorPagePublisher();
+        $result = $publisher->publish(
+            MaintenanceStaticPage::KIND,
+            function (array $target) use ($retryAfter): array {
+                return $this->publishOne(
+                    (string)$target['website_code'],
+                    (string)$target['lang'],
+                    (int)$target['website_id'],
+                    (string)($target['website_url'] ?? ''),
+                    $retryAfter,
+                );
+            },
+            static function (string $phase, array $meta) use ($printing): void {
+                if ($printing === null || PHP_SAPI !== 'cli') {
+                    return;
+                }
+                if ($phase === 'start') {
+                    $printing->note(__(
+                        '开始发布维护静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核）',
+                        ['total' => (int)($meta['total'] ?? 0), 'c' => (int)($meta['concurrency'] ?? 4)]
+                    ));
+                    return;
+                }
+                if ($phase === 'task') {
+                    $label = (string)($meta['website_code'] ?? '') . '/' . (string)($meta['lang'] ?? '');
+                    if (!empty($meta['ok'])) {
+                        $printing->success(__(
+                            '维护静态页 [%{done}/%{total}]：%{label}',
+                            [
+                                'done' => (int)($meta['done'] ?? 0),
+                                'total' => (int)($meta['total'] ?? 0),
+                                'label' => $label,
+                            ]
+                        ));
+                    } else {
+                        $printing->warning(__(
+                            '维护静态页失败 [%{done}/%{total}]：%{label} — %{err}',
+                            [
+                                'done' => (int)($meta['done'] ?? 0),
+                                'total' => (int)($meta['total'] ?? 0),
+                                'label' => $label,
+                                'err' => (string)($meta['error'] ?? ''),
+                            ]
+                        ));
+                    }
+                    return;
+                }
+                if ($phase === 'done') {
+                    $printing->success(__(
+                        '维护静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键',
+                        [
+                            'written' => (int)($meta['written'] ?? 0),
+                            'failed' => (int)($meta['failed'] ?? 0),
+                            'keys' => (int)($meta['host_map_keys'] ?? 0),
+                        ]
+                    ));
+                }
+            },
+            ['retry_after' => $retryAfter, 'extensions' => ['html', 'json']],
+        );
+
+        $langs = [];
+        foreach ($result['written'] as $row) {
+            $langs[] = $row['website_code'] . '/' . $row['lang'];
+        }
+
+        return $langs;
+    }
+
+    /**
+     * @return array{ok: bool, path?: string, error?: string}
+     */
+    public function publishOne(
+        string $websiteCode,
+        string $lang,
+        int $websiteId = 0,
+        string $websiteUrl = '',
+        int $retryAfter = 60,
+    ): array {
+        $websiteCode = StaticErrorPageMap::sanitizeWebsiteCode($websiteCode);
+        if ($websiteCode === '') {
+            return ['ok' => false, 'error' => 'invalid website code'];
+        }
+        $lang = \trim($lang);
+        if ($lang === '' || \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $lang) !== 1) {
+            return ['ok' => false, 'error' => 'invalid locale'];
+        }
+
+        $this->publishSite = [
+            'website_id' => $websiteId,
+            'website_code' => $websiteCode,
+            'website_url' => $websiteUrl,
+        ];
+
+        try {
+            $this->installPublishScope($websiteId, $websiteCode, $lang);
+            $htmlFile = MaintenanceStaticPage::staticFilePath($lang, false, $websiteCode);
+            $jsonFile = MaintenanceStaticPage::staticFilePath($lang, true, $websiteCode);
+            $inputHash = $this->computeMaintenancePublishInputHash($websiteCode, $lang, $websiteId, $retryAfter);
+            $fpHelper = new StaticErrorPagePublishFingerprint();
+            $fpKey = $fpHelper->fpKeyMaintenance($websiteCode, $lang);
+            if ($fpHelper->shouldSkipTarget($fpKey, $inputHash, $htmlFile, $jsonFile)) {
+                FiberTaskRunner::yield();
+
+                return ['ok' => true, 'path' => $htmlFile, 'skipped' => true];
+            }
+            $this->saveStaticFile($htmlFile, $this->buildHtml($lang));
+            FiberTaskRunner::yield();
+            $this->saveStaticFile($jsonFile, $this->buildJson($lang, $retryAfter));
+            // Keep flat legacy for default website as hot-path fallback.
+            if ($websiteCode === StaticErrorPageMap::DEFAULT_WEBSITE_CODE) {
+                $this->saveStaticFile(MaintenanceStaticPage::staticFilePath($lang, false, ''), $this->buildHtml($lang));
+                $this->saveStaticFile(MaintenanceStaticPage::staticFilePath($lang, true, ''), $this->buildJson($lang, $retryAfter));
+            }
+            $fpHelper->rememberTarget($fpKey, $inputHash);
+            FiberTaskRunner::yield();
+
+            return ['ok' => true, 'path' => $htmlFile];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'error' => $e->getMessage()];
+        } finally {
+            $this->publishSite = null;
+            try {
+                State::setRequestLanguageOverride('');
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function trySkipEntirePublishAll(int $retryAfter, ?Printing $printing): ?array
+    {
+        $publisher = new StaticErrorPagePublisher();
+        $sites = $publisher->discoverPublishTargets();
+        $targets = $sites['targets'];
+        if ($targets === []) {
+            return [];
+        }
+
+        $fpHelper = new StaticErrorPagePublishFingerprint();
+        $labels = [];
+        foreach ($targets as $target) {
+            $websiteCode = (string)$target['website_code'];
+            $lang = (string)$target['lang'];
+            $websiteId = (int)$target['website_id'];
+            $inputHash = $this->computeMaintenancePublishInputHash($websiteCode, $lang, $websiteId, $retryAfter);
+            $htmlFile = MaintenanceStaticPage::staticFilePath($lang, false, $websiteCode);
+            $jsonFile = MaintenanceStaticPage::staticFilePath($lang, true, $websiteCode);
+            if (!$fpHelper->shouldSkipTarget($fpHelper->fpKeyMaintenance($websiteCode, $lang), $inputHash, $htmlFile, $jsonFile)) {
+                return null;
+            }
+            $labels[] = $websiteCode . '/' . $lang;
+        }
+
+        $printing?->note(__(
+            '维护静态页输入未变，跳过全量发布（%{count} 个 website×locale）',
+            ['count' => \count($labels)]
+        ));
+
+        return $labels;
+    }
+
+    private function computeMaintenancePublishInputHash(
+        string $websiteCode,
+        string $lang,
+        int $websiteId,
+        int $retryAfter,
+    ): string {
+        $brand = $this->resolveWebsiteScopedPublishedBrand();
+        $brandToken = \hash(
+            'sha256',
+            (string)($brand['logo_light'] ?? '')
+            . '|' . (string)($brand['logo_dark'] ?? '')
+            . '|' . (string)($brand['favicon'] ?? '')
+            . '|' . (string)($brand['apple_touch_icon'] ?? '')
+        );
+
+        return (new StaticErrorPagePublishFingerprint())->maintenanceInputHash(
+            $websiteCode,
+            $lang,
+            $websiteId,
+            $retryAfter,
+            $brandToken,
+        );
+    }
+
+    private function installPublishScope(int $websiteId, string $websiteCode, string $lang): void
+    {
+        State::setRequestLanguageOverride($lang);
+        try {
+            RequestContext::resetWelineVars();
+            RequestContext::installScopeIdentity(ScopeIdentity::website($websiteId, $websiteCode));
+        } catch (\Throwable) {
+            // Scope freeze may already match; language override still applies.
+        }
+        try {
+            if (\class_exists(\Weline\Websites\Model\Website::class)
+                && \class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                /** @var \Weline\Websites\Model\Website $website */
+                $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                $website->clear()->where(\Weline\Websites\Model\Website::schema_fields_ID, $websiteId)->find()->fetch();
+                if ($website->hasData(\Weline\Websites\Model\Website::schema_fields_ID)
+                    || $websiteId === \Weline\Websites\Model\Website::ID_DEFAULT) {
+                    if (!$website->hasData(\Weline\Websites\Model\Website::schema_fields_CODE)) {
+                        $website->setCode($websiteCode);
+                        $website->setData(\Weline\Websites\Model\Website::schema_fields_ID, $websiteId);
+                    }
+                    \Weline\Websites\Data\WebsiteData::setWebsite($website);
+                }
+            }
+        } catch (\Throwable) {
+        }
     }
 
     public function renderHtml(string $lang): string
@@ -706,7 +932,10 @@ HTML;
         try {
             $websiteId = 0;
             $websiteCode = 'default';
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+            if ($this->publishSite !== null) {
+                $websiteId = (int)$this->publishSite['website_id'];
+                $websiteCode = (string)$this->publishSite['website_code'];
+            } elseif (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                 $id = \Weline\Websites\Data\WebsiteData::getWebsiteId();
                 if ($id !== null) {
                     $websiteId = (int)$id;
@@ -716,6 +945,7 @@ HTML;
                     $websiteCode = $code;
                 }
             }
+            $websiteCode = StaticErrorPageMap::sanitizeWebsiteCode($websiteCode) ?: 'default';
             $identity = \Weline\Framework\Runtime\ScopeIdentity::website($websiteId, $websiteCode);
             try {
                 $catalog = ObjectManager::getInstance(

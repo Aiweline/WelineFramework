@@ -14,6 +14,13 @@
 收货地址已同步,"Delivery address synced."
 国家代码不能为空,"Country code cannot be empty"
 配送信息已加载,"Shipping info loaded."
+运单已登记，等待承运商更新轨迹,运单已登记，等待承运商更新轨迹
+已检测到发货地址记录。,已检测到发货地址记录。
+"至少一条可用发货地址 + 承运商/费用模板，结账才能选配送。","至少一条可用发货地址 + 承运商/费用模板，结账才能选配送。"
+物流,物流
+发货地址与承运商,发货地址与承运商
+未指定配送方式,未指定配送方式
+"承运商 #%{1}","承运商 #%{1}"
 自动定位地址,"Auto Locate Address"
 地址不存在,"Address does not exist"
 更新成功,"Updated successfully"
@@ -155,6 +162,8 @@ circle,circle
 search,search
 查看物流跟踪,"View logistics tracking"
 查看物流跟踪记录,"View logistics tracking records"
+查询物流位置,查询物流位置
+按发货记录查询当前位置,按发货记录查询当前位置
 免邮规则创建成功。,"Free shipping rule created successfully."
 免邮规则已删除。,"Free shipping rule deleted."
 免邮规则已启用。,"Free shipping rule enabled."
@@ -194,11 +203,6 @@ grid,grid
 取件,Pickup
 到达,Arrival
 派送,Delivery
-快速添加地址,"Quick add address"
-收货人,Recipient
-电话,Phone
-详细地址,"Detailed address"
-保存并使用,"Save and use"
 收货地址,"Delivery Address"
 发货地址,"Shipping Address"
 请先保存网站，再配置禁运区域。,请先保存网站，再配置禁运区域。
@@ -217,6 +221,7 @@ grid,grid
 地址名称,"Address Name"
 联系电话,"Contact Phone"
 设为默认地址,"Set as Default Address"
+同时用作结账地址,同时用作结账地址
 保存地址,"Save Address"
 取消,Cancel
 管理顶部「配送至」与订单收货时使用的地址。,"Manage addresses used by the header Deliver-to picker and for order receiving."
@@ -235,11 +240,16 @@ grid,grid
 省/州,State/Province
 城市,City
 区县,District
+详细地址,"Detailed address"
 关闭,Close
 "例如：华东仓 / 家","e.g., East China Warehouse / Home"
 请输入联系人,"Please enter the contact person"
 请输入联系电话,"Please enter contact phone"
+收货人,Recipient
 联系人,Contact
+快速添加地址,"Quick add address"
+电话,Phone
+保存并使用,"Save and use"
 管理配送收货地址,"Manage delivery addresses"
 管理发货地址,"Manage shipping addresses"
 帮助中心,"Help Center"
@@ -354,21 +364,22 @@ China,China
 保存此地址,"Save this address"
 账单地址与收货地址相同,"Billing address same as shipping address"
 账单地址,"Billing address"
+选择账单地址,选择账单地址
+账单地址已保存。,账单地址已保存。
 更换地址,"Change address"
 收起地址列表,"Hide address list"
 地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
 该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
+同时用作收货地址,同时用作收货地址
 请填写收货人。,"Please enter the recipient name."
 请填写电话。,"Please enter a phone number."
+电话号码格式不正确,"Invalid phone number format"
 请填写详细地址。,"Please enter the street address."
 请输入收货人姓名,"Please enter the recipient's name"
 邮箱,Email
 请输入邮箱地址,"Please enter email address"
 请输入邮政编码,"Please enter postal code"
 "门牌号 / 楼栋单元等","Building / unit number, etc."
-请填写省份,"Enter province"
-请填写城市,"Enter city"
-请填写区县,"Enter district"
 确定要删除这个地址吗？,"Are you sure you want to delete this address?"
 系统,System
 运送地址列表,"Shipping address list"
@@ -639,9 +650,16 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 打开发货管理,打开发货管理
 只看待发货,只看待发货
 办理发货,办理发货
-发货时间,发货时间
-送达时间,送达时间
 暂无发货记录,暂无发货记录
+待补运单号,待补运单号
+通知,通知
+补充,补充
+发货时间,发货时间
+送达,送达
+物流进程记录,物流进程记录
+暂无物流进程,暂无物流进程
+承运方尚未回传轨迹节点,承运方尚未回传轨迹节点
+打开承运商轨迹页,打开承运商轨迹页
 店铺,店铺
 渠道,渠道
 网站,网站
@@ -696,12 +714,21 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 %{1}不存在。,"%{1} does not exist."
 %{1}必须与当前作用范围一致。,%{1}必须与当前作用范围一致。
 代码已存在。,"The code already exists."
+该配送方式暂不支持物流查询,该配送方式暂不支持物流查询
+物流查询失败，请稍后重试,物流查询失败，请稍后重试
+当前位置：%{loc},当前位置：%{loc}
+物流状态：%{status},物流状态：%{status}
+运单已登记：%{n},运单已登记：%{n}
+发货记录不存在,发货记录不存在
+尚未填写物流单号，无法查询位置,尚未填写物流单号，无法查询位置
+物流查询失败,物流查询失败
 启用承运商前必须配置支持范围。,"Carriers must have coverage configured before they can be enabled."
 全国,nationwide
-电话号码格式不正确,"Invalid phone number format"
 邮政编码格式不正确,"Invalid postal code format"
 无权操作此地址,"No permission to operate this address"
 地址名称不能为空,"Address name cannot be empty."
+"禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板，或留空由系统使用 17TRACK 默认","禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板，或留空由系统使用 17TRACK 默认"
+"禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板","禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板"
 查询失败：%{1},"Query failed: %{1}"
 费用模板不存在,"Rate template does not exist"
 费用模板未启用,"Fee template is not enabled"
@@ -718,6 +745,13 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 商品配送档案与仓航线无交集，无法报价,商品配送档案与仓航线无交集，无法报价
 方案家族无可报价服务：%{1},方案家族无可报价服务：%{1}
 无法完成多仓履约规划,无法完成多仓履约规划
+"Shipping 孤儿运单取消重试","Shipping 孤儿运单取消重试"
+"履约账本失败后的 cancelShipment 孤儿补偿队列","履约账本失败后的 cancelShipment 孤儿补偿队列"
+"孤儿运单处理：done=%{1} dead=%{2} processed=%{3}","孤儿运单处理：done=%{1} dead=%{2} processed=%{3}"
+请填写省份,"Enter province"
+请填写城市,"Enter city"
+请填写区县,"Enter district"
+送达时间,送达时间
 运费以结算页为准,"Shipping calculated at checkout"
 重货,重货
 本商品使用重货配送方案，运费以结算页为准,"This item uses heavy-goods shipping; fee calculated at checkout"
@@ -829,5 +863,12 @@ globe,globe
 大洋洲,Oceania
 拉美,"Latin America"
 中东非洲,"Middle East & Africa"
-港澳台,"HK / MO / TW"
+港澳台,"HK / Macau / Taiwan"
 其他可达市场,"Other reachable markets"
+国内标快,"Domestic Express"
+国内重货,"Domestic heavy freight"
+国际重货,"International heavy freight"
+免邮,"Free shipping"
+运费不含关税与税费,"Shipping excludes duties and taxes"
+运费已含卖家预估关税（可能另行列示）,"Shipping includes seller-estimated duties (may be shown separately)"
+送达时可能另收关税,"Duties may be collected on delivery"

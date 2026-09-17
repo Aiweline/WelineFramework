@@ -288,10 +288,10 @@
           shipBlock.hidden = false;
           var emptyMsg = text(data.shipping_empty_message)
             || (data.missing_weight
-              ? '购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。'
+              ? '购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助后再结账。'
               : '')
             || text(data.embargo_message)
-            || '该地区暂不支持配送';
+            || '系统暂未返回可用的配送方案。请确认收货地址，或联系客服了解具体原因。';
           if (shipEmpty) {
             shipEmpty.hidden = false;
             shipEmpty.textContent = emptyMsg;
@@ -485,6 +485,11 @@
             email: text(selected.email)
               || (emailInput ? text(emailInput.value) : ''),
             service_code: selectedServiceCode,
+            tax_identity: (function () {
+              var vat = root.querySelector('[data-tax-vat-id], [name="tax_identity[tax_id]"]');
+              var taxId = vat ? text(vat.value) : '';
+              return taxId ? { tax_id: taxId, tax_id_type: 'eu_vat' } : {};
+            })(),
           }));
           if (!result || result.success === false) {
             throw new Error((result && result.message) || '确认失败');

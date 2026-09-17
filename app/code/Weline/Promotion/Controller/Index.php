@@ -31,13 +31,16 @@ class Index extends FrontendController
 
         $data = $this->pageService->build($pageType);
 
-        $this->request->setGet('theme_public_route', 'promotion');
+        $themePublicRoute = $pageType === 'index'
+            ? 'promotion'
+            : 'promotion/' . strtolower(trim($pageType, '/'));
+        $this->request->setGet('theme_public_route', $themePublicRoute);
         $this->request->setData('params', $this->request->getParameterBag()->all());
 
         $this->forceThemeShell();
         $this->assign($data);
         $this->assign('title', (string)($data['title'] ?? __('活动中心')));
-        // SEO ownership: product_list profile lives only under seo.* (UI page_type stays slug).
+        // SEO ownership: products profile lives only under seo.* (UI page_type stays slug).
         if (isset($data['seo']) && is_array($data['seo'])) {
             $this->assign('seo', $data['seo']);
         }

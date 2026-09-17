@@ -1090,6 +1090,69 @@ class ChatService
     }
 
     /**
+     * 工作台侧栏标题：登录用户显示昵称/邮箱，其余回退 #session_id。
+     *
+     * @param array<string, mixed> $sessionData
+     */
+    public function consoleSessionListTitle(array $sessionData): string
+    {
+        $sessionId = (int)($sessionData[ChatSession::schema_fields_ID] ?? $sessionData['session_id'] ?? 0);
+        $kind = (string)($sessionData['customer_kind'] ?? '');
+        $name = trim((string)($sessionData['customer_display_name'] ?? ''));
+        if ($kind === 'customer' && $name !== '') {
+            return $name;
+        }
+
+        return '#' . max(0, $sessionId);
+    }
+
+    /**
+     * @param array<string, mixed> $sessionData
+     * @return array<string, mixed>
+     */
+    private function attachConsoleSessionIdentity(array $sessionData): array
+    {
+        $sessionId = (int)($sessionData[ChatSession::schema_fields_ID] ?? $sessionData['session_id'] ?? 0);
+        if ($sessionId <= 0) {
+            $sessionData['customer_kind'] = (string)($sessionData['customer_kind'] ?? 'guest');
+            $sessionData['customer_display_name'] = (string)($sessionData['customer_display_name'] ?? '');
+            $sessionData['customer_email'] = (string)($sessionData['customer_email'] ?? '');
+            $sessionData['list_title'] = $this->consoleSessionListTitle($sessionData);
+
+            return $sessionData;
+        }
+
+        /** @var ChatSession $sessionModel */
+        $sessionModel = ObjectManager::getInstance(ChatSession::class);
+        $sessionModel->clear()->load($sessionId);
+        if (!$sessionModel->getId()) {
+            $sessionModel->clear();
+            $sessionModel->setData(ChatSession::schema_fields_ID, $sessionId);
+            $sessionModel->setData(
+                ChatSession::schema_fields_CUSTOMER_ID,
+                (int)($sessionData[ChatSession::schema_fields_CUSTOMER_ID] ?? $sessionData['customer_id'] ?? 0) ?: null
+            );
+            $sessionModel->setData(
+                ChatSession::schema_fields_SESSION_TOKEN,
+                (string)($sessionData[ChatSession::schema_fields_SESSION_TOKEN] ?? $sessionData['session_token'] ?? '')
+            );
+        }
+
+        $customerId = (int)($sessionModel->getCustomerId()
+            ?: ($sessionData[ChatSession::schema_fields_CUSTOMER_ID] ?? $sessionData['customer_id'] ?? 0));
+        $isCustomer = $customerId > 0;
+        $identity = $this->buildSessionIdentity($sessionModel, $isCustomer, $isCustomer ? $customerId : null);
+
+        $sessionData['customer_id'] = $customerId > 0 ? $customerId : null;
+        $sessionData['customer_kind'] = (string)($identity['kind'] ?? 'guest');
+        $sessionData['customer_display_name'] = (string)($identity['display_name'] ?? '');
+        $sessionData['customer_email'] = (string)($identity['email'] ?? '');
+        $sessionData['list_title'] = $this->consoleSessionListTitle($sessionData);
+
+        return $sessionData;
+    }
+
+    /**
      * 工作台侧栏：补充最后消息、未读与等待起点。
      *
      * @param list<ChatSession|array<string, mixed>> $sessions
@@ -1102,8 +1165,11 @@ class ChatService
             $sessionId = (int)($sessionData[ChatSession::schema_fields_ID] ?? $sessionData['session_id'] ?? 0);
             if ($sessionId <= 0) {
                 $sessionData['unread_count'] = (int)($sessionData['unread_count'] ?? 0);
+                $sessionData = $this->attachConsoleSessionIdentity($sessionData);
                 continue;
             }
+
+            $sessionData = $this->attachConsoleSessionIdentity($sessionData);
 
             /** @var ChatMessage $message */
             $message = ObjectManager::getInstance(ChatMessage::class);

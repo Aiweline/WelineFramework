@@ -48,6 +48,12 @@ class WinbackCampaign extends Model
     #[Col(type: 'int', nullable: false, default: 0, comment: '网站ID，0=全部')]
     public const schema_fields_WEBSITE_ID = 'website_id';
 
+    #[Col(type: 'int', nullable: false, default: 0, comment: '激励券规则ID，step≥2 时发券；0=不发')]
+    public const schema_fields_INCENTIVE_RULE_ID = 'incentive_rule_id';
+
+    #[Col(type: 'int', nullable: false, default: 0, comment: '分群ID，0=全部')]
+    public const schema_fields_SEGMENT_ID = 'segment_id';
+
     #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
 
@@ -55,6 +61,20 @@ class WinbackCampaign extends Model
     public const schema_fields_UPDATED_AT = 'updated_at';
 
     public const TYPE_UNPAID_ORDER_REMINDER = 'unpaid_order_reminder';
+    public const TYPE_CHECKOUT_ABANDON_REMINDER = 'checkout_abandon_reminder';
+    public const TYPE_CART_ABANDON_REMINDER = 'cart_abandon_reminder';
     public const STATUS_ENABLED = 'enabled';
     public const STATUS_DISABLED = 'disabled';
+
+    /**
+     * @return list<string>
+     */
+    public static function allowedTypes(): array
+    {
+        return [
+            self::TYPE_UNPAID_ORDER_REMINDER,
+            self::TYPE_CHECKOUT_ABANDON_REMINDER,
+            self::TYPE_CART_ABANDON_REMINDER,
+        ];
+    }
 }

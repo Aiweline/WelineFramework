@@ -33,6 +33,7 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         self::assertStringContainsString('product.catalog.projection.bulk', $source);
         self::assertStringContainsString('product.catalog.full_rows.request', $source);
         self::assertStringContainsString('product.catalog.filtered_offers.request', $source);
+        self::assertStringContainsString('product.catalog.offers.request', $source);
         self::assertStringContainsString('catalogTargetedOffersPolicy()', $source);
         self::assertStringContainsString('catalogTargetedOffersLogicalKey', $source);
         self::assertStringContainsString('public function facetCountsForProductIds(', $source);
@@ -47,14 +48,12 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         );
         self::assertStringContainsString('public function projectMany(', $projectorSource);
 
-        $attributeLoad = strpos($source, '$attributeRows = $this->attributeValues->listExplicitRows(');
-        self::assertNotFalse($attributeLoad);
-        self::assertStringContainsString(
-            'if ($includeListingDetails) {',
-            substr($source, max(0, (int)$attributeLoad - 120), 180),
-        );
-        // Summary path must seed null (not []) so snapshot still loads localized name.
+        // Summary listings seed null; full listings load shard attributes once via request memo.
         self::assertStringContainsString('$attributeRows = null;', $source);
+        self::assertMatchesRegularExpression(
+            '/\$attributeRows = null;\s*if \(\$includeListingDetails\) \{\s*\$attributeStartedAt = hrtime\(true\);\s*\$attributeRows = \$this->requestAttributeRows\(/s',
+            $source,
+        );
         self::assertStringNotContainsString(
             "\$attributeRows = [];\n        if (\$includeListingDetails) {",
             $source,
@@ -93,7 +92,7 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
 
         self::assertSame($first, $second);
         self::assertNotSame($first, $full);
-        self::assertStringStartsWith('product.catalog_offers.targeted.v1.0.summary.', $first);
+        self::assertStringStartsWith('product.catalog_offers.targeted.v2.0.summary.', $first);
     }
 
     public function testBoundedSummaryProjectionUsesDedicatedPolicyAndBuildLimit(): void

@@ -35,6 +35,7 @@ final class WishlistPageTemplateContractTest extends TestCase
 
         self::assertStringContainsString('<w:product:card', $source);
         self::assertStringContainsString('ProductCardRenderer', $source);
+        self::assertStringContainsString('emitStylesheetLinkOnce()', $source);
         self::assertStringContainsString('show-wishlist="true"', $source);
         self::assertStringContainsString('show-compare="true"', $source);
         self::assertStringContainsString('show-quickview="true"', $source);

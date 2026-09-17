@@ -36,6 +36,33 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('BindCaptchaGuard', $content);
     }
 
+    public function testBodyEndHookDoesNotSkipOnPreviewOrVisualEditor(): void
+    {
+        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $content = (string) file_get_contents($hookFile);
+
+        $this->assertStringContainsString('$isAccountRoute', $content);
+        $this->assertStringContainsString('preview_storefront_delivery_parity', $content);
+        $this->assertStringNotContainsString('$isWorkspacePreview', $content);
+        $this->assertStringNotContainsString("getGet('visual_editor'", $content);
+        $this->assertStringNotContainsString("getGet('preview'", $content);
+        $this->assertDoesNotMatchRegularExpression(
+            '/if\s*\(\s*\$isAccountRoute\s*\|\|\s*\$isWorkspacePreview\s*\)/',
+            $content,
+            'preview must not early-return the customer-service Hook'
+        );
+        $this->assertMatchesRegularExpression(
+            '/\/\/[^\n]*FORBIDDEN[^\n]*workspace-preview[^\n]*early-return/',
+            $content,
+            'comment must document the forbidden preview skip'
+        );
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(\s*\$isAccountRoute\s*\)\s*\{\s*return;/',
+            $content,
+            'only account-route early-return remains'
+        );
+    }
+
     public function testFrontendStylesUseThemePanelAndResponsiveChat(): void
     {
         $cssFile = dirname(__DIR__, 3) . '/view/statics/css/customer-service.css';
@@ -54,6 +81,9 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('@media (max-width: 720px)', $content);
         $this->assertStringContainsString('position: fixed', $content);
         $this->assertStringContainsString('.customer-service-widget.is-open .cs-chat-button', $content);
+        $this->assertStringContainsString('cs-chat-button-breathe', $content);
+        $this->assertStringContainsString('.cs-chat-button.has-unread', $content);
+        $this->assertStringContainsString('.cs-presence-dot', $content);
         $this->assertStringContainsString('cs-bind-modal-open', $content);
         $this->assertStringContainsString('#cs-bind-modal.cs-modal', $content);
         $this->assertStringContainsString('calc(var(--weline-z-overlay) + 350)', $content);

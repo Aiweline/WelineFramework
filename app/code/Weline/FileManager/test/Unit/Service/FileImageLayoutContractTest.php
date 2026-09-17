@@ -156,6 +156,93 @@ final class FileImageLayoutContractTest extends TestCase
         self::assertSame('https://cdn.example.test/media/image.jpg', $result->value);
     }
 
+    public function testRenderHydrationFallsBackWhenLayoutLocaleEmpty(): void
+    {
+        $scope = ScopeIdentity::store(1, 'shop', 'main', ScopeIdentity::MODE_NORMAL);
+        $assets = $this->createMock(FileAssetManagerInterface::class);
+        $assets->expects(self::once())
+            ->method('resolveImage')
+            ->willReturnCallback(static function (
+                ImageUsage $usage,
+                FileAccessContext $access,
+            ) use ($scope): ResolvedFileImage {
+                self::assertSame(self::ASSET_ID, $usage->assetId);
+                self::assertTrue($scope->equals($access->scope));
+                self::assertSame('en_US', $access->localeCode);
+                return new ResolvedFileImage(
+                    'https://cdn.example.test/media/image-en.jpg',
+                    '<img src="https://cdn.example.test/media/image-en.jpg" alt="Product">',
+                    'Product',
+                );
+            });
+        $hydrator = new FileImageLayoutValueHydrator($assets);
+
+        $result = $hydrator->hydrate([
+            'type' => 'file-image',
+            'usage' => $this->usage(),
+        ], [
+            'scope_identity' => $scope,
+            'locale_code' => '',
+            'purpose' => 'render',
+        ]);
+
+        self::assertSame('https://cdn.example.test/media/image-en.jpg', $result->value);
+    }
+
+    public function testRenderHydrationSoftFailsWhenAssetMissing(): void
+    {
+        $assets = $this->createMock(FileAssetManagerInterface::class);
+        $assets->expects(self::once())
+            ->method('resolveImage')
+            ->willThrowException(new \RuntimeException('The file resource does not exist.'));
+        $hydrator = new FileImageLayoutValueHydrator($assets);
+
+        $result = $hydrator->hydrate([
+            'type' => 'file-image',
+            'usage' => $this->usage(),
+        ], [
+            'scope_identity' => ScopeIdentity::store(
+                1,
+                'shop',
+                'main',
+                ScopeIdentity::MODE_NORMAL,
+            ),
+            'locale_code' => 'en_US',
+            'purpose' => 'render',
+        ]);
+
+        self::assertSame('', $result->value);
+        self::assertSame('', $result->metadata['file_html']);
+        self::assertTrue($result->metadata['file_missing']);
+        self::assertSame(self::ASSET_ID, $result->metadata['file_asset_id']);
+    }
+
+    public function testPreviewHydrationSoftFailsWhenAssetMissing(): void
+    {
+        $assets = $this->createMock(FileAssetManagerInterface::class);
+        $assets->expects(self::once())
+            ->method('resolveImage')
+            ->willThrowException(new \RuntimeException('The file resource does not exist.'));
+        $hydrator = new FileImageLayoutValueHydrator($assets);
+
+        $result = $hydrator->hydrate([
+            'type' => 'file-image',
+            'usage' => $this->usage(),
+        ], [
+            'scope_identity' => ScopeIdentity::store(
+                1,
+                'shop',
+                'main',
+                ScopeIdentity::MODE_NORMAL,
+            ),
+            'locale_code' => 'en_US',
+            'purpose' => 'preview',
+        ]);
+
+        self::assertSame('', $result->value);
+        self::assertTrue($result->metadata['file_missing']);
+    }
+
     /** @return array<string,mixed> */
     private function usage(): array
     {

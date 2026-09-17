@@ -8,7 +8,11 @@ use Weline\Framework\App\State;
 use Weline\SystemConfig\Api\ConfigReader;
 
 /**
- * Scoped entrance-music (进店音乐) settings from SystemConfig.
+ * Entrance-music (进店音乐) settings.
+ *
+ * Primary source for layout-placed widgets: Theme widget params (部件配置).
+ * SystemConfig remains the Hook fallback and legacy migration source when
+ * widget tracks are empty.
  */
 class StoreMusicSettings
 {
@@ -24,6 +28,8 @@ class StoreMusicSettings
     public const KEY_LOOP = 'store_music/music/loop';
     public const KEY_DEFAULT_VOLUME = 'store_music/music/default_volume';
     public const KEY_WAVEFORM_DEFAULT = 'store_music/visual/waveform_default';
+    /** When true, spin the avatar while playing; default off — polar spectrum is the default ambience. */
+    public const KEY_AVATAR_SPIN = 'store_music/visual/avatar_spin';
 
     public function __construct(
         private readonly ConfigReader $config,
@@ -90,9 +96,11 @@ class StoreMusicSettings
         return $out;
     }
 
-    public function isWidgetActive(): bool
+    public function isWidgetActive(?array $widgetConfig = null): bool
     {
-        return $this->isEnabled() && $this->tracks() !== [];
+        $payload = $this->frontendPayload($widgetConfig);
+
+        return !empty($payload['enabled']) && ($payload['tracks'] ?? []) !== [];
     }
 
     public function delaySeconds(): int
@@ -119,7 +127,7 @@ class StoreMusicSettings
     {
         $value = (int)$this->string(self::KEY_DEFAULT_VOLUME);
         if ($this->string(self::KEY_DEFAULT_VOLUME) === '') {
-            $value = 12;
+            $value = 8;
         }
 
         return max(0, min(100, $value));
@@ -130,7 +138,13 @@ class StoreMusicSettings
         return $this->boolean(self::KEY_WAVEFORM_DEFAULT, false);
     }
 
+    public function avatarSpin(): bool
+    {
+        return $this->boolean(self::KEY_AVATAR_SPIN, false);
+    }
+
     /**
+     * @param array<string, mixed>|null $widgetConfig Theme editor widget params when rendered from layout.
      * @return array{
      *   enabled: bool,
      *   track: string,
@@ -139,23 +153,169 @@ class StoreMusicSettings
      *   try_autoplay: bool,
      *   loop: bool,
      *   default_volume: int,
-     *   waveform_default: bool
+     *   waveform_default: bool,
+     *   avatar_spin: bool
      * }
      */
-    public function frontendPayload(): array
+    public function frontendPayload(?array $widgetConfig = null): array
     {
-        $tracks = $this->tracksForFrontend();
-
-        return [
+        $systemTracks = $this->tracksForFrontend();
+        $payload = [
             'enabled' => $this->isEnabled(),
-            'track' => $tracks[0]['url'] ?? '',
-            'tracks' => $tracks,
+            'track' => $systemTracks[0]['url'] ?? '',
+            'tracks' => $systemTracks,
             'delay_seconds' => $this->delaySeconds(),
             'try_autoplay' => $this->tryAutoplay(),
             'loop' => $this->loop(),
             'default_volume' => $this->defaultVolume(),
             'waveform_default' => $this->waveformDefault(),
+            'avatar_spin' => $this->avatarSpin(),
         ];
+
+        if ($widgetConfig === null) {
+            return $payload;
+        }
+
+        if (array_key_exists('enabled', $widgetConfig)) {
+            $payload['enabled'] = self::coerceBool($widgetConfig['enabled'], $payload['enabled']);
+        }
+        if (array_key_exists('delay_seconds', $widgetConfig)) {
+            $payload['delay_seconds'] = max(1, min(15, (int)$widgetConfig['delay_seconds']));
+        }
+        if (array_key_exists('try_autoplay', $widgetConfig)) {
+            $payload['try_autoplay'] = self::coerceBool($widgetConfig['try_autoplay'], $payload['try_autoplay']);
+        }
+        if (array_key_exists('loop', $widgetConfig)) {
+            $payload['loop'] = self::coerceBool($widgetConfig['loop'], $payload['loop']);
+        }
+        if (array_key_exists('default_volume', $widgetConfig)) {
+            $payload['default_volume'] = max(0, min(100, (int)$widgetConfig['default_volume']));
+        }
+        if (array_key_exists('waveform_default', $widgetConfig)) {
+            $payload['waveform_default'] = self::coerceBool(
+                $widgetConfig['waveform_default'],
+                $payload['waveform_default']
+            );
+        }
+        if (array_key_exists('avatar_spin', $widgetConfig)) {
+            $payload['avatar_spin'] = self::coerceBool($widgetConfig['avatar_spin'], $payload['avatar_spin']);
+        }
+
+        $widgetTracks = self::tracksFromWidgetConfig($widgetConfig['tracks'] ?? null);
+        if ($widgetTracks !== []) {
+            $payload['tracks'] = $widgetTracks;
+            $payload['track'] = $widgetTracks[0]['url'] ?? '';
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Normalize Theme editor tracks array (url/title/intro) for storefront payload.
+     *
+     * @return list<array{url:string,title:string,intro:string}>
+     */
+    public static function tracksFromWidgetConfig(mixed $raw): array
+    {
+        if (is_string($raw)) {
+            $raw = self::parsePlaylistJson($raw);
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+        $locale = self::currentRequestLocale();
+        $out = [];
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $url = self::mediaUrlFromMixed($row['url'] ?? $row['path'] ?? '');
+            if ($url === '') {
+                continue;
+            }
+            $title = trim((string)($row['title'] ?? ''));
+            if ($title === '') {
+                $title = self::titleFromUrl($url);
+            }
+            $introRaw = $row['intro'] ?? '';
+            if (is_array($introRaw)) {
+                $intro = self::resolveIntroForLocale(self::normalizeIntroMap($introRaw), $locale);
+            } else {
+                $intro = mb_substr(trim((string)$introRaw), 0, 500);
+            }
+            $out[] = [
+                'url' => $url,
+                'title' => mb_substr($title, 0, 120),
+                'intro' => $intro,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Collect widget param bag from a Theme template dictionary (null when Hook-only).
+     *
+     * @param object|null $template View template with getData()
+     * @return array<string, mixed>|null
+     */
+    public static function widgetConfigFromTemplate(object $template): ?array
+    {
+        if (!method_exists($template, 'getData')) {
+            return null;
+        }
+        $keys = [
+            'enabled',
+            'tracks',
+            'delay_seconds',
+            'try_autoplay',
+            'loop',
+            'default_volume',
+            'avatar_spin',
+            'waveform_default',
+        ];
+        $bag = [];
+        $hit = false;
+        foreach ($keys as $key) {
+            $value = $template->getData($key);
+            if ($value !== null) {
+                $hit = true;
+                $bag[$key] = $value;
+            }
+        }
+
+        return $hit ? $bag : null;
+    }
+
+    public static function mediaUrlFromMixed(mixed $value): string
+    {
+        if (is_array($value)) {
+            if (($value['type'] ?? null) === 'file-image') {
+                $path = (string)($value['path'] ?? $value['file_path'] ?? $value['url'] ?? '');
+                if ($path === '' && is_array($value['usage'] ?? null)) {
+                    $path = (string)($value['usage']['path'] ?? $value['usage']['url'] ?? '');
+                }
+
+                return self::normalizeMediaUrl($path);
+            }
+            $path = (string)($value['url'] ?? $value['path'] ?? $value['src'] ?? '');
+
+            return self::normalizeMediaUrl($path);
+        }
+
+        return self::normalizeMediaUrl((string)$value);
+    }
+
+    public static function coerceBool(mixed $value, bool $default): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
     }
 
     /**

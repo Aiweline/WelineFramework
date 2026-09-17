@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 
 /**
  * ParamSchema 注册表
@@ -202,11 +203,6 @@ class ParamSchemaRegistry
     private function saveRegistry(array $registry): bool
     {
         try {
-            $registryDir = dirname(self::REGISTRY_FILE);
-            if (!is_dir($registryDir)) {
-                mkdir($registryDir, 0755, true);
-            }
-
             $content = "<?php\n";
             $content .= "/**\n";
             $content .= " * ParamSchema 注册表\n";
@@ -215,16 +211,17 @@ class ParamSchemaRegistry
             $content .= " */\n\n";
             $content .= "return " . var_export($registry, true) . ";\n";
 
-            $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
+            (new GeneratedPhpArrayPublisher())->publishContent(
+                self::REGISTRY_FILE,
+                $content,
+                $registry,
+                GeneratedPhpArrayPublisher::countTopLevel(...),
+            );
 
-            if ($result !== false) {
-                self::$staticCachedRegistry = null;
-                self::$staticCachedFileMtime = null;
-                return true;
-            }
-
-            return false;
-        } catch (\Exception $e) {
+            self::$staticCachedRegistry = null;
+            self::$staticCachedFileMtime = null;
+            return true;
+        } catch (\Throwable $e) {
             w_log_error('保存 ParamSchema 注册表失败: ' . $e->getMessage(), [], 'ParamSchemaRegistry');
             return false;
         }

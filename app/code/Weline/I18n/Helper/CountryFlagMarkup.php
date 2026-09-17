@@ -66,6 +66,7 @@ final class CountryFlagMarkup
 
     /**
      * Empty SSR slot — no SVG / img body. Client fills via binquery + local cache.
+     * Use for panel list options (many countries; ES alone can be ~81KB).
      */
     public static function placeholderHtml(string $countryCode): string
     {
@@ -77,6 +78,35 @@ final class CountryFlagMarkup
         $safe = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
 
         return '<span class="w-language-switcher__flag" data-country-flag="' . $safe . '" aria-hidden="true"></span>';
+    }
+
+    /**
+     * Visible chrome trigger: SSR a compact data-URI &lt;img&gt; so first paint is not an empty gap.
+     * Oversized lipis SVGs (budget) stay as placeholders and hydrate via getCountryFlags.
+     */
+    public static function triggerHtml(string $countryCode): string
+    {
+        $code = self::normalizeCountryCode($countryCode);
+        if ($code === '') {
+            return self::placeholderHtml('');
+        }
+
+        $payload = self::payloadFor($code);
+        $svg = is_array($payload) ? (string)($payload['svg'] ?? '') : '';
+        if ($svg === '' || strlen($svg) > self::INLINE_BYTE_BUDGET) {
+            return self::placeholderHtml($code);
+        }
+
+        $safe = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
+        $src = htmlspecialchars(
+            'data:image/svg+xml;charset=utf-8,' . rawurlencode($svg),
+            ENT_QUOTES,
+            'UTF-8',
+        );
+
+        return '<span class="w-language-switcher__flag" data-country-flag="' . $safe . '" aria-hidden="true">'
+            . '<img class="w-flag-icon" src="' . $src . '" alt="" width="24" height="18" decoding="async">'
+            . '</span>';
     }
 
     /**

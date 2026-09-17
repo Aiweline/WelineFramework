@@ -38,5 +38,8 @@ final class AccountLoginPanelOutlinedFieldContractTest extends TestCase
         self::assertStringContainsString('hideHeading', $src);
         self::assertStringContainsString('w-auth-login__forgot-link', $src);
         self::assertStringContainsString('white-space:nowrap', $src);
+        self::assertStringContainsString('withAuthRefreshSignal', $src);
+        self::assertStringContainsString("searchParams.set('w_auth', '1')", $src);
+        self::assertStringContainsString('markAuthPending', $src);
     }
 }

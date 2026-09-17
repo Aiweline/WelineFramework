@@ -172,8 +172,9 @@ final class MailTemplateSeedCopyCatalog
         $row = is_array($pack[$slug] ?? null) ? $pack[$slug] : [];
         $h1Style = "margin:0 0 16px;font-family:Georgia,'Iowan Old Style',Palatino,'Palatino Linotype',serif;font-size:26px;line-height:1.25;font-weight:600;color:#16333f;";
         $divStyle = 'font-size:15px;line-height:1.7;color:#33434c;';
-        $tdL = 'padding:10px 0;border-bottom:1px solid #e6eef1;color:#5c6b74;font-size:13px;width:38%;';
-        $tdR = 'padding:10px 0;border-bottom:1px solid #e6eef1;color:#1c2a32;font-size:13px;font-weight:600;';
+        // Compact kv rows: label shrink-wraps; avoid width:38% middle void in mail clients.
+        $tdL = 'padding:10px 16px 10px 0;border-bottom:1px solid #e6eef1;color:#5c6b74;font-size:13px;white-space:nowrap;width:1%;min-width:4.5em;vertical-align:top;';
+        $tdR = 'padding:10px 0;border-bottom:1px solid #e6eef1;color:#1c2a32;font-size:13px;font-weight:600;vertical-align:top;word-break:break-word;';
 
         return match ($slug) {
             'notification' => self::notificationBody($h1Style, $divStyle, $tdL, $tdR, $shared),
@@ -331,10 +332,10 @@ HTML;
         $hello = htmlspecialchars((string)($shared['hello'] ?? 'Hello {{var.customer_name}},'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $p2 = htmlspecialchars((string)($row['p2'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $orderNo = htmlspecialchars((string)($shared['order_no'] ?? 'Order no.'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $orderUuid = htmlspecialchars((string)($shared['order_uuid'] ?? 'Order UUID'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $email = htmlspecialchars((string)($shared['email'] ?? 'Email'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $status = htmlspecialchars((string)($shared['status'] ?? 'Status'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $total = htmlspecialchars((string)($shared['total'] ?? 'Total'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $itemsLabel = htmlspecialchars((string)($shared['items'] ?? 'Items'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         return <<<HTML
 <!-- mail:preheader: {$pre} -->
@@ -342,10 +343,14 @@ HTML;
             <div style="{$div}">
 <p style="margin:0 0 12px;">{$hello}</p>
 <p style="margin:0 0 12px;">{$p2}</p>
-<p style="margin:0 0 12px;">{{var.message}}</p>
-<p style="margin:0;">{{var.comment}}</p>
+{{#if var.message}}<p style="margin:0 0 12px;">{{var.message}}</p>{{/if}}
+{{#if var.comment}}<p style="margin:0;">{{var.comment}}</p>{{/if}}
             </div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;"><tr><td style="{$tdL}">{$orderNo}</td><td style="{$tdR}">{{var.order_number}}</td></tr><tr><td style="{$tdL}">{$orderUuid}</td><td style="{$tdR}">{{var.order_uuid}}</td></tr><tr><td style="{$tdL}">{$email}</td><td style="{$tdR}">{{var.customer_email}}</td></tr><tr><td style="{$tdL}">{$status}</td><td style="{$tdR}">{{var.status}} / {{var.new_status}}</td></tr><tr><td style="{$tdL}">{$total}</td><td style="{$tdR}">{{var.grand_total}}</td></tr></table>
+{{#if var.items_html}}
+<div style="margin:18px 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.02em;color:#5c6b74;">{$itemsLabel}</div>
+{{var.items_html|raw}}
+{{/if}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;"><tr><td style="{$tdL}">{$orderNo}</td><td style="{$tdR}">{{var.order_number}}</td></tr><tr><td style="{$tdL}">{$email}</td><td style="{$tdR}">{{var.customer_email}}</td></tr><tr><td style="{$tdL}">{$status}</td><td style="{$tdR}">{{var.status}}{{#if var.new_status}} / {{var.new_status}}{{/if}}</td></tr><tr><td style="{$tdL}">{$total}</td><td style="{$tdR}">{{var.grand_total}}</td></tr></table>
 
 HTML;
     }
@@ -420,7 +425,7 @@ HTML;
           </td>
         </tr>
         <tr>
-          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:20px 28px 10px;font-family:Arial,Helvetica,sans-serif;background:{{var.brand_footer_bg}};border-top:1px solid {{var.brand_border}};">
+          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:20px 28px 22px;font-family:Arial,Helvetica,sans-serif;background:{{var.brand_footer_bg}};border-top:1px solid {{var.brand_border}};">
             <div style="font-size:13px;font-weight:700;color:{{var.brand_footer_heading}};margin:0 0 8px;">{$need}</div>
             <div style="font-size:12px;line-height:1.75;color:{{var.brand_muted}};">
               {$visit} <a href="{{var.site_url}}" style="color:{{var.brand_link}};text-decoration:underline;">{{var.site_url}}</a><br>
@@ -429,12 +434,10 @@ HTML;
               {$hours} {{var.service_hours}}<br>
               {$address} {{var.contact_address}}
             </div>
-          </td>
-        </tr>
-        <tr>
-          <td align="left" bgcolor="{{var.brand_footer_bg}}" style="padding:8px 28px 24px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:{{var.brand_muted}};background:{{var.brand_footer_bg}};">
-            {{var.site_name}} · {{var.store_name}} · {{var.channel_name}}<br>
-            {$footer}
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid {{var.brand_border}};font-size:11px;line-height:1.65;color:{{var.brand_muted}};">
+              {{var.brand_display_name}}<br>
+              {$footer}
+            </div>
           </td>
         </tr>
       </table>

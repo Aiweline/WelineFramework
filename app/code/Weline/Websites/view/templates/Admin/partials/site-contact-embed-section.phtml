@@ -1,0 +1,74 @@
+<?php
+/**
+ * 站点联系信息（SystemConfig 分组嵌入）。
+ *
+ * Hook 路径请用 Template::fetch 引入本 partial（不要 include），以便布局上下文正确。
+ * embed 本体用 ConfigEmbedRenderer（避免裸 Taglib 在 hook 链上未编译）。
+ *
+ * @var string $sectionId
+ * @var bool $hasIdentity
+ * @var string $pendingHint
+ * @var array{ok:bool,storage_scope:string,website_code:string,store_code:string,channel_code:string,scope_kind:string,label:string} $scopeMeta
+ * @var string $scopeHint
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Service\ConfigEmbedRenderer;
+
+$sectionId = (string)($sectionId ?? 'site_contact');
+$hasIdentity = (bool)($hasIdentity ?? false);
+$pendingHint = (string)($pendingHint ?? __('请先保存后再配置联系信息。'));
+$scopeMeta = is_array($scopeMeta ?? null) ? $scopeMeta : ['ok' => false];
+$scopeHint = (string)($scopeHint ?? '');
+$h = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$storageScope = (string)($scopeMeta['storage_scope'] ?? '');
+$websiteCode = (string)($scopeMeta['website_code'] ?? '');
+$storeCode = (string)($scopeMeta['store_code'] ?? '');
+$channelCode = (string)($scopeMeta['channel_code'] ?? '');
+$scopeKind = (string)($scopeMeta['scope_kind'] ?? '');
+$scopeLabel = (string)($scopeMeta['label'] ?? '');
+$canEmbed = $hasIdentity && !empty($scopeMeta['ok']) && $storageScope !== '';
+?>
+<div class="w-disclosure" id="<?= $h($sectionId) ?>" data-testid="website-site-contact-section" data-w-component="disclosure">
+    <div id="<?= $h($sectionId . '_heading') ?>">
+        <button class="w-disclosure__trigger" type="button" aria-expanded="true" aria-controls="<?= $h($sectionId . '_body') ?>" data-w-target="#<?= $h($sectionId . '_body') ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger>
+            <span><lang>站点联系信息</lang></span>
+            <?php if ($scopeLabel !== ''): ?>
+                <span class="w-badge" data-tone="neutral" data-size="sm" style="margin-inline-start:var(--weline-space-2);"><?= $h($scopeLabel) ?></span>
+            <?php endif; ?>
+        </button>
+    </div>
+    <div id="<?= $h($sectionId . '_body') ?>" class="w-disclosure__panel" aria-labelledby="<?= $h($sectionId . '_heading') ?>" data-w-disclosure-panel>
+        <div class="w-disclosure__body">
+            <?php if (!$canEmbed): ?>
+                <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= $h($pendingHint) ?></p>
+            <?php else: ?>
+                <?php if ($scopeHint !== ''): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);"><?= $h($scopeHint) ?></p>
+                <?php endif; ?>
+                <div data-testid="website-site-contact-embed" data-storage-scope="<?= $h($storageScope) ?>">
+                    <?php
+                    /** @var ConfigEmbedRenderer $embedRenderer */
+                    $embedRenderer = ObjectManager::getInstance(ConfigEmbedRenderer::class);
+                    // 必须在分区内部 echo，避免预渲染时输出跑到 disclosure 外
+                    echo $embedRenderer->renderFromAttributes([
+                        'module' => 'Weline_Websites',
+                        'area' => 'backend',
+                        'group' => 'website_contact',
+                        'locale' => 'default',
+                        'target_scope' => $storageScope,
+                        'website_code' => $websiteCode,
+                        'store_code' => $storeCode,
+                        'channel_code' => $channelCode,
+                        'scope_kind' => $scopeKind,
+                    ]);
+                    ?>
+                </div>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-3);--w-mb:0;">
+                    <lang>修改即时保存到当前范围；留空可继承上级（Global → Website → Store → Channel）。</lang>
+                    <span class="w-text" data-tone="muted">scope=<?= $h($storageScope) ?></span>
+                </p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

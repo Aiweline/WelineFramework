@@ -240,6 +240,9 @@ final class OrderFacade implements OrderFacadeInterface
             $orderUuids = [];
             $orderRows = [];
             $ownerUuid = null;
+            $contact = OrderCheckoutContactFields::project($command->shippingAddress, $command->options);
+            $shippingAddress = $contact['shipping_address'];
+            $billingAddress = $this->billingAddressFromCommand($command, $shippingAddress);
 
             foreach ($plan->orders as $idx => $planned) {
                 $orderUuid = $this->newUuid();
@@ -275,7 +278,7 @@ final class OrderFacade implements OrderFacadeInterface
                     method: $command->shippingMethod,
                     amountMinor: (int)$planned['shipping_amount_minor'],
                     chargeOwnerOrderUuid: $isOwner ? $orderUuid : null,
-                    address: $command->shippingAddress,
+                    address: $shippingAddress,
                 );
                 $shippingData = array_merge(
                     $shipping->toArray(),
@@ -291,6 +294,9 @@ final class OrderFacade implements OrderFacadeInterface
                     'website_id' => $command->websiteId,
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
+                    'customer_email' => $contact['email'] !== '' ? $contact['email'] : null,
+                    'customer_name' => $contact['name'] !== '' ? $contact['name'] : null,
+                    'customer_phone' => $contact['phone'] !== '' ? $contact['phone'] : null,
                     'order_type' => $this->orderTypeFromCommand($command),
                     'payment_method' => $this->paymentMethodFromCommand($command),
                     'checkout_entry' => $this->checkoutEntryFromCommand($command),
@@ -298,6 +304,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
                     'scope' => $scope->toArray(),
+                    'billing_address' => $billingAddress,
                     'snapshots' => [
                         'money' => $money->toArray(),
                         'catalog' => $catalog->toArray(),
@@ -339,7 +346,7 @@ final class OrderFacade implements OrderFacadeInterface
                 method: $command->shippingMethod,
                 amountMinor: (int)$plan->totals['shipping_amount_minor'],
                 chargeOwnerOrderUuid: $ownerUuid,
-                address: $command->shippingAddress,
+                address: $shippingAddress,
             );
             $groupShippingData = array_merge(
                 $groupShipping->toArray(),
@@ -434,6 +441,9 @@ final class OrderFacade implements OrderFacadeInterface
             $groupUuid = $this->newUuid();
             $orderRows = [];
             $ownerUuid = null;
+            $contact = OrderCheckoutContactFields::project($command->shippingAddress, $command->options);
+            $shippingAddress = $contact['shipping_address'];
+            $billingAddress = $this->billingAddressFromCommand($command, $shippingAddress);
 
             foreach ($plan->orders as $idx => $planned) {
                 $orderUuid = $this->newUuid();
@@ -469,7 +479,7 @@ final class OrderFacade implements OrderFacadeInterface
                     method: $command->shippingMethod,
                     amountMinor: (int)$planned['shipping_amount_minor'],
                     chargeOwnerOrderUuid: $isOwner ? $orderUuid : null,
-                    address: $command->shippingAddress,
+                    address: $shippingAddress,
                 );
                 $shippingData = array_merge(
                     $shipping->toArray(),
@@ -485,6 +495,9 @@ final class OrderFacade implements OrderFacadeInterface
                     'website_id' => $command->websiteId,
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
+                    'customer_email' => $contact['email'] !== '' ? $contact['email'] : null,
+                    'customer_name' => $contact['name'] !== '' ? $contact['name'] : null,
+                    'customer_phone' => $contact['phone'] !== '' ? $contact['phone'] : null,
                     'order_type' => $this->orderTypeFromCommand($command),
                     'payment_method' => $this->paymentMethodFromCommand($command),
                     'checkout_entry' => $this->checkoutEntryFromCommand($command),
@@ -492,6 +505,7 @@ final class OrderFacade implements OrderFacadeInterface
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
                     'scope' => $scope->toArray(),
+                    'billing_address' => $billingAddress,
                     'snapshots' => [
                         'money' => $money->toArray(),
                         'catalog' => $catalog->toArray(),
@@ -527,7 +541,7 @@ final class OrderFacade implements OrderFacadeInterface
                 method: $command->shippingMethod,
                 amountMinor: (int)$plan->totals['shipping_amount_minor'],
                 chargeOwnerOrderUuid: $ownerUuid,
-                address: $command->shippingAddress,
+                address: $shippingAddress,
             );
             $groupShippingData = array_merge(
                 $groupShipping->toArray(),
@@ -740,6 +754,7 @@ final class OrderFacade implements OrderFacadeInterface
             typePayload: is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [],
             paymentStatus: strtolower(trim((string)($row['payment_status'] ?? ''))),
             checkoutEntry: strtolower(trim((string)($row['checkout_entry'] ?? 'unknown'))) ?: 'unknown',
+            billingAddress: is_array($row['billing_address'] ?? null) ? $row['billing_address'] : [],
         );
     }
 
@@ -1307,6 +1322,20 @@ final class OrderFacade implements OrderFacadeInterface
     }
 
     /**
+     * @param array<string, mixed> $shippingAddress
+     * @return array<string, mixed>
+     */
+    private function billingAddressFromCommand(CreateCheckoutGroupCommand $command, array $shippingAddress): array
+    {
+        $billing = $command->options['billing_address'] ?? null;
+        if (\is_array($billing) && $billing !== []) {
+            return $billing;
+        }
+
+        return $shippingAddress;
+    }
+
+    /**
      * COD fee into grand_total — options override or Payment CodFeeCalculator.
      */
     private function resolveCodFeeMinor(CreateCheckoutGroupCommand $command, int $baseMinor): int
@@ -1608,6 +1637,10 @@ final class OrderFacade implements OrderFacadeInterface
                 scopeKey: $snap->scopeKey,
                 websiteId: $snap->websiteId,
                 storeId: $snap->storeId,
+                buyerTaxId: $snap->buyerTaxId,
+                buyerTaxIdType: $snap->buyerTaxIdType,
+                buyerTaxCountry: $snap->buyerTaxCountry,
+                buyerCompanyName: $snap->buyerCompanyName,
             );
         }
         $mode = (string) ($command->options['tax_mode'] ?? 'stub_zero');

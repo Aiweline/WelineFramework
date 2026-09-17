@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Weline\Framework\Setup\Stage;
 
 use Weline\Framework\App\Exception;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
 use Weline\Framework\Module\Model\Module;
+use Weline\Framework\Output\Cli\Printing;
 
 /**
  * 模块安装/升级阶段
@@ -169,19 +171,61 @@ class ModuleSetupStage extends AbstractStage
             // 已经提交过，跳过
             return;
         }
+
+        $printing = $this->cliPrinting();
+        $installTotal = count($this->installTasks);
+        $upgradeTotal = count($this->upgradeTasks);
+        $taskTotal = $installTotal + $upgradeTotal;
+        $startedAt = microtime(true);
+
+        if ($taskTotal === 0) {
+            $printing?->note(__('模块安装/升级阶段：无待执行 Install/Upgrade 脚本，跳过'));
+            $this->committed = true;
+            $this->clearErrors();
+            return;
+        }
+
+        $printing?->note(__(
+            '模块安装/升级阶段开始：Install %{install} · Upgrade %{upgrade}（共 %{total}）',
+            [
+                'install' => $installTotal,
+                'upgrade' => $upgradeTotal,
+                'total' => $taskTotal,
+            ]
+        ));
+        $this->flushCli();
         
         // 同批先 Install 后 Upgrade（新模块可被同批 upgrade 依赖）
+        $step = 0;
         foreach ($this->installTasks as $module) {
+            $step++;
+            $moduleName = $module->getName();
+            $printing?->note(__(
+                'ModuleSetup [%{i}/%{total}] Install %{module}…',
+                ['i' => $step, 'total' => $taskTotal, 'module' => $moduleName]
+            ));
+            $this->flushCli();
+            $moduleStarted = microtime(true);
             try {
                 $this->executedTasks[] = [
-                    'module' => $module->getName(),
+                    'module' => $moduleName,
                     'type' => 'install',
                 ];
                 $this->moduleHandle->setupInstall($module);
                 $this->hasModuleInstalledOrUpgraded = true;
+                $printing?->success(__(
+                    'ModuleSetup [%{i}/%{total}] Install %{module} 完成（%{ms}ms）',
+                    [
+                        'i' => $step,
+                        'total' => $taskTotal,
+                        'module' => $moduleName,
+                        'ms' => number_format((microtime(true) - $moduleStarted) * 1000, 0),
+                    ]
+                ));
+                $this->flushCli();
             } catch (\Exception $e) {
                 $this->addError(__('模块 %{1} 安装失败：%{2}', [
-                    $module->getName(),
+                    $moduleName,
                     $e->getMessage()
                 ]));
                 $this->rollback();
@@ -193,16 +237,34 @@ class ModuleSetupStage extends AbstractStage
         }
 
         foreach ($this->upgradeTasks as $module) {
+            $step++;
+            $moduleName = $module->getName();
+            $printing?->note(__(
+                'ModuleSetup [%{i}/%{total}] Upgrade %{module}…',
+                ['i' => $step, 'total' => $taskTotal, 'module' => $moduleName]
+            ));
+            $this->flushCli();
+            $moduleStarted = microtime(true);
             try {
                 $this->executedTasks[] = [
-                    'module' => $module->getName(),
+                    'module' => $moduleName,
                     'type' => 'upgrade',
                 ];
                 $this->moduleHandle->setupUpgrade($module);
                 $this->hasModuleInstalledOrUpgraded = true;
+                $printing?->success(__(
+                    'ModuleSetup [%{i}/%{total}] Upgrade %{module} 完成（%{ms}ms）',
+                    [
+                        'i' => $step,
+                        'total' => $taskTotal,
+                        'module' => $moduleName,
+                        'ms' => number_format((microtime(true) - $moduleStarted) * 1000, 0),
+                    ]
+                ));
+                $this->flushCli();
             } catch (\Exception $e) {
                 $this->addError(__('模块 %{1} 升级失败：%{2}', [
-                    $module->getName(),
+                    $moduleName,
                     $e->getMessage()
                 ]));
                 $this->rollback();
@@ -215,6 +277,40 @@ class ModuleSetupStage extends AbstractStage
         
         $this->committed = true;
         $this->clearErrors();
+        $printing?->success(__(
+            '模块安装/升级阶段完成：共 %{total} · 耗时 %{sec}s',
+            [
+                'total' => $taskTotal,
+                'sec' => number_format(microtime(true) - $startedAt, 1),
+            ]
+        ));
+        $this->flushCli();
+    }
+
+    private function cliPrinting(): ?Printing
+    {
+        if (PHP_SAPI !== 'cli') {
+            return null;
+        }
+        try {
+            return ObjectManager::getInstance(Printing::class);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function flushCli(): void
+    {
+        if (\defined('STDOUT') && \is_resource(STDOUT)) {
+            \fflush(STDOUT);
+        }
+        if (\defined('STDERR') && \is_resource(STDERR)) {
+            \fflush(STDERR);
+        }
+        if (function_exists('ob_flush')) {
+            @ob_flush();
+        }
+        flush();
     }
     
     /**

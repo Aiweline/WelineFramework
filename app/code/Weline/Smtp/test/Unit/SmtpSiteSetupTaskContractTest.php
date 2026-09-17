@@ -7,40 +7,51 @@ namespace Weline\Smtp\Test\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 建站助手 SMTP 任务：探测自有/继承配置，未确认则为 doing。
+ * Smtp 建站任务：继承抽象 Provider，自声明发信/模板/多语言条目并自检。
  */
 final class SmtpSiteSetupTaskContractTest extends TestCase
 {
-    public function testSmtpProvidesSetupTaskStatusViaExtends(): void
+    public function testSmtpSetupTaskProviderRegistersViaExtends(): void
     {
         $smtpRoot = dirname(__DIR__, 2);
         $ssaRoot = dirname($smtpRoot) . '/SiteSetupAssistant';
 
-        $interface = (string)file_get_contents(
-            $ssaRoot . '/Api/SetupTaskStatusProviderInterface.php'
-        );
-        $collector = (string)file_get_contents(
-            $ssaRoot . '/Service/SetupTaskStatusCollector.php'
-        );
+        $interface = (string)file_get_contents($ssaRoot . '/Api/SetupTaskProviderInterface.php');
+        $abstract = (string)file_get_contents($ssaRoot . '/Api/AbstractSetupTaskProvider.php');
+        $collector = (string)file_get_contents($ssaRoot . '/Service/SetupTaskCollector.php');
         $float = (string)file_get_contents(
-            $ssaRoot . '/view/templates/Backend/widgets/site-setup-assistant-float.phtml'
+            $ssaRoot . '/view/templates/backend/widgets/site-setup-assistant-float.phtml'
         );
         $provider = (string)file_get_contents(
+            $smtpRoot . '/extends/module/Weline_SiteSetupAssistant/SetupTask/SmtpSetupTaskProvider.php'
+        );
+        $coverage = (string)file_get_contents($smtpRoot . '/Service/MailTemplateSetupCoverage.php');
+        $smtpExtends = (string)file_get_contents($smtpRoot . '/extends.php');
+        $command = (string)file_get_contents(
+            dirname($smtpRoot, 4) . '/dev/ai-command/sitesetup/建站.md'
+        );
+
+        self::assertFileDoesNotExist(
             $smtpRoot . '/extends/module/Weline_SiteSetupAssistant/SetupTaskStatus/SmtpSetupTaskStatusProvider.php'
         );
-        $smtpExtends = (string)file_get_contents($smtpRoot . '/extends.php');
-        $data = (string)file_get_contents($smtpRoot . '/Helper/Data.php');
 
-        self::assertStringContainsString('interface SetupTaskStatusProviderInterface', $interface);
-        self::assertStringContainsString('resolveTaskStatus', $interface);
-        self::assertStringContainsString('class SetupTaskStatusCollector', $collector);
-        self::assertStringContainsString('SetupTaskStatusCollector', $float);
-        self::assertStringContainsString('class SmtpSetupTaskStatusProvider', $provider);
-        self::assertStringContainsString('SetupTaskStatusProviderInterface::class', $smtpExtends);
-        self::assertStringContainsString('smtp_setup_confirmed', $data);
-        self::assertStringContainsString('isSetupConfirmed', $data);
-        self::assertStringContainsString('markSetupConfirmed', $data);
-        self::assertStringContainsString('resolveSendersProvenance', $provider);
-        self::assertStringContainsString('inherited', $provider);
+        self::assertStringContainsString('interface SetupTaskProviderInterface', $interface);
+        self::assertStringContainsString('abstract class AbstractSetupTaskProvider', $abstract);
+        self::assertStringContainsString('class SetupTaskCollector', $collector);
+        self::assertStringContainsString('SetupTaskCollector', $float);
+        self::assertStringContainsString('class SmtpSetupTaskProvider', $provider);
+        self::assertStringContainsString('extends AbstractSetupTaskProvider', $provider);
+        self::assertStringContainsString('smtp_transport', $provider);
+        self::assertStringContainsString('smtp_mail_template', $provider);
+        self::assertStringContainsString('smtp_mail_template_i18n', $provider);
+        self::assertStringContainsString('class MailTemplateSetupCoverage', $coverage);
+        self::assertStringContainsString('SystemConfig::SCOPE_GLOBAL', $coverage);
+        self::assertStringContainsString('localesByChannel', $coverage);
+        self::assertStringContainsString('SetupTaskProviderInterface::class', $smtpExtends);
+        self::assertStringContainsString('SmtpSetupTaskProvider::class', $smtpExtends);
+        self::assertStringNotContainsString('SetupTaskStatusProviderInterface', $smtpExtends);
+        self::assertStringContainsString('禁止', $command);
+        self::assertStringContainsString('SetupTaskProviderInterface', $command);
+        self::assertStringContainsString('AbstractSetupTaskProvider', $command);
     }
 }

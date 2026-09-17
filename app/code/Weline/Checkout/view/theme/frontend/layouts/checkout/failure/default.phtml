@@ -1,0 +1,229 @@
+<?php
+/**
+ * 布局：结算失败页
+ *
+ * layoutType=checkout/failure，option=default → layouts/checkout/failure/default.phtml
+ * 历史输入别名 `checkout_failer` / `checkout_failure` 由 ThemePageTypeResolver 映射到本路径；不再保留下划线布局目录。
+ *
+ * @meta.name {default="结算失败页面布局",name="结算失败页面布局",description="结算失败页面布局，用于描述布局的名称"}
+ * @meta.description {default="订单结算失败后的恢复页面布局",name="订单结算失败后的恢复页面布局",description="订单结算失败后的恢复页面布局，用于描述布局的用途"}
+ * @param title {default="订单尚未完成",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param errorMessage {default="",name="错误说明",description="错误说明文案"}
+ * @param errorCode {default="",name="错误代码",description="可选错误代码"}
+ * @param retryUrl {default="",name="重试链接",description="可选重试结算链接"}
+ * @param backToCart {default="/cart",name="返回购物车链接",description="返回购物车链接"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ */
+?>
+<?php
+$title = $this->getData('title') ?? __('订单尚未完成');
+$content = $this->getData('content') ?? '';
+$errorMessage = $this->getData('errorMessage') ?? __('本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。');
+$errorCode = $this->getData('errorCode') ?? '';
+$retryUrl = $this->getData('retryUrl') ?? '';
+$backToCart = $this->getData('backToCart') ?? '/cart';
+$class = $this->getData('class') ?? '';
+
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        body.checkout-failure-layout {
+            margin: 0;
+            background: var(--weline-layout-surface-secondary);
+            color: var(--weline-layout-text-primary);
+        }
+
+        .checkout-failure-main {
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin: 0 auto;
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-content-padding-inline) calc(var(--weline-layout-spacing-3xl) * 1.125);
+        }
+
+        .checkout-failure-content {
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-lg);
+            background: var(--weline-layout-surface-primary);
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-spacing-xl);
+            text-align: center;
+            box-shadow: var(--weline-theme-shadow-md);
+        }
+
+        /* 店面控制器内容自管失败英雄区时，布局壳不再叠第二套文案与 CTA */
+        .checkout-failure-content--passthrough {
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            padding: 0;
+            text-align: initial;
+            box-shadow: none;
+        }
+
+        .failure-icon {
+            width: var(--size-panel-120);
+            height: var(--size-panel-120);
+            margin: 0 auto var(--weline-layout-spacing-lg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--weline-layout-radius-full);
+            background: color-mix(in srgb, var(--weline-theme-danger, #83302a) 12%, var(--weline-layout-surface-primary));
+            color: var(--weline-theme-danger, #83302a);
+        }
+
+        .failure-icon .w-icon,
+        .failure-icon .w-icon[data-size] {
+            inline-size: calc(var(--size-panel-120) * 0.72);
+            block-size: calc(var(--size-panel-120) * 0.72);
+            stroke-width: 2.4;
+        }
+
+        .failure-title {
+            margin: 0;
+            font-size: var(--weline-layout-font-size-4xl);
+            line-height: var(--weline-layout-line-height-tight);
+        }
+
+        .error-message,
+        .error-code {
+            margin-top: var(--weline-layout-spacing-md);
+            color: var(--weline-layout-text-secondary);
+            line-height: var(--weline-layout-line-height-relaxed);
+        }
+
+        .failure-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--weline-layout-spacing-sm);
+            justify-content: center;
+            margin-top: var(--weline-layout-spacing-lg);
+        }
+
+        .w-btn {
+            min-height: var(--size-control-42);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 var(--weline-layout-spacing-lg);
+            border-radius: var(--weline-layout-radius-md);
+            text-decoration: none;
+            font-weight: var(--weline-layout-font-weight-bold);
+        }
+
+        .w-btn-primary {
+            color: var(--weline-theme-on-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-link-color);
+            background: var(--weline-layout-link-color);
+        }
+
+        .w-btn-secondary {
+            color: var(--weline-layout-text-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-strong);
+            background: var(--weline-layout-surface-primary);
+        }
+
+        .checkout-failure-recommendations {
+            margin-top: var(--weline-layout-spacing-xl);
+        }
+
+        @media (max-width: 640px) {
+            .checkout-failure-main {
+                width: min(100%, var(--weline-layout-content-max-width));
+                max-width: 100%;
+                padding-block: var(--size-control-md) var(--size-control-2xl);
+                padding-inline: var(--weline-layout-content-padding-inline);
+            }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="checkout-failure-layout">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+
+    <main class="checkout-failure-main <?= htmlspecialchars($class ?? '') ?>" id="checkout-failure-main" data-layout="checkout/failure">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-checkout-failure-content,layout-default-content,content,checkout-failure-content,checkout-error,checkout-recovery,order-summary"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-failure-main__content-root-slot">
+        <w:slot id="checkout-failure-content"
+                name="结算失败内容"
+                accept="layout-checkout-failure-content,checkout-failure,checkout-error,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-failure-container">
+            <?php if ($content): ?>
+            <div class="checkout-failure-content checkout-failure-content--passthrough">
+                {{content}}
+            </div>
+            <?php else: ?>
+            <div class="checkout-failure-content" data-testid="storefront-checkout-failure-page">
+                <div class="failure-icon">
+                    <w:icon name="close" size="xl"></w:icon>
+                </div>
+                <h1 class="failure-title"><?= htmlspecialchars((string)$title) ?></h1>
+                <div class="error-message">
+                    <p><?= htmlspecialchars((string)$errorMessage) ?></p>
+                </div>
+                <?php if ($errorCode): ?>
+                    <p class="error-code">
+                        <?= __('错误代码：') ?><code><?= htmlspecialchars((string)$errorCode) ?></code>
+                    </p>
+                <?php endif; ?>
+                <div class="failure-actions">
+                    <?php if ($retryUrl): ?>
+                        <a href="<?= htmlspecialchars((string)$retryUrl) ?>" class="w-btn w-btn-primary">
+                            <?= __('重试结算') ?>
+                        </a>
+                    <?php endif; ?>
+                    <a href="<?= htmlspecialchars((string)$backToCart) ?>" class="w-btn w-btn-primary">
+                        <?= __('返回购物车') ?>
+                    </a>
+                    <a href="@url{'faq'}" class="w-btn w-btn-secondary">
+                        <?= __('查看帮助中心') ?>
+                    </a>
+                </div>
+            </div>
+            <?php endif; ?>
+        </w:slot>
+        <w:slot id="checkout-failure-recommendations"
+                name="结算失败推荐区"
+                accept="layout-checkout-failure-recommendations,featured-products,bestsellers,new-arrivals,you-may-like,product-carousel"
+                multiple="true"
+                position="content"
+                wrapper="section"
+                class="checkout-failure-recommendations" weline-code="theme.checkout_failure.checkout_failure_recommendations">
+            <w:hook>Weline_Theme::frontend::layouts::checkout_failure::recommendations</w:hook>
+        </w:slot>
+        </w:slot>
+    </main>
+
+    <w:slot id="checkout-failure-bottom"
+            name="结算失败底部扩展"
+            accept="layout-checkout-failure-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="content"
+            class="checkout-failure-bottom-slot">
+    </w:slot>
+
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

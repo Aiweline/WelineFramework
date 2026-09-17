@@ -21,7 +21,7 @@ class ThemePreviewContentRenderer
         ThemeLayout::PAGE_TYPE_PRODUCT_LIST => [
             'filters' => ['filters'],
             'breadcrumb' => ['breadcrumb'],
-            'products' => ['product-list-main', 'products'],
+            'products' => ['products-main', 'products'],
         ],
         ThemeLayout::PAGE_TYPE_PRODUCT => [
             'breadcrumb' => ['breadcrumb'],
@@ -30,7 +30,7 @@ class ThemePreviewContentRenderer
         ThemeLayout::PAGE_TYPE_CART => [
             'cartItems' => ['cart-main', 'cartItems'],
         ],
-        'checkout_success' => [
+        ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => [
             'order' => ['checkout-success-main', 'order'],
         ],
     ];
@@ -47,12 +47,11 @@ class ThemePreviewContentRenderer
         ThemeLayout::PAGE_TYPE_CMS => ['cms-main', 'cms-page-main', 'content'],
         ThemeLayout::PAGE_TYPE_CHECKOUT => ['checkout-main', 'content'],
         ThemeLayout::PAGE_TYPE_ACCOUNT => ['account-main', 'content'],
-        'account_auth' => ['account-auth-main', 'content'],
-        'checkout_success' => ['content'],
+        ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => ['content'],
+        ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => ['content'],
         'promotion' => ['promotion-main', 'content'],
         'customer_service' => ['customer-service-main', 'content'],
         'faq' => ['faq-topics', 'faq-faq', 'faq-extras', 'faq-sidebar', 'content'],
-        'review' => ['review-main', 'content'],
         'qa' => ['qa-main', 'content'],
         'rma' => ['rma-main', 'content'],
         ThemeLayout::PAGE_TYPE_DEFAULT => ['default-content', 'content', 'main-content'],

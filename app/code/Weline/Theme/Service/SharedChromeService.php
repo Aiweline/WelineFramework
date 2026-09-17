@@ -82,7 +82,6 @@ final class SharedChromeService
         $localNodes = $this->chromeNodesFromState($this->workspace->load($pageContext, true));
 
         $slots = [];
-        $anyLocal = false;
         foreach (self::CHROME_AREAS as $area) {
             $count = 0;
             foreach ($localNodes as $node) {
@@ -90,33 +89,25 @@ final class SharedChromeService
                     ++$count;
                 }
             }
-            $mode = ($isCarrier || $count > 0) ? self::MODE_LOCAL : self::MODE_INHERIT;
-            if (!$isCarrier && $count > 0) {
-                $anyLocal = true;
-            }
+            // Hard cut: non-carrier layouts always inherit global chrome (MODE_LOCAL removed).
             $slots[$area] = [
-                'mode' => $isCarrier ? self::MODE_LOCAL : $mode,
+                'mode' => $isCarrier ? self::MODE_LOCAL : self::MODE_INHERIT,
                 'local_node_count' => $count,
             ];
-            // Carrier itself is the global source; treat as local ownership of the shared set.
-            if ($isCarrier) {
-                $slots[$area]['mode'] = self::MODE_LOCAL;
-            }
         }
 
         return [
             'page_type' => $pageType,
             'is_carrier' => $isCarrier,
             'slots' => $slots,
-            'overall_mode' => $isCarrier
-                ? self::MODE_LOCAL
-                : ($anyLocal ? self::MODE_LOCAL : self::MODE_INHERIT),
+            'overall_mode' => $isCarrier ? self::MODE_LOCAL : self::MODE_INHERIT,
             'carrier_page_type' => ThemeLayout::PAGE_TYPE_HOME,
         ];
     }
 
     /**
-     * 继承态 chrome 写操作应落到全局载体（homepage），避免误占业务布局。
+     * 继承态 chrome 写操作应落到全局载体（homepage），并同步 ThemeScopeVersion chrome 权威。
+     * 非载体布局永久 inherit，因此 chrome 写一律路由到 homepage。
      */
     public function resolveWriteLayoutType(
         ThemeEditorContext $pageContext,
@@ -141,7 +132,7 @@ final class SharedChromeService
     }
 
     /**
-     * 将全局 chrome 复制到本布局，切断继承。
+     * Detach (MODE_LOCAL) permanently removed — shared chrome is always inherit for non-carriers.
      *
      * @param list<string>|null $areas
      * @return array{copied:int,areas:list<string>,workspace:array<string,mixed>|null}
@@ -152,65 +143,7 @@ final class SharedChromeService
         string $actorId,
         string $actorName = '',
     ): array {
-        $pageContext = $pageContext->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
-        if ($this->isChromeCarrierPageType($pageContext->layoutType)) {
-            throw new \InvalidArgumentException('shared_chrome_carrier_cannot_detach');
-        }
-
-        $areas = $this->normalizeAreas($areas);
-        $carrierContext = $pageContext->withLayoutType(ThemeLayout::PAGE_TYPE_HOME);
-        $carrierState = $this->workspace->load($carrierContext, true);
-        $pageState = $this->workspace->load($pageContext, true);
-
-        $commands = [];
-        // Clear existing local chrome first so detach is idempotent.
-        foreach ($this->chromeNodesFromState($pageState) as $uid => $node) {
-            if (!$this->nodeBelongsToAreas($node, $areas)) {
-                continue;
-            }
-            $commands[] = ThemePatchCommand::fromArray([
-                'op' => ThemePatchCommand::OP_REMOVE_NODE,
-                'path' => '/nodes/' . $uid,
-                'node_uid' => $uid,
-            ]);
-        }
-
-        $copied = 0;
-        foreach ($this->chromeNodesFromState($carrierState) as $node) {
-            if (!$this->nodeBelongsToAreas($node, $areas)) {
-                continue;
-            }
-            $newUid = \bin2hex(\random_bytes(16));
-            $copy = $node;
-            $copy['node_uid'] = $newUid;
-            $commands[] = ThemePatchCommand::fromArray([
-                'op' => ThemePatchCommand::OP_ADD_NODE,
-                'path' => '/nodes/' . $newUid,
-                'node_uid' => $newUid,
-                'value' => $copy,
-            ]);
-            ++$copied;
-        }
-
-        $workspace = null;
-        if ($commands !== []) {
-            $workspace = $this->workspace->applyChanges(
-                context: $pageContext,
-                expectedRevision: (int)($pageState['revision'] ?? 0),
-                expectedParentReleaseId: $this->nullableReleaseId($pageState['expected_parent_release_id'] ?? null),
-                changes: $commands,
-                actorId: $actorId,
-                actorName: $actorName,
-                summary: 'shared_chrome_detached',
-            );
-        }
-
-        return [
-            'copied' => $copied,
-            'areas' => $areas,
-            'workspace' => $workspace,
-            'mode' => self::MODE_LOCAL,
-        ];
+        throw new \InvalidArgumentException('shared_chrome_detach_removed');
     }
 
     /**

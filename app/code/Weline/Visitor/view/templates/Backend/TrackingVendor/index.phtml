@@ -428,7 +428,7 @@ if ($selected === null && $vendorsRuntime !== []) {
                                             </button>
                                         </div>
                                     </div>
-                                    <p class="tvp-field__hint"><lang>短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。</lang></p>
+                                    <p class="tvp-field__hint"><lang>短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝、去重丢弃黄；可清理后重新监听。无服务端长轮询。</lang></p>
                                     <label class="tvp-field" for="tv-acc-search" style="margin-block-end:var(--weline-space-2);">
                                         <span class="tvp-field__label"><lang>搜索事件名</lang></span>
                                         <input id="tv-acc-search" class="w-input" data-size="sm" type="search" autocomplete="off" placeholder="<?= $h(__('过滤本会话事件名…')) ?>" data-testid="tv-acc-search">
@@ -1772,7 +1772,7 @@ if ($selected === null && $vendorsRuntime !== []) {
         var rawUrl = String(ev.path || ev.summary || '');
         var insights = parseUrlInsights(rawUrl);
         var hitKind = String(ev.hit_kind || '').toLowerCase();
-        if (ev.event_hit === false || (hitKind !== 'system' && hitKind !== 'custom')) {
+        if (ev.event_hit === false || (hitKind !== 'system' && hitKind !== 'custom' && hitKind !== 'dedupe')) {
             hitKind = '';
         }
         var pairs = collectParamPairs(ev, insights);
@@ -1789,7 +1789,9 @@ if ($selected === null && $vendorsRuntime !== []) {
             ? ' <span class="tvp-acc-badge" data-tone="system">系统</span>'
             : (hitKind === 'custom'
                 ? ' <span class="tvp-acc-badge" data-tone="custom">自定义</span>'
-                : ' <span class="tvp-acc-badge" data-tone="cat">流过</span>');
+                : (hitKind === 'dedupe'
+                    ? ' <span class="tvp-acc-badge" data-tone="dedupe">去重丢弃</span>'
+                    : ' <span class="tvp-acc-badge" data-tone="cat">流过</span>'));
         var paramsBlock = open
             ? copyableParamsHtml(pairs, idx)
             : '';

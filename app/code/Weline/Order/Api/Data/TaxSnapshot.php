@@ -8,6 +8,9 @@ namespace Weline\Order\Api\Data;
  * Immutable tax snapshot on CheckoutGroup / Order / OrderItem / Invoice.
  * It carries the exact scope, rule version and line results used at quote time
  * and is copied downstream without recalculation.
+ *
+ * Buyer tax identity (VAT ID etc.) belongs on CheckoutGroup / Order header snapshots only;
+ * OrderItem line snapshots keep buyer_* empty by default.
  */
 final class TaxSnapshot
 {
@@ -27,6 +30,10 @@ final class TaxSnapshot
         public readonly string $scopeKey = '',
         public readonly int $websiteId = 0,
         public readonly int $storeId = 0,
+        public readonly string $buyerTaxId = '',
+        public readonly string $buyerTaxIdType = '',
+        public readonly string $buyerTaxCountry = '',
+        public readonly string $buyerCompanyName = '',
     ) {
     }
 
@@ -46,6 +53,10 @@ final class TaxSnapshot
             'scope_key' => $this->scopeKey,
             'website_id' => $this->websiteId,
             'store_id' => $this->storeId,
+            'buyer_tax_id' => $this->buyerTaxId,
+            'buyer_tax_id_type' => $this->buyerTaxIdType,
+            'buyer_tax_country' => $this->buyerTaxCountry,
+            'buyer_company_name' => $this->buyerCompanyName,
         ];
     }
 
@@ -67,6 +78,39 @@ final class TaxSnapshot
             scopeKey: (string) ($data['scope_key'] ?? ''),
             websiteId: (int) ($data['website_id'] ?? 0),
             storeId: (int) ($data['store_id'] ?? 0),
+            buyerTaxId: (string) ($data['buyer_tax_id'] ?? ''),
+            buyerTaxIdType: (string) ($data['buyer_tax_id_type'] ?? ''),
+            buyerTaxCountry: (string) ($data['buyer_tax_country'] ?? ''),
+            buyerCompanyName: (string) ($data['buyer_company_name'] ?? ''),
+        );
+    }
+
+    /**
+     * Copy buyer identity onto a new snapshot (order header); leave amount/rules from $base.
+     */
+    public function withBuyerIdentity(
+        string $buyerTaxId,
+        string $buyerTaxIdType = '',
+        string $buyerTaxCountry = '',
+        string $buyerCompanyName = '',
+    ): self {
+        return new self(
+            taxAmountMinor: $this->taxAmountMinor,
+            mode: $this->mode,
+            note: $this->note,
+            ruleSchemaVersion: $this->ruleSchemaVersion,
+            ruleSetHash: $this->ruleSetHash,
+            engine: $this->engine,
+            lines: $this->lines,
+            jurisdictionKey: $this->jurisdictionKey,
+            currency: $this->currency,
+            scopeKey: $this->scopeKey,
+            websiteId: $this->websiteId,
+            storeId: $this->storeId,
+            buyerTaxId: $buyerTaxId,
+            buyerTaxIdType: $buyerTaxIdType,
+            buyerTaxCountry: $buyerTaxCountry,
+            buyerCompanyName: $buyerCompanyName,
         );
     }
 

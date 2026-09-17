@@ -7,12 +7,25 @@
  *
  * @meta.cache.mode {default="chrome",name="缓存模式"}
  * @meta.cache.auth {default="guest",name="鉴权维度"}
- * @meta.name {default="Footer底部片段",name="Footer底部片段",description="Footer 薄壳：独占槽挂载 footer-container"}
- * @meta.description {default="页面底部区域（由 footer-container 部件渲染）",name="页面底部区域",description="页面底部区域由整页脚主部件配置与渲染"}
+ * @meta.name {default="Footer底部片段",name="Footer底部片段",description="Footer 薄壳：footer-above 扩展槽 + 独占槽挂载 footer-container"}
+ * @meta.description {default="页脚上方扩展（默认 trust-badges）与页面底部区域（由 footer-container 部件渲染）",name="页面底部区域",description="footer-above 默认信任徽章；页脚主区由 footer-container 配置与渲染"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类（兼容保留）"}
  */
 ?>
 <!-- theme-partial:footer option=default -->
+<w:slot id="footer-above"
+        name="页脚上方扩展"
+        accept="layout-footer-above,trust-badges,banner,promo-banner,testimonial,content,container"
+        reject="header,footer,navigation"
+        multiple="true"
+        append="true"
+        position="content"
+        class="weline-footer-above-slot">
+    <w:hook>Weline_Theme::frontend::partials::footer::above<else/>
+        <w:widget type="content" name="trust-badges" />
+    </w:hook>
+</w:slot>
+
 <w:slot id="footer"
         name="整体底部"
         accept="layout-global-footer,footer-container"

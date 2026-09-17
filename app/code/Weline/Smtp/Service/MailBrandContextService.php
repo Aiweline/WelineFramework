@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Smtp\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Asset\MediaUrl;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
@@ -57,6 +58,13 @@ class MailBrandContextService
             'brand_link',
             'brand_footer_heading',
             'brand_footer_bg',
+            // 邮件壳分区背景图（SystemConfig smtp_mail_bg_*，绝对 URL + 安全内联 CSS）
+            'brand_header_bg_image',
+            'brand_header_bg_css',
+            'brand_body_bg_image',
+            'brand_body_bg_css',
+            'brand_footer_bg_image',
+            'brand_footer_bg_css',
         ];
     }
 
@@ -77,8 +85,8 @@ class MailBrandContextService
             ['code' => 'site_logo_img', 'label' => (string)__('Logo 图片 HTML（|raw）'), 'sample' => '<img …>'],
             ['code' => 'site_description', 'label' => (string)__('站点简介'), 'sample' => '官方商城'],
             ['code' => 'contact_email', 'label' => (string)__('联系邮箱'), 'sample' => 'support@example.com'],
-            ['code' => 'contact_phone', 'label' => (string)__('联系电话'), 'sample' => '+86…'],
-            ['code' => 'contact_address', 'label' => (string)__('联系地址'), 'sample' => '…'],
+            ['code' => 'contact_phone', 'label' => (string)__('联系电话'), 'sample' => ''],
+            ['code' => 'contact_address', 'label' => (string)__('联系地址'), 'sample' => \Weline\Websites\Service\SiteContactSeedService::DEFAULT_ADDRESS_EN],
             ['code' => 'service_hours', 'label' => (string)__('服务时间'), 'sample' => '周一至周五 9:00-18:00'],
             ['code' => 'brand_primary', 'label' => (string)__('品牌主色'), 'sample' => '#b84a3c'],
             ['code' => 'brand_primary_dark', 'label' => (string)__('品牌主色深'), 'sample' => '#963b30'],
@@ -95,6 +103,12 @@ class MailBrandContextService
             ['code' => 'brand_link', 'label' => (string)__('邮件链接色'), 'sample' => '#b84a3c'],
             ['code' => 'brand_footer_heading', 'label' => (string)__('页尾标题色'), 'sample' => '#7a3028'],
             ['code' => 'brand_footer_bg', 'label' => (string)__('页尾浅底'), 'sample' => '#f8ede9'],
+            ['code' => 'brand_header_bg_image', 'label' => (string)__('页头背景图 URL'), 'sample' => ''],
+            ['code' => 'brand_header_bg_css', 'label' => (string)__('页头背景内联样式'), 'sample' => 'background-color:#16181a;'],
+            ['code' => 'brand_body_bg_image', 'label' => (string)__('正文背景图 URL'), 'sample' => ''],
+            ['code' => 'brand_body_bg_css', 'label' => (string)__('正文背景内联样式'), 'sample' => 'background-color:#fffefa;'],
+            ['code' => 'brand_footer_bg_image', 'label' => (string)__('页尾背景图 URL'), 'sample' => ''],
+            ['code' => 'brand_footer_bg_css', 'label' => (string)__('页尾背景内联样式'), 'sample' => 'background-color:#f8ede9;'],
         ];
     }
 
@@ -103,7 +117,7 @@ class MailBrandContextService
      */
     public function resolve(string $storageScope, string $locale = ''): array
     {
-        $contact = $this->resolveContact();
+        $contact = $this->resolveContact($storageScope);
         $names = $this->resolveScopeNames($storageScope);
         $siteUrl = $names['site_url'];
         $logoUrl = $this->resolveLogoAbsoluteUrl($storageScope, $siteUrl);
@@ -137,6 +151,7 @@ class MailBrandContextService
 
         $palette = $this->resolvePalette($storageScope);
         $contactEmail = $this->normalizeContactEmail((string)$contact['contact_email'], $siteUrl);
+        $shellBg = $this->resolveMailShellBackgrounds($storageScope, $siteUrl, $palette);
 
         $brand = array_merge([
             'site_name' => $siteName,
@@ -151,7 +166,7 @@ class MailBrandContextService
             'contact_phone' => (string)$contact['contact_phone'],
             'contact_address' => (string)$contact['contact_address'],
             'service_hours' => (string)$contact['service_hours'],
-        ], $palette);
+        ], $palette, $shellBg);
 
         return $this->localizeBrandStrings($brand, $locale);
     }
@@ -480,21 +495,21 @@ class MailBrandContextService
     /**
      * @return array{site_name:string,site_description:string,contact_email:string,contact_phone:string,service_hours:string,contact_address:string}
      */
-    private function resolveContact(): array
+    private function resolveContact(string $storageScope = ''): array
     {
         try {
             /** @var SiteContactInfo $info */
             $info = ObjectManager::getInstance(SiteContactInfo::class);
 
-            return $info->resolve();
+            return $info->resolve($storageScope !== '' ? $storageScope : null);
         } catch (\Throwable) {
             return [
                 'site_name' => 'Weline',
-                'site_description' => (string)__('官方商城客户服务'),
+                'site_description' => (string)\__('官方商城客户服务'),
                 'contact_email' => 'support@example.com',
                 'contact_phone' => '',
-                'service_hours' => (string)__('周一至周五 9:00 - 18:00'),
-                'contact_address' => '',
+                'service_hours' => (string)\__('周一至周五 9:00 - 18:00'),
+                'contact_address' => \Weline\Websites\Service\SiteContactSeedService::DEFAULT_ADDRESS_EN,
             ];
         }
     }
@@ -774,10 +789,30 @@ class MailBrandContextService
         }
 
         if ($best !== '' && $bestScore >= 0) {
-            return $this->normalizeAbsoluteUrl($this->appendDevPortIfNeeded($best));
+            $candidate = $this->normalizeAbsoluteUrl($this->appendDevPortIfNeeded($best));
+            // 邮件客户端打不开 *.weline.test / e2e 沙盒 Host：优先 website.url，再回落本机托管公网站。
+            if (!$this->isUndeliverableMailPublicHost($candidate)) {
+                return $candidate;
+            }
+            $fallbackNorm = $this->normalizeAbsoluteUrl($this->appendDevPortIfNeeded($fallbackUrl));
+            if ($fallbackNorm !== '' && !$this->isUndeliverableMailPublicHost($fallbackNorm)) {
+                return $fallbackNorm;
+            }
+            $managed = $this->resolveManagedLocalPublicSiteUrl();
+            if ($managed !== '') {
+                return $managed;
+            }
+
+            return $candidate;
         }
 
-        return $fallbackUrl;
+        $fallbackNorm = $this->normalizeAbsoluteUrl($this->appendDevPortIfNeeded($fallbackUrl));
+        if ($fallbackNorm !== '' && !$this->isUndeliverableMailPublicHost($fallbackNorm)) {
+            return $fallbackNorm;
+        }
+        $managed = $this->resolveManagedLocalPublicSiteUrl();
+
+        return $managed !== '' ? $managed : $fallbackNorm;
     }
 
     private function scorePublicHost(string $host, bool $primary, bool $https): int
@@ -786,10 +821,15 @@ class MailBrandContextService
         if ($host === 'localhost' || $host === '127.0.0.1' || str_ends_with($host, '.local')) {
             return -100;
         }
+        // e2e/主题注入站域名不可作邮件资源 Origin（收件端 DNS/证书失败 → 裂图）
+        if ($this->isSandboxOrE2eHost($host)) {
+            return -90;
+        }
         if (str_ends_with($host, '.test.weline.com')) {
             $score += 100;
         } elseif (str_ends_with($host, '.weline.test')) {
-            $score += 40;
+            // 遗留别名：远低于 *.test.weline.com，避免抢成邮件主站址
+            $score += 5;
         } else {
             $score += 20;
         }
@@ -801,6 +841,70 @@ class MailBrandContextService
         }
 
         return $score;
+    }
+
+    private function isSandboxOrE2eHost(string $host): bool
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return false;
+        }
+
+        return str_starts_with($host, 'e2e-test-')
+            || str_starts_with($host, 'e2e-')
+            || str_contains($host, 'e2e_default')
+            || str_contains($host, 'e2e-theme');
+    }
+
+    private function isUndeliverableMailPublicHost(string $url): bool
+    {
+        $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?? ''));
+        if ($host === '') {
+            return true;
+        }
+        if ($this->isSandboxOrE2eHost($host)) {
+            return true;
+        }
+
+        // 邮件默认不要用遗留 *.weline.test（与本机验收 Host 门禁一致）
+        return str_ends_with($host, '.weline.test');
+    }
+
+    /**
+     * 本机托管公网站址：default 站 URL / 其 *.test.weline.com 域名。
+     */
+    private function resolveManagedLocalPublicSiteUrl(): string
+    {
+        try {
+            /** @var Website $website */
+            $website = ObjectManager::getInstance(Website::class);
+            $row = $website->clear()->where(Website::schema_fields_CODE, 'default')->find()->fetch();
+            if ($row && ($row->getId() !== null && $row->getId() !== '' || (int)$row->getData(Website::schema_fields_ID) === 0)) {
+                $fallback = $this->normalizeAbsoluteUrl((string)$row->getData(Website::schema_fields_URL));
+                if ($fallback !== '' && !$this->isUndeliverableMailPublicHost($fallback)) {
+                    return $this->appendDevPortIfNeeded($fallback);
+                }
+                $websiteId = (int)$row->getData(Website::schema_fields_ID);
+                /** @var WebsiteDomain $domainModel */
+                $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+                foreach ($domainModel->getWebsiteDomains($websiteId) ?: [] as $dom) {
+                    if (!is_array($dom)) {
+                        continue;
+                    }
+                    $host = strtolower(trim((string)($dom[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+                    if ($host === '' || !str_ends_with($host, '.test.weline.com')) {
+                        continue;
+                    }
+                    $https = !empty($dom[WebsiteDomain::schema_fields_HTTPS_ENABLED]);
+                    $scheme = $https ? 'https' : 'http';
+
+                    return $this->normalizeAbsoluteUrl($this->appendDevPortIfNeeded($scheme . '://' . $host));
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 
     /**
@@ -864,18 +968,48 @@ class MailBrandContextService
         if ($host === '' || (!str_ends_with($host, '.test.weline.com') && !str_ends_with($host, '.weline.test'))) {
             return $url;
         }
+        $port = $this->resolveDevPublicHttpsPort();
+        if ($port <= 0 || $port === 80 || $port === 443) {
+            return $url;
+        }
+        $scheme = (string)($parts['scheme'] ?? 'https');
+        $path = (string)($parts['path'] ?? '');
+
+        return $scheme . '://' . $host . ':' . $port . $path;
+    }
+
+    /**
+     * 本机 *.test.weline.com / *.weline.test 公网 HTTPS 端口。
+     * Web 请求优先 HTTP_HOST；CLI/Cron 发信无请求时读 edge nginx listen_https。
+     */
+    private function resolveDevPublicHttpsPort(): int
+    {
         $reqHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
         if ($reqHost !== '' && str_contains($reqHost, ':')) {
             $port = (int)explode(':', $reqHost, 2)[1];
-            if ($port > 0 && $port !== 80 && $port !== 443) {
-                $scheme = (string)($parts['scheme'] ?? 'https');
-                $path = (string)($parts['path'] ?? '');
-
-                return $scheme . '://' . $host . ':' . $port . $path;
+            if ($port > 0) {
+                return $port;
             }
         }
 
-        return $url;
+        foreach ([
+            'wls.edge.nginx.listen_https',
+            'server.ssl_port',
+            'wls.ssl_port',
+            'server.port',
+            'wls.port',
+        ] as $key) {
+            try {
+                $raw = Env::get($key, null);
+            } catch (\Throwable) {
+                $raw = null;
+            }
+            if (is_numeric($raw) && (int)$raw > 0) {
+                return (int)$raw;
+            }
+        }
+
+        return 0;
     }
 
     private function normalizeContactEmail(string $email, string $siteUrl): string
@@ -903,6 +1037,87 @@ class MailBrandContextService
         }
 
         return rtrim($url, '/');
+    }
+
+    /**
+     * 邮件壳三区背景：读 SystemConfig 继承路径 → 绝对 /pub/media URL + 内联 CSS。
+     * 邮件客户端不走 /media/image 缩略图端点，直接用原图静态地址。
+     *
+     * @param array<string, string> $palette
+     * @return array<string, string>
+     */
+    private function resolveMailShellBackgrounds(string $storageScope, string $siteUrl, array $palette): array
+    {
+        $paths = ['header' => '', 'body' => '', 'footer' => ''];
+        try {
+            /** @var \Weline\Smtp\Helper\Data $data */
+            $data = ObjectManager::getInstance(\Weline\Smtp\Helper\Data::class);
+            $paths = $data->getMailShellBackgrounds($storageScope);
+        } catch (\Throwable) {
+            // CLI/单测无容器时保持空图
+        }
+
+        $headerColor = (string)($palette['brand_header_bg'] ?? '#16181a');
+        $bodyColor = (string)($palette['brand_surface'] ?? '#fffefa');
+        $footerColor = (string)($palette['brand_footer_bg'] ?? '#f8ede9');
+
+        $headerUrl = $this->resolveMailMediaAbsoluteUrl((string)($paths['header'] ?? ''), $siteUrl);
+        $bodyUrl = $this->resolveMailMediaAbsoluteUrl((string)($paths['body'] ?? ''), $siteUrl);
+        $footerUrl = $this->resolveMailMediaAbsoluteUrl((string)($paths['footer'] ?? ''), $siteUrl);
+
+        return [
+            'brand_header_bg_image' => $headerUrl,
+            'brand_header_bg_css' => $this->buildMailRegionBgCss($headerColor, $headerUrl),
+            'brand_body_bg_image' => $bodyUrl,
+            'brand_body_bg_css' => $this->buildMailRegionBgCss($bodyColor, $bodyUrl),
+            'brand_footer_bg_image' => $footerUrl,
+            'brand_footer_bg_css' => $this->buildMailRegionBgCss($footerColor, $footerUrl),
+        ];
+    }
+
+    private function resolveMailMediaAbsoluteUrl(string $path, string $siteUrl): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+        if (preg_match('#^https?://#i', $path) === 1) {
+            return $path;
+        }
+        foreach (['/pub/media/', 'pub/media/', '/media/image/', 'media/image/', '/media/', 'media/'] as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                $path = ltrim(substr($path, strlen($prefix)), '/');
+                break;
+            }
+        }
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        if ($path === '' || str_contains($path, '..')) {
+            return '';
+        }
+        $disk = BP . '/pub/media/' . $path;
+        if (!is_file($disk)) {
+            return '';
+        }
+
+        return $this->joinBaseUrl($siteUrl, '/pub/media/' . $path);
+    }
+
+    private function buildMailRegionBgCss(string $colorHex, string $imageUrl): string
+    {
+        $colorHex = trim($colorHex) !== '' ? trim($colorHex) : '#ffffff';
+        $css = 'background-color:' . $colorHex;
+        if ($imageUrl === '') {
+            return $css;
+        }
+        // 无引号 url()：避免模板渲染把 ' 转成 &#039; 导致部分客户端背景失效
+        $safeUrl = preg_replace('/[)\\s"\']+/', '', $imageUrl) ?? '';
+        if ($safeUrl === '') {
+            return $css;
+        }
+
+        return $css
+            . ';background-image:url(' . $safeUrl . ')'
+            . ';background-size:cover;background-position:center center;background-repeat:no-repeat';
     }
 
     private function joinBaseUrl(string $base, string $path): string

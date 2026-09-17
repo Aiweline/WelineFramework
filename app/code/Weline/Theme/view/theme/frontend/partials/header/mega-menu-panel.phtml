@@ -246,92 +246,146 @@ $resolveName = static function (array $node) use ($resolveLocale, $esc): string 
                     && (!$hasGrandchildren || $showBannerWithChildren);
                 $contentId = $panelId . '-panel-' . $index;
                 $isActive = $index === 0;
+                $bannerAltBase = $childTextPlain !== '' ? $childTextPlain : strip_tags($childTextHtml);
+                $bannerAlt = trim($bannerAltBase . ' — ' . (string)__('汉服分类展示图'));
+
+                // Inactive panels: omit card grids/banners from live HTML; hydrate on first tab open.
+                $lazyCards = [];
+                if (!$isActive && $hasGrandchildren) {
+                    foreach ($grandchildren as $gcIndex => $grandchild) {
+                        if (!is_array($grandchild)) {
+                            continue;
+                        }
+                        $gcTextHtml = $resolveName($grandchild);
+                        if ($gcTextHtml === '') {
+                            continue;
+                        }
+                        $gcUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($grandchild['url'] ?? '#'));
+                        $gcImage = $resolveImage($grandchild, ($index + 1) * 17 + (int)$gcIndex);
+                        $gcDesc = $resolveDescription(
+                            $grandchild,
+                            html_entity_decode(strip_tags($gcTextHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                        );
+                        $gcChildren = is_array($grandchild['children'] ?? null) ? $grandchild['children'] : [];
+                        $leafPayload = [];
+                        foreach ($gcChildren as $leaf) {
+                            if (!is_array($leaf)) {
+                                continue;
+                            }
+                            $leafTextHtml = $resolveName($leaf);
+                            if ($leafTextHtml === '') {
+                                continue;
+                            }
+                            $leafPayload[] = [
+                                'n' => html_entity_decode(strip_tags($leafTextHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                                'u' => \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($leaf['url'] ?? '#')),
+                            ];
+                        }
+                        $lazyCards[] = [
+                            'n' => html_entity_decode(strip_tags($gcTextHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                            'u' => $gcUrl,
+                            'i' => $gcImage,
+                            'd' => html_entity_decode(strip_tags($gcDesc), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                            'c' => $leafPayload,
+                        ];
+                    }
+                }
+                $lazyPayload = !$isActive ? [
+                    'banner' => $showIntro ? $childBanner : '',
+                    'bannerAlt' => $bannerAlt,
+                    'intro' => $showIntro
+                        ? html_entity_decode(strip_tags($childIntroDesc), ENT_QUOTES | ENT_HTML5, 'UTF-8')
+                        : '',
+                    'cards' => $lazyCards,
+                ] : null;
+                $lazyPayloadJson = $lazyPayload !== null
+                    ? (string)json_encode($lazyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                    : '';
                 ?>
                 <div class="mega-menu-panel<?= $isActive ? ' is-active' : '' ?>"
                      id="<?= $escAttr($contentId) ?>"
                      role="tabpanel"
                      data-mega-panel="<?= $escAttr($contentId) ?>"
                      aria-labelledby="<?= $escAttr($panelId . '-tab-' . $index) ?>"
-                     <?= $isActive ? '' : ' hidden' ?>>
+                     <?= $isActive ? '' : ' hidden' ?>
+                     <?= !$isActive ? ' data-mega-panel-lazy="1" data-mega-lazy-payload="' . $escAttr($lazyPayloadJson) . '"' : '' ?>>
                     <div class="mega-menu-panel__head">
                         <h3 class="mega-menu-panel__title"><?= $childTextHtml ?></h3>
                         <a class="mega-menu-panel__all" href="<?= $escAttr($childUrl) ?>"><?= __('查看全部') ?></a>
                     </div>
-                    <?php if ($showIntro): ?>
-                        <div class="mega-menu-panel__intro" data-testid="mega-menu-category-intro">
-                            <?php if ($childBanner !== ''): ?>
-                                <?php
-                                $bannerAltBase = $childTextPlain !== '' ? $childTextPlain : strip_tags($childTextHtml);
-                                $bannerAlt = trim($bannerAltBase . ' — ' . (string)__('汉服分类展示图'));
-                                ?>
-                                <div class="mega-menu-panel__banner">
-                                    <img src="<?= $escAttr($childBanner) ?>"
-                                         alt="<?= $escAttr($bannerAlt) ?>"
-                                         width="1500"
-                                         height="300"
-                                         loading="lazy"
-                                         decoding="async">
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($childIntroDesc !== ''): ?>
-                                <p class="mega-menu-panel__intro-desc"><?= $childIntroDesc ?></p>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                    <?php if ($hasGrandchildren): ?>
-                        <ul class="mega-menu-subgrid mega-menu-subgrid--cards" role="list">
-                            <?php foreach ($grandchildren as $gcIndex => $grandchild): ?>
-                                <?php
-                                if (!is_array($grandchild)) {
-                                    continue;
-                                }
-                                $gcTextHtml = $resolveName($grandchild);
-                                $gcUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($grandchild['url'] ?? '#'));
-                                if ($gcTextHtml === '') {
-                                    continue;
-                                }
-                                $gcImage = $resolveImage($grandchild, ($index + 1) * 17 + (int)$gcIndex);
-                                $gcDesc = $resolveDescription($grandchild, html_entity_decode(strip_tags($gcTextHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-                                $gcChildren = is_array($grandchild['children'] ?? null) ? $grandchild['children'] : [];
-                                $hasExpand = $gcChildren !== [];
-                                ?>
-                                <li class="mega-menu-card<?= $hasExpand ? ' has-expand is-expanded' : '' ?>"
-                                    <?= $hasExpand ? 'data-mega-card-expand="1"' : '' ?>>
-                                    <a class="mega-menu-card__link" href="<?= $escAttr($gcUrl) ?>">
-                                        <span class="mega-menu-card__media">
-                                            <img src="<?= $escAttr($gcImage) ?>"
-                                                 alt=""
-                                                 loading="lazy"
-                                                 width="72"
-                                                 height="72">
-                                        </span>
-                                        <span class="mega-menu-card__body">
-                                            <span class="mega-menu-card__title"><?= $gcTextHtml ?></span>
-                                            <span class="mega-menu-card__desc"><?= $gcDesc ?></span>
-                                        </span>
-                                    </a>
-                                    <?php if ($hasExpand): ?>
-                                        <ul class="mega-menu-card__children" role="list">
-                                            <?php foreach ($gcChildren as $leaf): ?>
-                                                <?php
-                                                if (!is_array($leaf)) {
-                                                    continue;
-                                                }
-                                                $leafTextHtml = $resolveName($leaf);
-                                                $leafUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($leaf['url'] ?? '#'));
-                                                if ($leafTextHtml === '') {
-                                                    continue;
-                                                }
-                                                ?>
-                                                <li>
-                                                    <a href="<?= $escAttr($leafUrl) ?>"><?= $leafTextHtml ?></a>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    <?php endif; ?>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
+                    <?php if ($isActive): ?>
+                        <?php if ($showIntro): ?>
+                            <div class="mega-menu-panel__intro" data-testid="mega-menu-category-intro">
+                                <?php if ($childBanner !== ''): ?>
+                                    <div class="mega-menu-panel__banner">
+                                        <img src="<?= $escAttr($childBanner) ?>"
+                                             alt="<?= $escAttr($bannerAlt) ?>"
+                                             width="1500"
+                                             height="300"
+                                             loading="lazy"
+                                             decoding="async">
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($childIntroDesc !== ''): ?>
+                                    <p class="mega-menu-panel__intro-desc"><?= $childIntroDesc ?></p>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($hasGrandchildren): ?>
+                            <ul class="mega-menu-subgrid mega-menu-subgrid--cards" role="list">
+                                <?php foreach ($grandchildren as $gcIndex => $grandchild): ?>
+                                    <?php
+                                    if (!is_array($grandchild)) {
+                                        continue;
+                                    }
+                                    $gcTextHtml = $resolveName($grandchild);
+                                    $gcUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($grandchild['url'] ?? '#'));
+                                    if ($gcTextHtml === '') {
+                                        continue;
+                                    }
+                                    $gcImage = $resolveImage($grandchild, ($index + 1) * 17 + (int)$gcIndex);
+                                    $gcDesc = $resolveDescription($grandchild, html_entity_decode(strip_tags($gcTextHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                                    $gcChildren = is_array($grandchild['children'] ?? null) ? $grandchild['children'] : [];
+                                    $hasExpand = $gcChildren !== [];
+                                    ?>
+                                    <li class="mega-menu-card<?= $hasExpand ? ' has-expand is-expanded' : '' ?>"
+                                        <?= $hasExpand ? 'data-mega-card-expand="1"' : '' ?>>
+                                        <a class="mega-menu-card__link" href="<?= $escAttr($gcUrl) ?>">
+                                            <span class="mega-menu-card__media">
+                                                <img src="<?= $escAttr($gcImage) ?>"
+                                                     alt=""
+                                                     loading="lazy"
+                                                     width="72"
+                                                     height="72">
+                                            </span>
+                                            <span class="mega-menu-card__body">
+                                                <span class="mega-menu-card__title"><?= $gcTextHtml ?></span>
+                                                <span class="mega-menu-card__desc"><?= $gcDesc ?></span>
+                                            </span>
+                                        </a>
+                                        <?php if ($hasExpand): ?>
+                                            <ul class="mega-menu-card__children" role="list">
+                                                <?php foreach ($gcChildren as $leaf): ?>
+                                                    <?php
+                                                    if (!is_array($leaf)) {
+                                                        continue;
+                                                    }
+                                                    $leafTextHtml = $resolveName($leaf);
+                                                    $leafUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($leaf['url'] ?? '#'));
+                                                    if ($leafTextHtml === '') {
+                                                        continue;
+                                                    }
+                                                    ?>
+                                                    <li>
+                                                        <a href="<?= $escAttr($leafUrl) ?>"><?= $leafTextHtml ?></a>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        <?php endif; ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>

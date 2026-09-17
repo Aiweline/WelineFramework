@@ -38,6 +38,14 @@ class Content extends FrontendController
         /** @var PreviewTokenService $previewTokenService */
         $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
         $tokenData = $previewTokenService->getCurrentPreviewData();
+        $editorModeFlag = \trim((string)$this->request->getParam('editor_mode', ''));
+        $isEditorMode = ($editorModeFlag === '1' || \strtolower($editorModeFlag) === 'true');
+        // Visual-editor iframe (editor_mode=1 + backend session) must not inherit a live
+        // storefront preview token left by #btnFrontendPreview / start-preview. That cookie
+        // blanks layout_type and forces token editor_context → context_mismatch / blank canvas.
+        if ($isEditorMode && $this->isBackendUserLoggedIn()) {
+            $tokenData = null;
+        }
         if (!\is_array($tokenData)) {
             if (!$this->isBackendUserLoggedIn()) {
                 throw new \RuntimeException((string)__('Theme 预览需要有效 Token 或后台登录状态。'));
@@ -74,8 +82,6 @@ class Content extends FrontendController
         $this->layoutType = $layoutType;
         // Preview draft correctness comes from status/layout payload + private no-store responses.
         // Do not force view file-path cold lookups on every iframe render (PROD path cache remains usable).
-        $editorModeFlag = \trim((string)$this->request->getParam('editor_mode', ''));
-        $isEditorMode = ($editorModeFlag === '1' || \strtolower($editorModeFlag) === 'true');
         $this->assign('editor_mode', $isEditorMode);
         $this->request->setGet('page_type', $layoutType);
         $this->request->setGet('layout_type', $layoutType);
@@ -108,7 +114,13 @@ class Content extends FrontendController
         $this->assign('layout_option', $layoutOption);
 
         $themePublicRoute = \trim(\str_replace('\\', '/', (string)$this->request->getParam('theme_public_route', '')), '/');
-        if ($themePublicRoute !== '') {
+        // Editor canvas must not inherit sample storefront routes on the content URL
+        // (avoids token / theme_scoped_preview_context_mismatch). Same as homepage:
+        // layout shell + LayoutSlotRenderer fills w:slot; no controller-body hydrate.
+        if ($isEditorMode) {
+            $themePublicRoute = '';
+            $this->request->setGet('theme_public_route', '');
+        } elseif ($themePublicRoute !== '') {
             $this->request->setGet('theme_public_route', $themePublicRoute);
             $this->assign('theme_public_route', $themePublicRoute);
         }
@@ -166,6 +178,7 @@ class Content extends FrontendController
                 $editorArea,
                 $scope,
                 $context,
+                $isEditorMode,
             ): string {
                 $hideProductChrome = $this->shouldHideProductLayoutChrome($layoutType);
 
@@ -193,14 +206,29 @@ class Content extends FrontendController
                     return $html;
                 }
 
-                $previewPayload = $previewContentRenderer->build(
-                    $themeId,
-                    $layoutType,
-                    $status,
-                    $versionId,
-                    [],
-                    $typedEditorContext,
-                );
+                // Editor keeps nested w:slot shells: prebuilt ContentRenderer HTML lacks those
+                // markers, so content must stay empty and LayoutSlotRenderer fills once.
+                // Do not run that discarded build() — it would claim request-memo gates (e.g.
+                // StoreMusic) then throw the HTML away. This is pipeline hygiene, NOT a
+                // preview-only skip of Hook/widget storefront delivery.
+                if ($isEditorMode) {
+                    $previewPayload = [
+                        'content' => '',
+                        'meta' => [],
+                        'page_type' => $layoutType,
+                        'status' => $status,
+                        'used_seed' => false,
+                    ];
+                } else {
+                    $previewPayload = $previewContentRenderer->build(
+                        $themeId,
+                        $layoutType,
+                        $status,
+                        $versionId,
+                        [],
+                        $typedEditorContext,
+                    );
+                }
                 $layoutMeta = $this->resolveLayoutMetaForPreview(
                     $themeId,
                     $layoutType,
@@ -221,7 +249,14 @@ class Content extends FrontendController
                     $scope,
                 );
                 $targetPreviewMeta = $this->buildTargetPreviewMeta($targetPreviewPayload);
-                $this->assign('content', $previewPayload['content']);
+                // Editor iframe must keep homepage nested w:slot shells (homepage-brands, …).
+                // Prebuilt ThemePreviewContentRenderer HTML has widget wrappers but not those
+                // slot markers; assigning it as content makes meta.content replace the shells
+                // when layout fetch drops editor_mode / theme_preview_content flags.
+                $this->assign(
+                    'content',
+                    $isEditorMode ? '' : (string)($previewPayload['content'] ?? ''),
+                );
                 $this->assign('target_preview_payload', $targetPreviewPayload ?: []);
                 $mergedMeta = \array_merge([
                     'showHeader' => true,
@@ -233,6 +268,12 @@ class Content extends FrontendController
                     'showNews' => true,
                     'showPartners' => true,
                 ], $previewPayload['meta'], $layoutMeta, $targetPreviewMeta);
+                // Editor iframe must keep nested w:slot shells (homepage-brands, …).
+                // Wipe meta.content so LayoutSlotRenderer fills once — same as homepage.
+                // Canvas iframe should load the real storefront route (not hydrate here).
+                if ($isEditorMode) {
+                    unset($mergedMeta['content']);
+                }
                 $this->assign('meta', $mergedMeta);
 
                 $html = (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
@@ -329,11 +370,17 @@ class Content extends FrontendController
         /** @var PreviewTokenService $tokens */
         $tokens = ObjectManager::getInstance(PreviewTokenService::class);
         $tokenData = $tokens->getCurrentPreviewData();
-        $tokenContext = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
-        $tokenRaw = $tokenContext['editor_context'] ?? null;
-
-        if (\is_array($tokenRaw)) {
-            $raw = $tokenRaw;
+        $editorModeFlag = \trim((string)$this->request->getParam('editor_mode', ''));
+        $isEditorMode = ($editorModeFlag === '1' || \strtolower($editorModeFlag) === 'true');
+        // Prefer request-typed context for logged-in editor canvas; token context is for live storefront preview.
+        if (!($isEditorMode && $this->isBackendUserLoggedIn())) {
+            $tokenContext = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
+            $tokenRaw = $tokenContext['editor_context'] ?? null;
+            if (\is_array($tokenRaw)) {
+                $raw = $tokenRaw;
+            } elseif ($raw !== null && $raw !== '') {
+                $this->assertBackendScopePreviewAllowed();
+            }
         } elseif ($raw !== null && $raw !== '') {
             $this->assertBackendScopePreviewAllowed();
         }

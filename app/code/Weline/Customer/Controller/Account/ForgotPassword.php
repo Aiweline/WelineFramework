@@ -12,7 +12,7 @@ use Weline\Framework\View\Template;
 
 class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account.auth';
+    protected ?string $layoutType = 'account/forgot-password';
 
     public function __construct(
         private readonly Template $template,

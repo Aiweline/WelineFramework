@@ -16,7 +16,7 @@ use Weline\Framework\Runtime\DeveloperAccessPolicy;
  */
 class VisitorPanelBootstrapHtmlService
 {
-    private const PANEL_SCRIPT_VERSION = '20260911-event-sandbox-monitor9';
+    private const PANEL_SCRIPT_VERSION = '20260916-event-sandbox-monitor10';
 
     public function shouldInject(): bool
     {

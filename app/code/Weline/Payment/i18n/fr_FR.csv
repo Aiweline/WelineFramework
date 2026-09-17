@@ -55,6 +55,10 @@ PayPal,PayPal
 "Weline_Payment payment method registry and checkout availability provider.","Weline_Payment payment method registry and checkout availability provider."
 "显式后台目标 scope；可使用 global 或完整 website.store.channel","显式后台目标 scope；可使用 global 或完整 website.store.channel"
 读取/预览返回的对象授权版本；提交前必须保持一致,读取/预览返回的对象授权版本；提交前必须保持一致
+"已检测到 PayPal 已启用或 Live Client。","已检测到 PayPal 已启用或 Live Client。"
+"沙盒连通后切 Live；迁站核对 return/cancel/webhook。","沙盒连通后切 Live；迁站核对 return/cancel/webhook。"
+支付,支付
+"PayPal 收款","PayPal 收款"
 支付方式指南,支付方式指南
 查看各支付供应商的客户支付指南与支付政策。,查看各支付供应商的客户支付指南与支付政策。
 "仅本地可查询静默 worker 状态。","仅本地可查询静默 worker 状态。"
@@ -146,6 +150,9 @@ settings,settings
 支付成功,支付成功
 支付待处理,支付待处理
 支付处理中,支付处理中
+使用支付商账户直接付款，地址可由支付商带回,"Payez avec votre compte prestataire ; l’adresse peut être renvoyée par le prestataire"
+更多支付说明,"Plus d'infos sur le paiement"
+"使用 %{1} 快捷支付","Paiement express avec %{1}"
 "DevRelay 中继","DevRelay 中继"
 "左：SSE 日志 · 右：发送","左：SSE 日志 · 右：发送"
 "SSE 实时详情","SSE 实时详情"
@@ -294,8 +301,6 @@ More,More
 "【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。"
 返回首页,返回首页
 或使用下方结账,或使用下方结账
-"使用 %{1} 快捷支付","Paiement express avec %{1}"
-使用支付商账户直接付款，地址可由支付商带回,"Payez avec votre compte prestataire ; l’adresse peut être renvoyée par le prestataire"
 失败率,失败率
 "优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径","优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径"
 未完成支付,未完成支付

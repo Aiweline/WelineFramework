@@ -48,6 +48,7 @@ final class CheckoutFaultSnapshotContractTest extends TestCase
         self::assertStringContainsString('schema_fields_CHECKOUT_ENTRY', $ctrl);
         self::assertStringContainsString('checkout-session-entry-filter', $tpl);
         self::assertStringContainsString('checkout-session-entry', $tpl);
+        self::assertStringContainsString('data-w-width="auto"', $tpl);
         self::assertStringNotContainsString('weline_checkout_fault_snapshot', $ctrl);
     }
 

@@ -20,10 +20,10 @@ $requestPath = strtolower((string)(is_string($requestPathParsed) && $requestPath
 $isAccountRoute = $requestPath === '/customer/account'
     || $requestPath === 'customer/account'
     || str_contains($requestPath, '/customer/account/');
-$isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
-    || (string)$this->request->getGet('preview', '') === '1'
-    || str_contains($requestPath, 'workspace-preview');
-if ($isAccountRoute || $isWorkspacePreview) {
+// Account routes skip the float on publish AND preview (same business rule).
+// FORBIDDEN: preview-only / visual_editor / workspace-preview early-return
+// (preview_storefront_delivery_parity — preview must run the same Hook path).
+if ($isAccountRoute) {
     return;
 }
 
@@ -93,6 +93,7 @@ $modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_Custome
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
             <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
         </svg>
+        <span class="cs-presence-dot" id="cs-presence-dot" hidden aria-hidden="true"></span>
         <span class="cs-badge" id="cs-unread-badge" style="display: none;">0</span>
     </div>
 
@@ -367,16 +368,13 @@ function initCustomerServiceWidget() {
             });
     }
 
+    // 等网页完整 load 后再延迟 3s 加载，避免与正文抢带宽/主线程。
+    var CS_POST_LOAD_DELAY_MS = 3000;
+
     function scheduleCustomerServiceWidget() {
-        if ('requestIdleCallback' in window) {
-            window.requestIdleCallback(function () {
-                loadCustomerServiceWidget(false);
-            }, { timeout: 6000 });
-            return;
-        }
-        setTimeout(function () {
+        window.setTimeout(function () {
             loadCustomerServiceWidget(false);
-        }, 3000);
+        }, CS_POST_LOAD_DELAY_MS);
     }
 
     window.__WelineLoadCustomerServiceWidget = loadCustomerServiceWidget;

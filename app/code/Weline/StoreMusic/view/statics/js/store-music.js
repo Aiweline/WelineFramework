@@ -10,6 +10,28 @@
     var CHANNEL_NAME = 'weline.storeMusic.audio.' + PAGE_HOST;
     var TAB_ID = 't' + String(Date.now()) + '-' + String(Math.random()).slice(2, 8);
     var ORIGIN_TAB_TTL_MS = 15000;
+    // Peer-leader / solo-resume: census rows older than this are dying-refresh leftovers
+    // (origin watch heartbeats every 1s; real background BGM stays fresh).
+    var PEER_CENSUS_FRESH_MS = 3500;
+    // After this long without audible progress, soft resume (focus/peer) must not surprise-play.
+    var SOFT_RESUME_IDLE_MS = 90000;
+    // Polar spectrum bars around the avatar (frequency bins → height, not concentric rings).
+    var SPECTRUM_BAR_COUNT = 48;
+
+    function currentStoreMusicEpoch() {
+        return Number(global.__WelineStoreMusicEpoch) || 0;
+    }
+
+    /** Bump on every boot so a dying document's leaveHammer cannot purge the successor. */
+    function bumpStoreMusicEpoch() {
+        global.__WelineStoreMusicEpoch = currentStoreMusicEpoch() + 1;
+        return global.__WelineStoreMusicEpoch;
+    }
+
+    function isFreshPeerCensusRow(row, now) {
+        var at = row && Number(row.at) ? Number(row.at) : 0;
+        return !!(at && ((now || Date.now()) - at) < PEER_CENSUS_FRESH_MS);
+    }
 
     function audioRegistry() {
         if (!global.__WelineStoreMusicAudioRegistry) {
@@ -18,9 +40,77 @@
         return global.__WelineStoreMusicAudioRegistry;
     }
 
+    function nextPlayGeneration() {
+        global.__WelineStoreMusicPlayGen = (Number(global.__WelineStoreMusicPlayGen) || 0) + 1;
+        return global.__WelineStoreMusicPlayGen;
+    }
+
+    function currentPlayGeneration() {
+        return Number(global.__WelineStoreMusicPlayGen) || 0;
+    }
+
+    /**
+     * Process-wide MediaElement singleton. Track switches MUST reuse this element
+     * (only change src) — creating new Audio() each time left orphan decoders audible.
+     */
+    function getSharedAudioSingleton() {
+        var existing = global.__WelineStoreMusicSharedAudio;
+        if (existing && existing.__welineStoreMusicDestroyed) {
+            existing = null;
+            global.__WelineStoreMusicSharedAudio = null;
+        }
+        if (!existing) {
+            existing = new Audio();
+            existing.preload = 'auto';
+            try {
+                existing.setAttribute('data-store-music-audio', '1');
+            } catch (eMark) {
+                // ignore
+            }
+            existing.__welineStoreMusicSingleton = true;
+            global.__WelineStoreMusicSharedAudio = existing;
+        }
+        registerStoreAudio(existing);
+        return existing;
+    }
+
+    /** Close shared WebAudio graph and brick the old MediaElement (only on hard leave). */
+    function destroySharedAudioGraph() {
+        var ctx = global.__WelineStoreMusicSharedCtx;
+        if (ctx && typeof ctx.close === 'function') {
+            try {
+                ctx.close();
+            } catch (eClose) {
+                // ignore
+            }
+        }
+        global.__WelineStoreMusicSharedCtx = null;
+        global.__WelineStoreMusicSharedAnalyser = null;
+        global.__WelineStoreMusicSharedSource = null;
+        var audio = global.__WelineStoreMusicSharedAudio;
+        if (audio) {
+            silenceMediaElement(audio);
+            try {
+                audio.__welineMediaGraphBound = false;
+                audio.__welineStoreMusicDestroyed = true;
+            } catch (eFlag) {
+                // ignore
+            }
+            global.__WelineStoreMusicSharedAudio = null;
+            global.__WelineStoreMusicAudioRegistry = audioRegistry().filter(function (a) {
+                return a && a !== audio && !a.__welineStoreMusicDestroyed;
+            });
+        }
+    }
+
     function registerStoreAudio(audio) {
-        if (!audio) {
+        if (!audio || audio.__welineStoreMusicDestroyed) {
             return;
+        }
+        try {
+            audio.setAttribute('data-store-music-audio', '1');
+        } catch (eMark) {
+            // ignore
         }
         var list = audioRegistry();
         if (list.indexOf(audio) === -1) {
@@ -28,13 +118,42 @@
         }
     }
 
+    function isStoreMusicMedia(el) {
+        if (!el) {
+            return false;
+        }
+        if (el.__welineStoreMusicOwner || el.__welineStoreMusicBound) {
+            return true;
+        }
+        try {
+            if (el.getAttribute && (el.getAttribute('data-store-music-src') != null
+                || el.getAttribute('data-store-music-audio') === '1')) {
+                return true;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return false;
+    }
+
     /**
      * Silence every MediaElement in this browsing context except optional keep.
      * Prevents 高山流水+孤城 (or zombie Audio) dual-play when switching tracks.
+     * Only touches StoreMusic-owned media — never product / CMS <video>.
      */
     function silenceMediaElement(el) {
         if (!el) {
             return;
+        }
+        try {
+            el.muted = true;
+        } catch (eMute) {
+            // ignore
+        }
+        try {
+            el.volume = 0;
+        } catch (eVol) {
+            // ignore
         }
         try {
             el.pause();
@@ -59,10 +178,17 @@
             }
         }
         try {
-            var nodes = document.querySelectorAll('audio, video');
+            var nodes = document.querySelectorAll('audio[data-store-music-audio], audio[data-store-music-src], video[data-store-music-audio]');
             for (var j = 0; j < nodes.length; j++) {
                 if (nodes[j] !== keep) {
                     silenceMediaElement(nodes[j]);
+                }
+            }
+            // Also catch owner-tagged nodes missing attributes (legacy mounts).
+            var allAv = document.querySelectorAll('audio, video');
+            for (var k = 0; k < allAv.length; k++) {
+                if (allAv[k] !== keep && isStoreMusicMedia(allAv[k])) {
+                    silenceMediaElement(allAv[k]);
                 }
             }
         } catch (e3) {
@@ -85,12 +211,105 @@
         }
     }
 
+    /**
+     * Sole audible StoreMusic source in THIS document. Call on every play start.
+     */
+    function enforceSoleAudibleSource(keep) {
+        if (!keep) {
+            killRivalAudioElements(null);
+            return;
+        }
+        killRivalAudioElements(keep);
+        try {
+            if (!keep.paused && keep !== global.__WelineStoreMusicSharedAudio) {
+                global.__WelineStoreMusicSharedAudio = keep;
+            }
+        } catch (e) {
+            global.__WelineStoreMusicSharedAudio = keep;
+        }
+    }
+
+    /**
+     * Silence StoreMusic MediaElements + shared graph without clearing Live ownership.
+     * Dying leaveHammer / orphan ticks must use this so a refresh successor keeps its Live.
+     */
+    function silenceAllStoreMusicAudio() {
+        nextPlayGeneration();
+        try {
+            if (global.navigator && global.navigator.mediaSession) {
+                global.navigator.mediaSession.playbackState = 'none';
+                try {
+                    global.navigator.mediaSession.metadata = null;
+                } catch (eMeta) {
+                    // ignore
+                }
+            }
+        } catch (eMs) {
+            // ignore
+        }
+        destroySharedAudioGraph();
+        killRivalAudioElements(null);
+        try {
+            var nodes = document.querySelectorAll('audio, video');
+            for (var i = 0; i < nodes.length; i++) {
+                var el = nodes[i];
+                var src = '';
+                try {
+                    src = String(el.currentSrc || el.src || '')
+                        + String(el.getAttribute('data-store-music-src') || '')
+                        + String(el.getAttribute('src') || '');
+                } catch (eSrc) {
+                    src = '';
+                }
+                if (
+                    isStoreMusicMedia(el)
+                    || src.indexOf('store-music') !== -1
+                    || (el.getAttribute && el.getAttribute('data-store-music-audio') === '1')
+                ) {
+                    silenceMediaElement(el);
+                }
+            }
+        } catch (eDom) {
+            // ignore
+        }
+        global.__WelineStoreMusicAudioRegistry = [];
+        global.__WelineStoreMusicSharedAudio = null;
+        global.__WelineStoreMusicSharedCtx = null;
+        global.__WelineStoreMusicSharedAnalyser = null;
+        global.__WelineStoreMusicSharedSource = null;
+    }
+
+    /**
+     * Nuclear purge: silence everything and drop Live pointer.
+     * Only boot / script evaluate / bfcache cold restore — never leaveHammer.
+     */
+    function purgeAllStoreMusicAudio() {
+        silenceAllStoreMusicAudio();
+        global.__WelineStoreMusicLive = null;
+    }
+
     function parseConfig(root) {
         try {
             return JSON.parse(root.getAttribute('data-store-music-config') || '{}') || {};
         } catch (e) {
             return {};
         }
+    }
+
+    /** Cursor / VS Code / Electron guest — pagehide often skipped; AudioService can outlive the UI. */
+    function isEmbeddedBrowserHost() {
+        try {
+            var ua = String((global.navigator && global.navigator.userAgent) || '');
+            if (/Electron|Cursor|VSCode|Code\/\d/i.test(ua)) {
+                return true;
+            }
+            if (global.process && global.process.versions && global.process.versions.electron) {
+                return true;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return false;
     }
 
     function prefersReducedMotion() {
@@ -234,34 +453,76 @@
     }
 
     /**
-     * Prefer IndexedDB blob; otherwise fetch once, cache, then play via object URL.
-     * Falls back to the original URL if fetch/IDB fails.
+     * Resolve playable src for progressive HTTP streaming (Accept-Ranges).
+     * Online default: network URL so the browser can Range-buffer and start play()
+     * before the whole file is downloaded.
+     * preferCache (F5 sticky resume): try IndexedDB blob first for instant local play.
+     * Offline: fall back to IndexedDB blob when available.
+     * Full-file IDB warm happens later in the background — never before first play.
      */
-    function resolveMediaSrc(url) {
-        return idbGetAudio(url).then(function (cached) {
-            if (cached) {
-                return {
-                    src: URL.createObjectURL(cached),
-                    cached: true
-                };
+    function resolveMediaSrc(url, preferCache) {
+        var key = normalizeTrackUrl(url) || String(url || '');
+        var online = typeof navigator === 'undefined' || navigator.onLine !== false;
+        var fromIdb = function () {
+            return idbGetAudio(key).then(function (cached) {
+                if (cached) {
+                    return {
+                        src: URL.createObjectURL(cached),
+                        cached: true,
+                        stream: false
+                    };
+                }
+                return null;
+            }).catch(function () {
+                return null;
+            });
+        };
+        if (preferCache && global.indexedDB) {
+            return fromIdb().then(function (hit) {
+                if (hit) {
+                    return hit;
+                }
+                return { src: url, cached: false, stream: true };
+            });
+        }
+        if (online) {
+            return Promise.resolve({ src: url, cached: false, stream: true });
+        }
+        return fromIdb().then(function (hit) {
+            return hit || { src: url, cached: false, stream: true };
+        });
+    }
+
+    /**
+     * Background full-file cache into IndexedDB (never blocks play()).
+     * Must not race the first progressive stream — call only after audible start / idle.
+     */
+    function warmIdbAudio(key, fetchUrl) {
+        var storeKey = key || normalizeTrackUrl(fetchUrl) || String(fetchUrl || '');
+        var networkUrl = fetchUrl || storeKey;
+        if (!storeKey || !networkUrl || !global.fetch || !global.indexedDB) {
+            return;
+        }
+        // Do NOT await fetch().blob() on the play path — that waited for the whole MP3/M4A.
+        idbGetAudio(storeKey).then(function (hit) {
+            if (hit) {
+                return null;
             }
-            return global.fetch(url, {
+            return global.fetch(networkUrl, {
                 credentials: 'same-origin',
                 cache: 'force-cache'
             }).then(function (res) {
                 if (!res.ok) {
-                    throw new Error('audio fetch ' + res.status);
+                    return null;
                 }
                 return res.blob();
             }).then(function (blob) {
-                idbPutAudio(url, blob);
-                return {
-                    src: URL.createObjectURL(blob),
-                    cached: false
-                };
-            }).catch(function () {
-                return { src: url, cached: false };
+                if (blob) {
+                    return idbPutAudio(storeKey, blob);
+                }
             });
+        }).catch(function () {
+            // Soft.
         });
     }
 
@@ -376,9 +637,30 @@
             return Promise.resolve();
         }
         return new Promise(function (resolve) {
-            global.addEventListener('load', function () {
+            var done = false;
+            var finish = function () {
+                if (done) {
+                    return;
+                }
+                done = true;
                 resolve();
-            }, { once: true });
+            };
+            global.addEventListener('load', finish, { once: true });
+            // Race: load can fire between the readyState check and addEventListener
+            // (cached pages / fast assets). Without this re-check, scheduleStart hangs forever
+            // → 进店永远不自动播，只剩「点击开启音乐」.
+            if (document.readyState === 'complete') {
+                finish();
+            } else {
+                document.addEventListener('readystatechange', function onRs() {
+                    if (document.readyState === 'complete') {
+                        document.removeEventListener('readystatechange', onRs);
+                        finish();
+                    }
+                });
+            }
+            // Hard ceiling: never leave 进店 autoplay hung on a missed load forever.
+            global.setTimeout(finish, 5000);
         });
     }
 
@@ -462,15 +744,24 @@
         this.waveFailed = false;
         this.waveMode = 'analyser'; // analyser | soft
         this.raf = 0;
+        this._avatarLevel = 0;
+        this.spectrumEl = null;
+        this._spectrumBars = [];
+        this._spectrumSmooth = [];
         this.panelOpen = false;
         this.needGesture = false;
         this.isLeader = false;
+        // Remote state is UI-only. It must never be treated as local audio ownership.
+        this.remotePlaying = false;
+        this.remoteOwnerTabId = '';
+        this.remoteStateAt = 0;
         this.channel = null;
         this._progressTimer = 0;
         this._pendingSeek = null;
         this._lastGoodProgressTime = 0;
         this._blobUrl = null;
         this._loadToken = 0;
+        this._playGen = 0;
         this._leaderBeat = 0;
         this._leaderClaimedAt = 0;
         this._lastUserActionAt = 0;
@@ -484,22 +775,42 @@
         this._scheduleGen = 0;
         this._scheduleInFlight = false;
         this._peerRetryArmed = false;
+        this._ignorePeerOnce = false;
+        /** F5 / bfcache restore: ignore dying predecessor peer lock until play succeeds or we give up. */
+        this._navResumeActive = false;
+        // Same-document natural end (loop off): block soft resume without sticky user_stopped.
+        this._naturalEnded = false;
         // Document lifecycle: leave-page sets false so residual webviews cannot keep decoding.
         this._docAlive = true;
         this._tearingDown = false;
+        this._bfcacheParked = false;
         // Only continue while hidden if we already started audibly while this document was visible.
         // Prevents prerender/zombie/hidden restores from autoplaying with no open tab UI.
         this._heardWhileVisible = false;
+        this._lastAudibleAt = 0;
+        this._epoch = currentStoreMusicEpoch();
+        this._bootedAt = Date.now();
         this._ghostWatch = 0;
         this._orphanWatch = 0;
         this._leaveHammer = 0;
         this._originTabWatch = 0;
+        this._soleSourceWatch = 0;
         this._audioMutating = false;
         this._collapsedHits = 0;
 
         this.waveCanvas = document.querySelector('[data-store-music-wave]');
         this.mascot = root.querySelector('[data-testid="store-music-mascot"]')
             || root.querySelector('[data-store-music-toggle]');
+        // One live controller per browsing context — prior instance must not keep decoding.
+        if (global.__WelineStoreMusicLive && global.__WelineStoreMusicLive !== this) {
+            try {
+                global.__WelineStoreMusicLive.hardSilenceMedia(false);
+                global.__WelineStoreMusicLive.syncPlayingUi(false);
+            } catch (eLive) {
+                // ignore
+            }
+        }
+        global.__WelineStoreMusicLive = this;
         this.toggleBtns = root.querySelectorAll('[data-store-music-toggle]');
         this.hint = root.querySelector('[data-store-music-hint]');
         this.panel = root.querySelector('[data-store-music-panel]');
@@ -516,22 +827,49 @@
         this.waveLabel = root.querySelector('[data-store-music-wave-label]');
         this.titleEl = root.querySelector('[data-store-music-title]');
         this.introEl = root.querySelector('[data-store-music-intro]');
+        this.introWrap = root.querySelector('[data-store-music-intro-wrap]');
+        this.introToggle = root.querySelector('[data-store-music-intro-toggle]');
         this.playlistEl = root.querySelector('[data-store-music-playlist]');
         this.compartmentEl = root.querySelector('[data-store-music-compartment]');
+        this.searchInput = root.querySelector('[data-store-music-search]');
+        this.searchEmptyEl = root.querySelector('[data-store-music-search-empty]');
+        this.playlistFilter = '';
+        this.spectrumEl = root.querySelector('[data-store-music-spectrum]');
+        this.ensureSpectrumBars();
 
-        // Soft ambiance default; one-time migrate away from stale loud local prefs.
+        // Admin: optional vinyl spin (default off). Playing uses polar spectrum rings.
+        var avatarSpin = this.cfg.avatar_spin === true
+            || this.cfg.avatar_spin === 1
+            || this.cfg.avatar_spin === '1';
+        root.classList.toggle('is-avatar-spin', !!avatarSpin);
+
+        // Volume: remember user choice in localStorage. One-shot migrate only loud leftovers
+        // from the pre-quiet era — never re-clamp on every boot (that wiped 用户音量).
         var volDefault = Number(this.cfg.default_volume);
         if (!Number.isFinite(volDefault) || volDefault < 0) {
-            volDefault = 12;
+            volDefault = 8;
         }
-        if (!readPref(root, 'vol_soft_migrated', false)) {
-            writePref(root, 'volume', volDefault);
+        volDefault = Math.max(0, Math.min(100, Math.round(volDefault)));
+        var volUserSet = !!readPref(root, 'volume_user', false);
+        if (!volUserSet && !readPref(root, 'vol_remember_v47', false)) {
+            var legacyVol = readPref(root, 'volume', null);
+            var legacyNum = legacyVol === null || legacyVol === undefined || legacyVol === ''
+                ? NaN
+                : Number(legacyVol);
+            // Old installs often stuck at 30–100; soften once if the user never touched the slider.
+            if (Number.isFinite(legacyNum) && legacyNum > 40) {
+                writePref(root, 'volume', volDefault);
+            }
+            writePref(root, 'vol_remember_v47', '1');
+            writePref(root, 'vol_quiet_v42b', '1');
+            writePref(root, 'vol_quiet_v42', '1');
             writePref(root, 'vol_soft_migrated', '1');
         }
         var volPref = readPref(root, 'volume', volDefault);
         if (!Number.isFinite(Number(volPref))) {
             volPref = volDefault;
         }
+        volPref = Math.max(0, Math.min(100, Math.round(Number(volPref))));
         if (this.volume) {
             this.volume.value = String(volPref);
             this.syncVolumePct(volPref);
@@ -551,7 +889,8 @@
         this.bind();
         this.bindConsentAutoplayRetry();
         this.syncHintVisibility();
-        this.warmAudioCache();
+        // Progressive stream first — do not fetch whole playlist into IDB on boot.
+        this.armDeferredAudioCacheWarm();
         this.startOriginTabWatch();
         // Hidden/prerender boot must not autoplay (Cursor may keep detached webviews).
         if (document.visibilityState === 'hidden') {
@@ -584,6 +923,33 @@
 
     StoreMusic.prototype.setUserStopped = function (on) {
         writePref(this.root, 'user_stopped', on ? '1' : '0');
+    };
+
+    /**
+     * 1.1.28 natural-end wrote user_stopped=1 (same as ❚❚), killing 进店 try_autoplay
+     * and playlist advance via soft tryPlay / play-event guards. One-shot clear for
+     * non-dismissed sessions; real ❚❚ still works within the same visit after user presses it.
+     */
+    StoreMusic.prototype.migrateNaturalEndStopPoison = function () {
+        if (readPref(this.root, 'stop_semantics', '') === '1.1.29') {
+            return false;
+        }
+        writePref(this.root, 'stop_semantics', '1.1.29');
+        if (this.isDismissed()) {
+            return false;
+        }
+        if (!this.isUserStopped()) {
+            return false;
+        }
+        this.setUserStopped(false);
+        if (this.playIntent() === 'stop') {
+            try {
+                global.localStorage.removeItem(storageKey(this.root, 'want_play'));
+            } catch (e) {
+                writePref(this.root, 'want_play', '');
+            }
+        }
+        return true;
     };
 
     StoreMusic.prototype.wantsPlay = function () {
@@ -652,10 +1018,12 @@
             }
         }
         var t = Number(snap.time);
-        // Resume unfinished position (not only >1s) so page switches feel continuous.
-        if (Number.isFinite(t) && t >= 0.25) {
+        // Remember position even for short seeks so refresh / 再点 ▶ 能接上。
+        if (Number.isFinite(t) && t >= 0) {
             this._pendingSeek = t;
-            this._lastGoodProgressTime = t;
+            if (t >= 0.25) {
+                this._lastGoodProgressTime = t;
+            }
         }
         return restored;
     };
@@ -694,6 +1062,25 @@
         });
     };
 
+    /** Persist slider volume and mark it as an explicit user choice (never re-migrate over). */
+    StoreMusic.prototype.persistVolumePref = function (value) {
+        var v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+        writePref(this.root, 'volume', v);
+        writePref(this.root, 'volume_user', '1');
+        this.syncVolumePct(v);
+        if (this.volume && String(this.volume.value) !== String(v)) {
+            this.volume.value = String(v);
+        }
+        if (this.audio && (this.isLeader || !this.audio.paused)) {
+            try {
+                this.audio.volume = Math.max(0, Math.min(1, v / 100));
+            } catch (e) {
+                // ignore
+            }
+        }
+        return v;
+    };
+
     StoreMusic.prototype.saveProgress = function () {
         var track = this.currentTrack();
         if (!track) {
@@ -720,6 +1107,10 @@
             t = Number(this._lastGoodProgressTime);
         }
         this.persistSelection(t);
+        // Keep cross-page audible clock fresh so F5 sticky resume is not expired.
+        if (this.audio && !this.audio.paused) {
+            this.touchAudible();
+        }
     };
 
     StoreMusic.prototype.bindChannel = function () {
@@ -751,6 +1142,7 @@
                         self.hardSilenceMedia(true);
                         self.killAllPageAudio();
                         self.syncPlayingUi(false);
+                        self.syncRemotePlayingUi(false);
                         return;
                     }
                     if (msg.type === 'tab_dead') {
@@ -759,6 +1151,7 @@
                                 self.hardSilenceMedia(true);
                                 self.killAllPageAudio();
                                 self.syncPlayingUi(false);
+                                self.syncRemotePlayingUi(false);
                             }
                         }, 80);
                     }
@@ -785,6 +1178,8 @@
                                 if (owningPlay && self.canAudiblyStart(true) && self.playIntent() === 'play') {
                                     self.claimLeadership(true);
                                     self.reconcileAudibleSelection(false);
+                                } else if (!owningPlay) {
+                                    self.syncRemotePlayingUi(true, msg);
                                 }
                                 setStatus(self.root, '');
                                 return;
@@ -807,6 +1202,7 @@
                         return;
                     }
                     if (msg.type === 'released') {
+                        self.syncRemotePlayingUi(false, msg);
                         self.maybeResumeAfterPeerRelease();
                         return;
                     }
@@ -819,6 +1215,7 @@
                         if (msg.url || msg.index != null) {
                             self.applyRemoteSelection(msg);
                         }
+                        self.syncRemotePlayingUi(msg.type === 'force_stop' && msg.playing === true, msg);
                         if (msg.clearWantPlay || !self.shouldShowOtherTabStatus()) {
                             setStatus(self.root, '');
                         } else {
@@ -911,19 +1308,33 @@
         });
 
         var onLeave = function (ev) {
+            // Snapshot + latch BEFORE any silence so F5 successor can sticky-resume.
             self.saveProgress();
-            // bfcache (Chrome back/forward, many in-site navigations): keep the MediaElement
-            // alive like YouTube — hard tearDown would stop audio and force a cold restart.
+            if (self.isAudibleOwner()) {
+                self.armNavResumeLatch();
+            }
+            // bfcache (back/forward): keep the MediaElement shell, but NEVER keep decoding.
+            // Old behavior left audio running after the last domain tab was gone / navigated away.
             if (ev && ev.type === 'pagehide' && ev.persisted) {
-                self.stopLeaderHeartbeat();
-                self.stopOriginTabWatch();
-                self.stopGhostWatch();
-                self.stopOrphanWatch();
-                // Stay in census as hidden so a soft-loaded peer does not think the domain is empty.
-                self.touchOriginTab();
+                self.parkForBfcache();
                 return;
             }
-            // Hard leave / full refresh: document will be destroyed — drop census + silence.
+            // Hard leave / full refresh: mark dying in census BEFORE drop so a successor
+            // that boots mid-teardown does not treat this tab as a live peer leader.
+            try {
+                var dyingMap = self.readOriginTabs();
+                if (dyingMap[TAB_ID]) {
+                    dyingMap[TAB_ID] = {
+                        at: 0,
+                        host: PAGE_HOST,
+                        visible: false,
+                        dying: true
+                    };
+                    self.writeOriginTabs(dyingMap);
+                }
+            } catch (eDying) {
+                // ignore
+            }
             self.dropOriginTab();
             // Do NOT broadcastForceStop here. A refresh successor often boots within ~200ms;
             // a late force_stop from the dying document would silence the new page mid-resume.
@@ -934,8 +1345,31 @@
         // Prefer pagehide; beforeunload/unload are backup for hosts that skip pagehide.
         global.addEventListener('pagehide', onLeave, true);
         global.addEventListener('beforeunload', function (ev) {
-            // beforeunload is not bfcache-safe — only snapshot progress; pagehide does teardown.
+            // beforeunload is not bfcache-safe — snapshot + latch; pagehide does teardown.
             self.saveProgress();
+            if (self.isAudibleOwner()) {
+                self.armNavResumeLatch();
+            }
+            // Last-tab close may skip pagehide — emergency pause only then. F5 reload always
+            // gets pagehide tearDown; pausing here added a race that blocked sticky resume.
+            var navType = '';
+            try {
+                var navEntries = performance.getEntriesByType('navigation');
+                navType = navEntries && navEntries[0] ? String(navEntries[0].type || '') : '';
+            } catch (eNavType) {
+                navType = '';
+            }
+            if (navType === 'reload') {
+                return;
+            }
+            try {
+                self.clearMediaSession();
+                if (self.audio && !self.audio.paused) {
+                    self.audio.pause();
+                }
+            } catch (eBefore) {
+                // ignore
+            }
         }, true);
         global.addEventListener('unload', function (ev) {
             self.saveProgress();
@@ -949,6 +1383,19 @@
             }, true);
         }
         self.bindMediaSessionStopHandlers();
+        // Cursor/Electron: panel close may skip pagehide+visibilitychange — blur + size check.
+        if (isEmbeddedBrowserHost()) {
+            global.addEventListener('blur', function () {
+                global.setTimeout(function () {
+                    if (!self._docAlive || !self.audio || self.audio.paused) {
+                        return;
+                    }
+                    if (self.isCollapsedDetachedView() || (self.root && !self.root.isConnected)) {
+                        self.tearDownForLeave('host-detached');
+                    }
+                }, 50);
+            }, true);
+        }
         global.addEventListener('pageshow', function (ev) {
             self.stopLeaveHammer();
             self.stopOrphanWatch();
@@ -958,8 +1405,12 @@
             self.startGhostWatch();
             self.startOriginTabWatch();
             self.touchOriginTab();
-            // bfcache restore: MediaElement often still playing — reclaim lock, do not remount@0.
+            // bfcache restore: we parked (silenced) on pagehide.persisted — reclaim + resume,
+            // do not remount@0 when the element somehow still holds the same track.
             if (ev && ev.persisted) {
+                self._bfcacheParked = false;
+                self.touchOriginTab();
+                self.beginNavResumeBypass();
                 if (self.audio && !self.audio.paused) {
                     self.markHeardWhileVisible();
                     self.setWantPlay(true);
@@ -992,14 +1443,66 @@
     };
 
     /**
+     * Entering bfcache: stop all audible output and leave the domain census.
+     * Keeping decode alive here caused music to survive after every domain tab was closed
+     * or navigated away (frozen page still singing).
+     * Keep MediaElement shell via soft silence so pageshow can sticky-resume.
+     */
+    StoreMusic.prototype.parkForBfcache = function () {
+        this._bfcacheParked = true;
+        this._autoplayPending = false;
+        this._awaitingUnmute = false;
+        this.disarmPageGestureUnlock();
+        this.clearMediaSession();
+        this.stopLeaderHeartbeat();
+        this.stopWaveLoop();
+        this.stopProgressWatch();
+        this.stopOrphanWatch();
+        this.stopGhostWatch();
+        this.stopOriginTabWatch();
+        this.stopSoleSourceWatch();
+        this.releaseLeadership();
+        this.dropOriginTab();
+        try {
+            if (typeof silenceAllStoreMusicAudio === 'function') {
+                silenceAllStoreMusicAudio();
+            }
+        } catch (ePark) {
+            // ignore
+        }
+        // Soft silence keeps the singleton shell; never leave a decoding MediaElement in bfcache.
+        this.hardSilenceMedia(false);
+        this.syncPlayingUi(false);
+        if (!this.hasLiveOriginTab()) {
+            // Last domain surface is frozen/gone — wake any zombie peer contexts.
+            this.broadcastForceStop(false);
+            if (this.channel) {
+                try {
+                    this.channel.postMessage({
+                        type: 'domain_empty',
+                        tabId: TAB_ID,
+                        host: PAGE_HOST,
+                        at: Date.now()
+                    });
+                } catch (eEmpty) {
+                    // ignore
+                }
+            }
+        }
+    };
+
+    /**
      * Belt-and-suspenders: pause/clear every MediaElement in this document + shared singleton.
      * Used on leave and hidden cold-boot so detached Cursor webviews cannot keep singing.
      */
     StoreMusic.prototype.killAllPageAudio = function () {
+        this.stopWaveLoop();
+        destroySharedAudioGraph();
         killRivalAudioElements(null);
         this.audio = null;
         this.audioReady = false;
         this.waveConnected = false;
+        this.ctx = null;
         this.source = null;
         this.analyser = null;
         this.clearMediaSession();
@@ -1060,7 +1563,7 @@
     };
 
     /**
-     * Hard leave teardown: mark dead, drop leadership, destroy MediaElement, hammer residuals.
+     * Hard leave teardown: mark dead, drop leadership, destroy MediaElement.
      * Covers Cursor/Electron closing the Browser panel without a reliable pagehide.
      * Must NOT write user_stopped / want_play=0 — refresh must still resume.
      */
@@ -1071,35 +1574,71 @@
         this._autoplayPending = false;
         this._awaitingUnmute = false;
         this.disarmPageGestureUnlock();
-        // Clear MediaSession handlers before pause/src clear (see clearMediaSession).
         this.clearMediaSession();
         this.stopOrphanWatch();
         this.stopGhostWatch();
         this.stopOriginTabWatch();
+        this.stopSoleSourceWatch();
         this.dropOriginTab();
-        // Release lock only — do NOT force_stop peers (would mute a still-open / successor tab).
         this.releaseLeadership();
+        try {
+            // Prefer silence-without-null-Live: a same-window refresh successor may already
+            // own __WelineStoreMusicLive; leaveHammer must not wipe that pointer.
+            if (typeof silenceAllStoreMusicAudio === 'function') {
+                silenceAllStoreMusicAudio();
+            } else if (typeof purgeAllStoreMusicAudio === 'function') {
+                purgeAllStoreMusicAudio();
+            }
+        } catch (ePurge) {
+            // ignore
+        }
         this.hardSilenceMedia(true);
         this.killAllPageAudio();
         this.syncPlayingUi(false);
-        this.startLeaveHammer(reason || 'leave');
+        // pagehide/unload/freeze: document is dying — do NOT hammer for 2s.
+        // Same-window refresh (Electron/Cursor) would purge the successor mid-resume.
+        // Hammer only when the JS context may survive (orphan / detached webview).
+        var r = String(reason || '');
+        if (
+            r.indexOf('orphan') === 0
+            || r === 'visibility-detached'
+            || r === 'host-detached'
+            || r === 'domain-empty'
+            || r === 'origin-tabs-empty'
+            || r === 'ghost-disconnected'
+        ) {
+            this.startLeaveHammer(r);
+        }
     };
 
     /**
      * After leave, keep silencing briefly: some hosts re-kick decode right after pause/src clear.
+     * Epoch-gated: must not purge a refresh successor that already bumped __WelineStoreMusicEpoch.
      */
     StoreMusic.prototype.startLeaveHammer = function () {
         var self = this;
         this.stopLeaveHammer();
+        var epoch = currentStoreMusicEpoch();
         var n = 0;
         this._leaveHammer = global.setInterval(function () {
+            if (currentStoreMusicEpoch() !== epoch || global.__WelineStoreMusicLive !== self) {
+                self.stopLeaveHammer();
+                return;
+            }
+            try {
+                if (typeof silenceAllStoreMusicAudio === 'function') {
+                    silenceAllStoreMusicAudio();
+                }
+            } catch (eH) {
+                // ignore
+            }
             self.hardSilenceMedia(true);
             self.killAllPageAudio();
             n += 1;
-            if (n >= 12) {
+            if (n >= 20) {
                 self.stopLeaveHammer();
             }
-        }, 120);
+        }, 100);
     };
 
     StoreMusic.prototype.stopLeaveHammer = function () {
@@ -1122,6 +1661,11 @@
             try {
                 if (!document.documentElement || !document.documentElement.isConnected) {
                     self.tearDownForLeave('ghost-disconnected');
+                    return;
+                }
+                // Cursor can leave a connected DOM in a 0×0 singing webview — catch it here too.
+                if (self.audio && !self.audio.paused && self.isCollapsedDetachedView()) {
+                    self.tearDownForLeave('host-detached');
                 }
             } catch (e) {
                 // ignore
@@ -1137,39 +1681,103 @@
     };
 
     /**
+     * While audible, periodically kill sibling StoreMusic MediaElements in this document
+     * and drop local decode if another tab holds the leader lock (cross-tab dual-play).
+     */
+    StoreMusic.prototype.startSoleSourceWatch = function () {
+        var self = this;
+        this.stopSoleSourceWatch();
+        this._soleSourceWatch = global.setInterval(function () {
+            if (!self._docAlive) {
+                self.stopSoleSourceWatch();
+                return;
+            }
+            // Cross-tab: we are playing but someone else holds the lock → stop locally
+            // (unless the user just operated here — they are taking over).
+            var lock = self.readLeaderLock();
+            if (lock && lock.tabId && lock.tabId !== TAB_ID
+                && self.audio && !self.audio.paused
+                && !self.isUserOperating()) {
+                self.silenceForOtherTab(false, true);
+                return;
+            }
+            var keep = self.audio;
+            if (keep && !keep.paused) {
+                enforceSoleAudibleSource(keep);
+                self.touchAudible();
+                return;
+            }
+            // Only scrub OTHER playing StoreMusic nodes — never mass-kill when !isLeader.
+            var registry = audioRegistry().slice();
+            for (var i = 0; i < registry.length; i++) {
+                var el = registry[i];
+                if (el && el !== keep && !el.paused) {
+                    silenceMediaElement(el);
+                }
+            }
+        }, 700);
+    };
+
+    StoreMusic.prototype.stopSoleSourceWatch = function () {
+        if (this._soleSourceWatch) {
+            global.clearInterval(this._soleSourceWatch);
+            this._soleSourceWatch = 0;
+        }
+    };
+
+    /**
      * Background BGM is allowed while the tab still exists. When the host tears down the
      * webview without pagehide (Cursor Browser close), DOM often disconnects or the window
      * collapses to 0×0 — then we must hard-stop so audio cannot outlive the UI.
+     * Also run while *visible* playing: Cursor can close Simple Browser without visibilitychange,
+     * leaving AudioService decoding with a zombie "visible" 0×0 webview.
      */
     StoreMusic.prototype.startOrphanWatch = function () {
         var self = this;
         this.stopOrphanWatch();
         this._collapsedHits = 0;
+        var needHits = isEmbeddedBrowserHost() ? 1 : 2;
         this._orphanWatch = global.setInterval(function () {
             if (!self._docAlive) {
-                self.hardSilenceMedia(true);
-                self.killAllPageAudio();
+                if (currentStoreMusicEpoch() === self._epoch
+                    && global.__WelineStoreMusicLive === self) {
+                    try {
+                        if (typeof silenceAllStoreMusicAudio === 'function') {
+                            silenceAllStoreMusicAudio();
+                        }
+                    } catch (eOrphan) {
+                        // ignore
+                    }
+                    self.hardSilenceMedia(true);
+                    self.killAllPageAudio();
+                }
                 self.stopOrphanWatch();
                 return;
             }
             try {
-                var disconnected = !document.documentElement || !document.documentElement.isConnected;
+                var disconnected = !document.documentElement || !document.documentElement.isConnected
+                    || (self.root && !self.root.isConnected);
                 var collapsed = self.isCollapsedDetachedView();
                 if (disconnected || collapsed) {
                     self._collapsedHits = (Number(self._collapsedHits) || 0) + 1;
-                    if (self._collapsedHits < 4) {
+                    // Fast path: Cursor Browser close must not keep singing for seconds.
+                    if (self._collapsedHits < needHits) {
                         return;
                     }
-                    self.tearDownForLeave(disconnected ? 'orphan-disconnected' : 'orphan-collapsed');
+                    self.tearDownForLeave(
+                        disconnected ? 'orphan-disconnected' : 'host-detached'
+                    );
                     return;
                 }
                 self._collapsedHits = 0;
-                // Still a real hidden tab of this domain — keep census alive.
-                self.touchOriginTab();
+                // Only heartbeat census when this is still a real surface.
+                if (self.isRealOriginTab()) {
+                    self.touchOriginTab();
+                }
             } catch (e) {
                 // ignore
             }
-        }, 500);
+        }, 180);
     };
 
     StoreMusic.prototype.stopOrphanWatch = function () {
@@ -1189,21 +1797,39 @@
 
     /** Detached/closed host webview — not a real browser tab of this domain.
      * Hidden (switched to another tab) is NOT collapsed: outer/inner size often stays normal.
-     * Only treat as detached when the document is gone or the window is truly 0×0 while hidden.
+     * Cursor/Electron Simple Browser close often skips pagehide; zombie webviews may stay
+     * visibility=visible while chrome is 0×0 — still treat as detached.
      */
     StoreMusic.prototype.isCollapsedDetachedView = function () {
         try {
             if (!document.documentElement || !document.documentElement.isConnected) {
                 return true;
             }
-            // Visible tabs are always "real" — never drop them from the domain census.
-            if (document.visibilityState === 'visible') {
-                return false;
+            if (this.root && !this.root.isConnected) {
+                return true;
             }
             var ow = Number(global.outerWidth) || 0;
             var oh = Number(global.outerHeight) || 0;
-            // Hidden but still a real tab: keep counting. Only 0×0 chrome (zombie webview) drops.
-            return ow === 0 && oh === 0;
+            var iw = Number(global.innerWidth) || 0;
+            var ih = Number(global.innerHeight) || 0;
+            // 0×0 always means detached — even if visibility still reports "visible"
+            // (Cursor/Electron closed the panel but left a singing webview).
+            if ((ow === 0 && oh === 0) || (iw === 0 && ih === 0)) {
+                return true;
+            }
+            if (document.body) {
+                var bw = Number(document.body.clientWidth) || 0;
+                var bh = Number(document.body.clientHeight) || 0;
+                if (bw === 0 && bh === 0) {
+                    return true;
+                }
+            }
+            // Visible + nonzero chrome = real tab (or focused Simple Browser).
+            if (document.visibilityState === 'visible') {
+                return false;
+            }
+            // Hidden + nonzero: normal background tab — keep BGM.
+            return false;
         } catch (e) {
             return true;
         }
@@ -1237,7 +1863,12 @@
             var row = map[id];
             var at = row && Number(row.at) ? Number(row.at) : 0;
             if (id && at && (now - at) < ORIGIN_TAB_TTL_MS) {
-                kept[id] = { at: at, host: row.host || PAGE_HOST };
+                kept[id] = {
+                    at: at,
+                    host: row.host || PAGE_HOST,
+                    visible: row.visible === true,
+                    dying: row.dying === true
+                };
             }
         });
         return kept;
@@ -1380,6 +2011,168 @@
         }
     };
 
+    /** Mark that this tab is (or was just) audibly owning BGM — drives soft-resume idle gate. */
+    StoreMusic.prototype.touchAudible = function () {
+        var now = Date.now();
+        this._lastAudibleAt = now;
+        try {
+            writePref(this.root, 'last_audible_at', String(now));
+        } catch (e) {
+            // ignore
+        }
+        this.markHeardWhileVisible();
+    };
+
+    /**
+     * Shared play intent is global, but audible ownership is local. Only the document
+     * that owns a currently playing StoreMusic element may arm navigation resume.
+     */
+    StoreMusic.prototype.isAudibleOwner = function () {
+        if (!this._docAlive || !this.audio || this.audio.paused) {
+            return false;
+        }
+        return !!(
+            this.isLeader
+            || this.audio.__welineStoreMusicOwner === this
+        );
+    };
+
+    StoreMusic.prototype.navResumeKey = function () {
+        return storageKey(this.root, 'nav_resume');
+    };
+
+    /**
+     * F5 / hard-nav: session latch so the successor page sticky-resumes even if localStorage
+     * want_play races with tearDown. Survives same-tab refresh; dies with the tab.
+     */
+    StoreMusic.prototype.armNavResumeLatch = function () {
+        // Shared want_play alone is not enough (quiet peer). Arm when THIS document is
+        // actually decoding, including leader-or-owner and plain unmuted/muted play.
+        var decoding = !!(this.audio && !this.audio.paused && this.playIntent() === 'play');
+        if (!this.isAudibleOwner() && !decoding) {
+            return false;
+        }
+        this.setWantPlay(true);
+        this.setUserStopped(false);
+        this.touchAudible();
+        try {
+            if (global.sessionStorage) {
+                global.sessionStorage.setItem(this.navResumeKey(), String(Date.now()));
+            }
+        } catch (e) {
+            // ignore
+        }
+        return true;
+    };
+
+    /**
+     * @returns {boolean} true when this document should force sticky resume after refresh
+     */
+    StoreMusic.prototype.consumeNavResumeLatch = function () {
+        try {
+            if (!global.sessionStorage) {
+                return false;
+            }
+            var key = this.navResumeKey();
+            var raw = global.sessionStorage.getItem(key);
+            global.sessionStorage.removeItem(key);
+            if (!raw) {
+                return false;
+            }
+            var at = Number(raw) || 0;
+            // Only honor a latch from the last few seconds (refresh), not a stale tab restore.
+            return !at || (Date.now() - at) < 45000;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    /** Same-tab refresh / bfcache restore: skip the delay, never bypass a live peer lock. */
+    StoreMusic.prototype.beginNavResumeBypass = function () {
+        this._navResumeActive = true;
+        // Kept for compatibility with older boot state; a resume latch is not a takeover.
+        this._ignorePeerOnce = false;
+        this._heardWhileVisible = true;
+    };
+
+    StoreMusic.prototype.clearNavResumeBypass = function () {
+        this._navResumeActive = false;
+        this._ignorePeerOnce = false;
+    };
+
+    /**
+     * Cross-page audible clock: memory first, then persisted stamp, then progress.updated.
+     * New documents used to see _lastAudibleAt=0 and treat any sticky want_play as "fresh".
+     */
+    StoreMusic.prototype.readLastAudibleAt = function () {
+        var mem = Number(this._lastAudibleAt) || 0;
+        var stored = 0;
+        try {
+            stored = Number(readPref(this.root, 'last_audible_at', 0)) || 0;
+        } catch (e) {
+            stored = 0;
+        }
+        var snapAt = 0;
+        try {
+            var snap = readJsonPref(this.root, 'progress', null);
+            snapAt = snap && Number(snap.updated) ? Number(snap.updated) : 0;
+        } catch (e2) {
+            snapAt = 0;
+        }
+        return Math.max(mem, stored, snapAt);
+    };
+
+    /**
+     * True when a persisted audible clock exists and is older than the soft-resume window.
+     * Missing clock must NOT count as stale — otherwise refresh clears want_play and kills续播.
+     */
+    StoreMusic.prototype.isAudibleClockStale = function () {
+        var last = this.readLastAudibleAt();
+        if (!last) {
+            return false;
+        }
+        return (Date.now() - last) > SOFT_RESUME_IDLE_MS;
+    };
+
+    /**
+     * Soft resume (visibility / peer release) only while want_play is fresh enough.
+     * No audible clock → still allow (legacy / just-played before last_audible_at existed).
+     */
+    StoreMusic.prototype.canSoftResumeNow = function () {
+        if (this._naturalEnded || this.isUserStopped() || this.isDismissed()) {
+            return false;
+        }
+        if (this.playIntent() !== 'play') {
+            return false;
+        }
+        return !this.isAudibleClockStale();
+    };
+
+    /**
+     * Drop sticky want_play after a known long silence (clock present + stale).
+     * Clears to unset (remove key) — never write want_play=0, or cold try_autoplay
+     * reaches tryPlay with playIntent==='stop' and silently no-ops (进店不播).
+     * @param {{silent?: boolean}} [opts] silent=true: do not flash「点击开启音乐」(F5 sticky path).
+     * @returns {boolean} true when want was expired
+     */
+    StoreMusic.prototype.expireStaleWantPlay = function (opts) {
+        if (this.playIntent() !== 'play') {
+            return false;
+        }
+        if (!this.isAudibleClockStale()) {
+            return false;
+        }
+        try {
+            global.localStorage.removeItem(storageKey(this.root, 'want_play'));
+        } catch (e) {
+            writePref(this.root, 'want_play', '');
+        }
+        if (!(opts && opts.silent)) {
+            this.setNeedGesture(true);
+        }
+        return true;
+    };
+
     StoreMusic.prototype.leaderLockKey = function () {
         return storageKey(this.root, 'leader_lock');
     };
@@ -1424,8 +2217,19 @@
         var self = this;
         this.stopLeaderHeartbeat();
         this._leaderBeat = global.setInterval(function () {
-            if (!self.audio || self.audio.paused || !self.isLeader) {
+            if (!self.isLeader || self.playIntent() !== 'play' || self._naturalEnded) {
                 return;
+            }
+            var playing = !!(self.audio && !self.audio.paused);
+            var last = Number(self._lastAudibleAt) || 0;
+            var stallGrace = last && (Date.now() - last) < 20000;
+            // Keep lock during short stalls/track gaps so soft autoplay on another page
+            // cannot steal and force_stop this tab (heard as「播一阵就停」).
+            if (!playing && !stallGrace) {
+                return;
+            }
+            if (playing) {
+                self.touchAudible();
             }
             // Background BGM is intentional: keep the lock alive while still playing so
             // other same-site soft-autoplay pages stay quiet. Leave-page teardown is pagehide.
@@ -1439,7 +2243,9 @@
             } catch (e) {
                 // ignore
             }
-            self.broadcastLeaderState('playing', true);
+            if (playing) {
+                self.broadcastLeaderState('playing', true);
+            }
         }, 1000);
     };
 
@@ -1503,14 +2309,21 @@
     };
 
     /**
-     * Refresh / same-tab resume: clear leftover leader_lock when no other VISIBLE tab exists.
-     * Hard F5 races leave a lock + census entry for ~1s; that must not block soft tryPlay.
+     * Refresh / same-tab resume: clear leftover leader_lock only when NO other *fresh*
+     * tab remains in the origin census (true solo). Stale dying-refresh rows (no heartbeat
+     * within PEER_CENSUS_FRESH_MS) must not block F5 resume. Must not clear a background
+     * tab's lock while it still heartbeats (even visibility=hidden BGM).
      */
     StoreMusic.prototype.clearStaleLeaderForSoloResume = function () {
         if (this.playIntent() !== 'play' && !this.hasResumeSnap()) {
             return;
         }
-        if (this.countVisiblePeerTabs() > 0) {
+        var now = Date.now();
+        var tabs = this.readOriginTabs();
+        var otherFresh = Object.keys(tabs).filter(function (id) {
+            return id !== TAB_ID && isFreshPeerCensusRow(tabs[id], now);
+        });
+        if (otherFresh.length > 0) {
             return;
         }
         try {
@@ -1520,8 +2333,15 @@
         }
     };
 
-    /** True when another *live* tab refreshed the leader lock recently (soft autoplay stays quiet). */
+    /**
+     * True when another *live* tab holds a fresh leader lock (soft autoplay stays quiet).
+     * Background/hidden tabs that still heartbeat while playing MUST count — otherwise a
+     * newly opened page clears the lock and starts a second audible source.
+     * Dying F5 leftovers stay in ORIGIN_TAB_TTL but stop heartbeating → not fresh → not peer.
+     */
     StoreMusic.prototype.hasActivePeerLeader = function () {
+        // A navigation latch only bypasses the normal delay. It must never remove or
+        // ignore a live peer lock, otherwise a quiet refreshed tab becomes a new source.
         var cur = this.readLeaderLock();
         if (!cur || !cur.tabId || cur.tabId === TAB_ID) {
             return false;
@@ -1529,11 +2349,11 @@
         if ((Date.now() - (Number(cur.at) || 0)) >= 2500) {
             return false;
         }
-        // Full navigation leaves a lock for up to 2.5s while the old TAB_ID is already
-        // dropped from origin_tabs. Treating that as a peer made cold 无痕 autoplay bail
-        // out forever (status「已在其他页面播放」) even though this is the only tab.
+        var now = Date.now();
         var tabs = this.readOriginTabs();
-        if (!tabs[cur.tabId]) {
+        var row = tabs[cur.tabId];
+        if (!row || !isFreshPeerCensusRow(row, now) || row.dying) {
+            // Lock holder already left / dying refresh (no recent heartbeat) — stale lock.
             try {
                 global.localStorage.removeItem(this.leaderLockKey());
             } catch (e) {
@@ -1541,19 +2361,14 @@
             }
             return false;
         }
-        // Refresh successor: lock holder still in census but not visible → not a live peer.
-        if (tabs[cur.tabId].visible !== true && this.countVisiblePeerTabs() === 0) {
-            try {
-                global.localStorage.removeItem(this.leaderLockKey());
-            } catch (e2) {
-                // ignore
-            }
-            return false;
-        }
+        // Holder still heartbeating in census (visible or hidden background BGM) → peer is live.
         return true;
     };
 
-    /** Cold autoplay blocked by a live peer — retry once after lock TTL. */
+    /**
+     * Soft/cold autoplay blocked by a live peer — retry once after lock TTL.
+     * skipDelay on retry: cold path already waited delay_seconds before the peer block.
+     */
     StoreMusic.prototype.armPeerLeaderRetry = function () {
         var self = this;
         if (this._peerRetryArmed) {
@@ -1568,14 +2383,75 @@
             if (self.audio && !self.audio.paused) {
                 return;
             }
-            if (self.playIntent() === 'stop' && self.isUserStopped()) {
+            if (self.isUserStopped() || self.isDismissed() || self._naturalEnded) {
+                return;
+            }
+            self.expireStaleWantPlay({ silent: true });
+            var intent = self.playIntent();
+            var sticky = intent === 'play';
+            var cold = intent === 'unset'
+                && self.cfg.try_autoplay !== false
+                && self.cfg.try_autoplay !== 0
+                && self.cfg.try_autoplay !== '0';
+            if (!sticky && !cold) {
                 return;
             }
             if (self.hasActivePeerLeader()) {
                 return;
             }
-            self.scheduleStart({ force: true });
+            self.syncRemotePlayingUi(false);
+            self.scheduleStart({ force: true, skipDelay: true });
         }, 2800);
+    };
+
+    /**
+     * F5 sticky resume: AbortError / dying-lock / census races must retry quietly.
+     * Only after retries are exhausted may we show「点击开启音乐」.
+     */
+    StoreMusic.prototype.armStickyPlayRetry = function () {
+        var self = this;
+        if (this._stickyRetryArmed) {
+            return;
+        }
+        var left = Number(this._stickyRetryLeft);
+        if (!Number.isFinite(left)) {
+            left = 3;
+            this._stickyRetryLeft = 3;
+        }
+        if (left <= 0) {
+            this._autoplayPending = true;
+            this.setNeedGesture(true);
+            this.syncHintVisibility();
+            return;
+        }
+        this._stickyRetryArmed = true;
+        this._stickyRetryLeft = left - 1;
+        global.setTimeout(function () {
+            self._stickyRetryArmed = false;
+            if (!self._docAlive || self.isUserStopped() || self.isDismissed() || self._naturalEnded) {
+                return;
+            }
+            if (self.audio && !self.audio.paused) {
+                self._stickyRetryLeft = 0;
+                return;
+            }
+            if (self.playIntent() !== 'play' && !self.hasResumeSnap()) {
+                self.setNeedGesture(true);
+                return;
+            }
+            self._docAlive = true;
+            self.touchOriginTab();
+            self.beginNavResumeBypass();
+            self.clearStaleLeaderForSoloResume();
+            if (self.hasActivePeerLeader()) {
+                self.armPeerLeaderRetry();
+                self.armStickyPlayRetry();
+                return;
+            }
+            self.tryPlay({ force: false, navResume: true }).catch(function () {
+                self.armStickyPlayRetry();
+            });
+        }, 280);
     };
 
     /** True when localStorage operator stamp still points at this tab. */
@@ -1642,6 +2518,7 @@
                 host: PAGE_HOST,
                 at: at,
                 clearWantPlay: !!clearWantPlay,
+                playing: this.isAudibleOwner(),
                 // Carry selection so peers can sync the playlist UI even if the following
                 // playing message is dropped or treated as a soft heartbeat.
                 url: track ? track.url : '',
@@ -1768,6 +2645,7 @@
     StoreMusic.prototype.yieldToOtherTab = function (msg) {
         // Latest user operation wins. Only refuse if WE are still newer than the remote claim.
         if (this.canRefuseYield(msg)) {
+            this.clearRemotePlayingState();
             this.claimLeadership(true);
             // If the remote carried a newer selection we refused, still follow OUR selection audibly.
             this.reconcileAudibleSelection(true);
@@ -1779,6 +2657,8 @@
         if (msg) {
             this.applyRemoteSelection(msg);
         }
+        // Mirror the remote state in controls only; this document remains silent.
+        this.syncRemotePlayingUi(true, msg || this.readLeaderLock());
         // Soft load / open panel: never sticky-nag — user can press ▶ to take over (last op wins).
         if (this.shouldShowOtherTabStatus()) {
             setStatus(this.root, textOf(this.root, '[data-store-music-i18n-other-tab]', '已在其他页面播放'));
@@ -1793,17 +2673,27 @@
      */
     StoreMusic.prototype.maybeResumeAfterPeerRelease = function () {
         var self = this;
+        this.syncRemotePlayingUi(false);
         if (document.visibilityState === 'hidden') {
             return;
         }
+        if (this.expireStaleWantPlay() || !this.canSoftResumeNow()) {
+            return;
+        }
         if (this.playIntent() !== 'play') {
+            return;
+        }
+        if (this._naturalEnded) {
             return;
         }
         if (this.audio && !this.audio.paused) {
             return;
         }
         global.setTimeout(function () {
-            if (document.visibilityState === 'hidden' || self.playIntent() !== 'play') {
+            if (document.visibilityState === 'hidden' || self.playIntent() !== 'play' || self._naturalEnded) {
+                return;
+            }
+            if (self.expireStaleWantPlay() || !self.canSoftResumeNow()) {
                 return;
             }
             if (self.audio && !self.audio.paused) {
@@ -1865,20 +2755,42 @@
         if (this.compartmentEl) {
             this.compartmentEl.hidden = !multi;
         }
+        if (!multi && this.searchInput) {
+            this.searchInput.value = '';
+            this.playlistFilter = '';
+        }
+        var query = String(this.playlistFilter || '').trim().toLowerCase();
+        var visible = 0;
         if (this.playlistCountEl) {
             if (multi) {
                 var countTpl = textOf(this.root, '[data-store-music-i18n-playlist-count]', '共 {n} 首');
-                this.playlistCountEl.textContent = String(countTpl).split('{n}').join(String(this.tracks.length));
+                var countN = this.tracks.length;
+                if (query) {
+                    countN = 0;
+                    this.tracks.forEach(function (track) {
+                        if (self.trackMatchesFilter(track, query)) {
+                            countN += 1;
+                        }
+                    });
+                }
+                this.playlistCountEl.textContent = String(countTpl).split('{n}').join(String(countN));
             } else {
                 this.playlistCountEl.textContent = '';
             }
         }
         this.playlistEl.textContent = '';
         if (!multi) {
+            if (this.searchEmptyEl) {
+                this.searchEmptyEl.hidden = true;
+            }
             return;
         }
         try {
             this.tracks.forEach(function (track, index) {
+                if (query && !self.trackMatchesFilter(track, query)) {
+                    return;
+                }
+                visible += 1;
                 var li = document.createElement('li');
                 li.setAttribute('role', 'none');
                 var btn = document.createElement('button');
@@ -1910,6 +2822,30 @@
                     intro.className = 'w-store-music__track-intro';
                     intro.textContent = track.intro;
                     btn.appendChild(intro);
+                    var introToggle = document.createElement('button');
+                    introToggle.type = 'button';
+                    introToggle.className = 'w-store-music__track-intro-toggle';
+                    introToggle.setAttribute('data-store-music-track-intro-toggle', '1');
+                    introToggle.setAttribute('aria-expanded', 'false');
+                    // Length heuristic: webkit-line-clamp often reports equal scroll/client heights.
+                    introToggle.hidden = String(track.intro).trim().length < 18;
+                    introToggle.textContent = textOf(self.root, '[data-store-music-i18n-intro-expand]', '展开简介');
+                    introToggle.addEventListener('click', function (ev) {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        var open = !btn.classList.contains('is-intro-expanded');
+                        btn.classList.toggle('is-intro-expanded', open);
+                        introToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                        introToggle.textContent = open
+                            ? textOf(self.root, '[data-store-music-i18n-intro-collapse]', '收起简介')
+                            : textOf(self.root, '[data-store-music-i18n-intro-expand]', '展开简介');
+                    });
+                    btn.appendChild(introToggle);
+                    global.requestAnimationFrame(function () {
+                        if (introToggle.hidden && intro.scrollHeight > intro.clientHeight + 1) {
+                            introToggle.hidden = false;
+                        }
+                    });
                 }
                 btn.addEventListener('click', function () {
                     self.selectTrack(index);
@@ -1920,6 +2856,30 @@
         } catch (e) {
             // Soft: playlist chrome is optional; transport still works.
         }
+        if (this.searchEmptyEl) {
+            this.searchEmptyEl.hidden = !(query && visible === 0);
+        }
+        if (this.playlistEl) {
+            this.playlistEl.hidden = !!(query && visible === 0);
+        }
+    };
+
+    StoreMusic.prototype.trackMatchesFilter = function (track, query) {
+        var q = String(query || '').trim().toLowerCase();
+        if (!q) {
+            return true;
+        }
+        var hay = String(this.trackLabel(track) || '') + ' ' + String((track && track.intro) || '');
+        return hay.toLowerCase().indexOf(q) !== -1;
+    };
+
+    StoreMusic.prototype.onPlaylistSearchInput = function () {
+        if (!this.searchInput) {
+            return;
+        }
+        this.playlistFilter = String(this.searchInput.value || '');
+        this.renderPlaylist();
+        this.syncPlaylistActive();
     };
 
     StoreMusic.prototype.syncPlaylistActive = function () {
@@ -1929,7 +2889,8 @@
         var buttons = this.playlistEl.querySelectorAll('[data-store-music-track]');
         for (var i = 0; i < buttons.length; i++) {
             var btn = buttons[i];
-            var active = Number(btn.getAttribute('data-store-music-track')) === this.trackIndex;
+            var trackIndex = Number(btn.getAttribute('data-store-music-track'));
+            var active = trackIndex === this.trackIndex;
             btn.classList.toggle('is-active', active);
             btn.setAttribute('aria-selected', active ? 'true' : 'false');
             var mark = btn.querySelector('[data-store-music-track-mark]');
@@ -1937,10 +2898,11 @@
                 if (active) {
                     mark.textContent = '✓';
                 } else {
-                    var n = i + 1;
+                    var n = (Number.isFinite(trackIndex) ? trackIndex : i) + 1;
                     mark.textContent = n < 10 ? '0' + n : String(n);
                 }
-            }        }
+            }
+        }
     };
 
     StoreMusic.prototype.selectTrack = function (index) {
@@ -1949,6 +2911,7 @@
             return;
         }
         this.markUserOperating();
+        this._naturalEnded = false;
         if (next === this.trackIndex && this.audio && !this.audio.paused && this.isLeader) {
             this.syncTrackMeta(true);
             setStatus(this.root, '');
@@ -1979,34 +2942,41 @@
     };
 
     /**
-     * Discard current MediaElement + AudioContext.
-     * After createMediaElementSource(), closing the context bricks that element — reuse
-     * makes “换歌不生效” while an older decode path can keep audible.
+     * Soft: pause singleton for src swap (keep element + WebAudio graph).
+     * Hard: destroy shared graph + MediaElement (leave-page / orphan teardown only).
      */
-    StoreMusic.prototype.discardAudioElement = function () {
-        if (this.ctx && typeof this.ctx.close === 'function') {
-            try {
-                this.ctx.close();
-            } catch (e) {
-                // ignore
-            }
+    StoreMusic.prototype.discardAudioElement = function (opts) {
+        var hard = !!(opts && opts.hard);
+        this.stopWaveLoop();
+        if (typeof this.resetAvatarLevel === 'function') {
+            this.resetAvatarLevel();
         }
-        this.ctx = null;
-        this.source = null;
-        this.analyser = null;
-        this.waveConnected = false;
+        if (hard) {
+            destroySharedAudioGraph();
+            this.ctx = null;
+            this.source = null;
+            this.analyser = null;
+            this.waveConnected = false;
+            if (this._blobUrl) {
+                try {
+                    URL.revokeObjectURL(this._blobUrl);
+                } catch (e2) {
+                    // ignore
+                }
+                this._blobUrl = null;
+            }
+            this.audio = null;
+            this.audioReady = false;
+            return;
+        }
+        // Soft path — never close AudioContext / never new Audio() on track switch.
         if (this.audio) {
-            silenceMediaElement(this.audio);
-        }
-        if (this._blobUrl) {
             try {
-                URL.revokeObjectURL(this._blobUrl);
-            } catch (e2) {
+                this.audio.pause();
+            } catch (ePause) {
                 // ignore
             }
-            this._blobUrl = null;
         }
-        this.audio = null;
         this.audioReady = false;
     };
 
@@ -2031,33 +3001,28 @@
         this.markUserOperating();
         this.claimLeadership(true);
         setStatus(this.root, '');
-        // Hard reset: kill every rival Audio (multi-source overlay) then use a fresh element.
-        // Reusing an element that was wired to createMediaElementSource after ctx.close()
-        // is what made track switches appear to do nothing while the previous song kept playing.
-        this.stopWaveLoop();
-        this.discardAudioElement();
-        killRivalAudioElements(null);
-        // Never reuse a silenced singleton for track switches — stale decode buffers
-        // can keep the previous song audible while the playlist UI already moved on.
-        global.__WelineStoreMusicSharedAudio = null;
+        // Sole audible source: bump generation, soft-pause singleton, kill orphan Audios only.
+        var playGen = nextPlayGeneration();
+        this._playGen = playGen;
+        this.discardAudioElement({ hard: false });
         var audio = this.mountAudioElement();
+        killRivalAudioElements(audio);
         audio.__welineStoreMusicOwner = this;
         registerStoreAudio(audio);
         global.__WelineStoreMusicSharedAudio = audio;
         var multi = this.tracks.length > 1;
         var loopOne = !multi && !(this.cfg.loop === false || this.cfg.loop === 0 || this.cfg.loop === '0');
         audio.loop = !!loopOne;
-        var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 12);
+        var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 8);
         audio.volume = Math.max(0, Math.min(1, vol / 100));
         audio.muted = false;
         this._awaitingUnmute = false;
-        // Direct URL — do not wait for IDB/fetch (keeps user activation).
+        // Reuse the same MediaElement — only swap src (no parallel decoders).
         audio.setAttribute('data-store-music-src', url);
         audio.src = url;
         this.audioReady = true;
         this.syncTrackMeta(true);
         this.syncPlaylistActive();
-        // Gesture play must still honor resume snap (refresh / cross-page).
         this.applyPendingSeek();
         var playResult = null;
         try {
@@ -2067,28 +3032,33 @@
             this.setNeedGesture(true);
             return Promise.reject(err);
         }
-        // Warm IDB cache without interrupting playback.
         this.cacheTrackInBackground(url);
-        if (!playResult || typeof playResult.then !== 'function') {
-            this.setWantPlay(true);
-            this.markHeardWhileVisible();
-            this.syncPlayingUi(true);
-            this.broadcastLeaderState('playing', false);
-            this.broadcastForceStop(false);
-            this._audioMutating = false;
-            return Promise.resolve(audio);
-        }
-        return playResult.then(function () {
-            // Re-assert single audible source after async play (host may resurrect orphans).
-            killRivalAudioElements(audio);
+        var finishOk = function () {
+            if (self._playGen !== playGen || currentPlayGeneration() !== playGen) {
+                try {
+                    audio.pause();
+                } catch (eStale) {
+                    // ignore
+                }
+                return null;
+            }
+            enforceSoleAudibleSource(audio);
             self.setWantPlay(true);
             self.needGesture = false;
-            self.markHeardWhileVisible();
+            self.touchAudible();
             self.syncPlayingUi(true);
             self.broadcastLeaderState('playing', false);
             self.broadcastForceStop(false);
             setStatus(self.root, '');
             return audio;
+        };
+        if (!playResult || typeof playResult.then !== 'function') {
+            var outSync = finishOk();
+            this._audioMutating = false;
+            return Promise.resolve(outSync);
+        }
+        return playResult.then(function () {
+            return finishOk();
         }).catch(function (err) {
             var name = err && err.name ? String(err.name) : '';
             setStatus(self.root, '');
@@ -2104,50 +3074,21 @@
     };
 
     StoreMusic.prototype.cacheTrackInBackground = function (url) {
-        if (!url || !global.fetch) {
+        if (!url) {
             return;
         }
-        idbGetAudio(url).then(function (hit) {
-            if (hit) {
-                return;
-            }
-            return global.fetch(url, {
-                credentials: 'same-origin',
-                cache: 'force-cache'
-            }).then(function (res) {
-                if (!res.ok) {
-                    return null;
-                }
-                return res.blob();
-            }).then(function (blob) {
-                if (blob) {
-                    return idbPutAudio(url, blob);
-                }
-            });
-        }).catch(function () {
-            // Soft.
-        });
+        warmIdbAudio(normalizeTrackUrl(url) || url, url);
     };
 
     StoreMusic.prototype.mountAudioElement = function () {
-        var audio = this.audio;
-        if (!audio) {
-            if (global.__WelineStoreMusicSharedAudio
-                && !global.__WelineStoreMusicSharedAudio.__welineMediaGraphBound) {
-                audio = global.__WelineStoreMusicSharedAudio;
-            } else {
-                // Never reuse an element that already had createMediaElementSource().
-                if (global.__WelineStoreMusicSharedAudio) {
-                    silenceMediaElement(global.__WelineStoreMusicSharedAudio);
-                }
-                audio = new Audio();
-                global.__WelineStoreMusicSharedAudio = audio;
-            }
-            audio.preload = 'metadata';
-            this.audio = audio;
+        var audio = getSharedAudioSingleton();
+        if (this.audio && this.audio !== audio) {
+            silenceMediaElement(this.audio);
         }
+        this.audio = audio;
         audio.__welineStoreMusicOwner = this;
         registerStoreAudio(audio);
+        global.__WelineStoreMusicSharedAudio = audio;
         this.bindAudioElementEvents(audio);
         return audio;
     };
@@ -2174,6 +3115,17 @@
                 owner.killAllPageAudio();
                 return;
             }
+            // Natural end / ❚❚ / dismiss must not be revived by a late play() event.
+            if (owner._naturalEnded || owner.isUserStopped() || owner.isDismissed()) {
+                try {
+                    audio.pause();
+                } catch (eStop) {
+                    // ignore
+                }
+                owner.hardSilenceMedia(false);
+                owner.syncPlayingUi(false);
+                return;
+            }
             if (document.visibilityState === 'hidden' && !owner._heardWhileVisible) {
                 try {
                     audio.pause();
@@ -2193,6 +3145,7 @@
                         owner.markHeardWhileVisible();
                         owner.setWantPlay(true);
                         owner.syncPlayingUi(true);
+                        enforceSoleAudibleSource(audio);
                         setStatus(owner.root, '');
                         owner.ensureAnalyser();
                         owner.updateWaveLoop();
@@ -2219,7 +3172,19 @@
             }
             owner.markHeardWhileVisible();
             owner.setWantPlay(true);
+            owner.touchAudible();
             owner.syncPlayingUi(true);
+            // Progressive stream is audible — now safe to warm other tracks into IDB.
+            if (typeof owner._warmAfterPlay === 'function') {
+                var warmCb = owner._warmAfterPlay;
+                owner._warmAfterPlay = null;
+                warmCb();
+            }
+            // Sole source: any sibling StoreMusic Audio from remount races must die now.
+            enforceSoleAudibleSource(audio);
+            if (owner.isLeader) {
+                owner.broadcastForceStop(false);
+            }
             setStatus(owner.root, '');
             owner.ensureAnalyser();
             owner.updateWaveLoop();
@@ -2243,13 +3208,17 @@
                 return;
             }
             if (!owner._progressTimer) {
+                // Throttle ~0.5s so refresh keeps a fresher resume point.
                 owner._progressTimer = global.setTimeout(function () {
                     owner._progressTimer = 0;
                     if (!owner._docAlive) {
                         return;
                     }
+                    if (audio && !audio.paused) {
+                        owner.touchAudible();
+                    }
                     owner.saveProgress();
-                }, 1000);
+                }, 500);
             }
         });
         audio.addEventListener('ended', function () {
@@ -2305,8 +3274,67 @@
                 this.introEl.hidden = false;
                 this.introEl.textContent = textOf(this.root, '[data-store-music-i18n-idle]', '开匣雅乐');
             }
+            this.setIntroExpanded(false);
+            this.refreshIntroExpandState();
         }
         this.syncPlaylistActive();
+    };
+
+    StoreMusic.prototype.setIntroExpanded = function (expanded) {
+        var open = !!expanded;
+        if (this.introWrap) {
+            this.introWrap.classList.toggle('is-expanded', open);
+        }
+        if (this.introToggle) {
+            this.introToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            this.introToggle.textContent = open
+                ? textOf(this.root, '[data-store-music-i18n-intro-collapse]', '收起简介')
+                : textOf(this.root, '[data-store-music-i18n-intro-expand]', '展开简介');
+        }
+    };
+
+    /** Show “展开简介” when clamped text overflows OR copy is long enough to need expand. */
+    StoreMusic.prototype.refreshIntroExpandState = function () {
+        var self = this;
+        if (!this.introEl || !this.introToggle || !this.introWrap) {
+            return;
+        }
+        var textLen = String(this.introEl.textContent || '').trim().length;
+        var likelyLong = textLen >= 18;
+        // Optimistic show for long copy; refine after layout.
+        this.introToggle.hidden = !likelyLong && !this.introWrap.classList.contains('is-expanded');
+        global.requestAnimationFrame(function () {
+            global.requestAnimationFrame(function () {
+                if (!self.introEl || !self.introToggle || !self.introWrap) {
+                    return;
+                }
+                if (self.introWrap.classList.contains('is-expanded')) {
+                    self.introToggle.hidden = false;
+                    return;
+                }
+                var overflow = self.introEl.scrollHeight > self.introEl.clientHeight + 1;
+                self.introToggle.hidden = !(overflow || likelyLong);
+            });
+        });
+    };
+
+    /** Re-check playlist row intro toggles after panel becomes visible. */
+    StoreMusic.prototype.refreshPlaylistIntroToggles = function () {
+        if (!this.playlistEl) {
+            return;
+        }
+        var rows = this.playlistEl.querySelectorAll('[data-store-music-track]');
+        Array.prototype.forEach.call(rows, function (btn) {
+            var intro = btn.querySelector('.w-store-music__track-intro');
+            var toggle = btn.querySelector('[data-store-music-track-intro-toggle]');
+            if (!intro || !toggle) {
+                return;
+            }
+            var textLen = String(intro.textContent || '').trim().length;
+            if (textLen >= 18 || intro.scrollHeight > intro.clientHeight + 1) {
+                toggle.hidden = false;
+            }
+        });
     };
 
     StoreMusic.prototype.bind = function () {
@@ -2321,6 +3349,15 @@
                     // ignore
                 }
             }, true);
+        }
+        if (this.introToggle) {
+            this.introToggle.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var open = !(self.introWrap && self.introWrap.classList.contains('is-expanded'));
+                self.setIntroExpanded(open);
+                self.refreshIntroExpandState();
+            });
         }
         if (this.toggleBtns && this.toggleBtns.length) {
             Array.prototype.forEach.call(this.toggleBtns, function (btn) {
@@ -2402,17 +3439,14 @@
             });
         }
         if (this.volume) {
-            this.volume.addEventListener('input', function () {
+            var onVolume = function () {
                 // Volume prefs are local UI; only touch the live element if WE are playing.
                 // Never acquireLeaderLock here — that used to silence every other page.
                 self.markUserGesture();
-                var v = Number(self.volume.value) || 0;
-                writePref(self.root, 'volume', v);
-                self.syncVolumePct(v);
-                if (self.audio && (self.isLeader || !self.audio.paused)) {
-                    self.audio.volume = Math.max(0, Math.min(1, v / 100));
-                }
-            });
+                self.persistVolumePref(self.volume.value);
+            };
+            this.volume.addEventListener('input', onVolume);
+            this.volume.addEventListener('change', onVolume);
         }
         if (this.waveToggle) {
             this.waveToggle.addEventListener('change', function () {
@@ -2423,6 +3457,13 @@
                     self.updateWaveLoop();
                 }
             });
+        }
+        if (this.searchInput) {
+            var onSearch = function () {
+                self.onPlaylistSearchInput();
+            };
+            this.searchInput.addEventListener('input', onSearch);
+            this.searchInput.addEventListener('search', onSearch);
         }
         document.addEventListener('visibilitychange', function () {
             // visibility hidden ≠ leave page. Keep BGM only if we already started while visible.
@@ -2437,10 +3478,22 @@
                 self.touchOriginTab();
                 // Never-started hidden docs (prerender/zombie) must stay silent.
                 if (!self._heardWhileVisible) {
-                    self.hardSilenceMedia(false);
+                    try {
+                        if (typeof silenceAllStoreMusicAudio === 'function') {
+                            silenceAllStoreMusicAudio();
+                        }
+                    } catch (eQuiet) {
+                        // ignore
+                    }
+                    self.hardSilenceMedia(true);
                     self.killAllPageAudio();
                     self.syncPlayingUi(false);
                     self.stopOrphanWatch();
+                    return;
+                }
+                // Host already detached (Cursor Browser close) — do not wait for orphan ticks.
+                if (self.isCollapsedDetachedView() || (self.root && !self.root.isConnected)) {
+                    self.tearDownForLeave('visibility-detached');
                     return;
                 }
                 self.startOrphanWatch();
@@ -2463,12 +3516,18 @@
             }
             // Soft resume only when this page still wants play AND no peer is leading.
             // Never auto-steal just because the user focused this tab.
-            if (self.playIntent() === 'play') {
+            if (self._naturalEnded) {
+                self.setNeedGesture(true);
+            } else if (self.playIntent() === 'play') {
                 global.setTimeout(function () {
-                    if (document.visibilityState !== 'visible' || !self._docAlive) {
+                    if (document.visibilityState !== 'visible' || !self._docAlive || self._naturalEnded) {
                         return;
                     }
                     if (self.audio && !self.audio.paused) {
+                        return;
+                    }
+                    if (self.expireStaleWantPlay() || !self.canSoftResumeNow()) {
+                        self.setNeedGesture(true);
                         return;
                     }
                     if (self.playIntent() !== 'play') {
@@ -2544,20 +3603,9 @@
         this.stopWaveLoop();
         this.stopProgressWatch();
         this._loadToken += 1;
-        if (this.audio) {
-            try {
-                this.audio.pause();
-            } catch (e) {
-                // ignore
-            }
-            try {
-                this.audio.removeAttribute('src');
-                this.audio.removeAttribute('data-store-music-src');
-                this.audio.src = '';
-                this.audio.load();
-            } catch (e2) {
-                // ignore
-            }
+        this._playGen = nextPlayGeneration();
+        if (typeof this.resetAvatarLevel === 'function') {
+            this.resetAvatarLevel();
         }
         if (this._blobUrl) {
             try {
@@ -2567,42 +3615,111 @@
             }
             this._blobUrl = null;
         }
-        if (this.ctx && typeof this.ctx.close === 'function') {
-            try {
-                this.ctx.close();
-            } catch (e4) {
-                // ignore
-            }
-            this.ctx = null;
-        }
         this.clearMediaSession();
-        this.waveConnected = false;
-        this.source = null;
-        this.analyser = null;
         this.audioReady = false;
-        var shared = global.__WelineStoreMusicSharedAudio;
-        if (shared && (shared === this.audio || dropShared)) {
-            try {
-                shared.pause();
-                shared.removeAttribute('src');
-                shared.src = '';
-                shared.load();
-            } catch (e5) {
-                // ignore
+
+        if (dropShared) {
+            // Leave-page / orphan: destroy the only MediaElement + WebAudio graph.
+            destroySharedAudioGraph();
+            killRivalAudioElements(null);
+            this.audio = null;
+            this.ctx = null;
+            this.source = null;
+            this.analyser = null;
+            this.waveConnected = false;
+            return;
+        }
+
+        // Soft stop: pause + clear src on singleton, KEEP element + graph for next play.
+        var shared = getSharedAudioSingleton();
+        try {
+            shared.pause();
+            shared.muted = true;
+            shared.volume = 0;
+            shared.removeAttribute('src');
+            shared.removeAttribute('data-store-music-src');
+            shared.src = '';
+            shared.load();
+        } catch (eSoft) {
+            // ignore
+        }
+        this.audio = shared;
+        // Re-attach shared graph handles if still alive.
+        if (global.__WelineStoreMusicSharedCtx) {
+            this.ctx = global.__WelineStoreMusicSharedCtx;
+            this.analyser = global.__WelineStoreMusicSharedAnalyser;
+            this.source = global.__WelineStoreMusicSharedSource;
+            this.waveConnected = !!this.analyser;
+        } else {
+            this.ctx = null;
+            this.source = null;
+            this.analyser = null;
+            this.waveConnected = false;
+        }
+        killRivalAudioElements(shared);
+    };
+
+    StoreMusic.prototype.ensureAnalyser = function () {
+        if (prefersReducedMotion()) {
+            this.waveMode = 'soft';
+            return;
+        }
+        var audio = this.audio || getSharedAudioSingleton();
+        if (!audio) {
+            return;
+        }
+        this.audio = audio;
+
+        // Reuse process-wide graph — createMediaElementSource may run only once per element.
+        if (global.__WelineStoreMusicSharedAnalyser && global.__WelineStoreMusicSharedCtx) {
+            this.ctx = global.__WelineStoreMusicSharedCtx;
+            this.analyser = global.__WelineStoreMusicSharedAnalyser;
+            this.source = global.__WelineStoreMusicSharedSource;
+            this.waveConnected = true;
+            this.waveMode = 'analyser';
+            this.waveFailed = false;
+            if (this.ctx.state === 'suspended') {
+                try {
+                    this.ctx.resume();
+                } catch (eResume) {
+                    // ignore
+                }
             }
-            if (dropShared) {
-                global.__WelineStoreMusicSharedAudio = null;
-                this.audio = null;
+            return;
+        }
+        if (this.waveConnected && this.analyser) {
+            return;
+        }
+
+        var AC = global.AudioContext || global.webkitAudioContext;
+        if (!AC) {
+            this.waveMode = 'soft';
+            return;
+        }
+        try {
+            var ctx = new AC();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
             }
-        } else if (shared && shared !== this.audio) {
-            try {
-                shared.pause();
-                shared.removeAttribute('src');
-                shared.src = '';
-                shared.load();
-            } catch (e6) {
-                // ignore
-            }
+            var source = ctx.createMediaElementSource(audio);
+            var analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            analyser.connect(ctx.destination);
+            audio.__welineMediaGraphBound = true;
+            global.__WelineStoreMusicSharedCtx = ctx;
+            global.__WelineStoreMusicSharedSource = source;
+            global.__WelineStoreMusicSharedAnalyser = analyser;
+            this.ctx = ctx;
+            this.source = source;
+            this.analyser = analyser;
+            this.waveConnected = true;
+            this.waveMode = 'analyser';
+            this.waveFailed = false;
+        } catch (e) {
+            this.waveMode = 'soft';
+            this.waveFailed = false;
+            this.syncWaveLabel();
         }
     };
 
@@ -2645,6 +3762,10 @@
             return;
         }
         this.hardSilenceMedia(false);
+        // Yield must destroy residual StoreMusic MediaElements in THIS document.
+        killRivalAudioElements(null);
+        this.audio = null;
+        this.audioReady = false;
         this.syncPlayingUi(false);
         this.setNeedGesture(true);
         setStatus(this.root, '');
@@ -2668,6 +3789,7 @@
      */
     StoreMusic.prototype.markUserOperating = function () {
         var at = Date.now();
+        this.clearRemotePlayingState();
         this._lastGestureAt = at;
         this._lastUserActionAt = at;
         this._leaderClaimedAt = at;
@@ -2721,6 +3843,8 @@
                 this.panel.style.opacity = '';
                 this.panel.style.pointerEvents = '';
                 this.panel.removeAttribute('aria-hidden');
+                this.refreshIntroExpandState();
+                this.refreshPlaylistIntroToggles();
             }
         }
         if (this.root) {
@@ -2757,13 +3881,16 @@
             this.mascot.classList.toggle('is-need-gesture', this.needGesture && !prefersReducedMotion());
         }
         if (this.hint && this.needGesture && (this._autoplayPending || this._awaitingUnmute)) {
-            this.hint.textContent = textOf(
-                this.root,
-                this._awaitingUnmute
-                    ? '[data-store-music-i18n-tap-to-unmute]'
-                    : '[data-store-music-i18n-tap-to-play]',
-                this._awaitingUnmute ? '点击开启声音' : '点击开启音乐'
-            );
+            // Quiet sticky F5 retries must not rewrite the chip to「点击开启音乐」.
+            if (!(this._stickyMutedResume || this._stickyRetryArmed || (Number(this._stickyRetryLeft) > 0))) {
+                this.hint.textContent = textOf(
+                    this.root,
+                    this._awaitingUnmute
+                        ? '[data-store-music-i18n-tap-to-unmute]'
+                        : '[data-store-music-i18n-tap-to-play]',
+                    this._awaitingUnmute ? '点击开启声音' : '点击开启音乐'
+                );
+            }
         }
         this.syncHintVisibility();
         if (this.needGesture && (this._autoplayPending || this._awaitingUnmute)) {
@@ -2784,7 +3911,7 @@
             } catch (e) {
                 // ignore
             }
-            var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 12);
+            var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 8);
             try {
                 this.audio.volume = Math.max(0, Math.min(1, vol / 100));
             } catch (e2) {
@@ -2891,11 +4018,14 @@
     };
 
     /**
-     * @param {{force?: boolean}} [opts] force=true cancels in-flight delay and restarts
+     * @param {{force?: boolean, skipDelay?: boolean}} [opts]
+     *   force=true cancels in-flight delay and restarts
+     *   skipDelay=true used after peer-lock retry (delay already consumed)
      */
     StoreMusic.prototype.scheduleStart = function (opts) {
         var self = this;
         var force = !!(opts && opts.force);
+        var skipDelay = !!(opts && opts.skipDelay);
         if (!this._docAlive) {
             return;
         }
@@ -2908,19 +4038,47 @@
         if (this._scheduleInFlight && !force) {
             return;
         }
+        if (this._naturalEnded) {
+            // Same document already finished the playlist (loop off) — wait for ▶.
+            this.setNeedGesture(true);
+            this.syncHintVisibility();
+            return;
+        }
+        // Explicit ❚❚ / dismiss — every new page must stay quiet until ▶.
+        if (this.isUserStopped()) {
+            this.setNeedGesture(true);
+            this.syncHintVisibility();
+            return;
+        }
+        // 1.1.28 natural-end misused user_stopped and blocked 进店 autoplay.
+        this.migrateNaturalEndStopPoison();
+        // If migration cleared a false stop, re-check real ❚❚ (should be rare).
+        if (this.isUserStopped()) {
+            this.setNeedGesture(true);
+            this.syncHintVisibility();
+            return;
+        }
         // Repair sessions poisoned by old leave/domain_empty want_play=0 writes.
         this.clearLegacyStopPoison();
+        // F5 while playing: session latch forces sticky resume (progress/want already cached).
+        var navResume = this.consumeNavResumeLatch();
+        if (navResume) {
+            this.setWantPlay(true);
+            this.setUserStopped(false);
+            this.touchAudible();
+            this.beginNavResumeBypass();
+        }
+        // F5 latch / sticky want: never flash「点击开启」from idle-clock expire mid-resume.
+        this.expireStaleWantPlay({ silent: !!(navResume || this.playIntent() === 'play') });
         var intent = this.playIntent();
+        if (navResume && intent !== 'play') {
+            this.setWantPlay(true);
+            intent = 'play';
+        }
         if (this.isDismissed() && intent !== 'play') {
             this.setNeedGesture(false);
             this.syncHintVisibility();
             setStatus(this.root, textOf(this.root, '[data-store-music-i18n-dismissed]', '已关闭自动播放，点击播放可重新开启'));
-            return;
-        }
-        if (intent === 'stop' && this.isUserStopped()) {
-            // User explicitly stopped — do not honor try_autoplay until they press play again.
-            this.setNeedGesture(true);
-            this.syncHintVisibility();
             return;
         }
         if (intent === 'stop') {
@@ -2928,28 +4086,38 @@
             this.clearLegacyStopPoison();
             intent = this.playIntent();
         }
-        // Re-apply snap in case boot raced; ensures we never fall back to track 0 while
-        // progress still points at 孤城 (or any unfinished selection).
-        this.restoreProgressIndex();
-        var hasSnap = this.hasResumeSnap();
-        var resume = intent === 'play' || (intent === 'unset' && hasSnap);
+        // A valid local track snapshot is a previous playback session, not a cold visit.
+        // It may exist without want_play=1 after an unload/legacy cleanup; once the
+        // explicit stop/dismiss guards above have passed, resume it immediately.
+        var restoredProgress = this.restoreProgressIndex();
+        var cachedResume = !!(restoredProgress && this.hasResumeSnap());
         var delaySec = Math.max(1, Math.min(15, Number(this.cfg.delay_seconds) || 3));
-        // Cross-page / refresh resume: start ASAP on the saved track. Cold first visit keeps delay.
-        var waitMs = resume ? 0 : delaySec * 1000;
+        // Refresh/cross-page/cached resume → ASAP. Only a cold visit waits delay_seconds.
+        var stickyResume = intent === 'play' || navResume || cachedResume;
+        var waitMs = (stickyResume || skipDelay) ? 0 : delaySec * 1000;
         if (force && this._awaitingConsent) {
             waitMs = 0;
         }
         this._awaitingConsent = false;
         this._scheduleInFlight = true;
         var gen = (this._scheduleGen = (Number(this._scheduleGen) || 0) + 1);
-        whenWindowLoaded().then(function () {
+        // Sticky F5 / want_play / cached progress: play as soon as this module boots.
+        // Do NOT wait for window `load` (images/third-party can stall for seconds).
+        // Cold first visit still waits for load + delay_seconds.
+        var bootGate = stickyResume ? Promise.resolve() : whenWindowLoaded();
+        bootGate.then(function () {
             return delay(waitMs);
         }).then(function () {
             if (gen !== self._scheduleGen) {
                 return;
             }
+            if (!self._docAlive) {
+                return;
+            }
+            // Re-check after delay (or ASAP sticky path): user may have paused / peer may lead.
             self.clearLegacyStopPoison();
-            if (self.playIntent() === 'stop' && self.isUserStopped()) {
+            self.expireStaleWantPlay({ silent: !!(navResume || stickyResume) });
+            if (self.isUserStopped() || self._naturalEnded) {
                 return;
             }
             if (self.isDismissed() && self.playIntent() !== 'play') {
@@ -2962,7 +4130,7 @@
             if (allowed === undefined) {
                 return;
             }
-            if (gen !== self._scheduleGen) {
+            if (gen !== self._scheduleGen || !self._docAlive) {
                 return;
             }
             if (!allowed) {
@@ -2971,63 +4139,112 @@
                 return;
             }
             self.clearLegacyStopPoison();
+            self.expireStaleWantPlay({ silent: !!(navResume || stickyResume) });
+            // Expire must leave unset (not '0'); re-clear any legacy stop residue before gates.
+            self.clearLegacyStopPoison();
             var latest = self.playIntent();
             if (latest === 'stop' && self.isUserStopped()) {
                 self.setNeedGesture(true);
                 return;
             }
             if (latest === 'stop') {
+                self.clearLegacyStopPoison();
+                latest = self.playIntent();
+            }
+            if (latest === 'stop') {
                 latest = 'unset';
             }
+            // Snap from a previous session is an autoplay trigger after the explicit
+            // stop/dismiss guards above — it is the cached-resume fast path.
             self.restoreProgressIndex();
-            var snapAgain = self.hasResumeSnap();
-            // 1) want_play → resume unfinished selection
-            // 2) progress snap after page switch → resume that track (never force first item)
-            // 3) cold visit only → try_autoplay first/current playlist head
-            var shouldPlay = latest === 'play'
-                || (latest === 'unset' && snapAgain)
-                || (latest === 'unset'
-                    && !snapAgain
-                    && self.cfg.try_autoplay !== false
-                    && self.cfg.try_autoplay !== 0
-                    && self.cfg.try_autoplay !== '0');
+            // 1) sticky want_play / nav latch / cached progress → immediate resume
+            // 2) cold visit → try_autoplay after delay (already waited, or skipDelay peer-retry)
+            var stickyNow = latest === 'play' || navResume || cachedResume;
+            var coldAutoplay = !stickyNow
+                && latest === 'unset'
+                && self.cfg.try_autoplay !== false
+                && self.cfg.try_autoplay !== 0
+                && self.cfg.try_autoplay !== '0';
+            var shouldPlay = stickyNow || coldAutoplay;
             if (!shouldPlay) {
                 self.setNeedGesture(true);
                 return;
             }
             self._autoplayPending = true;
-            // Refresh/resume: drop stale lock from the document we just unloaded (solo tab).
+            if (stickyNow) {
+                self.beginNavResumeBypass();
+                self._stickyRetryLeft = 3;
+            }
+            // Refresh/resume: drop stale lock only when this is the sole remaining tab.
             self.clearStaleLeaderForSoloResume();
-            // New / soft-loaded tab: if another page is already leading, stay quiet.
-            // Do not sticky-nag; user can ▶ / 选曲 here to take over (last op wins).
+            // New page: if another tab (even background) still holds the lock / is playing,
+            // stay quiet — do not open a second audible source. ▶ can still take over.
             if (self.hasActivePeerLeader()) {
                 self._autoplayPending = true;
-                self.setNeedGesture(true);
+                // Sticky F5: dying-tab lock races for ~100–300ms — retry quietly, do not
+                // flash「点击开启音乐」(that is only for cold visit / explicit stop).
+                if (!stickyNow) {
+                    self.setNeedGesture(true);
+                } else {
+                    self.armStickyPlayRetry();
+                }
+                self.syncRemotePlayingUi(true, self.readLeaderLock());
+                // Cold and sticky both retry once — otherwise 进店 stays silent behind a dying lock.
                 self.armPeerLeaderRetry();
                 setStatus(self.root, '');
                 return;
             }
+            // F5 census race: dying tab dropped itself; register this tab before soft gate.
+            self._docAlive = true;
+            self.touchOriginTab();
             if (!self.canAudiblyStart(false)) {
-                self.setNeedGesture(true);
-                return;
+                if (stickyNow && document.visibilityState === 'visible') {
+                    self.touchOriginTab();
+                    if (!self.canAudiblyStart(true)) {
+                        self.armStickyPlayRetry();
+                        return;
+                    }
+                } else {
+                    self.setNeedGesture(true);
+                    return;
+                }
             }
-            return self.ensureAudio().then(function () {
-                if (gen !== self._scheduleGen) {
+            return self.ensureAudio({ preferCache: stickyNow }).then(function () {
+                if (gen !== self._scheduleGen || !self._docAlive) {
                     return;
                 }
                 self.clearStaleLeaderForSoloResume();
                 if (self.hasActivePeerLeader()) {
                     self._autoplayPending = true;
-                    self.setNeedGesture(true);
+                    if (!stickyNow) {
+                        self.setNeedGesture(true);
+                    } else {
+                        self.armStickyPlayRetry();
+                    }
+                    self.syncRemotePlayingUi(true, self.readLeaderLock());
                     self.armPeerLeaderRetry();
                     setStatus(self.root, '');
                     return;
                 }
-                return self.tryPlay({ force: false });
+                // Final gate right before play() — delay path must not skip this.
+                if (self.isUserStopped() || self._naturalEnded) {
+                    return;
+                }
+                self.clearLegacyStopPoison();
+                if (self.playIntent() === 'stop' && self.isUserStopped()) {
+                    return;
+                }
+                // Sticky want_play / cache / latch all share the refresh-resume path.
+                return self.tryPlay({ force: false, navResume: stickyNow || navResume });
             });
         }).catch(function () {
             self._autoplayPending = true;
-            self.setNeedGesture(true);
+            self.clearNavResumeBypass();
+            if (stickyResume || navResume) {
+                self.armStickyPlayRetry();
+            } else {
+                self.setNeedGesture(true);
+            }
         }).then(function () {
             if (gen === self._scheduleGen) {
                 self._scheduleInFlight = false;
@@ -3046,48 +4263,60 @@
                 return;
             }
             global.setTimeout(function () {
-                idbGetAudio(url).then(function (hit) {
-                    if (hit || self.isDismissed()) {
-                        return;
-                    }
-                    return global.fetch(url, {
-                        credentials: 'same-origin',
-                        cache: 'force-cache'
-                    }).then(function (res) {
-                        if (!res.ok) {
-                            return null;
-                        }
-                        return res.blob();
-                    }).then(function (blob) {
-                        if (blob) {
-                            return idbPutAudio(url, blob);
-                        }
-                    });
-                }).catch(function () {
-                    // Soft.
-                });
+                if (self.isDismissed()) {
+                    return;
+                }
+                // Skip warming the currently streaming track — avoid competing Range fetches.
+                var current = self.currentTrack();
+                var curUrl = current ? String(current.url || '') : '';
+                if (curUrl && normalizeTrackUrl(curUrl) === normalizeTrackUrl(url)
+                    && self.audio && !self.audio.paused) {
+                    return;
+                }
+                warmIdbAudio(normalizeTrackUrl(url) || url, url);
             }, 350 + index * 280);
         });
     };
 
-    StoreMusic.prototype.ensureAudio = function () {
+    /**
+     * Defer full-file IDB warm until after first audible stream (or long idle),
+     * so progressive play keeps the connection.
+     */
+    StoreMusic.prototype.armDeferredAudioCacheWarm = function () {
         var self = this;
+        if (this._warmArmed) {
+            return;
+        }
+        this._warmArmed = true;
+        var run = function () {
+            if (self._warmRan || !self._docAlive) {
+                return;
+            }
+            self._warmRan = true;
+            self.warmAudioCache();
+        };
+        this._warmAfterPlay = function () {
+            global.setTimeout(run, 10000);
+        };
+        global.setTimeout(run, 60000);
+    };
+
+    StoreMusic.prototype.ensureAudio = function (opts) {
+        var self = this;
+        var preferCache = !!(opts && opts.preferCache);
         var track = this.currentTrack();
         var url = track ? String(track.url || '').trim() : '';
         if (!url) {
             return Promise.reject(new Error('no track'));
         }
-        if (this.audioReady && this.audio && this.audio.getAttribute('data-store-music-src') === url
-            && !this.audio.__welineMediaGraphBound) {
+        if (this.audioReady && this.audio && this.audio.getAttribute('data-store-music-src') === url) {
             this.syncTrackMeta(!!(this.audio && !this.audio.paused));
             return Promise.resolve(this.audio);
         }
-        // Switching track or graph-bound element: discard and remount fresh (no dual-decode).
-        if (this.audio && (this.audio.getAttribute('data-store-music-src') !== url || this.audio.__welineMediaGraphBound)) {
-            this.discardAudioElement();
-            killRivalAudioElements(null);
-        }
+        // Soft pause + swap src on the process singleton (never spawn a second MediaElement).
+        this.discardAudioElement({ hard: false });
         var audio = this.mountAudioElement();
+        killRivalAudioElements(audio);
         registerStoreAudio(audio);
         global.__WelineStoreMusicSharedAudio = audio;
         audio.__welineStoreMusicOwner = this;
@@ -3095,7 +4324,7 @@
         var multi = this.tracks.length > 1;
         var loopOne = !multi && !(this.cfg.loop === false || this.cfg.loop === 0 || this.cfg.loop === '0');
         audio.loop = !!loopOne;
-        var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 12);
+        var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 8);
         audio.volume = Math.max(0, Math.min(1, vol / 100));
         var lower = url.toLowerCase().split('?')[0];
         var isM4a = lower.slice(-4) === '.m4a' || lower.indexOf('.m4a.') !== -1;
@@ -3106,8 +4335,10 @@
             }
         }
         var token = ++this._loadToken;
-        return resolveMediaSrc(url).then(function (resolved) {
-            if (token !== self._loadToken) {
+        var playGen = nextPlayGeneration();
+        this._playGen = playGen;
+        return resolveMediaSrc(url, preferCache).then(function (resolved) {
+            if (token !== self._loadToken || self._playGen !== playGen || currentPlayGeneration() !== playGen) {
                 if (resolved.src && String(resolved.src).indexOf('blob:') === 0) {
                     try {
                         URL.revokeObjectURL(resolved.src);
@@ -3132,10 +4363,15 @@
             }
             if (resolved.src && String(resolved.src).indexOf('blob:') === 0) {
                 self._blobUrl = resolved.src;
+                audio.preload = 'metadata';
+            } else {
+                audio.preload = 'auto';
             }
             audio.setAttribute('data-store-music-src', url);
+            audio.setAttribute('data-store-music-stream', resolved.stream ? '1' : '0');
             audio.src = resolved.src;
             self.audioReady = true;
+            enforceSoleAudibleSource(audio);
             self.syncTrackMeta(false);
             return audio;
         });
@@ -3146,7 +4382,15 @@
             return false;
         }
         var t = Number(this._pendingSeek);
-        if (!Number.isFinite(t) || t < 0.25) {
+        if (!Number.isFinite(t) || t < 0) {
+            this._pendingSeek = null;
+            return false;
+        }
+        // Tiny positions still count as "remembered" — only skip exact 0 cold starts.
+        if (t > 0 && t < 0.05) {
+            t = 0.05;
+        }
+        if (t === 0) {
             this._pendingSeek = null;
             return false;
         }
@@ -3158,6 +4402,7 @@
             }
             t = Math.min(t, Math.max(0, dur - 0.25));
             this.audio.currentTime = t;
+            this._lastGoodProgressTime = t;
             this._pendingSeek = null;
             return true;
         } catch (e) {
@@ -3177,15 +4422,154 @@
         }
     };
 
+    /**
+     * Playlist / track finished with loop off. Must sticky-stop soft resume:
+     * leaving want_play=1 made visibility/peer-release/armPeerLeaderRetry
+     * secretly restart playback minutes/hours later.
+     * Do NOT set user_stopped — that permanently killed 进店 try_autoplay (1.1.28).
+     */
+    StoreMusic.prototype.finishNaturalPlayback = function () {
+        this._naturalEnded = true;
+        this._awaitingUnmute = false;
+        this._autoplayPending = false;
+        this.disarmPageGestureUnlock();
+        this.setWantPlay(false);
+        try {
+            if (this.audio) {
+                this.audio.pause();
+            }
+        } catch (ePause) {
+            // ignore
+        }
+        this.hardSilenceMedia(false);
+        this.releaseLeadership();
+        this.broadcastLeaderState('stop');
+        this.persistSelection(0);
+        this.syncPlayingUi(false);
+        this.setNeedGesture(true);
+        setStatus(this.root, '');
+    };
+
+    /**
+     * Advance / wrap playlist after `ended`. Remount + muted fallback — ended is not a gesture.
+     */
+    StoreMusic.prototype.continuePlaylistPlayback = function () {
+        var self = this;
+        var track = this.currentTrack();
+        var url = track ? String(track.url || '').trim() : '';
+        if (!url) {
+            return Promise.reject(new Error('no track'));
+        }
+        this._naturalEnded = false;
+        this.setDismissed(false);
+        this.setUserStopped(false);
+        this.setWantPlay(true);
+        this._pendingSeek = 0;
+        this._docAlive = true;
+        this.stopLeaveHammer();
+        this.touchOriginTab();
+        this._audioMutating = true;
+        this.stopWaveLoop();
+        var playGen = nextPlayGeneration();
+        this._playGen = playGen;
+        this.discardAudioElement({ hard: false });
+        var audio = this.mountAudioElement();
+        killRivalAudioElements(audio);
+        audio.__welineStoreMusicOwner = this;
+        registerStoreAudio(audio);
+        global.__WelineStoreMusicSharedAudio = audio;
+        var multi = this.tracks.length > 1;
+        var loopOne = !multi && !(this.cfg.loop === false || this.cfg.loop === 0 || this.cfg.loop === '0');
+        audio.loop = !!loopOne;
+        var vol = this.volume ? Number(this.volume.value) : Number(this.cfg.default_volume || 8);
+        audio.volume = Math.max(0, Math.min(1, vol / 100));
+        this.acquireLeaderLock(true);
+        // Playlist advance is authoritative — force peers to drop residual decode.
+        this.claimLeadership(true);
+        setStatus(this.root, '');
+        audio.setAttribute('data-store-music-src', url);
+        audio.src = url;
+        this.audioReady = true;
+        this.syncTrackMeta(true);
+        this.syncPlaylistActive();
+        this.cacheTrackInBackground(url);
+        var markPlaying = function (mutedSoft) {
+            if (self._playGen !== playGen || currentPlayGeneration() !== playGen) {
+                try {
+                    audio.pause();
+                } catch (eStale) {
+                    // ignore
+                }
+                self._audioMutating = false;
+                return;
+            }
+            self._awaitingUnmute = !!mutedSoft;
+            self.setWantPlay(true);
+            self.touchAudible();
+            enforceSoleAudibleSource(audio);
+            self.syncPlayingUi(true);
+            self.broadcastLeaderState('playing', false);
+            self._audioMutating = false;
+        };
+        try {
+            audio.muted = false;
+        } catch (eMute) {
+            // ignore
+        }
+        var playResult = null;
+        try {
+            playResult = audio.play();
+        } catch (err) {
+            this._audioMutating = false;
+            this.setNeedGesture(true);
+            return Promise.reject(err);
+        }
+        if (!playResult || typeof playResult.then !== 'function') {
+            markPlaying(!!audio.muted);
+            return Promise.resolve(audio);
+        }
+        return playResult.then(function () {
+            enforceSoleAudibleSource(audio);
+            markPlaying(!!audio.muted);
+            return audio;
+        }).catch(function (err) {
+            var name = err && err.name ? String(err.name) : '';
+            if (name === 'NotAllowedError' && !audio.muted) {
+                try {
+                    audio.muted = true;
+                } catch (e2) {
+                    // ignore
+                }
+                var mutedPlay = audio.play();
+                if (!mutedPlay || typeof mutedPlay.then !== 'function') {
+                    markPlaying(true);
+                    return audio;
+                }
+                return mutedPlay.then(function () {
+                    markPlaying(true);
+                    return audio;
+                }).catch(function () {
+                    self._audioMutating = false;
+                    self._awaitingUnmute = false;
+                    self.setNeedGesture(true);
+                    return audio;
+                });
+            }
+            self._audioMutating = false;
+            self.setNeedGesture(true);
+            return audio;
+        });
+    };
+
     StoreMusic.prototype.onTrackEnded = function () {
         this.syncPlayingUi(false);
         this.stopWaveLoop();
+        var loopOn = !(this.cfg.loop === false || this.cfg.loop === 0 || this.cfg.loop === '0');
         if (this.tracks.length > 1) {
-            var loopPlaylist = !(this.cfg.loop === false || this.cfg.loop === 0 || this.cfg.loop === '0');
             var next = this.trackIndex + 1;
             if (next >= this.tracks.length) {
-                if (!loopPlaylist) {
-                    this.persistSelection(0);
+                if (!loopOn) {
+                    this.finishNaturalPlayback();
                     return;
                 }
                 next = 0;
@@ -3195,14 +4579,21 @@
             this.persistSelection(0);
             this.syncPlaylistActive();
             var self = this;
-            this.ensureAudio().then(function () {
-                return self.tryPlay();
-            }).catch(function () {
+            this.continuePlaylistPlayback().catch(function () {
                 self.setNeedGesture(true);
             });
-        } else {
-            this.persistSelection(0);
+            return;
         }
+        // Single track: MediaElement.loop handles repeat when loopOn.
+        if (!loopOn) {
+            this.finishNaturalPlayback();
+            return;
+        }
+        this.persistSelection(0);
+        var selfOne = this;
+        this.continuePlaylistPlayback().catch(function () {
+            selfOne.setNeedGesture(true);
+        });
     };
 
     StoreMusic.prototype.skipTrack = function (delta) {
@@ -3213,38 +4604,87 @@
         this.selectTrack(next);
     };
 
-    StoreMusic.prototype.syncPlayingUi = function (playing) {
+    StoreMusic.prototype.syncTransportButtons = function (playing) {
         if (this.playBtn) {
             this.playBtn.hidden = !!playing;
         }
         if (this.pauseBtn) {
             this.pauseBtn.hidden = !playing;
         }
+    };
+
+    StoreMusic.prototype.clearRemotePlayingState = function () {
+        this.remotePlaying = false;
+        this.remoteOwnerTabId = '';
+        this.remoteStateAt = 0;
         if (this.root) {
-            this.root.classList.toggle('is-playing', !!playing);
-            this.root.classList.toggle('is-awaiting-unmute', !!(playing && this._awaitingUnmute));
+            this.root.classList.remove('is-remote-playing');
         }
-        this.syncTrackMeta(!!playing);
-        if (playing && this._awaitingUnmute) {
+    };
+
+    /**
+     * Mirror a peer's playback state without mounting, seeking, or playing local audio.
+     * A local user operation clears this mirror and can then claim the lock normally.
+     */
+    StoreMusic.prototype.syncRemotePlayingUi = function (playing, msg) {
+        if (this.isAudibleOwner()) {
+            return;
+        }
+        this.remotePlaying = !!playing;
+        this.remoteOwnerTabId = playing && msg ? String(msg.tabId || '') : '';
+        this.remoteStateAt = playing && msg ? (Number(msg.at) || 0) : 0;
+        this.syncPlayingUi(false);
+    };
+
+    StoreMusic.prototype.syncPlayingUi = function (playing) {
+        var localPlaying = !!playing;
+        if (localPlaying) {
+            this.clearRemotePlayingState();
+        }
+        var mirroredPlaying = !localPlaying && !!this.remotePlaying;
+        this.syncTransportButtons(localPlaying || mirroredPlaying);
+        if (this.root) {
+            this.root.classList.toggle('is-playing', localPlaying);
+            this.root.classList.toggle('is-remote-playing', mirroredPlaying);
+            this.root.classList.toggle('is-awaiting-unmute', !!(localPlaying && this._awaitingUnmute));
+        }
+        if (!localPlaying) {
+            this.resetSpectrumBars();
+        }
+        this.syncTrackMeta(localPlaying || mirroredPlaying);
+        if (localPlaying && this._awaitingUnmute) {
             // Soft muted autoplay succeeded — keep gesture arm for first unmute click.
             this.needGesture = true;
             this._autoplayPending = true;
             if (this.mascot) {
                 this.mascot.classList.add('is-need-gesture');
             }
-            setStatus(
-                this.root,
-                textOf(this.root, '[data-store-music-i18n-tap-to-unmute]', '点击开启声音')
-            );
-            if (this.hint) {
-                this.hint.textContent = textOf(
+            // Sticky F5 muted resume: already「续播」decoding — do not flash cold「点击开启音乐」.
+            // First pointer/keydown unmutes via armPageGestureUnlock.
+            if (this._stickyMutedResume) {
+                setStatus(this.root, '');
+                if (this.hint) {
+                    this.hint.textContent = '';
+                }
+                this.syncHintVisibility();
+            } else {
+                setStatus(
                     this.root,
-                    '[data-store-music-i18n-tap-to-unmute]',
-                    '点击开启声音'
+                    textOf(this.root, '[data-store-music-i18n-tap-to-unmute]', '点击开启声音')
                 );
+                if (this.hint) {
+                    this.hint.textContent = textOf(
+                        this.root,
+                        '[data-store-music-i18n-tap-to-unmute]',
+                        '点击开启声音'
+                    );
+                }
             }
             this.armPageGestureUnlock();
             this.syncHintVisibility();
+            this.startSoleSourceWatch();
+            // Playing must poll host liveness even while "visible" (Cursor closes without hide).
+            this.startOrphanWatch();
             return;
         }
         if (playing) {
@@ -3253,22 +4693,51 @@
             this._awaitingConsent = false;
             this._awaitingUnmute = false;
             this.disarmPageGestureUnlock();
+            this.startSoleSourceWatch();
+            this.startOrphanWatch();
             if (this.mascot) {
                 this.mascot.classList.remove('is-need-gesture');
             }
             setStatus(this.root, '');
+        } else {
+            this.stopSoleSourceWatch();
+            if (!document.hidden) {
+                this.stopOrphanWatch();
+            }
         }
         this.syncHintVisibility();
+        this.updateWaveLoop();
     };
 
     StoreMusic.prototype.tryPlay = function (opts) {
         var self = this;
         var force = !!(opts && opts.force);
+        var navResume = !!(opts && opts.navResume);
         if (!this._docAlive) {
             return Promise.resolve();
         }
+        if (navResume) {
+            this.beginNavResumeBypass();
+        }
         if (force) {
             return this.playCurrentTrackNow();
+        }
+        // Soft autoplay/resume must honor natural end / ❚❚ / dismiss.
+        // Legacy want_play=0 (not ❚❚) must not block cold try_autoplay.
+        if (!force) {
+            this.clearLegacyStopPoison();
+        }
+        if (this._naturalEnded || this.isUserStopped() || this.isDismissed()) {
+            return Promise.resolve();
+        }
+        if (this.playIntent() === 'stop') {
+            if (this.isUserStopped()) {
+                return Promise.resolve();
+            }
+            this.clearLegacyStopPoison();
+        }
+        if (this.playIntent() === 'stop') {
+            return Promise.resolve();
         }
         if (!this.canAudiblyStart(false)) {
             return Promise.resolve();
@@ -3285,7 +4754,7 @@
             return Promise.resolve();
         }
         setStatus(this.root, '');
-        return this.ensureAudio().then(function (audio) {
+        return this.ensureAudio({ preferCache: navResume }).then(function (audio) {
             if (!self._docAlive || !self.canAudiblyStart(false)) {
                 return;
             }
@@ -3310,19 +4779,77 @@
             }
             var markPlaying = function (mutedSoft) {
                 self._awaitingUnmute = !!mutedSoft;
+                self._stickyMutedResume = !!(mutedSoft && navResume);
+                self.clearNavResumeBypass();
                 self.setWantPlay(true);
-                self.markHeardWhileVisible();
+                self.touchAudible();
+                self._stickyRetryLeft = 0;
+                enforceSoleAudibleSource(audio);
                 self.syncPlayingUi(true);
+                // Soft start must still force_stop peers — otherwise two tabs both decode
+                // (heard as 两首歌一起播). Stall-grace heartbeat keeps our lock so peers
+                // cannot soft-steal mid-track just because of a short pause.
+                self.broadcastForceStop(false);
                 self.broadcastLeaderState('playing', false);
+            };
+            var playMutedFallback = function () {
+                try {
+                    audio.muted = true;
+                } catch (e2) {
+                    // ignore
+                }
+                var mutedPlay = null;
+                try {
+                    mutedPlay = audio.play();
+                } catch (mutedPlayError) {
+                    recoverSoftAutoplayFailure();
+                    return null;
+                }
+                if (!mutedPlay || typeof mutedPlay.then !== 'function') {
+                    markPlaying(true);
+                    return null;
+                }
+                return mutedPlay.then(function () {
+                    if (!self._docAlive) {
+                        return;
+                    }
+                    markPlaying(true);
+                }).catch(function () {
+                    recoverSoftAutoplayFailure();
+                });
+            };
+            var recoverSoftAutoplayFailure = function () {
+                self._awaitingUnmute = false;
+                self._autoplayPending = true;
+                self.clearNavResumeBypass();
+                // A rejected play() is not playback ownership. Release the lock
+                // before showing the gesture fallback so quiet peers are not
+                // stranded behind a silent refresh tab.
+                self.releaseLeadership();
+                self.silenceForOtherTab(false, true);
+                // Sticky F5: AbortError / policy races — retry quietly, do not flash tip yet.
+                var sticky = navResume || self.playIntent() === 'play' || self.hasResumeSnap();
+                if (sticky && !self.isUserStopped() && !self._naturalEnded) {
+                    self.armStickyPlayRetry();
+                    return;
+                }
+                self.setNeedGesture(true);
             };
             // Try unmuted first (refresh/MEI often allows sound). Only mute on NotAllowedError.
             // Do NOT pre-mute when !userActivation — that made F5 look like「不播放了」(silent).
+            self._playAbortRetried = false;
             try {
                 audio.muted = false;
             } catch (eMute) {
                 // ignore
             }
-            var p = audio.play();
+            var p = null;
+            try {
+                p = audio.play();
+            } catch (playError) {
+                recoverSoftAutoplayFailure();
+                return;
+            }
             if (!p || typeof p.then !== 'function') {
                 markPlaying(!!audio.muted);
                 return;
@@ -3341,40 +4868,55 @@
                 markPlaying(!!audio.muted);
             }).catch(function (err) {
                 var name = err && err.name ? String(err.name) : '';
-                if (name === 'NotAllowedError' && !audio.muted) {
-                    try {
-                        audio.muted = true;
-                    } catch (e2) {
-                        // ignore
-                    }
-                    var mutedPlay = audio.play();
-                    if (!mutedPlay || typeof mutedPlay.then !== 'function') {
-                        markPlaying(true);
-                        return;
-                    }
-                    return mutedPlay.then(function () {
+                // Src swap / double scheduleStart often rejects with AbortError — retry once.
+                if (name === 'AbortError' && !self._playAbortRetried) {
+                    self._playAbortRetried = true;
+                    return delay(50).then(function () {
                         if (!self._docAlive) {
                             return;
                         }
-                        markPlaying(true);
-                    }).catch(function () {
-                        self._awaitingUnmute = false;
-                        self._autoplayPending = true;
-                        self.setNeedGesture(true);
+                        try {
+                            audio.muted = false;
+                        } catch (eRetryMute) {
+                            // ignore
+                        }
+                        var retry = null;
+                        try {
+                            retry = audio.play();
+                        } catch (retryErr) {
+                            return playMutedFallback();
+                        }
+                        if (!retry || typeof retry.then !== 'function') {
+                            markPlaying(!!audio.muted);
+                            return;
+                        }
+                        return retry.then(function () {
+                            markPlaying(!!audio.muted);
+                        }).catch(function (err2) {
+                            var n2 = err2 && err2.name ? String(err2.name) : '';
+                            if ((n2 === 'NotAllowedError' || n2 === 'AbortError') && !audio.muted) {
+                                return playMutedFallback();
+                            }
+                            recoverSoftAutoplayFailure();
+                        });
                     });
                 }
-                self._awaitingUnmute = false;
-                self._autoplayPending = true;
-                self.setNeedGesture(true);
+                if ((name === 'NotAllowedError' || name === 'AbortError') && !audio.muted) {
+                    return playMutedFallback();
+                }
+                recoverSoftAutoplayFailure();
             });
         });
     };
 
     StoreMusic.prototype.userPlay = function () {
         this.markUserOperating();
+        this._naturalEnded = false;
         this.setDismissed(false);
         this.setUserStopped(false);
+        this.clearNavResumeBypass();
         this.setWantPlay(true);
+        this.touchAudible();
         this._awaitingUnmute = false;
         this._awaitingConsent = false;
         setStatus(this.root, '');
@@ -3456,41 +4998,6 @@
         setStatus(this.root, textOf(this.root, '[data-store-music-i18n-dismissed]', '已关闭自动播放，点击播放可重新开启'));
     };
 
-    StoreMusic.prototype.ensureAnalyser = function () {
-        if (this.waveConnected || !this.audio) {
-            return;
-        }
-        if (prefersReducedMotion()) {
-            this.waveMode = 'soft';
-            return;
-        }
-        var AC = global.AudioContext || global.webkitAudioContext;
-        if (!AC) {
-            this.waveMode = 'soft';
-            return;
-        }
-        try {
-            this.ctx = this.ctx || new AC();
-            if (this.ctx.state === 'suspended') {
-                this.ctx.resume();
-            }
-            this.source = this.ctx.createMediaElementSource(this.audio);
-            this.analyser = this.ctx.createAnalyser();
-            this.analyser.fftSize = 256;
-            this.source.connect(this.analyser);
-            this.analyser.connect(this.ctx.destination);
-            this.audio.__welineMediaGraphBound = true;
-            this.waveConnected = true;
-            this.waveMode = 'analyser';
-            this.waveFailed = false;
-        } catch (e) {
-            // Fall back to soft ink-wave so body atmosphere still shows.
-            this.waveMode = 'soft';
-            this.waveFailed = false;
-            this.syncWaveLabel();
-        }
-    };
-
     StoreMusic.prototype.disableWaveToggle = function () {
         if (this.waveToggle) {
             this.waveToggle.checked = false;
@@ -3502,9 +5009,182 @@
         }
     };
 
+    StoreMusic.prototype.setAvatarLevel = function (level) {
+        var n = Number(level);
+        if (!Number.isFinite(n)) {
+            n = 0;
+        }
+        n = Math.max(0, Math.min(1, n));
+        // Light smoothing so rings do not jitter frame-to-frame.
+        this._avatarLevel = (this._avatarLevel * 0.62) + (n * 0.38);
+        var out = this._avatarLevel;
+        if (this.root) {
+            this.root.style.setProperty('--w-store-music-level', out.toFixed(3));
+        }
+        if (this.mascot) {
+            this.mascot.style.setProperty('--w-store-music-level', out.toFixed(3));
+        }
+    };
+
+    StoreMusic.prototype.syncSpectrumRadius = function () {
+        var host = this.mascot || this.root;
+        if (!host || !host.style) {
+            return;
+        }
+        var face = this.root ? this.root.querySelector('.w-store-music__face') : null;
+        var box = (face || host).getBoundingClientRect();
+        var radius = Math.max(8, Math.min(box.width, box.height) / 2);
+        // Start just outside the visible circular face (border sits on the img edge).
+        host.style.setProperty('--w-spectrum-r', (radius + 1).toFixed(1) + 'px');
+    };
+
+    StoreMusic.prototype.ensureSpectrumBars = function () {
+        if (!this.spectrumEl || prefersReducedMotion()) {
+            return;
+        }
+        this.syncSpectrumRadius();
+        if (this._spectrumBars && this._spectrumBars.length === SPECTRUM_BAR_COUNT) {
+            return;
+        }
+        this.spectrumEl.textContent = '';
+        this._spectrumBars = [];
+        this._spectrumSmooth = [];
+        for (var i = 0; i < SPECTRUM_BAR_COUNT; i++) {
+            var bar = document.createElement('span');
+            bar.className = 'w-store-music__spectrum-bar';
+            bar.style.setProperty('--w-ang', ((360 / SPECTRUM_BAR_COUNT) * i) + 'deg');
+            bar.style.setProperty('--w-bar', '0');
+            this.spectrumEl.appendChild(bar);
+            this._spectrumBars.push(bar);
+            this._spectrumSmooth.push(0);
+        }
+    };
+
+    /**
+     * Drive polar spectrum bars from Analyser frequency bins (or soft fake spectrum).
+     * Hidden via CSS when !is-playing — never show idle concentric rings.
+     */
+    StoreMusic.prototype.updateSpectrumBars = function () {
+        this.ensureSpectrumBars();
+        this.syncSpectrumRadius();
+        if (!this._spectrumBars || !this._spectrumBars.length) {
+            return;
+        }
+        var playing = !!(this.root && this.root.classList.contains('is-playing')
+            && this.audio && !this.audio.paused);
+        if (!playing) {
+            this.resetSpectrumBars();
+            return;
+        }
+        var levels = [];
+        var i;
+        if (this.waveMode === 'analyser' && this.analyser) {
+            var bins = this.analyser.frequencyBinCount;
+            var data = new Uint8Array(bins);
+            this.analyser.getByteFrequencyData(data);
+            // Map thin bars across the low–mid spectrum and remove the analyser noise floor.
+            var usable = Math.max(SPECTRUM_BAR_COUNT, Math.floor(bins * 0.5));
+            var rawLevels = [];
+            var framePeak = 0.0001;
+            for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
+                var idx = Math.min(usable - 1, Math.floor((i / SPECTRUM_BAR_COUNT) * usable));
+                // Mirror left/right for a fuller ring (bass at bottom-ish via angle 0).
+                var mirrored = i < SPECTRUM_BAR_COUNT / 2
+                    ? idx
+                    : Math.min(usable - 1, Math.floor(((SPECTRUM_BAR_COUNT - 1 - i) / SPECTRUM_BAR_COUNT) * usable));
+                var raw = data[mirrored] / 255;
+                var aboveFloor = Math.max(0, (raw - 0.015) / 0.985);
+                var shaped = Math.pow(aboveFloor, 0.7);
+                rawLevels[i] = shaped;
+                if (shaped > framePeak) {
+                    framePeak = shaped;
+                }
+            }
+            // Per-frame normalize so quiet tracks still fill the visual range.
+            for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
+                levels[i] = Math.min(1, Math.max(0.12, (rawLevels[i] / framePeak) * 0.95));
+            }
+        } else {
+            var t = (this.audio && this.audio.currentTime) || 0;
+            for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
+                var phase = (i / SPECTRUM_BAR_COUNT) * Math.PI * 2;
+                var contour = 0.72 + (0.28 * Math.sin(phase * 2 + t * 0.45));
+                var pulse = 0.28
+                    + 0.32 * Math.abs(Math.sin(t * 2.4 + phase * 1.7))
+                    + 0.24 * Math.abs(Math.sin(t * 5.7 + phase * 0.8))
+                    + 0.18 * Math.abs(Math.sin(t * 1.05 + phase * 3.1));
+                levels[i] = Math.min(1, Math.max(0.22, pulse * contour));
+            }
+        }
+        for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
+            var prev = this._spectrumSmooth[i] || 0;
+            var target = Math.max(0, Math.min(1, Number(levels[i]) || 0));
+            // Quick attack, slower decay: a small envelope feels more like music than
+            // 48 synchronised columns jumping at the same speed.
+            var rate = target > prev ? 0.34 : 0.12;
+            var next = prev + ((target - prev) * rate);
+            this._spectrumSmooth[i] = next;
+            this._spectrumBars[i].style.setProperty('--w-bar', next.toFixed(3));
+        }
+    };
+
+    StoreMusic.prototype.resetSpectrumBars = function () {
+        if (!this._spectrumBars || !this._spectrumBars.length) {
+            return;
+        }
+        for (var i = 0; i < this._spectrumBars.length; i++) {
+            this._spectrumSmooth[i] = 0;
+            this._spectrumBars[i].style.setProperty('--w-bar', '0');
+        }
+    };
+
+    StoreMusic.prototype.resetAvatarLevel = function () {
+        this._avatarLevel = 0;
+        this.resetSpectrumBars();
+        if (this.root) {
+            this.root.style.setProperty('--w-store-music-level', '0');
+        }
+        if (this.mascot) {
+            this.mascot.style.setProperty('--w-store-music-level', '0');
+        }
+    };
+
+    StoreMusic.prototype.readPlaybackLevel = function () {
+        if (this.waveMode === 'analyser' && this.analyser) {
+            var bins = this.analyser.frequencyBinCount;
+            var data = new Uint8Array(bins);
+            this.analyser.getByteFrequencyData(data);
+            var sum = 0;
+            var peak = 0;
+            // Bias toward mid/low energy — more musical than raw average of high hiss.
+            var use = Math.max(8, Math.floor(bins * 0.55));
+            for (var i = 0; i < use; i++) {
+                var v = data[i] / 255;
+                sum += v;
+                if (v > peak) {
+                    peak = v;
+                }
+            }
+            var avg = sum / use;
+            return Math.max(0, Math.min(1, (avg * 0.72) + (peak * 0.38)));
+        }
+        var t = (this.audio && this.audio.currentTime) || 0;
+        return Math.max(
+            0.12,
+            Math.min(
+                0.85,
+                0.28
+                    + 0.22 * Math.abs(Math.sin(t * 2.15))
+                    + 0.18 * Math.abs(Math.sin(t * 5.4))
+                    + 0.12 * Math.abs(Math.sin(t * 0.9))
+            )
+        );
+    };
+
     StoreMusic.prototype.updateWaveLoop = function () {
-        if (!this.waveToggle || !this.waveToggle.checked || prefersReducedMotion()) {
+        if (prefersReducedMotion()) {
             this.stopWaveLoop();
+            this.resetAvatarLevel();
             if (this.waveCanvas) {
                 this.waveCanvas.hidden = true;
             }
@@ -3512,14 +5192,29 @@
         }
         if (!this.audio || this.audio.paused || document.hidden) {
             this.stopWaveLoop();
+            this.resetAvatarLevel();
+            if (this.waveCanvas && (!this.waveToggle || !this.waveToggle.checked)) {
+                this.waveCanvas.hidden = true;
+            }
             return;
         }
+        // Avatar edge waves need analyser/soft clock even when full-page waveform is off.
         this.ensureAnalyser();
-        if (!this.waveCanvas) {
-            return;
+        var waveOn = !!(this.waveToggle && this.waveToggle.checked);
+        if (this.waveCanvas) {
+            // Escape zero-size host / transform ancestors so fixed + z-index paint above chrome.
+            if (waveOn && this.waveCanvas.parentElement !== document.body) {
+                try {
+                    document.body.appendChild(this.waveCanvas);
+                } catch (eMount) {
+                    // ignore
+                }
+            }
+            this.waveCanvas.hidden = !waveOn;
+            if (waveOn) {
+                this.waveCanvas.setAttribute('aria-hidden', 'false');
+            }
         }
-        this.waveCanvas.hidden = false;
-        this.waveCanvas.setAttribute('aria-hidden', 'false');
         this.startWaveLoop();
     };
 
@@ -3528,72 +5223,78 @@
         if (this.raf) {
             return;
         }
-        var canvas = this.waveCanvas;
-        var ctx2d = canvas.getContext('2d');
-        if (!ctx2d) {
-            return;
-        }
         var draw = function () {
-            if (!self.waveToggle || !self.waveToggle.checked || !self.audio || self.audio.paused || document.hidden) {
+            if (!self.audio || self.audio.paused || document.hidden || prefersReducedMotion()) {
                 self.raf = 0;
+                self.resetAvatarLevel();
                 return;
             }
-            var w = canvas.clientWidth || global.innerWidth || 1;
-            var h = canvas.clientHeight || global.innerHeight || 1;
-            var dpr = Math.min(global.devicePixelRatio || 1, 1.5);
-            if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-                canvas.width = Math.floor(w * dpr);
-                canvas.height = Math.floor(h * dpr);
-            }
-            ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx2d.clearRect(0, 0, w, h);
-            var fill = accentRgba(0.28);
-            ctx2d.fillStyle = fill;
-            ctx2d.strokeStyle = accentRgba(0.22);
-            ctx2d.lineWidth = 1.25;
+            var level = self.readPlaybackLevel();
+            self.setAvatarLevel(level);
+            self.updateSpectrumBars();
 
-            if (self.waveMode === 'analyser' && self.analyser) {
-                var bins = self.analyser.frequencyBinCount;
-                var step = w < 720 ? 4 : 2;
-                var data = new Uint8Array(bins);
-                self.analyser.getByteFrequencyData(data);
-                var barCount = Math.floor(bins / step);
-                var barW = w / barCount;
-                for (var i = 0; i < barCount; i++) {
-                    var v = data[i * step] / 255;
-                    var bh = Math.max(2, v * h * 0.42);
-                    ctx2d.fillRect(i * barW, h - bh, Math.max(1, barW * 0.65), bh);
-                }
-            } else {
-                // Soft ink-wash undulation driven by playback clock (no WebAudio required).
-                var t = (self.audio.currentTime || 0) * 1.35;
-                ctx2d.beginPath();
-                for (var x = 0; x <= w; x += 6) {
-                    var y = h * 0.72
-                        + Math.sin(x * 0.012 + t) * h * 0.06
-                        + Math.sin(x * 0.004 + t * 0.7) * h * 0.04;
-                    if (x === 0) {
-                        ctx2d.moveTo(x, y);
+            var waveOn = !!(self.waveToggle && self.waveToggle.checked);
+            var canvas = self.waveCanvas;
+            if (waveOn && canvas) {
+                var ctx2d = canvas.getContext('2d');
+                if (ctx2d) {
+                    var w = canvas.clientWidth || global.innerWidth || 1;
+                    var h = canvas.clientHeight || global.innerHeight || 1;
+                    var dpr = Math.min(global.devicePixelRatio || 1, 1.5);
+                    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+                        canvas.width = Math.floor(w * dpr);
+                        canvas.height = Math.floor(h * dpr);
+                    }
+                    ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    ctx2d.clearRect(0, 0, w, h);
+                    ctx2d.fillStyle = accentRgba(0.42);
+                    ctx2d.strokeStyle = accentRgba(0.32);
+                    ctx2d.lineWidth = 1.25;
+
+                    if (self.waveMode === 'analyser' && self.analyser) {
+                        var bins = self.analyser.frequencyBinCount;
+                        var step = w < 720 ? 4 : 2;
+                        var data = new Uint8Array(bins);
+                        self.analyser.getByteFrequencyData(data);
+                        var barCount = Math.floor(bins / step);
+                        var barW = w / barCount;
+                        for (var i = 0; i < barCount; i++) {
+                            var v = data[i * step] / 255;
+                            var bh = Math.max(4, v * h * 0.55);
+                            ctx2d.fillRect(i * barW, h - bh, Math.max(1, barW * 0.7), bh);
+                        }
                     } else {
-                        ctx2d.lineTo(x, y);
+                        var t = (self.audio.currentTime || 0) * 1.35;
+                        ctx2d.beginPath();
+                        for (var x = 0; x <= w; x += 6) {
+                            var y = h * 0.72
+                                + Math.sin(x * 0.012 + t) * h * 0.06
+                                + Math.sin(x * 0.004 + t * 0.7) * h * 0.04;
+                            if (x === 0) {
+                                ctx2d.moveTo(x, y);
+                            } else {
+                                ctx2d.lineTo(x, y);
+                            }
+                        }
+                        ctx2d.lineTo(w, h);
+                        ctx2d.lineTo(0, h);
+                        ctx2d.closePath();
+                        ctx2d.fill();
+                        ctx2d.beginPath();
+                        for (var x2 = 0; x2 <= w; x2 += 8) {
+                            var y2 = h * 0.62
+                                + Math.sin(x2 * 0.018 + t * 1.2) * h * 0.035;
+                            if (x2 === 0) {
+                                ctx2d.moveTo(x2, y2);
+                            } else {
+                                ctx2d.lineTo(x2, y2);
+                            }
+                        }
+                        ctx2d.stroke();
                     }
                 }
-                ctx2d.lineTo(w, h);
-                ctx2d.lineTo(0, h);
-                ctx2d.closePath();
-                ctx2d.fill();
-                ctx2d.beginPath();
-                for (var x2 = 0; x2 <= w; x2 += 8) {
-                    var y2 = h * 0.62
-                        + Math.sin(x2 * 0.018 + t * 1.2) * h * 0.035;
-                    if (x2 === 0) {
-                        ctx2d.moveTo(x2, y2);
-                    } else {
-                        ctx2d.lineTo(x2, y2);
-                    }
-                }
-                ctx2d.stroke();
             }
+
             self.raf = global.requestAnimationFrame(draw);
         };
         this.raf = global.requestAnimationFrame(draw);
@@ -3609,18 +5310,34 @@
             if (ctx2d) {
                 ctx2d.clearRect(0, 0, this.waveCanvas.width, this.waveCanvas.height);
             }
-            // Keep canvas in DOM; hide only when wave toggle off.
             if (!this.waveToggle || !this.waveToggle.checked) {
                 this.waveCanvas.hidden = true;
             }
         }
     };
 
+    var SCRIPT_GEN = '20260917-61speccenter2';
+
     function boot(root) {
-        if (!root || root.dataset.storeMusicBooted === '1') {
-            return;
+        if (!root) {
+            return null;
         }
-        root.dataset.storeMusicBooted = '1';
+        // Allow re-boot when a newer script generation lands (stale booted flag blocked fixes).
+        if (root.dataset.storeMusicBooted === SCRIPT_GEN && global.__WelineStoreMusicLive) {
+            return global.__WelineStoreMusicLive;
+        }
+        bumpStoreMusicEpoch();
+        try {
+            if (global.__WelineStoreMusicLive && typeof global.__WelineStoreMusicLive.hardSilenceMedia === 'function') {
+                global.__WelineStoreMusicLive.stopLeaveHammer();
+                global.__WelineStoreMusicLive.stopOrphanWatch();
+                global.__WelineStoreMusicLive.hardSilenceMedia(true);
+            }
+        } catch (ePrev) {
+            // ignore
+        }
+        purgeAllStoreMusicAudio();
+        root.dataset.storeMusicBooted = SCRIPT_GEN;
         return new StoreMusic(root);
     }
 
@@ -3631,6 +5348,20 @@
         }
     }
 
+    // Kill leftovers immediately when this script evaluates (covers cached-tab re-inject).
+    try {
+        purgeAllStoreMusicAudio();
+    } catch (eBootPurge) {
+        // ignore
+    }
+
+    global.addEventListener('pageshow', function (ev) {
+        if (ev && ev.persisted) {
+            purgeAllStoreMusicAudio();
+            autoBoot();
+        }
+    });
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', autoBoot);
     } else {
@@ -3640,6 +5371,8 @@
     global.WelineStoreMusic = {
         boot: boot,
         autoBoot: autoBoot,
+        killAll: purgeAllStoreMusicAudio,
+        SCRIPT_GEN: SCRIPT_GEN,
         TAB_ID: TAB_ID
     };
 })(typeof window !== 'undefined' ? window : globalThis);

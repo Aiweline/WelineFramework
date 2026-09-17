@@ -13,6 +13,7 @@ final class OrderReadResult
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $tax
      * @param array<string, mixed> $shipping
+     * @param array<string, mixed> $billingAddress
      * @param array<string, mixed> $typePayload
      */
     public function __construct(
@@ -36,6 +37,7 @@ final class OrderReadResult
         public readonly array $typePayload = [],
         public readonly string $paymentStatus = '',
         public readonly string $checkoutEntry = 'unknown',
+        public readonly array $billingAddress = [],
     ) {
     }
 
@@ -54,6 +56,7 @@ final class OrderReadResult
             'scope' => $this->scope,
             'tax' => $this->tax,
             'shipping' => $this->shipping,
+            'billing_address' => $this->billingAddress,
             'is_shipping_charge_owner' => $this->isShippingChargeOwner,
             'number_kind' => $this->numberKind,
             'display_number' => $this->displayNumber,

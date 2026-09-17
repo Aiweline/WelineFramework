@@ -37,9 +37,6 @@ $items = Block::items($this->getData('items'));
     <?php endif; ?>
     <div class="sb-grid columns-<?= $esc($columns) ?>">
         <?php foreach ($items as $index => $item):
-            $image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($item['image'] ?? '');
-            $mediaHtml = Block::mediaHtml($item['image_file_html'] ?? '', $item['title'] ?? '');
-            $url = Block::link($item['link'] ?? '');
         ?>
             <article class="w-card sb-card">
                 <div class="sb-body">

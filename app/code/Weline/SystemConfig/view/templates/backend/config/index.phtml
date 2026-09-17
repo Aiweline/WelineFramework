@@ -575,6 +575,7 @@ $guideConfigJson = json_encode([
 ?>
 
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-system-config.css)">
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
 
 <section class="w-system-config w-backend-page" data-w-system-config data-testid="system-config-management">
     <div class="w-card w-system-config__hero">
@@ -1605,9 +1606,117 @@ $flashToastFn = match ($flashTone) {
                                                                         $wscImageInputId = 'wsc-cfg-' . substr(hash('sha256', $fieldKey), 0, 16);
                                                                         $wscMediaPicker = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
                                                                             && \function_exists('framework_view_process_block');
-                                                                        $wscImageExt = $fieldType === 'image'
-                                                                            ? 'jpg,jpeg,png,gif,webp,svg'
-                                                                            : '*';
+                                                                        $wscImageExt = trim((string)($field['ext'] ?? ''));
+                                                                        if ($wscImageExt === '') {
+                                                                            $wscImageExt = $fieldType === 'image'
+                                                                                ? 'jpg,jpeg,png,gif,webp,svg'
+                                                                                : '*';
+                                                                        }
+                                                                        // 字段可声明 path / path-global / lock-path / lock-root；支持 {website}/{store}/{channel}。
+                                                                        $wscMediaPathTpl = trim((string)($field['path'] ?? $field['media-path'] ?? ''));
+                                                                        $wscMediaPathGlobal = trim((string)($field['path-global'] ?? $field['media-path-global'] ?? ''));
+                                                                        $wscStoreSeg = ($targetStore !== '' && $targetStore !== 'default') ? $targetStore : 'default';
+                                                                        $wscChannelSeg = ($targetChannel !== '' && $targetChannel !== 'default') ? $targetChannel : 'default';
+                                                                        $wscUsingGlobalMediaPath = false;
+                                                                        if ($isGlobalScope && $wscMediaPathGlobal !== '') {
+                                                                            $wscMediaPath = $wscMediaPathGlobal;
+                                                                            $wscUsingGlobalMediaPath = true;
+                                                                        } elseif ($wscMediaPathTpl !== '') {
+                                                                            $wscMediaPath = strtr($wscMediaPathTpl, [
+                                                                                '{website}' => $isGlobalScope ? 'default' : $targetWebsite,
+                                                                                '{store}' => $isGlobalScope ? 'default' : $wscStoreSeg,
+                                                                                '{channel}' => $isGlobalScope ? 'default' : $wscChannelSeg,
+                                                                            ]);
+                                                                        } else {
+                                                                            $wscMediaPath = 'system-config';
+                                                                        }
+                                                                        $wscMediaPath = trim($wscMediaPath, '/');
+                                                                        $wscLockPathRaw = $field['lock-path'] ?? $field['lockPath'] ?? null;
+                                                                        $wscLockPath = ($wscLockPathRaw === null || $wscLockPathRaw === '')
+                                                                            ? (($wscMediaPathTpl !== '' || $wscMediaPathGlobal !== '') ? '1' : '')
+                                                                            : (in_array(strtolower((string)$wscLockPathRaw), ['0', 'false', 'off', 'no'], true) ? '0' : '1');
+                                                                        $wscLockRootTpl = trim((string)($field['lock-root'] ?? $field['lockRoot'] ?? ''));
+                                                                        $wscLockRootGlobal = trim((string)($field['lock-root-global'] ?? $field['lockRootGlobal'] ?? ''));
+                                                                        $wscLockRoot = '';
+                                                                        if ($wscUsingGlobalMediaPath) {
+                                                                            if ($wscLockRootGlobal !== '') {
+                                                                                $wscLockRoot = trim($wscLockRootGlobal, '/');
+                                                                            } elseif (str_starts_with($wscMediaPath, 'mail/')) {
+                                                                                $wscLockRoot = 'mail';
+                                                                            }
+                                                                        } elseif ($wscLockRootTpl !== '') {
+                                                                            $wscLockRoot = strtr($wscLockRootTpl, [
+                                                                                '{website}' => $isGlobalScope ? 'default' : $targetWebsite,
+                                                                                '{store}' => $isGlobalScope ? 'default' : $wscStoreSeg,
+                                                                                '{channel}' => $isGlobalScope ? 'default' : $wscChannelSeg,
+                                                                            ]);
+                                                                            $wscLockRoot = trim($wscLockRoot, '/');
+                                                                        } elseif ($wscLockPath === '1' && str_starts_with($wscMediaPath, 'websites/')) {
+                                                                            // websites/{w}/{s}/… → 锁到站店根
+                                                                            $parts = explode('/', $wscMediaPath);
+                                                                            if (count($parts) >= 3) {
+                                                                                $wscLockRoot = $parts[0] . '/' . $parts[1] . '/' . $parts[2];
+                                                                            }
+                                                                        } elseif ($wscLockPath === '1' && str_starts_with($wscMediaPath, 'mail/')) {
+                                                                            $wscLockRoot = 'mail';
+                                                                        }
+                                                                        $wscIdentityScope = strtolower(trim((string)$scope));
+                                                                        if ($wscIdentityScope === '' || substr_count($wscIdentityScope, '.') !== 2) {
+                                                                            $wscStoreSegId = ($targetStore !== '' && $targetStore !== 'default') ? $targetStore : 'default';
+                                                                            $wscChannelSegId = ($targetChannel !== '' && $targetChannel !== 'default') ? $targetChannel : 'default';
+                                                                            $wscIdentityScope = strtolower(
+                                                                                ($isGlobalScope ? 'default' : $targetWebsite)
+                                                                                . '.' . $wscStoreSegId
+                                                                                . '.' . $wscChannelSegId
+                                                                            );
+                                                                        }
+                                                                        $wscIdentityPath = '';
+                                                                        $wscIdentitySlot = ['kind' => 'media'];
+                                                                        if ($selectedModule !== '') {
+                                                                            $wscIdentitySlot['component'] = $selectedModule;
+                                                                        }
+                                                                        try {
+                                                                            $wscIdentity = \Weline\FileManager\Service\MediaReference\ConfigMediaReferenceTemplates::config(
+                                                                                $wscIdentityScope,
+                                                                                $fieldKey,
+                                                                                $wscIdentitySlot
+                                                                            );
+                                                                            $wscIdentityPath = $wscIdentity->path;
+                                                                        } catch (\Throwable) {
+                                                                            $wscIdentityPath = '';
+                                                                        }
+                                                                        $wscMediaBlock = [
+                                                                            'class' => \Weline\MediaManager\Block\WelineMedia::class,
+                                                                            'target' => $wscImageInputId,
+                                                                            'picker_title' => (string)($fieldType === 'image' ? __('选择图片') : __('选择文件')),
+                                                                            'path' => $wscMediaPath,
+                                                                            'value' => $effectiveValue,
+                                                                            'preview' => '1',
+                                                                            'multi' => '0',
+                                                                            'ext' => $wscImageExt,
+                                                                            'size' => 2097152,
+                                                                            'width' => 64,
+                                                                            'height' => 64,
+                                                                            'identity' => $wscIdentityPath,
+                                                                            'identity_root' => 'config',
+                                                                            'identity_code' => $fieldKey,
+                                                                            'identity_scope' => $wscIdentityScope,
+                                                                            'identity_kind' => 'media',
+                                                                            'identity_field' => $fieldKey,
+                                                                            'ref_mode' => 'single',
+                                                                            'strong_ref' => '1',
+                                                                            'owner_type' => 'config',
+                                                                            'owner_id' => $fieldKey,
+                                                                        ];
+                                                                        if ($selectedModule !== '') {
+                                                                            $wscMediaBlock['identity_component'] = $selectedModule;
+                                                                        }
+                                                                        if ($wscLockPath !== '') {
+                                                                            $wscMediaBlock['lockPath'] = $wscLockPath;
+                                                                        }
+                                                                        if ($wscLockRoot !== '') {
+                                                                            $wscMediaBlock['lockRoot'] = $wscLockRoot;
+                                                                        }
                                                                         ?>
                                                                         <?php if ($wscMediaPicker): ?>
                                                                             <input type="hidden"
@@ -1616,19 +1725,7 @@ $flashToastFn = match ($flashTone) {
                                                                                    value="<?= htmlspecialchars($effectiveValue) ?>"
                                                                                    <?= $fieldDisabled ? ' disabled' : '' ?>>
                                                                             <?php if (!$fieldDisabled): ?>
-                                                                                <?= framework_view_process_block([
-                                                                                    'class' => \Weline\MediaManager\Block\WelineMedia::class,
-                                                                                    'target' => $wscImageInputId,
-                                                                                    'title' => (string)($fieldType === 'image' ? __('选择图片') : __('选择文件')),
-                                                                                    'path' => 'system-config',
-                                                                                    'value' => $effectiveValue,
-                                                                                    'preview' => '1',
-                                                                                    'multi' => '0',
-                                                                                    'ext' => $wscImageExt,
-                                                                                    'size' => 2097152,
-                                                                                    'width' => 64,
-                                                                                    'height' => 64,
-                                                                                ]) ?>
+                                                                                <?= framework_view_process_block($wscMediaBlock) ?>
                                                                             <?php elseif ($effectiveValue !== ''): ?>
                                                                                 <div class="w-text" data-size="sm" data-tone="muted"><?= htmlspecialchars($effectiveValue) ?></div>
                                                                             <?php endif; ?>

@@ -95,7 +95,8 @@ class MailTemplateShellComposer
                 return $bodyHtml;
             }
 
-            $shell = $this->loadShellRaw($locale);
+            $storageScope = trim((string)($options['storage_scope'] ?? ''));
+            $shell = $this->loadShellRaw($locale, $storageScope);
             $preheader = trim((string)($options['preheader'] ?? ''));
             if ($preheader === '') {
                 $preheader = $this->guessPreheader($bodyHtml, $locale);
@@ -110,10 +111,10 @@ class MailTemplateShellComposer
         });
     }
 
-    public function loadShell(string $locale): string
+    public function loadShell(string $locale, string $storageScope = ''): string
     {
-        return $this->withMailLocaleEnvironment($locale, function () use ($locale): string {
-            return $this->loadShellRaw($locale);
+        return $this->withMailLocaleEnvironment($locale, function () use ($locale, $storageScope): string {
+            return $this->loadShellRaw($locale, $storageScope);
         });
     }
 
@@ -150,14 +151,16 @@ class MailTemplateShellComposer
         }
     }
 
-    private function loadShellRaw(string $locale): string
+    private function loadShellRaw(string $locale, string $storageScope = ''): string
     {
         $locale = trim($locale) !== '' ? trim($locale) : 'zh_Hans_CN';
         $phtml = dirname(__DIR__) . '/view/email/shell.phtml';
         if (is_file($phtml)) {
             $raw = @file_get_contents($phtml);
             if (is_string($raw) && $raw !== '') {
-                return $this->renderShellPhtml($raw, $locale);
+                $shell = $this->renderShellPhtml($raw, $locale);
+
+                return $this->applyShellRegionOverrides($shell, $storageScope);
             }
         }
 
@@ -173,12 +176,31 @@ class MailTemplateShellComposer
             if (is_file($path)) {
                 $html = file_get_contents($path);
                 if (is_string($html) && $html !== '') {
-                    return $html;
+                    return $this->applyShellRegionOverrides($html, $storageScope);
                 }
             }
         }
 
-        return '<!DOCTYPE html><html><body data-weline-mail-shell="1">{{MAIL_BODY}}</body></html>';
+        return $this->applyShellRegionOverrides(
+            '<!DOCTYPE html><html><body data-weline-mail-shell="1">{{MAIL_BODY}}</body></html>',
+            $storageScope
+        );
+    }
+
+    private function applyShellRegionOverrides(string $shell, string $storageScope): string
+    {
+        $storageScope = trim($storageScope);
+        if ($storageScope === '') {
+            return $shell;
+        }
+        try {
+            /** @var MailShellRegionStore $store */
+            $store = ObjectManager::getInstance(MailShellRegionStore::class);
+
+            return $store->applyToShell($shell, $storageScope);
+        } catch (\Throwable) {
+            return $shell;
+        }
     }
 
     /**

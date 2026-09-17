@@ -14,7 +14,7 @@ namespace Weline\Order\Controller\Backend;
 use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\FrontendQueryException;
@@ -28,7 +28,7 @@ use Weline\Order\Service\OrderStateMachine;
  * 订单管理控制器
  */
 #[Acl('Weline_Order::order_manage', '订单管理', 'cart', '订单管理', 'Weline_Backend::order_group')]
-class Order extends BackendController
+class Order extends BackendPageController
 {
     private OrderService $orderService;
     private OrderStateMachine $stateMachine;
@@ -268,8 +268,7 @@ class Order extends BackendController
             $displayItems = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderLinePresenter::class)
                 ->present($order, $items);
 
-            $fulfillmentService = ObjectManager::getInstance(\Weline\Order\Service\FulfillmentService::class);
-            $shipments = $fulfillmentService->getShipments($orderId);
+            // 发货记录由「订单办理 → 发货」槽 + Weline_Shipping 部件填充，禁止本页直灌。
 
             $historyModel = ObjectManager::getInstance(\Weline\Order\Model\OrderHistory::class);
             $history = $historyModel->reset()
@@ -345,7 +344,6 @@ class Order extends BackendController
             $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
             $this->assign('order_type_tone', $orderTypeTone);
             $this->assign('type_payload', $typePayload);
-            $this->assign('shipments', $shipments);
             $this->assign('history', $history);
             $this->assignStatusFlow($order, $history, $orderId, $paymentChrome);
             $this->assign('current_status', $currentStatus);
@@ -444,6 +442,12 @@ class Order extends BackendController
         unset($row);
         $this->assign('candidates', $payload['candidates']);
         $this->assign('progress', $payload['progress']);
+        $this->assign('shipping_ref', $payload['shipping_ref'] ?? []);
+        $this->assign('tracking_carriers', $payload['tracking_carriers'] ?? []);
+        $this->assign('label_services', $payload['label_services'] ?? []);
+        $this->assign('shipments', $payload['shipments'] ?? []);
+        $this->assign('orderId', $orderId);
+        $this->assign('fulfill_grant_version', $grantVersion);
         $this->assign('returnUrl', $returnUrl);
 
         return $this->template('Weline_Order::templates/Backend/Order/panel/shipment.phtml');

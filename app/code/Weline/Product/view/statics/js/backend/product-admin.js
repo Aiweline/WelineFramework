@@ -22,6 +22,37 @@
     var createMediaHydrating = false;
     var createVariantPreviewTimer = 0;
 
+    function appendCreatePickerIdentity(pickerUrl, kind, field) {
+        var helper = window.Weline && window.Weline.MediaIdentityPicker;
+        if (!helper || !pickerUrl) {
+            return pickerUrl;
+        }
+        var ambient = helper.ambientFrom(root);
+        var code = String(ambient.code || 'draft').trim() || 'draft';
+        var codeSelector = String(root.getAttribute('data-media-code-input') || '').trim();
+        if (codeSelector) {
+            var codeInput = root.querySelector(codeSelector);
+            if (codeInput && 'value' in codeInput) {
+                var typed = String(codeInput.value || '').trim().replace(/:/g, '_');
+                if (typed !== '') {
+                    code = typed;
+                }
+            }
+        }
+        var identity = helper.buildIdentity({
+            root: ambient.root || 'product',
+            code: code,
+            scope: ambient.scope || null,
+            kind: kind || ambient.kind || 'media',
+            field: field || ambient.field || kind || 'media',
+        });
+        if (!identity) {
+            return pickerUrl;
+        }
+        root.__mediaIdentity = identity;
+        return helper.appendIdentityParams(pickerUrl, identity);
+    }
+
     function api() {
         if (!apiPromise) {
             apiPromise = Promise.resolve().then(function () {
@@ -1790,9 +1821,8 @@
                     if (pickerUrl.origin !== window.location.origin) {
                         throw new Error('媒体选择器必须与后台同源');
                     }
-                    if (frame.src !== pickerUrl.href) {
-                        frame.src = pickerUrl.href;
-                    }
+                    pickerUrl = appendCreatePickerIdentity(pickerUrl, 'media', 'media');
+                    frame.src = pickerUrl.href;
                     if (!openProductMediaDialog(dialog, {trigger: 'product-create-media'})) {
                         throw new Error('媒体选择器不可用');
                     }
@@ -4317,6 +4347,17 @@
             } else {
                 pickerUrl.searchParams.delete('asset_id');
             }
+            var helper = window.Weline && window.Weline.MediaIdentityPicker;
+            if (helper) {
+                var ambient = helper.ambientFrom(root);
+                var identity = helper.buildIdentity(Object.assign({}, ambient, { kind: ambient.kind || 'media' }));
+                if (identity) {
+                    pickerUrl = helper.appendIdentityParams(pickerUrl, identity);
+                    root.__mediaIdentity = identity;
+                } else if (ambient.code && ambient.root) {
+                    throw new Error('媒体身份不完整：需要 window.w_scope 或显式 identity');
+                }
+            }
             frame.src = pickerUrl.href;
             if (!openProductMediaDialog(dialog, {trigger: 'product-media'})) {
                 throw new Error('媒体选择器不可用');
@@ -4355,6 +4396,17 @@
             }
             try {
                 event.data.files.forEach(appendProductMediaRow);
+                var helper = window.Weline && window.Weline.MediaIdentityPicker;
+                if (helper && root.__mediaIdentity) {
+                    var ambient = helper.ambientFrom(root);
+                    helper.bindSelection(root.__mediaIdentity, event.data.files, {
+                        bindUrl: ambient.bindUrl,
+                        ownerType: ambient.ownerType || 'product',
+                        ownerId: ambient.ownerId || root.__mediaIdentity.code,
+                        ownerVersion: ambient.ownerVersion || 1,
+                        refMode: ambient.refMode || 'multi',
+                    });
+                }
                 closePicker();
             } catch (error) {
                 notify('error', messageFrom(error, '添加商品图片失败'));
@@ -5744,9 +5796,8 @@
                 if (pickerUrl.origin !== window.location.origin) {
                     throw new Error('媒体选择器必须与后台同源');
                 }
-                if (frame.src !== pickerUrl.href) {
-                    frame.src = pickerUrl.href;
-                }
+                pickerUrl = appendCreatePickerIdentity(pickerUrl, 'variant', 'variant_image');
+                frame.src = pickerUrl.href;
                 if (!openProductMediaDialog(dialog, {trigger: 'product-create-variant-image'})) {
                     throw new Error('媒体选择器不可用');
                 }

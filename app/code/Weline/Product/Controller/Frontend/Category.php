@@ -10,6 +10,7 @@ use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontCategoryViewService;
+use Weline\Product\Service\StorefrontListingPager;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
 final class Category extends FrontendController
@@ -18,6 +19,7 @@ final class Category extends FrontendController
         private readonly StorefrontCategoryViewService $categories,
         private readonly StorefrontCatalogViewService $catalog,
         private readonly StorefrontCategoryListingFilter $listingFilter,
+        private readonly StorefrontListingPager $listingPager,
         private readonly EventsManager $events,
     ) {
     }
@@ -117,23 +119,19 @@ final class Category extends FrontendController
 
         $pageOptions = [];
         if ($paged['total_pages'] > 1) {
-            for ($p = 1; $p <= $paged['total_pages']; $p++) {
-                $params = [];
-                if ($priceBucket !== '') {
-                    $params['price'] = $priceBucket;
-                }
-                if ($sort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
-                    $params['sort'] = $sort;
-                }
-                if ($p > 1) {
-                    $params['page'] = $p;
-                }
-                $pageOptions[] = [
-                    'page' => $p,
-                    'url' => $this->listingFilter->buildListingUrl($categoryUrl, $params),
-                    'selected' => $p === $paged['page'],
-                ];
+            $params = [];
+            if ($priceBucket !== '') {
+                $params['price'] = $priceBucket;
             }
+            if ($sort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
+                $params['sort'] = $sort;
+            }
+            $pageOptions = $this->listingPager->buildPageOptions(
+                $categoryUrl,
+                (int)$paged['page'],
+                (int)$paged['total_pages'],
+                $params,
+            );
         }
 
         $this->assign('page_title', $name !== '' ? $name : __('分类'));

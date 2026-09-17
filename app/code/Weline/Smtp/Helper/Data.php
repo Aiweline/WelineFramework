@@ -49,6 +49,14 @@ class Data
     public const key_smtp_sender_contacts = 'smtp_sender_contacts';
     /** 已注册发信渠道 → 传输账户 id；JSON { "Module::channel": "transport_id" } */
     public const key_smtp_channel_bindings = 'smtp_channel_bindings';
+    /** 邮件壳页头背景图（媒体路径或 URL；子 Scope 继承 Global） */
+    public const key_smtp_mail_bg_header = 'smtp_mail_bg_header';
+    /** 邮件壳正文背景图 */
+    public const key_smtp_mail_bg_body = 'smtp_mail_bg_body';
+    /** 邮件壳页尾背景图 */
+    public const key_smtp_mail_bg_footer = 'smtp_mail_bg_footer';
+    /** 邮件壳页头/页尾可视化编辑 innerHTML（JSON：header + footer[]） */
+    public const key_smtp_mail_shell_regions = 'smtp_mail_shell_regions';
     /** 建站进度：当前 scope 已通过测试确认 */
     public const key_smtp_setup_confirmed = 'smtp_setup_confirmed';
     public const TRANSPORT_ID_PATTERN = '/^[A-Za-z][A-Za-z0-9_]*$/';
@@ -63,6 +71,49 @@ class Data
         private readonly ConfigStore $store,
         private readonly ?ScopeHierarchyInterface $scopeHierarchy = null,
     ) {
+    }
+
+    /** @return list<string> */
+    public static function mailShellBackgroundKeys(): array
+    {
+        return [
+            self::key_smtp_mail_bg_header,
+            self::key_smtp_mail_bg_body,
+            self::key_smtp_mail_bg_footer,
+        ];
+    }
+
+    /**
+     * 读取邮件壳三区背景图路径（已按 Scope 继承回退）。
+     *
+     * @return array{header:string,body:string,footer:string}
+     */
+    public function getMailShellBackgrounds(?string $scope = null): array
+    {
+        $scope = $this->resolveScope($scope);
+        $out = ['header' => '', 'body' => '', 'footer' => ''];
+        $map = [
+            'header' => self::key_smtp_mail_bg_header,
+            'body' => self::key_smtp_mail_bg_body,
+            'footer' => self::key_smtp_mail_bg_footer,
+        ];
+        foreach ($map as $region => $key) {
+            try {
+                $val = $this->reader->getConfig(
+                    $key,
+                    'Weline_Smtp',
+                    self::AREA,
+                    null,
+                    $scope,
+                    ConfigReader::LOCALE_DEFAULT,
+                );
+                $out[$region] = $val !== null && $val !== '' ? trim((string)$val) : '';
+            } catch (\Throwable) {
+                $out[$region] = '';
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -241,7 +292,7 @@ class Data
     public function isSetupConfirmed(string $module = 'Weline_Smtp', ?string $scope = null): bool
     {
         $scope = $this->resolveScope($scope);
-        $resolved = $this->reader->resolveConfig(
+        $resolved = $this->store->resolveConfig(
             self::key_smtp_setup_confirmed,
             $module,
             self::AREA,
@@ -294,7 +345,7 @@ class Data
     public function resolveSendersProvenance(string $module = 'Weline_Smtp', ?string $scope = null): array
     {
         $scope = $this->resolveScope($scope);
-        $resolved = $this->reader->resolveConfig(
+        $resolved = $this->store->resolveConfig(
             self::key_smtp_senders,
             $module,
             self::AREA,
@@ -315,7 +366,7 @@ class Data
         $inherited = !empty($resolved['found']) && $sourceScope !== '' && $sourceScope !== $scope;
         // legacy 单账户也可能只在全局
         if (empty($resolved['found'])) {
-            $legacy = $this->reader->resolveConfig(
+            $legacy = $this->store->resolveConfig(
                 self::smtp_host,
                 $module,
                 self::AREA,

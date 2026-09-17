@@ -64,6 +64,12 @@ final class ConfigEmbed implements TaglibInterface
             'template' => false,
             'locale' => false,
             'class' => false,
+            // 实体页（网站/店/渠编辑）可强制写目标；有值时优先于 URL
+            'target_scope' => false,
+            'website_code' => false,
+            'store_code' => false,
+            'channel_code' => false,
+            'scope_kind' => false,
         ];
     }
 
@@ -85,6 +91,11 @@ final class ConfigEmbed implements TaglibInterface
                 . '\'template\' => (string)($Taglib__template ?? \'\'),'
                 . '\'locale\' => (string)($Taglib__locale ?? \'default\'),'
                 . '\'class\' => (string)($Taglib__class ?? \'\'),'
+                . '\'target_scope\' => (string)($Taglib__target_scope ?? \'\'),'
+                . '\'website_code\' => (string)($Taglib__website_code ?? \'\'),'
+                . '\'store_code\' => (string)($Taglib__store_code ?? \'\'),'
+                . '\'channel_code\' => (string)($Taglib__channel_code ?? \'\'),'
+                . '\'scope_kind\' => (string)($Taglib__scope_kind ?? \'\'),'
                 . ']); ?>';
         };
     }
@@ -119,6 +130,11 @@ final class ConfigEmbed implements TaglibInterface
                 'template' => self::runtimeAttr($attributes, 'template'),
                 'locale' => self::runtimeAttr($attributes, 'locale', 'default'),
                 'class' => self::runtimeAttr($attributes, 'class'),
+                'target_scope' => self::runtimeAttr($attributes, 'target_scope'),
+                'website_code' => self::runtimeAttr($attributes, 'website_code'),
+                'store_code' => self::runtimeAttr($attributes, 'store_code'),
+                'channel_code' => self::runtimeAttr($attributes, 'channel_code'),
+                'scope_kind' => self::runtimeAttr($attributes, 'scope_kind'),
             ]);
         };
     }
@@ -150,8 +166,10 @@ final class ConfigEmbed implements TaglibInterface
             . '<code>layout</code>（vertical｜horizontal｜inline）、'
             . '<code>template</code>（外壳 phtml）、'
             . '<code>locale</code>（默认 default）、'
-            . '<code>class</code>（预留，默认壳暂未应用）。</p>'
-            . '<p><strong>行为</strong>：Scope 只信 URL（无 Session）；变更即时 '
+            . '<code>class</code>（预留，默认壳暂未应用）、'
+            . '<code>target_scope</code> / <code>website_code</code> / <code>store_code</code> / '
+            . '<code>channel_code</code> / <code>scope_kind</code>（实体页强制写目标，优先于 URL）。</p>'
+            . '<p><strong>行为</strong>：默认 Scope 只信 URL（无 Session）；实体页可用属性锁定范围；变更即时 '
             . '<code>system_config.setScopedConfig</code> + toast；无 UPDATE 灰显；'
             . '未声明红标不阻断同级；敏感只读深链配置中心。</p>'
             . '<p><strong>变量绑定</strong>：列表循环可用 '

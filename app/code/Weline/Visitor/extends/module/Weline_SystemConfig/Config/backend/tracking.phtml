@@ -93,6 +93,37 @@
         scope="global,website" />
 </w:config:group>
 
+<w:config:group code="visitor_conversion_dedupe" label="转化事件去重" description="结账/支付成功等关键页事件：前后端约定同一套参数，TTL 内重复直接丢弃。" sort="22">
+    <w:config:field
+        key="visitor/tracking/conversion_dedupe_enabled"
+        label="启用转化去重"
+        description="开启后，白名单内且带订单/交易业务键的转化事件在 TTL 内只计一次（前端 localStorage + 后端账本）。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/conversion_dedupe_ttl_days"
+        label="去重保留天数"
+        description="默认 180（约半年）。过期后允许再次计入同一业务键。"
+        type="number"
+        value-type="int"
+        default="180"
+        scope="global,website"
+        validation="min:1|max:730" />
+
+    <w:config:field
+        key="visitor/tracking/conversion_dedupe_events"
+        label="去重事件白名单"
+        description="每行或逗号分隔一个事件名。可用 *_checkout_success 匹配形态闭环事件。默认含 payment_success、checkout_success、checkout_failure。"
+        type="textarea"
+        value-type="string"
+        default="payment_success&#10;checkout_success&#10;checkout_failure&#10;*_checkout_success"
+        scope="global,website"
+        validation="max:5000" />
+</w:config:group>
+
 <w:config:group code="visitor_attribution" label="归因回填" description="历史像素扁平列回填状态（A13）；Retention 仅在 done=true 后才应迁冷。" sort="25">
     <w:config:field
         key="visitor/tracking/attribution_backfill_done"

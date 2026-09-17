@@ -7,8 +7,9 @@
  *
  * @meta.name {default="服务条款页面布局",name="服务条款页面布局",description="Theme 自有的服务条款默认布局"}
  * @meta.description {default="包含 header、面包屑与整页内容 slot（默认服务条款）",name="描述",description="内容区为单一 slot 的服务条款默认页"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="服务条款页面通常允许访客访问"}
  * @param.title {default="服务条款",name="页面标题",description="服务条款页面标题"}
+ * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
+ * @param.meta_description {default="阅读使用本站服务前需要了解的条款与条件。",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
  * @param.subtitle {default="",name="页面副标题",description="留空时使用引导说明"}
  * @param.content {default="",name="主要内容（HTML）",description="非空时整页替换默认条款正文"}
  * @param.showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
@@ -434,6 +435,22 @@ $toc = [
                 </w:hook>
             </w:slot>
         </main>
+
+
+        <w:slot id="terms-bottom"
+                name="条款页底部扩展"
+                accept="layout-terms-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges,contact-info"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="terms-bottom-slot">
+            <w:hook>
+                Weline_Theme::frontend::layouts::terms::bottom
+                <else/>
+                <w:widget type="content" name="contact-info" />
+            </w:hook>
+        </w:slot>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>

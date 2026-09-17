@@ -24,7 +24,7 @@
 分享动作已记录。,分享动作已记录。
 提现申请已提交。,提现申请已提交。
 分销数据已加载。,分销数据已加载。
-请先登录。,请先登录。
+请先登录。,"Inicie sesión primero."
 分销查询,分销查询
 提供商品分享链接、分享动作记录和分销数据汇总。,提供商品分享链接、分享动作记录和分销数据汇总。
 为当前分销用户生成或复用商品分享链接。,为当前分销用户生成或复用商品分享链接。
@@ -81,24 +81,25 @@ settings,settings
 "Save affiliate data","Save affiliate data"
 "Open affiliate save route","Open affiliate save route"
 "mdi mdi-content-save-outline","mdi mdi-content-save-outline"
-我的分销,我的分销
-分享、转化与佣金,分享、转化与佣金
-加载中,加载中
-去登录,去登录
+加载中,Cargando
+去登录,"Iniciar sesión"
 分享好物，赚取佣金,"Comparte y gana comisión"
 加入分销计划后可生成专属推广链接；登录后前往申请，审核通过即可开始分享。,"Únete al programa de afiliados para obtener tu enlace. Inicia sesión para solicitar; comparte tras la aprobación."
 登录前往申请分销,"Inicia sesión para solicitar afiliación"
-暂不可用,暂不可用
-已复制,已复制
-已分享,已分享
-"分销 API 未初始化","分销 API 未初始化"
-"分销 API 不支持分享链接操作","分销 API 不支持分享链接操作"
-分销数据加载失败,分销数据加载失败
+暂不可用,"No disponible"
+已复制,Copiado
+已分享,Compartido
+"分销 API 未初始化","La API de afiliados no está inicializada"
+"分销 API 不支持分享链接操作","La API de afiliados no admite operaciones de enlace para compartir"
+分销数据加载失败,"No se pudieron cargar los datos de afiliado"
 分销分享,"Compartir afiliado"
+赚取佣金,"Gana comisión"
 分销分享链接,分销分享链接
-复制,复制
-分享,分享
+复制,Copiar
+分享,Compartir
 分享到社交平台,"Compartir en redes sociales"
+我的分销,我的分销
+分享、转化与佣金,分享、转化与佣金
 当前访问范围,当前访问范围
 账户范围,账户范围
 分销数据暂时无法加载，请稍后重试。,分销数据暂时无法加载，请稍后重试。

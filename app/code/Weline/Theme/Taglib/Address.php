@@ -247,6 +247,8 @@ class Address implements TaglibInterface
         $includeDetail = $bool($attributes, 'detail', false);
         $postalName = trim((string)($attributes['postal-name'] ?? 'postal_code')) ?: 'postal_code';
         $detailName = trim((string)($attributes['detail-name'] ?? 'address1')) ?: 'address1';
+        // Same-form second instance (e.g. checkout billing): prefix metadata like country_code → billing_country_code.
+        $metaPrefix = preg_replace('/[^A-Za-z0-9_]/', '', (string)($attributes['meta-prefix'] ?? '')) ?? '';
         $postalLabel = $translate('邮编', 'Postal code');
         $detailLabel = $translate('详细地址', 'Street address');
 
@@ -265,6 +267,7 @@ class Address implements TaglibInterface
             'postalLookup' => $postalLookup,
             'postalName' => $postalName,
             'detailName' => $detailName,
+            'metaPrefix' => $metaPrefix,
         ];
 
         $idAttr = $id !== '' ? ' id="' . $escape($id) . '"' : '';
@@ -308,7 +311,7 @@ class Address implements TaglibInterface
             'Weline_Theme::js/address-loader.js',
         ));
         // Explicit bust: module asset query can stick while file content already changed.
-        $loaderUrl .= (str_contains($loaderUrl, '?') ? '&' : '?') . 'v=20260911-single-float2';
+        $loaderUrl .= (str_contains($loaderUrl, '?') ? '&' : '?') . 'v=20260915-billing-meta1';
         $html[] = '<script src="' . $loaderUrl . '" data-w-address-loader data-no-extract="true" defer></script>';
 
         return implode("\n", $html);
@@ -368,6 +371,7 @@ class Address implements TaglibInterface
 <li><code>catalog</code>：<code>installed</code>（默认）或 <code>global</code> 国家目录。</li>
 <li><code>cascade="false"</code>：关闭下级联动；<code>searchable="true"</code>：可搜索。</li>
 <li><code>postal="true"</code>：壳内输出邮编；<code>postal-lookup="true"</code>：邮编 debounce 反查回填（逻辑在 address.js）。仅 lookup 时可驱动壳外 <code>data-postal-first</code> 邮编框。</li>
+<li><code>meta-prefix</code>：元数据字段前缀（如 <code>billing_</code>），同页第二套地址时避免与收货 <code>country_code</code> 等争用；配合 <code>country-name</code> / <code>postal-name</code> 等显示字段名。</li>
 <li><code>detail="true"</code>：输出详细地址字段（默认 name=address1）。</li>
 <li><code>selection="multi"</code>：批量多选模式（承运商覆盖/可售目的地）。配合 <code>multi-levels="country|province|district"</code> 或字段级 <code>multi-country</code> 等；输出 <code>data-multi-selection</code> JSON，并触发 <code>weline:address:multi-change</code>。</li>
 <li><strong>浮层硬约束</strong>：single / multi 搜索下拉都必须经 <code>Weline.UI.floating.attach</code>（<code>anchored-float</code>）做 portal / flip / 视口限界，以逃出父级 <code>overflow</code> 裁切；禁止在业务脚本手写 <code>left/top</code> 或自研边界检测。</li>

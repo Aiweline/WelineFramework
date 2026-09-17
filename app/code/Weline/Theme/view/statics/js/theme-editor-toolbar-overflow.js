@@ -7,11 +7,27 @@
 (function registerThemeEditorToolbarOverflow() {
     'use strict';
 
-    const UI = window.Weline?.UI;
-    if (!UI) {
-        throw new Error('Weline.UI must be loaded before Theme Editor toolbar overflow.');
+    // Bundle is type=module and concatenates sources; a hard throw here aborts the
+    // rest of weline-theme-editor.js (including loadLayoutPreview / widget library).
+    // Defer until Weline.UI is present instead of failing the whole editor boot.
+    let bootAttempts = 0;
+    const maxBootAttempts = 120;
+
+    function bootWhenUiReady() {
+        const UI = window.Weline?.UI;
+        if (!UI) {
+            bootAttempts += 1;
+            if (bootAttempts > maxBootAttempts) {
+                console.warn('[ThemeEditor] toolbar-overflow skipped: Weline.UI not ready');
+                return;
+            }
+            window.setTimeout(bootWhenUiReady, 50);
+            return;
+        }
+        register(UI);
     }
 
+    function register(UI) {
     const roots = () => [...document.querySelectorAll('[data-w-component~="toolbar-overflow"]')]
         .filter((element) => element instanceof HTMLElement);
 
@@ -61,14 +77,14 @@
             }
             const leftNeed = Math.min(intrinsicWidth(left), Math.floor(parentWidth * 0.58));
             siblingWidth = leftNeed + gap;
-        } else if (root.classList.contains('preview-actions')) {
-            siblingWidth = intrinsicWidth(parent.querySelector('.preview-tabs')) + gap;
         } else {
+            // preview-actions 须扣掉同行 tabs / 交互模式 / 选中目标 / 禁链等全部兄弟，
+            // 否则会高估可用宽、挤占本可由 gutter 让出的空间。
             const siblings = [...parent.children].filter((element) => (
                 element !== root && element instanceof HTMLElement && !element.hidden
             ));
             siblingWidth = siblings.reduce((sum, element) => sum + intrinsicWidth(element), 0)
-                + gap * siblings.length;
+                + gap * Math.max(0, siblings.length);
         }
 
         return Math.max(96, Math.floor(parentWidth - siblingWidth));
@@ -83,23 +99,100 @@
             + flexGap(root) * Math.max(0, children.length - 1);
     }
 
-    function scheduleAllLayouts() {
-        cancelAnimationFrame(scheduleAllLayouts.frame || 0);
-        scheduleAllLayouts.frame = requestAnimationFrame(() => {
-            const ordered = roots().sort((left, right) => {
-                const rank = (element) => {
-                    if (element.classList.contains('toolbar-right')) return 0;
-                    if (element.classList.contains('toolbar-selects')) return 1;
-                    if (element.classList.contains('preview-actions')) return 2;
-                    return 3;
-                };
-                return rank(left) - rank(right);
-            });
-            ordered.forEach((root) => UI.get(root, 'toolbar-overflow')?.layout());
+    function previewToolbarMainNeed(main) {
+        if (!(main instanceof HTMLElement)) return 0;
+        const children = [...main.children].filter((element) => (
+            element instanceof HTMLElement && !element.hidden
+        ));
+        if (children.length === 0) return 0;
+        const gap = flexGap(main);
+        let sum = horizontalPadding(main);
+        children.forEach((element, index) => {
+            if (index > 0) sum += gap;
+            if (element.classList.contains('preview-actions')
+                || element.classList.contains('w-toolbar-overflow')) {
+                const itemsHost = element.querySelector('[data-w-toolbar-overflow-items]');
+                const menu = element.querySelector('[data-w-toolbar-overflow-menu]');
+                const buttons = [
+                    ...(itemsHost instanceof HTMLElement ? [...itemsHost.children] : []),
+                    ...(menu instanceof HTMLElement ? [...menu.children] : []),
+                ].filter((item) => item instanceof HTMLElement);
+                const itemGap = flexGap(itemsHost || element);
+                sum += buttons.reduce((total, button) => total + intrinsicWidth(button), 0)
+                    + itemGap * Math.max(0, buttons.length - 1);
+                return;
+            }
+            sum += intrinsicWidth(element);
+        });
+        return sum;
+    }
+
+    /**
+     * 未借用 gutter 时中间列可用宽。已借用时禁止先 remove class 再测：
+     * ResizeObserver 盯着 .preview-toolbar，remove/add 会触发无限 schedule 闪烁。
+     */
+    function unborrowedMiddleWidth(toolbar, main) {
+        if (!toolbar.classList.contains('preview-toolbar--borrow-gutters')) {
+            return main.clientWidth;
+        }
+        const style = window.getComputedStyle(toolbar);
+        const configW = Number.parseFloat(style.getPropertyValue('--w-theme-editor-active-config-panel-width')) || 0;
+        const widgetW = Number.parseFloat(style.getPropertyValue('--w-theme-editor-active-widget-panel-width')) || 0;
+        return Math.max(0, toolbar.clientWidth - configW - widgetW);
+    }
+
+    function syncPreviewToolbarBorrow() {
+        document.querySelectorAll('.preview-toolbar.editor-preview-toolbar').forEach((toolbar) => {
+            if (!(toolbar instanceof HTMLElement)) return;
+            const main = toolbar.querySelector('.preview-toolbar-main');
+            if (!(main instanceof HTMLElement)) return;
+
+            const need = previewToolbarMainNeed(main);
+            const middleWidth = unborrowedMiddleWidth(toolbar, main);
+            const borrowing = toolbar.classList.contains('preview-toolbar--borrow-gutters');
+            // 中间列不够 → 先向两边借 gutter；整条仍不够再由 overflow 收进「更多」。
+            // 禁止再用「整条够用才借」门槛：否则 need 大于整条时两侧空着却已出现「更多」。
+            // 滞回：避免临界宽度下 true/false 来回抖
+            const slack = 2;
+            const shouldBorrow = borrowing
+                ? (need > middleWidth - slack)
+                : (need > middleWidth + slack);
+            // classList.toggle(token, force) 在状态相同时无 DOM 变更，避免 DevTools 蓝闪
+            toolbar.classList.toggle('preview-toolbar--borrow-gutters', shouldBorrow);
         });
     }
 
-    UI.define('toolbar-overflow', ({ element, listen, emit, floating }) => {
+    let layoutPassDepth = 0;
+
+    function scheduleAllLayouts() {
+        // 布局过程中 class/尺寸变化会再进 ResizeObserver；忽略以免死循环
+        if (layoutPassDepth > 0) return;
+        cancelAnimationFrame(scheduleAllLayouts.frame || 0);
+        scheduleAllLayouts.frame = requestAnimationFrame(() => {
+            layoutPassDepth += 1;
+            try {
+                syncPreviewToolbarBorrow();
+                const ordered = roots().sort((left, right) => {
+                    const rank = (element) => {
+                        if (element.classList.contains('toolbar-right')) return 0;
+                        if (element.classList.contains('toolbar-selects')) return 1;
+                        if (element.classList.contains('preview-actions')) return 2;
+                        return 3;
+                    };
+                    return rank(left) - rank(right);
+                });
+                ordered.forEach((root) => UI.get(root, 'toolbar-overflow')?.layout());
+            } finally {
+                // ResizeObserver 常在本帧布局后、下一帧前投递；延到下一 rAF 再放行
+                requestAnimationFrame(() => {
+                    layoutPassDepth = Math.max(0, layoutPassDepth - 1);
+                });
+            }
+        });
+    }
+
+    try {
+        UI.define('toolbar-overflow', ({ element, listen, emit, floating }) => {
         const itemsHost = element.querySelector('[data-w-toolbar-overflow-items]');
         const more = element.querySelector('[data-w-toolbar-overflow-more]');
         const trigger = element.querySelector('[data-w-toolbar-overflow-toggle]');
@@ -170,6 +263,10 @@
 
         const layout = () => {
             if (destroyed || !menu.hidden) return;
+            // 预览工具栏先决定是否占用两侧 gutter，再测量 overflow 可用宽
+            if (element.classList.contains('preview-actions')) {
+                syncPreviewToolbarBorrow();
+            }
             restoreItems();
             more.hidden = true;
             element.style.removeProperty('inline-size');
@@ -290,6 +387,15 @@
             },
         };
     });
+    } catch (error) {
+        const message = String(error?.message || error || '');
+        if (!message.includes('already defined')) {
+            throw error;
+        }
+    }
 
     UI.mount(document);
+    }
+
+    bootWhenUiReady();
 })();

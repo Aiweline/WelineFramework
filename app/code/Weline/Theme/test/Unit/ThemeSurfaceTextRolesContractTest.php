@@ -56,6 +56,12 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         $panel = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/header/mega-menu-panel.phtml');
         self::assertStringContainsString('data-w-component="mega-menu"', $panel);
         self::assertStringContainsString('w-mega-menu', $panel);
+        self::assertStringContainsString('data-mega-panel-lazy', $panel);
+        self::assertStringContainsString('data-mega-lazy-payload', $panel);
+
+        $megaJs = $this->read('app/code/Weline/Theme/view/ui/js/components/mega-menu.js');
+        self::assertStringContainsString('hydrateLazyPanel', $megaJs);
+        self::assertStringContainsString('data-mega-panel-lazy', $megaJs);
     }
 
     public function testMegaMenuTopChromeUsesNavSecondaryBackground(): void

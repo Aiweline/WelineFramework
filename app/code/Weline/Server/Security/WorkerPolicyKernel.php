@@ -331,10 +331,16 @@ final class WorkerPolicyKernel
             );
             // 非法编码 / 畸形目标多为扫描或探测：记攻击日志，短封禁，避免静默 400 无审计。
             // 面板探针 token 有效时仍返回 400，但不 ban、不记真实攻击账。
+            // 环回不 ban：本机 Agent/curl 误伤会封死经 nginx 的整站（peer 皆为 127.0.0.1）。
             if (!$probeMode
                 && \in_array($shapeError, ['invalid_path', 'invalid_query', 'invalid_target', 'path_traversal'], true)
             ) {
-                $this->rateLimiter->ban($shapeIp, 300);
+                $loopbackShape = $this->identityResolver->matchesCidr($shapeIp, '127.0.0.0/8')
+                    || $this->identityResolver->matchesCidr($shapeIp, '::1/128');
+                $blockDuration = $loopbackShape ? 0 : 300;
+                if (!$loopbackShape) {
+                    $this->rateLimiter->ban($shapeIp, $blockDuration);
+                }
                 AttackLogService::log(
                     [
                         'is_attack' => true,
@@ -352,7 +358,7 @@ final class WorkerPolicyKernel
                         'headers' => $this->safeAttackLogHeaders(
                             \is_array($parsed['headers'] ?? null) ? $parsed['headers'] : []
                         ),
-                        'block_duration' => 300,
+                        'block_duration' => $blockDuration,
                     ],
                 );
             }
@@ -1001,12 +1007,9 @@ final class WorkerPolicyKernel
         $push($envelope->path);
         $target = (string)($envelope->attributes['target'] ?? '');
         if ($target !== '') {
-            try {
-                $rawPath = \parse_url($target, PHP_URL_PATH);
-            } catch (\ValueError) {
-                $rawPath = false;
-            }
-            if (\is_string($rawPath) && $rawPath !== '') {
+            $split = $this->splitRequestTargetPathQuery($target);
+            $rawPath = isset($split['error']) ? '' : (string)($split['path'] ?? '');
+            if ($rawPath !== '') {
                 $push($rawPath);
                 foreach ($this->attackDecodeVariants($rawPath) as $variant) {
                     $push($variant);
@@ -1024,15 +1027,16 @@ final class WorkerPolicyKernel
         RequestEnvelope $envelope,
     ): array {
         $target = (string)($envelope->attributes['target'] ?? $envelope->path);
-        try {
-            $rawPath = \parse_url($target, PHP_URL_PATH);
-            $rawQuery = \parse_url($target, PHP_URL_QUERY);
-        } catch (\ValueError) {
-            $rawPath = false;
-            $rawQuery = null;
+        $split = $this->splitRequestTargetPathQuery($target);
+        if (isset($split['error'])) {
+            // Prefer envelope path already validated on the allow path; do not
+            // reintroduce PHP parse_url UTF-8 corruption as an "attack".
+            $rawPath = $envelope->path;
+            $rawQuery = (string)($envelope->attributes['query'] ?? '');
+        } else {
+            $rawPath = (string)$split['path'] !== '' ? (string)$split['path'] : $envelope->path;
+            $rawQuery = (string)$split['raw_query'];
         }
-        $rawPath = \is_string($rawPath) && $rawPath !== '' ? $rawPath : $envelope->path;
-        $rawQuery = \is_string($rawQuery) ? $rawQuery : '';
 
         // 扫描 wire / 一次解码 / 二次解码，堵住 %2527 → %27 → ' 等双重编码绕过。
         $pathVariants = $this->attackDecodeVariants($rawPath);
@@ -1362,45 +1366,26 @@ final class WorkerPolicyKernel
                 : $value;
         }
 
-        try {
-            $path = \parse_url($target, PHP_URL_PATH);
-            $query = \parse_url($target, PHP_URL_QUERY);
-        } catch (\ValueError) {
-            $path = false;
-            $query = false;
+        $split = $this->splitRequestTargetPathQuery($target);
+        if (isset($split['error'])) {
+            return $this->invalidParsed((string)$split['error'], $headers, $target);
         }
-        if (!\is_string($path) || $path === '' || ($query !== null && !\is_string($query))) {
-            return $this->invalidParsed('invalid_target', $headers);
+        $normalized = $this->normalizeAndValidatePathQuery(
+            (string)$split['path'],
+            (string)$split['raw_query'],
+        );
+        if (isset($normalized['error'])) {
+            return $this->invalidParsed((string)$normalized['error'], $headers, $target);
         }
-        $decodedPath = \rawurldecode($path);
-        if (\str_contains($decodedPath, "\0")
-            || \str_contains($decodedPath, '\\')
-            || \str_contains($decodedPath, '://')
-            || !$this->isValidUtf8Text($decodedPath)
-        ) {
-            return $this->invalidParsed('invalid_path', $headers);
-        }
-        $segments = \explode('/', $decodedPath);
-        foreach ($segments as $segment) {
-            if ($segment === '..' || $segment === '.') {
-                return $this->invalidParsed('path_traversal', $headers);
-            }
-        }
-        $path = '/' . \ltrim((string)(\preg_replace('#/+#', '/', $decodedPath) ?? $decodedPath), '/');
-        $query = \is_string($query) ? \rawurldecode($query) : '';
-        if (\str_contains($query, "\0")
-            || \preg_match('/[\r\n]/', $query) === 1
-            || !$this->isValidUtf8Text($query)
-        ) {
-            return $this->invalidParsed('invalid_query', $headers);
-        }
+        $path = (string)$normalized['path'];
+        $query = (string)$normalized['query'];
 
         $host = (string)($headers['host'] ?? '');
         if ($host === '') {
-            return $this->invalidParsed('missing_host', $headers);
+            return $this->invalidParsed('missing_host', $headers, $target);
         }
         if (!$this->requestTargetMatchesHost($target, $host)) {
-            return $this->invalidParsed('target_host_mismatch', $headers);
+            return $this->invalidParsed('target_host_mismatch', $headers, $target);
         }
         return [
             'method' => $method,
@@ -1437,48 +1422,30 @@ final class WorkerPolicyKernel
             }
             $headers[$key] = (string)$value;
         }
-        try {
-            $path = \parse_url($target, PHP_URL_PATH);
-            $query = \parse_url($target, PHP_URL_QUERY);
-        } catch (\ValueError) {
-            $path = false;
-            $query = false;
+        $split = $this->splitRequestTargetPathQuery($target);
+        if (isset($split['error'])) {
+            return $this->invalidParsed((string)$split['error'], $headers, $target);
         }
-        if (!\is_string($path) || $path === '' || ($query !== null && !\is_string($query))) {
-            return $this->invalidParsed('invalid_target', $headers);
+        $normalized = $this->normalizeAndValidatePathQuery(
+            (string)$split['path'],
+            (string)$split['raw_query'],
+        );
+        if (isset($normalized['error'])) {
+            return $this->invalidParsed((string)$normalized['error'], $headers, $target);
         }
-        $decodedPath = \rawurldecode($path);
-        if (\str_contains($decodedPath, "\0")
-            || \str_contains($decodedPath, '\\')
-            || \str_contains($decodedPath, '://')
-            || !$this->isValidUtf8Text($decodedPath)
-        ) {
-            return $this->invalidParsed('invalid_path', $headers);
-        }
-        foreach (\explode('/', $decodedPath) as $segment) {
-            if ($segment === '..' || $segment === '.') {
-                return $this->invalidParsed('path_traversal', $headers);
-            }
-        }
-        $path = '/' . \ltrim((string)(\preg_replace('#/+#', '/', $decodedPath) ?? $decodedPath), '/');
-        $query = \is_string($query) ? \rawurldecode($query) : '';
-        if (\str_contains($query, "\0")
-            || \preg_match('/[\r\n]/', $query) === 1
-            || !$this->isValidUtf8Text($query)
-        ) {
-            return $this->invalidParsed('invalid_query', $headers);
-        }
+        $path = (string)$normalized['path'];
+        $query = (string)$normalized['query'];
 
         $host = (string)($headers['host'] ?? '');
         if ($host === '') {
-            return $this->invalidParsed('missing_host', $headers);
+            return $this->invalidParsed('missing_host', $headers, $target);
         }
         if (!$this->requestTargetMatchesHost($target, $host)) {
-            return $this->invalidParsed('target_host_mismatch', $headers);
+            return $this->invalidParsed('target_host_mismatch', $headers, $target);
         }
         $protocol = $this->normalizeValidatedProtocol((string)$frame['protocol']);
         if ($protocol === null) {
-            return $this->invalidParsed('invalid_protocol', $headers);
+            return $this->invalidParsed('invalid_protocol', $headers, $target);
         }
 
         return [
@@ -1540,10 +1507,127 @@ final class WorkerPolicyKernel
     }
 
     /**
+     * Split request-target into path + raw query without PHP parse_url.
+     * parse_url() corrupts bare UTF-8 query bytes into invalid sequences.
+     *
+     * @return array{path:string,raw_query:string}|array{error:string}
+     */
+    private function splitRequestTargetPathQuery(string $target): array
+    {
+        if ($target === '' || $target === '*') {
+            return ['error' => 'invalid_target'];
+        }
+
+        if (\str_starts_with($target, '/')) {
+            $qPos = \strpos($target, '?');
+            if ($qPos === false) {
+                return ['path' => $target, 'raw_query' => ''];
+            }
+
+            return [
+                'path' => \substr($target, 0, $qPos),
+                'raw_query' => \substr($target, $qPos + 1),
+            ];
+        }
+
+        // absolute-form: scheme://authority[/path][?query]
+        if (\preg_match('#^[a-zA-Z][a-zA-Z0-9+.-]*://#D', $target) !== 1) {
+            return ['error' => 'invalid_target'];
+        }
+        $schemeSep = \strpos($target, '://');
+        if ($schemeSep === false) {
+            return ['error' => 'invalid_target'];
+        }
+        $authStart = $schemeSep + 3;
+        if ($authStart >= \strlen($target)) {
+            return ['error' => 'invalid_target'];
+        }
+        $authEnd = \strlen($target);
+        foreach (['/', '?', '#'] as $marker) {
+            $pos = \strpos($target, $marker, $authStart);
+            if ($pos !== false && $pos < $authEnd) {
+                $authEnd = $pos;
+            }
+        }
+        if ($authEnd <= $authStart) {
+            return ['error' => 'invalid_target'];
+        }
+        $rest = \substr($target, $authEnd);
+        if ($rest === '' || \str_starts_with($rest, '?') || \str_starts_with($rest, '#')) {
+            $rawQuery = '';
+            if (\str_starts_with($rest, '?')) {
+                $hashPos = \strpos($rest, '#');
+                $rawQuery = $hashPos === false
+                    ? \substr($rest, 1)
+                    : \substr($rest, 1, $hashPos - 1);
+            }
+
+            return ['path' => '/', 'raw_query' => $rawQuery];
+        }
+        $hashPos = \strpos($rest, '#');
+        if ($hashPos !== false) {
+            $rest = \substr($rest, 0, $hashPos);
+        }
+        $qPos = \strpos($rest, '?');
+        if ($qPos === false) {
+            return ['path' => $rest, 'raw_query' => ''];
+        }
+
+        return [
+            'path' => \substr($rest, 0, $qPos),
+            'raw_query' => \substr($rest, $qPos + 1),
+        ];
+    }
+
+    /**
+     * Validate wire path/query UTF-8, then decode and re-validate.
+     * Detection stays; the true source is request bytes, not parse_url debris.
+     *
+     * @return array{path:string,query:string}|array{error:string}
+     */
+    private function normalizeAndValidatePathQuery(string $rawPath, string $rawQuery): array
+    {
+        if ($rawPath === '' || !$this->isValidUtf8Text($rawPath)) {
+            return ['error' => 'invalid_path'];
+        }
+        if (!$this->isValidUtf8Text($rawQuery)
+            || \str_contains($rawQuery, "\0")
+            || \preg_match('/[\r\n]/', $rawQuery) === 1
+        ) {
+            return ['error' => 'invalid_query'];
+        }
+
+        $decodedPath = \rawurldecode($rawPath);
+        if (\str_contains($decodedPath, "\0")
+            || \str_contains($decodedPath, '\\')
+            || \str_contains($decodedPath, '://')
+            || !$this->isValidUtf8Text($decodedPath)
+        ) {
+            return ['error' => 'invalid_path'];
+        }
+        foreach (\explode('/', $decodedPath) as $segment) {
+            if ($segment === '..' || $segment === '.') {
+                return ['error' => 'path_traversal'];
+            }
+        }
+        $path = '/' . \ltrim((string)(\preg_replace('#/+#', '/', $decodedPath) ?? $decodedPath), '/');
+
+        $query = $rawQuery === '' ? '' : \rawurldecode($rawQuery);
+        if (\str_contains($query, "\0")
+            || \preg_match('/[\r\n]/', $query) === 1
+            || !$this->isValidUtf8Text($query)
+        ) {
+            return ['error' => 'invalid_query'];
+        }
+
+        return ['path' => $path, 'query' => $query];
+    }
+
+    /**
      * @param array<string, string|list<string>> $headers
      * @return array{method:string,protocol:string,target:string,path:string,query:string,host:string,headers:array<string,string>,body:string,header_bytes:int,error:string}
      */
-    private function invalidParsed(string $reason, array $headers = []): array
+    private function invalidParsed(string $reason, array $headers = [], string $target = '/'): array
     {
         $normalized = [];
         foreach ($headers as $name => $value) {
@@ -1556,11 +1640,12 @@ final class WorkerPolicyKernel
             }
             $normalized[$key] = (string)$value;
         }
+        $safeTarget = $target !== '' ? $target : '/';
 
         return [
             'method' => 'GET',
             'protocol' => 'HTTP/1.1',
-            'target' => '/',
+            'target' => $safeTarget,
             'path' => '/',
             'query' => '',
             'host' => (string)($normalized['host'] ?? ''),

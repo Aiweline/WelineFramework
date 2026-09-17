@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>{{var.brand_display_name}}</title>
-<!-- 邮件协议：table + 内联样式；禁止 script。固定页头/页尾壳；UI 文案用 lang 标签进 I18n collect/AI。RTL 语种由 Composer 注入 dir/align（对齐前端 htmlDir）。 -->
+<!-- 邮件协议：table + 内联样式；禁止 script。固定页头/页尾壳；UI 文案用 lang 标签进 I18n collect/AI。RTL 语种由 Composer 注入 dir/align（对齐前端 htmlDir）。header/body/footer 可各自配背景图（SystemConfig 继承）。 -->
 </head>
 <body style="margin:0;padding:0;background:{{var.brand_canvas}};-webkit-text-size-adjust:100%;direction:{{MAIL_HTML_DIR}};" dir="{{MAIL_HTML_DIR}}" data-weline-mail-shell="1">
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:{{var.brand_canvas}};">{{PREHEADER}}</div>
@@ -14,7 +14,7 @@
     <td align="center" style="padding:24px 12px;">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" dir="{{MAIL_HTML_DIR}}" style="width:100%;max-width:600px;background:{{var.brand_surface}};border:1px solid {{var.brand_border}};direction:{{MAIL_HTML_DIR}};">
         <tr>
-          <td bgcolor="{{var.brand_header_bg}}" style="background:{{var.brand_header_bg}};padding:22px 28px;">
+          <td bgcolor="{{var.brand_header_bg}}" background="{{var.brand_header_bg_image}}" style="{{var.brand_header_bg_css}};padding:22px 28px;" data-weline-mail-region="header">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" dir="{{MAIL_HTML_DIR}}">
               <tr>
                 <td align="{{MAIL_ALIGN_START}}" valign="middle" style="vertical-align:middle;">
@@ -32,12 +32,12 @@
           <td bgcolor="{{var.brand_accent}}" height="4" style="height:4px;background:{{var.brand_accent}};font-size:0;line-height:0;">&nbsp;</td>
         </tr>
         <tr>
-          <td align="{{MAIL_ALIGN_START}}" style="padding:28px 28px 12px;font-family:Arial,Helvetica,sans-serif;color:{{var.brand_text}};font-size:15px;line-height:1.7;text-align:{{MAIL_ALIGN_START}};direction:{{MAIL_HTML_DIR}};">
+          <td align="{{MAIL_ALIGN_START}}" bgcolor="{{var.brand_surface}}" background="{{var.brand_body_bg_image}}" style="{{var.brand_body_bg_css}};padding:28px 28px 12px;font-family:Arial,Helvetica,sans-serif;color:{{var.brand_text}};font-size:15px;line-height:1.7;text-align:{{MAIL_ALIGN_START}};direction:{{MAIL_HTML_DIR}};" data-weline-mail-region="body">
 {{MAIL_BODY}}
           </td>
         </tr>
         <tr>
-          <td align="{{MAIL_ALIGN_START}}" bgcolor="{{var.brand_footer_bg}}" style="padding:20px 28px 10px;font-family:Arial,Helvetica,sans-serif;background:{{var.brand_footer_bg}};border-top:1px solid {{var.brand_border}};text-align:{{MAIL_ALIGN_START}};direction:{{MAIL_HTML_DIR}};">
+          <td align="{{MAIL_ALIGN_START}}" bgcolor="{{var.brand_footer_bg}}" background="{{var.brand_footer_bg_image}}" style="{{var.brand_footer_bg_css}};padding:20px 28px 22px;font-family:Arial,Helvetica,sans-serif;border-top:1px solid {{var.brand_border}};text-align:{{MAIL_ALIGN_START}};direction:{{MAIL_HTML_DIR}};" data-weline-mail-region="footer">
             <div style="font-size:13px;font-weight:700;color:{{var.brand_footer_heading}};margin:0 0 8px;"><lang>需要帮助？</lang></div>
             <div style="font-size:12px;line-height:1.75;color:{{var.brand_muted}};">
               <lang>访问</lang> <a href="{{var.site_url}}" style="color:{{var.brand_link}};text-decoration:underline;">{{var.site_url}}</a><br>
@@ -46,12 +46,10 @@
               <lang>服务时间：</lang>{{var.service_hours}}<br>
               <lang>地址：</lang>{{var.contact_address}}
             </div>
-          </td>
-        </tr>
-        <tr>
-          <td align="{{MAIL_ALIGN_START}}" bgcolor="{{var.brand_footer_bg}}" style="padding:8px 28px 24px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:{{var.brand_muted}};background:{{var.brand_footer_bg}};text-align:{{MAIL_ALIGN_START}};direction:{{MAIL_HTML_DIR}};">
-            {{var.site_name}} · {{var.store_name}} · {{var.channel_name}}<br>
-            <lang>此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。</lang>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid {{var.brand_border}};font-size:11px;line-height:1.65;color:{{var.brand_muted}};">
+              {{var.brand_display_name}}<br>
+              <lang>此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。</lang>
+            </div>
           </td>
         </tr>
       </table>

@@ -5,7 +5,7 @@
  * @meta.name {default="账号认证顶栏",name="账号认证顶栏",description="登录/注册转化页精简顶栏"}
  * @meta.cache.mode {default="off",name="缓存模式",description="含登录/注册互跳 CTA，禁止跨路由复用 chrome 缓存"}
  * @meta.cache.auth {default="guest",name="鉴权维度"}
- * @param.logo {default="",name="Logo",description="覆盖站点 Logo URL"}
+ * @param.logo {default="",type="media_image",name="Logo",description="从媒体库选择覆盖站点 Logo；留空用站点默认",i18n=false}
  * @param.logoText {default="",name="Logo 文案",description="无图时的文字标"}
  */
 use Weline\Framework\Manager\ObjectManager;
@@ -13,12 +13,17 @@ use Weline\Theme\Helper\SiteBrand;
 
 $meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
 $layoutMeta = is_array($this->getData('layout')) ? $this->getData('layout') : [];
-$logo = trim((string)($meta['logo'] ?? ''))
-    ?: ObjectManager::getInstance(SiteBrand::class)->resolveFrontendLogoUrl($this);
+$logoRaw = $meta['logo'] ?? '';
+$logoFileHtml = trim((string)($meta['logo_file_html'] ?? ''));
+$logo = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($logoRaw);
+if ($logo === '' && $logoFileHtml === '') {
+    $logo = ObjectManager::getInstance(SiteBrand::class)->resolveFrontendLogoUrl($this);
+}
 $logoText = trim((string)($meta['logoText'] ?? ''));
 if ($logoText === '') {
     $logoText = (string)__('首页');
 }
+$hasLogo = $logoFileHtml !== '' || $logo !== '';
 $secondaryHref = trim((string)(
     $this->getData('auth_secondary_url')
     ?? $meta['auth_secondary_url']
@@ -36,7 +41,9 @@ $esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES |
 <header class="w-auth-chrome" data-w-component="auth-chrome" weline-code="theme.partial.header.auth">
     <div class="w-auth-chrome__inner">
         <a class="w-auth-chrome__brand" href="@url{'/'}" aria-label="<?= $esc($logoText) ?>">
-            <?php if ($logo !== ''): ?>
+            <?php if ($logoFileHtml !== ''): ?>
+                <span class="w-auth-chrome__logo w-auth-chrome__logo--asset"><?= $logoFileHtml ?></span>
+            <?php elseif ($hasLogo): ?>
                 <img class="w-auth-chrome__logo" src="<?= $esc($logo) ?>" alt="<?= $esc($logoText) ?>">
             <?php else: ?>
                 <span class="w-auth-chrome__wordmark"><?= $esc($logoText) ?></span>

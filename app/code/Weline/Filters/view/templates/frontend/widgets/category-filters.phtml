@@ -8,9 +8,9 @@
  * @widget.type {sidebar}
  * @widget.area {frontend}
  * @widget.position {["sidebar"]}
- * @widget.page_layouts {["category","search","product_list"]}
- * @widget.supports {["layout-category-filters","layout-product-list-filters","category-filters","attribute-filter","price-filter"]}
- * @widget.default_injections {[{"layout_type":"category","layout_option":"default","slot":"category-filters","area":"sidebar","sort_order":0,"required":true,"reason":"分类页默认注入 Filters 筛选部件"},{"layout_type":"product_list","layout_option":"default","slot":"list-filters","area":"sidebar","sort_order":0,"required":true,"reason":"商品列表默认注入 Filters 筛选部件"}]}
+ * @widget.page_layouts {["category","search","products"]}
+ * @widget.supports {["layout-category-filters","layout-products-filters","category-filters","attribute-filter","price-filter"]}
+ * @widget.default_injections {[{"layout_type":"category","layout_option":"default","slot":"category-filters","area":"sidebar","sort_order":0,"required":true,"reason":"分类页默认注入 Filters 筛选部件"},{"layout_type":"products","layout_option":"default","slot":"list-filters","area":"sidebar","sort_order":0,"required":true,"reason":"商品列表默认注入 Filters 筛选部件"}]}
  */
 
 use Weline\Filters\Service\StorefrontFilterPanelService;
@@ -44,15 +44,18 @@ $requestPath = strtolower(trim(str_replace('\\', '/', (string)(parse_url($reques
 
 /** @var StorefrontFilterPanelService $panelService */
 $panelService = ObjectManager::getInstance(StorefrontFilterPanelService::class);
+// PDP / unrelated pages: never rebuild the full catalog just because the widget rendered empty.
 if ($offers === [] && StorefrontPageContext::listingOffers() === null) {
-    $offers = $panelService->resolveListingOffers($requestPath);
+    if (StorefrontFilterPanelService::isListingLikePath($requestPath)) {
+        $offers = $panelService->resolveListingOffers($requestPath);
+    }
 }
 
 $listingUrl = '/categories';
 $rootCurrent = false;
-if (preg_match('#(?:^|/)(categories|products|product-list)(?:/|$)#', $requestPath, $m) === 1) {
-    $listingUrl = '/' . ($m[1] === 'product-list' ? 'products' : $m[1]);
-    $rootCurrent = in_array($m[1], ['categories', 'products', 'product-list'], true)
+if (preg_match('#(?:^|/)(categories|products)(?:/|$)#', $requestPath, $m) === 1) {
+    $listingUrl = '/' . ($m[1]);
+    $rootCurrent = in_array($m[1], ['categories', 'products'], true)
         && !str_contains($requestPath, 'category/');
 } elseif (preg_match('#(?:^|/)category/(.+)$#', $requestPath, $m) === 1) {
     $listingUrl = '/category/' . trim($m[1], '/');

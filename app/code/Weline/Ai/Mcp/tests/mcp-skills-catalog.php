@@ -46,6 +46,12 @@ $theme = McpSkillCatalog::get('weline-theme-development', true);
 skillCheck(is_array($theme), 'get by host alias weline-theme-development');
 skillCheck(($theme['skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_FRONTEND_DEVELOPMENT, 'theme alias maps to frontend_development');
 skillCheck(is_string($theme['content'] ?? null) && str_contains((string) $theme['content'], 'get_skill'), 'theme skill body includes fetch instructions');
+skillCheck(
+    is_string($theme['content'] ?? null)
+    && str_contains((string) $theme['content'], 'BinQuery')
+    && (str_contains((string) $theme['content'], '回退') || str_contains((string) $theme['content'], 'fallback')),
+    'theme skill body mandates BinQuery default not HTTP fallback'
+);
 skillCheck(($theme['static_skill_files'] ?? true) === false, 'theme skill static_skill_files=false');
 
 $browser = McpSkillCatalog::get('local-browser-urls', true);
@@ -96,6 +102,105 @@ skillCheck(($shentuBundle['rule_id'] ?? '') === 'user_image_attachment_triggers_
 skillCheck(($shentuBundle['hard_trigger'] ?? '') === 'any_user_message_image_or_screenshot_attachment', 'shentu bundle hard_trigger is any image attachment');
 skillCheck(($shentuBundle['command_path'] ?? '') === 'dev/ai-command/theme/审图.md', 'shentu bundle points at 审图 command');
 skillCheck(($shentuBundle['host_skill'] ?? '') === 'weline-ui-shentu', 'shentu bundle names host thin skill');
+
+$productOptimizeBundle = $policy['product_optimize_detail_suite_bundle'] ?? [];
+skillCheck(($productOptimizeBundle['rule_id'] ?? '') === 'product_optimize_triggers_detail_suite', 'policy exposes product_optimize_detail_suite_bundle');
+skillCheck(($productOptimizeBundle['mcp'] ?? '') === 'skip', 'product optimize bundle skips MCP');
+skillCheck(($productOptimizeBundle['hard_trigger'] ?? '') === 'product_pdp_url_with_optimize_intent', 'product optimize bundle hard_trigger is pdp url with intent');
+skillCheck(($productOptimizeBundle['command_path'] ?? '') === 'dev/ai-command/product/产品优化.md', 'product optimize bundle points at 产品优化 parent command');
+
+$blogArticleBundle = $policy['blog_article_methodology_bundle'] ?? [];
+skillCheck(($blogArticleBundle['rule_id'] ?? '') === 'blog_article_methodology_gate', 'policy exposes blog_article_methodology_bundle');
+skillCheck(($blogArticleBundle['mcp'] ?? '') === 'skip', 'blog article bundle skips MCP');
+skillCheck(($blogArticleBundle['hard_trigger'] ?? '') === 'blog_article_create_or_review_intent', 'blog article bundle hard_trigger is create/review intent');
+skillCheck(($blogArticleBundle['command_path'] ?? '') === 'dev/ai-command/blog/新建文章.md', 'blog article bundle points at 新建文章 command');
+skillCheck(($blogArticleBundle['host_skill'] ?? '') === 'weline-blog-article', 'blog article bundle names host thin skill');
+skillCheck(
+    ($blogArticleBundle['repo_skill_path'] ?? '') === 'app/code/Weline/Blog/doc/ai/skills/weline-blog-article/SKILL.md',
+    'blog article repo_skill_path points at weline-blog-article'
+);
+skillCheck(
+    ($blogArticleBundle['methodology_path'] ?? '') === 'app/code/Weline/Blog/doc/ai/skills/weline-blog-article/methodology.md'
+    && ($blogArticleBundle['review_checklist_path'] ?? '') === 'app/code/Weline/Blog/doc/ai/skills/weline-blog-article/review-checklist.md',
+    'blog article bundle exposes methodology and review checklist'
+);
+skillCheck(($productOptimizeBundle['child_command_path'] ?? '') === 'dev/ai-command/product/详情优化.md', 'product optimize bundle child_command_path is 详情优化');
+skillCheck(($productOptimizeBundle['host_skill'] ?? '') === 'ecommerce-product-optimize', 'product optimize bundle names ecommerce-product-optimize parent');
+skillCheck(($productOptimizeBundle['child_host_skill'] ?? '') === 'ecommerce-detail-suite', 'product optimize bundle child_host_skill is ecommerce-detail-suite');
+skillCheck(
+    ($productOptimizeBundle['image_pipeline'] ?? '') === 'app/code/Weline/Product/doc/ai/skills/ecommerce-detail-suite/companions/weline-image-pipeline.md',
+    'product optimize image_pipeline points at repo Product skill'
+);
+skillCheck(
+    ($productOptimizeBundle['repo_skill_path'] ?? '') === 'app/code/Weline/Product/doc/ai/skills/ecommerce-product-optimize/SKILL.md',
+    'product optimize repo_skill_path points at parent ecommerce-product-optimize'
+);
+skillCheck(
+    ($productOptimizeBundle['child_repo_skill_path'] ?? '') === 'app/code/Weline/Product/doc/ai/skills/ecommerce-detail-suite/SKILL.md',
+    'product optimize child_repo_skill_path points at ecommerce-detail-suite'
+);
+skillCheck(
+    ($productOptimizeBundle['hierarchy'] ?? '') === 'parent_contains_three_parallel_children'
+    && ($productOptimizeBundle['parent']['must_launch_three_subagents'] ?? false) === true
+    && is_array($productOptimizeBundle['parent']['subagent_slots'] ?? null)
+    && count($productOptimizeBundle['parent']['subagent_slots']) === 3,
+    'product optimize bundle hierarchy three parallel subagents'
+);
+skillCheck(
+    ($productOptimizeBundle['i18n_command_path'] ?? '') === 'dev/ai-command/product/翻译优化.md'
+    && ($productOptimizeBundle['i18n_host_skill'] ?? '') === 'ecommerce-product-i18n'
+    && ($productOptimizeBundle['i18n_repo_skill_path'] ?? '') === 'app/code/Weline/Product/doc/ai/skills/ecommerce-product-i18n/SKILL.md',
+    'product optimize bundle exposes 翻译优化 i18n branch'
+);
+skillCheck(
+    ($productOptimizeBundle['image_host_skill'] ?? '') === 'ecommerce-product-image'
+    && ($productOptimizeBundle['image_repo_skill_path'] ?? '') === 'app/code/Weline/Product/doc/ai/skills/ecommerce-product-image/SKILL.md',
+    'product optimize bundle exposes ecommerce-product-image branch'
+);
+skillCheck(
+    is_array($productOptimizeBundle['required_actions'] ?? null)
+    && in_array('parent_must_launch_three_parallel_subagents', $productOptimizeBundle['required_actions'], true)
+    && in_array('detect_default_website_locales_and_field_complete_translate', $productOptimizeBundle['required_actions'], true)
+    && in_array('parent_review_pass_1_against_child_skill_gates', $productOptimizeBundle['required_actions'], true)
+    && in_array('parent_review_pass_2_against_child_skill_gates', $productOptimizeBundle['required_actions'], true)
+    && in_array('named_rework_failing_slots_with_defect_list', $productOptimizeBundle['required_actions'], true)
+    && in_array('claim_done_only_after_review_pass_2_all_pass', $productOptimizeBundle['required_actions'], true),
+    'product optimize bundle requires three-subagent + dual review + i18n actions'
+);
+skillCheck(
+    is_array($productOptimizeBundle['forbid'] ?? null)
+    && in_array('parent_finish_without_three_subagents', $productOptimizeBundle['forbid'], true)
+    && in_array('skip_images_while_claiming_parent_product_optimize_done', $productOptimizeBundle['forbid'], true)
+    && in_array('parent_claim_done_without_dual_review_passes', $productOptimizeBundle['forbid'], true)
+    && in_array('vague_rework_without_named_defects', $productOptimizeBundle['forbid'], true),
+    'product optimize bundle forbids finishing without three subagents/dual review or vague rework'
+);
+skillCheck(
+    is_array($productOptimizeBundle['skip_marker'] ?? null)
+    && ($productOptimizeBundle['skip_marker']['attr'] ?? '') === 'data-weds="xq"',
+    'product optimize bundle skip_marker is data-weds=xq'
+);
+skillCheck(
+    is_array($productOptimizeBundle['required_actions'] ?? null)
+    && in_array('check_skip_marker_data_weds_xq_before_work', $productOptimizeBundle['required_actions'], true)
+    && in_array('write_skip_marker_data_weds_xq_on_detail_root', $productOptimizeBundle['required_actions'], true),
+    'product optimize bundle requires check+write skip marker actions'
+);
+skillCheck(
+    is_array($productOptimizeBundle['forbid'] ?? null)
+    && in_array('reoptimize_when_data_weds_xq_present_without_force', $productOptimizeBundle['forbid'], true)
+    && in_array('use_1688_or_source_attr_as_skip_marker', $productOptimizeBundle['forbid'], true),
+    'product optimize bundle forbids reoptimize without force and 1688-as-marker'
+);
+skillCheck(
+    is_array($productOptimizeBundle['triggers'] ?? null)
+    && in_array('详情优化', $productOptimizeBundle['triggers'], true)
+    && in_array('商详优化', $productOptimizeBundle['triggers'], true)
+    && in_array('产品优化', $productOptimizeBundle['triggers'], true)
+    && in_array('商品优化', $productOptimizeBundle['triggers'], true)
+    && in_array('/product/', $productOptimizeBundle['triggers'], true),
+    'product optimize bundle triggers include 详情/商详/产品/商品优化 and /product/'
+);
 skillCheck(
     is_array($shentuBundle['required_actions'] ?? null)
     && in_array('judge_humanization_and_aesthetics_with_frontend_design_and_prototype', $shentuBundle['required_actions'], true)

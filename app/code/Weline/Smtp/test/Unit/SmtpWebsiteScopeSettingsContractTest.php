@@ -23,8 +23,19 @@ final class SmtpWebsiteScopeSettingsContractTest extends TestCase
         self::assertStringContainsString('key="smtp_senders"', $declaration);
         self::assertStringContainsString('key="smtp_sender_contacts"', $declaration);
         self::assertStringContainsString('key="smtp_host"', $declaration);
+        self::assertStringContainsString('key="smtp_mail_bg_header"', $declaration);
+        self::assertStringContainsString('key="smtp_mail_bg_body"', $declaration);
+        self::assertStringContainsString('key="smtp_mail_bg_footer"', $declaration);
+        self::assertStringContainsString('path-global="mail/backgrounds/header"', $declaration);
+        self::assertStringContainsString('path="websites/{website}/{store}/mail/backgrounds/header"', $declaration);
+        self::assertStringContainsString('lock-root-global="mail"', $declaration);
         self::assertStringContainsString('scope="global,website"', $declaration);
+        self::assertStringContainsString('scope="global,website,store"', $declaration);
         self::assertStringContainsString('is_sensitive="true"', $declaration);
+
+        $data = (string)file_get_contents($moduleRoot . '/Helper/Data.php');
+        self::assertStringContainsString('key_smtp_mail_bg_header', $data);
+        self::assertStringContainsString('getMailShellBackgrounds', $data);
     }
 
     public function testConfigPageUsesTargetScopeAndMenu(): void

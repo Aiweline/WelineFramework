@@ -4,7 +4,6 @@
  *
  * @meta.name {default="404 页面布局",name="404 页面布局",description="Amazon 风格 404，静态快照由 Theme 生成"}
  * @meta.description {default="Amazon 风格页面不存在布局",name="404 页面布局",description="404 静态页生成模板"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="预览是否自动登录"}
  * @param title {default="抱歉，找不到您要的页面",name="页面标题",description="页面标题"}
  * @param pageTitle {default="抱歉，找不到您要的页面",name="404 标题",description="404 主标题"}
  * @param pageLead {default="您访问的链接可能已失效，或该页面已被移除。",name="404 说明",description="404 主要说明"}
@@ -266,11 +265,26 @@ $this->setData('seo', [
                         wrapper="section"
                         class="not-found-recommendations"
                         weline-code="theme.not_found.recommendations">
-                    <w:hook>Weline_Theme::frontend::layouts::not-found::recommendations</w:hook>
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::not-found::recommendations
+                        <else/>
+                        <w:widget type="product" name="featured-products" />
+                    </w:hook>
                 </w:slot>
             </div>
         </section>
     </main>
+
+
+    <w:slot id="not-found-bottom"
+            name="404 底部扩展"
+            accept="layout-not-found-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="content"
+            class="not-found-bottom-slot">
+    </w:slot>
 
     <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>

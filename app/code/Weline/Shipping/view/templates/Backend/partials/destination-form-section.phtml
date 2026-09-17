@@ -99,10 +99,10 @@ $pickerCode = $sectionId . '-picker';
                     'UTF-8'
                 );
                 ?>
-                <div class="w-address" data-w-address data-address-config="<?= $addressConfigJson ?>"></div>
-                <script src="/Weline/Theme/view/statics/js/address.js?v=20260906-catalog-empty1" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingDestReady&&window.__welineShippingDestReady()"></script>
+                <div class="w-address" data-w-address data-address-lazy="1" data-address-config="<?= $addressConfigJson ?>"></div>
                 <script>
                 (function () {
+                    var ADDRESS_JS = '/Weline/Theme/view/statics/js/address.js?v=20260917-open-load1';
                     var jsonInput = document.getElementById(<?= json_encode($sectionId . '_json', JSON_UNESCAPED_UNICODE) ?>);
                     if (!jsonInput) return;
                     var root = jsonInput.parentElement
@@ -117,21 +117,85 @@ $pickerCode = $sectionId . '-picker';
                         var raw = root.getAttribute('data-multi-selection') || '[]';
                         try { JSON.parse(raw); jsonInput.value = raw; } catch (e) {}
                     });
-                    function boot() {
+                    var panel = document.getElementById(<?= json_encode($sectionId . '_body', JSON_UNESCAPED_UNICODE) ?>);
+                    var trigger = panel
+                        ? document.querySelector('[aria-controls="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>"]')
+                        : null;
+                    var loading = false;
+
+                    function ensureAddressScript(done) {
+                        if (window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {
+                            done(true);
+                            return;
+                        }
+                        if (loading) {
+                            var tries = 0;
+                            (function wait() {
+                                if (window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {
+                                    done(true);
+                                    return;
+                                }
+                                tries += 1;
+                                if (tries > 80) {
+                                    done(false);
+                                    return;
+                                }
+                                setTimeout(wait, 50);
+                            })();
+                            return;
+                        }
+                        loading = true;
+                        var existing = document.querySelector('script[data-shipping-address-lazy-src]');
+                        if (existing) {
+                            existing.addEventListener('load', function () { done(!!window.WelineThemeAddress); });
+                            existing.addEventListener('error', function () { done(false); });
+                            return;
+                        }
+                        var s = document.createElement('script');
+                        s.src = ADDRESS_JS;
+                        s.async = true;
+                        s.setAttribute('data-shipping-address-lazy-src', '1');
+                        s.setAttribute('data-no-extract', 'true');
+                        s.onload = function () { done(!!window.WelineThemeAddress); };
+                        s.onerror = function () { done(false); };
+                        (document.head || document.documentElement).appendChild(s);
+                    }
+
+                    function bootArmed() {
+                        root.dataset.wAddressLazyArmed = '1';
                         if (!window.WelineThemeAddress || typeof window.WelineThemeAddress.boot !== 'function') {
                             return false;
                         }
-                        root.dataset.wAddressReady = '';
+                        if (root.dataset.wAddressReady === 'true' && root.dataset.addressCode
+                            && window.WelineThemeAddress.groups
+                            && window.WelineThemeAddress.groups[root.dataset.addressCode]) {
+                            return true;
+                        }
                         window.WelineThemeAddress.boot();
                         return true;
                     }
-                    window.__welineShippingDestReady = function () {
-                        if (!boot()) {
-                            setTimeout(boot, 50);
+
+                    function bootWhenOpen() {
+                        if (!panel || panel.hasAttribute('hidden')) {
+                            return;
                         }
-                    };
-                    if (window.WelineThemeAddress) {
-                        window.__welineShippingDestReady();
+                        ensureAddressScript(function (ok) {
+                            if (!ok) {
+                                return;
+                            }
+                            if (!bootArmed()) {
+                                setTimeout(bootWhenOpen, 50);
+                            }
+                        });
+                    }
+
+                    if (trigger) {
+                        trigger.addEventListener('click', function () {
+                            setTimeout(bootWhenOpen, 0);
+                        });
+                    }
+                    if (panel && typeof MutationObserver === 'function') {
+                        new MutationObserver(bootWhenOpen).observe(panel, {attributes: true, attributeFilter: ['hidden']});
                     }
                 })();
                 </script>

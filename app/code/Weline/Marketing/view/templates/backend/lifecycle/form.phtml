@@ -1,0 +1,56 @@
+<?php
+$campaign = $campaign ?? null;
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$id = $campaign ? (int)$campaign->getId() : 0;
+$name = $campaign ? (string)$campaign->getData('name') : '';
+$type = $campaign ? (string)$campaign->getData('type') : 'welcome_customer';
+$status = $campaign ? (string)$campaign->getData('status') : 'disabled';
+$incentiveRuleId = $campaign ? (int)$campaign->getData('incentive_rule_id') : 0;
+$segmentId = $campaign ? (int)$campaign->getData('segment_id') : 0;
+$websiteId = $campaign ? (int)$campaign->getData('website_id') : 0;
+?>
+<div class="w-grid" data-testid="marketing-lifecycle-form">
+  <div style="--w-span:12;">
+    <div class="w-backend-page__heading">
+      <h4 class="w-backend-page__title" style="--w-mb:0;"><?= $id > 0 ? __('编辑生命周期活动') : __('新建生命周期活动') ?></h4>
+      <a class="w-button" data-tone="neutral" data-size="sm" href="<?= $escape($this->getUrl('*/backend/lifecycle/index')) ?>"><?= __('返回列表') ?></a>
+    </div>
+    <div class="w-card"><div class="w-card__body">
+      <form method="post" action="<?= $escape($this->getUrl('*/backend/lifecycle/save')) ?>" class="w-form">
+        <input type="hidden" name="id" value="<?= $id ?>">
+        <div class="w-form-group">
+          <label class="w-label"><?= __('名称') ?></label>
+          <input class="w-input" type="text" name="name" required value="<?= $escape($name) ?>" data-testid="marketing-lifecycle-name">
+        </div>
+        <div class="w-form-group">
+          <label class="w-label"><?= __('类型') ?></label>
+          <select class="w-select" name="type" data-testid="marketing-lifecycle-type">
+            <option value="welcome_customer"<?= $type === 'welcome_customer' ? ' selected' : '' ?>><?= __('欢迎礼') ?></option>
+            <option value="idle_wake"<?= $type === 'idle_wake' ? ' selected' : '' ?>><?= __('沉睡唤醒（枚举预留）') ?></option>
+            <option value="birthday"<?= $type === 'birthday' ? ' selected' : '' ?>><?= __('生日礼（枚举预留）') ?></option>
+          </select>
+        </div>
+        <div class="w-form-group">
+          <label class="w-label"><?= __('状态') ?></label>
+          <select class="w-select" name="status">
+            <option value="disabled"<?= $status === 'disabled' ? ' selected' : '' ?>><?= __('已停用') ?></option>
+            <option value="enabled"<?= $status === 'enabled' ? ' selected' : '' ?>><?= __('已启用') ?></option>
+          </select>
+        </div>
+        <div class="w-form-group">
+          <label class="w-label"><?= __('激励券规则 ID') ?></label>
+          <input class="w-input" type="number" min="0" name="incentive_rule_id" value="<?= $incentiveRuleId ?>">
+        </div>
+        <div class="w-form-group">
+          <label class="w-label"><?= __('分群 ID') ?></label>
+          <input class="w-input" type="number" min="0" name="segment_id" value="<?= $segmentId ?>">
+        </div>
+        <div class="w-form-group">
+          <label class="w-label"><?= __('网站 ID（0=全部）') ?></label>
+          <input class="w-input" type="number" min="0" name="website_id" value="<?= $websiteId ?>">
+        </div>
+        <button class="w-button" data-tone="primary" type="submit" data-testid="marketing-lifecycle-save"><?= __('保存') ?></button>
+      </form>
+    </div></div>
+  </div>
+</div>

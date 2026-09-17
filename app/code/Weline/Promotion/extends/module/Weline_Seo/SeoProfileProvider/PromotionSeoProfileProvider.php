@@ -37,9 +37,12 @@ final class PromotionSeoProfileProvider implements SeoProfileProviderInterface
             return [];
         }
 
-        // Controller already published a product_list profile with item_list — keep it.
+        // Controller already published a products profile with item_list — keep it.
         $existingType = strtolower(str_replace(['-', ' '], '_', trim((string)($context['page_type'] ?? ''))));
-        if ($existingType === 'product_list' && is_array($context['item_list'] ?? null) && $context['item_list'] !== []) {
+        if ($existingType === 'products'
+            && is_array($context['item_list'] ?? null)
+            && $context['item_list'] !== []
+        ) {
             return [];
         }
 
@@ -112,7 +115,7 @@ final class PromotionSeoProfileProvider implements SeoProfileProviderInterface
         }
 
         $fromTemplate = strtolower(trim((string)($this->templateGet($template, 'page_type') ?? '')));
-        if ($fromTemplate !== '' && $fromTemplate !== 'product_list') {
+        if ($fromTemplate !== '' && $fromTemplate !== 'products') {
             return $fromTemplate;
         }
 

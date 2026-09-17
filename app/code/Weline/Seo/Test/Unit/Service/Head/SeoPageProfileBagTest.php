@@ -12,8 +12,28 @@ final class SeoPageProfileBagTest extends TestCase
 {
     protected function tearDown(): void
     {
+        SeoPageProfileBag::reset();
         RequestContext::remove(SeoPageProfileBag::REQUEST_KEY);
+        RequestContext::remove(SeoPageProfileBag::LAYOUT_FALLBACK_KEY);
         parent::tearDown();
+    }
+
+    public function testFingerprintIncludesBreadcrumbCount(): void
+    {
+        SeoPageProfileBag::replace([
+            'page_type' => 'about',
+            'title' => '关于我们',
+        ]);
+        $before = SeoPageProfileBag::fingerprint();
+        SeoPageProfileBag::replace([
+            'page_type' => 'about',
+            'title' => '关于我们',
+            'breadcrumbs' => [
+                ['name' => '首页', 'url' => '/'],
+                ['name' => '关于我们', 'url' => ''],
+            ],
+        ]);
+        self::assertNotSame($before, SeoPageProfileBag::fingerprint());
     }
 
     public function testPublishMergesProductFactsAndFingerprints(): void
@@ -52,13 +72,13 @@ final class SeoPageProfileBagTest extends TestCase
             'item_list' => [['name' => 'Variant']],
         ]);
         SeoPageProfileBag::replace([
-            'page_type' => 'product_list',
+            'page_type' => 'products',
             'title' => 'All Products',
             'item_list' => [['name' => 'Listing Item', 'url' => '/product/1']],
         ]);
 
         $profile = SeoPageProfileBag::pull();
-        self::assertSame('product_list', $profile['page_type']);
+        self::assertSame('products', $profile['page_type']);
         self::assertSame('All Products', $profile['title']);
         self::assertArrayNotHasKey('product', $profile);
         self::assertSame('Listing Item', $profile['item_list'][0]['name']);
@@ -72,13 +92,13 @@ final class SeoPageProfileBagTest extends TestCase
             'item_list' => [['name' => 'Variant Offer']],
         ]);
         SeoPageProfileBag::publish([
-            'page_type' => 'product_list',
+            'page_type' => 'products',
             'title' => 'Products',
             'item_list' => [['name' => 'Catalog Item']],
         ]);
 
         $profile = SeoPageProfileBag::pull();
-        self::assertSame('product_list', $profile['page_type']);
+        self::assertSame('products', $profile['page_type']);
         self::assertArrayNotHasKey('product', $profile);
         self::assertSame([['name' => 'Catalog Item']], $profile['item_list']);
     }

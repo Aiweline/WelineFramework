@@ -6,10 +6,14 @@ namespace Weline\Theme\Helper;
 
 use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Model\SystemConfig;
+use Weline\Websites\Service\SiteContactSeedService;
 
 /**
  * 前台帮助中心等页面读取站点公开联系与品牌信息。
- * 优先 Backend 基础配置，其次 env 常用键，最后给电商常见占位默认值。
+ * 站名/简介优先 Website 范围（SiteBrand），再 Backend / env；禁止硬编码商户品牌。
+ * 联系地址/电话/服务时间：SystemConfig（Weline_Websites）按 Global→Website→Store 继承，再 Backend / env。
  */
 class SiteContactInfo
 {
@@ -17,6 +21,7 @@ class SiteContactInfo
 
     public function __construct(
         private readonly BackendConfigStore $backendConfig,
+        private readonly ?SiteBrand $siteBrand = null,
     ) {
     }
 
@@ -30,21 +35,31 @@ class SiteContactInfo
      *   contact_address: string
      * }
      */
-    public function resolve(): array
+    public function resolve(?string $storageScope = null): array
     {
-        $siteName = $this->firstNonEmpty([
-            $this->backend('site_name'),
-            $this->env('site.name'),
-            $this->env('system.site_name'),
-            'Weline',
-        ]);
+        $scope = $this->normalizeScope($storageScope);
 
-        $siteDescription = $this->firstNonEmpty([
-            $this->backend('site_description'),
-            $this->env('site.description'),
-            $this->env('system.site_description'),
-            __('官方商城帮助与客户服务'),
-        ]);
+        $siteName = '';
+        $siteDescription = '';
+        if ($this->siteBrand instanceof SiteBrand) {
+            $siteName = trim($this->siteBrand->resolveFrontendSiteName());
+            $siteDescription = trim($this->siteBrand->resolveFrontendSiteDescription());
+        }
+        if ($siteName === '') {
+            $siteName = $this->firstNonEmpty([
+                $this->backend('site_name'),
+                $this->env('site.name'),
+                $this->env('system.site_name'),
+            ]);
+        }
+        if ($siteDescription === '') {
+            $siteDescription = $this->firstNonEmpty([
+                $this->backend('site_description'),
+                $this->env('site.description'),
+                $this->env('system.site_description'),
+                (string)__('官方商城帮助与客户服务'),
+            ]);
+        }
 
         $email = $this->firstNonEmpty([
             $this->backend('contact_email'),
@@ -56,6 +71,7 @@ class SiteContactInfo
         ]);
 
         $phone = $this->firstNonEmpty([
+            $this->systemConfig(SiteContactSeedService::KEY_PHONE, $scope),
             $this->backend('contact_phone'),
             $this->backend('support_phone'),
             $this->env('contact_phone'),
@@ -64,6 +80,7 @@ class SiteContactInfo
         ]);
 
         $hours = $this->firstNonEmpty([
+            $this->systemConfig(SiteContactSeedService::KEY_SERVICE_HOURS, $scope),
             $this->backend('service_hours'),
             $this->backend('contact_hours'),
             $this->env('site.service_hours'),
@@ -71,10 +88,11 @@ class SiteContactInfo
         ]);
 
         $address = $this->firstNonEmpty([
+            $this->systemConfig(SiteContactSeedService::KEY_ADDRESS, $scope),
             $this->backend('contact_address'),
             $this->backend('site_address'),
             $this->env('site.address'),
-            '',
+            SiteContactSeedService::DEFAULT_ADDRESS_EN,
         ]);
 
         return [
@@ -85,6 +103,39 @@ class SiteContactInfo
             'service_hours' => $hours,
             'contact_address' => $address,
         ];
+    }
+
+    private function normalizeScope(?string $storageScope): string
+    {
+        $scope = trim((string)$storageScope);
+        if ($scope === '' || str_starts_with($scope, '__')) {
+            return SystemConfig::SCOPE_GLOBAL;
+        }
+
+        return $scope;
+    }
+
+    private function systemConfig(string $key, string $storageScope): string
+    {
+        try {
+            /** @var SystemConfig $config */
+            $config = ObjectManager::getInstance(SystemConfig::class);
+            $resolved = $config->resolveConfig(
+                $key,
+                SiteContactSeedService::CONFIG_MODULE,
+                SiteContactSeedService::CONFIG_AREA,
+                $storageScope,
+                SystemConfig::LOCALE_DEFAULT,
+                null
+            );
+            if (empty($resolved['found'])) {
+                return '';
+            }
+
+            return trim((string)($resolved['value'] ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function backend(string $key): string

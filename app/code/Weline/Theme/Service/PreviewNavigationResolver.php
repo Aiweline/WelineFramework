@@ -6,7 +6,9 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Service\LayoutResolveService;
 
 final class PreviewNavigationResolver
 {
@@ -83,7 +85,29 @@ final class PreviewNavigationResolver
 
     private function buildThemeEditorLayoutResult(array $candidate, array $context): array
     {
-        $pageType = $this->resolveThemePageType($candidate['path']);
+        // Keep the clicked storefront path as-is (do not rewrite via layout_path).
+        // Locale/website mount may be stripped only for layout chrome inference.
+        $clickedPath = \trim((string)($candidate['path'] ?? ''), '/');
+        $publicRoute = $this->normalizeStorefrontPublicRoute((string)($candidate['path'] ?? ''));
+        // Never invent a different hub (e.g. layout_path) — path stays what was clicked.
+        if ($publicRoute === '') {
+            $publicRoute = \strtolower($clickedPath);
+        }
+
+        $resolved = $this->resolveLayoutFromPublicPath($publicRoute);
+        $pageType = (string)($resolved['layout_path'] ?? '');
+        if ($pageType === '') {
+            $pageType = $this->resolveThemePageType('/' . ($publicRoute !== '' ? $publicRoute : $clickedPath));
+        }
+        if ($pageType === '') {
+            $pageType = $publicRoute !== '' ? \explode('/', $publicRoute)[0] : ThemeLayout::PAGE_TYPE_HOME;
+        }
+
+        $layoutOption = (string)($resolved['layout_option'] ?? 'default');
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+
         $editorArea = $this->previewContextService->normalizeArea(
             (string)($context['editor_area'] ?? PreviewContextService::AREA_FRONTEND)
         );
@@ -92,23 +116,32 @@ final class PreviewNavigationResolver
             'shell' => PreviewContextService::SHELL_THEME_EDITOR,
             'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
             'target_value' => $pageType,
+            'layout_option' => $layoutOption,
+            // Authoritative canvas path = clicked path (normalized), not rebuilt from layout_path.
+            'theme_public_route' => $publicRoute,
         ]);
 
+        // Shell URL is only a chrome hint; canvas loads public_route + editor markers.
         $params = $this->previewContextService->toQueryParams($responseContext);
         $params['theme_id'] = $themeId;
-        $params['layout_type'] = $pageType;
-        $params['page_type'] = $pageType;
-        $params['layout_option'] = 'default';
         $params['editor_mode'] = '1';
         $params['status'] = $responseContext['status'];
         $params['editor_area'] = $editorArea;
         $params['preview_mode'] = $responseContext['preview_mode'];
-        $publicRoute = \trim((string)($candidate['path'] ?? ''), '/');
+        unset($params['layout_type'], $params['page_type'], $params['layout_option']);
+        if ($pageType !== '' && $pageType !== ThemeLayout::PAGE_TYPE_HOME) {
+            $params['page_type'] = $pageType;
+        }
+        if ($layoutOption !== 'default') {
+            $params['layout_option'] = $layoutOption;
+        }
         if ($publicRoute !== '' && !\str_starts_with($publicRoute, 'theme/')) {
-            $params['theme_public_route'] = \strtolower($publicRoute);
+            $params['theme_public_route'] = $publicRoute;
+        } else {
+            unset($params['theme_public_route']);
         }
 
-        return $this->buildResponse(
+        $response = $this->buildResponse(
             'internal-editor',
             $this->url->getBackendUrl('theme/backend/theme-editor', $params),
             PreviewContextService::TARGET_TYPE_LAYOUT,
@@ -117,6 +150,75 @@ final class PreviewNavigationResolver
             0,
             $responseContext
         );
+        // Exact path for canvas — editor must not substitute another path.
+        $response['public_route'] = $publicRoute;
+        $response['layout_option'] = $layoutOption;
+        $response['canvas_navigation'] = true;
+        $response['preserve_path'] = true;
+
+        return $response;
+    }
+
+    /**
+     * Strip website mount + locale prefix so /en_US/products → products.
+     */
+    private function normalizeStorefrontPublicRoute(string $path): string
+    {
+        $path = \trim(\str_replace('\\', '/', $path));
+        if ($path === '') {
+            return '';
+        }
+        if (\str_contains($path, '://')) {
+            $path = (string)(\parse_url($path, \PHP_URL_PATH) ?: '');
+        }
+        if (\str_contains($path, '?')) {
+            $path = \explode('?', $path, 2)[0];
+        }
+        $path = '/' . \trim($path, '/');
+
+        try {
+            $path = Url::peelWebsiteMountPathFromRelativePath($path);
+        } catch (\Throwable) {
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+
+        try {
+            $localized = \Weline\Framework\App\State::resolveLocalizationFromPathSegments($segments);
+            if (isset($localized['remaining']) && \is_array($localized['remaining'])) {
+                $segments = \array_values(\array_map('strval', $localized['remaining']));
+            }
+        } catch (\Throwable) {
+        }
+
+        return \strtolower(\implode('/', $segments));
+    }
+
+    /**
+     * @return array{claimed?:bool,layout_path?:string,layout_option?:string,entity_slug?:string}
+     */
+    private function resolveLayoutFromPublicPath(string $publicRoute): array
+    {
+        if ($publicRoute === '') {
+            return [
+                'claimed' => true,
+                'layout_path' => ThemeLayout::PAGE_TYPE_HOME,
+                'layout_option' => 'default',
+                'entity_slug' => '',
+            ];
+        }
+
+        try {
+            /** @var LayoutResolveService $layoutResolve */
+            $layoutResolve = ObjectManager::getInstance(LayoutResolveService::class);
+
+            return $layoutResolve->resolveFromPath($publicRoute);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function buildPreviewResult(array $candidate, array $context, ?object $page): array

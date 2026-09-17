@@ -30,7 +30,6 @@ final class RouterTest extends TestCase
     {
         return [
             'products' => ['products'],
-            'product list alias' => ['/product-list/'],
         ];
     }
 

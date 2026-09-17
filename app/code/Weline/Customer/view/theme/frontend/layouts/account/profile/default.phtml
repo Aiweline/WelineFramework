@@ -1,0 +1,140 @@
+<!--
+布局：account/profile/default - 账户个人资料壳
+layoutType=account/profile，option=default → layouts/account/profile/default.phtml
+由 Theme account_profile 迁入 Customer；店面主路径仍可用 account/dashboard + #profile。
+
+字段
+@meta.name {default="账号资料布局",name="账号资料布局",description="顾客个人资料布局"}
+@meta.description {default="与路由对齐：account/profile/default",name="描述",description="个人资料页布局"}
+@login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="需要登录才能访问"}
+@param.title {default="个人资料",name="页面标题",description="页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容"}
+@param.sidebar {default="",name="侧边栏内容（可选）",description="侧边栏内容"}
+@param.class {default="",name="额外CSS类",description="根节点额外 class"}
+-->
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+<style>
+.account-profile {
+    display: flex;
+    min-height: calc(100vh - var(--header-height));
+    background: var(--weline-layout-surface-secondary);
+}
+
+.account-profile__sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    background: var(--weline-layout-surface-primary);
+    border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+    padding: var(--weline-layout-spacing-lg);
+    position: sticky;
+    top: var(--header-height);
+    height: calc(100vh - var(--header-height));
+    overflow-y: auto;
+}
+
+.account-profile__main {
+    flex: 1;
+    min-width: 0;
+    padding: var(--weline-layout-spacing-lg) var(--weline-layout-content-padding-inline);
+    display: flex;
+    justify-content: center;
+}
+
+.account-profile__container {
+    box-sizing: border-box;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+}
+
+@media (max-width: 768px) {
+    .account-profile {
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .account-profile__sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+        padding: var(--weline-layout-spacing-md);
+    }
+
+    .account-profile__main {
+        padding: var(--weline-layout-spacing-md);
+    }
+}
+</style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+
+    <div class="account-profile {{meta.class}}">
+        <if condition="meta.sidebar">
+            <aside class="account-profile__sidebar">
+                <w:slot id="account-profile-sidebar"
+                        name="资料页侧边栏"
+                        accept="layout-account-profile-sidebar,layout-account-sidebar,account-sidebar,sidebar,account-nav"
+                        multiple="true"
+                        position="sidebar">
+                    {{meta.sidebar}}
+                </w:slot>
+            </aside>
+        </if>
+
+        <main class="account-profile__main" id="account-profile-content" data-layout="account_profile_content">
+            <div class="account-profile__container">
+                <w:slot id="content"
+                        name="内容区"
+                        accept="layout-account-content,layout-account-profile-content,layout-default-content,content,account-profile,account-content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="account-profile__content-root-slot">
+                    <w:slot id="account-profile-content"
+                        name="个人资料内容"
+                        accept="layout-account-profile-content,layout-account-content,account-profile,account-content,content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content">
+                    <if condition="meta.content">
+                        {{meta.content}}
+                    <else/>
+                        <section class="weline-layout-surface" weline-code="theme.account_profile.section_1">
+                            <h1><?= __('个人资料') ?></h1>
+                            <p class="weline-muted"><?= __('这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。') ?></p>
+                        </section>
+                    </if>
+                    </w:slot>
+                </w:slot>
+            </div>
+        </main>
+    </div>
+
+
+    <w:slot id="account-profile-bottom"
+            name="账户资料底部扩展"
+            accept="layout-account-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="content"
+            class="account-profile-bottom-slot">
+    </w:slot>
+
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+</body>
+</html>

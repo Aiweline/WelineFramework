@@ -26,15 +26,15 @@ final class StorefrontCatalogSurfaceResolver
      */
     private const SURFACES = [
         'products' => [
-            'page_type' => 'product_list',
-            'layout_type' => 'product_list',
+            'page_type' => 'products',
+            'layout_type' => 'products',
             'public_route' => 'products',
             'zh' => [
                 'title' => '商品列表',
                 'heading' => '全部商品',
                 'lede' => '浏览当前网站已发布的汉服、马面裙与传统配饰，可按价格与名称排序。',
                 'seo_title' => '汉服商城 | 明制、宋制、唐制与马面裙',
-                'seo_description' => '浏览云裳汉服全系列，选购明制、宋制、唐制汉服、马面裙与传统配饰，支持国际独立站多语言浏览。',
+                'seo_description' => '浏览全系列汉服，选购明制、宋制、唐制汉服、马面裙与传统配饰，支持国际独立站多语言浏览。',
                 'seo_keywords' => '汉服,明制汉服,宋制汉服,唐制汉服,马面裙,传统配饰',
                 'share_image_alt' => '桃园清梦米白粉色明制上衣与马面裙套装',
             ],
@@ -42,7 +42,7 @@ final class StorefrontCatalogSurfaceResolver
                 'title' => 'Hanfu Shop',
                 'heading' => 'Shop All Hanfu',
                 'lede' => 'Explore published Hanfu, mamian skirts, and traditional accessories, with price and name sorting.',
-                // Keep final composed title ≤65 with brand suffix (Yunshang Hanfu · Hanfu Atelier).
+                // Keep final composed title ≤65 with brand suffix from Website identity.
                 'seo_title' => 'Shop All Hanfu | Ming & Tang',
                 'seo_description' => 'Shop Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories with international storefront support.',
                 'seo_keywords' => 'hanfu,ming hanfu,song hanfu,tang hanfu,mamian skirt,traditional accessories',
@@ -73,15 +73,15 @@ final class StorefrontCatalogSurfaceResolver
             ],
         ],
         'new_arrivals' => [
-            'page_type' => 'product_list',
-            'layout_type' => 'product_list',
+            'page_type' => 'products',
+            'layout_type' => 'products',
             'public_route' => 'new-arrivals',
             'zh' => [
                 'title' => '新品上架',
                 'heading' => '新到汉服',
                 'lede' => '按上架时间探索最新汉服、马面裙与传统配饰，发现当季东方衣冠新作。',
                 'seo_title' => '汉服新品 | 最新汉服、马面裙与传统配饰',
-                'seo_description' => '探索云裳汉服新品上架，选购最新汉服、马面裙与传统配饰。',
+                'seo_description' => '探索新品上架，选购最新汉服、马面裙与传统配饰。',
                 'seo_keywords' => '汉服新品,新到汉服,马面裙,传统配饰',
                 'share_image_alt' => '桃园清梦米白粉色明制上衣与马面裙套装',
             ],
@@ -90,21 +90,21 @@ final class StorefrontCatalogSurfaceResolver
                 'heading' => 'New Hanfu Arrivals',
                 'lede' => 'Explore the latest Hanfu, mamian skirts, and traditional accessories in arrival order.',
                 'seo_title' => 'New Hanfu Arrivals',
-                'seo_description' => 'Discover the latest Hanfu, mamian skirts, and traditional accessories from Yunshang Hanfu.',
+                'seo_description' => 'Discover the latest Hanfu, mamian skirts, and traditional accessories.',
                 'seo_keywords' => 'new hanfu,new arrivals,mamian skirt,traditional accessories',
                 'share_image_alt' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
             ],
         ],
         'best_sellers' => [
-            'page_type' => 'product_list',
-            'layout_type' => 'product_list',
+            'page_type' => 'products',
+            'layout_type' => 'products',
             'public_route' => 'best-sellers',
             'zh' => [
                 'title' => '热销榜',
                 'heading' => '人气汉服榜',
                 'lede' => '查看当前最受欢迎的汉服、马面裙与传统配饰，快速发现店铺口碑之选。',
                 'seo_title' => '热销汉服榜 | 人气汉服与马面裙推荐',
-                'seo_description' => '探索云裳汉服热销榜，发现人气汉服、马面裙与传统配饰。',
+                'seo_description' => '探索热销榜，发现人气汉服、马面裙与传统配饰。',
                 'seo_keywords' => '热销汉服,人气汉服,马面裙,汉服榜单',
                 'share_image_alt' => '桃园清梦米白粉色明制上衣与马面裙套装',
             ],
@@ -113,7 +113,7 @@ final class StorefrontCatalogSurfaceResolver
                 'heading' => 'Most-Loved Hanfu',
                 'lede' => 'Discover the Hanfu, mamian skirts, and traditional accessories our customers love most.',
                 'seo_title' => 'Best-Selling Hanfu',
-                'seo_description' => 'Discover best-selling Hanfu, mamian skirts, and traditional accessories from Yunshang Hanfu.',
+                'seo_description' => 'Discover best-selling Hanfu, mamian skirts, and traditional accessories.',
                 'seo_keywords' => 'best selling hanfu,popular hanfu,mamian skirt',
                 'share_image_alt' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
             ],
@@ -163,7 +163,7 @@ final class StorefrontCatalogSurfaceResolver
         $first = $nonLocale[0];
         $rest = array_slice($nonLocale, 1);
         $surfaceCode = match ($first) {
-            'products', 'product-list' => 'products',
+            'products' => 'products',
             'categories' => 'categories',
             // `/category` alone is the index surface; `/category/{slug…}` is a leaf entity page.
             'category' => $rest === [] ? 'categories' : null,

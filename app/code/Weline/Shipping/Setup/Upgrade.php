@@ -11,6 +11,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Shipping\Model\Carrier;
 use Weline\Shipping\Model\CarrierRegion;
+use Weline\Shipping\Model\DeliveryAddress;
 use Weline\Shipping\Model\DestinationRegion;
 use Weline\Shipping\Model\EmbargoRegion;
 use Weline\Shipping\Model\EmbargoReason;
@@ -30,6 +31,8 @@ use Weline\Shipping\Service\ShippingProviderManager;
 use Weline\Shipping\Service\SystemEmbargoAdminService;
 
 /**
+ * 2.9.7：全球可达市场种子扩至 ~243 国（中国发运经济小包价）+ 目的地/承运商覆盖增量并入。
+ * 2.9.1：DeliveryAddress purpose_checkout / purpose_receiving；存量双标回填。
  * 2.9.0：第4章履约周边（incoterm + 退货模板/策略 + 同单分批发策略）。
  * 2.8.0：第3章同仓分箱 + 签名保价 + 旺季燃油（PackingPolicy/CheckoutAddon/SeasonalRule）。
  * 2.7.0：第2章偏远加价 + 地址点类型/危品门禁（ShippingSurchargeRule）。
@@ -56,6 +59,7 @@ final class Upgrade implements UpgradeInterface
     public function setup(Setup $setup, Context $context): void
     {
         foreach ([
+            DeliveryAddress::class,
             Carrier::class,
             CarrierRegion::class,
             DestinationRegion::class,
@@ -78,6 +82,8 @@ final class Upgrade implements UpgradeInterface
             \Weline\Shipping\Model\ShippingPackingPolicy::class,
             \Weline\Shipping\Model\ShippingCheckoutAddon::class,
             \Weline\Shipping\Model\ShippingSeasonalRule::class,
+            \Weline\Shipping\Model\ShippingLabelIdempotency::class,
+            \Weline\Shipping\Model\ShippingLabelOrphan::class,
             \Weline\Shipping\Model\ShippingCommercePolicy::class,
         ] as $modelClass) {
             $model = ObjectManager::getInstance($modelClass);
@@ -86,6 +92,7 @@ final class Upgrade implements UpgradeInterface
             $model->setup($runner, $context);
         }
 
+        $this->migrateDeliveryAddressPurposeFlags();
         $this->dropLegacyZoneSchema();
         $this->migrateConfigScopeColumns();
         $this->seedCarrierCoverageDefaults();
@@ -97,6 +104,55 @@ final class Upgrade implements UpgradeInterface
         $this->seedFreeShippingConditionTypes();
         $this->seedCountrySortOrders();
         $this->seedProviderCodesAndDefaultApiCarriers();
+    }
+
+    /**
+     * 2.9.1：存量地址双标（结账+收货），避免启用过滤后列表空窗。
+     */
+    private function migrateDeliveryAddressPurposeFlags(): void
+    {
+        try {
+            /** @var DeliveryAddress $model */
+            $model = ObjectManager::getInstance(DeliveryAddress::class, [], false);
+            $conn = $model->getConnection();
+            $connector = $conn->getConnector();
+            $quote = static function (string $ident) use ($connector): string {
+                if (method_exists($connector, 'quoteIdentifier')) {
+                    return (string)$connector->quoteIdentifier($ident);
+                }
+
+                return '"' . str_replace('"', '""', $ident) . '"';
+            };
+            $table = $quote(DeliveryAddress::schema_table);
+            $checkoutCol = $quote(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT);
+            $receivingCol = $quote(DeliveryAddress::schema_fields_PURPOSE_RECEIVING);
+
+            try {
+                $model->reset()->query(
+                    'ALTER TABLE ' . $table
+                    . ' ADD COLUMN IF NOT EXISTS ' . $checkoutCol
+                    . ' int NOT NULL DEFAULT 1'
+                )->fetch();
+            } catch (\Throwable) {
+            }
+            try {
+                $model->reset()->query(
+                    'ALTER TABLE ' . $table
+                    . ' ADD COLUMN IF NOT EXISTS ' . $receivingCol
+                    . ' int NOT NULL DEFAULT 1'
+                )->fetch();
+            } catch (\Throwable) {
+            }
+
+            $model->reset()->query(
+                'UPDATE ' . $table
+                . ' SET ' . $checkoutCol . '=1, ' . $receivingCol . '=1'
+                . ' WHERE ' . $checkoutCol . ' IS NULL OR ' . $receivingCol . ' IS NULL'
+                . ' OR (' . $checkoutCol . '=0 AND ' . $receivingCol . '=0)'
+            )->fetch();
+        } catch (\Throwable) {
+            // Schema may not be ready; next upgrade can retry.
+        }
     }
 
     /**

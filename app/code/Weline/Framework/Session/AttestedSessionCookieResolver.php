@@ -21,8 +21,8 @@ class AttestedSessionCookieResolver
         }
 
         $candidateNames = \array_values(\array_unique(\array_filter([
-            SessionCookieNameResolver::resolve(),
-            SessionCookieNameResolver::resolveUnscopedFor(SessionCookieNameResolver::LEGACY_NAME),
+            ...SessionCookieNameResolver::requestCookieCandidates(null, 'frontend'),
+            ...SessionCookieNameResolver::requestCookieCandidates(null, 'backend'),
         ], static fn(string $name): bool => $name !== '')));
 
         foreach ($candidateNames as $name) {

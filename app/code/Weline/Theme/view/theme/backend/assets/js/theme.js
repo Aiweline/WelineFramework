@@ -1838,6 +1838,24 @@
     if (window.WelineApiModule && window.WelineApiModule.__full === true) {
         window.Weline.Api = window.WelineApiModule;
     }
+    // MediaReferenceIdentity.v1 — PHP-isomorphic helper (load w-scope.js when present)
+    (function mountWScope() {
+        if (typeof window.w_scope === 'function') {
+            window.Weline.w_scope = window.w_scope;
+            return;
+        }
+        var src = (window.__WelineThemeConfig && window.__WelineThemeConfig.wScopeUrl)
+            || '/Weline/FileManager/view/statics/js/w-scope.js';
+        var s = document.createElement('script');
+        s.src = src;
+        s.async = false;
+        s.onload = function () {
+            if (typeof window.w_scope === 'function') {
+                window.Weline.w_scope = window.w_scope;
+            }
+        };
+        document.head.appendChild(s);
+    })();
     setupBackendFetchWorkerBridge();
     setupJQueryAjaxWorkerTransport();
     window.w_query = function (provider, operation, params = {}, options = {}) {

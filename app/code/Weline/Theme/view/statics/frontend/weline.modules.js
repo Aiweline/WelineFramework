@@ -22,7 +22,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     miniCartIcon: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20260914-swatch-zoom"
+            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20260915-sibling-i18n2"
         ],
         globalVar: "WelineMiniCartIcon",
         description: "迷你购物车图标与抽屉"

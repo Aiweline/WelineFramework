@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Framework',
-    "version" => '2.5.85',
+    "version" => '2.5.97',
     "requires" => [
     ],
     "optional" => [

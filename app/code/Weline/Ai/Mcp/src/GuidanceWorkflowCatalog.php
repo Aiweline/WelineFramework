@@ -64,10 +64,10 @@ final class GuidanceWorkflowCatalog
         return [
             '【引导·只指路】工程任务在 MCP 已挂载/可挂载时必须先 prepare_project，并遵守 agent_guidance.hard_constraints（hard-constraints.v1）。框架硬约束不在本列表展开。权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则可由 resolve_task_context → workflow_contract.v1 surfaces 下发；工程技能由 agent_guidance.mcp_skills + resolve_skill/get_skill 按需取。编码用宿主原生编辑。冷启动门禁由 MCP 生成 `.cursor/rules/weline-mcp-coldstart.mdc`（ensure 写出）。',
             '[Bootstrap · pointers only] For engineering when MCP is attached/attachable, MUST prepare_project first and obey agent_guidance.hard_constraints (hard-constraints.v1). Framework hard rules are not expanded here. Authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces; engineering skills via agent_guidance.mcp_skills + resolve_skill/get_skill. Coding uses host-native editors. Cold-start gate is MCP-generated `.cursor/rules/weline-mcp-coldstart.mdc` (via ensure).',
-            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。任何 feature 必须 Agent 自跑 Playwright e2e PASS（禁止请用户测试；默认无头 e2e_playwright_headless_default，勿加 --headed 除非用户要求观看）；Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
-            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Every feature MUST Agent-run Playwright e2e to PASS (never ask the user to test; default headless via e2e_playwright_headless_default—do not pass --headed unless the user asks to watch). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
+            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。任何 feature 必须 Agent 自跑 Playwright e2e PASS（禁止请用户测试；默认无头 e2e_playwright_headless_default，勿加 --headed 除非用户要求观看；仅正式 runner：`php bin/w e2e:run` / `npx playwright test`，禁止 `node -e`/`chromium.launch` 探活，见 e2e_playwright_formal_runner_only）；Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / e2e_playwright_formal_runner_only / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
+            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Every feature MUST Agent-run Playwright e2e to PASS (never ask the user to test; default headless via e2e_playwright_headless_default—do not pass --headed unless the user asks to watch; formal runner only: php bin/w e2e:run / npx playwright test—forbid node -e / chromium.launch probes per e2e_playwright_formal_runner_only). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / e2e_playwright_formal_runner_only / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
             '【调用范围】闲聊可跳过 MCP。工程/编码任务：MCP 已挂载或可挂载时必须 ensure→prepare_project→遵守 hard_constraints，再原生编辑；检索工具按需。挂不上则宿主 Read AI硬规则索引.md。例外：打招呼 hi/你好 或「提取技能」可 list MCP 技能+指令。运行/翻译状态查询默认本机（runtime_status_query_local_first）；仅明示线上/生产才 SSH。细则见 mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
-            '[Call scope] Skip MCP for pure chat. For engineering/coding when MCP is attached/attachable: MUST ensure→prepare_project→obey hard_constraints before host-native edits; retrieval tools as needed. If MCP cannot attach, host-Read AI硬规则索引.md. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands. Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / greeting_lists_mcp_skills_and_commands.',
+            '[Call scope] Skip MCP for pure chat AND content-ops skills (content_ops_skills_skip_mcp: 产品优化/详情优化/翻译优化/新建文章/规格修复—host Read doc/ai/skills + ai-command only). For engineering/coding when MCP is attached/attachable: MUST ensure→prepare_project→obey hard_constraints before host-native edits; retrieval tools as needed. If MCP cannot attach, host-Read AI硬规则索引.md. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands. Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / content_ops_skills_skip_mcp / greeting_lists_mcp_skills_and_commands.',
             '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 Browser 真机验视觉+逻辑（WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
             '[Every coding requirement] Analyze FE/BE scope; clarify/use-case (light when simple); host Plan Mode unless simple skip; ALWAYS acceptance—Web touches need local Browser WB-OP visual+logic even without Playwright e2e; layout/humanization/complaint/审图 force prototype+UI adjustments; then TDD→verify→汇审→delivery URLs.',
         ];
@@ -304,6 +304,7 @@ final class GuidanceWorkflowCatalog
                 'feature_delivery_urls_provided',
                 'webui_browser_released_after_delivery_or_na',
                 'module_i18n_csv_collected_when_strings_changed',
+                'default_website_locales_translated_when_user_asks_translation',
             ],
             // Pointer only: full hard-constraints.v1 already shipped in prepare_project.agent_guidance.
             'hard_constraints' => [
@@ -331,6 +332,7 @@ final class GuidanceWorkflowCatalog
                     'SIMPLE SKIP: plan_complexity=simple + rationale≥24 (single module, ≤~2h, no new extension invention)—still MUST accept (requirement_acceptance_always); Web touch → Browser WB-OP visual+logic even without e2e.',
                     'Stay in Plan Mode through architecture_design + chapter plan until user approves implement; then SwitchMode to agent.',
                     'If host has no Plan Mode: plan read-only in chat; record host_plan_mode=unavailable + rationale≥24; do not edit business code yet (unless simple skip).',
+                    'Plan body (plan_content_focus_only): ONLY 背景 + 方案 + 细节; forbid unrelated narrative that drifts the topic.',
                 ]],
                 ['id' => 'extension_point', 'label' => '扩展点选型', 'docs' => [
                     'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
@@ -455,12 +457,13 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_FRONTEND_DEVELOPMENT,
             'label' => '前端开发规范',
-            'description' => 'Theme / 布局 / 部件 / partial / 前台模板开发的统一规范表面。【高压线】必须使用 Weline 自研主题 UI（Weline UI 2.0）与主题 CSS 变量 Token；凡任务提到 CSS 或主题/theme，必须先加载 UI 技能 frontend-design、原型技能 prototype、主题技能 weline-theme-development（MCP get_skill），禁止自造色板与间距。禁止第三方 UI 与硬编码视觉字面量。section 身份属性（weline-code）只是其中一条硬约束，不是独立技能名。',
+            'description' => 'Theme / 布局 / 部件 / partial / 前台模板开发的统一规范表面。【高压线】必须使用 Weline 自研主题 UI（Weline UI 2.0）与主题 CSS 变量 Token；凡任务提到 CSS 或主题/theme，必须先加载 UI 技能 frontend-design、原型技能 prototype、主题技能 weline-theme-development（MCP get_skill），禁止自造色板与间距。禁止第三方 UI 与硬编码视觉字面量。【高压线·传输】浏览器业务数据默认且只能走 BinQuery：`Weline.Api.* → worker/query-bin`；禁止原生 fetch/XHR/axios/$.ajax，禁止把 BinQuery 写成 HTTP 失败后的回退。section 身份属性（weline-code）只是其中一条硬约束，不是独立技能名。',
             'triggers' => [
                 '部件', 'widget', '主题', 'theme', '布局', 'layout', 'partial',
                 'phtml', '前端', 'frontend', '模板', 'section', 'slot',
                 'UI', 'ui', 'frontend-design', '样式', '颜色', '间距',
                 'css', 'CSS', 'stylesheet', 'prototype', '原型',
+                'BinQuery', 'query-bin', 'Weline.Api', 'fetch', 'axios',
             ],
             'authoritative_skill' => 'weline-theme-development',
             'required_companion_skills' => [
@@ -471,17 +474,25 @@ final class GuidanceWorkflowCatalog
             'authoritative_doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
             'authoritative_docs' => [
                 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
+                'app/code/Weline/Theme/doc/preview-and-runtime-modes.md',
                 'app/code/Weline/Theme/doc/部件开发指南.md',
                 'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
                 'app/code/Weline/Theme/doc/frontend-section-weline-code.md',
                 'app/code/Weline/Theme/doc/theme-css-variables-only.md',
                 'app/code/Weline/Theme/doc/theme-layout-content-width.md',
+                'app/code/Weline/Frontend/doc/Weline.Api使用指南.md',
+                'app/code/Weline/Framework/doc/BinQuery/README.md',
             ],
             'norms' => [
                 [
                     'id' => 'weline_ui_theme_first',
                     'summary' => '【高压线】前端必须使用 Weline 自研主题 UI（Weline UI 2.0）与主题 CSS 变量 Token（w-field/w-input/w-button… + --color-*/--weline-theme-*/spacing Token）；禁止 Bootstrap/Element/Ant 等第三方 UI、硬编码色值/间距，以及手写国家/省/市 input 替代 <w:theme:address>',
                     'detail_doc' => 'app/code/Weline/Theme/doc/theme-css-variables-only.md',
+                ],
+                [
+                    'id' => 'theme_preview_runtime_three_modes',
+                    'summary' => '【高压线】主题身份权威分三态：（1）可视化编辑预览：query + typed editor_context 参数为主（theme-preview/content，禁止 start-preview）；（2）版本真实预览：预览 Token 反解析为准，URL theme/scope 不得覆盖 Token；（3）正式店面：RequestContext/Scope/路径解析为准（仅 r{published_release_id}）。业务逻辑三态同构（preview_storefront_delivery_parity）；只允许在身份装配层分支',
+                    'detail_doc' => 'app/code/Weline/Theme/doc/preview-and-runtime-modes.md',
                 ],
                 [
                     'id' => 'css_or_theme_requires_ui_prototype_theme_skills',
@@ -512,8 +523,13 @@ final class GuidanceWorkflowCatalog
                     'detail_doc' => 'app/code/Weline/Taglib/doc/场景映射表.md',
                 ],
                 [
+                    'id' => 'storefront_internal_url_via_url_helper',
+                    'summary' => '【高压线】站内跳转 href/action/data-*-url 必须用 @url/<url>/@backend-url 或 Url::getUrl/getFrontendUrl/getBackendUrl；禁止 \'/\'.$path 或手写 /module/action；外链 http(s) 可原样',
+                    'detail_doc' => 'app/code/Weline/Framework/doc/4-内置标签/06-url标签使用指南.md',
+                ],
+                [
                     'id' => 'weline_ui_floating_primitives',
-                    'summary' => '【高压线】菜单/Popover/Tooltip/Combobox/地址多选下拉等浮层必须用 Weline.UI（menu/popover/tooltip/combobox/anchored-float 或 UI.floating.attach）；禁止手写 left/top、自研 flip/边界检测或私有 portal',
+                    'summary' => '【高压线】菜单/Popover/Tooltip/Combobox/Dialog/产品·媒体·图标选择器/MCP 前端弹出等浮层必须用 Weline.UI（Weline.UI.dialog、menu/popover/tooltip/combobox/anchored-float 或 UI.floating.attach）；禁止私造 modal、手写 left/top、自研 flip 或私有 portal',
                     'detail_doc' => 'app/code/Weline/Theme/doc/widgets/anchored-float.md',
                 ],
                 [
@@ -582,8 +598,9 @@ final class GuidanceWorkflowCatalog
                     'detail_doc' => 'app/code/Weline/Theme/doc/theme-layout-content-width.md',
                 ],
                 [
-                    'id' => 'browser_api',
-                    'summary' => '浏览器业务请求走 Weline.Api.*，禁止 raw ajax/fetch fallback',
+                    'id' => 'browser_api_binquery_default',
+                    'summary' => '【高压线·传输】浏览器业务请求默认且只能走 BinQuery：`theme.js → Weline.Api.resource|graph|stream → worker/query-bin`。禁止原生 fetch/XMLHttpRequest/$.ajax/axios、手写 /api/framework/query-bin 或业务 REST URL；禁止先打 HTTP 控制器再把 BinQuery 当回退。无 Weline.Api 时返回空/降级本地，不得发明第二套原生请求通道',
+                    'detail_doc' => 'app/code/Weline/Frontend/doc/Weline.Api使用指南.md',
                 ],
                 [
                     'id' => 'responsive_tablet_pc',
@@ -622,9 +639,12 @@ final class GuidanceWorkflowCatalog
                     'Hand-rolled country/region <select>, custom filter chip rows, or cascade inputs that replace <w:theme:address> in admin/storefront filters and forms',
                     'Hand-computed left/top, custom flip/boundary scripts, or private portal stacks for menus/popovers/tooltips/combobox/address multi dropdowns — use Weline.UI floating primitives instead',
                     'Images without explicit HTML width+height (or aspect_ratio / layout dims) — CLS; do not rely on responsive CSS alone',
+                    'Native browser business I/O: fetch / XMLHttpRequest / $.ajax / axios, hand-written /api/framework/query-bin, or business REST URLs for first-party admin/storefront data',
+                    'HTTP controller as primary region/data path with BinQuery/Weline.Api as catch fallback — BinQuery is the default and only business transport',
                 ],
                 'required' => [
                     'Use first-party Weline Theme / Weline UI 2.0 component classes and theme CSS variable tokens for all visual UI',
+                    'Browser business data via Weline.Api.* → worker/query-bin (BinQuery) only; never raw fetch/ajax as primary or as BinQuery fallback',
                     'Address and region cascade/filters via <w:theme:address> (single or multi, including official chips); never hand-roll region inputs or chip rows',
                     'Floating surfaces (menu/popover/tooltip/combobox/address multi) via menu/popover/tooltip/combobox/anchored-float or UI.floating.attach',
                     'Images via <w:file:image> (or equivalent) with UI width+height or aspect_ratio, plus Theme CSS max-width:100%;height:auto / .w-file-image',
@@ -642,11 +662,14 @@ final class GuidanceWorkflowCatalog
                 'authoritative_doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
                 'authoritative_docs' => [
                     'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
+                    'app/code/Weline/Theme/doc/preview-and-runtime-modes.md',
                     'app/code/Weline/Theme/doc/部件开发指南.md',
                     'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
                     'app/code/Weline/Theme/doc/frontend-section-weline-code.md',
                     'app/code/Weline/Theme/doc/theme-css-variables-only.md',
                     'app/code/Weline/Theme/doc/theme-layout-content-width.md',
+                    'app/code/Weline/Frontend/doc/Weline.Api使用指南.md',
+                    'app/code/Weline/Framework/doc/BinQuery/README.md',
                 ],
                 'verification_commands' => [
                     'php bin/w frontend:check-section-code',
@@ -868,6 +891,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'csv_bilingual_aligned', 'summary' => 'zh_Hans_CN.csv 与 en_US.csv source 键对齐；en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
                 ['id' => 'collect_after_csv', 'summary' => '改 CSV 或新增源串后必须 php bin/w i18n:collect，否则运行时词典不更新'],
                 ['id' => 'en_us_no_chinese_placeholder', 'summary' => '交付前抽检 en_US：用户可见词条第二列不得仍为纯中文（与 source 相同）'],
+                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到「翻译」作为任务时：按默认网站已选语言（Website::ID_DEFAULT）全语种写 CSV，禁止只译 en_US'],
             ],
             'verification_commands' => [
                 'php bin/w i18n:collect Weline_Module',
@@ -898,10 +922,10 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_MODULE_I18N_CSV,
             'label' => '模块翻译 CSV 门禁',
-            'description' => '模块须维护齐全 zh_Hans_CN/en_US CSV；en_US 第二列须为英文（禁止中文占位）；改词或改 CSV 后必须 i18n:collect 才生效。',
+            'description' => '模块须维护齐全 zh_Hans_CN/en_US CSV；用户提到翻译时须覆盖默认网站已选全部语言；en_US 第二列须为英文（禁止中文占位）；改词或改 CSV 后必须 i18n:collect 才生效。',
             'triggers' => [
                 'csv', 'i18n:collect', 'en_us', 'zh_hans_cn', '翻译文件', '词典', 'collect',
-                '国际化', 'locale', '语言包',
+                '国际化', 'locale', '语言包', '翻译', 'translate',
             ],
             'authoritative_doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
             'authoritative_docs' => [
@@ -911,6 +935,7 @@ final class GuidanceWorkflowCatalog
             'norms' => [
                 ['id' => 'bilingual_csv_required', 'summary' => '每模块至少 zh_Hans_CN.csv + en_US.csv，source 键一致'],
                 ['id' => 'en_us_real_english', 'summary' => 'en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
+                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到翻译任务时：解析默认网站 language_codes（本地 DB，website_id=0）并对每一语种写真实译文，禁止只译 en_US'],
                 ['id' => 'frontend_backend_csv_sync', 'summary' => '前台加词须同步补后台 CSV 与 en 译文'],
                 ['id' => 'collect_mandatory', 'summary' => 'CSV 处理后必须 i18n:collect，禁止只改文件不收集'],
             ],
@@ -922,11 +947,13 @@ final class GuidanceWorkflowCatalog
                     'Claiming i18n done after CSV edit without i18n:collect',
                     'Adding frontend <lang> strings without en_US.csv translation rows',
                     'Leaving en_US translate column as Chinese source (untranslated placeholder) for user-visible strings',
+                    'Stopping at en_US when the user asked to 翻译 without narrowing locales',
                     'Replacing i18n:collect with cache:clear only',
                 ],
                 'required' => [
                     'Align zh_Hans_CN.csv and en_US.csv source keys for every new phrase',
                     'Fill en_US second column with real English before claiming translation done',
+                    'When the user mentions 翻译 as a task, fill i18n/{locale}.csv for every default-website selected language',
                     'Run php bin/w i18n:collect after any CSV or translatable string change',
                     'Record collect command in module doc/开发日志.md',
                 ],
@@ -1003,6 +1030,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'delivery_urls_section', 'summary' => '每次功能完成汇报末尾必须有「交付地址」小节（主链 http(s) Markdown）'],
                 ['id' => 'delivery_default_host_test_weline_com', 'summary' => '本机主验收 Host 默认 {project_hash}.test.weline.com；禁止主链 *.weline.test；仅无前者时才用 127.0.0.1'],
                 ['id' => 'browser_release_after_delivery', 'summary' => '写完「交付地址」后立即关闭本回合打开的验收 Browser（unlock + close tabs）；禁止留下空转 webview；用户明确要求保留除外'],
+                ['id' => 'e2e_playwright_formal_runner_only', 'summary' => 'Playwright 仅 `php bin/w e2e:run` / `npx playwright test`；禁止 node -e / chromium.launch 探活残留 chrome-headless-shell'],
             ],
             'verification_commands' => [
                 'curl -I <probe_verified_acceptance_url>',
@@ -1019,6 +1047,7 @@ final class GuidanceWorkflowCatalog
                     'Forcing 127.0.0.1 when *.test.weline.com Host exists',
                     'Leaving acceptance Browser tabs/webviews open after Delivery URLs are reported',
                     'Opening acceptance Browser with default HTTP cache enabled when verifying this turn UI/static changes',
+                    'Ad-hoc node -e / chromium.launch Playwright probes instead of php bin/w e2e:run or npx playwright test',
                 ],
                 'required' => [
                     'Define operator use cases (URL, steps, expected) before claiming Web done',
@@ -1027,6 +1056,7 @@ final class GuidanceWorkflowCatalog
                     'End every feature/stage report with probe-verified http(s) Markdown Delivery URLs on {project_hash}.test.weline.com by default',
                     'Immediately after the Delivery URLs section, close every acceptance Browser tab opened this turn (Cursor: unlock then browser_tabs close)',
                     'If Browser not run or host has no Browser: report only “代码已改，WebUI 验收未完成”',
+                    'When Playwright is needed: launch only via formal runner (php bin/w e2e:run or npx playwright test)',
                 ],
             ],
         ];

@@ -59,7 +59,7 @@ final class ProductCategoryTemplateContractTest extends TestCase
     public function testCategoryLayoutLeavesFiltersSlotForFiltersModuleInjection(): void
     {
         $layout = (string)file_get_contents(
-            BP . 'app/code/Weline/Theme/view/theme/frontend/layouts/category/default.phtml',
+            BP . 'app/code/Weline/Product/view/theme/frontend/layouts/category/default.phtml',
         );
 
         self::assertStringContainsString('id="category-filters"', $layout);

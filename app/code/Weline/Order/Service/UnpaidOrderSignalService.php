@@ -16,6 +16,7 @@ final class UnpaidOrderSignalService
 
     public function __construct(
         private readonly ?ContinuePayUrlBuilder $continuePayUrlBuilder = null,
+        private readonly ?UnpaidOrderMailLineProjector $mailLineProjector = null,
     ) {
     }
 
@@ -149,6 +150,8 @@ final class UnpaidOrderSignalService
         $money = json_decode((string)$row->getData(Order::schema_fields_MONEY_SNAPSHOT_JSON), true);
         $fromSnapshot = is_array($money) ? (int)($money['grand_total_minor'] ?? 0) : 0;
         $grandTotalMinor = $fromSnapshot > 0 ? $fromSnapshot : (int)round($grandTotal * 100);
+        $projector = $this->mailLineProjector ?? new UnpaidOrderMailLineProjector();
+        $lineItems = $projector->project($row);
 
         return [
             'order_uuid' => $orderUuid,
@@ -160,7 +163,11 @@ final class UnpaidOrderSignalService
             'grand_total_minor' => $grandTotalMinor,
             'currency' => strtoupper(trim((string)$row->getData(Order::schema_fields_CURRENCY))) ?: 'CNY',
             'checkout_entry' => strtolower(trim((string)($row->getData(Order::schema_fields_CHECKOUT_ENTRY) ?: 'unknown'))) ?: 'unknown',
-            'created_at' => (string)$row->getData(Order::schema_fields_CREATED_AT),
+            // Live rows often leave created_at empty; framework create_time is populated.
+            'created_at' => self::resolveCreatedAtDisplay(
+                (string)$row->getData(Order::schema_fields_CREATED_AT),
+                (string)$row->getData(\Weline\Framework\Database\AbstractModel::schema_fields_CREATE_TIME),
+            ),
             'website_id' => $websiteId,
             'store_id' => (int)$row->getData(Order::schema_fields_STORE_ID),
             'order_type' => strtolower(trim((string)($row->getData(Order::schema_fields_ORDER_TYPE) ?: 'toc'))) ?: 'toc',
@@ -172,6 +179,7 @@ final class UnpaidOrderSignalService
             ),
             'continue_pay_url' => (string)$pay['continue_pay_url'],
             'reachable' => !empty($pay['reachable']),
+            'line_items' => $lineItems,
         ];
     }
 
@@ -190,5 +198,21 @@ final class UnpaidOrderSignalService
         }
 
         return $locale;
+    }
+
+    /**
+     * Mail/admin display time: prefer framework create_time when created_at is blank.
+     */
+    public static function resolveCreatedAtDisplay(string $createdAt, string $createTime = ''): string
+    {
+        $raw = \trim($createTime) !== '' ? \trim($createTime) : \trim($createdAt);
+        if ($raw === '' || \str_starts_with($raw, '0000-00-00')) {
+            return '';
+        }
+        if (\preg_match('/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/', $raw, $m) === 1) {
+            return $m[1] . ' ' . $m[2];
+        }
+
+        return $raw;
     }
 }

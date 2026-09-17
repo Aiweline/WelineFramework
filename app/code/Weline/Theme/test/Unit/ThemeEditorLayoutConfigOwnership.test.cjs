@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '../../view/statics/js/theme-editor.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../../view/statics/ui/pages/weline-theme-editor.js'), 'utf8');
 function productionFunction(name) {
     const declaration = new RegExp(`\\n    (?:async )?function ${name}\\(`).exec(source);
     assert.ok(declaration, `Production function ${name} exists`);
@@ -73,10 +73,10 @@ function layoutEditor(initial = {}, validate = async () => ({success: true})) {
 
 test('editing only title submits only title, without inherited fields or the hidden CSRF control', async () => {
     const {context, form, requests, patches} = layoutEditor();
-    form.values.title = '云裳汉服 · 水墨衣冠';
+    form.values.title = '长安汉服 · 水墨衣冠';
     await context.saveLayoutConfig(form, 'zh_Hans_CN');
-    assert.deepEqual(requests[0].config, {title: '云裳汉服 · 水墨衣冠'});
-    assert.deepEqual(patches, [{config: {title: '云裳汉服 · 水墨衣冠'}, locale: 'zh_Hans_CN'}]);
+    assert.deepEqual(requests[0].config, {title: '长安汉服 · 水墨衣冠'});
+    assert.deepEqual(patches, [{config: {title: '长安汉服 · 水墨衣冠'}, locale: 'zh_Hans_CN'}]);
 });
 
 test('saving an unchanged form does not create any scope override', async () => {

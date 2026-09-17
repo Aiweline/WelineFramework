@@ -1,5 +1,7 @@
 # file:image CLS 尺寸与响应式（Google 写法）
 
+> **出图标签** `<w:file:image>` 专用。选图请用 `<w:file-manager>` / `WelineMedia`，见 [选图与出图分工](file-manager-选图与file-image出图.md)。
+
 ## 结论
 
 `<w:file:image>` **必须**在使用处给出 UI 占位宽高（或宽高比），输出 HTML `width`/`height` 防 CLS；显示尺寸由主题 CSS `max-width:100%; height:auto`（含 `.w-file-image`）做响应式。二者缺一不可。

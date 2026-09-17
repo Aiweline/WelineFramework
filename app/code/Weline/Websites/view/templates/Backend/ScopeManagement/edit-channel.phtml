@@ -1,25 +1,38 @@
 <?php
-/** @var array $entity @var string $error @var int $website_id */
+/** @var array $entity @var string $error @var int $website_id @var bool $tree_embed @var string $tree_return_node @var string $tree_return_url */
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $channelId = (int)($entity['channel_id'] ?? 0);
+$treeEmbed = !empty($tree_embed);
+$returnNode = (string)($tree_return_node ?? ('channel:' . $channelId));
+$returnUrl = trim((string)($tree_return_url ?? ''));
+$error = (string)($error ?? '');
 ?>
 <div class="w-container" data-testid="sales-channel-management-edit" data-channel-id="<?= $channelId ?>">
-    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
-        <div>
-            <h4 style="--w-mb:var(--weline-space-1);"><lang>编辑渠道</lang></h4>
-            <div class="w-text" data-tone="muted">channel_id=<?= $channelId ?> · website_id=<?= (int)$website_id ?></div>
+    <?php if (!$treeEmbed): ?>
+        <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+            <div>
+                <h4 style="--w-mb:var(--weline-space-1);"><lang>编辑渠道</lang></h4>
+                <div class="w-text" data-tone="muted">channel_id=<?= $channelId ?> · website_id=<?= (int)$website_id ?></div>
+            </div>
+            <a class="w-button" href="@backend-url('*/backend/scope-management/channels')?website_id=<?= (int)$website_id ?>"><lang>返回列表</lang></a>
         </div>
-        <a class="w-button" href="@backend-url('*/backend/scope-management/channels')?website_id=<?= (int)$website_id ?>"><lang>返回列表</lang></a>
-    </div>
+    <?php endif; ?>
 
     <?php if ($error !== ''): ?>
         <div class="w-alert" role="alert" data-tone="danger"><?= $escape($error) ?></div>
     <?php elseif (!\array_key_exists('code', $entity)): ?>
         <div class="w-alert" role="alert" data-tone="danger"><lang>渠道不存在</lang></div>
     <?php else: ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+        <div class="<?= $treeEmbed ? '' : 'w-card' ?>" style="--w-mb:var(--weline-space-4);"><div class="<?= $treeEmbed ? '' : 'w-card__body' ?>">
             <w:form method="post" action="@backend-url('*/backend/scope-management/update-channel')" csrf="auto" class="w-grid" data-testid="sales-channel-management-edit-form" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="channel_id" value="<?= $channelId ?>">
+                <?php if ($treeEmbed): ?>
+                    <input type="hidden" name="return_to" value="tree">
+                    <input type="hidden" name="return_node" value="<?= $escape($returnNode) ?>">
+                    <?php if ($returnUrl !== ''): ?>
+                        <input type="hidden" name="return_url" value="<?= $escape($returnUrl) ?>">
+                    <?php endif; ?>
+                <?php endif; ?>
                 <div style="--w-span-md:3;">
                     <label class="w-field__label"><lang>渠道代码</lang></label>
                     <input class="w-input" value="<?= $escape($entity['code'] ?? '') ?>" disabled>

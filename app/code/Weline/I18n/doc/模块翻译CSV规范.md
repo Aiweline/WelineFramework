@@ -89,9 +89,31 @@ php bin/w i18n:collect
 - 插值占位符用 `%{1}`、`%{name}`，两 locale 保持一致
 - 编辑器若显示 ``（U+FFFD）堆在中文键前：按乱码行丢弃即可，缺词下次再译；不要把污染键 strip 后写回
 
+## 默认网站全语种（硬，用户提到「翻译」）
+
+MCP 规则 id：`user_mentions_translation_all_default_website_locales`。
+
+当用户把 **翻译 / translate / translation** 当作**工作请求**（含店面漏译截图、搜索框仍中文等），而不是仅在讨论 i18n 子系统时：
+
+1. **在本机**解析默认网站已选语言（`runtime_status_query_local_first`；禁止为此去生产）：
+   - `WebsiteLanguage::getWebsiteLanguageCodes(Website::ID_DEFAULT)`（`website_id = 0`）
+   - 始终保留基线 `zh_Hans_CN` + `en_US`
+2. 对**每一个**已选 locale 写入归属模块 `i18n/{locale}.csv` 的真实目标语译文（第二列不得把中文 source 原样留下）。
+3. **禁止**只译 `en_US` 就宣称完成。用户可在本回合显式收窄语种。
+4. 默认由 Agent **直接写 CSV**；**未要求时禁止启动 Ollama**。
+5. 写完后必须 `php bin/w i18n:collect {Module}`，再抽检目标 locale 店面。
+
+解析示例（本机）：
+
+```bash
+# 仅当任务需要确认默认站语种时查本机库；勿 SSH 生产
+# website_id=0 → language_code 列表即本回合默认翻译范围
+```
+
 ## 禁止
 
 - 交付模块只有 `zh_Hans_CN.csv` 没有 `en_US.csv`（或 en 列大量仍为中文）
+- 用户说「翻译」却只补 `en_US`、不覆盖默认网站已选语言
 - 前台加了词、后台 CSV 不补
 - 改完 CSV 宣称「已翻译」但未执行 `i18n:collect`
 - 用 `cache:clear` 代替 `i18n:collect`（collect 内含扫描 + 缓存失效，二者不等价）
@@ -101,6 +123,7 @@ php bin/w i18n:collect
 - [ ] `i18n/zh_Hans_CN.csv` 与 `i18n/en_US.csv` 存在
 - [ ] 本次新增/修改的 source 在两文件中均有行
 - [ ] `en_US.csv` 译文为英文（非空、非中文占位）
+- [ ] 用户提到「翻译」时：默认网站已选语言的 `i18n/{locale}.csv` 均已写真实译文（抽检非中文 locale 第二列 ≠ 中文 source）
 - [ ] 已执行 `php bin/w i18n:collect Weline_YourModule` 且无报错
 - [ ] 开发日志记录 collect 命令与 locale 抽检结果
 

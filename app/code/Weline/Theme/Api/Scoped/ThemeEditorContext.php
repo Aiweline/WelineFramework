@@ -41,7 +41,6 @@ final readonly class ThemeEditorContext
             throw new \InvalidArgumentException('theme_editor_context_resource_invalid');
         }
         foreach ([
-            'layout_type' => $layoutType,
             'layout_option' => $layoutOption,
             'locale' => $locale,
             'target_type' => $targetType,
@@ -49,6 +48,15 @@ final readonly class ThemeEditorContext
             if (\preg_match('/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,127}$/D', $value) !== 1) {
                 throw new \InvalidArgumentException('theme_editor_context_' . $field . '_invalid');
             }
+        }
+        // Nested layout paths (account/login, checkout/success) use "/" like Customer path layouts.
+        // Use # delimiters so "/" inside the class is not the pattern terminator.
+        if (\preg_match('#^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,127}$#D', $layoutType) !== 1
+            || \str_contains($layoutType, '//')
+            || \str_starts_with($layoutType, '/')
+            || \str_ends_with($layoutType, '/')
+        ) {
+            throw new \InvalidArgumentException('theme_editor_context_layout_type_invalid');
         }
         if ($themeId < 0 || $targetId < 0) {
             throw new \InvalidArgumentException('theme_editor_context_id_invalid');

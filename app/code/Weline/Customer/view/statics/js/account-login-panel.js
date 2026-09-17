@@ -135,6 +135,24 @@
     return defaultPath;
   }
 
+  /** Ensure post-login navigation carries w_auth=1 for FPC guest-SSR chrome reconcile. */
+  function withAuthRefreshSignal(target) {
+    try {
+      var parsed = new URL(String(target || '/'), window.location.origin);
+      if (parsed.origin !== window.location.origin) {
+        return String(target || '/');
+      }
+      parsed.searchParams.set('w_auth', '1');
+      return parsed.pathname + parsed.search + parsed.hash;
+    } catch (_e) {
+      var base = String(target || '/');
+      if (base.indexOf('w_auth=') >= 0) {
+        return base;
+      }
+      return base.indexOf('?') >= 0 ? (base + '&w_auth=1') : (base + '?w_auth=1');
+    }
+  }
+
   function bindForm(panel, host) {
     var form = panel.querySelector('[data-w-login-form]');
     var submitBtn = panel.querySelector('[data-w-login-submit]');
@@ -207,10 +225,16 @@
               detail: { user: (payload && payload.user) || null }
             }));
           } catch (_e) { /* ignore */ }
-          var dest = safeDestination(
+          try {
+            if (window.WelineAccountModule
+              && typeof window.WelineAccountModule.markAuthPending === 'function') {
+              window.WelineAccountModule.markAuthPending();
+            }
+          } catch (_m) { /* ignore */ }
+          var dest = withAuthRefreshSignal(safeDestination(
             (payload && payload.redirect) || currentReturnUrl(host),
             currentReturnUrl(host) || '/'
-          );
+          ));
           window.location.assign(dest);
           return;
         }

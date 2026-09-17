@@ -33,7 +33,7 @@ use Weline\Framework\Session\Strategy\WlsStrategy;
  */
 class SessionFactory
 {
-    private const SESSION_SCOPE_KEY = 'session';
+    private const SESSION_SCOPE_PREFIX = 'session:';
 
     private const AUTH_SESSION_SCOPE_PREFIX = 'auth:';
 
@@ -46,8 +46,9 @@ class SessionFactory
     /** 已创建的策略实例（进程级缓存） */
     private static array $strategyInstances = [];
 
-    /** 已创建的 Session 实例（请求级，WLS 下需重置） */
-    private ?SessionInterface $sessionInstance = null;
+    /** 已创建的 Session 实例（请求级，按 cookie 族/area；WLS 下需重置） */
+    /** @var array<string, SessionInterface> */
+    private array $sessionInstances = [];
 
     /** 已创建的 AuthenticatedSession 实例（请求级） */
     private array $authSessionInstances = [];
@@ -180,20 +181,25 @@ class SessionFactory
      * 创建策略实例
      *
      * @param SessionStorageInterface|null $storage 存储实例
+     * @param string|null $area 认证/请求区域（决定 Cookie 族）
      * @return SessionStrategyInterface
      */
-    public function createStrategy(?SessionStorageInterface $storage = null): SessionStrategyInterface
-    {
+    public function createStrategy(
+        ?SessionStorageInterface $storage = null,
+        ?string $area = null,
+    ): SessionStrategyInterface {
         $storage ??= $this->createStorage();
         $isWls = $this->isWlsMode();
         $type = $isWls ? 'wls' : 'fpm';
+        $area = SessionCookieNameResolver::normalizeArea($area);
+        $legacyName = SessionCookieNameResolver::legacyNameForArea($area);
 
-        $cacheKey = $type . '_' . \spl_object_id($storage);
+        $cacheKey = $type . '_' . \spl_object_id($storage) . '_' . $legacyName;
         if (isset(self::$strategyInstances[$cacheKey])) {
             return self::$strategyInstances[$cacheKey];
         }
 
-        $strategyConfig = $this->getStrategyConfig();
+        $strategyConfig = $this->getStrategyConfig($area);
 
         $strategy = $isWls
             ? new WlsStrategy($storage, $strategyConfig)
@@ -207,8 +213,9 @@ class SessionFactory
     /**
      * 获取策略配置
      */
-    private function getStrategyConfig(): array
+    private function getStrategyConfig(?string $area = null): array
     {
+        $area = SessionCookieNameResolver::normalizeArea($area);
         // Keep raw SameSite / Partitioned flags. Strategies resolve the final
         // attribute at Set-Cookie time so WLS workers do not freeze a warmup-time Lax.
         return [
@@ -220,6 +227,8 @@ class SessionFactory
             'cookie_samesite' => \trim((string)($this->config['cookie_samesite'] ?? '')),
             'cookie_partitioned' => $this->config['cookie_partitioned'] ?? null,
             'cookie_lifetime' => (int)($this->config['cookie_lifetime'] ?? 86400 * 30),
+            'session_area' => $area,
+            'cookie_legacy_name' => SessionCookieNameResolver::legacyNameForArea($area),
         ];
     }
 
@@ -247,31 +256,36 @@ class SessionFactory
     /**
      * 创建 Session 实例
      *
+     * @param string|null $area 区域；空则取当前请求 area。前后台使用不同 Cookie 族与实例。
      * @return SessionInterface
      */
-    public function createSession(): SessionInterface
+    public function createSession(?string $area = null): SessionInterface
     {
+        $area = SessionCookieNameResolver::normalizeArea($area);
+        $familyKey = SessionCookieNameResolver::legacyNameForArea($area);
+        $scopeKey = self::SESSION_SCOPE_PREFIX . $familyKey;
+
         $fiber = $this->currentRequestFiber();
         if ($fiber === null) {
-            if ($this->sessionInstance !== null) {
-                return $this->sessionInstance;
+            if (isset($this->sessionInstances[$familyKey])) {
+                return $this->sessionInstances[$familyKey];
             }
         } else {
-            $session = $this->getFiberRequestScope($fiber)?->get(self::SESSION_SCOPE_KEY);
+            $session = $this->getFiberRequestScope($fiber)?->get($scopeKey);
             if ($session instanceof SessionInterface) {
                 return $session;
             }
         }
 
         $storage = $this->createStorage();
-        $strategy = $this->createStrategy($storage);
+        $strategy = $this->createStrategy($storage, $area);
         $ttl = (int)($this->config['lifetime'] ?? $this->config['session_ttl'] ?? 3600);
 
         $session = new Session($storage, $strategy, $ttl);
         if ($fiber === null) {
-            $this->sessionInstance = $session;
+            $this->sessionInstances[$familyKey] = $session;
         } else {
-            $this->getFiberRequestScope($fiber, true)->set(self::SESSION_SCOPE_KEY, $session);
+            $this->getFiberRequestScope($fiber, true)->set($scopeKey, $session);
         }
 
         return $session;
@@ -298,7 +312,7 @@ class SessionFactory
             }
         }
 
-        $session = $this->createSession();
+        $session = $this->createSession($area);
         $areaConfig = new AreaConfig($area);
 
         $runtimeProviders = null;
@@ -308,6 +322,9 @@ class SessionFactory
             $runtimeProviders = new RuntimeProviderResolver(new ServiceProviderRegistry());
         }
         $authSession = new AuthenticatedSession($session, $areaConfig, $runtimeProviders);
+        if (SessionCookieNameResolver::usesCustomerCookieFamily($area)) {
+            FrontendSessionCookieMigrator::migrateIfNeeded($session, $this);
+        }
         if ($fiber === null) {
             $this->authSessionInstances[$area] = $authSession;
         } else {
@@ -337,7 +354,7 @@ class SessionFactory
         }
 
         $ttl = (int)($this->config['lifetime'] ?? $this->config['session_ttl'] ?? 3600);
-        $session = new Session($this->createStorage(), $this->createStrategy(), $ttl);
+        $session = new Session($this->createStorage(), $this->createStrategy(null, $area), $ttl);
         $session->start($sessionId);
 
         try {
@@ -454,6 +471,7 @@ class SessionFactory
     public function resetRequestInstances(): void
     {
         Session::flushRequestSessions();
+        FrontendSessionCookieMigrator::resetRequestState();
 
         $fiber = $this->currentRequestFiber();
         if ($fiber === null) {
@@ -528,9 +546,9 @@ class SessionFactory
     {
         $this->resetRequestObjects([
             ...$this->authSessionInstances,
-            $this->sessionInstance,
+            ...$this->sessionInstances,
         ]);
-        $this->sessionInstance = null;
+        $this->sessionInstances = [];
         $this->authSessionInstances = [];
     }
 

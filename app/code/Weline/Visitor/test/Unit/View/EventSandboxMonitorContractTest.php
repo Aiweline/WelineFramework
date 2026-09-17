@@ -36,14 +36,19 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('WelineEventSandboxMonitor', $monitor);
         self::assertStringContainsString('data-tone="hit-system"', $monitor);
         self::assertStringContainsString('data-tone="hit-custom"', $monitor);
+        self::assertStringContainsString('data-tone="hit-dedupe"', $monitor);
         self::assertStringContainsString('data-tone="anomaly"', $monitor);
         self::assertStringContainsString("return 'hit-system'", $monitor);
         self::assertStringContainsString("return 'hit-custom'", $monitor);
+        self::assertStringContainsString("return 'hit-dedupe'", $monitor);
         self::assertStringContainsString("return 'anomaly'", $monitor);
         self::assertStringContainsString('--weline-color-success', $monitor);
         self::assertStringContainsString('--weline-color-info', $monitor);
+        self::assertStringContainsString('--weline-color-warning', $monitor);
         self::assertStringContainsString('--weline-color-primary', $monitor);
-        self::assertStringContainsString('绿=系统命中，蓝=自定义命中', $monitor);
+        self::assertStringContainsString('绿=系统命中，蓝=自定义命中，黄=去重丢弃', $monitor);
+        self::assertStringContainsString('去重丢弃', $monitor);
+        self::assertStringContainsString('data-wesm-tab="dedupe"', $monitor);
         self::assertStringContainsString('全量数据流（含参数）', $monitor);
         self::assertStringContainsString('系统命中', $monitor);
         self::assertStringContainsString('自定义命中', $monitor);
@@ -73,9 +78,13 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('relayToAdminSession', $pixel);
         self::assertStringContainsString("sandbox_stream', '1'", $pixel);
         self::assertStringContainsString('/visitor/analytics/event-picker/observe', $pixel);
+        self::assertStringContainsString('__isSandboxMonitorActiveForAutoRegister', $pixel);
+        self::assertStringContainsString('__welineSandboxStreamRelayFp', $pixel);
         self::assertStringNotContainsString("websiteId === '0'", $pixel);
         self::assertStringContainsString('relayToAdminSession', $phtml);
         self::assertStringContainsString("sandbox_stream', '1'", $phtml);
+        self::assertStringContainsString('__isSandboxMonitorActiveForAutoRegister', $phtml);
+        self::assertStringContainsString('__welineSandboxStreamRelayFp', $phtml);
         self::assertStringNotContainsString("websiteId === '0'", $phtml);
         $pickerCtl = (string) \file_get_contents($root . '/Controller/Analytics/EventPicker.php');
         self::assertStringContainsString('function postStream', $pickerCtl);
@@ -114,7 +123,7 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('WelineEventSandbox', $panel);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bootstrap);
-        self::assertStringContainsString('20260911-event-sandbox-monitor9', $bootstrap);
+        self::assertStringContainsString('20260916-event-sandbox-monitor10', $bootstrap);
         self::assertStringContainsString('weline_event_sandbox_monitor_v1', $bootstrap);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bodyEnd);

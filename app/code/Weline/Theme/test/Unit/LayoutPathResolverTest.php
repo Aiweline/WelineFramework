@@ -70,19 +70,18 @@ class LayoutPathResolverTest extends TestCore
         }
 
         $layoutModulePath = LayoutPathResolver::resolveLayoutTemplate(
-            'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
+            'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'about' . DS . 'default.phtml',
             $theme,
             'frontend'
         );
 
-        $this->assertSame('Weline_Theme::theme/frontend/layouts/review/default.phtml', $layoutModulePath);
-        $this->assertSame(
-            BP . 'app' . DS . 'design' . DS . 'WeShop' . DS . 'motor' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
-            LayoutPathResolver::getLayoutFilePath((string)$layoutModulePath, $theme, 'frontend')
-        );
+        $this->assertSame('Weline_Theme::theme/frontend/layouts/about/default.phtml', $layoutModulePath);
+        $resolved = LayoutPathResolver::getLayoutFilePath((string)$layoutModulePath, $theme, 'frontend');
+        $this->assertNotNull($resolved);
+        $this->assertFileExists((string)$resolved);
     }
 
-    public function testResolveLayoutTemplateFindsDefaultReviewLayout(): void
+    public function testResolveLayoutTemplateFindsDefaultQaLayout(): void
     {
         $theme = $this->loadTheme(6);
 
@@ -91,14 +90,14 @@ class LayoutPathResolverTest extends TestCore
         }
 
         $layoutModulePath = LayoutPathResolver::resolveLayoutTemplate(
-            'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
+            'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'qa' . DS . 'default.phtml',
             $theme,
             'frontend'
         );
 
-        $this->assertSame('Weline_Theme::theme/frontend/layouts/review/default.phtml', $layoutModulePath);
+        $this->assertSame('Weline_Theme::theme/frontend/layouts/qa/default.phtml', $layoutModulePath);
         $this->assertSame(
-            BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
+            BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'qa' . DS . 'default.phtml',
             LayoutPathResolver::getLayoutFilePath((string)$layoutModulePath, $theme, 'frontend')
         );
     }

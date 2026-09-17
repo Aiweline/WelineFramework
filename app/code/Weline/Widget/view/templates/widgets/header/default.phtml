@@ -1,7 +1,10 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
+
+use Weline\Theme\Helper\LegacyMediaUrl;
+
 $title = $this->getData('title') ?? '网站标题';
-$logo = $this->getData('logo') ?? '';
+$logo = LegacyMediaUrl::sanitize($this->getData('logo') ?? '');
 $logoFileHtml = (string)($this->getData('logo_file_html') ?? '');
 $showSearch = $this->getData('show_search') ?? true;
 $navItems = $this->getData('nav_items') ?? [];
@@ -12,7 +15,7 @@ $navItems = $this->getData('nav_items') ?? [];
             <div>
                 <?php if ($logoFileHtml !== ''): ?>
                     <span class="logo logo--asset"><?= $logoFileHtml ?></span>
-                <?php elseif ($logo): ?>
+                <?php elseif ($logo !== ''): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= htmlspecialchars($title) ?>" class="logo" style="max-height: 50px;">
                 <?php else: ?>
                     <h4 style="--w-mb:0;"><?= htmlspecialchars($title) ?></h4>

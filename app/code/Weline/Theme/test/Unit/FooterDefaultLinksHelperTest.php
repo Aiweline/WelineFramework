@@ -56,7 +56,7 @@ final class FooterDefaultLinksHelperTest extends TestCase
 
         $this->assertNotEmpty($groups);
         $this->assertCount(4, $groups);
-        $this->assertSame('云裳志', $groups[0]['title']);
+        $this->assertSame('关于我们', $groups[0]['title']);
         $this->assertArrayHasKey('links', $groups[0]);
         $this->assertArrayHasKey('label', $groups[0]['links'][0]);
         $this->assertArrayHasKey('url', $groups[0]['links'][0]);
@@ -96,10 +96,10 @@ final class FooterDefaultLinksHelperTest extends TestCase
             [[
                 'name' => 'Instagram',
                 'icon' => 'fab fa-instagram',
-                'url' => 'https://www.instagram.com/yunshang-hanfu',
+                'url' => 'https://www.instagram.com/changan-hanfu',
             ]],
             FooterDefaultLinksHelper::normalizeSocialItems([
-                ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/yunshang-hanfu'],
+                ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changan-hanfu'],
                 ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
                 ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => ''],
                 ['name' => 'Unsafe', 'icon' => 'fas fa-link', 'url' => 'javascript:alert(1)'],
@@ -120,8 +120,8 @@ final class FooterDefaultLinksHelperTest extends TestCase
             $byText[(string)$link['text']] = (string)$link['url'];
         }
         $this->assertSame('/terms', $byText['使用条件'] ?? null);
-        $this->assertSame('/privacy', $byText['隐私声明'] ?? null);
-        $this->assertSame('/cookies', $byText['Cookie 政策'] ?? null);
+        $this->assertSame('/policy/privacy', $byText['隐私声明'] ?? null);
+        $this->assertSame('/policy/cookie', $byText['Cookie 政策'] ?? null);
         $this->assertArrayNotHasKey('广告偏好', $byText);
     }
 }

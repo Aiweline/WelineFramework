@@ -23,7 +23,7 @@ final class PromotionSeoProfileProviderContractTest extends TestCase
         self::assertStringContainsString('implements SeoProfileProviderInterface', $src);
         self::assertStringContainsString("\$slot !== 'head'", $src);
         self::assertStringContainsString('claimsPromotion', $src);
-        self::assertStringContainsString('product_list', $src);
+        self::assertStringContainsString('products', $src);
         self::assertStringContainsString('promotion/', $src);
 
         self::assertTrue(is_a(PromotionSeoProfileProvider::class, SeoProfileProviderInterface::class, true));

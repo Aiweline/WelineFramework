@@ -1,9 +1,13 @@
 ﻿"Search shard 重复声明表 %{1}","Search shard 重复声明表 %{1}"
 搜索接口不支持该操作：%{1},搜索接口不支持该操作：%{1}
 热搜词已加载,热搜词已加载
-输入关键词…,输入关键词…
 搜索,搜索
 热搜,热搜
+"开始预热搜索 Provider 索引（共 %{count} 个）…","开始预热搜索 Provider 索引（共 %{count} 个）…"
+搜索索引已存在，跳过：%{code},搜索索引已存在，跳过：%{code}
+正在重建搜索索引：%{code}…,正在重建搜索索引：%{code}…
+搜索索引重建完成：%{code},搜索索引重建完成：%{code}
+"搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped}","搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped}"
 "Search 只接受 ResourceChange v1","搜索 只接受 ResourceChange v1"
 "Product Search 投影负载无效","Product Search 投影负载无效"
 "Product Search 投影 Scope kind 无效","Product Search 投影 Scope kind 无效"
@@ -47,6 +51,7 @@ chart,chart
 "website_id 不能为负数：%{1}","website_id 不能为负数：%{1}"
 "非法 search shard key：%{1}",非法搜索分片键：%{1}
 "非法 search shard 实体名：%{1}","非法 search shard 实体名：%{1}"
+搜索筛选,搜索筛选
 全部,全部
 商品,商品
 博客,博客
@@ -164,6 +169,7 @@ chart,chart
 显示帮助,显示帮助
 "重建全部 Provider 索引","重建全部 Provider 索引"
 "仅重建 Blog 索引","仅重建 Blog 索引"
+输入关键词…,输入关键词…
 "Product Search 投影事件负载无效","Product Search 投影事件负载无效"
 "Search Product 投影事件 %{1}","Search Product 投影事件 %{1}"
 搜索类型列表不接受参数,搜索类型列表不接受参数

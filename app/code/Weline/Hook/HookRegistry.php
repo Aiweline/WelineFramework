@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Hook;
 
 use Weline\Framework\Module\Service\ModuleScanService;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\System\File\Scan;
@@ -149,34 +150,34 @@ class HookRegistry
      */
     public function refresh(bool $allowSoloConflict = false): bool
     {
-        // 扫描所有 Hook 规约（使用 extends 方式）
-        RegistryProgress::log('Hook scan: hook.php specs started');
-        $scannedData = $this->scanner->scanAllHooks();
-        RegistryProgress::count('Hook spec scan', count($scannedData), 'modules with hook specs');
-        
-        // 扫描所有 Hook 实现文件
-        RegistryProgress::log('Hook implementation scan started');
-        $hookFiles = $this->scanAllHookFiles();
-        RegistryProgress::count('Hook implementation scan', count($hookFiles), 'hooks with implementation files');
+        try {
+            RegistryProgress::log('Hook scan: hook.php specs started');
+            $scannedData = $this->scanner->scanAllHooks();
+            RegistryProgress::count('Hook spec scan', count($scannedData), 'modules with hook specs');
 
-        // 组织数据结构，按 Hook 名索引（如果发现冲突会抛出异常）
-        RegistryProgress::log('Hook organize registry data');
-        $registry = $this->organizeRegistryData($scannedData, $hookFiles, $allowSoloConflict);
-        RegistryProgress::count('Hook registry', count($registry['hooks'] ?? []), 'hooks organized');
-        unset($scannedData, $hookFiles);
-        RegistryProgress::log('Hook raw scan data released');
+            RegistryProgress::log('Hook implementation scan started');
+            $hookFiles = $this->scanAllHookFiles();
+            RegistryProgress::count('Hook implementation scan', count($hookFiles), 'hooks with implementation files');
 
-        // 检查文档（无论是否允许solo冲突，都要检查文档）
-        RegistryProgress::log('Hook documentation validation started');
-        $this->validateDocumentation($registry);
+            RegistryProgress::log('Hook organize registry data');
+            $registry = $this->organizeRegistryData($scannedData, $hookFiles, $allowSoloConflict);
+            RegistryProgress::count('Hook registry', count($registry['hooks'] ?? []), 'hooks organized');
+            unset($scannedData, $hookFiles);
+            RegistryProgress::log('Hook raw scan data released');
 
-        // 检查Hook实现文件是否存在但没有规约的情况（始终检查，不只在开发环境）
-        // 在系统升级和hook:rebuild时，必须确保所有Hook实现都有规约
-        RegistryProgress::log('Hook specification validation started');
-        $this->validateHookSpecifications($registry);
+            RegistryProgress::log('Hook documentation validation started');
+            $this->validateDocumentation($registry);
 
-        // 保存注册表
-        return $this->saveRegistry($registry);
+            RegistryProgress::log('Hook specification validation started');
+            $this->validateHookSpecifications($registry);
+
+            return $this->saveRegistry($registry);
+        } catch (\Throwable $e) {
+            RegistryProgress::log('Hook refresh aborted; keeping existing generated/hooks.php');
+            throw $e instanceof \RuntimeException
+                ? $e
+                : new \RuntimeException('Hook registry refresh failed: ' . $e->getMessage(), 0, $e);
+        }
     }
 
     /**
@@ -1022,25 +1023,18 @@ class HookRegistry
     {
         RegistryProgress::log('Hook save registry: generated/hooks.php');
         $content = "<?php return " . var_export($registry, true) . ";\n";
+        (new GeneratedPhpArrayPublisher())->publishContent(
+            self::REGISTRY_FILE,
+            $content,
+            $registry,
+            GeneratedPhpArrayPublisher::countKey('hooks'),
+        );
 
-        // 确保目录存在
-        $dir = dirname(self::REGISTRY_FILE);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
-
-        if ($result !== false) {
-            $this->cachedRegistry = $registry;
-            $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
-            HookData::clearCache();
-            RegistryProgress::log('Hook save registry finished');
-            return true;
-        }
-
-        RegistryProgress::log('Hook save registry failed');
-        return false;
+        $this->cachedRegistry = $registry;
+        $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        HookData::clearCache();
+        RegistryProgress::log('Hook save registry finished');
+        return true;
     }
 
     /**

@@ -534,6 +534,7 @@ HTML;
             $path = (string)($context['request_path'] ?? '');
             $query = (string)($context['request_query'] ?? '');
             $cookie = (string)($context['cookie_header'] ?? '');
+            $host = (string)($context['request_host'] ?? '');
 
             // Prefer full REQUEST_URI so /{locale}/... still resolves after path-locale stripping.
             $requestUri = '';
@@ -567,8 +568,26 @@ HTML;
             if ($cookie === '' && \class_exists(WelineEnv::class, false)) {
                 $cookie = (string)WelineEnv::server('HTTP_COOKIE', '');
             }
+            if ($host === '') {
+                if (\class_exists(WelineEnv::class, false)) {
+                    try {
+                        $host = (string)WelineEnv::server('HTTP_HOST', '');
+                    } catch (\Throwable) {
+                        $host = '';
+                    }
+                }
+                if ($host === '') {
+                    $host = (string)($_SERVER['HTTP_HOST'] ?? '');
+                }
+            }
 
-            $html = StorefrontNotFoundStaticPage::loadHtml(null, $path !== '' ? $path : '/', $query, $cookie);
+            $html = StorefrontNotFoundStaticPage::loadHtml(
+                null,
+                $path !== '' ? $path : '/',
+                $query,
+                $cookie,
+                $host,
+            );
 
             return $html !== null && $html !== '' ? $html : null;
         } catch (\Throwable) {

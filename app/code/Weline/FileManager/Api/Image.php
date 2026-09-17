@@ -80,12 +80,24 @@ class Image
 
         return [
             'path' => $relativePath,
-            'name' => basename($relativePath),
+            'name' => self::previewDisplayName($relativePath),
             'url' => $url,
             'kind' => $kind,
             'is_image' => $kind === 'image',
             'pathInfo' => pathinfo(PUB . DS . 'media' . DS . $relativePath),
+            'file_image_json' => '',
         ];
+    }
+
+    private static function previewDisplayName(string $relativePath): string
+    {
+        $base = basename($relativePath);
+        $dot = strrpos($base, '.');
+        if ($dot !== false && $dot > 0) {
+            return substr($base, 0, $dot);
+        }
+
+        return $base;
     }
 
     public static function processImagesValuePreviewData(string $value, int $width, int $height): array
@@ -95,6 +107,14 @@ class Image
             $value = '';
         } else {
             $value = (string)$value;
+        }
+
+        $trimmed = trim($value);
+        if ($trimmed !== '' && str_starts_with($trimmed, '{')) {
+            $fileImageItems = self::previewItemsFromFileImageJson($trimmed, $width, $height);
+            if ($fileImageItems !== null) {
+                return $fileImageItems;
+            }
         }
 
         $value = self::normalizeMediaPath($value);
@@ -114,6 +134,45 @@ class Image
         }
 
         return $value_items;
+    }
+
+    /**
+     * @return list<array{path:string,name:string,url:string,kind:string,is_image:bool,pathInfo:array<string,string>,file_image_node?:array<string,mixed>}>|null
+     */
+    private static function previewItemsFromFileImageJson(string $json, int $width, int $height): ?array
+    {
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded) || ($decoded['type'] ?? null) !== 'file-image' || !is_array($decoded['usage'] ?? null)) {
+            return null;
+        }
+        $url = '';
+        try {
+            if (interface_exists(\Weline\Widget\Api\Param\FileImagePreviewResolverInterface::class)) {
+                $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Widget\Api\Param\FileImagePreviewResolverInterface::class,
+                );
+                $url = trim((string)$resolver->resolvePreviewUrl($decoded));
+            }
+        } catch (\Throwable) {
+            $url = '';
+        }
+        if ($url === '') {
+            return [];
+        }
+        $assetId = trim((string)($decoded['usage']['asset_id'] ?? 'image'));
+        $item = self::buildPreviewItem($url, $width, $height);
+        // Prefer the resolved public URL for display; keep typed node for file-picker sync.
+        $item['url'] = $url;
+        $item['path'] = $url;
+        $item['name'] = $assetId !== '' ? $assetId : $item['name'];
+        $node = ['type' => 'file-image', 'usage' => $decoded['usage']];
+        $item['file_image_node'] = $node;
+        $item['file_image_json'] = (string)json_encode(
+            $node,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+
+        return [$item];
     }
 
     /**

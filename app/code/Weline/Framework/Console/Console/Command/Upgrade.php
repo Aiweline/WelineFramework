@@ -14,6 +14,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Console\Command;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandInterface;
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\System\File\Data\File;
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\Manager\ObjectManager;
@@ -153,14 +154,7 @@ class Upgrade extends CommandAbstract
             return;
         }
 
-        // 全量更新：删除命令文件
-        if (is_file(Env::path_COMMANDS_FILE)) {
-            $data = $this->system->exec('rm ' . Env::path_COMMANDS_FILE);
-            if ($data) {
-                $this->printer->printList($data);
-            }
-        }
-
+        // 全量更新：扫描完成后再原子替换，禁止先删 commands.php
         if ($installMode) {
             $this->printer->note(__('安装模式：扫描所有模块命令（包括未激活的模块）'));
         }
@@ -168,12 +162,7 @@ class Upgrade extends CommandAbstract
         $commands = $this->scan($installMode);
         // 注册命令别名
         $commands = $this->registerAliases($commands);
-        /**@var $file \Weline\Framework\System\File\Io\File */
-        $file = ObjectManager::getInstance(\Weline\Framework\System\File\Io\File::class);
-        $file->open(Env::path_COMMANDS_FILE, $file::mode_w_add);
-        $text = '<?php return ' . w_var_export($commands, true) . ';';
-        $file->write($text);
-        $file->close();
+        $this->writeCommandsFile($commands);
         $this->printer->printList($commands);
         $this->printer->success(__('所有命令已更新！'));
     }
@@ -738,12 +727,13 @@ class Upgrade extends CommandAbstract
      */
     private function writeCommandsFile(array $commands): void
     {
-        /** @var \Weline\Framework\System\File\Io\File $file */
-        $file = ObjectManager::getInstance(\Weline\Framework\System\File\Io\File::class);
-        $file->open(Env::path_COMMANDS_FILE, $file::mode_w_add);
-        $text = '<?php return ' . w_var_export($commands, true) . ';';
-        $file->write($text);
-        $file->close();
+        $content = '<?php return ' . w_var_export($commands, true) . ";\n";
+        (new GeneratedPhpArrayPublisher())->publishContent(
+            Env::path_COMMANDS_FILE,
+            $content,
+            $commands,
+            GeneratedPhpArrayPublisher::countTopLevel(...),
+        );
     }
 
     /**

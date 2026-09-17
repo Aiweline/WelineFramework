@@ -19,7 +19,7 @@
  * @param enabled {default=true,type="bool",label="展示快捷支付"}
  * @param title {default="快捷支付",type="string",label="标题"}
  * @param method_code {default="paypal",type="string",label="支付方式代码"}
- * @param logo {default="",type="image",label="快捷支付 Logo"}
+ * @param logo {default="",type="media_image",label="快捷支付 Logo",description="从媒体库选择 Logo；留空用支付方式默认图",i18n=false}
  */
 
 use Weline\Framework\Manager\ObjectManager;
@@ -27,6 +27,7 @@ use Weline\Payment\Api\PaymentExpressFacadeInterface;
 use Weline\Payment\Service\ExpressCheckoutOrchestrator;
 use Weline\Payment\Service\PaymentMethodIconResolver;
 use Weline\SystemConfig\Api\ConfigStore;
+use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -44,7 +45,7 @@ $configMethod = strtolower(trim((string)($this->getData('method_code') ?? 'paypa
 $orLabel = (string)__('或使用下方结账');
 $defaultLogoRef = 'Weline_Payment::img/payment/paypal-express.svg';
 $logoFileHtml = trim((string)($this->getData('logo_file_html') ?? ''));
-$logoRaw = trim((string)($this->getData('logo') ?? ''));
+$logoRaw = LegacyMediaUrl::sanitize($this->getData('logo') ?? '');
 $iconResolver = ObjectManager::getInstance(PaymentMethodIconResolver::class);
 
 $expressMethods = [];

@@ -8,7 +8,7 @@
     margin-top: auto;
     background-color: var(--weline-chrome-bg-dark);
     color: var(--weline-chrome-text-light);
-    font-family: var(--weline-layout-font-family, var(--font-family-base));
+    font-family: var(--weline-layout-font-family-ui, var(--weline-layout-font-family, var(--font-family-base)));
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
 }

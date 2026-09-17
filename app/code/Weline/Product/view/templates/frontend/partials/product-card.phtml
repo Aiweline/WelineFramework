@@ -146,6 +146,8 @@ $hrefAttr = $productUrl !== ''
                         ProductCardAddToCartParams::fetchDictionary($product, [
                             'wrapper_class' => 'wpc-cart-wrap',
                             'button_class' => 'wpc-cart-btn',
+                            // CTA 视觉嵌入商品卡：只走 product-card.css，不再双注入 purchase-actions。
+                            'css_owned_by_card' => true,
                         ])
                     ) ?>
                 <?php else: ?>

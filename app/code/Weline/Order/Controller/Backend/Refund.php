@@ -6,14 +6,14 @@ namespace Weline\Order\Controller\Backend;
 
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Service\OrderTradeAdminCommandException;
 use Weline\Order\Service\OrderTradeAdminCommandService;
 
 #[Acl('Weline_Order::refund_controller', '订单退款控制器', 'cash', '订单并发安全退款管理', 'Weline_Backend::order_group')]
-final class Refund extends BackendController
+final class Refund extends BackendPageController
 {
     use OrderObjectAuthorizationTrait;
 

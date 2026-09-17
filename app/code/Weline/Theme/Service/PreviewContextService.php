@@ -705,14 +705,25 @@ final class PreviewContextService
 
     /**
      * Prefer an explicitly requested preview language over a sticky token locale.
-     * Raw REQUEST_URI query wins when present; otherwise the request parameter bag
-     * (WLS may strip the query string from REQUEST_URI after routing).
+     * Theme-editor live canvas: visitor language is the real path only (no ?locale=/lang=).
+     * Theme-preview content gateway may still use query locale for identity.
      *
      * @param array<string, mixed> $context
      * @return array<string, mixed>
      */
     private function applyExplicitLocaleOverride(array $context): array
     {
+        if ($this->isThemeEditorLiveCanvasRequest()) {
+            $pathLocale = $this->detectLocaleFromVisitorPath();
+            if ($pathLocale !== '') {
+                $context['locale'] = $pathLocale;
+                return $context;
+            }
+            // Unprefixed storefront path = website default / layout identity "default".
+            $context['locale'] = '';
+            return $context;
+        }
+
         if ($this->hasAnyRawQueryKey(['locale', 'locale_code'])) {
             return $this->applyLocaleParamToContext($context, (string)($this->getRawQueryString('locale', null)
                 ?? $this->getRawQueryString('locale_code', '')
@@ -728,6 +739,32 @@ final class PreviewContextService
         }
 
         return $this->applyLocaleParamToContext($context, (string)$param);
+    }
+
+    private function isThemeEditorLiveCanvasRequest(): bool
+    {
+        $editorMode = \strtolower(\trim((string)$this->request->getParam('editor_mode', '')));
+        if ($editorMode === '1' || $editorMode === 'true') {
+            return true;
+        }
+        $shell = \strtolower(\trim((string)$this->request->getParam('shell', '')));
+        return $shell === self::SHELL_THEME_EDITOR;
+    }
+
+    private function detectLocaleFromVisitorPath(): string
+    {
+        $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+            ?: \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '')
+            ?: '');
+        if ($requestUri === '') {
+            $requestUri = (string)(\w_env('origin_request_uri', '') ?: \w_env('request.uri', '') ?: '');
+        }
+        $fromUri = \Weline\Theme\Helper\WidgetI18n::localeFromRequestUri($requestUri);
+        if (\is_string($fromUri) && $fromUri !== '') {
+            return $this->normalizeLocale($fromUri);
+        }
+
+        return '';
     }
 
     /**

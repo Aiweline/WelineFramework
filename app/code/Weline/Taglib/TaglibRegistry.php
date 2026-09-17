@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Taglib;
 
+use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
+
 /**
  * 标签库注册表管理
  * 管理 generated/taglibs.php 文件的读写
@@ -117,20 +119,16 @@ class TaglibRegistry
         $content .= " */\n\n";
         $content .= "return " . w_var_export($registry, true) . ";\n";
 
-        $dir = dirname(self::REGISTRY_FILE);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
+        (new GeneratedPhpArrayPublisher())->publishContent(
+            self::REGISTRY_FILE,
+            $content,
+            $registry,
+            GeneratedPhpArrayPublisher::countKey('tags'),
+        );
 
-        $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
-
-        if ($result !== false) {
-            $this->cachedRegistry = $registry;
-            $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
-            return true;
-        }
-
-        return false;
+        $this->cachedRegistry = $registry;
+        $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        return true;
     }
 
     /**

@@ -25,7 +25,6 @@ use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Helper\ThemeConfigManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\PreviewManager;
-use Weline\Theme\Helper\PreviewAccountManager;
 use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\CssVariableParser;
@@ -291,7 +290,6 @@ class Layout extends BackendController
             $previewUrlFrontend = $url->getBackendUrl('theme/backend/index/preview', [
                 'theme_id' => $theme->getId(),
                 'area' => 'frontend',
-                'auto_login' => '1'
             ]);
             
             $previewUrlBackend = $url->getBackendUrl('theme/backend/index/preview', [
@@ -1046,23 +1044,6 @@ class Layout extends BackendController
             return '';
         }
 
-        // 判断是否需要自动登录（根据布局文件的 @preview.login 标记）
-        // 注意：自动登录逻辑现在由 PreviewAutoLogin Observer 在路由拦截之前处理
-        // 这里只设置session标志，供Observer使用
-        $autoLogin = $this->request->getParam('auto_login'); // 如果手动指定，优先使用
-        if ($area === 'frontend' && ($autoLogin === null || $autoLogin === '')) {
-            // 根据选中的布局文件判断是否需要登录
-            $autoLogin = $this->shouldAutoLoginByLayoutConfig($theme, $area, $layouts) ? '1' : '0';
-        }
-        
-        $shouldAutoLogin = ($autoLogin === '1' || $autoLogin === 1 || $autoLogin === true);
-        // 设置预览自动登录标志到session，供Observer使用
-        $this->session->setData('preview_auto_login', $shouldAutoLogin);
-
-        if ($shouldAutoLogin) {
-            PreviewAccountManager::ensurePreviewUser($theme);
-        }
-        
         // 根据区域和布局配置重定向到相应的预览页面
         /** @var Url $url */
         $url = ObjectManager::getInstance(Url::class);
@@ -1131,80 +1112,6 @@ class Layout extends BackendController
         }
 
         return $url->getBackendUrl('theme/backend/theme-editor/layout-preview', $params);
-    }
-    
-    /**
-     * 根据布局配置判断是否需要自动登录
-     * 
-     * @param WelineTheme $theme 主题对象
-     * @param string $area 区域（frontend/backend）
-     * @param array $layouts 布局配置数组
-     * @return bool 是否需要自动登录
-     */
-    private function shouldAutoLoginByLayoutConfig(WelineTheme $theme, string $area, array $layouts): bool
-    {
-        try {
-            // 优先检查 account 布局（通常需要登录）
-            $priorityOrder = ['account', 'homepage', 'default'];
-            
-            foreach ($priorityOrder as $layoutType) {
-                if (isset($layouts[$layoutType]) && !empty($layouts[$layoutType])) {
-                    $layoutOption = $layouts[$layoutType];
-                    $previewLogin = $this->getLayoutPreviewLogin($theme, $area, $layoutType, $layoutOption);
-                    if ($previewLogin !== null) {
-                        return $previewLogin == 1;
-                    }
-                }
-            }
-            
-            // 如果都没有找到，默认不登录
-            return false;
-        } catch (\Exception $e) {
-            return false;
-        }
-    }
-    
-    /**
-     * 获取布局文件的 @preview.login 标记值
-     * 
-     * @param WelineTheme $theme 主题对象
-     * @param string $area 区域
-     * @param string $layoutType 布局类型
-     * @param string $layoutOption 布局选项
-     * @return int|null 标记值（0或1），如果找不到返回null
-     */
-    private function getLayoutPreviewLogin(WelineTheme $theme, string $area, string $layoutType, string $layoutOption): ?int
-    {
-        try {
-            $themePath = $theme->getPath();
-            if (empty($themePath)) {
-                return null;
-            }
-            
-            $layoutPath = rtrim($themePath, DS) . DS . 'view' . DS . 'theme' . DS . $area . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
-            $layoutPath = str_replace('\\', DS, $layoutPath);
-            
-            // 如果当前主题不存在，尝试父主题
-            if (!is_file($layoutPath)) {
-                $parentId = $theme->getParentId();
-                if ($parentId) {
-                    /** @var WelineTheme $parentTheme */
-                    $parentTheme = ObjectManager::getInstance(WelineTheme::class);
-                    $parentTheme->load($parentId);
-                    if ($parentTheme->getId()) {
-                        return $this->getLayoutPreviewLogin($parentTheme, $area, $layoutType, $layoutOption);
-                    }
-                }
-                return null;
-            }
-            
-            // 解析布局文件的 Meta 信息
-            $meta = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutPath);
-            
-            return isset($meta['preview_login']) ? (int)$meta['preview_login'] : null;
-        } catch (\Exception $e) {
-            return null;
-        }
     }
     
     /**
@@ -3053,7 +2960,6 @@ class Layout extends BackendController
             $previewUrl = $url->getBackendUrl('theme/backend/index/preview', [
                 'theme_id' => $theme->getId(),
                 'area' => $area,
-                'auto_login' => '1'
             ]);
         } catch (\Exception $e) {
             // 忽略错误
@@ -3137,7 +3043,6 @@ class Layout extends BackendController
             $previewUrl = $url->getBackendUrl('theme/backend/index/preview', [
                 'theme_id' => $theme->getId(),
                 'area' => $area,
-                'auto_login' => '1'
             ]);
         } catch (\Exception $e) {
             // 忽略错误

@@ -116,6 +116,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'dev-rerun-install',
         'force-schema-rebind',
         'force-optimize',
+        'force-menu',
         'skip-classmap',
         'skip-composer-dump',
         'y',
@@ -143,6 +144,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--dev-rerun-install',
         '--force-schema-rebind',
         '--force-optimize',
+        '--force-menu',
         '--skip-classmap',
         '--skip-composer-dump',
         '--yes, -y',
@@ -190,6 +192,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
     /** Model/Controller/menu 等源树本轮有变更时，禁止自动跳过 completeUpgrade */
     private bool $sourceTreeChanged = false;
+
+    /** -f/--force-menu：本轮升级必须强制菜单全量重收集 */
+    private bool $forceMenuThisRun = false;
 
     function __construct(
         private Printing $printing
@@ -883,8 +888,49 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 6. 环境依赖检测
         $this->checkEnvironmentDependencies($args);
 
+        // 6b. -f/--force 与 --force-menu：清除 menu:* 指纹并强制下一轮全量重解析
+        $this->requestForceMenuCollectIfNeeded($args);
+
         // 7. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
         $this->validateFrameworkRules();
+    }
+
+    /**
+     * -f/--force 与 --force-menu：强制菜单全量重收集（与仅跳过环境检测的历史语义叠加）。
+     */
+    private function requestForceMenuCollectIfNeeded(array $args): void
+    {
+        $forceFlag = isset($args['force']) || isset($args['f']);
+        $forceMenu = isset($args['force-menu']);
+        if (!$forceFlag && !$forceMenu) {
+            return;
+        }
+        $reason = $forceFlag && $forceMenu
+            ? '-f/--force + --force-menu'
+            : ($forceMenu ? '--force-menu' : '-f/--force');
+        $this->forceMenuThisRun = true;
+        \Weline\Backend\Config\MenuXmlReader::beginForceFullHold();
+        \Weline\Backend\Config\MenuXmlReader::requestForceFull($reason);
+    }
+
+    /**
+     * 每次真正派发菜单收集前再清指纹并保持 sticky（防止中途 collect 写回指纹后假命中）。
+     */
+    private function assertForceMenuBeforeCollect(): void
+    {
+        if (!$this->forceMenuThisRun) {
+            return;
+        }
+        \Weline\Backend\Config\MenuXmlReader::requestForceFull('setup:upgrade menu-collect');
+    }
+
+    private function releaseForceMenuHold(): void
+    {
+        if (!$this->forceMenuThisRun) {
+            return;
+        }
+        \Weline\Backend\Config\MenuXmlReader::resetForceFullState();
+        $this->forceMenuThisRun = false;
     }
 
     private function shouldSkipComposerDump(array $args): bool
@@ -1347,12 +1393,46 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
 
         $skipAll = $scope === null && $modules !== [] && $changed === [] && $fingerprints !== [];
+        // 源指纹全员命中但磁盘路由产物缺失/空：禁止 skip_all（否则 seed 无源、运行无路由）
+        if ($skipAll && !$this->routeArtifactsPresent()) {
+            $skipAll = false;
+            $changed = \array_keys($fingerprints);
+            $changed = \array_map(
+                static fn(string $k): string => \str_starts_with($k, 'route:') ? \substr($k, 6) : $k,
+                $changed
+            );
+            if (\PHP_SAPI === 'cli') {
+                $this->printing->note(__(
+                    '   - 路由磁盘产物缺失或为空，忽略 Controller 源指纹，强制全量重扫'
+                ));
+            }
+        }
 
         return [
             'skip_all' => $skipAll,
             'changed' => $changed,
             'fingerprints' => $fingerprints,
         ];
+    }
+
+    /**
+     * generated/routers 下主路由文件是否可读且非空。
+     */
+    private function routeArtifactsPresent(): bool
+    {
+        $present = 0;
+        foreach (Env::router_files_PATH as $path) {
+            if (!\is_string($path) || $path === '' || !\is_file($path)) {
+                continue;
+            }
+            $size = (int)@\filesize($path);
+            if ($size > 32) {
+                $present++;
+            }
+        }
+
+        // 至少 backend_pc + frontend_pc 一类核心产物存在才允许全跳
+        return $present >= 2;
     }
 
     /**
@@ -1364,16 +1444,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return;
         }
         $fpService = new SetupSourceFingerprint();
-        $store = $fpService->loadStore();
-        foreach ($fingerprints as $key => $value) {
-            $k = (string)$key;
-            $v = (string)$value;
-            if ($k === '' || $v === '') {
-                continue;
-            }
-            $store[$k] = $v;
-        }
-        $fpService->saveStore($store);
+        $fpService->mergeUpdates($fingerprints);
     }
 
     /**
@@ -1656,6 +1727,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function cleanupUpgrade($lockHandle, string $lockFile, bool $maintenanceEnabled): void
     {
+        $this->releaseForceMenuHold();
+
         // 1. 禁用延迟注册表更新模式（无论升级是否成功，都要恢复正常模式）
         // 遵循SOLID原则：确保状态在 finally 块中被正确清理
         if (Handle::isDeferRegistryUpdate()) {
@@ -2208,6 +2281,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             $beforeRouteCollectionEventData = [];
+            $this->assertForceMenuBeforeCollect();
             $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $beforeRouteCollectionEventData);
 
             // 更新路由（支持指定模块）
@@ -2800,6 +2874,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             try {
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);
                 $menuEventData = [];
+                $this->assertForceMenuBeforeCollect();
                 $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $menuEventData);
             } catch (\Throwable $e) {
                 $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));
@@ -2862,6 +2937,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             try {
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);
                 $menuEventData = [];
+                $this->assertForceMenuBeforeCollect();
                 $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $menuEventData);
             } catch (\Throwable $e) {
                 $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));
@@ -3867,8 +3943,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-m, --module=<模块名>' => '升级指定模块（例如：Vendor_Module）',
                 '--stage=<code>[,code...]' => __('优先运行指定阶段；framework_db_bootstrap/eav_schema/schema_diff 在全量路径仍必执行。阶段 code：%{1}。幽灵阶段 module_manager_bootstrap 已移除。', [$stageCodes]),
                 '--hot' => __('热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS'),
-                '-s, --skip-env-check' => '跳过环境依赖检测',
-                '-f, --force' => '强制升级（跳过环境依赖检测）',
+                '-s, --skip-env-check' => '跳过环境依赖检测（不强制菜单）',
+                '-f, --force' => '强制升级：跳过环境依赖检测，并强制全量重解析/收集菜单（清除 menu:* 源指纹）',
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）'),
                 '--skip-framework-compile' => __('跳过 framework:compile（modules provides / container 等运行时索引；可事后执行 framework:compile）'),
                 '--background-optimize' => __('显式在后台执行优化；主命令不会等待类映射与反射编译完成'),
@@ -3877,6 +3953,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--dev-rerun-install' => __('DEV 下显式重跑全模块 Install.php（默认关闭）'),
                 '--force-schema-rebind' => __('DEV only：同版本 Schema checkpoint 冲突时 supersede 旧记录并重绑；与 -f/--force（跳过环境检测）无关'),
                 '--force-optimize' => __('强制重跑 classmap / reflection / framework:compile（忽略 optimize stamp）'),
+                '--force-menu' => __('强制全量重解析 menu.xml 并写入 ACL 菜单（清除 menu:* 指纹；不跳过环境检测）'),
                 '--skip-classmap' => __('跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新'),
                 '--skip-composer-dump' => __('仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段'),
                 '-h, --help' => '显示帮助信息',
@@ -3898,11 +3975,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
                 __('跳过框架运行时编译') => 'php bin/w setup:upgrade --skip-framework-compile',
                 __('强制重跑收尾优化') => 'php bin/w setup:upgrade --force-optimize',
+                __('强制重收集菜单') => 'php bin/w setup:upgrade --force-menu',
+                __('强制升级并重收集菜单') => 'php bin/w setup:upgrade -f',
                 __('显式在后台执行优化') => 'php bin/w setup:upgrade --background-optimize',
                 __('兼容旧脚本的同步参数') => 'php bin/w setup:upgrade --sync',
                 __('DEV 同版本 Schema 重绑') => 'php bin/w setup:upgrade --force-schema-rebind',
             ],
-            'php bin/w setup:upgrade [--model|--route|--stage=<code>|--hot|--force-optimize|--background-optimize|--sync|--force-schema-rebind] [-m|--module=<模块名>]'
+            'php bin/w setup:upgrade [--model|--route|--stage=<code>|--hot|--force-optimize|--force-menu|--background-optimize|--sync|--force-schema-rebind] [-m|--module=<模块名>]'
         );
     }
 

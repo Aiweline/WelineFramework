@@ -26,7 +26,7 @@ class LanguageSwitcher implements TaglibInterface
     private const SWITCHER_HTML_CACHE_TTL = 60.0;
     private const SWITCHER_LANGUAGE_CACHE_TTL = 300.0;
     /** Bumped when storefront switcher DOM contract changes (chrome partial cache key). */
-    public const SWITCHER_MARKUP_VERSION = 'component-25-supported-locales';
+    public const SWITCHER_MARKUP_VERSION = 'component-26-trigger-flag-ssr';
     public const TAG_NAME = 'i18n:switcher';
 
     /**
@@ -221,7 +221,8 @@ class LanguageSwitcher implements TaglibInterface
                 : (string)($welineCurrentLanguage['tag_label'] ?? ($welineCurrentLanguage['name'] ?? ''));
             $currentName = htmlspecialchars($currentLabelRaw, ENT_QUOTES, 'UTF-8');
             $currentCountryCode = self::resolveLanguageCountryCode($welineCurrentLanguage);
-            $currentFlag = CountryFlagMarkup::placeholderHtml($currentCountryCode);
+            // Trigger only: compact data-URI first paint. Panel options stay empty placeholders.
+            $currentFlag = CountryFlagMarkup::triggerHtml($currentCountryCode);
             $renderFor = strtolower(trim((string)($attributes['for'] ?? '')));
             $switcherId = SwitcherInstanceId::create('weline-i18n-switcher');
             $parts = explode('_', $currentCode);

@@ -26,7 +26,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
     private CustomerAuthReturnUrlService $authReturnUrlService;
     private ?CaptchaManagerInterface $captchaManager;
 
-    protected ?string $layoutType = 'account.auth';
+    protected ?string $layoutType = 'account/login';
 
     public function __construct(
         Template $template,

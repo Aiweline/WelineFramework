@@ -24,14 +24,15 @@ class LayoutPathResolver
             return $resolved;
         }
 
-        // 例如 account.dashboard：若未命中 dashboard.phtml，则回退 account.default（模块内仍有完整页面骨架）
+        // 同 layoutType 下 option 未命中则回退 default；layoutType 可嵌套（account/login）
         $normalized = str_replace('\\', '/', $layoutPath);
-        if (preg_match('#^theme/([^/]+)/layouts/([^/]+)/(.+)\.phtml$#', $normalized, $m)) {
+        if (preg_match('#^theme/([^/]+)/layouts/(.+)/([^/]+)\.phtml$#', $normalized, $m)) {
             $areaFromPath = $m[1];
-            $group = $m[2];
+            $layoutTypePath = $m[2];
             $optionBase = $m[3];
             if ($optionBase !== '' && $optionBase !== 'default') {
-                $fallbackPath = 'theme' . DS . $areaFromPath . DS . 'layouts' . DS . $group . DS . 'default.phtml';
+                $fallbackPath = 'theme' . DS . $areaFromPath . DS . 'layouts' . DS
+                    . str_replace('/', DS, $layoutTypePath) . DS . 'default.phtml';
 
                 return self::resolveLayoutTemplateOnce($fallbackPath, $theme, $area);
             }
@@ -243,7 +244,8 @@ class LayoutPathResolver
     private static function parseLayoutPath(string $layoutPath, string $fallbackArea): ?array
     {
         $normalized = str_replace('\\', '/', $layoutPath);
-        if (!preg_match('#^theme/([^/]+)/layouts/([^/]+)/(.+)\.phtml$#', $normalized, $matches)) {
+        // theme/{area}/layouts/{layoutType...}/{option}.phtml — layoutType 可嵌套（account/login）
+        if (!preg_match('#^theme/([^/]+)/layouts/(.+)/([^/]+)\.phtml$#', $normalized, $matches)) {
             return null;
         }
 

@@ -128,12 +128,27 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
             $code = $e instanceof \Weline\Shipping\Service\ShippingQuoteConflictException
                 ? $e->errorCode()
                 : 'shipping_quote_failed';
+            // Fail closed but keep last diagnostics so checkout can show the real refuse reason
+            // (missing_weight / no_matched_lane / …) instead of a vague empty state.
+            $diagnostics = [];
+            try {
+                $diagnostics = $this->serviceManager->getLastQuoteDiagnostics();
+            } catch (\Throwable) {
+                $diagnostics = [];
+            }
+            if (!\is_array($diagnostics)) {
+                $diagnostics = [];
+            }
+
             return [
                 'success' => false,
                 'code' => 400,
                 'message' => $e->getMessage(),
                 'error_code' => $code,
-                'data' => [],
+                'data' => [
+                    'quote_diagnostics' => $diagnostics,
+                    'exception_message' => $e->getMessage(),
+                ],
             ];
         }
     }

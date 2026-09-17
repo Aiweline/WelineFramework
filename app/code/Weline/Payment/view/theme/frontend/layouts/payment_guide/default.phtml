@@ -1,0 +1,104 @@
+<?php
+/**
+ * 支付方式指南布局（亚马逊风格，兼容 Theme 插槽与 Hook）。
+ *
+ * @meta.name {default="支付方式指南布局",name="支付方式指南布局",description="亚马逊风格支付供应商客户指南与政策页布局"}
+ * @meta.description {default="用于 /guide/payment 聚合页与各供应商指南/政策页",name="描述",description="支付指南页面布局"}
+ * @param.title {default="支付方式指南",name="页面标题",description="页面标题"}
+ * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
+ * @param.meta_description {default="了解可用支付方式、账单与安全保障说明。",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
+ * @param.subtitle {default="",name="副标题",description="页面副标题"}
+ * @param.showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
+ * @param.showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
+ * @param.showSidebar {default=true,name="显示侧栏",description="是否显示支付供应商侧栏导航"}
+ * @param.class {default="",name="额外 CSS 类",description="主内容额外 CSS 类"}
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::payment_guide::head-after</w:hook>
+    <link rel="stylesheet"
+          href="@static(Weline_Theme::css/widgets/amazon-payment-guide.css)">
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="amazon-payment-guide-layout__body-root">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::payment_guide::body-start</w:hook>
+
+    <div class="weline-page-wrapper amazon-payment-guide-layout">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::payment_guide::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::payment_guide::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::payment_guide::breadcrumb-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+        <w:hook>Weline_Theme::frontend::layouts::payment_guide::breadcrumb-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::payment_guide::content-before</w:hook>
+
+            <main class="amazon-payment-guide-layout__shell <?= htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                  id="payment-guide-main"
+                  data-layout="payment_guide">
+                <w:hook>Weline_Theme::frontend::layouts::payment_guide::main-before</w:hook>
+                <w:slot id="content"
+                        name="支付指南内容区"
+                        accept="layout-payment-guide-content,layout-default-content,content,policy-content,faq"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content">
+                    <if condition="meta.content">
+                        {{meta.content}}
+                    <elseif condition="content"/>
+                        {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                        <?php echo $this->fetch($this->getData('meta.contentTemplate')); ?>
+                    <elseif condition="contentTemplate"/>
+                        <?php echo $this->fetch($this->getData('contentTemplate')); ?>
+                    </if>
+                </w:slot>
+                <w:hook>Weline_Theme::frontend::layouts::payment_guide::main-after</w:hook>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::payment_guide::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+
+        <w:slot id="payment-guide-bottom"
+                name="支付指南底部扩展"
+                accept="layout-payment-guide-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="payment-guide-bottom-slot">
+        </w:slot>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::payment_guide::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::payment_guide::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::payment_guide::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

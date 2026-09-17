@@ -159,6 +159,15 @@ class ParamDefinitionNormalizer implements ParamDefinitionNormalizerInterface
             $definition['translatable'] = $this->toBool($definition['translatable']);
             $definition['i18n'] = $definition['translatable'];
             $definition['translate'] = $definition['translatable'];
+        } else {
+            // Keep in sync with Weline\Widget\Api\Param\ParamDefinition defaults:
+            // text + image UI types are translatable unless explicitly opted out.
+            $uiType = (string)($definition['ui_type'] ?? $definition['input'] ?? $definition['type'] ?? 'string');
+            $defaultI18n = in_array($uiType, ['string', 'textarea', 'html', 'text'], true)
+                || in_array($uiType, ['media_image', 'image', 'image_picker', 'file_image'], true);
+            $definition['i18n'] = $defaultI18n;
+            $definition['translate'] = $defaultI18n;
+            $definition['translatable'] = $defaultI18n;
         }
 
         if (array_key_exists('multiple', $definition)) {

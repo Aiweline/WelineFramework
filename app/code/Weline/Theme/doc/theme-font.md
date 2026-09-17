@@ -16,10 +16,20 @@ app/code/{Vendor}/{Module}/view/fonts/
 
 Theme 已内置（`Weline_Theme/view/fonts/`，OFL）：
 
-- `NotoSansSC-Regular.ttf`（400）
-- `NotoSansSC-Bold.ttf`（700）
+- `LXGWWenKai-Regular.ttf` / `LXGWWenKai-Medium.ttf`（默认标题 / 霞鹜文楷）
+- `NotoSerifSC-Regular.ttf` / `NotoSerifSC-Bold.ttf`（默认正文与界面 / 古风宋体）
+- `ZCOOLXiaoWei-Regular.ttf`（display 备选 / 站酷小薇）
+- `NotoSansSC-Regular.ttf` / `NotoSansSC-Bold.ttf`（无衬线兜底）
 
-前台 / 后台 Head 默认通过 `<w:theme:font>` 加载上述字体，CSS 变量使用 `"Noto Sans SC"`。
+前台 Head 默认通过 `<w:theme:font>` 加载上述字体。分层 Token：
+
+| 角色 | Token | 默认 |
+|------|--------|------|
+| 正文 / 商品文案 | `--font-family-base` | 思源宋体 `Noto Serif SC` |
+| 标题 / Hero / 区块 | `--font-family-display` | 霞鹜文楷 `LXGW WenKai` |
+| 顶栏 / 按钮 / 密控件 | `--font-family-ui` | 思源宋体（略短栈） |
+
+主题编辑器「外观 · 字体」盘对上述 Token 提供预设下拉（源：`theme-disk-appearance.js`，须与 `weline-theme-editor.js` 同步）。后台仍以 Noto Sans SC 为主。
 
 `setup:upgrade` 结束后会扫描所有**已启用**模块的 `view/fonts/**`，为内置语言字符集生成子集（已有文件则跳过）。运行时若尚未预热，标签仍会临时生成并缓存。
 

@@ -59,6 +59,9 @@ final class EmbargoServiceContractTest extends TestCase
         $src = (string)file_get_contents(dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/RegionQueryProvider.php');
         self::assertStringContainsString("'embargo_evaluate'", $src);
         self::assertStringContainsString("'embargo_countries'", $src);
+        self::assertStringContainsString("'name' => 'embargo_regions'", $src);
+        self::assertStringContainsString('Active subnational embargo rules for address option marking', $src);
+        self::assertStringContainsString('Country codes blocked by shipping embargo union', $src);
         $controller = (string)file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/Region.php');
         self::assertStringContainsString('embargo_evaluate', $controller);
         $addressJs = (string)file_get_contents(dirname(__DIR__, 4) . '/Theme/view/statics/js/address.js');

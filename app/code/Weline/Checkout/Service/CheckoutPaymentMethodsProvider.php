@@ -13,6 +13,17 @@ use Weline\Framework\Manager\ObjectManager;
  */
 final class CheckoutPaymentMethodsProvider
 {
+    /** @var (callable(string):string)|null */
+    private $urlBuilder;
+
+    /**
+     * @param (callable(string):string)|null $urlBuilder
+     */
+    public function __construct(?callable $urlBuilder = null)
+    {
+        $this->urlBuilder = $urlBuilder;
+    }
+
     /**
      * @param array<string, mixed> $params currency / amount / amount_minor / country_id …
      * @return list<array{
@@ -67,13 +78,10 @@ final class CheckoutPaymentMethodsProvider
             $guideUrl = trim((string) ($method['guide_url'] ?? ''));
             if ($guideUrl === '') {
                 $guideRoute = trim((string) ($method['guide_route'] ?? ''));
-                if ($guideRoute !== '') {
-                    $guideUrl = '/' . ltrim($guideRoute, '/');
-                } else {
-                    $guideUrl = '/guide/payment/' . rawurlencode($code);
+                if ($guideRoute === '') {
+                    $guideRoute = 'guide/payment/' . rawurlencode($code);
                 }
-            } elseif (!str_starts_with($guideUrl, '/') && !preg_match('#^https?://#i', $guideUrl)) {
-                $guideUrl = '/' . ltrim($guideUrl, '/');
+                $guideUrl = $this->storefrontUrl($guideRoute);
             }
 
             $caps = \is_array($method['capabilities'] ?? null) ? $method['capabilities'] : [];
@@ -148,5 +156,20 @@ final class CheckoutPaymentMethodsProvider
         } catch (\Throwable) {
             return 0;
         }
+    }
+
+    private function storefrontUrl(string $route): string
+    {
+        $route = ltrim(trim($route), '/');
+        if ($route === '') {
+            return '';
+        }
+        if ($this->urlBuilder !== null) {
+            return (string) ($this->urlBuilder)($route);
+        }
+        /** @var \Weline\Framework\Http\Url $url */
+        $url = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+
+        return $url->getUrl($route);
     }
 }

@@ -1,14 +1,26 @@
 <?php
 $campaign = $campaign ?? null;
+$allowed_types = is_array($allowed_types ?? null) ? $allowed_types : \Weline\Marketing\Model\Winback\WinbackCampaign::allowedTypes();
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 $id = $campaign ? (int)$campaign->getId() : 0;
 $name = $campaign ? (string)$campaign->getData('name') : '';
+$type = $campaign ? (string)$campaign->getData('type') : 'unpaid_order_reminder';
+if (!in_array($type, $allowed_types, true)) {
+    $type = 'unpaid_order_reminder';
+}
 $status = $campaign ? (string)$campaign->getData('status') : 'disabled';
 $abandon = $campaign ? (int)$campaign->getData('abandon_after_hours') : 24;
 $maxSteps = $campaign ? (int)$campaign->getData('max_steps') : 1;
 $stepInterval = $campaign ? (int)$campaign->getData('step_interval_hours') : 24;
 $cooldown = $campaign ? (int)$campaign->getData('cooldown_hours') : 168;
 $websiteId = $campaign ? (int)$campaign->getData('website_id') : 0;
+$incentiveRuleId = $campaign ? (int)$campaign->getData('incentive_rule_id') : 0;
+$segmentId = $campaign ? (int)$campaign->getData('segment_id') : 0;
+$typeLabels = [
+    'unpaid_order_reminder' => __('未付订单催付'),
+    'checkout_abandon_reminder' => __('结账遗弃提醒'),
+    'cart_abandon_reminder' => __('购物车遗弃提醒'),
+];
 ?>
 <div class="w-grid" data-testid="marketing-winback-form">
   <div style="--w-span:12;">
@@ -23,6 +35,14 @@ $websiteId = $campaign ? (int)$campaign->getData('website_id') : 0;
           <input class="w-input" type="text" name="name" required value="<?= $escape($name) ?>" data-testid="marketing-winback-name">
         </label>
         <label class="w-field">
+          <span class="w-field__label"><?= __('活动类型') ?></span>
+          <select class="w-select" name="type" id="marketing-winback-type" data-testid="marketing-winback-type">
+            <?php foreach ($allowed_types as $typeCode): ?>
+              <option value="<?= $escape($typeCode) ?>" <?= $type === $typeCode ? 'selected' : '' ?>><?= $escape($typeLabels[$typeCode] ?? $typeCode) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="w-field">
           <span class="w-field__label"><?= __('状态') ?></span>
           <select class="w-select" name="status" data-testid="marketing-winback-status">
             <option value="disabled" <?= $status !== 'enabled' ? 'selected' : '' ?>><?= __('已停用') ?></option>
@@ -32,11 +52,13 @@ $websiteId = $campaign ? (int)$campaign->getData('website_id') : 0;
         <label class="w-field">
           <span class="w-field__label"><?= __('遗弃时限（小时）') ?></span>
           <input class="w-input" type="number" min="1" name="abandon_after_hours" value="<?= $abandon ?>" data-testid="marketing-winback-abandon-hours">
-          <span class="w-field__help"><?= __('下单后经过这么久仍未支付，才视为遗弃并发送第 1 步催付。由营销决定，订单模块不写遗弃状态。') ?></span>
+          <span class="w-field__help" data-winback-help="unpaid_order_reminder" <?= $type === 'unpaid_order_reminder' ? '' : 'hidden' ?>><?= __('下单后经过这么久仍未支付，才视为遗弃并发送第 1 步催付。由营销决定，订单模块不写遗弃状态。') ?></span>
+          <span class="w-field__help" data-winback-help="checkout_abandon_reminder" <?= $type === 'checkout_abandon_reminder' ? '' : 'hidden' ?>><?= __('进入结账后经过这么久仍未下单，才视为遗弃并发送第 1 步继续结账提醒。由营销决定，结账模块不写遗弃状态。') ?></span>
+          <span class="w-field__help" data-winback-help="cart_abandon_reminder" <?= $type === 'cart_abandon_reminder' ? '' : 'hidden' ?>><?= __('购物车最后更新后经过这么久仍未结账，才视为遗弃。有邮箱必触达；无邮箱保留信号、不发信。已有 quoted 结账会话时不发车信。') ?></span>
         </label>
         <label class="w-field">
           <span class="w-field__label"><?= __('最大步数') ?></span>
-          <input class="w-input" type="number" min="1" max="10" name="max_steps" value="<?= $maxSteps ?>">
+          <input class="w-input" type="number" min="1" max="10" name="max_steps" value="<?= $maxSteps ?>" data-testid="marketing-winback-max-steps">
         </label>
         <label class="w-field">
           <span class="w-field__label"><?= __('步骤间隔（小时）') ?></span>
@@ -45,6 +67,14 @@ $websiteId = $campaign ? (int)$campaign->getData('website_id') : 0;
         <label class="w-field">
           <span class="w-field__label"><?= __('冷却（小时）') ?></span>
           <input class="w-input" type="number" min="0" name="cooldown_hours" value="<?= $cooldown ?>">
+        </label>
+        <label class="w-field">
+          <span class="w-field__label"><?= __('激励券规则 ID（step≥2；0=不发券）') ?></span>
+          <input class="w-input" type="number" min="0" name="incentive_rule_id" value="<?= $incentiveRuleId ?>" data-testid="marketing-winback-incentive-rule">
+        </label>
+        <label class="w-field">
+          <span class="w-field__label"><?= __('分群 ID（0=全部）') ?></span>
+          <input class="w-input" type="number" min="0" name="segment_id" value="<?= $segmentId ?>" data-testid="marketing-winback-segment">
         </label>
         <label class="w-field">
           <span class="w-field__label"><?= __('网站 ID（0=全部）') ?></span>
@@ -58,3 +88,18 @@ $websiteId = $campaign ? (int)$campaign->getData('website_id') : 0;
     </div></div>
   </div>
 </div>
+<script>
+(function () {
+  var select = document.getElementById('marketing-winback-type');
+  if (!select) return;
+  var helps = document.querySelectorAll('[data-winback-help]');
+  function syncHelp() {
+    var value = select.value;
+    helps.forEach(function (el) {
+      el.hidden = el.getAttribute('data-winback-help') !== value;
+    });
+  }
+  select.addEventListener('change', syncHelp);
+  syncHelp();
+})();
+</script>

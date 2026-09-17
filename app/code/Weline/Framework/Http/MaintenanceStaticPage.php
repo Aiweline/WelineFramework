@@ -8,12 +8,13 @@ namespace Weline\Framework\Http;
  * Zero-DB resolver/loader for pre-generated maintenance pages under pub/errors/maintenance/.
  *
  * Used by WLS maintenance Worker and other gates that must return static HTML quickly.
+ * Layout: {websiteCode}/{lang}.html|.json plus legacy flat {lang}.* and _host_map.php.
  */
 final class MaintenanceStaticPage
 {
     public const DEFAULT_LANG = 'zh_Hans_CN';
 
-    private const STATIC_SUBDIR = 'pub/errors/maintenance';
+    public const KIND = 'maintenance';
 
     /**
      * Resolve locale for a maintenance response.
@@ -62,27 +63,39 @@ final class MaintenanceStaticPage
         return self::resolveLang($path, $queryString, $cookieHeader);
     }
 
-    public static function staticFilePath(string $lang, bool $isApi = false): string
+    public static function staticFilePath(string $lang, bool $isApi = false, string $websiteCode = ''): string
     {
         $suffix = $isApi ? '.json' : '.html';
-        $base = \defined('PUB') ? \rtrim((string)PUB, \DIRECTORY_SEPARATOR) : ((\defined('BP') ? BP : '') . 'pub');
 
-        return $base . \DIRECTORY_SEPARATOR . 'errors' . \DIRECTORY_SEPARATOR . 'maintenance'
-            . \DIRECTORY_SEPARATOR . $lang . $suffix;
+        return StaticErrorPageMap::websiteLocaleFile(self::KIND, $websiteCode, $lang, $suffix);
     }
 
-    public static function publicHtmlUrl(string $lang): string
+    public static function publicHtmlUrl(string $lang, string $websiteCode = ''): string
     {
         $lang = self::normalizeLangCode($lang);
+        if ($lang === '') {
+            $lang = self::DEFAULT_LANG;
+        }
+        $code = StaticErrorPageMap::sanitizeWebsiteCode($websiteCode);
+        if ($code !== '') {
+            return '/pub/errors/maintenance/' . \rawurlencode($code) . '/' . \rawurlencode($lang) . '.html';
+        }
 
-        return $lang !== ''
-            ? '/pub/errors/maintenance/' . \rawurlencode($lang) . '.html'
-            : '/pub/errors/maintenance/' . \rawurlencode(self::DEFAULT_LANG) . '.html';
+        return '/pub/errors/maintenance/' . \rawurlencode($lang) . '.html';
     }
 
     public static function resolveLangFromMaintenancePath(string $path): string
     {
         $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+        // Website-scoped: /pub/errors/maintenance/{code}/{lang}.html
+        if (\preg_match('#/pub/errors/maintenance/([^/]+)/([^/]+)\.(?:html|json)$#i', $pathOnly, $matches) === 1) {
+            $maybeCode = (string)($matches[1] ?? '');
+            $maybeLang = self::normalizeLangCode(\rawurldecode((string)($matches[2] ?? '')));
+            if ($maybeLang !== '' && StaticErrorPageMap::sanitizeWebsiteCode($maybeCode) === $maybeCode) {
+                return $maybeLang;
+            }
+        }
+        // Legacy flat: /pub/errors/maintenance/{lang}.html
         if (\preg_match('#/pub/errors/maintenance/([^/]+)\.(?:html|json)$#i', $pathOnly, $matches) === 1) {
             $lang = self::normalizeLangCode(\rawurldecode((string)($matches[1] ?? '')));
             if ($lang !== '') {
@@ -93,48 +106,52 @@ final class MaintenanceStaticPage
         return '';
     }
 
-    public static function loadHtml(?string $lang = null, string $path = '/', string $queryString = '', string $cookieHeader = ''): ?string
-    {
+    public static function loadHtml(
+        ?string $lang = null,
+        string $path = '/',
+        string $queryString = '',
+        string $cookieHeader = '',
+        string $host = '',
+        ?string $websiteCode = null,
+    ): ?string {
         if (!\defined('BP')) {
             return null;
         }
 
         $lang = $lang !== null && $lang !== '' ? $lang : self::resolveLang($path, $queryString, $cookieHeader);
 
-        foreach (self::langFallbackChain($lang) as $candidate) {
-            $file = self::staticFilePath($candidate, false);
-            if (!\is_file($file) || !\is_readable($file)) {
-                continue;
-            }
-            $html = @\file_get_contents($file);
-            if (\is_string($html) && $html !== '') {
-                return $html;
-            }
-        }
-
-        return null;
+        return StaticErrorPageMap::loadWithFallback(
+            self::KIND,
+            $lang,
+            $host,
+            $path,
+            false,
+            $websiteCode,
+        );
     }
 
-    public static function loadJson(?string $lang = null, string $path = '/', string $queryString = '', string $cookieHeader = ''): ?string
-    {
+    public static function loadJson(
+        ?string $lang = null,
+        string $path = '/',
+        string $queryString = '',
+        string $cookieHeader = '',
+        string $host = '',
+        ?string $websiteCode = null,
+    ): ?string {
         if (!\defined('BP')) {
             return null;
         }
 
         $lang = $lang !== null && $lang !== '' ? $lang : self::resolveLang($path, $queryString, $cookieHeader);
 
-        foreach (self::langFallbackChain($lang) as $candidate) {
-            $file = self::staticFilePath($candidate, true);
-            if (!\is_file($file) || !\is_readable($file)) {
-                continue;
-            }
-            $json = @\file_get_contents($file);
-            if (\is_string($json) && $json !== '') {
-                return $json;
-            }
-        }
-
-        return null;
+        return StaticErrorPageMap::loadWithFallback(
+            self::KIND,
+            $lang,
+            $host,
+            $path,
+            true,
+            $websiteCode,
+        );
     }
 
     /**
@@ -142,26 +159,7 @@ final class MaintenanceStaticPage
      */
     public static function langFallbackChain(string $lang): array
     {
-        $chain = [];
-        foreach ([$lang, self::DEFAULT_LANG, 'en_US'] as $candidate) {
-            if ($candidate === '' || \in_array($candidate, $chain, true)) {
-                continue;
-            }
-            $chain[] = $candidate;
-        }
-
-        $dir = (\defined('PUB') ? \rtrim((string)PUB, \DIRECTORY_SEPARATOR) : ((\defined('BP') ? BP : '') . 'pub'))
-            . \DIRECTORY_SEPARATOR . 'errors' . \DIRECTORY_SEPARATOR . 'maintenance';
-        if (\is_dir($dir)) {
-            foreach (\glob($dir . \DIRECTORY_SEPARATOR . '*.html') ?: [] as $file) {
-                $code = \basename((string)$file, '.html');
-                if (!\in_array($code, $chain, true)) {
-                    $chain[] = $code;
-                }
-            }
-        }
-
-        return $chain;
+        return StaticErrorPageMap::langFallbackChain(self::KIND, $lang);
     }
 
     public static function normalizeLangCode(string $code): string
@@ -220,25 +218,5 @@ final class MaintenanceStaticPage
         ];
 
         return $mapping;
-    }
-
-    private static function readCookieValue(string $cookieHeader, string $name): string
-    {
-        if ($cookieHeader === '' || $name === '') {
-            return '';
-        }
-
-        foreach (\explode(';', $cookieHeader) as $part) {
-            $part = \trim($part);
-            if ($part === '' || !\str_contains($part, '=')) {
-                continue;
-            }
-            [$key, $value] = \array_map('trim', \explode('=', $part, 2));
-            if ($key === $name) {
-                return \urldecode($value);
-            }
-        }
-
-        return '';
     }
 }

@@ -18,6 +18,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString("successUrl.searchParams.set('checkout_token', checkoutToken);", $template);
         self::assertStringContainsString('weline_checkout_quote_token_w', $template);
         self::assertStringContainsString('quote_token: readStoredQuoteToken()', $template);
+        self::assertStringContainsString('adoptQuoteTokenFromUrl', $template);
+        self::assertStringContainsString("params.get('quote_token')", $template);
         self::assertStringContainsString('weline:checkout:success', $template);
         self::assertStringNotContainsString('checkout/success-page', $template);
         $controllerRoot = dirname(__DIR__, 6) . '/app/code/Weline/Checkout/Controller';
@@ -30,8 +32,9 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('isCancelOutcome', $successController);
         $successTpl = $this->read('app/code/Weline/Checkout/view/frontend/checkout/success.phtml');
         self::assertStringContainsString('paymentCancelled', $successTpl);
-        self::assertStringContainsString('已取消成功', $successTpl);
-        self::assertStringContainsString('已取消', $successTpl);
+        self::assertStringContainsString('支付已取消', $successTpl);
+        self::assertStringContainsString('本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。', $successTpl);
+        self::assertStringNotContainsString('已取消成功', $successTpl);
         self::assertStringContainsString('data-payment-outcome="cancel"', $successTpl);
         self::assertStringContainsString('cancel_state', $successTpl);
     }
@@ -193,11 +196,16 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('data-checkout-discount-row', $template);
         self::assertStringContainsString('data-checkout-deposit-row', $template);
         self::assertStringContainsString('data-checkout-credit-row', $template);
+        self::assertStringContainsString('data-checkout-tax-row', $template);
+        self::assertStringContainsString('selectedTaxAmount', $template);
         self::assertStringContainsString('data-grand-total-label', $template);
         self::assertStringContainsString('weline:b2b-credit-changed', $template);
         self::assertStringContainsString('WelineB2BCheckoutTob', $template);
         self::assertStringContainsString("weline:checkout:address-updated", $template);
-        self::assertStringContainsString("scheduleReload({ hardOnFailure: false })", $template);
+        self::assertStringContainsString("scheduleReload({ hardOnFailure: false, busyShipping: true })", $template);
+        self::assertStringContainsString('setShippingMethodsBusy', $template);
+        self::assertStringContainsString('Weline.UI.setBusy', $template);
+        self::assertStringContainsString('loading_shipping', $template);
         self::assertStringNotContainsString('<w:widget', $template);
         self::assertMatchesRegularExpression(
             '/\.weline-checkout__totals > \[role="listitem"\]/s',
@@ -270,6 +278,12 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringNotContainsString('$this->escapeHtml(', $template);
         self::assertStringContainsString("__('感谢您的订购！')", $template);
         self::assertStringContainsString("__('您的订单已支付成功，我们正在为您准备发货。')", $template);
+        self::assertStringContainsString("__('配送地址')", $template);
+        self::assertStringContainsString("__('结账地址')", $template);
+        self::assertStringContainsString("__('与配送地址相同')", $template);
+        self::assertStringContainsString('data-testid="checkout-success-billing-address"', $template);
+        self::assertStringContainsString('billing_address', $template);
+        self::assertStringContainsString('amz-order-confirm__meta-grid--with-billing', $template);
         self::assertStringContainsString("__('确认信息将发送至')", $template);
         self::assertStringContainsString('<w:slot id="checkout-success-guest-account"', $template);
         self::assertStringContainsString('weline-code="checkout.success.guest_account"', $template);
@@ -437,8 +451,9 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
 
         self::assertStringContainsString('announceCheckoutOrderCreated', $template);
         self::assertStringContainsString('syncLifecycleDomFields', $template);
-        self::assertStringContainsString('data-order-amount', $template);
+        self::assertStringContainsString('data-lifecycle-fields-sig', $template);
         self::assertStringContainsString('weline:checkout:fields-ready', $template);
+        self::assertStringContainsString('creditTotalsBusy', $template);
         self::assertStringContainsString('weline:checkout:order-created', $template);
         self::assertStringContainsString('weline:payment:outcome', $template);
         self::assertStringContainsString('checkoutLifecycle,paymentLifecycle', $template);

@@ -232,6 +232,10 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "回到 Websites 默认的一键建站入口。","Return to the default one-click website builder entry in Websites."
 回到信息准备,"Return to Information Preparation"
 把当前工作区重新聚焦到域名和准备动作。,"Refocus the current workspace on domains and preparation actions."
+域名池已有可建站域名记录。,域名池已有可建站域名记录。
+域名池可建站、证书签发；迁站重点核对解析与回调白名单。,域名池可建站、证书签发；迁站重点核对解析与回调白名单。
+基建,基建
+"域名与 HTTPS","域名与 HTTPS"
 域名到期提醒,"Domain expiration reminder"
 域名管理,"Domain management"
 域名即将到期的提醒通知,"Domain expiration reminder notice"
@@ -903,6 +907,11 @@ plus,plus
 清理DNS服务商域名,"Clean up DNS service provider domain name"
 trash,trash
 清理误同步的DNS服务商域名,"Clean up mis-synchronized DNS service provider domain names"
+编辑商店,编辑商店
+编辑渠道,编辑渠道
+新建商店,新建商店
+新建渠道,新建渠道
+范围编辑,范围编辑
 网站目录行必须是网站模型或数组,"Site directory row must be a site model or array"
 访问前端,"Access frontend"
 管理后端,"Management backend"
@@ -939,6 +948,10 @@ trash,trash
 "网站资源变更必须包含 before 或 after 快照","Website resource changes must contain before or after snapshots"
 "网站资源变更缺少 website code","Website resource changes are missing website code"
 当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新,"No language pack translation is available for the current language. Please go to the i18n module to update the regional language for the %{1} language."
+商店不存在,商店不存在
+渠道不存在,渠道不存在
+操作失败,操作失败
+操作成功,操作成功
 网站管理,"Website management"
 网站列表,"Site List"
 直进子站后台,"Go directly to the backend of the sub-site"
@@ -1190,8 +1203,6 @@ CDN,CDN
 SSL,SSL
 已完成,Completed
 失败,Failed
-商店不存在,商店不存在
-渠道不存在,渠道不存在
 商店已创建,"Store created"
 创建商店失败：%{1},"Failed to create store: %{1}"
 渠道已创建,"Channel created"
@@ -1200,18 +1211,14 @@ SSL,SSL
 保存商店失败：%{1},保存商店失败：%{1}
 渠道已保存,渠道已保存
 保存渠道失败：%{1},保存渠道失败：%{1}
-"Scope 数据读取失败：%{1}","Scope data read failed: %{1}"
 "%{1} 不能为空且最多 %{2} 字符","%{1} cannot be empty and must be at most %{2} characters"
-"%{1} 必须是正整数","%{1} must be a positive integer"
 "%{1} 必须是非负整数","%{1} must be a non-negative integer"
 商店管理,"store management"
 "管理 Store","Manage Store"
 渠道管理,"Channel management"
 branch,branch
 "管理 Sales Channel","Manage Sales Channel"
-编辑商店,编辑商店
 "编辑 Store","编辑 Store"
-编辑渠道,编辑渠道
 "编辑 Sales Channel","编辑 Sales Channel"
 创建商店,"Create store"
 "创建 Store","Create Store"
@@ -1386,22 +1393,33 @@ lock,lock
 删除渠道前必须加载明确的渠道记录,"Explicit channel records must be loaded before deleting a channel"
 "删除渠道前必须提供有效渠道 ID（0 是系统默认渠道）","A valid channel ID is required before deletion (0 is the system default channel)"
 要删除的渠道不存在,"The channel to be deleted does not exist"
+请先保存网站，再配置本站联系地址/电话/服务时间。,请先保存网站，再配置本站联系地址/电话/服务时间。
+"本组写入当前网站范围；未覆盖的字段继承 Global 默认。","本组写入当前网站范围；未覆盖的字段继承 Global 默认。"
+请先保存渠道，再配置本渠道联系信息。,请先保存渠道，再配置本渠道联系信息。
+"本组写入当前渠道范围；未覆盖时继承 Store → Website → Global。","本组写入当前渠道范围；未覆盖时继承 Store → Website → Global。"
+请先保存商店，再配置本店联系信息。,请先保存商店，再配置本店联系信息。
+"本组写入当前商店范围；未覆盖时继承 Website → Global。","本组写入当前商店范围；未覆盖时继承 Website → Global。"
+渠道代码,"channel code"
+渠道名称,"Channel name"
 访问入口,"Access entry"
 "语言 / 货币","Language / Currency"
 "Store / Channel","Store / Channel"
-管理多站点、域名、语言与货币配置,管理多站点、域名、语言与货币配置
-搜索,Search
+商店代码,"store code"
+商店名称,"store name"
+模式,model
+"独立 URL","Standalone URL"
+"按 Website → Store → Channel 树管理站点范围","按 Website → Store → Channel 树管理站点范围"
+过滤站点,过滤站点
+过滤,过滤
 清除,Clear
-使用说明,Instructions
-网站,Website
-代表一个独立站点，可配置多个域名、语言与货币,"Represents an independent site, can configure multiple domains, languages, and currencies"
-"Store / SalesChannel","Store / SalesChannel"
-列表只读展示摘要，修改请前往商店管理,列表只读展示摘要，修改请前往商店管理
-字段配置,字段配置
-可将时区等辅助信息合并到站点列,可将时区等辅助信息合并到站点列
-刷新,Refresh
-保存,Save
-您确定要删除此网站吗？,"Are you sure you want to delete this site?"
+站点范围树,站点范围树
+暂无网站,"No websites"
+折叠/展开,折叠/展开
+只读,Read-only
+保存后可翻译多语言,保存后可翻译多语言
+"前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌。已选语言将默认 LocalModel 翻译。","前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌。已选语言将默认 LocalModel 翻译。"
+网站简介,网站简介
+"网站范围品牌/SEO 叙述，前台与主题基础信息共用；已选语言默认 LocalModel 翻译。","网站范围品牌/SEO 叙述，前台与主题基础信息共用；已选语言默认 LocalModel 翻译。"
 可由选择域名自动生成（域名转下划线），可修改,"Auto-generated from first selected domain (dots to underscores)"
 网站子路径,"Site Subpath"
 "可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。禁止使用语言编码或货币编码（如 usd、en_US）。","Optional; leave empty to use the domain root. Applied to all selected domains. Language and currency codes (e.g. usd, en_US) are not allowed."
@@ -1416,6 +1434,7 @@ lock,lock
 默认时区,"Default Time Zone"
 搜索时区...,"Search Timezone..."
 点击选择时区，可输入关键词搜索,"Click to select a timezone; type keywords to search"
+保存,Save
 返回,Back
 网站子路径不允许使用语言编码,网站子路径不允许使用语言编码
 网站子路径不允许使用货币编码,网站子路径不允许使用货币编码
@@ -1453,6 +1472,8 @@ lock,lock
 拦截,拦截
 无匹配条目,无匹配条目
 "第 {page}/{pages} 页 · 共 {total} 条","第 {page}/{pages} 页 · 共 {total} 条"
+当前账号无权编辑该节点,当前账号无权编辑该节点
+请从左侧选择网站、商店或渠道,请从左侧选择网站、商店或渠道
 "Store 商品复制向导","Store Product Copy Wizard"
 "目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
 持久化事务模式,"Persistence transaction model"
@@ -1876,9 +1897,13 @@ Windows,Windows
 "将检查根域 @ 的 A/AAAA 是否指向本机公网（橙云代理不删）。继续试运行？","Dry-run: check apex A/AAAA vs server IP (CF proxied skipped). Continue?"
 暂无记录,"No records"
 流转记录,"Transfer Records"
+站点联系信息,站点联系信息
+"修改即时保存到当前范围；留空可继承上级（Global → Website → Store → Channel）。","修改即时保存到当前范围；留空可继承上级（Global → Website → Store → Channel）。"
+请先保存后再配置联系信息。,请先保存后再配置联系信息。
 网站功能授权,"Website function authorization"
 返回网站管理,"Return to website management"
 "为非默认网站勾选可用菜单与 ACL。未授权的子站后台菜单为空。","Check the available menus and ACLs for non-default websites. The backend menu of unauthorized subsites is empty."
+网站,Website
 代码,code
 已授权资源数,"Number of authorized resources"
 暂无非默认网站,"No non-default website"
@@ -1892,6 +1917,7 @@ Windows,Windows
 一站式配置订单,"One-stop configuration order"
 配置订单,"Configure order"
 搜索域名,"Search Domain"
+搜索,Search
 重置,Reset
 订单ID,"Order ID"
 当前步骤,"Current step"
@@ -2154,7 +2180,6 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,"After enabling maintenance mode, the frontend will display a maintenance page, but the backend will remain accessible."
 网站ID,"Site ID"
 维护模式,"Maintenance mode"
-暂无网站,"No websites"
 维护中,"Under maintenance"
 关闭维护模式,"Close maintenance mode"
 开启维护模式,"Enable Maintenance Mode"
@@ -2194,14 +2219,8 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 后台请求组件不可用，请刷新页面后重试。,"The background request component is unavailable, please refresh the page and try again."
 请选择网站,"Please select a website"
 返回列表,"Return to list"
-渠道代码,"channel code"
 "所属商店 ID","所属商店 ID"
-渠道名称,"Channel name"
 "Website Scope 管理工作台","Website Scope Management Workbench"
-商店代码,"store code"
-商店名称,"store name"
-模式,model
-"独立 URL","Standalone URL"
 所属商店,Store
 请选择商店,"Please select a store"
 AI建站域名准备队列,"AI website building domain name preparation queue"
@@ -2632,6 +2651,9 @@ download,download
 正式购买前必须选择域名购买账户。,"You must select a domain name purchase account before making the official purchase."
 正式域名购买需要明确确认。,"Official domain name purchases require explicit confirmation."
 "同一幂等命令 ID 的站点绑定参数不一致。","Site binding parameters for the same idempotent command ID are inconsistent."
+当前网站,当前网站
+当前商店,当前商店
+当前渠道,当前渠道
 账户未启用,"Account not enabled"
 账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）,"The domain registrar associated with account ""%{1}"" does not exist or is not configured (registrar_id=%{2})"
 账户「%{1}」的域名商适配器「%{2}」未注册,"The domain registrar adapter ""%{2}"" for account ""%{1}"" is not registered."
@@ -3044,8 +3066,8 @@ download,download
 域名可用性服务返回了无效结果。,"The Domain Availability Service returned an invalid result."
 域名注册商不存在。,"The domain name registrar does not exist."
 "默认站不使用站级 ACL 授权包","The default site does not use site-level ACL authorization packages"
+节点不存在或无权访问,节点不存在或无权访问
 网站身份,网站身份
-网站简介,网站简介
 网站名称保存失败,网站名称保存失败
 网站名称同步到后台配置失败,网站名称同步到后台配置失败
 网站简介保存失败,网站简介保存失败
@@ -3215,13 +3237,26 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
-"通知主题 domain_expiring 的邮件渠道","通知主题 domain_expiring 的邮件渠道"
-"通知主题 domain_transfer 的邮件渠道","通知主题 domain_transfer 的邮件渠道"
-"通知主题 domain_pool_resolve_off_local 的邮件渠道","通知主题 domain_pool_resolve_off_local 的邮件渠道"
 点击选择货币（可多选）,点击选择货币（可多选）
 点击选择货币,点击选择货币
 搜索货币代码、名称或符号,搜索货币代码、名称或符号
 清空选择,清空选择
+前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌,前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌
+"网站范围品牌/SEO 叙述，前台与主题基础信息共用","网站范围品牌/SEO 叙述，前台与主题基础信息共用"
+"Scope 数据读取失败：%{1}","Scope data read failed: %{1}"
+"%{1} 必须是正整数","%{1} must be a positive integer"
+管理多站点、域名、语言与货币配置,管理多站点、域名、语言与货币配置
+使用说明,Instructions
+代表一个独立站点，可配置多个域名、语言与货币,"Represents an independent site, can configure multiple domains, languages, and currencies"
+"Store / SalesChannel","Store / SalesChannel"
+列表只读展示摘要，修改请前往商店管理,列表只读展示摘要，修改请前往商店管理
+字段配置,字段配置
+可将时区等辅助信息合并到站点列,可将时区等辅助信息合并到站点列
+刷新,Refresh
+您确定要删除此网站吗？,"Are you sure you want to delete this site?"
+"通知主题 domain_expiring 的邮件渠道","通知主题 domain_expiring 的邮件渠道"
+"通知主题 domain_transfer 的邮件渠道","通知主题 domain_transfer 的邮件渠道"
+"通知主题 domain_pool_resolve_off_local 的邮件渠道","通知主题 domain_pool_resolve_off_local 的邮件渠道"
 点击选择语言（可多选）,点击选择语言（可多选）
 点击选择语言,点击选择语言
 搜索国家、语言或代码...,搜索国家、语言或代码...
@@ -3246,7 +3281,6 @@ download,download
 搜索名称、代码或URL,"Search name, code, or URL"
 "Store / SalesChannel 目录","Store / SalesChannel Directory"
 暂无网站数据,"No website data"
-只读,Read-only
 "暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","No Store/Channel directory is available. Run setup:upgrade to restore the default directory."
 未生成访问地址,"No access URL generated"
 主,host

@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Customer\Extends\Module\Weline_SiteSetupAssistant\SetupTask\CustomerSocialLoginSetupTaskProvider;
+
 use Weline\Customer\Extends\MailChannelProvider;
 use Weline\Smtp\Api\MailChannelProviderInterface;
 
@@ -9,6 +12,10 @@ use Weline\Smtp\Api\MailChannelProviderInterface;
  * Weline_Customer module extension points.
  */
 return [
+    SetupTaskProviderInterface::class => [
+        CustomerSocialLoginSetupTaskProvider::class,
+    ],
+
     MailChannelProviderInterface::class => [
         MailChannelProvider::class,
     ],

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE · 进店曲目卡 variants</title>
+  <style>
+    /* Throwaway only — theme tokens win in production. Do not copy hex into Theme CSS. */
+    :root {
+      --bg: #f4f5f7;
+      --surface: #fff;
+      --muted: #e8eaee;
+      --border: #d5d9e0;
+      --text: #1c2330;
+      --text-muted: #6b7380;
+      --primary: #2f6fed;
+      --primary-soft: #e8f0fe;
+      --danger: #c62828;
+      --radius: 10px;
+      --space: 8px;
+      --font: "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px 16px 96px;
+    }
+    h1 { font-size: 1.1rem; margin: 0 0 4px; }
+    .meta { color: var(--text-muted); font-size: .85rem; margin-bottom: 20px; }
+    .panel {
+      max-width: 360px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .label-section { font-size: .8rem; font-weight: 600; margin-bottom: 10px; }
+    .variant { display: none; }
+    .variant.is-active { display: block; }
+    .card {
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+      border-radius: var(--radius);
+      background: var(--muted);
+      border: 1px solid transparent;
+    }
+    .row-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .drag {
+      width: 22px; height: 22px;
+      display: grid; place-items: center;
+      color: var(--text-muted); cursor: grab; font-size: 12px;
+    }
+    .btn-x {
+      width: 28px; height: 28px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--danger);
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .field { display: grid; gap: 4px; }
+    .field label {
+      font-size: .72rem;
+      color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .field input, .field textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: .875rem;
+      background: var(--surface);
+    }
+    .field textarea { min-height: 64px; resize: vertical; }
+    .chip-i18n {
+      margin-left: auto;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 6px;
+      font-size: .7rem;
+      padding: 2px 8px;
+      color: var(--text);
+    }
+
+    /* === A: Status quo broken (current fail) === */
+    .a-broken-banner {
+      display: flex; align-items: center; gap: 4px;
+      width: 7.5rem; max-width: 7.5rem;
+      padding: 6px; border-radius: 8px; background: var(--surface);
+      border: 1px solid var(--border); overflow: hidden;
+    }
+    .a-broken-banner .ico {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: var(--primary-soft); color: var(--primary);
+      display: grid; place-items: center; flex: 0 0 auto; font-size: 14px;
+    }
+    .a-broken-banner .name {
+      flex: 1; min-width: 0; font-size: .75rem; white-space: nowrap; overflow: hidden;
+    }
+    .a-broken-banner .ops { display: flex; gap: 2px; opacity: .7; font-size: 11px; }
+
+    /* === B: Full-width banner picker (recommended) === */
+    .b-banner {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; min-width: 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .b-banner .ico {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--primary-soft); color: var(--primary);
+      display: grid; place-items: center; flex: 0 0 auto; font-size: 16px;
+    }
+    .b-banner .meta-col { flex: 1; min-width: 0; display: grid; gap: 2px; }
+    .b-banner .name {
+      font-size: .875rem; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .b-banner .hint { font-size: .7rem; color: var(--text-muted); }
+    .b-banner .clear {
+      width: 28px; height: 28px; border: 0; background: transparent;
+      color: var(--text-muted); cursor: pointer; border-radius: 6px;
+    }
+    .b-banner .clear:hover { color: var(--danger); background: #fdecea; }
+    .b-note { font-size: .7rem; color: var(--text-muted); margin-top: -4px; }
+
+    /* === C: Inline title-in-banner ( densest ) === */
+    .c-banner {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 6px 8px 6px 6px;
+      border-radius: 10px; background: var(--surface); border: 1px solid var(--border);
+    }
+    .c-banner .ico {
+      width: 40px; height: 40px; border-radius: 8px;
+      background: var(--primary-soft); color: var(--primary);
+      display: grid; place-items: center; flex: 0 0 auto;
+    }
+    .c-banner input.title {
+      flex: 1; min-width: 0; border: 0; background: transparent;
+      font: inherit; font-size: .9rem; font-weight: 600; padding: 4px 0;
+      outline: none;
+    }
+    .c-banner .pick {
+      border: 1px solid var(--border); background: var(--bg);
+      border-radius: 6px; font-size: .7rem; padding: 4px 8px; cursor: pointer;
+      color: var(--primary); white-space: nowrap;
+    }
+    .c-intro { position: relative; }
+    .c-intro textarea { padding-top: 28px; }
+    .c-intro .chip-i18n { position: absolute; top: 6px; right: 6px; }
+
+    .switcher {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      display: flex; gap: 6px; align-items: center;
+      padding: 8px 10px; border-radius: 999px;
+      background: #1c2330; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.2);
+      z-index: 20; font-size: .8rem;
+    }
+    .switcher button {
+      border: 0; border-radius: 999px; padding: 6px 12px;
+      background: transparent; color: #c5cad3; cursor: pointer; font: inherit;
+    }
+    .switcher button[aria-current="true"] { background: #fff; color: #1c2330; font-weight: 600; }
+    .badge {
+      display: inline-block; font-size: .65rem; padding: 1px 6px; border-radius: 4px;
+      background: #e6f4ea; color: #137333; margin-left: 6px; vertical-align: middle;
+    }
+    .badge.warn { background: #fef7e0; color: #b06000; }
+  </style>
+</head>
+<body>
+  <h1>PROTOTYPE · 进店曲目卡</h1>
+  <p class="meta">问句：曲目项应如何排成 Banner 式紧凑选曲？底部切换 A/B/C。生产落地选 B（全宽 Banner + 曲名/简介分离）。</p>
+
+  <div class="panel">
+    <div class="label-section">进店曲目</div>
+
+    <!-- A: broken current -->
+    <div class="variant" data-variant="A" id="vA">
+      <div class="card">
+        <div class="row-top">
+          <span class="drag" aria-hidden="true">⋮⋮</span>
+          <span style="font-size:.75rem;color:var(--text-muted)">曲目</span>
+          <div class="a-broken-banner" title="当前问题：预览被压成方块">
+            <span class="ico">♪</span>
+            <span class="name">H I..</span>
+            <span class="ops">← → ×</span>
+          </div>
+          <button type="button" class="btn-x" aria-label="删除">×</button>
+        </div>
+        <div class="field">
+          <label>曲名</label>
+          <input value="HITA-赤伶" readonly>
+        </div>
+        <div class="field">
+          <label>简介 <button type="button" class="chip-i18n">多语言</button></label>
+          <textarea readonly>Array</textarea>
+        </div>
+        <p class="b-note">A = 现状 fail：方块挤压文件名 + 简介 locale map 显示 Array</p>
+      </div>
+    </div>
+
+    <!-- B: recommended -->
+    <div class="variant" data-variant="B" id="vB">
+      <div class="card">
+        <div class="row-top">
+          <span class="drag" aria-hidden="true">⋮⋮</span>
+          <div class="b-banner" style="flex:1">
+            <span class="ico" aria-hidden="true">♪</span>
+            <div class="meta-col">
+              <div class="name">HITA-赤伶.mp3</div>
+              <div class="hint">点击更换曲目 · store-music</div>
+            </div>
+            <button type="button" class="clear" title="清除曲目" aria-label="清除曲目">×</button>
+          </div>
+          <button type="button" class="btn-x" aria-label="删除整项">×</button>
+        </div>
+        <div class="field">
+          <label>曲名</label>
+          <input value="HITA-赤伶">
+        </div>
+        <div class="field">
+          <label>简介 <button type="button" class="chip-i18n">多语言</button></label>
+          <textarea>戏腔古风现象级爆款。昆曲念白与戏腔高潮刷屏全网…</textarea>
+        </div>
+        <p class="b-note">B = 推荐：全宽 Banner 选曲；行删除 ≠ 清除文件；简介显示当前语种文案<span class="badge">落地</span></p>
+      </div>
+    </div>
+
+    <!-- C: densest -->
+    <div class="variant" data-variant="C" id="vC">
+      <div class="card">
+        <div class="row-top">
+          <span class="drag" aria-hidden="true">⋮⋮</span>
+          <div class="c-banner" style="flex:1">
+            <span class="ico">♪</span>
+            <input class="title" value="HITA-赤伶" aria-label="曲名">
+            <button type="button" class="pick">换曲</button>
+          </div>
+          <button type="button" class="btn-x" aria-label="删除">×</button>
+        </div>
+        <div class="field c-intro">
+          <textarea>戏腔古风现象级爆款。昆曲念白与戏腔高潮刷屏全网…</textarea>
+          <button type="button" class="chip-i18n">多语言</button>
+        </div>
+        <p class="b-note">C = 最密：曲名嵌进 Banner；简介无独立标签。信息密度高但可编辑性略弱<span class="badge warn">备选</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="switcher" role="toolbar" aria-label="原型变体">
+    <span>variant</span>
+    <button type="button" data-go="A">A 现状</button>
+    <button type="button" data-go="B" aria-current="true">B 推荐</button>
+    <button type="button" data-go="C">C 最密</button>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    let current = (params.get('variant') || 'B').toUpperCase();
+    if (!['A', 'B', 'C'].includes(current)) current = 'B';
+
+    function apply(v) {
+      current = v;
+      document.querySelectorAll('.variant').forEach((el) => {
+        el.classList.toggle('is-active', el.dataset.variant === v);
+      });
+      document.querySelectorAll('.switcher [data-go]').forEach((btn) => {
+        if (btn.dataset.go === v) btn.setAttribute('aria-current', 'true');
+        else btn.removeAttribute('aria-current');
+      });
+      const url = new URL(location.href);
+      url.searchParams.set('variant', v);
+      history.replaceState(null, '', url);
+      console.log('[prototype]', { variant: v, verdict_hint: v === 'B' ? 'ship' : 'compare' });
+    }
+
+    document.querySelectorAll('.switcher [data-go]').forEach((btn) => {
+      btn.addEventListener('click', () => apply(btn.dataset.go));
+    });
+    apply(current);
+  </script>
+</body>
+</html>

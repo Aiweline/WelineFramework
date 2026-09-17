@@ -21,10 +21,11 @@ return [
             'description' => '网站主标题'
         ],
         'logo' => [
-            'type' => 'image',
+            'type' => 'media_image',
             'label' => 'Logo',
             'default' => '',
             'required' => false,
+            'i18n' => false,
             'description' => '从统一媒体库选择的网站 Logo'
         ],
         'show_search' => [

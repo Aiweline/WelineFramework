@@ -134,6 +134,17 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
                     }
                     $rTitle = trim((string)($row['title'] ?? ''));
                     $rUrl = trim((string)($row['public_url'] ?? ''));
+                    // DTO public_url 多为相对 /blog/{slug}；输出走 @url（绝对地址原样保留）
+                    $rPath = '';
+                    $rIsAbsolute = false;
+                    if ($rUrl !== '') {
+                        if (preg_match('#^(?:https?:)?//#i', $rUrl) === 1) {
+                            $rIsAbsolute = true;
+                            $rPath = $rUrl;
+                        } else {
+                            $rPath = ltrim($rUrl, '/');
+                        }
+                    }
                     $rExcerpt = trim((string)($row['excerpt'] ?? ''));
                     $rAuthor = trim((string)($row['author'] ?? ''));
                     $rRef = is_array($row['source_ref'] ?? null) ? $row['source_ref'] : [];
@@ -143,8 +154,10 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
                     );
                     ?>
                     <article class="blog-storefront__card is-clickable">
-                        <?php if ($rUrl !== ''): ?>
-                            <a class="blog-storefront__card-hit" href="<?= $escape($rUrl) ?>" aria-label="<?= $escape($rTitle) ?>"></a>
+                        <?php if ($rIsAbsolute): ?>
+                            <a class="blog-storefront__card-hit" href="<?= $escape($rPath) ?>" aria-label="<?= $escape($rTitle) ?>"></a>
+                        <?php elseif ($rPath !== ''): ?>
+                            <a class="blog-storefront__card-hit" href="@url{$rPath}" aria-label="<?= $escape($rTitle) ?>"></a>
                         <?php endif; ?>
                         <div class="blog-storefront__media">
                             <img src="<?= $escape($rImage['src']) ?>" alt="" width="1200" height="800"

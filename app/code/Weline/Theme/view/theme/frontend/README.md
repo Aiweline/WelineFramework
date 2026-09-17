@@ -27,23 +27,19 @@
 ## 当前清单
 
 - 布局类型
-  - `account`
-  - `account_auth`
-  - `account_logout`
-  - `account_orders`
-  - `account_profile`
+  - `account`（Weline_Customer：`auth`/`challenge`/`dashboard`/`default`；嵌套 `account/{login|register|logout|orders|profile|…}/default`）
   - `activity`
   - `cart`
   - `category`
   - `checkout`
-  - `checkout_failer`
-  - `checkout_success`
+  - `checkout/failure`
+  - `checkout/success`
   - `cms_page`
   - `default`
   - `homepage`
   - `policy`
   - `product`
-  - `product_list`
+  - `products`
   - `test`
 
 - partial 类型

@@ -174,12 +174,45 @@ function initialize() {
     mount(document);
     bindPreviewExitButtons();
 
+    // Dense storefront hydrate would otherwise trip DEV delivery_storm; coalesce like ModuleLoader.
+    let mountScheduled = false;
+    const pendingMountRoots = new Set();
+    const mountObserveOptions = { childList: true, subtree: true };
     const observer = new MutationObserver((records) => {
+        try {
+            observer.disconnect();
+        } catch (_) {}
         records.forEach((record) => record.addedNodes.forEach((node) => {
-            if (node instanceof Element) mount(node);
+            if (node instanceof Element) {
+                pendingMountRoots.add(node);
+            }
         }));
+        if (mountScheduled) {
+            return;
+        }
+        mountScheduled = true;
+        const flush = () => {
+            mountScheduled = false;
+            const batch = Array.from(pendingMountRoots);
+            pendingMountRoots.clear();
+            batch.forEach((node) => {
+                if (node.isConnected) {
+                    mount(node);
+                }
+            });
+            try {
+                if (document.body) {
+                    observer.observe(document.body, mountObserveOptions);
+                }
+            } catch (_) {}
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => requestAnimationFrame(flush));
+        } else {
+            setTimeout(flush, 0);
+        }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, mountObserveOptions);
 
     document.addEventListener('click', (event) => {
         const target = event.target instanceof Element ? event.target : null;

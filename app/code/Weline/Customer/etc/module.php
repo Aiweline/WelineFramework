@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Customer',
-    "version" => '1.0.113',
+    "version" => '1.0.119',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '^2.4',
@@ -26,7 +26,6 @@ return [
         \Weline\Customer\Api\Auth\CustomerAccountFacadeInterface::class => \Weline\Customer\Service\CustomerAccountFacade::class,
         \Weline\Customer\Api\Auth\CustomerIdentityProviderInterface::class => \Weline\Customer\Service\CustomerIdentityProvider::class,
         \Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface::class => \Weline\Customer\Service\AccountSidebarProjectionProvider::class,
-        \Weline\Theme\Api\PreviewAccountProviderInterface::class => \Weline\Customer\Integration\Theme\PreviewAccountProvider::class,
         'template_cache_policy.Weline_Customer' => \Weline\Customer\Api\View\TemplateCachePolicyProvider::class,
         'view_warmup_contribution.Weline_Customer' => \Weline\Customer\Api\View\ViewWarmupContributionProvider::class,
     ],

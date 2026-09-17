@@ -7,6 +7,7 @@ namespace Weline\Theme\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Output\Cli\Printing;
 use Weline\Theme\Service\PreviewTokenService;
 
 /**
@@ -17,16 +18,21 @@ use Weline\Theme\Service\PreviewTokenService;
 class SetupUpgradeAfter implements ObserverInterface
 {
     private EventsManager $eventsManager;
+    private Printing $printing;
 
-    public function __construct(EventsManager $eventsManager)
+    public function __construct(EventsManager $eventsManager, Printing $printing)
     {
         $this->eventsManager = $eventsManager;
+        $this->printing = $printing;
     }
 
     public function execute(Event &$event): void
     {
-        // 推送预览绕过规则
-        $this->pushPreviewBypassRules();
+        $this->printing->note(__('正在推送主题预览 CDN 绕过规则…'));
+        $pushed = $this->pushPreviewBypassRules();
+        if ($pushed) {
+            $this->printing->success(__('主题预览 CDN 绕过规则推送完成'));
+        }
     }
 
     /**
@@ -37,7 +43,7 @@ class SetupUpgradeAfter implements ObserverInterface
      * 2. 包含 weline_preview_token Cookie 的请求绕过缓存
      * 3. 包含 X-Weline-Preview-Token Header 的请求绕过缓存
      */
-    private function pushPreviewBypassRules(): void
+    private function pushPreviewBypassRules(): bool
     {
         $rules = [
             // URL 参数绕过规则
@@ -72,9 +78,11 @@ class SetupUpgradeAfter implements ObserverInterface
             ];
             
             $this->eventsManager->dispatch('Weline_Cdn::request', $eventData);
+            return true;
         } catch (\Throwable $e) {
-            // 静默失败，不影响系统升级流程
-            // 如果 CDN 模块未安装，这里会失败
+            // 不影响系统升级流程；CDN 未安装或推送失败时仅提示
+            $this->printing->note(__('主题预览 CDN 规则推送跳过：%{msg}', ['msg' => $e->getMessage()]));
+            return false;
         }
     }
 }

@@ -1,7 +1,7 @@
 /**
  * Shared MediaManager iframe picker for brand/supplier admin forms.
  * Expects:
- * - root [data-product-entity-media-root]
+ * - root [data-product-entity-media-root] (+ optional data-media-identity-* Ambient)
  * - blocks [data-product-entity-media="kind"] with hidden url/asset inputs + preview
  * - dialog [data-product-entity-media-dialog] + iframe[data-product-entity-media-frame]
  */
@@ -29,6 +29,25 @@
         return String(
             (file && (file.asset_id || file.id || file.uuid)) || ''
         ).trim();
+    }
+
+    function sanitizeIdentityCode(value, fallback) {
+        var text = String(value || '').trim().replace(/:/g, '_');
+        return text !== '' ? text : fallback;
+    }
+
+    function resolveLiveCode(root, ambient) {
+        var selector = String(root.getAttribute('data-media-code-input') || '').trim();
+        if (selector) {
+            var input = root.querySelector(selector);
+            if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+                var typed = sanitizeIdentityCode(input.value, '');
+                if (typed !== '') {
+                    return typed;
+                }
+            }
+        }
+        return sanitizeIdentityCode(ambient && ambient.code, 'draft');
     }
 
     function setMedia(block, url, assetId) {
@@ -84,13 +103,39 @@
             if (src === '') {
                 return;
             }
-            var withTarget = src;
-            if (src.indexOf('target=') === -1) {
-                withTarget += (src.indexOf('?') >= 0 ? '&' : '?') + 'target=' + encodeURIComponent(kind);
-            } else {
-                withTarget = src.replace(/([?&]target=)[^&]*/, '$1' + encodeURIComponent(kind));
+            var pickerUrl;
+            try {
+                pickerUrl = new URL(src, window.location.href);
+            } catch (_err) {
+                return;
             }
-            frame.src = withTarget;
+            if (pickerUrl.searchParams.has('target')) {
+                pickerUrl.searchParams.set('target', kind);
+            } else {
+                pickerUrl.searchParams.set('target', kind);
+            }
+
+            var helper = window.Weline && window.Weline.MediaIdentityPicker;
+            if (helper) {
+                var ambient = helper.ambientFrom(root);
+                var identityRoot = String(ambient.root || '').trim();
+                if (identityRoot !== '') {
+                    var identity = helper.buildIdentity({
+                        root: identityRoot,
+                        code: resolveLiveCode(root, ambient),
+                        scope: ambient.scope || null,
+                        kind: ambient.kind || kind,
+                        field: ambient.field || kind,
+                    });
+                    if (identity) {
+                        pickerUrl = helper.appendIdentityParams(pickerUrl, identity);
+                        dialog.__mediaIdentity = identity;
+                        dialog.__mediaAmbient = ambient;
+                    }
+                }
+            }
+
+            frame.src = pickerUrl.href;
             if (typeof dialog.showModal === 'function') {
                 dialog.showModal();
             } else {
@@ -139,8 +184,18 @@
             if (!event || !event.data || typeof event.data !== 'object') {
                 return;
             }
+            if (event.source && frame.contentWindow && event.source !== frame.contentWindow) {
+                return;
+            }
+            if (event.origin && event.origin !== window.location.origin) {
+                return;
+            }
             var target = String(event.data.target || '');
             if (target === '' || (activeKind !== '' && activeKind !== target)) {
+                return;
+            }
+            if (event.data.type === 'weline-media-manager-cancel') {
+                closePicker();
                 return;
             }
             var block = root.querySelector('[data-product-entity-media="' + target + '"]');
@@ -159,6 +214,16 @@
                 return;
             }
             setMedia(block, url, resolveAssetId(file));
+            var helper = window.Weline && window.Weline.MediaIdentityPicker;
+            if (helper && dialog.__mediaIdentity && typeof helper.bindSelection === 'function') {
+                helper.bindSelection(dialog.__mediaIdentity, files, {
+                    bindUrl: (dialog.__mediaAmbient && dialog.__mediaAmbient.bindUrl) || '',
+                    ownerType: (dialog.__mediaAmbient && dialog.__mediaAmbient.ownerType) || '',
+                    ownerId: (dialog.__mediaAmbient && dialog.__mediaAmbient.ownerId) || '',
+                    ownerVersion: (dialog.__mediaAmbient && dialog.__mediaAmbient.ownerVersion) || '1',
+                    refMode: (dialog.__mediaAmbient && dialog.__mediaAmbient.refMode) || 'single',
+                });
+            }
             closePicker();
         });
     }

@@ -22,6 +22,11 @@ final class InMemoryCheckoutSessionStore implements CheckoutSessionStoreInterfac
         $ttl = $state === \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTED
             ? \Weline\Checkout\Model\CheckoutSession::TTL_SUBMITTED_SUCCESS_SECONDS
             : \Weline\Checkout\Model\CheckoutSession::TTL_QUOTED_SECONDS;
+        if ($state === \Weline\Checkout\Model\CheckoutSession::STATE_QUOTED
+            && CheckoutSessionContact::extractEmail($payload) !== ''
+        ) {
+            $ttl = max($ttl, \Weline\Checkout\Model\CheckoutSession::TTL_QUOTED_WITH_EMAIL_SECONDS);
+        }
         $existing = $this->rows[$token] ?? null;
         $fingerprint = trim((string)($payload['cart_fingerprint'] ?? ($existing['fingerprint'] ?? '')));
         $this->rows[$token] = [

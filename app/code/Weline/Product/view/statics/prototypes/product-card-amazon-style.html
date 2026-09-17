@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE — product card Amazon style (locked)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* PROTOTYPE only — hex ok here; production uses theme / --wpc-* tokens */
+    :root {
+      --ink: #0f1111;
+      --muted: #565959;
+      --link: #007185;
+      --link-hover: #c45500;
+      --price: #b12704;
+      --brand: #b84a3c;
+      --brand-bg: #f8ede9;
+      --brand-text: #7a3028;
+      --surface: #fff;
+      --canvas: #f7f4ef;
+      --border: #e7e7e7;
+      --space: 0.5rem;
+      --radius-card: 1rem;
+      --radius-btn: 0.65rem;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 1.25rem; font-family: "PingFang SC", system-ui, sans-serif; background: var(--canvas); color: var(--ink); }
+    h1 { font-size: 1.05rem; margin: 0 0 .35rem; }
+    .note { color: var(--muted); font-size: .85rem; max-width: 44rem; margin: 0 0 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    .card { display: none; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; box-shadow: 0 1px 2px rgba(15,17,17,.06), 0 8px 24px rgba(15,17,17,.04); min-height: 26rem; }
+    body[data-variant="a"] .v-a,
+    body[data-variant="b"] .v-b,
+    body[data-variant="c"] .v-c { display: flex; }
+    .media { aspect-ratio: 1; background: linear-gradient(135deg, #e8d5d0, #c9a9a2); position: relative; }
+    .badge { position: absolute; top: .65rem; left: .65rem; padding: .2rem .55rem; border-radius: 999px; background: rgba(255,255,255,.92); font-size: .75rem; font-weight: 600; }
+    .body { display: flex; flex: 1; flex-direction: column; gap: var(--space); padding: .9rem .95rem 1rem; }
+    .title { margin: 0; min-height: 2.8em; font-size: .92rem; line-height: 1.4; font-weight: 500; }
+    .title a { text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .price { margin: 0; }
+    .cta { display: flex; flex-direction: column; gap: var(--space); margin-top: auto; }
+    .btn { display: flex; align-items: center; justify-content: center; min-height: 2.35rem; border-radius: var(--radius-btn); font-weight: 600; font-size: .875rem; border: 1px solid transparent; }
+    .meta { padding: .65rem .9rem .9rem; font-size: .78rem; color: var(--muted); border-top: 1px solid var(--border); }
+    .bar { position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); display: flex; gap: .5rem; padding: .45rem .7rem; background: #111; border-radius: 999px; z-index: 9; }
+    .bar a { color: #fff; text-decoration: none; font-size: .8rem; padding: .3rem .65rem; border-radius: 999px; }
+    .bar a[aria-current="true"] { background: #c45500; }
+
+    /* A = 回归态（全局 a 主色 + 永久下划线 + 弱价格）— 禁止落地 */
+    .v-a .title a { color: var(--brand); text-decoration: underline; text-underline-offset: .16em; }
+    .v-a .now { color: var(--ink); font-size: 1rem; font-weight: 400; }
+    .v-a .btn-add { border-color: var(--brand); background: var(--brand-bg); color: var(--brand-text); }
+    .v-a .btn-buy { border-color: #963b30; background: var(--brand); color: #fff; }
+
+    /* B = 正确 CSS（审图参考 / 生产锁定）石青标题 · 朱砂加粗价 · 浅底描边加购 + 实心立即购买 */
+    .v-b .title a { color: var(--link); }
+    .v-b .title a:hover { color: var(--link-hover); text-decoration: underline; }
+    .v-b .now { color: var(--price); font-size: 1.05rem; font-weight: 700; }
+    .v-b .btn-add { border-color: var(--brand); background: var(--brand-bg); color: var(--brand-text); }
+    .v-b .btn-buy { border-color: #963b30; background: var(--brand); color: #fff; }
+
+    /* C = 黄橙 CTA 探索（明确不落地：与水墨品牌盘冲突） */
+    .v-c .title a { color: var(--link); }
+    .v-c .now { color: var(--price); font-weight: 700; font-size: 1.05rem; }
+    .v-c .btn-add { border-color: #fcd200; background: #ffd814; color: var(--ink); border-radius: 999px; }
+    .v-c .btn-buy { border-color: #ff8f00; background: #ffa41c; color: var(--ink); border-radius: 999px; }
+  </style>
+</head>
+<body data-variant="b">
+  <h1>PROTOTYPE · 商品卡亚马逊信息层（视觉锁定 B）</h1>
+  <p class="note">PROTOTYPE（可丢）。Verdict：<strong>B</strong> = 用户「正确 CSS」参考（石青标题、朱砂加粗价、朱砂双钮）。A=回归禁区；C=黄橙探索不落地。</p>
+  <div class="grid">
+    <article class="card v-a">
+      <div class="media"><span class="badge">新品</span></div>
+      <div class="body">
+        <h3 class="title"><a href="#">花朝记【花间令】秦汉制交领广袖齐腰直裾襦裙成人汉服男女同款</a></h3>
+        <div class="price"><span class="now">CNY 110.00</span></div>
+        <div class="cta"><div class="btn btn-add">🛒 加入购物车</div><div class="btn btn-buy">立即购买</div></div>
+      </div>
+      <div class="meta"><strong>A 回归（禁）</strong><br>主色永久下划线 · 弱黑价格</div>
+    </article>
+    <article class="card v-b">
+      <div class="media"><span class="badge">新品</span></div>
+      <div class="body">
+        <h3 class="title"><a href="#">花朝记【花间令】秦汉制交领广袖齐腰直裾襦裙成人汉服男女同款</a></h3>
+        <div class="price"><span class="now">CNY 176.00</span></div>
+        <div class="cta"><div class="btn btn-add">🛒 加入购物车</div><div class="btn btn-buy">立即购买</div></div>
+      </div>
+      <div class="meta"><strong>B 正确（锁定）</strong><br>石青标题 · 朱砂加粗价 · 浅底+实心钮</div>
+    </article>
+    <article class="card v-c">
+      <div class="media"><span class="badge">新品</span></div>
+      <div class="body">
+        <h3 class="title"><a href="#">花朝记【花间令】秦汉制交领广袖齐腰直裾襦裙成人汉服男女同款</a></h3>
+        <div class="price"><span class="now">CNY 176.00</span></div>
+        <div class="cta"><div class="btn btn-add">加入购物车</div><div class="btn btn-buy">立即购买</div></div>
+      </div>
+      <div class="meta"><strong>C 探索（不落地）</strong><br>亚马逊黄橙 CTA</div>
+    </article>
+  </div>
+  <div class="bar">
+    <a href="?variant=a" data-v="a">A 回归</a>
+    <a href="?variant=b" data-v="b">B 正确</a>
+    <a href="?variant=c" data-v="c">C 黄橙</a>
+  </div>
+  <script>
+    const v = new URLSearchParams(location.search).get('variant') || 'b';
+    document.body.dataset.variant = v;
+    document.querySelectorAll('.bar a').forEach(a => a.setAttribute('aria-current', a.dataset.v === v ? 'true' : 'false'));
+  </script>
+</body>
+</html>

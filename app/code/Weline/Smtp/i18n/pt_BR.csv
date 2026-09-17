@@ -1,3 +1,261 @@
+﻿"Smtp 查询器不支持的操作：%{1}","Smtp 查询器不支持的操作：%{1}"
+"SMTP 已配置","SMTP 已配置"
+"请先在 SMTP 配置中添加至少一个发件人","请先在 SMTP 配置中添加至少一个发件人"
+"发件人 code 不能为空","发件人 code 不能为空"
+已保存,已保存
+收件人不能为空,收件人不能为空
+"发信渠道 %{1} 未找到可用邮件模板","发信渠道 %{1} 未找到可用邮件模板"
+邮件主题不能为空,邮件主题不能为空
+"发信渠道 %{1} 未绑定传输账户","发信渠道 %{1} 未绑定传输账户"
+"发件人 %{1} 未配置或配置不完整","发件人 %{1} 未配置或配置不完整"
+系统,系统
+发送成功,发送成功
+发送失败,发送失败
+发送失败：%{1},发送失败：%{1}
+"模块 %{1} 未配置 SMTP，请先在后台配置","模块 %{1} 未配置 SMTP，请先在后台配置"
+自建邮箱账号不存在或未启用,自建邮箱账号不存在或未启用
+测试邮箱不能为空,测试邮箱不能为空
+"[SMTP 测试] WelineFramework 邮件测试","[SMTP 测试] WelineFramework 邮件测试"
+"这是一封测试邮件。如果您收到此邮件，说明 SMTP 配置正确。","这是一封测试邮件。如果您收到此邮件，说明 SMTP 配置正确。"
+"SMTP 邮件","SMTP 邮件"
+"提供 SMTP 邮件发送能力，支持多模块独立配置","提供 SMTP 邮件发送能力，支持多模块独立配置"
+发送邮件,发送邮件
+收件人,收件人
+"主题（无 channel 模板时必填）","主题（无 channel 模板时必填）"
+"HTML 正文（无 channel 模板时建议填写）","HTML 正文（无 channel 模板时建议填写）"
+"发信渠道 code，有则走模板","发信渠道 code，有则走模板"
+模板变量,模板变量
+模板语言,模板语言
+"是否使用模板，默认 true","是否使用模板，默认 true"
+覆盖模板主题,覆盖模板主题
+覆盖模板正文,覆盖模板正文
+发件人，空则用配置,发件人，空则用配置
+"使用哪一模块的 SMTP 配置","使用哪一模块的 SMTP 配置"
+"SystemConfig storage_scope，如 website.default.default","SystemConfig storage_scope，如 website.default.default"
+"网站 code，可推导 website 级 scope","网站 code，可推导 website 级 scope"
+"传输账户 code（无 channel 时）","传输账户 code（无 channel 时）"
+发送测试邮件,发送测试邮件
+测试邮箱,测试邮箱
+模块,模块
+"获取模块 SMTP 配置","获取模块 SMTP 配置"
+"检测 SMTP 是否已配置可用","检测 SMTP 是否已配置可用"
+"获取所有发件人列表（含 code）","获取所有发件人列表（含 code）"
+"按 code 获取发件人配置","按 code 获取发件人配置"
+"发件人 code","发件人 code"
+设置发件人默认联系人/收件邮箱，供消息通知等调用,设置发件人默认联系人/收件邮箱，供消息通知等调用
+默认收件邮箱,默认收件邮箱
+获取发件人默认联系人/收件邮箱,获取发件人默认联系人/收件邮箱
+通信,通信
+"配置 SMTP 发信","配置 SMTP 发信"
+"尚未配置 SMTP 传输账户。请添加发件账户并发送测试邮件确认。","尚未配置 SMTP 传输账户。请添加发件账户并发送测试邮件确认。"
+"已确认可用（当前继承自 %{1}）。","已确认可用（当前继承自 %{1}）。"
+已确认可用（当前范围自有配置）。,已确认可用（当前范围自有配置）。
+"已检测到继承自 %{1} 的 SMTP 配置，请打开配置页发送测试邮件确认。","已检测到继承自 %{1} 的 SMTP 配置，请打开配置页发送测试邮件确认。"
+"已检测到当前范围的 SMTP 配置，请发送测试邮件确认后再上线。","已检测到当前范围的 SMTP 配置，请发送测试邮件确认后再上线。"
+配置邮件模板,配置邮件模板
+无法检测邮件模板表，请打开渠道管理确认模板已种子化。,无法检测邮件模板表，请打开渠道管理确认模板已种子化。
+"尚有 %{1} 个发信渠道无模板：%{2}%{3}","尚有 %{1} 个发信渠道无模板：%{2}%{3}"
+各发信渠道已有可解析邮件模板。,各发信渠道已有可解析邮件模板。
+多语言邮件模板,多语言邮件模板
+无法检测多语言模板覆盖，请打开渠道管理核对各语言行。,无法检测多语言模板覆盖，请打开渠道管理核对各语言行。
+"站点 %{1} 个语种中，尚缺 %{2} 组渠道×语言模板（例：%{3}）。","站点 %{1} 个语种中，尚缺 %{2} 组渠道×语言模板（例：%{3}）。"
+站点已开通语种的邮件模板均已覆盖。,站点已开通语种的邮件模板均已覆盖。
+邮件配置,邮件配置
+settings,settings
+邮件配置项管理,邮件配置项管理
+查看邮件配置,查看邮件配置
+查看邮件配置项,查看邮件配置项
+Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。,Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。
+"[SMTP 测试] 发件人 %{1}","[SMTP 测试] 发件人 %{1}"
+这是一封测试邮件。如果您收到此邮件，说明该发件人配置正确。,这是一封测试邮件。如果您收到此邮件，说明该发件人配置正确。
+邮件发送成功！,邮件发送成功！
+发送者,发送者
+"WelineFramework SMTP 测试","WelineFramework SMTP 测试"
+这是一封测试邮件。,这是一封测试邮件。
+测试发送失败,测试发送失败
+无效的请求方法,无效的请求方法
+缺少发件人配置数据,缺少发件人配置数据
+"传输账户 ID 格式无效","传输账户 ID 格式无效"
+请选择自建邮箱账号,请选择自建邮箱账号
+保存成功,保存成功
+"SMTP 配置","SMTP 配置"
+mail,mail
+"SMTP 邮件服务配置","SMTP 邮件服务配置"
+配置页,配置页
+"查看 SMTP 配置","查看 SMTP 配置"
+保存配置,保存配置
+save,save
+"保存 SMTP 配置","保存 SMTP 配置"
+测试发送,测试发送
+arrow-right,arrow-right
+"测试 SMTP 发送","测试 SMTP 发送"
+发件记录不存在,"Registro de envio não encontrado"
+删除成功！,删除成功！
+你要删除的记录已不存在！,你要删除的记录已不存在！
+"SMTP 发件记录","Registros de envio SMTP"
+check,check
+"查看 SMTP 发送日志","Ver logs de envio SMTP"
+模板已保存,模板已保存
+已重置为默认模板,已重置为默认模板
+源模板不存在,源模板不存在
+已复制模板,已复制模板
+"SMTP 渠道管理","SMTP 渠道管理"
+按发信渠道与范围维护各语言邮件模板,按发信渠道与范围维护各语言邮件模板
+渠道管理,渠道管理
+list,list
+查看发信渠道与各语言模板,查看发信渠道与各语言模板
+编辑模板,编辑模板
+edit,edit
+编辑邮件模板,编辑邮件模板
+保存模板,保存模板
+保存邮件模板,保存邮件模板
+重置默认,重置默认
+refresh,refresh
+"重置为 Extends 默认模板","重置为 Extends 默认模板"
+复制模板,复制模板
+copy,copy
+复制到其它范围或语言,复制到其它范围或语言
+"发件人账户写入当前作用范围；切换网站范围后按新范围加载。未覆盖时继承 Global。","发件人账户写入当前作用范围；切换网站范围后按新范围加载。未覆盖时继承 Global。"
+在统一配置中心打开,在统一配置中心打开
+作用范围,Escopo
+传输账户管理,传输账户管理
+发信渠道绑定,发信渠道绑定
+"录入 SMTP 传输账户；可选在账户上直接绑定发信渠道（标签可搜索多选）。","录入 SMTP 传输账户；可选在账户上直接绑定发信渠道（标签可搜索多选）。"
+基本信息,基本信息
+"系统生成的传输账户 ID；不是业务代号，也不是邮箱","系统生成的传输账户 ID；不是业务代号，也不是邮箱"
+自建邮局账号,自建邮局账号
+选择自建邮箱账号,选择自建邮箱账号
+可搜索标签选择；选中后自动填充连接信息,可搜索标签选择；选中后自动填充连接信息
+连接与认证,连接与认证
+直接绑定发信渠道（可选）,直接绑定发信渠道（可选）
+选择要使用此账户的发信渠道,选择要使用此账户的发信渠道
+"可搜索多选标签；也可稍后在「发信渠道绑定」Tab 中调整","可搜索多选标签；也可稍后在「发信渠道绑定」Tab 中调整"
+按业务渠道选择传输账户；可搜索标签单选。,按业务渠道选择传输账户；可搜索标签单选。
+"暂无模块注册发信渠道。业务模块需 Extends 实现 MailChannelProviderInterface。","暂无模块注册发信渠道。业务模块需 Extends 实现 MailChannelProviderInterface。"
+绑定传输账户,绑定传输账户
+说明,说明
+"<strong>传输账户管理</strong>：录入 SMTP 连接；可在账户上直接用标签绑定发信渠道。","<strong>传输账户管理</strong>：录入 SMTP 连接；可在账户上直接用标签绑定发信渠道。"
+<strong>发信渠道绑定</strong>：按渠道选择传输账户；也可稍后在此集中调整。,<strong>发信渠道绑定</strong>：按渠道选择传输账户；也可稍后在此集中调整。
+"上方用 Tab 切换两个分区，无需整页上下翻找。","上方用 Tab 切换两个分区，无需整页上下翻找。"
+账号/渠道选择使用系统可搜索标签（theme:search-select），支持搜索。,账号/渠道选择使用系统可搜索标签（theme:search-select），支持搜索。
+"SMTP 配置分区","SMTP 配置分区"
+添加账户,添加账户
+发件人,发件人
+测试,测试
+删除,删除
+"传输账户 ID","传输账户 ID"
+系统生成，只读,系统生成，只读
+显示名称,显示名称
+如：默认发件人,如：默认发件人
+发件来源,发件来源
+"外部 SMTP","外部 SMTP"
+默认联系人（收件邮箱）,默认联系人（收件邮箱）
+"该发件人默认收件人，可被 w_query 设置","该发件人默认收件人，可被 w_query 设置"
+暂无可用自建邮箱账号，请先在企业邮箱模块创建并启用账号。,暂无可用自建邮箱账号，请先在企业邮箱模块创建并启用账号。
+自动配置摘要,自动配置摘要
+"外部 SMTP 需手动填写下方连接信息。","外部 SMTP 需手动填写下方连接信息。"
+"SMTP 主机","SMTP 主机"
+端口,端口
+加密方式,加密方式
+"SMTPS / SSL","SMTPS / SSL"
+"STARTTLS / TLS","STARTTLS / TLS"
+无加密,无加密
+需要认证,需要认证
+是,是
+否,否
+"发件邮箱 / 用户名","发件邮箱 / 用户名"
+密码,密码
+留空则不修改,留空则不修改
+已保存，输入新密码可覆盖,已保存，输入新密码可覆盖
+"自建 fake 账号无需密码；真实自建账号如需 SMTP 认证请填写密码。","自建 fake 账号无需密码；真实自建账号如需 SMTP 认证请填写密码。"
+保存全部,保存全部
+新发件人,新发件人
+默认发件人,默认发件人
+该发件人默认收件人,该发件人默认收件人
+关闭,关闭
+收件邮箱,收件邮箱
+取消,取消
+发送,发送
+暂无匹配的自建邮箱账号,暂无匹配的自建邮箱账号
+保存失败,保存失败
+请输入收件邮箱,请输入收件邮箱
+请至少添加一个发件人,请至少添加一个发件人
+网站维护中，请稍后再试,网站维护中，请稍后再试
+正在处理，请稍候,正在处理，请稍候
+已提交测试发送,已提交测试发送
+测试邮件已发送,测试邮件已发送
+发送中…,发送中…
+登录已失效，请重新登录,登录已失效，请重新登录
+搜索并选择自建邮箱账号,搜索并选择自建邮箱账号
+搜索并多选发信渠道,搜索并多选发信渠道
+搜索并选择传输账户,搜索并选择传输账户
+搜索选择组件未加载，请刷新页面,搜索选择组件未加载，请刷新页面
+确定删除最后一个发件人吗？删除后仍可重新添加。,确定删除最后一个发件人吗？删除后仍可重新添加。
+"请核对主机/端口：QQ 邮箱 465 须 SMTPS/SSL，587 须 STARTTLS/TLS","请核对主机/端口：QQ 邮箱 465 须 SMTPS/SSL，587 须 STARTTLS/TLS"
+"搜索渠道；用作用范围筛选渠道内模板；用语言标签多选快速过滤。未配置语言发送时使用网站默认语模板。共 %{1} 个渠道。","搜索渠道；用作用范围筛选渠道内模板；用语言标签多选快速过滤。未配置语言发送时使用网站默认语模板。共 %{1} 个渠道。"
+搜索渠道,搜索渠道
+"渠道名 / code / 模块 / 说明","渠道名 / code / 模块 / 说明"
+按范围筛选模板,按范围筛选模板
+语言标签过滤,语言标签过滤
+清除语言筛选,清除语言筛选
+使用官方语言选择标签多选过滤；未选时显示全部语言。当前范围：%{1},使用官方语言选择标签多选过滤；未选时显示全部语言。当前范围：%{1}
+没有匹配的渠道,没有匹配的渠道
+"已有 %{1} / %{2} 语言","已有 %{1} / %{2} 语言"
+本列表已按上方「作用范围」加载；未配置语言时，发送将使用网站默认语模板（可就近向上）。,本列表已按上方「作用范围」加载；未配置语言时，发送将使用网站默认语模板（可就近向上）。
+没有匹配的语言模板,没有匹配的语言模板
+语言,语言
+主题,主题
+来源,来源
+继承,继承
+操作,操作
+网站默认语,网站默认语
+发送将继承自,发送将继承自
+未配置本语言；发送时使用此默认语主题,未配置本语言；发送时使用此默认语主题
+编辑,编辑
+"← 返回渠道管理","← 返回渠道管理"
+保存,保存
+刷新预览,刷新预览
+重置为默认,重置为默认
+插入变量,插入变量
+三区切换后点击任意文字，对其父级改文字色/背景/字号/字体/对齐；变量文案不可改字。页头/正文/页尾背景图与真信一致，在,三区切换后点击任意文字，对其父级改文字色/背景/字号/字体/对齐；变量文案不可改字。页头/正文/页尾背景图与真信一致，在
+中更换后刷新本页即可。,中更换后刷新本页即可。
+"站店渠 / 联系信息","站店渠 / 联系信息"
+品牌色（壳用）,品牌色（壳用）
+此渠道未声明变量,此渠道未声明变量
+可视化编辑,可视化编辑
+「整体」按真信宽度预览；页头/正文/页尾可点选改样式（变量文案不可改字）。,「整体」按真信宽度预览；页头/正文/页尾可点选改样式（变量文案不可改字）。
+邮件区域,邮件区域
+整体,整体
+页头,页头
+正文,正文
+页尾,页尾
+未选中,未选中
+文字颜色,文字颜色
+文字颜色十六进制,文字颜色十六进制
+背景色,背景色
+字号,字号
+默认,默认
+字体,字体
+左对齐,左对齐
+居中,居中
+右对齐,右对齐
+邮件可视化编辑,邮件可视化编辑
+"高级：源码 / 纯文本","高级：源码 / 纯文本"
+"正文 HTML 源码","正文 HTML 源码"
+"纯 HTML 源码（无富文本编辑器）。日常请用上方可视化；仅排障或粘贴片段时改这里。","纯 HTML 源码（无富文本编辑器）。日常请用上方可视化；仅排障或粘贴片段时改这里。"
+纯文本（可选）,纯文本（可选）
+"复制到其他范围 / 语言","复制到其他范围 / 语言"
+复制到范围,复制到范围
+复制到语言,复制到语言
+复制,复制
+整体预览：点击任意区域文字可调样式,整体预览：点击任意区域文字可调样式
+点击文字以调整样式,点击文字以调整样式
+此段为变量渲染：可改文字色、背景、字号、字体与左右对齐，不可修改文字内容。,此段为变量渲染：可改文字色、背景、字号、字体与左右对齐，不可修改文字内容。
+"管理邮件壳外观与相关配置项。切换作用范围后按新范围加载；子范围未覆盖时继承 Global。传输账户与渠道绑定请用「Smtp配置」。","管理邮件壳外观与相关配置项。切换作用范围后按新范围加载；子范围未覆盖时继承 Global。传输账户与渠道绑定请用「Smtp配置」。"
+Smtp配置,"Configuração Smtp"
+发件记录,"Registros de envio"
+邮件壳背景图,邮件壳背景图
+"页头 / 正文 / 页尾各自可选背景图。Global 目录 mail/backgrounds/…；站店目录 websites/{网站}/{店铺}/mail/backgrounds/…。","页头 / 正文 / 页尾各自可选背景图。Global 目录 mail/backgrounds/…；站店目录 websites/{网站}/{店铺}/mail/backgrounds/…。"
 需要帮助？,"Precisa de ajuda?"
 访问,Visitar
 客服邮箱：,"E-mail de suporte:"
@@ -5,13 +263,131 @@
 服务时间：,"Horário de atendimento:"
 地址：,Endereço:
 此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。,"Esta mensagem foi enviada automaticamente. Não responda diretamente. Se você não a esperava, pode ignorá-la."
+网站名称,网站名称
+店铺名称,店铺名称
+销售渠道名称,销售渠道名称
+展示品牌名（店名优先）,展示品牌名（店名优先）
+网站地址,网站地址
+"Logo 绝对 URL","Logo 绝对 URL"
+"Logo 图片 HTML（|raw）","Logo 图片 HTML（|raw）"
+站点简介,站点简介
+联系邮箱,联系邮箱
+联系电话,联系电话
+联系地址,联系地址
+服务时间,服务时间
+品牌主色,品牌主色
+品牌主色深,品牌主色深
+主色上文字色,主色上文字色
+邮件页头背景,邮件页头背景
+邮件页头文字,邮件页头文字
+邮件页头次要文字,邮件页头次要文字
+邮件强调条,邮件强调条
+邮件画布背景,邮件画布背景
+邮件卡片背景,邮件卡片背景
+邮件边框色,邮件边框色
+邮件正文色,邮件正文色
+邮件次要文字色,邮件次要文字色
+邮件链接色,邮件链接色
+页尾标题色,页尾标题色
+页尾浅底,页尾浅底
+"页头背景图 URL","页头背景图 URL"
+页头背景内联样式,页头背景内联样式
+"正文背景图 URL","正文背景图 URL"
+正文背景内联样式,正文背景内联样式
+"页尾背景图 URL","页尾背景图 URL"
+页尾背景内联样式,页尾背景内联样式
+官方商城客户服务,"Atendimento ao cliente da loja oficial"
+"周一至周五 9:00 - 18:00","Seg–sex 9:00–18:00"
+"异步/CLI 发信必须显式传入 scope 或 website_code","异步/CLI 发信必须显式传入 scope 或 website_code"
+"异步/CLI 发信必须显式传入 locale，或确保网站有默认语言","异步/CLI 发信必须显式传入 locale，或确保网站有默认语言"
+未标注渠道,"Canal sem rótulo"
+Global,Global
+配置项不齐全%{1},配置项不齐全%{1}
+"发件人配置不完整：缺少 host 或 username","发件人配置不完整：缺少 host 或 username"
+"SMTP Host 未配置","SMTP Host 未配置"
+"SMTP 用户名未配置","SMTP 用户名未配置"
+接受者邮箱为空：请正确设置接收邮箱！,接受者邮箱为空：请正确设置接收邮箱！
+发送者邮箱为空：请正确设置发件邮箱！,发送者邮箱为空：请正确设置发件邮箱！
+选择作用范围,"Selecionar escopo"
+搜索作用范围,"Buscar escopo"
+折叠,Recolher
+展开,Expandir
+未找到匹配作用范围,"Nenhum escopo correspondente"
+三区切换后点击任意文字，对其父级改文字色/背景/字号/字体/对齐；变量文案不可改字。背景图见,三区切换后点击任意文字，对其父级改文字色/背景/字号/字体/对齐；变量文案不可改字。背景图见
+「整体」按真实邮件宽度预览完整信；点文字后工具条贴在旁边。,「整体」按真实邮件宽度预览完整信；点文字后工具条贴在旁边。
+「整体」预览完整邮件；点击文字后，样式工具条会悬浮在选中元素旁。,「整体」预览完整邮件；点击文字后，样式工具条会悬浮在选中元素旁。
+"点击任意文字，对其父级改颜色 / 字号 / 字体 / 对齐；变量文案不可改字。","点击任意文字，对其父级改颜色 / 字号 / 字体 / 对齐；变量文案不可改字。"
+文字色,文字色
+三区可视化编辑：切换页头/正文/页尾后点击元素，可改颜色、字号、字体与对齐；背景图见,三区可视化编辑：切换页头/正文/页尾后点击元素，可改颜色、字号、字体与对齐；背景图见
+正文可插业务变量；链接按当前作用范围站点地址填充。,正文可插业务变量；链接按当前作用范围站点地址填充。
+点击元素以调整样式,点击元素以调整样式
+点击元素后使用下方工具栏调整样式,点击元素后使用下方工具栏调整样式
+未选中元素,未选中元素
+"页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。","页头/页尾由系统固定注入；正文只插业务变量。实时预览链接按当前作用范围站点地址填充（非 example.com 样例）。品牌色变量仅预览壳使用。"
+实时预览,实时预览
+含固定页头/页尾；编辑后自动刷新。,含固定页头/页尾；编辑后自动刷新。
+邮件实时预览,邮件实时预览
+高级：纯文本,高级：纯文本
+"页头背景 CSS","页头背景 CSS"
+"正文背景 CSS","正文背景 CSS"
+"页尾背景 CSS","页尾背景 CSS"
 来自商城的通知,"Uma mensagem da loja"
 默认网站,"Site padrão"
 默认店铺,"Loja padrão"
 系统通知,"Notificação do sistema"
 通知内容,"Conteúdo da notificação"
 信息,Informação
-官方商城客户服务,"Atendimento ao cliente da loja oficial"
-"周一至周五 9:00 - 18:00","Seg–sex 9:00–18:00"
 "周一至周五 9:00 - 18:00（法定节假日除外）","Seg–sex 9:00–18:00 (exceto feriados)"
-默认渠道,Canal padrão
+默认渠道,"Canal padrão"
+按作用范围与发信渠道查看已发邮件；正文请点「预览」。,"Veja e-mails enviados por escopo e canal; para o corpo, clique em «Pré-visualizar»."
+发信渠道,"Canal de envio"
+按发信渠道筛选,"Filtrar por canal de envio"
+暂无发件记录,"Ainda não há registros de envio"
+邮件预览,"Pré-visualização do e-mail"
+邮件正文预览,"Pré-visualização do corpo do e-mail"
+选择网站范围,"Selecionar escopo do site"
+全部渠道,"Todos os canais"
+渠道,Canal
+不绑定,"Não vincular"
+仅英文字母与下划线,"Apenas letras e sublinhados"
+自建邮局,"E-mail auto-hospedado"
+"正文 HTML","HTML do corpo"
+"发件来源可选择外部 SMTP 或自建邮局账号。","A origem do remetente pode ser SMTP externo ou caixa auto-hospedada."
+可搜索多选标签；也可稍后在下方「发信渠道绑定」中调整,"Tags multi-seleção pesquisáveis; ou ajuste depois em Vinculação de canal."
+"可视化编辑邮件正文；保存后仍以 HTML 发出。","Edite o corpo visualmente; após salvar, ainda é enviado como HTML."
+含固定页头/页尾与示例变量；编辑正文后自动刷新。,"Inclui cabeçalho/rodapé fixos e variáveis de exemplo; atualiza após editar o corpo."
+页头/页尾由系统固定注入；正文只插业务变量。品牌色变量仅预览壳使用，一般无需写入正文。,"Cabeçalho/rodapé injetados pelo sistema; o corpo só usa variáveis de negócio. Cores da marca só no shell de pré-visualização."
+页头（Logo/品牌）与页尾（客服/地址等信任信息）由系统固定注入；此处只编辑邮件正文。禁止在正文加入脚本。,"Cabeçalho (logo/marca) e rodapé (suporte/endereço) são fixos pelo sistema; edite só o corpo. Não adicione scripts."
+"<strong>传输账户</strong>：只配置 SMTP 连接。账户 ID 由系统生成，不是业务代号，也不是发件邮箱。","<strong>Conta de transporte</strong>: configure só a conexão SMTP. O ID é gerado pelo sistema—não é código de negócio nem o From."
+"<strong>发信渠道</strong>：由业务模块 Extends 注册；本页只做渠道到传输账户的绑定。","<strong>Canal de envio</strong>: registrado por módulos via Extends; esta página só vincula canais a contas de transporte."
+"标识 code 仅允许英文字母与下划线","O código identificador só permite letras e sublinhados"
+未选语言标签时显示全部语言；多选后仅保留勾选语言的模板行。当前范围：%{1},"Sem tags = todos os locales; multi-seleção mantém só essas linhas. Escopo atual: %{1}"
+"按作用范围管理发信渠道；展开渠道查看并编辑各语言模板。未配置语言发送时使用网站默认语模板。共 %{1} 个渠道。","Gerencie canais por escopo; expanda para editar modelos por locale. Locales sem config usam o modelo do idioma padrão do site. %{1} canais."
+搜索语言模板,"Pesquisar modelos de idioma"
+"语言代码 / 主题 / 来源 / 继承","Locale / assunto / origem / herança"
+未配置语言时，发送将使用网站默认语模板（可就近向上）。,"Se faltar o locale, o envio usa o modelo do idioma padrão do site (mais próximo acima)."
+"按作用范围管理发信渠道；展开渠道查看并编辑各语言模板。共 %{1} 个渠道。","Gerencie canais de envio por escopo; expanda um canal para editar modelos por locale. %{1} canais."
+"SMTP 邮件模板","Modelos de e-mail SMTP"
+按渠道与范围维护邮件模板,"Manter modelos por canal e escopo"
+模板列表,"Lista de modelos"
+查看邮件模板,"Ver modelos de e-mail"
+邮件模板管理,"Gestão de modelos de e-mail"
+"按作用范围与语言维护全部发信渠道模板（含密码重置、订单通知、告警等）。共 %{1} 个渠道。","Mantenha todos os modelos de canal por escopo e locale (redefinição de senha, avisos de pedido, alertas etc.). %{1} canais."
+"← 返回模板列表","← Voltar à lista de modelos"
+"HTML 正文","Corpo HTML"
+添加发件人,"Adicionar remetente"
+搜索邮箱账号、域名或名称,"Pesquisar conta, domínio ou nome"
+"配置代号，不是邮箱；调用方用 sender_code 引用，如 notification、order_mail","ID de configuração, não um e-mail. Chamadores usam sender_code, ex.: notification ou order_mail"
+配置代号,"ID de configuração"
+配置代号仅允许英文字母与下划线,"O ID de configuração só permite letras e sublinhados"
+"<strong>code</strong> 是这份 SMTP 配置的稳定代号（仅英文字母与下划线），供消息通知、WeShop 等通过 w_query 的 <code>sender_code</code> 选用；它<strong>不是</strong>发件邮箱。发件邮箱在下方「发件邮箱 / 用户名」或自建账号中填写，更换邮箱不影响已写定的调用方。","<strong>code</strong> é um ID estável deste perfil SMTP (apenas letras e sublinhados). Módulos o escolhem via w_query <code>sender_code</code>; <strong>não</strong> é o From. Defina o e-mail em Usuário ou conta Mail—trocar o e-mail não quebra os chamadores."
+"发件来源可选择外部 SMTP 或自建邮局账号；选择自建后会自动带出 SMTP 主机、端口、加密方式和发件邮箱。","A origem pode ser SMTP externo ou caixa auto-hospedada. Ao escolher auto-hospedada, host, porta, criptografia e e-mail são preenchidos."
+"<strong>默认联系人</strong>：该发件人作为邮件渠道时的默认收件邮箱，可由系统管理员或 w_query 设置。","<strong>Contato padrão</strong>: e-mail de recebimento padrão do remetente como canal; definido pelo admin ou w_query."
+"每个发件人用 <strong>code</strong> 标识（仅英文字母与下划线），便于消息通知和 WeShop 等模块通过 w_query 指定发件人。","Cada remetente é identificado por um <strong>code</strong> (apenas letras e sublinhados) para notificação e WeShop escolherem via w_query."
+"标识 code","Código identificador"
+"每个发件人用 <strong>code</strong> 标识，便于消息通知和 WeShop 等模块通过 w_query 指定发件人。","Cada remetente é identificado por um <strong>code</strong> para notificação e WeShop escolherem via w_query."
+"""Smtp 查询器不支持的操作：%{1}""","""Operação não suportada pelo queryer Smtp: %{1}"""
+"SMTP 发件人配置","Configuração do remetente SMTP"
+Smtp邮件服务,"Serviço de e-mail Smtp"
+点击选择语言（可多选过滤）,"Clique para escolher idiomas (filtro multi-seleção)"
+搜索国家、语言或代码以过滤模板,"Pesquise país, idioma ou código para filtrar modelos"

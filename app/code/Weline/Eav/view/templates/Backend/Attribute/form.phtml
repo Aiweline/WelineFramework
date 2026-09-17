@@ -1,4 +1,5 @@
 
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
 <script>
 (function(g){
   if(g.__bqAdmin_eav_admin) return;
@@ -669,8 +670,9 @@
                                 </div>
                                 <div class="modal-body">
                                     <iframe class="w-100 h-100"
-                                            src="@file-manager-connector{target='#callBackImg' close='#closeImgModel' path='media/store/logo/' multi='0' ext='png,jpeg,jpg,webp,svg,ico' size='102400'}"
-                                            frameborder="0"></iframe>
+                                            :src="chooseImgModel ? swatchMediaPickerSrc : 'about:blank'"
+                                            frameborder="0"
+                                            title="@lang(图片选择器)"></iframe>
                                 </div>
                                 <div class="modal-footer">
                                     <button type="button" class="btn btn-secondary waves-effect"
@@ -708,6 +710,8 @@
         el: '#AttributePage',
         data: {
             chooseImgModel: false,
+            swatchMediaPickerBase: "@backend-url('media/backend/manager/iframe')",
+            mediaIdentityScope: 'default.default.default',
             params: {
                 attribute_id: '{{attribute.attribute_id}}',
                 eav_entity_id: '{{attribute.eav_entity_id}}',
@@ -787,6 +791,37 @@
                     this.activeAttrItem.swatch_image = type.swatch_image;
                     this.activeAttrItem.swatch_text = type.swatch_text;
                 }
+            }
+        },
+        computed: {
+            swatchMediaPickerSrc: function() {
+                var sanitize = function(value, fallback) {
+                    var text = String(value || '').trim().replace(/:/g, '_');
+                    return text !== '' ? text : fallback;
+                };
+                var attrCode = sanitize(this.params && this.params.code, 'draft');
+                var optionCode = sanitize(this.addParams && this.addParams.code, 'option');
+                var scope = String(this.mediaIdentityScope || 'default.default.default').trim() || 'default.default.default';
+                var base = String(this.swatchMediaPickerBase || '').trim();
+                if (!base) {
+                    return 'about:blank';
+                }
+                var params = [
+                    'target=callBackImg',
+                    'close=closeImgModel',
+                    'multi=0',
+                    'ext=' + encodeURIComponent('png,jpeg,jpg,webp,svg,ico'),
+                    'size=102400',
+                    'path=' + encodeURIComponent('media/eav/swatch/'),
+                    'identity_root=eav',
+                    'identity_code=' + encodeURIComponent(attrCode),
+                    'identity_scope=' + encodeURIComponent(scope),
+                    'identity_kind=swatch',
+                    'identity_field=' + encodeURIComponent(optionCode),
+                    'ref_mode=single',
+                    'strong_ref=1'
+                ];
+                return base + (base.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
             }
         },
         methods: {

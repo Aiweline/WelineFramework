@@ -13,7 +13,7 @@ final class CmsPagePreviewContentContractTest extends TestCase
         $root = dirname(__DIR__, 6);
 
         foreach (['default', 'blank'] as $layoutOption) {
-            $file = $root . '/app/code/Weline/Theme/view/theme/frontend/layouts/cms_page/'
+            $file = $root . '/app/code/Weline/Cms/view/theme/frontend/layouts/cms_page/'
                 . $layoutOption . '.phtml';
             self::assertFileExists($file);
 

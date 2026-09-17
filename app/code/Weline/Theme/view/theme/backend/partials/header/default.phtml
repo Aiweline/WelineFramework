@@ -6,7 +6,7 @@
  * 字段
  * @info description 描述：后端管理界面的默认头部
  * @info name 名称：Header头部片段
- * @param logo Logo URL
+ * @param logo {default="",type="media_image",name="Logo",description="从媒体库选择后台 Logo",i18n=false}
  * @param logoText Logo文字
  * @param navItems 导航项数组
  * @param showUserMenu 是否显示用户菜单
@@ -19,18 +19,23 @@ foreach ($metaParams as $key => $value) {
     $this->setData("meta.{$key}", $value);
 }
 
-$logo = $this->getData("meta.logo") ?? '';
+$logoRaw = $this->getData("meta.logo") ?? '';
+$logoFileHtml = trim((string)($this->getData('meta.logo_file_html') ?? ''));
+$logo = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($logoRaw);
 $logoText = $this->getData("meta.logoText") ?? __('Weline Admin');
 $navItems = $this->getData("meta.navItems") ?? [];
 $showUserMenu = $this->getData("meta.showUserMenu") ?? true;
 $class = $this->getData("meta.class") ?? '';
+$hasLogo = $logoFileHtml !== '' || $logo !== '';
 ?>
 <header class="backend-header <?= htmlspecialchars($class) ?>">
     <div class="header-container">
         <!-- Logo -->
         <div class="header-logo">
             <a href="@backend-url{'/'}" title="<?= __('管理后台') ?>">
-                <?php if ($logo): ?>
+                <?php if ($logoFileHtml !== ''): ?>
+                    <span class="logo-image logo-image--asset"><?= $logoFileHtml ?></span>
+                <?php elseif ($hasLogo): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('后台Logo') ?>">
                 <?php else: ?>
                     <span class="logo-text"><?= htmlspecialchars($logoText) ?></span>

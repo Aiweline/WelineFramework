@@ -21,7 +21,7 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         $surface = $this->resolver->resolve('/products?sort=price_asc', 'zh_Hans_CN');
 
         self::assertSame('products', $surface['code']);
-        self::assertSame('product_list', $surface['page_type']);
+        self::assertSame('products', $surface['page_type']);
         self::assertSame('products', $surface['public_route']);
         self::assertSame('全部商品', $surface['heading']);
     }
@@ -52,7 +52,7 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
 
         self::assertNotNull($surface);
         self::assertSame('products', $surface['code']);
-        self::assertSame('product_list', $surface['page_type']);
+        self::assertSame('products', $surface['page_type']);
         self::assertSame('en_US', $surface['locale']);
         self::assertSame('Shop All Hanfu | Ming & Tang', $surface['seo_title']);
         self::assertNotSame('', $surface['seo_keywords'] ?? '');

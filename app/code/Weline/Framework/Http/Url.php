@@ -98,6 +98,39 @@ class Url implements UrlInterface
     }
 
     /**
+     * 展开路径中的模块星号：优先 Request router；为空则回退模块 etc/env.php / 模块名末段。
+     * 避免星号路径变成 /admin/...（缺 frontName）导致后台 404。
+     */
+    private function expandModuleStarPath(string $path): string
+    {
+        if (!str_contains($path, '*')) {
+            return $path;
+        }
+
+        $router = trim((string)($this->getRequest()->getRouterData('router') ?? ''));
+        if ($router === '') {
+            $modulePath = trim((string)($this->getRequest()->getRouterData('module_path') ?? ''));
+            if ($modulePath !== '') {
+                $envFile = rtrim($modulePath, '/\\') . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
+                if (is_file($envFile)) {
+                    $env = require $envFile;
+                    if (is_array($env) && isset($env['router']) && is_scalar($env['router'])) {
+                        $router = trim((string)$env['router']);
+                    }
+                }
+            }
+            if ($router === '') {
+                $module = trim((string)($this->getRequest()->getRouterData('module') ?? ''));
+                if ($module !== '' && str_contains($module, '_')) {
+                    $router = strtolower((string)substr($module, (int)strrpos($module, '_') + 1));
+                }
+            }
+        }
+
+        return str_replace('//', '/', str_replace('*', $router, $path));
+    }
+
+    /**
      * @param mixed $uri
      * @param string $code
      * @return bool
@@ -958,15 +991,24 @@ class Url implements UrlInterface
     {
         if ($path) {
             if (!$this->isLink($path)) {
-                # URL自带星号处理
-                $router = $this->getRequest()->getRouterData('router');
-                if (str_contains($path, '*')) {
-                    $path = str_replace('*', (string)($router ?? ''), $path);
-                    $path = str_replace('//', '/', $path);
-                }
+                $path = $this->expandModuleStarPath($path);
                 $backendPrefix = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
-                $prefixPath = $backendPrefix !== '' ? '/' . $backendPrefix : '';
-                $url = $this->getRequest()->getBaseHost() . $prefixPath . (('/' === $path) ? '/' : '/' . ltrim($path, '/'));
+                $areaPath = $backendPrefix !== '' ? '/' . $backendPrefix . '/' : '/';
+                // 与前台 getFrontendUrl / getFrontendApiUrl 一致：非默认货币/语言写入路径段，默认值省略。
+                // 否则后台切语后菜单/@backend-url 仍落到无 locale 路径，请求回退网站默认语言。
+                $localePrefix = self::getLocalePrefix();
+                $localePath = $localePrefix === '' ? '' : ltrim($localePrefix, '/') . '/';
+                if ($path === '/' || $path === '') {
+                    $url = $this->getRequest()->getBaseHost()
+                        . rtrim($areaPath, '/')
+                        . ($localePrefix === '' ? '/' : $localePrefix . '/');
+                } else {
+                    $url = $this->getRequest()->getBaseHost()
+                        . $areaPath
+                        . $localePath
+                        . ltrim($path, '/');
+                }
+                $url = self::removeExtraDoubleSlashes($url);
             } else {
                 $url = $path;
             }
@@ -1019,7 +1061,21 @@ class Url implements UrlInterface
                     $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('backend') . (('/' === $path) ? '' : '/' . ltrim($path, '/'));
+                $backendPrefix = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+                $areaPath = $backendPrefix !== '' ? '/' . $backendPrefix . '/' : '/';
+                $localePrefix = self::getLocalePrefix();
+                $localePath = $localePrefix === '' ? '' : ltrim($localePrefix, '/') . '/';
+                if ($path === '/' || $path === '') {
+                    $url = $this->getRequest()->getBaseHost()
+                        . rtrim($areaPath, '/')
+                        . ($localePrefix === '' ? '/' : $localePrefix . '/');
+                } else {
+                    $url = $this->getRequest()->getBaseHost()
+                        . $areaPath
+                        . $localePath
+                        . ltrim($path, '/');
+                }
+                $url = self::removeExtraDoubleSlashes($url);
             } else {
                 $url = $path;
             }

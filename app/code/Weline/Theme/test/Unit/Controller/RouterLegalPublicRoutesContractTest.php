@@ -9,37 +9,38 @@ use Weline\Theme\Helper\FooterDefaultLinksHelper;
 
 /**
  * Prefer app/code Theme over stale vendor/weline/module-theme when PHPUnit autoloads vendor first.
+ *
+ * Legal public paths resolve via Theme LayoutResolveObserver (path ↔ layout file 1:1),
+ * not a hard-coded Router alias table.
  */
 final class RouterLegalPublicRoutesContractTest extends TestCase
 {
-    public function testFooterLegalLinksResolveInDefaultPublicRouteMapSource(): void
+    public function testFooterLegalLinksHaveDiscoverableThemeLayouts(): void
     {
-        $routerPath = dirname(__DIR__, 3) . '/Controller/Router.php';
-        self::assertFileExists($routerPath);
-        $source = (string)file_get_contents($routerPath);
+        $layoutsRoot = dirname(__DIR__, 3) . '/view/theme/frontend/layouts';
+        self::assertDirectoryExists($layoutsRoot);
 
         foreach (FooterDefaultLinksHelper::legalLinks() as $link) {
             $path = trim((string)($link['url'] ?? ''), '/');
             self::assertNotSame('', $path, 'legal link url must not be empty');
-            self::assertStringContainsString(
-                "'" . $path . "' =>",
-                $source,
-                'missing public route for /' . $path . ' in app/code Router.php'
+
+            if (!str_contains($path, '/')) {
+                $file = $layoutsRoot . '/' . $path . '/default.phtml';
+            } else {
+                [$layoutType, $layoutOption] = explode('/', $path, 2);
+                $file = $layoutsRoot . '/' . $layoutType . '/' . $layoutOption . '.phtml';
+            }
+
+            self::assertFileExists(
+                $file,
+                'missing Theme layout for legal link /' . $path . ' (expected ' . $file . ')'
             );
         }
 
-        self::assertStringContainsString(
-            "'cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie'",
-            $source
-        );
-        self::assertStringNotContainsString(
-            "'ads-preferences' =>",
-            $source
-        );
-        self::assertStringNotContainsString(
-            "'policy/ads-preferences' =>",
-            $source
-        );
+        self::assertFileExists($layoutsRoot . '/policy/accessibility.phtml');
+        self::assertFileExists($layoutsRoot . '/policy/shipping.phtml');
+        self::assertFileExists($layoutsRoot . '/error/default.phtml');
+        self::assertFileExists($layoutsRoot . '/sitemap/default.phtml');
     }
 
     public function testPublicLayoutRegistersThemeModuleBeforeTranslatingMetadata(): void
@@ -58,5 +59,10 @@ final class RouterLegalPublicRoutesContractTest extends TestCase
             $scopePosition,
             'Theme request scope must be registered before controller metadata is translated.'
         );
+
+        self::assertStringContainsString("'shipping'", $source);
+        self::assertStringContainsString("'accessibility'", $source);
+        self::assertStringContainsString("'error' => ['default']", $source);
+        self::assertStringContainsString("'sitemap' => ['default']", $source);
     }
 }

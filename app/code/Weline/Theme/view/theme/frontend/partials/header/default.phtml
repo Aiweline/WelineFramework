@@ -8,8 +8,8 @@
  * @meta.cache.auth {default="user",name="鉴权维度"}
  * @meta.name {default="Header头部片段",name="Header头部片段",description="Header头部片段，用于描述片段的名称"}
  * @meta.description {default="页面头部区域（导航栏、Logo、搜索等）",name="页面头部区域（导航栏、Logo、搜索等）",description="页面头部区域（导航栏、Logo、搜索等），用于描述片段的用途"}
- * @param.logo {default="",name="Logo URL",description="Logo图片URL，用于设置头部Logo图片地址"}
- * @param.logoText {default="云裳 Hanfu Atelier",name="Logo文字",description="Logo文字，用于设置当Logo图片不存在时显示的文字"}
+ * @param.logo {default="",type="media_image",name="Logo",description="从媒体库选择头部 Logo；留空使用站点默认 Logo",i18n=false}
+ * @param.logoText {default="",name="Logo文字",description="Logo文字；留空则使用当前网站名称（Website 基础信息）"}
  * @param.logoHeight {default=64,name="Logo高度",description="Logo高度（像素），用于设置Logo图片的高度，宽度自适应"}
  * @param.navItems {default=[],name="导航项数组",description="导航项数组，用于设置头部导航菜单，格式：[{\"text\":\"菜单文字\",\"url\":\"菜单链接\"}]"}
  * @param.showSearch {default=true,name="是否显示搜索框",description="是否显示搜索框，用于控制搜索框的显示"}
@@ -25,18 +25,20 @@
  */
 $meta = $this->getData('meta') ?? [];
 $layout = $this->getData('layout') ?? [];
-$logo = $meta['logo'] ?? '';
+$logoRaw = $meta['logo'] ?? '';
+$logoFileHtml = trim((string)($meta['logo_file_html'] ?? ''));
+$logo = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($logoRaw);
 $configuredLogoText = trim((string)($meta['logoText'] ?? ''));
-$logoText = '云裳 Hanfu Atelier';
+$logoText = '';
 try {
     $siteBrandForName = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
     if ($siteBrandForName instanceof \Weline\Theme\Helper\SiteBrand) {
-        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText, '云裳 Hanfu Atelier');
+        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText);
     } else {
-        $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText, '云裳 Hanfu Atelier');
+        $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText);
     }
 } catch (\Throwable) {
-    $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText, '云裳 Hanfu Atelier');
+    $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText);
 }
 $logoWordmarkParts = preg_split('/\s+/u', trim($logoText), 2) ?: [];
 $logoWordmarkPrimary = (string)($logoWordmarkParts[0] ?? $logoText);
@@ -57,7 +59,7 @@ if (is_string($headerShowBannerWithChildren)) {
 }
 $class = $meta['class'] ?? '';
 
-// 默认 Logo：优先商家已配置素材；未配置时展示可编辑的汉服文字品牌。
+// 默认 Logo：优先商家已配置素材；未配置时展示可编辑的文字品牌。
 $defaultLogoUrl = '';
 $themeFallbackLogoUrl = '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
 try {
@@ -71,10 +73,10 @@ try {
 } catch (\Throwable) {
     // 站点品牌服务不可用时保留文字品牌兜底。
 }
-if ($logo === '' || $logo === null) {
+if (($logo === '' || $logo === null) && $logoFileHtml === '') {
     $logo = $defaultLogoUrl;
 }
-$hasLogo = is_string($logo) && trim($logo) !== '';
+$hasLogo = ($logoFileHtml !== '') || (is_string($logo) && trim($logo) !== '');
 
 $headerHot = \Weline\Theme\Helper\HeaderCommerceData::resolveHotWords(8);
 $headerHotWords = $headerHot['words'] ?? [];
@@ -202,124 +204,22 @@ $headerEscDesc = static function ($value) use ($headerDesc): string {
 };
 
 // 注意：navItems 可能在 hook (Weline_Theme::frontend::partials::header::categories-before) 中被设置
-// 如果 hook 设置了 navItems，会覆盖这里的默认值
-// 默认导航数据（统一用于横向菜单和汉堡菜单）
+// 默认导航由 active theme 链上的 partials/header/nav-defaults.phtml 提供（design 可覆盖）。
 $defaultNavItemsFactory = static function (): array {
     static $defaultNavItems = null;
     if ($defaultNavItems !== null) {
         return $defaultNavItems;
     }
 
-    $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
-    $defaultNavItems = [
-        [
-            'text' => '全部商品',
-            'url' => '/products',
-            'description' => '浏览全部已发布商品',
-            'children' => [],
-        ],
-        [
-            'text' => '女士汉服',
-            'url' => $searchHref('女士汉服'),
-            'description' => '按形制探索适合日常、节庆与礼仪场景的女士汉服',
-            'children' => [
-                [
-                    'text' => '明制汉服',
-                    'url' => $searchHref('明制汉服'),
-                    'description' => '端庄利落的立领、马面裙与披风层次',
-                    'children' => [
-                        ['text' => '马面裙', 'url' => $searchHref('马面裙')],
-                        ['text' => '立领长衫', 'url' => $searchHref('立领长衫')],
-                        ['text' => '披风与比甲', 'url' => $searchHref('披风 比甲')],
-                    ],
-                ],
-                [
-                    'text' => '宋制汉服',
-                    'url' => $searchHref('宋制汉服'),
-                    'description' => '清雅轻盈的褙子、百迭裙与宋裤搭配',
-                    'children' => [
-                        ['text' => '褙子', 'url' => $searchHref('褙子')],
-                        ['text' => '百迭裙', 'url' => $searchHref('百迭裙')],
-                        ['text' => '宋裤', 'url' => $searchHref('宋裤')],
-                    ],
-                ],
-                [
-                    'text' => '唐制汉服',
-                    'url' => $searchHref('唐制汉服'),
-                    'description' => '明快华丽的齐胸襦裙、坦领与圆领款式',
-                    'children' => [
-                        ['text' => '齐胸襦裙', 'url' => $searchHref('齐胸襦裙')],
-                        ['text' => '坦领', 'url' => $searchHref('坦领汉服')],
-                        ['text' => '圆领袍', 'url' => $searchHref('唐制圆领袍')],
-                    ],
-                ],
-                [
-                    'text' => '晋制汉服',
-                    'url' => $searchHref('晋制汉服'),
-                    'description' => '飘逸交领、大袖衫与裙装组合',
-                    'children' => [
-                        ['text' => '交领襦裙', 'url' => $searchHref('交领襦裙')],
-                        ['text' => '大袖衫', 'url' => $searchHref('大袖衫')],
-                        ['text' => '杂裾', 'url' => $searchHref('杂裾')],
-                    ],
-                ],
-            ],
-        ],
-        [
-            'text' => '男士汉服',
-            'url' => $searchHref('男士汉服'),
-            'description' => '传统形制与现代日常穿着兼顾的男士系列',
-            'children' => [
-                ['text' => '圆领袍', 'url' => $searchHref('男士圆领袍'), 'description' => '节庆、礼仪与出行皆宜'],
-                ['text' => '道袍与直裰', 'url' => $searchHref('道袍 直裰'), 'description' => '从容雅正的传统衣冠'],
-                ['text' => '曳撒与贴里', 'url' => $searchHref('曳撒 贴里'), 'description' => '明制风格与利落剪裁'],
-                ['text' => '日常汉元素', 'url' => $searchHref('男士汉元素'), 'description' => '适合通勤与日常搭配'],
-            ],
-        ],
-        [
-            'text' => '儿童汉服',
-            'url' => $searchHref('儿童汉服'),
-            'description' => '舒适、安全并适合成长活动的儿童传统服饰',
-            'children' => [
-                ['text' => '女童汉服', 'url' => $searchHref('女童汉服')],
-                ['text' => '男童汉服', 'url' => $searchHref('男童汉服')],
-                ['text' => '亲子系列', 'url' => $searchHref('亲子汉服')],
-                ['text' => '节庆礼服', 'url' => $searchHref('儿童节庆汉服')],
-            ],
-        ],
-        [
-            'text' => '汉服配饰',
-            'url' => $searchHref('汉服配饰'),
-            'description' => '以发饰、鞋履与随身雅物完成整套造型',
-            'children' => [
-                ['text' => '发簪与发冠', 'url' => $searchHref('发簪 发冠')],
-                ['text' => '腰带与禁步', 'url' => $searchHref('腰带 禁步')],
-                ['text' => '绣花鞋履', 'url' => $searchHref('汉服鞋履')],
-                ['text' => '团扇与包袋', 'url' => $searchHref('团扇 汉服包袋')],
-            ],
-        ],
-        [
-            'text' => '按场景选购',
-            'url' => $searchHref('汉服'),
-            'description' => '按重要时刻与穿着需求快速找到合适的一套',
-            'children' => [
-                ['text' => '婚礼与礼服', 'url' => $searchHref('婚礼汉服')],
-                ['text' => '节庆与雅集', 'url' => $searchHref('节庆汉服')],
-                ['text' => '日常通勤', 'url' => $searchHref('日常汉服')],
-                ['text' => '旅拍与演出', 'url' => $searchHref('旅拍 演出 汉服')],
-            ],
-        ],
-        [
-            'text' => '品牌与文化',
-            'url' => '/about',
-            'description' => '认识云裳的审美、工艺与汉服穿着知识',
-            'children' => [
-                ['text' => '品牌故事', 'url' => '/about'],
-                ['text' => '汉服文化指南', 'url' => '/blog'],
-                ['text' => '新手购物帮助', 'url' => '/faq'],
-            ],
-        ],
-    ];
+    try {
+        /** @var \Weline\Theme\Helper\HeaderDefaultNavItems $resolver */
+        $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Helper\HeaderDefaultNavItems::class
+        );
+        $defaultNavItems = $resolver->resolve();
+    } catch (\Throwable) {
+        $defaultNavItems = \Weline\Theme\Helper\HeaderDefaultNavItems::genericDefaults();
+    }
 
     return $defaultNavItems;
 };
@@ -431,7 +331,9 @@ $defaultNavItemsFactory = static function (): array {
                            aria-label="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>"
                            class="header-logo__link w-surface"
                            data-surface="default">
-                            <?php if ($hasLogo): ?>
+                            <?php if ($logoFileHtml !== ''): ?>
+                                <span class="logo-image logo-image--asset"><?= $logoFileHtml ?></span>
+                            <?php elseif ($hasLogo): ?>
                                 <img class="logo-image"
                                      src="<?= htmlspecialchars((string)$logo, ENT_QUOTES, 'UTF-8') ?>"
                                      alt="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>"
@@ -472,7 +374,7 @@ $defaultNavItemsFactory = static function (): array {
                             position="header"
                             class="header-search-wrapper">
                         <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/header-bar.phtml', [
-                            'placeholder' => (string)__('搜索汉服、形制与配饰...'),
+                            'placeholder' => (string)__('搜索商品、分类与关键词...'),
                             'query' => (string)($this->request->getParam('q') ?? ''),
                             'show_hot_words' => true,
                             'panel_id' => 'header-search-panel',
@@ -599,16 +501,6 @@ $defaultNavItemsFactory = static function (): array {
                 -->
                 <w:widget type="header" name="account" />
 
-                <!-- 订单 Hook -->
-                <div class="header-action-item">
-                    <w:hook>header-orders<else/>
-                        <a href="@url{'customer/account/index'}#orders" class="action-link" title="<lang>我的订单</lang>">
-                            <span class="action-line-1"><lang>退货</lang></span>
-                            <span class="action-line-2"><lang>与我的订单</lang></span>
-                        </a>
-                    </w:hook>
-                </div>
-
                 <!-- 购物车 Hook -->
                 <!-- 
                     Hook: header-cart
@@ -631,9 +523,10 @@ $defaultNavItemsFactory = static function (): array {
         </div>
     </div>
 
-    <!-- 底部导航栏：全宽背景 + 版心内容（对齐通知条结构） -->
+    <!-- 底部导航栏：全宽背景 + 版心内容；左右两大簇（左：全部+分类；右：扩展博客+快捷导航） -->
     <div class="header-main-nav">
         <div class="header-main-nav-inner">
+            <div class="header-nav-left-cluster">
             <div class="header-nav-all" id="header-nav-all-root">
             <w:slot id="all-menu"
                     name="全部菜单"
@@ -669,18 +562,60 @@ $defaultNavItemsFactory = static function (): array {
                     class="header-nav-left-slot header-categories">
                 <w:widget type="navigation" name="category-menu" />
             </w:slot>
+            <!-- 分类后政策/关于链接：multiple+Hook else，对齐 footer-above 默认可注入模式 -->
+            <w:slot id="header-policy-links"
+                    name="政策与关于链接"
+                    accept="header-policy-links,layout-header-policy-links"
+                    multiple="true"
+                    append="true"
+                    position="header"
+                    class="header-policy-links-slot">
+                <w:hook>Weline_Theme::frontend::partials::header::policy-links<else/>
+                    <w:widget type="header" name="header-policy-links" />
+                </w:hook>
+            </w:slot>
             <w:hook>Weline_Theme::frontend::partials::header::categories</w:hook>
             <w:hook>Weline_Theme::frontend::partials::header::categories-after</w:hook>
+            </div>
 
-            <!-- 分类后方扩展槽：Blog 等模块 multiple 默认注入（禁止 Theme 内嵌业务链接） -->
+            <div class="header-nav-right-cluster">
+            <!-- 右侧扩展槽：Blog / Promotion / CustomerService 等模块 multiple 默认注入（禁止 Theme 内嵌业务链接） -->
             <w:slot id="header-nav-extensions"
-                    name="导航扩展"
-                    accept="header-blog-link,header-nav-link,layout-header-nav-extensions"
+                    name="右侧导航扩展"
+                    accept="header-blog-link,header-deals-link,header-contact-service-link,header-nav-link,layout-header-nav-extensions"
                     multiple="true"
                     position="header"
                     class="header-nav-extensions"></w:slot>
 
-            <!-- 右侧快捷导航 slot：未填充时使用 Amazon 风格快捷入口 -->
+            <!-- 「更多」：默认 display:none 不占 flex gap；溢出时再显示并申请宽度 -->
+            <div class="nav-more-wrapper"
+                 id="nav-more-wrapper"
+                 data-w-component="menu"
+                 data-w-open-on="hover"
+                 data-w-placement="bottom-end"
+                 style="display: none;">
+                <button class="nav-more-btn w-button"
+                        id="nav-more-btn"
+                        type="button"
+                        data-w-menu-trigger
+                        data-tone="quiet"
+                        aria-haspopup="menu"
+                        aria-expanded="false"
+                        aria-label="<?= $headerEsc('更多') ?>">
+                    <span><?= $headerEsc('更多') ?></span>
+                    <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                </button>
+                <div class="w-menu nav-more-menu w-surface-body"
+                     data-surface="body"
+                     id="nav-more-dropdown"
+                     data-w-menu-panel
+                     role="menu"
+                     data-state="closed"
+                     aria-hidden="true"
+                     hidden></div>
+            </div>
+
+            <!-- 右侧快捷导航 slot：可选 main-nav；默认空，业务入口由扩展槽部件注入 -->
             <w:slot id="navigation"
                     name="右侧菜单"
                     accept="layout-header-navigation,layout-global-header-navigation,main-nav,navigation"
@@ -689,42 +624,14 @@ $defaultNavItemsFactory = static function (): array {
                     class="header-nav-right-slot header-nav-links-slot">
                 <div id="header-nav-fill" class="header-nav-fill-inner">
                     <nav class="header-nav-links" aria-label="<?= $headerEsc('快捷导航') ?>">
-                        <ul class="nav-links-list" id="nav-links-list">
-                            <li><a href="@url{'promotion/deals'}"><?= $headerEsc('今日特价') ?></a></li>
-                            <li><a href="@url{'faq'}"><?= $headerEsc('客户服务') ?></a></li>
-                        </ul>
-                        <div class="nav-more-wrapper"
-                             id="nav-more-wrapper"
-                             data-w-component="menu"
-                             data-w-open-on="hover"
-                             data-w-placement="bottom-end"
-                             style="display: none;">
-                            <button class="nav-more-btn w-button"
-                                    id="nav-more-btn"
-                                    type="button"
-                                    data-w-menu-trigger
-                                    data-tone="quiet"
-                                    aria-haspopup="menu"
-                                    aria-expanded="false"
-                                    aria-label="<?= $headerEsc('更多') ?>">
-                                <span><?= $headerEsc('更多') ?></span>
-                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                            </button>
-                            <div class="w-menu nav-more-menu w-surface-body"
-                                 data-surface="body"
-                                 id="nav-more-dropdown"
-                                 data-w-menu-panel
-                                 role="menu"
-                                 data-state="closed"
-                                 aria-hidden="true"
-                                 hidden></div>
-                        </div>
+                        <ul class="nav-links-list" id="nav-links-list"></ul>
                     </nav>
                 </div>
             </w:slot>
 
             <div class="header-nav-right">
                 <w:hook>header-nav-right</w:hook>
+            </div>
             </div>
         </div>
     </div>
@@ -1042,7 +949,8 @@ textarea::-webkit-scrollbar-thumb:hover,
     line-height: 1.4;
 }
 
-.header-site-notice-inner {
+.header-site-notice-inner,
+.weline-header .header-site-notice-inner {
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 100%;
     margin-inline: auto;
@@ -1052,7 +960,8 @@ textarea::-webkit-scrollbar-thumb:hover,
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-md);
-    flex-wrap: wrap;
+    /* 放得下就单行：左通知 / 右入口；禁止无故两行居中堆叠 */
+    flex-wrap: nowrap;
 }
 
 /* 左侧：可容纳多个 notice 类型部件，横向排列 */
@@ -1093,6 +1002,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     flex: 0 0 auto;
     white-space: nowrap;
     min-width: 0;
+    margin-inline-start: auto;
 }
 
 .header-site-notice-links > *,
@@ -1134,21 +1044,29 @@ textarea::-webkit-scrollbar-thumb:hover,
     opacity: 0.45;
 }
 
-@media (max-width: 768px) {
+/* 仅极窄屏且两侧合计放不下时才允许换行；禁止 width:100% 强制各占一行 */
+@media (max-width: 480px) {
     .header-site-notice-inner {
+        flex-wrap: wrap;
         justify-content: center;
+        row-gap: var(--spacing-0_4);
+        column-gap: var(--spacing-md);
         text-align: center;
     }
 
-    .header-site-notice-items {
+    .header-site-notice-items,
+    .header-top-bar-slot {
+        flex: 0 1 auto;
         justify-content: center;
-        width: 100%;
+        max-width: 100%;
     }
 
     .header-site-notice-links,
     .header-top-bar-rights-slot {
-        width: 100%;
+        flex: 0 1 auto;
         justify-content: center;
+        max-width: 100%;
+        margin-inline-start: 0;
     }
 }
 
@@ -1580,30 +1498,33 @@ textarea::-webkit-scrollbar-thumb:hover,
     box-shadow: none;
 }
 
-/* 搜索按钮 */
+/* 搜索按钮：朱砂实底 + on-primary 图标（勿用 primaryLight+深墨图标，对比弱且像亚马逊黄钮） */
 .search-submit-btn {
     width: var(--token-size-45px);
     height: 100%;
-    background-color: <?= htmlspecialchars($colors['primaryLight'] ?? 'var(--token-color-febd69)') ?>;
-    border: var(--border-width-thin) solid <?= htmlspecialchars($colors['primary'] ?? 'var(--color-brand-orange)') ?>;
+    background-color: <?= htmlspecialchars($colors['primary'] ?? 'var(--color-primary)') ?>;
+    border: var(--border-width-thin) solid <?= htmlspecialchars($colors['primaryDark'] ?? 'var(--color-primary-dark)') ?>;
     border-left: none;
     border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+    color: var(--color-on-primary, #ffffff);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.search-submit-btn:hover {
-    background-color: <?= htmlspecialchars($colors['primary'] ?? 'var(--color-brand-orange)') ?>;
+.search-submit-btn:hover,
+.search-submit-btn:focus-visible {
+    background-color: <?= htmlspecialchars($colors['primaryDark'] ?? 'var(--color-primary-dark)') ?>;
+    border-color: <?= htmlspecialchars($colors['primaryDark'] ?? 'var(--color-primary-dark)') ?>;
 }
 
 .search-submit-btn::after {
     content: '';
     width: var(--spacing-5_5);
     height: var(--spacing-5_5);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -2387,7 +2308,8 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .header-main-nav-inner {
     display: flex;
-    flex-wrap: wrap;
+    /* 业界：宽屏单行 nowrap，靠「更多」收项；禁止 flex 自然换行后再挤回一行 */
+    flex-wrap: nowrap;
     align-items: center;
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 100%;
@@ -2400,6 +2322,57 @@ textarea::-webkit-scrollbar-thumb:hover,
     gap: var(--spacing-sm);
 }
 
+/* 锁两行：JS 滞回 class，或 ≤768 媒体查询兜底（二者任一即栈） */
+.header-main-nav-inner.is-nav-stacked {
+    flex-wrap: wrap;
+    gap: 0;
+}
+
+.header-main-nav-inner.is-nav-stacked .header-nav-left-cluster {
+    flex: 1 1 auto;
+    min-width: 0;
+    order: 1;
+    overflow: hidden;
+}
+
+.header-main-nav-inner.is-nav-stacked .header-nav-right-cluster {
+    flex: 1 1 100%;
+    order: 2;
+    justify-content: flex-start;
+    overflow: hidden;
+    min-height: var(--size-control-md);
+}
+
+.header-main-nav-inner.is-nav-stacked .header-nav-fill-inner {
+    justify-content: flex-start;
+    overflow: hidden;
+    width: 100%;
+}
+
+/* 左大簇：严格内容宽（max-content），永不吃中间空白；空白归右簇 */
+.header-nav-left-cluster {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    flex-grow: 0;
+    width: max-content;
+    min-width: 0;
+    max-width: 100%;
+    gap: var(--spacing-sm);
+    overflow: hidden;
+}
+
+/* 右大簇：吃剩余宽，右对齐；左空则右自动铺满，再在实宽内决定是否「更多」 */
+.header-nav-right-cluster {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 1 0%;
+    min-width: 0;
+    gap: var(--weline-space-5);
+    overflow: hidden;
+}
+
 /* 全部菜单：内容宽度，不被左右菜单挤压覆盖 */
 .header-nav-all {
     flex: 0 0 auto;
@@ -2408,19 +2381,40 @@ textarea::-webkit-scrollbar-thumb:hover,
     position: relative;
 }
 
-/* 左侧分类：跟在「全部」后，可收缩。弹出层抬升由 data-wf-stack + Weline.UI.stack 基建处理 */
+/* 左侧分类：跟在「全部」后，按可见内容宽（禁止 flex-grow 把中间空白留在左槽） */
 .header-nav-left,
 .header-nav-left-slot,
 .header-categories {
     display: flex;
     align-items: center;
-    flex: 1 1 0;
+    flex: 0 1 auto;
+    flex-grow: 0;
     min-width: 0;
-    max-width: none;
-    width: auto;
+    max-width: 100%;
+    width: max-content;
     overflow: hidden;
     white-space: nowrap;
     position: relative;
+}
+
+/* 分类后政策槽：固定内容宽（单一下拉），不参与挤占分类「更多」预算 */
+.header-policy-links-slot {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    overflow: visible;
+}
+.header-policy-links-slot:empty {
+    display: none;
+}
+@media (max-width: 768px) {
+    .header-policy-links-slot {
+        display: none;
+    }
 }
 
 @media (max-width: 768px) {
@@ -2431,7 +2425,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     }
 }
 
-/* 右侧快捷：跟条目内容自适应宽度，不与左侧分类 flex 平分空白；左侧 flex-grow 吃满后自然把右侧顶到行尾 */
+/* 右侧快捷：在右簇内跟条目内容自适应 */
 .header-nav-fill,
 .header-nav-right-slot,
 .header-nav-links-slot {
@@ -2449,8 +2443,9 @@ textarea::-webkit-scrollbar-thumb:hover,
     min-height: var(--size-control-md);
 }
 
+/* 右簇内扩展槽（博客等）：与快捷导航并列，不参与主行换行 */
 .header-nav-extensions {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
     max-width: none;
     width: auto;
@@ -2471,7 +2466,9 @@ textarea::-webkit-scrollbar-thumb:hover,
 }
 
 .header-nav-extensions .header-nav-extension-link,
-.header-nav-extensions a {
+.header-nav-extensions a,
+.header-nav-right-cluster > .header-nav-extension-link,
+.header-nav-right-cluster > .header-blog-link {
     color: inherit;
     text-decoration: none;
     white-space: nowrap;
@@ -2479,7 +2476,9 @@ textarea::-webkit-scrollbar-thumb:hover,
 }
 
 .header-nav-extensions .header-nav-extension-link:hover,
-.header-nav-extensions a:hover {
+.header-nav-extensions a:hover,
+.header-nav-right-cluster > .header-nav-extension-link:hover,
+.header-nav-right-cluster > .header-blog-link:hover {
     text-decoration: underline;
 }
 
@@ -2497,44 +2496,49 @@ textarea::-webkit-scrollbar-thumb:hover,
     flex: 0 0 auto;
 }
 
-/* 平板及以下：右侧快捷整行换到第二行；左侧「全部+分类」留在第一行；overflow 收纳进 More，不用横向滑走 All/More */
-@media (max-width: 992px) {
+/* 空 exclusive 槽 / 空 hook 不占 gap；「更多」已提到右簇旁，默认 display:none 亦不占位 */
+.header-nav-right:not(:has(*)),
+.header-nav-right-cluster > .header-nav-right-slot:has(#nav-links-list:empty) {
+    display: none;
+}
+
+/* 「更多」未展开时不占 flex 位；出现时（JS 写 display:flex）再申请宽度 */
+.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"],
+.header-nav-right-cluster > .nav-more-wrapper[hidden] {
+    display: none !important;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+    flex: 0 0 0;
+}
+
+.header-nav-right-cluster > .header-nav-extension-link.is-nav-overflow-hidden,
+.header-nav-right-cluster .nav-links-list > li.is-nav-overflow-hidden {
+    display: none !important;
+}
+
+/* 窄屏兜底两行（与 is-nav-stacked 同构）；宽屏保持单行+更多 */
+@media (max-width: 768px) {
     .header-main-nav-inner {
         flex-wrap: wrap;
         gap: 0;
     }
 
-    .header-nav-all {
-        flex: 0 0 auto;
-        order: 1;
-        display: flex;
-    }
-
-    .header-nav-left,
-    .header-nav-left-slot,
-    .header-categories {
+    .header-nav-left-cluster {
         flex: 1 1 auto;
         min-width: 0;
         order: 1;
         overflow: hidden;
     }
 
-    .header-nav-fill,
-    .header-nav-right-slot,
-    .header-nav-links-slot {
+    .header-nav-right-cluster {
         flex: 1 1 100%;
         order: 2;
-        margin-left: 0;
         justify-content: flex-start;
         overflow: hidden;
-        height: auto;
         min-height: var(--size-control-md);
-    }
-
-    .header-nav-extensions {
-        flex: 0 1 auto;
-        order: 1;
-        overflow: hidden;
     }
 
     .header-nav-fill-inner {
@@ -2576,8 +2580,10 @@ textarea::-webkit-scrollbar-thumb:hover,
 /* 分类菜单内容：未抬升时仍可横向裁剪；抬升后由 [data-wf-raised] 强制 overflow:visible */
 .header-categories .categories-nav,
 .header-nav-left-slot .categories-nav {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    width: max-content;
+    max-width: 100%;
     display: flex;
     align-items: center;
     overflow: hidden;
@@ -4138,11 +4144,10 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         display: none !important;
     }
 
+    /* ≤768 两行已由上方 stack 规则锁定；此处只收滚动条，禁止再 nowrap 挤回一行 */
     .header-main-nav-inner {
-        flex-wrap: nowrap;
         overflow-x: hidden;
         overflow-y: hidden;
-        gap: var(--spacing-sm);
         scrollbar-width: none;
         min-height: var(--size-control-md);
     }
@@ -4161,11 +4166,12 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     .header-nav-left-slot,
     .header-categories {
         display: flex;
-        flex: 1 1 0;
+        flex: 0 1 auto;
+        flex-grow: 0;
         order: 0;
         min-width: 0;
-        width: auto;
-        max-width: none;
+        width: max-content;
+        max-width: 100%;
         margin-left: 0;
         justify-content: flex-start;
         overflow: hidden;
@@ -4457,87 +4463,594 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
             });
         }
         
-        if (navLinksList && navMoreWrapper && navMoreBtn && navMoreDropdown && headerNavFill) {
-            let resizeTimeout;
+        if ((navLinksList || document.querySelector('.header-nav-right-cluster')) && navMoreWrapper && navMoreBtn && navMoreDropdown) {
+            const rightCluster = document.querySelector('.header-nav-right-cluster');
+            const leftCluster = document.querySelector('.header-nav-left-cluster');
+            const mainNavInner = document.querySelector('.header-main-nav-inner');
+            // 拖窗：只按「藏从哪项起」改可见性；菜单 DOM/mount 延到 resize 停稳。禁止每 px 重建。
+            let overflowAdjustRaf = 0;
+            let overflowIdleTimer = 0;
+            let lastNavHideFrom = null;
+            let lastCatHideFrom = null;
+            let lastNavCandidateCount = -1;
+            let lastCatCandidateCount = -1;
+            let navMenuBuiltFor = null;
+            let catMenuBuiltFor = null;
+            let navNaturalCache = { key: '', widths: [], prefix: [], moreW: 0, gap: 20 };
+            let catNaturalCache = { key: '', widths: [], prefix: [], moreW: 0, gap: 8 };
+            let cachedInnerPadGap = null;
+            let cachedRightPad = null;
+            let cachedLeftGap = null;
+            let cachedAllW = null;
+            // 临界宽滞回：变窄立即收，变宽多要 HYSTERESIS px 才吐回一项，避免来回闪
+            const OVERFLOW_HYSTERESIS_PX = 12;
+            // 两行栈：≤768 进入；>792 才退出（业界断点滞回，避免拖窗在临界来回单行/两行）
+            const NAV_STACK_ENTER_MAX = 768;
+            const NAV_STACK_EXIT_MIN = 792;
+            let navStackedSticky = false;
             
-            // 检查并调整菜单项
-            function adjustNavLinks() {
-                // 重置所有菜单项
-                const allItems = navLinksList.querySelectorAll('li');
-                allItems.forEach(function(item) {
-                    item.classList.remove('hidden');
+            // 右簇溢出：「更多」默认不占位；仅当前行装不下时再 display:flex
+            // 已换两行时按第二行全宽算——放得下则不显示更多；仍放不下才显示
+            function clustersOnSeparateRows() {
+                if (mainNavInner && mainNavInner.classList.contains('is-nav-stacked')) {
+                    return true;
+                }
+                if (!leftCluster || !rightCluster) {
+                    return false;
+                }
+                // offsetTop 比 getBoundingClientRect 轻，拖窗够用
+                return Math.abs(leftCluster.offsetTop - rightCluster.offsetTop) > 8;
+            }
+
+            function syncNavStackMode() {
+                if (!mainNavInner) {
+                    return;
+                }
+                const w = window.innerWidth || document.documentElement.clientWidth || 0;
+                if (!navStackedSticky && w <= NAV_STACK_ENTER_MAX) {
+                    navStackedSticky = true;
+                } else if (navStackedSticky && w > NAV_STACK_EXIT_MIN) {
+                    navStackedSticky = false;
+                }
+                const shouldStack = navStackedSticky || w <= NAV_STACK_ENTER_MAX;
+                const wasStacked = mainNavInner.classList.contains('is-nav-stacked');
+                mainNavInner.classList.toggle('is-nav-stacked', shouldStack);
+                if (wasStacked !== shouldStack) {
+                    // 单行/两行切换时丢掉 hideFrom 滞回，避免宽屏仍锁在「全进更多」
+                    lastNavHideFrom = null;
+                    lastCatHideFrom = null;
+                    navMenuBuiltFor = null;
+                    catMenuBuiltFor = null;
+                }
+            }
+
+            function scheduleOverflowAdjust() {
+                syncNavStackMode();
+                if (!overflowAdjustRaf) {
+                    overflowAdjustRaf = window.requestAnimationFrame(function() {
+                        overflowAdjustRaf = 0;
+                        // 先左后右：左收进更多后右簇变宽，再决定右「更多」
+                        warmNavNaturalMetrics();
+                        adjustCategoriesOverflow(true);
+                        if (rightCluster) {
+                            void rightCluster.offsetWidth;
+                        }
+                        adjustNavLinks(true);
+                    });
+                }
+                if (overflowIdleTimer) {
+                    window.clearTimeout(overflowIdleTimer);
+                }
+                overflowIdleTimer = window.setTimeout(function() {
+                    overflowIdleTimer = 0;
+                    warmNavNaturalMetrics();
+                    adjustCategoriesOverflow(false);
+                    if (rightCluster) {
+                        void rightCluster.offsetWidth;
+                    }
+                    adjustNavLinks(false);
+                }, 180);
+            }
+
+            function warmNavNaturalMetrics() {
+                if (!rightCluster) {
+                    return;
+                }
+                const extensionLinks = Array.from(rightCluster.querySelectorAll(
+                    ':scope > .header-nav-extension-link, :scope > .header-nav-extensions .header-nav-extension-link'
+                ));
+                const listItems = navLinksList
+                    ? Array.from(navLinksList.querySelectorAll(':scope > li'))
+                    : [];
+                const candidates = extensionLinks.concat(listItems);
+                if (candidates.length) {
+                    ensureNavNaturalMetrics(candidates);
+                }
+            }
+
+            function buildWidthPrefix(widths, gap) {
+                const prefix = new Array(widths.length);
+                let sum = 0;
+                for (let i = 0; i < widths.length; i++) {
+                    sum += widths[i] + (i > 0 ? gap : 0);
+                    prefix[i] = sum;
+                }
+                return prefix;
+            }
+
+            function measureMainInnerContentWidth() {
+                if (!mainNavInner) {
+                    return headerMainNav ? headerMainNav.clientWidth : 0;
+                }
+                if (!cachedInnerPadGap) {
+                    const innerStyle = window.getComputedStyle(mainNavInner);
+                    cachedInnerPadGap = {
+                        l: parseFloat(innerStyle.paddingInlineStart || innerStyle.paddingLeft) || 0,
+                        r: parseFloat(innerStyle.paddingInlineEnd || innerStyle.paddingRight) || 0,
+                        gap: parseFloat(innerStyle.columnGap || innerStyle.gap) || 0
+                    };
+                }
+                return Math.max(
+                    0,
+                    mainNavInner.clientWidth - cachedInnerPadGap.l - cachedInnerPadGap.r
+                );
+            }
+
+            function measureAllButtonWidth() {
+                const allRoot = document.getElementById('header-nav-all-root');
+                if (!allRoot) {
+                    return 0;
+                }
+                // hidden fallback / 空槽不占宽
+                const visible = allRoot.querySelector(
+                    '#hamburger-menu:not([hidden]), [data-all-menu-widget="1"], .hamburger-menu-btn:not([hidden])'
+                );
+                if (!visible) {
+                    return 0;
+                }
+                return allRoot.offsetWidth;
+            }
+
+            /**
+             * 左簇实际占用：仅「全部」+ 仍显示的分类/分类更多 + 政策下拉（不含 flex 吃掉的空白）。
+             * 左空时 ≈0，右可用宽 = 主栏 − 左占用 − gap。
+             */
+            function measurePolicyLinksWidth() {
+                const slot = document.querySelector('.header-policy-links-slot');
+                if (!slot) {
+                    return 0;
+                }
+                if (slot.hidden || slot.offsetParent === null) {
+                    return 0;
+                }
+                const w = slot.offsetWidth;
+                return w > 0 ? w : 0;
+            }
+
+            function measureLeftOccupiedWidth() {
+                const allW = measureAllButtonWidth();
+                if (!leftCluster) {
+                    return allW;
+                }
+                if (cachedLeftGap == null) {
+                    const leftStyle = window.getComputedStyle(leftCluster);
+                    cachedLeftGap = parseFloat(leftStyle.columnGap || leftStyle.gap) || 0;
+                }
+                let catsW = 0;
+                let visibleCount = 0;
+                if (categoriesList) {
+                    const catGap = parseFloat(window.getComputedStyle(categoriesList).columnGap
+                        || window.getComputedStyle(categoriesList).gap) || 8;
+                    Array.from(categoriesList.children).forEach(function(el) {
+                        if (el === categoriesOverflowWrapper) {
+                            const shown = categoriesOverflowWrapper.style.display !== 'none'
+                                && !categoriesOverflowWrapper.hidden
+                                && categoriesOverflowWrapper.offsetParent !== null;
+                            if (!shown) {
+                                return;
+                            }
+                        } else if (
+                            el.classList.contains('hidden')
+                            || el.classList.contains('is-nav-overflow-hidden')
+                            || el.getAttribute('hidden') !== null
+                        ) {
+                            return;
+                        }
+                        const w = el.offsetWidth;
+                        if (w <= 0) {
+                            return;
+                        }
+                        catsW += w + (visibleCount > 0 ? catGap : 0);
+                        visibleCount += 1;
+                    });
+                }
+                const policyW = measurePolicyLinksWidth();
+                let occupied = allW;
+                if (catsW > 0) {
+                    occupied = allW > 0 ? allW + cachedLeftGap + catsW : catsW;
+                }
+                if (policyW > 0) {
+                    occupied = occupied > 0 ? occupied + cachedLeftGap + policyW : policyW;
+                }
+                return occupied;
+            }
+
+            function measureNavAvailableWidth() {
+                const mainW = measureMainInnerContentWidth();
+                if (!cachedInnerPadGap && mainNavInner) {
+                    const innerStyle = window.getComputedStyle(mainNavInner);
+                    cachedInnerPadGap = {
+                        l: parseFloat(innerStyle.paddingInlineStart || innerStyle.paddingLeft) || 0,
+                        r: parseFloat(innerStyle.paddingInlineEnd || innerStyle.paddingRight) || 0,
+                        gap: parseFloat(innerStyle.columnGap || innerStyle.gap) || 0
+                    };
+                }
+                const gap = cachedInnerPadGap ? cachedInnerPadGap.gap : 0;
+                // 互让：右可用 = 主栏内容宽 − 左实际占用 − 簇间距（左空则右几乎拿满）
+                const reciprocal = Math.max(0, mainW - measureLeftOccupiedWidth() - gap);
+                if (!rightCluster) {
+                    if (headerNavFill) {
+                        return Math.max(reciprocal, headerNavFill.clientWidth);
+                    }
+                    return reciprocal;
+                }
+                if (!cachedRightPad) {
+                    const style = window.getComputedStyle(rightCluster);
+                    cachedRightPad = {
+                        l: parseFloat(style.paddingInlineStart || style.paddingLeft) || 0,
+                        r: parseFloat(style.paddingInlineEnd || style.paddingRight) || 0
+                    };
+                }
+                const layout = Math.max(
+                    0,
+                    rightCluster.clientWidth - cachedRightPad.l - cachedRightPad.r
+                );
+                // 取较大值：左若被错误撑宽导致 layout 偏小，仍以互让宽为准
+                return Math.max(layout, reciprocal);
+            }
+
+            function measureRightNaturalReserve() {
+                if (navNaturalCache.prefix && navNaturalCache.prefix.length) {
+                    return navNaturalCache.prefix[navNaturalCache.prefix.length - 1];
+                }
+                if (navNaturalCache.widths && navNaturalCache.widths.length) {
+                    let sum = 0;
+                    const gap = navNaturalCache.gap || 20;
+                    for (let i = 0; i < navNaturalCache.widths.length; i++) {
+                        sum += navNaturalCache.widths[i] + (i > 0 ? gap : 0);
+                    }
+                    return sum;
+                }
+                return 0;
+            }
+
+            function measureCatAvailableWidth() {
+                // 先给右簇留足自然宽，再扣政策下拉；左分类在剩余里进更多——避免左按内容撑满、右只剩「更多」
+                const mainW = measureMainInnerContentWidth();
+                const allW = measureAllButtonWidth();
+                if (!cachedInnerPadGap && mainNavInner) {
+                    const innerStyle = window.getComputedStyle(mainNavInner);
+                    cachedInnerPadGap = {
+                        l: parseFloat(innerStyle.paddingInlineStart || innerStyle.paddingLeft) || 0,
+                        r: parseFloat(innerStyle.paddingInlineEnd || innerStyle.paddingRight) || 0,
+                        gap: parseFloat(innerStyle.columnGap || innerStyle.gap) || 0
+                    };
+                }
+                if (cachedLeftGap == null && leftCluster) {
+                    const leftStyle = window.getComputedStyle(leftCluster);
+                    cachedLeftGap = parseFloat(leftStyle.columnGap || leftStyle.gap) || 0;
+                }
+                const gap = cachedInnerPadGap ? cachedInnerPadGap.gap : 0;
+                const leftGap = cachedLeftGap != null ? cachedLeftGap : 0;
+                const policyW = measurePolicyLinksWidth();
+                const policyReserve = policyW > 0 ? (policyW + leftGap) : 0;
+                const rightReserve = measureRightNaturalReserve();
+                if (rightReserve > 0) {
+                    return Math.max(0, mainW - allW - gap - rightReserve - policyReserve - 8);
+                }
+                // 无右项时：左可用 = 主栏 − 全部 − 政策下拉 − gap（不要用可能被撑大的 leftCluster.clientWidth）
+                return Math.max(0, mainW - allW - gap - policyReserve - 8);
+            }
+
+            function measureFlexChildrenOffDom(elements, morePrototype, gap) {
+                const host = document.createElement('div');
+                host.setAttribute('aria-hidden', 'true');
+                host.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;display:flex;align-items:center;white-space:nowrap;gap:'
+                    + gap + 'px;';
+                const clones = [];
+                for (let i = 0; i < elements.length; i++) {
+                    const clone = elements[i].cloneNode(true);
+                    clone.classList.remove('hidden', 'is-nav-overflow-hidden');
+                    clone.removeAttribute('hidden');
+                    // 分类 mega/popover 面板不计入行宽，否则左预算被撑爆、右被挤成「更多」
+                    clone.querySelectorAll(
+                        '.w-popover, .w-mega-menu, .header-category-panel, .categories-overflow-panel, [data-w-popover-panel], [data-w-menu-panel]'
+                    ).forEach(function(panel) {
+                        panel.remove();
+                    });
+                    clone.style.cssText = 'display:flex;position:static;visibility:visible;';
+                    host.appendChild(clone);
+                    clones.push(clone);
+                }
+                let moreClone = null;
+                if (morePrototype) {
+                    moreClone = morePrototype.cloneNode(true);
+                    moreClone.hidden = false;
+                    moreClone.querySelectorAll(
+                        '.w-popover, .w-mega-menu, .header-category-panel, .categories-overflow-panel, [data-w-popover-panel], [data-w-menu-panel]'
+                    ).forEach(function(panel) {
+                        panel.remove();
+                    });
+                    moreClone.style.cssText = 'display:flex;position:static;visibility:visible;';
+                    host.appendChild(moreClone);
+                }
+                document.body.appendChild(host);
+                const widths = clones.map(function(clone) {
+                    return clone.getBoundingClientRect().width;
                 });
-                // menu 挂在 wrapper 上；重建前先 unmount wrapper，避免旧 hover 绑定残留
+                const moreW = moreClone ? (moreClone.getBoundingClientRect().width + gap) : 0;
+                document.body.removeChild(host);
+                return { widths: widths, moreW: moreW, gap: gap };
+            }
+
+            function ensureNavNaturalMetrics(candidates) {
+                const key = candidates.map(function(item) {
+                    const link = item.tagName === 'A' ? item : item.querySelector('a');
+                    return (link && link.getAttribute('href') || '') + '\t' + ((link && link.textContent) || item.textContent || '').trim();
+                }).join('\n');
+                const clusterGap = rightCluster
+                    ? (parseFloat(window.getComputedStyle(rightCluster).gap) || 20)
+                    : 20;
+                if (navNaturalCache.key === key && navNaturalCache.widths.length === candidates.length) {
+                    navNaturalCache.gap = clusterGap;
+                    if (!navNaturalCache.prefix || navNaturalCache.prefix.length !== candidates.length) {
+                        navNaturalCache.prefix = buildWidthPrefix(navNaturalCache.widths, clusterGap);
+                    }
+                    return navNaturalCache;
+                }
+                const measured = measureFlexChildrenOffDom(candidates, navMoreWrapper, clusterGap);
+                const widths = measured.widths;
+                navNaturalCache = {
+                    key: key,
+                    widths: widths,
+                    prefix: buildWidthPrefix(widths, clusterGap),
+                    moreW: measured.moreW || 72,
+                    gap: clusterGap
+                };
+                return navNaturalCache;
+            }
+
+            function ensureCatNaturalMetrics(categoryItems) {
+                const catKey = categoryItems.map(function(item) {
+                    const link = item.querySelector('a');
+                    return (link && link.getAttribute('href') || '') + '\t' + ((link && link.textContent) || item.textContent || '').trim();
+                }).join('\n');
+                const gap = categoriesList
+                    ? (parseFloat(window.getComputedStyle(categoriesList).gap) || 8)
+                    : 8;
+                if (catNaturalCache.key === catKey && catNaturalCache.widths.length === categoryItems.length) {
+                    catNaturalCache.gap = gap;
+                    if (!catNaturalCache.prefix || catNaturalCache.prefix.length !== categoryItems.length) {
+                        catNaturalCache.prefix = buildWidthPrefix(catNaturalCache.widths, gap);
+                    }
+                    return catNaturalCache;
+                }
+                const measured = measureFlexChildrenOffDom(categoryItems, categoriesOverflowWrapper, gap);
+                const widths = measured.widths;
+                catNaturalCache = {
+                    key: catKey,
+                    widths: widths,
+                    prefix: buildWidthPrefix(widths, gap),
+                    moreW: measured.moreW || 56,
+                    gap: gap
+                };
+                return catNaturalCache;
+            }
+
+            /**
+             * 前缀和 + 二分：最大可见条数 k → hideFrom=k（全可见则 -1）
+             * moreW 已含与末项间距。
+             */
+            function computeHideFromRaw(prefix, moreW, availableWidth, count) {
+                if (!count) {
+                    return -1;
+                }
+                if (prefix[count - 1] <= availableWidth + 0.5) {
+                    return -1;
+                }
+                let lo = 0;
+                let hi = count - 1;
+                while (lo < hi) {
+                    const mid = (lo + hi + 1) >> 1;
+                    const need = (mid === 0 ? 0 : prefix[mid - 1]) + moreW;
+                    if (need <= availableWidth + 0.5) {
+                        lo = mid;
+                    } else {
+                        hi = mid - 1;
+                    }
+                }
+                const need0 = moreW;
+                if (lo === 0 && need0 > availableWidth + 0.5) {
+                    return 0;
+                }
+                return lo;
+            }
+
+            /**
+             * 滞回：变窄（可见变少）立即采用 raw；变宽（吐回项）需 A−δ 仍装得下才放行。
+             */
+            function resolveHideFromWithHysteresis(prefix, moreW, availableWidth, count, prevHideFrom) {
+                const raw = computeHideFromRaw(prefix, moreW, availableWidth, count);
+                if (prevHideFrom == null) {
+                    return raw;
+                }
+                const visibleOf = function(hideFrom) {
+                    return hideFrom < 0 ? count : hideFrom;
+                };
+                const rawVis = visibleOf(raw);
+                const prevVis = visibleOf(prevHideFrom);
+                if (rawVis < prevVis) {
+                    return raw;
+                }
+                if (rawVis > prevVis) {
+                    const strict = computeHideFromRaw(
+                        prefix,
+                        moreW,
+                        Math.max(0, availableWidth - OVERFLOW_HYSTERESIS_PX),
+                        count
+                    );
+                    if (visibleOf(strict) >= rawVis) {
+                        return raw;
+                    }
+                    return prevHideFrom;
+                }
+                return prevHideFrom;
+            }
+
+            function applyNavVisibility(candidates, hideFrom) {
+                for (let i = 0; i < candidates.length; i++) {
+                    const hide = hideFrom >= 0 && i >= hideFrom;
+                    const item = candidates[i];
+                    if (hide) {
+                        item.classList.add('is-nav-overflow-hidden');
+                        if (item.tagName === 'LI') {
+                            item.classList.add('hidden');
+                        }
+                    } else {
+                        item.classList.remove('is-nav-overflow-hidden');
+                        if (item.tagName === 'LI') {
+                            item.classList.remove('hidden');
+                        }
+                    }
+                }
+                if (hideFrom < 0) {
+                    navMoreWrapper.style.display = 'none';
+                    navMoreWrapper.hidden = true;
+                } else {
+                    navMoreWrapper.hidden = false;
+                    navMoreWrapper.style.display = 'flex';
+                }
+            }
+
+            function rebuildNavMoreMenu(candidates, hideFrom) {
                 if (window.Weline && window.Weline.UI && typeof window.Weline.UI.unmount === 'function') {
                     window.Weline.UI.unmount(navMoreWrapper);
                 }
                 navMoreDropdown.innerHTML = '';
-                navMoreWrapper.style.display = 'none';
-                
-                // 等待DOM更新
-                requestAnimationFrame(function() {
-                    // 可用宽度：#header-nav-fill 当前槽位（内容宽或被 flex-shrink 压缩后的宽）
-                    const availableWidth = Math.max(0, headerNavFill.clientWidth);
-                    const items = Array.from(navLinksList.querySelectorAll('li'));
-                    const computedStyle = window.getComputedStyle(navLinksList);
-                    const gap = parseFloat(computedStyle.gap) || 20;
-                    const linksGap = parseFloat(window.getComputedStyle(
-                        navLinksList.parentElement || navLinksList
-                    ).gap) || gap;
-
-                    let contentWidth = 0;
-                    for (let i = 0; i < items.length; i++) {
-                        contentWidth += items[i].getBoundingClientRect().width + (i > 0 ? gap : 0);
-                    }
-
-                    // 内容自适应且未被压缩时：整组能放下就不预留「更多」宽度（避免假溢出）
-                    if (contentWidth <= availableWidth + 0.5) {
-                        navMoreWrapper.style.display = 'none';
+                if (hideFrom < 0) {
+                    navMenuBuiltFor = -1;
+                    return;
+                }
+                candidates.slice(hideFrom).forEach(function(item) {
+                    const link = item.tagName === 'A' ? item : item.querySelector('a');
+                    if (!link) {
                         return;
                     }
-
-                    navMoreWrapper.style.display = 'flex';
-                    const moreBtnWidth = navMoreWrapper.getBoundingClientRect().width + linksGap;
-                    navMoreWrapper.style.display = 'none';
-
-                    let totalWidth = 0;
-                    let itemsToHide = [];
-                    for (let i = 0; i < items.length; i++) {
-                        const itemWidth = items[i].getBoundingClientRect().width;
-                        const itemGap = i > 0 ? gap : 0;
-                        if (totalWidth + itemWidth + itemGap + moreBtnWidth > availableWidth) {
-                            itemsToHide = items.slice(i);
-                            break;
-                        }
-                        totalWidth += itemWidth + itemGap;
-                    }
-
-                    if (itemsToHide.length > 0) {
-                        navMoreWrapper.style.display = 'flex';
-                        itemsToHide.forEach(function(item) {
-                            item.classList.add('hidden');
-                            const link = item.querySelector('a');
-                            if (link) {
-                                const menuItem = document.createElement('a');
-                                menuItem.className = 'w-menu__item';
-                                menuItem.setAttribute('role', 'menuitem');
-                                menuItem.tabIndex = -1;
-                                menuItem.href = link.getAttribute('href') || '#';
-                                menuItem.textContent = (link.textContent || '').trim();
-                                navMoreDropdown.appendChild(menuItem);
-                            }
+                    const menuItem = document.createElement('a');
+                    menuItem.className = 'w-menu__item';
+                    menuItem.setAttribute('role', 'menuitem');
+                    menuItem.tabIndex = -1;
+                    menuItem.href = link.getAttribute('href') || '#';
+                    if (link.getAttribute('role') === 'button' || (link.getAttribute('href') || '').charAt(0) === '#') {
+                        menuItem.addEventListener('click', function(ev) {
+                            ev.preventDefault();
+                            link.click();
                         });
-                        if (window.Weline && window.Weline.UI && typeof window.Weline.UI.mount === 'function') {
-                            window.Weline.UI.mount(navMoreWrapper);
-                        }
-                    } else {
-                        navMoreWrapper.style.display = 'none';
                     }
+                    menuItem.textContent = (link.textContent || '').trim();
+                    navMoreDropdown.appendChild(menuItem);
                 });
+                if (window.Weline && window.Weline.UI && typeof window.Weline.UI.mount === 'function') {
+                    window.Weline.UI.mount(navMoreWrapper);
+                }
+                navMenuBuiltFor = hideFrom;
+            }
+
+            function applyCatVisibility(categoryItems, hideFrom) {
+                for (let i = 0; i < categoryItems.length; i++) {
+                    categoryItems[i].classList.toggle('hidden', hideFrom >= 0 && i >= hideFrom);
+                }
+                if (hideFrom < 0) {
+                    categoriesOverflowWrapper.style.display = 'none';
+                    categoriesOverflowWrapper.classList.remove('active');
+                } else {
+                    categoriesOverflowWrapper.style.display = 'flex';
+                }
+            }
+
+            function rebuildCatMoreMenu(categoryItems, hideFrom) {
+                if (window.Weline && window.Weline.UI && typeof window.Weline.UI.unmount === 'function') {
+                    window.Weline.UI.unmount(categoriesOverflowWrapper);
+                }
+                categoriesOverflowDropdown.innerHTML = '';
+                categoriesOverflowWrapper.classList.remove('active');
+                if (hideFrom < 0) {
+                    catMenuBuiltFor = -1;
+                    return;
+                }
+                buildCategoriesOverflowMega(categoryItems.slice(hideFrom), categoriesOverflowDropdown);
+                if (window.Weline && window.Weline.UI && typeof window.Weline.UI.mount === 'function') {
+                    window.Weline.UI.mount(categoriesOverflowWrapper);
+                }
+                var overflowMega = categoriesOverflowWrapper.querySelector('[data-mega-menu]')
+                    || document.querySelector('body > .categories-overflow-panel[data-mega-menu]');
+                if (overflowMega) {
+                    bindHeaderMegaMenu(overflowMega);
+                    overflowMega.querySelectorAll('[data-mega-card-expand="1"]').forEach(function(card) {
+                        card.classList.add('is-expanded');
+                        var children = card.querySelector('.mega-menu-card__children');
+                        if (children) {
+                            children.hidden = false;
+                            children.removeAttribute('hidden');
+                        }
+                    });
+                }
+                catMenuBuiltFor = hideFrom;
+            }
+
+            function adjustNavLinks(lightOnly) {
+                const extensionLinks = rightCluster
+                    ? Array.from(rightCluster.querySelectorAll(':scope > .header-nav-extension-link, :scope > .header-nav-extensions .header-nav-extension-link'))
+                    : [];
+                const listItems = navLinksList
+                    ? Array.from(navLinksList.querySelectorAll(':scope > li'))
+                    : [];
+                const candidates = extensionLinks.concat(listItems);
+                if (candidates.length === 0) {
+                    if (lastNavHideFrom !== -1 || lastNavCandidateCount !== 0) {
+                        applyNavVisibility([], -1);
+                        if (!lightOnly) {
+                            rebuildNavMoreMenu([], -1);
+                        }
+                        lastNavHideFrom = -1;
+                        lastNavCandidateCount = 0;
+                    }
+                    return;
+                }
+
+                const availableWidth = measureNavAvailableWidth();
+                const metrics = ensureNavNaturalMetrics(candidates);
+                const hideFrom = resolveHideFromWithHysteresis(
+                    metrics.prefix,
+                    metrics.moreW,
+                    availableWidth,
+                    candidates.length,
+                    lastNavHideFrom
+                );
+
+                if (hideFrom !== lastNavHideFrom || candidates.length !== lastNavCandidateCount) {
+                    applyNavVisibility(candidates, hideFrom);
+                    lastNavHideFrom = hideFrom;
+                    lastNavCandidateCount = candidates.length;
+                }
+
+                if (!lightOnly && navMenuBuiltFor !== hideFrom) {
+                    rebuildNavMoreMenu(candidates, hideFrom);
+                }
             }
             
             // 初始调整
-            function adjustCategoriesOverflow() {
+            function adjustCategoriesOverflow(lightOnly) {
                 if (!categoriesList || !categoriesOverflowWrapper || !categoriesOverflowBtn || !categoriesOverflowDropdown || !headerMainNav) {
                     return;
                 }
@@ -4546,83 +5059,37 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     return item !== categoriesOverflowWrapper;
                 });
 
-                categoryItems.forEach(function(item) {
-                    item.classList.remove('hidden');
-                });
-                if (window.Weline && window.Weline.UI && typeof window.Weline.UI.unmount === 'function') {
-                    window.Weline.UI.unmount(categoriesOverflowWrapper);
+                if (categoryItems.length === 0) {
+                    if (lastCatHideFrom !== -1 || lastCatCandidateCount !== 0) {
+                        applyCatVisibility([], -1);
+                        if (!lightOnly) {
+                            rebuildCatMoreMenu([], -1);
+                        }
+                        lastCatHideFrom = -1;
+                        lastCatCandidateCount = 0;
+                    }
+                    return;
                 }
-                categoriesOverflowDropdown.innerHTML = '';
-                categoriesOverflowWrapper.style.display = 'none';
-                categoriesOverflowWrapper.classList.remove('active');
 
-                requestAnimationFrame(function() {
-                    const categoriesListRect = categoriesList.getBoundingClientRect();
-                    const headerNavFillRect = headerNavFill.getBoundingClientRect();
-                    const mainNavRect = headerMainNav.getBoundingClientRect();
-                    // LTR: categories left of fill → fill.left - categories.left
-                    // RTL: flex mirrors; categories sit on the right of fill → categories.right - fill.right
-                    // Using the LTR formula under RTL yields a negative span and collapses availableWidth to 0,
-                    // which hides every category into overflow (empty middle nav).
-                    const root = document.documentElement;
-                    const isRtl = (root.getAttribute('dir') || root.getAttribute('data-dir') || '').toLowerCase() === 'rtl'
-                        || root.classList.contains('is-rtl');
-                    const spanToFill = isRtl
-                        ? (categoriesListRect.right - headerNavFillRect.right)
-                        : (headerNavFillRect.left - categoriesListRect.left);
-                    const availableWidth = Math.max(
-                        0,
-                        Math.min(spanToFill - 16, mainNavRect.width - 32)
-                    );
+                const availableWidth = measureCatAvailableWidth();
+                const metrics = ensureCatNaturalMetrics(categoryItems);
+                const hideFrom = resolveHideFromWithHysteresis(
+                    metrics.prefix,
+                    metrics.moreW,
+                    availableWidth,
+                    categoryItems.length,
+                    lastCatHideFrom
+                );
 
-                    categoriesOverflowWrapper.style.display = 'flex';
-                    const overflowBtnWidth = categoriesOverflowWrapper.getBoundingClientRect().width + 8;
-                    categoriesOverflowWrapper.style.display = 'none';
+                if (hideFrom !== lastCatHideFrom || categoryItems.length !== lastCatCandidateCount) {
+                    applyCatVisibility(categoryItems, hideFrom);
+                    lastCatHideFrom = hideFrom;
+                    lastCatCandidateCount = categoryItems.length;
+                }
 
-                    const computedStyle = window.getComputedStyle(categoriesList);
-                    const gap = parseFloat(computedStyle.gap) || 8;
-                    let totalWidth = 0;
-                    let itemsToHide = [];
-
-                    for (let i = 0; i < categoryItems.length; i++) {
-                        const item = categoryItems[i];
-                        const itemWidth = item.getBoundingClientRect().width;
-                        const itemGap = i > 0 ? gap : 0;
-
-                        if (totalWidth + itemWidth + itemGap + overflowBtnWidth > availableWidth) {
-                            itemsToHide = categoryItems.slice(i);
-                            break;
-                        }
-                        totalWidth += itemWidth + itemGap;
-                    }
-
-                    if (itemsToHide.length > 0) {
-                        categoriesOverflowWrapper.style.display = 'flex';
-                        itemsToHide.forEach(function(item) {
-                            item.classList.add('hidden');
-                        });
-                        buildCategoriesOverflowMega(itemsToHide, categoriesOverflowDropdown);
-                        if (window.Weline && window.Weline.UI && typeof window.Weline.UI.mount === 'function') {
-                            window.Weline.UI.mount(categoriesOverflowWrapper);
-                        }
-                        // 委托绑定只挂一次；rebuild 只刷新 expand 卡片
-                        var overflowMega = categoriesOverflowWrapper.querySelector('[data-mega-menu]')
-                            || document.querySelector('body > .categories-overflow-panel[data-mega-menu]');
-                        if (overflowMega) {
-                            bindHeaderMegaMenu(overflowMega);
-                            overflowMega.querySelectorAll('[data-mega-card-expand="1"]').forEach(function(card) {
-                                card.classList.add('is-expanded');
-                                var children = card.querySelector('.mega-menu-card__children');
-                                if (children) {
-                                    children.hidden = false;
-                                    children.removeAttribute('hidden');
-                                }
-                            });
-                        }
-                    } else {
-                        categoriesOverflowWrapper.style.display = 'none';
-                    }
-                });
+                if (!lightOnly && catMenuBuiltFor !== hideFrom) {
+                    rebuildCatMoreMenu(categoryItems, hideFrom);
+                }
             }
 
             function buildCategoriesOverflowMega(itemsToHide, container) {
@@ -4806,30 +5273,22 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 container.appendChild(panels);
             }
 
-            adjustNavLinks();
-            adjustCategoriesOverflow();
-
-            // 窗口/容器尺寸变化时重新调整；右侧 More 仅由 adjustNavLinks 写入 w-menu__item 并 mount(menu)
-            window.addEventListener('resize', function() {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(function() {
-                    adjustNavLinks();
-                    adjustCategoriesOverflow();
-                }, 100);
-            });
-            if (typeof ResizeObserver !== 'undefined') {
-                const navLinksResizeObserver = new ResizeObserver(function() {
-                    clearTimeout(resizeTimeout);
-                    resizeTimeout = setTimeout(function() {
-                        adjustNavLinks();
-                        adjustCategoriesOverflow();
-                    }, 50);
-                });
-                navLinksResizeObserver.observe(headerNavFill);
-                if (headerMainNav) {
-                    navLinksResizeObserver.observe(headerMainNav);
-                }
+            // 首屏同步：先锁单行/两行策略；先左后右
+            syncNavStackMode();
+            warmNavNaturalMetrics();
+            adjustCategoriesOverflow(true);
+            if (rightCluster) {
+                void rightCluster.offsetWidth;
             }
+            adjustNavLinks(true);
+            adjustCategoriesOverflow(false);
+            if (rightCluster) {
+                void rightCluster.offsetWidth;
+            }
+            adjustNavLinks(false);
+
+            // 只听 window.resize：拖窗足够。RO 会在改 class 后回环，造成一闪一闪。
+            window.addEventListener('resize', scheduleOverflowAdjust, { passive: true });
             // 展开/关闭由 Weline.UI menu / popover 接管，不再手写 hover/click 层
         }
         
@@ -4987,33 +5446,43 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         (function() {
             const headerCategories = document.querySelector('.header-categories');
             if (!headerCategories) return;
+            let catWidthRaf = 0;
+            let lastHideNarrow = null;
 
             function checkCategoriesWidth() {
                 if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-                    headerCategories.classList.remove('hide-narrow');
+                    if (lastHideNarrow !== false) {
+                        headerCategories.classList.remove('hide-narrow');
+                        lastHideNarrow = false;
+                    }
                     return;
                 }
                 const width = headerCategories.offsetWidth;
-                if (width < 200) {
-                    headerCategories.classList.add('hide-narrow');
-                } else {
-                    headerCategories.classList.remove('hide-narrow');
+                const shouldHide = width < 200;
+                if (shouldHide === lastHideNarrow) {
+                    return;
                 }
+                headerCategories.classList.toggle('hide-narrow', shouldHide);
+                lastHideNarrow = shouldHide;
             }
 
-            // 使用 ResizeObserver 监听元素尺寸变化
-            if (window.ResizeObserver) {
-                const resizeObserver = new ResizeObserver(function(entries) {
+            function scheduleCheckCategoriesWidth() {
+                if (catWidthRaf) {
+                    return;
+                }
+                catWidthRaf = window.requestAnimationFrame(function() {
+                    catWidthRaf = 0;
                     checkCategoriesWidth();
                 });
+            }
+
+            if (window.ResizeObserver) {
+                const resizeObserver = new ResizeObserver(scheduleCheckCategoriesWidth);
                 resizeObserver.observe(headerCategories);
             }
 
-            // 同时监听窗口缩放事件
-            window.addEventListener('resize', checkCategoriesWidth);
-
-            // 初始执行
-            setTimeout(checkCategoriesWidth, 100);
+            window.addEventListener('resize', scheduleCheckCategoriesWidth, { passive: true });
+            scheduleCheckCategoriesWidth();
         })();
 
     }

@@ -91,6 +91,11 @@ CDN账户列表,CDN账户列表
 账户凭证为空,账户凭证为空
 该适配器未提供连接验证,该适配器未提供连接验证
 "邮箱 DNS 参数格式无效。","邮箱 DNS 参数格式无效。"
+Cloudflare,Cloudflare
+"已检测到 Cloudflare OAuth Client。","已检测到 Cloudflare OAuth Client。"
+"加速与证书联动时需要 OAuth Client。","加速与证书联动时需要 OAuth Client。"
+基建,基建
+"CDN / Cloudflare OAuth","CDN / Cloudflare OAuth"
 id属性不能为空,id属性不能为空
 搜索CDN账户...,搜索CDN账户...
 请选择CDN账户,请选择CDN账户

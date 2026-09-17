@@ -20,9 +20,9 @@ final class NewArrivals extends FrontendController
     {
         $title = (string)__('新品上架');
 
-        $this->layoutType = 'product_list';
-        $this->request->setGet('page_type', 'product_list');
-        $this->request->setGet('layout_type', 'product_list');
+        $this->layoutType = 'products';
+        $this->request->setGet('page_type', 'products');
+        $this->request->setGet('layout_type', 'products');
         $this->request->setGet('layout_option', 'default');
         $this->request->setGet('theme_public_route', 'new-arrivals');
         $this->request->setGet('theme_page_title', $title);
@@ -37,7 +37,7 @@ final class NewArrivals extends FrontendController
         $this->assign('storefront_new_arrivals_count', count($items));
         $this->assign('storefront_new_arrivals_rss_url', '/new-arrivals/rss.xml');
         $this->assign('seo', [
-            'page_type' => 'product_list',
+            'page_type' => 'products',
             'title' => $title,
             'item_list' => $this->listingFacts->itemListFromCards($items),
             'breadcrumbs' => $this->listingFacts->withHomeBreadcrumb([

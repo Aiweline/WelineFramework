@@ -217,11 +217,38 @@ final class TemplateInlineWidgetMerger
             return ((int)($a['sort_order'] ?? 0)) <=> ((int)($b['sort_order'] ?? 0));
         });
 
-        foreach ($additions as $widget) {
-            $plan[] = ['kind' => 'layout', 'widget' => $widget];
+        // Interleave pure layout additions by sort_order into the template/override
+        // sequence. Appending all additions after templates made "before template"
+        // drops always render after the shell.
+        $final = [];
+        $baseIndex = 0;
+        $additionIndex = 0;
+        $position = 0;
+        $baseCount = \count($plan);
+        $additionCount = \count($additions);
+        while ($baseIndex < $baseCount || $additionIndex < $additionCount) {
+            while (
+                $additionIndex < $additionCount
+                && (int)($additions[$additionIndex]['sort_order'] ?? 0) <= $position
+            ) {
+                $final[] = ['kind' => 'layout', 'widget' => $additions[$additionIndex]];
+                ++$additionIndex;
+                ++$position;
+            }
+            if ($baseIndex < $baseCount) {
+                $final[] = $plan[$baseIndex];
+                ++$baseIndex;
+                ++$position;
+                continue;
+            }
+            if ($additionIndex < $additionCount) {
+                $final[] = ['kind' => 'layout', 'widget' => $additions[$additionIndex]];
+                ++$additionIndex;
+                ++$position;
+            }
         }
 
-        return $plan;
+        return $final;
     }
 
     /**

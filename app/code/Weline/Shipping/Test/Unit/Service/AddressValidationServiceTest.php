@@ -29,6 +29,34 @@ final class AddressValidationServiceTest extends TestCase
         );
     }
 
+    public function testInternationalPhonesAreAccepted(): void
+    {
+        $samples = [
+            '13800138000',
+            '+86 138 0013 8000',
+            '+1 (212) 555-0100',
+            '212.555.0100',
+            '+44 20 7946 0958',
+            '+49 30 1234567',
+            '03-1234-5678',
+            '+91 98765 43210',
+        ];
+        foreach ($samples as $phone) {
+            self::assertTrue(
+                $this->service->isValidInternationalPhone($phone),
+                'expected valid: ' . $phone,
+            );
+        }
+    }
+
+    public function testNonPhoneTextAndTooShortAreRejected(): void
+    {
+        self::assertFalse($this->service->isValidInternationalPhone('dsdadaa'));
+        self::assertFalse($this->service->isValidInternationalPhone('12345'));
+        self::assertFalse($this->service->isValidInternationalPhone('12+34567890'));
+        self::assertFalse($this->service->isValidInternationalPhone('+1234567890123456'));
+    }
+
     public function testInvalidPhoneMapsToPhoneFormField(): void
     {
         try {

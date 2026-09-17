@@ -62,13 +62,10 @@ moduleDescribe(test, MODULE, 'Weline_Order 后台订单管理富信息', () => {
       await page.getByTestId('order-edit-tab-refund').click();
       await expect(page.getByTestId('order-edit-panel-refund')).toBeVisible({ timeout: 20000 });
 
+      await page.getByTestId('order-edit-tab-customer').click();
+      await expect(page.getByTestId('order-edit-ops-panel-customer')).toBeVisible();
       await expect(page.getByTestId('order-edit-writable')).toBeVisible();
-      await expect(page.getByTestId('order-edit-writable-toggle')).toHaveAttribute('aria-expanded', 'false');
-      await expect(page.getByTestId('order-edit-writable-summary')).toBeVisible();
-      await expect(page.getByTestId('order-edit-customer-select')).toBeHidden();
-
-      await page.getByTestId('order-edit-writable-toggle').click();
-      await expect(page.getByTestId('order-edit-writable-toggle')).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByTestId('order-edit-writable-toggle')).toHaveCount(0);
       await expect(page.getByTestId('order-edit-customer-select')).toBeVisible();
       await expect(page.getByTestId('order-edit-addresses')).toBeVisible();
       await expect(page.getByTestId('order-edit-shipping-card')).toBeVisible();

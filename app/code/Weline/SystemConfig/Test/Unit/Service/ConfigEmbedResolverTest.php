@@ -172,6 +172,25 @@ final class ConfigEmbedResolverTest extends TestCase
         self::assertFalse($view['items'][0]['editable']);
     }
 
+    public function testAttributeScopeOverridesUrlTarget(): void
+    {
+        $this->stubAcl(true, true);
+        $this->templates->method('getTemplates')->willReturn([]);
+        $this->templates->method('getTemplateMeta')->willReturn(null);
+
+        $view = $this->resolver->resolve([
+            'module' => 'Weline_Demo',
+            'field' => 'demo/enabled',
+            'website_code' => 'shop',
+            'scope_kind' => 'website',
+            'target_scope' => 'shop.default.default',
+        ], ['target_scope' => 'other.main.default']);
+
+        self::assertSame('shop.default.default', $view['storage_scope']);
+        self::assertSame('shop', $view['target']['website_code']);
+        self::assertSame('website', $view['target']['kind'] ?? $view['target']['scope_kind'] ?? '');
+    }
+
     private function stubAcl(bool $canView, bool $canUpdate): void
     {
         $this->guard->method('check')->willReturnCallback(

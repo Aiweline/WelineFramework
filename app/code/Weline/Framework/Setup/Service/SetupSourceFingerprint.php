@@ -22,7 +22,7 @@ final class SetupSourceFingerprint
     }
 
     /**
-     * 目录树稳定指纹：相对路径 + size + mtime，排序后 sha256。
+     * 目录树稳定指纹：相对路径 + size + 内容 sha256（不用裸 mtime，避免触碰时间戳误失效）。
      * 目录不存在或不可读时返回固定空树指纹。
      */
     public function fingerprintTree(string $absDir): string
@@ -48,8 +48,9 @@ final class SetupSourceFingerprint
                         continue;
                     }
                     $size = (int)$info->getSize();
-                    $mtime = (int)$info->getMTime();
-                    $entries[] = $rel . '|' . $size . '|' . $mtime;
+                    $content = @\file_get_contents($full);
+                    $digest = \is_string($content) ? \hash('sha256', $content) : 'unreadable';
+                    $entries[] = $rel . '|' . $size . '|' . $digest;
                 }
             } catch (\Throwable) {
                 $entries = [];
@@ -61,7 +62,7 @@ final class SetupSourceFingerprint
     }
 
     /**
-     * 单文件稳定指纹（path basename + size + mtime）。
+     * 单文件稳定指纹（basename + size + 内容 sha256；不用裸 mtime）。
      */
     public function fingerprintFile(string $absFile): string
     {
@@ -70,10 +71,11 @@ final class SetupSourceFingerprint
             return \hash('sha256', 'missing');
         }
         $size = (int)@\filesize($absFile);
-        $mtime = (int)@\filemtime($absFile);
         $base = \basename($absFile);
+        $content = @\file_get_contents($absFile);
+        $digest = \is_string($content) ? \hash('sha256', $content) : 'unreadable';
 
-        return \hash('sha256', $base . '|' . $size . '|' . $mtime);
+        return \hash('sha256', $base . '|' . $size . '|' . $digest);
     }
 
     /**
@@ -81,14 +83,15 @@ final class SetupSourceFingerprint
      */
     public function loadStore(): array
     {
-        if (self::$memoryStore !== null) {
-            return self::$memoryStore;
-        }
         $path = $this->storePath();
+        // 磁盘仓被外部删除时，禁止继续命中进程内旧指纹（否则「删了指纹仍跳过」）。
         if (!\is_file($path)) {
             self::$memoryStore = [];
 
             return [];
+        }
+        if (self::$memoryStore !== null) {
+            return self::$memoryStore;
         }
         try {
             if (\function_exists('opcache_invalidate')) {
@@ -106,6 +109,37 @@ final class SetupSourceFingerprint
     }
 
     /**
+     * 删除指定前缀的指纹键（如 menu:），并写回磁盘。
+     *
+     * @return int 删除的键数量
+     */
+    public function forgetByPrefix(string $prefix): int
+    {
+        $prefix = \trim($prefix);
+        if ($prefix === '') {
+            return 0;
+        }
+        $this->loadStore();
+        if (self::$memoryStore === null || self::$memoryStore === []) {
+            return 0;
+        }
+        $removed = 0;
+        foreach (\array_keys(self::$memoryStore) as $key) {
+            if (\str_starts_with((string)$key, $prefix)) {
+                unset(self::$memoryStore[$key]);
+                $removed++;
+            }
+        }
+        if ($removed > 0) {
+            $this->writeMemoryToDisk();
+        }
+
+        return $removed;
+    }
+
+    /**
+     * 全量替换指纹仓（测试/显式重建）。热路径请用 mergeUpdates，避免 COW 快照互踩。
+     *
      * @param array<string, string> $store
      */
     public function saveStore(array $store): void
@@ -119,6 +153,45 @@ final class SetupSourceFingerprint
             }
             $normalized[$k] = $v;
         }
+        \ksort($normalized, \SORT_STRING);
+        self::$memoryStore = $normalized;
+        $this->writeMemoryToDisk();
+    }
+
+    /**
+     * 合并写入：只更新给定键，原地改 memoryStore，避免 Fiber/并行 save 丢失其它键。
+     *
+     * @param array<string, string|null> $updates
+     */
+    public function mergeUpdates(array $updates): void
+    {
+        if ($updates === []) {
+            return;
+        }
+        $this->loadStore();
+        if (self::$memoryStore === null) {
+            self::$memoryStore = [];
+        }
+        foreach ($updates as $key => $value) {
+            $k = \trim((string)$key);
+            if ($k === '') {
+                continue;
+            }
+            if ($value === null || $value === '') {
+                unset(self::$memoryStore[$k]);
+            } else {
+                self::$memoryStore[$k] = (string)$value;
+            }
+        }
+        $this->writeMemoryToDisk();
+    }
+
+    private function writeMemoryToDisk(): void
+    {
+        if (self::$memoryStore === null) {
+            return;
+        }
+        $normalized = self::$memoryStore;
         \ksort($normalized, \SORT_STRING);
         self::$memoryStore = $normalized;
 
@@ -161,13 +234,7 @@ final class SetupSourceFingerprint
         if ($key === '') {
             return;
         }
-        $store = $this->loadStore();
-        if ($value === null || $value === '') {
-            unset($store[$key]);
-        } else {
-            $store[$key] = $value;
-        }
-        $this->saveStore($store);
+        $this->mergeUpdates([$key => $value]);
     }
 
     /**

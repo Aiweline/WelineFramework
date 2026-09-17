@@ -371,7 +371,10 @@ final class CatalogSeoProfileProvider implements SeoProfileProviderInterface
     {
         $seed = trim($seed);
         $name = trim($categoryName) !== '' ? trim($categoryName) : trim((string) ($context['title'] ?? ''));
-        $siteName = trim((string) ($context['site_name'] ?? '云裳汉服'));
+        $siteName = trim((string) ($context['site_name'] ?? ''));
+        if ($siteName === '') {
+            $siteName = '本店';
+        }
         if ($seed === '' && $name !== '') {
             $seed = $name . '精选汉服与配饰，覆盖形制说明、面料要点与搭配场景，助你更快选到合身得体的款式。';
         }

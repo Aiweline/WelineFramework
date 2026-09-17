@@ -11,12 +11,21 @@
 
 ## 发现优先级
 
-布局的逻辑 key 是 `layouts/{layoutType}/{option}`。例如：
+布局的逻辑 key 是 `layouts/{layoutType}/{option}`。`layoutType` 可以含 `/`（嵌套目录）；**末段文件名是 option，其前路径段全部属于 layoutType**。例如：
 
 ```text
 layouts/homepage/default
 layouts/product/default
 layouts/codex_module_only/default
+layouts/account/login/default          ← layoutType=account/login，option=default
+layouts/account/register/default
+```
+
+反例（错误理解）：
+
+```text
+# 错误：把 layouts/account/login/default.phtml 当成 layoutType=account + option=login/default
+# 正确：layoutType=account/login，option=default
 ```
 
 同一个逻辑 key 只取第一个命中项。发现顺序固定如下：
@@ -61,9 +70,12 @@ app/code/{Vendor}/{Module}/view/theme/backend/layouts/{layoutType}/{option}.phtm
 
 ```text
 app/code/Codex/ThemeLayoutDemo/view/theme/frontend/layouts/codex_module_only/default.phtml
+app/code/Weline/Customer/view/theme/frontend/layouts/account/login/default.phtml
 ```
 
-如果模块提供的逻辑 key 已经存在于 `Weline_Theme`，模块文件会被扫描为 raw candidate，但不会成为 resolved layout。要追加布局，请使用新的 `layoutType` 或新的 `option`。
+控制器应对齐：`protected ?string $layoutType = 'account/login';`（option 默认 `default`），不要写成 `account.login` 或只设 `account` 再指望 option=`login`。
+
+如果模块提供的逻辑 key 已经存在于 `Weline_Theme`，模块文件会被扫描为 raw candidate，但不会成为 resolved layout。要追加布局，请使用新的 `layoutType`（可嵌套）或新的 `option`。
 
 ### app/design 覆盖或新增布局
 

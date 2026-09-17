@@ -44,9 +44,12 @@ final class ThemeEditorContextFactory
         if (!\is_array($scope)) {
             throw new \InvalidArgumentException('theme_editor_typed_scope_required');
         }
-        $claims = \is_array($scope['identity'] ?? null) ? $scope['identity'] : $scope;
-        $candidate = ScopeIdentity::fromArray($claims);
+        // Preview tokens / legacy payloads may only carry storage_scope (or an incomplete
+        // identity bag). Resolve identity first, then re-claim from authoritative toArray()
+        // so contextFromClaims never sees partial client fields.
+        $candidate = $this->resolveScopeIdentity($scope);
         $authoritative = $this->catalog->authoritativeIdentity($candidate);
+        $claims = $authoritative->toArray();
         $scopeContext = $this->scopes->contextFromClaims($claims, $authoritative);
 
         $resourceType = $forcedResourceType ?? (string)($raw['resource_type'] ?? ThemeEditorContext::RESOURCE_LAYOUT);
@@ -122,6 +125,38 @@ final class ThemeEditorContextFactory
             targetType: $targetType,
             targetId: $targetId,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveScopeIdentity(array $scope): ScopeIdentity
+    {
+        $identity = $scope['identity'] ?? null;
+        if (\is_array($identity)) {
+            try {
+                return ScopeIdentity::fromArray($identity);
+            } catch (\InvalidArgumentException) {
+                // Incomplete identity: fall through to storage_scope / bare claims.
+            }
+        }
+
+        $storageScope = \trim((string)($scope['storage_scope'] ?? ''));
+        if ($storageScope === '' && \is_string($scope['scope'] ?? null)) {
+            $storageScope = \trim((string)$scope['scope']);
+        }
+        if ($storageScope !== '') {
+            $fromStorage = $this->scopes->fromStorageScope($storageScope, true);
+            if ($fromStorage instanceof ScopeIdentity) {
+                return $fromStorage;
+            }
+        }
+
+        if (\array_key_exists('scope_kind', $scope)) {
+            return ScopeIdentity::fromArray($scope);
+        }
+
+        throw new \InvalidArgumentException('theme_editor_typed_scope_required');
     }
 
     private function nonNegativeInt(mixed $value, string $field): int

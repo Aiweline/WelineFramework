@@ -69,6 +69,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 ### 3. 计划拆解
 
 - **宿主计划模式（硬门槛，`host_plan_mode_for_planning`）**：进入本阶段（澄清规格 `ready-for-plan` 之后、扩展点选型/架构映射/分章计划期间）**默认必须启用宿主 Plan Mode**。Cursor：立即 `SwitchMode` → `target_mode_id=plan`，在 Plan Mode 内完成 `architecture_design`、扩展点、章节/`dev_tasks`、`acceptance`；**禁止**在仍处于计划阶段时改业务 PHP/phtml/CSS。用户明确批准实现后，再 `SwitchMode` → `agent` 进入 §4。
+- **计划正文聚焦（硬门槛，`plan_content_focus_only`）**：计划正文（Plan Mode / `doc/开发/plan.md` / 会话计划笔记）**只写三块**——**(1) 背景**（本题为何、现状缺口）；**(2) 方案**（要做什么、选定做法，mechanism/owning_module/reuse/not_to_do 用短子弹）；**(3) 细节**（怎么做：步骤、章节/`dev_tasks`、路径、验收怎么验）。**禁止**把主题带偏：流程目录散文、无关模块巡礼、愿景/价值主张、整套 MCP 工作流复述、旁支功能推销、不影响构建的装饰性总览。必填结构化字段仍要有，但压成上述三节下的短子弹，不要另开无关章节。
 - **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。
 - **前后端范围（硬，`requirement_fe_be_scope_analysis`）**：每条需求须分析并记录 `fe_be_scope=frontend|backend|both|na` 及各侧要点；禁止只做一侧却漏该做的另一侧。
 - **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 Browser **WB-OP**：视觉（可截图则 WB-VIS）+ 真机点选逻辑；curl/CDP 不能替代。
@@ -99,11 +100,11 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 | 纯函数 / Service 局部 | 聚焦单测 |
 | 命令 / API / 持久化 | 真实命令或 API 结果 + 必要单测 |
 | Model / Controller / 注册表 | bump `etc/module.php` version + `setup:upgrade` 或 `--route` 成功（见 [模块版本与升级门禁](../Framework/doc/3-开发/模块版本与升级门禁.md)） |
-| i18n CSV / 新增可翻译文案 | `zh_Hans_CN.csv` + `en_US.csv` 对齐 + `php bin/w i18n:collect`（见 [模块翻译CSV规范](../I18n/doc/模块翻译CSV规范.md)） |
+| i18n CSV / 新增可翻译文案 | `zh_Hans_CN.csv` + `en_US.csv` 对齐；**用户提到翻译时还须覆盖默认网站已选全部语言** + `php bin/w i18n:collect`（见 [模块翻译CSV规范](../I18n/doc/模块翻译CSV规范.md)；MCP `user_mentions_translation_all_default_website_locales`） |
 | 页面 / 交互 / SSE | 真实 WLS + **当前宿主可用的真实 Browser** 操作员路径（**WB-OP**）；**须截图 + 对照模块 `doc/原型设计.md` 视觉清单（WB-VIS）**；多断点 375 / ≈768 / ≥1024 |
 | 文档 / 规则 | Diff、链接、渲染检查；**与实现对照无漂移** |
 
-**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
+**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**Playwright 仅正式 runner（硬，`e2e_playwright_formal_runner_only`）**：`php bin/w e2e:run` 或 `npx playwright test`（仓库 `tests/e2e` 配置）；禁止 `node -e` / 临时 `chromium.launch` 探活（易残留无头浏览器）。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
 
 未完成对应层级时，只能报告「代码已改，测试未完成」或「WebUI 验收未完成」。
 

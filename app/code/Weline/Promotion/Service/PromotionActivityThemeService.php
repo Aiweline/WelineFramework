@@ -720,6 +720,34 @@ final class PromotionActivityThemeService
     }
 
     /**
+     * Hub (/promotion) shelves products selected by active themes in the current scope.
+     * Never falls back to a generic catalog slice — callers must still drop non-deal rows.
+     *
+     * @return list<int>
+     */
+    public function listHubStorefrontProductIds(?array $scope = null): array
+    {
+        $scope = $scope ?? $this->scopeResolver->resolve();
+        $ids = [];
+        $seen = [];
+        foreach ($this->listActiveThemes($scope) as $theme) {
+            if (!is_array($theme)) {
+                continue;
+            }
+            foreach ($this->themeProductService->resolveStorefrontProductIds($theme, $scope) as $rawId) {
+                $productId = (int)$rawId;
+                if ($productId <= 0 || isset($seen[$productId])) {
+                    continue;
+                }
+                $seen[$productId] = true;
+                $ids[] = $productId;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * Campaign label/URL for storefront price badges (nav_label → page_title → slug).
      *
      * @param array<string, mixed> $themeFallback

@@ -10,10 +10,6 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
 {
     /** @var array<string, string> */
     private const ENGLISH_TRANSLATIONS = [
-        '云裳汉服 · Hanfu Atelier' => 'Yunshang Hanfu · Hanfu Atelier',
-        '云裳汉服 · Hanfu Atelier | 水墨汉服商城首页' => 'Yunshang Hanfu · Hanfu Atelier | Ink-Wash Hanfu Boutique',
-        '云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服、马面裙与传统配饰，服务日常、节庆与礼仪场景。' => 'Discover Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories for everyday wear, festivals, and ceremonies.',
-        '东方衣冠，全球配送' => 'Traditional elegance, delivered worldwide',
         '热门形制' => 'Popular Hanfu Styles',
         '汉服文化' => 'Hanfu Culture',
         '限时优惠' => 'Limited-Time Offers',
@@ -67,24 +63,16 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         '日常通勤' => 'Everyday & Work',
         '旅拍与演出' => 'Travel Shoots & Performance',
         '品牌与文化' => 'Our Brand & Culture',
-        '认识云裳的审美、工艺与汉服穿着知识' => "Discover Yunshang's aesthetic, craftsmanship, and guides to wearing Hanfu.",
         '品牌故事' => 'Our Story',
         '汉服文化指南' => 'Hanfu Culture Guide',
         '新手购物帮助' => 'First-Time Buyer Guide',
-        '云裳志' => 'Our Atelier',
         '定制与合作' => 'Bespoke & Partnerships',
-        '云裳国际页脚' => 'Yunshang International Footer',
-        '云裳汉服独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。' => 'Global footer for the Yunshang Hanfu storefront, covering brand, service, legal, social, language, and currency links. Four standard columns preserve business extension slots and exclusively own the footer area.',
         '联系我们页面布局' => 'Contact Us Page Layout',
         '保留所有权利' => 'All rights reserved.',
     ];
 
     /** @var list<string> */
     private const ARABIC_LAUNCH_SOURCES = [
-        '云裳汉服 · Hanfu Atelier',
-        '云裳汉服 · Hanfu Atelier | 水墨汉服商城首页',
-        '云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服、马面裙与传统配饰，服务日常、节庆与礼仪场景。',
-        '东方衣冠，全球配送',
         '热门形制',
         '汉服文化',
         '限时优惠',
@@ -138,14 +126,10 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         '日常通勤',
         '旅拍与演出',
         '品牌与文化',
-        '认识云裳的审美、工艺与汉服穿着知识',
         '品牌故事',
         '汉服文化指南',
         '新手购物帮助',
-        '云裳志',
         '定制与合作',
-        '云裳国际页脚',
-        '云裳汉服独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。',
         '联系我们页面布局',
         '保留所有权利',
         '桃园清梦 · 明制花鸟套装',
@@ -179,7 +163,6 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         '花罗',
         '合作品牌',
         '跳转到主要内容',
-        '云裳汉服 · 满 ¥299 包邮 · 形制精选上新',
         '帮助中心',
         '订单跟踪',
         '配送至',
@@ -209,7 +192,6 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         '我的账户',
         '我的订单',
         '设置',
-        '搜索汉服、形制与配饰...',
         '展开搜索',
         '我的',
         '我的菜单',
@@ -289,7 +271,6 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         '立即购买' => 'اشترِ الآن',
         '全部%{1}' => 'كل %{1}',
         '搜索商品...' => 'ابحث عن المنتجات...',
-        '云裳 Hanfu Atelier' => 'يونشانغ · مشغل الهانفو',
         '您好' => 'مرحبًا',
         '您好, %{1}' => 'مرحبًا، %{1}',
         '地址管理' => 'إدارة العناوين',
@@ -555,7 +536,6 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
     {
         $hi = $this->loadLocale('hi_IN');
         $needDevanagari = [
-            '云裳志' => 'हमारी कार्यशाला',
             '定制与合作' => 'कस्टम और साझेदारी',
             '支付与账户' => 'भुगतान और खाता',
             '社媒登录' => 'सोशल लॉगिन',
@@ -565,12 +545,12 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
             '猜你喜欢' => 'आपको यह भी पसंद आ सकता है',
             '最近浏览' => 'हाल ही में देखे गए',
             '关于我们' => 'हमारे बारे में',
-            '支付方式' => 'भुगतान विधि',
+            '支付方式' => 'भुगतान विधियाँ',
             '我的账户' => 'मेरा खाता',
             '我的订单' => 'मेरे ऑर्डर',
-            '配送说明' => 'शिपिंग सूचना',
-            '退换政策' => 'रिटर्न और एक्सचेंज',
-            '联系客服' => 'ग्राहक सेवा से संपर्क करें',
+            '配送说明' => 'शिपिंग गाइड',
+            '退换政策' => 'रिटर्न नीति',
+            '联系客服' => 'सहायता से संपर्क करें',
         ];
         foreach ($needDevanagari as $source => $hindi) {
             self::assertArrayHasKey($source, $hi, "Missing hi_IN source: {$source}");
@@ -583,7 +563,6 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
     {
         $bn = $this->loadLocale('bn_BD');
         $needBengali = [
-            '云裳志' => 'আমাদের কর্মশালা',
             '定制与合作' => 'কাস্টম ও অংশীদারিত্ব',
             '支付与账户' => 'পেমেন্ট ও অ্যাকাউন্ট',
             '社媒登录' => 'সোশ্যাল লগইন',
@@ -593,9 +572,9 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
             '支付方式' => 'পেমেন্ট পদ্ধতি',
             '我的账户' => 'আমার অ্যাকাউন্ট',
             '我的订单' => 'আমার অর্ডার',
-            '配送说明' => 'শিপিং তথ্য',
-            '退换政策' => 'ফেরত ও বিনিময়',
-            '联系客服' => 'কাস্টমার সার্ভিসে যোগাযোগ করুন',
+            '配送说明' => 'শিপিং নির্দেশিকা',
+            '退换政策' => 'রিটার্ন নীতি',
+            '联系客服' => 'কাস্টমার সার্ভিসে যোগাযোগ',
         ];
         foreach ($needBengali as $source => $bengali) {
             self::assertArrayHasKey($source, $bn, "Missing bn_BD source: {$source}");
@@ -633,6 +612,32 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
             self::assertArrayHasKey($source, $ar, "Missing ar_SA source: {$source}");
             self::assertSame($arabic, $ar[$source], "Unexpected ar_SA translation: {$source}");
             self::assertMatchesRegularExpression('/\\p{Arabic}/u', $ar[$source]);
+        }
+    }
+
+    public function testDefaultWebsiteLocalesTranslateSearchPlaceholder(): void
+    {
+        $source = '搜索商品、分类与关键词...';
+        $expected = [
+            'zh_Hans_CN' => '搜索商品、分类与关键词...',
+            'en_US' => 'Search products, categories, and keywords...',
+            'ar_SA' => 'ابحث عن المنتجات والفئات والكلمات المفتاحية...',
+            'bn_BD' => 'পণ্য, বিভাগ ও কীওয়ার্ড খুঁজুন...',
+            'es_ES' => 'Busca productos, categorías y palabras clave...',
+            'fr_FR' => 'Recherchez des produits, des catégories et des mots-clés...',
+            'hi_IN' => 'उत्पाद, श्रेणियाँ और कीवर्ड खोजें...',
+            'id_ID' => 'Cari produk, kategori, dan kata kunci...',
+            'pt_BR' => 'Busque produtos, categorias e palavras-chave...',
+            'ur_PK' => 'مصنوعات، زمرے اور کلیدی الفاظ تلاش کریں...',
+        ];
+
+        foreach ($expected as $locale => $translation) {
+            $catalog = $this->loadLocale($locale);
+            self::assertArrayHasKey($source, $catalog, "Missing {$locale} search placeholder");
+            self::assertSame($translation, $catalog[$source], "Unexpected {$locale} search placeholder");
+            if ($locale !== 'zh_Hans_CN') {
+                self::assertNotSame($source, $catalog[$source], "Untranslated {$locale} search placeholder");
+            }
         }
     }
 

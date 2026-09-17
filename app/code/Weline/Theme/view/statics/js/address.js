@@ -500,11 +500,23 @@
     }
 
     function getRegionApi() {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            return Promise.reject(new Error('Weline.Api unavailable'));
+        }
         if (!regionApiPromise) {
             regionApiPromise = Promise.resolve(window.Weline.Api.resource('region'));
         }
-
         return regionApiPromise;
+    }
+
+    /** 地区业务请求默认走 BinQuery（Weline.Api.resource('region')）；禁止 HTTP 主路径、禁止把 BinQuery 当回退。 */
+    function callRegion(opName, params) {
+        return getRegionApi().then(function (RegionApi) {
+            if (!RegionApi || typeof RegionApi[opName] !== 'function') {
+                return Promise.reject(new Error('region.' + opName + ' unavailable'));
+            }
+            return RegionApi[opName](params || {}, {silent: true});
+        });
     }
 
     function buildSourceRequestUrl(sourceUrl, countryCode, catalog) {
@@ -521,15 +533,11 @@
     }
 
     function fetchRegionsFromSource(sourceUrl, countryCode, catalog) {
-        return fetch(buildSourceRequestUrl(sourceUrl, countryCode, catalog), {
-            credentials: 'same-origin',
-            headers: {Accept: 'application/json'}
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error('region fetch failed');
-            }
-            return response.json();
-        }).then(function (payload) {
+        var params = {catalog: text(catalog) === 'global' ? 'global' : 'installed'};
+        if (text(countryCode)) {
+            params.country_code = text(countryCode).toUpperCase();
+        }
+        return callRegion('list', params).then(function (payload) {
             return normalizeRegions(regionsFromPayload(payload));
         });
     }
@@ -554,21 +562,7 @@
                 }
                 return null;
             }).then(function (rows) {
-                if (Array.isArray(rows)) {
-                    return rows;
-                }
-                var url = frontendRoute(defaultSourceUrl);
-                var sep = url.indexOf('?') >= 0 ? '&' : '?';
-                url += sep + 'mode=suggest&q=' + encodeURIComponent(query) + '&limit=' + encodeURIComponent(String(limit || 8));
-                if (text(countryCode)) {
-                    url += '&country_code=' + encodeURIComponent(text(countryCode).toUpperCase());
-                }
-                return fetch(url, {credentials: 'same-origin', headers: {Accept: 'application/json'}}).then(function (response) {
-                    if (!response.ok) {
-                        throw new Error('suggest failed');
-                    }
-                    return response.json();
-                }).then(normalizeSuggestPayload);
+                return Array.isArray(rows) ? rows : [];
             }).catch(function () {
                 return [];
             });
@@ -586,38 +580,15 @@
             var data = payload && payload.data !== undefined ? payload.data : payload;
             return Array.isArray(data) ? data : [];
         }
-        // Prefer visible HTTP fetch so DevTools Network shows mode=postal_lookup.
-        // Weline.Api.resource('region').postal_lookup may resolve without fetch/XHR.
-        var url = frontendRoute(defaultSourceUrl);
-        var sep = url.indexOf('?') >= 0 ? '&' : '?';
-        url += sep + 'mode=postal_lookup'
-            + '&country_code=' + encodeURIComponent(countryCode)
-            + '&postal_code=' + encodeURIComponent(postalCode)
-            + '&limit=' + encodeURIComponent(String(limit || 20));
-        return fetch(url, {
-            credentials: 'same-origin',
-            headers: {Accept: 'application/json'}
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error('postal lookup failed');
-            }
-            return response.json();
+        if (!window.Weline || !window.Weline.Api) {
+            return Promise.resolve([]);
+        }
+        return callRegion('postal_lookup', {
+            country_code: countryCode,
+            postal_code: postalCode,
+            limit: limit || 20
         }).then(normalizePostalPayload).catch(function () {
-            if (!window.Weline || !window.Weline.Api) {
-                return [];
-            }
-            return getRegionApi().then(function (RegionApi) {
-                if (!RegionApi || typeof RegionApi.postal_lookup !== 'function') {
-                    return [];
-                }
-                return RegionApi.postal_lookup({
-                    country_code: countryCode,
-                    postal_code: postalCode,
-                    limit: limit || 20
-                }, {silent: true}).then(normalizePostalPayload);
-            }).catch(function () {
-                return [];
-            });
+            return [];
         });
     }
 
@@ -646,33 +617,12 @@
                 return row.country_code.length === 2;
             });
         }
-        var url = frontendRoute(defaultSourceUrl);
-        var sep = url.indexOf('?') >= 0 ? '&' : '?';
-        url += sep + 'mode=postal_countries'
-            + '&postal_code=' + encodeURIComponent(postalCode);
-        return fetch(url, {
-            credentials: 'same-origin',
-            headers: {Accept: 'application/json'}
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error('postal countries failed');
-            }
-            return response.json();
-        }).then(normalizeCountriesPayload).catch(function () {
-            if (!window.Weline || !window.Weline.Api) {
-                return [];
-            }
-            return getRegionApi().then(function (RegionApi) {
-                if (!RegionApi || typeof RegionApi.postal_countries !== 'function') {
-                    return [];
-                }
-                return RegionApi.postal_countries({
-                    postal_code: postalCode
-                }, {silent: true}).then(normalizeCountriesPayload);
-            }).catch(function () {
+        var rowsPromise = (!window.Weline || !window.Weline.Api)
+            ? Promise.resolve([])
+            : callRegion('postal_countries', {postal_code: postalCode}).then(normalizeCountriesPayload).catch(function () {
                 return [];
             });
-        }).then(function (rows) {
+        return rowsPromise.then(function (rows) {
             return embargoedCountryCodes().then(function (blocked) {
                 return (rows || []).map(function (row) {
                     // API 可按邮编命中地点标省级/区级禁运；国家级名单再并入
@@ -686,19 +636,20 @@
         });
     }
 
+
+    // Survives cache-busted address.js reloads (same page lifetime).
+    var countryEmbargoCache = (window.WelineThemeAddress && window.WelineThemeAddress.__countryEmbargoCache) || null;
+    var subnationalEmbargoCache = (window.WelineThemeAddress && window.WelineThemeAddress.__subnationalEmbargoCache) || {};
+
     function embargoedCountryCodes() {
-        var url = frontendRoute(defaultSourceUrl);
-        var sep = url.indexOf('?') >= 0 ? '&' : '?';
-        url += sep + 'mode=embargo_countries';
-        return fetch(url, {
-            credentials: 'same-origin',
-            headers: {Accept: 'application/json'}
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error('embargo countries failed');
-            }
-            return response.json();
-        }).then(function (payload) {
+        var globalStore = window.__welineAddressEmbargoStore || (window.__welineAddressEmbargoStore = {});
+        if (globalStore.countriesReq || countryEmbargoCache) {
+            return globalStore.countriesReq || countryEmbargoCache;
+        }
+        if (!window.Weline || !window.Weline.Api) {
+            return Promise.resolve({});
+        }
+        var req = callRegion('embargo_countries', {}).then(function (payload) {
             var data = payload && payload.data !== undefined ? payload.data : payload;
             var map = {};
             (Array.isArray(data) ? data : []).forEach(function (code) {
@@ -709,72 +660,37 @@
             });
             return map;
         }).catch(function () {
-            if (!window.Weline || !window.Weline.Api) {
-                return {};
-            }
-            return getRegionApi().then(function (RegionApi) {
-                if (!RegionApi || typeof RegionApi.embargo_countries !== 'function') {
-                    return {};
-                }
-                return RegionApi.embargo_countries({}, {silent: true}).then(function (payload) {
-                    var data = payload && payload.data !== undefined ? payload.data : payload;
-                    var map = {};
-                    (Array.isArray(data) ? data : []).forEach(function (code) {
-                        code = text(code).toUpperCase();
-                        if (code.length === 2) {
-                            map[code] = true;
-                        }
-                    });
-                    return map;
-                });
-            }).catch(function () {
-                return {};
-            });
+            // Keep empty map cached — do not re-arm stampede on transient failure.
+            return {};
         });
+        countryEmbargoCache = req;
+        globalStore.countriesReq = req;
+        if (window.WelineThemeAddress) {
+            window.WelineThemeAddress.__countryEmbargoCache = req;
+        }
+        return req;
     }
 
     function evaluateEmbargo(address) {
         address = address || {};
-        var params = [
-            'mode=embargo_evaluate',
-            'country_code=' + encodeURIComponent(text(address.country_code || address.country || '').toUpperCase()),
-            'province_code=' + encodeURIComponent(text(address.province_code || address.province || '')),
-            'province_region_id=' + encodeURIComponent(text(address.province_region_id || 0)),
-            'city_code=' + encodeURIComponent(text(address.city_code || address.city || '')),
-            'city_region_id=' + encodeURIComponent(text(address.city_region_id || 0)),
-            'district_code=' + encodeURIComponent(text(address.district_code || address.district || '')),
-            'district_region_id=' + encodeURIComponent(text(address.district_region_id || 0)),
-            'street_code=' + encodeURIComponent(text(address.street_code || address.street || '')),
-            'street_id=' + encodeURIComponent(text(address.street_id || 0))
-        ].join('&');
-        var url = frontendRoute(defaultSourceUrl);
-        var sep = url.indexOf('?') >= 0 ? '&' : '?';
-        return fetch(url + sep + params, {
-            credentials: 'same-origin',
-            headers: {Accept: 'application/json'}
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error('embargo evaluate failed');
-            }
-            return response.json();
+        if (!window.Weline || !window.Weline.Api) {
+            return Promise.resolve({blocked: false});
+        }
+        return callRegion('embargo_evaluate', {
+            country_code: text(address.country_code || address.country || '').toUpperCase(),
+            province_code: text(address.province_code || address.province || ''),
+            province_region_id: Number(address.province_region_id || 0),
+            city_code: text(address.city_code || address.city || ''),
+            city_region_id: Number(address.city_region_id || 0),
+            district_code: text(address.district_code || address.district || ''),
+            district_region_id: Number(address.district_region_id || 0),
+            street_code: text(address.street_code || address.street || ''),
+            street_id: Number(address.street_id || 0)
         }).then(function (payload) {
             var data = payload && payload.data !== undefined ? payload.data : payload;
             return data && typeof data === 'object' ? data : {blocked: false};
         }).catch(function () {
-            if (!window.Weline || !window.Weline.Api) {
-                return {blocked: false};
-            }
-            return getRegionApi().then(function (RegionApi) {
-                if (!RegionApi || typeof RegionApi.embargo_evaluate !== 'function') {
-                    return {blocked: false};
-                }
-                return RegionApi.embargo_evaluate(address, {silent: true}).then(function (payload) {
-                    var data = payload && payload.data !== undefined ? payload.data : payload;
-                    return data && typeof data === 'object' ? data : {blocked: false};
-                });
-            }).catch(function () {
-                return {blocked: false};
-            });
+            return {blocked: false};
         });
     }
 
@@ -1122,60 +1038,47 @@
         return rows;
     }
 
-    var subnationalEmbargoCache = {};
+    // One in-flight/full-list promise for the whole page — never per-country network fan-out.
+    // Use window so duplicate address.js loads (direct script + loader) share one request.
+    var SUBNATIONAL_EMBARGO_CACHE_KEY = '*';
 
     function embargoedSubnationalRules(countryCode) {
         countryCode = text(countryCode).toUpperCase();
-        var cacheKey = countryCode || '*';
-        if (subnationalEmbargoCache[cacheKey]) {
-            return subnationalEmbargoCache[cacheKey];
-        }
-        var url = frontendRoute(defaultSourceUrl);
-        var sep = url.indexOf('?') >= 0 ? '&' : '?';
-        url += sep + 'mode=embargo_regions';
-        if (countryCode) {
-            url += '&country_code=' + encodeURIComponent(countryCode);
-        }
-        var req = fetch(url, {
-            credentials: 'same-origin',
-            headers: {Accept: 'application/json'}
-        }).then(function (response) {
-            if (!response.ok) {
-                throw new Error('embargo regions failed');
+        var globalStore = window.__welineAddressEmbargoStore || (window.__welineAddressEmbargoStore = {});
+        function filterRows(rows) {
+            rows = Array.isArray(rows) ? rows : [];
+            if (!countryCode) {
+                return rows;
             }
-            return response.json();
-        }).then(function (payload) {
+            return rows.filter(function (row) {
+                return text(row && row.country_code).toUpperCase() === countryCode;
+            });
+        }
+        var shared = globalStore.regionsReq || subnationalEmbargoCache[SUBNATIONAL_EMBARGO_CACHE_KEY];
+        if (shared) {
+            return shared.then(filterRows);
+        }
+        if (!window.Weline || !window.Weline.Api) {
+            return Promise.resolve([]);
+        }
+        // Always request the full active rule set once; filter by country locally.
+        // refreshPools() maps over many selected countries — per-country BinQuery stampeded the backend.
+        var req = callRegion('embargo_regions', {}).then(function (payload) {
             if (payload && payload.success === false) {
                 throw new Error(text(payload.message || 'embargo regions failed'));
             }
             var data = payload && payload.data !== undefined ? payload.data : payload;
             return Array.isArray(data) ? data : [];
         }).catch(function () {
-            delete subnationalEmbargoCache[cacheKey];
-            if (!window.Weline || !window.Weline.Api) {
-                return [];
-            }
-            return getRegionApi().then(function (RegionApi) {
-                if (!RegionApi || typeof RegionApi.embargo_regions !== 'function') {
-                    return [];
-                }
-                var params = {};
-                if (countryCode) {
-                    params.country_code = countryCode;
-                }
-                return RegionApi.embargo_regions(params, {silent: true}).then(function (payload) {
-                    if (payload && payload.success === false) {
-                        return [];
-                    }
-                    var data = payload && payload.data !== undefined ? payload.data : payload;
-                    return Array.isArray(data) ? data : [];
-                });
-            }).catch(function () {
-                return [];
-            });
+            // Keep resolved empty in cache — deleting here re-arms mount/refreshPools stampede.
+            return [];
         });
-        subnationalEmbargoCache[cacheKey] = req;
-        return req;
+        globalStore.regionsReq = req;
+        subnationalEmbargoCache[SUBNATIONAL_EMBARGO_CACHE_KEY] = req;
+        if (window.WelineThemeAddress) {
+            window.WelineThemeAddress.__subnationalEmbargoCache = subnationalEmbargoCache;
+        }
+        return req.then(filterRows);
     }
 
     function ruleMatchesRegionRow(rule, row, level) {
@@ -1243,43 +1146,22 @@
                 var data = payload && payload.data !== undefined ? payload.data : payload;
                 return Array.isArray(data) ? data : [];
             }
-            var url = frontendRoute(defaultSourceUrl);
-            var sep = url.indexOf('?') >= 0 ? '&' : '?';
-            url += sep + 'mode=children&limit=' + encodeURIComponent(String(limit));
-            if (parentRegionId && parentRegionId > 0) {
-                url += '&parent_region_id=' + encodeURIComponent(String(parentRegionId));
-            }
-            if (countryCode) {
-                url += '&country_code=' + encodeURIComponent(countryCode);
-            }
-            regionSources[cacheKey] = fetch(url, {
-                credentials: 'same-origin',
-                headers: {Accept: 'application/json'}
-            }).then(function (response) {
-                if (!response.ok) {
-                    throw new Error('children failed');
+            var rowsPromise;
+            if (!window.Weline || !window.Weline.Api) {
+                rowsPromise = Promise.resolve([]);
+            } else {
+                var params = {limit: limit};
+                if (parentRegionId && parentRegionId > 0) {
+                    params.parent_region_id = parentRegionId;
                 }
-                return response.json();
-            }).then(normalizeChildrenPayload).catch(function () {
-                if (!window.Weline || !window.Weline.Api) {
-                    return [];
+                if (countryCode) {
+                    params.country_code = countryCode;
                 }
-                return getRegionApi().then(function (RegionApi) {
-                    if (!RegionApi || typeof RegionApi.children !== 'function') {
-                        return [];
-                    }
-                    var params = {limit: limit};
-                    if (parentRegionId && parentRegionId > 0) {
-                        params.parent_region_id = parentRegionId;
-                    }
-                    if (countryCode) {
-                        params.country_code = countryCode;
-                    }
-                    return RegionApi.children(params, {silent: true}).then(normalizeChildrenPayload);
-                }).catch(function () {
+                rowsPromise = callRegion('children', params).then(normalizeChildrenPayload).catch(function () {
                     return [];
                 });
-            }).then(function (rows) {
+            }
+            regionSources[cacheKey] = rowsPromise.then(function (rows) {
                 return Promise.all([
                     embargoedCountryCodes().catch(function () { return {}; }),
                     embargoedSubnationalRules(countryCode).catch(function () { return []; })
@@ -1290,7 +1172,6 @@
                     var parentRegion = null;
                     if (parentRegionId && parentRegionId > 0) {
                         parentRegion = {region_id: parentRegionId, region_type: '', country_code: countryCode};
-                        // parent type unknown here; still match by id against any subnational rule
                         rules.forEach(function (rule) {
                             if (Number(rule.region_id || 0) === Number(parentRegionId)) {
                                 parentRegion.region_type = text(rule.region_type || '');
@@ -1419,37 +1300,16 @@
             }
             return data.default || data;
         }
-        if (window.Weline && window.Weline.Api) {
-            return getRegionApi().then(function (RegionApi) {
-                if (RegionApi && typeof RegionApi.country_profile === 'function') {
-                    var params = {};
-                    if (countryCode) {
-                        params.country_code = countryCode;
-                    }
-                    return RegionApi.country_profile(params, {silent: true}).then(normalizeProfile);
-                }
-                return null;
-            }).then(function (profile) {
-                if (profile) {
-                    return profile;
-                }
-                var url = frontendRoute(defaultSourceUrl);
-                var sep = url.indexOf('?') >= 0 ? '&' : '?';
-                url += sep + 'mode=country_profile';
-                if (countryCode) {
-                    url += '&country_code=' + encodeURIComponent(countryCode);
-                }
-                return fetch(url, {credentials: 'same-origin', headers: {Accept: 'application/json'}}).then(function (response) {
-                    if (!response.ok) {
-                        throw new Error('profile failed');
-                    }
-                    return response.json();
-                }).then(normalizeProfile);
-            }).catch(function () {
-                return null;
-            });
+        if (!window.Weline || !window.Weline.Api) {
+            return Promise.resolve(null);
         }
-        return Promise.resolve(null);
+        var params = {};
+        if (countryCode) {
+            params.country_code = countryCode;
+        }
+        return callRegion('country_profile', params).then(normalizeProfile).catch(function () {
+            return null;
+        });
     }
 
     function applyCountryProfile(group, profile) {
@@ -1526,22 +1386,10 @@
             return Promise.resolve(normalizeRegions(window.WelineShippingRegions));
         }
         if (!regionSources[cacheKey]) {
-            if (catalog === 'global') {
-                regionSources[cacheKey] = fetchRegionsFromSource(sourceUrl, countryCode, catalog).catch(function () {
-                    return fallbackRegions();
-                });
-            } else if (!window.Weline || !window.Weline.Api) {
+            if (!window.Weline || !window.Weline.Api) {
                 regionSources[cacheKey] = Promise.resolve(fallbackRegions());
             } else {
-                regionSources[cacheKey] = getRegionApi().then(function (RegionApi) {
-                    var params = {catalog: catalog};
-                    if (countryCode) {
-                        params.country_code = countryCode;
-                    }
-                    return RegionApi.list(params, {silent: true});
-                }).then(function (payload) {
-                    return normalizeRegions(regionsFromPayload(payload));
-                }).catch(function () {
+                regionSources[cacheKey] = fetchRegionsFromSource(sourceUrl, countryCode, catalog).catch(function () {
                     return fallbackRegions();
                 });
             }
@@ -1578,7 +1426,23 @@
     }
 
     function findOrCreateField(root, form, name) {
-        var field = form ? form.querySelector('[name="' + name + '"]') : null;
+        var field = null;
+        // Prefer the address root / nearest section so dual instances (shipping + billing) do not steal fields.
+        if (root && root.querySelector) {
+            field = root.querySelector('[name="' + name + '"]');
+        }
+        if (!field && root && root.closest) {
+            var scope = root.closest(
+                '[data-w-address-shell], [data-billing-address-cascade], [data-shipping-address-cascade],'
+                + ' [data-billing-section], [data-shipping-section], [data-billing-editor], [data-address-editor]'
+            );
+            if (scope) {
+                field = scope.querySelector('[name="' + name + '"]');
+            }
+        }
+        if (!field && form) {
+            field = form.querySelector('[name="' + name + '"]');
+        }
         if (!field) {
             field = createHidden(name, root);
         }
@@ -1591,6 +1455,10 @@
             holder.hidden = true;
         }
         return field;
+    }
+
+    function metaFieldName(group, name) {
+        return text((group && group.metaPrefix) || '') + name;
     }
 
     function renderRoot(root, config, levels) {
@@ -1940,7 +1808,7 @@
         }
         var form = root.closest('form');
         function metadataField(name) {
-            return findOrCreateField(root, form, name);
+            return findOrCreateField(root, form, metaFieldName(group, name));
         }
         var country = group.state.country;
         var province = group.state.province;
@@ -1987,10 +1855,16 @@
     }
 
     function syncPostalField(group, form) {
-        if (!form) {
-            return;
+        var root = null;
+        Object.keys(group.controls || {}).some(function (level) {
+            root = group.controls[level].root;
+            return !!root;
+        });
+        var postalField = findPostalFieldForRoot(root);
+        if (!postalField && form) {
+            var postalName = text(group.postalName || 'postal_code') || 'postal_code';
+            postalField = form.querySelector('[name="' + postalName + '"]');
         }
-        var postalField = form.querySelector('[name="postal_code"]');
         if (!postalField) {
             return;
         }
@@ -3464,11 +3338,31 @@
                     }
                 }
             });
-            paintMenu(level, text((root.querySelector('[data-multi-search="' + level + '"]') || {}).value || ''));
+            var needle = text((root.querySelector('[data-multi-search="' + level + '"]') || {}).value || '');
             var openPanel = root.querySelector('[data-multi-panel="' + level + '"]');
-            if (openPanel) {
-                placeOpenMenu(openPanel);
+            // Defer region.children / embargo_* until the user actually opens a menu.
+            // Website/store/channel forms embed collapsed shipping address multis — eager refreshPools stampeded BinQuery on page load.
+            ensurePools().then(function () {
+                paintMenu(level, needle);
+                if (openPanel) {
+                    placeOpenMenu(openPanel);
+                }
+            });
+        }
+
+        var poolsPromise = null;
+        function ensurePools() {
+            if (poolsPromise) {
+                return poolsPromise;
             }
+            poolsPromise = refreshPools().then(function () {
+                if (root.querySelector('[data-multi-panel].is-open')) {
+                    repaintOpenMenus();
+                }
+            }).catch(function () {
+                return null;
+            });
+            return poolsPromise;
         }
 
         function closeMenus() {
@@ -3868,14 +3762,7 @@
 
         renderChips();
         emit();
-        refreshPools().then(function () {
-            // 池刷新完成时若用户已打开菜单，只重绘，勿强关（避免“点开瞬间又关掉”）
-            if (root.querySelector('[data-multi-panel].is-open')) {
-                repaintOpenMenus();
-                return;
-            }
-            closeMenus();
-        });
+        // Do not refreshPools() on mount — wait for ensurePools() via first openMenu.
     }
 
     function ensureAddressBaseStyles() {
@@ -3971,6 +3858,9 @@
         group.countryOnly = countryOnly;
         group.labels = labelsFor(config);
         group.sourceUrl = frontendRoute(config.sourceUrl || group.sourceUrl || defaultSourceUrl);
+        group.metaPrefix = text(config.metaPrefix || config.meta_prefix || '');
+        group.postalName = text(config.postalName || 'postal_code') || 'postal_code';
+        group.config = config;
         ['country', 'province', 'city'].forEach(function (level) {
             if (config.filters && config.filters[level]) {
                 group.fixed[level] = config.filters[level];
@@ -4102,12 +3992,14 @@
             || text(values.city || '').trim()
             || text(values.district || '').trim()
             || text(values.street || '').trim());
+        var countryCodeField = metaFieldName(group, 'country_code');
+        var countryNameField = metaFieldName(group, 'country');
         if (hasCountryKey && !countryCode && root) {
             // 显式清空国家（邮编多国待选），禁止 fixed.country 把「中国」写回
             group.fixed.country = '';
             group.state.country = null;
-            findOrCreateField(root, form, 'country_code').value = '';
-            findOrCreateField(root, form, 'country').value = '';
+            findOrCreateField(root, form, countryCodeField).value = '';
+            findOrCreateField(root, form, countryNameField).value = '';
             if (group.controls.country) {
                 group.controls.country.field.value = '';
                 if (group.controls.country.input) {
@@ -4115,8 +4007,8 @@
                 }
             }
         } else if (countryCode && root) {
-            findOrCreateField(root, form, 'country_code').value = countryCode;
-            findOrCreateField(root, form, 'country').value = countryName || countryCode;
+            findOrCreateField(root, form, countryCodeField).value = countryCode;
+            findOrCreateField(root, form, countryNameField).value = countryName || countryCode;
             // 无国家控件时（宿主顶部已选国家）才锁定；有国家控件时禁止 fixed 锁死，
             // 否则国家菜单只剩当前国，系统禁运国无法再出现并标「不支持配送」。
             if (!group.controls.country) {
@@ -4192,7 +4084,17 @@
         if (!root) {
             return null;
         }
-        var selectors = '[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]';
+        var postalName = '';
+        try {
+            var cfg = readConfig(root) || {};
+            postalName = text(cfg.postalName || '').trim();
+        } catch (e) {
+            postalName = '';
+        }
+        var selectors = '[data-w-address-postal], [data-postal-first], [data-shipping-field][name="postal_code"], [data-billing-field][name="billing_postal_code"], [name="postal_code"]';
+        if (postalName) {
+            selectors += ', [name="' + postalName + '"]';
+        }
         var shell = root.closest('[data-w-address-shell]');
         if (shell) {
             var inShell = shell.querySelector('[data-w-address-postal], [data-postal-first]');
@@ -4200,12 +4102,20 @@
                 return inShell;
             }
         }
-        // Checkout / account: postal often sits outside shell (data-postal-first sibling).
+        // Checkout: prefer the nearest shipping/billing section so dual postals do not cross-bind.
         var host = root.closest(
-            '[data-shipping-checkout-address], [data-shipping-section], [data-address-editor],'
-            + ' [data-shipping-address-cascade], .w-shipping-checkout-address, form'
+            '[data-billing-address-cascade], [data-shipping-address-cascade],'
+            + ' [data-billing-editor], [data-address-editor],'
+            + ' [data-billing-section], [data-shipping-section],'
+            + ' [data-shipping-checkout-address], .w-shipping-checkout-address, form'
         );
         if (host) {
+            if (postalName) {
+                var named = host.querySelector('[name="' + postalName + '"]');
+                if (named) {
+                    return named;
+                }
+            }
             var inHost = host.querySelector(selectors);
             if (inHost) {
                 return inHost;
@@ -4226,6 +4136,12 @@
         }
         var form = root.closest('form');
         if (form) {
+            if (postalName) {
+                var formNamed = form.querySelector('[name="' + postalName + '"]');
+                if (formNamed) {
+                    return formNamed;
+                }
+            }
             return form.querySelector(selectors);
         }
         return null;
@@ -4447,7 +4363,13 @@
     }
 
     function boot() {
-        document.querySelectorAll('[data-w-address]').forEach(mount);
+        document.querySelectorAll('[data-w-address]').forEach(function (node) {
+            // data-address-lazy: wait until host arms (e.g. disclosure open) before mount/network.
+            if (node.getAttribute('data-address-lazy') === '1' && node.dataset.wAddressLazyArmed !== '1') {
+                return;
+            }
+            mount(node);
+        });
     }
 
     window.WelineThemeAddress = {
@@ -4455,6 +4377,8 @@
         groups: groups,
         __regionSources: regionSources,
         __streetSources: streetSources,
+        __countryEmbargoCache: countryEmbargoCache,
+        __subnationalEmbargoCache: subnationalEmbargoCache,
         applyValues: applyValues,
         postalLookup: postalLookup,
         postalCountries: postalCountries,

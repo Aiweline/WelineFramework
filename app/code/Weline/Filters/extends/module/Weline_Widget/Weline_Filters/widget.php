@@ -14,12 +14,12 @@ return [
         'code' => 'category-filters',
         'area' => 'frontend',
         'template' => 'Weline_Filters::templates/frontend/widgets/category-filters.phtml',
-        'page_layouts' => ['category', 'search', 'product_list'],
+        'page_layouts' => ['category', 'search', 'products'],
         'position' => ['sidebar'],
         'slot' => 'category-filters',
         'supports' => [
             'layout-category-filters',
-            'layout-product-list-filters',
+            'layout-products-filters',
             'category-filters',
             'attribute-filter',
             'price-filter',
@@ -37,7 +37,7 @@ return [
                 'reason' => '分类页默认在左侧筛选槽展示 Filters 部件（含属性筛选）',
             ],
             [
-                'layout_type' => 'product_list',
+                'layout_type' => 'products',
                 'layout_option' => 'default',
                 'slot' => 'list-filters',
                 'area' => 'sidebar',
