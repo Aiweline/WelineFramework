@@ -53,6 +53,8 @@ if (!is_array($store_channel_directory)) {
     $store_channel_directory = [];
 }
 $hasWebsite = array_key_exists('website_id', $website);
+$websiteEntityId = $hasWebsite ? (int)($website['website_id'] ?? 0) : -1;
+$showWebsiteBasicsLocal = $hasWebsite;
 $storeModeLabels = [
     'normal' => __('正式'),
     'dev' => __('开发'),
@@ -89,10 +91,15 @@ $selected_currencies = array_values(array_filter(array_map(
 }));
 $websiteReadonlyCurrencies = $websiteDefaultCurrency !== '' ? [$websiteDefaultCurrency] : [];
 $isEmbeddedForm = filter_var($is_embedded_form ?? $this->getData('is_embedded_form'), FILTER_VALIDATE_BOOLEAN);
+$treeReturnMode = filter_var($tree_return_mode ?? $this->getData('tree_return_mode'), FILTER_VALIDATE_BOOLEAN);
+$treeReturnNode = (string)($tree_return_node ?? $this->getData('tree_return_node') ?? '');
+$treeReturnUrl = trim((string)($tree_return_url ?? $this->getData('tree_return_url') ?? ''));
 ?>
 
 <div class="w-grid">
-    <template>Weline_Component::message.phtml</template>
+    <?php if (!$isEmbeddedForm): ?>
+        <template>Weline_Component::message.phtml</template>
+    <?php endif; ?>
 </div>
 
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-websites-admin.css)">
@@ -120,8 +127,33 @@ $isEmbeddedForm = filter_var($is_embedded_form ?? $this->getData('is_embedded_fo
         if ($hasWebsite) {
             $formParams['id'] = $website['website_id'];
         }
+        // 树内嵌：用当前页语种段拼 action，避免 @url 丢掉 zh_Hans_CN 落到 /USD/.../edit。
+        $treeFormAction = '';
+        if ($treeReturnMode && $treeReturnUrl !== '') {
+            $treeActionBase = explode('?', $treeReturnUrl, 2)[0];
+            $treeActionBase = (string)preg_replace('#/index$#', '', rtrim($treeActionBase, '/'));
+            $treeFormAction = $treeActionBase . '/' . ($hasWebsite ? 'edit' : 'add');
+            if ($hasWebsite) {
+                $treeFormAction .= '?id=' . rawurlencode((string)$website['website_id']);
+            }
+        }
+        $useTreeFormAction = $treeFormAction !== '';
         ?>
-        <w:form action="@url{$formAction|$formParams}" method="post" class="w-form" novalidate>
+        <?php if ($useTreeFormAction): ?>
+        <form action="<?= htmlspecialchars($treeFormAction, ENT_QUOTES, 'UTF-8') ?>"
+              method="post"
+              class="w-form"
+              id="website-admin-edit-form"
+              data-testid="website-admin-edit-form"
+              novalidate>
+        <?php else: ?>
+        <w:form action="@url{$formAction|$formParams}"
+                method="post"
+                class="w-form"
+                id="website-admin-edit-form"
+                data-testid="website-admin-edit-form"
+                novalidate>
+        <?php endif; ?>
             <!-- 手风琴折叠面板 -->
             <div class="w-website-form__sections" id="websiteFormAccordion">
                 <!-- 基本信息（默认展开） -->
@@ -138,12 +170,48 @@ $isEmbeddedForm = filter_var($is_embedded_form ?? $this->getData('is_embedded_fo
                             <?php if ($hasWebsite): ?>
                                 <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
                             <?php endif; ?>
+                            <?php if ($treeReturnMode && $treeReturnNode !== ''): ?>
+                                <input type="hidden" name="return_to" value="tree">
+                                <input type="hidden" name="return_node" value="<?= htmlspecialchars($treeReturnNode, ENT_QUOTES, 'UTF-8') ?>">
+                                <?php if ($treeReturnUrl !== ''): ?>
+                                    <input type="hidden" name="return_url" value="<?= htmlspecialchars($treeReturnUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                <?php endif; ?>
+                            <?php endif; ?>
 
                             <div class="w-grid">
-                                <div style="--w-span:4;--w-mb:var(--weline-space-4);">
-                                    <label for="name" class="w-field__label"><lang>网站名称</lang></label>
+                                <div class="w-field" style="--w-span:4;--w-mb:var(--weline-space-4);">
+                                    <div class="w-field__label-row w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                                        <label for="name" class="w-field__label"><lang>网站名称</lang></label>
+                                        <?php if ($showWebsiteBasicsLocal): ?>
+                                            <span data-testid="website-edit-name-local">
+                                                <?php if ($websiteEntityId === 0): ?>
+                                                    <local model="Weline\Websites\Model\Website\LocalDescription" field="name" id="0" name="website-edit-name-local"><?= htmlspecialchars((string)($website['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></local>
+                                                <?php else: ?>
+                                                    <local model="Weline\Websites\Model\Website\LocalDescription" field="name" id="websiteEntityId" name="website-edit-name-local"><?= htmlspecialchars((string)($website['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></local>
+                                                <?php endif; ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="w-field__hint" data-size="sm"><lang>保存后可翻译多语言</lang></span>
+                                        <?php endif; ?>
+                                    </div>
                                     <input type="text" class="w-input" id="name" name="name" value="<?= htmlspecialchars($website['name'] ?? '') ?>" required>
                                     <div class="w-field__error"><lang>请输入网站名称</lang></div>
+                                    <div class="w-field__hint"><lang>前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌。已选语言将默认 LocalModel 翻译。</lang></div>
+                                </div>
+
+                                <div class="w-field" data-label-layout="stacked" style="--w-span:8;--w-mb:var(--weline-space-4);">
+                                    <label for="description" class="w-field__label"><lang>网站简介</lang></label>
+                                    <?php if ($showWebsiteBasicsLocal): ?>
+                                        <div class="w-website-local-preview" data-testid="website-edit-description-local">
+                                            <?php if ($websiteEntityId === 0): ?>
+                                                <local model="Weline\Websites\Model\Website\LocalDescription" field="description" id="0" name="website-edit-description-local" bulk-input="#description" bulk-label="网站简介"><?= htmlspecialchars((string)($website['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></local>
+                                            <?php else: ?>
+                                                <local model="Weline\Websites\Model\Website\LocalDescription" field="description" id="websiteEntityId" name="website-edit-description-local" bulk-input="#description" bulk-label="网站简介"><?= htmlspecialchars((string)($website['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></local>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <textarea class="w-input" id="description" name="description" rows="3" maxlength="500"><?= htmlspecialchars($website['description'] ?? '') ?></textarea>
+                                    <div class="w-field__hint"><lang>网站范围品牌/SEO 叙述，前台与主题基础信息共用；已选语言默认 LocalModel 翻译。</lang></div>
                                 </div>
 
                                 <div style="--w-span:4;--w-mb:var(--weline-space-4);">
@@ -429,13 +497,32 @@ $isEmbeddedForm = filter_var($is_embedded_form ?? $this->getData('is_embedded_fo
                 <w:hook>Weline_Websites::backend::website::form::sections-after</w:hook>
             </div>
 
-            <?php if (!$isEmbeddedForm): ?>
-                <div class="w-cluster" style="--w-mt:var(--weline-space-6);">
-                    <button type="submit" class="w-button" data-tone="primary"><lang>保存</lang></button>
-                    <a href="@url{'*/admin/website'}" class="w-button" data-tone="neutral"><lang>返回</lang></a>
+            <?php
+            // OffCanvas 外层已有保存条；树编辑右栏必须自带保存（对齐 Store/Channel）。
+            $showFormSaveActions = !$isEmbeddedForm || $treeReturnMode;
+            ?>
+            <?php if ($showFormSaveActions): ?>
+                <div class="w-cluster w-website-form__actions"
+                     data-justify="<?= $isEmbeddedForm ? 'end' : 'start' ?>"
+                     style="--w-mt:var(--weline-space-6);"
+                     data-testid="website-form-actions">
+                    <button type="submit"
+                            class="w-button"
+                            data-tone="primary"
+                            data-testid="website-form-save">
+                        <w:icon name="save" size="sm"></w:icon>
+                        <lang>保存</lang>
+                    </button>
+                    <?php if (!$isEmbeddedForm): ?>
+                        <a href="@url{'*/admin/website'}" class="w-button" data-tone="neutral"><lang>返回</lang></a>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
+        <?php if ($useTreeFormAction): ?>
+        </form>
+        <?php else: ?>
         </w:form>
+        <?php endif; ?>
     </div>
 </div>
 

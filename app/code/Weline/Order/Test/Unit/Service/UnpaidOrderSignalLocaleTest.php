@@ -27,4 +27,21 @@ final class UnpaidOrderSignalLocaleTest extends TestCase
         self::assertSame('', UnpaidOrderSignalService::localeFromScopeSnapshotJson(''));
         self::assertSame('', UnpaidOrderSignalService::localeFromScopeSnapshotJson('{broken'));
     }
+
+    public function testResolveCreatedAtPrefersCreateTimeAndStripsMicros(): void
+    {
+        self::assertSame(
+            '2026-09-02 13:17:56',
+            UnpaidOrderSignalService::resolveCreatedAtDisplay('', '2026-09-02 13:17:56.338489')
+        );
+        self::assertSame(
+            '2026-09-02 13:17:56',
+            UnpaidOrderSignalService::resolveCreatedAtDisplay('2026-09-02 13:17:56', '')
+        );
+        self::assertSame(
+            '2026-09-02 13:17:56',
+            UnpaidOrderSignalService::resolveCreatedAtDisplay('2026-09-02 10:00:00', '2026-09-02 13:17:56.1')
+        );
+        self::assertSame('', UnpaidOrderSignalService::resolveCreatedAtDisplay('', ''));
+    }
 }

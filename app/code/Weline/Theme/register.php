@@ -14,7 +14,7 @@ Register::register(
     Register::MODULE,
     'Weline_Theme',
     __DIR__,
-    '2.2.41',
+    '2.2.43',
     '<a href="https://bbs.aiweline.com">官网</a>提供主题功能的模块。',
     ['Weline_Backend', 'Weline_Framework', 'Weline_I18n', 'Weline_Meta', 'Weline_SystemConfig', 'Weline_Widget']
 );
@@ -27,6 +27,6 @@ Register::register(
         'name' => 'Default 默认主题',
         'path' => __DIR__ . '/view/theme',
     ],
-    '2.2.41',
+    '2.2.43',
     'Weline Framework 默认主题，提供基础的前后台界面样式和布局。'
 );

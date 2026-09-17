@@ -41,7 +41,7 @@ final class CatalogSeoProfileProviderTest extends TestCase
 
         self::assertSame('Best-Selling Hanfu', $profile['title']);
         self::assertStringContainsString('best-selling Hanfu', $profile['description']);
-        self::assertSame('product_list', $profile['page_type']);
+        self::assertSame('products', $profile['page_type']);
     }
 
     public function testLegacyCategoryPageLayoutDefaultsAreLocalized(): void
@@ -74,7 +74,7 @@ final class CatalogSeoProfileProviderTest extends TestCase
             'description' => 'A hand-curated seasonal edit.',
         ]);
 
-        self::assertSame('product_list', $profile['page_type']);
+        self::assertSame('products', $profile['page_type']);
         self::assertArrayNotHasKey('title', $profile);
         self::assertArrayNotHasKey('description', $profile);
     }

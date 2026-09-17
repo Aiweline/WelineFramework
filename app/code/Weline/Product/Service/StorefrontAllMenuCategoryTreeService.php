@@ -28,14 +28,14 @@ final class StorefrontAllMenuCategoryTreeService
 
     public static function logicalCacheKey(int $websiteId, string $locale = ''): string
     {
-        // v7: empty category description is ensured into EAV/Local per locale (attribute i18n).
+        // v8: default-website category name/description i18n backfill (all site locales).
         // Keep the locale explicit when State has advanced ahead of the frozen key.
         $locale = trim(str_replace('-', '_', $locale));
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
 
-        return 'product.all_menu_category_tree.v7.' . max(0, $websiteId) . '.' . $locale;
+        return 'product.all_menu_category_tree.v8.' . max(0, $websiteId) . '.' . $locale;
     }
 
     public static function cachePool(): string
@@ -103,7 +103,12 @@ final class StorefrontAllMenuCategoryTreeService
     public function invalidate(int $websiteId): void
     {
         $websiteId = max(0, $websiteId);
-        foreach (['zh_Hans_CN', 'en_US', trim((string)State::getLangLocal())] as $locale) {
+        $locales = ['zh_Hans_CN', 'en_US', 'ar_SA', 'bn_BD', 'es_ES', 'fr_FR', 'hi_IN', 'id_ID', 'pt_BR', 'ur_PK'];
+        $stateLocale = trim((string)State::getLangLocal());
+        if ($stateLocale !== '' && !in_array($stateLocale, $locales, true)) {
+            $locales[] = $stateLocale;
+        }
+        foreach ($locales as $locale) {
             $locale = trim((string)$locale);
             if ($locale === '') {
                 continue;
@@ -114,8 +119,9 @@ final class StorefrontAllMenuCategoryTreeService
                 $logicalKey,
             );
         }
-        // Legacy v3 key (pre-locale-in-key).
+        // Legacy keys (pre-locale-in-key / prior tree versions).
         $this->hotCache->purgeProcessCacheForLogicalKey('product.all_menu_category_tree.v3.' . $websiteId);
+        $this->hotCache->purgeProcessCacheForLogicalKey('product.all_menu_category_tree.v7.' . $websiteId);
     }
 
     /**

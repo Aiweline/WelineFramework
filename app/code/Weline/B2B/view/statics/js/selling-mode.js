@@ -1195,7 +1195,9 @@
             }
             root.querySelectorAll('[data-mini-cart-type-caption]').forEach(function (el) {
                 el.hidden = false;
-                el.textContent = shortLabel;
+                if (el.textContent !== shortLabel) {
+                    el.textContent = shortLabel;
+                }
                 var meta = el.closest('[data-mini-cart-meta]');
                 if (meta && !meta.querySelector('.cart-meta__sep') && meta.querySelector('[data-cart-subtotal-text]')) {
                     var sep = document.createElement('span');
@@ -1206,7 +1208,9 @@
                 }
             });
             root.querySelectorAll('[data-mini-cart-title]').forEach(function (el) {
-                el.textContent = cartLabel;
+                if (el.textContent !== cartLabel) {
+                    el.textContent = cartLabel;
+                }
             });
             root.querySelectorAll('[data-b2b-mini-cart-type-option]').forEach(function (btn) {
                 var option = String(btn.getAttribute('data-b2b-mini-cart-type-option') || '').toLowerCase();
@@ -1458,14 +1462,33 @@
         // Mini-cart roots / lazy account sections / quick-add panel may hydrate after this script.
         // Do NOT forceNetwork here: applySummary/DOM chrome sync would re-enter the observer
         // and storm cart.getCart.
+        // chrome sync writes textContent → childList；短暂抑制，打断 enhanceMiniCarts 自激环。
         if (global.MutationObserver) {
             var pending = null;
+            var suppressChromeResyncUntil = 0;
+            var origSyncMini = syncMiniCartChrome;
+            var origSyncCheckout = syncCheckoutChrome;
+            syncMiniCartChrome = function (mode) {
+                suppressChromeResyncUntil = Date.now() + 200;
+                return origSyncMini(mode);
+            };
+            syncCheckoutChrome = function (mode) {
+                suppressChromeResyncUntil = Date.now() + 200;
+                return origSyncCheckout(mode);
+            };
+            if (global.WelineB2BSellingMode) {
+                global.WelineB2BSellingMode.syncMiniCartChrome = syncMiniCartChrome;
+                global.WelineB2BSellingMode.syncCheckoutChrome = syncCheckoutChrome;
+            }
             var observer = new MutationObserver(function () {
                 if (pending) {
                     return;
                 }
                 pending = global.setTimeout(function () {
                     pending = null;
+                    if (Date.now() < suppressChromeResyncUntil) {
+                        return;
+                    }
                     bindAllSellingModes();
                     enhanceMiniCarts({ refresh: false });
                     bindAllAccountIdentities();

@@ -25,7 +25,7 @@ final class FaqSeoFactsBuilder
             'canonical_url' => $canonical,
             'robots' => 'index,follow',
             // Share card for FAQ hub; HeadRenderer emits og:image / twitter:image when set.
-            'image' => '/pub/media/websites/default/default/brand/yunshang-logo-20260903.png',
+            'image' => '/pub/media/websites/default/default/brand/changan-logo-20260903.png',
             'image_alt' => WidgetI18n::label('帮助中心分享预览图'),
             'faqs' => $this->hub->seoFaqs(),
             'breadcrumbs' => [

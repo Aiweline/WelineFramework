@@ -88,20 +88,28 @@ final class CheckoutDeliveryQuickAddHookContractTest extends TestCase
         $this->assertStringContainsString("FORM_ID = 'checkout-delivery-quick-add-form'", $content);
     }
 
-    public function testEditorModeLightPathSkipsHeavyContextAndQuickAddHook(): void
+    public function testEditorPreviewKeepsQuickAddHookAndAutoDetectParity(): void
     {
         $widget = dirname(__DIR__, 3) . '/view/theme/frontend/widgets/header/checkout-delivery-context/default.phtml';
         $content = (string) file_get_contents($widget);
 
         $this->assertStringContainsString('ensureLazyCaptcha', $content);
         $this->assertStringContainsString('getDeliveryCaptchaChallenge', $content);
-        $this->assertStringContainsString("getParam('editor_mode'", $content);
-        $this->assertStringContainsString('if ($isEditorMode)', $content);
-        $this->assertStringContainsString('if (!$isEditorMode)', $content);
+        $this->assertStringContainsString('preview_storefront_delivery_parity', $content);
+        $this->assertStringNotContainsString('$isEditorMode', $content);
+        $this->assertStringNotContainsString("getParam('editor_mode'", $content);
+        $this->assertStringNotContainsString('Theme editor iframe: skip session/DB', $content);
+        $this->assertStringNotContainsString('if (!$isEditorMode)', $content);
         $this->assertStringContainsString(
             '<w:hook>Weline_Checkout::frontend::widgets::checkout-delivery-context::quick-add</w:hook>',
             $content
         );
-        $this->assertStringContainsString('Theme editor iframe: skip session/DB', $content);
+        $this->assertStringContainsString('data-action="auto-detect"', $content);
+        $this->assertStringContainsString('if ($autoDetect)', $content);
+        $this->assertDoesNotMatchRegularExpression(
+            '/if\s*\(\s*\$autoDetect\s*&&\s*!\$isEditorMode\s*\)/',
+            $content,
+            'auto-detect must not be gated on editor_mode'
+        );
     }
 }

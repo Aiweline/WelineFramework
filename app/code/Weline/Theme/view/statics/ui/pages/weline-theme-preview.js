@@ -13,6 +13,15 @@
     let activeDragSessionId = '';
     let activeDropSlot = null;
     let activeDropCandidate = null;
+    /** Parent-selected slot id (recommendation filter); preferred when under the pointer. */
+    let activePreferredSlotId = '';
+    /** 最近一次已渲染 / 已上报的 drop-candidate 身份；同插入位跳过 DOM 与消息。 */
+    let lastRenderedDropCandidateKey = '';
+    let lastPublishedDropCandidateKey = '';
+    /** 跨帧 postMessage 短合并（毫秒）：悬浮指示本地立即更新，父页同步略延迟防抖。 */
+    const DROP_CANDIDATE_PUBLISH_MS = 8;
+    let pendingPublishDropCandidate = null;
+    let dropCandidatePublishTimer = 0;
 
     function normalizeInteractionMode(mode) {
         return mode === 'preview' ? 'preview' : 'edit';
@@ -166,6 +175,9 @@
         // Do NOT include "view cart" / checkout anchors — those still navigate preview layouts.
         return !!target.closest([
             '[data-editor-interactive]',
+            '[data-w-header-account]',
+            '.account-logged-in',
+            '.account-dropdown',
             '[data-mini-cart-trigger]',
             '[data-mini-cart-close]',
             '[data-mini-cart-overlay]',
@@ -239,6 +251,7 @@
             activeDragWidget = null;
             activeDragSessionId = '';
             activeDropCandidate = null;
+            activePreferredSlotId = '';
         } else {
             refreshEmptySlotPlaceholders();
         }
@@ -554,6 +567,27 @@
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
+        try {
+            const bag = window.__WelineLocaleSwitchTrace || (window.__WelineLocaleSwitchTrace = []);
+            bag.push({
+                t: Date.now(),
+                stage: 'editor-mode-capture',
+                locale: hit.locale,
+                href: String(window.location.href || ''),
+            });
+            if (window.parent && window.parent !== window) {
+                const parentBag = window.parent.__WelineLocaleSwitchTrace
+                    || (window.parent.__WelineLocaleSwitchTrace = []);
+                parentBag.push({
+                    t: Date.now(),
+                    stage: 'editor-mode-capture',
+                    locale: hit.locale,
+                    href: String(window.location.href || ''),
+                    from: 'iframe-editor-mode',
+                });
+            }
+        } catch (_error) {
+        }
         postPreviewMessage('locale-change', { locale: hit.locale });
     }, true);
 
@@ -591,6 +625,10 @@
             clearIframeDropFeedback(null, false);
             activeDragSessionId = sessionId;
             activeDragWidget = data.widget;
+            activePreferredSlotId = String(data.selected_slot_id || data.preferred_slot_id || '').trim();
+            lastRenderedDropCandidateKey = '';
+            lastPublishedDropCandidateKey = '';
+            clearDropCandidatePublishSchedule();
             return;
         }
 
@@ -600,6 +638,10 @@
         activeDragWidget = null;
         activeDragSessionId = '';
         activeDropCandidate = null;
+        activePreferredSlotId = '';
+        lastRenderedDropCandidateKey = '';
+        lastPublishedDropCandidateKey = '';
+        clearDropCandidatePublishSchedule();
     });
 
     /**
@@ -1308,11 +1350,17 @@
             }
         }
 
+        // sort_order must match the visual DOM insert index (templates included).
+        // Persisted-only counts made "before template" become sort 0 while CoW still
+        // appended after the template; keep DOM index and let the renderer insert there.
+        const sortOrder = slotData.exclusive ? 0 : insertIndex;
+
         return {
             session_id: activeDragSessionId,
             widget: widgetData,
             slot: slotData,
-            sort_order: slotData.exclusive ? 0 : insertIndex,
+            sort_order: sortOrder,
+            dom_insert_index: insertIndex,
             placement: placement,
             reference_layout_id: target
                 ? resolvePreviewWidgetIdentity(target)
@@ -1365,17 +1413,81 @@
         status.style.setProperty('--w-theme-preview-drop-feedback-top', `${viewportTop - slotRect.top}px`);
     }
 
+    function dropCandidateIdentityKey(candidate) {
+        if (!candidate || !candidate.slot) {
+            return '';
+        }
+        return [
+            String(candidate.session_id || ''),
+            String(candidate.slot.id || ''),
+            String(candidate.sort_order),
+            String(candidate.placement || ''),
+            String(candidate.reference_layout_id || ''),
+        ].join('\0');
+    }
+
+    function clearDropCandidatePublishSchedule() {
+        if (dropCandidatePublishTimer) {
+            clearTimeout(dropCandidatePublishTimer);
+            dropCandidatePublishTimer = 0;
+        }
+        pendingPublishDropCandidate = null;
+    }
+
+    function flushPublishDropCandidate() {
+        dropCandidatePublishTimer = 0;
+        const candidate = pendingPublishDropCandidate;
+        pendingPublishDropCandidate = null;
+        if (!candidate) {
+            return false;
+        }
+        const key = dropCandidateIdentityKey(candidate);
+        if (!key || key === lastPublishedDropCandidateKey) {
+            return false;
+        }
+        lastPublishedDropCandidateKey = key;
+        postPreviewMessage('drop-candidate', candidate);
+        return true;
+    }
+
+    function publishDropCandidate(candidate) {
+        const key = dropCandidateIdentityKey(candidate);
+        if (!key || key === lastPublishedDropCandidateKey) {
+            return false;
+        }
+        pendingPublishDropCandidate = candidate;
+        if (dropCandidatePublishTimer) {
+            return true;
+        }
+        // 8ms 短 debounce：边界附近 before/after 抖动时合并消息，又不拖慢悬浮跟手。
+        dropCandidatePublishTimer = setTimeout(flushPublishDropCandidate, DROP_CANDIDATE_PUBLISH_MS);
+        return true;
+    }
+
     function showIframeDropFeedback(slot, mouseY, widgetData) {
+        const candidate = buildIframeDropCandidate(slot, mouseY, widgetData);
+        if (!candidate) return null;
+
+        const nextKey = dropCandidateIdentityKey(candidate);
+        // 指针仍在同一插入位：跳过 DOM 清建；消息侧已有签名去重。
+        if (nextKey
+            && nextKey === lastRenderedDropCandidateKey
+            && activeDropSlot === slot
+            && activeDropCandidate
+            && dropCandidateIdentityKey(activeDropCandidate) === nextKey) {
+            activeDropCandidate = candidate;
+            slot._editorInsertIndex = candidate.sort_order;
+            return activeDropCandidate;
+        }
+
         if (activeDropSlot && activeDropSlot !== slot) {
             clearIframeDropFeedback(activeDropSlot, false);
         }
         clearIframeDropFeedback(slot, false);
         activeDropSlot = slot;
 
-        const candidate = buildIframeDropCandidate(slot, mouseY, widgetData);
-        if (!candidate) return null;
-
         activeDropCandidate = candidate;
+        lastRenderedDropCandidateKey = nextKey;
         slot._editorInsertIndex = candidate.sort_order;
         slot.classList.add('w-theme-preview-drop-target');
         slot.setAttribute('data-w-drop-position', candidate.placement);
@@ -1385,9 +1497,12 @@
             showIframeDropStatus(slot, '放入 ' + slotName);
         } else {
             const items = getSlotWidgetElements(slot);
+            const domIndex = Number.isFinite(Number(candidate.dom_insert_index))
+                ? Number(candidate.dom_insert_index)
+                : Number(candidate.sort_order);
             const target = candidate.placement === 'before'
-                ? items[candidate.sort_order]
-                : items[Math.max(0, candidate.sort_order - 1)];
+                ? items[domIndex]
+                : items[Math.max(0, (candidate.placement === 'after' ? items.length : domIndex) - 1)];
             const targetName = target?.dataset.widgetName
                 || target?.dataset.widgetCode
                 || target?.getAttribute('aria-label')
@@ -1401,7 +1516,7 @@
                 : '插入到 ' + targetName + ' 后');
         }
 
-        postPreviewMessage('drop-candidate', candidate);
+        publishDropCandidate(candidate);
         return candidate;
     }
 
@@ -1457,6 +1572,113 @@
         return { hit: hit, slots: chain };
     }
 
+    /**
+     * Prefer the parent-selected recommendation slot when it is under the pointer,
+     * then keep deepest-first order so nested rejects can fall through to parents.
+     */
+    function orderSlotsForDrop(slots) {
+        const preferredId = normalizeCode(activePreferredSlotId);
+        if (!preferredId || !slots.length) {
+            return slots.slice();
+        }
+        const preferred = [];
+        const rest = [];
+        slots.forEach(function(slot) {
+            if (normalizeCode(slot.dataset.wslot || '') === preferredId) {
+                preferred.push(slot);
+            } else {
+                rest.push(slot);
+            }
+        });
+        return preferred.concat(rest);
+    }
+
+    function describeDropRejectReason(status) {
+        if (!status) {
+            return '该组件不能放入此插槽';
+        }
+        if (status.singleFull) {
+            return '该插槽仅允许一个组件';
+        }
+        if (status.full) {
+            return '该插槽已满';
+        }
+        return '该组件不能放入此插槽';
+    }
+
+    /**
+     * Walk slot chain under the pointer; return first accept+capacity hit.
+     * Does not mutate drop UI (caller decides feedback).
+     */
+    function resolvePreferredSlotElement() {
+        const preferredId = normalizeCode(activePreferredSlotId);
+        if (!preferredId) {
+            return null;
+        }
+        const nodes = document.querySelectorAll('[data-wslot]');
+        for (let i = 0; i < nodes.length; i++) {
+            if (normalizeCode(nodes[i].dataset.wslot || '') === preferredId) {
+                return nodes[i];
+            }
+        }
+        return null;
+    }
+
+    function findAcceptingDropSlotAtPoint(clientX, clientY, widgetData) {
+        const collected = collectSlotsAtPoint(clientX, clientY);
+        if (!collected.hit && !collected.slots.length) {
+            // Pointer may be over chrome; still allow parent-selected recommendation slot.
+            const preferredOnly = resolvePreferredSlotElement();
+            if (preferredOnly) {
+                const status = slotHasDropCapacity(preferredOnly, widgetData);
+                if (status.allowed && !status.full) {
+                    return {
+                        hit: collected.hit,
+                        slot: preferredOnly,
+                        invalidSlot: null,
+                        reason: '',
+                        status: status,
+                        viaPreferred: true,
+                    };
+                }
+            }
+            return { hit: collected.hit, slot: null, invalidSlot: null, reason: '' };
+        }
+        const ordered = orderSlotsForDrop(collected.slots || []);
+        let invalidSlot = null;
+        let invalidReason = '';
+        for (let i = 0; i < ordered.length; i++) {
+            const slot = ordered[i];
+            const status = slotHasDropCapacity(slot, widgetData);
+            if (status.allowed && !status.full) {
+                return { hit: collected.hit, slot: slot, invalidSlot: null, reason: '', status: status };
+            }
+            if (!invalidSlot) {
+                invalidSlot = slot;
+                invalidReason = describeDropRejectReason(status);
+            }
+        }
+
+        // Selected recommendation slot accepts this widget: use it even when the
+        // pointer is over a rejecting nested slot (e.g. hero) or empty chrome.
+        const preferred = resolvePreferredSlotElement();
+        if (preferred) {
+            const status = slotHasDropCapacity(preferred, widgetData);
+            if (status.allowed && !status.full) {
+                return {
+                    hit: collected.hit,
+                    slot: preferred,
+                    invalidSlot: null,
+                    reason: '',
+                    status: status,
+                    viaPreferred: true,
+                };
+            }
+        }
+
+        return { hit: collected.hit, slot: null, invalidSlot: invalidSlot, reason: invalidReason };
+    }
+
     function resolveDropAtPoint(clientX, clientY, widgetData) {
         if (!isEditInteractionMode()) {
             return null;
@@ -1473,45 +1695,35 @@
             return null;
         }
 
-        const collected = collectSlotsAtPoint(x, y);
-        if (!collected.hit) {
+        const found = findAcceptingDropSlotAtPoint(x, y, data);
+        if (!found.hit) {
             clearIframeDropFeedback(null, true);
             return null;
         }
-
-        const slots = collected.slots;
-        if (!slots.length) {
-            clearIframeDropFeedback(null, true);
+        if (!found.slot) {
+            if (found.invalidSlot) {
+                const invalidKey = 'invalid\0' + String(found.invalidSlot.dataset.wslot || '') + '\0' + String(found.reason || '');
+                if (activeDropSlot === found.invalidSlot
+                    && lastRenderedDropCandidateKey === invalidKey
+                    && found.invalidSlot.classList.contains('drag-invalid')) {
+                    return null;
+                }
+                if (activeDropSlot && activeDropSlot !== found.invalidSlot) {
+                    clearIframeDropFeedback(activeDropSlot);
+                }
+                clearIframeDropFeedback(found.invalidSlot);
+                activeDropSlot = found.invalidSlot;
+                lastRenderedDropCandidateKey = invalidKey;
+                found.invalidSlot.classList.add('drag-invalid');
+                found.invalidSlot.setAttribute('data-w-drop-position', 'invalid');
+                showIframeDropStatus(found.invalidSlot, found.reason || '该组件不能放入此插槽');
+            } else {
+                clearIframeDropFeedback(null, true);
+            }
             return null;
         }
 
-        let invalidSlot = null;
-        let invalidReason = '';
-        for (let i = 0; i < slots.length; i++) {
-            const slot = slots[i];
-            const status = slotHasDropCapacity(slot, data);
-            if (status.allowed && !status.full) {
-                return showIframeDropFeedback(slot, y, data);
-            }
-            if (!invalidSlot) {
-                invalidSlot = slot;
-                invalidReason = status.singleFull
-                    ? '该插槽仅允许一个组件'
-                    : (status.full ? '该插槽已满' : '该组件不能放入此插槽');
-            }
-        }
-
-        if (invalidSlot) {
-            if (activeDropSlot && activeDropSlot !== invalidSlot) {
-                clearIframeDropFeedback(activeDropSlot);
-            }
-            clearIframeDropFeedback(invalidSlot);
-            activeDropSlot = invalidSlot;
-            invalidSlot.classList.add('drag-invalid');
-            invalidSlot.setAttribute('data-w-drop-position', 'invalid');
-            showIframeDropStatus(invalidSlot, invalidReason);
-        }
-        return null;
+        return showIframeDropFeedback(found.slot, y, data);
     }
 
     /**
@@ -1544,6 +1756,9 @@
             const hadCandidate = !!activeDropCandidate;
             activeDropSlot = null;
             activeDropCandidate = null;
+            lastRenderedDropCandidateKey = '';
+            lastPublishedDropCandidateKey = '';
+            clearDropCandidatePublishSchedule();
             if (notifyParent && hadCandidate && clearedSessionId) {
                 postPreviewMessage('drop-candidate-clear', {
                     session_id: clearedSessionId
@@ -1633,37 +1848,11 @@
 
             e.preventDefault();
             e.stopPropagation();
-            const currentCount = getSlotWidgetElements(this).length;
-            const maxWidgets = this.dataset.wslotMax ? parseInt(this.dataset.wslotMax, 10) : -1;
-            const exclusive = this.dataset.wslotExclusive === 'true';
-            const multiple = this.dataset.wslotMultiple !== 'false';
-            const allowed = slotAcceptsWidget(
-                normalizeCodeList(this.dataset.wslotAccept || ''),
-                normalizeCodeList(this.dataset.wslotReject || ''),
-                this.dataset.wslot,
-                widgetData
-            );
-            const singleFull = !exclusive && !multiple && currentCount >= 1;
-            const maxFull = !exclusive && maxWidgets > 0 && currentCount >= maxWidgets;
-            const full = singleFull || maxFull;
-
-            if (!allowed || full) {
-                if (activeDropSlot && activeDropSlot !== this) {
-                    clearIframeDropFeedback(activeDropSlot);
-                }
-                clearIframeDropFeedback(this);
-                activeDropSlot = this;
-                this.classList.add('drag-invalid');
-                this.setAttribute('data-w-drop-position', 'invalid');
-                showIframeDropStatus(this, singleFull ? '该插槽仅允许一个组件' : (full ? '该插槽已满' : '该组件不能放入此插槽'));
-                e.dataTransfer.dropEffect = 'none';
-                return;
-            }
-
-            e.dataTransfer.dropEffect = 'copy';
-            this.classList.add('drag-over');
-            this.classList.remove('drag-invalid');
-            showIframeDropFeedback(this, e.clientY, widgetData);
+            // Walk the slot chain under the pointer (and prefer parent-selected slot).
+            // Never reject solely on the innermost slot — e.g. hero exclusive reject
+            // must fall through to homepage-content / selected Homepage brands.
+            const candidate = resolveDropAtPoint(e.clientX, e.clientY, widgetData);
+            e.dataTransfer.dropEffect = candidate ? 'copy' : 'none';
         });
 
         slot.addEventListener('dragleave', function(e) {
@@ -1692,34 +1881,41 @@
             e.preventDefault();
             e.stopPropagation();
 
+            // Resolve accepting slot under pointer (may be parent/selected, not `this`).
+            const found = findAcceptingDropSlotAtPoint(e.clientX, e.clientY, widgetData);
+            const targetSlot = found.slot || null;
+            if (!targetSlot) {
+                clearIframeDropFeedback(this, false);
+                if (found.invalidSlot) {
+                    found.invalidSlot.classList.add('drag-invalid');
+                    setTimeout(() => found.invalidSlot.classList.remove('drag-invalid'), 500);
+                    postPreviewMessage('widget-rejected', {
+                        widget: widgetData,
+                        slot: getIframeSlotData(found.invalidSlot),
+                        reason: found.reason || `插槽不接受部件 "${widgetData.name || widgetData.code}"`
+                    });
+                }
+                return;
+            }
+
             // 正常 drop 与父页 fallback 使用完全相同的候选，位置不会在释放瞬间重算漂移。
-            const candidate = activeDropSlot === this
+            const candidate = activeDropSlot === targetSlot
                 && activeDropCandidate?.session_id === activeDragSessionId
                 ? activeDropCandidate
-                : buildIframeDropCandidate(this, e.clientY, widgetData);
-            const insertIndex = candidate?.sort_order ?? this._editorInsertIndex;
+                : buildIframeDropCandidate(targetSlot, e.clientY, widgetData);
+            const insertIndex = candidate?.sort_order ?? targetSlot._editorInsertIndex;
 
             // 清理视觉状态，但保留父页候选直到提交消息到达。
-            clearIframeDropFeedback(this, false);
+            clearIframeDropFeedback(targetSlot, false);
 
-            const isExclusive = this.dataset.wslotExclusive === 'true';
-            const isMultiple = this.dataset.wslotMultiple !== 'false';
-            const maxAttr = this.dataset.wslotMax;
+            const isExclusive = targetSlot.dataset.wslotExclusive === 'true';
+            const isMultiple = targetSlot.dataset.wslotMultiple !== 'false';
+            const maxAttr = targetSlot.dataset.wslotMax;
             const maxWidgets = maxAttr ? parseInt(maxAttr, 10) : -1;
-            const currentWidgets = getSlotWidgetElements(this);
+            const currentWidgets = getSlotWidgetElements(targetSlot);
             const currentCount = currentWidgets.length;
 
-            const slotData = {
-                id: this.dataset.wslot,
-                name: this.dataset.wslotName || this.dataset.wslot,
-                accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
-                reject: this.dataset.wslotReject ? this.dataset.wslotReject.split(',').map(s => s.trim()) : [],
-                exclusive: isExclusive,
-                multiple: isMultiple,
-                max: maxWidgets,
-                current_count: currentCount,
-                position: this.dataset.wslotPosition || ''
-            };
+            const slotData = getIframeSlotData(targetSlot);
 
             let sortOrder;
             if (isExclusive) {
@@ -1756,8 +1952,8 @@
                     slot: slotData,
                     reason: `插槽 "${slotData.name}" 不接受部件 "${widgetData.name || widgetData.code}"`
                 });
-                this.classList.add('drag-invalid');
-                setTimeout(() => this.classList.remove('drag-invalid'), 500);
+                targetSlot.classList.add('drag-invalid');
+                setTimeout(() => targetSlot.classList.remove('drag-invalid'), 500);
                 return;
             }
 
@@ -1790,10 +1986,11 @@
                 reference_layout_id: candidate?.reference_layout_id || ''
             });
             activeDragWidget = null;
+            activePreferredSlotId = '';
 
             // 显示成功动画
-            this.classList.add('slot-highlight');
-            setTimeout(() => this.classList.remove('slot-highlight'), 1500);
+            targetSlot.classList.add('slot-highlight');
+            setTimeout(() => targetSlot.classList.remove('slot-highlight'), 1500);
         });
 
         // 初始化插槽内的占位符点击事件
@@ -2140,20 +2337,55 @@
     }
 
     // 监听动态添加的插槽 — 完整初始化（选择按钮 + 点击 + 拖放 + 占位符）
+    // Dense widget childList would otherwise trip DEV delivery_storm (>40 / ~250ms).
+    // Disconnect + coalesce (same pattern as ModuleLoader / captcha-lazy).
+    let slotDiscoveryScheduled = false;
+    const pendingSlots = new Set();
+    const slotObserveOptions = { childList: true, subtree: true };
     const observer = new MutationObserver(function(mutations) {
+        try {
+            observer.disconnect();
+        } catch (_) {}
         mutations.forEach(function(mutation) {
             mutation.addedNodes.forEach(function(node) {
-                if (node.nodeType === 1) {
-                    if (node.hasAttribute('data-wslot')) {
-                        initSingleSlot(node);
-                    }
-                    node.querySelectorAll && node.querySelectorAll('[data-wslot]').forEach(initSingleSlot);
+                if (node.nodeType !== 1) {
+                    return;
+                }
+                if (node.hasAttribute && node.hasAttribute('data-wslot')) {
+                    pendingSlots.add(node);
+                }
+                if (node.querySelectorAll) {
+                    node.querySelectorAll('[data-wslot]').forEach(function(el) {
+                        pendingSlots.add(el);
+                    });
                 }
             });
         });
+        if (slotDiscoveryScheduled) {
+            return;
+        }
+        slotDiscoveryScheduled = true;
+        const flush = function() {
+            slotDiscoveryScheduled = false;
+            const batch = Array.from(pendingSlots);
+            pendingSlots.clear();
+            batch.forEach(initSingleSlot);
+            try {
+                if (document.body) {
+                    observer.observe(document.body, slotObserveOptions);
+                }
+            } catch (_) {}
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function() {
+                requestAnimationFrame(flush);
+            });
+        } else {
+            setTimeout(flush, 0);
+        }
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, slotObserveOptions);
 
     document.addEventListener('drop', function() {
         activeDragWidget = null;
@@ -2358,12 +2590,45 @@ function initialize() {
     mount(document);
     bindPreviewExitButtons();
 
+    // Dense storefront hydrate would otherwise trip DEV delivery_storm; coalesce like ModuleLoader.
+    let mountScheduled = false;
+    const pendingMountRoots = new Set();
+    const mountObserveOptions = { childList: true, subtree: true };
     const observer = new MutationObserver((records) => {
+        try {
+            observer.disconnect();
+        } catch (_) {}
         records.forEach((record) => record.addedNodes.forEach((node) => {
-            if (node instanceof Element) mount(node);
+            if (node instanceof Element) {
+                pendingMountRoots.add(node);
+            }
         }));
+        if (mountScheduled) {
+            return;
+        }
+        mountScheduled = true;
+        const flush = () => {
+            mountScheduled = false;
+            const batch = Array.from(pendingMountRoots);
+            pendingMountRoots.clear();
+            batch.forEach((node) => {
+                if (node.isConnected) {
+                    mount(node);
+                }
+            });
+            try {
+                if (document.body) {
+                    observer.observe(document.body, mountObserveOptions);
+                }
+            } catch (_) {}
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => requestAnimationFrame(flush));
+        } else {
+            setTimeout(flush, 0);
+        }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, mountObserveOptions);
 
     document.addEventListener('click', (event) => {
         const target = event.target instanceof Element ? event.target : null;

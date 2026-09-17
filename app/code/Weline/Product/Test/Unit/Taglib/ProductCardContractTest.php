@@ -65,5 +65,41 @@ final class ProductCardContractTest extends TestCase
         $css = (string)file_get_contents($base . '/view/statics/css/frontend/product-card.css');
         self::assertStringContainsString('.weline-product-card', $css);
         self::assertStringContainsString('--wpc-link', $css);
+        self::assertStringContainsString('a:any-link', $css);
+        self::assertStringContainsString('color: var(--wpc-price)', $css);
+        self::assertDoesNotMatchRegularExpression(
+            '/\.weline-product-card\.density-shelf \\.wpc-price-now[^}]*color:\\s*var\\(--wpc-ink\\)/s',
+            $css
+        );
+        self::assertStringContainsString('padding-inline: var(--weline-space-4', $css);
+        self::assertStringContainsString('var(--color-link', $css);
+        self::assertStringContainsString('.wpc-cta .btn-buy-now', $css);
+        self::assertStringContainsString('20260917-product-card-widget-css-only', (string)file_get_contents(
+            $base . '/Service/ProductCardRenderer.php'
+        ));
+    }
+
+    public function testRendererDeclaresInlineProductCardStyleEmitter(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ProductCardRenderer.php'
+        );
+        self::assertStringContainsString('public static function emitStylesheetLinkOnce()', $src);
+        self::assertStringContainsString('buildProductCardStyleTag', $src);
+        self::assertStringContainsString('product-card.css', $src);
+        self::assertStringContainsString(ProductCardRenderer::CSS_LINK_MARKER, $src);
+        self::assertStringContainsString('<style ', $src);
+        self::assertStringNotContainsString('<link rel="stylesheet"', $src);
+        // 唯一入口：宿主 emit；render 不得再夹 cssLinkOnce
+        self::assertStringNotContainsString('cssLinkOnce', $src);
+        self::assertStringNotContainsString('return self::cssLinkOnce()', $src);
+        self::assertStringContainsString('20260917-product-card-widget-css-only', $src);
+
+        ProductCardRenderer::resetProductCardCssEmission();
+        $tag = ProductCardRenderer::buildProductCardStyleTag();
+        self::assertStringContainsString('<style ' . ProductCardRenderer::CSS_LINK_MARKER . '="1"', $tag);
+        self::assertStringContainsString('.weline-product-card', $tag);
+        self::assertStringContainsString('a:any-link', $tag);
+        self::assertStringContainsString('.product-actions .action-btn', $tag);
     }
 }

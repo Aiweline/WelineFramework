@@ -265,7 +265,7 @@ class RegionQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 15,
+                    'cache_ttl' => 300,
                     'params' => [],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Country codes blocked by shipping embargo union',
@@ -276,7 +276,7 @@ class RegionQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 15,
+                    'cache_ttl' => 300,
                     'params' => [
                         'country_code' => ['type' => 'string', 'max_length' => 8],
                     ],

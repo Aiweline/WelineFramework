@@ -76,9 +76,11 @@ final class ThemeScopedLayoutWriteService
         $hasTemplateRef = \trim((string)($config[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_REF] ?? '')) !== '';
 
         if ($exclusive && !$hasTemplateRef) {
+            // Exclusive replace owns the whole slot: clear every node in the slot,
+            // not only same widget_code (otherwise ad-banner + hero-slider stack).
             $commands = \array_merge(
                 $commands,
-                $this->removeNodesInSlot($state, $area, $slotId, (string)($data['widget_code'] ?? '')),
+                $this->removeNodesInSlot($state, $area, $slotId, null),
             );
         }
 
@@ -493,10 +495,16 @@ final class ThemeScopedLayoutWriteService
     /** @param array<string,mixed> $state
      * @return list<ThemePatchCommand>
      */
-    private function removeNodesInSlot(array $state, string $area, ?string $slotId, string $widgetCode): array
+    private function removeNodesInSlot(
+        array $state,
+        string $area,
+        ?string $slotId,
+        ?string $widgetCode = null,
+    ): array
     {
         $commands = [];
         $nodes = \is_array($state['draft_payload']['nodes'] ?? null) ? $state['draft_payload']['nodes'] : [];
+        $filterByCode = $widgetCode !== null && $widgetCode !== '';
         foreach ($nodes as $uid => $node) {
             if (!\is_array($node)) {
                 continue;
@@ -508,7 +516,7 @@ final class ThemeScopedLayoutWriteService
             if ($slotId !== null && $nodeSlot !== $slotId) {
                 continue;
             }
-            if ($widgetCode !== '' && (string)($node['widget_code'] ?? '') !== $widgetCode) {
+            if ($filterByCode && (string)($node['widget_code'] ?? '') !== $widgetCode) {
                 continue;
             }
             $uid = $this->assertNodeUid((string)$uid);

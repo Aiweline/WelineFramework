@@ -59,14 +59,17 @@ class Success extends FrontendController
         $orderId = (int)$this->request->getParam('order_id');
         if ($orderId <= 0) {
             if ($isCancel) {
-                $title = $cancelAlready ? (string)__('已取消') : (string)__('已取消成功');
+                $title = (string)__('支付已取消');
                 $this->request->setGet('theme_page_title', $title);
                 $this->assign('page_title', $title);
                 $this->assign('title', $title);
                 $this->assign('order', null);
-                $this->layoutType = 'checkout';
 
                 return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
+            }
+
+            if ($this->isThemeEditorCanvasRequest()) {
+                return $this->renderEditorPreviewShell();
             }
 
             return $this->redirect(self::CART_PATH);
@@ -89,13 +92,12 @@ class Success extends FrontendController
             }
         }
         $title = $isCancel
-            ? ($cancelAlready ? (string)__('已取消') : (string)__('已取消成功'))
+            ? (string)__('支付已取消')
             : (string)__('结账成功');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);
         $this->assign('order', $order);
-        $this->layoutType = 'checkout';
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
     }
@@ -141,7 +143,7 @@ class Success extends FrontendController
             }
         }
         $title = $isCancel
-            ? ($cancelAlready ? (string)__('已取消') : (string)__('已取消成功'))
+            ? (string)__('支付已取消')
             : (string)__('结账成功');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
@@ -171,7 +173,6 @@ class Success extends FrontendController
                 number_format(((int)($order->money['grand_total_minor'] ?? 0)) / 100, 2, '.', ','),
             ),
         );
-        $this->layoutType = 'checkout';
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
     }
@@ -206,13 +207,55 @@ class Success extends FrontendController
             'currency' => $currency,
             'money' => $money,
             'items' => [],
-            'shipping' => [],
+            'shipping' => is_array($arr['shipping'] ?? null) ? $arr['shipping'] : [],
+            'billing_address' => is_array($arr['billing_address'] ?? null) ? $arr['billing_address'] : [],
         ]);
         $this->assign('order_v2_display_number', $display !== '' ? $display : (string) ($order->orderUuid ?? ''));
         $this->assign('order_v2_status', 'paid');
         $this->assign('order_v2_total_label', $totalLabel);
-        $this->layoutType = 'checkout';
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
+    }
+
+    /**
+     * Theme editor canvas: no real order — still render success template shell (layout inferred from path).
+     */
+    private function renderEditorPreviewShell(): string
+    {
+        $title = (string) __('结账成功');
+        $this->request->setGet('theme_page_title', $title);
+        $this->assign('page_title', $title);
+        $this->assign('title', $title);
+        $this->assign('checkout_payment_cancelled', false);
+        $this->assign('checkout_cancel_already', false);
+        $this->assign('checkout_paid_ack', false);
+        $this->assign('order', null);
+        $this->assign('order_v2', [
+            'order_uuid' => 'preview-order',
+            'display_number' => 'PREVIEW-0001',
+            'status' => 'paid',
+            'currency' => 'CNY',
+            'money' => ['grand_total_minor' => 0],
+            'items' => [],
+            'shipping' => [],
+            'billing_address' => [],
+        ]);
+        $this->assign('order_v2_display_number', 'PREVIEW-0001');
+        $this->assign('order_v2_status', 'paid');
+        $this->assign('order_v2_total_label', 'CNY 0.00');
+        $this->assign('order_v2_items_display', []);
+        $this->assign('shipping_method_label', '');
+
+        return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
+    }
+
+    private function isThemeEditorCanvasRequest(): bool
+    {
+        $editorMode = strtolower(trim((string)$this->request->getParam('editor_mode', '')));
+        if ($editorMode === '1' || $editorMode === 'true' || $editorMode === 'yes') {
+            return true;
+        }
+
+        return strtolower(trim((string)$this->request->getParam('shell', ''))) === 'theme-editor';
     }
 }

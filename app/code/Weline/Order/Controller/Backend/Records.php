@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Weline\Order\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\OrderPayment;
 use Weline\Order\Model\RefundOutbox;
 
 #[Acl('Weline_Order::records', '订单业务记录', 'list', '订单关联业务记录', 'Weline_Backend::order_group')]
-final class Records extends BackendController
+final class Records extends BackendPageController
 {
     #[Acl('Weline_Order::payment_manage', '订单收款记录', 'edit', '订单收款记录', 'Weline_Backend::payment_group')]
     public function payment(): string

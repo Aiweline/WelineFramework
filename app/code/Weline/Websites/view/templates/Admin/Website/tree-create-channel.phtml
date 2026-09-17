@@ -1,0 +1,30 @@
+<?php
+/** @var int $website_id @var int $store_id @var string $tree_return_node @var string $tree_return_url */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$websiteId = (int)($website_id ?? 0);
+$storeId = (int)($store_id ?? 0);
+$returnNode = (string)($tree_return_node ?? ('store:' . $storeId));
+$returnUrl = trim((string)($tree_return_url ?? ''));
+?>
+<div class="w-container" data-testid="websites-tree-create-channel" data-store-id="<?= $storeId ?>">
+    <w:form method="post" action="@backend-url('*/backend/scope-management/create-channel')" csrf="auto" class="w-grid" data-testid="sales-channel-management-create-form" style="--w-gap:var(--weline-space-4);">
+        <input type="hidden" name="website_id" value="<?= $websiteId ?>">
+        <input type="hidden" name="store_id" value="<?= $storeId ?>">
+        <input type="hidden" name="return_to" value="tree">
+        <input type="hidden" name="return_node" value="<?= $escape($returnNode) ?>">
+        <?php if ($returnUrl !== ''): ?>
+            <input type="hidden" name="return_url" value="<?= $escape($returnUrl) ?>">
+        <?php endif; ?>
+        <div style="--w-span-md:3;">
+            <label class="w-field__label"><lang>渠道代码</lang></label>
+            <input class="w-input" name="code" maxlength="64" required>
+        </div>
+        <div style="--w-span-md:5;">
+            <label class="w-field__label"><lang>渠道名称</lang></label>
+            <input class="w-input" name="name" maxlength="128" required>
+        </div>
+        <div class="w-cluster" data-align="end" style="--w-span-md:12;">
+            <button class="w-button" type="submit" data-tone="primary"><lang>创建渠道</lang></button>
+        </div>
+    </w:form>
+</div>

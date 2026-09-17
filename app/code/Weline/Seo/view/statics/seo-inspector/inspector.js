@@ -251,7 +251,7 @@
     category: "collection",
     collection: "collection",
     collection_page: "collection",
-    product_list: "collection",
+    products: "collection",
     best_sellers: "collection",
     new_arrivals: "collection",
     blog_list: "collection",
@@ -260,6 +260,8 @@
     tag_collection: "collection",
     tag_landing: "collection",
     contact: "contact",
+    about: "about",
+    about_page: "about",
     legal: "legal",
     privacy: "legal",
     terms: "legal",
@@ -353,6 +355,13 @@
       primaryType: "ContactPage",
       requiredFields: ["name", "url"],
       recommendedFields: ["mainEntity", "about", "publisher.name", "publisher.logo"]
+    },
+    about: {
+      label: "关于页",
+      requiredTypes: ["AboutPage", "BreadcrumbList"],
+      primaryType: "AboutPage",
+      requiredFields: ["name", "url"],
+      recommendedFields: ["description", "publisher.name", "publisher.logo"]
     },
     legal: {
       label: "法律/政策页",
@@ -6053,6 +6062,7 @@
     // Ecommerce list pages: BreadcrumbList is the Google rich result; Org/WebSite are site signals.
     collection: { required: ["BreadcrumbList", "Organization", "WebSite"], optional: [] },
     contact: { required: ["Organization", "WebSite", "BreadcrumbList"], optional: [] },
+    about: { required: ["AboutPage", "Organization", "WebSite", "BreadcrumbList"], optional: [] },
     legal: { required: ["WebSite", "Organization", "BreadcrumbList"], optional: [] },
     web_page: { required: ["Organization", "WebSite"], optional: ["BreadcrumbList"] }
   };
@@ -6117,7 +6127,8 @@
     if (/\/post(?:\/|$)/.test(path)) return "blog";
     if (/\/news(?:\/|$)/.test(path)) return "news";
     if (/\/review(?:\/|$)/.test(path)) return "review";
-    if (/\/contact(?:\/|$)/.test(path) || /\/about(?:\/|$)/.test(path)) return "contact";
+    if (/\/contact(?:\/|$)/.test(path)) return "contact";
+    if (/\/about(?:\/|$)/.test(path)) return "about";
     if (/\/categor|\/collection|\/products(?:\/|$)|\/search(?:\/|$)|\/tag(?:\/|$)|\/best-sellers|\/new-arrivals/.test(path)) {
       return "collection";
     }

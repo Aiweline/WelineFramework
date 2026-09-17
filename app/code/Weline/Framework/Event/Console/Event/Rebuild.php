@@ -133,15 +133,16 @@ class Rebuild extends CommandAbstract
                 $this->printer->error(__('✖ 写入事件注册表失败。'));
             }
         } catch (\RuntimeException $e) {
-            // 事件名冲突错误，显示详细错误信息
-            $this->printer->error(__('✖ 事件注册表重建失败：事件名冲突'));
+            // 事件名冲突或写回门禁失败：磁盘上的 generated/events.php 保持不变
+            $this->printer->error(__('✖ 事件注册表重建失败（已保留现有 generated/events.php）'));
             $this->printer->error($e->getMessage());
             exit(1); // 致命错误，退出程序
         } catch (\Throwable $e) {
-            $this->printer->error(__('重建失败：%{1}', [$e->getMessage()]));
+            $this->printer->error(__('重建失败（已保留现有 generated/events.php）：%{1}', [$e->getMessage()]));
             if (DEV) {
                 $this->printer->error($e->getTraceAsString());
             }
+            exit(1);
         }
     }
 
@@ -162,6 +163,7 @@ class Rebuild extends CommandAbstract
             [
                 '执行后会在项目根目录的 generated/events.php 写入事件规约信息。',
                 '指定 -m 时为增量更新，仅刷新指定模块相关的事件和观察者。',
+                '扫描未完成或校验失败时不会删除/覆盖现有 generated/events.php。',
                 '所有事件必须同时具备规约文件 (event.php) 和文档文件 (doc/event/*.md) 才能正常执行。',
             ],
             [

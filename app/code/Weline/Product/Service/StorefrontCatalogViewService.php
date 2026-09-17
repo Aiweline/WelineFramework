@@ -422,25 +422,41 @@ final class StorefrontCatalogViewService
             $websiteId,
             ($includeMedia ? '' : 'candidates-') . ($includeListingDetails ? 'full' : 'summary-slug2'),
         );
+        $requestKey = serialize([
+            $websiteId,
+            $scope->canonicalKey(),
+            max(0, RequestContext::getWelineStoreId()),
+            strtoupper(trim(RequestContext::getWelineUserCurrency())),
+            trim((string)RequestContext::getWelineUserLang()),
+            $includeListingDetails,
+            $includeMedia,
+            'offers-v1',
+        ]);
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = RequestLifecycleTrace::measurePhase($includeMedia ? 'product.catalog.resolve' : 'product.catalog.resolve_candidates',
-            fn(): array => $this->hotCache->rememberPolicy(
-                StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
-                $logicalKey,
-                fn(): array => RequestLifecycleTrace::measurePhase($includeMedia ? 'product.catalog.build' : 'product.catalog.build_candidates',
-                    fn(): array => $this->buildPublishedOffers(
-                        $websiteId,
-                        $scope,
-                        [],
-                        true,
-                        $includeListingDetails,
-                        includeMedia: $includeMedia,
+        $rows = $this->hotCache->rememberForRequest(
+            'product.catalog.offers.request',
+            $requestKey,
+            fn(): array => RequestLifecycleTrace::measurePhase(
+                $includeMedia ? 'product.catalog.resolve' : 'product.catalog.resolve_candidates',
+                fn(): array => $this->hotCache->rememberPolicy(
+                    StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
+                    $logicalKey,
+                    fn(): array => RequestLifecycleTrace::measurePhase(
+                        $includeMedia ? 'product.catalog.build' : 'product.catalog.build_candidates',
+                        fn(): array => $this->buildPublishedOffers(
+                            $websiteId,
+                            $scope,
+                            [],
+                            true,
+                            $includeListingDetails,
+                            includeMedia: $includeMedia,
+                        ),
+                        ['website_id' => $websiteId],
                     ),
-                    ['website_id' => $websiteId],
                 ),
+                ['website_id' => $websiteId],
             ),
-            ['website_id' => $websiteId],
         );
 
         if ($includeMedia && $includeListingDetails && Context::hasCurrent()) {

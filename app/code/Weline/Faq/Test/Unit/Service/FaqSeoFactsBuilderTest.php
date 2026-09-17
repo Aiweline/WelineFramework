@@ -16,7 +16,7 @@ final class FaqSeoFactsBuilderTest extends TestCase
         self::assertStringContainsString("'page_type' => 'faq_article'", $facts);
         self::assertStringContainsString("'image'", $facts);
         self::assertStringContainsString("'image_alt'", $facts);
-        self::assertStringContainsString('yunshang-logo', $facts);
+        self::assertStringContainsString('changan-logo', $facts);
         self::assertStringContainsString('seoFaqs', $facts);
         self::assertStringContainsString("'question'", $hub);
         self::assertStringContainsString("'answer'", $hub);

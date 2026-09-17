@@ -50,6 +50,22 @@ class FileManager implements TaglibInterface
             'w' => false,
             'h' => false,
             'size' => false,
+            // MediaReferenceIdentity.v1 — explicit identity or Ambient self-build
+            'identity' => false,
+            'identity_root' => false,
+            'identity_code' => false,
+            'identity_scope' => false,
+            'identity_kind' => false,
+            'identity_field' => false,
+            'identity_component' => false,
+            'identity_locale' => false,
+            'identity_instance' => false,
+            'identity_path' => false,
+            'ref_mode' => false,
+            'owner_type' => false,
+            'owner_id' => false,
+            'owner_version' => false,
+            'strong_ref' => false,
         ];
     }
 
@@ -165,6 +181,16 @@ class FileManager implements TaglibInterface
                 ->setExt($attributes['ext'] ?? '*')
                 ->setSize($attributes['size'] ?? '102400')
                 ->setVars($attributes['vars'] ?? '');
+            foreach ([
+                'identity', 'identity_root', 'identity_code', 'identity_scope',
+                'identity_kind', 'identity_field', 'identity_component', 'identity_locale',
+                'identity_instance', 'identity_path', 'ref_mode', 'owner_type', 'owner_id',
+                'owner_version', 'strong_ref',
+            ] as $identityAttr) {
+                if (array_key_exists($identityAttr, $attributes) && $attributes[$identityAttr] !== null && $attributes[$identityAttr] !== '') {
+                    $fileManager->setData($identityAttr, $attributes[$identityAttr]);
+                }
+            }
             $result = $fileManager->setData(
                 [
                     'tag_key' => $tag_key,
@@ -206,40 +232,46 @@ class FileManager implements TaglibInterface
     public static function document(): string
     {
         $doc = htmlentities(
-            "<file-manager 
-                        code='local'
+            "<w:file-manager 
+                        code='weline_media'
                         target='#demo'
-                        title='文件管理器' 
+                        title='选择图片' 
                         preview='1'
-                        var='store' 
                         path='store/logo'
                         lockPath='1'
-                        value='store.logo'
+                        value=''
                         multi='0'
                         ext='jpg,png,gif,webp'
                         size='1048576'
                         w='50'
-                        h='50'                        
+                        h='50'
+                        identity_root='config'
+                        identity_code='demo_logo'
+                        identity_scope='default.default.default'
+                        identity_kind='media'
+                        identity_field='logo'
+                        ref_mode='single'
+                        strong_ref='1'
                         />"
         );
         return <<<HTML
+&lt;w:file-manager /&gt; — <strong>媒体选图</strong>（回填目标 input），不是出图标签。
+出图请用 &lt;w:file:image /&gt;。分工说明：app/code/Weline/FileManager/doc/file-manager-选图与file-image出图.md
+
 使用方法：
 {$doc}
 参数解释：
-code：可选，指定文件管理器实现，例如：local、weline_media
-target：目标容器id【选择文件后会根据id回填到属性value上】
-preview: 是否预览。默认：1
-ext：可选。允许的文件后缀，默认 * 表示所有类型，例如：jpg,png,gif,webp
-size：可选。允许的文件大小（字节），默认 102400（100KB），例如：1048576（1MB）
-title：可选。文件管理器标题
-path：可选。默认打开的文件路径，例如：store/logo
-lockPath：可选。是否锁定路径（不能返回上级目录），默认：0
-lockRoot：可选。锁定根相对路径（如 websites/default/default）；与 lockPath=1 联用
-vars：当前变量
-value：默认当前的文件路径
-multi：可选。是否多选，默认单选
-w：可选。默认预览宽50px
-h：可选。默认预览高50px
+code：可选，文件管理器实现（如 weline_media）
+target：必填，目标元素 id（选择结果写入其 value）
+preview：是否预览，默认 1
+ext / size：允许后缀与字节大小
+title：弹层标题
+path / lockPath / lockRoot：默认目录与路径锁
+value：当前值（路径模式为路径字符串）
+multi / w / h：多选与预览宽高
+identity_* / ref_mode / owner_* / strong_ref：MediaReferenceIdentity（强引用须有身份；禁止手拼 identity_path，用 w_scope）
+
+typed file-image（主题部件 media_image）：请用 MediaManager Block WelineMedia，并设 value_mode=file-image 与 usage=1（见同上分工文档）。标签默认路径模式，勿与 &lt;w:file:image&gt; 混淆。
 HTML;
     }
 }

@@ -64,6 +64,11 @@ final class ConfigEmbedResolver
         }
 
         $urlInput ??= $this->scopeInputFromRequest();
+        $forced = $this->scopeInputFromAttributes($attributes);
+        if ($forced !== []) {
+            // 实体页（网站/店/渠）锁定写目标：属性优先于 URL，避免误写 Global
+            $urlInput = $forced;
+        }
         $target = $this->targetScopeService->resolveFromInput($urlInput, allowSessionFallback: false);
         $storageScope = $this->systemConfig->normalizeScope((string)$target['storage_scope']);
         $normalizedLocale = $this->systemConfig->normalizeLocale($locale);
@@ -171,6 +176,33 @@ final class ConfigEmbedResolver
                 $input[$key] = (string)$request->getGet($key, '');
             } elseif ($request->getGet($key, null) !== null) {
                 $input[$key] = (string)$request->getGet($key, '');
+            }
+        }
+
+        return $input;
+    }
+
+    /**
+     * Tag 属性强制 Scope（实体编辑页）。空属性忽略，回落到 URL。
+     *
+     * @param array<string, mixed> $attributes
+     * @return array<string, mixed>
+     */
+    public function scopeInputFromAttributes(array $attributes): array
+    {
+        $input = [];
+        $targetScope = trim((string)($attributes['target_scope'] ?? ''));
+        if ($targetScope !== '') {
+            $input['target_scope'] = $targetScope;
+        }
+        foreach (['website_code', 'store_code', 'channel_code', 'scope_kind'] as $key) {
+            if (!\array_key_exists($key, $attributes)) {
+                continue;
+            }
+            $value = trim((string)($attributes[$key] ?? ''));
+            // 允许显式空 website_code 表示 Global；其它键仅非空时写入
+            if ($key === 'website_code' || $value !== '') {
+                $input[$key] = $value;
             }
         }
 
@@ -402,7 +434,118 @@ final class ConfigEmbedResolver
             'deny_tip' => $denyTip,
             'deeplink' => $this->configCenterDeeplink($module, $area, $key, $target),
             'template_code' => (string)(($fieldObject['template']['code'] ?? '') ?: ''),
+            // 媒体选择器：透传声明 path/lock，并按当前 target 解析落盘目录
+            ...$this->resolveMediaPickerMeta((array)($definitions[$key]['field'] ?? []), $target),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $fieldDecl
+     * @param array<string, mixed> $target
+     * @return array{
+     *   path?:string,
+     *   path-global?:string,
+     *   lock-path?:string,
+     *   lock-root?:string,
+     *   lock-root-global?:string,
+     *   ext?:string,
+     *   media_path?:string,
+     *   media_lock_path?:string,
+     *   media_lock_root?:string
+     * }
+     */
+    private function resolveMediaPickerMeta(array $fieldDecl, array $target): array
+    {
+        $meta = [];
+        foreach (['path', 'path-global', 'media-path', 'media-path-global', 'lock-path', 'lockPath', 'lock-root', 'lockRoot', 'lock-root-global', 'lockRootGlobal', 'ext'] as $attr) {
+            if (!array_key_exists($attr, $fieldDecl)) {
+                continue;
+            }
+            $meta[$attr] = (string)$fieldDecl[$attr];
+        }
+
+        $pathTpl = trim((string)($fieldDecl['path'] ?? $fieldDecl['media-path'] ?? ''));
+        $pathGlobal = trim((string)($fieldDecl['path-global'] ?? $fieldDecl['media-path-global'] ?? ''));
+        if ($pathTpl === '' && $pathGlobal === '') {
+            return $meta;
+        }
+
+        $kind = strtolower((string)($target['kind'] ?? 'global'));
+        $isGlobal = $kind === 'global'
+            || (
+                (string)($target['website_code'] ?? 'default') === 'default'
+                && (string)($target['store_code'] ?? 'default') === 'default'
+                && (string)($target['channel_code'] ?? 'default') === 'default'
+            );
+        $website = trim((string)($target['website_code'] ?? 'default')) ?: 'default';
+        $store = trim((string)($target['store_code'] ?? 'default')) ?: 'default';
+        $channel = trim((string)($target['channel_code'] ?? 'default')) ?: 'default';
+        if ($store === '') {
+            $store = 'default';
+        }
+        if ($channel === '') {
+            $channel = 'default';
+        }
+
+        $usingGlobal = false;
+        if ($isGlobal && $pathGlobal !== '') {
+            $mediaPath = $pathGlobal;
+            $usingGlobal = true;
+        } elseif ($pathTpl !== '') {
+            $mediaPath = strtr($pathTpl, [
+                '{website}' => $isGlobal ? 'default' : $website,
+                '{store}' => $isGlobal ? 'default' : $store,
+                '{channel}' => $isGlobal ? 'default' : $channel,
+            ]);
+        } else {
+            $mediaPath = $pathGlobal;
+            $usingGlobal = true;
+        }
+        $mediaPath = trim((string)$mediaPath, '/');
+
+        $lockPathRaw = $fieldDecl['lock-path'] ?? $fieldDecl['lockPath'] ?? '1';
+        $lockPath = in_array(strtolower((string)$lockPathRaw), ['0', 'false', 'off', 'no'], true) ? '0' : '1';
+        $lockRoot = '';
+        if ($usingGlobal) {
+            $lockRootGlobal = trim((string)($fieldDecl['lock-root-global'] ?? $fieldDecl['lockRootGlobal'] ?? ''));
+            $lockRoot = $lockRootGlobal !== '' ? trim($lockRootGlobal, '/') : (str_starts_with($mediaPath, 'mail/') ? 'mail' : '');
+        } else {
+            $lockRootTpl = trim((string)($fieldDecl['lock-root'] ?? $fieldDecl['lockRoot'] ?? ''));
+            if ($lockRootTpl !== '') {
+                $lockRoot = trim(strtr($lockRootTpl, [
+                    '{website}' => $website,
+                    '{store}' => $store,
+                    '{channel}' => $channel,
+                ]), '/');
+            }
+        }
+
+        $meta['media_path'] = $mediaPath;
+        $meta['media_lock_path'] = $lockPath;
+        if ($lockRoot !== '') {
+            $meta['media_lock_root'] = $lockRoot;
+        }
+
+        // MediaReferenceIdentity.v1 — config media fields require identity meta
+        $scope = strtolower($website . '.' . $store . '.' . $channel);
+        $moduleNs = trim((string)($fieldDecl['module'] ?? $target['module'] ?? ''));
+        $configKey = trim((string)($fieldDecl['key'] ?? $fieldDecl['code'] ?? ''));
+        if ($configKey === '') {
+            $configKey = trim((string)($meta['path'] ?? $mediaPath));
+            $configKey = (string)(preg_replace('#[^a-zA-Z0-9._-]+#', '_', $configKey) ?: 'config_media');
+        }
+        $meta['identity_root'] = 'config';
+        $meta['identity_code'] = $configKey;
+        $meta['identity_scope'] = $scope;
+        $meta['identity_kind'] = 'media';
+        $meta['identity_field'] = $configKey;
+        if ($moduleNs !== '') {
+            $meta['identity_ns'] = $moduleNs;
+        }
+        $meta['ref_mode'] = 'single';
+        $meta['strong_ref'] = '1';
+
+        return $meta;
     }
 
     /**

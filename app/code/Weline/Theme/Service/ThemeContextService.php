@@ -357,6 +357,7 @@ class ThemeContextService implements ThemeContextProviderInterface
             $this->clearActivationRuntimeCaches($theme, $normalizedArea);
 
             if ($normalizedArea === null || $normalizedArea === self::AREA_FRONTEND) {
+                $this->syncPublishedFrontendThemeBinding($themeId);
                 $this->ensureStorefrontHomepageLayoutSeeded($themeId);
             }
 
@@ -373,6 +374,72 @@ class ThemeContextService implements ThemeContextProviderInterface
                 'status' => 'error',
                 'message' => (string)__('激活失败：%{1}', [$throwable->getMessage()]),
             ];
+        }
+    }
+
+    /**
+     * Storefront HTTP resolves Theme via published theme_binding (scoped Release),
+     * which outranks is_active_frontend. Keep the global frontend binding aligned
+     * when activating a frontend theme so design themes actually render.
+     */
+    private function syncPublishedFrontendThemeBinding(int $themeId): void
+    {
+        if ($themeId <= 0) {
+            return;
+        }
+
+        try {
+            /** @var ThemeScopedWorkspaceInterface $workspace */
+            $workspace = $this->getScopedWorkspace();
+            /** @var ScopeHierarchyInterface $scopes */
+            $scopes = $this->getScopeHierarchy();
+            $context = new \Weline\Theme\Api\Scoped\ThemeEditorContext(
+                scope: $scopes->contextFromIdentity(ScopeIdentity::global()),
+                area: self::AREA_FRONTEND,
+                resourceType: \Weline\Theme\Api\Scoped\ThemeEditorContext::RESOURCE_THEME_BINDING,
+            );
+            $before = $workspace->load($context, true);
+            $publishedThemeId = (int)($before['published_payload']['theme_id']
+                ?? $before['effective_payload']['theme_id']
+                ?? 0);
+            $draftThemeId = (int)($before['draft_payload']['theme_id'] ?? 0);
+            if ($publishedThemeId === $themeId && ($draftThemeId === 0 || $draftThemeId === $themeId)) {
+                return;
+            }
+
+            $parentReleaseId = \array_key_exists('expected_parent_release_id', $before)
+                ? ($before['expected_parent_release_id'] === null
+                    ? null
+                    : (int)$before['expected_parent_release_id'])
+                : null;
+            $workspace->applyChanges(
+                context: $context,
+                expectedRevision: (int)($before['revision'] ?? 0),
+                expectedParentReleaseId: $parentReleaseId,
+                changes: [[
+                    'op' => 'set',
+                    'path' => '/theme_id',
+                    'value' => $themeId,
+                ]],
+                actorId: 'theme-context-activate',
+                actorName: 'ThemeContextService',
+                summary: 'Sync published frontend theme_binding on activation',
+            );
+            $afterDraft = $workspace->load($context, true);
+            $workspace->publish(
+                context: $context,
+                expectedRevision: (int)($afterDraft['revision'] ?? 0),
+                expectedParentReleaseId: \array_key_exists('expected_parent_release_id', $afterDraft)
+                    ? ($afterDraft['expected_parent_release_id'] === null
+                        ? null
+                        : (int)$afterDraft['expected_parent_release_id'])
+                    : null,
+                actorId: 'theme-context-activate',
+                actorName: 'ThemeContextService',
+                reason: 'Sync published frontend theme_binding on activation',
+            );
+        } catch (\Throwable) {
+            // Activation must not fail if scoped Release tables are mid-upgrade.
         }
     }
 

@@ -193,27 +193,82 @@ $legacyImagePreview = static function (mixed $raw) use ($normalizeFileImageNode)
                     $imageHasValue = $imageStoredValue !== '';
                     $imageMediaOptions = is_array($param['media_options'] ?? null) ? $param['media_options'] : [];
                     $imageDefaultDirectory = (string)($imageMediaOptions['default_directory'] ?? $param['default_directory'] ?? 'banner');
+                    $imageFieldId = 'config_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', (string)$key);
+                    $imageAspect = trim((string)($imageMediaOptions['aspect_ratio'] ?? $param['aspect_ratio'] ?? ''));
+                    $imageRecommendW = trim((string)($imageMediaOptions['recommend_width'] ?? $param['recommend_width'] ?? ''));
+                    $imageRecommendH = trim((string)($imageMediaOptions['recommend_height'] ?? $param['recommend_height'] ?? ''));
+                    $imageTolerance = trim((string)($imageMediaOptions['aspect_ratio_tolerance'] ?? $param['aspect_ratio_tolerance'] ?? ''));
+                    $renderedPicker = '';
+                    if (class_exists(\Weline\MediaManager\Block\WelineMedia::class) && \function_exists('framework_view_process_block')) {
+                        $block = [
+                            'class' => \Weline\MediaManager\Block\WelineMedia::class,
+                            'target' => $imageFieldId,
+                            'picker_title' => (string)__('从图库选择'),
+                            'path' => $imageDefaultDirectory !== '' ? $imageDefaultDirectory : 'banner',
+                            'value' => $imageStoredValue !== '' ? $imageStoredValue : '',
+                            'preview' => '1',
+                            'multi' => '0',
+                            'ext' => 'jpg,jpeg,png,gif,webp',
+                            'size' => 5242880,
+                            'width' => 96,
+                            'height' => 96,
+                            'usage' => '1',
+                            'value_mode' => 'file-image',
+                            'lockPath' => '0',
+                        ];
+                        if ($imageAspect !== '') {
+                            $block['aspect_ratio'] = $imageAspect;
+                        }
+                        if ($imageRecommendW !== '') {
+                            $block['recommend_width'] = $imageRecommendW;
+                        }
+                        if ($imageRecommendH !== '') {
+                            $block['recommend_height'] = $imageRecommendH;
+                        }
+                        if ($imageTolerance !== '') {
+                            $block['aspect_ratio_tolerance'] = $imageTolerance;
+                        }
+                        $obLevel = ob_get_level();
+                        try {
+                            $renderedPicker = (string)framework_view_process_block($block);
+                        } catch (\Throwable) {
+                            while (ob_get_level() > $obLevel) {
+                                ob_end_clean();
+                            }
+                            $renderedPicker = '';
+                        }
+                    }
+                    ?>
+                    <?php if ($renderedPicker !== '' && str_contains($renderedPicker, 'w-file-picker')): ?>
+                        <div class="w-param-media-image" data-w-param-media="file-picker">
+                            <input type="hidden" id="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($imageStoredValue, ENT_QUOTES, 'UTF-8') ?>" data-preview="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>_preview" data-clear-label="<?= __('清除图片') ?>"<?= $imagePreviewUrl !== '' ? ' data-preview-url="' . htmlspecialchars($imagePreviewUrl, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
+                            <?= $renderedPicker ?>
+                            <button type="button" class="w-button w-param-image-select w-param-media-image-select" hidden data-target="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>" data-default-dir="<?= htmlspecialchars($imageDefaultDirectory, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('选择') ?></button>
+                        </div>
+                    <?php else: ?>
+                    <?php
                     $imagePlaceholder = $imageNode !== null
                         ? trim((string)($imageNode['usage']['alt'] ?? $imageNode['usage']['asset_id']))
                         : (string)__($imageHasValue ? '旧图片地址仅兼容显示，请从媒体库重新选择' : '从媒体库选择');
                     ?>
                     <div class="w-param-media-image">
-                        <div class="w-param-image-preview<?= $imageHasValue ? ' w-param-has-image' : '' ?>" id="config_<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>_preview">
+                        <div class="w-param-image-preview<?= $imageHasValue ? ' w-param-has-image' : '' ?>" id="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>_preview">
                             <?php if ($imagePreviewUrl !== ''): ?>
                                 <img src="<?= htmlspecialchars($imagePreviewUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= __('预览') ?>">
                             <?php endif; ?>
                             <div class="w-param-image-placeholder"<?= $imagePreviewUrl !== '' ? ' hidden' : '' ?>><?= htmlspecialchars($imagePlaceholder, ENT_QUOTES, 'UTF-8') ?></div>
                             <div class="w-param-image-actions">
-                                <button type="button" class="w-button w-param-image-select w-param-media-image-select" data-target="config_<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>" data-default-dir="<?= htmlspecialchars($imageDefaultDirectory, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                <button type="button" class="w-button w-param-image-select w-param-media-image-select" data-target="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>" data-default-dir="<?= htmlspecialchars($imageDefaultDirectory, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
                                     <w:icon name="image" size="sm"></w:icon> <?= __('选择') ?>
                                 </button>
                                 <?php if ($imageHasValue): ?>
-                                    <button type="button" class="w-button w-param-image-clear" data-target="config_<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" aria-label="<?= __('清除图片') ?>">×</button>
+                                    <button type="button" class="w-button w-param-image-clear" data-target="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" aria-label="<?= __('清除图片') ?>">×</button>
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <input type="hidden" id="config_<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($imageStoredValue, ENT_QUOTES, 'UTF-8') ?>" data-preview="config_<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>_preview" data-clear-label="<?= __('清除图片') ?>">
+                        <input type="hidden" id="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($imageStoredValue, ENT_QUOTES, 'UTF-8') ?>" data-preview="<?= htmlspecialchars($imageFieldId, ENT_QUOTES, 'UTF-8') ?>_preview" data-clear-label="<?= __('清除图片') ?>">
                     </div>
+                    <?php endif; ?>
                 
                 <?php elseif ($type === 'color'): ?>
                     <div class="w-field__control">

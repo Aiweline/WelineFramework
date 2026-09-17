@@ -11,7 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page", "category"]}
- * @widget.supports {["layout-homepage-new-arrivals","layout-homepage-content","layout-product-list-recommendations","layout-cms-content","layout-default-content"]}
+ * @widget.supports {["layout-homepage-new-arrivals","layout-homepage-content","layout-products-recommendations","layout-cms-content","layout-default-content"]}
  *
  * @param title {default="新品上架",type="string",label="标题"}
  * @param subtitle {default="发现最新商品",type="string",label="副标题"}
@@ -31,6 +31,7 @@
 
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
@@ -122,10 +123,12 @@ $showAddToCart = true;
 
 ?>
 
+
 <section class="<?= $esc($wc) ?> weline-product-card-shelf<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <?php if ($title || $subtitle): ?>
         <div class="widget-header">
             <?php if ($title): ?>
@@ -193,12 +196,14 @@ $showAddToCart = true;
 }
 .<?= $wc ?> .widget-subtitle { margin: var(--weline-space-2) 0 0; color: var(--weline-theme-text-muted); }
 .<?= $wc ?> .products-container { width: 100%; }
-.<?= $wc ?> .products-wrapper { width: 100%; overflow: hidden; }
+.<?= $wc ?> .products-wrapper { width: 100%; overflow: visible; }
+.<?= $wc ?> .layout-carousel .products-wrapper { overflow: hidden; }
 .<?= $wc ?> .products-grid {
     display: grid;
     gap: var(--weline-space-4);
     width: 100%;
     box-sizing: border-box;
+    align-items: stretch;
 }
 .<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .<?= $wc ?> .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }

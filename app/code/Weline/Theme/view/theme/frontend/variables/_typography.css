@@ -1,7 +1,7 @@
 /**
  * 变量：字体变量定义
- * 
- * 定义字体系统相关的变量
+ *
+ * 古风分层：正文宋体可读、标题文楷出韵、界面控件偏干净。
  * 字段
  * @meta.name {default="字体变量",name="字体变量",description="字体变量，用于描述变量的名称"}
  * @meta.description {default="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等",name="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等",description="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等，用于描述变量的用途"}
@@ -11,12 +11,17 @@
  */
 
 :root {
-    /* ========== 字体族 ========== */
-    --font-family-base: "Noto Sans SC", -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-    --font-family-mono: 'Courier New', Courier, monospace;
-    --font-family-serif: Georgia, 'Times New Roman', serif;
-    
-    /* ========== 字体大小 ========== */
+    /* ========== 字体族 #font-family ========== */
+    /* 正文 / 商品卡文案：思源宋体 */
+    --font-family-base: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", "Noto Sans SC", "PingFang SC", serif;
+    /* 标题 / Hero / 区块名：霞鹜文楷（默认古风主信号） */
+    --font-family-display: "LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif SC", "Songti SC", serif;
+    /* 顶栏 / 按钮 / 筛选等密控件：宋体，避免楷书发糊 */
+    --font-family-ui: "Noto Serif SC", "Songti SC", "Noto Sans SC", "PingFang SC", serif;
+    --font-family-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, "Times New Roman", serif;
+    --font-family-mono: "Courier New", Courier, monospace;
+
+    /* ========== 字体大小 #font-size ========== */
     --font-size-xs: 0.75rem;    /* 12px */
     --font-size-sm: 0.875rem;   /* 14px */
     --font-size-base: 1rem;     /* 16px */
@@ -25,32 +30,35 @@
     --font-size-2xl: 1.5rem;    /* 24px */
     --font-size-3xl: 1.75rem;   /* 28px */
     --font-size-4xl: 2rem;      /* 32px */
-    
-    /* ========== 字体粗细 ========== */
+
+    /* ========== 字体粗细 #font-weight ========== */
     --font-weight-light: 300;
     --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
-    
-    /* ========== 行高 ========== */
+
+    /* ========== 行高 #line-height ========== */
     --line-height-tight: 1.25;
-    --line-height-normal: 1.5;
+    --line-height-normal: 1.55;
     --line-height-relaxed: 1.75;
     --line-height-loose: 2;
-    
-    /* ========== 字间距 ========== */
+
+    /* ========== 字间距 #letter-spacing ========== */
     --letter-spacing-tight: -0.025em;
     --letter-spacing-normal: 0;
     --letter-spacing-wide: 0.025em;
 
     /* ========== 字体别名 ========== */
-    --font-family-display: var(--font-family-base);
     --font-size-md: var(--font-size-base);
     --font-size-2_5xl: 1.375rem; /* 22px */
     --font-size-xxl: var(--font-size-2xl);
 
     /* ========== foundation 字体别名 ========== */
+    --weline-font-sans: var(--font-family-base);
+    --weline-font-serif: var(--font-family-serif);
+    --weline-font-display: var(--font-family-display);
+    --weline-font-ui: var(--font-family-ui);
     --weline-font-mono: var(--font-family-mono);
     --weline-font-size-xs: var(--font-size-xs);
     --weline-font-size-sm: var(--font-size-sm);
@@ -63,6 +71,7 @@
     --weline-font-weight-medium: var(--font-weight-medium);
     --weline-font-weight-semibold: var(--font-weight-semibold);
     --weline-font-weight-bold: var(--font-weight-bold);
+    --weline-line-height: var(--line-height-normal);
 
     /* ========== weshop 字号桥接 ========== */
     --weshop-font-size-xs: var(--font-size-xs);

@@ -19,7 +19,8 @@ class PixelEventService
         private ?PixelTrafficAttributionService $attributionService = null,
         private ?PixelSessionFirstTouchBackfillService $sessionFirstTouchBackfillService = null,
         private ?PixelChannelLookupService $channelLookupService = null,
-        private ?PageBuilderOptimizationAttributionService $optimizationAttributionService = null
+        private ?PageBuilderOptimizationAttributionService $optimizationAttributionService = null,
+        private ?PixelConversionDedupeService $conversionDedupeService = null,
     ) {
     }
 
@@ -645,6 +646,19 @@ class PixelEventService
             ]);
         }
 
+        // 转化事件去重：TTL 内同 website+event+业务键直接丢弃
+        if ($this->conversionDedupe()->isDuplicate($websiteId, $eventName, $prepared['post'])) {
+            return $this->successResponse([
+                'pixel_id' => null,
+                'pixel_additional_id' => null,
+                'buffered' => false,
+                'skipped' => true,
+                'reason' => 'duplicate',
+                'event_id' => $prepared['event_id'],
+                'event' => $eventName,
+            ]);
+        }
+
         $buffer = $eventName === 'site_error' ? null : $this->hotBuffer()->buffer($prepared);
         if ($buffer) {
             $response = $this->successResponse([
@@ -1072,6 +1086,15 @@ class PixelEventService
         }
 
         return $this->hotBufferService;
+    }
+
+    private function conversionDedupe(): PixelConversionDedupeService
+    {
+        if (!$this->conversionDedupeService) {
+            $this->conversionDedupeService = ObjectManager::getInstance(PixelConversionDedupeService::class);
+        }
+
+        return $this->conversionDedupeService;
     }
 
     private function attribution(): PixelTrafficAttributionService

@@ -24,7 +24,8 @@
     align-items: center;
     justify-content: center;
     padding-inline: var(--weline-space-3);
-    border-radius: var(--weline-theme-radius-full);
+    /* 与 canonical product-card CTA 圆角一致（约 0.65rem），勿用 pill 全圆 */
+    border-radius: var(--weline-theme-radius-lg, var(--weline-radius-lg));
     font: inherit;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);

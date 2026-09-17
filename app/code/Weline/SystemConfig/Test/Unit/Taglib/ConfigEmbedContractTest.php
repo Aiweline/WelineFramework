@@ -19,6 +19,11 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertArrayHasKey('group', $attrs);
         self::assertArrayHasKey('layout', $attrs);
         self::assertArrayHasKey('template', $attrs);
+        self::assertArrayHasKey('target_scope', $attrs);
+        self::assertArrayHasKey('website_code', $attrs);
+        self::assertArrayHasKey('store_code', $attrs);
+        self::assertArrayHasKey('channel_code', $attrs);
+        self::assertArrayHasKey('scope_kind', $attrs);
     }
 
     public function testCallbackDelegatesToConfigEmbedRenderer(): void
@@ -67,6 +72,8 @@ final class ConfigEmbedContractTest extends TestCase
 
         $field = (string)file_get_contents($root . '/view/templates/taglib/config-embed-field.phtml');
         self::assertStringContainsString('data-testid="config-embed-field"', $field);
+        self::assertStringContainsString('w-config-embed__media-path', $field);
+        self::assertStringContainsString('picker_title', $field);
         self::assertStringContainsString('config-embed-undeclared', $field);
         self::assertStringContainsString('config-embed-sensitive-link', $field);
         self::assertStringContainsString('data-w-config-embed-control', $field);
@@ -75,6 +82,9 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('w:ai:model:select', $field);
         self::assertStringContainsString("in_array(\$type, ['locale', 'language'], true)", $field);
         self::assertStringContainsString("in_array(\$type, ['ai_model', 'model', 'ai-model'], true)", $field);
+        self::assertStringContainsString("in_array(\$type, ['image', 'file'], true)", $field);
+        self::assertStringContainsString('media_path', $field);
+        self::assertStringContainsString('Weline\\MediaManager\\Block\\WelineMedia::class', $field);
         self::assertStringContainsString('data-value-type', $field);
 
         $js = (string)file_get_contents($root . '/view/statics/js/config-embed.js');
@@ -84,6 +94,7 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('payload.value_type = fieldEl.dataset.valueType', $js);
         self::assertStringContainsString('data-w-language-field', $js);
         self::assertStringContainsString('data-ai-model-value', $js);
+        self::assertStringContainsString('data-w-config-embed-media', $js);
         self::assertSame(1, preg_match('/var\s+TEXT_DEBOUNCE_MS\s*=\s*(\d+)/', $js, $debounceMatch));
         self::assertGreaterThanOrEqual(1000, (int)($debounceMatch[1] ?? 0), 'text autosave debounce must be >= 1000ms');
         self::assertStringContainsString('}, TEXT_DEBOUNCE_MS)', $js);
@@ -91,7 +102,17 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('lockControl: false', $js);
         self::assertStringContainsString('pendingSave', $js);
 
+        $resolver = (string)file_get_contents($root . '/Service/ConfigEmbedResolver.php');
+        self::assertStringContainsString('resolveMediaPickerMeta', $resolver);
+        self::assertStringContainsString('media_path', $resolver);
+
         $css = (string)file_get_contents($root . '/view/statics/css/config-embed.css');
+        self::assertStringContainsString('.w-config-embed__field {', $css);
+        self::assertStringContainsString('display: grid', $css);
+        self::assertStringContainsString('padding: var(--weline-space-5', $css);
+        self::assertStringContainsString('overflow: visible', $css);
+        self::assertStringContainsString('w-config-embed__media-path', $css);
+        self::assertStringContainsString('overflow-wrap: anywhere', $css);
         self::assertStringContainsString('--weline-theme-surface', $css);
         self::assertStringContainsString('--weline-theme-text', $css);
         self::assertStringContainsString('--weline-theme-border', $css);
@@ -104,11 +125,39 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('fetchHtml($fetchSource', $renderer);
     }
 
-    public function testModuleVersionIs1349(): void
+    public function testModuleVersionIs1355(): void
     {
         $module = include dirname(__DIR__, 3) . '/etc/module.php';
         self::assertIsArray($module);
-        self::assertSame('1.3.49', $module['version'] ?? null);
+        self::assertSame('1.3.55', $module['version'] ?? null);
+    }
+
+    public function testCallbackPassesExplicitScopeAttributes(): void
+    {
+        $callback = ConfigEmbed::callback();
+        $php = $callback('config:embed', [], [], [
+            'module' => true,
+            'area' => false,
+            'field' => false,
+            'fields' => false,
+            'group' => false,
+            'layout' => false,
+            'template' => false,
+            'locale' => false,
+            'class' => false,
+            'target_scope' => false,
+            'website_code' => false,
+            'store_code' => false,
+            'channel_code' => false,
+            'scope_kind' => false,
+        ]);
+        self::assertStringContainsString("'target_scope' => (string)(\$Taglib__target_scope ?? '')", $php);
+        self::assertStringContainsString("'website_code' => (string)(\$Taglib__website_code ?? '')", $php);
+        self::assertStringContainsString("'scope_kind' => (string)(\$Taglib__scope_kind ?? '')", $php);
+
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ConfigEmbedResolver.php');
+        self::assertStringContainsString('scopeInputFromAttributes', $src);
+        self::assertStringContainsString('属性优先于 URL', $src);
     }
 
     public function testSetScopedConfigDescriptorDeclaresValueType(): void

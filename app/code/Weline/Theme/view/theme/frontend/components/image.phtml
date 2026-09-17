@@ -8,7 +8,7 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["*","dashboard"]}
  * @widget.compatible {true}
- * @param.src {default="",type="image",name="图片",description="从媒体库选择图片"}
+ * @param.src {default="",type="media_image",name="图片",description="从媒体库选择图片"}
  * @param.alt {default="图片",name="替代文本",description="图片 alt 文本"}
  * @param.caption {default="",name="图片说明",description="图片下方说明"}
  * @param.href {default="",name="链接地址",description="点击图片跳转地址"}
@@ -109,7 +109,7 @@ $rootClass = trim($wc . ' w-builder-image w-builder-image--' . $ratio . ' w-buil
 
 $mediaHtml = $src !== ''
     ? '<img src="' . $esc($src) . '" alt="' . $esc($alt) . '" loading="lazy" class="image-media">'
-    : '<div class="w-builder-image__placeholder image-placeholder">' . $esc(__('添加图片地址')) . '</div>';
+    : '<div class="w-builder-image__placeholder image-placeholder">' . $esc(__('从媒体库选择图片')) . '</div>';
 ?>
 
 <?php if ($srcFileHtml !== ''): ?>

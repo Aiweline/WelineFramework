@@ -65,7 +65,7 @@ final class StorefrontProductLocaleFallbackTest extends TestCase
         self::assertNotSame('English Hanfu Name', $detail['name']);
     }
 
-    public function testEnglishLocaleSkipsChineseFallbackCopyAndUsesNeutralFacts(): void
+    public function testEnglishLocaleSkipsChineseNameButKeepsDefaultDescription(): void
     {
         $detail = $this->projector()->project(
             [
@@ -86,7 +86,8 @@ final class StorefrontProductLocaleFallbackTest extends TestCase
         );
 
         self::assertSame('Neutral English name', $detail['name']);
-        self::assertSame('', $detail['description']);
+        // No en_US description row: keep default/zh body so PDP still shows detail.
+        self::assertSame('中文商品描述', $detail['description']);
 
         $withoutNeutral = $this->projector()->project(
             [

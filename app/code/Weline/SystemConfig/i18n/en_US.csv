@@ -79,8 +79,13 @@ warning,warning
 没有这个字段,"Field not found"
 前往统一配置中心修改,"Open unified config center"
 可搜索多选标签；保存为逗号分隔值,可搜索多选标签；保存为逗号分隔值
+素材目录,素材目录
 请选择或搜索...,请选择或搜索...
 搜索并多选...,搜索并多选...
+选择图片,"Choose image"
+选择文件,"Choose file"
+"图片路径或 URL","Image path or URL"
+"文件路径或 URL","File path or URL"
 系统管理,系统管理
 系统配置,系统配置
 "按模块、区域与 Scope 管理全站配置项","Manage site-wide configuration by module, area, and scope"
@@ -159,10 +164,6 @@ default,default
 腾讯云验证码,腾讯云验证码
 本地图形验证码,本地图形验证码
 选择或搜索供应商...,选择或搜索供应商...
-选择图片,"Choose image"
-选择文件,"Choose file"
-"图片路径或 URL","Image path or URL"
-"文件路径或 URL","File path or URL"
 保存原因,"Reason for saving"
 "修改敏感项必填：当前后台登录密码（不是 API Key）","Required when changing secrets: current backend login password (not an API Key)"
 定位,Locate

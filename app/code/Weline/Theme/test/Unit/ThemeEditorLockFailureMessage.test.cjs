@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '../../view/statics/js/theme-editor.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../../view/statics/ui/pages/weline-theme-editor.js'), 'utf8');
 
 // Execute the production functions, with only their DOM, timer and API boundaries supplied.
 function productionFunction(name, script = source) {
@@ -33,7 +33,7 @@ function editor(apiJson) {
         elements: {container: new Element()},
         document: {getElementById: (id) => nodes.get(id), createElement: () => new Element()},
         window: {getComputedStyle: () => ({position: 'static'}), location: {reload() {}}},
-        state: {themeId: 1, currentUserId: 7, scopeIdentity: 'website:1', lockHeld: false},
+        state: {themeId: 1, currentUserId: 7, scopeIdentity: 'website:1', lockHeld: false, lockInitGeneration: 0},
         config: {apiCheckLock: '/check-lock', apiUpdateActivity: '/update-activity'},
         apiJson,
         buildLayoutVersionIdentityPayload: () => ({theme_id: 1, page_type: 'homepage'}),
@@ -42,6 +42,7 @@ function editor(apiJson) {
         startLockHeartbeat() {},
         bindLockLifecycle() {},
         clearInterval() {},
+        clearTimeout() {},
         setTimeout(callback) { callback(); },
         console: {warn() {}},
     });
@@ -186,9 +187,28 @@ test('successful acquisition clears the pending overlay and holds the lock', asy
     assert.equal(overlay(), undefined);
 });
 
+test('fast lock success skips pending overlay when delay never fires', async () => {
+    const {context, overlay} = editor(async () => ({success: true}));
+    const timers = [];
+    context.setTimeout = (callback, ms) => {
+        const id = timers.push({callback, ms});
+        return id;
+    };
+    context.clearTimeout = (id) => {
+        if (id > 0 && id <= timers.length) {
+            timers[id - 1] = null;
+        }
+    };
+    assert.equal(await context.initializeEditorLock(), true);
+    assert.equal(context.state.lockHeld, true);
+    assert.equal(overlay(), undefined);
+    assert.equal(timers.every((timer) => timer === null), true);
+});
+
 test('pending state never displays a stale failure reason', () => {
     const {context, overlay} = editor(async () => ({success: true}));
     context.renderEditorLockOverlay(null, 'pending', 'Stale failure');
-    assert.match(overlay().innerHTML, /正在确认编辑权限/);
+    assert.match(overlay().innerHTML, /正在准备编辑/);
+    assert.match(overlay().className, /w-theme-editor-lock--pending/);
     assert.doesNotMatch(overlay().innerHTML, /data-theme-editor-lock-reason|Stale failure/);
 });

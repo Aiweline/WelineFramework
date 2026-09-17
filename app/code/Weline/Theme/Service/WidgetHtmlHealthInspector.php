@@ -179,6 +179,38 @@ final class WidgetHtmlHealthInspector
     }
 
     /**
+     * Store-music may be delivered by layout widget OR body-end Hook (RenderGate).
+     * An empty content-slot wrapper is not a fault when the page already has the float.
+     *
+     * @param list<array{severity:string,code:string,message:string,detail?:string}> $issues
+     * @param array{module?:string,code?:string,type?:string,slot_id?:string,layout_id?:string} $meta
+     * @return list<array{severity:string,code:string,message:string,detail?:string}>
+     */
+    public function suppressSatisfiedDualPathEmpty(array $issues, array $meta, string $pageHtml): array
+    {
+        if ($issues === [] || $pageHtml === '') {
+            return $issues;
+        }
+        $code = strtolower(trim((string)($meta['code'] ?? '')));
+        if ($code !== 'store-music') {
+            return $issues;
+        }
+        if (!str_contains($pageHtml, 'data-store-music')) {
+            return $issues;
+        }
+
+        $filtered = [];
+        foreach ($issues as $issue) {
+            if (($issue['code'] ?? '') === 'empty_html') {
+                continue;
+            }
+            $filtered[] = $issue;
+        }
+
+        return $filtered;
+    }
+
+    /**
      * @return list<array{severity:string,code:string,message:string,detail?:string}>
      */
     private function inspectTagBalance(string $html): array

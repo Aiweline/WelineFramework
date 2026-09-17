@@ -1,0 +1,64 @@
+<?php
+$rows = is_array($rows ?? null) ? $rows : [];
+$load_error = $load_error ?? '';
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$typeLabels = [
+    'unpaid_order_reminder' => __('未付订单催付'),
+    'checkout_abandon_reminder' => __('结账遗弃提醒'),
+    'cart_abandon_reminder' => __('购物车遗弃提醒'),
+];
+?>
+<div class="w-grid" data-testid="marketing-winback-dashboard">
+  <div style="--w-span:12;">
+    <div class="w-backend-page__heading">
+      <div>
+        <h4 class="w-backend-page__title" style="--w-mb:0;"><?= __('挽回运营看板') ?></h4>
+        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+          <?= __('只读汇总：发送 / 跳过原因 / 已发券 / 券核销。不含邮件打开率与点击率。') ?>
+        </p>
+      </div>
+      <a class="w-button" data-tone="neutral" data-size="sm" href="<?= $escape($this->getUrl('*/backend/winback/index')) ?>"><?= __('挽回活动') ?></a>
+    </div>
+    <?php if ($load_error !== ''): ?>
+      <div class="w-alert" data-tone="danger"><?= $escape($load_error) ?></div>
+    <?php endif; ?>
+    <div class="w-card"><div class="w-card__body">
+      <table class="w-table" data-testid="marketing-winback-dashboard-table">
+        <thead>
+        <tr>
+          <th><?= __('活动') ?></th>
+          <th><?= __('类型') ?></th>
+          <th><?= __('已发送') ?></th>
+          <th><?= __('已跳过') ?></th>
+          <th><?= __('失败') ?></th>
+          <th><?= __('已发券') ?></th>
+          <th><?= __('已核销') ?></th>
+          <th><?= __('跳过原因') ?></th>
+        </tr>
+        </thead>
+        <tbody>
+        <?php if ($rows === []): ?>
+          <tr><td colspan="8" class="w-text" data-align="center" data-tone="muted"><?= __('暂无数据') ?></td></tr>
+        <?php else: foreach ($rows as $row):
+          $reasons = is_array($row['skipped_by_reason'] ?? null) ? $row['skipped_by_reason'] : [];
+          $reasonText = [];
+          foreach ($reasons as $k => $v) {
+              $reasonText[] = $k . ':' . $v;
+          }
+        ?>
+          <tr>
+            <td>#<?= (int)($row['campaign_id'] ?? 0) ?> <?= $escape((string)($row['name'] ?? '')) ?></td>
+            <td><?= $escape($typeLabels[(string)($row['type'] ?? '')] ?? (string)($row['type'] ?? '')) ?></td>
+            <td><?= (int)($row['sent'] ?? 0) ?></td>
+            <td><?= (int)($row['skipped'] ?? 0) ?></td>
+            <td><?= (int)($row['failed'] ?? 0) ?></td>
+            <td><?= (int)($row['coupons_issued'] ?? 0) ?></td>
+            <td><?= (int)($row['coupons_redeemed'] ?? 0) ?></td>
+            <td class="w-text" data-tone="muted"><?= $escape(implode('; ', $reasonText)) ?></td>
+          </tr>
+        <?php endforeach; endif; ?>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+</div>

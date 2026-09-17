@@ -28,4 +28,19 @@ final class OrderMailNotifierContractTest extends TestCase
         self::assertTrue(!empty($result['skipped']));
         self::assertSame('notify_customer_false', $result['message']);
     }
+
+    public function testNotifierLocalizesStatusVars(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/OrderMailNotifier.php');
+        self::assertStringContainsString('localizeStatusVars', $src);
+        self::assertStringContainsString('getStatusLabel', $src);
+        self::assertStringContainsString('withMailLocaleEnvironment', $src);
+        self::assertStringContainsString('formatGrandTotalDisplay', $src);
+        self::assertSame('已发货', Order::getStatusLabel(Order::STATUS_FULFILLED));
+        self::assertSame('待处理', Order::getStatusLabel(Order::STATUS_PENDING));
+
+        $zh = (string)file_get_contents(dirname(__DIR__, 3) . '/view/email/order_created/zh_Hans_CN.html');
+        self::assertStringNotContainsString('{{var.order_uuid}}', $zh);
+        self::assertStringContainsString('{{var.grand_total}}', $zh);
+    }
 }

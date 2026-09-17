@@ -26,11 +26,13 @@ use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\StoreChannelAdminService;
 use Weline\Websites\Service\WebsiteAdminListPresenter;
 use Weline\Websites\Service\WebsiteBackendEntryBridgeService;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 use Weline\Websites\Service\WebsiteChangeSnapshotFactory;
 use Weline\Websites\Service\WebsiteEntryUrlService;
+use Weline\Websites\Service\WebsiteScopeTreeService;
 use Weline\Websites\Service\WebsiteStoreChannelDirectory;
 use Weline\Websites\Service\WebsiteSubPathValidator;
 
@@ -54,23 +56,136 @@ class Website extends BackendController
     #[Acl('Weline_Websites::website_list', '网站列表', 'list', '网站管理')]
     public function index()
     {
-        // 保留既有 AJAX 响应兼容面；当前官方模板只使用普通 GET 页面搜索。
+        // panel=1（或 Accept:json + node）：左树异步右栏；否则保留旧 DataTable 搜索 AJAX。
         if ($this->request->isAjax()) {
+            if ($this->wantsTreeEditorPanel()) {
+                return $this->treeEditorPanelAjax();
+            }
+
             return $this->searchAjax();
         }
 
-        // 搜索功能
         $search = trim((string)$this->request->getGet('search', ''));
-        $websiteModel = $this->createWebsiteListingModel();
-        $this->applyWebsiteSearch($websiteModel, $search);
+        $nodeRaw = trim((string)$this->request->getGet('node', ''));
+        $focus = trim((string)$this->request->getGet('focus', ''));
+        $newKind = trim((string)$this->request->getGet('new', ''));
 
-        $websites = $websiteModel->order()->pagination()->select()->fetch();
-        $items = $websites->getItems();
+        /** @var WebsiteScopeTreeService $treeService */
+        $treeService = ObjectManager::getInstance(WebsiteScopeTreeService::class);
+        $tree = $treeService->buildTree($search);
+        $selection = $treeService->resolveSelection($nodeRaw, $focus, $tree, $newKind);
 
-        $this->enrichWebsiteListingItems($items);
-        $this->assignListingTableView($items, $websites->getPagination(), $search);
+        $this->assignTreeShell($selection, $tree, $search, $focus);
+        $this->prepareTreeEditor($selection);
 
         return $this->fetch();
+    }
+
+    private function wantsTreeEditorPanel(): bool
+    {
+        if (trim((string)$this->request->getGet('panel', '')) === '1') {
+            return true;
+        }
+        $header = $this->request->getHeader('X-Weline-Scope-Panel');
+        if (is_array($header)) {
+            $header = (string)($header[0] ?? '');
+        }
+        if (trim((string)$header) === '1') {
+            return true;
+        }
+        // 兜底：带 node 的 JSON AJAX（避免旧搜索接口吞掉右栏请求）
+        $node = trim((string)$this->request->getGet('node', ''));
+        if ($node === '') {
+            return false;
+        }
+        $accept = $this->request->getHeader('Accept');
+        if (is_array($accept)) {
+            $accept = implode(',', $accept);
+        }
+        $accept = strtolower((string)$accept);
+
+        return str_contains($accept, 'application/json') && !str_contains($accept, 'text/html');
+    }
+
+    /**
+     * 左树点击：返回右栏 HTML 片段（JSON）。
+     */
+    private function treeEditorPanelAjax(): string
+    {
+        try {
+            $search = trim((string)$this->request->getGet('search', ''));
+            $nodeRaw = trim((string)$this->request->getGet('node', ''));
+            $focus = trim((string)$this->request->getGet('focus', ''));
+            $newKind = trim((string)$this->request->getGet('new', ''));
+
+            /** @var WebsiteScopeTreeService $treeService */
+            $treeService = ObjectManager::getInstance(WebsiteScopeTreeService::class);
+            $tree = $treeService->buildTree($search);
+            $selection = $treeService->resolveSelection($nodeRaw, $focus, $tree, $newKind);
+
+            $this->assignTreeShell($selection, $tree, $search, $focus);
+            $this->prepareTreeEditor($selection);
+
+            $html = (string)$this->template('Weline_Websites::templates/Admin/Website/tree-editor-panel.phtml');
+            $payload = [
+                'success' => true,
+                'html' => $html,
+                'kind' => (string)$selection['kind'],
+                'node' => (string)$selection['node'],
+                'title' => (string)$this->getData('editor_title'),
+            ];
+        } catch (\Throwable $throwable) {
+            $payload = [
+                'success' => false,
+                'message' => $throwable->getMessage(),
+            ];
+        }
+
+        return $this->fetchJson($payload);
+    }
+
+    /**
+     * @param array{
+     *     kind:string,
+     *     id:int,
+     *     node:string,
+     *     acl_ok:bool,
+     *     website_id:int,
+     *     store_id:int,
+     *     channel_id:int,
+     *     entity:array<string,mixed>,
+     *     error:string
+     * } $selection
+     * @param list<array<string,mixed>> $tree
+     */
+    private function assignTreeShell(array $selection, array $tree, string $search, string $focus): void
+    {
+        $kind = (string)$selection['kind'];
+        $editorTitle = match ($kind) {
+            'website' => (string)__('编辑网站'),
+            'store' => (string)__('编辑商店'),
+            'channel' => (string)__('编辑渠道'),
+            'new_store' => (string)__('新建商店'),
+            'new_channel' => (string)__('新建渠道'),
+            default => (string)__('范围编辑'),
+        };
+
+        $this->assign('scope_tree', $tree);
+        $this->assign('search', $search);
+        $this->assign('selected_node', (string)$selection['node']);
+        $this->assign('editor_kind', $kind);
+        $this->assign('editor_acl_ok', (bool)$selection['acl_ok']);
+        $this->assign('editor_error', (string)$selection['error']);
+        $this->assign('editor_website_id', (int)$selection['website_id']);
+        $this->assign('editor_store_id', (int)$selection['store_id']);
+        $this->assign('editor_channel_id', (int)$selection['channel_id']);
+        $this->assign('editor_title', $editorTitle);
+        $this->assign('focus', $focus);
+        $this->assign('tree_return_mode', true);
+        $this->assign('tree_return_node', (string)$selection['node']);
+        // 保活浏览器地址栏语种/货币段：@url/@backend-url 走 State 前缀时会丢掉 URL 路径里的 zh_Hans_CN。
+        $this->assign('tree_return_url', $this->buildLocalePreservingWebsitesTreeUrl((string)$selection['node']));
+        $this->assign('is_embedded_form', true);
     }
 
     /**
@@ -523,20 +638,22 @@ class Website extends BackendController
                 if (DEV) {
                     $errorMsg .= "\n\n[File] " . $e->getFile() . ':' . $e->getLine();
                 }
-                $this->redirect('component/backend/offcanvas/getError', [
-                    'msg' => __('网站添加失败: %{1}', [$errorMsg]),
-                    'url' => '/',
-                    'reload' => '0',
-                    'time' => '10',
-                ]);
+                $this->finishWebsiteMutation(
+                    '',
+                    (string)__('网站添加失败: %{1}', [$errorMsg]),
+                    null,
+                    true,
+                );
+                return;
             }
 
-            $this->redirect('component/backend/offcanvas/getSuccess', [
-                'msg' => __('网站添加成功'),
-                'url' => '*/admin/website',
-                'reload' => '1',
-                'time' => '3',
-            ]);
+            $this->finishWebsiteMutation(
+                (string)__('网站添加成功'),
+                '',
+                $websiteId,
+                false,
+            );
+            return;
         }
 
         // 初始化空网站数据，避免模板中访问未定义变量
@@ -575,11 +692,7 @@ class Website extends BackendController
         try {
             $websiteId = $this->resolveEditTargetWebsiteIdFromRequest();
         } catch (\InvalidArgumentException $exception) {
-            $this->redirect('component/backend/offcanvas/getError', [
-                'msg' => $exception->getMessage(),
-                'reload' => '0',
-                'time' => '3',
-            ]);
+            $this->respondWebsiteOffcanvasError((string)$exception->getMessage());
             return;
         }
 
@@ -587,11 +700,7 @@ class Website extends BackendController
 
         // 检查网站是否存在
         if (!$this->website->hasData(\Weline\Websites\Model\Website::schema_fields_ID)) {
-            $this->redirect('component/backend/offcanvas/getError', [
-                'msg' => __('网站不存在'),
-                'reload' => '0',
-                'time' => '3',
-            ]);
+            $this->respondWebsiteOffcanvasError((string)__('网站不存在'));
             return;
         }
 
@@ -686,7 +795,9 @@ class Website extends BackendController
                         $websiteLanguage->setWebsiteLanguages($postWebsiteId, $languageCodes);
                         $this->saveStartPagePathConfig(
                             $postWebsiteId,
-                            $this->website->getCode(),
+                            trim((string)($before[\Weline\Websites\Model\Website::schema_fields_CODE]
+                                ?? $data['code']
+                                ?? $this->website->getCode())),
                             $startPagePath,
                             $connection,
                             true,
@@ -713,89 +824,25 @@ class Website extends BackendController
                     },
                 );
             } catch (\Throwable $e) {
-                $this->redirect('component/backend/offcanvas/getError', [
-                    'msg' => $e->getMessage(),
-                    'reload' => '0',
-                    'time' => '5',
-                ]);
+                $this->finishWebsiteMutation(
+                    '',
+                    (string)$e->getMessage(),
+                    $websiteId,
+                    true,
+                );
+                return;
             }
 
-            $this->redirect('component/backend/offcanvas/getSuccess', [
-                'msg' => __('网站更新成功'),
-                'url' => '*/admin/website',
-                'reload' => '1',
-                'time' => '3',
-            ]);
-        }
-
-        // 获取网站的关联货币和语言
-        $selectedCurrencies = [];
-        $selectedLanguages = [];
-
-        try {
-            $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
-            $selectedCurrencies = $websiteCurrency->getWebsiteCurrencyCodes($websiteId);
-        } catch (\Exception $e) {
-            // 如果关联表不存在，使用空数组
-            $selectedCurrencies = [];
-        }
-
-        try {
-            $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
-            $selectedLanguages = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
-        } catch (\Exception $e) {
-            // 如果关联表不存在，使用空数组
-            $selectedLanguages = [];
-        }
-
-        $websiteData = $this->website->getData();
-        $this->assign('website', $websiteData);
-        $this->assign('selected_currencies', $selectedCurrencies);
-        $this->assign('selected_languages', $selectedLanguages);
-        $selectedPoolIds = [];
-        $selectedDomainNames = [];
-        try {
-            $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
-            $domains = $websiteDomain->getWebsiteDomains($websiteId);
-            foreach ($domains as $domain) {
-                $poolId = (int)($domain[WebsiteDomain::schema_fields_POOL_ID] ?? 0);
-                if ($poolId > 0) {
-                    $selectedPoolIds[] = $poolId;
-                }
-                $domainName = strtolower(trim((string)($domain[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
-                if ($domainName !== '' && !in_array($domainName, $selectedDomainNames, true)) {
-                    $selectedDomainNames[] = $domainName;
-                }
-            }
-        } catch (\Exception $e) {
-            $selectedPoolIds = [];
-            $selectedDomainNames = [];
-        }
-        $this->assign('selected_pool_ids', $selectedPoolIds);
-        $this->assign('selected_domain_names', $selectedDomainNames);
-        $this->assign('domain_options', $this->getDomainOptions());
-        $this->assign('sub_path', $this->getPrimarySubPathForWebsite($websiteId));
-        $this->assign('start_page_route_options', $this->getStartPageRouteOptions());
-        $this->assign(
-            'selected_start_page_path',
-            $this->getStartPagePathForWebsite(
+            $this->finishWebsiteMutation(
+                (string)__('网站更新成功'),
+                '',
                 $websiteId,
-                (string)($websiteData['code'] ?? ''),
-            ),
-        );
-        $this->assign('store_channel_directory', $this->storeChannelDirectory->forWebsite($websiteId));
-        $this->assignSubPathBanCatalog();
+                false,
+            );
+            return;
+        }
 
-        // 获取所有货币
-        $this->assign('currencies', $this->getAllCurrencies());
-
-        // 获取所有语言
-        $this->assign('locales', $this->getAllLocales());
-
-        // 时区
-        $timezones = \DateTimeZone::listIdentifiers();
-        sort($timezones);
-        $this->assign('timezones', $timezones);
+        $this->assignWebsiteEditorFormData($websiteId);
         return $this->fetch('form');
     }
 
@@ -1407,6 +1454,7 @@ class Website extends BackendController
         return array_intersect_key($snapshot, array_flip([
             \Weline\Websites\Model\Website::schema_fields_ID,
             \Weline\Websites\Model\Website::schema_fields_NAME,
+            \Weline\Websites\Model\Website::schema_fields_DESCRIPTION,
             \Weline\Websites\Model\Website::schema_fields_CODE,
             \Weline\Websites\Model\Website::schema_fields_URL,
             \Weline\Websites\Model\Website::schema_fields_DEFAULT_CURRENCY,
@@ -1735,5 +1783,398 @@ class Website extends BackendController
         }
         $first = $rows[0][WebsiteDomain::schema_fields_SUB_PATH] ?? '';
         return $this->normalizeSubPath((string) $first);
+    }
+
+    /**
+     * @param array{
+     *     kind:string,
+     *     id:int,
+     *     node:string,
+     *     acl_ok:bool,
+     *     website_id:int,
+     *     store_id:int,
+     *     channel_id:int,
+     *     entity:array<string,mixed>,
+     *     error:string
+     * } $selection
+     */
+    private function prepareTreeEditor(array $selection): void
+    {
+        $kind = (string)$selection['kind'];
+        if ($kind === 'website' && $selection['acl_ok']) {
+            $websiteId = (int)$selection['website_id'];
+            $this->website->load($websiteId);
+            if (!$this->website->hasData(\Weline\Websites\Model\Website::schema_fields_ID)) {
+                $this->assign('editor_error', (string)__('网站不存在'));
+                $this->assign('editor_acl_ok', false);
+                return;
+            }
+            $this->assignWebsiteEditorFormData($websiteId);
+            return;
+        }
+
+        /** @var StoreChannelAdminService $admin */
+        $admin = ObjectManager::getInstance(StoreChannelAdminService::class);
+
+        if ($kind === 'store') {
+            $row = $admin->getStore((int)$selection['store_id']);
+            $this->assign('entity', $row ?? []);
+            $this->assign('website_id', (int)$selection['website_id']);
+            $this->assign('error', $row === null ? (string)__('商店不存在') : (string)$selection['error']);
+            $this->assign('tree_embed', true);
+            return;
+        }
+
+        if ($kind === 'channel') {
+            $row = $admin->getChannel((int)$selection['channel_id']);
+            $this->assign('entity', $row ?? []);
+            $this->assign('website_id', (int)$selection['website_id']);
+            $this->assign('error', $row === null ? (string)__('渠道不存在') : (string)$selection['error']);
+            $this->assign('tree_embed', true);
+            return;
+        }
+
+        if ($kind === 'new_store') {
+            $this->assign('website_id', (int)$selection['website_id']);
+            $this->assign('tree_embed', true);
+            return;
+        }
+
+        if ($kind === 'new_channel') {
+            $this->assign('website_id', (int)$selection['website_id']);
+            $this->assign('store_id', (int)$selection['store_id']);
+            $this->assign('tree_embed', true);
+        }
+    }
+
+    private function assignWebsiteEditorFormData(int $websiteId): void
+    {
+        $selectedCurrencies = [];
+        $selectedLanguages = [];
+
+        try {
+            $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
+            $selectedCurrencies = $websiteCurrency->getWebsiteCurrencyCodes($websiteId);
+        } catch (\Exception $e) {
+            $selectedCurrencies = [];
+        }
+
+        try {
+            $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
+            $selectedLanguages = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
+        } catch (\Exception $e) {
+            $selectedLanguages = [];
+        }
+
+        $websiteData = $this->website->getData();
+        $this->assign('website', $websiteData);
+        $this->assign('selected_currencies', $selectedCurrencies);
+        $this->assign('selected_languages', $selectedLanguages);
+        $selectedPoolIds = [];
+        $selectedDomainNames = [];
+        try {
+            $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
+            $domains = $websiteDomain->getWebsiteDomains($websiteId);
+            foreach ($domains as $domain) {
+                $poolId = (int)($domain[WebsiteDomain::schema_fields_POOL_ID] ?? 0);
+                if ($poolId > 0) {
+                    $selectedPoolIds[] = $poolId;
+                }
+                $domainName = strtolower(trim((string)($domain[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+                if ($domainName !== '' && !in_array($domainName, $selectedDomainNames, true)) {
+                    $selectedDomainNames[] = $domainName;
+                }
+            }
+        } catch (\Exception $e) {
+            $selectedPoolIds = [];
+            $selectedDomainNames = [];
+        }
+        $this->assign('selected_pool_ids', $selectedPoolIds);
+        $this->assign('selected_domain_names', $selectedDomainNames);
+        $this->assign('domain_options', $this->getDomainOptions());
+        $this->assign('sub_path', $this->getPrimarySubPathForWebsite($websiteId));
+        $this->assign('start_page_route_options', $this->getStartPageRouteOptions());
+        $this->assign(
+            'selected_start_page_path',
+            $this->getStartPagePathForWebsite(
+                $websiteId,
+                (string)($websiteData['code'] ?? ''),
+            ),
+        );
+        $this->assign('store_channel_directory', $this->storeChannelDirectory->forWebsite($websiteId));
+        $this->assignSubPathBanCatalog();
+        $this->assign('currencies', $this->getAllCurrencies());
+        $this->assign('locales', $this->getAllLocales());
+        $timezones = \DateTimeZone::listIdentifiers();
+        sort($timezones);
+        $this->assign('timezones', $timezones);
+    }
+
+    /**
+     * Api / XHR / worker 请求走 JSON，禁止 302（避免 redirect:manual 触发无限重试风暴）。
+     * OffCanvas iframe 普通表单仍走 redirect 结果页。
+     */
+    private function prefersApiJsonResponse(): bool
+    {
+        if ($this->request->isAjax()) {
+            return true;
+        }
+
+        $server = $this->request->getServerBag();
+        $apiFlag = strtolower(trim((string)$server->getHeader('X-Weline-Api', '')));
+        if ($apiFlag === '1' || $apiFlag === 'true') {
+            return true;
+        }
+
+        $accept = strtolower(trim((string)$server->getHeader('Accept', '')));
+        if ($accept !== ''
+            && str_contains($accept, 'application/json')
+            && !str_contains($accept, 'text/html')
+        ) {
+            return true;
+        }
+
+        // Dedicated Worker 代发时 Referer 指向 weline-api-worker.js；无需等客户端 JS 热更新即可止血。
+        $referer = strtolower(trim((string)$server->getHeader('Referer', '')));
+        if ($referer !== '' && str_contains($referer, 'weline-api-worker.js')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function respondWebsiteOffcanvasError(string $message, string $reload = '0', string $time = '3'): void
+    {
+        if ($this->prefersApiJsonResponse()) {
+            $this->noteApiWebsiteMutationCall('error');
+            $this->fetchJson([
+                'success' => false,
+                'message' => $message,
+                'reload' => $reload === '1',
+            ]);
+            return;
+        }
+
+        $this->redirect('component/backend/offcanvas/getError', [
+            'msg' => $message,
+            'reload' => $reload,
+            'time' => $time,
+        ]);
+    }
+
+    private function noteApiWebsiteMutationCall(string $phase): void
+    {
+        static $logged = false;
+        if ($logged) {
+            return;
+        }
+        $logged = true;
+
+        $server = $this->request->getServerBag();
+        w_log_warning(sprintf(
+            '[Websites] Api-style website mutation (%s): method=%s uri=%s referer=%s ua=%s x-weline-api=%s',
+            $phase,
+            (string)$this->request->getMethod(),
+            (string)$server->get('REQUEST_URI', ''),
+            (string)$server->getHeader('Referer', ''),
+            (string)$server->getHeader('User-Agent', ''),
+            (string)$server->getHeader('X-Weline-Api', ''),
+        ));
+    }
+
+    private function finishWebsiteMutation(string $successMsg, string $errorMsg, ?int $websiteId, bool $isError): void
+    {
+        $returnTo = trim((string)$this->request->getPost('return_to', ''));
+        $returnNode = trim((string)$this->request->getPost('return_node', ''));
+        $message = $isError
+            ? ($errorMsg !== '' ? $errorMsg : (string)__('操作失败'))
+            : ($successMsg !== '' ? $successMsg : (string)__('操作成功'));
+
+        if ($this->prefersApiJsonResponse()) {
+            $this->noteApiWebsiteMutationCall($isError ? 'error' : 'success');
+            $payload = [
+                'success' => !$isError,
+                'message' => $message,
+                'website_id' => $websiteId,
+            ];
+            if ($returnTo === 'tree') {
+                $params = [];
+                if ($returnNode !== '') {
+                    $params['node'] = $returnNode;
+                } elseif ($websiteId !== null) {
+                    $params['node'] = WebsiteScopeTreeService::formatNode('website', $websiteId);
+                }
+                if ($isError) {
+                    $this->getMessageManager()->addError($message);
+                } else {
+                    $this->getMessageManager()->addSuccess($message);
+                }
+                $payload['reload'] = true;
+                $payload['redirect_url'] = $this->resolveTreeReturnTarget((string)($params['node'] ?? ''));
+            } else {
+                $payload['reload'] = !$isError;
+                if (!$isError) {
+                    $payload['redirect_url'] = $this->getUrl($this->websitesAdminWebsiteIndexPath());
+                }
+            }
+            $this->fetchJson($payload);
+            return;
+        }
+
+        if ($returnTo === 'tree') {
+            if ($isError) {
+                $this->getMessageManager()->addError($message);
+            } else {
+                $this->getMessageManager()->addSuccess($message);
+            }
+            $params = [];
+            if ($returnNode !== '') {
+                $params['node'] = $returnNode;
+            } elseif ($websiteId !== null) {
+                $params['node'] = WebsiteScopeTreeService::formatNode('website', $websiteId);
+            }
+            $this->redirect($this->resolveTreeReturnTarget((string)($params['node'] ?? '')));
+            return;
+        }
+
+        if ($isError) {
+            $this->redirect('component/backend/offcanvas/getError', [
+                'msg' => $message,
+                'url' => '/',
+                'reload' => '0',
+                'time' => '10',
+            ]);
+            return;
+        }
+
+        $this->redirect('component/backend/offcanvas/getSuccess', [
+            'msg' => $message,
+            'url' => $this->websitesAdminWebsiteIndexPath(),
+            'reload' => '1',
+            'time' => '3',
+        ]);
+    }
+
+    /**
+     * 树编辑保存后回跳路径：{router}/admin/website，并保留当前模块 frontName。
+     */
+    private function websitesAdminWebsiteIndexPath(): string
+    {
+        $router = trim((string)($this->request->getRouterData('router') ?? ''));
+        if ($router === '') {
+            $router = 'websites';
+        }
+
+        return $router . '/admin/website';
+    }
+
+    /**
+     * 优先用表单带回的 return_url（渲染时的浏览器地址，含语种段），否则再拼 getBackendUrl。
+     * 避免 POST 落到 /USD/.../edit 后 State 前缀变成 en_US，302 丢掉 zh_Hans_CN。
+     */
+    private function resolveTreeReturnTarget(string $node): string
+    {
+        $posted = trim((string)$this->request->getPost('return_url', ''));
+        if ($posted !== '' && $this->isSafeWebsitesTreeReturnUrl($posted)) {
+            return $this->withTreeNodeQuery($posted, $node);
+        }
+
+        $params = [];
+        if ($node !== '') {
+            $params['node'] = $node;
+        }
+
+        return $this->getUrl($this->websitesAdminWebsiteIndexPath(), $params);
+    }
+
+    /**
+     * 用当前页 ORIGIN_REQUEST_URI 拼树深链，保留地址栏语种/货币段。
+     */
+    private function buildLocalePreservingWebsitesTreeUrl(string $node): string
+    {
+        try {
+            $current = (string)$this->request->getUrlBuilder()->getCurrentUrl([], false);
+        } catch (\Throwable) {
+            $current = '';
+        }
+        if ($current !== '' && $this->isSafeWebsitesTreeReturnUrl($current)) {
+            return $this->withTreeNodeQuery($current, $node);
+        }
+
+        $params = [];
+        if ($node !== '') {
+            $params['node'] = $node;
+        }
+
+        return (string)$this->getUrl($this->websitesAdminWebsiteIndexPath(), $params);
+    }
+
+    private function withTreeNodeQuery(string $url, string $node): string
+    {
+        if ($node === '') {
+            return $url;
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return $url;
+        }
+        $query = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $query);
+        }
+        $query['node'] = $node;
+        $rebuild = '';
+        if (!empty($parts['scheme'])) {
+            $rebuild .= $parts['scheme'] . '://';
+        }
+        if (!empty($parts['host'])) {
+            $rebuild .= $parts['host'];
+            if (isset($parts['port'])) {
+                $rebuild .= ':' . (int)$parts['port'];
+            }
+        }
+        $rebuild .= (string)($parts['path'] ?? '');
+        $rebuild .= '?' . http_build_query($query);
+
+        return $rebuild;
+    }
+
+    private function isSafeWebsitesTreeReturnUrl(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '' || preg_match('/[\x00-\x1F\x7F]/', $url) === 1) {
+            return false;
+        }
+
+        if (str_starts_with($url, '/')) {
+            $path = (string)(parse_url($url, PHP_URL_PATH) ?: $url);
+
+            return (bool)preg_match('#/websites/admin/website(?:/index)?$#', rtrim($path, '/'));
+        }
+
+        if (!preg_match('#^https?://#i', $url)) {
+            return (bool)preg_match('#^websites/admin/website(?:/index)?(?:\?|$)#', $url);
+        }
+
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return false;
+        }
+
+        try {
+            $reqHost = (string)(parse_url(
+                (string)$this->request->getUrlBuilder()->getCurrentUrl([], false),
+                PHP_URL_HOST
+            ) ?: '');
+        } catch (\Throwable) {
+            $reqHost = '';
+        }
+        if ($reqHost === '' || strcasecmp((string)$parts['host'], $reqHost) !== 0) {
+            return false;
+        }
+
+        $path = rtrim((string)($parts['path'] ?? ''), '/');
+
+        return (bool)preg_match('#/websites/admin/website(?:/index)?$#', $path);
     }
 }

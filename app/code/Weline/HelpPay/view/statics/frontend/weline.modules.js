@@ -7,7 +7,7 @@ window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 Object.assign(window.WelineModulesConfig.modules, {
     helpPayShare: {
         paths: [
-            "Weline_HelpPay::js/helppay-share.js?v=20260914-event-chain1"
+            "Weline_HelpPay::js/helppay-share.js?v=20260917-buybox-flow-auto1"
         ],
         globalVar: "WelineModules.helpPayShare",
         load: "defer",

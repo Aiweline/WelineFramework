@@ -5,6 +5,7 @@ declare(strict_types=1);
 use LearningMcp\Analyzer;
 use LearningMcp\Config;
 use LearningMcp\HardConstraintsCatalog;
+use LearningMcp\HostEditorRulesGenerator;
 use LearningMcp\IntelligenceService;
 use LearningMcp\IndexGarbageCollector;
 use LearningMcp\ProcessRunner;
@@ -774,7 +775,7 @@ try {
     $sortedNames = $names;
     sort($sortedNames);
     check($sortedNames === $indexTools, 'compact tool surface equals the nine index/knowledge tools');
-    check(ToolService::VERSION === '0.13.3', 'tool service version is 0.13.3');
+    check(ToolService::VERSION === '0.13.5', 'tool service version is 0.13.5');
     check(str_contains(substr(ToolService::instructions(), 0, 512), 'prepare_project'), 'first 512 instruction characters contain prepare_project');
     check(str_contains(ToolService::instructions(), 'resolve_task_context'), 'instructions mention resolve_task_context');
     check(str_contains(ToolService::instructions(), 'resolve_skill'), 'instructions mention resolve_skill');
@@ -799,6 +800,28 @@ try {
             && str_contains($mcpCallScope, 'prepare_project')
             && str_contains($mcpCallScope, 'hard_constraints'),
         'mcp_call_scope mandates prepare_project hard_constraints for engineering',
+    );
+    $contentOpsSkip = '';
+    foreach (HardConstraintsCatalog::mcpOperationalRules() as $rule) {
+        if (($rule['id'] ?? '') === 'content_ops_skills_skip_mcp') {
+            $contentOpsSkip = (string) ($rule['summary'] ?? '');
+            break;
+        }
+    }
+    check(
+        str_contains($contentOpsSkip, 'MUST NOT call prepare_project')
+            && str_contains($contentOpsSkip, '产品优化')
+            && str_contains($contentOpsSkip, '新建文章'),
+        'content_ops_skills_skip_mcp forbids MCP on content-ops skills',
+    );
+    check(
+        str_contains(HardConstraintsCatalog::mcpInstructions(), 'content_ops_skills_skip_mcp'),
+        'mcp instructions mention content_ops_skills_skip_mcp',
+    );
+    check(
+        str_contains(HostEditorRulesGenerator::coldStartMdc(), 'content_ops_skills_skip_mcp')
+            && str_contains(HostEditorRulesGenerator::coldStartMdc(), '产品优化'),
+        'coldstart mdc documents content-ops MCP skip',
     );
 
     $runner = new ProcessRunner();

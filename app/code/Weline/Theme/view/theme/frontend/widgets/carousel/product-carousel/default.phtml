@@ -14,7 +14,7 @@
  *
  * @param title {default="",type="string",label="标题"}
  * @param product_source {default="featured",type="select",label="产品来源",options={featured:"推荐产品",new:"新品",bestseller:"畅销",sale:"促销"}}
- * @param product_ids {default="",type="string",label="指定产品ID",description="逗号分隔，留空使用来源"}
+ * @param product_ids {default="",type="product_picker",label="指定产品",description="搜索选择产品；留空使用来源",i18n=false}
  * @param limit {default=10,type="number",label="显示数量"}
  * @param slides_per_view {default=4,type="number",label="每屏显示数量"}
  * @param autoplay {default=false,type="bool",label="自动播放"}
@@ -28,6 +28,7 @@
  * @param label_sale_text {default="",type="color",label="促销标签文字",description="留空使用主题全局色盘"}
  */
 
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\ThemeDemoCatalog;
@@ -63,6 +64,7 @@ $labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
 $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 ?>
 
+
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
@@ -70,6 +72,7 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
          data-slides-per-view="<?= $esc((string)$slidesPerView) ?>"
          data-autoplay="<?= $autoplay ? 'true' : 'false' ?>"
          data-loop="<?= $loop ? 'true' : 'false' ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
 
     <?php if ($title): ?>
         <div class="widget-header">

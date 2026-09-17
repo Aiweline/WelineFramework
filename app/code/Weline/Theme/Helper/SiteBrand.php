@@ -152,11 +152,11 @@ class SiteBrand
     }
 
     /**
-     * 前台品牌字标：显式自定义文案优先；再回落当前 Website 名称 / Backend site_name；
-     * 框架占位（Weline/韦林）不作为最终展示。站名权威源是 Website 实体（基础信息 identity slot），
-     * 不是 appearance.brand。
+     * 前台品牌字标：显式自定义文案优先；再回落当前 Website 名称 / Backend site_name。
+     * 框架占位（Weline/韦林/默认网站）不作为最终展示。站名权威源是 Website 实体（基础信息 identity），
+     * 不是 appearance.brand，也禁止在调用方硬编码品牌字面量作为默认。
      */
-    public function resolveFrontendSiteName(string $configured = '', string $themeFallback = '云裳汉服 · Hanfu Atelier'): string
+    public function resolveFrontendSiteName(string $configured = '', string $themeFallback = ''): string
     {
         $configured = trim($configured);
         if ($configured !== '' && !$this->isGenericBrandPlaceholder($configured)) {
@@ -174,13 +174,21 @@ class SiteBrand
             return WidgetI18n::label($fromBackend);
         }
 
-        $fallback = trim($themeFallback) !== '' ? trim($themeFallback) : '云裳汉服 · Hanfu Atelier';
+        $fallback = trim($themeFallback);
+        if ($fallback !== '' && !$this->isGenericBrandPlaceholder($fallback)) {
+            return WidgetI18n::label($fallback);
+        }
 
-        return WidgetI18n::label($fallback);
+        return '';
     }
 
     public function resolveFrontendSiteDescription(string $fallback = ''): string
     {
+        $fromWebsite = $this->resolveWebsiteDescription();
+        if ($fromWebsite !== '') {
+            return $fromWebsite;
+        }
+
         $fromBackend = trim($this->getRawConfig('site_description'));
         if ($fromBackend !== '') {
             return $fromBackend;
@@ -203,6 +211,7 @@ class SiteBrand
             '韦林',
             '默认网站',
             'Default Website',
+            '系统默认站点',
         ], true);
     }
 
@@ -221,6 +230,21 @@ class SiteBrand
         });
     }
 
+    private function resolveWebsiteDescription(): string
+    {
+        return $this->rememberRequest('theme.site_brand.website_description', 'current', static function (): string {
+            try {
+                if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                    return '';
+                }
+
+                return trim((string)(\Weline\Websites\Data\WebsiteData::getDescription() ?? ''));
+            } catch (\Throwable) {
+                return '';
+            }
+        });
+    }
+
     public function resolveBackendLogoUrl(Template $template, string $configKey, int $width, int $height): string
     {
         $url = $this->resolveMediaUrl($configKey, $width, $height);
@@ -233,9 +257,18 @@ class SiteBrand
 
     private function resolveThemeBrandUrl(string $brandKey, int $width, int $height): string
     {
+        $scopeKey = 'global';
+        try {
+            $identity = \Weline\Framework\Runtime\RequestContext::scopeIdentity();
+            if ($identity instanceof \Weline\Framework\Runtime\ScopeIdentity) {
+                $scopes = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+                $scopeKey = (string)$scopes->contextFromIdentity($identity)->storageScope;
+            }
+        } catch (\Throwable) {
+        }
         $path = $this->rememberRequest(
             'theme.site_brand.theme_path',
-            'frontend:' . $brandKey,
+            'frontend:' . $brandKey . '@' . $scopeKey,
             static function () use ($brandKey): string {
                 try {
                     /** @var ThemeBrandResolver $resolver */

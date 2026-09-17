@@ -9,27 +9,43 @@
 }
 
 /*
- * PDP 购买槽布局（有分享/快捷购买时）：
- * 主购买（加购/结账）通栏；次级钮按文案定宽、flex 换行（瀑布流），禁止等宽两列挤换行。
- * Slot 子节点为 .widget-wrapper，故用 :has(.product-native-detail__secondary)。
+ * PDP 购买槽布局（有次级描边钮 / 安静文字链时）：
+ * 1) 加购 + 立即结账：按文案定宽流式，放得下一行、放不下整钮换行（禁止 50% 均分）
+ * 2) 分享 / 快捷购买 / 代付：流式文字链，放得下一行、放不下换行
+ * Slot 子节点为 .widget-wrapper。
  */
-.product-native-detail__actions:has(.product-native-detail__secondary) {
+.product-native-detail__actions:has(.product-native-detail__secondary),
+.product-native-detail__actions:has(.w-helppay-cta--quiet) {
   display: flex;
   flex-wrap: wrap;
   gap: var(--weline-space-2, var(--space-2, 0.5rem));
   align-items: stretch;
+  justify-content: flex-start;
 }
 
+/* 主 CTA：内容宽流式，禁止均分；放不下换行 */
 .product-native-detail__actions:has(.product-native-detail__secondary)
   > .widget-wrapper:has(.product-native-detail__add),
 .product-native-detail__actions:has(.product-native-detail__secondary)
   > .widget-wrapper:has(.product-native-detail__buy-now),
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
+  > .widget-wrapper:has(.product-native-detail__add),
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
+  > .widget-wrapper:has(.product-native-detail__buy-now) {
+  flex: 0 1 auto;
+  inline-size: auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
 .product-native-detail__actions:has(.product-native-detail__secondary)
   > .widget-wrapper:has(.product-native-detail__quote),
 .product-native-detail__actions:has(.product-native-detail__secondary)
   > .widget-wrapper:has(.product-native-detail__cart),
-.product-native-detail__actions:has(.product-native-detail__secondary)
-  > .widget-wrapper:has(.w-helppay-cta--quiet) {
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
+  > .widget-wrapper:has(.product-native-detail__quote),
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
+  > .widget-wrapper:has(.product-native-detail__cart) {
   flex: 1 1 100%;
   inline-size: 100%;
   min-inline-size: 100%;
@@ -44,11 +60,34 @@
   max-inline-size: 100%;
 }
 
+/* 分享 / 快捷购买 / 代付：次要入口同排文字链，不抢主 CTA */
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
+  > .widget-wrapper:has(.w-helppay-cta--quiet) {
+  flex: 0 1 auto;
+  inline-size: auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .product-native-detail__actions:has(.product-native-detail__secondary)
   .product-native-detail__add,
 .product-native-detail__actions:has(.product-native-detail__secondary)
   .product-native-detail__buy-now,
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
+  .product-native-detail__add,
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
+  .product-native-detail__buy-now {
+  inline-size: auto;
+  max-inline-size: 100%;
+  white-space: nowrap;
+}
+
 .product-native-detail__actions:has(.product-native-detail__secondary)
+  .product-native-detail__quote,
+.product-native-detail__actions:has(.w-helppay-cta--quiet)
   .product-native-detail__quote {
   inline-size: 100%;
 }
@@ -104,13 +143,14 @@
 
 /* 结账/购物车/商品详情：弱入口（文字链），不与主下单 CTA 抢视觉 */
 .w-helppay-cta--quiet {
-  margin-block-start: var(--weline-space-2, var(--space-2));
+  margin-block-start: 0;
   text-align: center;
 }
 
 /* PDP 购买槽内：贴在主按钮下方，更轻量 */
-.product-native-detail__actions > .w-helppay-cta--quiet {
-  margin-block-start: var(--weline-space-1, var(--space-1, 0.25rem));
+.product-native-detail__actions > .w-helppay-cta--quiet,
+.product-native-detail__actions > .widget-wrapper .w-helppay-cta--quiet {
+  margin-block-start: 0;
 }
 
 .w-helppay-cta__link {

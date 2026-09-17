@@ -79,6 +79,25 @@ class Policy extends FrontendController
         $this->request->addModule('Weline_Theme');
 
         $title = trim((string)$this->request->getParam('theme_page_title', ''));
+        if ($title === '' && $layoutType === 'policy') {
+            $policyTitles = [
+                'cookie' => 'Cookie 政策',
+                'privacy' => '隐私政策',
+                'term-condition' => '服务条款',
+                'refund' => '退款政策',
+                'disclaimer' => '免责声明',
+                'shipping' => '配送政策',
+                'accessibility' => '无障碍声明',
+                'default' => '政策页面',
+            ];
+            $title = $policyTitles[$layoutOption] ?? $policyTitles['default'];
+        }
+        if ($title === '' && $layoutType === 'error') {
+            $title = '服务异常';
+        }
+        if ($title === '' && $layoutType === 'sitemap') {
+            $title = '站点地图';
+        }
         if ($title !== '') {
             $this->assign('title', \Weline\Theme\Helper\WidgetI18n::label($title));
         }
@@ -112,6 +131,8 @@ class Policy extends FrontendController
             'term-condition' => '服务条款',
             'refund' => '退款政策',
             'disclaimer' => '免责声明',
+            'shipping' => '配送政策',
+            'accessibility' => '无障碍声明',
             'default' => '政策页面'
         ];
         
@@ -135,14 +156,15 @@ class Policy extends FrontendController
      */
     private function sanitizeLayoutName(string $layout): string
     {
-        // 移除危险字符，只允许字母、数字、连字符和下划线
-        $layout = preg_replace('/[^a-zA-Z0-9_-]/', '', $layout);
-        
-        // 如果清理后为空，返回默认值
-        if (empty($layout)) {
+        // Nested layout types (checkout/success, checkout/failure, account/login) need `/`.
+        $layout = strtolower(trim(str_replace('\\', '/', $layout), '/'));
+        $layout = (string)preg_replace('/[^a-z0-9_\/-]+/', '', $layout);
+        $layout = (string)preg_replace('#/+#', '/', $layout);
+
+        if ($layout === '' || $layout === '/') {
             return 'default';
         }
-        
+
         return $layout;
     }
     
@@ -161,7 +183,9 @@ class Policy extends FrontendController
             'privacy',
             'term-condition',
             'refund',
-            'disclaimer'
+            'disclaimer',
+            'shipping',
+            'accessibility',
         ];
         
         return in_array($layout, $allowedLayouts, true);
@@ -173,78 +197,111 @@ class Policy extends FrontendController
     }
 
     /**
-     * Publish Theme shell SEO facts so head survives layout unsetData().
+     * Publish Theme shell structural SEO (page_type / robots / breadcrumbs).
+     * Title/description defaults come from layout explicit SEO fallback + providers,
+     * so ops layout meta_title/meta_description can win over hardcoded shell copy.
+     * BreadcrumbList needs ≥2 ListItems for Google; shells always emit Home → current page.
      */
     private function assignThemeShellSeo(string $title, string $pageType): void
     {
         $title = trim($title);
         $pageType = strtolower(trim(str_replace(['-', ' '], '_', $pageType)));
-        if ($title === '') {
-            $title = (string)__('页面');
-        }
         if ($pageType === '') {
             $pageType = 'web_page';
         }
 
         $privateTypes = [
-            'cart', 'checkout', 'checkout_success', 'checkout_failure', 'checkout_failer',
-            'account', 'account_auth', 'account_logout', 'account_orders', 'account_profile',
+            // Canonical slash paths; underscore aliases kept for legacy page_type strings still in SEO bags.
+            'cart', 'checkout', 'checkout/success', 'checkout/failure', 'checkout_success', 'checkout_failure', 'checkout_failer',
+            'account',
+            'error',
+            'not_found',
         ];
         $robots = in_array($pageType, $privateTypes, true) ? 'noindex,follow' : 'index,follow';
+        if ($pageType === 'error' || $pageType === 'not_found') {
+            $robots = 'noindex,nofollow';
+        }
 
-        $descriptions = [
-            'about' => (string)__('了解云裳汉服品牌故事、匠心工艺与传统服饰选购理念。'),
-            'contact' => (string)__('联系云裳汉服客服，咨询订单、定制与批发合作。'),
-            'policy' => (string)__('阅读本站隐私、Cookie、退款与相关法律政策说明。'),
-            'privacy' => (string)__('了解我们如何收集、使用与保护您的个人信息。'),
-            'terms' => (string)__('阅读使用本站服务前需要了解的条款与条件。'),
-            'guide' => (string)__('查看配送、退换与购物相关说明，帮助顺利完成汉服选购。'),
-            'payment_guide' => (string)__('了解可用支付方式、账单与安全保障说明。'),
-            'faq' => (string)__('查找订单、物流、退换与账户相关常见问题。'),
-            'cart' => (string)__('查看已选汉服商品、调整数量并进入结算。'),
-            'account_auth' => (string)__('登录或注册账户，管理订单与收藏。'),
-        ];
-        $description = $descriptions[$pageType]
-            ?? ((string)__('浏览%{1}相关信息，了解汉服选购与服务说明。', [$title]));
+        if ($title === '') {
+            $title = $this->defaultShellPageTitle($pageType);
+        }
 
-        $this->assign('seo', [
+        $seo = [
             'page_type' => $pageType,
-            'title' => $title,
-            'description' => $description,
             'robots' => $robots,
-        ]);
+        ];
+        if (!in_array($pageType, $privateTypes, true)) {
+            $seo['breadcrumbs'] = [
+                ['name' => (string)__('首页'), 'url' => '/'],
+                ['name' => $title, 'url' => ''],
+            ];
+        }
+
+        $this->assign('seo', $seo);
+        // Keep visible/page chrome title; do not put it into the entity SEO bag.
+        $this->assign('title', $title);
+    }
+
+    private function defaultShellPageTitle(string $pageType): string
+    {
+        $titles = [
+            'about' => (string)__('关于我们'),
+            'contact' => (string)__('联系我们'),
+            'faq' => (string)__('FAQ/常见问题'),
+            'terms' => (string)__('服务条款'),
+            'guide' => (string)__('指南'),
+            'payment_guide' => (string)__('支付方式指南'),
+            'policy' => (string)__('政策页面'),
+            'privacy' => (string)__('隐私政策'),
+            'error' => (string)__('服务异常'),
+            'sitemap' => (string)__('站点地图'),
+            'cart' => (string)__('购物车'),
+            'account' => (string)__('账户中心'),
+            'checkout/failure' => (string)__('订单尚未完成'),
+            'checkout_failure' => (string)__('订单尚未完成'),
+            'checkout_failer' => (string)__('订单尚未完成'),
+            'checkout/success' => (string)__('结账成功'),
+            'checkout_success' => (string)__('结账成功'),
+        ];
+
+        return $titles[$pageType] ?? (string)__('页面');
     }
 
     private function publicLayoutExists(string $layoutType, string $layoutOption): bool
     {
         $allowedLayouts = [
             'account' => ['default'],
-            'account_auth' => ['default'],
-            'account_logout' => ['default'],
-            'account_orders' => ['default'],
-            'account_profile' => ['default'],
             'activity' => ['default'],
             'cart' => ['default', 'empty'],
             'category' => ['default', 'list'],
             'checkout' => ['default', 'one-page'],
-            'checkout_failure' => ['default'],
-            'checkout_failer' => ['default'],
-            'checkout_success' => ['default'],
+            'checkout/success' => ['default'],
+            'checkout/failure' => ['default'],
             'cms_page' => ['default'],
             'contact' => ['default'],
             'about' => ['default'],
+            'error' => ['default'],
             'faq' => ['default'],
             'guide' => ['default'],
             'payment_guide' => ['default'],
             'not_found' => ['default'],
             'promotion' => ['default'],
             'qa' => ['default'],
+            'sitemap' => ['default'],
             'terms' => ['default'],
             'default' => ['default'],
-            'policy' => ['default', 'cookie', 'privacy', 'term-condition', 'refund', 'disclaimer'],
+            'policy' => [
+                'default',
+                'cookie',
+                'privacy',
+                'term-condition',
+                'refund',
+                'disclaimer',
+                'shipping',
+                'accessibility',
+            ],
             'product' => ['default'],
-            'product_list' => ['default'],
-            'review' => ['default'],
+            'products' => ['default'],
             'rma' => ['default'],
             'search' => ['default'],
         ];

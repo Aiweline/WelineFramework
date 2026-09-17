@@ -1,0 +1,107 @@
+<?php
+/**
+ * 邮件配置：分组嵌入统一配置（邮件壳背景等）；传输账户仍走 Smtp配置。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$urlBuilder = $this->request->getUrlBuilder();
+$centerUrl = $urlBuilder->getBackendUrl('weline_systemconfig/backend/config', [
+    'module' => 'Weline_Smtp',
+    'area' => 'backend',
+    'target_scope' => $selectedScope,
+    'guide_locate' => 'smtp_mail_bg_header',
+]);
+$smtpConfigUrl = $urlBuilder->getBackendUrl('smtp/backend/config', [
+    'target_scope' => $selectedScope,
+]);
+$channelUrl = $urlBuilder->getBackendUrl('smtp/backend/template/listing', [
+    'target_scope' => $selectedScope,
+]);
+$logUrl = $urlBuilder->getBackendUrl('smtp/backend/log/listing');
+?>
+<div class="w-backend-page smtp-mail-config" data-testid="smtp-mail-config">
+    <div class="w-backend-page__heading w-cluster" data-align="start" data-justify="between" style="--w-gap:var(--weline-space-3);">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1); min-inline-size:0; flex:1 1 16rem;">
+            <h1 class="w-heading" data-level="2" style="--w-m:0;"><lang>邮件配置</lang></h1>
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                <lang>管理邮件壳外观与相关配置项。切换作用范围后按新范围加载；子范围未覆盖时继承 Global。传输账户与渠道绑定请用「Smtp配置」。</lang>
+            </p>
+        </div>
+        <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
+           href="<?= htmlspecialchars($centerUrl, ENT_QUOTES, 'UTF-8') ?>"
+           data-testid="smtp-mail-config-center-link">
+            <lang>在统一配置中心打开</lang>
+        </a>
+    </div>
+
+    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);" data-testid="smtp-mail-config-shortcuts">
+        <a class="w-button" data-tone="neutral" data-variant="soft" data-size="sm"
+           href="<?= htmlspecialchars($smtpConfigUrl, ENT_QUOTES, 'UTF-8') ?>"><lang>Smtp配置</lang></a>
+        <a class="w-button" data-tone="neutral" data-variant="soft" data-size="sm"
+           href="<?= htmlspecialchars($channelUrl, ENT_QUOTES, 'UTF-8') ?>"><lang>渠道管理</lang></a>
+        <a class="w-button" data-tone="neutral" data-variant="soft" data-size="sm"
+           href="<?= htmlspecialchars($logUrl, ENT_QUOTES, 'UTF-8') ?>"><lang>发件记录</lang></a>
+    </div>
+
+    <div class="w-field" style="--w-max-inline-size:22rem;" data-testid="smtp-mail-config-scope">
+        <label class="w-field__label" for="smtp-mail-config-scope"><lang>作用范围</lang></label>
+        <div class="w-field__control">
+            <w:scope
+                id="smtp-mail-config-scope"
+                name="target_scope"
+                value="selected_scope"
+                placeholder="@lang(选择网站、店铺或渠道)"
+                search-placeholder="@lang(搜索作用范围)"
+                aria-label="@lang(选择作用范围)"
+                searchable="true"
+                default-expand-all="true"
+                required="true"
+            />
+        </div>
+    </div>
+
+    <section class="w-card" data-testid="smtp-mail-config-shell-bg">
+        <div class="w-card__header">
+            <div class="w-stack" style="--w-gap:var(--weline-space-1); min-inline-size:0;">
+                <h2 class="w-card__title"><lang>邮件壳背景图</lang></h2>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                    <lang>页头 / 正文 / 页尾各自可选背景图。Global 目录 mail/backgrounds/…；站店目录 websites/{网站}/{店铺}/mail/backgrounds/…。</lang>
+                </p>
+            </div>
+        </div>
+        <div class="w-card__body">
+            <w:config:embed
+                module="Weline_Smtp"
+                area="backend"
+                group="smtp_mail_shell"
+                locale="default"
+            />
+        </div>
+    </section>
+</div>
+<script>
+(function () {
+    var root = document.getElementById('smtp-mail-config-scope');
+    if (!root) {
+        return;
+    }
+    var field = root.querySelector('input[type="hidden"][name="target_scope"]') || root.querySelector('input[name="target_scope"]');
+    if (!field) {
+        return;
+    }
+    field.addEventListener('change', function () {
+        var next = String(field.value || '').trim();
+        if (!next) {
+            return;
+        }
+        var url = new URL(window.location.href);
+        url.searchParams.set('target_scope', next);
+        var parts = next.split('.');
+        url.searchParams.set('website_code', parts[0] && parts[0] !== 'default' ? parts[0] : '');
+        url.searchParams.set('store_code', parts[1] && parts[1] !== 'default' ? parts[1] : '');
+        url.searchParams.set('channel_code', parts[2] && parts[2] !== 'default' ? parts[2] : '');
+        window.location.assign(url.toString());
+    });
+})();
+</script>

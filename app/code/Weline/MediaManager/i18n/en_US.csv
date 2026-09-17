@@ -58,20 +58,35 @@ save,save
 允许的文件大小：,"Allowed file size:"
 媒体选择器初始化失败，请刷新页面后重试。,"Media selector initialization failed, please refresh the page and try again."
 暂无缩略图,"No thumbnail yet"
+"强引用选图缺少媒体身份：请由页面 Ambient 或标签显式设置 identity。","强引用选图缺少媒体身份：请由页面 Ambient 或标签显式设置 identity。"
+点击更换曲目,点击更换曲目
+点击更换文件,点击更换文件
 向前移动,"move forward"
 向后移动,"move backward"
 移除,Remove
+从图库选择,从图库选择
 关闭,Close
 Storage,Storage
 "Local Storage","Local Storage"
 Folders,Folders
 Search,Search
+引用标签筛,引用标签筛
+大类,大类
+筛选,筛选
+卸引用前缀,卸引用前缀
+无引用,无引用
+关站清引用,关站清引用
+当前身份引用,"Current identity refs"
+全部,All
 目录,目录
 Upload,Upload
 "New Folder","New Folder"
 Rename,Rename
 Download,Download
 Delete,Delete
+文件管理,文件管理
+引用管理,引用管理
+垃圾箱,垃圾箱
 Refresh,Refresh
 "AI 自动翻译","AI 自动翻译"
 Select,Select
@@ -133,6 +148,8 @@ OK,OK
 "默认 Caption（可选）","Default caption (optional)"
 确认保存,"Confirm Save"
 搜索文件或文件夹…,"Search files or folders…"
+身份标签组,"Identity tag groups"
+管理视图,管理视图
 "开启后由 cron 自动补缺未翻译语言；已有文案不覆盖。上传一键翻译不受此开关影响。","When enabled, cron gap-fills missing locales without overwriting existing copy. Upload one-click translate ignores this switch."
 当前目录,"Current directory"
 文件上传进度,"File upload progress"
@@ -245,13 +262,24 @@ OK,OK
 正在补缺翻译…,"Filling missing locales…"
 "正在调用 AI 补缺其它语言，请稍候…","AI is translating missing locales, please wait…"
 未翻译,Missing
+单击切换语言；双击未翻译语言可临时补齐（草稿）,单击切换语言；双击未翻译语言可临时补齐（草稿）
+双击：临时补齐该语言（草稿）,双击：临时补齐该语言（草稿）
+单击切换；已有文案，双击不会覆盖,单击切换；已有文案，双击不会覆盖
+源语言,源语言
+"已临时补齐 %{locale}（草稿）","已临时补齐 %{locale}（草稿）"
+"%{locale} 已有文案，已跳过","%{locale} 已有文案，已跳过"
+源语言无需补齐,源语言无需补齐
 "已开启 AI 自动翻译（每小时定时补缺）","AI auto-translation enabled (hourly cron gap-fill)"
 "已开启并立即入队补缺 #%{id}，请到任务队列查看进度","Enabled and queued gap-fill ##{id}; check task queue for progress"
 "已关闭 AI 自动翻译","AI auto-translation disabled"
 "AI 自动翻译配置保存失败","Failed to save AI auto-translation setting"
 文件名已存在,"Filename already exists"
-当前文件夹已有「%{name}」。系统已生成不重复的文件名，请确认或修改后上传：,"A file named \"%{name}\" already exists in this folder. A unique filename has been suggested; confirm or edit it before uploading:"
+当前文件夹已有「%{name}」。可改用不重复的文件名，或覆盖已有文件并保留其多语言文案：,"A file named \"%{name}\" already exists. Rename it, or overwrite the existing file and keep its multilingual copy:"
 「%{name}」仍与现有文件重名，请换一个名称,"\"%{name}\" still conflicts with an existing file. Choose another name."
+覆盖已有,"Overwrite existing"
+确认覆盖,"Confirm overwrite"
+将替换「%{name}」的文件内容；已有多语言文案将保留。此操作不可撤销。,"This will replace the contents of \"%{name}\". Existing multilingual copy will be kept. This cannot be undone."
+确定,确定
 当前文件尚未建立可编辑的资源实体,"The current file does not yet have an editable FileAsset."
 资源信息编辑器尚未就绪,"The asset metadata editor is not ready."
 请填写当前语言下的资源名称。,"Enter the asset name for the current locale."
@@ -311,6 +339,12 @@ OK,OK
 "文生图模型未就绪，请先在 AI 场景管理中绑定模型","Text-to-image model is not ready. Bind a model in AI scenario management first."
 当前模型：,Model:
 请从当前目录选择一张参考图,"Please select a reference image from the current folder."
+身份,身份
+范围,范围
+槽位,槽位
+命中引用,命中引用
+当前可见,当前可见
+点击按本组全部标签过滤,点击按本组全部标签过滤
 媒体文件操作缺少明确操作人。,"The media-file operation requires an explicit actor."
 媒体文件访问上下文未冻结或与任务所有者不匹配。,"The media-file access context is not frozen or does not match the task owner."
 媒体文件语言与冻结上下文不匹配。,"The media-file locale does not match the frozen context."
@@ -409,6 +443,7 @@ OK,OK
 上传文件扩展名不允许：%{1},"The upload file extension is not allowed: %{1}"
 当前存储磁盘不支持上传。,"The selected storage disk does not support uploads."
 目标文件已存在：%{1},"The target file already exists: %{1}"
+目标文件不存在，无法覆盖：%{1},目标文件不存在，无法覆盖：%{1}
 文件资源可见性无效。,"The file asset visibility is invalid."
 文件资源可见性必须与所选磁盘可见性一致。,"The file asset visibility must match the selected disk visibility."
 无法创建分块上传暂存文件。,"The resumable upload staging file could not be created."
@@ -433,6 +468,7 @@ OK,OK
 分块上传完成重试次数超过限制。,"The resumable upload completion retry limit was exceeded."
 存储磁盘对象命名空间已变更，请重新上传。,"The storage object namespace changed. Upload the file again."
 分块上传完成后缺少文件资源结果。,"The completed resumable upload did not return a file asset."
+分块上传完成凭据写入失败；覆盖后的文件内容已写入，请人工核对。,"Failed to write the resumable completion receipt; overwritten content is already stored and needs manual review."
 分块上传完成凭据写入失败，且已上传文件无法自动回收。,"The completion receipt failed and the uploaded file could not be reclaimed automatically."
 无法终止分块上传会话。,"The resumable upload session could not be aborted."
 分块上传会话已终止，但暂存文件清理失败。,"The upload session was aborted but its staging files could not be cleaned."
@@ -514,6 +550,8 @@ OK,OK
 无权访问该文件资源,无权访问该文件资源
 "媒体文件访问缺少冻结的 ScopeIdentity。","Media-file access requires a frozen ScopeIdentity."
 媒体文件操作缺少显式语言。,"The media-file operation requires an explicit locale."
+目标语言列表格式无效。,目标语言列表格式无效。
+目标语言列表不能为空。,目标语言列表不能为空。
 文件夹名称不能为空,"Folder name is required"
 文件夹创建失败或已存在,"Folder creation failed or the folder already exists"
 新名称不能为空,"New name is required"
@@ -564,3 +602,10 @@ Dimensions,Dimensions
 文件管理器,"File Manager"
 存储路径无效,"Invalid storage path"
 目录路径,Path
+identityGroupRoot,Root
+identityGroupCode,Identity
+identityGroupScope,Scope
+identityGroupSlot,Slot
+identityFilterHit,"Matched refs"
+identityFilterVisible,"Visible now"
+identityFilterGroupHint,"Click to filter by this whole group"

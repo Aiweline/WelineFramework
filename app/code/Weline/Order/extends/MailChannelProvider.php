@@ -18,6 +18,9 @@ class MailChannelProvider implements MailChannelProviderInterface
             ['code' => 'customer_email', 'label' => __('客户邮箱'), 'sample' => 'user@example.com'],
             ['code' => 'status', 'label' => __('状态'), 'sample' => 'paid'],
             ['code' => 'old_status', 'label' => __('原状态'), 'sample' => 'pending'],
+            ['code' => 'grand_total', 'label' => __('订单金额'), 'sample' => '198.00'],
+            ['code' => 'currency', 'label' => __('货币'), 'sample' => 'CNY'],
+            ['code' => 'items_html', 'label' => __('商品明细 HTML（|raw）'), 'sample' => '<table>…</table>'],
             ['code' => 'comment', 'label' => __('备注'), 'sample' => ''],
             ['code' => 'message', 'label' => __('附加说明'), 'sample' => ''],
         ];

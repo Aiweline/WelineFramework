@@ -313,9 +313,88 @@ html[data-theme-mode="dark"] .w-local-translation-drawer > .w-drawer__footer {
     text-align: center;
 }
 
-.w-local-translation__trigger {
-    /* Label ↔ language icon: readable click affordance */
+/* Trigger may embed long source text: block wrap (not span) so width clamps; text folds to 3 lines. */
+.w-local-translation__wrap {
+    display: block;
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    overflow: hidden;
+}
+
+.w-field__label-row .w-local-translation__wrap,
+.w-cluster .w-local-translation__wrap,
+[data-testid$="-local"] .w-local-translation__wrap,
+.w-website-local-preview .w-local-translation__wrap {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+}
+
+.w-field__label-row.w-cluster > [data-testid$="-local"] {
+    flex: 1 1 12rem;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+}
+
+.w-local-translation__trigger.w-button,
+.w-local-translation__trigger.w-button[data-tone="quiet"] {
+    /* Override .w-button inline-flex/nowrap — take parent width so line-clamp has a real bound. */
+    display: flex;
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
     gap: var(--weline-space-2, 0.5rem);
+    block-size: auto;
+    min-block-size: var(--weline-control-height, 2.25rem);
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: start;
+    white-space: normal;
+    padding-block: var(--weline-space-2, 0.5rem);
+    padding-inline: var(--weline-space-2, 0.5rem);
+    border-radius: var(--weline-radius-md, 0.5rem);
+    border-color: transparent;
+    /* Tag-level affordance: light primary wash so every <local> is recognizable. */
+    background: color-mix(
+        in srgb,
+        var(--backend-theme-primary, var(--weline-theme-primary, var(--color-primary, #4f46e5))) 10%,
+        var(--weline-theme-surface, #fff)
+    );
+    color: var(--weline-theme-text, inherit);
+}
+
+.w-local-translation__trigger.w-button:hover,
+.w-local-translation__trigger.w-button:focus-visible,
+.w-local-translation__trigger.w-button[data-tone="quiet"]:hover,
+.w-local-translation__trigger.w-button[data-tone="quiet"]:focus-visible {
+    background: color-mix(
+        in srgb,
+        var(--backend-theme-primary, var(--weline-theme-primary, var(--color-primary, #4f46e5))) 14%,
+        var(--weline-theme-surface, #fff)
+    );
+    border-color: transparent;
+    color: var(--weline-theme-text, inherit);
+}
+
+.w-local-translation__trigger-text {
+    display: -webkit-box;
+    box-sizing: border-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    flex: 1 1 0;
+    line-height: 1.4;
+    font-weight: 500;
 }
 
 .w-local-translation__trigger :is(w-icon, .w-icon) {
@@ -325,6 +404,7 @@ html[data-theme-mode="dark"] .w-local-translation-drawer > .w-drawer__footer {
     );
     flex-shrink: 0;
     margin-inline-start: var(--weline-space-1, 0.25rem);
+    margin-block-start: 0.1em;
 }
 
 .w-local-translation__trigger:hover :is(w-icon, .w-icon),

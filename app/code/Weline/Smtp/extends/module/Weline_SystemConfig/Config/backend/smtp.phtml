@@ -111,3 +111,65 @@
         scope="global,website"
     />
 </w:config:group>
+
+<w:config:group
+    code="smtp_mail_shell"
+    label="邮件壳背景图"
+    description="页头 / 正文 / 页尾各自可选背景图；子 Scope 未覆盖时继承 Global。素材目录固定，勿散落到其它媒体路径。"
+    sort="30"
+>
+    <w:config:hint>
+        目录约定：Global 用 `mail/backgrounds/{header|body|footer}/`；Website/Store 用 `websites/{website}/{store}/mail/backgrounds/{header|body|footer}/`。选择器已锁定到该树，请勿改存到 brand/blog 等其它目录。
+    </w:config:hint>
+
+    <w:config:field
+        key="smtp_mail_bg_header"
+        label="页头背景图"
+        description="邮件壳 header 区域背景图。留空则仅用主题色 brand_header_bg。"
+        type="image"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        path="websites/{website}/{store}/mail/backgrounds/header"
+        path-global="mail/backgrounds/header"
+        lock-path="1"
+        lock-root="websites/{website}/{store}/mail"
+        lock-root-global="mail"
+        ext="jpg,jpeg,png,gif,webp"
+        validation="max:1024"
+    />
+
+    <w:config:field
+        key="smtp_mail_bg_body"
+        label="正文背景图"
+        description="邮件壳 body（正文卡片内容区）背景图。留空则用主题色 brand_surface。"
+        type="image"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        path="websites/{website}/{store}/mail/backgrounds/body"
+        path-global="mail/backgrounds/body"
+        lock-path="1"
+        lock-root="websites/{website}/{store}/mail"
+        lock-root-global="mail"
+        ext="jpg,jpeg,png,gif,webp"
+        validation="max:1024"
+    />
+
+    <w:config:field
+        key="smtp_mail_bg_footer"
+        label="页尾背景图"
+        description="邮件壳 footer 区域背景图。留空则用主题色 brand_footer_bg。"
+        type="image"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        path="websites/{website}/{store}/mail/backgrounds/footer"
+        path-global="mail/backgrounds/footer"
+        lock-path="1"
+        lock-root="websites/{website}/{store}/mail"
+        lock-root-global="mail"
+        ext="jpg,jpeg,png,gif,webp"
+        validation="max:1024"
+    />
+</w:config:group>

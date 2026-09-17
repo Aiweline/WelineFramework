@@ -1,0 +1,30 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 25
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\SiteContactScopeMapper;
+
+$website = (array)($this->getData('website') ?? []);
+$hasWebsiteIdentity = array_key_exists('website_id', $website) || array_key_exists('id', $website);
+$websiteId = $hasWebsiteIdentity ? (int)($website['website_id'] ?? $website['id']) : -1;
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'website_' . (is_string($hookId) ? $hookId : '');
+}
+
+/** @var SiteContactScopeMapper $mapper */
+$mapper = ObjectManager::getInstance(SiteContactScopeMapper::class);
+$scopeMeta = ($hasWebsiteIdentity && $websiteId >= 0)
+    ? $mapper->forWebsite($website)
+    : ['ok' => false, 'storage_scope' => '', 'website_code' => '', 'store_code' => '', 'channel_code' => '', 'scope_kind' => '', 'label' => ''];
+
+echo $this->fetch('Weline_Websites::templates/Admin/partials/site-contact-embed-section.phtml', [
+    'sectionId' => $hookId . '_site_contact',
+    'hasIdentity' => $hasWebsiteIdentity && $websiteId >= 0,
+    'pendingHint' => (string)__('请先保存网站，再配置本站联系地址/电话/服务时间。'),
+    'scopeMeta' => $scopeMeta,
+    'scopeHint' => (string)__('本组写入当前网站范围；未覆盖的字段继承 Global 默认。'),
+]);

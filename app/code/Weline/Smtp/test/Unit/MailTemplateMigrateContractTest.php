@@ -131,7 +131,11 @@ final class MailTemplateMigrateContractTest extends TestCase
         self::assertStringContainsString('syncAll', $src);
         self::assertStringContainsString('MailTemplateSeedCopyCatalog', $src);
         self::assertStringContainsString('materializeFiles', $src);
-        $module = (string)file_get_contents($root . '/app/code/Weline/Smtp/etc/module.php');
-        self::assertStringContainsString('1.4.25', $module);
+        $module = include $root . '/app/code/Weline/Smtp/etc/module.php';
+        self::assertIsArray($module);
+        self::assertTrue(
+            version_compare((string)($module['version'] ?? '0'), '1.4.25', '>='),
+            'Smtp module must be >= 1.4.25 for mail template seed upgrade'
+        );
     }
 }

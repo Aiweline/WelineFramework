@@ -1,4 +1,4 @@
-博客分类,"Blog categories"
+﻿博客分类,"Blog categories"
 "分类 ID 不能为空","分类 ID 不能为空"
 "博客文章 sitemap URL 提供器","博客文章 sitemap URL 提供器"
 博客,Blog
@@ -36,9 +36,23 @@
 "AI 生成博客 Slug","AI 生成博客 Slug"
 "使用翻译 AI 生成博客 slug","使用翻译 AI 生成博客 slug"
 删除博客文章,"Delete Blog Post"
+作者,Author
+更新于,"Updated on"
+分钟阅读,"min read"
+相关文章,"Related Posts"
 关键词,Keywords
 面包屑,Breadcrumb
 文章,Article
+暂无文章,"No posts yet"
+返回博客,"Back to Blog"
+"共 %{1} 条","%{1} item(s) total"
+文章列表,"Article list"
+未命名文章,"Untitled Post"
+博客文章封面,博客文章封面
+页面,Page
+博客页面,"Blog Page"
+未命名页面,"Untitled Page"
+全部文章,"All Posts"
 展开/收起,展开/收起
 "订阅 RSS","Subscribe to RSS"
 正在加载评论...,"Loading reviews..."
@@ -78,20 +92,6 @@
 "撰写图文 / 视频评论","Write a photo / video review"
 正在加载评论表单...,"Loading review form..."
 支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。,"Guest and signed-in reviews are supported; media and extra fields are moderated together."
-"共 %{1} 条","%{1} item(s) total"
-文章列表,"Article list"
-未命名文章,"Untitled Post"
-博客文章封面,博客文章封面
-作者,Author
-更新于,"Updated on"
-分钟阅读,"min read"
-相关文章,"Related Posts"
-暂无文章,"No posts yet"
-返回博客,"Back to Blog"
-页面,Page
-博客页面,"Blog Page"
-未命名页面,"Untitled Page"
-全部文章,"All Posts"
 管理当前网站下的博客文章与发布状态,管理当前网站下的博客文章与发布状态
 "万能分类 · 博客","万能分类 · 博客"
 新建文章,"New Post"

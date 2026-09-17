@@ -72,7 +72,9 @@ class ThemeMetaIdentityService
         $values = [];
         foreach ($definitions as $name => $definition) {
             $default = $definition['default'] ?? null;
-            $isTranslatable = !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']);
+            $isTranslatable = \Weline\Widget\Api\Param\ParamDefinition::isTranslatable(
+                is_array($definition) ? $definition : []
+            );
             if ($isTranslatable && $locale !== null && $locale !== '') {
                 $values[$name] = ThemeData::getParamTranslation(
                     $identify,
@@ -145,7 +147,9 @@ class ThemeMetaIdentityService
         $values = [];
 
         foreach ($definitions as $name => $definition) {
-            $isTranslatable = !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']);
+            $isTranslatable = \Weline\Widget\Api\Param\ParamDefinition::isTranslatable(
+                is_array($definition) ? $definition : []
+            );
             if ($isTranslatable) {
                 $translated = $this->getStoredParamTranslation($identify, (string)$name, $effectiveScope, $effectiveLocale);
                 if ($translated !== null) {
@@ -283,13 +287,16 @@ class ThemeMetaIdentityService
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
 
-        $isTranslatable = !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']);
-        $value = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : (string)$value;
-
+        $isTranslatable = \Weline\Widget\Api\Param\ParamDefinition::isTranslatable($definition);
         if ($isTranslatable && $locale !== null && $locale !== '') {
-            ThemeData::setParamTranslation($identify, $paramName, $value, $scope, $locale);
+            $encoded = ThemeData::encodeTranslationForStorage($value);
+            if ($encoded !== null) {
+                ThemeData::setParamTranslation($identify, $paramName, $encoded, $scope, $locale);
+            }
             return;
         }
+
+        $value = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : (string)$value;
 
         $normalizedIdentify = $this->normalizeFullIdentify($identify, $area);
         [$namespace, $configKey] = $this->resolveNamespaceAndConfigKey($normalizedIdentify, 'param.' . $paramName . '.value');

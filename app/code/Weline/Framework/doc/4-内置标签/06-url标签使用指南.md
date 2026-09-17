@@ -17,6 +17,18 @@
 - 区分前台 / 后台 / API
 - 参数编码与 XSS 防护由框架处理
 
+## PHP / Service（与标签等价）
+
+模板外（Query、HTML 字符串拼接、JSON 里给店面 href）**必须**用 `Weline\Framework\Http\Url`：
+
+```php
+$url->getUrl('guide/payment/paypal');
+$url->getFrontendUrl('customer/account/index', ['order_uuid' => $uuid]);
+$url->getBackendUrl('order/backend/order/view', ['id' => $id]);
+```
+
+禁止 `'/' . $route`、手写 `/guide/payment/paypal` 这类缺语言/货币前缀的站内 path。外链 `http(s)://` 可原样。MCP 硬规则：`storefront_internal_url_via_url_helper`。
+
 ## 标签族
 
 | 名称 | 作用 |

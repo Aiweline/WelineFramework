@@ -97,6 +97,8 @@ await gotoThemePreview(page, { pageType: 'homepage' });
 
 ## 运行测试
 
+**Agent / MCP（硬，`e2e_playwright_formal_runner_only`）**：只允许本入口——`php bin/w e2e:run …` 或本目录下 `npx playwright test …`。禁止 `node -e` / 临时 `chromium.launch` 探活（易残留 `chrome-headless-shell`）。缺覆盖请补模块 `Test/e2e` / `test/e2e` 的 `.spec.js` 再跑正式 runner。
+
 **工作目录：** Playwright 必须在 `tests/e2e` 下解析 `node_modules`（与 `php bin/w e2e:run` 一致）。若在仓库根目录执行 `npx playwright test --config=tests/e2e/playwright.config.js`，可能加载到另一份 `@playwright/test`，报错：`Playwright Test did not expect test.describe() to be called here`。请优先用下面的 `e2e:run`，或先 `cd tests/e2e` 再 `npx playwright test --config=playwright.config.js`。
 
 ```bash

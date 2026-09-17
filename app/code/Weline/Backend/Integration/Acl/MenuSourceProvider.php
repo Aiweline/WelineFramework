@@ -17,7 +17,7 @@ final class MenuSourceProvider implements MenuSourceProviderInterface
     public function sourceIds(): array
     {
         $sources = [];
-        foreach ($this->menuReader->read() as $menus) {
+        foreach ($this->menuReader->read(false) as $menus) {
             foreach (($menus['data'] ?? []) as $menu) {
                 $source = (string)($menu['source'] ?? '');
                 if ($source !== '') {

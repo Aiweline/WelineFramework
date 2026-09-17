@@ -24,6 +24,10 @@ save,save
 迁移状态,"Migration status"
 eye,eye
 只读查看税务迁移状态,"Read-only view of tax migration status"
+"需要填写税号 / VAT？","Need a tax ID / VAT?"
+"欧盟 VAT 税号（可选）","EU VAT number (optional)"
+例如：DE123456789,"e.g. DE123456789"
+账单国家为欧盟时可选填写；仅做格式校验，不改变应付税额。,"Optional when the billing country is in the EU; format check only, does not change the amount due."
 是,yes
 否,no
 只读诊断,"Read-only diagnostics"
@@ -46,6 +50,7 @@ eye,eye
 税务规则版本已变更，请重新报价,"Tax rules changed; request a new quote"
 税务报价缺少有效规则版本，请重新报价,"The Tax quote has no valid rule version; request a new quote"
 税务当前规则版本不可验证，新结账已阻断,"The current Tax rule version cannot be verified; new checkout is blocked"
+买家税号无效，请检查后重试,买家税号无效，请检查后重试
 税务报价行结构无效，新结账已阻断,"The Tax quote line structure is invalid; new checkout is blocked"
 税务报价行标识缺失或重复，新结账已阻断,"Tax quote line IDs are missing or duplicated; new checkout is blocked"
 税务报价行不能为空，新结账已阻断,"Tax quote lines cannot be empty; new checkout is blocked"
@@ -100,6 +105,8 @@ eye,eye
 "目标 Store ID，必须 >=1","Target Store ID, must >=1"
 "目标 Channel ID，必须 >=1","Target Channel ID, must be >=1"
 显示本帮助,"Show this help"
+"欧盟 VAT 税号（B2B 可选）","EU VAT number (optional for B2B)"
+"账单国家为欧盟时显示；格式校验由税收模块负责，不写入 Checkout EAV。","Shown when the billing country is in the EU; Tax owns format validation and does not write Checkout EAV."
 """仅允许 POST 请求。""","""Only POST requests are allowed."""
 "网站 ID","Website ID"
 """税务不可用且无同版本同 Scope 的 LKG，新结账已阻断""","Tax is unavailable and no verified LKG exists for the same version and Scope; new checkout is blocked"

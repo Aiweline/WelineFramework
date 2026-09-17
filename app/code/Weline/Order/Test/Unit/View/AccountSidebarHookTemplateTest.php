@@ -14,10 +14,12 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $sidebarTemplate = $moduleRoot . '/view/hooks/account.sidebar.group.commerce.phtml';
         $contentTemplate = $moduleRoot . '/view/hooks/account.sidebar.content.phtml';
         $headerTemplate = $moduleRoot . '/view/hooks/header-orders.phtml';
+        $headerAccountLinks = $moduleRoot . '/view/hooks/header-account-links.phtml';
 
         $this->assertFileExists($sidebarTemplate);
         $this->assertFileExists($contentTemplate);
         $this->assertFileExists($headerTemplate);
+        $this->assertFileExists($headerAccountLinks);
 
         $sidebar = (string) file_get_contents($sidebarTemplate);
         $content = (string) file_get_contents($contentTemplate);
@@ -70,6 +72,7 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $css = (string) file_get_contents($ordersCss);
         $this->assertStringContainsString('[data-account-orders="true"]', $css);
         $this->assertStringContainsString('.account-orders__groups', $css);
+        $this->assertStringContainsString('.account-orders__hang', $css);
         $this->assertStringContainsString('list-style: none', $css);
 
         $ordersPanel = $moduleRoot . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
@@ -77,6 +80,12 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $orders = (string) file_get_contents($ordersPanel);
         $this->assertStringContainsString('data-account-layout="customer-sidebar"', $orders);
         $this->assertStringContainsString('data-group-summary="true"', $orders);
+        $this->assertStringContainsString('data-account-orders-accordion="true"', $orders);
+        $this->assertStringContainsString('data-testid="account-orders-accordion"', $orders);
+        $this->assertStringContainsString('data-account-orders-hang="true"', $orders);
+        $this->assertStringContainsString('data-testid="account-orders-hang"', $orders);
+        $this->assertStringContainsString('account-orders__chevron', $orders);
+        $this->assertStringContainsString('.account-orders__accordion', $css);
         $this->assertStringContainsString('data-order-status="true"', $orders);
         $this->assertStringContainsString('data-order-total="true"', $orders);
         $this->assertStringContainsString('data-partial-expanded="true"', $orders);
@@ -90,5 +99,12 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('customer/account/index', $header);
         $this->assertStringContainsString('#orders', $header);
         $this->assertStringNotContainsString('/account/orders', $header);
+
+        $accountLinks = (string) file_get_contents($headerAccountLinks);
+        $this->assertStringContainsString('data-account-menu-auth="signed-in"', $accountLinks);
+        $this->assertStringContainsString("@url{'customer/account/index'}#orders", $accountLinks);
+        $this->assertStringContainsString('我的订单', $accountLinks);
+        $this->assertStringNotContainsString("@url{'customer/account/orders'}", $accountLinks);
+        $this->assertStringNotContainsString('customer/account/orders', $accountLinks);
     }
 }

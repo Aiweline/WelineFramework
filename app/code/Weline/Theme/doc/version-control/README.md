@@ -9,6 +9,16 @@
 - **恢复原始布局**：一键恢复到主题模板的原始状态（自动创建备份）
 - **版本发布**：将指定版本发布到前台
 
+### 看版本时走哪条预览？
+
+| 场景 | 状态 | 权威 |
+|------|------|------|
+| 编辑器画布 / 版本面板内预览 | 可视化编辑预览 | **参数**（`status` / `version_id` / `editor_context`） |
+| 「真实前端预览」打开店面 | **版本真实预览** | **Token 反解析**（须重新 `start-preview`） |
+| 发布后访客页 | 正式 | **RequestContext** + `r{published_release_id}` |
+
+权威全文：[`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)。技能：`weline-theme-development`。
+
 ## 核心概念
 
 ### 工作区 vs 版本快照

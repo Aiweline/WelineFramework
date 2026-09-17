@@ -495,6 +495,11 @@ class DeliveryAddressQueryProvider implements QueryProviderInterface
             'postal_code' => $string,
             'is_default' => ['type' => 'mixed'],
             'is_enabled' => ['type' => 'mixed'],
+            'purpose_source' => ['type' => 'string', 'max_length' => 16],
+            'also_use_checkout' => ['type' => 'mixed'],
+            'also_use_receiving' => ['type' => 'mixed'],
+            'purpose_checkout' => ['type' => 'mixed'],
+            'purpose_receiving' => ['type' => 'mixed'],
         ];
     }
 }

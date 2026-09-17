@@ -27,6 +27,19 @@ final class BackendOrderShipmentsSlotContractTest extends TestCase
         self::assertStringNotContainsString("getData('shipments')", $source);
     }
 
+    public function testOrderShipmentPanelProvidesEmptyShipmentsSlot(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/panel/shipment.phtml';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('id="backend-order-shipments"', $source);
+        self::assertStringContainsString(
+            'Weline_Order::backend::order::view::shipments',
+            $source
+        );
+        self::assertStringNotContainsString('发货记录 / 补充运单号', $source);
+    }
+
     public function testOrderListProvidesShippingSlot(): void
     {
         $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/index.phtml';
@@ -37,6 +50,29 @@ final class BackendOrderShipmentsSlotContractTest extends TestCase
             'Weline_Order::backend::order::list::shipping',
             $source
         );
+    }
+
+    public function testOrderEditShipmentPanelProvidesShipmentsSlotOnly(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/panel/shipment.phtml';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('id="backend-order-shipments"', $source);
+        self::assertStringContainsString(
+            'Weline_Order::backend::order::view::shipments',
+            $source
+        );
+        self::assertStringNotContainsString('data-testid="shipment-row"', $source);
+        self::assertStringContainsString('履约进度账本', $source);
+    }
+
+    public function testOrderEditPageDoesNotHardcodeShipmentsTable(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringNotContainsString('data-testid="order-edit-shipments"', $source);
+        self::assertStringNotContainsString('OrderShipment::schema_fields_TRACKING_NUMBER', $source);
     }
 
     public function testOrderDeclaresShipmentsHooksAndDocs(): void

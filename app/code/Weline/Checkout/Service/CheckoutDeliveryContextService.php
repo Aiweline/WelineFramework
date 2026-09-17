@@ -54,7 +54,8 @@ final class CheckoutDeliveryContextService
             $countryName = $this->countryName($countryCode, $countries);
             // 更换地址 picking：拉全量地址簿（含其它国家）；默认仍按当前配送国过滤。
             $listAll = $this->wantsAllAddresses($params);
-            $addresses = $this->annotateEmbargoList($this->listAddresses($listAll ? '' : $countryCode));
+            $purpose = $this->resolveAddressPurpose($params);
+            $addresses = $this->annotateEmbargoList($this->listAddresses($listAll ? '' : $countryCode, $purpose));
             $selected = $this->selectedAddress($addresses, $countryCode, $countryName);
             if (\is_array($selected)) {
                 $selected = $this->annotateEmbargoOne($selected);
@@ -132,10 +133,20 @@ final class CheckoutDeliveryContextService
         }
 
         $match = null;
-        foreach ($this->listAddresses('') as $address) {
+        $purpose = $this->resolveAddressPurpose($params);
+        foreach ($this->listAddresses('', $purpose === 'receiving' ? 'receiving' : 'checkout') as $address) {
             if ((string)$address['id'] === $addressId) {
                 $match = $address;
                 break;
+            }
+        }
+        // 跨用途兜底：双标/错端选择时仍可按 id 命中。
+        if ($match === null) {
+            foreach ($this->listAddresses('', 'any') as $address) {
+                if ((string)$address['id'] === $addressId) {
+                    $match = $address;
+                    break;
+                }
             }
         }
         if ($match === null) {
@@ -148,7 +159,10 @@ final class CheckoutDeliveryContextService
         $this->writeSelected($match);
         $this->syncShippingSession($match);
 
-        return $this->getContext(['country_code' => (string)$match['country_code']]);
+        return $this->getContext([
+            'country_code' => (string)$match['country_code'],
+            'address_purpose' => $purpose === 'receiving' ? 'receiving' : 'checkout',
+        ]);
     }
 
     /**
@@ -170,6 +184,9 @@ final class CheckoutDeliveryContextService
         ]);
         $this->assertDestinationAllowed($normalized);
 
+        $purposeMeta = $this->extractPurposeMeta($params, $payload);
+        $normalized = array_merge($normalized, $purposeMeta);
+
         $customerId = $this->currentCustomerId();
         $saved = $customerId > 0
             ? $this->saveCustomerAddress($customerId, $normalized)
@@ -179,7 +196,220 @@ final class CheckoutDeliveryContextService
         $this->writeSelected($saved);
         $this->syncShippingSession($saved);
 
-        return $this->getContext(['country_code' => (string)$saved['country_code']]);
+        $listPurpose = (($purposeMeta['purpose_source'] ?? 'checkout') === 'receiving')
+            ? 'receiving'
+            : 'checkout';
+
+        return $this->getContext([
+            'country_code' => (string)$saved['country_code'],
+            'address_purpose' => $listPurpose,
+        ]);
+    }
+
+    /**
+     * 仅清空结账用途地址（purpose_checkout）；保留收货/运输用途地址。
+     * 双标条目：摘结账标、保留收货标。仅结账条目：移出访客簿。
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    public function clearDeliveryBook(array $params = []): array
+    {
+        $session = $this->session();
+        $book = $this->guestBook();
+        $kept = [];
+        $selected = $this->readSelected();
+        $selectedId = is_array($selected) ? (string)($selected['id'] ?? '') : '';
+        $selectedWasCheckout = false;
+
+        foreach ($book as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = trim((string)($row['id'] ?? ''));
+            // 去掉误种的演示数据
+            if (str_starts_with($id, 'guest_demo_')) {
+                if ($id !== '' && $id === $selectedId) {
+                    $selectedWasCheckout = true;
+                }
+                continue;
+            }
+            $checkout = array_key_exists('purpose_checkout', $row)
+                ? DeliveryAddressService::isTruthy($row['purpose_checkout'])
+                : true;
+            $receiving = array_key_exists('purpose_receiving', $row)
+                ? DeliveryAddressService::isTruthy($row['purpose_receiving'])
+                : true;
+
+            if ($id !== '' && $id === $selectedId && $checkout) {
+                $selectedWasCheckout = true;
+            }
+
+            if (!$checkout) {
+                // 本就不是结账地址：原样保留
+                $kept[] = $row;
+                continue;
+            }
+
+            if ($receiving) {
+                // 双标：只摘结账标，保留收货/运输
+                $row['purpose_checkout'] = 0;
+                $row['purpose_receiving'] = 1;
+                $row['is_selected'] = false;
+                $kept[] = $row;
+                continue;
+            }
+
+            // 仅结账：从簿中移除
+        }
+
+        $session->set(self::SESSION_GUEST_BOOK, array_values($kept));
+
+        // 账户库：摘结账标（clear 原先只清访客簿，登录用户展开账单/结账列表仍见双标地址）。
+        $customerId = $this->currentCustomerId();
+        if ($customerId > 0) {
+            $this->deliveryAddressService->stripCheckoutPurposeForCustomer($customerId);
+        }
+
+        // 若误清后收货侧为空：从本机备份恢复原「纽约测试地址」为仅收货（不进结账列表）。
+        $hasReceiving = false;
+        foreach ($kept as $row) {
+            if (DeliveryAddressService::isTruthy($row['purpose_receiving'] ?? 1)) {
+                $hasReceiving = true;
+                break;
+            }
+        }
+        if (!$hasReceiving) {
+            $ny = $this->loadBackupReceivingGuestAddress();
+            if (is_array($ny)) {
+                $ny['purpose_checkout'] = 0;
+                $ny['purpose_receiving'] = 1;
+                $ny['is_selected'] = true;
+                $kept[] = $ny;
+                $session->set(self::SESSION_GUEST_BOOK, array_values($kept));
+                $session->set(self::SESSION_SELECTED, $ny);
+                $this->syncShippingSession($ny);
+                $selectedWasCheckout = false;
+            }
+        }
+
+        if ($selectedWasCheckout || $selectedId === '') {
+            // 结账选中被清掉后：优先改选仍有的收货地址，否则清空选中
+            $nextSelected = null;
+            foreach ($kept as $row) {
+                if (DeliveryAddressService::isTruthy($row['purpose_receiving'] ?? 1)) {
+                    $nextSelected = $row;
+                    break;
+                }
+            }
+            if (is_array($nextSelected)) {
+                $nextSelected['is_selected'] = true;
+                $session->set(self::SESSION_SELECTED, $nextSelected);
+                $this->syncShippingSession($nextSelected);
+            } else {
+                $session->set(self::SESSION_SELECTED, null);
+                $session->set(self::SESSION_SHIPPING, null);
+            }
+        }
+
+        $session->save();
+
+        return $this->getContext([
+            'address_purpose' => 'checkout',
+            'list_all_addresses' => true,
+        ]);
+    }
+
+    /**
+     * 下单成功：把本单选中的配送地址转化为结账地址（只加 purpose_checkout）。
+     * 点选收货簿地址不会在选址时打标；真下单后才进结账/账单簿。
+     */
+    public function promoteSelectedAddressToCheckout(): void
+    {
+        $selected = $this->readSelected();
+        if (!is_array($selected)) {
+            return;
+        }
+        $id = trim((string)($selected['id'] ?? ''));
+        if ($id === '') {
+            return;
+        }
+
+        $customerId = $this->currentCustomerId();
+        if ($customerId > 0 && ctype_digit($id)) {
+            $this->deliveryAddressService->ensureCheckoutPurposeForAddressId((int)$id, $customerId);
+            return;
+        }
+
+        if (!str_starts_with($id, 'guest_')) {
+            return;
+        }
+
+        $book = $this->guestBook();
+        $changed = false;
+        foreach ($book as $i => $row) {
+            if (!is_array($row) || (string)($row['id'] ?? '') !== $id) {
+                continue;
+            }
+            if (DeliveryAddressService::isTruthy($row['purpose_checkout'] ?? 0)) {
+                break;
+            }
+            $row['purpose_checkout'] = 1;
+            if (!array_key_exists('purpose_receiving', $row)) {
+                $row['purpose_receiving'] = 1;
+            }
+            $book[$i] = $row;
+            $selected['purpose_checkout'] = 1;
+            $changed = true;
+            break;
+        }
+        if (!$changed) {
+            return;
+        }
+        $session = $this->session();
+        $session->set(self::SESSION_GUEST_BOOK, array_values($book));
+        $session->set(self::SESSION_SELECTED, $selected);
+        $this->syncShippingSession($selected);
+        $session->save();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadBackupReceivingGuestAddress(): ?array
+    {
+        $paths = [
+            BP . 'var/session',
+            '/tmp',
+        ];
+        foreach ($paths as $dir) {
+            if ($dir === '/tmp') {
+                $json = '/tmp/weline-restore-ny-guest.json';
+                if (is_file($json)) {
+                    $decoded = json_decode((string)file_get_contents($json), true);
+                    if (is_array($decoded) && trim((string)($decoded['id'] ?? '')) !== '') {
+                        return $decoded;
+                    }
+                }
+                continue;
+            }
+            foreach (glob(rtrim($dir, '/') . '/*.bak-clear-*') ?: [] as $bak) {
+                $data = @unserialize((string)file_get_contents($bak));
+                if (!is_array($data)) {
+                    continue;
+                }
+                $book = $data['checkout_guest_delivery_addresses'] ?? null;
+                if (!is_array($book) || $book === []) {
+                    continue;
+                }
+                $first = $book[0] ?? null;
+                if (is_array($first) && trim((string)($first['id'] ?? '')) !== '') {
+                    return $first;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -373,9 +603,56 @@ final class CheckoutDeliveryContextService
     }
 
     /**
+     * checkout=结账地址；receiving=收货地址（Header/账户）；any=不过滤用途。
+     *
+     * @param array<string, mixed> $params
+     */
+    private function resolveAddressPurpose(array $params): string
+    {
+        $raw = strtolower(trim((string)($params['address_purpose'] ?? $params['purpose'] ?? '')));
+        if (in_array($raw, ['checkout', 'receiving', 'any'], true)) {
+            return $raw;
+        }
+
+        // Header「配送至」默认收货；结账页须显式传 address_purpose=checkout。
+        return 'receiving';
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function extractPurposeMeta(array $params, array $payload): array
+    {
+        $source = strtolower(trim((string)(
+            $params['purpose_source']
+            ?? $payload['purpose_source']
+            ?? ''
+        )));
+        if ($source === '') {
+            $source = 'checkout';
+        }
+
+        $meta = ['purpose_source' => $source];
+        if (array_key_exists('also_use_receiving', $params)) {
+            $meta['also_use_receiving'] = $params['also_use_receiving'];
+        } elseif (array_key_exists('also_use_receiving', $payload)) {
+            $meta['also_use_receiving'] = $payload['also_use_receiving'];
+        }
+        if (array_key_exists('also_use_checkout', $params)) {
+            $meta['also_use_checkout'] = $params['also_use_checkout'];
+        } elseif (array_key_exists('also_use_checkout', $payload)) {
+            $meta['also_use_checkout'] = $payload['also_use_checkout'];
+        }
+
+        return $meta;
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
-    private function listAddresses(string $countryCode): array
+    private function listAddresses(string $countryCode, string $purpose = 'receiving'): array
     {
         $selected = $this->readSelected();
         $selectedId = is_array($selected) ? (string)($selected['id'] ?? '') : '';
@@ -384,7 +661,13 @@ final class CheckoutDeliveryContextService
         $customerId = $this->currentCustomerId();
         if ($customerId > 0) {
             try {
-                foreach ($this->deliveryAddressService->getListByCustomer($customerId, ['is_enabled' => 1]) as $model) {
+                $filters = ['is_enabled' => 1];
+                if ($purpose === 'checkout') {
+                    $filters['purpose_checkout'] = 1;
+                } elseif ($purpose === 'receiving') {
+                    $filters['purpose_receiving'] = 1;
+                }
+                foreach ($this->deliveryAddressService->getListByCustomer($customerId, $filters) as $model) {
                     $row = $model instanceof DeliveryAddress ? $model->getData() : (array)$model;
                     $projected = $this->projectAddress(
                         $row,
@@ -403,6 +686,9 @@ final class CheckoutDeliveryContextService
         }
 
         foreach ($this->guestBook() as $row) {
+            if (!$this->guestMatchesPurpose($row, $purpose)) {
+                continue;
+            }
             $projected = $this->projectAddress(
                 $row,
                 'guest',
@@ -416,6 +702,31 @@ final class CheckoutDeliveryContextService
         }
 
         return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function guestMatchesPurpose(array $row, string $purpose): bool
+    {
+        if ($purpose === 'any') {
+            return true;
+        }
+        // 旧 session 行无用途字段：视为双标，避免突然消失。
+        $checkout = array_key_exists('purpose_checkout', $row)
+            ? DeliveryAddressService::isTruthy($row['purpose_checkout'])
+            : true;
+        $receiving = array_key_exists('purpose_receiving', $row)
+            ? DeliveryAddressService::isTruthy($row['purpose_receiving'])
+            : true;
+        if ($purpose === 'checkout') {
+            return $checkout;
+        }
+        if ($purpose === 'receiving') {
+            return $receiving;
+        }
+
+        return true;
     }
 
     /**
@@ -536,6 +847,18 @@ final class CheckoutDeliveryContextService
             'full_address' => $full,
             'is_selected' => $selected,
             'display_label' => $name !== '' ? $name . ' · ' . $full : $full,
+            'purpose_checkout' => array_key_exists('purpose_checkout', $row)
+                || array_key_exists(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, $row)
+                ? (DeliveryAddressService::isTruthy(
+                    $row[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT] ?? $row['purpose_checkout'] ?? 0
+                ) ? 1 : 0)
+                : 1,
+            'purpose_receiving' => array_key_exists('purpose_receiving', $row)
+                || array_key_exists(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, $row)
+                ? (DeliveryAddressService::isTruthy(
+                    $row[DeliveryAddress::schema_fields_PURPOSE_RECEIVING] ?? $row['purpose_receiving'] ?? 0
+                ) ? 1 : 0)
+                : 1,
         ];
     }
 
@@ -583,7 +906,20 @@ final class CheckoutDeliveryContextService
             DeliveryAddress::schema_fields_POSTAL_CODE => (string)$normalized['postal_code'],
             DeliveryAddress::schema_fields_IS_DEFAULT => !empty($normalized['is_default']) ? 1 : 0,
             DeliveryAddress::schema_fields_IS_ENABLED => 1,
+            'purpose_source' => (string)($normalized['purpose_source'] ?? 'checkout'),
         ];
+        if (array_key_exists('also_use_receiving', $normalized)) {
+            $data['also_use_receiving'] = $normalized['also_use_receiving'];
+        }
+        if (array_key_exists('also_use_checkout', $normalized)) {
+            $data['also_use_checkout'] = $normalized['also_use_checkout'];
+        }
+        if (array_key_exists(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT, $normalized)) {
+            $data[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT] = $normalized[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT];
+        }
+        if (array_key_exists(DeliveryAddress::schema_fields_PURPOSE_RECEIVING, $normalized)) {
+            $data[DeliveryAddress::schema_fields_PURPOSE_RECEIVING] = $normalized[DeliveryAddress::schema_fields_PURPOSE_RECEIVING];
+        }
 
         $id = (int)($normalized['id'] ?? $normalized['delivery_address_id'] ?? 0);
         $model = $id > 0
@@ -610,8 +946,33 @@ final class CheckoutDeliveryContextService
 
         // array + keeps left-hand keys: normalizeIncoming may leave id='', which would
         // wipe the generated guest_* id and then guestBook() drops empty-id rows.
+        $isCreate = true;
+        foreach ($book as $existing) {
+            if ((string)($existing['id'] ?? '') === $id) {
+                $isCreate = false;
+                break;
+            }
+        }
+        $purposeFlags = DeliveryAddressService::resolvePurposeWriteFlags($normalized, $isCreate, null);
+        if (!$isCreate) {
+            foreach ($book as $existing) {
+                if ((string)($existing['id'] ?? '') !== $id) {
+                    continue;
+                }
+                $purposeFlags[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT] = max(
+                    (int)$purposeFlags[DeliveryAddress::schema_fields_PURPOSE_CHECKOUT],
+                    DeliveryAddressService::isTruthy($existing['purpose_checkout'] ?? 1) ? 1 : 0,
+                );
+                $purposeFlags[DeliveryAddress::schema_fields_PURPOSE_RECEIVING] = max(
+                    (int)$purposeFlags[DeliveryAddress::schema_fields_PURPOSE_RECEIVING],
+                    DeliveryAddressService::isTruthy($existing['purpose_receiving'] ?? 1) ? 1 : 0,
+                );
+                break;
+            }
+        }
+
         $projected = $this->projectAddress(
-            array_merge($normalized, [
+            array_merge($normalized, $purposeFlags, [
                 'id' => $id,
                 'source' => 'guest',
                 'is_anonymous' => true,

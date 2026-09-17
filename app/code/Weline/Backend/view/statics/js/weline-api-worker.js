@@ -10,16 +10,25 @@
         handleRequest(message).then(function (result) {
             self.postMessage(Object.assign({id: message.id}, result));
         }).catch(function (error) {
+            var body = {
+                success: false,
+                message: error instanceof Error ? error.message : String(error)
+            };
+            if (error && error.code) {
+                body.code = error.code;
+            }
+            if (error && error.location) {
+                body.location = error.location;
+            }
             self.postMessage({
                 id: message.id,
                 ok: false,
                 status: error && error.status ? error.status : 0,
                 statusText: '',
                 headers: {},
-                body: {
-                    success: false,
-                    message: error instanceof Error ? error.message : String(error)
-                },
+                body: body,
+                code: error && error.code ? error.code : '',
+                location: error && error.location ? error.location : '',
                 maintenance: false
             });
         });
@@ -29,6 +38,32 @@
         var url = sameOriginUrl(message.url);
         var options = normalizeOptions(message.options || {});
         var response = await fetch(url, options);
+        // Never follow redirects into HTML login/error pages for backend API.
+        var status = response && response.status ? response.status : 0;
+        if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+            var location = '';
+            try {
+                location = response.headers.get('location') || '';
+            } catch (error) {
+                location = '';
+            }
+            var redirectError = new Error(
+                'Backend worker redirected instead of returning API body (HTTP '
+                + status
+                + (location ? ', ' + location : '')
+                + ').'
+            );
+            redirectError.status = status;
+            redirectError.code = 'http_redirect';
+            redirectError.location = location;
+            throw redirectError;
+        }
+        if (response && response.type === 'opaqueredirect') {
+            var opaqueError = new Error('Backend worker opaque redirect; expected API body.');
+            opaqueError.status = 0;
+            opaqueError.code = 'http_redirect';
+            throw opaqueError;
+        }
         var body = await parseResponseBody(response);
 
         return {
@@ -36,7 +71,7 @@
             status: response.status,
             statusText: response.statusText || '',
             headers: collectHeaders(response.headers),
-            url: response.url || url.href,
+            url: response.url || url,
             redirected: !!response.redirected,
             body: body,
             maintenance: response.status === 503
@@ -61,7 +96,7 @@
             method: method,
             credentials: options.credentials || 'same-origin',
             cache: options.cache || 'no-store',
-            redirect: options.redirect || 'follow',
+            redirect: 'manual',
             headers: headers
         };
 

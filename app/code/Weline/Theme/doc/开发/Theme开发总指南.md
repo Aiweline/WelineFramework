@@ -47,6 +47,25 @@
 - `app/design/{Vendor}/{theme}/theme/frontend/layouts/{layoutType}/{option}.phtml`
 - `app/design/{Vendor}/{theme}/view/theme/frontend/layouts/{layoutType}/{option}.phtml`
 
+`layoutType` 允许嵌套（目录含 `/`）。路径约定：**末段文件名 = `option`，前面的目录段拼成 `layoutType`**。
+
+正确示例（与公开路由 `customer/account/login` 对齐）：
+
+```text
+layouts/account/login/default.phtml
+→ layoutType=account/login，option=default
+→ 控制器：protected ?string $layoutType = 'account/login';
+```
+
+不要写成：
+
+```text
+layouts/account/login.phtml          # 那是 layoutType=account，option=login（扁平 option）
+account.login                        # 点号旧式会拆成 type=account + option=login，与嵌套约定不同
+```
+
+嵌套与点号对照、发现优先级细则见 [`../theme-inheritance-and-file-conventions.md`](../theme-inheritance-and-file-conventions.md) 与 [`../layout-discovery-guide.md`](../layout-discovery-guide.md)。
+
 规则：
 
 - `app/design` 可以覆盖 `Weline_Theme` 默认布局。
@@ -110,6 +129,30 @@
 
 不要为了一个普通布局片段就创建 Taglib。能用 layout / partial / component / widget 解决的，优先不用 Taglib。
 
+### 预览与运行三态（身份权威）
+
+Theme 请求里「当前主题 / Scope / draft|published / version」的权威来源只有三种，改预览或店面解析前必须先判定属于哪一态。全文见 [`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)；MCP 技能 `weline-theme-development` 必读该文档。
+
+| 状态 | 权威 | 入口要点 |
+|------|------|----------|
+| **可视化编辑预览** | **参数为主**（query + typed `editor_context`） | 编辑器 iframe → `theme-preview/content`；勿种店面预览 Token |
+| **版本真实预览** | **Token 反解析参数为准**（URL 不能覆盖主题身份） | `start-preview` → 真实店面 + `weline_preview_token` |
+| **正式（正常店面）** | **RequestContext / 路径 / Scope**；布局只认 `r{published_release_id}` | 访客 URL；无有效预览 Token |
+
+业务逻辑与交付路径必须与正式店面同构（MCP `preview_storefront_delivery_parity`）；只允许在身份装配层分支。
+
+### 预览与运行三态（身份权威）
+
+改预览、编辑器 canvas、真实前端预览或店面主题解析前，先读 [`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)，并加载 MCP 技能 `weline-theme-development`：
+
+| 状态 | 身份权威 |
+|------|----------|
+| 可视化编辑预览 | **请求参数**（query + typed `editor_context`）为主 |
+| 版本真实预览 | **预览 Token 反解析**为准（URL 不能覆盖主题身份） |
+| 正式店面 | **RequestContext / Scope / 路径**解析为准（`r{published_release_id}`） |
+
+三态业务逻辑与交付路径必须同构（MCP `preview_storefront_delivery_parity`）；只允许在身份装配层分支。
+
 ### 可视化编辑器与 Weline UI 2.0
 
 Theme Editor 不是演示壳。Weline UI 迁移只统一主题 token、通用组件、浮层和编辑器 chrome，不得删除或降级布局预览、部件库、结构视图、拖拽排序、inside/before/after 插入、嵌套 slot、版本/发布、锁、AI 与配置能力。重写成本接近独立项目的拖拽、富文本等专用引擎可继续保留，但必须由 Theme 模块持有、通过适配器接入，并且不能向全局输出第三方 UI 主题。
@@ -144,7 +187,8 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 
 当前规则：
 
-- 站内业务请求只能走 `theme.js -> Weline.Api.* -> worker/query-bin`
+- **默认且唯一**：站内业务请求只能走 `theme.js -> Weline.Api.* -> worker/query-bin`（BinQuery）
+- **禁止当回退**：不得先打 HTTP 控制器 / 原生 fetch，再把 BinQuery 写成 catch 降级；无 `Weline.Api` 时本地空数据，不得发明第二套原生通道
 - 使用：
   - `Weline.Api.resource('provider')`
   - `Weline.Api.graph()`
@@ -172,6 +216,7 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 - 禁止 `axios`
 - 禁止手写 `/api/framework/query-bin`
 - 禁止手写业务 REST URL
+- 禁止「HTTP 主路径 + BinQuery 回退」（BinQuery 不是 fallback）
 - 禁止部件/布局直接 `@static` / `<script src>` 加载已登记或应登记的 JS 模块（见上「前端 JS 模块加载」）
 
 ## 3. 当前 Theme 目录的权威位置

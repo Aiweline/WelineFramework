@@ -32,8 +32,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260914-swatch-zoom"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260914-swatch-zoom"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260915-sibling-i18n2"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260915-sibling-i18n2"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
@@ -113,8 +113,8 @@
             description: "前台账户会话与顶栏账户 chrome"
         },
         customerAccount: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20260906-profile-header-sync-1"],
-            paths: ["/Weline/Customer/view/statics/js/account-index.js?v=20260906-profile-header-sync-1"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20260917-sidebar-empty-retry"],
+            paths: ["/Weline/Customer/view/statics/js/account-index.js?v=20260917-sidebar-empty-retry"],
             globalVar: "WelineCustomerAccount",
             description: "前台用户中心账户页交互"
         },
@@ -229,14 +229,14 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260914-picker-all-addr1"],
-            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260914-picker-all-addr1"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260916-phone-intl1"],
+            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260916-phone-intl1"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
         shippingAccountAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/frontend/js/account-address-v3.js?v=20260908-delete-promise-resolve"],
-            paths: ["/Weline/Shipping/view/statics/frontend/js/account-address-v3.js?v=20260908-delete-promise-resolve"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/frontend/js/account-address-v3.js?v=20260916-purpose-tags2"],
+            paths: ["/Weline/Shipping/view/statics/frontend/js/account-address-v3.js?v=20260916-purpose-tags2"],
             globalVar: null,
             description: "账户中心发货/收货地址维护"
         },
@@ -255,8 +255,8 @@
             description: "结账生命周期：weline:checkout:order-created / success"
         },
         checkoutExpressReview: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260914-weight-align1"],
-            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260914-weight-align1"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260915-tax-identity1"],
+            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260915-tax-identity1"],
             globalVar: "WelineCheckoutExpressReview",
             load: "lazy",
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
@@ -311,8 +311,8 @@
             description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
         },
         helpPayShare: {
-            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260914-event-chain1"],
-            paths: ["/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260914-event-chain1"],
+            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260917-buybox-flow-auto1"],
+            paths: ["/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260917-buybox-flow-auto1"],
             globalVar: "WelineModules.helpPayShare",
             load: "defer",
             description: "帮我付 / 纯分享 / 快捷购买 / 商品找朋友代付：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"
@@ -330,8 +330,8 @@
             description: "顶栏收藏角标水合（SSR 游客空角标）"
         },
         storeMusic: {
-            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js"],
-            paths: ["/Weline/StoreMusic/view/statics/js/store-music.js"],
+            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20260917-storemusic-speccenter"],
+            paths: ["/Weline/StoreMusic/view/statics/js/store-music.js?v=20260917-storemusic-speccenter"],
             globalVar: "WelineStoreMusic",
             load: "defer",
             description: "进店音乐"

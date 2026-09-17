@@ -86,6 +86,7 @@ readonly class ThemeLayoutVersionService
         ?string $description = null,
         ?int $userId = null,
         array $identity = [],
+        string $type = ThemeLayoutVersion::TYPE_MANUAL,
     ): ThemeLayoutVersion {
         $identity = $this->normalizeLayoutIdentity($identity);
         /** @var ThemeRuntimeLayoutResolver $runtimeLayout */
@@ -107,6 +108,7 @@ readonly class ThemeLayoutVersionService
             $description,
             $userId,
             $identity,
+            $type,
         );
     }
 
@@ -119,8 +121,16 @@ readonly class ThemeLayoutVersionService
         ?string $description = null,
         ?int $userId = null,
         array $identity = [],
+        string $type = ThemeLayoutVersion::TYPE_MANUAL,
     ): ThemeLayoutVersion {
         $identity = $this->normalizeLayoutIdentity($identity);
+        $allowedTypes = [
+            ThemeLayoutVersion::TYPE_MANUAL,
+            ThemeLayoutVersion::TYPE_AUTO_BACKUP,
+            ThemeLayoutVersion::TYPE_RESTORE,
+            ThemeLayoutVersion::TYPE_PUBLISH,
+        ];
+        $versionType = \in_array($type, $allowedTypes, true) ? $type : ThemeLayoutVersion::TYPE_MANUAL;
 
         $currentVersion = $this->getCurrentVersion($themeId, $pageType, $identity);
         $parentVersionId = $currentVersion?->getVersionId();
@@ -132,7 +142,7 @@ readonly class ThemeLayoutVersionService
             pageType: $pageType,
             versionNumber: $nextVersionNumber,
             snapshotData: $snapshotData,
-            type: ThemeLayoutVersion::TYPE_MANUAL,
+            type: $versionType,
             name: $name ?: "v{$nextVersionNumber}",
             description: $description,
             parentVersionId: $parentVersionId,
@@ -427,7 +437,15 @@ readonly class ThemeLayoutVersionService
             ? $this->versionModel->reset()->load($versionId)
             : $this->getCurrentVersion($themeId, $pageType, $identity);
         if (!$version || !$version->getVersionId()) {
-            $version = $this->saveVersion($themeId, $pageType, null, __('发布时自动创建'), null, $identity);
+            $version = $this->saveVersion(
+                $themeId,
+                $pageType,
+                null,
+                __('发布时自动创建'),
+                null,
+                $identity,
+                ThemeLayoutVersion::TYPE_PUBLISH,
+            );
         }
 
         if ($version->getThemeId() !== $themeId
@@ -889,6 +907,11 @@ readonly class ThemeLayoutVersionService
             ->save();
 
         return $version;
+    }
+
+    public function peekNextVersionNumber(int $themeId, string $pageType, array $identity = []): int
+    {
+        return $this->getNextVersionNumber($themeId, $pageType, $identity);
     }
 
     /**

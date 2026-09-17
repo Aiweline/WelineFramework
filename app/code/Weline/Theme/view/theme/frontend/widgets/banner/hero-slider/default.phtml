@@ -19,7 +19,8 @@
  * @param show_dots {default=true,type="bool",label="显示指示点"}
  * @param show_arrows {default=true,type="bool",label="显示箭头"}
  * @param effect {default="slide",type="select",label="切换效果",options={slide:"滑动",fade:"淡入淡出"}}
- * @param height {default="var(--size-hero-height)",type="string",label="轮播高度"}
+ * @param aspect_ratio {default="1920/600",type="string",label="宽高比",description="仅无图渐变帧兜底；有图时高度跟随图片自然比例，避免定高/强比例裁切烘焙文案"}
+ * @param height {default="auto",type="string",label="轮播高度",description="默认 auto（图片自适应）。仅特殊场景写死 px/rem/var 作为 max-height；旧配置 var(--size-hero-height) 视为自适应"}
  */
 
 use Weline\Theme\Helper\WidgetUiScope;
@@ -36,7 +37,7 @@ if (is_string($slides)) {
 if (!is_array($slides)) {
     $slides = [];
 }
-// 部件 CSS/尺寸自我完全：始终用配置 height。库卡片缩略由编辑器外壳 viewport+scale 完成，
+// 部件 CSS 自我完全：默认按宽高比自适应高度（禁止定高+cover 裁左右）。库卡片缩略由编辑器外壳 viewport+scale 完成，
 // 禁止按 preview_mode/editor_mode 压高度，也禁止选择外部编辑器类名。
 $autoplay = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('autoplay') ?? $this->getData('auto_play'), true);
 $autoplaySpeed = max(1000, min(600000, (int)($this->getData('autoplay_speed') ?? $this->getData('interval') ?? 5000)));
@@ -46,7 +47,24 @@ $effect = strtolower(trim((string)($this->getData('effect') ?? 'slide')));
 if (!in_array($effect, ['slide', 'fade'], true)) {
     $effect = 'slide';
 }
-$height = \Weline\Theme\Helper\SiteBlockConfig::length($this->getData('height'), 'var(--size-hero-height)');
+$aspectRatioRaw = trim((string)($this->getData('aspect_ratio') ?? '1920/600'));
+if (preg_match('/^(\d+(?:\.\d+)?)\s*[\/:]\s*(\d+(?:\.\d+)?)$/D', $aspectRatioRaw, $aspectMatch) !== 1) {
+    $aspectMatch = [1 => '1920', 2 => '600'];
+}
+$aspectRatioCss = $aspectMatch[1] . ' / ' . $aspectMatch[2];
+$configuredHeight = trim((string)($this->getData('height') ?? 'auto'));
+// 旧默认 token / auto / 空 = 自适应；仅显式长度才作为 max-height 上限。
+$useAdaptiveHeight = $configuredHeight === ''
+    || strcasecmp($configuredHeight, 'auto') === 0
+    || $configuredHeight === 'var(--size-hero-height)';
+$maxHeight = '';
+if (!$useAdaptiveHeight) {
+    $maxHeight = \Weline\Theme\Helper\SiteBlockConfig::length($configuredHeight, '');
+}
+$rootStyle = '--wc-hero-aspect:' . $aspectRatioCss . ';';
+if ($maxHeight !== '') {
+    $rootStyle .= 'max-height:' . $maxHeight . ';';
+}
 $placeholder = '';
 try {
     $placeholder = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
@@ -174,35 +192,45 @@ foreach ($slides as $slideIndex => $slide) {
 }
 
 if (empty($slides)) {
+    // 素材：人物抠图 + 自衣饰母题发散的水墨山水底（r2/homepage/{slug}(.|-mobile).webp）
     $defaults = [
         [
             'slug' => 'taoyuan-qingmeng',
+            'tone' => 'light',
+            'kicker_zh' => '桃花源意',
+            'kicker_en' => 'Peach Blossom Spring',
             'title_zh' => '桃园清梦 · 明制花鸟套装',
             'title_en' => 'Peach Garden Dream · Ming-Style Set',
-            'subtitle_zh' => '烟粉花鸟，上衣与马面裙可选',
-            'subtitle_en' => 'Ivory and blush florals, with top and mamian options',
-            'alt_zh' => '桃园清梦米白粉色明制上衣与马面裙套装',
-            'alt_en' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
+            'subtitle_zh' => '裙上桃鸟入画：烟粉远山，上衣与马面可单选成套',
+            'subtitle_en' => 'Peach birds from the skirt become misty mountains; top or mamian alone, or as a set',
+            'alt_zh' => '桃园清梦明制花鸟套装立于桃花源意山水画前',
+            'alt_en' => 'Peach Garden Dream Ming-style set before a peach-blossom landscape painting',
             'link' => '/products',
         ],
         [
             'slug' => 'shenlong-yin',
+            'tone' => 'dark',
+            'kicker_zh' => '妆花江山',
+            'kicker_en' => 'Zhuanghua Rivers & Mountains',
             'title_zh' => '神龙吟 · 妆花马面裙',
             'title_en' => 'Dragon Chant · Zhuanghua Mamian',
-            'subtitle_zh' => '黑红妆花，马面裙与飞机袖可选',
-            'subtitle_en' => 'Black-and-red zhuanghua, with mamian and feijixiu options',
-            'alt_zh' => '神龙吟黑红妆花明制马面裙造型',
-            'alt_en' => 'Dragon Chant black-and-red zhuanghua Ming-style mamian look',
+            'subtitle_zh' => '裙幅青绿峰与金鹤散作朱砂江山，同系可选',
+            'subtitle_en' => 'Teal peaks and golden cranes from the skirt unfold into cinnabar mountains',
+            'alt_zh' => '神龙吟妆花马面立于青绿金鹤山水画前',
+            'alt_en' => 'Dragon Chant zhuanghua mamian before a teal-and-gold landscape painting',
             'link' => '/products',
         ],
         [
             'slug' => 'zuimeng-xifeng',
+            'tone' => 'dark',
+            'kicker_zh' => '泼金暮山',
+            'kicker_en' => 'Gold-Splashed Evening Peaks',
             'title_zh' => '醉梦夕风 · 仙鹤织金',
             'title_en' => 'Evening Wind · Crane Brocade',
-            'subtitle_zh' => '仙鹤织金，单裙与套装可选',
-            'subtitle_en' => 'Crane brocade, available as a skirt or coordinated set',
-            'alt_zh' => '醉梦夕风深色仙鹤织金马面裙造型',
-            'alt_en' => 'Evening Wind dark crane-brocade mamian look',
+            'subtitle_zh' => '裙裾金山水与蝶影化作夜色泼金，单裙或套装可入藏',
+            'subtitle_en' => 'Gold mountains and butterflies from the hem become a night ink wash; skirt or set',
+            'alt_zh' => '醉梦夕风织金马面立于泼金暮山山水画前',
+            'alt_en' => 'Evening Wind brocade mamian before a gold-splashed night landscape painting',
             'link' => '/products',
         ],
     ];
@@ -210,6 +238,8 @@ if (empty($slides)) {
     foreach ($defaults as $index => $default) {
         $slides[] = [
             'gradient' => $defaultGradients[$index],
+            'tone' => $default['tone'],
+            'kicker' => $translateDefaultCopy($default['kicker_zh'], $default['kicker_en']),
             'title' => $translateDefaultCopy($default['title_zh'], $default['title_en']),
             'subtitle' => $translateDefaultCopy($default['subtitle_zh'], $default['subtitle_en']),
             'button_text' => $translateDefaultCopy('浏览系列', 'Explore collection'),
@@ -233,7 +263,7 @@ if (empty($slides)) {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-weline-load="siteBlocks" data-site-block="hero"
          data-autoplay="<?= $autoplay ? 'true' : 'false' ?>" data-autoplay-speed="<?= $autoplaySpeed ?>"
-         style="height: <?= $esc($height) ?>;">
+         style="<?= $esc($rootStyle) ?>">
     <div class="slider-container effect-<?= htmlspecialchars($effect ?? '') ?>">
         <div class="slider-wrapper">
             <?php foreach ($slides as $index => $slide): ?>
@@ -241,6 +271,10 @@ if (empty($slides)) {
                 $textPosition = strtolower(trim((string)($slide['text_position'] ?? 'left')));
                 if (!in_array($textPosition, ['left', 'center', 'right'], true)) {
                     $textPosition = 'left';
+                }
+                $tone = strtolower(trim((string)($slide['tone'] ?? $slide['text_tone'] ?? 'light')));
+                if (!in_array($tone, ['light', 'dark'], true)) {
+                    $tone = 'light';
                 }
                 $slideLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($slide['link'] ?? '#');
                 if ($slideLink === '' || $slideLink === '#') {
@@ -252,15 +286,19 @@ if (empty($slides)) {
                         : ($slideLinkParts['url_path'] !== '' ? $this->getUrl($slideLinkParts['url_path']) : '#');
                 }
                 ?>
-                <div class="slide <?= $index === 0 ? 'active' : '' ?>" 
+                <div class="slide <?= $index === 0 ? 'active' : '' ?>"
                      data-index="<?= $index ?>"
+                     data-tone="<?= $esc($tone) ?>"
                      style="<?= htmlspecialchars($resolveSlideBackground($slide, $index), ENT_QUOTES, 'UTF-8') ?>">
                     <?php if (trim((string)($slide['image_file_html'] ?? '')) !== ''): ?>
                         <div class="slide-media"><?= (string)$slide['image_file_html'] ?></div>
                     <?php endif; ?>
-                    <div class="slide-overlay"></div>
+                    <div class="slide-overlay" aria-hidden="true"></div>
                     <div class="slide-content text-<?= htmlspecialchars($textPosition, ENT_QUOTES, 'UTF-8') ?>">
                         <div class="slide-text">
+                            <?php if (!empty($slide['kicker'])): ?>
+                                <p class="slide-kicker"><?= htmlspecialchars((string)$slide['kicker'], ENT_QUOTES, 'UTF-8') ?></p>
+                            <?php endif; ?>
                             <?php if (!empty($slide['title'])): ?>
                                 <h2 class="slide-title"><?= htmlspecialchars($slide['title'] ?? '') ?></h2>
                             <?php endif; ?>
@@ -268,7 +306,9 @@ if (empty($slides)) {
                                 <p class="slide-subtitle"><?= htmlspecialchars($slide['subtitle'] ?? '') ?></p>
                             <?php endif; ?>
                             <?php if (!empty($slide['button_text'])): ?>
-                                <a href="<?= htmlspecialchars($slideLink, ENT_QUOTES, 'UTF-8') ?>" class="slide-button w-button w-button-primary">
+                                <a href="<?= htmlspecialchars($slideLink, ENT_QUOTES, 'UTF-8') ?>"
+                                   class="slide-button w-button w-button-primary"
+                                   data-pixel-event="hero_cta_click">
                                     <?= htmlspecialchars($slide['button_text'] ?? '') ?>
                                 </a>
                             <?php endif; ?>
@@ -306,56 +346,75 @@ if (empty($slides)) {
 .<?= $wc ?> {
     position: relative;
     width: 100%;
+    height: auto;
+    min-height: 0;
+    /* 高度由当前激活帧图片自然撑开，禁止定高/强比例导致 cover 裁左右文案 */
     overflow: hidden;
 }
 
 .<?= $wc ?> .slider-container {
     position: relative;
     width: 100%;
-    height: 100%;
+    height: auto;
 }
 
 .<?= $wc ?> .slider-wrapper {
     position: relative;
     width: 100%;
-    height: 100%;
+    height: auto;
 }
 
 .<?= $wc ?> .slide {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
     background-size: cover;
     background-position: center;
     opacity: 0;
-    transition: opacity 0.6s ease;
+    transition: opacity 0.7s ease;
     z-index: 1;
 }
 
 .<?= $wc ?> .slide.active {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
     opacity: 1;
     z-index: 2;
 }
 
-.<?= $wc ?> .slide-media,
-.<?= $wc ?> .slide-media img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+/* 无图渐变帧：用宽高比兜底，避免塌成一条线 */
+.<?= $wc ?> .slide.active:not(:has(.slide-media)) {
+    aspect-ratio: var(--wc-hero-aspect, 1920 / 600);
+    min-height: 0;
 }
 
-.<?= $wc ?> .slide-media img {
-    object-fit: cover;
-    object-position: 75% center;
+.<?= $wc ?> .slide-media {
+    position: relative;
+    inset: auto;
+    display: block;
+    width: 100%;
+    height: auto;
+    line-height: 0;
+}
+
+.<?= $wc ?> .slide-media :is(picture, img) {
+    position: static;
+    inset: auto;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    object-fit: unset;
+    object-position: center center;
 }
 
 /* Slide效果 */
 .<?= $wc ?> .effect-slide .slide {
     transform: translateX(100%);
-    transition: transform 0.6s ease, opacity 0.6s ease;
+    transition: transform 0.7s ease, opacity 0.7s ease;
 }
 
 .<?= $wc ?> .effect-slide .slide.active {
@@ -366,36 +425,50 @@ if (empty($slides)) {
     transform: translateX(-100%);
 }
 
-/* 遮罩 */
+/* 遮罩：纸色/墨色轻罩，露出山水画远峰，不挡右侧人物 */
 .<?= $wc ?> .slide-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(to right, var(--color-overlay-50) 0%, var(--color-overlay-light) 100%);
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        to right,
+        color-mix(in srgb, var(--color-bg-canvas) 72%, transparent) 0%,
+        color-mix(in srgb, var(--color-bg-canvas) 36%, transparent) 32%,
+        color-mix(in srgb, var(--color-bg-canvas) 8%, transparent) 55%,
+        transparent 72%
+    );
 }
 
-/* 内容 */
+.<?= $wc ?> .slide[data-tone="dark"] .slide-overlay {
+    background: linear-gradient(
+        to right,
+        color-mix(in srgb, var(--color-bg-dark) 68%, transparent) 0%,
+        color-mix(in srgb, var(--color-bg-dark) 38%, transparent) 34%,
+        color-mix(in srgb, var(--color-bg-dark) 10%, transparent) 58%,
+        transparent 76%
+    );
+}
+
+/* 内容：全幅电影感，无厚卡片 */
 .<?= $wc ?> .slide-content {
     position: relative;
     z-index: 3;
     height: 100%;
     display: flex;
     align-items: center;
-    padding: 0 10%;
+    padding: 0 clamp(var(--weline-space-5), 8vw, 10%);
 }
 
 .<?= $wc ?> .slide-text {
     box-sizing: border-box;
     width: 100%;
     max-width: var(--size-content-640);
-    padding: var(--weline-space-6);
-    background: color-mix(in srgb, var(--weline-theme-surface-raised) 92%, transparent);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
-    border-radius: var(--weline-theme-radius-xl);
-    box-shadow: var(--weline-theme-shadow-lg);
-    backdrop-filter: blur(var(--spacing-sm));
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
 }
 
 .<?= $wc ?> .text-left .slide-text {
@@ -418,35 +491,64 @@ if (empty($slides)) {
     text-align: right;
 }
 
-.<?= $wc ?> .slide-title {
-    font-size: var(--weline-layout-font-size-4xl);
-    font-weight: 700;
-    color: var(--weline-theme-text);
-    margin: 0 0 var(--spacing-3_5);
-    text-shadow: none;
-    animation: heroSlideUp 0.6s ease forwards;
-}
-
-.<?= $wc ?> .slide-subtitle {
-    font-size: var(--weline-layout-font-size-xl);
-    color: var(--weline-theme-text-secondary);
-    margin: 0 0 var(--weline-space-8);
-    text-shadow: none;
-    animation: heroSlideUp 0.6s 0.2s ease forwards;
+.<?= $wc ?> .slide-kicker {
+    margin: 0 0 var(--weline-space-3);
+    font-size: var(--weline-layout-font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: var(--weline-theme-primary);
     opacity: 0;
 }
 
+.<?= $wc ?> .slide[data-tone="dark"] .slide-kicker {
+    color: var(--color-primary-light);
+}
+
+.<?= $wc ?> .slide-title {
+    font-family: var(--font-family-serif), var(--font-family-base);
+    font-size: clamp(var(--weline-layout-font-size-2xl), 3.2vw, var(--weline-layout-font-size-4xl));
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    color: var(--weline-theme-text);
+    margin: 0 0 var(--spacing-3_5);
+    text-shadow: none;
+    opacity: 0;
+}
+
+.<?= $wc ?> .slide[data-tone="dark"] .slide-title {
+    color: var(--color-text-on-dark);
+}
+
+.<?= $wc ?> .slide-subtitle {
+    font-size: var(--weline-layout-font-size-lg);
+    line-height: 1.6;
+    color: var(--weline-theme-text-secondary);
+    margin: 0 0 var(--weline-space-8);
+    max-width: 28em;
+    text-shadow: none;
+    opacity: 0;
+}
+
+.<?= $wc ?> .slide[data-tone="dark"] .slide-subtitle {
+    color: var(--color-text-on-dark-muted);
+}
+
 .<?= $wc ?> .slide-button {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: var(--spacing-3_5) var(--size-control-md);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     text-decoration: none;
-    border-radius: var(--weline-radius-round);
+    border-radius: var(--weline-theme-radius-md);
     font-weight: 600;
     font-size: var(--weline-layout-font-size-base);
-    transition: all var(--weline-theme-transition-base);
-    animation: heroSlideUp 0.6s 0.4s ease forwards;
+    letter-spacing: 0.06em;
+    transition: background var(--weline-theme-transition-base),
+                transform var(--weline-theme-transition-base),
+                box-shadow var(--weline-theme-transition-base);
     opacity: 0;
 }
 
@@ -456,14 +558,50 @@ if (empty($slides)) {
     box-shadow: var(--weline-theme-shadow-md);
 }
 
+/* 仅激活帧播入场，避免非激活 slide 永久 opacity:0 */
+.<?= $wc ?> .slide.active .slide-kicker,
+.<?= $wc ?> .slide.active .slide-title,
+.<?= $wc ?> .slide.active .slide-subtitle,
+.<?= $wc ?> .slide.active .slide-button {
+    animation: heroSlideUp 0.65s ease forwards;
+}
+
+.<?= $wc ?> .slide.active .slide-title {
+    animation-delay: 0.08s;
+}
+
+.<?= $wc ?> .slide.active .slide-subtitle {
+    animation-delay: 0.18s;
+}
+
+.<?= $wc ?> .slide.active .slide-button {
+    animation-delay: 0.3s;
+}
+
 @keyframes heroSlideUp {
     from {
         opacity: 0;
-        transform: translateY(var(--weline-space-8));
+        transform: translateY(var(--weline-space-5));
     }
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .<?= $wc ?> .slide,
+    .<?= $wc ?> .effect-slide .slide {
+        transition: none;
+    }
+
+    .<?= $wc ?> .slide.active .slide-kicker,
+    .<?= $wc ?> .slide.active .slide-title,
+    .<?= $wc ?> .slide.active .slide-subtitle,
+    .<?= $wc ?> .slide.active .slide-button {
+        animation: none;
+        opacity: 1;
+        transform: none;
     }
 }
 
@@ -474,7 +612,7 @@ if (empty($slides)) {
     transform: translateY(-50%);
     width: var(--size-control-50);
     height: var(--size-control-50);
-    background: color-mix(in srgb, var(--weline-theme-surface-raised) 92%, transparent);
+    background: color-mix(in srgb, var(--weline-theme-surface-raised) 88%, transparent);
     border: none;
     border-radius: 50%;
     cursor: pointer;
@@ -505,7 +643,12 @@ if (empty($slides)) {
     right: var(--weline-space-5);
 }
 
-.<?= $wc ?> .slider-pause { position: absolute; bottom: var(--spacing-md); inset-inline-end: var(--spacing-md); z-index: 10; }
+.<?= $wc ?> .slider-pause {
+    position: absolute;
+    bottom: var(--spacing-md);
+    inset-inline-end: var(--spacing-md);
+    z-index: 10;
+}
 
 /* 指示点 */
 .<?= $wc ?> .slider-dots {
@@ -522,7 +665,7 @@ if (empty($slides)) {
     width: var(--font-size-xs);
     height: var(--font-size-xs);
     border-radius: 50%;
-    background: var(--token-color-rgba-255-255-255-0-5);
+    background: color-mix(in srgb, var(--weline-theme-on-primary) 45%, transparent);
     border: none;
     cursor: pointer;
     transition: all 0.3s;
@@ -530,14 +673,24 @@ if (empty($slides)) {
 
 .<?= $wc ?> .dot:hover,
 .<?= $wc ?> .dot.active {
-    background: var(--weline-theme-on-primary);
-    transform: scale(1.2);
+    background: var(--weline-theme-primary);
+    transform: scale(1.25);
 }
 
-/* 响应式 */
+/* 响应式：文案与控件适配；高度继续跟随图片，不再用竖比例强裁横图 */
 @media (max-width: 768px) {
-    .<?= $wc ?> .slide-media img {
-        object-position: center;
+    .<?= $wc ?> .slide-media :is(picture, img) {
+        object-position: center center;
+    }
+
+    .<?= $wc ?> .slide-overlay,
+    .<?= $wc ?> .slide[data-tone="dark"] .slide-overlay {
+        background: linear-gradient(
+            to top,
+            color-mix(in srgb, var(--color-bg-dark) 72%, transparent) 0%,
+            color-mix(in srgb, var(--color-bg-dark) 28%, transparent) 42%,
+            transparent 72%
+        );
     }
 
     .<?= $wc ?> .slide-content {
@@ -546,23 +699,32 @@ if (empty($slides)) {
     }
 
     .<?= $wc ?> .slide-text {
-        max-width: var(--size-content-640);
-        padding: var(--weline-space-5);
+        max-width: none;
     }
 
-    .<?= $wc ?> .slide-title {
+    .<?= $wc ?> .slide-kicker,
+    .<?= $wc ?> .slide[data-tone="light"] .slide-kicker {
+        color: var(--color-primary-light);
+    }
+
+    .<?= $wc ?> .slide-title,
+    .<?= $wc ?> .slide[data-tone="light"] .slide-title {
         font-size: var(--weline-layout-font-size-2xl);
+        color: var(--color-text-on-dark);
     }
-    
-    .<?= $wc ?> .slide-subtitle {
+
+    .<?= $wc ?> .slide-subtitle,
+    .<?= $wc ?> .slide[data-tone="light"] .slide-subtitle {
         font-size: var(--weline-layout-font-size-base);
+        color: var(--color-text-on-dark-muted);
+        margin-bottom: var(--weline-space-5);
     }
-    
+
     .<?= $wc ?> .slide-button {
         padding: var(--weline-space-3) var(--weline-space-8);
-        font-size: var(--spacing-0_9);
+        font-size: var(--weline-layout-font-size-sm);
     }
-    
+
     .<?= $wc ?> .slider-arrow {
         top: var(--weline-space-8);
         width: var(--size-control-md);

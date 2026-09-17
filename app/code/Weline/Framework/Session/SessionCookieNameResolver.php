@@ -6,6 +6,7 @@ namespace Weline\Framework\Session;
 
 use Weline\Framework\Context;
 use Weline\Framework\Http\CookieScope;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Resolves the framework Session cookie name for the active request.
@@ -14,19 +15,24 @@ use Weline\Framework\Http\CookieScope;
  * instances on the same host therefore need a port-qualified name, while
  * standard HTTP/HTTPS deployments retain the historical name.
  *
- * Request cookie-scope modules (via {@see CookieScope::EVENT_RESOLVE}) may
- * further qualify the name/path so sibling mounts on one host stay isolated.
+ * Customer (storefront) auth uses {@see CUSTOMER_NAME}; admin/backend keeps
+ * {@see LEGACY_NAME}. Request cookie-scope modules (via {@see CookieScope::EVENT_RESOLVE})
+ * may further qualify the name/path so sibling mounts on one host stay isolated.
  *
  * SameSite follows the same authority: HTTPS non-standard ports use
  * CHIPS (`SameSite=None; Partitioned`) so embedded browsers keep the cookie.
  */
 final class SessionCookieNameResolver
 {
+    /** Admin / backend Session cookie base name. */
     public const LEGACY_NAME = 'WELINE_SESSID';
 
-    public static function resolve(?string $host = null): string
+    /** Customer / storefront Session cookie base name (isolated from admin). */
+    public const CUSTOMER_NAME = 'WELINE_CUSTOMER_SESSID';
+
+    public static function resolve(?string $host = null, ?string $area = null): string
     {
-        return self::resolveFor(self::LEGACY_NAME, $host);
+        return self::resolveFor(self::legacyNameForArea($area), $host);
     }
 
     /** Resolve a host cookie name for the active request authority + cookie scope. */
@@ -56,6 +62,72 @@ final class SessionCookieNameResolver
         }
 
         return $name;
+    }
+
+    /**
+     * Cookie base name for an auth/session area.
+     *
+     * Frontend / storefront-facing areas use the customer family so shopper
+     * login cannot share a jar with admin WELINE_SESSID. With no explicit area
+     * and no request context, keep historical {@see LEGACY_NAME}.
+     */
+    public static function legacyNameForArea(?string $area = null): string
+    {
+        $area = \strtolower(\trim((string)$area));
+        if ($area === '') {
+            try {
+                if (\class_exists(RequestContext::class, false)
+                    && \class_exists(Context::class, false)) {
+                    $context = Context::getCurrent();
+                    if ($context !== null && $context->has('route.area')) {
+                        $fromRequest = \strtolower(\trim((string)$context->get('route.area', '')));
+                        if ($fromRequest !== '') {
+                            $area = $fromRequest;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if ($area === '') {
+            return self::LEGACY_NAME;
+        }
+
+        return self::usesCustomerCookieFamily($area) ? self::CUSTOMER_NAME : self::LEGACY_NAME;
+    }
+
+    public static function usesCustomerCookieFamily(?string $area = null): bool
+    {
+        $area = \strtolower(\trim((string)$area));
+        if ($area === '') {
+            return false;
+        }
+        return match ($area) {
+            'frontend', 'api', 'checkout', 'rest_frontend' => true,
+            default => false,
+        };
+    }
+
+    /**
+     * Resolve area for cookie family: explicit arg, else request WELINE_AREA, else frontend.
+     */
+    public static function normalizeArea(?string $area = null): string
+    {
+        $area = \strtolower(\trim((string)$area));
+        if ($area !== '') {
+            return $area;
+        }
+        try {
+            if (\class_exists(RequestContext::class, false)) {
+                $fromRequest = \strtolower(\trim(RequestContext::getWelineArea()));
+                if ($fromRequest !== '') {
+                    return $fromRequest;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'frontend';
     }
 
     private static function normalizeTcpPort(mixed $value): ?int
@@ -113,37 +185,39 @@ final class SessionCookieNameResolver
         return 'Lax';
     }
 
-    public static function hasRequestCookie(): bool
+    public static function hasRequestCookie(?string $area = null): bool
     {
-        return self::readRequestSessionId() !== '';
+        return self::readRequestSessionId(null, $area) !== '';
     }
 
     /**
-     * Session cookie wire names that may carry the active login for this request.
+     * Session cookie wire names that may carry the active login for this area.
      *
      * Document navigations can emit the authority-qualified name before
-     * CookieScope is active (`WELINE_SESSID_9555`), while QueryBin often
-     * starts after website detection and uses the scoped name
-     * (`WELINE_SESSID_9555_w0`) while expiring the unscoped alias. Readers
-     * must accept every candidate so login state is not split across jars.
+     * CookieScope is active, while QueryBin often starts after website
+     * detection and uses the scoped name while expiring the unscoped alias.
+     * Candidates stay within one cookie family so customer Expire never
+     * clears admin WELINE_SESSID*.
      *
      * @return list<string>
      */
-    public static function requestCookieCandidates(?string $host = null): array
+    public static function requestCookieCandidates(?string $host = null, ?string $area = null): array
     {
+        $legacyName = self::legacyNameForArea($area);
         $names = [
-            self::resolve($host),
-            self::resolveUnscopedFor(self::LEGACY_NAME, $host),
-            self::LEGACY_NAME,
+            self::resolveFor($legacyName, $host),
+            self::resolveUnscopedFor($legacyName, $host),
+            $legacyName,
         ];
 
+        $pattern = self::familyPattern($legacyName);
         $cookies = Context::getCurrent()?->get('input.cookie', []) ?? [];
         if (\is_array($cookies)) {
             foreach (\array_keys($cookies) as $name) {
                 if (!\is_string($name) || $name === '') {
                     continue;
                 }
-                if (\preg_match('/^WELINE_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D', $name) !== 1) {
+                if (\preg_match($pattern, $name) !== 1) {
                     continue;
                 }
                 $names[] = $name;
@@ -165,14 +239,14 @@ final class SessionCookieNameResolver
     /**
      * First non-empty Session id from {@see requestCookieCandidates()}.
      */
-    public static function readRequestSessionId(?string $host = null): string
+    public static function readRequestSessionId(?string $host = null, ?string $area = null): string
     {
         $cookies = Context::getCurrent()?->get('input.cookie', []) ?? [];
         if (!\is_array($cookies)) {
             $cookies = [];
         }
 
-        foreach (self::requestCookieCandidates($host) as $name) {
+        foreach (self::requestCookieCandidates($host, $area) as $name) {
             $value = $cookies[$name] ?? null;
             if (!\is_string($value) || \trim($value) === '') {
                 if (\function_exists('w_env_cookie')) {
@@ -185,6 +259,20 @@ final class SessionCookieNameResolver
         }
 
         return '';
+    }
+
+    /**
+     * Regex that matches only one Session cookie family (customer or admin).
+     */
+    public static function familyPattern(string $legacyName): string
+    {
+        $legacyName = \trim($legacyName);
+        if ($legacyName === self::CUSTOMER_NAME) {
+            return '/^WELINE_CUSTOMER_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D';
+        }
+
+        // Admin family: WELINE_SESSID… but never WELINE_CUSTOMER_SESSID…
+        return '/^WELINE_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D';
     }
 
     /**

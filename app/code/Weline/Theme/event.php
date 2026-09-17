@@ -24,6 +24,16 @@ return [
         'description' => __('Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.'),
         'doc' => 'theme_editor_result_after.md',
     ],
+    'Weline_Theme::layout_resolve' => [
+        'name' => __('Layout path resolve'),
+        'description' => __('Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty.'),
+        'doc' => 'layout_resolve.md',
+    ],
+    'Weline_Theme::layout_preview_sample' => [
+        'name' => __('Layout preview sample'),
+        'description' => __('Reverse-resolve a storefront public path for the visual editor (layout dropdown + start-preview). Slug modules claim first; Theme falls back to catalog module_name + Env::getModuleInfo router join.'),
+        'doc' => 'layout_preview_sample.md',
+    ],
     'Weline_Theme_Font::warmup_collect' => [
         'name' => __('字体子集预热收集'),
         'description' => __('系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。'),

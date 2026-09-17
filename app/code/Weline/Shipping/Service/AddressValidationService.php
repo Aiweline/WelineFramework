@@ -32,7 +32,7 @@ class AddressValidationService
         }
 
         $phone = trim((string)($address['contact_phone'] ?? ''));
-        if ($phone !== '' && !preg_match((string)$schema['phone_pattern'], $phone)) {
+        if ($phone !== '' && !$this->isValidInternationalPhone($phone)) {
             $errors['contact_phone'] = (string)__('电话号码格式不正确');
         }
 
@@ -44,5 +44,33 @@ class AddressValidationService
         if ($errors !== []) {
             throw new AddressValidationException($errors);
         }
+    }
+
+    /**
+     * 全球电话：允许 + 与常见分隔符，按 E.164 数字位数 7–15 校验（不绑单一国格式）。
+     * 允许字符：数字、可选前导 +、空格、-、()、.、/
+     */
+    public function isValidInternationalPhone(string $phone): bool
+    {
+        $phone = trim($phone);
+        if ($phone === '' || strlen($phone) > 32) {
+            return false;
+        }
+        if (!preg_match('/^\+?[0-9\-\s().\/]+$/', $phone)) {
+            return false;
+        }
+        if (str_contains($phone, '+') && !str_starts_with($phone, '+')) {
+            return false;
+        }
+        if (substr_count($phone, '+') > 1) {
+            return false;
+        }
+        if (!preg_match('/^\+?[0-9]/', $phone)) {
+            return false;
+        }
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+        $len = strlen($digits);
+
+        return $len >= 7 && $len <= 15;
     }
 }

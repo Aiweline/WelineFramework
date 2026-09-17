@@ -91,6 +91,11 @@ CDN账户列表,"CDN Account List"
 账户凭证为空,"Account credentials are empty"
 该适配器未提供连接验证,"This adapter does not provide connection verification"
 "邮箱 DNS 参数格式无效。","邮箱 DNS 参数格式无效。"
+Cloudflare,Cloudflare
+"已检测到 Cloudflare OAuth Client。","已检测到 Cloudflare OAuth Client。"
+"加速与证书联动时需要 OAuth Client。","加速与证书联动时需要 OAuth Client。"
+基建,基建
+"CDN / Cloudflare OAuth","CDN / Cloudflare OAuth"
 id属性不能为空,"The id attribute cannot be empty"
 搜索CDN账户...,"Search CDN accounts..."
 请选择CDN账户,"Please select a CDN account"

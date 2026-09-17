@@ -752,6 +752,8 @@
             response = await fetch(config.endpoint, {
                 method: 'POST',
                 credentials: 'same-origin',
+                redirect: 'manual',
+                cache: 'no-store',
                 headers: {
                     'Content-Type': CONTENT_TYPE,
                     'X-Weline-Protocol': PROTOCOL,
@@ -766,6 +768,7 @@
             throw error;
         }
 
+        assertBinaryFetchResponse(response);
         const body = decodeResponsePacket(response, new Uint8Array(await response.arrayBuffer()));
         if (!response.ok || !body || body.ok !== true || !body.data) {
             const message = body && body.error ? body.error.message : 'Weline worker handshake failed.';
@@ -873,6 +876,7 @@
             const response = await fetch(config.endpoint, {
                 method: 'POST',
                 credentials: 'same-origin',
+                redirect: 'manual',
                 cache: 'no-store',
                 headers: {
                     'Content-Type': CONTENT_TYPE,
@@ -890,6 +894,7 @@
                 body: rawBody,
             });
 
+            assertBinaryFetchResponse(response);
             const responseBytes = new Uint8Array(await response.arrayBuffer());
             const headers = collectHeaders(response.headers);
             let body = null;
@@ -900,8 +905,32 @@
                     // Maintenance/startup gates return JSON/HTML, not WQB1 — keep headers for detection.
                     if (response.status === 503) {
                         body = tryParseJsonBytes(responseBytes);
+                        if (!body) {
+                            throw error;
+                        }
                     } else {
-                        throw error;
+                        // Prefer a structured JSON error over opaque magic failure when
+                        // a middleware incorrectly returned application/json with HTTP 200.
+                        const jsonBody = tryParseJsonBytes(responseBytes);
+                        if (jsonBody && (jsonBody.error || jsonBody.message || jsonBody.ok === false)) {
+                            body = {
+                                ok: false,
+                                data: jsonBody.data ?? null,
+                                error: jsonBody.error && typeof jsonBody.error === 'object'
+                                    ? jsonBody.error
+                                    : {
+                                        code: String(jsonBody.code || jsonBody.error || 'protocol_error'),
+                                        message: String(
+                                            (jsonBody.error && jsonBody.error.message)
+                                            || jsonBody.message
+                                            || 'Non-binary query-bin response.'
+                                        ),
+                                    },
+                                request_id: String(jsonBody.request_id || ''),
+                            };
+                        } else {
+                            throw error;
+                        }
                     }
                 }
             }
@@ -965,6 +994,29 @@
         return variant === 'maintenance';
     }
 
+    function describeResponseBytes(responseBytes) {
+        const bytes = responseBytes instanceof Uint8Array ? responseBytes : new Uint8Array();
+        const head = bytes.subarray(0, 48);
+        const hex = Array.from(head).map((b) => b.toString(16).padStart(2, '0')).join(' ');
+        const ascii = Array.from(head)
+            .map((b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : '.'))
+            .join('');
+        let kind = 'unknown';
+        if (bytes.length === 0) {
+            kind = 'empty';
+        } else if (bytes.length >= 4
+            && bytes[0] === 0x57 && bytes[1] === 0x51 && bytes[2] === 0x42 && bytes[3] === 0x31) {
+            kind = 'wqb1';
+        } else if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+            kind = 'gzip';
+        } else if (bytes[0] === 0x7b || bytes[0] === 0x5b) {
+            kind = 'json';
+        } else if (bytes[0] === 0x3c) {
+            kind = 'html';
+        }
+        return { kind, hex, ascii, length: bytes.length };
+    }
+
     function decodeResponsePacket(response, responseBytes) {
         try {
             return decodePacket(responseBytes);
@@ -973,16 +1025,51 @@
             const contentType = response && response.headers && typeof response.headers.get === 'function'
                 ? (response.headers.get('content-type') || '')
                 : '';
+            const desc = describeResponseBytes(responseBytes);
+            const hint = desc.kind === 'html'
+                ? 'got HTML instead of WQB1 (login redirect or error page?)'
+                : (desc.kind === 'json'
+                    ? 'got JSON instead of WQB1'
+                    : (desc.kind === 'gzip'
+                        ? 'got gzip bytes without Content-Encoding decode'
+                        : (desc.kind === 'empty' ? 'empty body' : '')));
             const message = [
                 error instanceof Error ? error.message : String(error),
                 `(HTTP ${status}${contentType ? ', ' + contentType : ''})`,
-                `response_bytes=${responseBytes.length}`,
+                `response_bytes=${desc.length}`,
+                hint,
+                desc.hex ? `head_hex=${desc.hex}` : '',
+                desc.ascii ? `head_ascii=${desc.ascii}` : '',
             ].filter(Boolean).join(' ');
             throw Object.assign(new Error(message), {
                 code: 'protocol_error',
                 status,
             });
         }
+    }
+
+    function assertBinaryFetchResponse(response) {
+        // Never follow redirects into HTML login/error pages — that yields
+        // HTTP 200 + "<!DOCTYPE..." and surfaces as "Invalid Weline binary magic".
+        const status = response && response.status ? response.status : 0;
+        if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+            const location = response.headers && typeof response.headers.get === 'function'
+                ? (response.headers.get('location') || '')
+                : '';
+            throw Object.assign(new Error(
+                `Query-bin redirected instead of returning WQB1 (HTTP ${status}${location ? ', ' + location : ''}).`
+            ), {
+                code: 'auth_error',
+                status,
+            });
+        }
+        if (response && response.type === 'opaqueredirect') {
+            throw Object.assign(new Error('Query-bin opaque redirect; expected WQB1 binary response.'), {
+                code: 'auth_error',
+                status: 0,
+            });
+        }
+        return response;
     }
 
     function collectHeaders(responseHeaders) {

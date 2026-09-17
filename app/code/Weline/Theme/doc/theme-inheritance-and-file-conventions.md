@@ -109,6 +109,7 @@ app/design/{Vendor}/{theme}/frontend/templates/...
 - `variables/` 和 `colors/` 只扫描以下划线开头的 `.css` 文件。
 - layout 旁边可以放同名 `.layout.json`，例如 `default.phtml` 对应 `default.layout.json`。
 - 资源元数据优先来自 `@meta.*`、`@widget.*`、`@param`、`<w:slot>`、`data-wslot`。
+- **`layoutType` 可以含 `/`（嵌套）**：路径末段文件名永远是 `option`，其前全部目录段拼成 `layoutType`。例如 `layouts/account/login/default.phtml` → `layoutType=account/login`，`option=default`，逻辑 key `layouts/account/login/default`。禁止把该文件理解成 `layoutType=account` + `option=login/default`。
 
 ## Layout 解析规则
 
@@ -118,12 +119,29 @@ layout 请求路径形态：
 theme/{area}/layouts/{layoutType}/{option}.phtml
 ```
 
+其中 `{layoutType}` 允许嵌套目录（如 `account/login`）。控制器写法对照：
+
+| 控制器 `$layoutType` | 默认 option | 文件 |
+|---|---|---|
+| `homepage` | `default` | `layouts/homepage/default.phtml` |
+| `account` | `dashboard` / `default`（按配置） | `layouts/account/{option}.phtml` |
+| `account/login` | `default` | `layouts/account/login/default.phtml` |
+| `account.auth`（点号，旧式） | 点号右侧为 option | `layouts/account/auth.phtml` |
+
+规则：
+
+- **斜杠 `/`**：整段是 `layoutType`，`option` 另取（未指定则为 `default`）。
+- **点号 `.`**：左侧是 `layoutType`，右侧是 `option`（扁平 option，兼容旧入口如 Multipass `account.auth`）。
+- 与公开路由对齐的认证页优先用嵌套：`account/login`、`account/register`、`account/forgot-password`、`account/set-password`、`account/social-login`。
+
 解析过程：
 
 1. 先找默认主题 `Weline_Theme/view/theme/{area}/layouts/...` 是否存在。
 2. 如果默认主题有对应文件，再通过主题路径解析器查当前主题/父主题覆盖。
-3. 如果具体 option 不存在，会尝试回退到同 layoutType 的 `default.phtml`。
+3. 如果具体 option 不存在，会尝试回退到同 layoutType 的 `default.phtml`（含嵌套 layoutType）。
 4. 如果默认主题没有该 layout，再查模块贡献层 `view/theme/{area}/layouts/...`。
+
+实现来源（冲突以源码为准）：`ThemeResourceCatalog::resolveTypeAndOption`、`LayoutScanner::scanLayoutsFromDir`、`LayoutPathResolver::buildLayoutPath` / `parseLayoutPath`、`ControllerFetchFileBefore`。
 
 常见例子：
 
@@ -133,6 +151,7 @@ theme/{area}/layouts/{layoutType}/{option}.phtml
 | 覆盖当前主题首页简写布局 | `app/design/WeShop/motor/frontend/layouts/homepage.phtml` |
 | 给模块贡献一个新商品布局 | `app/code/{Vendor}/{Module}/view/theme/frontend/layouts/product/custom.phtml` |
 | 改框架默认首页布局 | `app/code/Weline/Theme/view/theme/frontend/layouts/homepage/default.phtml` |
+| 顾客登录页（模块贡献） | `app/code/Weline/Customer/view/theme/frontend/layouts/account/login/default.phtml` |
 
 ## 文件落点决策表
 

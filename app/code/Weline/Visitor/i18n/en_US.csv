@@ -32,6 +32,13 @@
 "Create visitor A/B test config.","Create visitor A/B test config."
 "Seed or clean auditable AI/SEO acceptance pixel events.","Seed or clean auditable AI/SEO acceptance pixel events."
 "Export visitor analytics data.","Export visitor analytics data."
+像素追踪,像素追踪
+像素追踪默认已开启（当前范围无覆盖关闭）。,像素追踪默认已开启（当前范围无覆盖关闭）。
+已继承上级范围开启访客像素追踪。,已继承上级范围开启访客像素追踪。
+已开启访客像素追踪。,已开启访客像素追踪。
+开启像素后才能在仪表盘看真实转化漏斗。,开启像素后才能在仪表盘看真实转化漏斗。
+增长,增长
+访客像素追踪,访客像素追踪
 站点错误监控,站点错误监控
 "前端 JS 异常","前端 JS 异常"
 "window.onerror / ErrorEvent 运行时错误","window.onerror / ErrorEvent 运行时错误"
@@ -534,7 +541,7 @@ Events,Events
 本会话沙盒,本会话沙盒
 清理,清理
 收起,收起
-短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。,短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。
+短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝、去重丢弃黄；可清理后重新监听。无服务端长轮询。,短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝、去重丢弃黄；可清理后重新监听。无服务端长轮询。
 搜索事件名,搜索事件名
 系统命中,系统命中
 自定义命中,自定义命中
@@ -740,6 +747,7 @@ ok,ok
 "rule 匹配模式无效：%{1}","Invalid rule match mode: %{1}"
 "rule 匹配值必填","Rule match value is required"
 "campaign 渠道不接受匹配模式/匹配值","Campaign channels do not accept match mode/value"
+短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。,短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。
 "打洞实时读前台沙盒 emit（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。","打洞实时读前台沙盒 emit（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。"
 选择作用范围,选择作用范围
 搜索作用范围,搜索作用范围

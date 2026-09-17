@@ -7,7 +7,6 @@
  * @meta.name {default="热销榜布局",name="热销榜布局",description="店面热销商品排行榜页面布局"}
  * @meta.description {default="热销榜页面布局，含页头、面包屑、排名主内容与页脚",name="描述",description="热销榜页面布局"}
  * @meta.category {default="catalog",name="商品",description="布局所属分类"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="热销榜通常无需登录"}
  * @param.title {default="热销榜",name="页面标题",description="页面标题"}
  * @param.content {default="",name="主要内容（HTML字符串）",description="控制器渲染的热销榜内容"}
  * @param.showHeader {default=true,name="是否显示header",description="是否显示站点头部"}
@@ -80,6 +79,17 @@ $meta = $this->getData('meta') ?? [];
 
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
+
+
+        <w:slot id="best-sellers-bottom"
+                name="畅销榜底部扩展"
+                accept="layout-best-sellers-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="best-sellers-bottom-slot">
+        </w:slot>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>

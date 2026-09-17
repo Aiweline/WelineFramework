@@ -23,6 +23,7 @@ $heroCtaUrl = $pageType === 'index'
       data-no-extract="true">
 
 <div class="w-promotion-page weline-product-card-shelf" data-testid="storefront-promotion-page" data-page-type="<?= $esc($pageType) ?>">
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <nav class="w-promotion-page__nav" aria-label="<?= $esc(__('活动中心')) ?>" weline-code="promotion.page.nav">
         <?php foreach ($navTabs as $tab): ?>
             <?php

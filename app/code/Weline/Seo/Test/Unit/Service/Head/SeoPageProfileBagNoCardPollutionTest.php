@@ -32,7 +32,7 @@ final class SeoPageProfileBagNoCardPollutionTest extends TestCase
 
         $publish->invoke($template, [
             'seo' => [
-                'page_type' => 'product_list',
+                'page_type' => 'products',
                 'title' => 'All Products',
                 'item_list' => [
                     ['name' => 'Listing Item', 'url' => '/product/1'],
@@ -55,7 +55,7 @@ final class SeoPageProfileBagNoCardPollutionTest extends TestCase
         ]);
 
         $profile = SeoPageProfileBag::pull();
-        self::assertSame('product_list', $profile['page_type'] ?? null);
+        self::assertSame('products', $profile['page_type'] ?? null);
         self::assertSame('All Products', $profile['title'] ?? null);
         self::assertArrayNotHasKey('product', $profile);
         self::assertSame('Listing Item', $profile['item_list'][0]['name'] ?? null);

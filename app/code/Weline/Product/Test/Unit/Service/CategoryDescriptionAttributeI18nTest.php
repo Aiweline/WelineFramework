@@ -37,12 +37,24 @@ final class CategoryDescriptionAttributeI18nTest extends TestCase
             'Browse steering covers products and accessories',
             $method->invoke($service, 'steering covers', 'en_US'),
         );
+        self::assertSame(
+            'स्पोर्ट्सवियर उत्पाद और सहायक वस्तुएँ देखें',
+            $method->invoke($service, 'स्पोर्ट्सवियर', 'hi_IN'),
+        );
+        self::assertSame(
+            'Explora productos y accesorios de Ropa deportiva',
+            $method->invoke($service, 'Ropa deportiva', 'es_ES'),
+        );
+        self::assertSame(
+            'تصفح منتجات وإكسسوارات ملابس رياضية',
+            $method->invoke($service, 'ملابس رياضية', 'ar_SA'),
+        );
     }
 
     public function testAllMenuTreeCacheKeyBumpedForAttributeEnsure(): void
     {
         self::assertSame(
-            'product.all_menu_category_tree.v7.3.en_US',
+            'product.all_menu_category_tree.v8.3.en_US',
             StorefrontAllMenuCategoryTreeService::logicalCacheKey(3, 'en_US'),
         );
         $source = (string)file_get_contents(

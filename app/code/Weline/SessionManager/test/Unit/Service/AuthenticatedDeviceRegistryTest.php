@@ -103,6 +103,41 @@ final class AuthenticatedDeviceRegistryTest extends TestCase
         );
     }
 
+    public function testSharedSessionLoginTakesOverDigestFromDifferentPrincipal(): void
+    {
+        // Same browser Session cookie may already be bound to another frontend
+        // principal. Login must take over the digest instead of returning
+        // session_binding_conflict — otherwise AuthenticatedSession clears auth
+        // and the user appears to "drop offline".
+        $this->installKeys->nextRaw = 'shopper-browser';
+        $shopper = $this->context('frontend', '47', 'shared-cookie-session');
+        $shopperBinding = $this->registry->register($shopper);
+        self::assertTrue($shopperBinding->valid);
+
+        $this->installKeys->nextRaw = 'preview-browser';
+        $preview = $this->context('frontend', '1', 'shared-cookie-session');
+        $previewBinding = $this->registry->register(
+            $preview,
+            AuthenticatedLoginContext::trustedReuse(),
+        );
+
+        self::assertTrue($previewBinding->valid);
+        self::assertNotSame($shopperBinding->deviceId, $previewBinding->deviceId);
+        self::assertTrue($this->registry->validate($preview->withDeviceId((string)$previewBinding->deviceId))->valid);
+        self::assertFalse(
+            $this->registry->validate($shopper->withDeviceId((string)$shopperBinding->deviceId))->valid,
+        );
+
+        $retired = $this->repository->findDeviceByPublicId('frontend', (string)$shopperBinding->deviceId);
+        self::assertNotNull($retired);
+        self::assertGreaterThan(0, (int)($retired['revoked_at'] ?? 0));
+        self::assertSame('session_taken_over', (string)($retired['revoke_reason'] ?? ''));
+        self::assertNotSame(
+            hash('sha256', 'shared-cookie-session'),
+            (string)($retired['session_digest'] ?? ''),
+        );
+    }
+
     public function testValidateKeepsSessionReboundWithoutExplicitRebind(): void
     {
         $this->installKeys->nextRaw = 'browser-a';
@@ -116,6 +151,27 @@ final class AuthenticatedDeviceRegistryTest extends TestCase
 
         self::assertFalse($validation->valid);
         self::assertSame('session_rebound', $validation->reason);
+    }
+
+    public function testValidateHealsStaleRevokedDeviceIdViaCurrentSessionDigest(): void
+    {
+        // Shopper bound the shared cookie; preview takeover creates a new device row.
+        // Session may still present the shopper device_id while principal is already preview.
+        $this->installKeys->nextRaw = 'shopper-heal';
+        $shopper = $this->context('frontend', '47', 'shared-heal-session');
+        $shopperBinding = $this->registry->register($shopper);
+        self::assertTrue($shopperBinding->valid);
+
+        $this->installKeys->nextRaw = 'preview-heal';
+        $preview = $this->context('frontend', '1', 'shared-heal-session');
+        $previewBinding = $this->registry->register($preview);
+        self::assertTrue($previewBinding->valid);
+        self::assertNotSame($shopperBinding->deviceId, $previewBinding->deviceId);
+
+        $stale = $preview->withDeviceId((string)$shopperBinding->deviceId);
+        $validation = $this->registry->validate($stale);
+        self::assertTrue($validation->valid);
+        self::assertSame($previewBinding->deviceId, $validation->deviceId);
     }
 
     public function testPasswordLoginReplacedRevokesCredentialOnly(): void

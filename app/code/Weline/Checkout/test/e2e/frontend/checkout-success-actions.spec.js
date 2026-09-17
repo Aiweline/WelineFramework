@@ -31,7 +31,7 @@ moduleDescribe(test, MODULE, 'checkout success actions', () => {
       expect(normalized).toEqual(
         expect.arrayContaining([
           expect.stringMatching(/继续购物|Continue shopping/i),
-          expect.stringMatching(/返回订单列表|order list|orders/i),
+          expect.stringMatching(/查看订单列表|返回订单列表|order list|orders/i),
         ]),
       );
       await expect(nav.locator('.amz-order-confirm__btn--primary')).toHaveCount(1);

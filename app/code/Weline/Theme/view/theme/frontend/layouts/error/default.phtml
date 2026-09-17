@@ -1,0 +1,258 @@
+<?php
+/**
+ * 布局：服务异常页面（镜像 404 壳）- 头尾 + 说明区
+ *
+ * @meta.name {default="服务异常页面布局",name="服务异常页面布局",description="Amazon 风格 500/服务异常壳，供主题编辑与公网 /error 发现"}
+ * @meta.description {default="Amazon 风格服务异常布局",name="服务异常页面布局",description="服务异常页模板；运行时静态 500 仍可走 pub/errors"}
+ * @param title {default="服务暂时不可用",name="页面标题",description="页面标题"}
+ * @param pageTitle {default="服务暂时不可用",name="异常标题",description="异常主标题"}
+ * @param pageLead {default="我们正在处理问题，请稍后再试。",name="异常说明",description="异常主要说明"}
+ * @param pageHint {default="您可以返回首页继续浏览，或稍后刷新本页。",name="异常提示",description="异常次要提示"}
+ * @param homeHref {default="/",name="首页链接",description="返回首页链接"}
+ * @param statusCode {default=500,name="状态码",description="HTTP 状态码"}
+ * @param class {default="",name="额外CSS类",description="额外 CSS 类"}
+ */
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$statusCode = (int)($meta['statusCode'] ?? 500);
+$pageTitle = (string)($meta['pageTitle'] ?? $meta['title'] ?? __('服务暂时不可用'));
+$pageLead = (string)($meta['pageLead'] ?? __('我们正在处理问题，请稍后再试。'));
+$pageHint = (string)($meta['pageHint'] ?? __('您可以返回首页继续浏览，或稍后刷新本页。'));
+$homeHref = (string)($meta['homeHref'] ?? '/');
+$homeJs = json_encode($homeHref !== '' ? $homeHref : '/', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$seoTitle = trim((string)$statusCode) . ' · ' . $pageTitle;
+$this->setData('seo', [
+    'page_type' => 'error',
+    'title' => $seoTitle,
+    'robots' => 'noindex,nofollow',
+]);
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::error::head-after</w:hook>
+    <style>
+        .amazon-error-layout {
+            margin: 0;
+            background: var(--color-bg-canvas, #ffffff);
+            color: var(--color-text-primary, #0f1111);
+            font-family: "Amazon Ember", Arial, sans-serif;
+        }
+
+        .amazon-error {
+            width: 100%;
+        }
+
+        .amazon-error__intro {
+            background: var(--color-bg-canvas, #ffffff);
+            border-bottom: 1px solid var(--color-border-default, #ddd);
+        }
+
+        .amazon-error__intro-inner {
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin: 0 auto;
+            padding-block: 2.5rem 2.75rem;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            display: grid;
+            grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+            gap: clamp(1.25rem, 3vw, 2.5rem);
+            align-items: center;
+        }
+
+        .amazon-error__visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+        }
+
+        .amazon-error__visual svg {
+            width: min(100%, 240px);
+            height: auto;
+        }
+
+        .amazon-error__kicker {
+            margin: 0 0 0.35rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--color-text-secondary, #565959);
+        }
+
+        .amazon-error__title {
+            margin: 0 0 0.75rem;
+            font-size: clamp(1.45rem, 2.4vw, 1.85rem);
+            line-height: 1.25;
+            font-weight: 700;
+            color: var(--color-text-primary, #0f1111);
+        }
+
+        .amazon-error__lead,
+        .amazon-error__hint {
+            margin: 0;
+            max-width: 42rem;
+            line-height: 1.55;
+            color: var(--color-text-secondary, #565959);
+        }
+
+        .amazon-error__hint {
+            margin-top: 0.55rem;
+            font-size: 0.95rem;
+        }
+
+        .amazon-error__actions {
+            margin-top: 1.15rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.85rem 1.25rem;
+        }
+
+        .amazon-error__home-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 2rem;
+            padding: 0.35rem 0.95rem;
+            border-radius: 999px;
+            border: 1px solid var(--color-primary-border, #cc7700);
+            background: linear-gradient(180deg, #ffe08a 0%, var(--color-primary, #ff9900) 100%);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+            color: var(--color-on-primary, #111);
+            font-size: 0.92rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .amazon-error__home-link:hover {
+            background: linear-gradient(180deg, #ffd56b 0%, var(--color-primary-hover, #e68900) 100%);
+            color: var(--color-on-primary, #111);
+        }
+
+        .amazon-error__back-link {
+            appearance: none;
+            border: none;
+            background: transparent;
+            padding: 0;
+            color: var(--color-link);
+            font: inherit;
+            font-size: 0.95rem;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .amazon-error__back-link:hover {
+            color: var(--color-link-hover);
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .amazon-error__intro-inner {
+                grid-template-columns: 1fr;
+                padding: 1.75rem 0 2rem;
+                text-align: left;
+            }
+
+            .amazon-error__visual {
+                justify-content: flex-start;
+            }
+
+            .amazon-error__visual svg {
+                width: min(72vw, 200px);
+            }
+
+            .amazon-error__actions {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="error-layout amazon-error-layout">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+
+    <main class="amazon-error <?= $esc((string)($meta['class'] ?? '')) ?>"
+          id="error-main"
+          data-layout="error"
+          data-testid="storefront-error-page">
+        <section class="amazon-error__intro" weline-code="theme.error.intro" aria-labelledby="amazon-error-title">
+            <w:slot id="error-content"
+                    name="异常内容"
+                    accept="layout-error-content,content,empty-state"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="amazon-error__intro-inner error-container">
+                <div class="amazon-error__visual" aria-hidden="true">
+                    <svg viewBox="0 0 240 200" role="img" focusable="false">
+                        <rect x="28" y="56" width="118" height="92" rx="10" fill="#ffd699"/>
+                        <rect x="38" y="66" width="98" height="72" rx="8" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
+                        <path d="M170 72c18 0 34 14 34 34s-16 34-34 34h-10V72h10z" fill="#ff9900"/>
+                        <circle cx="194" cy="106" r="18" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
+                        <text x="194" y="113" text-anchor="middle" font-size="18" font-weight="700" fill="#c45500">!</text>
+                        <path d="M78 118h38M78 104h48" stroke="#cc7700" stroke-width="4" stroke-linecap="round"/>
+                        <ellipse cx="120" cy="168" rx="62" ry="10" fill="#eaeded"/>
+                    </svg>
+                </div>
+                <div class="amazon-error__message">
+                    <p class="amazon-error__kicker"><?= $esc((string)$statusCode) ?> · <?= __('ERROR') ?></p>
+                    <h1 class="amazon-error__title" id="amazon-error-title"><?= $esc($pageTitle) ?></h1>
+                    <?php if ($pageLead !== ''): ?>
+                        <p class="amazon-error__lead"><?= $esc($pageLead) ?></p>
+                    <?php endif; ?>
+                    <?php if ($pageHint !== ''): ?>
+                        <p class="amazon-error__hint"><?= $esc($pageHint) ?></p>
+                    <?php endif; ?>
+                    <div class="amazon-error__actions">
+                        <a class="amazon-error__home-link" href="<?= $esc($homeHref !== '' ? $homeHref : '/') ?>">
+                            <?= __('前往首页') ?>
+                        </a>
+                        <button type="button" class="amazon-error__back-link" data-w-error-back>
+                            <?= __('返回上一页') ?>
+                        </button>
+                    </div>
+                </div>
+            </w:slot>
+        </section>
+    </main>
+
+    <w:slot id="error-bottom"
+            name="异常页底部扩展"
+            accept="layout-error-bottom,banner,promo-banner,content,container,trust-badges,contact-info"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="content"
+            class="error-bottom-slot">
+        <w:hook>
+            Weline_Theme::frontend::layouts::error::bottom
+            <else/>
+            <w:widget type="content" name="contact-info" />
+        </w:hook>
+    </w:slot>
+
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>seo::footer</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::error::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <script>
+        document.addEventListener('click', function (e) {
+            var btn = e.target && e.target.closest && e.target.closest('[data-w-error-back]');
+            if (!btn) return;
+            if (window.history.length > 1) { window.history.back(); return; }
+            window.location.href = <?= $homeJs ?>;
+        });
+    </script>
+</body>
+</html>

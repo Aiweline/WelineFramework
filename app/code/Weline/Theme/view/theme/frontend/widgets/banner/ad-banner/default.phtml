@@ -11,8 +11,9 @@
  * @widget.area {frontend}
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
+ * @widget.supports {["layout-homepage-hero","layout-homepage-content","layout-homepage-promo","layout-default-content","banner"]}
  *
- * @param image {default="",type="media_image",label="广告图片",description="从媒体库选择广告图片"}
+ * @param image {default="",type="media_image",label="广告图片",description="从媒体库选择广告图片",media_options={default_directory:"banner",aspect_ratio:"1920/150",recommend_width:"1920",recommend_height:"150",aspect_ratio_tolerance:"0.1"}}
  * @param link {default="",type="string",label="链接地址"}
  * @param alt_text {default="广告",type="string",label="替代文字"}
  * @param open_new_tab {default=false,type="bool",label="新窗口打开"}
@@ -20,6 +21,7 @@
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('ad-banner');
@@ -29,8 +31,8 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('image') ?? '');
 $imageFileHtml = (string)($this->getData('image_file_html') ?? '');
-$link = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('link') ?? '');
-$altText = $this->getData('alt_text') ?? __('广告');
+$link = \Weline\Theme\Helper\SiteBlockConfig::link($this->getData('link') ?? '');
+$altText = WidgetI18n::label(trim((string)($this->getData('alt_text') ?? '')), '广告');
 $openNewTab = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('open_new_tab'));
 $borderRadius = \Weline\Theme\Helper\SiteBlockConfig::length($this->getData('border_radius'), 'var(--weline-radius-md)');
 $rootStyle = 'border-radius:' . $borderRadius . ';';
@@ -53,13 +55,15 @@ $rootStyle = 'border-radius:' . $borderRadius . ';';
     <?php elseif ($image !== ''): ?>
         <img src="<?= $esc($image) ?>"
              alt="<?= $esc((string)$altText) ?>"
-             class="ad-image"
+             class="ad-image w-file-image"
+             width="1920"
+             height="150"
              loading="lazy" decoding="async">
     <?php else: ?>
         <p class="sb-empty"><lang>请选择真实图片</lang></p>
     <?php endif; ?>
 
-    <span class="ad-label"><?= __('广告') ?></span>
+    <span class="ad-label"><?= $esc((string)$altText) ?></span>
 
     <?php if ($link): ?>
         </a>
@@ -72,27 +76,43 @@ $rootStyle = 'border-radius:' . $borderRadius . ';';
     overflow: hidden;
     display: block;
     width: 100%;
+    height: auto;
+    min-height: 0;
+    line-height: 0;
+    background: transparent;
 }
 
 .<?= $wc ?> .ad-link {
     display: block;
-    text-decoration: none;
-}
-
-.<?= $wc ?> .ad-image {
     width: 100%;
     height: auto;
+    text-decoration: none;
+    line-height: 0;
+}
+
+.<?= $wc ?> .ad-image,
+.<?= $wc ?> .ad-image--asset {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 0;
     display: block;
+    aspect-ratio: auto;
     transition: transform var(--weline-theme-transition-base);
 }
 
-.<?= $wc ?> .ad-image--asset img {
+.<?= $wc ?> .ad-image--asset :is(img, picture, .w-file-image) {
     display: block;
     width: 100%;
+    max-width: 100%;
     height: auto;
+    min-height: 0;
+    vertical-align: top;
+    object-fit: unset;
 }
 
-.<?= $wc ?>:hover .ad-image {
+.<?= $wc ?>:hover .ad-image,
+.<?= $wc ?>:hover .ad-image--asset {
     transform: scale(1.02);
 }
 
@@ -100,6 +120,8 @@ $rootStyle = 'border-radius:' . $borderRadius . ';';
     position: absolute;
     top: var(--weline-space-2);
     right: var(--weline-space-2);
+    z-index: 1;
+    line-height: var(--line-height-normal);
     padding: var(--spacing-0_5) var(--weline-space-2);
     background: color-mix(in srgb, var(--weline-theme-overlay) 60%, transparent);
     color: var(--weline-theme-on-primary);

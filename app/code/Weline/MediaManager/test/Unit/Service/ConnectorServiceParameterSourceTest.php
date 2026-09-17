@@ -92,6 +92,8 @@ final class ConnectorServiceParameterSourceTest extends TestCase
         self::assertStringContainsString('assertUploadDestinationsAvailable', $source);
         self::assertStringContainsString('handleStorageSearch', $source);
         self::assertStringContainsString('目标文件已存在：%{1}', $source);
+        self::assertStringContainsString('目标文件不存在，无法覆盖：%{1}', $source);
+        self::assertStringContainsString('MediaAssetUploadService::isOverwriteFlag', $source);
         self::assertSame(14 * 1024 * 1024, MediaAssetUploadService::MAX_UPLOAD_BYTES);
         self::assertSame(1024 * 1024, MediaUploadBase64Hydrator::MAX_BYTES);
     }
@@ -295,7 +297,7 @@ final class ConnectorServiceParameterSourceTest extends TestCase
         $open = substr(
             $source,
             (int)strpos($source, 'private function handleStorageOpen('),
-            (int)strpos($source, 'private function handleStorageResource(')
+            (int)strpos($source, 'private function handleStorageAssetLocales(')
                 - (int)strpos($source, 'private function handleStorageOpen('),
         );
 
@@ -379,5 +381,30 @@ final class ConnectorServiceParameterSourceTest extends TestCase
         $requiredTargets = new \ReflectionMethod(new ConnectorService(), 'requiredTargetHashes');
         $this->expectException(\InvalidArgumentException::class);
         $requiredTargets->invoke(new ConnectorService(), ['mm_' . str_repeat('a', 2046)], 'empty');
+    }
+
+    public function testAssetTranslateMissingForwardsOptionalTargetLocales(): void
+    {
+        $source = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/Service/ConnectorService.php',
+        );
+        $provider = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/extends/module/Weline_Framework/Query/MediaManagerQueryProvider.php',
+        );
+
+        self::assertStringContainsString('private function optionalTargetLocales(', $source);
+        self::assertStringContainsString('$targetLocales = $this->optionalTargetLocales($src);', $source);
+        self::assertMatchesRegularExpression(
+            '/translateMissing\(\s*\$assetId,\s*\$sourceLocale,\s*\$access,\s*\$targetLocales,\s*\)/',
+            $source,
+        );
+        self::assertStringContainsString("['name' => 'target_locales', 'type' => 'array'", $provider);
+
+        $service = new ConnectorService();
+        $parse = new \ReflectionMethod($service, 'optionalTargetLocales');
+        self::assertNull($parse->invoke($service, []));
+        self::assertSame(['en_US'], $parse->invoke($service, ['target_locales' => ['en_US']]));
+        self::assertSame(['en_US', 'fr_FR'], $parse->invoke($service, ['target_locales' => 'en_US,fr_FR']));
+        self::assertSame(['en_US'], $parse->invoke($service, ['target_locales' => '["en_US"]']));
     }
 }

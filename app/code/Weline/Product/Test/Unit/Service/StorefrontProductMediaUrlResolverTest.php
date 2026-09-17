@@ -441,6 +441,58 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
         self::assertStringContainsString('alt="尺码示意"', $rendered);
     }
 
+    public function testRenderDescriptionHtmlPreservesAspectOrientationMarkers(): void
+    {
+        $detailAsset = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+        $html = '<div data-weline-product-description="1688">'
+            . '<div class="weline-detail-figure-stack weline-detail-figure-stack--fullbleed weline-detail-orient--portrait">'
+            . '<div class="weline-detail-figure"><img src="asset://' . $detailAsset . '" width="1200" height="1600" alt="竖图"></div>'
+            . '</div>'
+            . '<div class="weline-detail-feature weline-detail-orient--landscape" data-weline-orient="landscape" data-weline-pad="g02-blur-3x2">'
+            . '<div class="weline-detail-feature__media"><img src="asset://' . $detailAsset . '" width="2400" height="1600" alt="扩横"></div>'
+            . '<div class="weline-detail-feature__copy"><h3>交领</h3><p>旁文</p></div>'
+            . '</div>'
+            . '</div>';
+
+        $rendered = StorefrontProductMediaUrlResolver::renderDescriptionHtml(
+            $html,
+            static fn(string $reference): string => $reference === 'asset://' . $detailAsset
+                ? '/pub/media/catalog/hanfu/portrait.jpg'
+                : '',
+        );
+
+        self::assertStringContainsString('weline-detail-orient--portrait', $rendered);
+        self::assertStringContainsString('weline-detail-orient--landscape', $rendered);
+        self::assertStringContainsString('data-weline-orient="landscape"', $rendered);
+        self::assertStringContainsString('data-weline-pad="g02-blur-3x2"', $rendered);
+        self::assertStringContainsString('width="1200"', $rendered);
+        self::assertStringContainsString('height="1600"', $rendered);
+    }
+
+    public function testRenderDescriptionHtmlEmitsDetailSuiteSkipMarkerFromRoot(): void
+    {
+        $detailAsset = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+        $html = '<div data-weline-product-description="1688" data-weds="xq">'
+            . '<!--weds:xq--><span data-weds="xq" hidden aria-hidden="true"></span>'
+            . '<div class="weline-detail-prose"><h3>扶摇</h3><p>旁文</p></div>'
+            . '<div class="weline-detail-quiet-spacer" aria-hidden="true"></div>'
+            . '<p><img src="asset://' . $detailAsset . '" width="787" height="1050" alt="着装"></p>'
+            . '</div>';
+
+        $rendered = StorefrontProductMediaUrlResolver::renderDescriptionHtml(
+            $html,
+            static fn(string $reference): string => $reference === 'asset://' . $detailAsset
+                ? '/pub/media/catalog/hanfu/fuyao.jpg'
+                : '',
+        );
+
+        self::assertStringContainsString('<!--weds:xq-->', $rendered);
+        self::assertStringContainsString('data-weds="xq"', $rendered);
+        self::assertStringContainsString('weline-detail-quiet-spacer', $rendered);
+        self::assertStringContainsString('扶摇', $rendered);
+        self::assertSame(1, substr_count($rendered, 'data-weds="xq"'));
+    }
+
     public function testEnsureDescriptionImageAltsFillsEmptyAltWithProductName(): void
     {
         $html = '<p><img src="/media/a.jpg" alt="" width="800" height="800"></p>'
@@ -453,5 +505,68 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
         self::assertStringContainsString('alt="悦雅霓裳长安忆襦裙 · 2"', $out);
         self::assertStringContainsString('alt="已有说明文案"', $out);
         self::assertStringNotContainsString('alt=""', $out);
+    }
+
+    public function testNormalizeDescriptionLayoutGroupsImagesAndReplacesBrokenOcr(): void
+    {
+        $html = '<img src="/pub/media/a.jpg" width="790" height="1200" alt="1">'
+            . '<img src="/pub/media/b.jpg" width="790" height="900" alt="2">'
+            . '<h3>名 产品信息 ，皇</h3>'
+            . '<ul><li>S 50 90 156 4 15 114</li><li>M 52 96 160 4 16 120</li><li>L 84 102 164 4 17 126</li></ul>'
+            . '<p>以上数值来自商品详情图文字识别，手工测量可能存在 1-3 cm 误差。</p>'
+            . '<img src="/pub/media/c.jpg" width="790" height="1000" alt="3">';
+
+        $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
+
+        self::assertStringContainsString('weline-detail-figure-stack', $out);
+        self::assertStringContainsString('weline-detail-text--size-chart', $out);
+        self::assertStringContainsString('尺码参考表', $out);
+        self::assertStringNotContainsString('名 产品信息', $out);
+        self::assertSame(2, substr_count($out, 'weline-detail-figure-stack'));
+    }
+
+    public function testNormalizeDescriptionLayoutPairsPortraitImagesResponsively(): void
+    {
+        $base = '/pub/media/catalog/hanfu/1688/factory-yueya/731150010223';
+        // ~0.73 / ~0.75 pairable portraits; ultra-tall calligraphy board stays solo.
+        $html = '<img src="' . $base . '/detail-03-5e775f11bbad.jpg" width="800" height="800" alt="a">'
+            . '<img src="' . $base . '/detail-04-3adc1cabe08c.jpg" width="800" height="800" alt="b">'
+            . '<img src="' . $base . '/detail-16-b025f8b80432.jpg" width="800" height="800" alt="tall">';
+
+        $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
+
+        self::assertStringContainsString('weline-detail-figure-row--pair', $out);
+        self::assertStringContainsString('weline-detail-figure-row--solo', $out);
+        self::assertGreaterThanOrEqual(1, substr_count($out, 'weline-detail-figure-row--pair'));
+        self::assertStringContainsString('width="790"', $out);
+    }
+
+    public function testNormalizeDescriptionLayoutKeepsNearSquareCollageBoardsSolo(): void
+    {
+        $base = '/pub/media/catalog/hanfu/1688/factory-yueya/731150010223';
+        // detail-02 ≈790×861 (~0.92) — 1688 multi-panel board, must not enter a half-column pair.
+        $html = '<img src="' . $base . '/detail-02-89008dbf3174.jpg" width="800" height="800" alt="board-a">'
+            . '<img src="' . $base . '/detail-05-3e614e1a7cfe.jpg" width="800" height="800" alt="board-b">';
+
+        $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
+
+        self::assertStringNotContainsString('weline-detail-figure-row--pair', $out);
+        self::assertSame(2, substr_count($out, 'weline-detail-figure-row--solo'));
+    }
+
+    public function testNormalizeDescriptionLayoutRePairsExistingFigureRows(): void
+    {
+        $base = '/pub/media/catalog/hanfu/1688/factory-yueya/731150010223';
+        // Stale pair markup (old rule) must be re-evaluated into solos for collage boards.
+        $html = '<div class="weline-detail-figure-stack">'
+            . '<div class="weline-detail-figure-row weline-detail-figure-row--pair">'
+            . '<figure class="weline-detail-figure"><img src="' . $base . '/detail-02-89008dbf3174.jpg" width="800" height="800" alt="a"></figure>'
+            . '<figure class="weline-detail-figure"><img src="' . $base . '/detail-05-3e614e1a7cfe.jpg" width="800" height="800" alt="b"></figure>'
+            . '</div></div>';
+
+        $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
+
+        self::assertStringNotContainsString('weline-detail-figure-row--pair', $out);
+        self::assertSame(2, substr_count($out, 'weline-detail-figure-row--solo'));
     }
 }

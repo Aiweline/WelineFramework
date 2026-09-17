@@ -30,7 +30,7 @@ class DeliveryAddress extends AbstractModel
     public const schema_fields_NAME = 'name';
     #[Col('varchar', 100, nullable: false, comment: '收货人姓名')]
     public const schema_fields_CONTACT_NAME = 'contact_name';
-    #[Col('varchar', 20, nullable: false, comment: '联系电话')]
+    #[Col('varchar', 32, nullable: false, comment: '联系电话')]
     public const schema_fields_CONTACT_PHONE = 'contact_phone';
     #[Col('varchar', 50, nullable: false, default: '中国', comment: '国家')]
     public const schema_fields_COUNTRY = 'country';
@@ -64,6 +64,12 @@ class DeliveryAddress extends AbstractModel
     public const schema_fields_IS_DEFAULT = 'is_default';
     #[Col('int', 1, nullable: false, default: 1, comment: '是否启用')]
     public const schema_fields_IS_ENABLED = 'is_enabled';
+    /** 结账地址用途：结账页保存/选择可见 */
+    #[Col('int', 1, nullable: false, default: 1, comment: '用途-结账地址')]
+    public const schema_fields_PURPOSE_CHECKOUT = 'purpose_checkout';
+    /** 收货地址用途：账户收货 / Header「配送至」可见 */
+    #[Col('int', 1, nullable: false, default: 1, comment: '用途-收货地址')]
+    public const schema_fields_PURPOSE_RECEIVING = 'purpose_receiving';
     #[Col('datetime', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('datetime', comment: '更新时间')]
@@ -75,7 +81,14 @@ class DeliveryAddress extends AbstractModel
     /**
      * 索引排序键（用于提升查询效率）
      */
-    public array $_index_sort_keys = ['delivery_address_id', 'customer_id', 'is_default', 'is_enabled'];
+    public array $_index_sort_keys = [
+        'delivery_address_id',
+        'customer_id',
+        'is_default',
+        'is_enabled',
+        'purpose_checkout',
+        'purpose_receiving',
+    ];
     /**
      * 初始化模型
      */
@@ -104,6 +117,17 @@ class DeliveryAddress extends AbstractModel
     {
         return (bool)$this->getData(self::schema_fields_IS_ENABLED);
     }
+
+    public function hasPurposeCheckout(): bool
+    {
+        return (int)$this->getData(self::schema_fields_PURPOSE_CHECKOUT) === 1;
+    }
+
+    public function hasPurposeReceiving(): bool
+    {
+        return (int)$this->getData(self::schema_fields_PURPOSE_RECEIVING) === 1;
+    }
+
     /**
      * 获取客户ID
      */

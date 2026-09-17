@@ -1206,7 +1206,7 @@ class ThemeLayoutService
     {
         unset($layoutId);
 
-        return null;
+        throw new \InvalidArgumentException('layout_id_api_removed');
     }
 
     /**

@@ -1,0 +1,69 @@
+<?php
+$campaigns = is_array($campaigns ?? null) ? $campaigns : [];
+$load_error = $load_error ?? '';
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$typeLabels = [
+    'welcome_customer' => __('欢迎礼'),
+    'idle_wake' => __('沉睡唤醒（未启用 Cron）'),
+    'birthday' => __('生日礼（未启用 Cron）'),
+];
+?>
+<div class="w-grid" data-testid="marketing-lifecycle-management">
+  <div style="--w-span:12;">
+    <div class="w-backend-page__heading">
+      <div>
+        <h4 class="w-backend-page__title" style="--w-mb:0;"><?= __('生命周期活动') ?></h4>
+        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+          <?= __('注册后欢迎信 ± 礼券；同客同活动仅发送一次。') ?>
+        </p>
+      </div>
+      <a class="w-button" data-tone="primary" data-size="sm" href="<?= $escape($this->getUrl('*/backend/lifecycle/add')) ?>" data-testid="marketing-lifecycle-create">
+        <?= __('新建生命周期活动') ?>
+      </a>
+    </div>
+    <?php if ($load_error !== ''): ?>
+      <div class="w-alert" data-tone="danger"><?= $escape($load_error) ?></div>
+    <?php endif; ?>
+    <div class="w-card"><div class="w-card__body">
+      <div class="w-table-wrap">
+        <table class="w-table" data-testid="marketing-lifecycle-table">
+          <thead>
+          <tr>
+            <th><?= __('ID') ?></th>
+            <th><?= __('名称') ?></th>
+            <th><?= __('类型') ?></th>
+            <th><?= __('状态') ?></th>
+            <th><?= __('激励规则') ?></th>
+            <th><?= __('网站') ?></th>
+            <th><?= __('操作') ?></th>
+          </tr>
+          </thead>
+          <tbody>
+          <?php if ($campaigns === []): ?>
+            <tr><td colspan="7" class="w-text" data-align="center" data-tone="muted"><?= __('还没有生命周期活动') ?></td></tr>
+          <?php else: foreach ($campaigns as $row):
+            $id = (int)(is_object($row) ? $row->getId() : ($row['id'] ?? 0));
+            $name = (string)(is_object($row) ? $row->getData('name') : ($row['name'] ?? ''));
+            $type = (string)(is_object($row) ? $row->getData('type') : ($row['type'] ?? ''));
+            $status = (string)(is_object($row) ? $row->getData('status') : ($row['status'] ?? ''));
+            $ruleId = (int)(is_object($row) ? $row->getData('incentive_rule_id') : ($row['incentive_rule_id'] ?? 0));
+            $websiteId = (int)(is_object($row) ? $row->getData('website_id') : ($row['website_id'] ?? 0));
+          ?>
+            <tr>
+              <td><?= $id ?></td>
+              <td><?= $escape($name) ?></td>
+              <td><?= $escape($typeLabels[$type] ?? $type) ?></td>
+              <td><span class="w-badge" data-tone="<?= $status === 'enabled' ? 'success' : 'neutral' ?>"><?= $escape($status === 'enabled' ? __('已启用') : __('已停用')) ?></span></td>
+              <td><?= $ruleId > 0 ? $ruleId : '—' ?></td>
+              <td><?= $websiteId > 0 ? $websiteId : __('全部') ?></td>
+              <td>
+                <a class="w-button" data-tone="neutral" data-size="sm" href="<?= $escape($this->getUrl('*/backend/lifecycle/edit', ['id' => $id])) ?>"><?= __('编辑') ?></a>
+              </td>
+            </tr>
+          <?php endforeach; endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div></div>
+  </div>
+</div>

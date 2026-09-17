@@ -6,6 +6,7 @@ namespace Weline\Framework\Event\ResourceChange;
 
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\Async\ContextSnapshot;
+use Weline\Framework\Manager\ObjectManager;
 
 final class ResourceChangeFactory
 {
@@ -40,6 +41,8 @@ final class ResourceChangeFactory
         array $origin = [],
         ?string $previousWebsiteCode = null,
         int $siteId = 0,
+        ?string $resourceCode = null,
+        ?string $resourceScope = null,
     ): ResourceChange {
         $websiteCode = trim($websiteCode);
         $previousWebsiteCode = $previousWebsiteCode === null
@@ -68,17 +71,41 @@ final class ResourceChangeFactory
             $normalizedImpact['cache_ops'] = $this->normalizeCacheOps((array)$impact['cache_ops']);
         }
 
+        $resource = [
+            'type' => strtolower(trim($resourceType)),
+            'id' => (string)$resourceId,
+            'action' => $action,
+            'revision' => $revision,
+        ];
+        $resourceCode = $resourceCode === null ? null : trim($resourceCode);
+        if ($resourceCode !== null && $resourceCode !== '') {
+            $resource['code'] = $resourceCode;
+        }
+        $resourceScope = $resourceScope === null ? null : strtolower(trim($resourceScope));
+        if ($resourceScope === null || $resourceScope === '') {
+            try {
+                if (class_exists(\Weline\FileManager\Service\MediaReference\MediaReferenceScopeResolver::class)) {
+                    $resolved = ObjectManager::getInstance(
+                        \Weline\FileManager\Service\MediaReference\MediaReferenceScopeResolver::class
+                    )->fromContext();
+                    if (is_string($resolved) && $resolved !== '') {
+                        $resourceScope = $resolved;
+                    }
+                }
+            } catch (\Throwable) {
+                // optional fill only
+            }
+        }
+        if ($resourceScope !== null && $resourceScope !== '') {
+            $resource['scope'] = $resourceScope;
+        }
+
         return ResourceChange::fromArray([
             'schema_version' => ResourceChange::SCHEMA_VERSION,
             'event_id' => bin2hex(random_bytes(16)),
             'event_name' => ResourceChange::EVENT_NAME,
             'occurred_at' => $this->utcMicrotime(),
-            'resource' => [
-                'type' => strtolower(trim($resourceType)),
-                'id' => (string)$resourceId,
-                'action' => $action,
-                'revision' => $revision,
-            ],
+            'resource' => $resource,
             'website' => [
                 'id' => $websiteId,
                 'code' => $websiteCode,

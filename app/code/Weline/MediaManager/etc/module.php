@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_MediaManager',
-    "version" => '1.3.2',
+    "version" => '1.3.5',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_FileManager' => '>=1.1.5',

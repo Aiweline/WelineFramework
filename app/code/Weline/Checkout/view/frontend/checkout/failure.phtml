@@ -1,0 +1,184 @@
+<?php
+/**
+ * 结算失败页业务内容（对齐结账成功页英雄区结构，danger 语气）。
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$title = trim((string)($this->getData('title') ?? __('订单尚未完成')));
+$errorMessage = trim((string)($this->getData('error_message') ?? ''));
+if ($errorMessage === '') {
+    $errorMessage = (string)__(
+        '本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。'
+    );
+}
+$errorCode = trim((string)($this->getData('error_code') ?? ''));
+$retryUrl = trim((string)($this->getData('retry_url') ?? ''));
+?>
+<main class="amz-order-confirm amz-order-confirm--danger checkout-failure-page weline-pixel::checkout_failure"
+    weline-code="checkout.checkout.failure.section_1"
+    data-testid="checkout-failure"
+    data-weline-load="cart,checkoutLifecycle"
+    data-checkout-lifecycle="failure"
+    data-payment-outcome="failure"
+    data-pixel-event="checkout_failure"
+    <?php if ($errorCode !== ''): ?>
+    data-error-code="<?= $escape($errorCode) ?>"
+    <?php endif; ?>
+>
+    <header class="amz-order-confirm__banner amz-order-confirm__banner--hero">
+        <div class="amz-order-confirm__banner-inner">
+            <span class="amz-order-confirm__check" aria-hidden="true">×</span>
+            <div class="amz-order-confirm__banner-copy">
+                <h1><?= $escape($title) ?></h1>
+                <p><?= $escape($errorMessage) ?></p>
+                <?php if ($errorCode !== ''): ?>
+                    <p class="amz-order-confirm__order-no">
+                        <?= $escape(__('错误代码')) ?>：
+                        <strong><?= $escape($errorCode) ?></strong>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </header>
+
+    <section class="amz-order-confirm__panel" weline-code="checkout.checkout.failure.actions">
+        <div class="amz-order-confirm__actions">
+            <?php if ($retryUrl !== ''): ?>
+                <a class="amz-order-confirm__btn amz-order-confirm__btn--primary"
+                   href="<?= $escape($retryUrl) ?>"
+                   data-testid="checkout-failure-retry"><?= $escape(__('重试结算')) ?></a>
+            <?php endif; ?>
+            <a class="amz-order-confirm__btn amz-order-confirm__btn--primary"
+               href="@url{'cart'}"
+               data-testid="checkout-failure-cart"><?= $escape(__('返回购物车')) ?></a>
+            <a class="amz-order-confirm__btn amz-order-confirm__btn--secondary"
+               href="@url{'checkout'}"
+               data-testid="checkout-failure-checkout"><?= $escape(__('返回结账')) ?></a>
+            <a class="amz-order-confirm__btn amz-order-confirm__btn--secondary"
+               href="@url{'faq'}"
+               data-testid="checkout-failure-help"><?= $escape(__('查看帮助中心')) ?></a>
+        </div>
+    </section>
+</main>
+
+<style>
+.amz-order-confirm {
+    --amz-text: var(--color-text, #0f1111);
+    --amz-muted: var(--color-text-muted, #565959);
+    --amz-border: var(--color-border, #d5d9d9);
+    --amz-panel-bg: var(--color-surface, #fff);
+    --amz-banner-bg: var(--color-surface-subtle, #f7fafa);
+    --amz-link: var(--color-link);
+    --amz-btn-primary-bg: var(--color-primary, #b84a3c);
+    --amz-btn-primary-border: var(--color-primary-dark, #963b30);
+    --amz-btn-primary-hover: var(--color-primary-hover, #963b30);
+    --amz-btn-primary-fg: var(--color-on-primary, #fff);
+    box-sizing: border-box;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    min-width: 0;
+    margin: 0 auto;
+    padding: var(--weline-space-5, 24px) var(--weline-layout-content-padding-inline) var(--weline-space-8, 48px);
+    color: var(--amz-text);
+    font-size: var(--weline-font-size-sm, 14px);
+    line-height: 1.5;
+}
+.amz-order-confirm__banner--hero {
+    text-align: center;
+    padding-bottom: var(--weline-space-5, 20px);
+    margin-bottom: var(--weline-space-5, 20px);
+    border-bottom: 1px solid var(--amz-border);
+}
+.amz-order-confirm__banner-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--weline-space-4, 14px);
+    padding: var(--weline-space-2, 8px) 0 0;
+    max-width: min(100%, var(--size-content-640, 40rem));
+    margin-inline: auto;
+}
+.amz-order-confirm__check {
+    flex-shrink: 0;
+    width: var(--size-panel-120, 7.5rem);
+    height: var(--size-panel-120, 7.5rem);
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--weline-theme-danger-surface, var(--color-danger-surface, #f8e8e4));
+    color: var(--color-danger, #b12704);
+    font-size: calc(var(--size-panel-120, 7.5rem) * 0.42);
+    font-weight: 700;
+    line-height: 1;
+}
+.amz-order-confirm h1,
+.amz-order-confirm p { margin: 0; color: inherit; }
+.amz-order-confirm__banner-copy { width: 100%; }
+.amz-order-confirm__banner-copy h1 {
+    font-size: var(--weline-font-size-2xl, 1.5rem);
+    font-weight: 700;
+    line-height: 1.25;
+}
+.amz-order-confirm__banner-copy > p {
+    margin-top: var(--weline-space-2, 8px);
+    color: var(--amz-muted);
+    font-size: var(--weline-font-size-sm, 14px);
+}
+.amz-order-confirm__order-no {
+    margin-top: var(--weline-space-3, 10px) !important;
+    color: var(--amz-text) !important;
+    font-size: var(--weline-font-size-sm, 15px);
+}
+.amz-order-confirm__panel {
+    background: var(--amz-panel-bg);
+    border: 1px solid var(--amz-border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+}
+.amz-order-confirm__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-3, 12px) var(--weline-space-4, 16px);
+}
+.amz-order-confirm__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+    padding: 0 var(--weline-space-4, 16px);
+    border-radius: var(--weline-radius-md, 8px);
+    font-size: var(--weline-font-size-sm, 13px);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+.amz-order-confirm__btn--primary {
+    background: var(--amz-btn-primary-bg);
+    border: 1px solid var(--amz-btn-primary-border);
+    color: var(--amz-btn-primary-fg);
+}
+.amz-order-confirm__btn--primary:hover {
+    background: var(--amz-btn-primary-hover);
+    color: var(--amz-btn-primary-fg);
+}
+.amz-order-confirm__btn--secondary {
+    background: var(--amz-panel-bg);
+    border: 1px solid var(--amz-border);
+    color: var(--amz-text);
+}
+.amz-order-confirm__btn--secondary:hover {
+    background: var(--amz-banner-bg);
+    color: var(--amz-text);
+}
+@media (max-width: 720px) {
+    .amz-order-confirm__actions { flex-direction: column; align-items: stretch; }
+    .amz-order-confirm__btn--primary,
+    .amz-order-confirm__btn--secondary { width: 100%; }
+}
+</style>

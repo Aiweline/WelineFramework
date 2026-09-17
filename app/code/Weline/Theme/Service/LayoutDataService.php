@@ -202,26 +202,37 @@ class LayoutDataService
             return $layouts;
         }
 
-        // 扫描一级子目录（每个子目录代表一个布局类型）
-        $dirs = glob($layoutsDir . DS . '*', GLOB_ONLYDIR);
-        foreach ($dirs as $dir) {
-            $layoutType = basename($dir);
-            
-            // 扫描该布局类型下的所有 .phtml 文件
-            $files = glob($dir . DS . '*.phtml');
-            if (!empty($files)) {
-                $options = [];
-                foreach ($files as $file) {
-                    $fileName = basename($file, '.phtml');
-                    $meta = LayoutScanner::extractLayoutMeta($file, 'frontend');
-                    $options[] = [
-                        'value' => $fileName,
-                        'meta' => $meta,
-                        'file' => $fileName . '.phtml'
-                    ];
-                }
-                $layouts[$layoutType] = $options;
+        // 与 LayoutScanner / ThemeResourceCatalog 一致：末段=option，前缀=layoutType（可嵌套）
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($layoutsDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'phtml') {
+                continue;
             }
+            $filePath = $file->getPathname();
+            $relativePath = str_replace($layoutsDir . DS, '', $filePath);
+            $relativePath = str_replace(DS, '/', $relativePath);
+            $pathParts = explode('/', $relativePath);
+            $fileName = basename($relativePath, '.phtml');
+
+            if (count($pathParts) === 1) {
+                $layoutType = $fileName;
+                $option = 'default';
+            } else {
+                $layoutType = implode('/', array_slice($pathParts, 0, -1));
+                $option = $fileName;
+            }
+
+            $meta = LayoutScanner::extractLayoutMeta($filePath, 'frontend');
+            $layouts[$layoutType] ??= [];
+            $layouts[$layoutType][] = [
+                'value' => $option,
+                'meta' => $meta,
+                'file' => $relativePath,
+            ];
         }
 
         return $layouts;
@@ -241,19 +252,14 @@ class LayoutDataService
             'homepage' => __('首页'),
             'category' => __('分类页'),
             'product' => __('产品页'),
-            'product_list' => __('产品列表页'),
+            'products' => __('产品列表页'),
             'cms_page' => __('CMS页面'),
             'cart' => __('购物车'),
             'checkout' => __('结算页'),
-            'checkout_success' => __('结算成功页'),
-            'checkout_failure' => __('结算失败页'),
-            'checkout_failer' => __('结算失败页'),
+            'checkout/success' => __('结算成功页'),
+            'checkout/failure' => __('结算失败页'),
             'not_found' => __('404 页面'),
             'account' => __('账户中心'),
-            'account_auth' => __('账户认证'),
-            'account_logout' => __('退出登录'),
-            'account_orders' => __('订单列表'),
-            'account_profile' => __('个人资料'),
             'search' => __('搜索页'),
             'blog' => __('博客详情'),
             'blog_category' => __('博客分类'),
@@ -266,7 +272,6 @@ class LayoutDataService
             'policy' => __('政策页面'),
             'promotion' => __('促销页'),
             'activity' => __('活动页'),
-            'review' => __('评价页'),
             'qa' => __('问答页'),
             'rma' => __('退换货页'),
             'terms' => __('服务条款'),

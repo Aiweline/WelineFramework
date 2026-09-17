@@ -76,6 +76,12 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('weline:cart-updated', $source);
         self::assertStringContainsString('isCheckoutPath', $source);
         self::assertStringContainsString("setDrawerOpen(root, false)", $source);
+        self::assertStringContainsString('suppressBackdropCloseUntil', $source);
+        self::assertStringContainsString('noteDrawerLineInteraction', $source);
+        self::assertStringContainsString('shouldSuppressBackdropClose', $source);
+        self::assertStringContainsString('keepDrawerOpen', $source);
+        self::assertStringContainsString('event.stopPropagation()', $source);
+        self::assertStringContainsString('never collapse the drawer', $source);
         self::assertStringContainsString('miniItems', $source);
         self::assertStringContainsString('update', $source);
         self::assertStringContainsString('remove', $source);

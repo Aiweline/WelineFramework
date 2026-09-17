@@ -91,8 +91,12 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringNotContainsString('w:editor-manager', $editStub);
 
         $edit = (string)file_get_contents($root . '/view/Backend/Template/edit.phtml');
-        self::assertStringContainsString('w:editor-manager', $edit);
-        self::assertStringContainsString('container-id="smtp-tpl-body"', $edit);
+        // 自研可视化：禁止再挂 CKEditor / editor-manager
+        self::assertStringNotContainsString('w:editor-manager', $edit);
+        self::assertStringNotContainsString('ckeditorInstance', $edit);
+        self::assertStringNotContainsString('<w:editor', $edit);
+        self::assertDoesNotMatchRegularExpression('/<textarea[^>]*\seditor\b/', $edit);
+        self::assertStringContainsString('data-testid="smtp-template-body-source"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-editor-shell"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-edit-toolbar"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-back-listing"', $edit);
@@ -115,13 +119,21 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('window.location.assign', $edit);
         self::assertStringContainsString('el.matches(\'input[name="target_scope"]\')', $edit);
         self::assertStringNotContainsString('<code class="w-text" data-size="sm"><?= $h($selectedScope) ?></code>', $edit);
-        self::assertStringContainsString('data-testid="smtp-template-edit-workspace"', $edit);
+        self::assertStringContainsString('data-testid="smtp-visual-editor"', $edit);
+        self::assertStringContainsString('data-testid="smtp-ve-region-tabs"', $edit);
+        self::assertStringContainsString('data-testid="smtp-ve-tab-all"', $edit);
+        self::assertStringContainsString('data-region="all"', $edit);
+        self::assertStringContainsString('isAllRegionView', $edit);
+        self::assertStringContainsString('resolveRegionRoot', $edit);
+        self::assertStringContainsString('data-testid="smtp-ve-style-toolbar"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-vars-content"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-vars-identity"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-vars-tone"', $edit);
-        self::assertStringContainsString('w-smtp-edit-main', $edit);
-        self::assertStringContainsString('position: sticky', $edit);
-        self::assertStringContainsString('ckeditorInstance', $edit);
+        self::assertStringContainsString('w-smtp-visual-editor', $edit);
+        self::assertStringContainsString('shell_regions_json', $edit);
+        self::assertStringNotContainsString('ckeditorInstance', $edit);
+        self::assertStringNotContainsString('allowSourceEditorSync', $edit);
+        self::assertStringNotContainsString('bindSourceEditor', $edit);
         self::assertStringContainsString('data-testid="smtp-template-vars"', $edit);
         self::assertStringContainsString('data-var-code', $edit);
         self::assertStringContainsString("'{' + '{var.'", $edit);
@@ -134,11 +146,46 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('preview_samples', $controllerSrc);
         self::assertStringContainsString('buildPreviewSamples', $controllerSrc);
         self::assertStringContainsString('buildPreviewSamples($mergedVars, $editScope, $editLocale)', $controllerSrc);
+        self::assertStringContainsString('MailShellRegionStore', $controllerSrc);
+        self::assertStringContainsString('MailThemeFontCatalog', $controllerSrc);
+        self::assertStringContainsString('shell_regions_json', $controllerSrc);
+        self::assertStringContainsString('readMailChannelFromRequest', $controllerSrc);
+        self::assertStringContainsString("str_contains(\$value, '::')", $controllerSrc);
+        self::assertStringContainsString('name="mail_channel"', $edit);
+        self::assertStringContainsString('data-testid="smtp-template-mail-channel"', $edit);
         $brandSrc = (string)file_get_contents($root . '/Service/MailBrandContextService.php');
         self::assertStringContainsString('function buildPreviewSamples', $brandSrc);
         self::assertStringContainsString('localizePreviewText', $brandSrc);
         self::assertStringContainsString('scopeLockPreviewSample', $brandSrc);
-        self::assertStringContainsString('renderPreview', $edit);
+        self::assertStringContainsString('data-weline-mail-var', $edit);
+        self::assertStringContainsString('smtp-ve-var-hint', $edit);
+        self::assertStringContainsString('applyTextColor', $edit);
+        self::assertStringContainsString('pickStyleTarget', $edit);
+        self::assertStringContainsString('w-smtp-ve-selected', $edit);
+        self::assertStringContainsString('outline-offset:-6px', $edit);
+        self::assertStringContainsString('is-floating', $edit);
+        self::assertStringContainsString('positionFloatingToolbar', $edit);
+        self::assertStringContainsString('hideFloatingToolbar', $edit);
+        self::assertStringContainsString('clearActiveSelection', $edit);
+        self::assertStringNotContainsString('allowSourceEditorSync', $edit);
+        self::assertStringNotContainsString('bindSourceEditor', $edit);
+        self::assertStringContainsString('smtp-template-advanced', $edit);
+        self::assertStringContainsString('width:1%', $edit);
+        self::assertStringContainsString('min-width:4.5em', $edit);
+        self::assertStringContainsString('renderPreviewIfBlocks', $edit);
+        self::assertStringContainsString('restoreMailIfBlocks', $edit);
+        self::assertStringContainsString('scrubPreviewDebris', $edit);
+        self::assertStringContainsString('data-weline-mail-if', $edit);
+        self::assertStringContainsString('getViewportRectForEl', $edit);
+        // 可视化须展示邮件配置三区背景图，禁止再强制 none
+        self::assertStringNotContainsString('background-image:none', $edit);
+        self::assertStringContainsString('background-size:cover', $edit);
+        self::assertStringContainsString('overflow-wrap:break-word', $edit);
+        self::assertStringNotContainsString('overflow-wrap:anywhere', $edit);
+        self::assertStringContainsString('smtp-ve-text-color-field', $edit);
+        self::assertStringContainsString('smtp-ve-color-hex', $edit);
+        self::assertStringContainsString('文字颜色', $edit);
+        self::assertStringContainsString('w-smtp-ve-color-input', $edit);
         self::assertStringContainsString("'{' + '{MAIL_BODY}}'", $edit);
         self::assertStringContainsString('form="smtp-template-save-form"', $edit);
         self::assertStringContainsString('form="smtp-template-reset-form"', $edit);
@@ -146,7 +193,7 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('data-testid="smtp-template-reset"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-save"', $edit);
         self::assertStringNotContainsString('view/templates/Backend/Template/edit.phtml', $edit);
-        self::assertMatchesRegularExpression('/textarea[^>]*\\seditor\\b/', $edit);
+        self::assertDoesNotMatchRegularExpression('/<textarea[^>]*\seditor\b/', $edit);
     }
 
     public function testSendPathUsesTemplateServices(): void
@@ -189,5 +236,44 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertSame('Hi <b>x</b>', $raw);
         $stripped = $renderer->stripScripts('<p>a</p><script>alert(1)</script>');
         self::assertStringNotContainsString('<script', $stripped);
+    }
+
+    public function testRendererEvaluatesIfBlocks(): void
+    {
+        $renderer = new \Weline\Smtp\Service\MailTemplateRenderer();
+        $tpl = 'X{{#if var.continue_pay_url}}<a href="{{var.continue_pay_url}}">Pay</a>{{/if}}Y';
+        $with = $renderer->render($tpl, ['continue_pay_url' => 'https://pay.test/x'], ['continue_pay_url']);
+        self::assertSame('X<a href="https://pay.test/x">Pay</a>Y', $with);
+        self::assertStringNotContainsString('{{#if', $with);
+        self::assertStringNotContainsString('{{/if}}', $with);
+
+        $without = $renderer->render($tpl, ['continue_pay_url' => ''], ['continue_pay_url']);
+        self::assertSame('XY', $without);
+        self::assertStringNotContainsString('Pay', $without);
+    }
+
+    public function testUnpaidOrderReminderTemplateIfCleared(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $file = $root . '/view/email/unpaid_order_reminder/en_US.html';
+        if (!is_file($file)) {
+            // 模块种子在 Marketing；Smtp catalog 同步同语法
+            $file = dirname($root) . '/Marketing/view/email/unpaid_order_reminder/en_US.html';
+        }
+        self::assertFileExists($file);
+        $tpl = (string)file_get_contents($file);
+        $renderer = new \Weline\Smtp\Service\MailTemplateRenderer();
+        $out = $renderer->render($tpl, [
+            'customer_name' => 'Buyer',
+            'order_number' => 'WB-1',
+            'currency' => 'USD',
+            'grand_total' => '99.00',
+            'created_at' => '2026-09-13 10:00:00',
+            'continue_pay_url' => 'https://shop.test/pay',
+        ], ['customer_name', 'order_number', 'currency', 'grand_total', 'created_at', 'continue_pay_url']);
+        self::assertStringContainsString('https://shop.test/pay', $out);
+        self::assertStringContainsString('Continue payment', $out);
+        self::assertStringNotContainsString('{{#if', $out);
+        self::assertStringNotContainsString('{{/if}}', $out);
     }
 }

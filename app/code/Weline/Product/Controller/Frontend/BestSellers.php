@@ -20,7 +20,7 @@ final class BestSellers extends FrontendController
     {
         $title = (string)__('热销榜');
         $this->layoutType = 'best_sellers';
-        $this->request->setGet('page_type', 'product_list');
+        $this->request->setGet('page_type', 'products');
         $this->request->setGet('layout_type', 'best_sellers');
         $this->request->setGet('layout_option', 'default');
         $this->request->setGet('theme_public_route', 'best-sellers');
@@ -32,7 +32,7 @@ final class BestSellers extends FrontendController
         $this->assign('storefront_best_sellers', $items);
         $this->assign('storefront_best_sellers_count', count($items));
         $this->assign('seo', [
-            'page_type' => 'product_list',
+            'page_type' => 'products',
             'title' => $title,
             'item_list' => $this->listingFacts->itemListFromCards($items),
             'breadcrumbs' => $this->listingFacts->withHomeBreadcrumb([

@@ -22,6 +22,9 @@ final class SeoInspectorPanelGateContractTest extends TestCase
         self::assertStringContainsString('data-weline-seo-copy-html', $inspector);
         self::assertStringContainsString('seo/gsc/inspect', $inspector);
         self::assertStringContainsString("requiredTypes: [\"BreadcrumbList\", \"Organization\", \"WebSite\"]", $inspector);
+        self::assertStringContainsString("requiredTypes: [\"AboutPage\", \"BreadcrumbList\"]", $inspector);
+        self::assertStringContainsString('if (/\\/about(?:\\/|$)/.test(path)) return "about";', $inspector);
+        self::assertStringContainsString('about: { required: ["AboutPage", "Organization", "WebSite", "BreadcrumbList"]', $inspector);
         self::assertStringContainsString('if (/\/blog$/.test(path)) return "collection";', $inspector);
         self::assertStringContainsString('explicitNorm === "blog_list" || explicitNorm === "blog_category"', $inspector);
         self::assertStringContainsString('never invent "… +N" placeholders', $inspector);

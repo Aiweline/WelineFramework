@@ -46,6 +46,9 @@ function store_music_fixture_audio_path(string $format = 'mp3'): string
         throw new RuntimeException('unable to create store-music e2e media dir');
     }
     $format = strtolower(trim($format));
+    if ($format === 'real') {
+        return '/media/store-music/HITA-赤伶.mp3';
+    }
     if ($format === 'm4a') {
         $file = $dir . '/beep.m4a';
         if (!is_file($file)) {
@@ -251,8 +254,14 @@ function store_music_snapshot(string $token): void
 
 function store_music_restore(string $token): array
 {
-    $path = store_music_snapshot_path($token);
     $realBackup = BP . '/var/tmp/store-music-last-real.json';
+    // Explicit last-real token must never resolve to store-music-e2e-last-real.json
+    // (snapshot_path prefixes e2e-); always use the durable real backup file.
+    if ($token === 'last-real') {
+        $path = $realBackup;
+    } else {
+        $path = store_music_snapshot_path($token);
+    }
     if (!is_file($path)) {
         if (is_file($realBackup)) {
             $path = $realBackup;
@@ -278,6 +287,7 @@ function store_music_restore(string $token): array
         if (is_array($realSnap) && is_array($realSnap['entries'] ?? null)) {
             $snapshot = $realSnap;
             $entries = $realSnap['entries'];
+            $path = $realBackup;
         }
     }
     /** @var ConfigStore $store */
@@ -304,12 +314,25 @@ function store_music_restore(string $token): array
         );
     }
     $tokenPath = store_music_snapshot_path($token);
-    if (is_file($tokenPath)) {
+    if ($token !== 'last-real' && is_file($tokenPath)) {
         @unlink($tokenPath);
     }
     store_music_flush_runtime_caches();
 
-    return ['ok' => true, 'restored' => true];
+    // CH1 disable → CH2 enable can overwrite the token snapshot with an empty
+    // gate-off payload; never leave the shop without the durable real playlist.
+    $status = store_music_status();
+    $inactive = empty($status['active']) || empty($status['enabled']) || trim((string)($status['track'] ?? '')) === '';
+    $blob = json_encode($status, JSON_UNESCAPED_UNICODE) ?: '';
+    $stillE2e = str_contains($blob, 'store-music-e2e') || str_contains($blob, 'E2E');
+    if (($inactive || $stillE2e) && $token !== 'last-real' && is_file($realBackup)) {
+        return store_music_restore('last-real');
+    }
+    if ($stillE2e && $token === 'last-real') {
+        throw new RuntimeException('last-real restore still exposes E2E playlist');
+    }
+
+    return ['ok' => true, 'restored' => true, 'tracks' => count(($status['payload']['tracks'] ?? []) ?: [])];
 }
 
 /**
@@ -321,7 +344,9 @@ function store_music_enable(array $input): array
     store_music_snapshot($token);
     $delay = max(1, min(15, (int)($input['delay_seconds'] ?? 2)));
     $format = strtolower(trim((string)($input['format'] ?? 'mp3')));
-    $track = store_music_fixture_audio_path($format === 'm4a' ? 'm4a' : 'mp3');
+    $track = store_music_fixture_audio_path(
+        $format === 'm4a' ? 'm4a' : ($format === 'real' ? 'real' : 'mp3')
+    );
     $playlist = StoreMusicSettings::encodePlaylist([
         [
             'url' => $track,

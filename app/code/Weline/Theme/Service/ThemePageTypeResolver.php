@@ -24,12 +24,16 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_CHECKOUT => ThemeLayout::PAGE_TYPE_CHECKOUT,
         ThemeLayout::PAGE_TYPE_ACCOUNT => ThemeLayout::PAGE_TYPE_ACCOUNT,
         ThemeLayout::PAGE_TYPE_DASHBOARD => ThemeLayout::PAGE_TYPE_DASHBOARD,
-        'account_auth' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         'account.auth' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/login' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/register' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/forgot-password' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/set-password' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/social-login' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/logout' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/orders' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account/profile' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         'account.challenge' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account_profile' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account_orders' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account_logout' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         ThemeLayout::PAGE_TYPE_SEARCH => ThemeLayout::PAGE_TYPE_SEARCH,
         ThemeLayout::PAGE_TYPE_BLOG => ThemeLayout::PAGE_TYPE_BLOG,
         ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => ThemeLayout::PAGE_TYPE_BLOG_CATEGORY,
@@ -37,6 +41,8 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_ACTIVITY => ThemeLayout::PAGE_TYPE_ACTIVITY,
         ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
         ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+        'checkout_success' => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
+        'checkout_failure' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
         'checkout_failer' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
         ThemeLayout::PAGE_TYPE_FAQ => ThemeLayout::PAGE_TYPE_FAQ,
         ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE => ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE,
@@ -44,43 +50,14 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_ABOUT => ThemeLayout::PAGE_TYPE_ABOUT,
         ThemeLayout::PAGE_TYPE_CONTACT => ThemeLayout::PAGE_TYPE_CONTACT,
         'customer_service' => ThemeLayout::PAGE_TYPE_CONTACT,
-        ThemeLayout::PAGE_TYPE_REVIEW => ThemeLayout::PAGE_TYPE_REVIEW,
         ThemeLayout::PAGE_TYPE_QA => ThemeLayout::PAGE_TYPE_QA,
         ThemeLayout::PAGE_TYPE_RMA => ThemeLayout::PAGE_TYPE_RMA,
         ThemeLayout::PAGE_TYPE_POLICY => ThemeLayout::PAGE_TYPE_POLICY,
         ThemeLayout::PAGE_TYPE_TERMS => ThemeLayout::PAGE_TYPE_TERMS,
         ThemeLayout::PAGE_TYPE_NOT_FOUND => ThemeLayout::PAGE_TYPE_NOT_FOUND,
+        ThemeLayout::PAGE_TYPE_ERROR => ThemeLayout::PAGE_TYPE_ERROR,
+        ThemeLayout::PAGE_TYPE_SITEMAP => ThemeLayout::PAGE_TYPE_SITEMAP,
         ThemeLayout::PAGE_TYPE_DEFAULT => ThemeLayout::PAGE_TYPE_DEFAULT,
-    ];
-
-    private const PREVIEW_ROUTE_BY_PAGE_TYPE = [
-        ThemeLayout::PAGE_TYPE_HOME => 'index/index',
-        ThemeLayout::PAGE_TYPE_CATEGORY => 'theme/frontend/theme-preview/content',
-        ThemeLayout::PAGE_TYPE_PRODUCT => 'theme/frontend/theme-preview/content',
-        ThemeLayout::PAGE_TYPE_PRODUCT_LIST => 'theme/frontend/theme-preview/content',
-        ThemeLayout::PAGE_TYPE_CMS => 'page/default',
-        ThemeLayout::PAGE_TYPE_CART => 'cart',
-        ThemeLayout::PAGE_TYPE_CHECKOUT => 'checkout',
-        ThemeLayout::PAGE_TYPE_ACCOUNT => 'account',
-        ThemeLayout::PAGE_TYPE_SEARCH => 'search',
-        ThemeLayout::PAGE_TYPE_BLOG => 'blog',
-        ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => 'blog',
-        ThemeLayout::PAGE_TYPE_PROMOTION => 'promotion',
-        ThemeLayout::PAGE_TYPE_ACTIVITY => 'activity',
-        ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => 'checkout/success',
-        ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => 'theme/frontend/theme-preview/content',
-        ThemeLayout::PAGE_TYPE_FAQ => 'faq',
-        ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE => 'guide/payment',
-        ThemeLayout::PAGE_TYPE_GUIDE => 'guide/shipping',
-        ThemeLayout::PAGE_TYPE_ABOUT => 'about',
-        ThemeLayout::PAGE_TYPE_CONTACT => 'contact',
-        ThemeLayout::PAGE_TYPE_REVIEW => 'review',
-        ThemeLayout::PAGE_TYPE_QA => 'qa',
-        ThemeLayout::PAGE_TYPE_RMA => 'rma',
-        ThemeLayout::PAGE_TYPE_POLICY => 'policy',
-        ThemeLayout::PAGE_TYPE_TERMS => 'terms',
-        ThemeLayout::PAGE_TYPE_NOT_FOUND => 'theme/frontend/theme-preview/content',
-        ThemeLayout::PAGE_TYPE_DEFAULT => 'index/index',
     ];
 
     public function extractBaseLayoutType(?string $layoutType): string
@@ -135,22 +112,92 @@ final class ThemePageTypeResolver
             return ThemeLayout::PAGE_TYPE_DEFAULT;
         }
 
-        return self::LAYOUT_TO_PAGE_TYPE[$baseLayoutType] ?? $baseLayoutType;
-    }
-
-    public function getPreviewRouteByPageType(?string $pageType): string
-    {
-        $pageType = trim((string)$pageType);
-        if ($pageType === '') {
-            $pageType = ThemeLayout::PAGE_TYPE_DEFAULT;
+        if (isset(self::LAYOUT_TO_PAGE_TYPE[$baseLayoutType])) {
+            return self::LAYOUT_TO_PAGE_TYPE[$baseLayoutType];
         }
 
-        return self::PREVIEW_ROUTE_BY_PAGE_TYPE[$pageType] ?? self::PREVIEW_ROUTE_BY_PAGE_TYPE[ThemeLayout::PAGE_TYPE_DEFAULT];
+        // 嵌套 layoutType：account/login → page_type=account（编辑器/预览仍归账户族）
+        if (str_starts_with($baseLayoutType, 'account/')) {
+            return ThemeLayout::PAGE_TYPE_ACCOUNT;
+        }
+
+        return $baseLayoutType;
     }
 
-    public function getPreviewPathByPageType(?string $pageType): string
+    /**
+     * Path ↔ layout 1:1.
+     *
+     * - Explicit storefront path (click / sample / theme_public_route) wins unchanged.
+     * - Otherwise the preview route IS the layout path (homepage → "").
+     * - Dynamic slug pages must pass themePublicRoute / preview_sample — never invent
+     *   theme-preview/content or module-aliased paths from a lookup table.
+     */
+    public function getPreviewRouteByPageType(?string $pageType, ?string $themePublicRoute = null): string
     {
-        return '/' . ltrim($this->getPreviewRouteByPageType($pageType), '/');
+        $publicRoute = $this->normalizeStorefrontPublicRoute((string)$themePublicRoute);
+        if ($publicRoute !== '') {
+            return $publicRoute;
+        }
+
+        $layoutPath = strtolower(trim(str_replace('\\', '/', (string)$pageType), '/'));
+        if ($layoutPath === ''
+            || $layoutPath === ThemeLayout::PAGE_TYPE_DEFAULT
+            || $layoutPath === ThemeLayout::PAGE_TYPE_HOME
+            || $layoutPath === 'index'
+            || $layoutPath === 'index/index'
+            || $this->isNonStorefrontPublicRoute($layoutPath)
+        ) {
+            return '';
+        }
+
+        return $layoutPath;
+    }
+
+    public function getPreviewPathByPageType(?string $pageType, ?string $themePublicRoute = null): string
+    {
+        $route = $this->getPreviewRouteByPageType($pageType, $themePublicRoute);
+
+        return $route === '' ? '/' : '/' . ltrim($route, '/');
+    }
+
+    /**
+     * Path for Url::getFrontendUrl() / start-preview / publish redirect.
+     *
+     * Homepage must be "/" — never "". getFrontendUrl('') reuses the current
+     * REQUEST_URI via getBaseUrl(); under BinQuery that is /framework/query-bin.
+     */
+    public function getFrontendUrlPathForPreview(?string $pageType, ?string $themePublicRoute = null): string
+    {
+        $route = $this->getPreviewRouteByPageType($pageType, $themePublicRoute);
+
+        return $route === '' ? '/' : $route;
+    }
+
+    /**
+     * Strip aliases and reject API / query-bin paths that must never become
+     * live storefront preview targets.
+     */
+    public function normalizeStorefrontPublicRoute(string $route): string
+    {
+        $normalized = strtolower(trim(str_replace('\\', '/', $route), '/'));
+        if ($normalized === '' || $this->isNonStorefrontPublicRoute($normalized)) {
+            return '';
+        }
+
+        return $normalized;
+    }
+
+    public function isNonStorefrontPublicRoute(string $route): bool
+    {
+        $normalized = strtolower(trim(str_replace('\\', '/', $route), '/'));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return $normalized === 'framework/query-bin'
+            || $normalized === 'api/framework/query-bin'
+            || str_ends_with($normalized, '/framework/query-bin')
+            || str_contains($normalized, 'framework/query-bin');
     }
 
     public function resolveLayoutTypeFromUri(string $requestUri, string $default = ThemeLayout::PAGE_TYPE_DEFAULT): string
@@ -234,9 +281,6 @@ final class ThemePageTypeResolver
         if ($contains('category')) {
             return ThemeLayout::PAGE_TYPE_CATEGORY;
         }
-        if ($contains('product') && ($contains('productlist') || $contains('product_list'))) {
-            return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
-        }
         // Catalog listing must win over generic product detail inference.
         if ($contains('product') && $contains('catalog')) {
             return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
@@ -259,8 +303,20 @@ final class ThemePageTypeResolver
         if ($contains('account') && $contains('challenge')) {
             return 'account.challenge';
         }
-        if ($contains('account') && ($contains('login') || $contains('register') || $contains('forgotpassword'))) {
-            return 'account.auth';
+        if ($contains('account') && $contains('login')) {
+            return 'account/login';
+        }
+        if ($contains('account') && $contains('register')) {
+            return 'account/register';
+        }
+        if ($contains('account') && ($contains('forgotpassword') || $contains('forgot-password'))) {
+            return 'account/forgot-password';
+        }
+        if ($contains('account') && ($contains('setpassword') || $contains('set-password'))) {
+            return 'account/set-password';
+        }
+        if ($contains('account') && ($contains('sociallogin') || $contains('social-login'))) {
+            return 'account/social-login';
         }
         if ($contains('account')) {
             return ThemeLayout::PAGE_TYPE_ACCOUNT;
@@ -291,9 +347,6 @@ final class ThemePageTypeResolver
         }
         if ($contains('activity')) {
             return ThemeLayout::PAGE_TYPE_ACTIVITY;
-        }
-        if ($contains('review')) {
-            return ThemeLayout::PAGE_TYPE_REVIEW;
         }
         if ($contains('qa')) {
             return ThemeLayout::PAGE_TYPE_QA;
@@ -336,8 +389,8 @@ final class ThemePageTypeResolver
         if ($this->pathMatchesRoute($path, 'blog')) {
             return ThemeLayout::PAGE_TYPE_BLOG;
         }
-        // products before product — avoid matching product-list prefix incorrectly.
-        if ($this->pathMatchesRoute($path, 'products') || $this->pathMatchesRoute($path, 'product-list')) {
+        // products before product — path ↔ layout 1:1 (/products → layouts/products).
+        if ($this->pathMatchesRoute($path, 'products')) {
             return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
         }
         if ($this->pathMatchesRoute($path, 'product')) {
@@ -356,7 +409,7 @@ final class ThemePageTypeResolver
             return ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE;
         }
         if ($this->pathMatchesRoute($path, 'checkout/failer')) {
-            return 'checkout_failer';
+            return ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE;
         }
         if ($this->pathMatchesRoute($path, 'checkout')) {
             return ThemeLayout::PAGE_TYPE_CHECKOUT;
@@ -370,15 +423,36 @@ final class ThemePageTypeResolver
             return 'account.challenge';
         }
         if ($this->pathMatchesRoute($path, 'account/login')
-            || $this->pathMatchesRoute($path, 'account/register')
-            || $this->pathMatchesRoute($path, 'account/forgot')
-            || $this->pathMatchesRoute($path, 'account/forgot-password')
             || $this->pathMatchesRoute($path, 'customer/account/login')
+        ) {
+            return 'account/login';
+        }
+        if ($this->pathMatchesRoute($path, 'account/register')
             || $this->pathMatchesRoute($path, 'customer/account/register')
+        ) {
+            return 'account/register';
+        }
+        if ($this->pathMatchesRoute($path, 'account/forgot')
+            || $this->pathMatchesRoute($path, 'account/forgot-password')
             || $this->pathMatchesRoute($path, 'customer/account/forgot')
             || $this->pathMatchesRoute($path, 'customer/account/forgot-password')
         ) {
-            return 'account.auth';
+            return 'account/forgot-password';
+        }
+        if ($this->pathMatchesRoute($path, 'account/set-password')
+            || $this->pathMatchesRoute($path, 'customer/account/set-password')
+        ) {
+            return 'account/set-password';
+        }
+        if ($this->pathMatchesRoute($path, 'account/social-login')
+            || $this->pathMatchesRoute($path, 'customer/account/social-login')
+        ) {
+            return 'account/social-login';
+        }
+        if ($this->pathMatchesRoute($path, 'account/logout')
+            || $this->pathMatchesRoute($path, 'customer/account/logout')
+        ) {
+            return 'account/logout';
         }
         if ($this->pathMatchesRoute($path, 'account') || $this->pathMatchesRoute($path, 'customer/account')) {
             return ThemeLayout::PAGE_TYPE_ACCOUNT;
@@ -390,8 +464,8 @@ final class ThemePageTypeResolver
             || $this->pathMatchesRoute($path, 'order/track')
             || $this->pathMatchesRoute($path, 'order/tracking')
         ) {
-            // Legacy public track URLs redirect into account orders.
-            return 'account_orders';
+            // Legacy public track URLs redirect into account center (orders section).
+            return ThemeLayout::PAGE_TYPE_ACCOUNT;
         }
         if ($this->pathMatchesRoute($path, 'faq')) {
             return ThemeLayout::PAGE_TYPE_FAQ;
@@ -410,9 +484,6 @@ final class ThemePageTypeResolver
         }
         if ($this->pathMatchesRoute($path, 'activity')) {
             return ThemeLayout::PAGE_TYPE_ACTIVITY;
-        }
-        if ($this->pathMatchesRoute($path, 'review')) {
-            return ThemeLayout::PAGE_TYPE_REVIEW;
         }
         if ($this->pathMatchesRoute($path, 'qa')) {
             return ThemeLayout::PAGE_TYPE_QA;

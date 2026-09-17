@@ -81,6 +81,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
             <?php endif; ?>
         </div>
     <?php else: ?>
+        <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
         <div class="product-storefront__grid weline-product-card-shelf">
             <?php foreach ($offers as $index => $offer): ?>
                 <?php
@@ -101,9 +102,32 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                     if (!is_array($option)) {
                         continue;
                     }
+                    $type = (string)($option['type'] ?? 'page');
                     $href = trim((string)($option['url'] ?? ''));
-                    $label = (string)($option['page'] ?? '');
-                    if ($href === '' || $label === '') {
+                    $label = (string)($option['label'] ?? $option['page'] ?? '');
+                    if ($label === '') {
+                        continue;
+                    }
+                    if ($type === 'ellipsis') {
+                        ?>
+                        <span class="product-storefront__pager-item is-ellipsis" aria-hidden="true"><?= $escape($label) ?></span>
+                        <?php
+                        continue;
+                    }
+                    if ($type === 'prev' || $type === 'next') {
+                        $disabled = !empty($option['disabled']);
+                        if ($disabled || $href === '') {
+                            ?>
+                            <span class="product-storefront__pager-item is-nav is-disabled" aria-disabled="true"><?= $escape($label) ?></span>
+                            <?php
+                        } else {
+                            ?>
+                            <a class="product-storefront__pager-item is-nav" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
+                            <?php
+                        }
+                        continue;
+                    }
+                    if ($href === '') {
                         continue;
                     }
                     ?>
@@ -198,6 +222,22 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
         border-color:#0f1111;
         background:#0f1111;
         color:#fff;
+    }
+    .product-storefront__pager-item.is-ellipsis {
+        border:0;
+        background:transparent;
+        min-width:auto;
+        padding:0 4px;
+        color:#565959;
+        font-weight:500;
+        cursor:default;
+    }
+    .product-storefront__pager-item.is-nav {
+        padding:0 12px;
+    }
+    .product-storefront__pager-item.is-disabled {
+        opacity:.45;
+        cursor:not-allowed;
     }
     .product-storefront__empty {
         padding:28px 16px;

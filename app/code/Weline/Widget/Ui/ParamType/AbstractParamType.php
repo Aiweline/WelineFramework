@@ -20,8 +20,8 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
     protected const CSS_PREFIX = 'w-param-';
 
     /**
-     * 推断字段是否可翻译：显式 i18n 优先，否则文本类默认 true
-     * 关闭多语言：'i18n' => false
+     * 推断字段是否可翻译：显式 i18n / translate / translatable 优先，
+     * 否则文本类与图片 UI（media_image 等）默认 true。关闭：'i18n' => false
      */
     public static function isTranslatable(array $param): bool
     {
@@ -145,6 +145,213 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         return ' data-preview-url="' . htmlspecialchars($previewUrl) . '"';
     }
 
+    /**
+     * Prefer WelineMedia / file-picker (typed file-image). Fallback keeps the legacy
+     * overlay button so array item editors and degraded hosts still work.
+     *
+     * @param array{
+     *     array_field?: string,
+     *     omit_name?: bool,
+     *     input_class?: string
+     * } $options array_field set → item editor: data-field + w-param-array-item-input, omit name
+     */
+    protected function renderMediaLibraryPickerHtml(
+        string $fieldId,
+        string $key,
+        array $param,
+        mixed $currentValue,
+        string $selectButtonClass = 'w-param-media-image-select',
+        array $options = [],
+    ): string {
+        $hasImage = !empty($currentValue);
+        $storedValue = $this->serializeImageFormValue($currentValue);
+        $previewUrl = $this->imagePreviewUrl($currentValue);
+        $mediaKind = $this->resolveMediaPickerKind($param);
+        $isAudioMedia = $mediaKind === 'audio';
+        $placeholder = $param['placeholder']
+            ?? ($isAudioMedia ? __('从媒体库选择曲目') : __('从媒体库选择图片'));
+        $defaultDir = $this->mediaOptionValue($param, 'default_directory');
+        if ($defaultDir === '') {
+            $defaultDir = $isAudioMedia ? 'store-music' : 'banner';
+        }
+        $ext = $this->resolveMediaPickerExt($param, $isAudioMedia);
+        $size = $this->resolveMediaPickerSize($param, $isAudioMedia);
+        $valueMode = $this->resolveMediaPickerValueMode($param, $isAudioMedia);
+        $usage = $this->resolveMediaPickerUsage($param, $isAudioMedia);
+        $pickerTitle = $this->mediaOptionValue($param, 'picker_title');
+        if ($pickerTitle === '') {
+            $pickerTitle = $isAudioMedia ? (string)__('选择曲目') : (string)__('从图库选择');
+        }
+        $clearLabel = $isAudioMedia ? (string)__('清除曲目') : (string)__('清除图片');
+        $aspectRatio = $this->resolveMediaAspectRatio($param);
+        $recommendW = $this->mediaOptionValue($param, 'recommend_width');
+        $recommendH = $this->mediaOptionValue($param, 'recommend_height');
+        $aspectTolerance = $this->mediaOptionValue($param, 'aspect_ratio_tolerance');
+
+        $arrayField = trim((string)($options['array_field'] ?? ''));
+        $omitName = $arrayField !== '' || !empty($options['omit_name']);
+        $inputClass = trim((string)($options['input_class'] ?? ''));
+        if ($arrayField !== '' && $inputClass === '') {
+            $inputClass = 'w-param-array-item-input';
+        }
+
+        $inputHtml = '<div class="w-param-media-image" data-w-param-media="file-picker"'
+            . ($isAudioMedia ? ' data-media-kind="audio"' : '') . '>';
+        $inputHtml .= '<input type="hidden" id="' . htmlspecialchars($fieldId) . '"';
+        if (!$omitName) {
+            $inputHtml .= ' name="' . htmlspecialchars($key) . '"';
+        }
+        if ($inputClass !== '') {
+            $inputHtml .= ' class="' . htmlspecialchars($inputClass) . '"';
+        }
+        if ($arrayField !== '') {
+            $inputHtml .= ' data-field="' . htmlspecialchars($arrayField) . '"';
+        }
+        $inputHtml .= ' value="' . htmlspecialchars($storedValue) . '" data-preview="' . htmlspecialchars($fieldId)
+            . '_preview" data-clear-label="' . htmlspecialchars($clearLabel) . '"'
+            . $this->buildImageHiddenInputExtraAttrs($currentValue) . '>';
+
+        $canUseFilePicker = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
+            && \function_exists('framework_view_process_block');
+        if ($canUseFilePicker) {
+            $block = [
+                'class' => \Weline\MediaManager\Block\WelineMedia::class,
+                'target' => $fieldId,
+                'picker_title' => $pickerTitle,
+                'path' => $defaultDir,
+                'value' => $storedValue !== '' ? $storedValue : '',
+                'preview' => '1',
+                'multi' => '0',
+                'ext' => $ext,
+                'size' => $size,
+                'width' => 96,
+                'height' => 96,
+                'usage' => $usage,
+                'value_mode' => $valueMode,
+                'lockPath' => '0',
+            ];
+            if ($aspectRatio !== '') {
+                $block['aspect_ratio'] = $aspectRatio;
+            }
+            if ($recommendW !== '') {
+                $block['recommend_width'] = $recommendW;
+            }
+            if ($recommendH !== '') {
+                $block['recommend_height'] = $recommendH;
+            }
+            if ($aspectTolerance !== '') {
+                $block['aspect_ratio_tolerance'] = $aspectTolerance;
+            }
+            $obLevel = ob_get_level();
+            try {
+                $pickerHtml = (string)framework_view_process_block($block);
+            } catch (\Throwable) {
+                while (ob_get_level() > $obLevel) {
+                    ob_end_clean();
+                }
+                $pickerHtml = '';
+            }
+            if ($pickerHtml !== '' && str_contains($pickerHtml, 'w-file-picker')) {
+                $inputHtml .= $pickerHtml;
+                // Keep a hidden select trigger so i18n media panels can still detect media fields.
+                $inputHtml .= '<button type="button" class="w-button ' . htmlspecialchars($selectButtonClass)
+                    . '" hidden data-tone="primary" data-variant="outline" data-size="sm" data-target="'
+                    . htmlspecialchars($fieldId) . '"' . $this->mediaImageSelectDataAttrs($param)
+                    . ' title="' . htmlspecialchars($pickerTitle) . '">'
+                    . htmlspecialchars($isAudioMedia ? (string)__('选择曲目') : (string)__('选择')) . '</button>';
+                $inputHtml .= '</div>';
+
+                return $inputHtml;
+            }
+        }
+
+        $previewAttrs = $this->mediaImagePreviewShellAttrs($param);
+        $inputHtml .= '<div class="w-param-image-preview' . ($hasImage ? ' w-param-has-image' : '') . '" id="'
+            . htmlspecialchars($fieldId) . '_preview"' . $previewAttrs . '>';
+        $inputHtml .= $this->mediaImageAspectBadgeHtml($param);
+        if ($previewUrl !== '') {
+            $inputHtml .= '<img src="' . htmlspecialchars($previewUrl) . '" alt="' . htmlspecialchars((string)__('预览')) . '">';
+        }
+        $inputHtml .= '<div class="w-param-image-placeholder"' . ($hasImage ? ' hidden' : '') . '>'
+            . htmlspecialchars((string)$placeholder) . '</div>';
+        $inputHtml .= '<div class="w-param-image-actions">';
+        $inputHtml .= '<button type="button" class="w-button ' . htmlspecialchars($selectButtonClass)
+            . '" data-tone="primary" data-variant="outline" data-size="sm" data-target="'
+            . htmlspecialchars($fieldId) . '"' . $this->mediaImageSelectDataAttrs($param)
+            . ' title="' . htmlspecialchars($pickerTitle) . '">'
+            . htmlspecialchars($isAudioMedia ? (string)__('选择曲目') : (string)__('选择')) . '</button>';
+        if ($hasImage) {
+            $inputHtml .= '<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="'
+                . htmlspecialchars($fieldId) . '" aria-label="' . htmlspecialchars($clearLabel) . '">×</button>';
+        }
+        $inputHtml .= '</div></div></div>';
+
+        return $inputHtml;
+    }
+
+    protected function resolveMediaPickerKind(array $param): string
+    {
+        $explicit = strtolower($this->mediaOptionValue($param, 'kind'));
+        if (in_array($explicit, ['audio', 'image', 'file'], true)) {
+            return $explicit;
+        }
+        $ext = strtolower($this->mediaOptionValue($param, 'ext'));
+        if ($ext === '') {
+            return 'image';
+        }
+        $audioExt = ['mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma', 'weba'];
+        foreach (preg_split('/\s*,\s*/', $ext) ?: [] as $part) {
+            if (in_array(ltrim((string)$part, '.'), $audioExt, true)) {
+                return 'audio';
+            }
+        }
+
+        return 'image';
+    }
+
+    protected function resolveMediaPickerExt(array $param, bool $isAudioMedia): string
+    {
+        $ext = $this->mediaOptionValue($param, 'ext');
+        if ($ext !== '') {
+            return $ext;
+        }
+
+        return $isAudioMedia
+            ? 'mp3,wav,ogg,oga,m4a,aac,flac,opus,wma,weba'
+            : 'jpg,jpeg,png,gif,webp';
+    }
+
+    protected function resolveMediaPickerSize(array $param, bool $isAudioMedia): int
+    {
+        $sizeRaw = $this->mediaOptionValue($param, 'size');
+        if ($sizeRaw !== '' && ctype_digit($sizeRaw)) {
+            return max(1, (int)$sizeRaw);
+        }
+
+        return $isAudioMedia ? 20971520 : 5242880;
+    }
+
+    protected function resolveMediaPickerValueMode(array $param, bool $isAudioMedia): string
+    {
+        $mode = $this->mediaOptionValue($param, 'value_mode');
+        if ($mode !== '') {
+            return $mode;
+        }
+
+        // Audio tracks persist as media paths; file-image usage is image-only.
+        return $isAudioMedia ? '' : 'file-image';
+    }
+
+    protected function resolveMediaPickerUsage(array $param, bool $isAudioMedia): string
+    {
+        $usage = $this->mediaOptionValue($param, 'usage');
+        if ($usage !== '') {
+            return $usage;
+        }
+
+        return $isAudioMedia ? '0' : '1';
+    }
+
     protected function mediaOptionValue(array $param, string $key): string
     {
         $mediaOptions = is_array($param['media_options'] ?? null) ? $param['media_options'] : [];
@@ -188,11 +395,28 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
 
     protected function mediaImageSelectDataAttrs(array $param): string
     {
-        $defaultDir = $this->mediaOptionValue($param, 'default_directory') ?: 'banner';
+        $isAudioMedia = $this->resolveMediaPickerKind($param) === 'audio';
+        $defaultDir = $this->mediaOptionValue($param, 'default_directory')
+            ?: ($isAudioMedia ? 'store-music' : 'banner');
         $recommendW = $this->mediaOptionValue($param, 'recommend_width');
         $recommendH = $this->mediaOptionValue($param, 'recommend_height');
         $aspectRatio = $this->resolveMediaAspectRatio($param);
-        $attrs = ' data-default-dir="' . htmlspecialchars($defaultDir) . '"';
+        $aspectTolerance = $this->mediaOptionValue($param, 'aspect_ratio_tolerance');
+        $ext = $this->resolveMediaPickerExt($param, $isAudioMedia);
+        $size = (string)$this->resolveMediaPickerSize($param, $isAudioMedia);
+        $usage = $this->resolveMediaPickerUsage($param, $isAudioMedia);
+        $valueMode = $this->resolveMediaPickerValueMode($param, $isAudioMedia);
+        $pickerTitle = $this->mediaOptionValue($param, 'picker_title');
+        if ($pickerTitle === '') {
+            $pickerTitle = $isAudioMedia ? (string)__('选择曲目') : (string)__('选择媒体');
+        }
+        $attrs = ' data-default-dir="' . htmlspecialchars($defaultDir) . '"'
+            . ' data-ext="' . htmlspecialchars($ext) . '"'
+            . ' data-size="' . htmlspecialchars($size) . '"'
+            . ' data-usage="' . htmlspecialchars($usage) . '"'
+            . ' data-value-mode="' . htmlspecialchars($valueMode) . '"'
+            . ' data-picker-title="' . htmlspecialchars($pickerTitle) . '"'
+            . ($isAudioMedia ? ' data-media-kind="audio"' : '');
         if ($recommendW !== '') {
             $attrs .= ' data-recommend-w="' . htmlspecialchars($recommendW) . '"';
         }
@@ -201,6 +425,9 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         }
         if ($aspectRatio !== '') {
             $attrs .= ' data-aspect-ratio="' . htmlspecialchars($aspectRatio) . '"';
+        }
+        if ($aspectTolerance !== '') {
+            $attrs .= ' data-aspect-ratio-tolerance="' . htmlspecialchars($aspectTolerance) . '"';
         }
 
         return $attrs;
@@ -297,7 +524,7 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
     /**
      * 统一多语言包装入口
      *
-     * translatable=true  → 字段头（label + 多语言按钮）+ 输入区 + 空 i18n 面板容器
+     * translatable=true  → 字段头（label + 多语言按钮）+ 输入区 + i18n 弹窗容器
      * translatable=false → 字段头（仅 label）+ 输入区
      *
      * $context 可含 array_key / array_index，用于数组子字段的 data 属性。
@@ -343,23 +570,35 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         $html .= '<div class="' . $p . 'field-input">' . $inputHtml . '</div>';
 
         if ($translatable) {
-            $html .= $this->renderI18nPanel($key, $layoutId, $context);
+            $panelContext = $context;
+            $panelContext['ui_type'] = ParamDefinition::resolveUiType($param);
+            $panelContext['is_image'] = ParamDefinition::isImageUiType($param);
+            $html .= $this->renderI18nPanel($key, $layoutId, $panelContext);
         }
 
         return $html;
     }
 
     /**
-     * 统一 i18n 面板：空容器，由前端动态填充语言列表
+     * 统一 i18n 弹窗：空容器，由前端动态填充语言列表；经 Weline.UI.dialog 打开
      */
     protected function renderI18nPanel(string $key, int|string $layoutId, array $context = []): string
     {
         $p = self::CSS_PREFIX;
         $panelId = 'i18n_panel_' . $layoutId . '_' . str_replace('.', '_', $key);
+        $uiType = (string)($context['ui_type'] ?? '');
+        $isImage = !empty($context['is_image']) || ParamDefinition::isImageUiType(['ui_type' => $uiType]);
+        $titleId = $panelId . '_title';
 
         $identityHtml = self::widgetIdentityAttrHtml($layoutId);
         $dataAttrs = 'data-field="' . htmlspecialchars($key) . '"'
             . ($identityHtml !== '' ? ' ' . $identityHtml : '');
+        if ($uiType !== '') {
+            $dataAttrs .= ' data-ui-type="' . htmlspecialchars($uiType) . '"';
+        }
+        if ($isImage) {
+            $dataAttrs .= ' data-i18n-media="1"';
+        }
         if (!empty($context['array_key'])) {
             $dataAttrs .= ' data-array-key="' . htmlspecialchars($context['array_key']) . '"';
         }
@@ -367,19 +606,26 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
             $dataAttrs .= ' data-array-index="' . htmlspecialchars((string)$context['array_index']) . '"';
         }
 
-        $html = '<div class="' . $p . 'i18n-panel" id="' . htmlspecialchars($panelId) . '" ' . $dataAttrs . ' data-state="closed" aria-hidden="true" hidden>';
-        $html .= '<div class="' . $p . 'i18n-header">';
-        $html .= '<span>' . __('多语言配置') . '</span>';
+        $html = '<dialog class="w-dialog ' . $p . 'i18n-panel ' . $p . 'i18n-dialog" id="'
+            . htmlspecialchars($panelId) . '" ' . $dataAttrs
+            . ' data-w-component="dialog" data-w-closable="false" data-w-backdrop="static"'
+            . ' data-state="closed" aria-hidden="true" aria-labelledby="'
+            . htmlspecialchars($titleId) . '" hidden>';
+        $html .= '<div class="w-dialog__surface">';
+        $html .= '<header class="w-dialog__header ' . $p . 'i18n-header">';
+        $html .= '<h2 class="w-dialog__title" id="' . htmlspecialchars($titleId) . '">' . __('多语言配置') . '</h2>';
         $html .= '<div class="' . $p . 'i18n-header-actions">';
-        $html .= '<button type="button" class="w-button w-param-btn-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n ' . $dataAttrs . '>' . __('AI翻译') . '</button>';
+        if (!$isImage) {
+            $html .= '<button type="button" class="w-button w-param-btn-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n ' . $dataAttrs . '>' . __('AI翻译') . '</button>';
+        }
         $html .= '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n data-field="' . htmlspecialchars($key) . '" aria-label="' . htmlspecialchars((string)__('关闭多语言配置'), ENT_QUOTES, 'UTF-8') . '"><w-icon name="close" size="sm"></w-icon></button>';
         $html .= '</div>';
-        $html .= '</div>';
+        $html .= '</header>';
         // 空 body，由前端 fetchInstalledLocales() 后动态填充
-        $html .= '<div class="' . $p . 'i18n-body"></div>';
-        $html .= '<div class="' . $p . 'i18n-footer">';
+        $html .= '<div class="w-dialog__body ' . $p . 'i18n-body"></div>';
+        $html .= '<footer class="w-dialog__footer ' . $p . 'i18n-footer">';
         $html .= '<button type="button" class="w-button" data-tone="primary" data-size="sm" data-save-i18n ' . $dataAttrs . '>' . __('保存多语言') . '</button>';
-        $html .= '</div></div>';
+        $html .= '</footer></div></dialog>';
         return $html;
     }
 

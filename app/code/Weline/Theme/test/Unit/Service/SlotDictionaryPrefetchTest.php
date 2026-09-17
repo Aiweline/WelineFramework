@@ -73,7 +73,7 @@ final class SlotDictionaryPrefetchTest extends TestCase
                 $source = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
                 $methods .= str_replace('\\Weline\\Framework\\Phrase\\Parser', '\\' . SlotPrefetchParserProbe::class, $source) . "\n";
             }
-            eval('namespace ' . __NAMESPACE__ . '; use Weline\\Theme\\Model\\ThemeLayout; use ' . SlotPrefetchTraceProbe::class . ' as RequestLifecycleTrace; final class SlotPrefetchExtractedPipeline extends SlotPrefetchFlowDependencies {' . $methods . ' public function run(string $html): string { return $this->doProcessSlots($html, 1, "product_list"); }}');
+            eval('namespace ' . __NAMESPACE__ . '; use Weline\\Theme\\Model\\ThemeLayout; use ' . SlotPrefetchTraceProbe::class . ' as RequestLifecycleTrace; final class SlotPrefetchExtractedPipeline extends SlotPrefetchFlowDependencies {' . $methods . ' public function run(string $html): string { return $this->doProcessSlots($html, 1, "products"); }}');
         }
         return new $class();
     }

@@ -22,7 +22,6 @@ final class ThemeEditorServerNavigationContractTest extends TestCase
     {
         foreach ([
             'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js',
-            'app/code/Weline/Theme/view/statics/js/theme-editor.js',
         ] as $path) {
             $source = $this->read($path);
 
@@ -35,6 +34,19 @@ final class ThemeEditorServerNavigationContractTest extends TestCase
             self::assertStringNotContainsString("pathname.includes('/checkout')", $source, $path);
             self::assertStringNotContainsString("let pageType = 'homepage'", $source, $path);
         }
+    }
+
+    public function testThemeQueryProviderMapsResolveNavigationEditorRequest(): void
+    {
+        $provider = $this->read(
+            'app/code/Weline/Theme/extends/module/Weline_Framework/Query/ThemeQueryProvider.php'
+        );
+
+        self::assertStringContainsString(
+            "'/theme/backend/theme-editor/resolve-navigation'",
+            $provider
+        );
+        self::assertStringContainsString('postResolveNavigation()', $provider);
     }
 
     private function read(string $relativePath): string

@@ -51,11 +51,15 @@ final class SiteBlockConfigTest extends TestCase
 
     public function testLinksAllowRealContactActionsButRejectExecutableSchemes(): void
     {
-        self::assertSame('/about', SiteBlockConfig::link('/about'));
+        // Path-relative stays for <base>; root-relative may be rewritten by getFrontendUrl when bootstrap exists.
+        self::assertSame('promotion/deals', \Weline\Theme\Helper\SiteBlockConfig::link('promotion/deals'));
         self::assertSame('mailto:hello@example.com', SiteBlockConfig::link('mailto:hello@example.com'));
         self::assertSame('tel:+86-12345678', SiteBlockConfig::link('tel:+86-12345678'));
         self::assertSame('', SiteBlockConfig::link('javascript:alert(1)'));
         self::assertSame('', SiteBlockConfig::link('mailto:bad%0aBcc:other@example.com'));
         self::assertSame('', SiteBlockConfig::text(['en_US' => 'Not a scalar']));
+        $about = SiteBlockConfig::link('/about');
+        self::assertNotSame('', $about);
+        self::assertTrue(str_contains($about, 'about') || $about === '/about');
     }
 }

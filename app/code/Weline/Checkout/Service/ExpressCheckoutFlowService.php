@@ -16,6 +16,7 @@ use Weline\Payment\Api\PaymentExpressFacadeInterface;
 use Weline\Payment\Model\PaymentTransaction;
 use Weline\Payment\Service\ExpressCheckoutOrchestrator;
 use Weline\Payment\Service\PaymentBrowserReturnDispatcher;
+use Weline\Shipping\Service\ShippingIncotermService;
 
 /**
  * PDP/checkout express: start → review → confirm (defer capture) → cancel/abandon.
@@ -133,6 +134,8 @@ final class ExpressCheckoutFlowService
             'cart_type' => $cartType,
             'selling_mode' => $cartType,
             'checkout_entry' => \Weline\Checkout\Service\CheckoutEntry::EXPRESS,
+            'tax_identity' => \is_array($params['tax_identity'] ?? null) ? $params['tax_identity'] : [],
+            'buyer_tax_identity' => \is_array($params['buyer_tax_identity'] ?? null) ? $params['buyer_tax_identity'] : [],
         ]);
         if (empty($frozen['success'])) {
             return [
@@ -311,10 +314,14 @@ final class ExpressCheckoutFlowService
         $shippingEmptyMessage = '';
         $quoteDiagnostics = $this->lastListQuoteDiagnostics;
         if ($requiresShipping && $shippingMethods === []) {
-            $missingWeight = !empty($quoteDiagnostics['missing_weight']);
-            $shippingEmptyMessage = $missingWeight
-                ? (string) __('购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。')
-                : (string) __('该地区暂不支持配送');
+            $presented = (new CheckoutShippingUnavailablePresenter())->present(
+                is_array($quoteDiagnostics) ? $quoteDiagnostics : [],
+                is_array($items) ? $items : [],
+                (string)($address['country_code'] ?? ''),
+            );
+            $missingWeight = ($presented['reason_code'] ?? '') === 'missing_weight'
+                || !empty($quoteDiagnostics['missing_weight']);
+            $shippingEmptyMessage = (string)($presented['message'] ?? '');
             $this->syncExpressFaultSnapshot(
                 $params,
                 $address,
@@ -464,9 +471,36 @@ final class ExpressCheckoutFlowService
             'address' => $address,
         ]);
         $serviceCode = trim((string) ($params['service_code'] ?? ''));
+        $taxIdentity = \is_array($params['tax_identity'] ?? null) ? $params['tax_identity'] : [];
+        if ($taxIdentity === [] && \is_array($params['buyer_tax_identity'] ?? null)) {
+            $taxIdentity = $params['buyer_tax_identity'];
+        }
+        $billingForTax = \is_array($params['billing_address'] ?? null) ? $params['billing_address'] : $address;
+        if (interface_exists(\Weline\Tax\Api\CheckoutTaxAdvisorInterface::class)) {
+            try {
+                /** @var \Weline\Tax\Api\CheckoutTaxAdvisorInterface $taxAdvisor */
+                $taxAdvisor = $this->om()->getInstance(\Weline\Tax\Api\CheckoutTaxAdvisorInterface::class);
+                $taxAdvisor->validateTaxIdentity($taxIdentity, $billingForTax);
+            } catch (\Weline\Tax\Api\TaxConflictException $e) {
+                return [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'error_code' => $e->errorCode(),
+                ];
+            } catch (\Throwable $e) {
+                return [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'error_code' => 'checkout_tax_identity_invalid',
+                ];
+            }
+        }
         $amended = $this->amendUnpaidOrder($orderUuid, $address, [
             'service_code' => $serviceCode,
             'currency' => (string) ($order['currency'] ?? 'CNY'),
+            'tax_identity' => $taxIdentity,
+            'buyer_tax_identity' => \is_array($params['buyer_tax_identity'] ?? null) ? $params['buyer_tax_identity'] : $taxIdentity,
+            'billing_address' => $billingForTax,
         ]);
         if (empty($amended['ok'])) {
             return [
@@ -1080,18 +1114,34 @@ final class ExpressCheckoutFlowService
                 if ($code === '') {
                     continue;
                 }
-                // Express-only display label; same field priority as checkout listQuoteOptions mapping.
+                // Express display: same label/duty tip translation as CheckoutQueryProvider storefront list.
                 // Keep code as selection value — do not change CheckoutQueryProvider / 万能结账.
                 $label = trim((string) ($option['label'] ?? $option['service_name'] ?? $option['title'] ?? $option['name'] ?? ''));
                 if ($label === '') {
                     $label = $code;
+                } else {
+                    $label = (string) __($label);
+                }
+                $dutyNotice = trim((string) ($option['duty_notice'] ?? ''));
+                $dutyNoticeLabel = $dutyNotice !== ''
+                    ? (string) __((new ShippingIncotermService())->labelForDutyNoticeCode($dutyNotice))
+                    : '';
+                $description = !empty($option['is_free']) || !empty($option['free_reason'])
+                    ? (string) __('免邮')
+                    : '';
+                if ($dutyNoticeLabel !== '') {
+                    $description = $description !== ''
+                        ? ($description . ' · ' . $dutyNoticeLabel)
+                        : $dutyNoticeLabel;
                 }
                 $out[] = [
                     'code' => $code,
                     'label' => $label,
                     'title' => $label,
+                    'description' => $description,
                     'amount_minor' => (int) ($option['amount_minor'] ?? 0),
                     'amount' => ((int) ($option['amount_minor'] ?? 0)) / 100,
+                    'duty_notice' => $dutyNotice,
                 ];
             }
 

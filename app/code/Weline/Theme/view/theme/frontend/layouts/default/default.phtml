@@ -3,6 +3,8 @@
  * @meta.name {default="Weline UI 2.0 前台默认布局",name="Weline UI 2.0 前台默认布局"}
  * @meta.description {default="Native frontend shell with explicit resources and slots.",name="自研前台壳层"}
  * @param.title {default="Weline",name="页面标题"}
+ * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
+ * @param.meta_description {default="",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
  * @param.content {default="",name="主要内容"}
  * @param.showHeader {default=true,name="显示顶部"}
  * @param.showFooter {default=true,name="显示页脚"}
@@ -57,7 +59,11 @@ $extraClasses = array_values(array_filter(
 
                 <div class="w-frontend-content-grid">
                     <w:slot id="sidebar-left" name="Left sidebar" accept="layout-sidebar,sidebar,filter,navigation,content" multiple="true" position="sidebar" class="w-frontend-sidebar">
-                        <w:hook>Weline_Theme::frontend::layouts::default::sidebar-left</w:hook>
+                        <w:hook>
+                            Weline_Theme::frontend::layouts::default::sidebar-left
+                            <else/>
+                            <w:widget type="content" name="contact-info" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="content" name="Content" accept="layout-default-content,content,container,banner,carousel,product,category,faq,video" reject="header,footer" multiple="true" position="content" class="w-frontend-content">
@@ -69,13 +75,12 @@ $extraClasses = array_values(array_filter(
                             <?php elseif ($contentTemplate !== ''): ?>
                                 <?= $this->fetch($contentTemplate) ?>
                             <?php else: ?>
-                                <section class="w-card w-empty-state" weline-code="theme.layouts.default.empty_state">
-                                    <div class="w-card__body w-stack">
-                                        <h1><?= htmlspecialchars((string)($meta['title'] ?? __('Weline 默认页面')), ENT_QUOTES, 'UTF-8') ?></h1>
-                                        <p><?= htmlspecialchars((string)__('该页面尚未提供内容。'), ENT_QUOTES, 'UTF-8') ?></p>
-                                        <div class="w-cluster"><a class="w-button" href="@url{'/'}"><?= htmlspecialchars((string)__('返回首页'), ENT_QUOTES, 'UTF-8') ?></a></div>
-                                    </div>
-                                </section>
+                                <div class="w-frontend-default-stack" weline-code="theme.layouts.default.widget_stack">
+                                    <w:widget type="content" name="section-heading" />
+                                    <w:widget type="content" name="text-block" />
+                                    <w:widget type="content" name="feature-list" />
+                                    <w:widget type="faq" name="faq-accordion" />
+                                </div>
                             <?php endif; ?>
                         </w:hook>
                     </w:slot>

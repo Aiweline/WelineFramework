@@ -6,4 +6,7 @@
     <menu source="Weline_Marketing::commerce:marketing:coupons_index" name="coupon_list" title="万能优惠券" action="marketing/backend/coupon/index" parent="Weline_Backend::marketing_group" icon="circle" order="20"/>
     <menu source="Weline_Marketing::commerce:marketing:campaigns_index" name="campaign_list" title="万能促销活动" action="marketing/backend/campaign/index" parent="Weline_Backend::marketing_group" icon="circle" order="30"/>
     <menu source="Weline_Marketing::commerce:marketing:winback_index" name="winback_list" title="挽回活动" action="marketing/backend/winback/index" parent="Weline_Backend::marketing_group" icon="mail" order="40"/>
+    <menu source="Weline_Marketing::commerce:marketing:winback_dashboard_index" name="winback_dashboard" title="挽回看板" action="marketing/backend/winbackdashboard/index" parent="Weline_Backend::marketing_group" icon="chart" order="45"/>
+    <menu source="Weline_Marketing::commerce:marketing:lifecycle_index" name="lifecycle_list" title="生命周期活动" action="marketing/backend/lifecycle/index" parent="Weline_Backend::marketing_group" icon="gift" order="50"/>
+    <menu source="Weline_Marketing::commerce:marketing:segment_index" name="segment_list" title="营销分群" action="marketing/backend/segment/index" parent="Weline_Backend::marketing_group" icon="users" order="55"/>
 </menus>

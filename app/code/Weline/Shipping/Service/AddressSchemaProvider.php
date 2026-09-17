@@ -22,7 +22,8 @@ class AddressSchemaProvider
             'contact_phone' => 'Phone',
         ],
         'postal_code_pattern' => '/^[A-Za-z0-9][A-Za-z0-9\\-\\s]{1,11}$/',
-        'phone_pattern' => '/^[0-9+\\-\\s()]{6,32}$/',
+        // 字符集说明；实际校验见 AddressValidationService::isValidInternationalPhone（E.164 位数）
+        'phone_pattern' => '/^\\+?[0-9][0-9\\-\\s().\\/]{0,30}$/',
         'format' => [
             'single_line' => ['country', 'province', 'city', 'district', 'street'],
             'tokens' => ['country', 'province', 'city', 'district', 'street'],
@@ -46,7 +47,7 @@ class AddressSchemaProvider
                 'contact_phone' => '联系电话',
             ],
             'postal_code_pattern' => '/^\\d{6}$/',
-            'phone_pattern' => '/^[0-9+\\-\\s()]{6,32}$/',
+            'phone_pattern' => '/^\\+?[0-9][0-9\\-\\s().\\/]{0,30}$/',
             'format' => [
                 'single_line' => ['country', 'province', 'city', 'district', 'street'],
                 'tokens' => ['street', 'city', 'province', 'postal_code', 'country'],
@@ -68,7 +69,7 @@ class AddressSchemaProvider
                 'contact_phone' => 'Phone',
             ],
             'postal_code_pattern' => '/^\\d{5}(-\\d{4})?$/',
-            'phone_pattern' => '/^[0-9+\\-\\s()]{7,32}$/',
+            'phone_pattern' => '/^\\+?[0-9][0-9\\-\\s().\\/]{0,30}$/',
             'format' => [
                 'single_line' => ['street', 'city', 'province', 'postal_code', 'country'],
                 'tokens' => ['street', 'city', 'province', 'postal_code', 'country'],
@@ -90,7 +91,7 @@ class AddressSchemaProvider
                 'contact_phone' => 'Phone',
             ],
             'postal_code_pattern' => '/^[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}$/i',
-            'phone_pattern' => '/^[0-9+\\-\\s()]{7,32}$/',
+            'phone_pattern' => '/^\\+?[0-9][0-9\\-\\s().\\/]{0,30}$/',
             'format' => [
                 'single_line' => ['street', 'city', 'province', 'postal_code', 'country'],
                 'tokens' => ['postal_code', 'province', 'city', 'district', 'street', 'country'],
@@ -112,7 +113,7 @@ class AddressSchemaProvider
                 'contact_phone' => 'Phone',
             ],
             'postal_code_pattern' => '/^\\d{3}-?\\d{4}$/',
-            'phone_pattern' => '/^[0-9+\\-\\s()]{7,32}$/',
+            'phone_pattern' => '/^\\+?[0-9][0-9\\-\\s().\\/]{0,30}$/',
             'format' => [
                 'single_line' => ['postal_code', 'province', 'city', 'district', 'street', 'country'],
                 'tokens' => ['country', 'province', 'city', 'district', 'street'],

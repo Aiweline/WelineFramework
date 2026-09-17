@@ -218,8 +218,12 @@ class Template extends BackendController
         $this->assign('variables', $mergedVars);
         $this->assign('locale', $editLocale);
         $this->assign('listing_return', $returnState);
-        $this->assign('preview_shell_html', $shell->loadShell($editLocale));
+        /** @var \Weline\Smtp\Service\MailShellRegionStore $shellRegions */
+        $shellRegions = ObjectManager::getInstance(\Weline\Smtp\Service\MailShellRegionStore::class);
+        $this->assign('preview_shell_html', $shell->loadShell($editLocale, $editScope));
         $this->assign('preview_samples', $previewSamples);
+        $this->assign('shell_regions', $shellRegions->get($editScope));
+        $this->assign('mail_editor_fonts', \Weline\Smtp\Service\MailThemeFontCatalog::mailEditorFonts());
         $this->assignScopeVars([
             'storage_scope' => $editScope,
             'website_code' => (string)$workScope['website_code'],
@@ -234,9 +238,12 @@ class Template extends BackendController
     {
         $workScope = $this->resolveWorkScope(false);
         $templateId = (int)$this->request->getPost('template_id', 0);
-        $channel = trim((string)$this->request->getPost('channel_code', ''));
+        $channel = $this->readMailChannelFromRequest(true);
         $locale = trim((string)$this->request->getPost('locale', 'zh_Hans_CN'));
         $storageScope = trim((string)$this->request->getPost('storage_scope', $workScope['storage_scope']));
+        if ($storageScope === '') {
+            $storageScope = (string)$workScope['storage_scope'];
+        }
         $subject = (string)$this->request->getPost('subject', '');
         $bodyHtml = (string)$this->request->getPost('body_html', '');
         $bodyText = (string)$this->request->getPost('body_text', '');
@@ -249,6 +256,22 @@ class Template extends BackendController
         $bodyHtml = $shell->extractBodyFragment($bodyHtml);
         if (trim($bodyText) === '') {
             $bodyText = $renderer->htmlToText($bodyHtml);
+        }
+
+        $shellRegionsRaw = trim((string)$this->request->getPost('shell_regions_json', ''));
+        if ($shellRegionsRaw !== '') {
+            try {
+                $decoded = json_decode($shellRegionsRaw, true, 512, JSON_THROW_ON_ERROR);
+                if (is_array($decoded)) {
+                    $headerOverride = trim((string)($decoded['header'] ?? ''));
+                    $footerRows = is_array($decoded['footer'] ?? null) ? $decoded['footer'] : [];
+                    /** @var \Weline\Smtp\Service\MailShellRegionStore $regionStore */
+                    $regionStore = ObjectManager::getInstance(\Weline\Smtp\Service\MailShellRegionStore::class);
+                    $regionStore->save($storageScope, $headerOverride, array_map('strval', $footerRows));
+                }
+            } catch (\Throwable) {
+                // 壳区 JSON 损坏时不阻断正文保存
+            }
         }
 
         /** @var SmtpMailTemplate $model */
@@ -299,9 +322,12 @@ class Template extends BackendController
     public function postReset(): string
     {
         $workScope = $this->resolveWorkScope(false);
-        $channel = trim((string)$this->request->getPost('channel_code', ''));
+        $channel = $this->readMailChannelFromRequest(true);
         $locale = trim((string)$this->request->getPost('locale', 'zh_Hans_CN'));
         $storageScope = trim((string)$this->request->getPost('storage_scope', SystemConfig::SCOPE_GLOBAL));
+        if ($storageScope === '') {
+            $storageScope = (string)$workScope['storage_scope'];
+        }
 
         /** @var SmtpMailTemplate $model */
         $model = ObjectManager::getInstance(SmtpMailTemplate::class);
@@ -459,6 +485,27 @@ class Template extends BackendController
     }
 
     /**
+     * 读发信渠道 code（Extends 渠道，常含 ::）。
+     * 勿与 SystemConfig 作用域分段键 channel_code 混用。
+     */
+    private function readMailChannelFromRequest(bool $fromPost): string
+    {
+        $bag = $fromPost && $this->request->isPost() ? $this->request->getPost() : $this->request->getGet();
+        $mailChannel = trim((string)($bag['mail_channel'] ?? ''));
+        if ($mailChannel !== '') {
+            return $mailChannel;
+        }
+        // 兼容旧表单字段名；仅当值像 Extends 渠道时才采纳，避免吃掉 SystemConfig 渠道段
+        $legacy = trim((string)($bag['channel_code'] ?? ''));
+        if ($legacy !== '' && str_contains($legacy, '::')) {
+            return $legacy;
+        }
+        $fromQuery = trim((string)$this->request->getGet('channel', ''));
+
+        return $fromQuery;
+    }
+
+    /**
      * @return array{kind:string,website_code:string,store_code:string,channel_code:string,storage_scope:string}
      */
     private function resolveWorkScope(bool $normalizeUrl): array
@@ -473,9 +520,15 @@ class Template extends BackendController
         ];
         // 仅当请求显式携带分段键时再传入，避免空 website_code 覆盖 target_scope
         foreach (['website_code', 'store_code', 'channel_code', 'scope_kind', 'store_mode'] as $key) {
-            if (\array_key_exists($key, $post) || \array_key_exists($key, $get)) {
-                $input[$key] = (string)($post[$key] ?? $get[$key] ?? '');
+            if (!\array_key_exists($key, $post) && !\array_key_exists($key, $get)) {
+                continue;
             }
+            $value = (string)($post[$key] ?? $get[$key] ?? '');
+            // 邮件模板表单曾用 channel_code 存 Extends 渠道（含 ::），不能当 SystemConfig 渠道段
+            if ($key === 'channel_code' && str_contains($value, '::')) {
+                continue;
+            }
+            $input[$key] = $value;
         }
         $resolved = $targetScopeService->resolveFromInput($input, false);
         $storageScope = (string)($resolved['storage_scope'] ?? SystemConfig::SCOPE_GLOBAL);

@@ -37,11 +37,11 @@ interface LayoutProviderInterface
      * 
      * @return array 布局类型数组，格式如：
      * [
-     *     'product_list' => [
+     *     'products' => [
      *         'name' => '产品列表布局',
      *         'description' => '用于产品列表页面的布局'
      *     ],
-     *     'product_detail' => [
+     *     'product' => [
      *         'name' => '产品详情布局',
      *         'description' => '用于产品详情页面的布局'
      *     ]

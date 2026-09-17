@@ -1,0 +1,31 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 25
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\SiteContactScopeMapper;
+
+$store = (array)($this->getData('store') ?? $this->getData('entity') ?? []);
+$storeId = array_key_exists('store_id', $store) || $this->getData('store_id') !== null
+    ? (int)($this->getData('store_id') ?? $store['store_id'] ?? -1)
+    : -1;
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'store'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'store_' . (is_string($hookId) ? $hookId : '');
+}
+
+/** @var SiteContactScopeMapper $mapper */
+$mapper = ObjectManager::getInstance(SiteContactScopeMapper::class);
+$scopeMeta = $storeId >= 0
+    ? $mapper->forStore($store)
+    : ['ok' => false, 'storage_scope' => '', 'website_code' => '', 'store_code' => '', 'channel_code' => '', 'scope_kind' => '', 'label' => ''];
+
+echo $this->fetch('Weline_Websites::templates/Admin/partials/site-contact-embed-section.phtml', [
+    'sectionId' => $hookId . '_site_contact',
+    'hasIdentity' => $storeId >= 0,
+    'pendingHint' => (string)__('请先保存商店，再配置本店联系信息。'),
+    'scopeMeta' => $scopeMeta,
+    'scopeHint' => (string)__('本组写入当前商店范围；未覆盖时继承 Website → Global。'),
+]);

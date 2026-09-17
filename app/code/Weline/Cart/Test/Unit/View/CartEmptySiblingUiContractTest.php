@@ -20,8 +20,9 @@ final class CartEmptySiblingUiContractTest extends TestCase
         self::assertStringContainsString('weline-cart-shell__empty-actions', $page);
         self::assertStringContainsString('data-cart-siblings', $page);
         self::assertStringContainsString('data-cart-empty-lead', $page);
-        self::assertStringContainsString("浏览' + label", $page);
-        self::assertStringContainsString('件商品', $page);
+        self::assertStringContainsString('siblingBrowse', $page);
+        self::assertStringContainsString('siblingBrowseLabel', $page);
+        self::assertStringContainsString('浏览%1 %2件商品', $page);
         // Any sibling with stock gets a twin button — including gate/non-switchable rows.
         self::assertStringContainsString("btn.setAttribute('data-cart-sibling'", $page);
         self::assertStringNotContainsString('登录后可查看批发车', $page);
@@ -56,10 +57,16 @@ final class CartEmptySiblingUiContractTest extends TestCase
             "btn.className = 'mini-cart-drawer__btn mini-cart-drawer__btn--secondary'",
             $js,
         );
-        self::assertStringContainsString("浏览' + label", $js);
-        self::assertStringContainsString('件商品', $js);
+        self::assertStringContainsString('data-i18n-sibling-browse', $js);
+        self::assertStringContainsString('浏览%1 %2件商品', $js);
         self::assertStringNotContainsString("label + '还有 '", $js);
         self::assertStringNotContainsString('--color-primary-bg-subtle', $drawer);
         self::assertStringNotContainsString('border-inline-start', $drawer);
+
+        $phtml = (string)\file_get_contents(
+            $theme . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml'
+        );
+        self::assertStringContainsString('data-i18n-sibling-browse', $phtml);
+        self::assertStringContainsString('浏览%1 %2件商品', $phtml);
     }
 }

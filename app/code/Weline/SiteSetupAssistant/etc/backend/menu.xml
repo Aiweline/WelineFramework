@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!-- 标题含「助手」，后台菜单搜索可命中 -->
+    <menu source="Weline_SiteSetupAssistant::site_setup_assistant"
+          name="site_setup_assistant"
+          title="建站助手"
+          action="weline_sitesetupassistant/backend/progress/index"
+          parent="Weline_Websites::website_service"
+          icon="checklist"
+          order="25"/>
+</menus>

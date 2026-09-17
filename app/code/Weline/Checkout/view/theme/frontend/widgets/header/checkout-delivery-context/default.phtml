@@ -32,15 +32,8 @@ $title = (string)__(trim((string)($this->getData('title') ?? '配送至')));
 $countrySearch = (bool)($this->getData('enable_country_search') ?? true);
 $autoDetect = (bool)($this->getData('enable_auto_detect') ?? true);
 
-$isEditorMode = false;
-try {
-    $editorModeFlag = trim((string)($this->request->getParam('editor_mode', '') ?? ''));
-    $isEditorMode = ($editorModeFlag === '1' || strtolower($editorModeFlag) === 'true')
-        || (bool)$this->getData('editor_mode');
-} catch (\Throwable) {
-    $isEditorMode = (bool)$this->getData('editor_mode');
-}
-
+// preview_storefront_delivery_parity: editor/preview MUST use the same context
+// + Hook + auto-detect path as the live storefront (no editor_mode stub/skip).
 $hasSessionCookie = false;
 try {
     $hasSessionCookie = SessionCookieNameResolver::hasRequestCookie();
@@ -49,20 +42,7 @@ try {
 }
 
 $context = [];
-if ($isEditorMode) {
-    // Theme editor iframe: skip session/DB country lists and captcha quick-add render cost.
-    $context = [
-        'country_code' => 'CN',
-        'country_name' => (string)__('China'),
-        'countries' => [],
-        'addresses' => [],
-        'selected' => null,
-        'is_logged_in' => false,
-        'can_auto_detect' => false,
-        'display_text' => (string)__('选择国家/地址'),
-        'checkout_address' => [],
-    ];
-} elseif ($hasSessionCookie) {
+if ($hasSessionCookie) {
     try {
         $context = ObjectManager::getInstance(CheckoutDeliveryContextService::class)->getContext();
     } catch (\Throwable) {
@@ -81,6 +61,7 @@ if ($isEditorMode) {
 } else {
     // Do not start a guest Session while assembling the cacheable storefront
     // shell. The panel refreshes this state through QueryBin on first use.
+    // Same guest shell applies on publish AND theme-preview/editor iframe.
     $context = [
         'country_code' => 'CN',
         'country_name' => (string)__('China'),
@@ -134,12 +115,10 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选
         <div class="address-list" data-address-list></div>
 
         <div data-delivery-quick-add-slot>
-            <?php if (!$isEditorMode): ?>
             <w:hook>Weline_Checkout::frontend::widgets::checkout-delivery-context::quick-add</w:hook>
-            <?php endif; ?>
         </div>
 
-        <?php if ($autoDetect && !$isEditorMode): ?>
+        <?php if ($autoDetect): ?>
             <button type="button" class="w-button" data-action="auto-detect" data-variant="outline" data-size="sm"><?= __('自动定位') ?></button>
         <?php endif; ?>
         <p class="message" data-message hidden></p>
@@ -290,7 +269,10 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选
     }
 
     async function refreshContext() {
-        const result = await (await api()).getDeliveryContext({country_code: text(countryCodeInput.value || '')}, {silent: true});
+        const result = await (await api()).getDeliveryContext({
+            country_code: text(countryCodeInput.value || ''),
+            address_purpose: 'receiving',
+        }, {silent: true});
         const ctx = result.data || result;
         Object.assign(state, ctx);
         renderAddresses(ctx);
@@ -323,8 +305,12 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选
                 district: text(fd.get('district')).trim(),
                 street: text(fd.get('street')).trim(),
                 postal_code: text(fd.get('postal_code')).trim(),
+                purpose_source: 'receiving',
+                also_use_checkout: fd.get('also_use_checkout') ? 1 : 0,
             };
             const payload = {
+                purpose_source: 'receiving',
+                also_use_checkout: address.also_use_checkout,
                 address: address,
                 captcha_provider: text(fd.get('captcha_provider')).trim(),
                 captcha_token: text(fd.get('captcha_token')).trim(),

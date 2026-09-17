@@ -86,6 +86,8 @@ class Website extends Model
     public const schema_fields_ID = 'website_id';
     #[Col('varchar', 128, nullable: false, unique: true, comment: '网站名称')]
     public const schema_fields_NAME = 'name';
+    #[Col('varchar', 500, nullable: true, default: '', comment: '网站简介（品牌/SEO 叙述，网站范围）')]
+    public const schema_fields_DESCRIPTION = 'description';
     #[Col('varchar', 255, nullable: false, unique: true, comment: '网站代码')]
     public const schema_fields_CODE = 'code';
     #[Col('varchar', 128, nullable: false, unique: true, comment: '网站链接')]
@@ -356,6 +358,17 @@ class Website extends Model
     public function getName(): string
     {
         return (string)$this->getData(self::schema_fields_NAME);
+    }
+
+    public function setDescription(string $description): self
+    {
+        $this->setData(self::schema_fields_DESCRIPTION, $description);
+        return $this;
+    }
+
+    public function getDescription(): string
+    {
+        return trim((string)$this->getData(self::schema_fields_DESCRIPTION));
     }
 
     public function setCode(string $code): self

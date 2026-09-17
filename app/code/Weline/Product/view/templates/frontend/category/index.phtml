@@ -90,10 +90,10 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                 <span><?= $escape($categoryName) ?></span>
             </h1>
             <?php if ($categorySummary !== ''): ?>
-                <p class="amz-plp__summary"><?= $escape($categorySummary) ?></p>
+                <p class="amz-plp__summary" dir="auto"><?= $escape($categorySummary) ?></p>
             <?php endif; ?>
             <?php if ($categoryDescription !== ''): ?>
-                <div class="amz-plp__description"><?= nl2br($escape($categoryDescription)) ?></div>
+                <div class="amz-plp__description" dir="auto"><?= nl2br($escape($categoryDescription)) ?></div>
             <?php endif; ?>
         </header>
     <?php endif; ?>
@@ -172,6 +172,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
             <?php endif; ?>
         </div>
     <?php else: ?>
+        <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
         <div class="amz-plp__grid weline-product-card-shelf" data-testid="storefront-category-grid">
             <?php foreach ($offers as $index => $offer): ?>
                 <?php
@@ -192,9 +193,32 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                     if (!is_array($option)) {
                         continue;
                     }
+                    $type = (string)($option['type'] ?? 'page');
                     $href = trim((string)($option['url'] ?? ''));
-                    $label = (string)($option['page'] ?? '');
-                    if ($href === '' || $label === '') {
+                    $label = (string)($option['label'] ?? $option['page'] ?? '');
+                    if ($label === '') {
+                        continue;
+                    }
+                    if ($type === 'ellipsis') {
+                        ?>
+                        <span class="amz-plp__pager-item is-ellipsis" aria-hidden="true"><?= $escape($label) ?></span>
+                        <?php
+                        continue;
+                    }
+                    if ($type === 'prev' || $type === 'next') {
+                        $disabled = !empty($option['disabled']);
+                        if ($disabled || $href === '') {
+                            ?>
+                            <span class="amz-plp__pager-item is-nav is-disabled" aria-disabled="true"><?= $escape($label) ?></span>
+                            <?php
+                        } else {
+                            ?>
+                            <a class="amz-plp__pager-item is-nav" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
+                            <?php
+                        }
+                        continue;
+                    }
+                    if ($href === '') {
                         continue;
                     }
                     ?>
@@ -355,25 +379,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     gap: 12px;
     align-items: stretch;
 }
-/* 购买操作：与卡片正文同一垂直节奏（禁止与分页器选择器串线） */
-.amz-plp .product-card-purchase-actions {
-    display: grid;
-    gap: var(--weline-space-2, 0.5rem);
-    width: 100%;
-    margin-top: 0;
-}
-.amz-plp .product-card-purchase-actions > .weline-cart-product-card-add-to-cart,
-.amz-plp .product-card-purchase-actions > .weline-checkout-product-card-buy-now {
-    width: 100%;
-}
-.amz-plp .product-card-purchase-actions button,
-.amz-plp .product-card-purchase-actions a.amz-card__add,
-.amz-plp .amz-card__add:disabled,
-.amz-plp .amz-card__add[aria-disabled="true"],
-.amz-plp .amz-card__buy-now:disabled {
-    margin: 0;
-    width: 100%;
-}
+/* 购买操作布局已由 .weline-product-card .wpc-cta 拥有；PLP 仅保证格子拉伸 */
 .amz-plp__pager {
     display: flex;
     flex-wrap: wrap;
@@ -402,6 +408,22 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     border-color: #0f1111;
     background: #0f1111;
     color: #fff;
+}
+.amz-plp__pager-item.is-ellipsis {
+    border: 0;
+    background: transparent;
+    min-width: auto;
+    padding: 0 4px;
+    color: #565959;
+    font-weight: 500;
+    cursor: default;
+}
+.amz-plp__pager-item.is-nav {
+    padding: 0 12px;
+}
+.amz-plp__pager-item.is-disabled {
+    opacity: .45;
+    cursor: not-allowed;
 }
 .amz-plp__empty {
     padding: 28px 16px;

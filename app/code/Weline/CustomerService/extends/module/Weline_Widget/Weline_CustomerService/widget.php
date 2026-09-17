@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * CustomerService 前台部件：页脚帮助中心「联系客服」——打开悬浮聊天。
+ * CustomerService 前台部件：页脚帮助「联系客服」+ 页头右侧「客户服务」。
  * Theme layouts/partials 禁止内嵌本模块 <w:widget>；靠 default_injections / 拖入补空槽。
  */
 return [
@@ -35,6 +35,40 @@ return [
         'params' => [
             'label' => [
                 'default' => '联系客服',
+                'type' => 'string',
+                'label' => '链接文字',
+            ],
+        ],
+    ],
+    'header-contact-service-link' => [
+        'name' => '页头客户服务链接',
+        'description' => '页头右侧导航扩展槽：客户服务入口；点击打开悬浮客服聊天；默认注入 header-nav-extensions。',
+        'type' => 'navigation',
+        'code' => 'header-contact-service-link',
+        'area' => 'frontend',
+        'template' => 'Weline_CustomerService::templates/frontend/widgets/header-contact-service-link.phtml',
+        'page_layouts' => ['*'],
+        'position' => ['header'],
+        'slot' => 'header-nav-extensions',
+        'supports' => [
+            'header-contact-service-link',
+            'header-nav-link',
+            'layout-header-nav-extensions',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'homepage',
+            'slot' => 'header-nav-extensions',
+            'area' => 'header',
+            'sort_order' => 20,
+            'required' => true,
+            'reason' => '页头右侧扩展槽默认展示客户服务（客服模块打开悬浮聊天）',
+            'config' => [
+                'label' => '客户服务',
+            ],
+        ]],
+        'params' => [
+            'label' => [
+                'default' => '客户服务',
                 'type' => 'string',
                 'label' => '链接文字',
             ],

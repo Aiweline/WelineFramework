@@ -48,9 +48,13 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
         ?>
     </div>
     <?php
-    ProductCardAddToCartParams::emitPurchaseActionsAssetsOnce(static function (): void {
-        echo ProductCardAddToCartParams::buildPurchaseActionsStyleTag();
-        // cart JS：本槽 data-weline-load="cart"；toast CSS 在 theme.css；toast JS：storefrontShopperToast
-    });
+    // 已在 canonical 商品卡内：CTA 色/间距由 product-card.css 拥有，禁止再注入第二套 purchase-actions CSS。
+    $cssOwnedByProductCard = (bool)($this->getData('card_css_owned_by_product_card') ?? false);
+    if (!$cssOwnedByProductCard) {
+        ProductCardAddToCartParams::emitPurchaseActionsAssetsOnce(static function (): void {
+            echo ProductCardAddToCartParams::buildPurchaseActionsStyleTag();
+            // cart JS：本槽 data-weline-load="cart"；toast CSS 在 theme.css；toast JS：storefrontShopperToast
+        });
+    }
     ?>
 </div>

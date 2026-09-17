@@ -129,18 +129,18 @@ class WidgetPreviewService
                 'a', 'abbr', 'article', 'aside', 'audio', 'b', 'blockquote', 'br', 'button', 'caption',
                 'cite', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'dfn', 'div', 'dl', 'dt',
                 'em', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-                'header', 'hr', 'i', 'img', 'input', 'ins', 'label', 'legend', 'li', 'main', 'mark',
+                'header', 'hr', 'i', 'iframe', 'img', 'input', 'ins', 'label', 'legend', 'li', 'main', 'mark',
                 'nav', 'ol', 'option', 'p', 'picture', 'pre', 'progress', 's', 'section', 'select',
                 'small', 'source', 'span', 'strong', 'style', 'sub', 'summary', 'sup', 'table', 'tbody', 'td',
                 'textarea', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'video',
             ];
             $allowedAttr = [
-                'abbr', 'accept', 'action', 'alt', 'aria-label', 'aria-labelledby', 'aria-describedby',
+                'abbr', 'accept', 'action', 'allow', 'allowfullscreen', 'alt', 'aria-label', 'aria-labelledby', 'aria-describedby',
                 'aria-hidden', 'aria-expanded', 'aria-controls', 'autocomplete', 'checked', 'class',
-                'cols', 'colspan', 'controls', 'datetime', 'dir', 'disabled', 'for', 'height', 'hidden',
+                'cols', 'colspan', 'controls', 'datetime', 'dir', 'disabled', 'for', 'frameborder', 'height', 'hidden',
                 'href', 'id', 'label', 'loading', 'max', 'maxlength', 'method', 'min', 'multiple', 'name',
-                'pattern', 'placeholder', 'poster', 'readonly', 'rel', 'required', 'role', 'rows',
-                'rowspan', 'selected', 'sizes', 'src', 'style', 'target', 'title', 'type', 'value', 'width',
+                'pattern', 'placeholder', 'poster', 'readonly', 'referrerpolicy', 'rel', 'required', 'role', 'rows',
+                'rowspan', 'sandbox', 'selected', 'sizes', 'src', 'style', 'target', 'title', 'type', 'value', 'width',
             ];
             $uriAttr = ['action', 'href', 'poster', 'src'];
             $allowedInputTypes = [
@@ -157,6 +157,15 @@ class WidgetPreviewService
                 if (!in_array($tag, $allowedTags, true)) {
                     $node->parentNode?->removeChild($node);
                     continue;
+                }
+                if ($tag === 'iframe') {
+                    $src = (string)$node->getAttribute('src');
+                    if (!$this->isTrustedPreviewEmbedSrc($src)) {
+                        $node->parentNode?->removeChild($node);
+                        continue;
+                    }
+                    $node->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+                    $node->setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
                 }
             }
 
@@ -240,6 +249,24 @@ class WidgetPreviewService
             return true;
         }
         return in_array(strtolower((string)$scheme), ['http', 'https', 'mailto', 'tel'], true);
+    }
+
+    /**
+     * Keep YouTube / Vimeo player iframes in widget preview; strip everything else.
+     */
+    private function isTrustedPreviewEmbedSrc(string $src): bool
+    {
+        if (!$this->isSafePreviewUrl($src)) {
+            return false;
+        }
+        $host = strtolower((string)parse_url(trim($src), PHP_URL_HOST));
+        return in_array($host, [
+            'youtube.com',
+            'www.youtube.com',
+            'youtube-nocookie.com',
+            'www.youtube-nocookie.com',
+            'player.vimeo.com',
+        ], true);
     }
 
     private function isSafePreviewCss(string $css): bool

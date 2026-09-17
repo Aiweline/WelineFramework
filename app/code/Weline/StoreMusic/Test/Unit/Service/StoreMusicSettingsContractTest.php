@@ -20,6 +20,9 @@ final class StoreMusicSettingsContractTest extends TestCase
         $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Config/index.phtml');
         $menuXml = (string)file_get_contents($moduleRoot . '/etc/backend/menu.xml');
         $widget = (string)file_get_contents(
+            $moduleRoot . '/view/templates/frontend/widgets/store-music.phtml'
+        );
+        $hook = (string)file_get_contents(
             $moduleRoot . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml'
         );
         $js = (string)file_get_contents($moduleRoot . '/view/statics/js/store-music.js');
@@ -33,13 +36,19 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('store_music/music/loop', $template);
         self::assertStringContainsString('store_music/music/default_volume', $template);
         self::assertStringContainsString('store_music/visual/waveform_default', $template);
+        self::assertStringContainsString('store_music/visual/avatar_spin', $template);
         self::assertStringContainsString('scope="global,website,store"', $template);
         self::assertStringContainsString('ext="mp3,wav,ogg,oga,m4a,aac,flac,opus,wma,weba"', $template);
 
         self::assertStringContainsString('ConfigReader', $settings);
         self::assertStringContainsString('isWidgetActive', $settings);
         self::assertStringContainsString('frontendPayload', $settings);
+        self::assertStringContainsString('widgetConfigFromTemplate', $settings);
+        self::assertStringContainsString('tracksFromWidgetConfig', $settings);
         self::assertStringContainsString('KEY_PLAYLIST', $settings);
+        self::assertStringContainsString('KEY_AVATAR_SPIN', $settings);
+        self::assertStringContainsString('avatarSpin', $settings);
+        self::assertStringContainsString("'avatar_spin'", $settings);
         self::assertStringContainsString('parsePlaylistJson', $settings);
         self::assertStringContainsString('normalizeIntroMap', $settings);
         self::assertStringContainsString('resolveIntroForLocale', $settings);
@@ -50,6 +59,13 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('<w:config:embed', $configTemplate);
         self::assertStringContainsString('module="Weline_StoreMusic"', $configTemplate);
         self::assertStringContainsString('WelineMedia', $configTemplate);
+        self::assertStringContainsString('Weline_FileManager::js/w-scope.js', $configTemplate);
+        self::assertStringContainsString('ConfigMediaReferenceTemplates::config', $configTemplate);
+        self::assertStringContainsString("'identity' => \$storeMusicIdentityPath", $configTemplate);
+        self::assertStringContainsString("'picker_title'", $configTemplate);
+        self::assertStringContainsString("'identity_root' => 'config'", $configTemplate);
+        self::assertStringContainsString("'identity_scope' => \$storeMusicIdentityScope", $configTemplate);
+        self::assertStringContainsString("'strong_ref' => '1'", $configTemplate);
         self::assertStringContainsString('ext\' => \'mp3,wav,ogg,oga,m4a,aac,flac,opus,wma,weba\'', $configTemplate);
         self::assertStringContainsString("'multi' => '1'", $configTemplate);
         self::assertStringContainsString('20971520', $configTemplate);
@@ -65,11 +81,15 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('action="*/backend/config"', $menuXml);
 
         self::assertStringContainsString('isWidgetActive', $widget);
+        self::assertStringContainsString('widgetConfigFromTemplate', $widget);
+        self::assertStringContainsString('frontendPayload($widgetConfig)', $widget);
         self::assertStringContainsString('data-weline-load="storeMusic"', $widget);
         self::assertStringContainsString('data-testid="store-music-widget"', $widget);
         self::assertStringContainsString('data-store-music-intro', $widget);
-        self::assertStringContainsString('<lang>', $widget);
+        self::assertStringContainsString("\$t = static fn (string \$word): string => \$esc((string)__(\$word))", $widget);
         self::assertStringNotContainsString('CustomerService', $widget);
+        self::assertStringContainsString('templates/frontend/widgets/store-music.phtml', $hook);
+        self::assertStringContainsString('BP . ', $hook);
 
         self::assertStringContainsString('storeMusic', $modulesJs);
         self::assertStringContainsString('load: "defer"', $modulesJs);
@@ -90,7 +110,8 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('stopPlayback', $js);
         self::assertStringContainsString('data-store-music-close', $widget);
         self::assertStringNotContainsString('data-store-music-dismiss', $widget);
-        self::assertStringNotContainsString('preload = \'auto\'', $js);
+        // Streaming playback intentionally uses preload=auto (HTTP Range progressive).
+        self::assertStringContainsString("audio.preload = 'auto'", $js);
 
         $parsed = StoreMusicSettings::parsePlaylistJson(
             '[{"url":"/media/a.m4a","title":"甲","intro":"简介甲"},{"url":"store-music/b.mp3","title":"","intro":""}]'
@@ -130,6 +151,21 @@ final class StoreMusicSettingsContractTest extends TestCase
         ]);
         $again = StoreMusicSettings::parsePlaylistJson($encoded);
         self::assertSame($map, $again[0]['intro']);
+    }
+
+    public function testTracksFromWidgetConfigNormalizesUrlsAndIntros(): void
+    {
+        $tracks = StoreMusicSettings::tracksFromWidgetConfig([
+            ['url' => 'store-music/a.mp3', 'title' => '甲', 'intro' => '简介甲'],
+            ['url' => ['type' => 'file-image', 'path' => '/media/store-music/b.mp3'], 'title' => '', 'intro' => ''],
+            ['url' => '', 'title' => 'skip'],
+        ]);
+        self::assertCount(2, $tracks);
+        self::assertSame('/media/store-music/a.mp3', $tracks[0]['url']);
+        self::assertSame('甲', $tracks[0]['title']);
+        self::assertSame('简介甲', $tracks[0]['intro']);
+        self::assertSame('/media/store-music/b.mp3', $tracks[1]['url']);
+        self::assertSame('b', $tracks[1]['title']);
     }
 
     public function testDoesNotPatchSystemConfigCoreTemplate(): void

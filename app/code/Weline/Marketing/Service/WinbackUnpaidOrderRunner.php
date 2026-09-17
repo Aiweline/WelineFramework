@@ -39,6 +39,12 @@ final class WinbackUnpaidOrderRunner
     /** @var callable(array):void */
     private $writeLog;
 
+    /** @var callable(int,int,?int):bool */
+    private $matchesSegment;
+
+    /** @var callable(int,array):array */
+    private $issueCoupon;
+
     /**
      * @param callable():int|null $nowTs
      * @param callable(array):array|null $listUnpaid
@@ -48,6 +54,8 @@ final class WinbackUnpaidOrderRunner
      * @param callable(int,string,int):bool|null $hasStepLog
      * @param callable(int,string,int):?string|null $lastSentAt
      * @param callable(array):void|null $writeLog
+     * @param callable(int,int,?int):bool|null $matchesSegment
+     * @param callable(int,array):array|null $issueCoupon
      */
     public function __construct(
         ?callable $nowTs = null,
@@ -58,6 +66,8 @@ final class WinbackUnpaidOrderRunner
         ?callable $hasStepLog = null,
         ?callable $lastSentAt = null,
         ?callable $writeLog = null,
+        ?callable $matchesSegment = null,
+        ?callable $issueCoupon = null,
     ) {
         $this->nowTs = $nowTs ?? static fn (): int => \time();
         $this->listUnpaid = $listUnpaid ?? [$this, 'defaultListUnpaid'];
@@ -67,6 +77,8 @@ final class WinbackUnpaidOrderRunner
         $this->hasStepLog = $hasStepLog ?? [$this, 'defaultHasStepLog'];
         $this->lastSentAt = $lastSentAt ?? [$this, 'defaultLastSentAt'];
         $this->writeLog = $writeLog ?? [$this, 'defaultWriteLog'];
+        $this->matchesSegment = $matchesSegment ?? [$this, 'defaultMatchesSegment'];
+        $this->issueCoupon = $issueCoupon ?? [$this, 'defaultIssueCoupon'];
     }
 
     /**
@@ -119,6 +131,7 @@ final class WinbackUnpaidOrderRunner
                     continue;
                 }
 
+                $subjectKey = \str_starts_with($orderUuid, 'order:') ? $orderUuid : ('order:' . $orderUuid);
                 $createdAt = \trim((string)($item['created_at'] ?? ''));
                 $createdTs = $this->parseUtcTs($createdAt);
                 if ($createdTs === null || $now < ($createdTs + $abandonHours * 3600)) {
@@ -127,14 +140,29 @@ final class WinbackUnpaidOrderRunner
                     continue;
                 }
 
-                $step = 1;
-                if (($this->hasStepLog)($campaignId, $orderUuid, $step)) {
+                $stepInterval = max(1, (int)($campaign['step_interval_hours'] ?? 24));
+                $incentiveRuleId = max(0, (int)($campaign['incentive_rule_id'] ?? 0));
+                $next = (new WinbackStepResolver())->resolveNext(
+                    $campaignId,
+                    $subjectKey,
+                    $maxSteps,
+                    $stepInterval,
+                    $now,
+                    $this->hasStepLog,
+                    $this->lastSentAt,
+                );
+                if ($next === null) {
                     $stats['skipped']++;
                     continue;
                 }
+                if (empty($next['ready'])) {
+                    $stats['skipped']++;
+                    continue;
+                }
+                $step = (int)$next['step'];
 
                 if ($cooldownHours > 0) {
-                    $last = ($this->lastSentAt)($campaignId, $orderUuid, $step);
+                    $last = ($this->lastSentAt)($campaignId, $subjectKey, $step);
                     $lastTs = $last !== null ? $this->parseUtcTs($last) : null;
                     if ($lastTs !== null && $now < ($lastTs + $cooldownHours * 3600)) {
                         $stats['skipped']++;
@@ -147,7 +175,7 @@ final class WinbackUnpaidOrderRunner
                     $stats['skipped']++;
                     ($this->writeLog)([
                         'campaign_id' => $campaignId,
-                        'order_uuid' => $orderUuid,
+                        'order_uuid' => $subjectKey,
                         'step' => $step,
                         'status' => WinbackSendLog::STATUS_SKIPPED,
                         'reason' => 'already_paid_or_ineligible',
@@ -159,7 +187,7 @@ final class WinbackUnpaidOrderRunner
                     $stats['skipped']++;
                     ($this->writeLog)([
                         'campaign_id' => $campaignId,
-                        'order_uuid' => $orderUuid,
+                        'order_uuid' => $subjectKey,
                         'step' => $step,
                         'status' => WinbackSendLog::STATUS_SKIPPED,
                         'reason' => 'unreachable',
@@ -168,15 +196,44 @@ final class WinbackUnpaidOrderRunner
                     continue;
                 }
 
+                $segmentId = max(0, (int)($campaign['segment_id'] ?? 0));
+                $customerId = (int)($fresh['customer_id'] ?? $item['customer_id'] ?? 0);
+                if ($segmentId > 0 && !($this->matchesSegment)($customerId, $segmentId, $now)) {
+                    $stats['skipped']++;
+                    ($this->writeLog)([
+                        'campaign_id' => $campaignId,
+                        'order_uuid' => $subjectKey,
+                        'step' => $step,
+                        'status' => WinbackSendLog::STATUS_SKIPPED,
+                        'reason' => 'segment_mismatch',
+                        'sent_at' => \gmdate('Y-m-d H:i:s', $now),
+                    ]);
+                    continue;
+                }
+
+                $couponCode = '';
+                if ($step >= 2 && $incentiveRuleId > 0) {
+                    $issued = ($this->issueCoupon)($incentiveRuleId, [
+                        'customer_email' => (string)($fresh['email'] ?? $fresh['customer_email'] ?? ''),
+                        'order_uuid' => $orderUuid,
+                        'source_type' => 'winback_unpaid',
+                    ]);
+                    $couponCode = \is_array($issued) ? (string)($issued['coupon_code'] ?? '') : '';
+                    if ($couponCode !== '') {
+                        $fresh['coupon_code'] = $couponCode;
+                    }
+                }
+
                 $mailResult = ($this->sendMail)($fresh);
                 if (!empty($mailResult['success'])) {
                     $stats['sent']++;
                     ($this->writeLog)([
                         'campaign_id' => $campaignId,
-                        'order_uuid' => $orderUuid,
+                        'order_uuid' => $subjectKey,
                         'step' => $step,
                         'status' => WinbackSendLog::STATUS_SENT,
                         'reason' => '',
+                        'coupon_code' => $couponCode,
                         'sent_at' => \gmdate('Y-m-d H:i:s', $now),
                     ]);
                     continue;
@@ -186,7 +243,7 @@ final class WinbackUnpaidOrderRunner
                     $stats['skipped']++;
                     ($this->writeLog)([
                         'campaign_id' => $campaignId,
-                        'order_uuid' => $orderUuid,
+                        'order_uuid' => $subjectKey,
                         'step' => $step,
                         'status' => WinbackSendLog::STATUS_SKIPPED,
                         'reason' => (string)($mailResult['message'] ?? 'mail_skipped'),
@@ -198,7 +255,7 @@ final class WinbackUnpaidOrderRunner
                 $stats['failed']++;
                 ($this->writeLog)([
                     'campaign_id' => $campaignId,
-                    'order_uuid' => $orderUuid,
+                    'order_uuid' => $subjectKey,
                     'step' => $step,
                     'status' => WinbackSendLog::STATUS_FAILED,
                     'reason' => (string)($mailResult['message'] ?? 'send_failed'),
@@ -310,6 +367,7 @@ final class WinbackUnpaidOrderRunner
                 WinbackSendLog::schema_fields_STEP => (int)$row['step'],
                 WinbackSendLog::schema_fields_STATUS => (string)$row['status'],
                 WinbackSendLog::schema_fields_REASON => (string)($row['reason'] ?? ''),
+                WinbackSendLog::schema_fields_COUPON_CODE => (string)($row['coupon_code'] ?? ''),
                 WinbackSendLog::schema_fields_SENT_AT => (string)($row['sent_at'] ?? \gmdate('Y-m-d H:i:s')),
             ])->save();
         } catch (\Throwable $e) {
@@ -331,5 +389,24 @@ final class WinbackUnpaidOrderRunner
         }
 
         return $ts === false ? null : $ts;
+    }
+
+    private function defaultMatchesSegment(int $customerId, int $segmentId, ?int $nowTs = null): bool
+    {
+        try {
+            return (new AudienceSegmentMatcher())->matches($customerId, $segmentId, $nowTs);
+        } catch (\Throwable) {
+            return $segmentId <= 0;
+        }
+    }
+
+    /** @param array<string,mixed> $context */
+    private function defaultIssueCoupon(int $ruleId, array $context = []): array
+    {
+        try {
+            return (new WinbackIncentiveIssuer())->issue($ruleId, $context);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 }

@@ -38,12 +38,16 @@ class SeoHeadContextResolve implements ObserverInterface
         $headContext = $event->getData('head_context');
         $headContext = is_array($headContext) ? $headContext : [];
 
+        // site_name 权威源是 Website.name（网站基础信息 / 品牌身份），不由 Store.name 覆盖。
         $store = $this->stores->byId(RequestContext::getWelineStoreId());
         if ($store !== null && $store->websiteId === $website->getWebsiteId()) {
-            $siteName = trim($store->name) ?: $siteName;
             $siteUrl = trim((string)$store->url) ?: $siteUrl;
             $headContext['store_id'] = $store->id;
             $headContext['store_code'] = $store->code;
+            $storeName = trim($store->name);
+            if ($storeName !== '') {
+                $headContext['store_name'] = $storeName;
+            }
             $channel = $this->channels->byId(RequestContext::getWelineChannelId());
             if ($channel !== null && $channel->websiteId === $website->getWebsiteId()
                 && $channel->storeId === $store->id) {

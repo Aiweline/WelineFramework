@@ -20,8 +20,10 @@ use Weline\Theme\Exception\SlotBoundaryRequiredException;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ThemeData;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeVirtualLayout;
@@ -799,30 +801,86 @@ class SlotRendererService
         string $status,
         string $area
     ): array {
-        if ($pageType === ThemeLayout::PAGE_TYPE_HOME) {
+        unset($status);
+        if ($themeId < 1) {
             return $slotWidgets;
         }
 
-        // 全局 chrome 持久化在「当前作用范围」的 homepage 载体上（website/store 各有一套），
-        // 但 target 必须是 global——不得带着 cms_page/product 等业务 target 去读，否则会读到空布局。
-        $chromeIdentity = $this->sharedChromeCarrierIdentity($this->currentLayoutIdentity($area));
-        $globalChromeLayout = $this->getLayoutData(
-            $themeId,
-            ThemeLayout::PAGE_TYPE_HOME,
-            $status,
-            $area,
-            $chromeIdentity
-        );
-        $globalChromeSlotWidgets = $this->organizeWidgetsBySlot($globalChromeLayout);
+        $globalChromeSlotWidgets = $this->loadSharedChromeSlotWidgetsFromEntity($themeId, $area);
+        if ($globalChromeSlotWidgets === []) {
+            return $slotWidgets;
+        }
+
         foreach ($globalChromeSlotWidgets as $slotId => $widgets) {
             if ($widgets === [] || !$this->slotWidgetsBelongToSharedChrome((string)$slotId, $widgets)) {
                 continue;
             }
-            // 发版本/全局语义：载体始终覆盖业务布局本地 chrome 残留。
+            // Homepage carrier: root header/footer come from entity chrome inject; nested
+            // extension slots (footer-help-links etc.) still need merge into w:slot markers.
+            if ($pageType === ThemeLayout::PAGE_TYPE_HOME
+                && \in_array((string)$slotId, SharedChromeService::CHROME_SLOTS, true)
+            ) {
+                continue;
+            }
             $slotWidgets[$slotId] = $widgets;
         }
 
         return $slotWidgets;
+    }
+
+    /**
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function loadSharedChromeSlotWidgetsFromEntity(int $themeId, string $area): array
+    {
+        unset($area);
+        try {
+            /** @var \Weline\Theme\Service\ThemeScopeVersionService $scopeVersions */
+            $scopeVersions = ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class);
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder $slotTree */
+            $slotTree = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder::class);
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore $configStore */
+            $configStore = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore::class);
+
+            $scope = $this->resolveStorageScopeForSharedChrome(
+                $this->renderArea === 'backend' ? 'backend' : 'frontend',
+            );
+            if ($scope === '') {
+                return [];
+            }
+
+            $version = $scopeVersions->getPublished($themeId, $scope)
+                ?? $scopeVersions->getCurrent($themeId, $scope);
+            if ($version === null || $version->getVersionId() < 1) {
+                return [];
+            }
+
+            $nodes = $version->getChromePayload();
+            if ($nodes === []) {
+                return [];
+            }
+
+            $layout = $slotTree->nodesToAreaLayout($nodes);
+            $configByUid = $configStore->readChromeConfig($themeId, $scope, $version->getVersionId());
+            foreach ($layout as $areaKey => $areaData) {
+                if (!\is_array($areaData['widgets'] ?? null)) {
+                    continue;
+                }
+                foreach ($areaData['widgets'] as $index => $widget) {
+                    if (!\is_array($widget)) {
+                        continue;
+                    }
+                    $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+                    if ($uid !== '' && isset($configByUid[$uid]) && \is_array($configByUid[$uid])) {
+                        $layout[$areaKey]['widgets'][$index] = \array_replace($widget, $configByUid[$uid]);
+                    }
+                }
+            }
+
+            return $this->organizeWidgetsBySlot($layout);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -832,6 +890,37 @@ class SlotRendererService
      * @param array{layout_option?:string,scope?:string,target_type?:string,target_id?:int,locale_code?:string} $identity
      * @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string}
      */
+    private function resolveStorageScopeForSharedChrome(string $area): string
+    {
+        try {
+            $identity = $this->currentLayoutIdentity($area);
+            $scope = \trim((string)($identity['scope'] ?? ''));
+            if ($scope !== '') {
+                return $scope;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        try {
+            if (RequestContext::isInitialized()) {
+                $scopeIdentity = RequestContext::scopeIdentity();
+                if ($scopeIdentity instanceof \Weline\Framework\Runtime\ScopeIdentity) {
+                    /** @var \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface $scopes */
+                    $scopes = ObjectManager::getInstance(
+                        \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class,
+                    );
+
+                    return $scopes->contextFromIdentity($scopeIdentity)->storageScope;
+                }
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        return 'default.default.default';
+    }
+
     private function sharedChromeCarrierIdentity(array $identity): array
     {
         return [
@@ -1253,11 +1342,78 @@ class SlotRendererService
         $isAppend = \str_contains($wrapperOpenTag, 'data-wslot-append="true"');
         $isPrepend = \str_contains($wrapperOpenTag, 'data-wslot-prepend="true"');
 
+        // Exclusive slots with layout placements: layout owns the slot. CoW would
+        // otherwise keep meaningful template shells beside layout rows that lack
+        // matching template_ref (common after entity bake), causing duplicate banners.
+        if ($isExclusive && $layoutWidgets !== []) {
+            $widgetsHtml = $this->traceCall(
+                'slot_renderer::renderExclusiveSlot::' . \substr($slotId, 0, 80),
+                fn() => $this->renderSlotWidgets($layoutWidgets),
+                [
+                    'slot_id' => $slotId,
+                    'widgets' => \count($layoutWidgets),
+                ]
+            );
+            if ($widgetsHtml === '') {
+                return null;
+            }
+
+            return [
+                'inner_start' => (int)$region['inner_start'],
+                'inner_end' => (int)$region['inner_end'],
+                'new_inner' => $widgetsHtml,
+            ];
+        }
+
         $merger = ObjectManager::getInstance(TemplateInlineWidgetMerger::class);
         $templateWidgets = $merger->extractTemplateWidgetsFromHtml($inner);
         if ($templateWidgets !== []) {
             $plan = $merger->plan($templateWidgets, $layoutWidgets);
             if ($this->isMultipleSlotWrapperTag($wrapperOpenTag)) {
+                $hasPureLayoutAddition = false;
+                foreach ($plan as $planItem) {
+                    if (($planItem['kind'] ?? '') !== 'layout' || !\is_array($planItem['widget'] ?? null)) {
+                        continue;
+                    }
+                    $cfg = $this->cowWidgetConfig($planItem['widget']);
+                    if (\trim((string)($cfg[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_REF] ?? '')) === '') {
+                        $hasPureLayoutAddition = true;
+                        break;
+                    }
+                }
+                // Pure additions must follow interleaved plan order (sort_order vs
+                // templates). Surgical splice alone always parked them after the first
+                // template shell, contradicting editor "before" hints.
+                //
+                // Exception: homepage `content` (and similar carriers) nest layout-scoped
+                // slots with section wrappers (homepage-section). Full rebuild only
+                // concatenates template widget HTML and drops those wrappers → flush edges
+                // in editor preview. Keep splice so nested data-wslot shells survive.
+                if ($hasPureLayoutAddition && !$this->slotInnerContainsNestedSlots($inner)) {
+                    $newInner = $this->traceCall(
+                        'slot_renderer::renderCowMergedMultipleSlot::' . \substr($slotId, 0, 80),
+                        fn() => RequestLifecycleTrace::measurePhase(
+                            'theme.slots.widgets.cow',
+                            fn() => $this->renderCowMergedSlotHtml($plan),
+                            ['branch' => 'multiple-rebuild', 'widgets' => \count($layoutWidgets)],
+                        ),
+                        [
+                            'slot_id' => $slotId,
+                            'templates' => \count($templateWidgets),
+                            'widgets' => \count($layoutWidgets),
+                        ]
+                    );
+                    if ($newInner === '') {
+                        return null;
+                    }
+
+                    return [
+                        'inner_start' => (int)$region['inner_start'],
+                        'inner_end' => (int)$region['inner_end'],
+                        'new_inner' => $newInner,
+                    ];
+                }
+
                 $newInner = RequestLifecycleTrace::measurePhase(
                     'theme.slots.widgets.cow',
                     fn() => $this->spliceCowMergedMultipleSlotInner($inner, $templateWidgets, $plan, $layoutWidgets),
@@ -1340,7 +1496,16 @@ class SlotRendererService
 
     private function isMultipleSlotWrapperTag(string $wrapperOpenTag): bool
     {
-        return \str_contains($wrapperOpenTag, 'data-wslot-multiple="true"');
+        return (bool)\preg_match('/\bdata-wslot-multiple\s*=\s*(["\']?)true\1/i', $wrapperOpenTag);
+    }
+
+    /**
+     * True when a multiple slot's inner HTML still carries nested layout-scoped
+     * slot markers (e.g. homepage-brands with homepage-section wrappers).
+     */
+    private function slotInnerContainsNestedSlots(string $inner): bool
+    {
+        return $inner !== '' && (bool)\preg_match('/\bdata-wslot\s*=/', $inner);
     }
 
     private function spliceCowMergedMultipleSlotInner(
@@ -1518,7 +1683,138 @@ class SlotRendererService
             }
         }
 
-        return $this->insertCowLayoutAdditionsIntoMultipleSlotInner($inner, $templateWidgets, $renderedHtml);
+        // sort_order is the visual insert index among template shells + persisted
+        // wrappers. Defaulting to "after first template" made "插入到 X 前" land after X
+        // when X was a template-only shell (empty reference_layout_id).
+        $sortOrder = \max(0, (int)($widget['sort_order'] ?? 0));
+
+        return $this->insertHtmlAtMultipleSlotAnchorIndex(
+            $inner,
+            $templateWidgets,
+            $renderedHtml,
+            $sortOrder,
+        );
+    }
+
+    /**
+     * @param list<array{ref:string,html:string,element?:\DOMElement}> $templateWidgets
+     * @return list<array{start:int,end:int}>
+     */
+    private function collectMultipleSlotWidgetAnchors(string $inner, array $templateWidgets): array
+    {
+        $anchors = [];
+        foreach ($templateWidgets as $templateWidget) {
+            $block = (string)($templateWidget['html'] ?? '');
+            if ($block === '') {
+                continue;
+            }
+            $pos = \strpos($inner, $block);
+            if ($pos === false) {
+                continue;
+            }
+            $anchors[] = [
+                'start' => $pos,
+                'end' => $pos + \strlen($block),
+            ];
+        }
+
+        if (\preg_match_all(
+            '/<div\b(?=[^>]*\bwidget-wrapper\b)(?=[^>]*\bdata-node-uid\s*=\s*(["\'])[a-f0-9]{32}\1)[^>]*>/i',
+            $inner,
+            $matches,
+            \PREG_OFFSET_CAPTURE
+        )) {
+            foreach ($matches[0] as $match) {
+                $openStart = (int)($match[1] ?? -1);
+                if ($openStart < 0) {
+                    continue;
+                }
+                $covered = false;
+                foreach ($anchors as $anchor) {
+                    if ($openStart >= $anchor['start'] && $openStart < $anchor['end']) {
+                        $covered = true;
+                        break;
+                    }
+                }
+                if ($covered) {
+                    continue;
+                }
+                $end = $this->findMatchingDivEndOffset($inner, $openStart);
+                if ($end === null) {
+                    continue;
+                }
+                $anchors[] = [
+                    'start' => $openStart,
+                    'end' => $end,
+                ];
+            }
+        }
+
+        \usort(
+            $anchors,
+            static fn(array $left, array $right): int => ((int)$left['start']) <=> ((int)$right['start'])
+        );
+
+        return $anchors;
+    }
+
+    private function findMatchingDivEndOffset(string $html, int $openStart): ?int
+    {
+        if (\preg_match('/<div\b[^>]*>/i', $html, $openMatch, 0, $openStart) !== 1) {
+            return null;
+        }
+        $pos = $openStart + \strlen($openMatch[0]);
+        $depth = 1;
+        $length = \strlen($html);
+        while ($depth > 0 && $pos < $length) {
+            if (\preg_match('/<\/?div\b[^>]*>/i', $html, $tagMatch, \PREG_OFFSET_CAPTURE, $pos) !== 1) {
+                return null;
+            }
+            $tag = (string)$tagMatch[0][0];
+            $tagPos = (int)$tagMatch[0][1];
+            $isClose = isset($tag[1]) && $tag[1] === '/';
+            $isSelfClosing = \str_ends_with(\rtrim($tag, '>'), '/');
+            if ($isClose) {
+                --$depth;
+            } elseif (!$isSelfClosing) {
+                ++$depth;
+            }
+            $pos = $tagPos + \strlen($tag);
+            if ($depth === 0) {
+                return $pos;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<array{ref:string,html:string,element?:\DOMElement}> $templateWidgets
+     */
+    private function insertHtmlAtMultipleSlotAnchorIndex(
+        string $inner,
+        array $templateWidgets,
+        string $html,
+        int $index,
+    ): string {
+        if ($html === '') {
+            return $inner;
+        }
+
+        $anchors = $this->collectMultipleSlotWidgetAnchors($inner, $templateWidgets);
+        if ($anchors === []) {
+            return $index <= 0 ? ($html . $inner) : ($inner . $html);
+        }
+
+        if ($index <= 0) {
+            $insertAt = (int)$anchors[0]['start'];
+        } elseif ($index >= \count($anchors)) {
+            $insertAt = (int)$anchors[\count($anchors) - 1]['end'];
+        } else {
+            $insertAt = (int)$anchors[$index]['start'];
+        }
+
+        return \substr($inner, 0, $insertAt) . $html . \substr($inner, $insertAt);
     }
 
     /**
@@ -1879,6 +2175,7 @@ class SlotRendererService
             $isBrokenShell = false;
             try {
                 $issues = $inspector->inspect($inner, $meta);
+                $issues = $inspector->suppressSatisfiedDualPathEmpty($issues, $meta, $html);
                 foreach ($issues as $issue) {
                     $code = (string)($issue['code'] ?? '');
                     if ($code === 'empty_html' || $code === 'broken_widget_shell') {
@@ -1970,9 +2267,10 @@ class SlotRendererService
         ];
 
         try {
-            // Repair replaces wrapper HTML; re-allow purchase-actions CSS emission so
-            // btn-buy-now does not fall back to UA default after the first emit was discarded.
+            // Repair replaces wrapper HTML; re-allow card + purchase-actions CSS emission so
+            // styles discarded with the first pass are not skipped by RequestContext flags.
             ProductCardAddToCartParams::resetPurchaseActionsAssetsEmission();
+            ProductCardRenderer::resetProductCardCssEmission();
             $html = $this->doRenderWidget($widget);
         } catch (\Throwable) {
             return '';
@@ -3322,10 +3620,16 @@ HTML;
                 ];
                 try {
                     $issues = $inspector->inspect($inner, $meta);
+                    $issues = $inspector->suppressSatisfiedDualPathEmpty($issues, $meta, $html);
                 } catch (\Throwable) {
                     $issues = [];
                 }
 
+                // Always refresh: wrap-time stamp may have flagged empty_html before Hook float existed.
+                $openTag = $this->stripHtmlAttributes($openTag, [
+                    'data-w-widget-health',
+                    'data-w-widget-health-issues',
+                ]);
                 if ($issues !== []) {
                     $severity = $inspector->worstSeverity($issues);
                     $encoded = \json_encode($issues, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
@@ -3727,17 +4031,22 @@ HTML;
     private function hydrateTypedLayoutValues(array $config, string $renderArea, array $widget): array
     {
         $locale = trim((string)($widget['locale_code'] ?? ''));
-        // Empty/default layout locale means all-language identity. Typed file-image
-        // usage is stamped with the site default locale by the media picker, so
-        // hydration must use that same locale — not the browser/request language.
+        // Empty/default layout locale = all-language identity.
+        // Frontend: keep empty so FileImage hydrator follows each usage.locale_code
+        // after mergeTranslatedPaths (per-locale media overlays).
+        // Backend: stamp site default (media picker stamp) for typed hydration.
         if ($locale === '' || strcasecmp($locale, 'default') === 0) {
-            $locale = trim((string)Env::default_LANGUAGE_CODE);
-        }
-        if ($locale === '' || strcasecmp($locale, 'default') === 0) {
-            $locale = $this->resolveRenderLocale() ?? '';
-        }
-        if ($locale === '' || strcasecmp($locale, 'default') === 0) {
-            throw new \RuntimeException((string)__('类型化布局值解析缺少冻结的 locale_code。'));
+            if ($renderArea === 'backend') {
+                $locale = trim((string)Env::default_LANGUAGE_CODE);
+                if ($locale === '' || strcasecmp($locale, 'default') === 0) {
+                    $locale = $this->resolveRenderLocale() ?? '';
+                }
+                if ($locale === '' || strcasecmp($locale, 'default') === 0) {
+                    throw new \RuntimeException((string)__('类型化布局值解析缺少冻结的 locale_code。'));
+                }
+            } else {
+                $locale = '';
+            }
         }
         $scope = null;
         $encodedScope = trim((string)($widget['scope'] ?? ''));
@@ -3753,10 +4062,12 @@ HTML;
         if ($scope === null) {
             // Ordinary backend chrome intentionally does not freeze ScopeIdentity.
             // Resolve a local Global identity for hydration only — never install it.
-            if ($renderArea === 'backend') {
+            // Frontend entity fill can also run before LayoutIdentity is installed;
+            // fall back to Global rather than failing the whole widget as "missing".
+            try {
                 $scope = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class)
                     ->identityFromEncodedScope(ThemeContextService::DEFAULT_SCOPE);
-            } else {
+            } catch (\Throwable) {
                 throw new \RuntimeException((string)__('类型化布局值解析缺少冻结的 ScopeIdentity。'));
             }
         }
@@ -3975,6 +4286,57 @@ HTML;
             return $array;
         }
 
+        // Live storefront preview Token: prefer the identity captured at start-preview
+        // so draft processSlots matches the visual editor workspace (not RequestContext defaults).
+        try {
+            /** @var PreviewContextService $previewContexts */
+            $previewContexts = ObjectManager::getInstance(PreviewContextService::class);
+            if ($previewContexts->hasAuthoritativePreviewContext()
+                || ObjectManager::getInstance(PreviewTokenService::class)->isPreviewMode()
+            ) {
+                $preview = $previewContexts->getCurrentContext();
+                $tokenData = ObjectManager::getInstance(PreviewTokenService::class)->getCurrentPreviewData();
+                if (\is_array($tokenData['context'] ?? null)) {
+                    $preview = \array_replace($preview, $tokenData['context']);
+                }
+                $normalizer = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class);
+                $normalized = $normalizer->normalize([
+                    'scope' => (string)($preview['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
+                    'store_mode' => (string)($preview['store_mode'] ?? 'normal'),
+                    'locale_code' => '',
+                ]);
+                $layoutOption = \trim((string)($preview['layout_option'] ?? 'default'));
+                if ($layoutOption === '') {
+                    $layoutOption = 'default';
+                }
+                $targetType = \trim((string)(
+                    $preview['theme_layout_target_type']
+                    ?? $preview['theme_layout_source_target_type']
+                    ?? 'global'
+                ));
+                if ($targetType === '') {
+                    $targetType = 'global';
+                }
+                $targetId = $targetType === 'global'
+                    ? 0
+                    : \max(0, (int)(
+                        $preview['theme_layout_target_id']
+                        ?? $preview['theme_layout_source_target_id']
+                        ?? 0
+                    ));
+
+                return (new LayoutIdentity(
+                    $layoutOption,
+                    $normalized['scope'],
+                    $targetType,
+                    $targetId,
+                    '',
+                ))->toArray();
+            }
+        } catch (\Throwable) {
+            // Fall through to RequestContext ScopeIdentity.
+        }
+
         $area = $area === 'backend' || $this->renderArea === 'backend' ? 'backend' : 'frontend';
         $scope = RequestContext::scopeIdentity();
         $normalizer = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class);
@@ -4056,43 +4418,13 @@ HTML;
             // 1. Structure-only resolve (published 不读 legacy theme_layout).
             $layout = $runtimeLayoutResolver->resolveLayout($themeId, $pageType, $status, $area, $identity);
 
-            // 2. 检查是否有部件配置。空 slot 必须保持为空：default_injections 不得在渲染路径回填
-            // （仅主题初始化、「应用」tab / 显式初始化、草稿重置、部件首次入库、Dashboard view ready）。
-            $hasWidgets = $this->hasWidgetsInLayout($layout);
-            $hasNoWidgetPlacements = $runtimeLayoutResolver->hasNoWidgetPlacements(
-                $themeId,
-                $pageType,
-                $status,
-                $identity,
-                $area,
-            );
-
-            // Published runtime must never read or auto-publish a draft. Empty
-            // published layouts remain empty until an immutable Release is created.
-
-            // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据。
-            // 已明确保存为“没有部件配置”的布局必须保持这个状态，只渲染 slot 默认内容。
-            if (!$hasWidgets && !$hasNoWidgetPlacements && !$hasTargetIdentity && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
-                $defaultLayout = $runtimeLayoutResolver->resolveLayout(
-                    $themeId,
-                    ThemeLayout::PAGE_TYPE_DEFAULT,
-                    $status,
-                    $area,
-                    $identity,
-                );
-                if ($this->hasWidgetsInLayout($defaultLayout)) {
-                    $layout = $defaultLayout;
-                }
-            }
-
-            $layout = ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
-                ->normalizeLayoutForRender($pageType, $layout);
-
-            // 扩展槽部件已配置但缺 footer-container 时补齐父容器，避免孤儿告警与空槽。
-            // 非 default_injections 空槽回填；仅修复已放置子部件与父容器不一致的布局。
-            $layout = FooterDefaultLinksHelper::ensureFooterContainerInLayout($layout);
+            // Hard cutover: no request-time PAGE_TYPE_DEFAULT steal, footer-container
+            // repair, ProductPageLayoutNormalizer, or default_injections — bake only.
+            // Empty published layouts stay empty until an immutable Release is created.
 
             // 仅普通已发布布局写入结构缓存；草稿和页面级 target 不缓存。
+            // Storefront must not rely on this path (entity SlotFiller). Kept for
+            // editor/draft callers that still hit getLayoutData.
             if ($cacheablePublished) {
                 $this->layoutCache[$cacheKey] = $layout;
                 $this->rememberPublishedLayoutData($cacheKey, $layout);

@@ -29,7 +29,6 @@ class ComponentMetaParser
                 'description' => '',
                 'params' => [],
                 'meta' => [],
-                'preview_login' => 0
             ];
         }
         
@@ -40,7 +39,6 @@ class ComponentMetaParser
             'description' => '',
             'params' => [],
             'meta' => [], // 存储所有 @meta:: 标记
-            'preview_login' => 0 // 默认不需要登录
         ];
         
         // 提取组件名称
@@ -134,14 +132,6 @@ class ComponentMetaParser
                     $current = &$current[$keyPart];
                 }
                 unset($current);
-            }
-        }
-        
-        // 提取预览登录标记 @preview.login {default=0,...}
-        if (preg_match('/@preview\.login\s*\{([^}]+)\}/i', $content, $matches)) {
-            $attributes = self::parseAttributes($matches[1], $filePath, '@preview.login');
-            if (isset($attributes['default'])) {
-                $meta['preview_login'] = (int)$attributes['default'];
             }
         }
         

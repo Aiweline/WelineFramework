@@ -3,10 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
+
 /**
  * Keep AI translation targets aligned with the multi-website language union:
  * languages added to any site are installed and translated; languages removed
  * from every site are skipped on the next enqueue/cron cycle.
+ * Also kicks LocalModelTranslation so Website name/description locals fill by default.
  */
 final class WebsiteLocaleTranslationSync
 {
@@ -72,17 +76,36 @@ final class WebsiteLocaleTranslationSync
             return [];
         }
 
+        $queued = [];
         try {
             // enqueueEnabledLocales already uses getEnabledLocaleCodes() → removed union members are skipped.
-            return $this->queueService->enqueueEnabledLocales($requestedBy, false);
+            $queued = $this->queueService->enqueueEnabledLocales($requestedBy, false);
         } catch (\Throwable $throwable) {
             w_log_warning(
                 (string)__('网站语言变更后 AI 翻译入队失败：%{1}', [$throwable->getMessage()]),
                 [],
                 'i18n',
             );
+        }
 
-            return [];
+        // Website name/description LocalModel rows: fill newly selected locales by default.
+        $this->enqueueLocalModelTranslation($requestedBy);
+
+        return $queued;
+    }
+
+    private function enqueueLocalModelTranslation(string $requestedBy): void
+    {
+        try {
+            /** @var LocalModelTranslationQueueService $localModelQueue */
+            $localModelQueue = ObjectManager::getInstance(LocalModelTranslationQueueService::class);
+            $localModelQueue->enqueue($requestedBy . '_local_model', false);
+        } catch (\Throwable $throwable) {
+            w_log_warning(
+                (string)__('网站语言变更后 LocalModel 翻译入队失败：%{1}', [$throwable->getMessage()]),
+                [],
+                'i18n',
+            );
         }
     }
 }

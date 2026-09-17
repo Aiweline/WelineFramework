@@ -96,6 +96,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('refresh({ forceNetwork: false })', $jsContent);
         // membership-active may forceNetwork; MutationObserver path must not storm cart.getCart
         self::assertStringContainsString('enhanceMiniCarts({ refresh: false })', $jsContent);
+        self::assertStringContainsString('suppressChromeResyncUntil', $jsContent);
         self::assertStringContainsString('Do NOT forceNetwork here', $jsContent);
         self::assertStringContainsString(
             "var mode = String(detail.cart_type || detail.selling_mode || preferredMode(null)).toLowerCase();",
@@ -454,6 +455,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('cashDepositMinor', $checkoutTob);
         self::assertStringContainsString('weline:b2b-credit-changed', $checkoutTob);
         self::assertStringContainsString('notifyCreditChanged', $checkoutTob);
+        self::assertStringContainsString('creditState._notifySig', $checkoutTob);
         self::assertStringContainsString('data-b2b-credit', $checkoutTob);
 
         $b2bQuery = self::bp('app/code/Weline/B2B/extends/module/Weline_Framework/Query/B2BQueryProvider.php');

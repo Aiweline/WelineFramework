@@ -188,7 +188,7 @@ class ThemeTargetTypeRegistry
         foreach ([
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_GLOBAL, (string)__('全局'), ['*']),
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_PRODUCT, (string)__('商品'), ['product']),
-            new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_CATEGORY, (string)__('分类'), ['category', 'product_list']),
+            new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_CATEGORY, (string)__('分类'), ['category', 'products']),
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT, (string)__('分类商品默认'), ['product']),
         ] as $provider) {
             $providers[$provider->getCode()] = $provider;

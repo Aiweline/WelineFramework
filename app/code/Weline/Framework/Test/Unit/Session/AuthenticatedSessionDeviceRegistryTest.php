@@ -203,6 +203,33 @@ final class AuthenticatedSessionDeviceRegistryTest extends TestCase
         }
     }
 
+    public function testTrustedReuseRegistrationFailurePreservesExistingFrontendLogin(): void
+    {
+        DeviceRegistryFake::resetState();
+        $session = $this->newSession();
+        $resolver = $this->resolverWith([
+            AuthenticatedDeviceRegistryInterface::class => DeviceRegistryFake::class,
+        ]);
+        $auth = new AuthenticatedSession($session, AreaConfig::frontend(), $resolver);
+        $auth->login($this->user(47, 'shopper@example.test'));
+        self::assertSame(47, $auth->getUserId());
+
+        DeviceRegistryFake::$registerException = new \RuntimeException('register boom');
+        try {
+            $auth->login(
+                $this->user(1, 'other_shopper'),
+                AuthenticatedLoginContext::trustedReuse(),
+            );
+            self::fail('Expected trustedReuse registration to fail.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('认证设备登记失败', $exception->getMessage());
+        }
+
+        // Shopper must remain — clearing here is the storefront "掉线" regression.
+        self::assertSame(47, $session->get('WF_FRONTEND_USER_ID'));
+        self::assertSame('shopper@example.test', $session->get('WF_FRONTEND_USER'));
+    }
+
     public function testConfiguredButUnavailableRegistryRejectsAnExistingAuthenticationState(): void
     {
         $session = $this->newSession();

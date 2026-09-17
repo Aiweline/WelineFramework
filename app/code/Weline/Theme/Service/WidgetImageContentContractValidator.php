@@ -130,6 +130,10 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
             if ($value === null || $value === '') {
                 return;
             }
+            // media_image 也可承载音频/文件路径选曲（usage=0 / kind=audio|file），不强制 file-image。
+            if ($this->allowsNonImageMediaPath($definition)) {
+                return;
+            }
             $node = $this->normalizeFileImageNode($value);
             if ($node === null) {
                 throw new \RuntimeException((string)__('图片字段 %{1} 仍是旧 URL；请从媒体库重新选择资源后再发布。', [$path]));
@@ -140,7 +144,9 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
             return;
         }
 
-        if (($type === 'array' || $type === 'list') && is_array($definition['item_schema'] ?? null)) {
+        if (($type === 'array' || $type === 'list' || $type === 'nav_tree')
+            && is_array($definition['item_schema'] ?? null)
+        ) {
             if (is_string($value)) {
                 $decoded = json_decode($value, true);
                 $value = is_array($decoded) ? $decoded : [];
@@ -150,6 +156,10 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
             }
             foreach ($value as $index => $item) {
                 if (!is_array($item)) {
+                    continue;
+                }
+                // Drop nested list junk (e.g. slides:[[]]) — nothing to validate.
+                if ($item !== [] && array_is_list($item)) {
                     continue;
                 }
                 foreach ($definition['item_schema'] as $field => $fieldDefinition) {
@@ -163,8 +173,38 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
                         );
                     }
                 }
+                // Nested nav_tree children reuse the same item_schema.
+                if ($type === 'nav_tree' && is_array($item['children'] ?? null)) {
+                    $this->validateValue(
+                        $item['children'],
+                        $definition,
+                        $path . '[' . $index . '].children',
+                        $depth + 1,
+                        $nodes,
+                    );
+                }
             }
         }
+    }
+
+    /**
+     * media_image 在音频/文件选曲场景下允许路径字符串（非 file-image）。
+     *
+     * @param array<string,mixed> $definition
+     */
+    private function allowsNonImageMediaPath(array $definition): bool
+    {
+        $options = is_array($definition['media_options'] ?? null) ? $definition['media_options'] : [];
+        $kind = strtolower(trim((string)($options['kind'] ?? '')));
+        if (in_array($kind, ['audio', 'file', 'video'], true)) {
+            return true;
+        }
+        $usage = $options['usage'] ?? null;
+        if ($usage === 0 || $usage === '0' || $usage === false) {
+            return true;
+        }
+        $valueMode = strtolower(trim((string)($options['value_mode'] ?? '')));
+        return $valueMode === 'path' || $valueMode === 'url';
     }
 
     /** @return array{type:string,usage:array<string,mixed>}|null */

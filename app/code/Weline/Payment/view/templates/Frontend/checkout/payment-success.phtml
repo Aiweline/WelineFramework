@@ -67,24 +67,31 @@ $pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
     </section>
 </main>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    if (typeof window.WelinePixel === 'undefined' || !<?= json_encode($transactionNo !== '') ?>) {
+(function () {
+    if (!<?= json_encode($transactionNo !== '') ?>) {
         return;
     }
-    var dedupeKey = 'weline_pixel_dedupe:payment_success:' + <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>;
-    try {
-        if (window.sessionStorage.getItem(dedupeKey)) {
+    var attempts = 0;
+    var maxAttempts = 80;
+    function fire() {
+        attempts += 1;
+        if (typeof window.WelinePixel === 'undefined' || typeof window.WelinePixel.track !== 'function') {
+            if (attempts < maxAttempts) {
+                window.setTimeout(fire, 50);
+            }
             return;
         }
-    } catch (e) {}
-    window.WelinePixel.track('payment_success', {
-        transaction_id: <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>,
-        value: <?= json_encode($pixelValue, JSON_UNESCAPED_UNICODE) ?>,
-        currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
-        payment_method: <?= json_encode($paymentMethodLabel, JSON_UNESCAPED_UNICODE) ?>
-    });
-    try {
-        window.sessionStorage.setItem(dedupeKey, '1');
-    } catch (e) {}
-});
+        window.WelinePixel.track('payment_success', {
+            transaction_id: <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>,
+            value: <?= json_encode($pixelValue, JSON_UNESCAPED_UNICODE) ?>,
+            currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
+            payment_method: <?= json_encode($paymentMethodLabel, JSON_UNESCAPED_UNICODE) ?>
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fire);
+    } else {
+        fire();
+    }
+})();
 </script>

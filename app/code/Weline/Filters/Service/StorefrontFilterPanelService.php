@@ -44,7 +44,21 @@ final class StorefrontFilterPanelService
     }
 
     /**
+     * True for category/product listing routes — not PDP or unrelated chrome pages.
+     */
+    public static function isListingLikePath(string $requestPath): bool
+    {
+        $requestPath = strtolower(trim(str_replace('\\', '/', $requestPath), '/'));
+
+        // Match listing segments even when a locale/currency prefix is present.
+        // Keep `product/{slug}` (PDP) out: require `products` / `categories` / `category/…`.
+        return preg_match('#(?:^|/)(?:categories|products)(?:/|$)#', $requestPath) === 1
+            || preg_match('#(?:^|/)category(?:/|$)#', $requestPath) === 1;
+    }
+
+    /**
      * Resolve unfiltered listing offers when Theme widget render cleared page assigns.
+     * Only listing-like paths may rebuild catalog projections; PDP/other pages return [].
      *
      * @return list<array<string, mixed>>
      */
@@ -56,6 +70,10 @@ final class StorefrontFilterPanelService
         }
 
         $requestPath = strtolower(trim(str_replace('\\', '/', $requestPath), '/'));
+        if (!self::isListingLikePath($requestPath)) {
+            return [];
+        }
+
         try {
             if (preg_match('#(?:^|/)category/(.+)$#', $requestPath, $matches) === 1) {
                 $publicPath = trim((string)$matches[1], '/');
@@ -77,7 +95,8 @@ final class StorefrontFilterPanelService
                 return $this->catalog->publishedOffersForProductIds($productIds, 120, false);
             }
 
-            return $this->catalog->publishedOffers(120, false);
+            // Root listing: prefer candidates (no media) + request memo / HotCache single-flight.
+            return $this->catalog->publishedListingCandidates(120, false);
         } catch (\Throwable) {
             return [];
         }

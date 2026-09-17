@@ -533,8 +533,17 @@ class EditorLockService
 
     private function assertLockIdentity(int $themeId, string $pageType, string $contextKey): void
     {
+        // Align with ThemeEditorContext layoutType: nested paths like account/login
+        // and checkout/success are first-class page types. The old flat regex
+        // rejected "/" and uppercase, so nested pages always failed lock acquire
+        // with 「编辑锁资源身份无效」and the editor stayed read-only.
+        $pageTypeOk = preg_match('#^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,127}$#D', $pageType) === 1
+            && !str_contains($pageType, '//')
+            && !str_starts_with($pageType, '/')
+            && !str_ends_with($pageType, '/');
+
         if ($themeId < 1
-            || preg_match('/^[a-z][a-z0-9_.:-]{0,63}$/D', $pageType) !== 1
+            || !$pageTypeOk
             || $contextKey === ''
             || strlen($contextKey) > 2048
             || preg_match('/[\x00-\x1F\x7F]/', $contextKey) === 1

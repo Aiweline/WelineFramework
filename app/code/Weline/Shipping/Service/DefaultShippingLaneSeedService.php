@@ -31,7 +31,11 @@ final class DefaultShippingLaneSeedService
     private const MARKETS_TSV = 'app/code/Weline/Shipping/data/default-markets/countries.tsv';
 
     /**
-     * 九档默认可达市场航线元数据（费用一律站点基础货币）。
+     * 九档默认可达市场航线元数据（费用一律站点基础货币，默认 CNY）。
+     *
+     * 计价假设：中国大陆仓发货 → 跨境经济小包/挂号小包量级（非 EMS/商业快递）。
+     * `fee`+`weight_rate` 经 SeedWeightBracketFactory::fromLinear 生成阶梯；Americas 保持
+     * base=45/rate=14（Ch1 契约 2kg=115.00），其余航线按中国发往该区常见经济线校准。
      *
      * @var array<string, array{
      *   name:string,
@@ -47,60 +51,71 @@ final class DefaultShippingLaneSeedService
      */
     private const LANE_META = [
         'domestic' => [
+            // 国内标快：首重约 12 元，续重约 4 元/kg
             'name' => '国内标快', 'fee' => 12.00, 'weight_rate' => 4.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
             'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 1, 'days_max' => 3, 'sort' => 10,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'greater_china' => [
-            'name' => '港澳台', 'fee' => 25.00, 'weight_rate' => 8.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
+            // 港澳台经济线
+            'name' => '港澳台', 'fee' => 28.00, 'weight_rate' => 9.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
             'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 2, 'days_max' => 5, 'sort' => 20,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'asia_pacific' => [
-            'name' => '亚太', 'fee' => 35.00, 'weight_rate' => 10.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
-            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 3, 'days_max' => 7, 'sort' => 30,
+            // 日韩/东南亚/南亚经济小包
+            'name' => '亚太', 'fee' => 38.00, 'weight_rate' => 12.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
+            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 3, 'days_max' => 10, 'sort' => 30,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'americas' => [
+            // 美加墨经济线（Ch1 锁定：2kg 档 115.00）
             'name' => '美洲', 'fee' => 45.00, 'weight_rate' => 14.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
-            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 5, 'days_max' => 12, 'sort' => 40,
+            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 7, 'days_max' => 15, 'sort' => 40,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'europe' => [
-            'name' => '欧洲', 'fee' => 40.00, 'weight_rate' => 12.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
-            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 5, 'days_max' => 12, 'sort' => 50,
+            // 西欧/北欧/中东欧经济小包（略低于美线）
+            'name' => '欧洲', 'fee' => 42.00, 'weight_rate' => 13.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
+            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 6, 'days_max' => 14, 'sort' => 50,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'oceania' => [
-            'name' => '大洋洲', 'fee' => 42.00, 'weight_rate' => 13.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
-            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 5, 'days_max' => 12, 'sort' => 60,
+            // 澳新经济线
+            'name' => '大洋洲', 'fee' => 48.00, 'weight_rate' => 15.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
+            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 7, 'days_max' => 16, 'sort' => 60,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'latam' => [
-            'name' => '拉美', 'fee' => 48.00, 'weight_rate' => 15.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
-            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 7, 'days_max' => 15, 'sort' => 70,
+            // 拉美/加勒比（运距与清关成本更高）
+            'name' => '拉美', 'fee' => 58.00, 'weight_rate' => 18.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
+            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 10, 'days_max' => 22, 'sort' => 70,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'middle_east_africa' => [
-            'name' => '中东非洲', 'fee' => 46.00, 'weight_rate' => 14.50, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
-            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 6, 'days_max' => 14, 'sort' => 80,
+            // 中东/非洲经济线
+            'name' => '中东非洲', 'fee' => 55.00, 'weight_rate' => 17.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
+            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 8, 'days_max' => 20, 'sort' => 80,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
         'other' => [
-            'name' => '其他可达市场', 'fee' => 50.00, 'weight_rate' => 16.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
-            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 7, 'days_max' => 18, 'sort' => 90,
+            // 独联体/中亚等其它可达市场
+            'name' => '其他可达市场', 'fee' => 60.00, 'weight_rate' => 18.00, 'volume_rate' => 0.0, 'quantity_rate' => 0.0,
+            'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 10, 'days_max' => 25, 'sort' => 90,
             'max_weight_kg' => 30.0, 'bracket_set' => 'general',
         ],
     ];
 
     private const HEAVY_META = [
         'heavy_domestic' => [
+            // 国内重货专线（托盘/大件量级）
             'name' => '国内重货', 'fee' => 80.00, 'weight_rate' => 20.00,
             'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 7, 'days_max' => 30, 'sort' => 200,
             'max_weight_kg' => 1000.0, 'bracket_set' => 'heavy', 'lane_group' => 'domestic',
         ],
         'heavy_international' => [
-            'name' => '国际重货', 'fee' => 200.00, 'weight_rate' => 40.00,
+            // 国际重货/海运空运混运参考价
+            'name' => '国际重货', 'fee' => 220.00, 'weight_rate' => 45.00,
             'calc' => RateTemplate::CALC_TYPE_WEIGHT_TABLE, 'days_min' => 15, 'days_max' => 45, 'sort' => 210,
             'max_weight_kg' => 1000.0, 'bracket_set' => 'heavy', 'lane_group' => 'international',
         ],
@@ -307,6 +322,14 @@ final class DefaultShippingLaneSeedService
             ->getItems();
         $existing = is_array($items) ? ($items[0] ?? null) : null;
         if ($existing instanceof Carrier && (int)$existing->getId() > 0) {
+            $template = trim((string)$existing->getData(Carrier::schema_fields_TRACKING_URL_TEMPLATE));
+            /** @var TrackingUrlResolver $urlResolver */
+            $urlResolver = $this->objectManager->getInstance(TrackingUrlResolver::class);
+            $sanitized = $urlResolver->sanitizeTemplate($template);
+            if ($sanitized !== $template) {
+                $existing->setData(Carrier::schema_fields_TRACKING_URL_TEMPLATE, $sanitized)->save();
+            }
+
             return (int)$existing->getId();
         }
 
@@ -316,7 +339,7 @@ final class DefaultShippingLaneSeedService
             Carrier::schema_fields_CARRIER_CODE => self::CARRIER_CODE,
             Carrier::schema_fields_CARRIER_NAME => 'Weline Standard',
             Carrier::schema_fields_CARRIER_TYPE => Carrier::TYPE_MANUAL,
-            Carrier::schema_fields_TRACKING_URL_TEMPLATE => 'https://track.example.com/?n={tracking_number}',
+            Carrier::schema_fields_TRACKING_URL_TEMPLATE => TrackingUrlResolver::DEFAULT_TEMPLATE,
             Carrier::schema_fields_TRACKING_SUPPORT_STATUS => Carrier::TRACKING_SUPPORTED,
             Carrier::schema_fields_IS_ACTIVE => 1,
             Carrier::schema_fields_SORT_ORDER => 10,
@@ -369,7 +392,7 @@ final class DefaultShippingLaneSeedService
     }
 
     /**
-     * 商户已维护较完整白名单则不覆盖；仅 CN 等窄名单时扩到默认可达市场。
+     * 可售目的地：窄名单整表替换；已有较多国家时仅并入种子市场缺失国（不删商户额外项）。
      *
      * @param array<string, list<string>> $markets
      */
@@ -378,30 +401,56 @@ final class DefaultShippingLaneSeedService
         /** @var DestinationAdminService $admin */
         $admin = $this->objectManager->getInstance(DestinationAdminService::class);
         $existing = $admin->listForScope(DestinationRegion::SCOPE_WEBSITE, max(0, $websiteId));
-        // 商户已维护较完整白名单则不覆盖；仅 CN 等窄名单时扩到默认可达市场。
-        if (count($existing) > 5) {
+        $seedRows = $this->marketCountryRows($markets);
+        if ($seedRows === []) {
             return count($existing);
         }
-        $rows = [];
-        foreach ($markets as $codes) {
-            foreach ($codes as $cc) {
-                $rows[] = [
-                    'region_type' => DestinationRegion::TYPE_COUNTRY,
-                    'country_code' => $cc,
-                    'region_id' => 0,
-                    'region_code' => $cc,
-                    'street_id' => 0,
-                ];
-            }
-        }
-        if ($rows === []) {
-            return 0;
+        if (count($existing) <= 5) {
+            return $admin->replaceForScope(DestinationRegion::SCOPE_WEBSITE, max(0, $websiteId), $seedRows);
         }
 
-        return $admin->replaceForScope(DestinationRegion::SCOPE_WEBSITE, max(0, $websiteId), $rows);
+        $have = [];
+        $merged = [];
+        foreach ($existing as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $cc = strtoupper(trim((string)($row['country_code'] ?? '')));
+            $type = (string)($row['region_type'] ?? DestinationRegion::TYPE_COUNTRY);
+            $key = $type . ':' . $cc . ':' . (string)($row['region_code'] ?? $cc);
+            if (isset($have[$key])) {
+                continue;
+            }
+            $have[$key] = true;
+            $merged[] = [
+                'region_type' => $type !== '' ? $type : DestinationRegion::TYPE_COUNTRY,
+                'country_code' => $cc,
+                'region_id' => (int)($row['region_id'] ?? 0),
+                'region_code' => (string)($row['region_code'] ?? $cc),
+                'street_id' => (int)($row['street_id'] ?? 0),
+            ];
+        }
+        $added = 0;
+        foreach ($seedRows as $row) {
+            $cc = strtoupper(trim((string)($row['country_code'] ?? '')));
+            $key = DestinationRegion::TYPE_COUNTRY . ':' . $cc . ':' . $cc;
+            if ($cc === '' || isset($have[$key])) {
+                continue;
+            }
+            $have[$key] = true;
+            $merged[] = $row;
+            ++$added;
+        }
+        if ($added === 0) {
+            return count($existing);
+        }
+
+        return $admin->replaceForScope(DestinationRegion::SCOPE_WEBSITE, max(0, $websiteId), $merged);
     }
 
     /**
+     * 承运商覆盖：空/极少时整表写入；已有覆盖时并入种子市场缺失国。
+     *
      * @param array<string, list<string>> $markets
      */
     private function ensureCarrierWorldCoverage(int $carrierId, array $markets): int
@@ -411,17 +460,81 @@ final class DefaultShippingLaneSeedService
         }
         /** @var CarrierCoverageAdminService $admin */
         $admin = $this->objectManager->getInstance(CarrierCoverageAdminService::class);
-        $rows = $this->marketCoverageRows();
-        if ($rows === []) {
+        $seedRows = $this->marketCoverageRows();
+        if ($seedRows === []) {
             return 0;
         }
-        // 仅当覆盖为空或仅有极少国家时扩展；商户已手改多国则跳过。
         $count = $admin->countForCarrier($carrierId);
-        if ($count > 5) {
+        if ($count <= 5) {
+            return $admin->replaceForCarrier($carrierId, $seedRows);
+        }
+
+        $existing = $admin->listForCarrier($carrierId);
+        $have = [];
+        $merged = [];
+        foreach (is_array($existing) ? $existing : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $cc = strtoupper(trim((string)($row['country_code'] ?? '')));
+            $type = (string)($row['region_type'] ?? CarrierRegion::TYPE_COUNTRY);
+            $key = $type . ':' . $cc;
+            if ($cc === '' || isset($have[$key])) {
+                continue;
+            }
+            $have[$key] = true;
+            $merged[] = [
+                'region_type' => $type !== '' ? $type : CarrierRegion::TYPE_COUNTRY,
+                'country_code' => $cc,
+                'region_id' => $row['region_id'] ?? null,
+                'region_code' => (string)($row['region_code'] ?? $cc),
+                'street_id' => $row['street_id'] ?? null,
+            ];
+        }
+        $added = 0;
+        foreach ($seedRows as $row) {
+            $cc = strtoupper(trim((string)($row['country_code'] ?? '')));
+            $key = CarrierRegion::TYPE_COUNTRY . ':' . $cc;
+            if ($cc === '' || isset($have[$key])) {
+                continue;
+            }
+            $have[$key] = true;
+            $merged[] = $row;
+            ++$added;
+        }
+        if ($added === 0) {
             return $count;
         }
 
-        return $admin->replaceForCarrier($carrierId, $rows);
+        return $admin->replaceForCarrier($carrierId, $merged);
+    }
+
+    /**
+     * @param array<string, list<string>> $markets
+     * @return list<array<string,mixed>>
+     */
+    private function marketCountryRows(array $markets): array
+    {
+        $rows = [];
+        $seen = [];
+        foreach ($markets as $codes) {
+            foreach ($codes as $cc) {
+                $cc = strtoupper(trim((string)$cc));
+                if ($cc === '' || isset($seen[$cc])) {
+                    continue;
+                }
+                $seen[$cc] = true;
+                $rows[] = [
+                    'region_type' => DestinationRegion::TYPE_COUNTRY,
+                    'country_code' => $cc,
+                    'region_id' => 0,
+                    'region_code' => $cc,
+                    'street_id' => 0,
+                ];
+            }
+        }
+
+        return $rows;
     }
 
     /**

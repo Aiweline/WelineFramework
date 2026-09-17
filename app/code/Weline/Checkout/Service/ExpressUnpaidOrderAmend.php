@@ -123,6 +123,7 @@ final class ExpressUnpaidOrderAmend
                 OrderModel::schema_fields_SHIPPING_SNAPSHOT_JSON,
                 json_encode($shippingSnapshot, JSON_UNESCAPED_UNICODE),
             );
+            $this->mergeBuyerTaxIdentity($order, $address, $options);
             $order->save();
         } catch (\Throwable $e) {
             return ['ok' => false, 'message' => $e->getMessage()];
@@ -146,6 +147,56 @@ final class ExpressUnpaidOrderAmend
                 'grand_total_minor' => $grandTotalMinor,
             ],
         ];
+    }
+
+    /**
+     * Merge buyer tax identity into order header tax_snapshot_json (formal buyer_* keys).
+     *
+     * @param array<string, mixed> $address
+     * @param array<string, mixed> $options
+     */
+    private function mergeBuyerTaxIdentity(OrderModel $order, array $address, array $options): void
+    {
+        if (!class_exists(\Weline\Tax\Service\BuyerTaxIdentityService::class)) {
+            return;
+        }
+        /** @var \Weline\Tax\Service\BuyerTaxIdentityService $service */
+        $service = ObjectManager::getInstance(\Weline\Tax\Service\BuyerTaxIdentityService::class);
+        $identity = \Weline\Tax\Service\BuyerTaxIdentityService::extractFromBag($options);
+        $billing = \is_array($options['billing_address'] ?? null) ? $options['billing_address'] : $address;
+        $desc = $service->describeForAddress($billing, $identity, false);
+        if ($desc['errors'] !== []) {
+            throw new \InvalidArgumentException((string)($desc['errors'][0] ?? 'buyer_tax_vat_invalid'));
+        }
+        $normalized = $service->normalize($identity);
+        if ($normalized !== [] && trim((string)($normalized['country_code'] ?? '')) === '') {
+            $normalized['country_code'] = strtoupper(trim((string)($billing['country_code'] ?? $billing['country'] ?? '')));
+        }
+
+        $raw = $order->getData(OrderModel::schema_fields_TAX_SNAPSHOT_JSON);
+        $tax = [];
+        if (\is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (\is_array($decoded)) {
+                $tax = $decoded;
+            }
+        } elseif (\is_array($raw)) {
+            $tax = $raw;
+        }
+        if (!$desc['visible']) {
+            $tax = $service->mergeIntoTaxSnapshot($tax, []);
+        } else {
+            $tax = $service->mergeIntoTaxSnapshot($tax, $normalized);
+        }
+        // Drop nested session copies before persist — TaxSnapshot::fromArray only keeps buyer_*.
+        unset(
+            $tax[\Weline\Tax\Service\BuyerTaxIdentityService::PAYLOAD_KEY],
+            $tax[\Weline\Tax\Service\BuyerTaxIdentityService::LEGACY_PAYLOAD_KEY],
+        );
+        $order->setData(
+            OrderModel::schema_fields_TAX_SNAPSHOT_JSON,
+            json_encode($tax, JSON_UNESCAPED_UNICODE),
+        );
     }
 
     /**

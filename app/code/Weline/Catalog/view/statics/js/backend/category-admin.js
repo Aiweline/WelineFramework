@@ -296,7 +296,28 @@ if (root) {
             if (src === '') {
                 return;
             }
-            frame.src = src;
+            let pickerUrl = new URL(src, window.location.href);
+            const helper = window.Weline && window.Weline.MediaIdentityPicker;
+            if (helper) {
+                const ambient = helper.ambientFrom(root);
+                const pathPreview = String(root.querySelector('[data-category-path-preview]')?.textContent || '').trim();
+                const code = pathPreview && pathPreview !== '/'
+                    ? pathPreview
+                    : (ambient.code || ('id-' + String(root.dataset.selectedId || '0')));
+                const identity = helper.buildIdentity({
+                    root: 'catalog',
+                    code: code.replace(/^\/+/, ''),
+                    scope: ambient.scope || null,
+                    kind: kind,
+                    field: kind,
+                });
+                if (identity) {
+                    pickerUrl = helper.appendIdentityParams(pickerUrl, identity);
+                    dialog.__mediaIdentity = identity;
+                    dialog.__mediaAmbient = ambient;
+                }
+            }
+            frame.src = pickerUrl.href;
             if (typeof dialog.showModal === 'function') {
                 dialog.showModal();
             } else {
@@ -361,6 +382,17 @@ if (root) {
                 return;
             }
             setMediaValue(kind, url);
+            const helper = window.Weline && window.Weline.MediaIdentityPicker;
+            if (helper && dialog.__mediaIdentity) {
+                const ambient = dialog.__mediaAmbient || helper.ambientFrom(root);
+                helper.bindSelection(dialog.__mediaIdentity, files, {
+                    bindUrl: ambient.bindUrl || root.dataset.mediaBindUrl || '',
+                    ownerType: 'catalog_category',
+                    ownerId: dialog.__mediaIdentity.code,
+                    ownerVersion: 1,
+                    refMode: 'single',
+                });
+            }
             closePicker();
         });
     })();

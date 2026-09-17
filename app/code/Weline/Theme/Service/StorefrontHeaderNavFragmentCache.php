@@ -98,7 +98,7 @@ final class StorefrontHeaderNavFragmentCache
         $structureFp = $this->navStructureFingerprint($item);
 
         return \sprintf(
-            'theme.header.mega_panel.v6.%s.%s.%s.%s.%s',
+            'theme.header.mega_panel.v7.%s.%s.%s.%s.%s',
             $this->storefrontLocaleSegment(),
             $drawerFlyout ? 'drawer' : 'top',
             $panelSlug,
@@ -112,7 +112,7 @@ final class StorefrontHeaderNavFragmentCache
      */
     public function sidebarNavLogicalKey(array $items): string
     {
-        return 'theme.header.sidebar_nav.v6.'
+        return 'theme.header.sidebar_nav.v7.'
             . $this->storefrontLocaleSegment()
             . '.'
             . $this->navListFingerprint($items);

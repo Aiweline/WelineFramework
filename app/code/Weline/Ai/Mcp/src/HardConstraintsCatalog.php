@@ -42,11 +42,13 @@ final class HardConstraintsCatalog
     public static function preamble(): string
     {
         return 'HARD CONSTRAINTS (hard-constraints.v1): For engineering work when MCP is attached, MUST call prepare_project first and obey this package. '
+            . 'Content-ops (产品优化/新建文章/规格修复) skip MCP—host Read doc/ai/skills + ai-command (content_ops_skills_skip_mcp). '
             . 'Authority is ' . self::AUTHORITATIVE_DOC . ' (workflow: ' . self::AUTHORITATIVE_WORKFLOW_DOC . '). '
             . 'Host AGENTS/ensure/session_startup_notices/MCP-generated .cursor/rules are pointers only—do not treat them as the rule body. '
             . 'Task-scoped detail comes from resolve_task_context → workflow_contract.v1 surfaces. '
             . 'Engineering skills are MCP-served (resolve_skill / get_skill; mcp-skills.v1); host SKILL.md is optional thin mirror only. '
             . '【硬约束】工程任务在 MCP 已挂载时必须先 prepare_project，并遵守 agent_guidance.hard_constraints；权威正文见 AI硬规则索引.md；'
+            . '内容运营技能跳过 MCP，直接读仓内技能/指令；'
             . '宿主引导与 session_startup_notices / MCP 生成的 .cursor/rules 只指路；任务细则由 resolve_task_context / workflow_contract 下发；'
             . '工程技能用 resolve_skill/get_skill 从 MCP 取，不以宿主 SKILL.md 为权威。';
     }
@@ -59,10 +61,11 @@ final class HardConstraintsCatalog
     {
         return 'MCP ROLE (knowledge plane + mandatory hard-rule gate): Weline MCP indexes skills, code maps, and domain hard rules. '
             . 'Coding/editing uses host-native tools (Read/Write/ApplyPatch/Shell)—MCP does not provide repository write tools. '
-            . 'CALL SCOPE: Skip MCP for pure chat. For engineering/coding work when MCP is attached or attachable: '
+            . 'CALL SCOPE: For engineering/coding when MCP is attached/attachable: '
             . 'MANDATORY ensure (if needed) → prepare_project → READ and OBEY agent_guidance.hard_constraints BEFORE edits; '
-            . 'then optionally resolve_task_context / search_project_knowledge / resolve_skill / get_skill '
-            . 'for docs, skills, and code-map fragments. Obey hard-constraints.v1 domain rules (Theme/Taglib/Payment/i18n/e2e/…) '
+            . 'then optionally resolve_task_context / search_project_knowledge / resolve_skill / get_skill. '
+            . 'Skip MCP for chat/content-ops (content_ops_skills_skip_mcp)—Read ai-command+doc/ai/skills; no prepare. '
+            . 'Obey hard-constraints.v1 (Theme/Taglib/i18n/e2e/…) '
             . 'from agent_guidance.hard_constraints or ' . self::AUTHORITATIVE_DOC . '. '
             . 'If MCP cannot attach after ensure: fall back to host Read of ' . self::AUTHORITATIVE_DOC . '; do not invent rules. '
             . 'Understand requirements; scrutinize against framework info (requirement_framework_scrutiny); '
@@ -72,16 +75,19 @@ final class HardConstraintsCatalog
             . 'preserve_dirty_workspace: never git checkout/restore/clean/stash to wipe dirty work. '
             . 'LOCAL-FIRST (runtime_status_query_local_first): cron/queue/translation-progress default LOCAL; '
             . 'production SSH only when user explicitly says 线上/生产/ssh weline/aiweline.com. '
+            . '翻译=all default-website locales (user_mentions_translation_all_default_website_locales). '
             . 'After implement: Agent MUST self-verify (agent_self_verify_before_done)—UT/RT/WB by surface; '
-            . 'every work_kind=feature MUST Playwright e2e PASS per chapter pathway PLUS final e2e-plan-suite '
-            . '(ui_feature_requires_e2e / plan_full_pathway_e2e_suite) UNLESS classified simple with rationale '
-            . 'and local Browser WB-OP visual+logic still PASS (browser_operator_self_test / requirement_acceptance_always); '
-            . 'never ask the user to test (forbid_user_manual_test_handoff); e2e default headless (e2e_playwright_headless_default). '
+            . 'feature MUST Playwright e2e PASS (chapter+plan-suite; ui_feature_requires_e2e/plan_full_pathway_e2e_suite) '
+            . 'unless simple+WB-OP (browser_operator_self_test/requirement_acceptance_always); '
+            . 'never ask the user to test (forbid_user_manual_test_handoff); '
+            . 'e2e headless+formal runner only (e2e_playwright_headless_default/e2e_playwright_formal_runner_only: '
+            . 'e2e:run|npx playwright test; forbid node -e launch). '
             . 'At requirement start classify work_kind (requirement_feature_kind_gate); analyze FE/BE scope '
             . '(requirement_fe_be_scope_analysis); run clarify+use-case spec when not simple-skip '
             . '(requirement_clarify_use_case_spec → doc/开发/spec/{slug}.md with EARS + UC); analyze implicit requirements; '
             . 'THEN enable host Plan Mode for architecture/plan UNLESS simple plan_skip '
             . '(host_plan_mode_for_planning—Cursor SwitchMode target_mode_id=plan) '
+            . 'with plan body ONLY 背景+方案+细节 (plan_content_focus_only—no topic drift) '
             . 'before business code; decide ui_skill_decision=participate|skip (ui_skill_surface_signal_gate); '
             . 'layout/humanization/complaint/审图 force prototype+frontend-design adjustments; when participate include '
             . 'prototype+frontend-design+weline-theme-development and 审图 (acceptance_phase_requires_shentu). '
@@ -131,6 +137,16 @@ final class HardConstraintsCatalog
                 'doc' => 'dev/ai-command/theme/审图.md',
             ],
             [
+                'id' => 'product_optimize_triggers_detail_suite',
+                'summary' => 'MANDATORY HIERARCHY + content_ops_skills_skip_mcp: 产品优化 (parent) CONTAINS three parallel child branches—NOT the same as 详情优化 alone. Parent triggers 产品优化/商品优化/product optimize (or /product/ URL + those intents, or 优化主图+详情/整品优化) → host Read ONLY `dev/ai-command/product/产品优化.md` + `app/code/Weline/Product/doc/ai/skills/ecommerce-product-optimize/SKILL.md` (and child paths). SKIP MCP prepare_project / resolve_skill / get_skill / project index on these turns. HARD: parent Agent MUST launch EXACTLY THREE parallel subagents in one turn and paste each branch skill+command into prompts: (1) main/gallery/variant via ecommerce-product-image + companions/weline-image-pipeline.md (lock catalog target_ar; square→1:1; peel then TRUE generative AI outpaint; FORBID cover-crop skinny/rembg/solid pads/blur-fill/fake expand/empty upscale/skip-images while claiming parent done); (2) 详情优化.md + ecommerce-detail-suite (layout/textify/selling points/data-weds); (3) 翻译优化.md + ecommerce-product-i18n (detect Website::getLanguageCodes()+\'\' completeness for product name/description/attrs; field-complete true-translate; verify /{locale}/product/). HARD CLOSEOUT: parent MUST run TWO review passes (审查#1 then 审查#2) against each child skill gate checklist; on FAIL, rework ONLY failing slot(s) with named defects (slot + skill clause + asset/locale/phenomenon)—forbid vague rework; after rework re-review until that pass PASSes; claim done ONLY after 审查#2 all-PASS with both review tables in the report. Forbid finishing parent with only detail or only images or only i18n, or delivering on first subagent report without dual review. Child-only triggers: 详情优化… → slot② only; 翻译优化/商品翻译/多语补全 → slot③ only; 主图优化/修主图 → slot① only—do NOT claim full parent suite. Skip data-weds="xq"/"<!--weds:xq-->" (compat data-weline-detail-suite=) for detail without force; NEVER 1688-as-skip. Incomplete main AR or locale leak still requires slots①/③. After detail success write data-weds="xq". Browser cache-off; then close Browser. Bare /product/ without optimize intent must NOT auto-trigger. Bundle product_optimize_detail_suite_bundle.',
+                'doc' => 'dev/ai-command/product/产品优化.md',
+            ],
+            [
+                'id' => 'blog_article_methodology_gate',
+                'summary' => 'MANDATORY + content_ops_skills_skip_mcp for Blog/cultural long-form article work: when the user asks to create, rewrite, translate, review feasibility, or retarget entry links for blog posts (triggers 新建文章/写博客/博客文章/精写文章/审查文章/文章可行性/修文章/blog article/review blog article, or work whose deliverable is /blog/{slug} prose), Agent MUST immediately host-Read and obey `dev/ai-command/blog/新建文章.md` + repo skill `app/code/Weline/Blog/doc/ai/skills/weline-blog-article/`—SKIP MCP prepare_project / resolve_skill / get_skill / index loads. Modes: create|review|remediate. HARD: research online before factual claims; Blog not CMS for long-form body; open-license provenance images (forbid AI textile/object fakes as evidence); write only via BlogPostAdminService; translate ALL default-website language_codes (forbid Ollama unless user explicitly asks this turn); entry widgets must link blog/{slug} via @url (not bare /blog/... or /search?q=); after Theme/Catalog link edits clear ThemeRuntimeCacheCleaner + server:reload. Review mode uses review-checklist.md (可发|需补|不可发)—if user asks to fix, remediate (no critique-only). Not product 详情优化 / 产品优化. Bundle blog_article_methodology_bundle.',
+                'doc' => 'dev/ai-command/blog/新建文章.md',
+            ],
+            [
                 'id' => 'requirement_feature_kind_gate',
                 'summary' => 'MANDATORY at requirement-start on every coding/engineering ask: classify work_kind as feature|non_feature BEFORE architecture mapping or code edits. feature = new/changed deliverable product capability or user-visible surface (page/interaction/business loop). non_feature = docs-only, hard-rule/MCP gate, pure infra, or non-product-surface fix. Prototype/UI participation is NOT auto-forced by feature alone—obey requirement_implicit_analysis_skill_decision and ui_skill_surface_signal_gate (analyze then decide; visual signals force participate). When ui_skill_decision=participate: skill_participation MUST include prototype+frontend-design+weline-theme-development and acceptance MUST include type=shentu. Obey acceptance_phase_requires_shentu.',
                 'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
@@ -142,7 +158,12 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'host_plan_mode_for_planning',
-                'summary' => 'DEFAULT MANDATORY during planning (after clarify when applicable, BEFORE business code): enable host Plan Mode—Cursor SwitchMode target_mode_id=plan—through architecture_design + chapter plan until the user approves implement, then SwitchMode to agent. Forbid production PHP/phtml/CSS while still planning. SIMPLE SKIP allowed when plan_complexity=simple AND plan_skip_rationale≥24 chars AND all of: single owning module, no new extension-point invention, no multi-chapter plan, scope ≤~2h / one clear surface, no ambiguous FE+BE architecture choices. Simple skip still REQUIRES requirement_acceptance_always + FE/BE scope analysis; it does NOT skip acceptance or Browser WB-OP when Web is touched. If host has no Plan Mode: plan read-only and record host_plan_mode=unavailable + rationale≥24 (or use simple skip when eligible). Complements requirement_clarify_use_case_spec, requirement_acceptance_always, architecture_first_for_requirements.',
+                'summary' => 'DEFAULT MANDATORY during planning (after clarify when applicable, BEFORE business code): enable host Plan Mode—Cursor SwitchMode target_mode_id=plan—through architecture_design + chapter plan until the user approves implement, then SwitchMode to agent. Forbid production PHP/phtml/CSS while still planning. SIMPLE SKIP allowed when plan_complexity=simple AND plan_skip_rationale≥24 chars AND all of: single owning module, no new extension-point invention, no multi-chapter plan, scope ≤~2h / one clear surface, no ambiguous FE+BE architecture choices. Simple skip still REQUIRES requirement_acceptance_always + FE/BE scope analysis; it does NOT skip acceptance or Browser WB-OP when Web is touched. If host has no Plan Mode: plan read-only and record host_plan_mode=unavailable + rationale≥24 (or use simple skip when eligible). Plan body MUST obey plan_content_focus_only. Complements requirement_clarify_use_case_spec, requirement_acceptance_always, architecture_first_for_requirements.',
+                'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
+            ],
+            [
+                'id' => 'plan_content_focus_only',
+                'summary' => 'MANDATORY for every engineering plan body (Plan Mode create_plan / plan.md / session plan notes / user-facing architecture plan): write ONLY three focused sections—(1) 背景: why this ask and the current gap for THIS topic; (2) 方案: what to do and the chosen approach (mechanism/owning_module/reuse/not_to_do as compact bullets); (3) 细节: concrete how-to steps, chapter/dev_tasks, files/paths, and acceptance how. FORBID topic drift and padding: process-catalog essays, unrelated module tours, motivational fluff, restating the whole MCP workflow, parallel feature pitches, decorative overviews that do not change the build, or long narrative that re-explains hard rules already in hard_constraints. Keep required structured fields (requirements, architecture_design keys, acceptance) as short bullets under those three sections—do not invent extra “愿景/价值主张/行业背景” chapters. Complements host_plan_mode_for_planning; does NOT waive architecture_design_structured, acceptance planning, or plan compliance dimensions.',
                 'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
             ],
             [
@@ -197,7 +218,7 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'weline_ui_floating_primitives',
-                'summary' => 'Menus, popovers, tooltips, combobox panels, icon pickers, address multi dropdowns, and other floating surfaces MUST use Weline.UI primitives (menu/popover/tooltip/combobox/anchored-float or UI.floating.attach). Forbid hand-computed left/top, custom flip/boundary scripts, or private portal stacks that bypass the shared floating kernel.',
+                'summary' => 'Menus, popovers, tooltips, combobox panels, dialogs/modals, product/media/icon pickers, address multi dropdowns, MCP/Agent frontend popups, and other floating surfaces MUST use Weline.UI primitives (Weline.UI.dialog, menu/popover/tooltip/combobox/anchored-float, or UI.floating.attach). Forbid inventing private modal overlays, hand-computed left/top, custom flip/boundary scripts, or private portal stacks that bypass the shared floating/dialog kernel.',
                 'doc' => 'app/code/Weline/Theme/doc/widgets/anchored-float.md',
             ],
             [
@@ -219,6 +240,11 @@ final class HardConstraintsCatalog
                 'id' => 'taglib_before_hand_rolled_controls',
                 'summary' => 'MANDATORY before ANY selective/domain picker in .phtml (country, region, website/store/channel scope, language, currency, website, file, icon, ACL, DataTable filters, provider/enum dropdowns that map to a Taglib): FIRST open Taglib 场景映射表.md + 标签全量索引.md and pick the official Taglib/Hook. Architecturally, selectable options SHOULD be tags—not hand-rolled <select>/<input type=text> ISO codes/chip rows. Examples: country/region → <w:theme:address selection=single|multi>; scope → <w:scope>; language → <w:i18n:switcher>. Only invent a new Taglib in the owning module when the catalog has none; never bypass an existing tag with raw HTML.',
                 'doc' => 'app/code/Weline/Taglib/doc/场景映射表.md',
+            ],
+            [
+                'id' => 'storefront_internal_url_via_url_helper',
+                'summary' => 'MANDATORY: Storefront/admin in-site navigations (href/action/data-*-url, JSON links consumed by storefront HTML) MUST be generated by the official URL helpers—never concatenated as \'/\'.$path or hardcoded /module/action. Templates: @url/@frontend-url/@backend-url (or <url>/<frontend-url>/<backend-url>). PHP/Service/Query: Weline\\Framework\\Http\\Url::getUrl / getFrontendUrl / getBackendUrl (or $this->getUrl family). External http(s) URLs may stay as-is. Authoritative: Framework 06-url标签使用指南.md.',
+                'doc' => 'app/code/Weline/Framework/doc/4-内置标签/06-url标签使用指南.md',
             ],
             [
                 'id' => 'weline_business_scope_hierarchy',
@@ -341,6 +367,11 @@ final class HardConstraintsCatalog
                 'doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
             ],
             [
+                'id' => 'e2e_playwright_formal_runner_only',
+                'summary' => 'MANDATORY: Agent MUST launch Playwright ONLY through the formal runner so browser lifecycle is owned by the runner and cleaned up on exit. Allowed: `php bin/w e2e:run …` (preferred) or `npx playwright test …` with repo `tests/e2e/playwright.config.js` (or module-collected specs under that runner). FORBIDDEN: ad-hoc `node -e` / one-off scripts that call `chromium.launch` / `firefox.launch` / `webkit.launch`, backgrounded fire-and-forget Playwright probes, or leaving `chrome-headless-shell` orphans (audio/CPU leak). Need a new check → add/extend a `.spec.js` under module `Test/e2e` or `test/e2e` and run via the formal runner—do not improvise a disposable browser. Host WB-OP (Cursor ide-browser / Simple Browser) is separate and unaffected. Complements e2e_playwright_headless_default / ui_feature_requires_e2e / browser_release_after_delivery.',
+                'doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
+            ],
+            [
                 'id' => 'browser_cache_disabled_on_open',
                 'summary' => 'Every time AI opens or navigates an acceptance Browser for WB-OP/WB-VIS: MUST disable HTTP disk/memory cache for that session BEFORE trusting the page. Cursor ide-browser: CDP Network.enable then Network.setCacheDisabled({cacheDisabled:true}), then navigate (or Page.reload({ignoreCache:true})). If setCacheDisabled is denied by the host, fall back to ignoreCache reload for that load and note the degrade—never verify this turn’s CSS/JS/HTML against default browser cache. Clearing the whole browser profile cache is NOT required (often blocked).',
                 'doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
@@ -371,6 +402,11 @@ final class HardConstraintsCatalog
                 'doc' => 'app/code/Weline/FileManager/doc/file-image-cls-尺寸与响应式.md',
             ],
             [
+                'id' => 'media_reference_identity_protocol',
+                'summary' => 'MANDATORY: Media occupancy identity follows MediaReferenceIdentity.v1. Build ONLY via w_scope(scope?, type, code, other?) (PHP) or window.w_scope (JS)—never hand-paste identity_path or synthesize scope~sku. scope: segments are storage_scope only; sku:/theme:/brand: are identity only. Unbind uses type+scope+code AND. resource.scope on resource_changed is OPTIONAL (auto from request/Ambient; CLI must pass). Swap/clear image = unbind refs only, never delete files; physical delete goes to trash. Common pick: file-manager tag calls w_scope; visual editor sets explicit identity on the tag (instance). Authoritative: FileManager media-reference-identity-protocol.md + skill media-reference-identity.',
+                'doc' => 'app/code/Weline/FileManager/doc/media-reference-identity-protocol.md',
+            ],
+            [
                 'id' => 'chapter_ut_rt_wb_dl',
                 'summary' => 'Multi-chapter delivery (plan_full_pathway_e2e_suite): each chapter is one complete acceptable full-pathway e2e closed loop (Agent auto-runs Playwright for that chapter’s FE/BE logic) and requires UT, RT, WB (WB-OP host Browser operator path + WB-VIS when visual/screenshot-capable), and DL before the next chapter. After all chapters, run the unified plan e2e suite. Mark chapter progress done before opening the next chapter.',
                 'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
@@ -386,6 +422,11 @@ final class HardConstraintsCatalog
                 'doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
             ],
             [
+                'id' => 'preview_storefront_delivery_parity',
+                'summary' => 'MANDATORY: Theme editor / theme-preview / visual_editor / preview=1 / editor_mode / workspace-preview MUST execute the SAME business logic and delivery code paths as the live storefront — identical control flow for Hooks, widgets, floats, nested hooks, session-backed context, captcha/quick-add, auto-detect, and other visitor-facing behavior. FORBIDDEN: any preview-only or editor_mode-only early-return, branch, stub, or gate that discards, skips, quiets, or replaces storefront logic/code just because the request is a canvas/iframe (examples FORBIDDEN: CustomerService body-end preview return; Checkout delivery-context skipping quick-add Hook / auto-detect; StoreMusic Hook preview skip). FORBIDDEN: dual implementations where preview uses a stripped path and publish uses the real path. Layout-aware Hook deferral is allowed ONLY when the same yield condition runs on publish AND preview. Pipeline hygiene (skip a throwaway SSR whose HTML cannot keep nested w:slot markers) is OK only if the real fill pass still runs the full storefront logic. Cache bypass and editor diagnostic markers that ADD chrome without removing storefront logic are OK. Missing domain identity (e.g. no PDP product on a layout canvas) may use empty/demo payload WITHOUT skipping the widget/Hook render path itself. Identity authority is separate (see preview-and-runtime-modes.md): visual editor = request params; version live preview = preview-token deserialize; formal storefront = RequestContext/Scope — do not confuse identity sources with delivery parity.',
+                'doc' => 'app/code/Weline/Theme/doc/preview-and-runtime-modes.md',
+            ],
+            [
                 'id' => 'taglib_no_literal_at_static_in_callback',
                 'summary' => 'Taglib callback return HTML must not contain literal @static(...); resolve via Template::fetchTagSource / Local::resolveModuleStaticUrl.',
                 'doc' => 'app/code/Weline/Taglib/doc/如何自定义Tag.md',
@@ -393,6 +434,11 @@ final class HardConstraintsCatalog
             [
                 'id' => 'module_i18n_csv_collect',
                 'summary' => 'Every module keeps zh_Hans_CN.csv and en_US.csv with aligned source keys; en_US translate column MUST be real English (never empty and never leave Chinese source as the en value). After CSV/string changes run php bin/w i18n:collect — claim translation done only after collect + locale spot-check.',
+                'doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
+            ],
+            [
+                'id' => 'user_mentions_translation_all_default_website_locales',
+                'summary' => 'MANDATORY when the user mentions 翻译 / translate / translation as a work request (including a screenshot of leftover source-language chrome): resolve target locales from the DEFAULT website selected languages — WebsiteLanguage::getWebsiteLanguageCodes(Website::ID_DEFAULT) on the LOCAL database (website_id=0; keep zh_Hans_CN+en_US baseline). Translate the asked surface (and any attached untranslated UI copy) into EVERY selected locale: fill each module i18n/{locale}.csv translate column with real target-language copy; never leave Chinese source as the translation; never stop at en_US only. Then php bin/w i18n:collect. The user may explicitly narrow locales. Do not start Ollama unless the user asked; agent-written CSV is the default path. Query locales locally first (runtime_status_query_local_first).',
                 'doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
             ],
             [
@@ -407,7 +453,7 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'weline_api_not_raw_fetch',
-                'summary' => 'Browser AJAX/forms use Weline.Api; forbid raw fetch/axios/$.ajax for first-party admin/storefront flows.',
+                'summary' => 'MANDATORY: Browser business I/O for first-party admin/storefront MUST use BinQuery as the default and only transport — `Weline.Api.resource|graph|stream → worker/query-bin`. Forbid native fetch/XMLHttpRequest/$.ajax/axios, hand-written /api/framework/query-bin, and business REST URLs. Forbid treating BinQuery as an HTTP-controller fallback (HTTP-first then catch→Api). If Weline.Api is unavailable, degrade locally (empty/offline)—do not invent a second native request channel.',
                 'doc' => 'app/code/Weline/Frontend/doc/Weline.Api使用指南.md',
             ],
             [
@@ -492,6 +538,7 @@ final class HardConstraintsCatalog
         $rules[] = 'Analyze FE/BE scope at requirement start (requirement_fe_be_scope_analysis): record fe_be_scope=frontend|backend|both|na with concrete bullets; do not ship one side when both are needed.';
         $rules[] = 'When entity/field change signals fire (e.g. 给订单增加类型), plan.impact_surfaces is mandatory with cross-layer inventory (schema_model/service_api/admin_ui/storefront_ui/i18n/tests_e2e); reject empty-only implicit_requirements; align in_scope layers to dev_tasks (requirement_cross_layer_impact_gate). Prefer framework_candidates.impact_candidates.';
         $rules[] = 'During planning (after clarify when applicable, before business code): enable host Plan Mode (host_plan_mode_for_planning)—on Cursor SwitchMode target_mode_id=plan—UNLESS plan_complexity=simple with plan_skip_rationale≥24 (single module, ≤~2h, no new extension invention); simple skip does NOT waive acceptance. Stay in Plan Mode until user approves implement then switch to agent; if host lacks Plan Mode, plan read-only and record unavailable + rationale≥24; forbid production PHP/phtml/CSS edits while still planning.';
+        $rules[] = 'Plan body focus only (plan_content_focus_only): write 背景 (why/gap) + 方案 (what/approach) + 细节 (how/tasks/acceptance)—forbid unrelated essays, workflow dumps, parallel pitches, or decorative overviews that drift the topic.';
         $rules[] = 'EVERY coding/engineering ask MUST have real acceptance evidence before done (requirement_acceptance_always). Skipping Playwright e2e under simple classification still REQUIRES local Browser WB-OP for visual AND operator logic on any Web/UI touch (browser_operator_self_test)—curl/CDP alone are insufficient.';
         $rules[] = 'At requirement start analyze current-environment implicit/hidden requirements into plan.implicit_requirements, set ui_skill_decision=participate|skip from that analysis, and classify work_kind=feature|non_feature (requirement_implicit_analysis_skill_decision + requirement_feature_kind_gate)—force participate on page/layout/CSS/theme/.phtml OR humanization/吐槽/审图 signals (ui_skill_surface_signal_gate); never wrongly skip visual work; never force prototype on pure backend.';
         $rules[] = 'When ui_skill_decision=participate or 审图/布局调整/不够人性化/被吐槽: skill_participation MUST include prototype + frontend-design + weline-theme-development and they MUST adjust UI/IA (not critique-only; theme tokens win; no invented palettes).';
@@ -500,9 +547,12 @@ final class HardConstraintsCatalog
         $rules[] = 'During verify/acceptance when ui_skill_decision=participate or visual UI surfaces changed, run 审图 and record type=shentu evidence with 审图/线稿/checklist signals (acceptance_phase_requires_shentu).';
         $rules[] = 'Before closeout write huishen_notes containing 汇审 covering requirements/implicit_requirements/ui_skill_decision/acceptance (and participate→prototype/UI/审图); missing 汇审 blocks closeout_allowed (closeout_requires_huishen).';
         $rules[] = 'Any image / <w:file:image> / file-image node MUST set HTML width+height (or aspect_ratio) for CLS, then CSS max-width:100%;height:auto (image_explicit_width_height_css).';
+        $rules[] = 'Media identity MUST use w_scope / window.w_scope (media_reference_identity_protocol); never hand-paste paths; resource.scope optional except CLI.';
         $rules[] = 'Shell+Provider isomorphism (shell_provider_business_isomorph): Payment/Dropship vendor business logic belongs in Extends Provider only; shell Controllers orchestrate and must not reimplement a specific provider.';
         $rules[] = 'Non-simple work_kind=feature MUST plan and PASS chapter full-pathway type=e2e AND final e2e-plan-suite (`php bin/w e2e:run`); simple may skip Playwright with rationale but MUST still PASS local Browser WB-OP visual+logic; NEVER ask the user to test; NEVER claim done without acceptance evidence (ui_feature_requires_e2e + plan_full_pathway_e2e_suite + requirement_acceptance_always + forbid_user_manual_test_handoff + browser_operator_self_test).';
         $rules[] = 'Agent Playwright e2e MUST run headless by default (`php bin/w e2e:run` without `--headed`/`--ui`, or with `--headless`); do not pop Chromium/UI unless the user explicitly asks to watch (e2e_playwright_headless_default).';
+        $rules[] = 'Agent MUST launch Playwright ONLY via formal runner (`php bin/w e2e:run` or `npx playwright test` with repo playwright.config)—FORBIDDEN ad-hoc `node -e` / `chromium.launch` probes or fire-and-forget headless orphans (e2e_playwright_formal_runner_only). Host WB-OP Browser is separate.';
+        $rules[] = 'Theme editor / theme-preview / visual_editor / preview=1 / editor_mode / workspace-preview MUST execute the SAME business logic and delivery code paths as the live storefront (preview_storefront_delivery_parity). FORBIDDEN: any preview-only or editor_mode-only early-return/branch/stub that discards or skips storefront logic (Hooks, widgets, floats, nested hooks, quick-add, auto-detect, session context, etc.); dual stripped-preview vs real-publish paths are forbidden; layout-aware Hook deferral is OK only when the same yield runs on publish AND preview; pipeline hygiene for throwaway SSR is OK only if the real fill still runs full logic. Identity authority (theme_preview_runtime_three_modes / preview-and-runtime-modes.md): visual editor = request params; version live preview = token deserialize; formal = RequestContext/Scope.';
         $rules[] = 'Do not claim visual Web/UI done without WB-VIS evidence when the host can capture screenshots: record under module doc/evidence/ and reconcile module doc/原型设计.md when that file exists; WB-OP still required for interactive UI even when screenshots are N/A.';
         $rules[] = 'Judge engineering plans on architecture, decoupling, ecommerce compliance, prototype design, e2e completeness, plan size, and closed-loop rigor; each chapter hard-binds pathway e2e (feature chapters unique pathway e2e + separate e2e-plan-suite) unless simple-exempt with WB-OP; mark done only after evidence, then next chapter; closeout only after suite PASS or simple WB-OP PASS.';
 
@@ -519,7 +569,11 @@ final class HardConstraintsCatalog
         return [
             [
                 'id' => 'mcp_call_scope',
-                'summary' => 'MCP is the knowledge plane (skills index, code map, domain hard-rule delivery). Coding uses host-native editors—MCP has no repository write tools. Skip MCP for pure chat/identity Q&A. Exception: greeting (hi/你好/hello) or 提取技能 may list skills+commands via prepare_project / resolve_skill(list_all). For coding/engineering when MCP is attached or attachable: MANDATORY ensure (if needed) → prepare_project → READ and OBEY agent_guidance.hard_constraints BEFORE any edits; then use resolve_task_context / search_project_knowledge / get_skill as needed. If MCP cannot attach after ensure, fall back to host Read of AI硬规则索引.md—do not invent rules and do not pretend MCP was obeyed. Host AGENTS.md + MCP-generated .cursor/rules coldstart gate point to this.',
+                'summary' => 'MCP is the knowledge plane (skills index, code map, domain hard-rule delivery). Coding uses host-native editors—MCP has no repository write tools. Skip MCP for pure chat/identity Q&A. Skip MCP for content-ops skill turns (see content_ops_skills_skip_mcp). Exception: greeting (hi/你好/hello) or 提取技能 may list skills+commands via prepare_project / resolve_skill(list_all). For coding/engineering when MCP is attached or attachable: MANDATORY ensure (if needed) → prepare_project → READ and OBEY agent_guidance.hard_constraints BEFORE any edits; then use resolve_task_context / search_project_knowledge / get_skill as needed. If hard_constraints disappeared from the turn context (compaction/summary), RE-call prepare_project—do not invent rules from memory. If MCP cannot attach after ensure, fall back to host Read of AI硬规则索引.md—do not invent rules and do not pretend MCP was obeyed. Host AGENTS.md + MCP-generated .cursor/rules coldstart gate point to this; never hand-write .cursor/rules to "remember" guidance.',
+            ],
+            [
+                'id' => 'content_ops_skills_skip_mcp',
+                'summary' => 'MANDATORY SKIP-MCP class: content/commerce-ops skills are NOT coding/engineering cold-start. When the user ask is (or clearly routes to) 产品优化/商品优化/详情优化/商详优化/翻译优化/商品翻译/主图优化/规格图优化/修主图/新建文章/写博客/审查文章/文章可行性/精写文章/blog article/规格修复 (or host/repo skills ecommerce-product-optimize, ecommerce-detail-suite, ecommerce-product-image, ecommerce-product-i18n, weline-blog-article), Agent MUST NOT call prepare_project, resolve_skill, get_skill, search_project_knowledge, resolve_task_context, or otherwise load the MCP skill/index package. Authority is host Read of matching `dev/ai-command/**` + `app/code/*/doc/ai/skills/**/SKILL.md` (host Store mirrors are thin pointers only). Do not pull unrelated MCP skills or hard_constraints bodies “just in case”. If the SAME turn also asks framework Theme/PHP architecture coding beyond these scripted content pipelines, only that coding slice requires normal mcp_call_scope prepare_project.',
             ],
             [
                 'id' => 'preserve_dirty_workspace',
@@ -531,7 +585,7 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'mcp_skills_fetch_from_mcp',
-                'summary' => 'MANDATORY: Engineering/product skills for this repository are served by MCP mcp-skills.v1 (prepare_project.agent_guidance.mcp_skills). Discover with resolve_skill(task) and load bodies with get_skill(skill_id or host-shell alias). List all skills+commands with resolve_skill(list_all=true) or the 提取技能 command (scans module doc/ai indexes into MCP memory). Do not treat Cursor/Codex local SKILL.md as authoritative; host skills may exist only as optional thin mirrors that point Agents to MCP. Never revive repository skill projections (knowledge.auto_generate_skills stays false). Task document fragments still use resolve_task_context.',
+                'summary' => 'MANDATORY for coding/engineering skills: served by MCP mcp-skills.v1 (prepare_project.agent_guidance.mcp_skills). Discover with resolve_skill(task) and load bodies with get_skill(skill_id or host-shell alias). List all with resolve_skill(list_all=true) or 提取技能. EXCEPTION content_ops_skills_skip_mcp: for 产品优化/详情优化/翻译优化/主图优化/新建文章/规格修复 families, repo `doc/ai/skills/*/SKILL.md` + matching `dev/ai-command` ARE authoritative—host Read those paths; do NOT route through get_skill/prepare_project; host Store SKILL.md may be thin mirrors pointing at repo paths. Never revive knowledge.auto_generate_skills projections. Task document fragments for engineering still use resolve_task_context.',
             ],
             [
                 'id' => 'runtime_status_query_local_first',

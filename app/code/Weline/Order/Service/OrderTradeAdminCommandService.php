@@ -65,25 +65,105 @@ final class OrderTradeAdminCommandService
                 WarehouseFulfillmentService::ERROR_OVER_FULFILL,
             );
         }
-        $trackingNumber = trim((string)($logistics['tracking_number'] ?? ''));
-        $carrier = trim((string)($logistics['carrier'] ?? ''));
-        $notifyCustomer = !empty($logistics['notify_customer']);
-        if ($trackingNumber === '') {
-            throw new OrderTradeAdminCommandException('shipment_tracking_required');
+
+        $fulfillMode = strtolower(trim((string)($logistics['fulfill_mode'] ?? 'manual')));
+        if ($fulfillMode !== 'label') {
+            $fulfillMode = 'manual';
         }
+        $trackingNumber = trim((string)($logistics['tracking_number'] ?? ''));
+        $carrierId = (int)($logistics['carrier_id'] ?? 0);
+        $carrierName = trim((string)($logistics['carrier'] ?? $logistics['carrier_name'] ?? ''));
+        $providerCode = trim((string)($logistics['tracking_provider_code'] ?? ''));
+        $notifyCustomer = !empty($logistics['notify_customer']);
+        $weightGrams = (int)($logistics['weight_grams'] ?? 0);
+        $labelServiceCode = strtoupper(trim((string)($logistics['service_code'] ?? '')));
+
         if (mb_strlen($trackingNumber, 'UTF-8') > 100) {
             throw new OrderTradeAdminCommandException('shipment_tracking_too_long');
         }
-        if (mb_strlen($carrier, 'UTF-8') > 100) {
+        if (mb_strlen($carrierName, 'UTF-8') > 100) {
             throw new OrderTradeAdminCommandException('shipment_carrier_too_long');
         }
+
+        $context = null;
+        $gateway = $this->shippingGateway();
+        if ($gateway !== null && $this->shipmentCommand === null) {
+            $context = $this->shipmentContext($unitUuid);
+            $order = $this->newModel(Order::class)->load((int)$context['order_id']);
+            if (!$order instanceof Order || !$order->getId()) {
+                throw new OrderTradeAdminCommandException('order_admin_order_not_found');
+            }
+            $ref = $gateway->resolveCheckoutShippingRef($order);
+            if ($ref['fulfillment_channel'] === \Weline\Order\Api\OrderShippingFulfillmentGatewayInterface::CHANNEL_PROVIDER
+                && $fulfillMode === 'manual'
+            ) {
+                throw new OrderTradeAdminCommandException('shipment_channel_locked_provider');
+            }
+            if ($fulfillMode === 'manual') {
+                if ($carrierId > 0) {
+                    $allowed = false;
+                    foreach ($gateway->listTrackingCarriers((int)$order->getData(Order::schema_fields_WEBSITE_ID)) as $c) {
+                        if ((int)$c['carrier_id'] === $carrierId) {
+                            $allowed = true;
+                            $carrierName = $carrierName !== '' ? $carrierName : (string)$c['carrier_name'];
+                            $providerCode = $providerCode !== '' ? $providerCode : (string)$c['provider_code'];
+                            break;
+                        }
+                    }
+                    if (!$allowed) {
+                        throw new OrderTradeAdminCommandException('shipment_carrier_invalid');
+                    }
+                } elseif ($carrierName === '') {
+                    $carrierName = (string)__('其他');
+                }
+            }
+        } elseif ($fulfillMode === 'manual' && $carrierId > 0 && $carrierName === '') {
+            $carrierName = (string)__('承运商 #%{1}', [$carrierId]);
+        }
+        $labelMeta = null;
+        if ($fulfillMode === 'label' && $this->shipmentCommand === null) {
+            if ($gateway === null) {
+                throw new OrderTradeAdminCommandException('shipment_label_gateway_unavailable');
+            }
+            $context = $context ?? $this->shipmentContext($unitUuid);
+            $order = $this->newModel(Order::class)->load((int)$context['order_id']);
+            if (!$order instanceof Order || !$order->getId()) {
+                throw new OrderTradeAdminCommandException('order_admin_order_not_found');
+            }
+            try {
+                $labelMeta = $gateway->createLabelForUnit($order, $unitUuid, $quantityMinor, [
+                    'carrier_id' => $carrierId,
+                    'service_code' => $labelServiceCode,
+                    'weight_grams' => $weightGrams,
+                ]);
+            } catch (\Throwable $e) {
+                $code = $e->getMessage();
+                if (!preg_match('/^shipment_[a-z0-9_]+$/', $code)) {
+                    $code = 'shipment_label_failed';
+                }
+                throw new OrderTradeAdminCommandException($code, $e->getMessage(), $e);
+            }
+            $trackingNumber = (string)($labelMeta['tracking_number'] ?? '');
+            $carrierName = (string)($labelMeta['carrier'] ?? $carrierName);
+            $carrierId = (int)($labelMeta['carrier_id'] ?? $carrierId);
+            $providerCode = (string)($labelMeta['provider_code'] ?? $providerCode);
+            $idempotencyKey = (string)($labelMeta['idempotency_key'] ?? $idempotencyKey);
+        }
+
+        // #16: no tracking => never ship-mail even if checkbox on
+        if ($trackingNumber === '') {
+            $notifyCustomer = false;
+        }
+
         $requestHash = hash('sha256', $this->json([
-            'command' => 'order.fulfillment.partial-ship.v1',
+            'command' => 'order.fulfillment.partial-ship.v2',
             'fulfillment_unit_uuid' => $unitUuid,
             'qty_minor' => $quantityMinor,
             'expected_version' => $expectedVersion,
+            'fulfill_mode' => $fulfillMode,
             'tracking_number' => $trackingNumber,
-            'carrier' => $carrier,
+            'carrier_id' => $carrierId,
+            'carrier' => $carrierName,
             'notify_customer' => $notifyCustomer ? 1 : 0,
         ]));
 
@@ -104,29 +184,202 @@ final class OrderTradeAdminCommandService
                     $requestHash,
                 );
         } catch (WarehouseFulfillmentConflictException $exception) {
+            if ($labelMeta !== null && $gateway !== null) {
+                $cancelled = $gateway->cancelLabelBestEffort(
+                    (string)($labelMeta['idempotency_key'] ?? $idempotencyKey),
+                    (int)($labelMeta['carrier_id'] ?? 0),
+                    (string)($labelMeta['service_code'] ?? $labelServiceCode),
+                    (string)($labelMeta['tracking_number'] ?? ''),
+                    (string)(($context['order_number'] ?? '')),
+                );
+                if (!$cancelled) {
+                    $gateway->enqueueOrphanCancel(
+                        (string)($labelMeta['idempotency_key'] ?? $idempotencyKey),
+                        (int)($labelMeta['carrier_id'] ?? 0),
+                        (string)($labelMeta['service_code'] ?? $labelServiceCode),
+                        (string)($labelMeta['tracking_number'] ?? ''),
+                        (string)(($context['order_number'] ?? '')),
+                        $exception->errorCode(),
+                    );
+                    throw new OrderTradeAdminCommandException(
+                        'shipment_label_orphaned_risk',
+                        $exception->getMessage(),
+                        $exception,
+                    );
+                }
+            }
             throw new OrderTradeAdminCommandException(
                 $exception->errorCode(),
                 $exception->getMessage(),
                 $exception,
             );
+        } catch (\Throwable $exception) {
+            if ($labelMeta !== null && $gateway !== null && !$exception instanceof OrderTradeAdminCommandException) {
+                $cancelled = $gateway->cancelLabelBestEffort(
+                    (string)($labelMeta['idempotency_key'] ?? $idempotencyKey),
+                    (int)($labelMeta['carrier_id'] ?? 0),
+                    (string)($labelMeta['service_code'] ?? $labelServiceCode),
+                    (string)($labelMeta['tracking_number'] ?? ''),
+                    (string)(($context['order_number'] ?? '')),
+                );
+                if (!$cancelled) {
+                    $gateway->enqueueOrphanCancel(
+                        (string)($labelMeta['idempotency_key'] ?? $idempotencyKey),
+                        (int)($labelMeta['carrier_id'] ?? 0),
+                        (string)($labelMeta['service_code'] ?? $labelServiceCode),
+                        (string)($labelMeta['tracking_number'] ?? ''),
+                        (string)(($context['order_number'] ?? '')),
+                        $exception->getMessage(),
+                    );
+                }
+            }
+            throw $exception;
         }
 
-        $result = $result + ['request_hash' => $requestHash];
-        // Injected shipmentCommand is for unit tests / custom adapters; skip side effects.
+        $result = $result + ['request_hash' => $requestHash, 'fulfill_mode' => $fulfillMode];
         if (empty($result['replayed']) && $this->shipmentCommand === null) {
-            $context = $this->shipmentContext($unitUuid);
+            $context = $context ?? $this->shipmentContext($unitUuid);
             $result['logistics'] = $this->attachShipmentLogistics(
                 (int)$context['order_id'],
                 $trackingNumber,
-                $carrier,
+                $carrierName,
                 $notifyCustomer,
                 (string)($result['status'] ?? ''),
+                $providerCode,
             );
+            if (\is_array($labelMeta)) {
+                $result['label'] = [
+                    'label_url' => (string)($labelMeta['label_url'] ?? ''),
+                    'replayed' => !empty($labelMeta['replayed']),
+                ];
+            }
         }
 
         return $result;
     }
 
+    /**
+     * Backfill tracking on an existing shipment row (#23/#24).
+     *
+     * @return array{shipment_id:int,tracking_number:string,mail_sent:bool}
+     */
+    public function updateShipmentTracking(
+        int $shipmentId,
+        string $trackingNumber,
+        string $carrier = '',
+        bool $notifyCustomer = false,
+    ): array {
+        $shipmentId = max(0, $shipmentId);
+        $trackingNumber = trim($trackingNumber);
+        $carrier = trim($carrier);
+        if ($shipmentId <= 0 || $trackingNumber === '') {
+            throw new OrderTradeAdminCommandException('shipment_tracking_required');
+        }
+        if (mb_strlen($trackingNumber, 'UTF-8') > 100) {
+            throw new OrderTradeAdminCommandException('shipment_tracking_too_long');
+        }
+        /** @var \Weline\Order\Model\OrderShipment $shipment */
+        $shipment = $this->newModel(\Weline\Order\Model\OrderShipment::class)->load($shipmentId);
+        if (!$shipment instanceof \Weline\Order\Model\OrderShipment || !$shipment->getId()) {
+            throw new OrderTradeAdminCommandException('shipment_not_found');
+        }
+        $hadTracking = trim((string)$shipment->getData(
+            \Weline\Order\Model\OrderShipment::schema_fields_TRACKING_NUMBER,
+        )) !== '';
+        $shipment->setData(\Weline\Order\Model\OrderShipment::schema_fields_TRACKING_NUMBER, $trackingNumber);
+        if ($carrier !== '') {
+            $shipment->setData(\Weline\Order\Model\OrderShipment::schema_fields_CARRIER, $carrier);
+        }
+        $shipment->save();
+
+        $mailSent = false;
+        // #24: only notify when newly writing a non-empty tracking and explicitly requested
+        if ($notifyCustomer && !$hadTracking) {
+            $orderId = (int)$shipment->getData(\Weline\Order\Model\OrderShipment::schema_fields_ORDER_ID);
+            $order = $this->newModel(Order::class)->load($orderId);
+            if ($order instanceof Order && $order->getId()) {
+                $email = trim((string)$order->getData(Order::schema_fields_CUSTOMER_EMAIL));
+                if ($email !== '') {
+                    try {
+                        $events = $this->manager()->getInstance(
+                            \Weline\Framework\Event\EventsManager::class,
+                        );
+                        $events->dispatch('Weline_Order::order_shipped', [
+                            'order' => $order,
+                            'order_id' => $orderId,
+                            'shipment' => $shipment,
+                            'notify_customer' => true,
+                            'tracking_number' => $trackingNumber,
+                            'carrier' => (string)$shipment->getData(
+                                \Weline\Order\Model\OrderShipment::schema_fields_CARRIER,
+                            ),
+                        ]);
+                        $mailSent = true;
+                    } catch (\Throwable) {
+                        $mailSent = false;
+                    }
+                }
+            }
+        }
+
+        return [
+            'shipment_id' => $shipmentId,
+            'tracking_number' => $trackingNumber,
+            'mail_sent' => $mailSent,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $lock
+     * @return array<string,mixed>
+     */
+    public function setOrderFulfillmentChannel(int $orderId, string $channel, array $lock = []): array
+    {
+        $gateway = $this->shippingGateway();
+        if ($gateway === null) {
+            throw new OrderTradeAdminCommandException('shipment_label_gateway_unavailable');
+        }
+        $order = $this->newModel(Order::class)->load($orderId);
+        if (!$order instanceof Order || !$order->getId()) {
+            throw new OrderTradeAdminCommandException('order_admin_order_not_found');
+        }
+        $order = $gateway->setFulfillmentChannel($order, $channel, $lock);
+
+        return $gateway->resolveCheckoutShippingRef($order);
+    }
+
+    /** @return array<string,mixed> */
+    public function shipmentPanelMeta(int $orderId): array
+    {
+        $gateway = $this->shippingGateway();
+        $order = $this->newModel(Order::class)->load($orderId);
+        if (!$order instanceof Order || !$order->getId()) {
+            return [
+                'shipping_ref' => [],
+                'tracking_carriers' => [],
+                'label_services' => [],
+            ];
+        }
+        if ($gateway === null) {
+            return [
+                'shipping_ref' => [
+                    'service_code' => (string)$order->getData(Order::schema_fields_SHIPPING_METHOD),
+                    'service_name' => (string)$order->getData(Order::schema_fields_SHIPPING_METHOD),
+                    'fulfillment_channel' => 'merchant',
+                ],
+                'tracking_carriers' => [],
+                'label_services' => [],
+            ];
+        }
+
+        return [
+            'shipping_ref' => $gateway->resolveCheckoutShippingRef($order),
+            'tracking_carriers' => $gateway->listTrackingCarriers(
+                (int)$order->getData(Order::schema_fields_WEBSITE_ID),
+            ),
+            'label_services' => $gateway->listLabelEligibleServices($order),
+        ];
+    }
     /** @return array<string,mixed> */
     public function refund(
         string $orderUuid,
@@ -560,10 +813,20 @@ final class OrderTradeAdminCommandService
         string $carrier,
         bool $notifyCustomer,
         string $unitStatus,
+        string $trackingProviderCode = '',
     ): array {
         $order = $this->newModel(Order::class)->load($orderId);
         if (!$order instanceof Order || !$order->getId()) {
             throw new OrderTradeAdminCommandException('order_admin_order_not_found');
+        }
+
+        // #16: never mail without a tracking number
+        if ($trackingNumber === '') {
+            $notifyCustomer = false;
+        }
+        $email = trim((string)$order->getData(Order::schema_fields_CUSTOMER_EMAIL));
+        if ($email === '') {
+            $notifyCustomer = false;
         }
 
         /** @var \Weline\Order\Model\OrderShipment $shipment */
@@ -574,6 +837,12 @@ final class OrderTradeAdminCommandService
             $trackingNumber,
         );
         $shipment->setData(\Weline\Order\Model\OrderShipment::schema_fields_CARRIER, $carrier);
+        if ($trackingProviderCode !== '') {
+            $shipment->setData(
+                \Weline\Order\Model\OrderShipment::schema_fields_TRACKING_PROVIDER_CODE,
+                $trackingProviderCode,
+            );
+        }
         $shipment->setData(
             \Weline\Order\Model\OrderShipment::schema_fields_STATUS,
             \Weline\Order\Model\OrderShipment::STATUS_SHIPPED,
@@ -600,7 +869,6 @@ final class OrderTradeAdminCommandService
             try {
                 /** @var OrderStateMachine $stateMachine */
                 $stateMachine = $this->manager()->getInstance(OrderStateMachine::class);
-                // Mail goes through order_shipped; keep status transition silent to avoid double send.
                 $stateMachine->transition(
                     $orderId,
                     Order::STATUS_FULFILLED,
@@ -637,6 +905,8 @@ final class OrderTradeAdminCommandService
             'notify_customer' => $notifyCustomer,
             'shipment_id' => (int)$shipment->getId(),
             'mail_sent' => $mailSent,
+            'mail_skipped_no_email' => $email === '',
+            'mail_skipped_no_tracking' => $trackingNumber === '',
         ];
     }
 
@@ -710,6 +980,21 @@ final class OrderTradeAdminCommandService
             FulfillmentUnit::STATUS_SHIPPED => (string)__('已发完'),
             default => $status !== '' ? $status : (string)__('未知'),
         };
+    }
+
+    private function shippingGateway(): ?\Weline\Order\Api\OrderShippingFulfillmentGatewayInterface
+    {
+        try {
+            $gateway = $this->manager()->getInstance(
+                \Weline\Order\Api\OrderShippingFulfillmentGatewayInterface::class,
+            );
+
+            return $gateway instanceof \Weline\Order\Api\OrderShippingFulfillmentGatewayInterface
+                ? $gateway
+                : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

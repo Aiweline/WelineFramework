@@ -39,8 +39,13 @@ final class GuestStorefrontFpcContractTest extends TestCase
 
         self::assertStringContainsString('SessionCookieNameResolver::hasRequestCookie()', $source);
         self::assertMatchesRegularExpression(
-            '/if\s*\(\$isEditorMode\).*?elseif\s*\(\$hasSessionCookie\).*?getContext\(\)/s',
+            '/if\s*\(\$hasSessionCookie\).*?getContext\(\)/s',
             $source,
+        );
+        self::assertStringNotContainsString(
+            '$isEditorMode',
+            $source,
+            'delivery widget must not use editor_mode stub (preview_storefront_delivery_parity)'
         );
     }
 

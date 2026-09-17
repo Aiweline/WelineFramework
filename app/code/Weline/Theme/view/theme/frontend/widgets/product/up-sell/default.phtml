@@ -27,6 +27,7 @@
  */
 
 
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ProductLabelStyle;
@@ -61,10 +62,12 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 
 ?>
 
+
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <div class="widget-header">
         <h2 class="widget-title">
             <w:icon name="arrow-up" size="sm"></w:icon>
@@ -122,7 +125,8 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
     font-weight: var(--weline-font-weight-bold);
 }
 .<?= $wc ?> .products-container { width: 100%; position: relative; }
-.<?= $wc ?> .products-wrapper { width: 100%; overflow: hidden; }
+.<?= $wc ?> .products-wrapper { width: 100%; overflow: visible; }
+.<?= $wc ?> .layout-carousel .products-wrapper { overflow: hidden; }
 .<?= $wc ?> .products-grid {
     display: grid;
     gap: var(--weline-space-4);
@@ -200,20 +204,7 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 .<?= $wc ?> .product-price { display: flex; align-items: baseline; gap: var(--spacing-sm); margin-top: auto; }
 .<?= $wc ?> .price-original { color: var(--weline-theme-text-muted); text-decoration: line-through; }
 .<?= $wc ?> .price-current { color: var(--weline-theme-primary); font-weight: 800; }
-.<?= $wc ?> .btn-add-to-cart {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    width: 100%;
-    min-height: var(--spacing-2_75);
-    border: 0;
-    border-radius: var(--radius-md);
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-    cursor: pointer;
-    font-weight: 700;
-}
+/* CTA 由 canonical product-card.css 拥有 */
 
 @media (max-width: 980px) {
     .<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

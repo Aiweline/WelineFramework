@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Payment\Extends\Module\Weline_SiteSetupAssistant\SetupTask\PaymentPaypalSetupTaskProvider;
+
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
@@ -15,6 +18,10 @@ declare(strict_types=1);
  * 本文件定义了 Weline_Payment 模块提供的扩展点，其他模块可以通过这些扩展点来扩展支付功能
  */
 return [
+    SetupTaskProviderInterface::class => [
+        PaymentPaypalSetupTaskProvider::class,
+    ],
+
     'type' => 'module', // module 或 theme
     'documentation' => 'doc/extends.md', // 文档文件路径（相对于模块根目录）
     'extends' => [

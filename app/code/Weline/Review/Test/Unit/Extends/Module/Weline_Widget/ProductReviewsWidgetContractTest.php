@@ -114,7 +114,7 @@ final class ProductReviewsWidgetContractTest extends TestCase
         self::assertStringContainsString("'nextPage'", $tpl);
         self::assertStringContainsString("'pageLabelPrefix'", $tpl);
         self::assertStringContainsString('data-review-pager', $tpl);
-        self::assertStringContainsString('20260904-review-pager2', $tpl);
+        self::assertStringContainsString('20260915-review-compact1', $tpl);
         self::assertStringNotContainsString("'scrollForMore'", $tpl);
 
         $modules = (string)file_get_contents(dirname(__DIR__, 5) . '/view/statics/frontend/weline.modules.js');

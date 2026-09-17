@@ -52,6 +52,29 @@ final class ThemePreviewStorefrontParityContractTest extends TestCase
         );
     }
 
+    public function testEditorModeSkipsDiscardedPreviewContentBuild(): void
+    {
+        $source = $this->moduleFile('Controller/Frontend/ThemePreview/Content.php');
+        self::assertStringContainsString('$isEditorMode,', $source);
+        self::assertStringContainsString('if ($isEditorMode)', $source);
+        self::assertStringContainsString('pipeline hygiene', $source);
+        self::assertStringContainsString('preview-only skip of Hook/widget storefront delivery', $source);
+        self::assertMatchesRegularExpression(
+            '/if\s*\(\s*\$isEditorMode\s*\)\s*\{[^}]*\'content\'\s*=>\s*\'\'/s',
+            $source,
+            'editor_mode must skip ThemePreviewContentRenderer.build() with empty content payload'
+        );
+
+        $editor = $this->moduleFile('Controller/Backend/ThemeEditor.php');
+        self::assertStringContainsString('request-memo gates are not claimed then starved', $editor);
+        self::assertStringContainsString('preview-only skip of Hook/widget storefront delivery', $editor);
+        self::assertMatchesRegularExpression(
+            '/if\s*\(\s*\$isEditorMode\s*\)\s*\{[^}]*\'content\'\s*=>\s*\'\'/s',
+            $editor,
+            'ThemeEditor layout preview must also skip discarded build in editor_mode'
+        );
+    }
+
     public function testCategoryMenuKeepsChildrenForEditorFullPagePreview(): void
     {
         $source = $this->moduleFile('view/theme/frontend/widgets/navigation/category-menu/default.phtml');

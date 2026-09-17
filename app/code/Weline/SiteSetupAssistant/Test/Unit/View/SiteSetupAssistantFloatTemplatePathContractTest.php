@@ -38,5 +38,11 @@ final class SiteSetupAssistantFloatTemplatePathContractTest extends TestCase
             "templates/Backend/widgets/site-setup-assistant-float.phtml",
             $hookSrc
         );
+
+        $floatSrc = (string)file_get_contents($absolute);
+        self::assertStringContainsString('collectGlobalOverview', $floatSrc);
+        self::assertStringContainsString('ssa-float-capsules', $floatSrc);
+        self::assertStringContainsString('全站', $floatSrc);
+        self::assertStringNotContainsString('dashboard_website_id', $floatSrc);
     }
 }

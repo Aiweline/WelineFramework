@@ -19,7 +19,13 @@
    - **Surface / Text 语义（反色顶栏）**：[`theme-surface-text-roles.md`](./theme-surface-text-roles.md) — `data-surface` + `.w-text*`，禁止裸 span 黑底黑字
    - Slot：[`widget-slot-attributes.md`](./widget-slot-attributes.md)
    - **布局/Slot 结构缓存键（MCP）**：[`layout-slot-cache-keys.md`](./layout-slot-cache-keys.md) — 结构键排除语言/货币/request_id，须用 `w_cache` Custom / `KeyBuilder` / `CachePolicy`
+   - **预览三态权威（可视化 / 版本真实预览 / 正式）**：[`preview-and-runtime-modes.md`](./preview-and-runtime-modes.md) — 参数为主 · Token 反解析为准 · RequestContext 为准；技能 `weline-theme-development`
+   - 可视化编辑器：[`visual-editor/README.md`](./visual-editor/README.md)
+   - 版本与发布：[`version-control/README.md`](./version-control/README.md)
    - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
+   - **预览三态（可视化 / 版本真实预览 / 正式）**：[`preview-and-runtime-modes.md`](./preview-and-runtime-modes.md) — 参数 vs Token 反解析 vs RequestContext；技能 `weline-theme-development` 必读
+   - 可视化编辑器：[`visual-editor/README.md`](./visual-editor/README.md)
+   - 版本控制：[`version-control/README.md`](./version-control/README.md)
    - WLS 视图预热贡献：[`worker-view-warmup-contributions.md`](./worker-view-warmup-contributions.md)
    - 浏览器请求：[`../../Frontend/doc/Weline.Api使用指南.md`](../../Frontend/doc/Weline.Api使用指南.md)
 

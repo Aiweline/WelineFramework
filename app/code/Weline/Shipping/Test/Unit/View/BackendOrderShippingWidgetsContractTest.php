@@ -67,6 +67,12 @@ final class BackendOrderShippingWidgetsContractTest extends TestCase
         self::assertStringContainsString('BackendOrderShipmentsService', $detail);
         self::assertStringContainsString('@widget.default_injections', $detail);
         self::assertStringContainsString('data-testid="backend-order-shipments"', $detail);
+        self::assertStringContainsString('物流进程记录', $detail);
+        self::assertStringContainsString('OrderShipmentTrackingQueryService', $detail);
+        self::assertStringContainsString('data-testid="backend-order-shipment-progress"', $detail);
+        self::assertStringContainsString('showOpsLink', $detail);
+        self::assertStringNotContainsString('查看当前位置', $detail);
+        self::assertStringNotContainsString('shippingOrderShipmentTracking', $detail);
         self::assertStringContainsString('BackendOrderShipmentsService', $list);
         self::assertStringContainsString('data-testid="backend-order-list-shipping"', $list);
         self::assertStringContainsString('order/backend/shipment/index', $list);

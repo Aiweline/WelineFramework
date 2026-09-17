@@ -7,7 +7,7 @@ namespace Weline\Smtp\Test\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 发信记录按渠道 + 作用范围：模型字段 + listing Tab/列/w:scope + 写日志契约。
+ * 发信记录按渠道 + 作用范围：模型字段 + listing 筛选/列 + 写日志契约。
  */
 final class SmtpSendLogChannelContractTest extends TestCase
 {
@@ -38,14 +38,30 @@ final class SmtpSendLogChannelContractTest extends TestCase
         self::assertStringContainsString("'__storage_scope'", $provider);
 
         self::assertStringContainsString('MailChannelCollector', $controller);
+        self::assertStringContainsString('SmtpSendLogListPresenter', $controller);
         self::assertStringContainsString('channel', $controller);
         self::assertStringContainsString('SystemConfigTargetScopeService', $controller);
         self::assertStringContainsString('schema_fields_STORAGE_SCOPE', $controller);
-        self::assertStringContainsString('data-testid="smtp-log-channel-tabs"', $listing);
+        self::assertStringContainsString('data-testid="smtp-log-channel-select"', $listing);
         self::assertStringContainsString('data-testid="smtp-log-col-channel"', $listing);
         self::assertStringContainsString('data-testid="smtp-log-scope"', $listing);
         self::assertStringContainsString('<w:scope', $listing);
-        self::assertStringContainsString('w-tabs__tab', $listing);
+        self::assertStringContainsString('to_display', $listing);
+        self::assertStringContainsString('locale_display', $listing);
+        self::assertStringContainsString('content_excerpt', $listing);
+        self::assertStringContainsString('data-testid="smtp-log-excerpt"', $listing);
+        self::assertStringContainsString('data-smtp-log-preview', $listing);
+        self::assertStringContainsString('data-testid="smtp-log-preview-dialog"', $listing);
+        self::assertStringContainsString('data-testid="smtp-log-preview-iframe"', $listing);
         self::assertStringContainsString('channel', $listing);
+        self::assertStringContainsString("embed' => '1'", $controller);
+        self::assertStringContainsString('Backend/Log/embed', $controller);
+        self::assertStringContainsString('respondEmbedDocument', $controller);
+        self::assertStringContainsString('ResponseTerminateException', $controller);
+        self::assertStringContainsString('content_excerpt', (string)file_get_contents($moduleRoot . '/Service/SmtpSendLogListPresenter.php'));
+        self::assertStringNotContainsString('smtp-log-channel-tabs', $listing);
+        self::assertStringNotContainsString('{{log.content}}', $listing);
+        self::assertFileExists($moduleRoot . '/view/templates/Backend/Log/embed.phtml');
+        self::assertStringContainsString('data-smtp-embed-standalone', (string)file_get_contents($moduleRoot . '/view/templates/Backend/Log/embed.phtml'));
     }
 }

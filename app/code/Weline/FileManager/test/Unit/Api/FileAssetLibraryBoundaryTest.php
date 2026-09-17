@@ -40,6 +40,25 @@ final class FileAssetLibraryBoundaryTest extends TestCase
         );
     }
 
+    public function testRegisterExistingObjectIsPublishedOnLibraryBoundary(): void
+    {
+        $interface = (string)file_get_contents(
+            BP . '/app/code/Weline/FileManager/Api/FileAssetLibraryInterface.php',
+        );
+        $library = (string)file_get_contents(
+            BP . '/app/code/Weline/FileManager/Service/FileAssetLibrary.php',
+        );
+        $upload = (string)file_get_contents(
+            BP . '/app/code/Weline/FileManager/Service/FileAssetUploadService.php',
+        );
+
+        self::assertStringContainsString('function registerExistingObject(', $interface);
+        self::assertStringContainsString('function registerExistingObject(', $library);
+        self::assertStringContainsString('function registerExisting(', $upload);
+        self::assertStringContainsString('hashExistingObject', $upload);
+        self::assertStringContainsString("'source' => 'register_existing'", $upload);
+    }
+
     public function testSoftDeletedPathsFailClosedAndCanBeRetriedWithFreshIdentity(): void
     {
         $library = (string)file_get_contents(
@@ -176,13 +195,16 @@ final class FileAssetLibraryBoundaryTest extends TestCase
             BP . '/app/code/Weline/FileManager/Service/FileAssetLibrary.php',
         );
 
-        foreach ([['describe', 3], ['upload', 6]] as [$methodName, $parameterIndex]) {
+        foreach ([['describe', 3], ['upload', 6], ['replaceContent', 6]] as [$methodName, $parameterIndex]) {
             $access = $contract->getMethod($methodName)->getParameters()[$parameterIndex];
             self::assertSame('access', $access->getName());
             self::assertSame('Weline\\FileManager\\Api\\Data\\FileAccessContext', (string)$access->getType());
             self::assertFalse($access->allowsNull());
             self::assertFalse($access->isOptional());
         }
+        self::assertTrue($contract->hasMethod('replaceContent'));
+        self::assertStringContainsString('public function replaceContent(', $library);
+        self::assertStringContainsString('$this->uploads->replaceContent(', $library);
         self::assertStringContainsString('$this->accessPolicy->assertCanRead($asset, $access)', $library);
         self::assertStringContainsString('$asset->getVisibility() === FileAsset::VISIBILITY_PRIVATE', $library);
         self::assertStringContainsString('$this->accessPolicy->assertCanManage($asset, $access)', $library);
@@ -213,6 +235,28 @@ final class FileAssetLibraryBoundaryTest extends TestCase
             $uploadService,
         );
         self::assertStringContainsString("\$query->additional('FOR UPDATE')", $uploadService);
+        self::assertStringContainsString('public function replaceContent(', $uploadService);
+        self::assertStringContainsString("'overwrite' => \$overwrite", $uploadService);
+        self::assertStringContainsString('lockLiveAssetForReplace', $uploadService);
+        self::assertStringNotContainsString('saveLocale($asset, $localeCode, $localeMetadata)', substr(
+            $uploadService,
+            (int)strpos($uploadService, 'public function replaceContent('),
+            (int)strpos($uploadService, 'public function saveLocale(') - (int)strpos($uploadService, 'public function replaceContent('),
+        ));
+    }
+
+    public function testReplaceContentAuthorizesManageBeforeStorageWrite(): void
+    {
+        $library = (string)file_get_contents(
+            BP . '/app/code/Weline/FileManager/Service/FileAssetLibrary.php',
+        );
+        $replace = substr($library, (int)strpos($library, 'public function replaceContent('));
+        $managePosition = strpos($replace, '$this->accessPolicy->assertCanManage($existing, $access)');
+        $writePosition = strpos($replace, '$this->uploads->replaceContent(');
+        self::assertIsInt($managePosition);
+        self::assertIsInt($writePosition);
+        self::assertTrue($managePosition < $writePosition);
+        self::assertStringContainsString('目标文件不存在，无法覆盖。', $replace);
     }
 
     public function testPrivateMutationsCarryAccessContextIntoTheMutationLayer(): void
@@ -263,6 +307,7 @@ final class FileAssetLibraryBoundaryTest extends TestCase
         self::assertStringContainsString("\$attributes['aspect_ratio'] = \$attributes['aspect_ratio'] ?? ''", $connector);
         self::assertStringContainsString("\$attributes['lockRoot'] = trim(str_replace(", $connector);
         $block = (string)file_get_contents(BP . '/app/code/Weline/FileManager/Api/Block/FileManager.php');
+        self::assertStringContainsString("foreach (['usage', 'locale_code'] as \$optionalKey)", $block);
         self::assertStringContainsString("'lockRoot' => \$this->getData('lockRoot')", $block);
         foreach ([$tag, $connector] as $tagSource) {
             self::assertStringContainsString('FILTER_VALIDATE_BOOL', $tagSource);

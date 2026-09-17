@@ -41,7 +41,7 @@ class ArrayType extends AbstractParamType
         $inputHtml .= '<div class="w-param-array-actions">';
         $inputHtml .= '<button type="button" class="w-button w-param-array-add" data-tone="primary" data-variant="outline" data-target="' . htmlspecialchars($fieldId) . '" data-key="' . htmlspecialchars($key) . '"' . ($maxItems !== null && count($items) >= $maxItems ? ' disabled' : '') . '>+ ' . htmlspecialchars($addLabel);
         $inputHtml .= '</button>';
-        $inputHtml .= $this->renderAddWithMediaButton($fieldId, $key, $itemSchema, $maxItems, count($items));
+        $inputHtml .= $this->renderAddWithMediaButton($fieldId, $key, $itemSchema, $maxItems, count($items), $param);
         if ($maxItems !== null) {
             $inputHtml .= '<span class="w-param-array-count">' . sprintf(__('%d / %d 项'), count($items), $maxItems) . '</span>';
         }
@@ -68,19 +68,43 @@ class ArrayType extends AbstractParamType
             }
             $decoded = json_decode($trimmed, true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                return $decoded;
+                $items = $decoded;
+            } else {
+                return [];
             }
+        }
+
+        if (!is_array($items)) {
             return [];
         }
 
-        return is_array($items) ? $items : [];
+        // Drop corrupted slots such as slides:[[ ]] (empty list nested as an item).
+        // Object-schema arrays only accept associative item maps.
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if ($item !== [] && array_is_list($item)) {
+                continue;
+            }
+            $normalized[] = $item;
+        }
+
+        return $normalized;
     }
 
     /**
      * 当 item_schema 中存在图片字段时，输出「选择图片添加」按钮，用于先选图再新增一项并回填图片，其余字段可编辑
      */
-    private function renderAddWithMediaButton(string $fieldId, string $key, array $itemSchema, ?int $maxItems, int $currentCount): string
-    {
+    private function renderAddWithMediaButton(
+        string $fieldId,
+        string $key,
+        array $itemSchema,
+        ?int $maxItems,
+        int $currentCount,
+        array $arrayParam = []
+    ): string {
         $imageFieldKey = null;
         $imageFieldDef = [];
         foreach ($itemSchema as $fieldKey => $fieldDef) {
@@ -94,12 +118,20 @@ class ArrayType extends AbstractParamType
             return '';
         }
         $disabled = $maxItems !== null && $currentCount >= $maxItems;
+        $isAudio = $this->resolveMediaPickerKind($imageFieldDef) === 'audio';
+        $addLabel = trim((string)($arrayParam['add_with_media_label'] ?? ''));
+        if ($addLabel === '') {
+            $addLabel = $isAudio ? (string)__('选择曲目添加') : (string)__('选择图片添加');
+        }
+        $title = $isAudio
+            ? (string)__('从媒体库选择曲目并添加为一项，可再编辑曲名与简介')
+            : (string)__('从媒体库选择图片并添加为一项，可再编辑标题等');
         $btn = '<button type="button" class="w-button w-param-array-add-with-media" data-tone="neutral" data-variant="outline" '
             . 'data-target="' . htmlspecialchars($fieldId) . '" data-key="' . htmlspecialchars($key) . '" '
             . 'data-image-field="' . htmlspecialchars($imageFieldKey) . '"'
             . $this->mediaImageSelectDataAttrs($imageFieldDef)
             . ($disabled ? ' disabled' : '')
-            . ' title="' . __('从媒体库选择图片并添加为一项，可再编辑标题等') . '">' . __('选择图片添加') . '</button>';
+            . ' title="' . htmlspecialchars($title) . '">' . htmlspecialchars($addLabel) . '</button>';
         return $btn;
     }
 
@@ -167,37 +199,16 @@ class ArrayType extends AbstractParamType
             case 'image_picker':
             case 'media_image':
             case 'file_image': {
-                $hasImage = !empty($fieldValue);
-                $storedValue = $this->serializeImageFormValue($fieldValue);
-                $previewUrl = $this->imagePreviewUrl($fieldValue);
-                $placeholderText = $previewUrl !== ''
-                    ? (string)__('从媒体库选择')
-                    : ($hasImage ? (string)__('缩略图加载中…') : (string)__('从媒体库选择'));
-                $previewAttrs = $this->mediaImagePreviewShellAttrs($fieldDef);
-                $html = '<div class="w-param-media-image">';
-                $html .= '<div class="w-param-image-preview' . ($hasImage ? ' w-param-has-image' : '') . '" id="'
-                    . htmlspecialchars($itemFieldId) . '_preview"' . $previewAttrs . '>';
-                $html .= $this->mediaImageAspectBadgeHtml($fieldDef);
-                if ($previewUrl !== '') {
-                    $html .= '<img src="' . htmlspecialchars($previewUrl) . '" alt="' . __('预览') . '">';
-                }
-                $html .= '<div class="w-param-image-placeholder"' . ($previewUrl !== '' ? ' hidden' : '') . '>'
-                    . htmlspecialchars($placeholderText) . '</div>';
-                $html .= '<div class="w-param-image-actions">';
-                $html .= '<button type="button" class="w-button w-param-media-image-select" data-tone="primary" data-variant="outline" data-size="sm" '
-                    . 'data-target="' . htmlspecialchars($itemFieldId) . '" data-field="' . htmlspecialchars($fieldKey) . '"'
-                    . $this->mediaImageSelectDataAttrs($fieldDef)
-                    . '>' . __('选择') . '</button>';
-                if ($hasImage) {
-                    $html .= '<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="'
-                        . htmlspecialchars($itemFieldId) . '" aria-label="' . __('清除图片') . '">×</button>';
-                }
-                $html .= '</div></div>';
-                $html .= '<input type="hidden" class="w-param-array-item-input" value="' . htmlspecialchars($storedValue)
-                    . '" data-field="' . htmlspecialchars($fieldKey) . '" id="' . htmlspecialchars($itemFieldId)
-                    . '" data-preview="' . htmlspecialchars($itemFieldId) . '_preview" data-clear-label="'
-                    . __('清除图片') . '"' . $this->buildImageHiddenInputExtraAttrs($fieldValue) . '>';
-                $html .= '</div>';
+                $html = $this->renderMediaLibraryPickerHtml(
+                    $itemFieldId,
+                    $key,
+                    $fieldDef,
+                    $fieldValue,
+                    'w-param-media-image-select',
+                    [
+                        'array_field' => $fieldKey,
+                    ],
+                );
                 break;
             }
             case 'url':
@@ -237,13 +248,57 @@ class ArrayType extends AbstractParamType
                 $html = '<div class="w-check w-param-form-check"><input type="checkbox" data-field="' . htmlspecialchars($fieldKey) . '"' . ($fieldValue ? ' checked' : '') . '></div>';
                 break;
             case 'textarea':
-                $html = '<textarea class="w-textarea" rows="2" placeholder="' . htmlspecialchars($placeholder) . '" data-field="' . htmlspecialchars($fieldKey) . '">' . htmlspecialchars((string)$fieldValue) . '</textarea>';
+                $html = '<textarea class="w-textarea" rows="2" placeholder="' . htmlspecialchars($placeholder) . '" data-field="' . htmlspecialchars($fieldKey) . '">' . htmlspecialchars($this->scalarizeFieldDisplayValue($fieldValue, $fieldDef)) . '</textarea>';
                 break;
             default:
                 $inputType = $type === 'number' ? 'number' : 'text';
-                $html = '<input type="' . $inputType . '" class="w-input" value="' . htmlspecialchars((string)$fieldValue) . '" placeholder="' . htmlspecialchars($placeholder) . '" data-field="' . htmlspecialchars($fieldKey) . '">';
+                $html = '<input type="' . $inputType . '" class="w-input" value="' . htmlspecialchars($this->scalarizeFieldDisplayValue($fieldValue, $fieldDef)) . '" placeholder="' . htmlspecialchars($placeholder) . '" data-field="' . htmlspecialchars($fieldKey) . '">';
         }
         return $html;
+    }
+
+    /**
+     * 可翻译字段可能存 locale map；主输入框只展示当前语种标量，禁止 (string)array → "Array"。
+     *
+     * @param array<string,mixed> $fieldDef
+     */
+    private function scalarizeFieldDisplayValue(mixed $fieldValue, array $fieldDef): string
+    {
+        if ($fieldValue === null || $fieldValue === '') {
+            return '';
+        }
+        if (is_scalar($fieldValue)) {
+            return (string)$fieldValue;
+        }
+        if (!is_array($fieldValue)) {
+            return '';
+        }
+        // Prefer current request / cookie locale, then zh_Hans_CN / default / first non-empty.
+        $locale = '';
+        try {
+            $locale = trim((string)(\Weline\Framework\Http\Cookie::getLangLocal() ?? ''));
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        $candidates = array_values(array_filter([
+            $locale,
+            'zh_Hans_CN',
+            'zh_CN',
+            'default',
+            'en_US',
+        ], static fn (string $code): bool => $code !== ''));
+        foreach ($candidates as $code) {
+            if (isset($fieldValue[$code]) && is_scalar($fieldValue[$code]) && trim((string)$fieldValue[$code]) !== '') {
+                return (string)$fieldValue[$code];
+            }
+        }
+        foreach ($fieldValue as $v) {
+            if (is_scalar($v) && trim((string)$v) !== '') {
+                return (string)$v;
+            }
+        }
+
+        return '';
     }
 
     private function normalizeColorForPickerInArray(string $color): string

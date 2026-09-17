@@ -15,7 +15,7 @@
  *
  * @param background_image {default="",type="media_image",label="背景图片",description="从媒体库选择背景图"}
  * @param background_color {default="var(--weline-theme-primary-subtle)",type="color",label="背景颜色"}
- * @param text {default="云裳汉服 · 满 ¥299 包邮 · 形制精选上新",type="string",label="促销文字"}
+ * @param text {default="满额包邮 · 精选上新",type="string",label="促销文字"}
  * @param text_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="文字颜色"}
  * @param link {default="",type="string",label="链接地址"}
  * @param closeable {default=true,type="bool",label="允许关闭"}
@@ -40,12 +40,12 @@ $backgroundColor = ThemeUiColor::sanitize(
     $this->getData('background_color') ?? '',
     'var(--weline-theme-primary-subtle)'
 );
-$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '云裳汉服 · 满 ¥299 包邮 · 形制精选上新');
+$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '满额包邮 · 精选上新');
 $textColor = ThemeUiColor::sanitize(
     $this->getData('text_color') ?? '',
     'var(--weline-theme-primary-text-emphasis)'
 );
-$link = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('link') ?? '');
+$link = \Weline\Theme\Helper\SiteBlockConfig::link($this->getData('link') ?? '');
 $closeable = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('closeable'), true);
 $countdownEnd = trim((string)($this->getData('countdown_end') ?? ''));
 $hasCountdown = $countdownEnd !== '';

@@ -13,6 +13,19 @@ use Weline\Theme\Service\ThemePageTypeResolver;
  */
 final class ThemePageTypeResolverAuthRoutesTest extends TestCase
 {
+    public function testAccountPreviewRouteEqualsLayoutPath(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        self::assertSame(
+            'account',
+            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_ACCOUNT)
+        );
+        self::assertSame(
+            '/account',
+            $resolver->getPreviewPathByPageType(ThemeLayout::PAGE_TYPE_ACCOUNT)
+        );
+    }
+
     public function testCustomerChallengeUriResolvesToAccountDotChallenge(): void
     {
         $resolver = new ThemePageTypeResolver();
@@ -26,29 +39,33 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         );
     }
 
-    public function testCustomerLoginUriResolvesToAccountDotAuth(): void
+    public function testCustomerLoginUriResolvesToAccountSlashLogin(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'account.auth',
+            'account/login',
             $resolver->resolveLayoutTypeFromUri('https://shop.example/customer/account/login')
+        );
+        $this->assertSame(
+            ThemeLayout::PAGE_TYPE_ACCOUNT,
+            $resolver->mapLayoutTypeToPageType('account/login')
         );
     }
 
-    public function testCustomerRegisterUriResolvesToAccountDotAuth(): void
+    public function testCustomerRegisterUriResolvesToAccountSlashRegister(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'account.auth',
+            'account/register',
             $resolver->resolveLayoutTypeFromUri('/customer/account/register')
         );
     }
 
-    public function testCustomerForgotUriResolvesToAccountDotAuth(): void
+    public function testCustomerForgotUriResolvesToAccountSlashForgotPassword(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'account.auth',
+            'account/forgot-password',
             $resolver->resolveLayoutTypeFromUri('/zh_CN/customer/account/forgot-password')
         );
     }
@@ -84,16 +101,21 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         );
     }
 
-    public function testProductPreviewRouteUsesThemeVisualContent(): void
+    public function testProductPreviewRouteEqualsLayoutPathNotContentShell(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'theme/frontend/theme-preview/content',
+            'product',
             $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
         );
         $this->assertStringNotContainsString(
-            'product/default',
+            'theme-preview/content',
             $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
+        );
+        // Slug sample must be passed explicitly — never invented from page_type alone.
+        $this->assertSame(
+            'product/benq-screenbar',
+            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT, 'product/benq-screenbar')
         );
     }
 
@@ -135,7 +157,6 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             '/en_US/USD/guide/shipping' => ThemeLayout::PAGE_TYPE_GUIDE,
             '/about' => ThemeLayout::PAGE_TYPE_ABOUT,
             '/contact' => ThemeLayout::PAGE_TYPE_CONTACT,
-            '/review' => ThemeLayout::PAGE_TYPE_REVIEW,
             '/qa' => ThemeLayout::PAGE_TYPE_QA,
             '/rma' => ThemeLayout::PAGE_TYPE_RMA,
             '/privacy' => ThemeLayout::PAGE_TYPE_POLICY,

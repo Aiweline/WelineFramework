@@ -6,16 +6,17 @@
 .weline-product-card {
   --wpc-ink: var(--weline-theme-text, #0f1111);
   --wpc-muted: var(--weline-theme-text-muted, #565959);
-  --wpc-link: #007185;
-  --wpc-link-hover: #c45500;
+  --wpc-link: var(--color-link, #3d6b78);
+  --wpc-link-hover: var(--color-link-hover, #b84a3c);
   --wpc-border: var(--weline-theme-border-subtle, #e7e7e7);
   --wpc-surface: var(--weline-chrome-bg-primary, #ffffff);
-  --wpc-price: #b12704;
-  --wpc-star: #de7921;
+  --wpc-price: var(--color-danger, #a63d3d);
+  --wpc-star: var(--color-warning, #c4893f);
   --wpc-shadow: 0 1px 2px rgba(15, 17, 17, 0.06), 0 8px 24px rgba(15, 17, 17, 0.04);
   --wpc-shadow-hover: 0 12px 32px rgba(15, 17, 17, 0.12);
   display: flex;
   min-width: 0;
+  height: 100%;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--wpc-border);
@@ -25,6 +26,19 @@
   box-shadow: var(--wpc-shadow);
   box-sizing: border-box;
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+/* Shelf grids: stretch peers so CTA sticks to a shared baseline per row. */
+.weline-product-card-shelf .products-grid,
+.weline-product-card-shelf.amz-plp__grid,
+.weline-product-card-shelf.product-storefront__grid {
+  align-items: stretch;
+}
+
+.weline-product-card-shelf .products-grid > .weline-product-card,
+.weline-product-card-shelf > .weline-product-card {
+  min-width: 0;
+  height: 100%;
 }
 
 .weline-product-card:hover {
@@ -39,23 +53,34 @@
 }
 
 .weline-product-card .wpc-media {
+  /* Square lock via padding box — survives theme overrides that zero aspect-ratio
+     and prevents portrait catalog shots from stretching card rows unevenly. */
   position: relative;
-  aspect-ratio: 1 / 1;
+  width: 100%;
+  flex: 0 0 auto;
+  height: 0;
+  padding-top: 100%;
   overflow: hidden;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  /* 宣纸面，禁止冷灰渐变抢水墨画布 */
+  background: var(--weline-theme-surface-muted, var(--color-bg-secondary, #ede9e1));
 }
 
 .weline-product-card .wpc-media-link {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
 }
 
 .weline-product-card .wpc-image {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   transition: transform 0.4s ease;
 }
 
@@ -102,16 +127,57 @@
   right: 0.5rem;
   z-index: 3;
   display: flex;
-  gap: 0.35rem;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;
 }
 
 .weline-product-card:hover .product-actions,
-.weline-product-card:focus-within .product-actions {
+.weline-product-card:focus-within .product-actions,
+.weline-product-card .product-actions:focus-within {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* 收藏/对比/快览：白底圆钮；禁止 UA 默认黑边方框（Compare chrome 未挂载时的回归态） */
+.weline-product-card .product-actions .action-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: var(--weline-radius-round, 999px);
+  background: color-mix(in srgb, var(--wpc-surface) 92%, transparent);
+  color: var(--wpc-ink);
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 17, 17, 0.12), 0 2px 6px rgba(15, 17, 17, 0.08);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.weline-product-card .product-actions .action-btn:hover,
+.weline-product-card .product-actions .action-btn:focus-visible {
+  background: var(--wpc-surface);
+  color: var(--wpc-link-hover);
+  box-shadow: 0 2px 8px rgba(15, 17, 17, 0.16);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.weline-product-card .product-actions .action-btn.is-active {
+  color: var(--color-primary, var(--wpc-link-hover));
 }
 
 .weline-product-card .wpc-body {
@@ -120,13 +186,15 @@
   flex: 1;
   flex-direction: column;
   gap: var(--weline-space-2, 0.5rem);
-  padding: 0.9rem 0.95rem 1rem;
+  padding-block: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem);
+  padding-inline: var(--weline-space-4, 1rem);
   box-sizing: border-box;
 }
 
 .weline-product-card.density-compact .wpc-body,
 .weline-product-card.density-shelf .wpc-body {
-  padding: 0.7rem 0.65rem 0.85rem;
+  padding-block: var(--weline-space-3, 0.75rem) var(--weline-space-5, 1.25rem);
+  padding-inline: var(--weline-space-3, 0.75rem);
   gap: var(--weline-space-2, 0.5rem);
 }
 
@@ -145,7 +213,12 @@
   min-height: 2.8em;
 }
 
-.weline-product-card .wpc-title a {
+/* 压过 foundation @layer base `a { color: primary }` 与 UA 默认下划线；
+   正确视觉：石青标题、仅 hover 下划线（见审图参考「正确 CSS」）。 */
+.weline-product-card .wpc-title a,
+.weline-product-card .wpc-title a:link,
+.weline-product-card .wpc-title a:visited,
+.weline-product-card .wpc-title a:any-link {
   color: var(--wpc-link);
   text-decoration: none;
   display: -webkit-box;
@@ -155,7 +228,8 @@
   overflow-wrap: anywhere;
 }
 
-.weline-product-card .wpc-title a:hover {
+.weline-product-card .wpc-title a:hover,
+.weline-product-card .wpc-title a:focus-visible {
   color: var(--wpc-link-hover);
   text-decoration: underline;
 }
@@ -201,11 +275,12 @@
   letter-spacing: -0.01em;
 }
 
+/* shelf/compact：仍强调成交价色，仅放宽字号；禁止回落墨色导致「弱价格」 */
 .weline-product-card.density-shelf .wpc-price-now,
 .weline-product-card.density-compact .wpc-price-now {
-  color: var(--wpc-ink);
+  color: var(--wpc-price);
   font-size: 1.15rem;
-  font-weight: 400;
+  font-weight: 700;
 }
 
 .weline-product-card .wpc-price-was {
@@ -293,16 +368,51 @@
   color: var(--color-on-primary, #f7f4ef);
 }
 
+/* 询价：浅底主色字，禁止误用实心购买红 */
+.weline-product-card .wpc-cta .btn-quote,
+.weline-product-card .wpc-cta a[data-quote-only="1"] {
+  border: 1px solid var(--color-primary, #b84a3c);
+  background: var(--color-primary-bg-subtle, #f8ede9);
+  color: var(--color-primary-text-emphasis, #7a3028);
+}
+
+.weline-product-card .wpc-cta a[data-quote-only="1"] span {
+  color: inherit;
+}
+
 .weline-product-card .wpc-detail-link:hover,
 .weline-product-card .wpc-cart-btn:hover,
-.weline-product-card .wpc-cta .btn-add-to-cart:hover {
+.weline-product-card .wpc-cta .btn-add-to-cart:hover:not(:disabled):not([aria-disabled="true"]),
+.weline-product-card .wpc-cta .btn-quote:hover:not([aria-disabled="true"]),
+.weline-product-card .wpc-cta a[data-quote-only="1"]:hover:not([aria-disabled="true"]) {
   background: color-mix(in srgb, var(--color-primary, #b84a3c) 16%, #ffffff);
   border-color: var(--color-primary-hover, #963b30);
 }
 
-.weline-product-card .wpc-cta .btn-buy-now:hover {
+.weline-product-card .wpc-cta .btn-buy-now:hover:not(:disabled) {
   background: var(--color-primary-hover, #963b30);
   border-color: var(--color-primary-active, #7a3028);
+}
+
+.weline-product-card .wpc-cta .btn-add-to-cart:focus-visible,
+.weline-product-card .wpc-cta .btn-buy-now:focus-visible,
+.weline-product-card .wpc-cta .btn-quote:focus-visible,
+.weline-product-card .wpc-cta a[data-quote-only="1"]:focus-visible,
+.weline-product-card .wpc-detail-link:focus-visible {
+  outline: 2px solid var(--weline-theme-focus-outline, var(--color-primary, #b84a3c));
+  outline-offset: var(--weline-space-1, 0.25rem);
+}
+
+/* 预览/不可售：保持品牌色 + 降透明度，禁止灰底方言（勿回落 surface-muted） */
+.weline-product-card .wpc-cta .btn-add-to-cart:disabled,
+.weline-product-card .wpc-cta .btn-add-to-cart[aria-disabled="true"],
+.weline-product-card .wpc-cta .btn-buy-now:disabled,
+.weline-product-card .wpc-cta .btn-quote[aria-disabled="true"],
+.weline-product-card .wpc-cta a[data-quote-only="1"][aria-disabled="true"] {
+  opacity: 0.72;
+  cursor: not-allowed;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {

@@ -45,6 +45,7 @@ class Manager extends BackendController
         $this->assign('locale_code', $this->resolvePickerLocale());
         $this->assign('require_image_usage', '0');
         $this->assignConnectorSecurity();
+        $this->assign('media_reference_base', $this->_url->getBackendUrl('weline_filemanager/backend/media-reference'));
         $this->assign('size', (string)MediaAssetUploadService::MAX_ASSET_UPLOAD_BYTES);
         return $this->fetch('manager.phtml');
     }
@@ -60,7 +61,21 @@ class Manager extends BackendController
         $this->suppressPageChromeForPicker();
         $params = $this->request->getParams();
         $connectorUrl = $this->_url->getBackendUrl('media/backend/connector');
-        $startPath = $params['startPath'] ?? $params['path'] ?? '';
+        $startPath = trim(str_replace('\\', '/', (string)($params['startPath'] ?? $params['path'] ?? '')), '/');
+        $pathParam = trim(str_replace('\\', '/', (string)($params['path'] ?? '')), '/');
+        $lockRoot = trim(str_replace('\\', '/', (string)($params['lockRoot'] ?? $params['lock_root'] ?? '')), '/');
+        $lockEnabled = filter_var($params['lockPath'] ?? $params['lock_path'] ?? false, FILTER_VALIDATE_BOOL);
+        // Prefer path when startPath is stale/relative and would sit outside lockRoot
+        // (theme file-picker used to set path=websites/… while leaving startPath=banner).
+        if ($lockEnabled && $lockRoot !== '' && $pathParam !== '') {
+            $pathUnderLock = $pathParam === $lockRoot || str_starts_with($pathParam, $lockRoot . '/');
+            $startUnderLock = $startPath === ''
+                || $startPath === $lockRoot
+                || str_starts_with($startPath, $lockRoot . '/');
+            if ($pathUnderLock && !$startUnderLock) {
+                $startPath = $pathParam;
+            }
+        }
         $initialValue = trim((string) ($params['initialValue'] ?? ''));
         if ($initialValue !== '') {
             $firstPath = explode(',', $initialValue)[0];
@@ -92,7 +107,6 @@ class Manager extends BackendController
         $this->assign('ext', $normalizedExt !== '' ? $normalizedExt : '*');
         $this->assign('size', $params['size'] ?? (string)MediaAssetUploadService::MAX_ASSET_UPLOAD_BYTES);
         $this->assign('lock_path', $params['lockPath'] ?? '0');
-        $lockRoot = trim(str_replace('\\', '/', (string)($params['lockRoot'] ?? $params['lock_root'] ?? '')), '/');
         $this->assign('lock_root', $lockRoot);
         $themeState = $this->resolveIframeThemeState();
         $this->assign('theme_preference', $themeState['preference']);
@@ -109,6 +123,7 @@ class Manager extends BackendController
         );
         $this->assign('recommend_width', trim((string)($params['recommend_width'] ?? $params['recommendWidth'] ?? '')));
         $this->assign('recommend_height', trim((string)($params['recommend_height'] ?? $params['recommendHeight'] ?? '')));
+        $this->assign('media_reference_base', $this->_url->getBackendUrl('weline_filemanager/backend/media-reference'));
         $this->assignConnectorSecurity();
         return $this->fetch('manager.phtml');
     }

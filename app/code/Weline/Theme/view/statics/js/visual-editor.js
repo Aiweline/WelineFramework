@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('Visual Editor initializing...');
         if (!config) {
             console.error('ThemeEditorConfig not found!');
-            showToast('配置数据丢失', 'error');
+            showToast('??????', 'error');
             return;
         }
 
@@ -78,18 +78,18 @@ document.addEventListener('DOMContentLoaded', function () {
             // Apply theme mode
             applyThemeMode();
 
-            // 初始化iframe加载事件处理（确保初始加载时也能隐藏loading�?
+            // ???iframe??????????????????loading�?
             if (elements.iframe && elements.loading) {
-                // 显示初始加载状�?
+                // ???????�?
                 elements.loading.classList.add('show');
                 
-                // 处理iframe初始加载完成
+                // ??iframe??????
                 elements.iframe.addEventListener('load', function onInitialLoad() {
-                    // 延迟隐藏，确保内容已渲染
+                    // ????????????
                     setTimeout(() => {
                         elements.loading.classList.remove('show');
                     }, 300);
-                    // 移除事件监听器，避免重复执行
+                    // ??????????????
                     elements.iframe.removeEventListener('load', onInitialLoad);
                 }, { once: true });
             }
@@ -156,11 +156,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 console.log('Options loaded:', state.optionsData[area]);
             } else {
-                showToast(result.msg || '加载配置失败', 'error');
+                showToast(result.msg || '??????', 'error');
             }
         } catch (error) {
             console.error('Failed to load options:', error);
-            showToast('网络错误', 'error');
+            showToast('????', 'error');
         }
     }
 
@@ -235,9 +235,9 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.addEventListener('click', () => {
                 const action = btn.dataset.action;
                 if (action === 'global-colors') {
-                    openGlobalSettings('colors', 'colors', '全局配色');
+                    openGlobalSettings('colors', 'colors', '????');
                 } else if (action === 'global-variables') {
-                    openGlobalSettings('variable', 'variables', '全局变量');
+                    openGlobalSettings('variable', 'variables', '????');
                 }
             });
         });
@@ -422,11 +422,11 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (options.length > 0) {
                 loadParams(type, category, options[0].value);
             } else {
-                elements.settingsForm.innerHTML = '<div class="alert alert-info">当前区域没有可配置的' + title + '</div>';
+                elements.settingsForm.innerHTML = '<div class="alert alert-info">??????????' + title + '</div>';
             }
         } else {
             elements.layoutContainer.innerHTML = '';
-            elements.settingsForm.innerHTML = '<div class="alert alert-info">当前区域没有可配置的' + title + '</div>';
+            elements.settingsForm.innerHTML = '<div class="alert alert-info">??????????' + title + '</div>';
         }
     }
 
@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="color-variable-card" data-color-name="${varName}">
                     <div class="color-header">
                         <div class="color-swatch" style="background-color: ${varValue}">
-                            <input type="color" name="colors[${varName}]" value="${varValue}" title="点击选择颜色">
+                            <input type="color" name="colors[${varName}]" value="${varValue}" title="??????">
                         </div>
                         <div class="color-info">
                             <div class="color-name" title="${varName}">${varLabel}</div>
@@ -599,14 +599,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (currentVal) {
             loadParams(type, category, currentVal);
         } else {
-            elements.settingsForm.innerHTML = '<div class="alert alert-info">请先选择一个布局</div>';
+            elements.settingsForm.innerHTML = '<div class="alert alert-info">????????</div>';
         }
     }
 
     function renderLayoutOptions(options, currentVal) {
         let html = '';
         if (!options || options.length === 0) {
-            html = '<div class="text-muted">没有可用的选项</div>';
+            html = '<div class="text-muted">???????</div>';
         } else {
             options.forEach(opt => {
                 const isActive = opt.value === currentVal;
@@ -659,10 +659,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (result.code === 200) {
                 renderParamsForm(result.data);
             } else {
-                elements.settingsForm.innerHTML = `<div class="alert alert-warning">${result.msg || '加载参数失败'}</div>`;
+                elements.settingsForm.innerHTML = `<div class="alert alert-warning">${result.msg || '??????'}</div>`;
             }
         } catch (error) {
-            elements.settingsForm.innerHTML = `<div class="alert alert-danger">加载错误: ${error.message}</div>`;
+            elements.settingsForm.innerHTML = `<div class="alert alert-danger">????: ${error.message}</div>`;
         }
     }
 
@@ -671,7 +671,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const configVals = data.config || {};
 
         if (Object.keys(params).length === 0) {
-            elements.settingsForm.innerHTML = '<div class="text-muted text-center py-3">此选项没有可配置的参数</div>';
+            elements.settingsForm.innerHTML = '<div class="text-muted text-center py-3">???????????</div>';
             return;
         }
 
@@ -686,8 +686,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <label for="${inputId}">${param.name || key}</label>
                     <div class="param-actions">
-                        ${isI18n ? `<span class="locale-badge" title="多语言字段">${config.locale || 'I18N'}</span>` : ''}
-                        <button type="button" class="btn-reset-param" data-key="${key}" title="重置为默认�?>
+                        ${isI18n ? `<span class="locale-badge" title="?????">${config.locale || 'I18N'}</span>` : ''}
+                        <button type="button" class="btn-reset-param" data-key="${key}" title="?????�?>
                             <i class="mdi mdi-refresh"></i>
                         </button>
                     </div>
@@ -723,11 +723,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         ${value ? `<img src="${value}" alt="Preview">` : '<i class="mdi mdi-image-plus"></i>'}
                     </div>
                     <div class="input-group">
-                        <input type="text" class="form-control" id="${inputId}" name="${inputName}" value="${value}" placeholder="图片 URL">
-                        <button class="btn btn-outline-secondary btn-clear-image" type="button" title="清除图片">
+                        <input type="text" class="form-control" id="${inputId}" name="${inputName}" value="${value}" placeholder="?? URL">
+                        <button class="btn btn-outline-secondary btn-clear-image" type="button" title="????">
                             <i class="mdi mdi-close"></i>
                         </button>
-                        <button class="btn btn-outline-secondary btn-upload" type="button" title="上传文件">
+                        <button class="btn btn-outline-secondary btn-upload" type="button" title="????">
                             <i class="mdi mdi-upload"></i>
                         </button>
                     </div>
@@ -743,7 +743,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (param.type === 'boolean' || param.type === 'checkbox') {
                 html += `<div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="${inputId}" name="${inputName}" value="1" ${value == '1' || value === true ? 'checked' : ''}>
-                    <label class="form-check-label" for="${inputId}">${param.description || '启用'}</label>
+                    <label class="form-check-label" for="${inputId}">${param.description || '??'}</label>
                 </div>`;
             } else if (param.type === 'number' || param.type === 'range') {
                 html += `<input type="number" class="form-control" id="${inputId}" name="${inputName}" value="${value}">`;
@@ -822,11 +822,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                 input.dispatchEvent(new Event('input'));
                                 input.dispatchEvent(new Event('change'));
                             } else {
-                                showToast('上传失败: ' + result.msg, 'error');
+                                showToast('????: ' + result.msg, 'error');
                             }
                         } catch (error) {
                             console.error('Upload Error:', error);
-                            showToast('上传失败', 'error');
+                            showToast('????', 'error');
                         } finally {
                             uploadBtn.disabled = false;
                             uploadBtn.innerHTML = '<i class="mdi mdi-upload"></i>';
@@ -932,7 +932,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 showToast(result.msg || config.translations.saveFailed, 'error');
             }
         } catch (error) {
-            showToast('保存错误', 'error');
+            showToast('????', 'error');
         }
     }
 
@@ -969,7 +969,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const btn = elements.saveBtn;
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 保存�?..';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ??�?..';
 
         try {
             const response = await fetch(config.urls.saveFileParams, {
@@ -984,7 +984,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 showToast(result.msg || config.translations.saveFailed, 'error');
             }
         } catch (error) {
-            showToast('保存错误: ' + error.message, 'error');
+            showToast('????: ' + error.message, 'error');
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -1033,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const originalHtml = btn ? btn.innerHTML : '';
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ������...';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ������...';
         }
 
         try {
@@ -1087,7 +1087,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const originalHtml = btn ? btn.innerHTML : '';
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ������...';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ������...';
         }
 
         try {
@@ -1122,7 +1122,7 @@ document.addEventListener('DOMContentLoaded', function () {
         elements.loading.classList.add('show');
         const currentSrc = elements.iframe.src;
         
-        // 使用 addEventListener 而不是直接赋�?onload，避免覆盖其他监听器
+        // ?? addEventListener ??????�?onload??????????
         const handleLoad = () => {
             setTimeout(() => {
                 elements.loading.classList.remove('show');
@@ -1250,7 +1250,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Use the first option's meta for the card
             const firstOption = options[0];
-            const name = category === 'default' ? '全局默认' : (firstOption.label || category);
+            const name = category === 'default' ? '????' : (firstOption.label || category);
             const iconClass = getLayoutIcon(category);
 
             const card = document.createElement('div');
@@ -1297,20 +1297,15 @@ document.addEventListener('DOMContentLoaded', function () {
         // Reload parameters for this layout type
         const currentVal = state.configData[area].layouts?.[category] || options[0].value;
 
-        // Navigating the iframe to the preview URL
+        // Navigating the iframe: path=layout 1:1 (no Magento-style alias table).
+        // Dynamic-slug layouts should provide meta.preview_url from the server sample.
         let previewUrl = options[0].meta?.preview_url || '';
         if (!previewUrl) {
-            // Default mapping
-            const map = {
-                'default': '/',
-                'homepage': '/',
-                'product': '/product/view/id/1.html',
-                'category': '/category/view/id/1.html',
-                'cart': '/checkout/cart',
-                'checkout': '/checkout/index',
-                'account': '/customer/account'
-            };
-            previewUrl = map[category] || '/';
+            if (category === 'homepage' || category === 'default') {
+                previewUrl = '/';
+            } else {
+                previewUrl = '/' + String(category || '').replace(/^\/+|\/+$/g, '');
+            }
         }
 
         // Update iframe
@@ -1324,7 +1319,7 @@ document.addEventListener('DOMContentLoaded', function () {
             targetUrl.searchParams.set('preview_theme', config.themeId);
             targetUrl.searchParams.set('area', config.area);
             
-            // 添加加载完成事件处理
+            // ??????????
             const handleLoad = () => {
                 setTimeout(() => {
                     if (elements.loading) {
@@ -1365,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', function () {
             'checkout': 'mdi-shield-check',
             'account': 'mdi-account-circle',
             'cms': 'mdi-file-document-outline',
-            'product_list': 'mdi-view-grid'
+            'products': 'mdi-view-grid'
         };
         return icons[category] || 'mdi-view-dashboard';
     }

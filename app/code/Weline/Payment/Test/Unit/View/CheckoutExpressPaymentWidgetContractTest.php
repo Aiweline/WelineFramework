@@ -22,7 +22,8 @@ final class CheckoutExpressPaymentWidgetContractTest extends TestCase
         );
         self::assertTrue((bool)($widget['params']['enabled']['default'] ?? false));
         self::assertSame('bool', $widget['params']['enabled']['type'] ?? null);
-        self::assertSame('image', $widget['params']['logo']['type'] ?? null);
+        self::assertSame('media_image', $widget['params']['logo']['type'] ?? null);
+        self::assertFalse((bool)($widget['params']['logo']['i18n'] ?? true));
 
         $injection = $widget['default_injections'][0] ?? [];
         self::assertSame('checkout', $injection['layout_type'] ?? null);
@@ -51,6 +52,8 @@ final class CheckoutExpressPaymentWidgetContractTest extends TestCase
         self::assertStringContainsString('justify-content: center', $template);
         self::assertStringContainsString('paypal-express.svg', $template);
         self::assertStringContainsString('payment/method/paypal/express_logo', $template);
+        self::assertStringContainsString('LegacyMediaUrl::sanitize', $template);
+        self::assertStringContainsString('logo_file_html', $template);
         self::assertStringContainsString("getData('logo')", $template);
         self::assertStringContainsString('w-payment-express__logo-img', $template);
         self::assertStringNotContainsString('.w-payment-express__paypal {\n    display: inline-flex', $template);

@@ -11,6 +11,7 @@ use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
+use Weline\Product\Service\StorefrontListingPager;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
 final class Catalog extends FrontendController
@@ -19,6 +20,7 @@ final class Catalog extends FrontendController
         private readonly StorefrontCatalogViewService $catalog,
         private readonly StorefrontCategoryListingFilter $listingFilter,
         private readonly StorefrontCatalogSurfaceResolver $surfaceResolver,
+        private readonly StorefrontListingPager $listingPager,
         private readonly EventsManager $events,
     ) {
     }
@@ -123,23 +125,19 @@ final class Catalog extends FrontendController
 
         $pageOptions = [];
         if (!$isInternalStorefrontChainWarmup && $paged['total_pages'] > 1) {
-            for ($p = 1; $p <= $paged['total_pages']; $p++) {
-                $params = $attributeFilterParams;
-                if ($priceBucket !== '') {
-                    $params['price'] = $priceBucket;
-                }
-                if ($sort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
-                    $params['sort'] = $sort;
-                }
-                if ($p > 1) {
-                    $params['page'] = $p;
-                }
-                $pageOptions[] = [
-                    'page' => $p,
-                    'url' => $this->listingFilter->buildListingUrl($productsUrl, $params),
-                    'selected' => $p === $paged['page'],
-                ];
+            $params = $attributeFilterParams;
+            if ($priceBucket !== '') {
+                $params['price'] = $priceBucket;
             }
+            if ($sort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
+                $params['sort'] = $sort;
+            }
+            $pageOptions = $this->listingPager->buildPageOptions(
+                $productsUrl,
+                (int)$paged['page'],
+                (int)$paged['total_pages'],
+                $params,
+            );
         }
 
         $this->assign('page_title', $surface['title']);

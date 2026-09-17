@@ -57,6 +57,12 @@ final class WlsStrategy implements SessionStrategyInterface
     /** Cookie 生存时间（秒），0 表示浏览器会话 */
     private int $cookieLifetime;
 
+    /** Session Cookie 基名（客户 / 后台分族） */
+    private string $cookieLegacyName;
+
+    /** Session area for candidate Expire */
+    private string $sessionArea;
+
     /**
      * 构造函数
      *
@@ -76,6 +82,11 @@ final class WlsStrategy implements SessionStrategyInterface
         $this->configuredCookiePartitioned = $config['cookie_partitioned'] ?? null;
         $this->cookieSameSite = $this->configuredCookieSameSite !== '' ? $this->configuredCookieSameSite : 'Lax';
         $this->cookieLifetime = (int)($config['cookie_lifetime'] ?? 86400 * 30);
+        $legacy = \trim((string)($config['cookie_legacy_name'] ?? ''));
+        $this->cookieLegacyName = $legacy !== ''
+            ? $legacy
+            : \Weline\Framework\Session\SessionCookieNameResolver::LEGACY_NAME;
+        $this->sessionArea = \trim((string)($config['session_area'] ?? ''));
     }
 
     private function resolveCookiePath(): string
@@ -114,7 +125,10 @@ final class WlsStrategy implements SessionStrategyInterface
         }
 
         if ($sessionId === null || $sessionId === '') {
-            $sessionId = \Weline\Framework\Session\SessionCookieNameResolver::readRequestSessionId();
+            $sessionId = \Weline\Framework\Session\SessionCookieNameResolver::readRequestSessionId(
+                null,
+                $this->sessionArea !== '' ? $this->sessionArea : null,
+            );
         }
 
         if ($sessionId === '') {
@@ -195,7 +209,7 @@ final class WlsStrategy implements SessionStrategyInterface
         // CookieScope::qualifyName once so Session and website cookies share
         // the same active suffix (e.g. _w0) at emission time.
         $cookieName = \Weline\Framework\Session\SessionCookieNameResolver::resolveUnscopedFor(
-            \Weline\Framework\Session\SessionCookieNameResolver::LEGACY_NAME
+            $this->cookieLegacyName
         );
         $secure = $this->resolveCookieSecure();
         $sameSite = $this->resolveCookieSameSite($secure);
@@ -232,7 +246,10 @@ final class WlsStrategy implements SessionStrategyInterface
             : \Weline\Framework\Http\CookieScope::qualifyName($assertedUnscopedName);
         $expire = \time() - 42000;
 
-        foreach (\Weline\Framework\Session\SessionCookieNameResolver::requestCookieCandidates() as $name) {
+        foreach (\Weline\Framework\Session\SessionCookieNameResolver::requestCookieCandidates(
+            null,
+            $this->sessionArea !== '' ? $this->sessionArea : null,
+        ) as $name) {
             $name = \trim((string)$name);
             if ($name === '' || $name === $assertedUnscopedName) {
                 continue;
@@ -273,7 +290,7 @@ final class WlsStrategy implements SessionStrategyInterface
         // unscoped aliases when the scope policy asks for it.
         $headerCollector->setCookie(
             \Weline\Framework\Session\SessionCookieNameResolver::resolveUnscopedFor(
-                \Weline\Framework\Session\SessionCookieNameResolver::LEGACY_NAME
+                $this->cookieLegacyName
             ),
             '',
             $expire,
@@ -286,8 +303,14 @@ final class WlsStrategy implements SessionStrategyInterface
 
         // When CookieScope is inactive, also expire sibling scoped/legacy names
         // still present on the request so logout cannot leave QueryBin logged in.
-        foreach (\Weline\Framework\Session\SessionCookieNameResolver::requestCookieCandidates() as $name) {
-            if ($name === \Weline\Framework\Session\SessionCookieNameResolver::resolve()) {
+        foreach (\Weline\Framework\Session\SessionCookieNameResolver::requestCookieCandidates(
+            null,
+            $this->sessionArea !== '' ? $this->sessionArea : null,
+        ) as $name) {
+            if ($name === \Weline\Framework\Session\SessionCookieNameResolver::resolve(
+                null,
+                $this->sessionArea !== '' ? $this->sessionArea : null,
+            )) {
                 continue;
             }
             $headerCollector->setCookie(

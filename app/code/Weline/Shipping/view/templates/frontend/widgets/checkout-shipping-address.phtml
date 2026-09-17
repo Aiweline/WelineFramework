@@ -44,7 +44,8 @@ $context = [
 
 try {
     if (class_exists(\Weline\Checkout\Service\CheckoutDeliveryContextService::class)) {
-        $context = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutDeliveryContextService::class)->getContext();
+        $context = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutDeliveryContextService::class)
+            ->getContext(['address_purpose' => 'checkout']);
     }
 } catch (\Throwable) {
     // Checkout 可选：部件仍渲染可编辑表单
@@ -109,14 +110,18 @@ $ui = [
     'save_use' => (string)__('保存此地址'),
     'billing_same' => (string)__('账单地址与收货地址相同'),
     'billing_title' => (string)__('账单地址'),
+    'billing_saved_heading' => (string)__('选择账单地址'),
+    'billing_saved' => (string)__('账单地址已保存。'),
     'shipping_title' => $title,
     'saved_heading' => $savedHeading,
     'change_address' => (string)__('更换地址'),
     'done_change' => (string)__('收起地址列表'),
     'load_addresses_failed' => (string)__('地址列表加载失败，请稍后重试。'),
     'embargo_hint' => (string)__('该地址所在地区暂不支持配送（禁运）。'),
+    'also_use_receiving' => (string)__('同时用作收货地址'),
     'err_name' => (string)__('请填写收货人。'),
     'err_phone' => (string)__('请填写电话。'),
+    'err_phone_invalid' => (string)__('电话号码格式不正确'),
     'err_address1' => (string)__('请填写详细地址。'),
 ];
 ?>
@@ -234,6 +239,7 @@ $ui = [
         </div>
 
         <div class="w-shipping-checkout-address__editor"
+             id="checkout-shipping-address-editor"
              data-address-editor
              data-shipping-editor
              <?= $hasSaved ? 'hidden' : '' ?>>
@@ -245,7 +251,7 @@ $ui = [
                 </div>
                 <div class="w-field w-shipping-checkout-address__field">
                     <label class="w-field__label"><?= __('电话') ?></label>
-                    <input class="w-input" name="phone" type="tel" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping tel" value="<?= $esc($seed['phone']) ?>" placeholder="<?= $esc(__('请输入联系电话')) ?>" data-shipping-field>
+                    <input class="w-input" name="phone" type="tel" inputmode="tel" maxlength="32" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping tel" value="<?= $esc($seed['phone']) ?>" placeholder="<?= $esc(__('请输入联系电话')) ?>" data-shipping-field data-phone-field>
                     <span class="w-shipping-checkout-address__field-error" data-field-error-for="phone" role="alert" hidden></span>
                 </div>
                 <div class="w-field w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
@@ -274,13 +280,19 @@ $ui = [
                     <span class="w-shipping-checkout-address__field-error" data-field-error-for="address1" role="alert" hidden></span>
                 </div>
             </div>
+            <label class="w-shipping-checkout-address__same" data-also-use-receiving-wrap>
+                <input type="checkbox" name="also_use_receiving" value="1" checked data-also-use-receiving>
+                <span><?= $esc((string)__('同时用作收货地址')) ?></span>
+            </label>
             <?php /* 始终渲染：登录无已存地址时也可点「保存此地址」收起为卡片；不点仍可用表单下单 */ ?>
             <div class="w-shipping-checkout-address__editor-actions">
                 <?php if (!$isLoggedIn): ?>
                 <div class="w-shipping-checkout-address__captcha"
                      data-weline-captcha-lazy
                      data-form-id="checkout-shipping-address-editor"
-                     data-intent="checkout.save_delivery_address"></div>
+                     data-intent="checkout.save_delivery_address"
+                     data-challenge-route="weline_captcha/frontend/challenge"></div>
+                <?= \Weline\Captcha\Service\LazyCaptchaClientRuntime::onceScriptHtml() ?>
                 <?php endif; ?>
                 <div class="w-shipping-checkout-address__editor-action-row">
                     <p class="w-shipping-checkout-address__message" data-shipping-message aria-live="polite" hidden></p>
@@ -306,8 +318,25 @@ $ui = [
             <input type="checkbox" name="billing_same_as_shipping" value="1" checked data-billing-same>
             <span><?= $esc($ui['billing_same']) ?></span>
         </label>
+        <div class="w-shipping-checkout-address__saved"
+             data-billing-saved
+             hidden>
+            <div class="w-shipping-checkout-address__saved-toolbar">
+                <p class="w-shipping-checkout-address__saved-label"><?= $esc($ui['billing_saved_heading']) ?></p>
+                <button type="button"
+                        class="w-shipping-checkout-address__link-btn"
+                        data-change-billing-address
+                        aria-expanded="false"
+                        hidden>
+                    <?= $esc($ui['change_address']) ?>
+                </button>
+            </div>
+            <div class="w-shipping-checkout-address__cards" data-billing-cards role="radiogroup" aria-label="<?= $esc($ui['billing_saved_heading']) ?>"></div>
+            <button type="button" class="w-shipping-checkout-address__link-btn" data-add-billing-address>
+                <?= $esc($ui['add_new']) ?>
+            </button>
+        </div>
         <div class="w-shipping-checkout-address__editor" data-billing-editor hidden>
-            <?php /* 账单区不用第二套 theme:address，避免与收货级联争用 form 内 country_code 等元数据字段 */ ?>
             <div class="w-shipping-checkout-address__grid">
                 <div class="w-field w-shipping-checkout-address__field">
                     <label class="w-field__label"><?= __('收货人') ?></label>
@@ -315,40 +344,56 @@ $ui = [
                 </div>
                 <div class="w-field w-shipping-checkout-address__field">
                     <label class="w-field__label"><?= __('电话') ?></label>
-                    <input class="w-input" name="billing_phone" type="tel" autocomplete="billing tel" value="" placeholder="<?= $esc(__('请输入联系电话')) ?>" data-billing-field disabled>
+                    <input class="w-input" name="billing_phone" type="tel" inputmode="tel" maxlength="32" autocomplete="billing tel" value="" placeholder="<?= $esc(__('请输入联系电话')) ?>" data-billing-field data-phone-field disabled>
+                    <span class="w-shipping-checkout-address__field-error" data-field-error-for="billing_phone" role="alert" hidden></span>
                 </div>
                 <div class="w-field w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
                     <label class="w-field__label"><?= __('邮箱') ?></label>
                     <input class="w-input" name="billing_email" type="email" autocomplete="email" value="" placeholder="<?= $esc(__('请输入邮箱地址')) ?>" data-billing-field disabled>
                 </div>
                 <div class="w-field w-shipping-checkout-address__field">
-                    <label class="w-field__label"><?= __('国家/地区') ?></label>
-                    <input class="w-input" name="billing_country_code" type="text" maxlength="8" value="CN" data-billing-field disabled placeholder="CN">
+                    <label class="w-field__label"><lang>邮编</lang></label>
+                    <input class="w-input" name="billing_postal_code" type="text" autocomplete="billing postal-code" value="" placeholder="<?= $esc(__('请输入邮政编码')) ?>" data-billing-field data-postal-first disabled>
                 </div>
-                <div class="w-field w-shipping-checkout-address__field">
-                    <label class="w-field__label"><?= __('省份') ?></label>
-                    <input class="w-input" name="billing_province" type="text" autocomplete="address-level1" value="" placeholder="<?= $esc(__('请填写省份')) ?>" data-billing-field disabled>
-                </div>
-                <div class="w-field w-shipping-checkout-address__field">
-                    <label class="w-field__label"><?= __('城市') ?></label>
-                    <input class="w-input" name="billing_city" type="text" autocomplete="address-level2" value="" placeholder="<?= $esc(__('请填写城市')) ?>" data-billing-field disabled>
-                </div>
-                <div class="w-field w-shipping-checkout-address__field">
-                    <label class="w-field__label"><?= __('区县') ?></label>
-                    <input class="w-input" name="billing_district" type="text" autocomplete="address-level3" value="" placeholder="<?= $esc(__('请填写区县')) ?>" data-billing-field disabled>
+                <div class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide" data-billing-address-cascade>
+                    <?php /* meta-prefix 避免与收货 theme:address 争用 form 内 country_code 等元数据字段 */ ?>
+                    <w:theme:address
+                        levels="country,province,city"
+                        code="checkout-billing-address"
+                        searchable="true"
+                        cascade="true"
+                        district="true"
+                        postal="false"
+                        postal-lookup="true"
+                        postal-name="billing_postal_code"
+                        meta-prefix="billing_"
+                        country-name="billing_country"
+                        province-name="billing_province"
+                        city-name="billing_city"
+                        district-name="billing_district"
+                        street-name="billing_street" />
                 </div>
                 <div class="w-field w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
                     <label class="w-field__label"><?= __('详细地址') ?></label>
                     <input class="w-input" name="billing_address1" type="text" autocomplete="billing street-address" value="" placeholder="<?= $esc(__('门牌号 / 楼栋单元等')) ?>" data-billing-field disabled>
                 </div>
-                <div class="w-field w-shipping-checkout-address__field">
-                    <label class="w-field__label"><?= __('邮编') ?></label>
-                    <input class="w-input" name="billing_postal_code" type="text" autocomplete="billing postal-code" value="" placeholder="<?= $esc(__('请输入邮政编码')) ?>" data-billing-field disabled>
+            </div>
+            <div class="w-shipping-checkout-address__editor-actions">
+                <div class="w-shipping-checkout-address__editor-action-row">
+                    <p class="w-shipping-checkout-address__message" data-billing-message aria-live="polite" hidden></p>
+                    <div class="w-shipping-checkout-address__editor-action-buttons">
+                        <button type="button" class="w-shipping-checkout-address__secondary-btn" data-cancel-billing-edit hidden>
+                            <?= $esc($ui['cancel']) ?>
+                        </button>
+                        <button type="button" class="w-shipping-checkout-address__primary-btn" data-use-billing-address>
+                            <?= $esc($ui['save_use']) ?>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <?php endif; ?>
 </section>
-<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260910-csa-embargo1">
+<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260916-phone-intl1">
 <?php // shippingCheckoutAddress：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

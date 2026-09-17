@@ -338,6 +338,13 @@
         if (checkbox) {
             checkbox.checked = !!data.is_default;
         }
+        var alsoCheckout = form.querySelector('[data-also-use-checkout]');
+        if (alsoCheckout) {
+            // 收货新建默认不打结账标；编辑时仅当已有结账标才勾选（只加标不摘标，取消勾选不会摘标）。
+            alsoCheckout.checked = !!(data.purpose_checkout === 1
+                || data.purpose_checkout === '1'
+                || data.purpose_checkout === true);
+        }
         form.querySelector('[data-address-form-title]').textContent = (data.id ? labels.edit : labels.add) + (panel.dataset.addressPanel === 'delivery' ? labels.deliveryAddress : labels.shippingAddress);
         wrap.hidden = false;
         wrap.scrollIntoView({behavior: 'smooth', block: 'nearest'});
@@ -372,6 +379,14 @@
                 payload[field] = Number(value);
             }
         });
+        if (payload.purpose_source === 'receiving') {
+            payload.also_use_checkout = Object.prototype.hasOwnProperty.call(payload, 'also_use_checkout')
+                && (payload.also_use_checkout === 1
+                    || payload.also_use_checkout === '1'
+                    || payload.also_use_checkout === true)
+                ? 1
+                : 0;
+        }
         return payload;
     }
 

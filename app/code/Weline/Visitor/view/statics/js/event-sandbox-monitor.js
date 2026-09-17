@@ -17,11 +17,11 @@
     var LEGACY_COOKIE_ON = 'weline_lifecycle_assistant';
     var ROOT_ID = 'weline-event-sandbox-monitor';
     var STYLE_ATTR = 'data-weline-event-sandbox-monitor-style';
-    var STYLE_VERSION = '20260911-event-sandbox-monitor9';
+    var STYLE_VERSION = '20260916-event-sandbox-monitor10';
     var PANEL_COLLAPSE_EVENT = 'weline:dev-tool-panel:collapsed';
     var MAX_ROWS = 120;
     var MAX_CHAIN_ROWS = 200;
-    var TAB_IDS = { system: 1, custom: 1, previous: 1, chain: 1, stream: 1 };
+    var TAB_IDS = { system: 1, custom: 1, dedupe: 1, previous: 1, chain: 1, stream: 1 };
 
     var LIFECYCLE_CHAIN = [
         { id: 'order-created', label: '订单已创建', match: ['weline:checkout:order-created'] },
@@ -402,6 +402,7 @@
             '#' + ROOT_ID + ' .wesm-row__params{cursor:text;user-select:text;-webkit-user-select:text}',
             '#' + ROOT_ID + ' .wesm-row[data-tone="hit-system"]{border-color:var(--weline-color-success,#22c55e);background:color-mix(in srgb,var(--weline-color-success,#22c55e) 16%,transparent)}',
             '#' + ROOT_ID + ' .wesm-row[data-tone="hit-custom"]{border-color:var(--weline-color-info,#3b82f6);background:color-mix(in srgb,var(--weline-color-info,#3b82f6) 16%,transparent)}',
+            '#' + ROOT_ID + ' .wesm-row[data-tone="hit-dedupe"]{border-color:var(--weline-color-warning,#eab308);background:color-mix(in srgb,var(--weline-color-warning,#eab308) 18%,transparent)}',
             '#' + ROOT_ID + ' .wesm-row[data-tone="hit"]{border-color:var(--weline-color-success,#22c55e);background:color-mix(in srgb,var(--weline-color-success,#22c55e) 16%,transparent)}',
             '#' + ROOT_ID + ' .wesm-row[data-tone="anomaly"]{border-color:var(--weline-color-primary,#f59e0b);background:color-mix(in srgb,var(--weline-color-primary,#f59e0b) 18%,transparent)}',
             '#' + ROOT_ID + ' .wesm-row__top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}',
@@ -442,6 +443,7 @@
         var kind = String(row.hit_kind || '').toLowerCase();
         if (kind === 'custom') return 'hit-custom';
         if (kind === 'system') return 'hit-system';
+        if (kind === 'dedupe') return 'hit-dedupe';
         // 兼容旧 envelope：无 hit_kind 时按自定义蓝（历史文案曾一律「自定义」）
         return 'hit-custom';
     }
@@ -449,6 +451,7 @@
     function hitBadgeLabel(row, tone) {
         var label = text(row.event_name || row.name);
         if (tone === 'hit-system') return '系统事件 · ' + label;
+        if (tone === 'hit-dedupe') return '去重丢弃 · ' + label;
         if (tone === 'hit-custom' || tone === 'hit') return '自定义事件 · ' + label;
         return '流过';
     }
@@ -639,9 +642,11 @@
             if (row.anomaly || (row.missing && row.missing.length)) return;
             var hk = String(row.hit_kind || '').toLowerCase();
             var isSystem = hk === 'system';
-            var isCustom = !isSystem; // 空 hit_kind 的历史命中按自定义
+            var isDedupe = hk === 'dedupe';
+            var isCustom = !isSystem && !isDedupe; // 空 hit_kind 的历史命中按自定义
             if (kind === 'system' && !isSystem) return;
             if (kind === 'custom' && !isCustom) return;
+            if (kind === 'dedupe' && !isDedupe) return;
             var name = text(row.event_name || row.name);
             if (!name) return;
             counts[name] = (counts[name] || 0) + 1;
@@ -667,11 +672,14 @@
         if (!root || !state.enabled) return;
         var hitSys = 0;
         var hitCustom = 0;
+        var hitDedupe = 0;
         var bad = 0;
         state.rows.forEach(function (row) {
             if (row.anomaly || (row.missing && row.missing.length)) bad += 1;
             else if (row.event_hit) {
-                if (String(row.hit_kind || '').toLowerCase() === 'system') hitSys += 1;
+                var hk = String(row.hit_kind || '').toLowerCase();
+                if (hk === 'system') hitSys += 1;
+                else if (hk === 'dedupe') hitDedupe += 1;
                 else hitCustom += 1;
             }
         });
@@ -686,6 +694,9 @@
         } else if (tab === 'custom') {
             bodyHtml = '<div class="wesm-sec">自定义命中</div>'
                 + hitListHtml(hitAggregate(state.rows, 'custom'), '本会话尚无自定义事件命中。', 'hit-custom');
+        } else if (tab === 'dedupe') {
+            bodyHtml = '<div class="wesm-sec">去重丢弃（本地/约定参数拦截，未上报）</div>'
+                + hitListHtml(hitAggregate(state.rows, 'dedupe'), '本会话尚无去重丢弃。', 'hit-dedupe');
         } else if (tab === 'previous') {
             bodyHtml = '<div class="wesm-sec">上一页事件'
                 + (state.previous && state.previous.path ? (' · ' + esc(state.previous.path)) : '')
@@ -710,20 +721,22 @@
             '<div class="wesm-head" data-wesm-drag="1">',
             '<div><div class="wesm-title">事件监视 <span class="wesm-rev" data-testid="wesm-config-revision" title="站点·店铺·渠道·配置版本（与后台对齐）">' + esc(formatScopeVersionLabel()) + '</span></div>',
             '<div class="wesm-meta">沙盒流 · ' + esc(formatScopeVersionLabel()) + ' · ' + state.rows.length + ' 条 · 系统 ' + hitSys + ' · 自定义 ' + hitCustom
-                + ' · 上一页 ' + prevCount + ' · 链 ' + chainCount + ' · 异常 ' + bad + '</div></div>',
+                + ' · 去重 ' + hitDedupe + ' · 上一页 ' + prevCount + ' · 链 ' + chainCount + ' · 异常 ' + bad + '</div></div>',
             '<button type="button" class="wesm-close" data-wesm-action="close" aria-label="关闭事件监视" title="关闭并清理">×</button>',
             '</div>',
             '<div class="wesm-tabs">',
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="system" data-active="' + (tab === 'system' ? '1' : '0') + '">系统命中 ' + hitSys + '</button>',
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="custom" data-active="' + (tab === 'custom' ? '1' : '0') + '">自定义命中 ' + hitCustom + '</button>',
+            '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="dedupe" data-active="' + (tab === 'dedupe' ? '1' : '0') + '">去重丢弃 ' + hitDedupe + '</button>',
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="previous" data-active="' + (tab === 'previous' ? '1' : '0') + '" title="保存的上一页事件">上一页 ' + prevCount + '</button>',
+
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="chain" data-active="' + (tab === 'chain' ? '1' : '0') + '" title="累积链监听">累积链 ' + chainCount + '</button>',
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="stream" data-active="' + (tab === 'stream' ? '1' : '0') + '">数据流 ' + state.rows.length + '</button>',
             '</div>',
             '<div class="wesm-body">',
             bodyHtml,
             '</div>',
-            '<div class="wesm-foot">可拖动标题栏；点 × 关闭并清理。上一页/累积链跨页保存于本会话。数据流内高级事件链进度条保留。绿=系统命中，蓝=自定义命中。</div>'
+            '<div class="wesm-foot">可拖动标题栏；点 × 关闭并清理。上一页/累积链跨页保存于本会话。数据流内高级事件链进度条保留。绿=系统命中，蓝=自定义命中，黄=去重丢弃（记流不发）。</div>'
         ].join('');
         applyPosition(root);
         bindChrome(root);
@@ -870,13 +883,33 @@
         tick();
     }
 
+    function onSandboxCustomEvent(ev) {
+        try {
+            onEnvelope(ev && ev.detail);
+        } catch (eCust) {}
+    }
+
     function bindStream() {
         if (state.unsub) {
             try { state.unsub(); } catch (e) {}
             state.unsub = null;
         }
+        try {
+            global.removeEventListener('weline:pixel-sandbox:event', onSandboxCustomEvent);
+        } catch (eRm) {}
+        // CustomEvent 兜底：subscribe 竞态或沙盒对象被替换时仍能进监视流
+        try {
+            global.addEventListener('weline:pixel-sandbox:event', onSandboxCustomEvent);
+        } catch (eAdd) {}
         waitSandbox(function (sb) {
             state.unsub = sb.subscribe(onEnvelope);
+            // 订阅后再扫一次环形缓冲（兼容旧 subscribe 无回放）
+            try {
+                var buf = Array.isArray(sb._earlyBuffer) ? sb._earlyBuffer.slice() : [];
+                for (var i = 0; i < buf.length; i++) {
+                    onEnvelope(buf[i]);
+                }
+            } catch (eBuf) {}
         });
     }
 
@@ -979,7 +1012,7 @@
         render: render,
         getConfigRevision: readConfigRevision,
         setConfigRevision: setConfigRevision,
-        version: '20260911-event-sandbox-monitor9'
+        version: '20260916-event-sandbox-monitor10'
     };
 
     global.WelineEventSandboxMonitor = api;

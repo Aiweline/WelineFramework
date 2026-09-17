@@ -26,29 +26,33 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         );
     }
 
-    public function testCustomerLoginUriResolvesToAccountDotAuth(): void
+    public function testCustomerLoginUriResolvesToAccountSlashLogin(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'account.auth',
+            'account/login',
             $resolver->resolveLayoutTypeFromUri('https://shop.example/customer/account/login')
+        );
+        $this->assertSame(
+            ThemeLayout::PAGE_TYPE_ACCOUNT,
+            $resolver->mapLayoutTypeToPageType('account/login')
         );
     }
 
-    public function testCustomerRegisterUriResolvesToAccountDotAuth(): void
+    public function testCustomerRegisterUriResolvesToAccountSlashRegister(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'account.auth',
+            'account/register',
             $resolver->resolveLayoutTypeFromUri('/customer/account/register')
         );
     }
 
-    public function testCustomerForgotUriResolvesToAccountDotAuth(): void
+    public function testCustomerForgotUriResolvesToAccountSlashForgotPassword(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'account.auth',
+            'account/forgot-password',
             $resolver->resolveLayoutTypeFromUri('/zh_CN/customer/account/forgot-password')
         );
     }
@@ -84,16 +88,20 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         );
     }
 
-    public function testProductPreviewRouteUsesThemeVisualContent(): void
+    public function testProductPreviewRouteEqualsLayoutPathNotContentShell(): void
     {
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
-            'theme/frontend/theme-preview/content',
+            'product',
             $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
         );
         $this->assertStringNotContainsString(
-            'product/default',
+            'theme-preview/content',
             $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
+        );
+        $this->assertSame(
+            'product/benq-screenbar',
+            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT, 'product/benq-screenbar')
         );
     }
 

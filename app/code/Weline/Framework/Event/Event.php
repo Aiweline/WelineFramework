@@ -14,8 +14,10 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Console\Event\Data;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Output\Cli\Printing as CliPrinting;
 use Weline\Framework\Output\Debug\Printing;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
+use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Event extends \Weline\Framework\DataObject\DataObject
@@ -223,6 +225,10 @@ class Event extends \Weline\Framework\DataObject\DataObject
         }
 
         $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $upgradeAfterProgress = PHP_SAPI === 'cli'
+            && $this->getName() === 'Weline_Framework_Setup::upgrade_after';
+        $upgradeAfterTotal = $upgradeAfterProgress ? count($observers) : 0;
+        $upgradeAfterStep = 0;
         
         // 遍历观察者配置，按需实例化并执行
         // 注意：模块激活状态已在 EventsManager::filterActiveObservers() 中过滤，此处不再重复检查
@@ -250,8 +256,22 @@ class Event extends \Weline\Framework\DataObject\DataObject
                     }
                     continue;
                 }
+
+                $upgradeAfterStep++;
+                $observerName = (string)($observerConfig['name'] ?? $observerClass);
+                $observerSort = (string)($observerConfig['sort'] ?? '0');
+                if ($upgradeAfterProgress) {
+                    $this->printUpgradeAfterObserverProgress(
+                        'start',
+                        $upgradeAfterStep,
+                        $upgradeAfterTotal,
+                        $observerName,
+                        $observerClass,
+                        $observerSort
+                    );
+                }
                 
-                $observerSpanStart = $traceEnabled ? microtime(true) : 0.0;
+                $observerSpanStart = microtime(true);
                 $observerSpanName = null;
                 if ($traceEnabled) {
                     $observerSpanName = 'observer::' . str_replace('\\', '::', get_class($observer));
@@ -269,9 +289,20 @@ class Event extends \Weline\Framework\DataObject\DataObject
                         RequestLifecycleTrace::popCurrentParent();
                     }
                 }
-                if ($observerSpanStart > 0 && $observerSpanName !== null) {
-                    $observerDurationMs = (microtime(true) - $observerSpanStart) * 1000;
+                $observerDurationMs = (microtime(true) - $observerSpanStart) * 1000;
+                if ($traceEnabled && $observerSpanName !== null) {
                     RequestLifecycleTrace::recordSpan($observerSpanName, $observerDurationMs, 'observer', 'event::' . $this->getName());
+                }
+                if ($upgradeAfterProgress) {
+                    $this->printUpgradeAfterObserverProgress(
+                        'done',
+                        $upgradeAfterStep,
+                        $upgradeAfterTotal,
+                        $observerName,
+                        $observerClass,
+                        $observerSort,
+                        $observerDurationMs
+                    );
                 }
             } catch (\Exception $e) {
                 // 实例化失败，跳过该观察者
@@ -318,6 +349,68 @@ class Event extends \Weline\Framework\DataObject\DataObject
         echo str_repeat("-", 80) . "\n";
         echo sprintf("%-50s %-15s %-15s %s\n", __("Class Name"), __("Start Time"), __("End Time"), __("Duration"));
         echo str_repeat("-", 80) . "\n";
+    }
+
+    /**
+     * setup:upgrade 的 upgrade_after 观察者链可能很长且多数无自带日志；CLI 下强制逐步打印，避免“卡住无输出”。
+     */
+    private function printUpgradeAfterObserverProgress(
+        string $phase,
+        int $step,
+        int $total,
+        string $observerName,
+        string $observerClass,
+        string $sort,
+        ?float $durationMs = null
+    ): void {
+        $shortClass = $observerClass;
+        $pos = strrpos($observerClass, '\\');
+        if ($pos !== false) {
+            $shortClass = substr($observerClass, $pos + 1);
+        }
+
+        if ($phase === 'start') {
+            $message = __('升级后观察者开始 [%{step}/%{total}] sort=%{sort} %{name} (%{class})', [
+                'step' => $step,
+                'total' => $total,
+                'sort' => $sort,
+                'name' => $observerName,
+                'class' => $shortClass,
+            ]);
+        } else {
+            $message = __('升级后观察者完成 [%{step}/%{total}] sort=%{sort} %{name}，耗时 %{ms}ms', [
+                'step' => $step,
+                'total' => $total,
+                'sort' => $sort,
+                'name' => $observerName,
+                'ms' => number_format((float)$durationMs, 1),
+            ]);
+        }
+
+        try {
+            /** @var CliPrinting $printing */
+            $printing = ObjectManager::getInstance(CliPrinting::class);
+            if ($phase === 'start') {
+                $printing->note($message);
+            } else {
+                $printing->success($message);
+            }
+        } catch (\Throwable) {
+            echo (string)$message . PHP_EOL;
+        }
+
+        RegistryProgress::log((string)$message);
+
+        if (\defined('STDOUT') && \is_resource(STDOUT)) {
+            \fflush(STDOUT);
+        }
+        if (\defined('STDERR') && \is_resource(STDERR)) {
+            \fflush(STDERR);
+        }
+        if (function_exists('ob_flush')) {
+            @ob_flush();
+        }
+        flush();
     }
     
     /**

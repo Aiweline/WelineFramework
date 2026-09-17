@@ -48,8 +48,11 @@
 只读查看站点检测、证据、发布与实验实时状态。,"Read-only view of site detection, evidence, publishing and experiment real-time status."
 "SEO 事件表现分析","SEO Event Performance Analysis"
 将汇总的访客与搜索证据转换为一条有边界的结构化优化建议。,"Converts aggregated Visitor/Search evidence into one bounded structured recommendation."
-"SEO 站内重复内容","SEO on-site duplicate content"
+"已绑定 SEO 站点账户。","已绑定 SEO 站点账户。"
+"绑定 Search Console / 分析账户后才能推送与诊断。","绑定 Search Console / 分析账户后才能推送与诊断。"
 SEO,SEO
+"SEO 站点账户绑定","SEO 站点账户绑定"
+"SEO 站内重复内容","SEO on-site duplicate content"
 站内正文近重复检测报告（消息内含报告查看地址）,"On-site near-duplicate report (message includes report URL)"
 "SEO Sitemap","SEO Sitemap"
 "Sitemap 提交与账户绑定相关提示","Sitemap 提交与账户绑定相关提示"

@@ -62,4 +62,17 @@ final class SetupUpgradeObserverTest extends TestCase
             'version' => '2.1.0',
         ]));
     }
+
+    public function testIdleModuleMigrationOutputIsCompressed(): void
+    {
+        $source = (string)file_get_contents(dirname(__DIR__) . '/Observer/SetupUpgradeObserver.php');
+
+        self::assertStringNotContainsString('检查模块: {$moduleName}', $source);
+        self::assertStringNotContainsString('没有待执行的迁移', $source);
+        self::assertStringNotContainsString('setStickyFooter', $source);
+        self::assertStringContainsString('迁移检查完成：共 %{total}', $source);
+        self::assertStringContainsString('▶ %{module}：%{count} 个待执行迁移', $source);
+        self::assertStringContainsString('迁移检查进度 %{i}/%{total}', $source);
+        self::assertStringContainsString('flushCli', $source);
+    }
 }

@@ -44,6 +44,19 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         self::assertStringContainsString('workerRecoverPromise', $script);
     }
 
+    public function testWorkerRejectsQueryBinRedirectsAndSurfacesNonBinaryHeads(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/weline-api-worker.js',
+        );
+        self::assertStringContainsString("redirect: 'manual'", $script);
+        self::assertStringContainsString('function assertBinaryFetchResponse(response)', $script);
+        self::assertStringContainsString('Query-bin redirected instead of returning WQB1', $script);
+        self::assertStringContainsString('function describeResponseBytes(responseBytes)', $script);
+        self::assertStringContainsString('got HTML instead of WQB1', $script);
+        self::assertStringContainsString('head_hex=', $script);
+    }
+
     public function testWorkerDetectMaintenanceRequiresExplicitSignal(): void
     {
         $script = (string)file_get_contents(

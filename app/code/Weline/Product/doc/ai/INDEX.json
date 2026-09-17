@@ -1,0 +1,40 @@
+{
+  "module": "Weline_Product",
+  "skills": [
+    {
+      "skill_id": "doc:ecommerce-product-optimize",
+      "name": "ecommerce-product-optimize",
+      "aliases": ["ecommerce-product-optimize", "产品优化", "商品优化", "product optimize"],
+      "path": "app/code/Weline/Product/doc/ai/skills/ecommerce-product-optimize/SKILL.md",
+      "description": "Parent product optimize: parallel image + detail + i18n subagents."
+    },
+    {
+      "skill_id": "doc:ecommerce-product-image",
+      "name": "ecommerce-product-image",
+      "aliases": ["ecommerce-product-image", "主图优化", "规格图优化"],
+      "path": "app/code/Weline/Product/doc/ai/skills/ecommerce-product-image/SKILL.md",
+      "description": "Product main/gallery/variant image pipeline (slot ①)."
+    },
+    {
+      "skill_id": "doc:ecommerce-detail-suite",
+      "name": "ecommerce-detail-suite",
+      "aliases": ["ecommerce-detail-suite", "详情优化", "商详优化"],
+      "path": "app/code/Weline/Product/doc/ai/skills/ecommerce-detail-suite/SKILL.md",
+      "description": "Ecommerce detail page suite (slot ②)."
+    },
+    {
+      "skill_id": "doc:ecommerce-product-i18n",
+      "name": "ecommerce-product-i18n",
+      "aliases": ["ecommerce-product-i18n", "翻译优化", "商品翻译"],
+      "path": "app/code/Weline/Product/doc/ai/skills/ecommerce-product-i18n/SKILL.md",
+      "description": "Product listing i18n across default-website locales (slot ③)."
+    },
+    {
+      "skill_id": "doc:weline-product-knowledge",
+      "name": "weline-product-knowledge",
+      "aliases": ["weline-product-knowledge"],
+      "path": "app/code/Weline/Product/doc/ai/skills/weline-product-knowledge/SKILL.md",
+      "description": "Product module knowledge locator for storefront/admin product surfaces."
+    }
+  ]
+}

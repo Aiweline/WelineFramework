@@ -73,6 +73,10 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $this->assertStringContainsString('waitForWelineLoad', $content);
         $this->assertStringContainsString('weline.load(', $content);
         $this->assertStringContainsString('loadCustomerServiceScriptFallback', $content);
+        $this->assertStringContainsString('CS_POST_LOAD_DELAY_MS = 3000', $content);
+        $this->assertStringContainsString("addEventListener('load', scheduleCustomerServiceWidget", $content);
+        $this->assertStringNotContainsString('requestIdleCallback', $content);
+        $this->assertStringContainsString('cs-presence-dot', $content);
         $this->assertStringNotContainsString(
             "@static(Weline_CustomerService::js/customer-service.js)",
             $content

@@ -18,7 +18,7 @@
  * @param enabled {default=true,type="bool",label="展示快捷支付"}
  * @param title {default="快捷支付",type="string",label="标题"}
  * @param method_code {default="paypal",type="string",label="支付方式代码"}
- * @param logo {default="",type="image",label="快捷支付 Logo"}
+ * @param logo {default="",type="media_image",label="快捷支付 Logo",description="从媒体库选择 Logo；留空用支付方式默认图",i18n=false}
  */
 
 use Weline\Framework\Manager\ObjectManager;
@@ -27,6 +27,7 @@ use Weline\Payment\Service\ExpressCheckoutOrchestrator;
 use Weline\Payment\Service\PaymentMethodIconResolver;
 use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\SystemConfig\Api\ConfigStore;
+use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -58,9 +59,10 @@ $titleSource = trim((string) ($this->getData('title') ?? '')) ?: '快捷支付';
 $title = WidgetI18n::label($titleSource, '快捷支付');
 $configMethod = strtolower(trim((string) ($this->getData('method_code') ?? 'paypal'))) ?: 'paypal';
 $hint = (string) __('使用支付商账户直接付款，地址可由支付商带回');
+$moreLabel = (string) __('更多支付说明');
 $defaultLogoRef = 'Weline_Payment::img/payment/paypal-express.svg';
 $logoFileHtml = trim((string) ($this->getData('logo_file_html') ?? ''));
-$logoRaw = trim((string) ($this->getData('logo') ?? ''));
+$logoRaw = LegacyMediaUrl::sanitize($this->getData('logo') ?? '');
 $iconResolver = ObjectManager::getInstance(PaymentMethodIconResolver::class);
 
 $expressMethods = [];
@@ -90,7 +92,7 @@ if ($logoFileHtml === '' && $logoRaw === '') {
     }
 }
 ?>
-<section class="w-payment-express w-payment-express--pdp <?= $esc($wc) ?>"
+<section class="w-payment-express w-payment-express--pdp w-payment-express--collapsible <?= $esc($wc) ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-testid="product-express-payment"
@@ -101,11 +103,8 @@ if ($logoFileHtml === '' && $logoRaw === '') {
          data-product-id="<?= (int) $productId ?>"
          data-global-offer-uuid="<?= $esc($offerUuid) ?>"
          data-checkout-base="@url{'checkout'}">
-    <header class="w-payment-express__header">
-        <h2 class="w-payment-express__title"><?= $esc($title) ?></h2>
-        <p class="w-payment-express__hint"><?= $esc($hint) ?></p>
-    </header>
-    <div class="w-payment-express__methods" role="group" aria-label="<?= $esc($title) ?>">
+    <?php /* PayPal 等快捷按钮始终展示；说明文案默认收起，底部居中箭头展开 */ ?>
+    <div class="w-payment-express__methods w-payment-express__methods--always" role="group" aria-label="<?= $esc($title) ?>">
         <?php foreach ($expressMethods as $method):
             $code = strtolower(trim((string) ($method['method_code'] ?? '')));
             if ($code === '') {
@@ -151,51 +150,102 @@ if ($logoFileHtml === '' && $logoRaw === '') {
         </button>
         <?php endforeach; ?>
     </div>
+    <details class="w-payment-express__disclosure">
+        <summary class="w-payment-express__summary w-payment-express__summary--more"
+                 aria-label="<?= $esc($moreLabel) ?>">
+            <span class="w-payment-express__more-label"><?= $esc($moreLabel) ?></span>
+            <span class="w-payment-express__chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="w-payment-express__panel">
+            <p class="w-payment-express__hint"><?= $esc($hint) ?></p>
+        </div>
+    </details>
 </section>
 <style>
 .w-payment-express--pdp {
-    --express-gap: var(--weline-space-3, var(--space-3, 0.75rem));
+    --express-gap: var(--weline-space-2, var(--space-2, 0.5rem));
     --express-paypal-bg: #ffc439;
     --express-paypal-bg-hover: #f2bb36;
     --express-text: var(--color-text-primary, #0f1111);
     --express-btn-min: 148px;
     --express-btn-max: 200px;
     margin-block: var(--express-gap);
-    padding: var(--express-gap);
-    border: 1px solid var(--color-border-subtle, rgba(15, 17, 17, 0.12));
-    border-radius: var(--radius-3, 0.5rem);
-    background: var(--color-surface-raised, var(--color-bg, #fff));
+    padding: var(--express-gap) 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
 }
-.w-payment-express--pdp .w-payment-express__header {
-    margin-bottom: var(--weline-space-2, var(--space-2, 0.5rem));
-}
-.w-payment-express--pdp .w-payment-express__title {
-    margin: 0;
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: 600;
-    color: var(--color-text-primary, inherit);
-}
-.w-payment-express--pdp .w-payment-express__hint {
-    margin: 0.25rem 0 0;
-    font-size: var(--font-size-xs, 0.75rem);
-    color: var(--color-text-muted, #565959);
-}
-.w-payment-express--pdp .w-payment-express__methods {
+.w-payment-express--pdp .w-payment-express__methods--always {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--express-btn-min), var(--express-btn-max)));
+    grid-template-columns: repeat(auto-fit, minmax(var(--express-btn-min), 1fr));
     gap: var(--weline-space-2, var(--space-2, 0.5rem));
     justify-content: center;
+    max-inline-size: 100%;
+}
+.w-payment-express--collapsible .w-payment-express__disclosure {
+    margin: 0;
+}
+.w-payment-express--collapsible .w-payment-express__summary--more {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-1, var(--space-1, 0.25rem));
+    min-height: auto;
+    padding: var(--weline-space-2, var(--space-2, 0.5rem)) 0 0;
+    cursor: pointer;
+    list-style: none;
+    text-align: center;
+    inline-size: 100%;
+}
+.w-payment-express--collapsible .w-payment-express__summary::-webkit-details-marker { display: none; }
+.w-payment-express--collapsible .w-payment-express__summary::marker { content: ''; }
+.w-payment-express--pdp .w-payment-express__more-label {
+    flex: 0 1 auto;
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.2;
+    color: var(--color-text-muted, var(--color-text-secondary));
+    white-space: nowrap;
+}
+.w-payment-express--collapsible .w-payment-express__chevron {
+    flex: 0 0 auto;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 1.5px solid var(--color-text-muted, var(--color-text-secondary));
+    border-bottom: 1.5px solid var(--color-text-muted, var(--color-text-secondary));
+    transform: rotate(45deg);
+    transition: transform .15s ease;
+    margin: 0;
+}
+.w-payment-express--collapsible .w-payment-express__disclosure[open] .w-payment-express__chevron {
+    transform: rotate(-135deg);
+    margin: 0.15rem 0 0;
+}
+.w-payment-express--collapsible .w-payment-express__panel {
+    display: grid;
+    gap: var(--express-gap);
+    padding: var(--weline-space-2, var(--space-2, 0.5rem)) 0 0;
+    border-top: 0;
+}
+.w-payment-express--pdp .w-payment-express__hint {
+    margin: 0;
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--color-text-muted, var(--color-text-secondary));
+    text-align: center;
 }
 .w-payment-express--pdp .w-payment-express__btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 2.5rem;
+    inline-size: 100%;
     padding: 0.4rem 0.75rem;
     border: 0;
-    border-radius: var(--radius-2, 0.375rem);
+    border-radius: var(--radius-2, var(--weline-radius-sm, 0.375rem));
     cursor: pointer;
-    background: var(--color-surface-muted, #f0f2f2);
+    background: var(--color-surface-muted, var(--color-bg-secondary));
     color: var(--express-text);
 }
 .w-payment-express--pdp .w-payment-express__paypal {

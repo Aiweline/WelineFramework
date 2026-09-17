@@ -501,7 +501,7 @@ class ScanConvention extends CommandAbstract
                 }
                 }
                 
-                // 收集其他 @ 标记（如 @param.xxx, @preview.login 等）
+                // 收集其他 @ 标记（如 @param.xxx 等）
                 $collectedData = $this->collectOtherTags($fileContent, $fileNameWithoutExt);
                 $otherTags = $collectedData['tags'] ?? [];
                 $setting = $collectedData['setting'] ?? [];
@@ -535,7 +535,7 @@ class ScanConvention extends CommandAbstract
     }
 
     /**
-     * 收集其他 @ 标记（如 @param.xxx, @preview.login 等）
+     * 收集其他 @ 标记（如 @param.xxx 等）
      * 返回两个数组：$tags（其他标记）和 $setting（参数设置）
      */
     protected function collectOtherTags(string $content, string $fileName): array
@@ -606,12 +606,6 @@ class ScanConvention extends CommandAbstract
                 $setting['param'] = $normalizer->normalizeDefinitions($this->flattenParamDefinitions($params));
         }
         
-        // 收集 @preview.login 标记
-        if (preg_match('/@preview\.login\s*\{([^}]+)\}/i', $content, $matches)) {
-            $attributes = $this->parseAttributes($matches[1]);
-            $tags['preview_login'] = $attributes;
-        }
-        
         // 收集其他 @ 标记（除了 @meta::, @meta.xxx, @param.xxx, @param xxx）
         // 注意：正则表达式 @(\w+(?:\.\w+)*)\s*\{ 只会匹配 @xxx { 格式，不会匹配 @param xxx { 格式
         // 因为 @param xxx { 中，param 后面是空格和 xxx，不符合 \w+ 后面直接是 \s*\{ 的模式
@@ -630,7 +624,7 @@ class ScanConvention extends CommandAbstract
                 $attributesStr = trim($match[2]);
                 $attributes = $this->parseAttributes($attributesStr);
                 
-                // 直接使用标记名作为键（保持原始格式，如 preview.login）
+                // 直接使用标记名作为键（保持原始格式）
                 $tagKey = $tagName;
                 
                 // 如果已存在，转换为数组
@@ -978,7 +972,7 @@ class ScanConvention extends CommandAbstract
             'groups' => $pathParts, // 所有路径部分都是 group
         ];
         
-        // 合并其他标记（如 @preview.login 等）
+        // 合并其他标记
         if (!empty($otherTags)) {
             $metaDataArray = array_merge($metaDataArray, $otherTags);
         }

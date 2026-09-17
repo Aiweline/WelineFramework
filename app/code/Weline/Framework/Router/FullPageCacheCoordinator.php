@@ -433,7 +433,15 @@ final class FullPageCacheCoordinator
         $body = $response->getBody();
         try {
             $policyService = new SecurityHeaderPolicyService();
-            if ($policyService->isMetaDelivery()) {
+            // 仅 HTML 文档走 meta CSP；JSON/二进制禁止改写正文（曾污染 shipping region API）
+            $publishContentType = $response->getHeader('Content-Type');
+            if (\is_array($publishContentType)) {
+                $publishContentType = \implode(',', \array_map('strval', $publishContentType));
+            }
+            $publishContentType = \strtolower((string)$publishContentType);
+            $publishLooksHtml = \str_contains($publishContentType, 'text/html')
+                || \str_contains($publishContentType, 'application/xhtml');
+            if ($policyService->isMetaDelivery() && $publishLooksHtml) {
                 $withCsp = $policyService->ensureDocumentCspMeta($body);
                 if ($withCsp !== $body) {
                     $body = $withCsp;
@@ -2040,12 +2048,18 @@ final class FullPageCacheCoordinator
             }
         }
 
-        $names = SessionCookieNameResolver::requestCookieCandidates($host !== '' ? $host : null);
+        $names = SessionCookieNameResolver::requestCookieCandidates(
+            $host !== '' ? $host : null,
+            'frontend',
+        );
+        $customerPattern = SessionCookieNameResolver::familyPattern(
+            SessionCookieNameResolver::CUSTOMER_NAME,
+        );
         foreach (\array_keys($cookies) as $name) {
             if (!\is_string($name) || $name === '') {
                 continue;
             }
-            if (\preg_match('/^WELINE_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D', $name) !== 1) {
+            if (\preg_match($customerPattern, $name) !== 1) {
                 continue;
             }
             $names[] = $name;

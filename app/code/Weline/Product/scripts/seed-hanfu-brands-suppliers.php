@@ -57,7 +57,7 @@ $brands = [
     ['code' => 'shangyao', 'name' => '裳谣', 'description' => '汉服电商常见品牌名（公开盘点常见）。'],
     ['code' => 'yuechi', 'name' => '月池', 'description' => '汉服电商常见品牌名（公开盘点常见）。'],
     ['code' => 'qingluo', 'name' => '青萝', 'description' => '汉服电商常见品牌名（公开盘点常见）。'],
-    ['code' => 'yunshang', 'name' => '云裳', 'description' => '汉服/中式礼服方向常见品牌名。'],
+    ['code' => 'changan', 'name' => '长安', 'description' => '汉服/中式礼服方向常见品牌名。'],
     ['code' => 'jinxiuweiyang', 'name' => '锦绣未央', 'description' => '中式/汉服婚服方向公开供货线索。'],
     ['code' => 'qingchengzhilian', 'name' => '倾城之恋', 'description' => '汉服婚服/秀禾等公开供货线索（昆明螺蛳湾相关报道）。'],
 ];
@@ -150,7 +150,7 @@ $suppliers = [
         'default_lead_time_days' => 5,
         'default_payment_terms' => '1件起订/混批（公开采购指南）',
         'description' => '公开行业资讯：昆明螺蛳湾相关汉服婚服/秀禾供货。尚无独立可核验网店 URL，店铺留空。',
-        'brand_codes' => ['qingchengzhilian', 'jinxiuweiyang', 'yunshang'],
+        'brand_codes' => ['qingchengzhilian', 'jinxiuweiyang', 'changan'],
     ],
     [
         'code' => 'ruili-hanyun',
@@ -160,7 +160,7 @@ $suppliers = [
         'default_moq' => 2,
         'default_lead_time_days' => 10,
         'description' => '公开采购指南线索。尚无独立可核验网店 URL，店铺留空。',
-        'brand_codes' => ['yunshang', 'jinxiuweiyang'],
+        'brand_codes' => ['changan', 'jinxiuweiyang'],
     ],
     [
         'code' => 'factory-qiyige',
@@ -320,7 +320,7 @@ $suppliers = [
         'default_moq' => 10,
         'default_lead_time_days' => 10,
         'description' => '1688 工厂黄页 title 核验。',
-        'brand_codes' => ['huashangjiuzhou', 'yunshang'],
+        'brand_codes' => ['huashangjiuzhou', 'changan'],
     ],
     [
         'code' => 'factory-jianzhou',

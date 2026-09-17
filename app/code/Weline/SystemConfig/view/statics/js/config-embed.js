@@ -191,6 +191,8 @@
             control.dataset.lastValue = readControlValue(control);
             var fieldEl = control.closest('[data-testid="config-embed-field"]');
             var isImmediate = control.type === 'checkbox'
+                || control.type === 'hidden'
+                || control.hasAttribute('data-w-config-embed-media')
                 || control.tagName === 'SELECT'
                 || control.hasAttribute('data-w-language-field')
                 || control.hasAttribute('data-ai-model-value')

@@ -7,13 +7,13 @@ namespace Weline\Seo\Service\Seed;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoKeyword;
 use Weline\Seo\Model\SeoSubject;
+use Weline\Websites\Service\WebsiteBrandIdentitySeedService;
 
 /**
- * 安装预置：云裳汉服默认站 SEO 主体（幂等）。
+ * 安装预置：默认站 SEO 主体（幂等）。
  *
- * 绑定真实默认网站 website_id=0；标题/描述与 Theme
- * {@see \Weline\Theme\Extends\Module\Weline_Seo\SeoProfileProvider\HanfuHomepageSeoProfileProvider}
- * 及实站首页 meta 一致。URL 从 WebsiteDomain 解析（优先 *.test.weline.com）。
+ * 绑定真实默认网站 website_id=0；标题/描述与 Website 基础信息种子
+ * {@see WebsiteBrandIdentitySeedService} 一致。URL 从 WebsiteDomain 解析。
  * 仅当 module/scope 仍为种子标记时回写画像字段。
  */
 final class HanfuSubjectSeedService
@@ -26,10 +26,10 @@ final class HanfuSubjectSeedService
     /** 历史假种子 entity_id，升级时删除（仅种子所有） */
     public const LEGACY_DEMO_ENTITY_ID = 900001;
 
-    /** 与 HanfuHomepageSeoProfileProvider::SITE_NAME_ZH / 实站品牌一致 */
-    public const SEED_TITLE = '云裳汉服 · Hanfu Atelier';
-    /** 与 HanfuHomepageSeoProfileProvider::DESCRIPTION_ZH / 实站 meta description 一致 */
-    public const SEED_DESCRIPTION = '云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合；提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。';
+    /** 与 WebsiteBrandIdentitySeedService / Website.name 种子一致（写入 SEO 表，非运行时硬编码） */
+    public const SEED_TITLE = WebsiteBrandIdentitySeedService::SEED_NAME;
+    /** 与 WebsiteBrandIdentitySeedService / Website.description 种子一致 */
+    public const SEED_DESCRIPTION = WebsiteBrandIdentitySeedService::SEED_DESCRIPTION;
     public const SEED_LOCALE = 'zh-CN';
 
     /**
@@ -38,7 +38,7 @@ final class HanfuSubjectSeedService
      * @var list<array{keyword:string,priority:int}>
      */
     public const SEED_KEYWORDS = [
-        ['keyword' => '云裳汉服', 'priority' => 100],
+        ['keyword' => '长安汉服', 'priority' => 100],
         ['keyword' => '汉服', 'priority' => 95],
         ['keyword' => '明制汉服', 'priority' => 90],
         ['keyword' => '宋制汉服', 'priority' => 85],

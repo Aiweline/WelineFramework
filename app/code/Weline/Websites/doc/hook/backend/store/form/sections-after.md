@@ -12,3 +12,7 @@ Guidelines:
 - Store templates must not call Shipping/SEO services directly.
 
 Payload keys available in the hook: `id`, `store`, `store_id`, `website_id`.
+
+## Built-in: 站点联系信息
+
+已保存商店时嵌入 `website_contact`（锁 `scope_kind=store`）；未保存仅提示。见 website hook 文档与 `SiteContactScopeMapper::forStore`。

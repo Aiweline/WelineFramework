@@ -25,6 +25,7 @@
 
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetI18n;
@@ -130,9 +131,7 @@ if ($products === []) {
     return;
 }
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Product::css/widgets/related-products.css)?v=20260906-product-card1"
-      data-no-extract="true">
+
 
 <section class="<?= $esc($wc) ?> weline-product-related<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
@@ -142,6 +141,10 @@ if ($products === []) {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-layout="<?= $esc($layout) ?>"
          data-columns="<?= $esc($columns) ?>">
+    <link rel="stylesheet"
+          href="@static(Weline_Product::css/widgets/related-products.css)?v=20260906-product-card1"
+          data-no-extract="true">
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="wpr-header">
         <h2 class="wpr-title"><?= $esc($widgetTitle) ?></h2>
         <p class="wpr-subtitle"><?= $esc((string)__('Customers also viewed')) ?></p>

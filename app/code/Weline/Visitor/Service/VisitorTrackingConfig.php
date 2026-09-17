@@ -23,6 +23,9 @@ class VisitorTrackingConfig
     private const KEY_HOT_BUFFER_FLUSH_INTERVAL = 'visitor/tracking/hot_buffer_flush_interval';
     private const KEY_HOT_BUFFER_BATCH_SIZE = 'visitor/tracking/hot_buffer_batch_size';
     private const KEY_HOT_BUFFER_TTL = 'visitor/tracking/hot_buffer_ttl';
+    private const KEY_CONVERSION_DEDUPE_ENABLED = 'visitor/tracking/conversion_dedupe_enabled';
+    private const KEY_CONVERSION_DEDUPE_TTL_DAYS = 'visitor/tracking/conversion_dedupe_ttl_days';
+    private const KEY_CONVERSION_DEDUPE_EVENTS = 'visitor/tracking/conversion_dedupe_events';
     private const KEY_CONSENT_MODE_ENABLED = 'visitor/tracking/consent_mode_enabled';
     private const KEY_STICKY_UTM_TTL_HOURS = 'visitor/tracking/sticky_utm_ttl_hours';
     private const KEY_STICKY_LINKER_ENABLED = 'visitor/tracking/sticky_linker_enabled';
@@ -105,6 +108,7 @@ class VisitorTrackingConfig
                 'ttl' => $this->boundedInt($map[self::KEY_HOT_BUFFER_TTL] ?? 300, 300, 60, 3600),
                 'source' => 'Weline_Visitor SystemConfig',
             ],
+            'conversionDedupe' => $this->buildConversionDedupeRuntime($map),
             'consent' => [
                 'enabled' => $this->toBool($map[self::KEY_CONSENT_MODE_ENABLED] ?? false, false),
                 // A08 前端门闩读取；A08a 仅注入，不改变现有 JS 行为
@@ -261,6 +265,70 @@ class VisitorTrackingConfig
     private function readRuntimeRevision(array $map): int
     {
         return $this->boundedInt($map[self::KEY_RUNTIME_REVISION] ?? 0, 0, 0, PHP_INT_MAX);
+    }
+
+    /**
+     * 结账/支付转化事件去重（前后端同一份约定）。
+     *
+     * @param array<string, mixed> $map
+     * @return array{enabled:bool,ttlDays:int,ttlSeconds:int,events:list<string>,source:string}
+     */
+    private function buildConversionDedupeRuntime(array $map): array
+    {
+        $ttlDays = $this->boundedInt(
+            $map[self::KEY_CONVERSION_DEDUPE_TTL_DAYS] ?? PixelConversionDedupeService::DEFAULT_TTL_DAYS,
+            PixelConversionDedupeService::DEFAULT_TTL_DAYS,
+            1,
+            730
+        );
+        $defaultEvents = implode("\n", PixelConversionDedupeService::DEFAULT_EVENTS);
+        $events = $this->normalizeConversionDedupeEvents(
+            (string)($map[self::KEY_CONVERSION_DEDUPE_EVENTS] ?? $defaultEvents)
+        );
+        if ($events === []) {
+            $events = PixelConversionDedupeService::DEFAULT_EVENTS;
+        }
+
+        return [
+            'enabled' => $this->toBool($map[self::KEY_CONVERSION_DEDUPE_ENABLED] ?? true, true),
+            'ttlDays' => $ttlDays,
+            'ttlSeconds' => $ttlDays * 86400,
+            'events' => $events,
+            'source' => 'Weline_Visitor SystemConfig',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeConversionDedupeEvents(string $value): array
+    {
+        if (trim($value) === '') {
+            return [];
+        }
+        $items = preg_split('/[\r\n,]+/', $value) ?: [];
+        $normalized = [];
+        foreach ($items as $item) {
+            $item = strtolower(trim((string)$item));
+            if ($item === '') {
+                continue;
+            }
+            if ($item === '*_checkout_success') {
+                $normalized[$item] = $item;
+            } else {
+                $item = preg_replace('/[^a-z0-9_]+/', '_', $item) ?: '';
+                $item = trim($item, '_');
+                if ($item === '') {
+                    continue;
+                }
+                $normalized[$item] = substr($item, 0, 64);
+            }
+            if (\count($normalized) >= 100) {
+                break;
+            }
+        }
+
+        return array_values($normalized);
     }
 
     /**

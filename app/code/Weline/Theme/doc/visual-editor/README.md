@@ -7,6 +7,15 @@
 
 可视化编辑器是一个用于构建和编辑页面的可视化工具，支持组件拖拽、嵌套放置、实时预览等功能。
 
+### 预览身份（本壳）
+
+画布 / iframe 预览属于**可视化编辑预览**：身份以 **query + typed `editor_context` 参数**为准，走 `theme-preview/content`，**不要**调用 `start-preview`。
+
+与「版本真实预览」（Token 反解析）、「正式店面」（RequestContext）的对照与正确用法见权威文档：
+
+→ [`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)  
+→ MCP 技能 `weline-theme-development`
+
 ## 核心设计
 
 ### 1. 区域系统

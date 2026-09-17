@@ -56,6 +56,8 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('function buildSidebarContentUrl(sectionName)', $script);
         $this->assertStringContainsString("'section=' + encodeURIComponent(sectionName)", $script);
         $this->assertStringContainsString('loadSidebarContent(targetId, loadingState === \'failed\' ? { force: true } : {})', $script);
+        $this->assertStringContainsString('_retriedEmpty', $script);
+        $this->assertStringContainsString('Rare race: worker returns success with empty hook HTML', $script);
         $this->assertStringContainsString('function sanitizeSidebarHtml(html)', $script);
         $this->assertStringContainsString('function loadTrustedSidebarStyles(html)', $script);
         $this->assertStringContainsString('loadTrustedSidebarStyles(payload.html)', $script);

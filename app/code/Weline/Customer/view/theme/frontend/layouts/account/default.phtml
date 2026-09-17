@@ -1,0 +1,257 @@
+<!--
+布局：个人中心 - 仪表盘布局
+
+个人中心仪表盘布局，包含侧边栏导航和主内容区
+字段
+@meta.name {default="个人中心仪表盘布局",name="个人中心仪表盘布局",description="个人中心仪表盘布局，用于描述布局的名称"}
+@meta.description {default="个人中心仪表盘布局，包含侧边栏导航和主内容区",name="个人中心仪表盘布局，包含侧边栏导航和主内容区",description="个人中心仪表盘布局，包含侧边栏导航和主内容区，用于描述布局的用途"}
+@login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="个人中心的仪表盘布局，需要登录才能访问。"}
+@param.title {default="个人中心",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+@param.sidebar {default="",name="侧边栏内容（HTML字符串）",description="侧边栏内容（HTML字符串），用于设置侧边栏HTML内容"}
+@param.sidebarCollapsed {default=false,name="侧边栏是否折叠",description="侧边栏是否折叠，用于控制侧边栏的折叠状态"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+@param.layout.leftsider {default=1,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
+@param.layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
+@param.showHeader {default=true,name="是否显示header",description="是否显示顶栏（Theme Partials，与首页一致）"}
+@param.showFooter {default=true,name="是否显示footer",description="是否显示底栏（Theme Partials，与首页一致）"}
+@param.showSearch {default=true,name="顶栏搜索",description="顶栏是否展示搜索（Partials）"}
+@param.showUserMenu {default=true,name="用户菜单",description="顶栏是否展示用户菜单（Partials）"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<?php
+$meta = $this->getData('meta') ?? [];
+$meta['showHeader'] = true;
+$meta['showFooter'] = true;
+$this->assign('meta', $meta);
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+    <style>
+        /* ========== 账户仪表盘布局样式 ========== */
+        .account-dashboard {
+            --account-page-background: var(--weline-layout-surface-secondary, var(--color-bg-secondary, #f3f3f3));
+            --account-page-top-gap: clamp(1.5rem, 2.2vw, 2.25rem);
+            --account-page-bottom-gap: var(--spacing-xl, 2rem);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--account-page-background);
+            box-shadow: inset 0 10px 14px -16px rgba(15, 23, 42, 0.55);
+        }
+
+        .account-dashboard__body {
+            flex: 1;
+            display: flex;
+            /* 与全站 .w-container / .header-container 同一版心公式 */
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            padding-block: var(--account-page-top-gap) var(--account-page-bottom-gap);
+            /* 前台 head 不加载 theme.css；无 fallback 时大屏 gap 会塌成 0 */
+            gap: var(--weline-layout-spacing-xl, var(--spacing-xl, 2rem));
+        }
+
+        /* 侧边栏样式 */
+        .account-sidebar {
+            width: var(--sidebar-width, 280px);
+            flex-shrink: 0;
+            background: var(--weline-layout-surface-primary);
+            border-radius: var(--weline-layout-radius-lg);
+            box-shadow: var(--shadow-sm);
+            padding: var(--weline-layout-spacing-lg, var(--spacing-lg, 1.5rem));
+            height: fit-content;
+            position: sticky;
+            top: var(--weline-layout-spacing-lg, var(--spacing-lg, 1.5rem));
+            transition: all 0.3s ease;
+        }
+
+        .account-sidebar.collapsed {
+            width: var(--sidebar-collapsed-width);
+            padding: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+        }
+
+        .account-sidebar.collapsed .account-sidebar__nav-text,
+        .account-sidebar.collapsed .account-sidebar__user-info {
+            display: none;
+        }
+
+        /* 主内容区样式 */
+        .account-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .account-main-content {
+            /* 与 dashboard 对齐：主区不做白卡壳；水平 padding 归版心 */
+            background: transparent;
+            padding: 0;
+            min-height: 60vh;
+        }
+
+        /* 响应式调整 */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .account-dashboard__body {
+                gap: var(--spacing-md, 1rem);
+                padding-block: var(--weline-space-5, 1.25rem);
+                padding-inline: var(--weline-layout-content-padding-inline);
+            }
+
+            .account-main-content {
+                padding: 0;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .account-dashboard__body {
+                flex-direction: column;
+                padding-block: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+                padding-inline: var(--weline-layout-content-padding-inline);
+                gap: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+            }
+
+            .account-sidebar {
+                width: 100%;
+                position: static;
+                border-radius: var(--weline-layout-radius-md);
+                padding: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+            }
+
+            .account-sidebar.collapsed {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .account-dashboard__body {
+                padding-block: var(--weline-space-3) var(--weline-space-5);
+                padding-inline: var(--weline-layout-content-padding-inline);
+                gap: var(--weline-space-3);
+            }
+
+            .account-sidebar {
+                padding: var(--weline-space-3);
+                border-radius: var(--weline-layout-radius-md);
+            }
+
+            .account-main-content {
+                padding: 0;
+                min-height: auto;
+            }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::body-start</w:hook>
+
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
+
+    <div class="account-dashboard__body <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-dashboard" data-layout="account_dashboard">
+                <?php $accountSidebarHtml = (string)($meta['sidebar'] ?? $this->getData('sidebar') ?? ''); ?>
+                <?php if (trim($accountSidebarHtml) === '' && function_exists('w_log_warning')) {
+                    try {
+                        $rootSidebar = $this->getData('sidebar');
+                        w_log_warning('[AccountSidebar] default account layout sidebar empty at template render', [
+                            'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
+                            'meta_sidebar_len' => is_string($meta['sidebar'] ?? null) ? strlen(trim($meta['sidebar'])) : 0,
+                            'root_sidebar_len' => is_string($rootSidebar) ? strlen(trim($rootSidebar)) : 0,
+                            'meta_keys' => array_keys(is_array($meta) ? $meta : []),
+                            'template_id' => spl_object_id($this),
+                        ], 'account_sidebar');
+                    } catch (\Throwable) {
+                    }
+                } ?>
+        <w:slot id="account-sidebar"
+                name="账户侧边栏"
+                accept="layout-account-sidebar,account-sidebar,sidebar,account-nav"
+                multiple="true"
+                position="sidebar">
+            <?php if (trim($accountSidebarHtml) !== ''): ?>
+                <w:hook>Weline_Theme::frontend::layouts::account::sidebar-before</w:hook>
+                <aside class="account-sidebar <?= !empty($meta['sidebarCollapsed']) ? 'collapsed' : '' ?>">
+                    <?= $accountSidebarHtml ?>
+                </aside>
+                <w:hook>Weline_Theme::frontend::layouts::account::sidebar-after</w:hook>
+            <?php endif; ?>
+        </w:slot>
+        
+        <div class="account-main">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account::content-before</w:hook>
+            <main class="account-main-content" id="account-main-content" data-layout="account_main_content">
+                <w:slot id="content"
+                        name="内容区"
+                        accept="layout-account-content,layout-default-content,content,account-content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="account-main-content__root-slot">
+                    <w:slot id="account-content"
+                        name="账户主内容"
+                        accept="layout-account-content,account-content,content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="account-main-content__slot">
+                    <if condition="meta.content">
+                    {{meta.content}}
+                        <elseif condition="content"/>
+                        {{content}}
+                        <elseif condition="meta.contentTemplate"/>
+                        <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                        <elseif condition="contentTemplate"/>
+                        <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+                        <else/>
+                        <?= $this->getChildHtml('content') ?>
+                    </if>
+                    </w:slot>
+                </w:slot>
+            </main>
+            <w:hook>Weline_Theme::frontend::layouts::account::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+    </div>
+    
+
+    <w:slot id="account-bottom"
+            name="账户页底部扩展"
+            accept="layout-account-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="content"
+            class="account-bottom-slot">
+    </w:slot>
+
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+
+    <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>

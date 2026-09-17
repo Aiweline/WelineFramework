@@ -19,6 +19,9 @@ final class BackendOrderOpsTabsContractTest extends TestCase
         self::assertStringContainsString('data-testid="order-edit-tab-shipment"', $src);
         self::assertStringContainsString('data-testid="order-edit-tab-refund"', $src);
         self::assertStringContainsString('data-testid="order-edit-tab-comms"', $src);
+        self::assertStringContainsString('data-testid="order-edit-tab-customer"', $src);
+        self::assertStringContainsString('customer-adjust-form.phtml', $src);
+        self::assertStringNotContainsString('前往客户调整', $src);
         self::assertStringContainsString('order/backend/order/panel', $src);
         self::assertStringContainsString('data-w-component="tabs"', $src);
         self::assertStringContainsString('[data-testid^="order-edit-panel-"]', $src);

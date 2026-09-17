@@ -195,6 +195,7 @@ final class PostAdmin extends BackendController
         $this->assign('websiteSelectValue', $websiteSelect['value']);
         $this->assign('websiteSelectDisplay', $websiteSelect['display']);
         $this->assign('websiteSelectOptionsJson', $websiteSelect['options_json']);
+        $this->assign('media_identity_scope', $websiteSelect['media_identity_scope'] ?? 'default.default.default');
         $this->assign('cms_available', $cmsAvailable);
         $this->assign('cms_page_id', $cmsPageId);
         $this->assign('theme_editor_url', $themeEditorUrl);
@@ -329,7 +330,7 @@ final class PostAdmin extends BackendController
     }
 
     /**
-     * @return array{value:string,display:string,options_json:string}
+     * @return array{value:string,display:string,options_json:string,media_identity_scope:string}
      */
     private function buildWebsiteSelect(?int $websiteId): array
     {
@@ -345,11 +346,16 @@ final class PostAdmin extends BackendController
                     if ($value === '') {
                         continue;
                     }
-                    $options[] = [
+                    $option = [
                         'value' => $value,
                         'label' => trim((string)($row['label'] ?? $value)),
                         'meta' => trim((string)($row['meta'] ?? '')),
                     ];
+                    $code = trim((string)($row['code'] ?? ''));
+                    if ($code !== '') {
+                        $option['code'] = $code;
+                    }
+                    $options[] = $option;
                 }
             }
         } catch (\Throwable) {
@@ -358,6 +364,7 @@ final class PostAdmin extends BackendController
 
         $value = $websiteId === null ? '' : (string)$websiteId;
         $display = '';
+        $websiteCode = '';
         foreach ($options as $option) {
             if ((string)($option['value'] ?? '') !== $value) {
                 continue;
@@ -366,16 +373,23 @@ final class PostAdmin extends BackendController
             if ($display === '') {
                 $display = '#' . $value;
             }
+            $websiteCode = trim((string)($option['code'] ?? ''));
             break;
         }
         if ($display === '' && $value !== '') {
             $display = '#' . $value;
         }
 
+        $mediaIdentityScope = 'default.default.default';
+        if ($websiteCode !== '' && !str_contains($websiteCode, '.') && !str_contains($websiteCode, ':')) {
+            $mediaIdentityScope = strtolower($websiteCode) . '.default.default';
+        }
+
         return [
             'value' => $value,
             'display' => $display,
             'options_json' => json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]',
+            'media_identity_scope' => $mediaIdentityScope,
         ];
     }
 }

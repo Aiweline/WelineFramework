@@ -105,8 +105,9 @@ class LayoutScanner
                     $layoutType = 'default';
                     $option = $fileName;
                 } else {
-                    // 子目录布局：account/auth.phtml
-                    $layoutType = $pathParts[0];
+                    // 子目录布局：account/auth.phtml → type=account, option=auth
+                    // 嵌套路由对齐：account/login/default.phtml → type=account/login, option=default
+                    $layoutType = implode('/', array_slice($pathParts, 0, -1));
                     $option = $fileName;
                 }
                 

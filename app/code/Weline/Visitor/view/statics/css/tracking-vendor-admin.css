@@ -477,6 +477,16 @@
   background: color-mix(in srgb, var(--weline-color-success) 10%, var(--weline-color-surface));
 }
 
+.tvp-acc-item[data-hit-kind="custom"] {
+  border-color: color-mix(in srgb, var(--weline-color-info, #3b82f6) 55%, var(--weline-color-border));
+  background: color-mix(in srgb, var(--weline-color-info, #3b82f6) 10%, var(--weline-color-surface));
+}
+
+.tvp-acc-item[data-hit-kind="dedupe"] {
+  border-color: color-mix(in srgb, var(--weline-color-warning, #eab308) 60%, var(--weline-color-border));
+  background: color-mix(in srgb, var(--weline-color-warning, #eab308) 14%, var(--weline-color-surface));
+}
+
 .tvp-acc-item[data-hit-kind="stream"] {
   border-color: var(--weline-color-border);
   background: var(--weline-color-surface);
@@ -490,6 +500,11 @@
 .tvp-acc-badge[data-tone="custom"] {
   color: var(--weline-color-info, var(--weline-color-primary));
   background: color-mix(in srgb, var(--weline-color-info, var(--weline-color-primary)) 14%, transparent);
+}
+
+.tvp-acc-badge[data-tone="dedupe"] {
+  color: var(--weline-color-warning, #a16207);
+  background: color-mix(in srgb, var(--weline-color-warning, #eab308) 18%, transparent);
 }
 
 .visually-hidden {

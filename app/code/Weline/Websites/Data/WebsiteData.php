@@ -11,6 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\Website\LocalDescription as WebsiteLocalDescription;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteLanguage;
 
@@ -131,14 +132,103 @@ class WebsiteData
     }
 
     /**
-     * 获取当前网站名称
+     * 获取当前网站名称（优先当前语言 LocalDescription，回退主表）
      * 
      * @return string|null
      */
     public static function getName(): ?string
     {
         $website = self::getWebsite();
-        return $website ? $website->getName() : null;
+        if (!$website instanceof Website) {
+            return null;
+        }
+
+        $localized = self::resolveLocalizedField((int)$website->getId(), WebsiteLocalDescription::schema_fields_NAME);
+        if ($localized !== null && $localized !== '') {
+            return $localized;
+        }
+
+        $name = trim((string)$website->getName());
+
+        return $name !== '' ? $name : null;
+    }
+
+    /**
+     * 获取当前网站简介（网站范围品牌/SEO 叙述；优先当前语言 LocalDescription）
+     */
+    public static function getDescription(): ?string
+    {
+        $website = self::getWebsite();
+        if (!$website instanceof Website) {
+            return null;
+        }
+
+        $localized = self::resolveLocalizedField(
+            (int)$website->getId(),
+            WebsiteLocalDescription::schema_fields_DESCRIPTION,
+        );
+        if ($localized !== null && $localized !== '') {
+            return $localized;
+        }
+
+        $description = trim((string)$website->getDescription());
+
+        return $description !== '' ? $description : null;
+    }
+
+    /**
+     * @var array<string, string>
+     */
+    private static array $localizedFieldCache = [];
+
+    private static function resolveLocalizedField(int $websiteId, string $field): ?string
+    {
+        if ($websiteId < 0 || $field === '') {
+            return null;
+        }
+
+        $locale = '';
+        try {
+            $locale = trim((string)\Weline\Framework\Http\Cookie::getLang());
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        if ($locale === '') {
+            return null;
+        }
+
+        $cacheKey = $websiteId . "\0" . $locale . "\0" . $field;
+        if (array_key_exists($cacheKey, self::$localizedFieldCache)) {
+            $cached = self::$localizedFieldCache[$cacheKey];
+
+            return $cached !== '' ? $cached : null;
+        }
+
+        try {
+            /** @var WebsiteLocalDescription $local */
+            $local = ObjectManager::getInstance(WebsiteLocalDescription::class);
+            $items = $local->reset()
+                ->where(WebsiteLocalDescription::schema_fields_ID, $websiteId)
+                ->where(WebsiteLocalDescription::schema_fields_local_code, $locale)
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach ($items as $item) {
+                if (!$item instanceof WebsiteLocalDescription) {
+                    continue;
+                }
+                $value = trim((string)$item->getData($field));
+                self::$localizedFieldCache[$cacheKey] = $value;
+
+                return $value !== '' ? $value : null;
+            }
+        } catch (\Throwable) {
+            // Fall back to main table.
+        }
+
+        self::$localizedFieldCache[$cacheKey] = '';
+
+        return null;
     }
 
     /**
@@ -676,6 +766,7 @@ class WebsiteData
             'website_id' => $website->getWebsiteId(),
             'code' => $website->getCode(),
             'name' => $website->getName(),
+            'description' => $website->getDescription(),
             'url' => $website->getUrl(),
             'default_currency' => $website->getDefaultCurrency(),
             'default_language' => $website->getDefaultLanguage(),

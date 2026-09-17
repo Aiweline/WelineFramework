@@ -22,4 +22,12 @@
                   shared="true"
                   sort="110"/>
     </event>
+
+    <event name="Weline_Order::order_paid">
+        <observer name="Weline_Customer::order_paid_anonymous_customer"
+                  instance="Weline\Customer\Observer\OrderPaidAnonymousCustomerObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="40"/>
+    </event>
 </config>

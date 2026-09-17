@@ -47,6 +47,9 @@ class Data extends AbstractHelper
     /** @var list<\Weline\Framework\DataObject\DataObject> */
     private array $deferredControllerAttributesEvents = [];
 
+    /** defer 队列过大时分块派发，避免扫完全部模块才卸掉 ACL 事件大包 */
+    private const DEFER_ACL_FLUSH_CHUNK = 600;
+
     public function enableDeferControllerAttributes(): void
     {
         $this->deferControllerAttributes = true;
@@ -58,19 +61,52 @@ class Data extends AbstractHelper
         return $this->deferControllerAttributes;
     }
 
+    public function getDeferredControllerAttributesCount(): int
+    {
+        return \count($this->deferredControllerAttributesEvents);
+    }
+
     /**
      * 将暂存的控制器 ACL 事件一次派发（可含多模块；观察者按 module 分组落库）。
      */
     public function flushDeferredControllerAttributes(): void
     {
+        $this->flushDeferredControllerAttributesInternal(false);
+    }
+
+    /**
+     * 分块冲刷 defer 队列，但保持 defer 开启（路由扫描中途降内存）。
+     */
+    public function flushDeferredControllerAttributesChunk(): void
+    {
+        if (!$this->deferControllerAttributes || $this->deferredControllerAttributesEvents === []) {
+            return;
+        }
+        $this->flushDeferredControllerAttributesInternal(true);
+    }
+
+    private function flushDeferredControllerAttributesInternal(bool $keepDeferring): void
+    {
         $events = $this->deferredControllerAttributesEvents;
         $this->deferredControllerAttributesEvents = [];
-        $this->deferControllerAttributes = false;
+        if (!$keepDeferring) {
+            $this->deferControllerAttributes = false;
+        }
         if ($events === []) {
             return;
         }
 
-        $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $events);
+        try {
+            $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $events);
+        } finally {
+            $events = [];
+            unset($events);
+            $this->collected_controller_attributes_events = [];
+            $this->collected_route_registrations = [];
+            if (\function_exists('gc_collect_cycles')) {
+                \gc_collect_cycles();
+            }
+        }
     }
 
     public function clearDeferredControllerAttributes(): void
@@ -674,6 +710,9 @@ class Data extends AbstractHelper
                 $this->deferredControllerAttributesEvents[] = $eventData;
             }
             $this->collected_controller_attributes_events = [];
+            if (\count($this->deferredControllerAttributesEvents) >= self::DEFER_ACL_FLUSH_CHUNK) {
+                $this->flushDeferredControllerAttributesChunk();
+            }
             return;
         }
         

@@ -1,0 +1,12 @@
+{
+  "module": "Weline_FileManager",
+  "skills": [
+    {
+      "skill_id": "doc:weline-filemanager-media-reference-identity",
+      "name": "media-reference-identity",
+      "aliases": ["media-reference-identity", "w_scope", "media-identity"],
+      "path": "doc/ai/skills/media-reference-identity/SKILL.md",
+      "description": "Build media occupancy identity with w_scope; forbid hand-built paths."
+    }
+  ]
+}

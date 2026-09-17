@@ -61,6 +61,11 @@ final class AuthenticatedDeviceRegistry implements
             : $this->repository->findDeviceBySessionDigest($area, $digest);
         if ($device === null) {
             if ($context->deviceId !== null && trim($context->deviceId) !== '') {
+                // Stale Session device_id after concurrent takeover: adopt the live digest row.
+                $healed = $this->healFromCurrentSessionDigest($area, $context, $digest);
+                if ($healed !== null) {
+                    return $healed;
+                }
                 return AuthenticatedDeviceValidation::invalid('device_binding_missing');
             }
             // Deployment compatibility: an authenticated pre-1.1.0 Session is adopted
@@ -68,12 +73,24 @@ final class AuthenticatedDeviceRegistry implements
             return $this->bindNewOrExistingSession($area, $context);
         }
         if (!$this->sameOwner($device, $context->principalId)) {
+            $healed = $this->healFromCurrentSessionDigest($area, $context, $digest);
+            if ($healed !== null) {
+                return $healed;
+            }
             return AuthenticatedDeviceValidation::invalid('owner_mismatch');
         }
         if ($this->isRevoked($device)) {
+            $healed = $this->healFromCurrentSessionDigest($area, $context, $digest);
+            if ($healed !== null) {
+                return $healed;
+            }
             return AuthenticatedDeviceValidation::invalid('revoked');
         }
         if (!hash_equals((string)$device['session_digest'], $digest)) {
+            $healed = $this->healFromCurrentSessionDigest($area, $context, $digest);
+            if ($healed !== null) {
+                return $healed;
+            }
             return AuthenticatedDeviceValidation::invalid('session_rebound');
         }
 
@@ -96,6 +113,24 @@ final class AuthenticatedDeviceRegistry implements
             $device = $this->repository->updateDevice((int)$device['id'], $changes);
         }
         return AuthenticatedDeviceValidation::valid((string)$device['public_id']);
+    }
+
+    /**
+     * After session_taken_over / preview logout races, Session may still hold an old
+     * device public_id while a newer active row owns the current session digest.
+     */
+    private function healFromCurrentSessionDigest(
+        string $area,
+        AuthenticatedDeviceContext $context,
+        string $digest,
+    ): ?AuthenticatedDeviceValidation {
+        $live = $this->repository->findDeviceBySessionDigest($area, $digest);
+        if ($live === null
+            || !$this->sameOwner($live, $context->principalId)
+            || $this->isRevoked($live)) {
+            return null;
+        }
+        return AuthenticatedDeviceValidation::valid((string)$live['public_id']);
     }
 
     public function revokeCurrent(AuthenticatedDeviceContext $context, string $reason = 'logout'): void
@@ -404,17 +439,26 @@ final class AuthenticatedDeviceRegistry implements
         AuthenticatedDeviceContext $context,
     ): AuthenticatedDeviceValidation {
         $digest = $this->digest($context->sessionId);
+        $installDigest = $this->currentInstallKeyDigest($area);
         $existing = $this->repository->findDeviceBySessionDigest($area, $digest);
         if ($existing !== null) {
-            if (!$this->sameOwner($existing, $context->principalId) || $this->isRevoked($existing)) {
-                return AuthenticatedDeviceValidation::invalid('session_binding_conflict');
+            // Same browser Session cookie may already be bound to another frontend
+            // principal. Login must take over the digest instead of returning
+            // session_binding_conflict — otherwise AuthenticatedSession clears auth
+            // and the user appears to "drop offline".
+            if ($this->sameOwner($existing, $context->principalId)) {
+                if ($this->isRevoked($existing)) {
+                    return AuthenticatedDeviceValidation::valid(
+                        (string)$this->reactivateDevice($area, $context, $existing, $installDigest)['public_id'],
+                    );
+                }
+                return AuthenticatedDeviceValidation::valid(
+                    (string)$this->ensureInstallKeyOnDevice($area, $existing)['public_id'],
+                );
             }
-            return AuthenticatedDeviceValidation::valid(
-                (string)$this->ensureInstallKeyOnDevice($area, $existing)['public_id'],
-            );
+            $this->releaseSessionDigestBinding($existing, 'session_taken_over');
         }
 
-        $installDigest = $this->currentInstallKeyDigest($area);
         if ($installDigest !== '') {
             $byInstall = $this->repository->findActiveDevicesByInstallKey(
                 $area,
@@ -457,6 +501,21 @@ final class AuthenticatedDeviceRegistry implements
             $device = $this->repository->insertDevice($record);
         } catch (\Throwable $exception) {
             $device = $this->repository->findDeviceBySessionDigest($area, $digest);
+            if ($device !== null
+                && (!$this->sameOwner($device, $context->principalId) || $this->isRevoked($device))) {
+                if ($this->sameOwner($device, $context->principalId) && $this->isRevoked($device)) {
+                    return AuthenticatedDeviceValidation::valid(
+                        (string)$this->reactivateDevice($area, $context, $device, $installDigest)['public_id'],
+                    );
+                }
+                $this->releaseSessionDigestBinding($device, 'session_taken_over');
+                try {
+                    $device = $this->repository->insertDevice($record);
+                } catch (\Throwable $retryException) {
+                    throw $retryException;
+                }
+                return AuthenticatedDeviceValidation::valid((string)$device['public_id']);
+            }
             if ($device === null && $installDigest !== '') {
                 $race = $this->repository->findActiveDevicesByInstallKey(
                     $area,
@@ -476,6 +535,57 @@ final class AuthenticatedDeviceRegistry implements
             return AuthenticatedDeviceValidation::invalid('session_binding_conflict');
         }
         return AuthenticatedDeviceValidation::valid((string)$device['public_id']);
+    }
+
+    /**
+     * Free (auth_area, session_digest) so a new principal can bind the shared cookie.
+     *
+     * @param array<string,mixed> $device
+     */
+    private function releaseSessionDigestBinding(array $device, string $reason): void
+    {
+        $now = time();
+        $retiredDigest = $this->digest(
+            'retired:' . (int)($device['id'] ?? 0) . ':' . (string)($device['session_digest'] ?? '') . ':' . $now,
+        );
+        if (!$this->isRevoked($device)) {
+            $this->revokeDevice($device, $reason);
+        }
+        $this->repository->updateDevice((int)$device['id'], [
+            'session_digest' => $retiredDigest,
+            'updated_at' => $now,
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $device
+     * @return array<string,mixed>
+     */
+    private function reactivateDevice(
+        string $area,
+        AuthenticatedDeviceContext $context,
+        array $device,
+        string $installDigest,
+    ): array {
+        $now = time();
+        $metadata = $this->metadataProvider->current();
+        $changes = [
+            'session_digest' => $this->digest($context->sessionId),
+            'device_name' => $metadata->deviceName,
+            'browser' => $metadata->browser,
+            'operating_system' => $metadata->operatingSystem,
+            'last_ip' => $metadata->ipAddress,
+            'last_seen_at' => $now,
+            'session_expires_at' => max($now + 1, $context->sessionExpiresAt),
+            'revoked_at' => 0,
+            'revoke_reason' => '',
+            'remembered_until' => 0,
+            'updated_at' => $now,
+        ];
+        if ($installDigest !== '') {
+            $changes['install_key_digest'] = $installDigest;
+        }
+        return $this->repository->updateDevice((int)$device['id'], $changes);
     }
 
     private function resumeDevice(

@@ -98,13 +98,13 @@ final class SupplierApplicationContractTest extends TestCase
         $base = dirname(__DIR__, 3) . '/i18n';
         $en = (string)file_get_contents($base . '/en_US.csv');
         $zh = (string)file_get_contents($base . '/zh_Hans_CN.csv');
-        self::assertStringContainsString('"云裳 · 供应合作","YunShang · Supplier partnerships"', $en);
+        self::assertStringContainsString('"长安 · 供应合作","Chang\'an · Supplier partnerships"', $en);
         self::assertStringContainsString('把好工艺带进更多衣橱,"Bring craft into more wardrobes"', $en);
         self::assertStringContainsString('一、合作对象,"1. Who we partner with"', $en);
-        self::assertStringNotContainsString("'云裳 · 供应合作'", $en);
+        self::assertStringNotContainsString("'长安 · 供应合作'", $en);
         self::assertStringNotContainsString("'一、合作对象'", $en);
-        self::assertStringContainsString('"云裳 · 供应合作","云裳 · 供应合作"', $zh);
-        self::assertStringNotContainsString("'云裳 · 供应合作'", $zh);
+        self::assertStringContainsString('"长安 · 供应合作","长安 · 供应合作"', $zh);
+        self::assertStringNotContainsString("'长安 · 供应合作'", $zh);
     }
 
     public function testBootstrapUsesThemeCountryFieldType(): void

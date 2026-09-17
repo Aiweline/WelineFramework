@@ -1,0 +1,198 @@
+<?php
+/**
+ * Header 政策/关于：顶栏露出「关于我们」；政策进下拉并细分法律/履约分组。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {header-policy-links}
+ * @widget.name {政策与关于链接}
+ * @widget.description {Header 左侧分类后：关于我们直链 + 购物政策下拉（法律与隐私 / 配送与售后）；可关闭单项并新增自定义链接。}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {header-policy-links}
+ * @widget.supports {["header-policy-links","layout-header-policy-links"]}
+ * @widget.exclusive {false}
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"header-policy-links","area":"header","sort_order":10,"required":true,"reason":"全局 chrome 在分类菜单后默认展示关于我们直链与政策下拉；非首页继承合并","config":{}}]}
+ *
+ * @param links {default=[],type="header_policy_links",label="政策与关于链接",description="空则使用 Theme 默认；group=about 顶栏直出，其余进下拉细分分组；名称支持翻译"}
+ * @param menu_label {default="购物政策",type="string",label="政策菜单标题"}
+ * @param aria_label {default="政策与关于",type="string",label="无障碍标题"}
+ */
+
+use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Helper\HeaderPolicyLinksHelper;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('header-policy-links');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$links = HeaderPolicyLinksHelper::normalizeRenderableLinks($this->getData('links'));
+$inlineLinks = HeaderPolicyLinksHelper::inlineLinks($links);
+$menuGroups = HeaderPolicyLinksHelper::menuGroups($links);
+$hasMenu = false;
+foreach ($menuGroups as $group) {
+    if (($group['items'] ?? []) !== []) {
+        $hasMenu = true;
+        break;
+    }
+}
+
+if ($inlineLinks !== [] || $hasMenu) {
+    $menuSource = trim((string)($this->getData('menu_label') ?? ''));
+    $menuLabel = WidgetI18n::label($menuSource !== '' ? $menuSource : '购物政策', '购物政策');
+    $ariaSource = trim((string)($this->getData('aria_label') ?? ''));
+    $ariaLabel = WidgetI18n::label($ariaSource !== '' ? $ariaSource : '政策与关于', '政策与关于');
+    $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+
+    $renderLink = function (array $link, string $class) use ($esc): void {
+        $openNew = !empty($link['open_in_new']);
+        $label = WidgetI18n::label((string)($link['label'] ?? ''), (string)($link['label'] ?? ''));
+        if ($label === '') {
+            return;
+        }
+        $split = FooterDefaultLinksHelper::splitUrlForTaglib((string)($link['url'] ?? '#'));
+        ?>
+        <a class="<?= $esc($class) ?>"
+           <?php if (str_contains($class, 'w-menu__item')): ?>role="menuitem"<?php endif; ?>
+           href="<?php if ($split['url'] !== ''): ?><?= $esc($split['url']) ?><?php else: ?>@url{$split['url_path']}<?php endif; ?>"<?= $openNew ? ' target="_blank" rel="noopener noreferrer"' : '' ?>><?= $esc($label) ?></a>
+        <?php
+    };
+    ?>
+<div class="<?= $esc($wc) ?> header-policy-links<?= $isPreviewMode ? ' is-preview' : '' ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-widget-type="header"
+     data-widget-code="header-policy-links"
+     data-testid="header-policy-links"
+     aria-label="<?= $esc($ariaLabel) ?>">
+    <?php foreach ($inlineLinks as $link):
+        $renderLink($link, 'header-policy-links__inline');
+    endforeach; ?>
+
+    <?php if ($hasMenu): ?>
+        <div class="header-policy-links__menu-wrap"
+             data-w-component="menu"
+             data-w-open-on="hover"
+             data-w-placement="bottom-start">
+            <button type="button"
+                    class="header-policy-links__trigger w-button"
+                    data-w-menu-trigger
+                    data-tone="quiet"
+                    aria-haspopup="menu"
+                    aria-expanded="false">
+                <span><?= $esc($menuLabel) ?></span>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div class="w-menu header-policy-links__menu w-surface-body"
+                 data-surface="body"
+                 data-w-menu-panel
+                 role="menu"
+                 data-state="closed"
+                 aria-hidden="true"
+                 hidden>
+                <?php
+                $groupIndex = 0;
+                foreach ($menuGroups as $group):
+                    $items = is_array($group['items'] ?? null) ? $group['items'] : [];
+                    if ($items === []) {
+                        continue;
+                    }
+                    $sectionTitle = trim((string)($group['title'] ?? ''));
+                    if ($groupIndex > 0):
+                        ?>
+                        <div class="w-menu__separator" role="separator"></div>
+                    <?php endif;
+                    if ($sectionTitle !== ''):
+                        ?>
+                        <div class="header-policy-links__section" role="presentation"><?= $esc(WidgetI18n::label($sectionTitle, $sectionTitle)) ?></div>
+                    <?php
+                    endif;
+                    foreach ($items as $link) {
+                        if (is_array($link)) {
+                            $renderLink($link, 'w-menu__item header-policy-links__item');
+                        }
+                    }
+                    $groupIndex++;
+                endforeach;
+                ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.<?= $wc ?>.header-policy-links {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+    gap: var(--weline-space-5, var(--spacing-sm, 0.75rem));
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    overflow: visible;
+    white-space: nowrap;
+    height: auto;
+    min-height: var(--size-control-md);
+}
+.<?= $wc ?> .header-policy-links__inline {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.<?= $wc ?> .header-policy-links__inline:hover {
+    text-decoration: underline;
+}
+.<?= $wc ?> .header-policy-links__menu-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.<?= $wc ?> .header-policy-links__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs, 0.25rem);
+    padding: var(--spacing-sm, 0.5rem) 0;
+    margin: 0;
+    min-inline-size: 0;
+    padding-inline: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.<?= $wc ?> .header-policy-links__trigger:hover {
+    text-decoration: underline;
+}
+.<?= $wc ?> .header-policy-links__trigger i {
+    font-size: 0.7em;
+    opacity: 0.85;
+}
+.<?= $wc ?> .header-policy-links__menu.w-menu {
+    min-width: 12rem;
+}
+.<?= $wc ?> .header-policy-links__section {
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem) var(--weline-space-1, 0.25rem);
+    color: var(--weline-theme-text-muted, var(--color-text-muted, #6b7280));
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: 600;
+}
+.<?= $wc ?> .header-policy-links__item {
+    white-space: nowrap;
+}
+@media (max-width: 768px) {
+    .<?= $wc ?>.header-policy-links {
+        display: none;
+    }
+}
+</style>
+<?php } ?>

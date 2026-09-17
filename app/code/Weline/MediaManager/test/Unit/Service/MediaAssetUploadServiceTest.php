@@ -340,6 +340,73 @@ final class MediaAssetUploadServiceTest extends TestCase
         }
     }
 
+    public function testOverwriteSkipsLocaleMetadataAndCallsReplaceContent(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'mmu_ow_');
+        self::assertIsString($path);
+        file_put_contents($path, 'replacement-bytes');
+        $access = self::accessContext();
+        try {
+            $assets = $this->createMock(FileAssetLibraryInterface::class);
+            $assets->expects(self::never())->method('upload');
+            $assets->expects(self::once())->method('replaceContent')->willReturnCallback(
+                static function (
+                    string $disk,
+                    string $key,
+                    mixed $stream,
+                    string $name,
+                    string $mime,
+                    string $locale,
+                    FileAccessContext $ctx,
+                ) use ($access): array {
+                    self::assertIsResource($stream);
+                    self::assertSame('image.txt', $name);
+                    self::assertSame('batch/image.txt', $key);
+                    self::assertSame($access, $ctx);
+                    return [
+                        'asset_id' => 'asset-kept',
+                        'disk_code' => $disk,
+                        'object_key' => $key,
+                        'locale_code' => $locale,
+                        'mime' => $mime,
+                        'default_alt' => 'kept-alt',
+                        'description' => 'kept-description',
+                        'asset_ready' => true,
+                        'asset_selectable' => true,
+                    ];
+                },
+            );
+            $service = $this->createService($assets);
+            $result = $service->uploadFiles(
+                [[
+                    'name' => 'image.txt',
+                    'tmp_name' => $path,
+                    'type' => 'text/plain',
+                    'error' => UPLOAD_ERR_OK,
+                    'size' => 17,
+                ]],
+                'local::filesystem::media',
+                'batch',
+                'zh_Hans_CN',
+                $access,
+                [],
+                FileAssetLibraryInterface::VISIBILITY_PUBLIC,
+                ['text/plain'],
+                1024,
+                [['overwrite' => true]],
+                ['txt'],
+            );
+            self::assertCount(1, $result);
+            self::assertSame('asset-kept', $result[0]['asset_id']);
+            self::assertTrue($result[0]['overwritten']);
+            self::assertSame('kept-alt', $result[0]['default_alt']);
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
     private static function accessContext(): FileAccessContext
     {
         return new FileAccessContext(

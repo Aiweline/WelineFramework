@@ -55,6 +55,7 @@ final class PostAdminTemplateContractTest extends TestCase
         self::assertStringContainsString('<file-manager', $source);
         self::assertStringContainsString('path="media/blog/"', $source);
         self::assertStringContainsString('lockPath="1"', $source);
+        self::assertStringContainsString('identity_scope=', $source);
         self::assertStringContainsString('cms-theme-editor-workspace', $source);
         self::assertStringContainsString('cms-theme-editor-frame', $source);
         self::assertStringContainsString('data-blog-slug-ai', $source);
@@ -75,5 +76,6 @@ final class PostAdminTemplateContractTest extends TestCase
         self::assertStringContainsString('WebsiteAclGrantService', $source);
         self::assertStringContainsString('resolveFormWebsiteId', $source);
         self::assertStringContainsString('theme_editor_url', $source);
+        self::assertStringContainsString('media_identity_scope', $source);
     }
 }

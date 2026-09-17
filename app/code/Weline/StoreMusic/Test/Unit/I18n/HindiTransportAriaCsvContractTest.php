@@ -22,11 +22,12 @@ final class HindiTransportAriaCsvContractTest extends TestCase
     public function testTransportAriaUsesRuntimeTranslateNotCompileLang(): void
     {
         $tpl = dirname(__DIR__, 3)
-            . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+            . '/view/templates/frontend/widgets/store-music.phtml';
         self::assertFileExists($tpl);
         $src = (string)file_get_contents($tpl);
-        self::assertStringContainsString("htmlspecialchars((string)__('播放')", $src);
-        self::assertStringContainsString("htmlspecialchars((string)__('下一首')", $src);
+        self::assertStringContainsString("\$t('播放')", $src);
+        self::assertStringContainsString("\$t('下一首')", $src);
         self::assertStringNotContainsString('aria-label="@lang(播放)"', $src);
+        self::assertStringNotContainsString('<lang>', $src);
     }
 }
