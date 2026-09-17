@@ -19,7 +19,7 @@ return [
         'supports' => [
             'layout-product-recently-viewed',
             'layout-product-sidebar',
-            'layout-product-list-recommendations',
+            'layout-products-recommendations',
             'layout-search-recommendations',
             'recently-viewed',
         ],
