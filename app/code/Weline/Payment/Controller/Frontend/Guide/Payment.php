@@ -22,7 +22,6 @@ final class Payment extends FrontendController
 
         $this->layoutType = 'payment_guide';
         $this->request->setGet('page_type', 'payment_guide');
-        $this->request->setGet('theme_public_route', 'guide/payment');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);
@@ -82,15 +81,9 @@ final class Payment extends FrontendController
         $title = (string) ($entry[$titleKey] ?? '');
         $layoutType = (string) ($entry[$layoutKey] ?? 'payment_guide');
         $template = (string) ($entry[$templateKey] ?? '');
-        $publicRoute = match ($pageType) {
-            'policy' => 'guide/payment/' . $methodCode . '/policy',
-            'agreement' => 'guide/payment/' . $methodCode . '/agreement',
-            default => 'guide/payment/' . $methodCode,
-        };
 
         $this->layoutType = $layoutType;
         $this->request->setGet('page_type', $layoutType);
-        $this->request->setGet('theme_public_route', $publicRoute);
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);

@@ -840,7 +840,7 @@
         if (!(slot instanceof HTMLElement)) {
             return null;
         }
-        const slotId = String(slot.dataset.wslot || slot.getAttribute('data-slot') || '').trim();
+        const slotId = String(slot.dataset.wslot || slot.getAttribute('data-wslot') || '').trim();
         if (!slotId) {
             return null;
         }
@@ -906,7 +906,7 @@
         toolbar.setAttribute('data-slot-hover-actions', '1');
 
         const stamped = stampSlotToolbarSelection(toolbar, slot);
-        const slotIdForLabel = stamped?.id || slot.dataset.wslot || slot.getAttribute('data-slot') || '';
+        const slotIdForLabel = stamped?.id || slot.dataset.wslot || slot.getAttribute('data-wslot') || '';
 
         // 选择按钮
         const btn = document.createElement('button');
@@ -2336,56 +2336,108 @@
         initSlots();
     }
 
-    // 监听动态添加的插槽 — 完整初始化（选择按钮 + 点击 + 拖放 + 占位符）
-    // Dense widget childList would otherwise trip DEV delivery_storm (>40 / ~250ms).
-    // Disconnect + coalesce (same pattern as ModuleLoader / captcha-lazy).
-    let slotDiscoveryScheduled = false;
+    // Dense widget childList: disconnect + trailing idle (never double-rAF reobserve).
     const pendingSlots = new Set();
     const slotObserveOptions = { childList: true, subtree: true };
-    const observer = new MutationObserver(function(mutations) {
-        try {
-            observer.disconnect();
-        } catch (_) {}
-        mutations.forEach(function(mutation) {
-            mutation.addedNodes.forEach(function(node) {
-                if (node.nodeType !== 1) {
-                    return;
-                }
-                if (node.hasAttribute && node.hasAttribute('data-wslot')) {
-                    pendingSlots.add(node);
-                }
-                if (node.querySelectorAll) {
-                    node.querySelectorAll('[data-wslot]').forEach(function(el) {
-                        pendingSlots.add(el);
+    if (document.body) {
+        const coalesce = (typeof window.Weline !== 'undefined'
+            && window.Weline.dom
+            && typeof window.Weline.dom.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : (typeof window.Weline !== 'undefined'
+            && typeof window.Weline.observeMutationsCoalesced === 'function')
+            ? window.Weline.observeMutationsCoalesced
+            : function observeMutationsCoalescedFallback(spec) {
+                /* ARCH_MO_FALLBACK_START */
+                const options = (spec && spec.options) || { childList: true, subtree: true };
+                const idleTimeoutMs = 100;
+                let idleHandle = null;
+                let timeoutHandle = null;
+                let disposed = false;
+                const clearTimers = function() {
+                    if (idleHandle != null && typeof window.cancelIdleCallback === 'function') {
+                        try { window.cancelIdleCallback(idleHandle); } catch (_) {}
+                        idleHandle = null;
+                    }
+                    if (timeoutHandle != null) {
+                        window.clearTimeout(timeoutHandle);
+                        timeoutHandle = null;
+                    }
+                };
+                const runFlush = function() {
+                    if (disposed) return;
+                    clearTimers();
+                    try { mo.disconnect(); } catch (_) {}
+                    try {
+                        if (typeof spec.onFlush === 'function') spec.onFlush();
+                    } finally {
+                        if (!disposed && document.body) {
+                            try { mo.observe(document.body, options); } catch (_) {}
+                        }
+                    }
+                };
+                const schedule = function() {
+                    if (disposed) return;
+                    clearTimers();
+                    try { mo.disconnect(); } catch (_) {}
+                    timeoutHandle = window.setTimeout(function() {
+                        timeoutHandle = null;
+                        var run = function() {
+                            idleHandle = null;
+                            runFlush();
+                        };
+                        if (typeof window.requestIdleCallback === 'function') {
+                            idleHandle = window.requestIdleCallback(run, { timeout: 50 });
+                        } else {
+                            run();
+                        }
+                    }, idleTimeoutMs);
+                };
+                const mo = new MutationObserver(function(records) {
+                    if (disposed) return;
+                    try { mo.disconnect(); } catch (_) {}
+                    if (typeof spec.onRecords === 'function') {
+                        try { spec.onRecords(records); } catch (_) {}
+                    }
+                    schedule();
+                });
+                try { mo.observe(document.body, options); } catch (_) {}
+                return { disconnect: function() {
+                    disposed = true;
+                    clearTimers();
+                    try { mo.disconnect(); } catch (_) {}
+                } };
+                /* ARCH_MO_FALLBACK_END */
+            };
+        coalesce({
+            target: document.body,
+            options: slotObserveOptions,
+            idleTimeoutMs: 100,
+            onRecords: function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType !== 1) {
+                            return;
+                        }
+                        if (node.hasAttribute && node.hasAttribute('data-wslot')) {
+                            pendingSlots.add(node);
+                        }
+                        if (node.querySelectorAll) {
+                            node.querySelectorAll('[data-wslot]').forEach(function(el) {
+                                pendingSlots.add(el);
+                            });
+                        }
                     });
-                }
-            });
+                });
+            },
+            onFlush: function() {
+                const batch = Array.from(pendingSlots);
+                pendingSlots.clear();
+                // Only newly added slots — never full-body querySelectorAll rescan (feeds delivery_storm).
+                batch.forEach(initSingleSlot);
+            },
         });
-        if (slotDiscoveryScheduled) {
-            return;
-        }
-        slotDiscoveryScheduled = true;
-        const flush = function() {
-            slotDiscoveryScheduled = false;
-            const batch = Array.from(pendingSlots);
-            pendingSlots.clear();
-            batch.forEach(initSingleSlot);
-            try {
-                if (document.body) {
-                    observer.observe(document.body, slotObserveOptions);
-                }
-            } catch (_) {}
-        };
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(function() {
-                requestAnimationFrame(flush);
-            });
-        } else {
-            setTimeout(flush, 0);
-        }
-    });
-
-    observer.observe(document.body, slotObserveOptions);
+    }
 
     document.addEventListener('drop', function() {
         activeDragWidget = null;
@@ -2590,45 +2642,101 @@ function initialize() {
     mount(document);
     bindPreviewExitButtons();
 
-    // Dense storefront hydrate would otherwise trip DEV delivery_storm; coalesce like ModuleLoader.
-    let mountScheduled = false;
+    // Dense storefront hydrate: disconnect + trailing idle (never double-rAF reobserve).
     const pendingMountRoots = new Set();
     const mountObserveOptions = { childList: true, subtree: true };
-    const observer = new MutationObserver((records) => {
-        try {
-            observer.disconnect();
-        } catch (_) {}
-        records.forEach((record) => record.addedNodes.forEach((node) => {
-            if (node instanceof Element) {
-                pendingMountRoots.add(node);
-            }
-        }));
-        if (mountScheduled) {
-            return;
-        }
-        mountScheduled = true;
-        const flush = () => {
-            mountScheduled = false;
-            const batch = Array.from(pendingMountRoots);
-            pendingMountRoots.clear();
-            batch.forEach((node) => {
-                if (node.isConnected) {
-                    mount(node);
-                }
-            });
-            try {
-                if (document.body) {
-                    observer.observe(document.body, mountObserveOptions);
-                }
-            } catch (_) {}
-        };
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => requestAnimationFrame(flush));
-        } else {
-            setTimeout(flush, 0);
-        }
-    });
-    observer.observe(document.body, mountObserveOptions);
+    if (!document.body) {
+        // no-op when body missing
+    } else {
+        const coalesce = (typeof window.Weline?.dom?.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : (typeof window.Weline?.observeMutationsCoalesced === 'function')
+            ? window.Weline.observeMutationsCoalesced
+            : function observeMutationsCoalescedFallback(spec) {
+                /* ARCH_MO_FALLBACK_START */
+                const options = (spec && spec.options) || { childList: true, subtree: true };
+                const idleTimeoutMs = 100;
+                let flushScheduled = false;
+                let idleHandle = null;
+                let timeoutHandle = null;
+                let disposed = false;
+                const clearTimers = () => {
+                    if (idleHandle != null && typeof window.cancelIdleCallback === 'function') {
+                        try { window.cancelIdleCallback(idleHandle); } catch (_) {}
+                        idleHandle = null;
+                    }
+                    if (timeoutHandle != null) {
+                        window.clearTimeout(timeoutHandle);
+                        timeoutHandle = null;
+                    }
+                };
+                const runFlush = () => {
+                    if (disposed) return;
+                    flushScheduled = false;
+                    clearTimers();
+                    try { mo.disconnect(); } catch (_) {}
+                    try { if (typeof spec.onFlush === 'function') spec.onFlush(); } finally {
+                        if (!disposed && document.body) {
+                            try { mo.observe(document.body, options); } catch (_) {}
+                        }
+                    }
+                };
+                const schedule = () => {
+                    if (disposed) return;
+                    clearTimers();
+                    flushScheduled = true;
+                    try { mo.disconnect(); } catch (_) {}
+                    timeoutHandle = window.setTimeout(() => {
+                        timeoutHandle = null;
+                        const run = () => {
+                            idleHandle = null;
+                            runFlush();
+                        };
+                        if (typeof window.requestIdleCallback === 'function') {
+                            idleHandle = window.requestIdleCallback(run, { timeout: 50 });
+                        } else {
+                            run();
+                        }
+                    }, idleTimeoutMs);
+                };
+                const mo = new MutationObserver((records) => {
+                    if (disposed) return;
+                    try { mo.disconnect(); } catch (_) {}
+                    if (typeof spec.onRecords === 'function') {
+                        try { spec.onRecords(records); } catch (_) {}
+                    }
+                    schedule();
+                });
+                try { mo.observe(document.body, options); } catch (_) {}
+                return {
+                    disconnect() {
+                        disposed = true;
+                        flushScheduled = false;
+                        clearTimers();
+                        try { mo.disconnect(); } catch (_) {}
+                    },
+                };
+                /* ARCH_MO_FALLBACK_END */
+            };
+        coalesce({
+            target: document.body,
+            options: mountObserveOptions,
+            idleTimeoutMs: 100,
+            onRecords(records) {
+                records.forEach((record) => record.addedNodes.forEach((node) => {
+                    if (node instanceof Element) pendingMountRoots.add(node);
+                }));
+            },
+            onFlush() {
+                const batch = Array.from(pendingMountRoots);
+                pendingMountRoots.clear();
+                // Only newly added roots — never remount(document) (feeds delivery_storm / starves parent microtasks).
+                batch.forEach((node) => {
+                    if (node.isConnected) mount(node);
+                });
+            },
+        });
+    }
 
     document.addEventListener('click', (event) => {
         const target = event.target instanceof Element ? event.target : null;

@@ -43,13 +43,11 @@ final class Category extends FrontendController
         $category = $page['category'];
         $name = trim((string)($category['name'] ?? ''));
         $routePath = trim(str_replace('\\', '/', (string)($category['path'] ?? $publicPath)), '/');
-        $themeRoute = $routePath !== '' ? 'category/' . $routePath : 'categories';
 
         $this->layoutType = 'category';
         $this->request->setGet('page_type', 'category');
         $this->request->setGet('layout_type', 'category');
         $this->request->setGet('layout_option', 'default');
-        $this->request->setGet('theme_public_route', $themeRoute);
         $this->request->setGet('theme_page_title', $name !== '' ? $name : (string)__('分类'));
         // Keep path query aligned for layout hooks that resolve by request param.
         $this->request->setGet('path', $routePath);

@@ -5,6 +5,7 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Currency\Helper\CurrencySymbol;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetI18n;
@@ -40,6 +41,7 @@ $productUrlPath = trim((string)($product['url_path'] ?? ''));
 $productImage = (string)($product['image'] ?? '');
 $imageFallback = (string)($product['image_fallback'] ?? '');
 $currency = (string)($product['currency'] ?? 'CNY');
+$currencyGlyph = CurrencySymbol::forCode($currency);
 $price = (float)($product['price'] ?? 0);
 $originalPrice = (float)($product['original_price'] ?? 0);
 $rating = (float)($product['rating'] ?? 0);
@@ -50,6 +52,7 @@ $isSale = !empty($product['is_sale']);
 $isDemo = !empty($product['is_demo']);
 $sellable = !empty($product['sellable']);
 $quoteOnly = !empty($product['quote_only']);
+$currencyUnavailable = !empty($product['currency_unavailable']);
 $offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
 $campaignLabel = WidgetI18n::label(trim((string)($product['campaign_label'] ?? '')));
 $campaignUrl = trim((string)($product['campaign_url'] ?? ''));
@@ -60,6 +63,7 @@ $hrefAttr = $productUrl !== ''
     ? 'href="' . $esc($productUrl) . '"'
     : ($productUrlPath !== '' ? 'href="@url{' . $productUrlPath . '}"' : 'href="#"');
 ?>
+<?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
 <article class="<?= $esc($classes) ?>"
          data-testid="weline-product-card"
          data-product-id="<?= $productId ?>"
@@ -117,15 +121,17 @@ $hrefAttr = $productUrl !== ''
 
         <?php if ($showPrice): ?>
             <div class="wpc-price">
-                <?php if ($quoteOnly): ?>
+                <?php if ($currencyUnavailable): ?>
+                    <span class="wpc-price-quote">@lang{当前货币暂不可用}</span>
+                <?php elseif ($quoteOnly): ?>
                     <span class="wpc-price-quote">@lang{联系询价}</span>
                 <?php else: ?>
                     <span class="wpc-price-now weline-pixel::add_to_cart:value"
                           data-pixel-value="<?= $esc((string)$price) ?>">
-                        <?= $esc($currency) ?> <?= number_format($price, 2) ?>
+                        <?= $esc($currencyGlyph) ?><?= number_format($price, 2) ?>
                     </span>
                     <?php if ($originalPrice > $price && $price > 0): ?>
-                        <span class="wpc-price-was"><?= $esc($currency) ?> <?= number_format($originalPrice, 2) ?></span>
+                        <span class="wpc-price-was"><?= $esc($currencyGlyph) ?><?= number_format($originalPrice, 2) ?></span>
                         <?php if ($campaignLabel !== ''): ?>
                             <?php if ($campaignUrl !== ''): ?>
                                 <a class="wpc-campaign" href="<?= $esc($campaignUrl) ?>"><?= $esc($campaignLabel) ?></a>
@@ -140,7 +146,9 @@ $hrefAttr = $productUrl !== ''
 
         <?php if ($showAddToCart): ?>
             <div class="wpc-cta">
-                <?php if ($sellable && $offerUuid !== '' && !$quoteOnly): ?>
+                <?php if ($currencyUnavailable): ?>
+                    <span class="wpc-detail-link" aria-disabled="true">@lang{当前货币暂不可用}</span>
+                <?php elseif ($sellable && $offerUuid !== '' && !$quoteOnly): ?>
                     <?= $this->fetch(
                         'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
                         ProductCardAddToCartParams::fetchDictionary($product, [

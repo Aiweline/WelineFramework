@@ -143,9 +143,44 @@
     }
     function boot() {
         mount(document);
+        var observeApi = (window.Weline && window.Weline.dom && typeof window.Weline.dom.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : null;
+        if (observeApi) {
+            var pendingRoots = [];
+            observeApi({
+                target: document.documentElement,
+                options: { childList: true, subtree: true },
+                idleTimeoutMs: 100,
+                label: 'site-blocks',
+                onRecords: function (records) {
+                    records.forEach(function (record) {
+                        record.addedNodes.forEach(function (node) {
+                            if (node.nodeType === 1) {
+                                pendingRoots.push(node);
+                            }
+                        });
+                    });
+                },
+                onFlush: function () {
+                    var batch = pendingRoots;
+                    pendingRoots = [];
+                    // Only newly added roots — never remount(document) (feeds delivery_storm).
+                    batch.forEach(function (node) {
+                        if (node.isConnected) {
+                            mount(node);
+                        }
+                    });
+                },
+            });
+            return;
+        }
+        // ARCH_MO_FALLBACK_START — stripped by contract as /* */ markers below
+        /* ARCH_MO_FALLBACK_START */
         new MutationObserver((records) => {
             records.forEach((record) => record.addedNodes.forEach((node) => { if (node.nodeType === 1) mount(node); }));
         }).observe(document.documentElement, { childList: true, subtree: true });
+        /* ARCH_MO_FALLBACK_END */
     }
     document.addEventListener('visibilitychange', () => sliders.forEach((resume) => resume()));
     reducedMotion.addEventListener('change', () => sliders.forEach((resume) => resume()));

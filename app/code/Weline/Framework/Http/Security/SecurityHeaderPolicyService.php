@@ -355,9 +355,6 @@ final class SecurityHeaderPolicyService
         if ($origin === '') {
             $origin = \trim((string)WelineEnv::get('server.http_origin', ''));
         }
-        if ($origin === '' && isset($_SERVER['HTTP_ORIGIN'])) {
-            $origin = \trim((string)$_SERVER['HTTP_ORIGIN']);
-        }
 
         return $origin;
     }

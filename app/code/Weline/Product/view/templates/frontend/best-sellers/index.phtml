@@ -1,324 +1,159 @@
 <?php
 
-use Weline\Theme\Helper\ProductCardAddToCartParams;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\ProductCardUrl;
-use Weline\Theme\Helper\StorefrontImagePlaceholder;
+use Weline\Theme\Helper\ProductLabelStyle;
 
 /**
- * Storefront best-sellers ranking page body.
+ * Storefront best-sellers ranking page body (grid only; hero is best-sellers-hero widget).
  *
  * @var list<array<string,mixed>> $storefront_best_sellers
  */
 $items = $this->getData('storefront_best_sellers') ?? [];
 $items = is_array($items) ? $items : [];
-$count = max(0, (int)($this->getData('storefront_best_sellers_count') ?? count($items)));
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$top = array_slice($items, 0, 3);
-$rest = array_slice($items, 3);
+$showPrice = true;
+$showRating = true;
+$showAddToCart = true;
+$showWishlist = true;
+$showCompare = true;
+$showQuickview = true;
 ?>
 <section class="best-sellers-page"
          data-testid="storefront-best-sellers"
          weline-code="product.frontend.best_sellers.section_1">
-    <header class="best-sellers-page__hero">
-        <p class="best-sellers-page__eyebrow"><lang>本站人气排行</lang></p>
-        <h1 class="best-sellers-page__title"><lang>热销榜</lang></h1>
-        <p class="best-sellers-page__lede">
-            <lang>按店面热度排序的热销商品，帮你快速找到大家都在买的好物。</lang>
-        </p>
-        <p class="best-sellers-page__count" data-testid="storefront-best-sellers-count">
-            <?php if ($count > 0): ?>
-                <?= __('共 %{1} 件热销商品', [$count]) ?>
-            <?php else: ?>
-                <lang>暂无热销商品</lang>
-            <?php endif; ?>
-        </p>
-    </header>
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
 
     <?php if ($items === []): ?>
         <div class="best-sellers-page__empty" data-testid="storefront-best-sellers-empty">
             <lang>当前网站暂无已发布的热销商品。</lang>
         </div>
     <?php else: ?>
-        <?php if ($top !== []): ?>
-            <ol class="best-sellers-page__podium" data-testid="storefront-best-sellers-podium">
-                <?php foreach ($top as $item): ?>
-                    <?php
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    $rank = max(1, (int)($item['rank'] ?? 1));
-                    $productId = max(0, (int)($item['product_id'] ?? $item['id'] ?? 0));
-                    $name = trim((string)($item['name'] ?? ''));
-                    $sales = max(0, (int)($item['sales_count'] ?? 0));
-                    $price = (float)($item['price'] ?? 0);
-                    $productLink = ProductCardUrl::splitForTaglib((string)($item['url'] ?? ''));
-                    $route = $productLink['url'] !== ''
-                        ? $productLink['url']
-                        : ($productLink['url_path'] !== '' ? $this->getUrl($productLink['url_path']) : '');
-                    $imageResolved = StorefrontImagePlaceholder::resolve((string)($item['image'] ?? ''), $productId);
-                    ?>
-                    <li class="best-sellers-page__podium-item best-sellers-page__podium-item--<?= $rank ?>"
-                        data-testid="storefront-best-sellers-card"
-                        data-rank="<?= $rank ?>"
-                        data-product-id="<?= $productId ?>">
-                        <span class="best-sellers-page__rank" aria-label="<?= $escape(__('排名') . ' ' . $rank) ?>">#<?= $rank ?></span>
-                        <?php if ($route !== ''): ?>
-                            <a class="best-sellers-page__media" href="<?= $escape($route) ?>" aria-label="<?= $escape($name) ?>">
-                                <img src="<?= $escape($imageResolved['src']) ?>"
-                                     alt=""
-                                     data-storefront-img="1"
-                                     data-fallback="<?= $escape($imageResolved['fallback']) ?>"
-                                     loading="lazy"
-                                     decoding="async">
-                            </a>
-                        <?php else: ?>
-                            <div class="best-sellers-page__media" aria-hidden="true">
-                                <img src="<?= $escape($imageResolved['src']) ?>"
-                                     alt=""
-                                     data-storefront-img="1"
-                                     data-fallback="<?= $escape($imageResolved['fallback']) ?>"
-                                     loading="lazy"
-                                     decoding="async">
-                            </div>
-                        <?php endif; ?>
-                        <div class="best-sellers-page__body">
-                            <h2 class="best-sellers-page__name">
-                                <?php if ($route !== ''): ?>
-                                    <a href="<?= $escape($route) ?>"><?= $escape($name) ?></a>
-                                <?php else: ?>
-                                    <?= $escape($name) ?>
-                                <?php endif; ?>
-                            </h2>
-                            <p class="best-sellers-page__sales"><?= __('已售 %{1}', [$sales]) ?></p>
-                            <p class="best-sellers-page__price">CNY <?= number_format($price, 2) ?></p>
-                            <?= $this->fetch(
-                                'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-                                ProductCardAddToCartParams::fetchDictionary($item, ['variant' => 'storefront'])
-                            ) ?>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-            </ol>
-        <?php endif; ?>
-
-        <?php if ($rest !== []): ?>
-            <ol class="best-sellers-page__list" data-testid="storefront-best-sellers-list" start="4">
-                <?php foreach ($rest as $item): ?>
-                    <?php
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    $rank = max(1, (int)($item['rank'] ?? 1));
-                    $productId = max(0, (int)($item['product_id'] ?? $item['id'] ?? 0));
-                    $name = trim((string)($item['name'] ?? ''));
-                    $sales = max(0, (int)($item['sales_count'] ?? 0));
-                    $price = (float)($item['price'] ?? 0);
-                    $productLink = ProductCardUrl::splitForTaglib((string)($item['url'] ?? ''));
-                    $route = $productLink['url'] !== ''
-                        ? $productLink['url']
-                        : ($productLink['url_path'] !== '' ? $this->getUrl($productLink['url_path']) : '');
-                    $imageResolved = StorefrontImagePlaceholder::resolve((string)($item['image'] ?? ''), $productId);
-                    ?>
-                    <li class="best-sellers-page__row"
-                        data-testid="storefront-best-sellers-card"
-                        data-rank="<?= $rank ?>"
-                        data-product-id="<?= $productId ?>">
-                        <span class="best-sellers-page__rank best-sellers-page__rank--row">#<?= $rank ?></span>
-                        <?php if ($route !== ''): ?>
-                            <a class="best-sellers-page__thumb" href="<?= $escape($route) ?>" aria-label="<?= $escape($name) ?>">
-                                <img src="<?= $escape($imageResolved['src']) ?>"
-                                     alt=""
-                                     data-storefront-img="1"
-                                     data-fallback="<?= $escape($imageResolved['fallback']) ?>"
-                                     loading="lazy"
-                                     decoding="async">
-                            </a>
-                        <?php else: ?>
-                            <div class="best-sellers-page__thumb" aria-hidden="true">
-                                <img src="<?= $escape($imageResolved['src']) ?>"
-                                     alt=""
-                                     data-storefront-img="1"
-                                     data-fallback="<?= $escape($imageResolved['fallback']) ?>"
-                                     loading="lazy"
-                                     decoding="async">
-                            </div>
-                        <?php endif; ?>
-                        <div class="best-sellers-page__row-body">
-                            <h2 class="best-sellers-page__name">
-                                <?php if ($route !== ''): ?>
-                                    <a href="<?= $escape($route) ?>"><?= $escape($name) ?></a>
-                                <?php else: ?>
-                                    <?= $escape($name) ?>
-                                <?php endif; ?>
-                            </h2>
-                            <p class="best-sellers-page__meta">
-                                <span><?= __('已售 %{1}', [$sales]) ?></span>
-                                <span class="best-sellers-page__price">CNY <?= number_format($price, 2) ?></span>
-                            </p>
-                        </div>
-                        <div class="best-sellers-page__row-actions">
-                            <?= $this->fetch(
-                                'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-                                ProductCardAddToCartParams::fetchDictionary($item, ['variant' => 'storefront'])
-                            ) ?>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-            </ol>
-        <?php endif; ?>
+        <div class="best-sellers-page__grid weline-product-card-shelf"
+             data-testid="storefront-best-sellers-grid"
+             role="list"
+             aria-label="<?= $escape(__('热销商品')) ?>">
+            <?php foreach ($items as $index => $item): ?>
+                <?php
+                if (!is_array($item)) {
+                    continue;
+                }
+                $product = $item;
+                $productId = max(0, (int)($product['product_id'] ?? $product['id'] ?? 0));
+                if ($productId <= 0) {
+                    continue;
+                }
+                $rank = max(1, (int)($product['rank'] ?? ($index + 1)));
+                $sales = max(0, (int)($product['sales_count'] ?? 0));
+                $product['id'] = $productId;
+                $product['product_id'] = $productId;
+                $product['rank'] = $rank;
+                $productLink = ProductCardUrl::splitForTaglib((string)($product['url'] ?? ''));
+                $product['url'] = $productLink['url'];
+                $product['url_path'] = $productLink['url_path'];
+                $labelFlags = ProductLabelStyle::resolveFlags($product, (int)$index);
+                $product['is_demo'] = !empty($labelFlags['is_demo']);
+                $product['is_new'] = !empty($labelFlags['is_new']);
+                $product['is_sale'] = !empty($labelFlags['is_sale']) || !empty($product['has_deal']);
+                $rankClass = $rank <= 3
+                    ? 'best-sellers-page__item--top best-sellers-page__item--' . $rank
+                    : 'best-sellers-page__item--rest';
+                ?>
+                <div class="best-sellers-page__item <?= $escape($rankClass) ?>"
+                     role="listitem"
+                     data-testid="storefront-best-sellers-card"
+                     data-rank="<?= $rank ?>"
+                     data-product-id="<?= $productId ?>">
+                    <span class="best-sellers-page__rank"
+                          aria-label="<?= $escape(__('排名') . ' ' . $rank) ?>">#<?= $rank ?></span>
+                    <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="showWishlist" show-compare="showCompare" show-quickview="showQuickview" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card" wishlist-pixel="true" />
+                    <?php if ($sales > 0): ?>
+                        <p class="best-sellers-page__sales"><?= __('已售 %{1}', [$sales]) ?></p>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
     <?php endif; ?>
 </section>
 
 <style>
-.best-sellers-page__hero {
-    margin: 0 0 1.75rem;
-    padding: clamp(1.5rem, 4vw, 2.25rem);
-    border-radius: 12px;
-    background:
-        radial-gradient(ellipse at top right, rgba(255, 153, 0, 0.22), transparent 48%),
-        linear-gradient(135deg, var(--color-bg-dark-secondary, #131921) 0%, var(--color-bg-dark, #232f3e) 100%);
-    color: #ffffff;
-}
-.best-sellers-page__hero .best-sellers-page__eyebrow {
-    margin: 0 0 0.35rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #ffd814;
-}
-.best-sellers-page__hero .best-sellers-page__title {
-    margin: 0;
-    font-size: clamp(1.75rem, 4vw, 2.4rem);
-    line-height: 1.15;
-    font-weight: 700;
-    color: #ffffff;
-}
-.best-sellers-page__hero .best-sellers-page__lede,
-.best-sellers-page__hero .best-sellers-page__count {
-    margin: 0.65rem 0 0;
-    color: rgba(255, 255, 255, 0.88);
+.best-sellers-page {
+    display: grid;
+    gap: var(--weline-space-7, 1.75rem);
+    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
 }
 .best-sellers-page__empty {
-    padding: 2rem;
+    padding: var(--weline-space-8, 2rem);
     text-align: center;
-    color: var(--color-text-secondary, #565959);
-    border: 1px dashed var(--color-border-default, #ddd);
-    border-radius: 8px;
+    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
+    border: var(--weline-theme-border-width, 1px) dashed var(--weline-theme-border, var(--color-border-default, #ddd));
+    border-radius: var(--weline-radius-md, 8px);
 }
-.best-sellers-page__podium {
-    list-style: none;
-    margin: 0 0 1.5rem;
-    padding: 0;
+.best-sellers-page__grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--weline-space-5, 1.25rem);
+    align-items: stretch;
 }
-.best-sellers-page__podium-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
-    border: 1px solid var(--color-border-default, #ddd);
-    border-radius: 12px;
-    background: var(--color-bg-secondary, #f7f8f8);
+.best-sellers-page__item {
     position: relative;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--weline-space-2, 0.5rem);
 }
-.best-sellers-page__podium-item--1 {
-    border-color: #f0c14b;
-    box-shadow: 0 0 0 1px rgba(240, 193, 75, 0.35);
+.best-sellers-page__item > .weline-product-card {
+    height: 100%;
+    min-width: 0;
 }
 .best-sellers-page__rank {
     position: absolute;
-    top: 0.75rem;
-    left: 0.75rem;
-    z-index: 1;
+    top: var(--weline-space-3, 0.75rem);
+    left: var(--weline-space-3, 0.75rem);
+    z-index: 3;
     min-width: 2.25rem;
     padding: 0.2rem 0.45rem;
     border-radius: 999px;
     background: var(--color-bg-dark, #232f3e);
     color: #fff;
-    font-weight: 700;
-    font-size: 0.85rem;
+    font-weight: var(--weline-font-weight-bold, 700);
+    font-size: var(--weline-font-size-sm, 0.85rem);
     text-align: center;
+    pointer-events: none;
+    box-shadow: var(--weline-theme-shadow-sm, 0 2px 8px rgba(15, 17, 17, 0.16));
 }
-.best-sellers-page__podium-item--1 .best-sellers-page__rank { background: #b12704; }
-.best-sellers-page__podium-item--2 .best-sellers-page__rank { background: #565959; }
-.best-sellers-page__podium-item--3 .best-sellers-page__rank { background: #8b5a2b; }
-.best-sellers-page__media,
-.best-sellers-page__thumb {
-    display: block;
-    aspect-ratio: 1;
-    overflow: hidden;
-    border-radius: 8px;
-    background: #fff;
+.best-sellers-page__item--1 .best-sellers-page__rank {
+    background: var(--color-danger, #b12704);
 }
-.best-sellers-page__media img,
-.best-sellers-page__thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+.best-sellers-page__item--2 .best-sellers-page__rank {
+    background: var(--weline-theme-text-muted, #565959);
 }
-.best-sellers-page__name {
+.best-sellers-page__item--3 .best-sellers-page__rank {
+    background: #8b5a2b;
+}
+.best-sellers-page__sales {
     margin: 0;
-    font-size: 1rem;
-    line-height: 1.35;
+    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
+    font-size: var(--weline-font-size-sm, 0.9rem);
 }
-.best-sellers-page__name a {
-    color: inherit;
-    text-decoration: none;
-}
-.best-sellers-page__name a:hover { color: #c45500; text-decoration: underline; }
-.best-sellers-page__sales,
-.best-sellers-page__meta {
-    margin: 0.35rem 0 0;
-    color: var(--color-text-secondary, #565959);
-    font-size: 0.9rem;
-}
-.best-sellers-page__price {
-    margin: 0.35rem 0 0;
-    font-weight: 700;
-    color: #b12704;
-}
-.best-sellers-page__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-.best-sellers-page__row {
-    display: grid;
-    grid-template-columns: auto 5.5rem minmax(0, 1fr) auto;
-    gap: 0.85rem;
-    align-items: center;
-    padding: 0.75rem;
-    border: 1px solid var(--color-border-default, #ddd);
-    border-radius: 10px;
-    background: #fff;
-}
-.best-sellers-page__rank--row {
-    position: static;
-    background: var(--color-bg-secondary, #eaeded);
-    color: var(--color-text-primary, #0f1111);
-}
-.best-sellers-page__thumb {
-    width: 5.5rem;
-    aspect-ratio: 1;
-}
-.best-sellers-page__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    align-items: baseline;
-}
-.best-sellers-page__meta .best-sellers-page__price { margin: 0; }
-@media (max-width: 900px) {
-    .best-sellers-page__podium { grid-template-columns: 1fr; }
-    .best-sellers-page__row {
-        grid-template-columns: auto 4.5rem minmax(0, 1fr);
+@media (max-width: 68rem) {
+    .best-sellers-page__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
-    .best-sellers-page__row-actions { grid-column: 2 / -1; }
+}
+@media (max-width: 48rem) {
+    .best-sellers-page__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--weline-space-4, 1rem);
+    }
+}
+@media (max-width: 32rem) {
+    .best-sellers-page__grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+:dir(rtl) .best-sellers-page__rank {
+    left: auto;
+    right: var(--weline-space-3, 0.75rem);
 }
 </style>

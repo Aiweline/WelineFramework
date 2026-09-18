@@ -61,15 +61,40 @@ class CurrencyImportService
         ];
 
         try {
-            // 获取汇率数据
+            // 未指定目标时，只刷新目录里已有的币种，避免把 API 全量币种灌进本站目录。
+            if ($targetCurrencies === []) {
+                $existing = $this->currencyModel->clear()
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                foreach ($existing as $row) {
+                    $code = strtoupper(trim((string) $row->getCode()));
+                    if ($code !== '') {
+                        $targetCurrencies[] = $code;
+                    }
+                }
+                $targetCurrencies = array_values(array_unique($targetCurrencies));
+            }
+
+            // 获取汇率数据（API：1 base = rate target；本站存储：1 target = rate base）
             $rates = $this->api->getExchangeRates($baseCurrency, $targetCurrencies);
-            
+            $baseCurrency = strtoupper(trim($baseCurrency));
+
             $result['total_count'] = count($rates);
-            
+
             // 遍历更新汇率
             foreach ($rates as $currencyCode => $rate) {
                 try {
-                    $this->updateCurrencyRate($currencyCode, $rate, $baseCurrency);
+                    $currencyCode = strtoupper(trim((string) $currencyCode));
+                    $apiRate = (float) $rate;
+                    if ($currencyCode === $baseCurrency) {
+                        $storedRate = 1.0;
+                    } elseif ($apiRate <= 0) {
+                        throw new Exception(__('货币 %{1} 的 API 汇率无效: %{2}', [$currencyCode, $apiRate]));
+                    } else {
+                        $storedRate = 1.0 / $apiRate;
+                    }
+                    $this->updateCurrencyRate($currencyCode, $storedRate, $baseCurrency);
                     $result['success_count']++;
                 } catch (\Exception $e) {
                     $result['fail_count']++;
@@ -219,6 +244,57 @@ class CurrencyImportService
     }
 
     /**
+     * 预览切换基准货币后的汇率对照（只算不写库）
+     *
+     * @return array{
+     *   old_base:string,
+     *   new_base:string,
+     *   formula:string,
+     *   changes:list<array{code:string,name:string,old_rate:float,new_rate:float,old_meaning:string,new_meaning:string,is_new_base:bool,changed:bool}>,
+     *   changed_count:int,
+     *   total_count:int,
+     *   errors:list<array{currency:string,error:string}>
+     * }
+     */
+    public function previewRatesForNewBase(string $oldBaseCurrency, string $newBaseCurrency): array
+    {
+        $plan = $this->buildBaseCurrencyRatePlan($oldBaseCurrency, $newBaseCurrency);
+        $changes = [];
+        foreach ($plan['rows'] as $row) {
+            $changes[] = [
+                'code' => $row['code'],
+                'name' => $row['name'],
+                'old_rate' => $row['old_rate'],
+                'new_rate' => $row['new_rate'],
+                'old_meaning' => sprintf(
+                    '1 %s = %s %s',
+                    $row['code'],
+                    $this->formatRateDisplay($row['old_rate']),
+                    $plan['old_base']
+                ),
+                'new_meaning' => sprintf(
+                    '1 %s = %s %s',
+                    $row['code'],
+                    $this->formatRateDisplay($row['new_rate']),
+                    $plan['new_base']
+                ),
+                'is_new_base' => $row['is_new_base'],
+                'changed' => $row['changed'],
+            ];
+        }
+
+        return [
+            'old_base' => $plan['old_base'],
+            'new_base' => $plan['new_base'],
+            'formula' => (string) __('新汇率 = 旧汇率 ÷ 新基准币在旧基准下的汇率'),
+            'changes' => $changes,
+            'changed_count' => (int) $plan['changed_count'],
+            'total_count' => (int) $plan['total_count'],
+            'errors' => $plan['errors'],
+        ];
+    }
+
+    /**
      * 重新计算所有货币汇率（当基准货币改变时）
      * 
      * @param string $oldBaseCurrency 旧的基准货币代码
@@ -239,83 +315,29 @@ class CurrencyImportService
             'errors' => []
         ];
 
-        // 如果基准货币没有改变，直接返回
-        if ($oldBaseCurrency === $newBaseCurrency) {
+        $plan = $this->buildBaseCurrencyRatePlan($oldBaseCurrency, $newBaseCurrency);
+        $result['total_count'] = (int) $plan['total_count'];
+        $result['errors'] = $plan['errors'];
+
+        if ($plan['errors'] !== [] && $plan['rows'] === []) {
             return $result;
         }
 
-        // 获取所有货币
-        $currencies = $this->currencyModel->clear()
-            ->select()
-            ->fetchArray();
-
-        // 如果查询失败或没有数据，返回空数组
-        if ($currencies === false || !is_array($currencies)) {
-            $currencies = [];
-        }
-
-        $result['total_count'] = count($currencies);
-
-        // 获取新旧基准货币的汇率（相对于旧基准货币）
-        $oldBaseRate = 1.0; // 旧基准货币的汇率总是1
-        $newBaseRate = 1.0; // 新基准货币的汇率（需要查找）
-
-        // 查找新基准货币在旧基准货币下的汇率
-        foreach ($currencies as $currency) {
-            if ($currency['code'] === $newBaseCurrency) {
-                $newBaseRate = (float)$currency['rate'];
-                break;
-            }
-        }
-
-        // 如果找不到新基准货币，尝试从API获取
-        if ($newBaseRate === 1.0 && $newBaseCurrency !== $oldBaseCurrency) {
-            try {
-                $newBaseRate = $this->api->getExchangeRate($oldBaseCurrency, $newBaseCurrency);
-            } catch (\Exception $e) {
-                $result['errors'][] = [
-                    'currency' => $newBaseCurrency,
-                    'error' => __('无法获取新基准货币的汇率: %{1}', $e->getMessage())
-                ];
-                return $result;
-            }
-        }
-
-        // 如果新基准货币的汇率是0，无法计算
-        if ($newBaseRate <= 0) {
-            throw new \Exception(__('新基准货币的汇率无效，无法重新计算'));
-        }
-
-        // 重新计算所有货币的汇率
         $current = 0;
-        foreach ($currencies as $currency) {
+        foreach ($plan['rows'] as $row) {
             $current++;
-            $currencyCode = $currency['code'];
-            
+            $currencyCode = $row['code'];
+
             try {
-                // 调用进度回调
                 if ($progressCallback) {
                     $progressCallback($current, $result['total_count'], $currencyCode);
                 }
 
-                // 如果是新基准货币，汇率设为1
-                if ($currencyCode === $newBaseCurrency) {
-                    $newRate = 1.0;
-                } else {
-                    // 计算新汇率：新汇率 = 旧汇率 / 新基准货币在旧基准下的汇率
-                    $oldRate = (float)$currency['rate'];
-                    if ($oldRate <= 0) {
-                        throw new \Exception(__('货币汇率无效'));
-                    }
-                    $newRate = $oldRate / $newBaseRate;
-                }
-
-                // 更新货币汇率和基准货币
                 $currencyModel = $this->currencyModel->clear()
-                    ->load($currency['currency_id']);
-                
-                $currencyModel->setRate($newRate)
-                    ->setBaseCurrency($newBaseCurrency)
+                    ->load($row['currency_id']);
+
+                $currencyModel->setRate((float) $row['new_rate'])
+                    ->setBaseCurrency($plan['new_base'])
                     ->save();
 
                 $result['success_count']++;
@@ -329,6 +351,127 @@ class CurrencyImportService
         }
 
         return $result;
+    }
+
+    /**
+     * @return array{
+     *   old_base:string,
+     *   new_base:string,
+     *   total_count:int,
+     *   changed_count:int,
+     *   rows:list<array{currency_id:int,code:string,name:string,old_rate:float,new_rate:float,is_new_base:bool,changed:bool}>,
+     *   errors:list<array{currency:string,error:string}>
+     * }
+     */
+    private function buildBaseCurrencyRatePlan(string $oldBaseCurrency, string $newBaseCurrency): array
+    {
+        $oldBaseCurrency = strtoupper(trim($oldBaseCurrency));
+        $newBaseCurrency = strtoupper(trim($newBaseCurrency));
+
+        $plan = [
+            'old_base' => $oldBaseCurrency,
+            'new_base' => $newBaseCurrency,
+            'total_count' => 0,
+            'changed_count' => 0,
+            'rows' => [],
+            'errors' => [],
+        ];
+
+        if ($oldBaseCurrency === '' || $newBaseCurrency === '' || $oldBaseCurrency === $newBaseCurrency) {
+            return $plan;
+        }
+
+        $currencies = $this->currencyModel->clear()
+            ->select()
+            ->fetchArray();
+
+        if ($currencies === false || !is_array($currencies)) {
+            $currencies = [];
+        }
+
+        $plan['total_count'] = count($currencies);
+
+        $newBaseRate = 0.0;
+        $foundNewBase = false;
+        foreach ($currencies as $currency) {
+            if (strtoupper((string) ($currency['code'] ?? '')) === $newBaseCurrency) {
+                $newBaseRate = (float) ($currency['rate'] ?? 0);
+                $foundNewBase = true;
+                break;
+            }
+        }
+
+        if (!$foundNewBase || $newBaseRate <= 0) {
+            try {
+                $apiRate = (float) $this->api->getExchangeRate($oldBaseCurrency, $newBaseCurrency);
+                if ($apiRate <= 0) {
+                    throw new \Exception(__('新基准货币的 API 汇率无效'));
+                }
+                $newBaseRate = 1.0 / $apiRate;
+            } catch (\Exception $e) {
+                $plan['errors'][] = [
+                    'currency' => $newBaseCurrency,
+                    'error' => __('无法获取新基准货币的汇率: %{1}', $e->getMessage())
+                ];
+                return $plan;
+            }
+        }
+
+        if ($newBaseRate <= 0) {
+            $plan['errors'][] = [
+                'currency' => $newBaseCurrency,
+                'error' => (string) __('新基准货币的汇率无效，无法重新计算'),
+            ];
+            return $plan;
+        }
+
+        foreach ($currencies as $currency) {
+            $currencyCode = strtoupper((string) ($currency['code'] ?? ''));
+            $oldRate = (float) ($currency['rate'] ?? 0);
+            $isNewBase = $currencyCode === $newBaseCurrency;
+
+            if ($isNewBase) {
+                $newRate = 1.0;
+            } elseif ($oldRate <= 0) {
+                $plan['errors'][] = [
+                    'currency' => $currencyCode,
+                    'error' => (string) __('货币汇率无效'),
+                ];
+                continue;
+            } else {
+                $newRate = $oldRate / $newBaseRate;
+            }
+
+            // Persist with same decimal(10,4) rounding the DB column uses.
+            $newRateRounded = round($newRate, 4);
+            $oldRateRounded = round($oldRate, 4);
+            $changed = abs($newRateRounded - $oldRateRounded) > 0.00005
+                || $isNewBase
+                || strtoupper((string) ($currency['base_currency'] ?? '')) !== $newBaseCurrency;
+
+            if ($changed) {
+                $plan['changed_count']++;
+            }
+
+            $plan['rows'][] = [
+                'currency_id' => (int) ($currency['currency_id'] ?? 0),
+                'code' => $currencyCode,
+                'name' => (string) ($currency['name'] ?? $currencyCode),
+                'old_rate' => $oldRateRounded,
+                'new_rate' => $newRateRounded,
+                'is_new_base' => $isNewBase,
+                'changed' => $changed,
+            ];
+        }
+
+        return $plan;
+    }
+
+    private function formatRateDisplay(float $rate): string
+    {
+        $formatted = number_format($rate, 4, '.', '');
+        $formatted = rtrim(rtrim($formatted, '0'), '.');
+        return $formatted === '' ? '0' : $formatted;
     }
 
     /**

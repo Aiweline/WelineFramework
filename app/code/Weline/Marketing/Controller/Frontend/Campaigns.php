@@ -28,7 +28,6 @@ final class Campaigns extends FrontendController
 
         $this->layoutType = 'default';
         $this->request->setGet('page_type', 'marketing_campaign');
-        $this->request->setGet('theme_public_route', 'marketing/campaign');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);

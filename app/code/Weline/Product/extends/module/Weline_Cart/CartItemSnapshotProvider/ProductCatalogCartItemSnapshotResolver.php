@@ -184,7 +184,8 @@ final class ProductCatalogCartItemSnapshotResolver
                 $currency,
             );
         }
-        if ($priced['unresolved']) {
+        $fxUnavailable = !empty($priced['fx_unavailable']);
+        if ($priced['unresolved'] && !$fxUnavailable) {
             return $this->unavailable(
                 $identity,
                 $selection,
@@ -195,7 +196,7 @@ final class ProductCatalogCartItemSnapshotResolver
             );
         }
 
-        $unitPriceMinor = max(0, (int)$priced['unit_price_minor']);
+        $unitPriceMinor = $fxUnavailable ? 0 : max(0, (int)$priced['unit_price_minor']);
         if ($this->isQuoteOnly($websiteId, $storeId, $productId, $locale)) {
             return $this->unavailable(
                 $identity,
@@ -223,6 +224,9 @@ final class ProductCatalogCartItemSnapshotResolver
         }
         if ($shippingHazardClass !== '' && $shippingHazardClass !== 'none' && $shippingHazardClass !== 'general') {
             $fulfillmentMetadata['shipping_hazard_class'] = strtolower($shippingHazardClass);
+        }
+        if ($fxUnavailable) {
+            $fulfillmentMetadata['currency_unavailable'] = '1';
         }
         if ($productType === 'downloadable') {
             if ($this->currentCustomerId() <= 0) {
@@ -257,7 +261,7 @@ final class ProductCatalogCartItemSnapshotResolver
 
         $availability = $this->availability($websiteId, $storeId, $offerId);
         $stock = $availability['stock'];
-        if ($availability['sellable'] === false) {
+        if ($fxUnavailable || $availability['sellable'] === false) {
             return new CartItemSnapshot(
                 offer: $identity,
                 name: $name,
@@ -268,7 +272,9 @@ final class ProductCatalogCartItemSnapshotResolver
                 found: true,
                 sellable: false,
                 stock: $stock,
-                message: (string)__('商品库存不足'),
+                message: $fxUnavailable
+                    ? $this->currencyUnavailableMessage()
+                    : (string)__('商品库存不足'),
                 selection: $selection,
                 productType: $productType,
                 sourceModule: 'Weline_Product',
@@ -293,8 +299,9 @@ final class ProductCatalogCartItemSnapshotResolver
             currency: $currency,
             unitPriceMinor: $unitPriceMinor,
             found: true,
-            sellable: true,
+            sellable: !$fxUnavailable,
             stock: $stock,
+            message: $fxUnavailable ? $this->currencyUnavailableMessage() : '',
             selection: $selection,
             productType: $productType,
             sourceModule: 'Weline_Product',
@@ -498,6 +505,7 @@ final class ProductCatalogCartItemSnapshotResolver
             }
         }
         $pricesByOffer = [];
+        $fxUnavailableOfferIds = [];
         foreach ($offerIds as $offerId) {
             $displayPrice = $overlay->resolvePrice(
                 $priceRowsByOffer[$offerId] ?? [],
@@ -526,6 +534,7 @@ final class ProductCatalogCartItemSnapshotResolver
             );
             if ($convertedMajor === null) {
                 $pricesByOffer[$offerId] = $displayPrice;
+                $fxUnavailableOfferIds[$offerId] = true;
                 continue;
             }
             $pricesByOffer[$offerId] = ResolvedScopeValue::explicit(
@@ -609,7 +618,8 @@ final class ProductCatalogCartItemSnapshotResolver
                 );
                 continue;
             }
-            if ($price->isUnresolved()) {
+            $fxUnavailable = isset($fxUnavailableOfferIds[$offerId]);
+            if ($price->isUnresolved() && !$fxUnavailable) {
                 $snapshots[] = $this->unavailable(
                     $identity,
                     [],
@@ -627,13 +637,15 @@ final class ProductCatalogCartItemSnapshotResolver
                 $storeId,
                 $locale,
             );
-            $isSellable = !$isQuoteOnly && $availability['sellable'] !== false;
+            $isSellable = !$fxUnavailable && !$isQuoteOnly && $availability['sellable'] !== false;
             // Listing/PDP/shelf Assembler is the single deal applicator. Keep this
             // phase for timing, but emit raw catalog minor (cart add still deals).
-            $unitPriceMinor = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                'product.catalog.snapshot.deals',
-                fn() => max(0, (int)$price->value),
-            );
+            $unitPriceMinor = $fxUnavailable
+                ? 0
+                : \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'product.catalog.snapshot.deals',
+                    fn() => max(0, (int)$price->value),
+                );
             $options = [];
             if ($includeOptions) {
                 $options = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
@@ -651,16 +663,19 @@ final class ProductCatalogCartItemSnapshotResolver
                 found: true,
                 sellable: $isSellable,
                 stock: $availability['stock'],
-                message: $isSellable
-                    ? ''
-                    : ($isQuoteOnly
-                        ? (string)__('仅询价，不可加入购物车')
-                        : (string)__('商品库存不足')),
+                message: $fxUnavailable
+                    ? $this->currencyUnavailableMessage()
+                    : ($isSellable
+                        ? ''
+                        : ($isQuoteOnly
+                            ? (string)__('仅询价，不可加入购物车')
+                            : (string)__('商品库存不足'))),
                 productType: (string)$facts['type'],
                 sourceModule: 'Weline_Product',
                 sourceApp: 'Weline',
                 offerId: $offerId,
                 productId: $productId,
+                fulfillmentMetadata: $fxUnavailable ? ['currency_unavailable' => '1'] : [],
                 options: $options,
                 slug: (string)($facts['slug'] ?? ''),
             );
@@ -739,6 +754,11 @@ final class ProductCatalogCartItemSnapshotResolver
         return ['store_id' => $store->id, 'sellable' => true, 'message' => ''];
     }
 
+    private function currencyUnavailableMessage(): string
+    {
+        return (string)__('当前货币暂不可用');
+    }
+
     private function currency(): string
     {
         $currency = $this->currencyResolver === null
@@ -790,13 +810,14 @@ final class ProductCatalogCartItemSnapshotResolver
         $baseMajor = max(0, (int)$basePrice->value) / 100;
         $convertedMajor = $this->convertMajorAmount($baseMajor, $baseCurrency, $displayCurrency);
         if ($convertedMajor === null) {
-            return ['unit_price_minor' => 0, 'cleared' => false, 'unresolved' => true];
+            return ['unit_price_minor' => 0, 'cleared' => false, 'unresolved' => true, 'fx_unavailable' => true];
         }
 
         return [
             'unit_price_minor' => max(0, (int)round($convertedMajor * 100)),
             'cleared' => false,
             'unresolved' => false,
+            'fx_unavailable' => false,
         ];
     }
 

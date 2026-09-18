@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Query;
 
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -662,7 +663,9 @@ class QueryProviderRegistry
     {
         $language = \function_exists('w_env') ? (string)\w_env('user.lang', '') : '';
         if ($language === '') {
-            $language = (string)($_COOKIE['WELINE_LANGUAGE'] ?? $_COOKIE['language'] ?? 'default');
+            $language = (string)(WelineEnv::getCookie('WELINE_LANGUAGE', '')
+                ?: WelineEnv::getCookie('language', '')
+                ?: 'default');
         }
 
         return $language !== '' ? $language : 'default';

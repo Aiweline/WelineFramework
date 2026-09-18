@@ -333,8 +333,8 @@ function renderAreaPlaceholder(string $area, string $label): string {
             font-size: 18px;
         }
         
-        /* 编辑模式 - 插槽高亮 */
-        [data-slot]:hover {
+        /* 编辑模式 - 插槽高亮（框架约定 data-wslot） */
+        [data-wslot]:hover {
             outline: 2px dashed #28a745;
             outline-offset: 2px;
         }
@@ -506,21 +506,28 @@ function renderAreaPlaceholder(string $area, string $label): string {
         });
     });
     
-    // 插槽点击事件（用于添加部件）
-    document.querySelectorAll('[data-slot]').forEach(slot => {
+    // 插槽点击：框架约定 data-wslot + slot-selected（与 editor-mode 对齐）
+    document.querySelectorAll('[data-wslot]').forEach(slot => {
         slot.addEventListener('click', function(e) {
-            if (e.target.closest('.preview-widget')) return;
-            
-            const slotName = this.dataset.slot;
-            const accept = this.dataset.accept;
-            
-            if (window.parent !== window) {
-                window.parent.postMessage({
-                    type: 'slot-clicked',
-                    slot: slotName,
-                    accept: accept
-                }, '*');
+            if (e.target.closest('.preview-widget, .widget-wrapper')) return;
+
+            const slotId = this.getAttribute('data-wslot') || '';
+            if (!slotId || window.parent === window) {
+                return;
             }
+            window.parent.postMessage({
+                source: 'weline-theme-preview',
+                type: 'slot-selected',
+                slot: {
+                    id: slotId,
+                    name: this.getAttribute('data-wslot-name') || slotId,
+                    accept: (this.getAttribute('data-wslot-accept') || '')
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    area: this.getAttribute('data-wslot-position') || '',
+                }
+            }, '*');
         });
     });
     </script>

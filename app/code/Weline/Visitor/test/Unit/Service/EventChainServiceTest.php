@@ -13,13 +13,13 @@ final class EventChainServiceTest extends TestCase
     public function testNormalizeAndMatchOrderedSteps(): void
     {
         $svc = new EventChainService(new EventDictionaryService());
-        $chain = $svc->chainFromPickerSteps('Demo-Funnel_Complete!!', [
+        $chain = $svc->chainFromPickerSteps('Sample-Funnel_Complete!!', [
             ['type' => 'page', 'path' => '/'],
-            ['type' => 'track', 'event' => 'chain_demo_step_b'],
-        ], 'demo_cross_page', '演示');
+            ['type' => 'track', 'event' => 'chain_step_b'],
+        ], 'sample_funnel', '样例');
         self::assertNotNull($chain);
-        self::assertSame('demo_cross_page', $chain['id']);
-        self::assertSame('demo_funnel_complete', $chain['complete_event']);
+        self::assertSame('sample_funnel', $chain['id']);
+        self::assertSame('sample_funnel_complete', $chain['complete_event']);
         self::assertCount(2, $chain['steps']);
 
         self::assertTrue($svc->stepMatches($chain['steps'][0], [
@@ -36,16 +36,16 @@ final class EventChainServiceTest extends TestCase
         ]));
         self::assertTrue($svc->stepMatches($chain['steps'][1], [
             'type' => 'track',
-            'event' => 'chain_demo_step_b',
+            'event' => 'chain_step_b',
         ]));
     }
 
     public function testAnyPageStepMatchesAllPaths(): void
     {
         $svc = new EventChainService(new EventDictionaryService());
-        $chain = $svc->chainFromPickerSteps('demo_funnel_complete', [
+        $chain = $svc->chainFromPickerSteps('sample_funnel_complete', [
             ['type' => 'page', 'label' => 'any'],
-            ['type' => 'track', 'event' => 'chain_demo_step_b'],
+            ['type' => 'track', 'event' => 'chain_step_b'],
         ]);
         self::assertNotNull($chain);
         self::assertTrue($svc->stepMatches($chain['steps'][0], [
@@ -72,6 +72,14 @@ final class EventChainServiceTest extends TestCase
         self::assertStringContainsString('__event_chain_complete', $js);
         self::assertStringContainsString('严格按序匹配', $js);
         self::assertStringContainsString('WelineEventChains', $js);
+        // 多链同页起步不得向监视器 emit 名为 page_view 的假系统命中
+        self::assertStringContainsString("eventName: 'chain_step'", $js);
+        self::assertStringContainsString("name: 'chain_step'", $js);
+        self::assertStringContainsString('signal_event', $js);
+        self::assertStringNotContainsString(
+            'eventName: signal.event || signal.type || \'chain_step\'',
+            $js
+        );
     }
 
     public function testUnlabeledClickStepFallsBackToPagePath(): void
@@ -134,6 +142,19 @@ final class EventChainServiceTest extends TestCase
         self::assertTrue($svc->payloadMarksChainComplete([
             'additionalInfo' => ['meta' => ['__event_chain_complete' => 1]],
         ]));
+    }
+
+    public function testDemoEnsureEndpointRemovedFromSource(): void
+    {
+        $base = \dirname(__DIR__, 3);
+        $svc = (string)\file_get_contents($base . '/Service/EventChainService.php');
+        $ctl = (string)\file_get_contents($base . '/Controller/Backend/TrackingVendor.php');
+        $tpl = (string)\file_get_contents($base . '/view/templates/Backend/TrackingVendor/index.phtml');
+        self::assertStringNotContainsString('ensureDemoCrossPageChain', $svc);
+        self::assertStringNotContainsString('postEnsureDemoEventChain', $ctl);
+        self::assertStringNotContainsString('tv-ensure-demo-chain', $tpl);
+        self::assertStringNotContainsString('发布演示跨页链', $tpl);
+        self::assertStringNotContainsString('demo_cross_page', $svc);
     }
 
     public function testPixelEventServiceSkipsUnsealedCompleteEvents(): void

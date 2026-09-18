@@ -597,23 +597,6 @@
   margin: 0;
 }
 
-.tvp-map-more {
-  position: relative;
-}
-
-.tvp-map-more > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.tvp-map-more > summary::-webkit-details-marker {
-  display: none;
-}
-
-.tvp-map-more__menu {
-  margin-block-start: var(--weline-space-2);
-}
-
 .tvp-ga4-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;

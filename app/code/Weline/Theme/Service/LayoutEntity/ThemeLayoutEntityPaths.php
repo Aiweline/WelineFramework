@@ -77,6 +77,55 @@ final class ThemeLayoutEntityPaths
     }
 
     /**
+     * Request-time snapshot of renderCurrent() output. Invalidated when chrome.phtml
+     * or chrome-config.json is newer (see ThemeLayoutEntityChrome).
+     *
+     * Prefer locale-keyed files: chrome.rendered.{locale}.html. The bare
+     * chrome.rendered.html name is legacy (locale-agnostic) and must not be reused.
+     */
+    public function chromeRenderedHtml(
+        int $themeId,
+        string $scope,
+        int $themeVersionId,
+        ?string $locale = null,
+    ): string {
+        $dir = $this->chromeDir($themeId, $scope, $themeVersionId);
+        $locale = \trim((string)$locale);
+        if ($locale !== ''
+            && \preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale) === 1
+        ) {
+            return $dir . 'chrome.rendered.' . $locale . '.html';
+        }
+
+        // Materializer invalidation helper: pattern prefix (callers glob).
+        return $dir . 'chrome.rendered.html';
+    }
+
+    /**
+     * Absolute paths of all chrome.rendered*.html snapshots under a chrome dir
+     * (legacy bare file + every locale-keyed variant).
+     *
+     * @return list<string>
+     */
+    public function chromeRenderedHtmlSnapshots(int $themeId, string $scope, int $themeVersionId): array
+    {
+        $dir = $this->chromeDir($themeId, $scope, $themeVersionId);
+        if (!\is_dir($dir)) {
+            return [];
+        }
+
+        $matches = \glob($dir . 'chrome.rendered*.html') ?: [];
+        $out = [];
+        foreach ($matches as $path) {
+            if (\is_string($path) && $path !== '' && \is_file($path)) {
+                $out[] = $path;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * @param string $structureOrRelease structure_key hash or release segment (e.g. r123)
      */
     public function pageDir(

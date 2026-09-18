@@ -282,6 +282,7 @@ final class StorefrontVariantSelectionService
                 'has_deal' => !empty($offer['has_deal']) || ($catalogPriceMinor > 0 && $unitPriceMinor > 0 && $unitPriceMinor < $catalogPriceMinor),
                 'stock' => max(0, (int)($offer['stock'] ?? 0)),
                 'sellable' => !empty($offer['sellable']),
+                'currency_unavailable' => !empty($offer['currency_unavailable']),
                 'quote_only' => !empty($offer['quote_only']),
                 'message' => trim((string)($offer['message'] ?? '')),
                 'provider_code' => trim((string)($offer['provider_code'] ?? 'product')),

@@ -36,9 +36,14 @@ test.describe('Theme frontend preview integration', () => {
 
     const slotCount = await page.locator('[data-wslot]').count();
     expect(slotCount).toBeGreaterThan(0);
-    expect(currentUrl).toContain('/theme/frontend/theme-preview/content');
-    expect(currentUrl).toContain(`frontend_theme_id=${activeTheme.id}`);
-    expect(currentUrl).toContain('weline_preview_token=');
+    // Entry is gateway; final URL is storefront (or still gateway if redirect pending).
+    expect(currentUrl).not.toContain('/theme/frontend/theme-preview/content');
+    expect(
+      currentUrl.includes('/theme/frontend/theme-preview/gateway')
+      || currentUrl.includes('weline_preview_token=')
+      || currentUrl.includes(`preview_theme=${activeTheme.id}`)
+      || currentUrl.includes(`frontend_theme_id=${activeTheme.id}`)
+    ).toBeTruthy();
 
     const runtimeTheme = runtime.themes.active.frontend || runtime.themes.active.global;
     expect(runtimeTheme.id).toBe(activeTheme.id);
@@ -64,7 +69,7 @@ test.describe('Theme frontend preview integration', () => {
 
     expect(state.themedDocument).toBeTruthy();
     expect(state.slotCount).toBeGreaterThan(0);
-    expect(state.currentUrl).toMatch(/(theme\/frontend\/theme-preview\/content|preview_theme=)/);
+    expect(state.currentUrl).toMatch(/(weline_preview_token=|preview_theme=)/);
     expect(state.currentUrl).toMatch(new RegExp(`(preview_theme|frontend_theme_id)=${activeThemeId}`));
     expect(state.hasPreviewToken || state.hasFrontendThemeId).toBeTruthy();
   });

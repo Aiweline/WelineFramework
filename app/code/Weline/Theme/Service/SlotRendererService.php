@@ -205,6 +205,7 @@ class SlotRendererService
                     );
                     $slotWidgets = $this->mergeSharedChromeSlotWidgets(
                         $slotWidgets,
+                        $html,
                         $themeId,
                         $pageType,
                         $status,
@@ -222,6 +223,7 @@ class SlotRendererService
 
                 $this->filledSlotIdsThisRun = [];
                 $this->unavailableWidgets = [];
+                $this->orphanWidgets = [];
                 $this->capturePageRenderContext();
                 try {
                     $processed = $this->withRenderTheme(
@@ -289,7 +291,7 @@ class SlotRendererService
         // 页头/页脚是全局 chrome（一改全站）：各 pageType 缺槽时合并同一套全局 chrome 部件。
         $slotWidgets = $this->traceCall(
             'slot_renderer::mergeSharedChromeSlotWidgets',
-            fn() => $this->mergeSharedChromeSlotWidgets($slotWidgets, $themeId, $pageType, $status, $area)
+            fn() => $this->mergeSharedChromeSlotWidgets($slotWidgets, $html, $themeId, $pageType, $status, $area)
         );
 
         if ($status === ThemeLayout::STATUS_PUBLISHED) {
@@ -334,6 +336,7 @@ class SlotRendererService
         // Boundaries-only slot fill (legacy DOM engine removed).
         $this->filledSlotIdsThisRun = [];
         $this->unavailableWidgets = [];
+        $this->orphanWidgets = [];
         $this->capturePageRenderContext();
         try {
             $html = $this->traceCall(
@@ -447,44 +450,18 @@ class SlotRendererService
         $out = '';
 
         while ($offset < $length) {
-            if (\preg_match(
-                '/<div\b[^>]*\bdata-weline-template-widget\s*=\s*(["\']?)1\1[^>]*>/i',
-                $html,
-                $match,
-                \PREG_OFFSET_CAPTURE,
-                $offset
-            ) !== 1) {
+            $open = $this->findNextTemplateWidgetShellOpen($html, $offset);
+            if ($open === null) {
                 $out .= \substr($html, $offset);
                 break;
             }
 
-            $openStart = (int)$match[0][1];
-            $openTag = (string)$match[0][0];
-            $openEnd = $openStart + \strlen($openTag);
+            $openStart = $open['start'];
+            $openTag = $open['tag'];
+            $openEnd = $open['end'];
             $out .= \substr($html, $offset, $openStart - $offset);
 
-            $depth = 1;
-            $cursor = $openEnd;
-            $innerEnd = null;
-            while ($cursor < $length && $depth > 0) {
-                $nextOpen = \stripos($html, '<div', $cursor);
-                $nextClose = \stripos($html, '</div>', $cursor);
-                if ($nextClose === false) {
-                    break;
-                }
-                if ($nextOpen !== false && $nextOpen < $nextClose && \preg_match('/<div\b/i', \substr($html, $nextOpen, 10)) === 1) {
-                    $depth++;
-                    $cursor = $nextOpen + 4;
-                    continue;
-                }
-                $depth--;
-                if ($depth === 0) {
-                    $innerEnd = $nextClose;
-                    break;
-                }
-                $cursor = $nextClose + 6;
-            }
-
+            $innerEnd = $this->findMatchingDivClose($html, $openEnd);
             if ($innerEnd === null) {
                 $out .= \substr($html, $openStart);
                 break;
@@ -509,6 +486,34 @@ class SlotRendererService
         }
 
         return $out;
+    }
+
+    /**
+     * Quote-aware open for data-weline-template-widget=1 shells (attrs may contain ">").
+     *
+     * @return array{start:int,end:int,tag:string}|null
+     */
+    private function findNextTemplateWidgetShellOpen(string $html, int $offset): ?array
+    {
+        $length = \strlen($html);
+        $pos = \max(0, $offset);
+        while ($pos < $length) {
+            if (\preg_match('/<div\b/i', $html, $match, \PREG_OFFSET_CAPTURE, $pos) !== 1) {
+                return null;
+            }
+            $start = (int)$match[0][1];
+            $end = $this->findHtmlTagClose($html, $start + 4);
+            if ($end === null) {
+                return null;
+            }
+            $tag = \substr($html, $start, $end - $start);
+            if (\preg_match('/\bdata-weline-template-widget\s*=\s*(["\']?)1\1/i', $tag) === 1) {
+                return ['start' => $start, 'end' => $end, 'tag' => $tag];
+            }
+            $pos = $end;
+        }
+
+        return null;
     }
 
     /**
@@ -538,28 +543,7 @@ class SlotRendererService
                 // Prefer a layout sibling; template-to-template is not "healthy fill".
                 continue;
             }
-            $depth = 1;
-            $cursor = $openEnd;
-            $length = \strlen($html);
-            $innerEnd = null;
-            while ($cursor < $length && $depth > 0) {
-                $nextOpen = \stripos($html, '<div', $cursor);
-                $nextClose = \stripos($html, '</div>', $cursor);
-                if ($nextClose === false) {
-                    break;
-                }
-                if ($nextOpen !== false && $nextOpen < $nextClose && \preg_match('/<div\b/i', \substr($html, $nextOpen, 10)) === 1) {
-                    $depth++;
-                    $cursor = $nextOpen + 4;
-                    continue;
-                }
-                $depth--;
-                if ($depth === 0) {
-                    $innerEnd = $nextClose;
-                    break;
-                }
-                $cursor = $nextClose + 6;
-            }
+            $innerEnd = $this->findMatchingDivClose($html, $openEnd);
             if ($innerEnd === null) {
                 continue;
             }
@@ -675,6 +659,98 @@ class SlotRendererService
         }
 
         return \array_intersect_key($slotWidgets, $slotIds);
+    }
+
+    /**
+     * 合并当前布局模板源码中声明的 w:slot（含被 &lt;if&gt;/meta 门控、本轮 HTML 未出现的槽）。
+     * 仅用于孤儿检测：避免「相关/搭配」等默认关闭区误报「找不到插槽」。
+     *
+     * @param array<string, true> $slotIds
+     * @param array<string, list<array<string, mixed>>> $slotWidgets
+     * @return array<string, true>
+     */
+    private function expandSlotIdsWithLayoutDeclaredSlots(
+        string $pageType,
+        array $slotIds,
+        array $slotWidgets = [],
+    ): array {
+        $pageType = \strtolower(\trim(\str_replace('\\', '/', $pageType), '/ '));
+        if ($pageType !== '') {
+            $slotIds = $this->mergeCatalogLayoutSlotIds($pageType, $slotIds);
+        }
+
+        // Editor canvas sometimes resolves pageType as default/homepage while product
+        // widgets remain in the workspace. Still honor product layout declarations for
+        // gated slots (showRelatedProducts=false) so they are not false orphans.
+        $needsProductLayout = false;
+        foreach (\array_keys($slotWidgets) as $widgetSlotId) {
+            $widgetSlotId = \strtolower(\trim((string)$widgetSlotId));
+            if ($widgetSlotId === 'product-related-products'
+                || $widgetSlotId === 'product-cross-sell'
+                || $widgetSlotId === 'product-bestsellers'
+                || \str_starts_with($widgetSlotId, 'product-')
+            ) {
+                $needsProductLayout = true;
+                break;
+            }
+        }
+        if ($needsProductLayout && $pageType !== ThemeLayout::PAGE_TYPE_PRODUCT) {
+            $slotIds = $this->mergeCatalogLayoutSlotIds(ThemeLayout::PAGE_TYPE_PRODUCT, $slotIds);
+        }
+
+        return $slotIds;
+    }
+
+    /**
+     * @param array<string, true> $slotIds
+     * @return array<string, true>
+     */
+    private function mergeCatalogLayoutSlotIds(string $pageType, array $slotIds): array
+    {
+        $pageType = \strtolower(\trim($pageType));
+        if ($pageType === '') {
+            return $slotIds;
+        }
+
+        $area = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $option = 'default';
+        try {
+            $identity = $this->currentLayoutIdentity($area);
+            $option = \strtolower(\trim((string)($identity['layout_option'] ?? 'default')));
+            if ($option === '') {
+                $option = 'default';
+            }
+        } catch (\Throwable) {
+            $option = 'default';
+        }
+
+        try {
+            /** @var ThemeResourceCatalog $catalog */
+            $catalog = ObjectManager::getInstance(ThemeResourceCatalog::class);
+            $resource = $catalog->getLayoutResource($area, $this->renderTheme, $pageType, $option);
+            if ($resource === null && $option !== 'default') {
+                $resource = $catalog->getLayoutResource($area, $this->renderTheme, $pageType, 'default');
+            }
+            if ($resource === null) {
+                return $slotIds;
+            }
+
+            foreach ($resource['slots'] ?? [] as $slot) {
+                $slotId = '';
+                if ($slot instanceof \Weline\Theme\Dto\ThemeSlotDefinition) {
+                    $slotId = \trim((string)$slot->id);
+                } elseif (\is_array($slot)) {
+                    $slotId = \trim((string)($slot['id'] ?? ''));
+                }
+                if ($slotId !== '') {
+                    $slotIds[$slotId] = true;
+                }
+            }
+        } catch (\Throwable) {
+            // best-effort：目录不可用时回退为仅 HTML 可见槽
+        }
+
+        return $slotIds;
     }
 
     /**
@@ -796,6 +872,7 @@ class SlotRendererService
      */
     private function mergeSharedChromeSlotWidgets(
         array $slotWidgets,
+        string $html,
         int $themeId,
         string $pageType,
         string $status,
@@ -815,10 +892,13 @@ class SlotRendererService
             if ($widgets === [] || !$this->slotWidgetsBelongToSharedChrome((string)$slotId, $widgets)) {
                 continue;
             }
-            // Homepage carrier: root header/footer come from entity chrome inject; nested
-            // extension slots (footer-help-links etc.) still need merge into w:slot markers.
+            // Homepage carrier: prefer entity chrome inject for root header/footer to
+            // avoid double-fill. If inject left the exclusive shell empty (stale chrome
+            // pointer / soft-skip), still merge so storefront is not stuck with
+            // weline-footer--shell.
             if ($pageType === ThemeLayout::PAGE_TYPE_HOME
                 && \in_array((string)$slotId, SharedChromeService::CHROME_SLOTS, true)
+                && $this->htmlHasRenderedChromeRootWidget($html, (string)$slotId)
             ) {
                 continue;
             }
@@ -826,6 +906,44 @@ class SlotRendererService
         }
 
         return $slotWidgets;
+    }
+
+    /**
+     * True when the exclusive chrome root already contains a rendered widget wrapper
+     * (not the empty weline-*-shell placeholder left by the layout template).
+     */
+    private function htmlHasRenderedChromeRootWidget(string $html, string $slotId): bool
+    {
+        $slotId = \strtolower(\trim($slotId));
+        if ($html === '' || ($slotId !== 'header' && $slotId !== 'footer')) {
+            return false;
+        }
+        try {
+            $open = SlotBoundaryMarkers::open($slotId);
+            $close = SlotBoundaryMarkers::close($slotId);
+        } catch (\InvalidArgumentException) {
+            return false;
+        }
+        $openPos = \strpos($html, $open);
+        if ($openPos === false) {
+            return false;
+        }
+        $innerStart = $openPos + \strlen($open);
+        $closePos = \strpos($html, $close, $innerStart);
+        if ($closePos === false) {
+            return false;
+        }
+        $inner = \substr($html, $innerStart, $closePos - $innerStart);
+        if ($inner === '' || !\str_contains($inner, 'data-widget-code=')) {
+            return false;
+        }
+        if ($slotId === 'footer' && \str_contains($inner, 'weline-footer--shell')
+            && !\str_contains($inner, 'footer-container')
+        ) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -1160,11 +1278,17 @@ class SlotRendererService
         RequestLifecycleTrace::measurePhase(
             'theme.slots.orphan_scan',
             function () use ($slotWidgets, $existingSlotIds, $html, $pageType): void {
+                // 布局源码已声明、但被 meta 门控（如 showRelatedProducts=false）未写入 HTML
+                // 的插槽仍算「存在」：配置保留、不告孤儿；打开门控后即可填充。
                 $this->detectOrphanWidgets(
                     $slotWidgets,
-                    $this->expandSlotIdsWithContainerChildSlots(
+                    $this->expandSlotIdsWithLayoutDeclaredSlots(
+                        $pageType,
+                        $this->expandSlotIdsWithContainerChildSlots(
+                            $slotWidgets,
+                            $existingSlotIds + $this->extractSlotIdsFromHtml($html)
+                        ),
                         $slotWidgets,
-                        $existingSlotIds + $this->extractSlotIdsFromHtml($html)
                     ),
                     $pageType
                 );
@@ -2080,6 +2204,8 @@ class SlotRendererService
 
     /**
      * Find the </div> that matches a div opened at $openEnd (index of first inner byte).
+     * Skips comments and opaque/raw-text elements (script/style/…) so literal
+     * "</div>" inside them cannot close a widget-wrapper early.
      */
     private function findMatchingDivClose(string $html, int $openEnd): ?int
     {
@@ -2096,6 +2222,12 @@ class SlotRendererService
             if (\substr($html, $lt, 4) === '<!--') {
                 $commentEnd = \strpos($html, '-->', $lt + 4);
                 $cursor = $commentEnd === false ? $length : $commentEnd + 3;
+                continue;
+            }
+
+            $opaqueEnd = $this->skipOpaqueHtmlElement($html, $lt);
+            if ($opaqueEnd !== null) {
+                $cursor = $opaqueEnd;
                 continue;
             }
 
@@ -2117,6 +2249,41 @@ class SlotRendererService
         }
 
         return null;
+    }
+
+    /**
+     * When $lt points at an opaque/raw-text open tag, return the byte offset after
+     * its matching close (or self-close). Otherwise null.
+     */
+    private function skipOpaqueHtmlElement(string $html, int $lt): ?int
+    {
+        if (\preg_match(
+            '/\G<(script|style|textarea|title|xmp|iframe|noembed|noframes|noscript)\b/i',
+            $html,
+            $match,
+            0,
+            $lt
+        ) !== 1) {
+            return null;
+        }
+
+        $name = \strtolower((string)$match[1]);
+        $tagEnd = $this->findHtmlTagClose($html, $lt + 1);
+        if ($tagEnd === null) {
+            return \strlen($html);
+        }
+
+        $openTag = \substr($html, $lt, $tagEnd - $lt);
+        if (\str_ends_with(\rtrim(\substr($openTag, 0, -1)), '/')) {
+            return $tagEnd;
+        }
+
+        $close = \stripos($html, '</' . $name . '>', $tagEnd);
+        if ($close === false) {
+            return \strlen($html);
+        }
+
+        return $close + \strlen('</' . $name . '>');
     }
 
     /**
@@ -2183,6 +2350,16 @@ class SlotRendererService
                     }
                     if ($code === 'broken_widget_shell') {
                         $isBrokenShell = true;
+                    }
+                    // Truncated fiber captures leave unclosed_tag / tag_mismatch;
+                    // re-render instead of stamping a toast-only health tip.
+                    if ($code === 'unclosed_tag'
+                        || $code === 'unclosed_raw_tag'
+                        || $code === 'tag_mismatch'
+                        || $code === 'malformed_close_tag'
+                        || $code === 'unexpected_close'
+                    ) {
+                        $needsRepair = true;
                     }
                     if (\str_starts_with($code, 'php_')) {
                         $needsRepair = true;
@@ -3844,8 +4021,8 @@ HTML;
         $config['editor_mode'] = $isEditor || !empty($config['editor_mode']);
         // ComponentRenderer unsetData() 会清掉模板上的 preview_mode；必须显式写入 config。
         // preview_mode 布尔 = 部件库小画布压缩（is-preview），与查询串 preview_mode=live（整页布局预览）解耦。
-        // 整页 theme-preview/content 必须与店面 chrome 保真，禁止强制 preview_mode=true。
-        if ($this->isThemePreviewContentRequest()) {
+        // 整页店面 editor_mode 画布必须与店面 chrome 保真，禁止强制 preview_mode=true。
+        if ($isEditor) {
             $config['preview_mode'] = false;
         } else {
             $config['preview_mode'] = !empty($config['preview_mode']);
@@ -3877,7 +4054,6 @@ HTML;
             'selected_offer_uuid',
             'variant_catalog',
             'page_title',
-            'theme_public_route',
             'preview_mode',
             'editor_mode',
         ];
@@ -3900,7 +4076,8 @@ HTML;
     {
         try {
             $request = $this->template->getRequest();
-            // preview_mode=live|version|draft is a layout-source query flag for theme-preview/content.
+            // preview_mode=live|version|draft is a layout-source query flag for canvas / preview.
+            // Do not treat it as widget-library compact preview_mode.
             // It must NOT imply widget-canvas compact preview (is-preview / flattened mega trees).
             if ((string)$request->getParam('editor_mode', '') === '1'
                 || (string)$request->getParam('interaction_mode', '') === 'edit'
@@ -3916,26 +4093,6 @@ HTML;
         } catch (\Throwable) {
             return false;
         }
-    }
-
-    /**
-     * Full-page theme editor iframe content (not widget-library canvas).
-     */
-    private function isThemePreviewContentRequest(): bool
-    {
-        try {
-            $request = $this->template->getRequest();
-            $path = strtolower((string)($request->getPathInfo() ?: \w_env_request_uri()));
-            if (str_contains($path, 'theme/frontend/theme-preview/content')
-                || str_contains($path, 'theme/backend/theme-preview/content')
-            ) {
-                return true;
-            }
-        } catch (\Throwable) {
-            // fall through
-        }
-
-        return false;
     }
 
     private function mergeTranslatedWidgetConfig(
@@ -4737,6 +4894,15 @@ HTML;
             return;
         }
         if ($lastYieldAt > 0.0 && (($now - $lastYieldAt) * 1000000) < self::WLS_RENDER_YIELD_MIN_INTERVAL_US) {
+            return;
+        }
+
+        // Match Template::cooperativeTemplateYield: drain the process-level fiber
+        // output handler into *this* capture frame before suspending. Otherwise a
+        // peer fiber's flush attributes our pending chunks to the wrong stack
+        // (or discards them), truncating widgets mid-HTML → Unclosed tag toasts
+        // and cascade layout breakage until a clean re-render.
+        if (!\Weline\Framework\Runtime\FiberOutputBuffer::flushBeforeYield()) {
             return;
         }
 

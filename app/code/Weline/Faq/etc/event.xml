@@ -9,13 +9,6 @@
                   shared="true"
                   sort="40"/>
     </event>
-    <event name="Weline_Theme::layout_preview_sample">
-        <observer name="Weline_Faq::layout_preview_sample"
-                  instance="Weline\Faq\Observer\LayoutPreviewSampleObserver"
-                  disabled="false"
-                  shared="true"
-                  sort="40"/>
-    </event>
     <event name="Weline_Framework_Router::process_uri_before">
         <observer name="Weline_Faq::claim_faq_namespace_uri_before"
                   instance="Weline\Faq\Observer\ClaimFaqNamespaceUriBefore"

@@ -111,6 +111,10 @@ Loading...,Loading...
 查看详情,"View details"
 "AI 修图","AI Edit"
 Preview,Preview
+指定覆盖目标（可选）,"Choose overwrite target (optional)"
+可为每个入站文件搜索当前目录里要覆盖的已有文件；选定后只替换物理内容，目标文件名与元数据全部保留。不选则按新建上传。,"Optionally search the current folder and map each incoming file to an existing target. Only physical bytes are replaced; the target name and metadata stay. Skip to upload as new."
+取消上传,"Cancel upload"
+继续,Continue
 Cancel,Cancel
 OK,OK
 文件元数据,"File metadata"
@@ -141,7 +145,9 @@ OK,OK
 保存,Save
 保存图片,"Save Image"
 覆盖原图,"Overwrite Original"
+覆盖指定文件,"Overwrite chosen file"
 另存为新文件,"Save As New File"
+搜索当前目录文件,"Search files in current folder"
 文件名,Filename
 "默认 Alt（必填）","Default alt (required)"
 资源描述（必填）,"Resource description (required)"
@@ -154,6 +160,8 @@ OK,OK
 当前目录,"Current directory"
 文件上传进度,"File upload progress"
 搜索文件名…,"Search filenames…"
+输入文件名过滤,"Filter by file name"
+覆盖目标列表,"Overwrite target list"
 上一张,Previous
 下一张,Next
 连接器URL未配置，请刷新页面,"Connector URL not configured, please refresh the page"
@@ -280,6 +288,15 @@ OK,OK
 确认覆盖,"Confirm overwrite"
 将替换「%{name}」的文件内容；已有多语言文案将保留。此操作不可撤销。,"This will replace the contents of \"%{name}\". Existing multilingual copy will be kept. This cannot be undone."
 确定,确定
+入站文件,"Incoming file"
+覆盖目标,"Overwrite target"
+不覆盖（新建）,"Do not overwrite (create new)"
+清除映射,"Clear mapping"
+当前目录没有可覆盖的文件,"No overwritable files in this folder"
+没有匹配的文件,"No matching files"
+已选目标：%{name},"Selected target: %{name}"
+多个入站文件不能映射到同一个覆盖目标「%{name}」,"Multiple incoming files cannot map to the same overwrite target ""%{name}"""
+请选择当前目录中要覆盖的文件,"Select a file in the current folder to overwrite"
 当前文件尚未建立可编辑的资源实体,"The current file does not yet have an editable FileAsset."
 资源信息编辑器尚未就绪,"The asset metadata editor is not ready."
 请填写当前语言下的资源名称。,"Enter the asset name for the current locale."
@@ -316,7 +333,6 @@ OK,OK
 草稿,Draft
 是,Yes
 否,No
-继续,Continue
 正在润色…,Polishing…
 润色完成,"Polish completed"
 润色失败,"Polish failed"
@@ -352,11 +368,13 @@ OK,OK
 "正在生成第 %{1}/%{2} 张…","Generating the %{1}/%{2} picture..."
 "缺少生成结果 ID","Missing build ID"
 "缺少会话 ID","Missing session ID"
-"统一 FileAsset 模式不允许原位覆盖共享资源，请另存为新资源后更新业务引用。","Unified FileAsset mode does not allow in-place overwriting of shared assets. Save a new asset and update the business reference instead."
+覆盖保存一次只能选择一张生成图。,"Overwrite save accepts only one generated image at a time."
+文件名无效。,"The filename is invalid."
+覆盖保存需要指定目标文件或原图。,"Overwrite save requires a target file or the source image."
+生成结果已过期，请重新生成,"The generated result has expired, please generate it again"
 图片保存模式无效。,"The image save mode is invalid."
 缺少目标目录,"Missing target directory"
 "保存生成图片必须填写默认 alt 和资源描述。","A default alt text and asset description are required before saving a generated image."
-生成结果已过期，请重新生成,"The generated result has expired, please generate it again"
 保存生成图片未全部完成，且部分资源无法自动回收，请立即刷新并人工核对。,"Not all generated images were saved, and some assets could not be reclaimed automatically. Refresh immediately and verify them manually."
 请先输入提示词,"Please enter a prompt first"
 "你是图像生成提示词润色助手。请把用户的简短描述改写成更适合文生图的提示词：保留原意，补充主体、构图、风格、光线与画质关键词；不要解释、不要前后缀说明，只输出润色后的提示词本身。\n\n用户描述：\n%{1}","You are the image generation prompt word polishing assistant. Please rewrite the user's short description into a prompt word that is more suitable for Vincentian pictures: keep the original meaning, and supplement the keywords of subject, composition, style, light and image quality; do not explain, do not use suffixes and suffixes, and only output the polished prompt word itself. \n\nUser description:\n%{1}"
@@ -420,12 +438,12 @@ OK,OK
 参考图片超过大小限制。,"The reference image exceeds the size limit."
 客户端已断开，图片读取已取消。,"The client disconnected, so image reading was canceled."
 读取图片时连续无数据进展。,"Image reading made no progress after repeated attempts."
-文件名无效。,"The filename is invalid."
 生成图片超过保存大小限制。,"The generated image exceeds the save size limit."
 同名文件已存在，请更换文件名。,"A file with the same name already exists. Choose another filename."
 生成图片声明类型与实际内容不一致。,"The declared generated-image type does not match its content."
 无法创建图片保存流。,"Unable to create the image save stream."
 无法重置图片保存流。,"Unable to rewind the image save stream."
+目标文件不存在，无法覆盖。,"Target file does not exist; cannot overwrite."
 存储磁盘可见性配置无效。,"The storage disk visibility configuration is invalid."
 目标目录不存在。,"The target directory does not exist."
 文件不是受支持的位图图片。,"The file is not a supported raster image."
@@ -571,6 +589,8 @@ OK,OK
 目标路径已被文件占用,目标路径已被文件占用
 选择项目数量或格式无效,"The selected item count or format is invalid"
 逐文件元数据格式无效。,"Per-file metadata has an invalid format."
+拖入或粘贴时，用这里选中的当前目录文件作为覆盖目标。只换物理内容；多文件时只覆盖第一个。不选则按新建上传。,"On drop or paste, the file selected here is the overwrite target. Only the bytes change; with several files, only the first one overwrites. Leave it empty to upload as new."
+"统一 FileAsset 模式不允许原位覆盖共享资源，请另存为新资源后更新业务引用。","Unified FileAsset mode does not allow in-place overwriting of shared assets. Save a new asset and update the business reference instead."
 Type,Type
 Size,Size
 Dimensions,Dimensions

@@ -491,7 +491,7 @@ final class GuidanceWorkflowCatalog
                 ],
                 [
                     'id' => 'theme_preview_runtime_three_modes',
-                    'summary' => '【高压线】主题身份权威分三态：（1）可视化编辑预览：query + typed editor_context 参数为主（theme-preview/content，禁止 start-preview）；（2）版本真实预览：预览 Token 反解析为准，URL theme/scope 不得覆盖 Token；（3）正式店面：RequestContext/Scope/路径解析为准（仅 r{published_release_id}）。业务逻辑三态同构（preview_storefront_delivery_parity）；只允许在身份装配层分支',
+                    'summary' => '【高压线】主题身份权威分三态：（1）可视化编辑预览：真实店面 path + query + typed editor_context 参数为主（禁止 start-preview；前台 theme-preview/content HTTP 壳已完整删除，禁止再造/302 兼容）（2）版本真实预览：预览 Token 反解析为准，URL theme/scope 不得覆盖 Token；（3）正式店面：RequestContext/Scope/路径解析为准（仅 r{published_release_id}）。业务逻辑三态同构（preview_storefront_delivery_parity）；只允许在身份装配层分支',
                     'detail_doc' => 'app/code/Weline/Theme/doc/preview-and-runtime-modes.md',
                 ],
                 [

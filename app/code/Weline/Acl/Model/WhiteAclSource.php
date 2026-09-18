@@ -23,6 +23,34 @@ class WhiteAclSource extends Model
     
     public const type_PC = 'pc';
     public const type_API = 'api';
+
+    public function save_after()
+    {
+        parent::save_after();
+        self::invalidateWhitelistCaches();
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        self::invalidateWhitelistCaches();
+    }
+
+    public static function invalidateWhitelistCaches(): void
+    {
+        try {
+            \Weline\Acl\Observer\RouteBefore::resetRequestCache();
+            \Weline\Acl\Observer\RouteBefore::clearProcessCache();
+        } catch (\Throwable) {
+        }
+        try {
+            $cache = w_cache('acl');
+            $cache->delete('backend_white_acl_sources');
+            $cache->delete('frontend_api_white_acl_sources');
+        } catch (\Throwable) {
+        }
+    }
+
     /**
      * 获取类型
      */

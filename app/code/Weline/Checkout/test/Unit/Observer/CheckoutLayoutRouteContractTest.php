@@ -21,10 +21,12 @@ final class CheckoutLayoutRouteContractTest extends TestCase
 
         $successLayout = (string)file_get_contents($root . '/view/theme/frontend/layouts/checkout/success/default.phtml');
         self::assertStringContainsString('data-layout="checkout/success"', $successLayout);
+        self::assertStringContainsString('Weline_Theme::frontend::layouts::base::body-end', $successLayout);
 
         $failureLayout = (string)file_get_contents($root . '/view/theme/frontend/layouts/checkout/failure/default.phtml');
         self::assertStringContainsString('data-layout="checkout/failure"', $failureLayout);
         self::assertStringContainsString('checkout-failure-content--passthrough', $failureLayout);
+        self::assertStringContainsString('Weline_Theme::frontend::layouts::base::body-end', $failureLayout);
 
         $resolve = (string)file_get_contents($root . '/Observer/LayoutResolveObserver.php');
         self::assertStringContainsString("requestPath === 'checkout/success'", $resolve);

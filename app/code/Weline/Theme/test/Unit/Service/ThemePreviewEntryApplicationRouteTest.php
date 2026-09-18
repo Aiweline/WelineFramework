@@ -18,44 +18,21 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
     {
         $resolver = new ThemePageTypeResolver();
 
-        self::assertSame('account', $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_ACCOUNT));
-        self::assertSame('account', $resolver->getPreviewRouteByPageType('account'));
-        self::assertSame('account/login', $resolver->getPreviewRouteByPageType('account/login'));
+        self::assertSame('account', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_ACCOUNT));
+        self::assertSame('account/login', $resolver->getFrontendUrlPathForPreview('account/login'));
         self::assertSame(
             'account/forgot-password',
-            $resolver->getPreviewRouteByPageType('account/forgot-password')
+            $resolver->getFrontendUrlPathForPreview('account/forgot-password')
         );
-        self::assertSame('products', $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT_LIST));
-        self::assertSame('product', $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT));
-        self::assertSame('category', $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_CATEGORY));
-        self::assertSame('', $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_HOME));
+        self::assertSame('products', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT_LIST));
+        self::assertSame('product', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT));
+        self::assertSame('category', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_CATEGORY));
+        self::assertSame('/', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_HOME));
         self::assertSame('/', $resolver->getPreviewPathByPageType(ThemeLayout::PAGE_TYPE_HOME));
         self::assertSame('/account', $resolver->getPreviewPathByPageType(ThemeLayout::PAGE_TYPE_ACCOUNT));
         self::assertStringNotContainsString(
             'theme-preview/content',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
-        );
-    }
-
-    public function testExplicitPublicRouteIsNeverRemapped(): void
-    {
-        $resolver = new ThemePageTypeResolver();
-
-        self::assertSame(
-            'account',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_ACCOUNT, 'account')
-        );
-        self::assertSame(
-            'customer/account/login',
-            $resolver->getPreviewRouteByPageType('account/login', 'customer/account/login')
-        );
-        self::assertSame(
-            'products',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT_LIST, 'products')
-        );
-        self::assertSame(
-            'product/benq-screenbar',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT, 'product/benq-screenbar')
+            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT)
         );
     }
 
@@ -71,12 +48,12 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
             $source
         );
         self::assertStringContainsString(
-            'getFrontendUrlPathForPreview($pageType, $publicRoute)',
+            'getFrontendUrlPathForPreview($pageType)',
             $source
         );
         // Must not pass empty homepage route into getFrontendUrl (query-bin REQUEST_URI leak).
         self::assertStringNotContainsString(
-            'getPreviewRouteByPageType($pageType, $publicRoute)',
+            'getPreviewRouteByPageType',
             $source
         );
     }
@@ -100,6 +77,14 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
             "'theme/frontend/theme-preview/content'",
             $source
         );
+        self::assertStringNotContainsString(
+            'theme/backend/theme-editor/layout-preview',
+            $source
+        );
+        self::assertStringContainsString(
+            "getBackendUrl('weline_dashboard/backend/dashboard'",
+            $source
+        );
     }
 
     public function testFrontendUrlPathForPreviewNeverPassesEmptyString(): void
@@ -110,10 +95,7 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
         self::assertSame('/', $resolver->getFrontendUrlPathForPreview('homepage'));
         self::assertSame('/', $resolver->getFrontendUrlPathForPreview('index/index'));
         self::assertSame('account', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_ACCOUNT));
-        self::assertSame(
-            'product/benq-screenbar',
-            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT, 'product/benq-screenbar')
-        );
+        self::assertSame('product', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT));
     }
 
     public function testQueryBinPathsAreRejectedAsStorefrontPublicRoutes(): void
@@ -124,13 +106,21 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
         self::assertSame('', $resolver->normalizeStorefrontPublicRoute('/api/framework/query-bin'));
         self::assertSame('', $resolver->normalizeStorefrontPublicRoute('USD/zh_Hans_CN/framework/query-bin'));
         self::assertTrue($resolver->isNonStorefrontPublicRoute('framework/query-bin'));
-        self::assertSame(
-            '/',
-            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_HOME, 'framework/query-bin')
-        );
-        self::assertSame(
-            'promotion/deals',
-            $resolver->getFrontendUrlPathForPreview('promotion', 'promotion/deals')
-        );
+        self::assertSame('/', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_HOME));
+        self::assertSame('promotion', $resolver->getFrontendUrlPathForPreview('promotion'));
+    }
+
+    public function testMarkupLeaksAreRejectedAsStorefrontPublicRoutes(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+
+        self::assertSame('', $resolver->normalizeStorefrontPublicRoute('<div    class='));
+        self::assertSame('', $resolver->normalizeStorefrontPublicRoute('/%3cdiv%20%20%20%20class='));
+        self::assertSame('', $resolver->normalizeStorefrontPublicRoute('<div class="x">'));
+        self::assertFalse($resolver->isSafeStorefrontPublicRoute('<div    class='));
+        self::assertTrue($resolver->isSafeStorefrontPublicRoute(''));
+        self::assertTrue($resolver->isSafeStorefrontPublicRoute('product/benq-screenbar'));
+        self::assertTrue($resolver->isSafeStorefrontPublicRoute('zh_Hans_CN/products'));
+        self::assertSame('/', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_HOME));
     }
 }

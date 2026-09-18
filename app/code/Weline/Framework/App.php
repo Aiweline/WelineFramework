@@ -520,10 +520,7 @@ class App
      */
     private function redirectDefaultLocalizationPrefixIfNeeded(string $rawRequestUri, array $parse = []): void
     {
-        $method = \strtoupper(\trim((string)(
-            WelineEnv::server('REQUEST_METHOD', '')
-            ?: ($_SERVER['REQUEST_METHOD'] ?? 'GET')
-        )));
+        $method = \strtoupper(\trim((string)(WelineEnv::server('REQUEST_METHOD', 'GET') ?: 'GET')));
         if ($method !== '' && !\in_array($method, ['GET', 'HEAD'], true)) {
             return;
         }

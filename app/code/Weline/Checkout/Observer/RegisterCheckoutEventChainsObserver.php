@@ -75,6 +75,8 @@ final class RegisterCheckoutEventChainsObserver implements ObserverInterface
                 'steps' => [
                     ['type' => 'track', 'event' => 'express_pay', 'label' => '快捷支付'],
                     ['type' => 'track', 'event' => 'express_pay_started', 'label' => '已拉起支付'],
+                    ['type' => 'track', 'event' => 'express_pay_confirmed', 'label' => '确认支付方式'],
+                    ['type' => 'track', 'event' => 'express_pay_transaction', 'label' => '交易进行中'],
                     ['type' => 'track', 'event' => 'checkout_success', 'label' => '结账成功'],
                 ],
             ],

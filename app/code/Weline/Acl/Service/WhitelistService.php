@@ -46,5 +46,6 @@ final class WhitelistService implements WhitelistServiceInterface
         /** @var WhiteAclSource $source */
         $source = ObjectManager::getInstance(WhiteAclSource::class, [], false);
         $source->insert($rows, WhiteAclSource::schema_fields_PATH)->fetch();
+        WhiteAclSource::invalidateWhitelistCaches();
     }
 }

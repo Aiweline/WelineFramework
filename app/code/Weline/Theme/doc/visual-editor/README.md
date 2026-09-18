@@ -9,7 +9,7 @@
 
 ### 预览身份（本壳）
 
-画布 / iframe 预览属于**可视化编辑预览**：身份以 **query + typed `editor_context` 参数**为准，走 `theme-preview/content`，**不要**调用 `start-preview`。
+画布 / iframe 预览属于**可视化编辑预览**：身份以 **query + typed `editor_context` 参数**为准，打开**真实店面 path**（`buildCanvasStorefrontPreviewUrl`），**不要**调用 `start-preview`，也**不要**用 `theme-preview/content` 冒充画布。
 
 与「版本真实预览」（Token 反解析）、「正式店面」（RequestContext）的对照与正确用法见权威文档：
 

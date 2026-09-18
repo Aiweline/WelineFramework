@@ -48,17 +48,37 @@ if ($inlineLinks !== [] || $hasMenu) {
     $ariaLabel = WidgetI18n::label($ariaSource !== '' ? $ariaSource : '政策与关于', '政策与关于');
     $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 
-    $renderLink = function (array $link, string $class) use ($esc): void {
+    // Resolve URLs outside the closure: taglib @url compiles to $this->getUrl(),
+    // which fatals with "Using $this when not in object context" inside anonymous
+    // functions after template compile — truncates header HTML mid-render.
+    $resolvePolicyHref = static function (array $link) use ($esc): string {
+        $split = FooterDefaultLinksHelper::splitUrlForTaglib((string)($link['url'] ?? '#'));
+        if ($split['url'] !== '') {
+            return $esc($split['url']);
+        }
+        $path = trim((string)($split['url_path'] ?? ''));
+        if ($path === '') {
+            return '#';
+        }
+        try {
+            /** @var \Weline\Framework\Http\Url $url */
+            $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+            return $esc((string)$url->getUrl($path));
+        } catch (\Throwable) {
+            return $esc('/' . ltrim($path, '/'));
+        }
+    };
+    $renderLink = static function (array $link, string $class) use ($esc, $resolvePolicyHref): void {
         $openNew = !empty($link['open_in_new']);
         $label = WidgetI18n::label((string)($link['label'] ?? ''), (string)($link['label'] ?? ''));
         if ($label === '') {
             return;
         }
-        $split = FooterDefaultLinksHelper::splitUrlForTaglib((string)($link['url'] ?? '#'));
+        $href = $resolvePolicyHref($link);
         ?>
         <a class="<?= $esc($class) ?>"
            <?php if (str_contains($class, 'w-menu__item')): ?>role="menuitem"<?php endif; ?>
-           href="<?php if ($split['url'] !== ''): ?><?= $esc($split['url']) ?><?php else: ?>@url{$split['url_path']}<?php endif; ?>"<?= $openNew ? ' target="_blank" rel="noopener noreferrer"' : '' ?>><?= $esc($label) ?></a>
+           href="<?= $href ?>"<?= $openNew ? ' target="_blank" rel="noopener noreferrer"' : '' ?>><?= $esc($label) ?></a>
         <?php
     };
     ?>

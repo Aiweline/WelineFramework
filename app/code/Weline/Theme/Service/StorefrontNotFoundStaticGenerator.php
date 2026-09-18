@@ -32,6 +32,9 @@ use Weline\Websites\Service\ScopeResolver;
  * Expensive work (theme slots, product cards, header/footer) runs here during
  * setup:upgrade or explicit publish — not on each 404 request.
  * Publishes website×locale via StaticErrorPagePublisher (cooperative Fibers).
+ *
+ * Snapshots are already SSR'd per locale — never keep client multi-locale
+ * translation dictionaries (e.g. CustomerService widgetTranslations) in the HTML.
  */
 final class StorefrontNotFoundStaticGenerator
 {
@@ -246,7 +249,7 @@ final class StorefrontNotFoundStaticGenerator
     }
 
     /**
-     * publish 输入指纹：站×语×主题×brand×generated/language×404 布局模板（v5，不含 URL）。
+     * publish 输入指纹：站×语×主题×brand×generated/language×404 布局模板（v6，不含 URL）。
      *
      * @return list<string>|null null 表示不可全跳，须走 Fiber 发布
      */
@@ -372,6 +375,7 @@ final class StorefrontNotFoundStaticGenerator
         // setup:upgrade 等长 CLI 会把全流程 __() 堆进 usedWords；若不隔离，
         // Frontend head 会把整袋词典塞进 runtime JSON，首语言可拖到分钟级甚至 OOM。
         $this->isolatePhraseBagForStaticRender();
+        RequestContext::set(StaticErrorPagePublisher::CTX_PUBLISHING, true);
 
         State::setRequestLanguageOverride($lang);
         try {
@@ -379,8 +383,11 @@ final class StorefrontNotFoundStaticGenerator
             StorefrontScopeHotCache::resetProcessCache();
             \Weline\Theme\Block\Partials::clearOutputCache();
             RequestContext::resetWelineVars();
+            // resetWelineVars may clear storage — re-assert publish flag for hooks.
+            RequestContext::set(StaticErrorPagePublisher::CTX_PUBLISHING, true);
             RequestContext::installScopeIdentity($this->authoritativeWebsiteIdentity($websiteId, $websiteCode));
         } catch (\Throwable) {
+            RequestContext::set(StaticErrorPagePublisher::CTX_PUBLISHING, true);
         }
         try {
             if (\class_exists(\Weline\Websites\Model\Website::class)
@@ -402,12 +409,90 @@ final class StorefrontNotFoundStaticGenerator
 
         // Prefer Context language override — do not mutate process $_SERVER REQUEST_URI.
         try {
-            return $this->renderThemedNotFoundPage($websiteId, $websiteCode, $websiteUrl);
+            $html = $this->renderThemedNotFoundPage($websiteId, $websiteCode, $websiteUrl);
+
+            return self::stripClientTranslationDictionaries($html);
         } catch (\Throwable) {
-            return $this->fallbackShellHtml();
+            return self::stripClientTranslationDictionaries($this->fallbackShellHtml());
         } finally {
             State::setRequestLanguageOverride('');
+            RequestContext::set(StaticErrorPagePublisher::CTX_PUBLISHING, false);
         }
+    }
+
+    /**
+     * Remove client-side multi-locale translation bags from static snapshots.
+     * Per-locale HTML is already SSR'd — embedding widgetTranslations (all locales)
+     * is redundant and bloats pub/errors storefront-not-found pages.
+     */
+    public static function stripClientTranslationDictionaries(string $html): string
+    {
+        if ($html === '' || !\str_contains($html, 'widgetTranslations')) {
+            return $html;
+        }
+
+        $needle = 'widgetTranslations';
+        $offset = 0;
+        while (($pos = \strpos($html, $needle, $offset)) !== false) {
+            $colon = \strpos($html, ':', $pos + \strlen($needle));
+            if ($colon === false) {
+                break;
+            }
+            $braceStart = \strpos($html, '{', $colon);
+            if ($braceStart === false || $braceStart > $colon + 32) {
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+            $braceEnd = self::matchBalancedJsonObjectEnd($html, $braceStart);
+            if ($braceEnd === null) {
+                break;
+            }
+            $html = \substr($html, 0, $braceStart) . '{}' . \substr($html, $braceEnd);
+            $offset = $braceStart + 2;
+        }
+
+        return $html;
+    }
+
+    private static function matchBalancedJsonObjectEnd(string $html, int $braceStart): ?int
+    {
+        $len = \strlen($html);
+        $depth = 0;
+        $inString = false;
+        $escape = false;
+        for ($i = $braceStart; $i < $len; $i++) {
+            $ch = $html[$i];
+            if ($inString) {
+                if ($escape) {
+                    $escape = false;
+                    continue;
+                }
+                if ($ch === '\\') {
+                    $escape = true;
+                    continue;
+                }
+                if ($ch === '"') {
+                    $inString = false;
+                }
+                continue;
+            }
+            if ($ch === '"') {
+                $inString = true;
+                continue;
+            }
+            if ($ch === '{') {
+                $depth++;
+                continue;
+            }
+            if ($ch === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return $i + 1;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function isolatePhraseBagForStaticRender(): void

@@ -9,12 +9,13 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrameworkQueryService;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Service\Seo\InternationalSeoContextService;
+use Weline\I18n\Service\Seo\LocalizedUrlBuilder;
 
 class InternationalSeoContextServiceTest extends TestCase
 {
     public function testBuildsAlternatesFromInstalledLocalesAndCanonicalPath(): void
     {
-        $service = new InternationalSeoContextService($this->localeProvider(['zh_Hans_CN', 'en_US']));
+        $service = $this->service(['zh_Hans_CN', 'en_US']);
         $template = new InternationalSeoTemplateStub([
             'seo' => ['default_locale' => 'zh_Hans_CN'],
         ]);
@@ -35,7 +36,7 @@ class InternationalSeoContextServiceTest extends TestCase
 
     public function testAppliesLocalizedSeoOverridesForCurrentLocale(): void
     {
-        $service = new InternationalSeoContextService($this->localeProvider(['zh_Hans_CN', 'en_US']));
+        $service = $this->service(['zh_Hans_CN', 'en_US']);
         $template = new InternationalSeoTemplateStub([
             'seo' => ['default_locale' => 'zh_Hans_CN'],
             'i18n_seo' => [
@@ -93,9 +94,7 @@ class InternationalSeoContextServiceTest extends TestCase
         ObjectManager::setInstance(FrameworkQueryService::class, $queryService);
 
         try {
-            $service = new InternationalSeoContextService(
-                $this->localeProvider(['zh_Hans_CN', 'en_US', 'de_DE']),
-            );
+            $service = $this->service(['zh_Hans_CN', 'en_US', 'de_DE']);
             $template = new InternationalSeoTemplateStub([
                 'website_id' => 0,
             ]);
@@ -116,6 +115,77 @@ class InternationalSeoContextServiceTest extends TestCase
                 ObjectManager::removeInstance(FrameworkQueryService::class);
             }
         }
+    }
+
+    public function testSelfHreflangEqualsCanonicalWhenDefaultCurrencyOmittedFromPath(): void
+    {
+        $service = $this->service(['zh_Hans_CN', 'bn_BD']);
+        $canonical = 'https://shop.test/bn_BD/product/demo-sku';
+        $context = $service->build(new InternationalSeoTemplateStub([
+            'seo' => ['default_locale' => 'zh_Hans_CN'],
+        ]), [
+            'locale' => 'bn_BD',
+            'canonical_url' => $canonical,
+            'url' => $canonical,
+        ]);
+
+        self::assertSame($canonical, $context['alternates']['bn_BD']);
+        self::assertStringNotContainsString('/USD/', (string)$context['alternates']['bn_BD']);
+        self::assertSame('https://shop.test/product/demo-sku', $context['alternates']['zh_Hans_CN']);
+        self::assertSame('https://shop.test/product/demo-sku', $context['alternates']['x-default']);
+    }
+
+    public function testNonDefaultCurrencyFromCanonicalIsPreservedAcrossHreflang(): void
+    {
+        $service = $this->service(['zh_Hans_CN', 'bn_BD']);
+        $canonical = 'https://shop.test/EUR/bn_BD/product/demo-sku';
+        $context = $service->build(new InternationalSeoTemplateStub([
+            'seo' => ['default_locale' => 'zh_Hans_CN'],
+        ]), [
+            'locale' => 'bn_BD',
+            'canonical_url' => $canonical,
+            'url' => $canonical,
+        ]);
+
+        self::assertSame($canonical, $context['alternates']['bn_BD']);
+        self::assertSame('https://shop.test/EUR/product/demo-sku', $context['alternates']['zh_Hans_CN']);
+        self::assertSame('https://shop.test/EUR/product/demo-sku', $context['alternates']['x-default']);
+    }
+
+    public function testDoesNotReinjectUserCurrencyWhenCanonicalOmitsDefaultCurrency(): void
+    {
+        // Regression: even if request env claims user.currency=USD, hreflang must follow
+        // the canonical path (no currency segment for site-default USD) — never reinject.
+        $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+        try {
+            $service = $this->service(['zh_Hans_CN', 'bn_BD']);
+            $canonical = 'https://shop.test/bn_BD/product/demo-sku';
+            $context = $service->build(new InternationalSeoTemplateStub([
+                'seo' => ['default_locale' => 'zh_Hans_CN'],
+            ]), [
+                'locale' => 'bn_BD',
+                'canonical_url' => $canonical,
+                'url' => $canonical,
+            ]);
+
+            self::assertSame($canonical, $context['alternates']['bn_BD']);
+            foreach ($context['alternates'] as $href) {
+                self::assertStringNotContainsString('/USD/', (string)$href);
+            }
+        } finally {
+            unset($_SERVER['WELINE_USER_CURRENCY']);
+        }
+    }
+
+    /**
+     * @param string[] $locales
+     */
+    private function service(array $locales): InternationalSeoContextService
+    {
+        return new InternationalSeoContextService(
+            $this->localeProvider($locales),
+            new LocalizedUrlBuilder(),
+        );
     }
 
     /**

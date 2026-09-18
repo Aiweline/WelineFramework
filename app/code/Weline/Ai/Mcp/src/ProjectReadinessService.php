@@ -434,7 +434,12 @@ final class ProjectReadinessService
                     $targetResult = $indexer->indexPaths($paths);
                     $result['changed_paths'] = array_merge($result['changed_paths'] ?? [], $targetResult['changed_paths'] ?? []);
                     $result['errors'] = array_merge($result['errors'] ?? [], $targetResult['errors'] ?? []);
-                    $result['freshness'] = $targetResult['freshness'] ?? $result['freshness'];
+                    // index.enabled=false may omit top-level freshness; each ?? left operand must be isset-safe.
+                    $result['freshness'] = ($targetResult['freshness'] ?? null)
+                        ?? ($result['freshness'] ?? null)
+                        ?? ($targetResult['status']['freshness'] ?? null)
+                        ?? ($result['status']['freshness'] ?? null)
+                        ?? 'unknown';
                 }
             } elseif ($paths !== []) {
                 // Explicit paths are content-hashed even for same-size/same-mtime edits.

@@ -135,7 +135,7 @@ Theme 请求里「当前主题 / Scope / draft|published / version」的权威�
 
 | 状态 | 权威 | 入口要点 |
 |------|------|----------|
-| **可视化编辑预览** | **参数为主**（query + typed `editor_context`） | 编辑器 iframe → `theme-preview/content`；勿种店面预览 Token |
+| **可视化编辑预览** | **参数为主**（query + typed `editor_context`） | 编辑器 iframe → **真实店面 path** + `editor_mode`；勿种店面预览 Token；禁止 `theme-preview/content` 冒充画布 |
 | **版本真实预览** | **Token 反解析参数为准**（URL 不能覆盖主题身份） | `start-preview` → 真实店面 + `weline_preview_token` |
 | **正式（正常店面）** | **RequestContext / 路径 / Scope**；布局只认 `r{published_release_id}` | 访客 URL；无有效预览 Token |
 

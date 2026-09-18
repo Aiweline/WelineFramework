@@ -34,32 +34,67 @@ class PixelConversionDedupeService
     /**
      * @param array<string, mixed> $post
      */
-    public function isDuplicate(int $websiteId, string $event, array $post, ?string $scope = null): bool
+    public function skipReason(int $websiteId, string $event, array $post, ?string $scope = null): ?string
     {
         $cfg = $this->resolveConfig($scope);
         if (!$cfg['enabled']) {
-            return false;
+            return null;
         }
         $eventName = $this->normalizeEventName($event);
         if ($eventName === '' || !$this->eventMatches($eventName, $cfg['events'])) {
-            return false;
+            return null;
         }
-        $businessKey = $this->resolveBusinessKey($post);
-        if ($businessKey === '') {
-            return false;
+        $family = $this->ledgerEventName($eventName);
+        $aliases = $this->resolveAliasKeys($post);
+        if ($family === 'purchase' && $aliases === []) {
+            return 'missing_business_key';
+        }
+        if ($aliases === []) {
+            return null;
         }
 
         $now = time();
-        $existing = $this->findRow($websiteId, $eventName, $businessKey);
-        if ($existing !== null) {
+        foreach ($aliases as $alias) {
+            $existing = $this->findRow($websiteId, $family, $alias);
+            if ($existing === null) {
+                continue;
+            }
             $expiresAt = strtotime((string)($existing[PixelConversionDedupe::schema_fields_EXPIRES_AT] ?? '')) ?: 0;
             if ($expiresAt > $now) {
-                return true;
+                return 'duplicate';
             }
             $this->deleteRow((int)($existing[PixelConversionDedupe::schema_fields_ID] ?? 0));
         }
 
-        return !$this->claim($websiteId, $eventName, $businessKey, $cfg['ttlDays'], $now);
+        foreach ($aliases as $alias) {
+            $this->claim($websiteId, $family, $alias, $cfg['ttlDays'], $now);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $post
+     */
+    public function isDuplicate(int $websiteId, string $event, array $post, ?string $scope = null): bool
+    {
+        return $this->skipReason($websiteId, $event, $post, $scope) === 'duplicate';
+    }
+
+    public function ledgerEventName(string $event): string
+    {
+        $eventName = $this->normalizeEventName($event);
+        if ($eventName === '' || $eventName === 'checkout_failure') {
+            return $eventName;
+        }
+        if ($eventName === 'checkout_success'
+            || $eventName === 'payment_success'
+            || str_ends_with($eventName, '_checkout_success')
+        ) {
+            return 'purchase';
+        }
+
+        return $eventName;
     }
 
     /**
@@ -174,6 +209,49 @@ class PixelConversionDedupeService
         }
 
         return '';
+    }
+
+    /**
+     * 同一笔购买的全部单号别名。任一命中即视为重复。
+     *
+     * @param array<string, mixed> $post
+     * @return list<string>
+     */
+    public function resolveAliasKeys(array $post): array
+    {
+        $bags = [$post];
+        $meta = \is_array($post['meta'] ?? null) ? $post['meta'] : [];
+        $bags[] = $meta;
+        $additional = \is_array($post['additionalInfo'] ?? null) ? $post['additionalInfo'] : [];
+        $bags[] = $additional;
+        $ecommerce = \is_array($additional['ecommerce'] ?? null) ? $additional['ecommerce'] : [];
+        if ($ecommerce === [] && \is_array($post['ecommerce'] ?? null)) {
+            $ecommerce = $post['ecommerce'];
+        }
+        $bags[] = $ecommerce;
+
+        $seen = [];
+        $out = [];
+        $fields = array_merge(self::BUSINESS_KEY_FIELDS, ['transaction_no', 'transactionNo']);
+        foreach ($fields as $field) {
+            foreach ($bags as $bag) {
+                if (!\is_array($bag) || !array_key_exists($field, $bag)) {
+                    continue;
+                }
+                $value = trim((string)$bag[$field]);
+                if ($value === '') {
+                    continue;
+                }
+                $value = mb_substr($value, 0, 191);
+                if (isset($seen[$value])) {
+                    continue;
+                }
+                $seen[$value] = true;
+                $out[] = $value;
+            }
+        }
+
+        return $out;
     }
 
     private function normalizeEventName(string $event, bool $allowWildcard = false): string

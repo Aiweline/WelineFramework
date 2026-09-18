@@ -62,8 +62,8 @@ final class NestedLayoutTypeConventionTest extends TestCase
     {
         $resolver = new ThemePageTypeResolver();
 
-        self::assertSame(ThemeLayout::PAGE_TYPE_ACCOUNT, $resolver->mapLayoutTypeToPageType('account/login'));
-        self::assertSame(ThemeLayout::PAGE_TYPE_ACCOUNT, $resolver->mapLayoutTypeToPageType('account/register'));
+        self::assertSame('account/login', $resolver->mapLayoutTypeToPageType('account/login'));
+        self::assertSame('account/register', $resolver->mapLayoutTypeToPageType('account/register'));
         self::assertSame('account/login', $resolver->resolveLayoutTypeFromUri('/customer/account/login'));
     }
 

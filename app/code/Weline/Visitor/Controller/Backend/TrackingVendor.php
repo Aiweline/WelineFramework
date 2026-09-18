@@ -103,7 +103,6 @@ class TrackingVendor extends BackendController
         $addCustomEventUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/add-custom-event');
         $autosaveUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/postAutosave');
         $annotateEventUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/postAnnotateEvent');
-        $ensureDemoChainUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/postEnsureDemoEventChain');
         $eventChainsUrl = $url->getBackendUrlPath('visitor/backend/tracking-vendor/getEventChains', [
             'website_id' => $websiteId,
         ]);
@@ -139,7 +138,6 @@ class TrackingVendor extends BackendController
         $this->assign('event_category_options_json', \json_encode($annotations->categoryOptions(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $this->assign('match_param_options_json', \json_encode($annotations->matchParamOptions(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $this->assign('match_op_options_json', \json_encode($annotations->matchOpOptions(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        $this->assign('ensure_demo_chain_url', $ensureDemoChainUrl);
         $this->assign('event_chains_url', $eventChainsUrl);
         $this->assign('dev_no_report', \defined('DEV') && DEV);
         $this->assign('ui_layout', 'split');
@@ -901,26 +899,6 @@ class TrackingVendor extends BackendController
         if (($result['chain'] ?? null) === null) {
             return $this->jsonResponse(['ok' => false, 'error' => 'invalid_chain'], 400);
         }
-
-        return $this->jsonResponse($this->withRuntimeReloadMeta([
-            'ok' => true,
-            'website_id' => $websiteId,
-            'version' => $result['version'],
-            'chain' => $result['chain'],
-            'chains' => $result['chains'],
-        ], null, false));
-    }
-
-    /**
-     * 确保演示跨页事件链（开发/验收用）。
-     */
-    #[Acl('Weline_Visitor::tracking_vendor_save', '保存事件供应商', 'save', '保存事件供应商配置')]
-    public function postEnsureDemoEventChain(): string
-    {
-        $websiteId = $this->resolveWebsiteId();
-        /** @var EventChainService $svc */
-        $svc = ObjectManager::getInstance(EventChainService::class);
-        $result = $svc->ensureDemoCrossPageChain($websiteId);
 
         return $this->jsonResponse($this->withRuntimeReloadMeta([
             'ok' => true,

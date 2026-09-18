@@ -62,10 +62,6 @@ final class StorefrontNotFoundStaticPage
             }
         } catch (\Throwable) {
         }
-        $mirror = self::normalizeLangCode((string)($_SERVER['WELINE_USER_LANG'] ?? ''));
-        if ($mirror !== '') {
-            return $mirror;
-        }
 
         // $cookieHeader retained for call-site compatibility; language cookies are ignored.
         unset($cookieHeader);

@@ -8,7 +8,9 @@ use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Binary\EmergencyPacket;
 use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
+use Weline\Framework\Http\BinaryOutputGuard;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationException;
 use Weline\Framework\Service\Query\BinQueryCachePolicy;
 use Weline\Framework\Service\Query\BinQueryGateway;
 use Weline\Framework\Service\Query\FrontendQueryException;
@@ -103,6 +105,14 @@ class BinQuery extends FrontendRestController
                 $this->logUnexpectedFailure($exception, $requestId, $summary);
                 $responsePayload = $this->unexpectedFailurePayload($exception, $requestId);
             }
+            $responseHeaders = ['Cache-Control' => 'no-store'];
+        } catch (FrontendWorkerBackendAuthorizationException $exception) {
+            $statusCode = $exception->httpStatus > 0 ? $exception->httpStatus : 403;
+            $responsePayload = $this->errorPayload(
+                $exception->reason !== '' ? $exception->reason : 'backend_acl_denied',
+                $exception->getMessage(),
+                $requestId
+            );
             $responseHeaders = ['Cache-Control' => 'no-store'];
         } catch (\Throwable $throwable) {
             $statusCode = 500;
@@ -301,52 +311,18 @@ class BinQuery extends FrontendRestController
     }
 
     /**
-     * @return array{display_errors:string|false,html_errors:string|false}
+     * @return array{mode: 'persistent'|'fpm', label: string, display_errors?: string|false, html_errors?: string|false}
      */
     private function beginBinaryOutputGuard(): array
     {
-        $preExisting = '';
-        while (\ob_get_level() > 0) {
-            $chunk = \ob_get_clean();
-            if (\is_string($chunk) && $chunk !== '') {
-                $preExisting = $chunk . $preExisting;
-            }
-        }
-        if ($preExisting !== '' && \function_exists('w_log_warning')) {
-            \w_log_warning('[BinQuery] Cleared pre-existing output buffer before binary response: ' . \mb_substr(\trim($preExisting), 0, 500));
-        }
-
-        $guard = [
-            'display_errors' => \ini_get('display_errors'),
-            'html_errors' => \ini_get('html_errors'),
-        ];
-        @\ini_set('display_errors', '0');
-        @\ini_set('html_errors', '0');
-        \ob_start();
-
-        return $guard;
+        return BinaryOutputGuard::begin('BinQuery');
     }
 
     /**
-     * @param array{display_errors:string|false,html_errors:string|false} $guard
+     * @param array{mode: 'persistent'|'fpm', label: string, display_errors?: string|false, html_errors?: string|false} $guard
      */
     private function endBinaryOutputGuard(array $guard): void
     {
-        $captured = '';
-        while (\ob_get_level() > 0) {
-            $chunk = \ob_get_clean();
-            if (\is_string($chunk) && $chunk !== '') {
-                $captured = $chunk . $captured;
-            }
-        }
-        if (\is_string($guard['display_errors']) || $guard['display_errors'] === false) {
-            @\ini_set('display_errors', $guard['display_errors'] === false ? '0' : (string)$guard['display_errors']);
-        }
-        if (\is_string($guard['html_errors']) || $guard['html_errors'] === false) {
-            @\ini_set('html_errors', $guard['html_errors'] === false ? '0' : (string)$guard['html_errors']);
-        }
-        if ($captured !== '' && \function_exists('w_log_warning')) {
-            \w_log_warning('[BinQuery] Suppressed stray output during binary response: ' . \mb_substr(\trim($captured), 0, 500));
-        }
+        BinaryOutputGuard::end($guard);
     }
 }

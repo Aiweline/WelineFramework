@@ -53,12 +53,23 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('系统命中', $monitor);
         self::assertStringContainsString('自定义命中', $monitor);
         self::assertStringContainsString('data-wesm-tab="stream"', $monitor);
+        self::assertStringContainsString('wesm-row__bridge', $monitor);
+        self::assertStringContainsString('wesm-empty--warn', $monitor);
+        self::assertStringContainsString('patchBridgeStatus', $monitor);
         self::assertStringContainsString('data-wesm-tab="system"', $monitor);
         self::assertStringContainsString('data-wesm-tab="custom"', $monitor);
         self::assertStringContainsString('data-wesm-tab="previous"', $monitor);
         self::assertStringContainsString('data-wesm-tab="chain"', $monitor);
         self::assertStringContainsString('累积链', $monitor);
         self::assertStringContainsString('上一页', $monitor);
+        self::assertStringContainsString('PAGE_INSTANCE_ID', $monitor);
+        self::assertStringContainsString('getPageInstanceId', $monitor);
+        self::assertStringContainsString('displayPagePath', $monitor);
+        self::assertStringContainsString("STYLE_VERSION = '20260918-clear-stream'", $monitor);
+        self::assertStringContainsString('data-wesm-action="clear"', $monitor);
+        self::assertStringContainsString('data-testid="wesm-clear"', $monitor);
+        self::assertStringContainsString('clearSessionKeepOpen', $monitor);
+        self::assertStringContainsString('点「清空」清会话记录并继续监听', $monitor);
         self::assertStringContainsString('CHAIN_KEY', $monitor);
         self::assertStringContainsString('chainRows', $monitor);
         self::assertStringContainsString('hitAggregate', $monitor);
@@ -123,7 +134,7 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('WelineEventSandbox', $panel);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bootstrap);
-        self::assertStringContainsString('20260916-event-sandbox-monitor10', $bootstrap);
+        self::assertStringContainsString('20260918-clear-stream', $bootstrap);
         self::assertStringContainsString('weline_event_sandbox_monitor_v1', $bootstrap);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bodyEnd);

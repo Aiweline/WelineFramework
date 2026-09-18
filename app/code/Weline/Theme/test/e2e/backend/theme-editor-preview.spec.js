@@ -38,7 +38,10 @@ test.describe('Theme editor iframe preview integration', () => {
     });
 
     const previewFrame = page.locator('#previewFrame');
-    await expect(previewFrame).toHaveAttribute('src', /theme-preview\/content|layout-preview/);
+    // Canvas must be real storefront path + editor markers — never theme-preview/content shell.
+    await expect(previewFrame).toHaveAttribute('src', /[?&]editor_mode=1/);
+    await expect(previewFrame).toHaveAttribute('src', /(?:[?&]shell=theme-editor|shell%3Dtheme-editor)/);
+    await expect(previewFrame).not.toHaveAttribute('src', /theme-preview\/content/);
     await expect(previewFrame).toHaveAttribute('src', /editor_mode=1/);
     await expect(previewFrame).toHaveAttribute('src', /preview_area=frontend/);
 
@@ -104,12 +107,13 @@ test.describe('Theme editor iframe preview integration', () => {
     });
 
     const previewFrame = page.locator('#previewFrame');
-    // Live canvas: storefront URL with editor_mode/shell; legacy content gateway still accepted.
+    // Live canvas: real storefront path + editor markers only.
     await expect(previewFrame).toHaveAttribute(
       'src',
-      /(?:theme-preview\/content|layout-preview|[?&](?:editor_mode=1|shell=theme-editor))/,
+      /[?&](?:editor_mode=1|shell=theme-editor)/,
       { timeout: 60000 }
     );
+    await expect(previewFrame).not.toHaveAttribute('src', /theme-preview\/content/);
 
     const frame = page.frameLocator('#previewFrame');
     await frame.locator('body').first().waitFor({ state: 'visible', timeout: 60000 });

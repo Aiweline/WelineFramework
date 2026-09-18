@@ -48,8 +48,8 @@ final class PreviewNavigationProductsRouteContractTest extends TestCase
         $js = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/statics/ui/pages/weline-theme-editor.js'
         );
-        $visual = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/view/statics/js/visual-editor.js'
+        $authority = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/theme-editor.js'
         );
         $template = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/templates/backend/ThemeEditor/index.phtml'
@@ -60,15 +60,19 @@ final class PreviewNavigationProductsRouteContractTest extends TestCase
             $js
         );
         self::assertStringContainsString('apiThemePreviewGateway', $js);
-        self::assertStringNotContainsString('/product/view/id/1.html', $visual);
-        self::assertStringNotContainsString('/checkout/cart', $visual);
-        self::assertStringContainsString('path=layout 1:1', $visual);
-        self::assertStringContainsString('no Magento-style alias table', $visual);
+        self::assertStringContainsString('Path ↔ layout 1:1', $authority);
+        self::assertStringContainsString('No layout→route alias table', $authority);
+        self::assertFileDoesNotExist(\dirname(__DIR__, 3) . '/view/statics/js/visual-editor.js');
+        self::assertFileDoesNotExist(
+            \dirname(__DIR__, 3) . '/view/templates/backend/config/visual-editor.phtml'
+        );
         self::assertStringContainsString('theme-preview/gateway', $template);
         self::assertStringNotContainsString(
             "data-api-frontend-layout-preview=",
             $template
         );
+        self::assertStringNotContainsString('data-api-exit-preview=', $template);
+        self::assertStringNotContainsString('data-api-preview=', $template);
     }
 
     public function testEditorJsPreservesClickedPathAndOnlyAddsEditorParams(): void
@@ -81,13 +85,8 @@ final class PreviewNavigationProductsRouteContractTest extends TestCase
         self::assertStringContainsString('applyResolvedEditorCanvasNavigation', $source);
         self::assertStringContainsString('Preserve-path canvas navigation', $source);
         self::assertStringContainsString('Preserve clicked/navigation path exactly', $source);
-        self::assertStringContainsString('Wait for preview-sample', $source);
-        self::assertStringContainsString('isHomepageLayoutType', $source);
-        // Must not invent path from layout type when previewEntityRoute is empty.
-        self::assertStringNotContainsString(
-            '// Layout-dropdown fallback only: path equals layout type (no alias table).',
-            $source
-        );
+        self::assertStringContainsString('Path ↔ layout 1:1', $source);
+        self::assertStringNotContainsString('Wait for preview-sample', $source);
         // Must not hard-remap product_list → products inside resolveCanvasStorefrontPath.
         self::assertDoesNotMatchRegularExpression(
             '/function resolveCanvasStorefrontPath[\s\S]*?product_list[\s\S]*?return \'products\'/',

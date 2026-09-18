@@ -596,7 +596,8 @@ final class StorefrontProductWidgetCatalog
             'rating' => 0.0,
             'review_count' => 0,
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
-            'sellable' => !empty($offer['sellable']),
+            'sellable' => !empty($offer['sellable']) && empty($offer['currency_unavailable']),
+            'currency_unavailable' => !empty($offer['currency_unavailable']),
         ];
     }
 

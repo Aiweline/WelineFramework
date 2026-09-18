@@ -9,11 +9,13 @@ use Weline\Framework\Binary\EmergencyPacket;
 use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Http\BinaryOutputGuard;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationException;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationProviderInterface;
+use Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationException;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
@@ -178,6 +180,23 @@ class QueryBin extends FrontendRestController
                 'request_id' => $requestId,
             ];
             $statusCode = 400;
+        } catch (FrontendWorkerBackendAuthorizationException $exception) {
+            $statusCode = $exception->httpStatus > 0 ? $exception->httpStatus : 403;
+            $errorCode = $exception->reason !== '' ? $exception->reason : 'backend_acl_denied';
+            $markPhase('backend_acl_denied', [
+                'code' => $errorCode,
+                'status' => $statusCode,
+                'class' => $exception::class,
+            ]);
+            $payload = [
+                'ok' => false,
+                'data' => null,
+                'error' => [
+                    'code' => $errorCode,
+                    'message' => $exception->getMessage(),
+                ],
+                'request_id' => $requestId,
+            ];
         } catch (\Throwable $throwable) {
             $markPhase('throwable_exception', [
                 'class' => \get_class($throwable),
@@ -1039,62 +1058,18 @@ class QueryBin extends FrontendRestController
     }
 
     /**
-     * @return array{display_errors:string|false,html_errors:string|false}
+     * @return array{mode: 'persistent'|'fpm', label: string, display_errors?: string|false, html_errors?: string|false}
      */
     private function beginBinaryOutputGuard(): array
     {
-        $preExisting = '';
-        while (\ob_get_level() > 0) {
-            $chunk = \ob_get_clean();
-            if (\is_string($chunk) && $chunk !== '') {
-                $preExisting = $chunk . $preExisting;
-            }
-        }
-
-        if ($preExisting !== '' && \function_exists('w_log_warning')) {
-            \w_log_warning('[QueryBin] Cleared pre-existing output buffer before binary response.', [
-                'bytes' => \strlen($preExisting),
-                'sha256' => \hash('sha256', $preExisting),
-            ], 'query_bin');
-        }
-
-        $guard = [
-            'display_errors' => \ini_get('display_errors'),
-            'html_errors' => \ini_get('html_errors'),
-        ];
-
-        @\ini_set('display_errors', '0');
-        @\ini_set('html_errors', '0');
-        \ob_start();
-
-        return $guard;
+        return BinaryOutputGuard::begin('QueryBin');
     }
 
     /**
-     * @param array{display_errors:string|false,html_errors:string|false} $guard
+     * @param array{mode: 'persistent'|'fpm', label: string, display_errors?: string|false, html_errors?: string|false} $guard
      */
     private function endBinaryOutputGuard(array $guard): void
     {
-        $captured = '';
-        while (\ob_get_level() > 0) {
-            $chunk = \ob_get_clean();
-            if (\is_string($chunk) && $chunk !== '') {
-                $captured = $chunk . $captured;
-            }
-        }
-
-        if (\is_string($guard['display_errors']) || $guard['display_errors'] === false) {
-            @\ini_set('display_errors', $guard['display_errors'] === false ? '0' : (string)$guard['display_errors']);
-        }
-        if (\is_string($guard['html_errors']) || $guard['html_errors'] === false) {
-            @\ini_set('html_errors', $guard['html_errors'] === false ? '0' : (string)$guard['html_errors']);
-        }
-
-        if ($captured !== '' && \function_exists('w_log_warning')) {
-            \w_log_warning('[QueryBin] Suppressed stray output during binary response.', [
-                'bytes' => \strlen($captured),
-                'sha256' => \hash('sha256', $captured),
-            ], 'query_bin');
-        }
+        BinaryOutputGuard::end($guard);
     }
 }

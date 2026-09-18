@@ -31,9 +31,10 @@ test.describe('Theme editor preview locale switch', () => {
     const previewFrame = page.locator('#previewFrame');
     await expect(previewFrame).toHaveAttribute(
       'src',
-      /(?:theme-preview\/content|layout-preview|[?&](?:editor_mode=1|shell=theme-editor))/,
+      /[?&](?:editor_mode=1|shell=theme-editor)/,
       { timeout: 90000 },
     );
+    await expect(previewFrame).not.toHaveAttribute('src', /theme-preview\/content/);
 
     // Edit-lock modal can sit on top while the canvas boots.
     await page.locator('#themeEditor').locator('text=/正在确认编辑权限|正在准备编辑/').waitFor({ state: 'hidden', timeout: 90000 }).catch(() => {});

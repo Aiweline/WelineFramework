@@ -349,6 +349,27 @@ SKU,SKU
 正在前往结账...,"Proceeding to checkout..."
 结账准备失败,"Checkout preparation failed"
 立即结账,"Proceed to checkout"
+China,China
+国家/地区,Country/Region
+搜索国家/地区,"Search country/region"
+自动定位,Auto-detect
+当前国家暂无地址，可直接快速新增。,"No addresses for this country yet. You can add one quickly."
+当前国家暂无地址。,"No addresses for the current country."
+匿名,Guest
+已登录地址,"Saved address"
+国家已切换,"Country updated"
+地址已保存并应用,"Address saved and applied"
+地址保存失败,"Failed to save address"
+加载失败,"Failed to load"
+地址已应用到结账,"Address applied to checkout"
+地址选择失败,"Failed to select address"
+国家切换失败,"Failed to switch country"
+自动定位不可用，请手动选择国家并完善地址。,"Auto-detect is unavailable. Please select a country and complete the address."
+自动定位可用位置，但反查地址服务不可用，请手动完善地址并保存。,"Location found"
+自动定位反查地址失败，请手动完善地址并保存。,"Reverse geocoding failed. Please complete and save the address."
+定位完成，但当前未启用地址添加模块。,"Location completed"
+定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
+自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -371,27 +392,6 @@ SKU,SKU
 配送,配送
 合计,合计
 错误代码：,错误代码：
-China,China
-国家/地区,Country/Region
-搜索国家/地区,"Search country/region"
-自动定位,Auto-detect
-当前国家暂无地址，可直接快速新增。,"No addresses for this country yet. You can add one quickly."
-当前国家暂无地址。,"No addresses for the current country."
-匿名,Guest
-已登录地址,"Saved address"
-国家已切换,"Country updated"
-地址已保存并应用,"Address saved and applied"
-地址保存失败,"Failed to save address"
-加载失败,"Failed to load"
-地址已应用到结账,"Address applied to checkout"
-地址选择失败,"Failed to select address"
-国家切换失败,"Failed to switch country"
-自动定位不可用，请手动选择国家并完善地址。,"Auto-detect is unavailable. Please select a country and complete the address."
-自动定位可用位置，但反查地址服务不可用，请手动完善地址并保存。,"Location found"
-自动定位反查地址失败，请手动完善地址并保存。,"Reverse geocoding failed. Please complete and save the address."
-定位完成，但当前未启用地址添加模块。,"Location completed"
-定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
-自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
 订单列表,"order list"
 订单号关键词,"Order number keyword"
 全部状态,"All status"

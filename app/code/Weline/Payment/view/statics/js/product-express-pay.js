@@ -131,10 +131,32 @@
     }
   }
 
-  function trackPixel(name, payload, el) {
+  function resolveMethodLabel(button, methodCode) {
+    var fromData = text(button && (button.getAttribute('data-method-label') || button.getAttribute('data-method-title')));
+    if (fromData) {
+      return fromData;
+    }
+    var aria = text(button && button.getAttribute('aria-label'));
+    if (aria) {
+      return aria;
+    }
+    return methodCode ? ('使用 ' + methodCode + ' 快捷支付') : '快捷支付';
+  }
+
+  function toastPaymentMethod(message) {
+    var msg = text(message);
+    if (!msg) {
+      return;
+    }
     try {
-      if (global.WelinePixel && typeof global.WelinePixel.track === 'function') {
-        global.WelinePixel.track(name, payload || {}, { element: el || null, keepalive: true });
+      var toast = global.Weline && global.Weline.UI && global.Weline.UI.toast;
+      if (toast && typeof toast.show === 'function') {
+        toast.show(msg, { tone: 'info', duration: 2800 });
+        return;
+      }
+      if (toast && typeof toast.info === 'function') {
+        toast.info(msg);
+        return;
       }
     } catch (e) {}
   }
@@ -143,8 +165,12 @@
     var methodCode = text(button.getAttribute('data-method-code')
       || section.getAttribute('data-method-code')
       || 'paypal') || 'paypal';
+    var methodLabel = resolveMethodLabel(button, methodCode);
+    toastPaymentMethod(methodLabel);
     trackPixel('express_pay', {
       payment_method: methodCode,
+      payment_type: methodCode,
+      method_label: methodLabel,
       product_id: Number(section.getAttribute('data-product-id') || 0) || 0,
       selected_options: readEavSelection(section),
       source: 'product_express_pay',
@@ -214,9 +240,13 @@
     }
     trackPixel('express_pay_started', {
       payment_method: methodCode,
+      payment_type: methodCode,
+      method_label: methodLabel,
       product_id: productId,
       source: 'product_express_pay',
       trigger: 'express_started',
+      transaction_no: text(data.transaction_no || ''),
+      transaction_id: text(data.transaction_no || ''),
     }, button);
     openProviderWindow(redirectUrl);
     return started;
@@ -251,7 +281,14 @@
             detail: { message: message },
           }));
         }
-        window.alert(message);
+        try {
+          var toast = global.Weline && global.Weline.UI && global.Weline.UI.toast;
+          if (toast && typeof toast.error === 'function') {
+            toast.error(message);
+          } else if (toast && typeof toast.show === 'function') {
+            toast.show(message, { tone: 'danger' });
+          }
+        } catch (e3) {}
       }).finally(function () {
         setBusy(button, false);
       });

@@ -343,6 +343,10 @@ final class HeaderCommerceData
 
     public static function formatMoney(float $amount, string $currency = 'CNY'): string
     {
+        if (class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+            return \Weline\Currency\Helper\CurrencySymbol::formatAmount($amount, $currency);
+        }
+
         $currency = strtoupper(trim($currency));
         $symbol = match ($currency) {
             'USD' => '$',

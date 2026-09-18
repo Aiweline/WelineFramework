@@ -59,6 +59,12 @@ $productId = max(0, (int)($offer['product_id'] ?? $cardProductId));
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
+if (!empty($offer['currency_unavailable'])) {
+    echo '<p class="product-native-detail__unavailable" data-testid="currency-unavailable-purchase">'
+        . $escape(__('当前货币暂不可用'))
+        . '</p>';
+    return;
+}
 // Quote-only is inquiry CTA only — never enable add-to-cart.
 $buttonEnabled = !$quoteOnly && ($isPreviewMode || ($sellable && $offerUuid !== ''));
 $buttonLabel = ($sellable && $offerUuid !== '') ? __('加入购物车') : __('暂不可售');

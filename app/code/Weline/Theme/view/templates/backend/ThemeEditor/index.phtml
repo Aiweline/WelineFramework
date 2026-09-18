@@ -166,7 +166,6 @@ $previewStatusSafe = $escape($preview_status);
 $themeHasBackendSafe = $theme_has_backend ? '1' : '0';
 $pageTypeSafe = $escape($page_type);
 $layoutOptionSafe = $escape($layout_option);
-$themePublicRouteSafe = $escape((string)($this->getData('theme_public_route') ?: ''));
 $layoutIdentityScopeSafe = $escape($layout_identity_scope);
 $layoutIdentityTargetTypeSafe = $escape($layout_identity_target_type);
 $layoutIdentityTargetIdSafe = (string)$layout_identity_target_id;
@@ -226,7 +225,6 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-page-type="<?= $pageTypeSafe ?>"
      data-layout-type="<?= $pageTypeSafe ?>"
      data-layout-option="<?= $layoutOptionSafe ?>"
-     data-theme-public-route="<?= $themePublicRouteSafe ?>"
      data-scope="<?= $layoutIdentityScopeSafe ?>"
      data-locale-code="<?= $layoutIdentityLocaleSafe ?>"
      data-config-locale="<?= $layoutIdentityLocaleSafe ?>"
@@ -260,8 +258,6 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-apply-required-defaults="@url{'theme/backend/theme-editor/apply-required-defaults'}"
      data-api-init-slot-defaults="@url{'theme/backend/theme-editor/init-slot-defaults'}"
      data-api-publish="@url{'theme/backend/theme-editor/publish'}"
-     data-api-preview="@url{'theme/backend/theme-editor/preview'}"
-     data-api-render-widget="@url{'theme/backend/theme-editor/render-widget'}"
      data-api-widget-preview="@url{'theme/backend/theme-editor/widget-preview'}"
      data-api-compile-layout="@url{'theme/backend/theme-editor/compile-layout'}"
      data-api-layout-config="@url{'theme/backend/theme-editor/layout-config'}"
@@ -269,7 +265,6 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-save-layout-selection="@url{'theme/backend/theme-editor/save-layout-selection'}"
      data-api-save-layout-config="@url{'theme/backend/theme-editor/save-layout-config'}"
      data-api-ai-translate-config="@url{'theme/backend/theme-editor/ai-translate-config'}"
-     data-api-widget-field-i18n="@url{'theme/backend/theme-editor/widget-field-i18n'}"
      data-api-theme-ai-agents="@url{'theme/backend/ai/agents'}"
      data-api-theme-ai-component-stream="@url{'theme/backend/ai/component-stream'}"
      data-api-theme-ai-refine-stream="@url{'theme/backend/ai/refine-stream'}"
@@ -277,14 +272,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-theme-ai-prepare-refine="@url{'theme/backend/ai/prepare-refine'}"
      data-api-virtual-theme-ai-catalog="@url{'theme/backend/virtual-theme/ai-catalog'}"
      data-api-virtual-theme-create-draft="@url{'theme/backend/virtual-theme/create-draft'}"
-     data-api-virtual-theme-block-action="@url{'theme/backend/virtual-theme/block-action'}"
      data-api-virtual-theme-source="@url{'theme/backend/virtual-theme/source'}"
-     data-api-virtual-theme-save-source="@url{'theme/backend/virtual-theme/save-source'}"
      data-api-virtual-theme-publish-version="@url{'theme/backend/virtual-theme/publish-version'}"
-     data-api-layout-preview="@url{'theme/backend/theme-editor/layout-preview'}"
      data-api-theme-preview-gateway="@frontend-url{'theme/frontend/theme-preview/gateway'}"
      data-api-param-render-form="@url{'theme/backend/widget/paramrender/form'}"
-     data-api-save-compiled-layout="@url{'theme/backend/theme-editor/save-compiled-layout'}"
      data-api-versions="@url{'theme/backend/theme-editor/versions'}"
      data-api-save-version="@url{'theme/backend/theme-editor/save-version'}"
      data-api-switch-version="@url{'theme/backend/theme-editor/switch-version'}"
@@ -294,17 +285,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-factory-reset="@url{'theme/backend/theme-editor/factory-reset'}"
      data-api-publish-version="@url{'theme/backend/theme-editor/publish-version'}"
      data-api-delete-version="@url{'theme/backend/theme-editor/delete-version'}"
-     data-api-rename-version="@url{'theme/backend/theme-editor/rename-version'}"
      data-api-start-preview="@url{'theme/backend/theme-editor/start-preview'}"
-     data-api-preview-sample="@url{'theme/backend/theme-editor/preview-sample'}"
-     data-api-exit-preview="@url{'theme/backend/theme-editor/exit-preview'}"
-     data-api-publish-and-exit="@url{'theme/backend/theme-editor/publish-and-exit'}"
      data-api-check-lock="@url{'theme/backend/theme-editor/check-lock'}"
      data-api-release-lock="@url{'theme/backend/theme-editor/release-lock'}"
      data-api-update-activity="@url{'theme/backend/theme-editor/update-activity'}"
-     data-api-request-takeover="@url{'theme/backend/theme-editor/request-takeover'}"
-     data-api-check-takeover-request="@url{'theme/backend/theme-editor/check-takeover-request'}"
-     data-api-force-takeover="@url{'theme/backend/theme-editor/force-takeover'}"
      data-api-theme-tokens="@url{'theme/backend/theme-editor/theme-tokens'}"
      data-api-theme-disk-tokens="@url{'theme/backend/theme-editor/theme-disk-tokens'}"
      data-api-disk-save="@url{'theme/backend/theme-editor/disk-save'}"
@@ -314,7 +298,6 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-scoped-workspace="@url{'theme/backend/theme-editor/scoped-workspace'}"
      data-api-publish-scoped-workspace="@url{'theme/backend/theme-editor/publish-scoped-workspace'}"
      data-api-publish-scoped-release-batch="@url{'theme/backend/theme-editor/publish-scoped-release-batch'}"
-     data-api-scoped-release-batch="@url{'theme/backend/theme-editor/scoped-release-batch'}"
      data-api-retry-scoped-release-batch-cache="@url{'theme/backend/theme-editor/retry-scoped-release-batch-cache'}"
      data-api-rollback-scoped-release-batch="@url{'theme/backend/theme-editor/rollback-scoped-release-batch'}"
      data-initial-preview-url="<?= $initialPreviewUrlSafe ?>"
@@ -407,13 +390,6 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                     <span class="toolbar-select-label">@lang{布局选项}</span>
                     <select id="layoutOptionSelect" class="w-select" title="@lang{选择布局选项}" aria-label="@lang{布局选项}"<?= $selectorDisabledAttribute ?>>
                         <?php echo $layoutOptionsHtml; ?>
-                    </select>
-                </label>
-                <label class="toolbar-select-field toolbar-select-field-preview-sample" id="previewSampleField" hidden>
-                    <span class="toolbar-select-label">@lang{预览取样}</span>
-                    <select id="previewSampleSelect" class="w-select" title="@lang{选择店面取样路由}" aria-label="@lang{预览取样}" hidden>
-                        <option value="promotion">@lang{活动首页 /promotion}</option>
-                        <option value="promotion/deals">@lang{取样 deals /promotion/deals}</option>
                     </select>
                 </label>
                 <label class="toolbar-select-field toolbar-select-field-language" data-w-toolbar-overflow-pin>
@@ -706,10 +682,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         -->
                         <div class="preview-area area-header area-slot"
                              data-area="header"
-                             data-slot="header"
-                             data-slot-name="@lang{头部区域}"
-                             data-slot-exclusive="true"
-                             data-slot-multiple="false">
+                             data-wslot="header"
+                             data-wslot-name="@lang{头部区域}"
+                             data-wslot-exclusive="true"
+                             data-wslot-multiple="false">
                             <div class="area-label"><w:icon name="monitor" size="sm"></w:icon> @lang{Header}</div>
                             <div class="area-description">@lang{拖入 Header 容器部件可整段替换默认页头}</div>
                             <div class="area-widgets header-slot-widgets" data-area="header">
@@ -725,9 +701,9 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         -->
                         <div class="preview-area area-content area-slot"
                              data-area="content"
-                             data-slot="content"
-                             data-slot-name="@lang{内容区域}"
-                             data-slot-multiple="true">
+                             data-wslot="content"
+                             data-wslot-name="@lang{内容区域}"
+                             data-wslot-multiple="true">
                             <div class="area-label"><w:icon name="grid" size="sm"></w:icon> @lang{Content}</div>
                             <div class="area-description">@lang{拖入任意部件或容器}</div>
                             <div class="area-widgets content-slot-widgets" data-area="content">
@@ -743,10 +719,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         -->
                         <div class="preview-area area-footer area-slot"
                              data-area="footer"
-                             data-slot="footer"
-                             data-slot-name="@lang{底部区域}"
-                             data-slot-exclusive="true"
-                             data-slot-multiple="false">
+                             data-wslot="footer"
+                             data-wslot-name="@lang{底部区域}"
+                             data-wslot-exclusive="true"
+                             data-wslot-multiple="false">
                             <div class="area-label"><w:icon name="layout-footer" size="sm"></w:icon> @lang{Footer}</div>
                             <div class="area-description">@lang{拖入 Footer 容器部件可整段替换默认页脚}</div>
                             <div class="area-widgets footer-slot-widgets" data-area="footer">

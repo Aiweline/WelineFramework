@@ -27,14 +27,50 @@ class CurrencyLocalDescriptionSeed
             'zh_Hans_CN' => '英镑',
             'en_US' => 'British Pound',
         ],
+        'CAD' => [
+            'zh_Hans_CN' => '加拿大元',
+            'en_US' => 'Canadian Dollar',
+        ],
+        'CHF' => [
+            'zh_Hans_CN' => '瑞士法郎',
+            'en_US' => 'Swiss Franc',
+        ],
+        'SEK' => [
+            'zh_Hans_CN' => '瑞典克朗',
+            'en_US' => 'Swedish Krona',
+        ],
+        'NOK' => [
+            'zh_Hans_CN' => '挪威克朗',
+            'en_US' => 'Norwegian Krone',
+        ],
+        'DKK' => [
+            'zh_Hans_CN' => '丹麦克朗',
+            'en_US' => 'Danish Krone',
+        ],
+        'PLN' => [
+            'zh_Hans_CN' => '波兰兹罗提',
+            'en_US' => 'Polish Zloty',
+        ],
+        'MXN' => [
+            'zh_Hans_CN' => '墨西哥比索',
+            'en_US' => 'Mexican Peso',
+        ],
     ];
 
     /** @var array<string, array{name:string,symbol:string,rate:float}> */
     private const CATALOG_DEFAULTS = [
         'CNY' => ['name' => '人民币', 'symbol' => '￥', 'rate' => 1.0],
         'USD' => ['name' => '美元', 'symbol' => '$', 'rate' => 8.0],
-        'EUR' => ['name' => '欧元', 'symbol' => '€', 'rate' => 0.0],
-        'GBP' => ['name' => '英镑', 'symbol' => '£', 'rate' => 0.0],
+        // Relative to CNY base: 1 foreign = rate CNY (manual mode placeholders; live rates via exchangerate-api).
+        'EUR' => ['name' => '欧元', 'symbol' => '€', 'rate' => 7.8],
+        'GBP' => ['name' => '英镑', 'symbol' => '£', 'rate' => 9.0],
+        'CAD' => ['name' => '加拿大元', 'symbol' => 'C$', 'rate' => 0.0],
+        'CHF' => ['name' => '瑞士法郎', 'symbol' => 'CHF', 'rate' => 0.0],
+        'SEK' => ['name' => '瑞典克朗', 'symbol' => 'kr', 'rate' => 0.0],
+        'NOK' => ['name' => '挪威克朗', 'symbol' => 'kr', 'rate' => 0.0],
+        'DKK' => ['name' => '丹麦克朗', 'symbol' => 'kr', 'rate' => 0.0],
+        'PLN' => ['name' => '波兰兹罗提', 'symbol' => 'zł', 'rate' => 0.0],
+        'MXN' => ['name' => '墨西哥比索', 'symbol' => 'MX$', 'rate' => 0.0],
     ];
 
     public function seedDefaults(): void

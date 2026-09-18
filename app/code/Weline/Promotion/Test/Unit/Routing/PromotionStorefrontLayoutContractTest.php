@@ -16,8 +16,7 @@ final class PromotionStorefrontLayoutContractTest extends TestCase
 
         self::assertStringContainsString("protected ?string \$layoutType = 'promotion.default';", $source);
         self::assertStringNotContainsString("protected ?string \$layoutType = 'default.default';", $source);
-        self::assertStringContainsString("theme_public_route", $source);
-        self::assertStringContainsString("'promotion/'", $source);
+        self::assertStringNotContainsString('theme_public_route', $source);
         $layout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/promotion/default.phtml';
         self::assertFileExists($layout);
         self::assertFileDoesNotExist(

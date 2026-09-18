@@ -34,7 +34,7 @@ moduleDescribe(test, MODULE, 'e2e-closeout and e2e-plan-suite promotion layout s
     await expect(page.locator('[data-wslot="promotion-bottom"]').first()).toBeAttached();
   });
 
-  moduleCase(test, { module: MODULE, id: 'B-editor-sample' }, '编辑器源码契约：无 deals 布局键；preview-sample / theme_public_route 已接线', async () => {
+  moduleCase(test, { module: MODULE, id: 'B-editor-sample' }, '编辑器源码契约：画布是真实店面 path，不再接线 preview-sample', async () => {
     const themeEditorJs = fs.readFileSync(
       path.join(ROOT, 'app/code/Weline/Theme/view/statics/js/theme-editor.js'),
       'utf8'
@@ -54,12 +54,12 @@ moduleDescribe(test, MODULE, 'e2e-closeout and e2e-plan-suite promotion layout s
 
     expect(themeLayout).toContain("PAGE_TYPE_PROMOTION = 'promotion'");
     expect(themeLayout).not.toContain('PAGE_TYPE_DEALS');
-    expect(themeEditorPhtml).toContain('data-api-preview-sample=');
-    expect(themeEditorPhtml).toContain('previewSampleSelect');
-    expect(themeEditorJs).toContain('refreshPreviewSample');
-    expect(themeEditorJs).toContain('theme_public_route: themePublicRoute');
-    expect(compiled).toContain('refreshPreviewSample');
-    expect(compiled).toContain('apiPreviewSample');
+    expect(themeEditorPhtml).not.toContain('data-api-preview-sample=');
+    expect(themeEditorPhtml).not.toContain('previewSampleSelect');
+    expect(themeEditorJs).toContain('buildCanvasStorefrontPreviewUrl');
+    expect(themeEditorJs).not.toContain('theme_public_route');
+    expect(compiled).toContain('buildCanvasStorefrontPreviewUrl');
+    expect(compiled).not.toContain('apiPreviewSample');
     expect(fs.existsSync(path.join(ROOT, 'app/code/Weline/Theme/view/theme/frontend/layouts/promotion/default.phtml'))).toBe(false);
     expect(fs.existsSync(path.join(ROOT, 'app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml'))).toBe(true);
   });

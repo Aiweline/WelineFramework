@@ -8,20 +8,10 @@ use PHPUnit\Framework\TestCase;
 
 final class ThemePreviewContentEditorIsolationContractTest extends TestCase
 {
-    public function testEditorModeIgnoresLivePreviewTokenForCanvasIdentity(): void
+    public function testFrontendThemePreviewContentControllerIsDeleted(): void
     {
         $path = dirname(__DIR__, 4) . '/Controller/Frontend/ThemePreview/Content.php';
-        self::assertFileExists($path);
-        $source = (string)file_get_contents($path);
-
-        self::assertStringContainsString('$isEditorMode && $this->isBackendUserLoggedIn()', $source);
-        self::assertStringContainsString('$tokenData = null;', $source);
-        self::assertStringNotContainsString('StorefrontSampleCanvasHydrator', $source);
-        self::assertStringNotContainsString('applyEditorCanvasBodyHydrate', $source);
-        self::assertMatchesRegularExpression(
-            '/if\s*\(\s*\$isEditorMode\s*\)\s*\{[\s\S]*theme_public_route[\s\S]*\'\'/m',
-            $source
-        );
+        self::assertFileDoesNotExist($path, 'Frontend theme-preview/content HTTP shell must be fully deleted');
     }
 
     public function testEditorCanvasLoadsStorefrontRouteNotHydrate(): void

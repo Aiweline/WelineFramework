@@ -160,6 +160,7 @@ default,default
 配置或字段,"configuration or field"
 "OAuth Return URL（须原样登记到第三方 App）","OAuth Return URL（须原样登记到第三方 App）"
 已连接,已连接
+详细说明,Details
 已配置，留空则保持不变,已配置，留空则保持不变
 腾讯云验证码,腾讯云验证码
 本地图形验证码,本地图形验证码
@@ -204,7 +205,7 @@ Global（全部网站、店铺和渠道）,"Global (all websites, stores, and ch
 此字段不能为空。,"This field cannot be empty."
 字段值不在允许选项内。,"Field value is not among allowed options."
 "当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。","当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。"
-"应用默认 CSP（不可覆盖）","应用默认 CSP（不可覆盖）"
+"应用默认 CSP（不可覆盖）","Application default CSP (immutable)"
 "用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","Usage: scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
 "MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B configuration Scope migration: preflight/apply/verify/rollback (apply must --database=mig_clone_*)"
 所有模块,所有模块

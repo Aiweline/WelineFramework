@@ -92,11 +92,12 @@ if ($offerUuid === '') {
 
 // Slot widgets render on a cleared Template. Prefer page-context offer; only
 // reload catalog when the PDP snapshot was not injected at all.
-$hasPublicRoute = false;
-try {
-    $hasPublicRoute = \trim(\str_replace('\\', '/', (string)$this->getRequest()->getParam('theme_public_route', '')), '/') !== '';
-} catch (\Throwable) {
-}
+    $hasPublicRoute = false;
+    try {
+        $requestPath = \strtolower(\trim(\str_replace('\\', '/', (string)$this->getRequest()->getUrlPath()), '/'));
+        $hasPublicRoute = (bool)\preg_match('#^product/#', $requestPath);
+    } catch (\Throwable) {
+    }
 if ($offer === [] && !$isPreviewMode && class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
     try {
         $resolved = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);

@@ -70,7 +70,6 @@ class Gateway extends FrontendController
         $status = (string)$this->request->getParam('status', 'draft');
         $previewMode = (string)$this->request->getParam('preview_mode', 'default');
         $scopeStr = $scope !== null && $scope !== '' ? trim((string)$scope) : null;
-        $themePublicRoute = trim(str_replace('\\', '/', (string)$this->request->getParam('theme_public_route', '')), '/');
 
         /** @var ThemePreviewEntryApplication $app */
         $app = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
@@ -85,7 +84,6 @@ class Gateway extends FrontendController
             $status,
             $editorArea,
             $previewMode,
-            $themePublicRoute !== '' ? $themePublicRoute : null,
         );
 
         if (!$result['ok']) {

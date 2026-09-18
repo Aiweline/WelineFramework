@@ -64,61 +64,33 @@ class ThemeConfig extends BackendController
     }
 
     /**
-     * 主题配置编辑页面
+     * 主题配置编辑页面 → 重定向到 ThemeEditor（旧 visual-editor 壳已下线）
      */
     public function getIndex()
     {
-        $themeId = $this->request->getParam('theme_id');
-        $area = $this->request->getParam('area', 'frontend');
-        $scope = $this->request->getParam('scope', self::DEFAULT_SCOPE);
-        
-        // 获取所有主题列?
-        /** @var WelineTheme $themeModel */
-        $themeModel = ObjectManager::getInstance(WelineTheme::class);
-        $themes = $themeModel->select()->fetch()->getItems();
-        
-        // 如果?theme_id，加载主?
-        $theme = null;
-        if ($themeId) {
-            $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme->load($themeId);
-            if (!$theme->getId()) {
-                $theme = null;
+        $themeId = (int)$this->request->getParam('theme_id', 0);
+        $area = strtolower((string)$this->request->getParam('area', 'frontend')) ?: 'frontend';
+        $editorArea = $area === 'backend' ? 'backend' : 'frontend';
+
+        /** @var Url $url */
+        $url = ObjectManager::getInstance(Url::class);
+        $params = [
+            'editor_area' => $editorArea,
+            'preview_area' => $editorArea,
+        ];
+        if ($themeId > 0) {
+            $params['theme_id'] = $themeId;
+            if ($editorArea === 'backend') {
+                $params['backend_theme_id'] = $themeId;
+            } else {
+                $params['frontend_theme_id'] = $themeId;
             }
         }
-        
-        // 生成预览URL
-        $previewUrlFrontend = null;
-        $previewUrlBackend = null;
-        
-        if ($theme) {
-            /** @var Url $url */
-            $url = ObjectManager::getInstance(Url::class);
-            
-            $previewUrlFrontend = $url->getBackendUrl('theme/backend/index/preview', [
-                'theme_id' => $theme->getId(),
-                'area' => 'frontend'
-            ]);
-            
-            $previewUrlBackend = $url->getBackendUrl('theme/backend/index/preview', [
-                'theme_id' => $theme->getId(),
-                'area' => 'backend'
-            ]);
-        }
-        
-        // 获取可用?scope 选项
-        $scopeOptions = $this->getScopeOptions($theme);
+        $this->request->getResponse()->redirect(
+            $url->getBackendUrl('theme/backend/theme-editor', $params)
+        );
 
-        $this->assign('themes', $themes);
-        $this->assign('theme', $theme);
-        $this->assign('area', $area);
-        $this->assign('scope', $scope);
-        $this->assign('scopeOptions', []); // 这里可以加载可用scope列表
-        $this->assign('previewUrlFrontend', $previewUrlFrontend);
-        $this->assign('previewUrlBackend', $previewUrlBackend);
-
-        // 使用新的可视化编辑器模板
-        return $this->fetch('Weline_Theme::templates/backend/config/visual-editor.phtml');
+        return '';
     }
 
     /**

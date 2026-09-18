@@ -34,6 +34,14 @@ final class WidgetI18n
     }
 
     /**
+     * Current storefront locale for chrome/Phrase (path override wins over RequestContext).
+     */
+    public static function storefrontLocale(): string
+    {
+        return self::resolveStorefrontLocale();
+    }
+
+    /**
      * Resolve configured/default storefront copy and expand framework-style positional placeholders.
      *
      * @param list<scalar|null> $args

@@ -25,6 +25,19 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
     private const REQUEST_STATE_KEY = 'acl.service.request_cache.v1';
     private static bool $stateManagerRegistered = false;
 
+    /** @var array<string, bool> */
+    private static array $processRouteProtected = [];
+
+    /** @var array<int, list<array<string, mixed>>> */
+    private static array $processRoleAclEntries = [];
+
+    /** @var array<string, RouteResource|null> */
+    private static array $processRouteResources = [];
+
+    private const PROCESS_ROUTE_PROTECTED_MAX = 2048;
+    private const PROCESS_ROLE_ENTRIES_MAX = 256;
+    private const PROCESS_ROUTE_RESOURCES_MAX = 2048;
+
     public function __construct(
         Role       $roleModel,
         RoleAccess $roleAccessModel,
@@ -50,6 +63,14 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
     public static function resetRequestCache(): void
     {
         RequestContext::remove(self::REQUEST_STATE_KEY);
+    }
+
+    /** 角色/资源变更或进程复位时清空进程级 ACL 表。 */
+    public static function clearProcessCache(): void
+    {
+        self::$processRouteProtected = [];
+        self::$processRoleAclEntries = [];
+        self::$processRouteResources = [];
     }
 
     /**
@@ -89,6 +110,11 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
      */
     public function findRouteResource(string $className, string $httpMethod, string $routePath): ?RouteResource
     {
+        $processKey = $className . '|' . \strtoupper($httpMethod) . '|' . $routePath;
+        if (\array_key_exists($processKey, self::$processRouteResources)) {
+            return self::$processRouteResources[$processKey];
+        }
+
         /** @var Acl $acl */
         $acl = ObjectManager::getInstance(Acl::class, [], false)
             ->fields([
@@ -102,11 +128,13 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             ->find()
             ->fetch();
 
-        if (!$acl->getId()) {
-            return null;
+        $resource = null;
+        if ($acl->getId()) {
+            $resource = new RouteResource($acl->getAclId(), $acl->getSourceName());
         }
+        self::rememberProcessRouteResource($processKey, $resource);
 
-        return new RouteResource($acl->getAclId(), $acl->getSourceName());
+        return $resource;
     }
 
     /**
@@ -122,12 +150,19 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         if (isset($state['role_acl_entries'][$roleId])) {
             return $state['role_acl_entries'][$roleId];
         }
+        if (isset(self::$processRoleAclEntries[$roleId])) {
+            $entries = self::$processRoleAclEntries[$roleId];
+            $state['role_acl_entries'][$roleId] = $entries;
+            self::storeRequestState($state);
+            return $entries;
+        }
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $entries = $this->roleAccessModel->getRoleAccessListArrayByRoleId($roleId);
         if ($t0 > 0) {
             RequestLifecycleTrace::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
         }
         $entries = $this->dispatchRoleAclEntriesAfter($roleId, $entries);
+        self::rememberProcessRoleAclEntries($roleId, $entries);
         $state = self::requestState();
         $state['role_acl_entries'][$roleId] = $entries;
         self::storeRequestState($state);
@@ -278,6 +313,12 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         if (array_key_exists($routePath, $state['route_protected'])) {
             return $state['route_protected'][$routePath];
         }
+        if (array_key_exists($routePath, self::$processRouteProtected)) {
+            $protected = self::$processRouteProtected[$routePath];
+            $state['route_protected'][$routePath] = $protected;
+            self::storeRequestState($state);
+            return $protected;
+        }
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $protected = false;
         foreach ($this->getEquivalentRoutePaths($routePath) as $candidate) {
@@ -306,6 +347,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         if ($t0 > 0) {
             RequestLifecycleTrace::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
         }
+        self::rememberProcessRouteProtected($routePath, $protected);
         $state = self::requestState();
         $state['route_protected'][$routePath] = $protected;
         self::storeRequestState($state);
@@ -586,5 +628,53 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         return ObjectManager::getInstance(
             \Weline\Acl\Api\Authorization\ObjectAuthorizationServiceInterface::class
         );
+    }
+
+    private static function rememberProcessRouteProtected(string $routePath, bool $protected): void
+    {
+        if (\count(self::$processRouteProtected) >= self::PROCESS_ROUTE_PROTECTED_MAX
+            && !\array_key_exists($routePath, self::$processRouteProtected)
+        ) {
+            self::$processRouteProtected = \array_slice(
+                self::$processRouteProtected,
+                -((int)(self::PROCESS_ROUTE_PROTECTED_MAX / 2)),
+                null,
+                true,
+            );
+        }
+        self::$processRouteProtected[$routePath] = $protected;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $entries
+     */
+    private static function rememberProcessRoleAclEntries(int $roleId, array $entries): void
+    {
+        if (\count(self::$processRoleAclEntries) >= self::PROCESS_ROLE_ENTRIES_MAX
+            && !\array_key_exists($roleId, self::$processRoleAclEntries)
+        ) {
+            self::$processRoleAclEntries = \array_slice(
+                self::$processRoleAclEntries,
+                -((int)(self::PROCESS_ROLE_ENTRIES_MAX / 2)),
+                null,
+                true,
+            );
+        }
+        self::$processRoleAclEntries[$roleId] = $entries;
+    }
+
+    private static function rememberProcessRouteResource(string $processKey, ?RouteResource $resource): void
+    {
+        if (\count(self::$processRouteResources) >= self::PROCESS_ROUTE_RESOURCES_MAX
+            && !\array_key_exists($processKey, self::$processRouteResources)
+        ) {
+            self::$processRouteResources = \array_slice(
+                self::$processRouteResources,
+                -((int)(self::PROCESS_ROUTE_RESOURCES_MAX / 2)),
+                null,
+                true,
+            );
+        }
+        self::$processRouteResources[$processKey] = $resource;
     }
 }
