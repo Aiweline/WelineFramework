@@ -257,6 +257,16 @@ $checks = [
             && !str_contains((string) ($rule['summary'] ?? ''), 'Core aliases allowed: api / account')),
         false,
     ),
+    'hard_constraints include dom_mutation_observe_via_weline_dom' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'dom_mutation_observe_via_weline_dom'
+            && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY architecture')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Weline.dom.observe')
+            && str_contains((string) ($rule['summary'] ?? ''), 'shared coalesced bus')
+            && str_contains((string) ($rule['doc'] ?? ''), 'DOM-Mutation观察总线')),
+        false,
+    ),
     'hard_constraints include at_lang_no_unquoted_comma' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'at_lang_no_unquoted_comma'),

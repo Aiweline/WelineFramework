@@ -45,20 +45,6 @@ final class ThemeEditorEmptySlotNoAutoInjectContractTest extends TestCase
         );
     }
 
-    public function testPreviewRendererKeepsEmptyLayoutsWithoutDefaultInjection(): void
-    {
-        $src = (string)file_get_contents(
-            dirname(__DIR__, 2) . '/Service/ThemePreviewContentRenderer.php'
-        );
-
-        self::assertStringContainsString(
-            'Empty layouts and empty slots stay empty on preview/render',
-            $src
-        );
-        self::assertStringNotContainsString('applyMissingForLayout(', $src);
-        self::assertStringNotContainsString('applyMissingForAllPageTypes(', $src);
-    }
-
     public function testExplicitSlotInitApiIsRegistered(): void
     {
         $controller = (string)file_get_contents(

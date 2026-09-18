@@ -223,28 +223,108 @@ if ($selected === null && $vendorsRuntime !== []) {
                                 </div>
                             </div>
 
-                            <p class="tvp-section__title" style="margin-block-start:var(--weline-space-2);"><lang>凭证</lang></p>
-                            <div class="tvp-field-grid" id="tv-cred-fields">
-                                <?php if (!$creds): ?>
-                                    <p class="tvp-field__hint"><lang>暂无凭证字段；模块供应商同步后会出现 Measurement ID 等。</lang></p>
-                                <?php endif; ?>
-                                <?php foreach ($creds as $ck => $cv): ?>
-                                    <div class="tvp-field">
-                                        <label><?= $h($ck) ?></label>
-                                        <input class="w-input" data-size="sm" data-cred-key="<?= $h($ck) ?>" value="<?= $h($cv) ?>">
-                                    </div>
-                                <?php endforeach; ?>
-                                <?php if (($selected['source'] ?? '') === 'custom'): ?>
-                                    <div class="tvp-field" style="grid-column:1 / -1;">
-                                        <label><lang>新增凭证</lang></label>
-                                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
-                                            <input class="w-input" data-size="sm" id="tv-cred-key" placeholder="key">
-                                            <input class="w-input" data-size="sm" id="tv-cred-val" placeholder="value">
-                                            <button type="button" class="w-button" data-size="sm" id="tv-cred-add"><lang>添加</lang></button>
+                            <?php
+                            $selectedVendorCode = (string)($selected['code'] ?? '');
+                            $isGa4Vendor = $selectedVendorCode === 'ga4';
+                            $isGtmVendor = $selectedVendorCode === 'gtm';
+                            $ga4CenterUrl = $this->getBackendUrlPath('weline_systemconfig/backend/config', \array_merge($scopeQuery, [
+                                'module' => 'Weline_Visitor',
+                                'area' => 'backend',
+                                'guide_key' => 'visitor/tracking/ga4_measurement_id',
+                                'guide_locate' => '1',
+                            ]));
+                            $gtmCenterUrl = $this->getBackendUrlPath('weline_systemconfig/backend/config', \array_merge($scopeQuery, [
+                                'module' => 'Weline_Visitor',
+                                'area' => 'backend',
+                                'guide_key' => 'visitor/tracking/gtm_container_id',
+                                'guide_locate' => '1',
+                            ]));
+                            ?>
+                            <?php if ($isGa4Vendor || $isGtmVendor): ?>
+                                <div class="tvp-system-config-embed w-stack" style="--w-gap:var(--weline-space-3);margin-block-start:var(--weline-space-3);" data-testid="tv-system-config-embed">
+                                    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                                        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                                            <p class="tvp-section__title" style="margin:0;">
+                                                <?= $isGa4Vendor ? __('站点 GA4 转发（统一配置）') : __('站点 GTM（统一配置）') ?>
+                                            </p>
+                                            <p class="tvp-field__hint" style="margin:0;">
+                                                <lang>与统一配置中心同源；即时保存。范围跟随页顶配置范围。Pixel 运行时只读这里。</lang>
+                                            </p>
                                         </div>
+                                        <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"
+                                           href="<?= $h($isGa4Vendor ? $ga4CenterUrl : $gtmCenterUrl) ?>"
+                                           data-testid="tv-open-system-config">
+                                            <lang>在统一配置中心打开</lang>
+                                        </a>
                                     </div>
-                                <?php endif; ?>
-                            </div>
+                                    <?php if ($isGa4Vendor): ?>
+                                        <w:config:embed
+                                            module="Weline_Visitor"
+                                            area="backend"
+                                            group="visitor_ga4"
+                                            locale="default"
+                                        />
+                                        <details class="tvp-gtm-mutex" data-testid="tv-gtm-mutex">
+                                            <summary class="tvp-field__hint" style="cursor:pointer;"><lang>GTM 互斥（展开可改）</lang></summary>
+                                            <p class="tvp-field__hint"><lang>开启 GTM 且填写 Container ID 后，GA4 直连会自动关闭，避免双计。</lang></p>
+                                            <w:config:embed
+                                                module="Weline_Visitor"
+                                                area="backend"
+                                                group="visitor_gtm"
+                                                locale="default"
+                                            />
+                                        </details>
+                                    <?php else: ?>
+                                        <w:config:embed
+                                            module="Weline_Visitor"
+                                            area="backend"
+                                            group="visitor_gtm"
+                                            locale="default"
+                                        />
+                                        <details class="tvp-ga4-mutex" data-testid="tv-ga4-mutex">
+                                            <summary class="tvp-field__hint" style="cursor:pointer;"><lang>GA4 直连（展开可改）</lang></summary>
+                                            <p class="tvp-field__hint"><lang>GTM 开启时 GA4 直连会被运行时关闭；仅在未用 GTM 时启用下方 Measurement。</lang></p>
+                                            <w:config:embed
+                                                module="Weline_Visitor"
+                                                area="backend"
+                                                group="visitor_ga4"
+                                                locale="default"
+                                            />
+                                        </details>
+                                    <?php endif; ?>
+                                </div>
+                                <p class="tvp-field__hint" data-testid="tv-cred-legacy-hint" style="margin-block-start:var(--weline-space-2);">
+                                    <lang>供应商行内「凭证」仅作同步种子；请以上方统一配置为准。</lang>
+                                </p>
+                                <div class="tvp-field-grid" id="tv-cred-fields" hidden aria-hidden="true">
+                                    <?php foreach ($creds as $ck => $cv): ?>
+                                        <input type="hidden" data-cred-key="<?= $h($ck) ?>" value="<?= $h($cv) ?>">
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <p class="tvp-section__title" style="margin-block-start:var(--weline-space-2);"><lang>凭证</lang></p>
+                                <div class="tvp-field-grid" id="tv-cred-fields">
+                                    <?php if (!$creds): ?>
+                                        <p class="tvp-field__hint"><lang>暂无凭证字段；模块供应商同步后会出现 Measurement ID 等。</lang></p>
+                                    <?php endif; ?>
+                                    <?php foreach ($creds as $ck => $cv): ?>
+                                        <div class="tvp-field">
+                                            <label><?= $h($ck) ?></label>
+                                            <input class="w-input" data-size="sm" data-cred-key="<?= $h($ck) ?>" value="<?= $h($cv) ?>">
+                                        </div>
+                                    <?php endforeach; ?>
+                                    <?php if (($selected['source'] ?? '') === 'custom'): ?>
+                                        <div class="tvp-field" style="grid-column:1 / -1;">
+                                            <label><lang>新增凭证</lang></label>
+                                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                                <input class="w-input" data-size="sm" id="tv-cred-key" placeholder="key">
+                                                <input class="w-input" data-size="sm" id="tv-cred-val" placeholder="value">
+                                                <button type="button" class="w-button" data-size="sm" id="tv-cred-add"><lang>添加</lang></button>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="tvp-section" data-panel="scope" hidden data-testid="tv-scope-panel">
@@ -396,17 +476,9 @@ if ($selected === null && $vendorsRuntime !== []) {
                                                 <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-start-picker" data-testid="tv-start-picker">
                                                     <lang>启动事件拾取</lang>
                                                 </button>
-                                                <details class="tvp-map-more">
-                                                    <summary class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"><lang>更多</lang></summary>
-                                                    <div class="tvp-map-more__menu w-cluster" style="--w-gap:var(--weline-space-2);">
-                                                        <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" id="tv-ensure-demo-chain" data-testid="tv-ensure-demo-chain">
-                                                            <lang>发布演示跨页链</lang>
-                                                        </button>
-                                                        <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" href="<?= $h($pixel_list_url ?? '#') ?>" target="_blank" rel="noopener" data-testid="tv-pixel-list-link">
-                                                            <lang>后台事件列表</lang>
-                                                        </a>
-                                                    </div>
-                                                </details>
+                                                <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral" href="<?= $h($pixel_list_url ?? '#') ?>" target="_blank" rel="noopener" data-testid="tv-pixel-list-link">
+                                                    <lang>后台事件列表</lang>
+                                                </a>
                                             </div>
                                             <p class="tvp-field__hint" id="tv-chain-status" data-testid="tv-chain-status"></p>
                                         </section>
@@ -619,7 +691,6 @@ if ($selected === null && $vendorsRuntime !== []) {
     var categoryOptions = <?= $event_category_options_json ?: '[]' ?>;
     var matchParamOptions = <?= $match_param_options_json ?: '[]' ?>;
     var matchOpOptions = <?= $match_op_options_json ?: '[]' ?>;
-    var ensureDemoChainUrl = <?= \json_encode((string)($ensure_demo_chain_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var eventChainsUrl = <?= \json_encode((string)($event_chains_url ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var websiteId = <?= (int)($website_id ?? 0) ?>;
     var storageScope = <?= \json_encode((string)($storage_scope ?? ($scopeQuery['target_scope'] ?? '')), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -2603,30 +2674,6 @@ if ($selected === null && $vendorsRuntime !== []) {
             }).catch(function () {});
     }
     refreshChainStatus();
-
-    var ensureDemo = document.getElementById('tv-ensure-demo-chain');
-    if (ensureDemo && ensureDemoChainUrl) {
-        ensureDemo.addEventListener('click', function () {
-            var body = new URLSearchParams();
-            body.set('website_id', String(websiteId));
-            body.set('csrf_token', csrfToken || '');
-            fetch(ensureDemoChainUrl, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body.toString()
-            }).then(function (r) { return r.json(); }).then(function (data) {
-                if (!data || !data.ok) {
-                    themeToastError((data && data.error) || '发布失败');
-                    return;
-                }
-                refreshChainStatus();
-                themeToastSuccess('已发布演示链 demo_cross_page → demo_funnel_complete（version ' + data.version + '）');
-            }).catch(function () {
-                themeToastError('发布演示链失败');
-            });
-        });
-    }
 
     var credAdd = document.getElementById('tv-cred-add');
     if (credAdd) {

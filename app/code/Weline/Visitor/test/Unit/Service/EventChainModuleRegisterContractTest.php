@@ -49,6 +49,8 @@ final class EventChainModuleRegisterContractTest extends TestCase
                         'steps' => [
                             ['type' => 'track', 'event' => 'express_pay'],
                             ['type' => 'track', 'event' => 'express_pay_started'],
+                            ['type' => 'track', 'event' => 'express_pay_confirmed'],
+                            ['type' => 'track', 'event' => 'express_pay_transaction'],
                             ['type' => 'track', 'event' => 'checkout_success'],
                         ],
                     ],

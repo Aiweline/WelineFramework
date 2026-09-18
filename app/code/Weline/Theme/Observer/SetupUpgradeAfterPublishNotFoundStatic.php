@@ -13,6 +13,7 @@ use Weline\Theme\Service\StorefrontNotFoundStaticGenerator;
  * Regenerate cached storefront 404 HTML after setup:upgrade.
  *
  * Hot-path 404 serving reads pub/errors/storefront-not-found/*.html directly (zero DB).
+ * Manual / CI: `php bin/w theme:publish-not-found-static [--force] [--lang=el_GR]`
  */
 final class SetupUpgradeAfterPublishNotFoundStatic implements ObserverInterface
 {

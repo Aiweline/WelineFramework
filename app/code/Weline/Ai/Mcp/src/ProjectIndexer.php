@@ -91,7 +91,15 @@ final class ProjectIndexer
     public function index(array $options = []): array
     {
         if (!(bool) $this->config->get('index.enabled', true)) {
-            return ['enabled' => false, 'status' => $this->index->status()];
+            $status = $this->index->status();
+
+            return [
+                'enabled' => false,
+                'status' => $status,
+                'freshness' => (string) ($status['freshness'] ?? 'unknown'),
+                'changed_paths' => [],
+                'errors' => [],
+            ];
         }
         $mode = strtolower(trim((string) ($options['mode'] ?? 'incremental')));
         if (!in_array($mode, ['full', 'incremental'], true)) {

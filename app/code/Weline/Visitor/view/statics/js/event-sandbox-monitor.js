@@ -17,11 +17,13 @@
     var LEGACY_COOKIE_ON = 'weline_lifecycle_assistant';
     var ROOT_ID = 'weline-event-sandbox-monitor';
     var STYLE_ATTR = 'data-weline-event-sandbox-monitor-style';
-    var STYLE_VERSION = '20260916-event-sandbox-monitor10';
+    var STYLE_VERSION = '20260918-clear-stream';
     var PANEL_COLLAPSE_EVENT = 'weline:dev-tool-panel:collapsed';
     var MAX_ROWS = 120;
     var MAX_CHAIN_ROWS = 200;
     var TAB_IDS = { system: 1, custom: 1, dedupe: 1, previous: 1, chain: 1, stream: 1 };
+    /** 每个文档实例唯一；避免同 path 刷新把上一文档的 page_exit 灌进当前数据流。 */
+    var PAGE_INSTANCE_ID = '';
 
     var LIFECYCLE_CHAIN = [
         { id: 'order-created', label: '订单已创建', match: ['weline:checkout:order-created'] },
@@ -120,13 +122,34 @@
         }
     }
 
+    function getPageInstanceId() {
+        if (!PAGE_INSTANCE_ID) {
+            var origin = Date.now();
+            try {
+                if (global.performance && typeof global.performance.timeOrigin === 'number') {
+                    origin = Math.floor(global.performance.timeOrigin);
+                }
+            } catch (eOrigin) {}
+            PAGE_INSTANCE_ID = String(origin) + '-' + Math.random().toString(36).slice(2, 9);
+        }
+        return PAGE_INSTANCE_ID;
+    }
+
     function currentPageKey() {
         try {
             var loc = global.location;
-            return text(loc && (loc.pathname + (loc.search || '')));
+            var base = text(loc && (loc.pathname + (loc.search || '')));
+            return base + '::' + getPageInstanceId();
         } catch (e) {
-            return '';
+            return '::' + getPageInstanceId();
         }
+    }
+
+    /** 展示用路径：去掉 ::instance 后缀。 */
+    function displayPagePath(key) {
+        var s = text(key);
+        var idx = s.lastIndexOf('::');
+        return idx >= 0 ? s.slice(0, idx) : s;
     }
 
     function setCookie(on, name) {
@@ -388,6 +411,10 @@
             '#' + ROOT_ID + ' .wesm-title{font-weight:700;font-size:14px}',
             '#' + ROOT_ID + ' .wesm-rev{display:inline-block;max-width:min(70vw,360px);overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;margin-inline-start:6px;font-weight:600;font-size:11px;opacity:.9;color:var(--weline-color-info,#38bdf8)}',
             '#' + ROOT_ID + ' .wesm-meta{opacity:.75;font-size:12px;margin-top:2px}',
+            '#' + ROOT_ID + ' .wesm-head-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}',
+            '#' + ROOT_ID + ' .wesm-clear{border:1px solid var(--weline-color-border,rgba(148,163,184,.35));background:transparent;',
+            'color:var(--weline-color-warning,#eab308);border-radius:999px;padding:3px 10px;font-size:11px;line-height:1.3;cursor:pointer}',
+            '#' + ROOT_ID + ' .wesm-clear:hover{background:color-mix(in srgb,var(--weline-color-warning,#eab308) 16%,transparent)}',
             '#' + ROOT_ID + ' .wesm-close{border:0;background:transparent;color:inherit;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}',
             '#' + ROOT_ID + ' .wesm-tabs{display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px 0}',
             '#' + ROOT_ID + ' .wesm-tab{border:1px solid var(--weline-color-border,rgba(148,163,184,.3));background:transparent;color:inherit;',
@@ -396,6 +423,7 @@
             '#' + ROOT_ID + ' .wesm-body{overflow:auto;padding:8px 10px 12px;flex:1}',
             '#' + ROOT_ID + ' .wesm-sec{margin:10px 0 6px;font-size:12px;opacity:.8;font-weight:600}',
             '#' + ROOT_ID + ' .wesm-empty{opacity:.6;padding:12px 4px;font-size:12px}',
+            '#' + ROOT_ID + ' .wesm-empty--warn{opacity:.95;color:var(--weline-color-warning,#eab308);border:1px solid color-mix(in srgb,var(--weline-color-warning,#eab308) 45%,transparent);border-radius:8px;padding:10px 8px;background:color-mix(in srgb,var(--weline-color-warning,#eab308) 12%,transparent)}',
             '#' + ROOT_ID + ' .wesm-row{border:1px solid var(--weline-color-border,rgba(148,163,184,.2));border-radius:8px;padding:8px;margin:0 0 6px}',
             '#' + ROOT_ID + ' .wesm-row__bar{cursor:pointer;border-radius:6px;margin:-2px;padding:2px}',
             '#' + ROOT_ID + ' .wesm-row__bar:hover{background:rgba(255,255,255,.04)}',
@@ -409,6 +437,11 @@
             '#' + ROOT_ID + ' .wesm-row__name{font-weight:600;word-break:break-all}',
             '#' + ROOT_ID + ' .wesm-row__badge{font-size:11px;opacity:.85;white-space:nowrap}',
             '#' + ROOT_ID + ' .wesm-row__meta{font-size:11px;opacity:.7;margin-top:2px}',
+            '#' + ROOT_ID + ' .wesm-row__bridge{font-size:12px;margin-top:4px;font-weight:600}',
+            '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="去重"],'
+            + '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="无单号"],'
+            + '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="已过滤"]{color:var(--weline-color-warning,#eab308)}',
+            '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="已发送"]{color:var(--weline-color-success,#22c55e)}',
             '#' + ROOT_ID + ' .wesm-row__params{margin-top:6px;padding:6px;border-radius:6px;background:rgba(0,0,0,.25);',
             'font-size:11px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:4px}',
             '#' + ROOT_ID + ' .wesm-row__params[data-collapsed="1"]{max-height:4.8em}',
@@ -438,6 +471,10 @@
     }
 
     function rowTone(row) {
+        var bridge = String(row.bridge_status || '');
+        if (bridge.indexOf('去重') > -1 || bridge.indexOf('无单号') > -1 || bridge.indexOf('已过滤') > -1) {
+            return 'hit-dedupe';
+        }
         if (row.anomaly || (row.missing && row.missing.length)) return 'anomaly';
         if (!row.event_hit) return 'plain';
         var kind = String(row.hit_kind || '').toLowerCase();
@@ -570,7 +607,13 @@
 
     function streamRowsHtml(rows) {
         if (!rows || !rows.length) {
-            return '<div class="wesm-empty">尚无动作流入沙盒。点击页面或触发 Pixel 事件后会出现在此。</div>';
+            var pixelReady = !!(global.WelinePixel && typeof global.WelinePixel.track === 'function');
+            if (!pixelReady) {
+                return '<div class="wesm-empty wesm-empty--warn" data-testid="wesm-empty-pixel-missing">'
+                    + '本页尚未加载 Pixel 引导（常见于布局缺少 base::body-end）。转化事件无法入流；补齐像素后刷新即可。重复转化会以黄标 warning 记流，但不会上报第三方。'
+                    + '</div>';
+            }
+            return '<div class="wesm-empty">尚无动作流入沙盒。点击页面或触发 Pixel 事件后会出现在此。重复转化会以黄标 warning 记流，但不会上报第三方。</div>';
         }
         return rows.map(function (row, idx) {
             var tone = rowTone(row);
@@ -589,6 +632,7 @@
                 '<div class="wesm-row__top"><span class="wesm-row__name">' + esc(row.name) + '</span>',
                 '<span class="wesm-row__badge">' + esc(badge + hitNote) + '</span></div>',
                 '<div class="wesm-row__meta">' + esc(row.at) + ' · ' + esc(row.source || '') + '</div>',
+                row.bridge_status ? ('<div class="wesm-row__bridge" data-bridge-status="' + esc(row.bridge_status) + '">桥接  ' + esc(row.bridge_status) + '</div>') : '',
                 '</div>',
                 paramsHtmlFor(row, open),
                 '</div>'
@@ -695,11 +739,11 @@
             bodyHtml = '<div class="wesm-sec">自定义命中</div>'
                 + hitListHtml(hitAggregate(state.rows, 'custom'), '本会话尚无自定义事件命中。', 'hit-custom');
         } else if (tab === 'dedupe') {
-            bodyHtml = '<div class="wesm-sec">去重丢弃（本地/约定参数拦截，未上报）</div>'
+            bodyHtml = '<div class="wesm-sec">去重丢弃（未上报第三方）</div>'
                 + hitListHtml(hitAggregate(state.rows, 'dedupe'), '本会话尚无去重丢弃。', 'hit-dedupe');
         } else if (tab === 'previous') {
             bodyHtml = '<div class="wesm-sec">上一页事件'
-                + (state.previous && state.previous.path ? (' · ' + esc(state.previous.path)) : '')
+                + (state.previous && state.previous.path ? (' · ' + esc(displayPagePath(state.previous.path))) : '')
                 + '</div>'
                 + (prevCount
                     ? streamRowsHtml(state.previous.rows)
@@ -722,7 +766,10 @@
             '<div><div class="wesm-title">事件监视 <span class="wesm-rev" data-testid="wesm-config-revision" title="站点·店铺·渠道·配置版本（与后台对齐）">' + esc(formatScopeVersionLabel()) + '</span></div>',
             '<div class="wesm-meta">沙盒流 · ' + esc(formatScopeVersionLabel()) + ' · ' + state.rows.length + ' 条 · 系统 ' + hitSys + ' · 自定义 ' + hitCustom
                 + ' · 去重 ' + hitDedupe + ' · 上一页 ' + prevCount + ' · 链 ' + chainCount + ' · 异常 ' + bad + '</div></div>',
+            '<div class="wesm-head-actions">',
+            '<button type="button" class="wesm-clear" data-wesm-action="clear" data-testid="wesm-clear" aria-label="清空监视记录" title="清空本会话监视记录并继续监听">清空</button>',
             '<button type="button" class="wesm-close" data-wesm-action="close" aria-label="关闭事件监视" title="关闭并清理">×</button>',
+            '</div>',
             '</div>',
             '<div class="wesm-tabs">',
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="system" data-active="' + (tab === 'system' ? '1' : '0') + '">系统命中 ' + hitSys + '</button>',
@@ -736,10 +783,28 @@
             '<div class="wesm-body">',
             bodyHtml,
             '</div>',
-            '<div class="wesm-foot">可拖动标题栏；点 × 关闭并清理。上一页/累积链跨页保存于本会话。数据流内高级事件链进度条保留。绿=系统命中，蓝=自定义命中，黄=去重丢弃（记流不发）。</div>'
+            '<div class="wesm-foot">可拖动标题栏；点「清空」清会话记录并继续监听；点 × 关闭并清理。上一页/累积链跨页保存于本会话。数据流内高级事件链进度条保留。绿=系统命中，蓝=自定义命中，黄=去重丢弃（记流不发）。</div>'
         ].join('');
         applyPosition(root);
         bindChrome(root);
+    }
+
+    /** 清空本会话监视记录（数据流/上一页/累积链），面板保持开启并继续订阅。 */
+    function clearSessionKeepOpen() {
+        if (!state.enabled) return api;
+        state.rows = [];
+        state.previous = null;
+        state.chainRows = [];
+        state.seenIds = {};
+        state.chainSeenIds = {};
+        state.expanded = {};
+        clearHistoryStorage();
+        clearChainStorage();
+        persistCurrent();
+        if (state.mounted) {
+            render();
+        }
+        return api;
     }
 
     function bindChrome(root) {
@@ -754,6 +819,12 @@
             if (closeBtn && root.contains(closeBtn)) {
                 event.preventDefault();
                 disable();
+                return;
+            }
+            var clearBtn = target.closest('[data-wesm-action="clear"]');
+            if (clearBtn && root.contains(clearBtn)) {
+                event.preventDefault();
+                clearSessionKeepOpen();
                 return;
             }
             var tabBtn = target.closest('[data-wesm-action="tab"]');
@@ -824,10 +895,28 @@
         });
     }
 
+    function patchBridgeStatus(id, status) {
+        var rows = state.rows || [];
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i] && rows[i].id === id) {
+                rows[i].bridge_status = status;
+                return true;
+            }
+        }
+        return false;
+    }
+
     function onEnvelope(envelope) {
         if (!state.enabled || !envelope) return;
         var id = text(envelope.id);
-        if (id && state.seenIds[id]) return;
+        var bridgeStatus = text(envelope.bridge_status || '');
+        if (id && state.seenIds[id]) {
+            if (bridgeStatus && patchBridgeStatus(id, bridgeStatus)) {
+                persistCurrent();
+                render();
+            }
+            return;
+        }
         if (id) state.seenIds[id] = 1;
         var page = currentPageKey();
         if (page !== state.pageKey) {
@@ -844,6 +933,7 @@
             anomaly: !!envelope.anomaly,
             event_hit: !!envelope.event_hit,
             hit_kind: text(envelope.hit_kind || ''),
+            bridge_status: text(envelope.bridge_status || ''),
             chain: envelope.chain || null,
             page: page
         };
@@ -1008,11 +1098,12 @@
     var api = {
         enable: enable,
         disable: disable,
+        clear: clearSessionKeepOpen,
         isEnabled: isEnabled,
         render: render,
         getConfigRevision: readConfigRevision,
         setConfigRevision: setConfigRevision,
-        version: '20260916-event-sandbox-monitor10'
+        version: '20260918-clear-stream'
     };
 
     global.WelineEventSandboxMonitor = api;

@@ -937,13 +937,18 @@ final class CodeGenerator
             );
         }
         
-        // 常规情况：使用 ob_start 捕获子内容
+        // 常规情况：用 FiberOutputBuffer 捕获子内容（禁止进程级 ob_start，WLS 多 Fiber 会串缓冲）
         $children = $this->generateNodes($node->children);
         $childrenVar = '$__children_' . crc32($tagName . $node->line);
         
-        $code = ExprBuilder::wrapPhp("ob_start();");
+        $code = ExprBuilder::wrapPhp("\\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture();");
+        $code .= ExprBuilder::wrapPhp("try {");
         $code .= $children;
-        $code .= ExprBuilder::wrapPhp("{$childrenVar} = ob_get_clean();");
+        $code .= ExprBuilder::wrapPhp("{$childrenVar} = \\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture();");
+        $code .= ExprBuilder::wrapPhp("} catch (\\Throwable \$__weline_rt_children_e) {");
+        $code .= ExprBuilder::wrapPhp("\\Weline\\Framework\\Runtime\\FiberOutputBuffer::discardCapture();");
+        $code .= ExprBuilder::wrapPhp("throw \$__weline_rt_children_e;");
+        $code .= ExprBuilder::wrapPhp("}");
         $code .= ExprBuilder::wrapEcho(
             "\$this->getTaglib()->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, {$childrenVar}, '', {$rawAttributes}, '')"
         );

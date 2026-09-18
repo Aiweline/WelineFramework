@@ -9,13 +9,6 @@
                   shared="true"
                   sort="50"/>
     </event>
-    <event name="Weline_Theme::layout_preview_sample">
-        <observer name="Weline_Cms::layout_preview_sample"
-                  instance="Weline\Cms\Observer\LayoutPreviewSampleObserver"
-                  disabled="false"
-                  shared="true"
-                  sort="50"/>
-    </event>
     <event name="Weline_Framework_Router::process_uri_before">
         <observer name="Weline_Cms::process_cms_page_uri_before"
                   instance="Weline\Cms\Observer\ProcessCmsPageUriBefore"

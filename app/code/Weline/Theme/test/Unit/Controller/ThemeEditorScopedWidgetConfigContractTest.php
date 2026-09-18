@@ -43,6 +43,22 @@ final class ThemeEditorScopedWidgetConfigContractTest extends TestCase
         self::assertStringContainsString("'scoped_workspace' => \$scopedWorkspace", $saveBody);
         self::assertStringContainsString('updateWidgetConfig(', $saveBody);
 
+        $getStart = \strpos($source, 'function getWidgetConfig(');
+        self::assertNotFalse($getStart);
+        $getNext = \strpos($source, "\n    public function ", $getStart + 10);
+        $getBody = $getNext === false
+            ? \substr($source, (int)$getStart)
+            : \substr($source, (int)$getStart, $getNext - (int)$getStart);
+        // 无 @param 必须 success=true 空态，禁止 success=false 触发 BinQuery ERR /「加载配置失败」
+        self::assertStringContainsString("'has_params' => false", $getBody);
+        self::assertStringContainsString("'params' => []", $getBody);
+        // GET 配置不得同步渲 preview（会阻塞打开配置面板）
+        self::assertStringNotContainsString('tryBuildPreviewHtmlForWidget', $getBody);
+        self::assertDoesNotMatchRegularExpression(
+            '/if\s*\(\s*empty\(\s*\$params\s*\)\s*\)\s*\{\s*return\s+\$this->fetchJson\(\s*\[\s*\'success\'\s*=>\s*false/s',
+            $getBody,
+        );
+
         $updateStart = \strpos($source, 'function postUpdateConfig(');
         self::assertNotFalse($updateStart);
         $updateNext = \strpos($source, "\n    public function ", $updateStart + 10);

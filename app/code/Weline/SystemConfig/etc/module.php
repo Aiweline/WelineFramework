@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_SystemConfig',
-    "version" => '1.3.55',
+    "version" => '1.3.56',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Framework' => '*',
@@ -20,5 +20,6 @@ return [
             => \Weline\SystemConfig\Service\OrmSecurityPolicyLkgRepository::class,
         \Weline\Framework\Http\Security\SecurityHeaderPolicyOverrideProviderInterface::class
             => \Weline\SystemConfig\Service\SystemConfigSecurityHeaderPolicyOverrideProvider::class,
+        'process_cache_resetter.Weline_SystemConfig' => \Weline\SystemConfig\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

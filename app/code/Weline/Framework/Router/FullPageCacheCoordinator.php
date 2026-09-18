@@ -462,6 +462,14 @@ final class FullPageCacheCoordinator
             ]);
             return;
         }
+        if (!$this->storefrontProductCardCssIntegrityOk($body)) {
+            $this->logFpcWarning('skip publish missing product-card css', [
+                'cache_key_full_uri' => $fullUri,
+                'raw_full_uri' => $this->getRawFullUri(),
+                'method' => $method,
+            ]);
+            return;
+        }
 
         if ($variant === null) {
             $variant = $this->buildCurrentFpcVariant();
@@ -870,6 +878,14 @@ final class FullPageCacheCoordinator
 
         $body = $this->resolvePlaintextBody($cached) ?? '';
         if ($body === '') {
+            return null;
+        }
+        if (!$this->storefrontProductCardCssIntegrityOk($body)) {
+            $this->logFpcWarning('invalidate stale hit missing product-card css', [
+                'cache_key' => $staleCacheKey,
+                'cache_source' => $cacheSource,
+            ]);
+            $this->deleteCachedPayloadByKey($staleCacheKey);
             return null;
         }
 
@@ -2235,6 +2251,15 @@ final class FullPageCacheCoordinator
         }
         $body = $this->resolvePlaintextBody($cached) ?? '';
         if ($body === '') {
+            RequestContext::set('wls.fpc.hit_source', 'invalid');
+            return null;
+        }
+        if (!$this->storefrontProductCardCssIntegrityOk($body)) {
+            $this->logFpcWarning('invalidate hit missing product-card css', [
+                'cache_key' => $cacheKey,
+                'cache_source' => $cacheSource,
+            ]);
+            $this->deleteCachedPayloadByKey($cacheKey);
             RequestContext::set('wls.fpc.hit_source', 'invalid');
             return null;
         }
@@ -4090,6 +4115,21 @@ final class FullPageCacheCoordinator
         }
 
         return false;
+    }
+
+    /**
+     * Storefront pages that render canonical product cards must carry the inline
+     * product-card CSS marker. Poisoned FPC entries without it serve unstyled cards.
+     */
+    private function storefrontProductCardCssIntegrityOk(string $body): bool
+    {
+        $hasCard = \str_contains($body, 'data-testid="weline-product-card"')
+            || \str_contains($body, "data-testid='weline-product-card'");
+        if (!$hasCard) {
+            return true;
+        }
+
+        return \str_contains($body, 'data-weline-product-card-css');
     }
 
     private function bodyContainsRawIgnorableRequestQuery(string $body): bool

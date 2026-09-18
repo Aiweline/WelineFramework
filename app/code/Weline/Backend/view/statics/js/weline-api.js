@@ -922,6 +922,124 @@
             || 'Backend request failed.';
     }
 
+    var BACKEND_ACL_DENIED_CODE = 'backend_acl_denied';
+    var BACKEND_ACL_EXCEPTION_MARK = 'FrontendWorkerBackendAuthorizationException';
+    var BACKEND_ACL_DEFAULT_MESSAGE = '当前后台账号无权执行该操作。';
+
+    function readErrorEnvelope(error) {
+        var responseData = error && error.response && error.response.data
+            ? error.response.data
+            : null;
+        if (responseData && typeof responseData === 'object' && responseData.error) {
+            return responseData;
+        }
+        if (responseData && typeof responseData === 'object' && responseData.data && responseData.data.error) {
+            return responseData.data;
+        }
+        return responseData && typeof responseData === 'object' ? responseData : null;
+    }
+
+    function isBackendAclDeniedError(error) {
+        if (!error) {
+            return false;
+        }
+        var code = String(error.code || '').trim();
+        if (code === BACKEND_ACL_DENIED_CODE) {
+            return true;
+        }
+        var envelope = readErrorEnvelope(error);
+        var nestedError = envelope && envelope.error && typeof envelope.error === 'object'
+            ? envelope.error
+            : null;
+        if (nestedError && String(nestedError.code || '').trim() === BACKEND_ACL_DENIED_CODE) {
+            return true;
+        }
+        var exceptionClass = nestedError && nestedError.debug
+            ? String(nestedError.debug.exception_class || '')
+            : '';
+        if (exceptionClass.indexOf(BACKEND_ACL_EXCEPTION_MARK) !== -1) {
+            return true;
+        }
+        var message = String(error.message || (nestedError && nestedError.message) || '');
+        return message.indexOf(BACKEND_ACL_EXCEPTION_MARK) !== -1;
+    }
+
+    function cleanBackendAclMessage(raw) {
+        var text = String(raw || '').trim();
+        if (!text) {
+            return BACKEND_ACL_DEFAULT_MESSAGE;
+        }
+        text = text.replace(
+            /^Weline\\Framework\\Runtime\\FrontendWorkerBackendAuthorizationException:\s*/i,
+            ''
+        );
+        text = text.replace(/\s+in\s+\/.+:\d+\s*$/i, '');
+        text = text.trim();
+        return text || BACKEND_ACL_DEFAULT_MESSAGE;
+    }
+
+    function resolveBackendAclMessage(error) {
+        var envelope = readErrorEnvelope(error);
+        var nestedError = envelope && envelope.error && typeof envelope.error === 'object'
+            ? envelope.error
+            : null;
+        var debugMessage = nestedError && nestedError.debug
+            ? String(nestedError.debug.exception_message || '').trim()
+            : '';
+        if (debugMessage) {
+            return cleanBackendAclMessage(debugMessage);
+        }
+        if (nestedError && nestedError.message) {
+            return cleanBackendAclMessage(nestedError.message);
+        }
+        if (error && error.message) {
+            return cleanBackendAclMessage(error.message);
+        }
+        return BACKEND_ACL_DEFAULT_MESSAGE;
+    }
+
+    function showBackendAclDeniedUi(error) {
+        if (!error || error._welineBackendAclUiShown) {
+            return true;
+        }
+        error._welineBackendAclUiShown = true;
+        var message = resolveBackendAclMessage(error);
+        try {
+            if (isDevMode()) {
+                var dialog = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                if (dialog && typeof dialog.alert === 'function') {
+                    Promise.resolve(dialog.alert(message)).catch(function () {});
+                    return true;
+                }
+            }
+            var toast = window.Weline && window.Weline.UI && window.Weline.UI.toast;
+            if (toast && typeof toast.error === 'function') {
+                toast.error(message);
+                return true;
+            }
+            if (toast && typeof toast.show === 'function') {
+                toast.show(message, {tone: 'danger'});
+                return true;
+            }
+            if (window.WelineBackendToast && typeof window.WelineBackendToast.error === 'function') {
+                window.WelineBackendToast.error(message);
+                return true;
+            }
+        } catch (uiError) {
+            console.error('[Weline.Api] backend ACL UI failed:', uiError);
+        }
+        console.error('[Weline.Api]', message);
+        return true;
+    }
+
+    function notifyBackendAclDeniedUi(error) {
+        if (!isBackendAclDeniedError(error)) {
+            return false;
+        }
+        showBackendAclDeniedUi(error);
+        return true;
+    }
+
     function looksLikeJson(text) {
         var trimmed = String(text || '').trim();
         return trimmed.indexOf('{') === 0 || trimmed.indexOf('[') === 0;
@@ -1646,6 +1764,7 @@
                     workerMessage: data,
                     skipConsole: true
                 });
+                notifyBackendAclDeniedUi(businessError);
                 pending.reject(businessError);
                 return;
             }
@@ -1686,6 +1805,7 @@
             workerMessage: data,
             skipConsole: true
         });
+        notifyBackendAclDeniedUi(error);
         pending.reject(error);
     };
 

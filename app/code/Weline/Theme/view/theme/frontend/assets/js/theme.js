@@ -3826,16 +3826,42 @@
             return fallbackCurrency.toUpperCase();
         }
 
+        function resolveCurrencyDisplayGlyph(currencyCode) {
+            const code = String(currencyCode || '').toUpperCase().trim();
+            if (!code) {
+                return '';
+            }
+            const option = document.querySelector(
+                '[data-currency-switcher] [data-currency-option][data-currency="' + code + '"],'
+                + '[data-currency-switcher] [data-currency="' + code + '"]'
+            );
+            if (!option) {
+                return code;
+            }
+            const fromAttr = String(option.getAttribute('data-currency-symbol') || '').trim();
+            if (fromAttr !== '') {
+                return fromAttr;
+            }
+            const symbolNode = option.querySelector('.w-currency-switcher__symbol');
+            const fromNode = symbolNode ? String(symbolNode.textContent || '').trim() : '';
+            return fromNode !== '' ? fromNode : code;
+        }
+
         /**
          * 更新当前货币显示
          */
         function updateCurrentCurrencyDisplay() {
             const currentCurrency = getCurrentCurrency();
+            const glyph = resolveCurrencyDisplayGlyph(currentCurrency) || currentCurrency;
 
-            // 更新 current-currency 元素
+            // 更新 current-currency 元素（优先符号）
             const currentCurrencyElements = document.querySelectorAll('[data-currency-switcher] .current-currency');
             currentCurrencyElements.forEach(el => {
+                el.textContent = glyph;
+            });
+            document.querySelectorAll('[data-currency-switcher] .w-currency-switcher__code').forEach(el => {
                 el.textContent = currentCurrency;
+                el.hidden = glyph === currentCurrency;
             });
 
             // 更新 active 状态

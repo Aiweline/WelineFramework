@@ -259,12 +259,32 @@ final class FooterDefaultLinksHelper
      */
     public static function defaultSocialItems(): array
     {
+        // Demo storefront profiles (长安汉服). Keep http(s) so Organization.sameAs /
+        // footer launch readiness can emit actionable Trust signals — never `#`.
         return [
-            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => '#'],
-            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
-            ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => '#'],
-            ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => '#'],
+            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changan.hanfu'],
+            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => 'https://www.pinterest.com/changanhanfu'],
+            ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => 'https://www.tiktok.com/@changan.hanfu'],
+            ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => 'https://www.youtube.com/@changanhanfu'],
         ];
+    }
+
+    /**
+     * Absolute http(s) profile URLs for Organization.sameAs (Trust / entity example).
+     *
+     * @return list<string>
+     */
+    public static function defaultSameAsUrls(): array
+    {
+        $urls = [];
+        foreach (self::defaultSocialItems() as $item) {
+            $url = trim((string)($item['url'] ?? ''));
+            if ($url !== '') {
+                $urls[] = $url;
+            }
+        }
+
+        return $urls;
     }
 
     /**
@@ -456,9 +476,27 @@ final class FooterDefaultLinksHelper
     public static function normalizeSocialItems(mixed $raw): array
     {
         $list = self::decodeList($raw);
+        $usedDefaults = false;
         if ($list === []) {
             $list = self::defaultSocialItems();
+            $usedDefaults = true;
         }
+        $out = self::filterActionableSocialItems($list);
+        // Published layouts often still store `#` placeholders; treat that as empty
+        // so Organization.sameAs / footer can fall back to actionable defaults.
+        if ($out === [] && !$usedDefaults) {
+            $out = self::filterActionableSocialItems(self::defaultSocialItems());
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<mixed> $list
+     * @return list<array{name:string,icon:string,url:string}>
+     */
+    private static function filterActionableSocialItems(array $list): array
+    {
         $out = [];
         foreach ($list as $row) {
             if (!is_array($row)) {

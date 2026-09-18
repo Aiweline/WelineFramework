@@ -71,6 +71,11 @@ class ExchangeRateApi implements ExchangeRateApiInterface
         'CHF' => ['symbol' => 'CHF', 'position' => 'left', 'icon' => 'CHF', 'thousand_separator' => "'", 'decimal_separator' => '.'],
         'HKD' => ['symbol' => 'HK$', 'position' => 'left', 'icon' => 'HK$', 'thousand_separator' => ',', 'decimal_separator' => '.'],
         'SGD' => ['symbol' => 'S$', 'position' => 'left', 'icon' => 'S$', 'thousand_separator' => ',', 'decimal_separator' => '.'],
+        'SEK' => ['symbol' => 'kr', 'position' => 'right', 'icon' => 'kr', 'thousand_separator' => ' ', 'decimal_separator' => ','],
+        'NOK' => ['symbol' => 'kr', 'position' => 'right', 'icon' => 'kr', 'thousand_separator' => ' ', 'decimal_separator' => ','],
+        'DKK' => ['symbol' => 'kr', 'position' => 'right', 'icon' => 'kr', 'thousand_separator' => '.', 'decimal_separator' => ','],
+        'PLN' => ['symbol' => 'zł', 'position' => 'right', 'icon' => 'zł', 'thousand_separator' => ' ', 'decimal_separator' => ','],
+        'MXN' => ['symbol' => 'MX$', 'position' => 'left', 'icon' => 'MX$', 'thousand_separator' => ',', 'decimal_separator' => '.'],
     ];
 
     /**

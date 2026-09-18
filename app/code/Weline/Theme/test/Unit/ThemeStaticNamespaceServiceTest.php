@@ -191,7 +191,7 @@ class ThemeStaticNamespaceServiceTest extends TestCase
     {
         $request = $this->createMock(Request::class);
         $request->method('getUrlPath')->willReturn(
-            $shouldUseStoredContext ? '/theme/frontend/theme-preview/content' : '/'
+            $shouldUseStoredContext ? '/theme/frontend/theme-preview/gateway' : '/'
         );
         $request->method('getParam')->willReturnCallback(
             static fn(string $key, mixed $default = null): mixed => $default

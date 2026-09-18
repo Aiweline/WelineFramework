@@ -65,7 +65,6 @@ final class View extends FrontendController
         $canonical = $this->scope->articleCanonical($slug);
         $this->layoutType = ThemeLayout::PAGE_TYPE_FAQ;
         $this->request->setGet('page_type', 'faq_article');
-        $this->request->setGet('theme_public_route', FaqNamespace::PREFIX . '/' . $slug);
         $this->request->setGet('theme_page_title', $title);
 
         $payload = null;
@@ -94,7 +93,6 @@ final class View extends FrontendController
         $canonical = $this->scope->articleCanonical($slug);
         $this->layoutType = ThemeLayout::PAGE_TYPE_FAQ;
         $this->request->setGet('page_type', 'faq_article');
-        $this->request->setGet('theme_public_route', FaqNamespace::PREFIX . '/' . $slug);
         $this->request->setGet('theme_page_title', $title);
 
         $this->assign('page_title', $title);

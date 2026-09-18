@@ -64,4 +64,27 @@ final class PixelConversionDedupeServiceTest extends TestCase
         self::assertFalse($this->svc->eventMatches('page_view', $events));
         self::assertFalse($this->svc->eventMatches('begin_checkout', $events));
     }
+
+    public function testLedgerFamilyGroupsPurchaseEvents(): void
+    {
+        self::assertSame('purchase', $this->svc->ledgerEventName('checkout_success'));
+        self::assertSame('purchase', $this->svc->ledgerEventName('payment_success'));
+        self::assertSame('purchase', $this->svc->ledgerEventName('express_pay_checkout_success'));
+        self::assertSame('checkout_failure', $this->svc->ledgerEventName('checkout_failure'));
+        self::assertSame('page_view', $this->svc->ledgerEventName('page_view'));
+    }
+
+    public function testResolveAliasKeysKeepsEveryOrderId(): void
+    {
+        self::assertSame(['TXN-1', 'uuid-2'], $this->svc->resolveAliasKeys([
+            'transaction_id' => 'TXN-1',
+            'order_uuid' => 'uuid-2',
+        ]));
+        self::assertSame(['PAY-9'], $this->svc->resolveAliasKeys([
+            'transaction_no' => 'PAY-9',
+        ]));
+        self::assertSame([], $this->svc->resolveAliasKeys([
+            'chain_id' => 'checkout_express_pay',
+        ]));
+    }
 }

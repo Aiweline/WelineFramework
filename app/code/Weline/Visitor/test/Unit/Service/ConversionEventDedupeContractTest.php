@@ -36,7 +36,7 @@ final class ConversionEventDedupeContractTest extends TestCase
     {
         $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/PixelEventService.php');
         self::assertStringContainsString('conversionDedupe()', $src);
-        self::assertStringContainsString("reason' => 'duplicate'", $src);
+        self::assertStringContainsString('skipReason', $src);
         self::assertStringContainsString('PixelConversionDedupeService', $src);
     }
 
@@ -48,15 +48,19 @@ final class ConversionEventDedupeContractTest extends TestCase
             self::assertStringContainsString('function __isConversionDedupeDuplicate', $source);
             self::assertStringContainsString('function __markConversionDedupeSeen', $source);
             self::assertStringContainsString('function __emitConversionDedupeSandbox', $source);
+            self::assertStringContainsString('function __conversionLedgerFamily', $source);
+            self::assertStringContainsString('function __collectConversionAliasKeys', $source);
+            self::assertStringContainsString('function __conversionBridgeGate', $source);
             self::assertStringContainsString('weline_pixel_dedupe:', $source);
             self::assertStringContainsString('conversionDedupe', $source);
             self::assertStringContainsString('sandboxDedupeIsDup', $source);
             self::assertStringContainsString('function __resolvePixelVendorArea', $source);
             self::assertStringContainsString('_earlyBuffer', $source);
             self::assertStringContainsString('回放缓冲：成功页 SSR track', $source);
-            self::assertStringContainsString("__emitConversionDedupeSandbox(welineEvent", $source);
+            self::assertStringContainsString("__emitConversionDedupeSandbox(gate.name", $source);
             self::assertStringContainsString("hit_kind: 'dedupe'", $source);
-            // 主 track 不得提前 return null 丢弃
+            self::assertStringContainsString('bridge_status', $source);
+            self::assertStringContainsString('未发送·去重', $source);
             self::assertStringNotContainsString("__shouldDropConversionDedupe(normalizedEventName, meta || {})", $source);
             self::assertStringContainsString('转化去重不拦截主 track', $source);
         }

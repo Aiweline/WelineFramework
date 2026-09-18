@@ -8,29 +8,27 @@ use PHPUnit\Framework\TestCase;
 
 final class LayoutResolveServiceContractTest extends TestCase
 {
-    public function testLayoutResolveServiceExposesResolveAndPreviewSampleEvents(): void
+    public function testLayoutResolveIsPathToLayoutOnly(): void
     {
         $path = BP . 'app/code/Weline/Theme/Service/LayoutResolveService.php';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
 
         self::assertStringContainsString("EVENT_LAYOUT_RESOLVE = 'Weline_Theme::layout_resolve'", $source);
-        self::assertStringContainsString("EVENT_LAYOUT_PREVIEW_SAMPLE = 'Weline_Theme::layout_preview_sample'", $source);
         self::assertStringContainsString('function resolveFromRequest', $source);
         self::assertStringContainsString('function resolveFromPath', $source);
-        self::assertStringContainsString('function resolvePreviewSample', $source);
+        self::assertStringNotContainsString('EVENT_LAYOUT_PREVIEW_SAMPLE', $source);
+        self::assertStringNotContainsString('function resolvePreviewSample', $source);
+        self::assertStringNotContainsString('LayoutStorefrontRouteFromModuleRouter', $source);
         self::assertStringNotContainsString('StorefrontSampleCanvasHydrator', $source);
-        self::assertStringNotContainsString('hydrateCanvasBody', $source);
-        self::assertStringNotContainsString('EVENT_LAYOUT_CANVAS_BODY', $source);
-        self::assertStringContainsString("'promotion'", $source);
-        self::assertStringContainsString('shell_plus_slug', $source);
 
         $eventPhp = dirname(__DIR__, 3) . '/event.php';
         self::assertFileExists($eventPhp);
         $eventSource = (string)file_get_contents($eventPhp);
         self::assertStringContainsString("'Weline_Theme::layout_resolve'", $eventSource);
-        self::assertStringContainsString("'Weline_Theme::layout_preview_sample'", $eventSource);
-        self::assertStringNotContainsString('layout_canvas_body', $eventSource);
+        self::assertStringNotContainsString('layout_preview_sample', $eventSource);
+        self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/Service/LayoutStorefrontRouteFromModuleRouter.php');
+        self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/Observer/LayoutPreviewSampleObserver.php');
     }
 
     public function testFetchFileBeforeDispatchesLayoutResolveWhenLayoutTypeEmpty(): void
@@ -61,16 +59,39 @@ final class LayoutResolveServiceContractTest extends TestCase
         $jsSource = (string)file_get_contents($js);
         $phtmlSource = (string)file_get_contents($phtml);
 
-        self::assertStringContainsString('function postPreviewSample', $editorSource);
-        self::assertStringContainsString('theme_public_route', $editorSource);
+        self::assertStringNotContainsString('function postPreviewSample', $editorSource);
+        self::assertStringNotContainsString('ThemePreviewContentRenderer', $editorSource);
+        self::assertStringNotContainsString('theme_public_route', $editorSource);
         self::assertStringContainsString('buildFrontendPreviewUrl', $editorSource);
-        self::assertStringContainsString('data-api-preview-sample=', $phtmlSource);
-        self::assertStringContainsString('previewSampleSelect', $phtmlSource);
-        self::assertStringContainsString('apiPreviewSample', $jsSource);
-        self::assertStringContainsString('refreshPreviewSample', $jsSource);
-        self::assertStringContainsString('theme_public_route: themePublicRoute', $jsSource);
-        self::assertStringContainsString('previewEntityRoute', $jsSource);
-        self::assertStringContainsString('shell_plus_slug', $jsSource);
+        self::assertStringNotContainsString('data-api-preview-sample=', $phtmlSource);
+        self::assertStringNotContainsString('previewSampleSelect', $phtmlSource);
+        self::assertStringContainsString('Path ↔ layout 1:1', $jsSource);
+        self::assertStringNotContainsString('Wait for preview-sample', $jsSource);
+        self::assertStringNotContainsString('theme_public_route', $jsSource);
+        self::assertStringNotContainsString('refreshPreviewSample', $jsSource);
+        self::assertStringNotContainsString('shell_plus_slug', $jsSource);
+        self::assertStringNotContainsString('function buildLayoutPreviewUrl', $jsSource);
+        self::assertStringContainsString('canvasRoute', $jsSource);
+        self::assertStringContainsString('syncCanvasRouteFromLayout', $jsSource);
         self::assertStringContainsString('buildCanvasStorefrontPreviewUrl', $jsSource);
+    }
+
+    /**
+     * Live WLS serves theme overlay from pub/static/Weline/hanfu/...
+     * After removing preview-sample, published UI bundle must match source
+     * (otherwise editor keeps calling the deleted API and panels stay Loading).
+     */
+    public function testPublishedHanfuThemeEditorJsMatchesRealPathCanvas(): void
+    {
+        $published = BP . 'pub/static/Weline/hanfu/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js';
+        if (!is_file($published)) {
+            $this->markTestSkipped('pub/static hanfu theme-editor bundle not present');
+        }
+        $source = (string)file_get_contents($published);
+        self::assertStringNotContainsString('refreshPreviewSample', $source);
+        self::assertStringNotContainsString('preview-sample', $source);
+        self::assertStringNotContainsString('shell_plus_slug', $source);
+        self::assertStringContainsString('syncCanvasRouteFromLayout', $source);
+        self::assertStringContainsString('buildCanvasStorefrontPreviewUrl', $source);
     }
 }

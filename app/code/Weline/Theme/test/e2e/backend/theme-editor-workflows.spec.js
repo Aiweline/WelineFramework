@@ -56,7 +56,8 @@ async function waitForThemeEditor(page) {
   }, null, {
     timeout: 60000,
   });
-  await expect(page.locator('#previewFrame')).toHaveAttribute('src', /theme-preview|layout-preview/, { timeout: 60000 });
+  await expect(page.locator('#previewFrame')).toHaveAttribute('src', /editor_mode=1/, { timeout: 60000 });
+  await expect(page.locator('#previewFrame')).not.toHaveAttribute('src', /theme-preview\/content|theme-editor\/layout-preview/);
 }
 
 async function callEditorRequest(page, url, method = 'GET', body = null) {

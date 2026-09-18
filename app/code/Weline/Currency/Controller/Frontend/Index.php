@@ -25,7 +25,6 @@ final class Index extends FrontendController
 
         $this->layoutType = 'default';
         $this->request->setGet('page_type', 'currency_guide');
-        $this->request->setGet('theme_public_route', 'currency');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);

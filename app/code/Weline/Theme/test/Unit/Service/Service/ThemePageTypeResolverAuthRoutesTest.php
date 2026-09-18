@@ -34,7 +34,7 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             $resolver->resolveLayoutTypeFromUri('https://shop.example/customer/account/login')
         );
         $this->assertSame(
-            ThemeLayout::PAGE_TYPE_ACCOUNT,
+            'account/login',
             $resolver->mapLayoutTypeToPageType('account/login')
         );
     }
@@ -93,15 +93,11 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
             'product',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
+            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT)
         );
         $this->assertStringNotContainsString(
             'theme-preview/content',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
-        );
-        $this->assertSame(
-            'product/benq-screenbar',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT, 'product/benq-screenbar')
+            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT)
         );
     }
 

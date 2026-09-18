@@ -18,11 +18,30 @@ class SeoUrlGenerateRewrite implements ObserverInterface
     private const CACHE_PREFIX = 'seo_generate_rewrite.v1.';
     private const REQUEST_CACHE_PREFIX = 'seo_generate_rewrite.';
     private const REQUEST_CONTEXT_CACHE_PREFIX = 'seo_generate_rewrite_context.';
+    private const PROCESS_CACHE_MAX = 2048;
+
+    /** @var array<string, array{rewrite: string, matched_uri: string}|string> */
+    private static array $processCache = [];
 
     private ?CachePoolInterface $cache = null;
 
     public function __construct(private UrlRewrite $urlRewrite)
     {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processCache = [];
+    }
+
+    /** rewrite 行变更：进程 L1 + 共享池一并清掉。 */
+    public static function invalidateCaches(): void
+    {
+        self::clearProcessCache();
+        try {
+            w_cache('url_rewrite')->clear();
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -63,6 +82,10 @@ class SeoUrlGenerateRewrite implements ObserverInterface
                 continue;
             }
             $cacheKey = $this->buildPersistentCacheKey($websiteId, $matchUri, $realUri);
+            if (isset(self::$processCache[$cacheKey])) {
+                RequestContext::set($requestKey, self::$processCache[$cacheKey]);
+                continue;
+            }
             $pending[$cacheKey] = [$websiteId, $matchUri, $realUri, $requestKey];
         }
         if ($pending === []) {
@@ -75,6 +98,7 @@ class SeoUrlGenerateRewrite implements ObserverInterface
         foreach ($pending as $cacheKey => [$websiteId, $matchUri, $realUri, $requestKey]) {
             $cached = $hits[$cacheKey] ?? null;
             if (is_array($cached) || $cached === 'not_found') {
+                self::rememberProcessCache($cacheKey, $cached);
                 RequestContext::set($requestKey, $cached);
                 continue;
             }
@@ -99,6 +123,7 @@ class SeoUrlGenerateRewrite implements ObserverInterface
                     'rewrite' => (string)($row[UrlRewrite::schema_fields_REWRITE] ?? ''),
                     'matched_uri' => $matchedUri,
                 ];
+                self::rememberProcessCache($cacheKey, $value);
                 RequestContext::set($requestKey, $value);
                 $writes[$cacheKey] = $value;
             }
@@ -418,11 +443,17 @@ class SeoUrlGenerateRewrite implements ObserverInterface
         }
 
         $cacheKey = $this->buildPersistentCacheKey($websiteId, $matchUri, $realUri);
+        if (isset(self::$processCache[$cacheKey])) {
+            $cached = self::$processCache[$cacheKey];
+            RequestContext::set($requestCacheKey, $cached);
+            return $cached;
+        }
         $cached = $this->getCache()->get($cacheKey);
         if (!is_array($cached) && !is_string($cached)) {
             return false;
         }
 
+        self::rememberProcessCache($cacheKey, $cached);
         RequestContext::set($requestCacheKey, $cached);
         return $cached;
     }
@@ -452,7 +483,26 @@ class SeoUrlGenerateRewrite implements ObserverInterface
         RequestContext::set($requestCacheKey, $value);
 
         $cacheKey = $this->buildPersistentCacheKey($websiteId, $matchUri, $realUri);
+        self::rememberProcessCache($cacheKey, $value);
         $this->getCache()->set($cacheKey, $value, self::CACHE_TTL);
+    }
+
+    /**
+     * @param array{rewrite: string, matched_uri: string}|string $value
+     */
+    private static function rememberProcessCache(string $cacheKey, array|string $value): void
+    {
+        if (\count(self::$processCache) >= self::PROCESS_CACHE_MAX
+            && !\array_key_exists($cacheKey, self::$processCache)
+        ) {
+            self::$processCache = \array_slice(
+                self::$processCache,
+                -((int)(self::PROCESS_CACHE_MAX / 2)),
+                null,
+                true,
+            );
+        }
+        self::$processCache[$cacheKey] = $value;
     }
 
     /**

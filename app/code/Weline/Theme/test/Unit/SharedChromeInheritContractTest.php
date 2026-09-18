@@ -152,7 +152,7 @@ final class SharedChromeInheritContractTest extends TestCase
         // Authority source remains js/theme-editor.js (compiled into the UI bundle).
         // Do not replace it with a deprecation stub — that empties the loaded bundle.
         self::assertStringContainsString('function fetchSharedChromeMode(', $legacy);
-        self::assertStringContainsString('function loadLayoutPreview(', $legacy);
+        self::assertStringContainsString('function loadCanvas(', $legacy);
         self::assertGreaterThan(1000, substr_count($legacy, "\n") + 1, 'theme-editor.js must keep editor behavior');
     }
 

@@ -3,6 +3,32 @@
 declare(strict_types=1);
 
 return [
+    'storefront-pixel-bootstrap' => [
+        'name' => '店面像素引导',
+        'description' => '页头注入 Weline Pixel 引导（eager 立刻拉 pixel.js，带 track 队列）；默认安装到 header-pixel-bootstrap。Theme/hanfu 布局禁止内嵌本部件，靠 required default_injections。v20260918b',
+        'type' => 'header',
+        'code' => 'storefront-pixel-bootstrap',
+        'area' => 'frontend',
+        'template' => 'Weline_Visitor::templates/frontend/widgets/storefront-pixel-bootstrap.phtml',
+        'page_layouts' => ['*'],
+        'position' => ['header'],
+        'slot' => 'header-pixel-bootstrap',
+        'supports' => [
+            'storefront-pixel-bootstrap',
+            'layout-header-pixel-bootstrap',
+            'pixel-bootstrap',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'homepage',
+            'slot' => 'header-pixel-bootstrap',
+            'area' => 'header',
+            'sort_order' => 0,
+            'required' => true,
+            'reason' => '店面顶栏默认安装像素引导，首屏即可 track，避免结账确认丢事件',
+            'config' => [],
+        ]],
+        'params' => [],
+    ],
     'pixel_overview' => [
         'name' => '像素概览',
         'description' => '展示像素事件、独立访客、事件类型和处理率。',

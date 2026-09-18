@@ -7,7 +7,8 @@ namespace Weline\Theme\Test\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 整页 theme-preview/content 必须与店面 chrome 保真。
+ * Visual-editor canvas = real storefront path + params.
+ * Frontend theme-preview/content HTTP controller is deleted (no 302 / no shell).
  */
 final class ThemePreviewStorefrontParityContractTest extends TestCase
 {
@@ -31,47 +32,44 @@ final class ThemePreviewStorefrontParityContractTest extends TestCase
             $source,
             'preview_mode=live must not trip isEditorPreviewRequest / force widget is-preview'
         );
-        self::assertStringContainsString('theme-preview/content', $source);
         self::assertTrue(
             (bool)preg_match("/\\\$config\['preview_mode'\]\s*=\s*false/", $source)
             || (bool)preg_match("/'preview_mode'\s*=>\s*false/", $source),
-            'theme-preview/content must force widget config preview_mode=false'
+            'editor/storefront preview must force widget config preview_mode=false'
         );
     }
 
-    public function testThemePreviewContentDoesNotAssignStringPreviewMode(): void
+    public function testFrontendThemePreviewContentControllerIsDeleted(): void
     {
-        $source = $this->moduleFile('Controller/Frontend/ThemePreview/Content.php');
-        self::assertStringContainsString("assign('layout_preview_mode'", $source);
-        self::assertStringContainsString("assign('theme_preview_content', true)", $source);
-        self::assertStringContainsString("assign('preview_mode', false)", $source);
-        self::assertStringNotContainsString(
-            "assign('preview_mode', (string)",
-            $source,
-            'string preview_mode=live must not be assigned (bool cast would enable is-preview)'
-        );
+        $path = dirname(__DIR__, 2) . '/Controller/Frontend/ThemePreview/Content.php';
+        self::assertFileDoesNotExist($path, 'Frontend theme-preview/content HTTP shell must be fully deleted');
     }
 
-    public function testEditorModeSkipsDiscardedPreviewContentBuild(): void
+    public function testLayoutPreviewFrontendRejectsWithoutRedirect(): void
     {
-        $source = $this->moduleFile('Controller/Frontend/ThemePreview/Content.php');
-        self::assertStringContainsString('$isEditorMode,', $source);
-        self::assertStringContainsString('if ($isEditorMode)', $source);
-        self::assertStringContainsString('pipeline hygiene', $source);
-        self::assertStringContainsString('preview-only skip of Hook/widget storefront delivery', $source);
-        self::assertMatchesRegularExpression(
-            '/if\s*\(\s*\$isEditorMode\s*\)\s*\{[^}]*\'content\'\s*=>\s*\'\'/s',
-            $source,
-            'editor_mode must skip ThemePreviewContentRenderer.build() with empty content payload'
-        );
-
         $editor = $this->moduleFile('Controller/Backend/ThemeEditor.php');
-        self::assertStringContainsString('request-memo gates are not claimed then starved', $editor);
-        self::assertStringContainsString('preview-only skip of Hook/widget storefront delivery', $editor);
-        self::assertMatchesRegularExpression(
-            '/if\s*\(\s*\$isEditorMode\s*\)\s*\{[^}]*\'content\'\s*=>\s*\'\'/s',
+        self::assertStringNotContainsString('redirectFrontendLayoutPreviewToStorefront', $editor);
+        self::assertStringContainsString(
+            'Frontend visual canvas must use the real storefront path',
+            $editor
+        );
+        self::assertStringContainsString('renderFrontendLayoutTemplateHtml', $editor);
+        self::assertStringContainsString(
+            'Frontend layout HTML must use the real layout template path.',
+            $editor
+        );
+        self::assertStringNotContainsString(
+            "Weline_Theme::templates/frontend/theme-preview/content.phtml",
             $editor,
-            'ThemeEditor layout preview must also skip discarded build in editor_mode'
+            'ThemeEditor must not fetch frontend theme-preview/content.phtml stub'
+        );
+        self::assertStringNotContainsString(
+            "Weline_Theme::templates/backend/theme-preview/content.phtml",
+            $editor
+        );
+        self::assertStringContainsString(
+            'Weline_Theme::theme/backend/layouts/',
+            $editor
         );
     }
 

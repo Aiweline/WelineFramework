@@ -365,7 +365,7 @@
     'use strict';
 
     // Bundle is type=module and concatenates sources; a hard throw here aborts the
-    // rest of weline-theme-editor.js (including loadLayoutPreview / widget library).
+    // rest of weline-theme-editor.js (including loadCanvas / widget library).
     // Defer until Weline.UI is present instead of failing the whole editor boot.
     let bootAttempts = 0;
     const maxBootAttempts = 120;
@@ -782,7 +782,6 @@
         apiApplyDefaultInjection: '',
         apiInitSlotDefaults: '',
         apiPublish: '',
-        apiPreview: '',
         apiCompileLayout: '',
         apiLayoutOptions: '',
         apiLayoutConfig: '',
@@ -796,11 +795,8 @@
         apiThemeAiPrepareRefine: '',
         apiVirtualThemeAiCatalog: '',
         apiVirtualThemeCreateDraft: '',
-        apiVirtualThemeBlockAction: '',
         apiVirtualThemeSource: '',
-        apiVirtualThemeSaveSource: '',
         apiVirtualThemePublishVersion: '',
-        apiLayoutPreview: '',
         apiParamRenderForm: '',
         defaultLocale: 'zh_Hans_CN',
         autoSaveDelay: 1000,
@@ -813,22 +809,14 @@
         apiResetDraftResources: '',
         apiPublishVersion: '',
         apiDeleteVersion: '',
-        apiRenameVersion: '',
         // 前端预览 API
         apiStartPreview: '',
-        apiPreviewSample: '',
-        apiExitPreview: '',
-        apiPublishAndExit: '',
         apiCheckLock: '',
         apiReleaseLock: '',
         apiUpdateActivity: '',
-        apiRequestTakeover: '',
-        apiCheckTakeoverRequest: '',
-        apiForceTakeover: '',
         apiScopedWorkspace: '',
         apiPublishScopedWorkspace: '',
         apiPublishScopedReleaseBatch: '',
-        apiScopedReleaseBatch: '',
         apiRetryScopedReleaseBatchCache: '',
         apiRollbackScopedReleaseBatch: '',
     };
@@ -861,14 +849,10 @@
         originalGroupOrder: [], // 保存原始分组顺序
         previewRefreshInFlight: false,
         previewRefreshQueued: false,
-        previewNavigationSequence: 0,
+        canvasNavigationSequence: 0,
         previewArrayItemIndexByLayout: {},
         previewStatus: 'draft', // 预览版本状态：draft（草稿）/ published（已发布）
-        previewEntityRoute: '', // shell_plus_slug sample storefront path (e.g. promotion/deals)
-        previewKind: 'fixed',
-        previewSampleClaimed: false,
-        previewSampleSource: 'none',
-        previewEntitySlug: '',
+        canvasRoute: '', // current canvas path; homepage stays empty, layout path otherwise
         saveInProgress: false,   // 防止拖入保存时重复提交导致保存两个部件
         // 版本控制状态
         versions: [], // 版本列表
@@ -1327,8 +1311,8 @@
             }
             throw contextApplyError;
         }
-        showPreviewLoadingImmediate();
-        loadLayoutPreview({
+        showCanvasLoadingImmediate();
+        loadCanvas({
             locale: state.configLocale,
             locale_code: state.configLocale,
             scope: canonicalScope,
@@ -2769,27 +2753,7 @@
             elements.pageTypeSelect.value = nextType;
         }
         renderLayoutOptionSelect(nextType, state.layoutOption);
-        state.previewKind = resolvePreviewKindForLayout(nextType);
-        // Clear until preview-sample reverse-resolves the storefront path.
-        state.previewEntityRoute = '';
-        state.previewEntitySlug = '';
-        state.previewSampleClaimed = false;
-        state.previewSampleSource = 'none';
-        renderPreviewSampleSelect();
-    }
-
-    function resolvePreviewKindForLayout(layoutType = getEffectiveLayoutType()) {
-        const type = normalizeLayoutOptionValue(layoutType || '');
-        const shellPlus = {
-            promotion: true,
-            product: true,
-            category: true,
-            blog: true,
-            faq: true,
-            cms_page: true,
-            payment_guide: true,
-        };
-        return shellPlus[type] ? 'shell_plus_slug' : 'fixed';
+        syncCanvasRouteFromLayout(nextType);
     }
 
     function isHomepageLayoutType(layoutType = getEffectiveLayoutType()) {
@@ -2797,110 +2761,15 @@
         return type === 'homepage' || type === 'default' || type === '';
     }
 
-    function layoutRequiresPreviewSample(layoutType = getEffectiveLayoutType()) {
-        return resolvePreviewKindForLayout(layoutType) === 'shell_plus_slug';
-    }
-
-    function layoutHasUsablePreviewSample() {
-        if (isHomepageLayoutType()) {
-            return true;
-        }
-        // promotion hub is always previewable even when sample falls back to shell route
-        const type = normalizeLayoutOptionValue(getEffectiveLayoutType());
-        if (type === 'promotion') {
-            return true;
-        }
-        // Fixed + slug: must reverse-resolve via preview-sample (module router join / slug).
-        return Boolean(state.previewSampleClaimed && state.previewEntityRoute);
-    }
-
-    async function refreshPreviewSample(options = {}) {
-        const layoutType = normalizeLayoutOptionValue(options.layout_type || getEffectiveLayoutType()) || 'homepage';
-        const layoutOption = normalizeLayoutOptionValue(options.layout_option || getEffectiveLayoutOption()) || 'default';
-        state.previewKind = resolvePreviewKindForLayout(layoutType);
-
-        // Always reverse-resolve storefront path (fixed hubs via module router join; slug via modules).
-        const preferredSlug = String(options.preferred_slug || state.previewEntitySlug || '').trim();
-        try {
-            const result = await apiJson(config.apiPreviewSample || `${config.apiBase}/preview-sample`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                silent: options.silent !== false,
-                body: JSON.stringify({
-                    layout_path: layoutType,
-                    layout_type: layoutType,
-                    page_type: layoutType,
-                    layout_option: layoutOption,
-                    preferred_slug: preferredSlug,
-                    website_id: getScopeWebsiteId() || 0,
-                    locale: getPreviewLocaleForRequest() || '',
-                }),
-            });
-            const data = result?.data || {};
-            state.previewKind = String(data.preview_kind || state.previewKind || 'fixed');
-            state.previewSampleClaimed = Boolean(data.claimed);
-            state.previewSampleSource = String(data.sample_source || 'none');
-            state.previewEntitySlug = String(data.entity_slug || '');
-            const route = String(data.preview_entity_route || '').replace(/^\/+|\/+$/g, '');
-            if (route) {
-                state.previewEntityRoute = route;
-            } else if (isHomepageLayoutType(layoutType) && state.previewSampleClaimed) {
-                state.previewEntityRoute = '';
-            } else if (layoutType === 'promotion') {
-                state.previewEntityRoute = 'promotion';
-                state.previewSampleClaimed = true;
-            } else {
-                state.previewEntityRoute = '';
-            }
-            renderPreviewSampleSelect();
-            return data;
-        } catch (error) {
-            console.error('[ThemeEditor] preview-sample error:', error);
-            if (layoutType === 'promotion') {
-                state.previewEntityRoute = 'promotion';
-                state.previewSampleClaimed = true;
-                state.previewSampleSource = 'none';
-            } else if (isHomepageLayoutType(layoutType)) {
-                state.previewEntityRoute = '';
-                state.previewSampleClaimed = true;
-                state.previewSampleSource = 'none';
-            } else {
-                state.previewEntityRoute = '';
-                state.previewSampleClaimed = false;
-                state.previewSampleSource = 'none';
-            }
-            renderPreviewSampleSelect();
-            return null;
-        }
-    }
-
-    function renderPreviewSampleSelect() {
-        const select = elements.previewSampleSelect;
-        const field = elements.previewSampleField;
-        if (!select) {
-            return;
-        }
-        const layoutType = normalizeLayoutOptionValue(getEffectiveLayoutType());
-        const show = state.previewKind === 'shell_plus_slug' && layoutType === 'promotion';
-        if (field) {
-            field.hidden = !show;
-        }
-        select.hidden = !show;
-        if (!show) {
-            return;
-        }
-        const current = state.previewEntityRoute || 'promotion';
-        const options = [
-            { value: 'promotion', label: translateUiText('活动首页 /promotion') },
-            { value: 'promotion/deals', label: translateUiText('取样 deals /promotion/deals') },
-        ];
-        if (current && !options.some((item) => item.value === current)) {
-            options.push({ value: current, label: current });
-        }
-        select.innerHTML = options.map((item) => (
-            `<option value="${item.value}"${item.value === current ? ' selected' : ''}>${item.label}</option>`
-        )).join('');
-        select.value = current;
+    /**
+     * Path ↔ layout 1:1. Homepage canvas is "/"; every other layout path is the route.
+     * Clicked navigation overwrites this afterwards.
+     */
+    function syncCanvasRouteFromLayout(layoutType = getEffectiveLayoutType()) {
+        const type = normalizeLayoutOptionValue(layoutType || '') || 'homepage';
+        state.canvasRoute = isHomepageLayoutType(type)
+            ? ''
+            : (sanitizeStorefrontPublicRoute(type) || '');
     }
 
     function getCurrentWindowUrl() {
@@ -3196,7 +3065,7 @@
             showToast(translateUiText('旧 Scope 编辑锁释放失败，已停留在当前 Scope'), 'error');
             return;
         }
-        showPreviewLoadingImmediate();
+        showCanvasLoadingImmediate();
         navigateEditorShell({
             scope: nextScope,
             scope_kind: null,
@@ -3457,9 +3326,7 @@
             } catch (workspaceError) {
                 console.warn('[ThemeEditor] chrome action workspace sync failed', workspaceError);
             }
-            if (typeof loadLayoutPreview === 'function') {
-                loadLayoutPreview();
-            }
+            loadCanvas();
             if (state.selectedSlot) {
                 await renderSlotInfoPanel(state.selectedSlot);
             }
@@ -3869,7 +3736,7 @@
                         summary: 'structural_conflict_reset',
                     });
                     showToast(translateUiText('冲突路径已恢复继承'), 'success');
-                    loadLayoutPreview();
+                    loadCanvas();
                 } catch (error) {
                     showToast(error?.message || translateUiText('冲突重置失败'), 'error');
                 }
@@ -3900,7 +3767,7 @@
                             summary: 'structural_conflict_rebaseline',
                         });
                         showToast(translateUiText('节点已转为本级新增，请确认位置后发布'), 'success');
-                        loadLayoutPreview();
+                        loadCanvas();
                     } catch (error) {
                         showToast(error?.message || translateUiText('重新基线化失败'), 'error');
                     }
@@ -3944,7 +3811,7 @@
                             summary: 'structural_conflict_relocate',
                         });
                         showToast(translateUiText('冲突节点已重新定位'), 'success');
-                        loadLayoutPreview();
+                        loadCanvas();
                     } catch (error) {
                         showToast(error?.message || translateUiText('重新定位失败'), 'error');
                     }
@@ -4948,101 +4815,49 @@
         return url.toString();
     }
 
-    /**
-     * Backend layout-preview URL, or frontend storefront path=layout canvas URL.
+        /**
+     * Editor canvas iframe path: clicked path wins; otherwise layout path is the route.
+     * No layout→route alias table.
      */
-    function buildLayoutPreviewUrl(overrides = {}) {
-        const currentUrl = getCurrentWindowUrl();
-        const requestedPreviewArea = (typeof overrides.preview_area === 'string' && overrides.preview_area)
-            ? overrides.preview_area
-            : (
-                (typeof overrides.editor_area === 'string' && overrides.editor_area)
-                    ? overrides.editor_area
-                    : (getEffectiveEditorArea(currentUrl.searchParams.get('preview_area') || 'frontend'))
-            );
-        const previewArea = requestedPreviewArea === 'backend' ? 'backend' : 'frontend';
-        if (previewArea !== 'backend') {
-            return buildCanvasStorefrontPreviewUrl(overrides);
+    function sanitizeStorefrontPublicRoute(route) {
+        const path = String(route || '').trim().replace(/^\/+|\/+$/g, '');
+        if (path === '') {
+            return '';
         }
-
-        const layoutType = (typeof overrides.layout_type === 'string' && overrides.layout_type)
-            ? overrides.layout_type
-            : getEffectiveLayoutType();
-        const pageType = (typeof overrides.page_type === 'string' && overrides.page_type)
-            ? overrides.page_type
-            : getEffectivePageType(layoutType || 'homepage');
-        const layoutOption = (typeof overrides.layout_option === 'string' && overrides.layout_option)
-            ? overrides.layout_option
-            : getEffectiveLayoutOption();
-        const previewStatus = (typeof overrides.status === 'string' && overrides.status)
-            ? overrides.status
-            : (state.previewStatus || 'draft');
-        const themeId = overrides.theme_id || state.themeId || 0;
-        const url = new URL(config.apiLayoutPreview || `${config.apiBase}/layout-preview`, window.location.origin);
-
-        url.searchParams.set('theme_id', String(themeId));
-        url.searchParams.set('page_type', pageType);
-        url.searchParams.set('layout_type', layoutType);
-        url.searchParams.set('layout_option', layoutOption);
-        url.searchParams.set('editor_mode', String(overrides.editor_mode || '1'));
-        url.searchParams.set('preview_mode', String(overrides.preview_mode || 'live'));
-        url.searchParams.set(
-            'interaction_mode',
-            normalizeInteractionMode(
-                Object.prototype.hasOwnProperty.call(overrides, 'interaction_mode')
-                    ? overrides.interaction_mode
-                    : (state.interactionMode || 'edit')
-            )
-        );
-        url.searchParams.set('status', previewStatus);
-        url.searchParams.set('editor_area', 'backend');
-        url.searchParams.set('preview_area', 'backend');
-        const previewLocale = getPreviewLocaleForRequest(overrides);
-        if (previewLocale) {
-            url.searchParams.set('locale', previewLocale);
+        // Reject markup leaks from broken <a href="<div class=…"> (becomes /%3cdiv%20…).
+        if (/[<>"'`\\\s?#]/.test(path) || path.includes('//')) {
+            return '';
         }
-
-        ['frontend_theme_id', 'backend_theme_id', 'version_id'].forEach((key) => {
-            const overrideValue = Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : currentUrl.searchParams.get(key);
-            if (overrideValue !== null && overrideValue !== undefined && overrideValue !== '') {
-                url.searchParams.set(key, String(overrideValue));
+        const segments = path.split('/').filter(Boolean);
+        for (let i = 0; i < segments.length; i += 1) {
+            const segment = segments[i];
+            if (segment === '.' || segment === '..') {
+                return '';
             }
-        });
-        url.searchParams.delete('theme_public_route');
-        url.searchParams.delete('weline_preview_token');
-        appendThemeLayoutRuntimeParams(url, overrides);
-        url.searchParams.set('editor_context', JSON.stringify(buildTypedEditorContext('layout', {
-            area: 'backend',
-            theme_id: themeId,
-            layout_type: layoutType,
-            layout_option: layoutOption,
-            locale: previewLocale || 'default',
-            target_type: Object.prototype.hasOwnProperty.call(overrides, 'target_type')
-                ? overrides.target_type
-                : (state.layoutIdentity?.target_type || 'global'),
-            target_id: Object.prototype.hasOwnProperty.call(overrides, 'target_id')
-                ? overrides.target_id
-                : (state.layoutIdentity?.target_id || 0),
-        })));
-
-        url.searchParams.set('_t', String(overrides._t || Date.now()));
-        return url.toString();
+            if (/%(?:00|0[1-9A-Fa-f]|1[0-9A-Fa-f]|20|7[Ff]|2[Ff]|3[CcEe]|5[Cc])/.test(segment)) {
+                return '';
+            }
+            if (!/^[A-Za-z0-9._~!$&'()*+,;=:@%-]+$/.test(segment)) {
+                return '';
+            }
+        }
+        return path;
     }
 
-    /**
-     * Editor canvas iframe path: NEVER invent a path from layout type.
-     * Use click/navigation/state route, or preview-sample reverse-resolve result only.
-     */
+    function isSafeStorefrontPublicRoute(route) {
+        const raw = String(route || '').trim().replace(/^\/+|\/+$/g, '');
+        return sanitizeStorefrontPublicRoute(raw) === raw;
+    }
+
     function resolveCanvasStorefrontPath(overrides = {}) {
-        let route = String(
-            overrides.theme_public_route
-            || overrides.preview_entity_route
-            || state.previewEntityRoute
+        let route = sanitizeStorefrontPublicRoute(
+            overrides.preview_entity_route
+            || state.canvasRoute
             || ''
-        ).replace(/^\/+|\/+$/g, '');
+        );
         if (route !== '') {
             // Preserve clicked/navigation path exactly — do not remap aliases here.
-            return route.replace(/^\/+|\/+$/g, '');
+            return route;
         }
         const layoutType = normalizeLayoutOptionValue(
             (typeof overrides.layout_type === 'string' && overrides.layout_type)
@@ -5052,8 +4867,8 @@
         if (isHomepageLayoutType(layoutType)) {
             return '';
         }
-        // Wait for preview-sample (module_name + getModuleInfo router join / slug).
-        return '';
+        // Path ↔ layout 1:1. The storefront path is the layout path.
+        return sanitizeStorefrontPublicRoute(layoutType);
     }
 
     function normalizeCanvasLocaleCode(locale) {
@@ -5214,7 +5029,6 @@
                 url.searchParams.set(key, String(overrideValue));
             }
         });
-        url.searchParams.delete('theme_public_route');
         url.searchParams.delete('weline_preview_token');
         url.searchParams.delete('page_type');
         url.searchParams.delete('layout_type');
@@ -5255,7 +5069,7 @@
     function buildCanvasUrlPreservingStorefrontPath(storefrontPath, overrides = {}) {
         const path = String(storefrontPath || '').replace(/^\/+|\/+$/g, '');
         return buildCanvasStorefrontPreviewUrl(Object.assign({}, overrides || {}, {
-            theme_public_route: path,
+            preview_entity_route: path,
         }));
     }
 
@@ -5272,12 +5086,10 @@
             return false;
         }
 
-        const publicRoute = String(
+        const publicRoute = sanitizeStorefrontPublicRoute(
             navigation.public_route
-            || navigation.theme_public_route
-            || (navigation.context && navigation.context.theme_public_route)
             || ''
-        ).replace(/^\/+|\/+$/g, '');
+        );
 
         const pageType = normalizeLayoutOptionValue(
             navigation.page_type || navigation.target_value || state.pageType || 'homepage'
@@ -5287,18 +5099,12 @@
         ) || 'default';
 
         setCurrentLayoutSelection(pageType, layoutOption);
-        // Re-apply clicked path after layout selection (fixed layouts clear sample route).
-        state.previewEntityRoute = publicRoute;
-        const slugParts = publicRoute.split('/').filter(Boolean);
-        state.previewEntitySlug = slugParts.length > 1 ? slugParts.slice(1).join('/') : '';
-        if (publicRoute !== '') {
-            state.previewSampleClaimed = true;
-        }
+        // Clicked path wins over the layout path.
+        state.canvasRoute = publicRoute;
 
         syncEditorUrlState({
             page_type: pageType,
             layout_option: layoutOption === 'default' ? null : layoutOption,
-            theme_public_route: publicRoute || null,
         });
 
         const canvasUrl = buildCanvasUrlPreservingStorefrontPath(publicRoute, {
@@ -5327,7 +5133,7 @@
      * HttpOnly weline_preview_token Cookie, and the storefront exit float.
      * Only #btnFrontendPreview / openFrontendPreview may do that.
      */
-    async function buildAuthorizedLayoutPreviewUrl(overrides = {}) {
+    async function buildAuthorizedCanvasUrl(overrides = {}) {
         // Canvas / #btnPreview: real storefront path + editor markers (path=layout).
         const rawUrl = buildCanvasStorefrontPreviewUrl(overrides);
         const url = new URL(rawUrl, window.location.origin);
@@ -5339,21 +5145,21 @@
         return String(config.apiThemePreviewGateway || '/theme/frontend/theme-preview/gateway');
     }
 
-    async function setLayoutPreviewSource(overrides = {}) {
+    async function setCanvasSource(overrides = {}) {
         if (!elements.previewFrame || !state.themeId) {
             return '';
         }
-        const navigationSequence = ++state.previewNavigationSequence;
+        const navigationSequence = ++state.canvasNavigationSequence;
         try {
-            // Canvas loads the real storefront sample route (router → controller → layout).
+            // Canvas loads the real storefront path (path = layout; homepage is /).
             const previewUrl = buildCanvasStorefrontPreviewUrl(overrides);
-            if (navigationSequence !== state.previewNavigationSequence || !elements.previewFrame) {
+            if (navigationSequence !== state.canvasNavigationSequence || !elements.previewFrame) {
                 return '';
             }
             elements.previewFrame.src = previewUrl;
             return previewUrl;
         } catch (error) {
-            if (navigationSequence === state.previewNavigationSequence) {
+            if (navigationSequence === state.canvasNavigationSequence) {
                 elements.previewLoading?.classList.add('hidden');
                 showToast(error?.message || translateUiText('预览加载失败'), 'error');
             }
@@ -5476,8 +5282,6 @@
         config.apiApplyRequiredDefaults = container.dataset.apiApplyRequiredDefaults || `${config.apiBase}/apply-required-defaults`;
         config.apiInitSlotDefaults = container.dataset.apiInitSlotDefaults || `${config.apiBase}/init-slot-defaults`;
         config.apiPublish = container.dataset.apiPublish || `${config.apiBase}/publish`;
-        config.apiPreview = container.dataset.apiPreview || `${config.apiBase}/preview`;
-        config.apiRenderWidget = container.dataset.apiRenderWidget || `${config.apiBase}/render-widget`;
         config.apiWidgetPreview = container.dataset.apiWidgetPreview || `${config.apiBase}/widget-preview`;
         config.apiCompileLayout = container.dataset.apiCompileLayout || `${config.apiBase}/compile-layout`;
         config.apiLayoutOptions = container.dataset.apiLayoutOptions || `${config.apiBase}/layout-options`;
@@ -5492,15 +5296,11 @@
         config.apiThemeAiPrepareRefine = container.dataset.apiThemeAiPrepareRefine || '/theme/backend/ai/prepare-refine';
         config.apiVirtualThemeAiCatalog = container.dataset.apiVirtualThemeAiCatalog || '/theme/backend/virtual-theme/ai-catalog';
         config.apiVirtualThemeCreateDraft = container.dataset.apiVirtualThemeCreateDraft || '/theme/backend/virtual-theme/create-draft';
-        config.apiVirtualThemeBlockAction = container.dataset.apiVirtualThemeBlockAction || '/theme/backend/virtual-theme/block-action';
         config.apiVirtualThemeSource = container.dataset.apiVirtualThemeSource || '/theme/backend/virtual-theme/source';
-        config.apiVirtualThemeSaveSource = container.dataset.apiVirtualThemeSaveSource || '/theme/backend/virtual-theme/save-source';
         config.apiVirtualThemePublishVersion = container.dataset.apiVirtualThemePublishVersion || '/theme/backend/virtual-theme/publish-version';
-        config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
         config.apiThemePreviewGateway = container.dataset.apiThemePreviewGateway
             || '/theme/frontend/theme-preview/gateway';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
-        config.apiSaveCompiledLayout = container.dataset.apiSaveCompiledLayout || `${config.apiBase}/save-compiled-layout`;
         config.defaultLocale = container.dataset.defaultLocale || config.defaultLocale || 'zh_Hans_CN';
 
         // 版本控制 API 端点
@@ -5513,25 +5313,16 @@
         config.apiFactoryReset = container.dataset.apiFactoryReset || `${config.apiBase}/factory-reset`;
         config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
-        config.apiRenameVersion = container.dataset.apiRenameVersion || `${config.apiBase}/rename-version`;
 
         // 前端预览 API 端点
         config.apiStartPreview = container.dataset.apiStartPreview || `${config.apiBase}/start-preview`;
-        config.apiPreviewSample = container.dataset.apiPreviewSample || `${config.apiBase}/preview-sample`;
-        config.apiExitPreview = container.dataset.apiExitPreview || `${config.apiBase}/exit-preview`;
-        config.apiPublishAndExit = container.dataset.apiPublishAndExit || `${config.apiBase}/publish-and-exit`;
         config.apiCheckLock = container.dataset.apiCheckLock || `${config.apiBase}/check-lock`;
         config.apiReleaseLock = container.dataset.apiReleaseLock || `${config.apiBase}/release-lock`;
         config.apiUpdateActivity = container.dataset.apiUpdateActivity || `${config.apiBase}/update-activity`;
-        config.apiRequestTakeover = container.dataset.apiRequestTakeover || `${config.apiBase}/request-takeover`;
-        config.apiCheckTakeoverRequest = container.dataset.apiCheckTakeoverRequest || `${config.apiBase}/check-takeover-request`;
-        config.apiForceTakeover = container.dataset.apiForceTakeover || `${config.apiBase}/force-takeover`;
         config.apiScopedWorkspace = container.dataset.apiScopedWorkspace || `${config.apiBase}/scoped-workspace`;
         config.apiPublishScopedWorkspace = container.dataset.apiPublishScopedWorkspace || `${config.apiBase}/publish-scoped-workspace`;
         config.apiPublishScopedReleaseBatch = container.dataset.apiPublishScopedReleaseBatch
             || `${config.apiBase}/publish-scoped-release-batch`;
-        config.apiScopedReleaseBatch = container.dataset.apiScopedReleaseBatch
-            || `${config.apiBase}/scoped-release-batch`;
         config.apiRetryScopedReleaseBatchCache = container.dataset.apiRetryScopedReleaseBatchCache
             || `${config.apiBase}/retry-scoped-release-batch-cache`;
         config.apiRollbackScopedReleaseBatch = container.dataset.apiRollbackScopedReleaseBatch
@@ -5541,9 +5332,8 @@
             || '';
 
         // Preview-related endpoints and call sites (baseline for TDD)
-        // - apiRenderWidget: used by renderWidgetPreview()/preview render flows
-        // - apiWidgetPreview: legacy per-widget preview fetches (to be removed)
-        // - apiLayoutPreview: used by refreshPreviewWidgets() and loadLayoutPreview()
+        // - apiWidgetPreview: library / modal widget HTML thumbnails
+        // - canvas iframe: buildCanvasStorefrontPreviewUrl (real storefront path)
         // - apiCompileLayout: used by fetchLayoutSlots()
         // - apiSaveWidget/save-widget-config: save flows that should return preview_html
 
@@ -5578,8 +5368,6 @@
             scopeSelect: document.getElementById('scopeSelect'),
             pageTypeSelect: document.getElementById('pageTypeSelect'),
             layoutOptionSelect: document.getElementById('layoutOptionSelect'),
-            previewSampleField: document.getElementById('previewSampleField'),
-            previewSampleSelect: document.getElementById('previewSampleSelect'),
             editorAreaSelect: document.getElementById('editorAreaSelect'),
             editorLangSwitcher: document.getElementById('editorLangSwitcher'),
             scopeConflictPanel: document.getElementById('themeScopeConflictPanel'),
@@ -5639,25 +5427,13 @@
             container.dataset.layoutOption || getCurrentWindowParam('layout_option') || 'default'
         );
         renderLayoutOptionSelect(state.layoutType, state.layoutOption);
-        state.previewKind = resolvePreviewKindForLayout(state.layoutType);
-        const initialPublicRoute = String(
-            getCurrentWindowParam('theme_public_route')
-            || container.dataset.themePublicRoute
-            || ''
-        ).replace(/^\/+|\/+$/g, '');
-        if (initialPublicRoute) {
-            state.previewEntityRoute = initialPublicRoute;
-            const slugParts = initialPublicRoute.split('/');
-            state.previewEntitySlug = slugParts.length > 1 ? slugParts.slice(1).join('/') : '';
-            state.previewSampleClaimed = true;
-        }
+        syncCanvasRouteFromLayout(state.layoutType);
         // Drop live storefront preview token from editor shell URL (pollutes canvas identity).
         if (getCurrentWindowParam('weline_preview_token')) {
             syncEditorUrlState({
                 theme_id: state.themeId,
                 page_type: state.pageType,
                 layout_option: state.layoutOption || 'default',
-                theme_public_route: state.previewEntityRoute || null,
             });
         }
         if (state.legacyScopeReadonly) {
@@ -5686,13 +5462,7 @@
         // 部件库与预览并行：优先发起部件列表请求，不再等待 iframe load
         deferWidgetLibraryLoad();
         if (state.themeId) {
-            Promise.resolve(refreshPreviewSample({
-                layout_type: state.layoutType,
-                layout_option: state.layoutOption,
-                preferred_slug: state.previewEntitySlug,
-            })).finally(() => {
-                loadLayoutPreview();
-            });
+            loadCanvas();
         }
 
         // 初始化拖拽
@@ -5726,7 +5496,6 @@
             apiDeleteWidget: config.apiDeleteWidget,
             apiWidgets: config.apiWidgets,
             apiPublish: config.apiPublish,
-            apiPreview: config.apiPreview,
             themeId: state.themeId,
             pageType: state.pageType,
             layoutType: state.layoutType
@@ -6023,7 +5792,7 @@
                         showToast(error?.message || translateUiText('当前修改保存失败，已停留在原主题'), 'error');
                         return;
                     }
-                    showPreviewLoadingImmediate();
+                    showCanvasLoadingImmediate();
                     state.themeId = parseInt(themeId, 10) || 0;
                     try {
                         await queueScopedChanges('theme_binding', [{ op: 'set', path: '/theme_id', value: state.themeId }], {
@@ -6043,7 +5812,7 @@
                         layout_option: state.layoutOption || 'default',
                         preview_area: state.editorArea || 'frontend',
                     });
-                    loadLayoutPreview();
+                    loadCanvas();
                     loadLayoutConfig({ silent: true });
                     loadVersions();
                     reloadWidgetLibrary({ silent: true });
@@ -6055,7 +5824,7 @@
                 const previousThemeId = state.themeId;
                 try {
                     await flushPendingEditorMutations();
-                    showPreviewLoadingImmediate();
+                    showCanvasLoadingImmediate();
                     const workspace = await queueScopedChanges('theme_binding', [{ op: 'inherit', path: '/theme_id' }], {
                         summary: 'theme_binding_inherit',
                     });
@@ -6071,7 +5840,7 @@
                         layout_option: state.layoutOption || 'default',
                         preview_area: state.editorArea || 'frontend',
                     });
-                    loadLayoutPreview();
+                    loadCanvas();
                     loadLayoutConfig({ silent: true });
                     loadVersions();
                     reloadWidgetLibrary({ silent: true });
@@ -6107,7 +5876,7 @@
                     showToast(translateUiText('旧编辑区域锁释放失败，已停留在原编辑区域'), 'error');
                     return;
                 }
-                showPreviewLoadingImmediate();
+                showCanvasLoadingImmediate();
                 navigateEditorShell({
                     editor_area: area,
                     preview_area: area,
@@ -6135,12 +5904,11 @@
                         showToast(error?.message || translateUiText('当前修改保存失败，已停留在原布局类型'), 'error');
                         return;
                     }
-                    showPreviewLoadingImmediate();
+                    showCanvasLoadingImmediate();
                     setCurrentLayoutSelection(pageType, '');
                     initWidgetLibraryTabs();
                     try {
                         await refreshLayoutOptions({ layout_type: pageType, layout_option: '', silent: true });
-                        await refreshPreviewSample({ layout_type: pageType, layout_option: state.layoutOption || 'default' });
                     } catch (error) {
                         console.error('[ThemeEditor] refresh layout options error:', error);
                         setCurrentLayoutSelection(previousPageType, previousLayoutOption);
@@ -6148,23 +5916,13 @@
                         showToast(error?.message || translateUiText('布局类型切换失败，已恢复原布局'), 'error');
                         return;
                     }
-                    if (!isHomepageLayoutType(pageType)
-                        && pageType !== 'promotion'
-                        && !(state.previewSampleClaimed && state.previewEntityRoute)
-                    ) {
-                        showToast(
-                            translateUiText('该布局尚未登记店面入口（preview_sample / module router），暂不可预览'),
-                            'warning'
-                        );
-                    }
                     syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: pageType,
                         layout_option: state.layoutOption || 'default',
-                        theme_public_route: state.previewEntityRoute || null,
-                        version_id: null,
+                                version_id: null,
                     });
-                    loadLayoutPreview();
+                    loadCanvas();
                     loadLayoutConfig({ silent: true });
                     loadVersions();
                     reloadWidgetLibrary({ silent: true });
@@ -6193,19 +5951,14 @@
                     showToast(error?.message || translateUiText('当前修改保存失败，已停留在原布局选项'), 'error');
                     return;
                 }
-                showPreviewLoadingImmediate();
+                showCanvasLoadingImmediate();
                 state.layoutOption = layoutOption;
                 renderLayoutOptionSelect(state.layoutType, state.layoutOption);
-                await refreshPreviewSample({
-                    layout_type: state.layoutType,
-                    layout_option: state.layoutOption,
-                });
                 syncEditorUrlState({
                     theme_id: state.themeId,
                     page_type: getCurrentPageType(),
                     layout_option: state.layoutOption,
-                    theme_public_route: state.previewEntityRoute || null,
-                    version_id: null,
+                        version_id: null,
                 });
                 try {
                     await saveLayoutSelection();
@@ -6216,31 +5969,9 @@
                     showToast(error.message || translateUiText('布局选项切换失败，已恢复原布局'), 'error');
                     return;
                 }
-                loadLayoutPreview();
+                loadCanvas();
                 loadLayoutConfig({ silent: true });
                 refreshDefaultInjectionApplications({ render: state.widgetLibraryTab === 'applications', silent: true });
-            });
-        }
-
-        if (elements.previewSampleSelect) {
-            elements.previewSampleSelect.addEventListener('change', async function() {
-                const route = String(this.value || '').replace(/^\/+|\/+$/g, '');
-                if (!route) {
-                    return;
-                }
-                state.previewEntityRoute = route;
-                const slugParts = route.split('/');
-                state.previewEntitySlug = slugParts.length > 1 ? slugParts.slice(1).join('/') : '';
-                state.previewSampleClaimed = true;
-                syncEditorUrlState({
-                    theme_id: state.themeId,
-                    page_type: getCurrentPageType(),
-                    layout_option: state.layoutOption || 'default',
-                    theme_public_route: route,
-                });
-                // Same layout workspace — only storefront sample URL changes.
-                showToast(translateUiText('已切换取样路由（布局草稿不变）') + ': /' + route, 'info');
-                // Do not reload canvas with theme_public_route; start-preview uses the route.
             });
         }
 
@@ -6411,7 +6142,7 @@
             }
 
             // 点击空白区域时，取消选中 slot 并恢复部件顺序
-            const slotElement = e.target.closest('.container-slot, [data-wslot], .preview-area');
+            const slotElement = e.target.closest('[data-wslot], .preview-area');
             if (!slotElement && !e.target.closest('.widget-item')) {
                 clearSlotSelection();
                 // 同时取消区域选中
@@ -6651,7 +6382,7 @@
                 if (!layoutId) return;
                 // 尝试从结构面板获取 slotId
                 const structureItem = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
-                const slotId = structureItem?.closest('[data-slot]')?.dataset.slot || undefined;
+                const slotId = structureItem?.closest('[data-wslot]')?.dataset.wslot || undefined;
                 handleWidgetDelete(layoutId, slotId);
             }
         });
@@ -6813,7 +6544,7 @@
         window.history.replaceState({}, '', url.toString());
     }
 
-    function showPreviewLoadingImmediate() {
+    function showCanvasLoadingImmediate() {
         if (elements.previewLoading) {
             elements.previewLoading.classList.remove('hidden');
         }
@@ -7898,7 +7629,7 @@
         } catch (error) {
             console.warn('[ThemeEditor] Preview exit gateway failed:', error);
         }
-        await setLayoutPreviewSource({ _t: Date.now() });
+        await setCanvasSource({ _t: Date.now() });
         if (isPreviewInteractionMode()) {
             setInteractionMode('edit', { syncUrl: false });
         }
@@ -7948,7 +7679,6 @@
 
         if (isPreviewInteractionMode() && [
             'widget-selected',
-            'slot-clicked',
             'drop-candidate',
             'drop-candidate-clear',
             'widget-dropped',
@@ -7965,14 +7695,6 @@
                 }
                 // 预览页面中选中了部件
                 handlePreviewWidgetSelected(data);
-                break;
-            case 'slot-clicked':
-                // 部件模式只触发部件，忽略旧版插槽点击消息。
-                if (normalizeSelectionTarget(state.selectionTarget) === 'widget') {
-                    break;
-                }
-                // 预览页面中点击了插槽（旧版）
-                handlePreviewSlotClicked(data);
                 break;
             case 'drop-candidate':
                 // iframe 只报告当前指针候选；最终接纳、容量与保存由父编辑器统一处理。
@@ -8085,7 +7807,7 @@
         }
 
         await loadScopedWorkspace('layout');
-        loadLayoutPreview();
+        loadCanvas();
         showToast(result.message || translateUiText('已初始化插槽默认部件'), 'success');
         if (state.widgetLibraryTab === 'applications') {
             await refreshDefaultInjectionApplications({ render: true, silent: true });
@@ -8155,12 +7877,12 @@
         }
 
         const areaCode = areaElement.dataset.area || '';
-        const slotId = areaElement.dataset.slot || areaElement.dataset.wslot || areaCode;
+        const slotId = areaElement.dataset.wslot || areaCode;
         if (!slotId) {
             return null;
         }
 
-        const slotName = areaElement.dataset.slotName
+        const slotName = areaElement.dataset.wslotName
             || areaElement.querySelector('.slot-placeholder-large .placeholder-title')?.textContent?.trim()
             || areaElement.querySelector('.area-label')?.textContent?.trim()
             || slotId;
@@ -8168,13 +7890,13 @@
         return normalizeSelectedSlot({
             id: slotId,
             name: slotName,
-            accept: areaElement.dataset.slotAccept || areaElement.dataset.accept || areaCode || '*',
-            reject: areaElement.dataset.slotReject || areaElement.dataset.reject || '',
+            accept: areaElement.dataset.wslotAccept || areaElement.dataset.accept || areaCode || '*',
+            reject: areaElement.dataset.wslotReject || areaElement.dataset.reject || '',
             area: areaCode || inferAreaFromSlotId(slotId),
-            exclusive: areaElement.dataset.slotExclusive === 'true' || areaElement.dataset.exclusive === 'true',
-            multiple: areaElement.dataset.slotMultiple !== 'false' && areaElement.dataset.multiple !== 'false',
-            max: areaElement.dataset.slotMax || areaElement.dataset.max || '',
-            min: areaElement.dataset.slotMin || areaElement.dataset.min || '',
+            exclusive: areaElement.dataset.wslotExclusive === 'true',
+            multiple: areaElement.dataset.wslotMultiple !== 'false',
+            max: areaElement.dataset.wslotMax || '',
+            min: areaElement.dataset.wslotMin || '',
             source: 'structure',
         });
     }
@@ -8277,7 +7999,7 @@
         `;
 
         // 查找插槽内的部件
-        // 支持多种选择器：area-widgets、container-slot、data-wslot
+        // 框架插槽选择器：data-wslot + 结构视图 area-widgets
         const widgetsInSlot = findWidgetsInSlot(slotId);
 
         if (widgetsInSlot.length > 0) {
@@ -8313,19 +8035,11 @@
             return widgets;
         }
 
-        // 尝试多种选择器查找部件
-        // 1. 查找 widget-wrapper 容器内的部件（SlotRendererService 渲染的）
-        // 2. 查找原有标记的部件元素
+        // iframe 店面画布：框架插槽仅 data-wslot；身份优先 data-node-uid（非 hex 仍认 data-layout-id）
         const selectors = [
             `${dataAttributeSelector('data-wslot', slotId)} .weline-template-widget[data-template-ref]`,
             `${dataAttributeSelector('data-wslot', slotId)} .widget-wrapper[data-node-uid]`,
-            // non-hex legacy identity: covered by WIDGET_IDENTITY_MATCH ([data-layout-id])
             `${dataAttributeSelector('data-wslot', slotId)} ${WIDGET_IDENTITY_MATCH}`,
-            `.area-widgets${dataAttributeSelector('data-area', slotId)} .preview-widget-item`,
-            `.area-widgets${dataAttributeSelector('data-area', slotId)} ${WIDGET_IDENTITY_MATCH}`,
-            `.${cssIdentifier(slotId)}-slot-widgets .preview-widget-item`,
-            `.container-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
-            `.area-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
         ];
 
         for (const selector of selectors) {
@@ -8390,11 +8104,6 @@
             ? ''
             : `<span class="widget-code-k">${escapeHtml(translateUiText('code'))}</span>`;
         return `${label}<code class="widget-code" title="${escapeHtml(title)}">${escapeHtml(code)}</code>`;
-    }
-
-    /** @deprecated alias — prefer buildWidgetCodeDisplayHtml */
-    function buildWidgetCodeMetaHtml(widgetCode, widgetModule = '') {
-        return buildWidgetCodeDisplayHtml(widgetCode, { widgetModule, showLabel: false });
     }
 
     function buildWidgetConfigMetaInnerHtml(widgetName, widgetCode, widgetDesc, widgetModule = '') {
@@ -8768,7 +8477,7 @@
         }
         fetchLayoutSlots();
         if (options.refreshPreview !== false) {
-            loadLayoutPreview();
+            loadCanvas();
         }
     }
 
@@ -8938,6 +8647,15 @@
                 const widgetData = result.data;
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
+                const paramKeys = params && typeof params === 'object' ? Object.keys(params) : [];
+                // 无 schema 为空态，不是加载失败（BinQuery 也不应再因 success=false 刷 ERR）
+                if (widgetData.has_params === false || paramKeys.length === 0) {
+                    configBody.innerHTML = `<div class="w-theme-editor-empty-copy">
+                    <span class="w-theme-editor-empty-icon">${iconSvg('settings')}</span>
+                    <small>该部件无可配置项</small>
+                </div>`;
+                    return;
+                }
 
                 // 生成配置表单
                 const formHtml = await generateWidgetConfigForm(identityValue, params, widgetConfig);
@@ -8967,6 +8685,14 @@
                 </div>`;
             }
         } catch (err) {
+            const softNoParams = /没有配置项|no configuration items/i.test(String(err?.message || ''));
+            if (softNoParams) {
+                configBody.innerHTML = `<div class="w-theme-editor-empty-copy">
+                    <span class="w-theme-editor-empty-icon">${iconSvg('settings')}</span>
+                    <small>该部件无可配置项</small>
+                </div>`;
+                return;
+            }
             console.error('Load widget config error:', err);
             configBody.innerHTML = `<div class="w-theme-editor-empty-copy" data-tone="danger">
                 <small>加载配置失败</small>
@@ -10035,7 +9761,7 @@
                     if (iframe && iframe.contentDocument) {
                         const wEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                         if (wEl) {
-                            slotIdFb = wEl.getAttribute('data-slot-id') || wEl.closest('[data-wslot]')?.getAttribute('data-wslot') || wEl.closest('[data-slot]')?.getAttribute('data-slot') || '';
+                            slotIdFb = wEl.getAttribute('data-slot-id') || wEl.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
                             if (wEl.closest('header, [data-wslot-position="header"], .site-header')) areaFb = 'header';
                             else if (wEl.closest('footer, [data-wslot-position="footer"], .site-footer')) areaFb = 'footer';
                         }
@@ -10062,7 +9788,7 @@
                         if (iframe && iframe.contentDocument) {
                             const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                             if (widgetEl) {
-                                const slot = widgetEl.closest('[data-wslot], [data-slot]');
+                                const slot = widgetEl.closest('[data-wslot]');
 
                                 // 移除部件元素；不回填「插槽原本为空」空态提示
                                 widgetEl.remove();
@@ -10738,9 +10464,7 @@
         }
 
         return iframeDoc.querySelector([
-            dataAttributeSelector('data-wslot', slotId),
-            dataAttributeSelector('data-slot', slotId),
-            dataAttributeSelector('data-slot-id', slotId)
+            dataAttributeSelector('data-wslot', slotId)
         ].join(', '));
     }
 
@@ -10761,7 +10485,6 @@
             id: slotId,
             name: firstNonEmptyValue(
                 readSlotAttr(slotElement, 'data-wslot-name'),
-                readSlotAttr(slotElement, 'data-slot-name'),
                 readSlotAttr(slotElement, 'data-name'),
                 catalogSlot.name,
                 slotId
@@ -10871,10 +10594,10 @@
             return false;
         }
 
-        const nestedSlot = target.closest('[data-wslot], [data-slot], .content-slot');
+        const nestedSlot = target.closest('[data-wslot]');
         if (nestedSlot && nestedSlot.closest(`${WIDGET_WRAPPER_MATCH}`) === widgetWrapper) {
             // 点在子槽上时交给 slot 选择；点在模板部件本体上继续
-            if (target.closest('[data-wslot], [data-slot]') !== widgetWrapper && nestedSlot.contains(widgetWrapper) === false) {
+            if (target.closest('[data-wslot]') !== widgetWrapper && nestedSlot.contains(widgetWrapper) === false) {
                 return false;
             }
         }
@@ -10888,8 +10611,7 @@
             widgetType: widgetWrapper.dataset.widgetType || widgetWrapper.getAttribute('data-widget-type') || '',
             widgetName: widgetWrapper.dataset.widgetName || widgetWrapper.getAttribute('data-widget-name') || '',
             config: widgetWrapper.dataset.config || widgetWrapper.getAttribute('data-config') || '{}',
-            slotId: widgetWrapper.closest('[data-wslot], [data-slot]')?.getAttribute('data-wslot')
-                || widgetWrapper.closest('[data-wslot], [data-slot]')?.getAttribute('data-slot')
+            slotId: widgetWrapper.closest('[data-wslot]')?.getAttribute('data-wslot')
                 || ''
         });
         return true;
@@ -10911,13 +10633,42 @@
         state.selectedSlot = null;
         openConfigPanelForWidgetSelection();
         setConfigMode('widget');
+        // 先给即时反馈并启动配置请求，再做选中高亮 DOM（避免 Mutation 风暴占满微任务导致「点了没反应」）。
+        showWidgetConfigLoadingState(widgetElement);
+        const loadPromise = loadWidgetConfig(widgetElement);
         markPreviewWidgetSelected(
             resolveDomWidgetIdentity(widgetElement).layoutId
             || widgetElement?.dataset?.templateRef
             || data.templateRef
             || ''
         );
-        loadWidgetConfig(widgetElement);
+        return loadPromise;
+    }
+
+    function showWidgetConfigLoadingState(widgetElement) {
+        if (!elements.configContent) {
+            return;
+        }
+        const code = String(
+            widgetElement?.dataset?.widgetCode
+            || widgetElement?.getAttribute?.('data-widget-code')
+            || ''
+        ).trim();
+        const name = String(
+            widgetElement?.dataset?.widgetName
+            || widgetElement?.getAttribute?.('data-widget-name')
+            || code
+            || translateUiText('部件')
+        ).trim();
+        elements.configContent.innerHTML = `
+            <div class="widget-config-loading w-theme-editor-loading-state" data-widget-config-loading="1">
+                <span class="w-spinner" role="status"><span class="w-visually-hidden">${escapeHtml(translateUiText('加载中...'))}</span></span>
+                <p class="widget-list-loading-text">${escapeHtml(translateUiText('正在加载配置…'))}${code ? ' · ' + escapeHtml(name) : ''}</p>
+            </div>
+        `;
+        if (elements.configPanelTitle) {
+            elements.configPanelTitle.textContent = translateUiText('部件配置');
+        }
     }
 
     /**
@@ -10932,10 +10683,9 @@
         const templateRef = widgetElement.dataset.templateRef || widgetElement.getAttribute('data-template-ref') || '';
         if (!templateRef) return null;
 
-        const slotEl = widgetElement.closest('[data-wslot], [data-slot]');
+        const slotEl = widgetElement.closest('[data-wslot]');
         const slotId = widgetElement.dataset.slotId
             || slotEl?.getAttribute('data-wslot')
-            || slotEl?.getAttribute('data-slot')
             || '';
         const area = slotEl?.getAttribute('data-wslot-position')
             || (slotEl?.closest('header') ? 'header' : (slotEl?.closest('footer') ? 'footer' : 'content'));
@@ -10971,20 +10721,6 @@
         return domKey || null;
     }
 
-    /**
-     * 处理预览页面中点击插槽
-     */
-    function handlePreviewSlotClicked(data) {
-        handleSlotSelected({
-            id: data.slot || '',
-            name: data.name || data.slot || '',
-            accept: data.accept ?? '',
-            reject: data.reject || '',
-            area: data.area || data.position || '',
-            exclusive: data.exclusive === true || data.exclusive === 'true',
-            multiple: data.multiple !== false && data.multiple !== 'false',
-        });
-    }
 
     /**
      * 高亮可接受的部件并排序
@@ -11664,9 +11400,19 @@
         counts.applications = state.defaultInjectionLib?.total || state.defaultInjectionLib?.items?.length || 0;
         state.widgetLibraryTabCounts = counts;
 
+        const lib = getWidgetLibState();
+        const widgetsLoading = state.widgetLibraryRenderMode !== 'applications'
+            && !!lib.loading
+            && !elements.widgetList?.querySelector('.widget-item');
+        const appsLoading = state.widgetLibraryRenderMode === 'applications'
+            && !!state.defaultInjectionLib?.loading
+            && !(state.defaultInjectionLib?.items?.length);
+
         elements.widgetLibraryTabs.querySelectorAll('[data-widget-library-tab-count]').forEach(el => {
             const tab = el.getAttribute('data-widget-library-tab-count') || 'general';
-            el.textContent = String(counts[tab] || 0);
+            const loading = tab === 'applications' ? appsLoading : widgetsLoading;
+            el.classList.toggle('is-loading', loading);
+            el.textContent = loading ? '…' : String(counts[tab] || 0);
         });
 
         const appsTab = elements.widgetLibraryTabs.querySelector('[data-widget-library-tab="applications"]');
@@ -11740,13 +11486,17 @@
     }
 
     /**
-     * 预加载部件库：编辑器初始化后立即与预览 iframe 并行拉取，打开右侧面板时列表通常已就绪。
+     * 预加载部件库：编辑器 init 同步立刻发请求（勿只靠 queueMicrotask）。
+     * MutationObserver 风暴会占满微任务队列，导致 microtask/setTimeout 迟迟跑不到，
+     * 右侧一直 Loading 且 Network 里根本没有 widgets 请求。
      * iframe load 与短兜底定时器仅作二次保障。
      */
     function deferWidgetLibraryLoad() {
         if (!state.themeId) {
             return;
         }
+        initWidgetLibraryOnce();
+        prefetchWidgetsCatalog();
         queueMicrotask(function () {
             initWidgetLibraryOnce();
             prefetchWidgetsCatalog();
@@ -12129,7 +11879,7 @@
 
         if (slotId && widgetCode) {
             const slotEl = iframeDoc.querySelector(
-                `[data-wslot="${cssIdentifier(slotId)}"], [data-slot="${cssIdentifier(slotId)}"]`
+                `[data-wslot="${cssIdentifier(slotId)}"]`
             );
             if (slotEl) {
                 return slotEl.querySelector(
@@ -12562,8 +12312,8 @@
                 render: state.widgetLibraryTab === 'applications',
                 silent: true,
             });
-            if (Number(result.applied || 0) > 0 && typeof loadLayoutPreview === 'function') {
-                loadLayoutPreview();
+            if (Number(result.applied || 0) > 0 ) {
+                loadCanvas();
             }
         } finally {
             defaults.reconciling = false;
@@ -12608,8 +12358,8 @@
                 silent: true,
             });
             const applied = Number(result?.applied || 0);
-            if (applied > 0 && typeof loadLayoutPreview === 'function') {
-                loadLayoutPreview();
+            if (applied > 0 ) {
+                loadCanvas();
             }
             if (applied > 0) {
                 showToast(translateUiText('已安装默认部件') + ' (' + applied + ')', 'success');
@@ -12782,12 +12532,14 @@
             listEl.innerHTML = '<div class="widget-list-loading" id="widgetListLoading">'
                 + '<span class="w-spinner" role="status"><span class="w-visually-hidden">' + escapeHtml(translateUiText('加载中...')) + '</span></span>'
                 + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('部件库加载中...')) + '</span></div>';
+            updateWidgetLibraryTabCounts();
         } else if (!lib.hasMore || lib.slot) {
             return;
         }
         const loadGeneration = lib.loadGeneration || 0;
         lib.loading = true;
         state.widgetLibraryRenderMode = 'widgets';
+        updateWidgetLibraryTabCounts();
         try {
             const result = await apiJson(buildWidgetLibUrl(lib));
             if (loadGeneration !== (lib.loadGeneration || 0)) {
@@ -12837,12 +12589,13 @@
                 const loadingEl = document.getElementById('widgetListLoading');
                 if (loadingEl) {
                     loadingEl.innerHTML = '<span class="widget-list-loading-text">'
-                        + escapeHtml(translateUiText('当前主题暂无可用部件')) + '</span>';
+                        + escapeHtml(translateUiText('部件库加载失败，请稍后重试')) + '</span>';
                 }
             }
         } finally {
             if (loadGeneration === (lib.loadGeneration || 0)) {
                 lib.loading = false;
+                updateWidgetLibraryTabCounts();
             }
         }
     }
@@ -13501,10 +13254,7 @@
                     await saveConfigFromModal(form, widgetMeta);
                 });
 
-                // T012: 移除实时预览 API 调用，只在保存时刷新预览
-                // 注：不再绑定 change/input 事件触发 updateModalPreview
-
-                // 绑定颜色选择器同步（仅同步UI，不触发预览请求）
+                // 绑定颜色选择器同步（仅同步 UI，保存后再刷预览）
                 form.querySelectorAll('.w-theme-editor-color-input').forEach(colorPicker => {
                     colorPicker.addEventListener('input', function() {
                         const textInput = this.parentElement.querySelector('input[type="text"]');
@@ -13526,17 +13276,6 @@
         }
     }
 
-    /**
-     * 更新模态框中的实时预览
-     *
-     * @deprecated T012: 实时预览已移除，改为保存后刷新。
-     *             此函数保留但不再被调用，预览通过 saveConfigFromModal 返回的 preview_html 更新。
-     */
-    async function updateModalPreview(form, widgetMeta) {
-        // T012: 此函数已弃用，不再执行实时 API 调用
-        // 保留函数签名以防止外部调用报错
-        console.warn('[ThemeEditor] updateModalPreview is deprecated. Preview updates only on save.');
-    }
 
     /**
      * 保存模态框配置
@@ -13562,7 +13301,7 @@
 
             showToast('配置已保存', 'success');
 
-            // T012: 使用返回的 preview_html 更新预览，不再触发 layout-preview 请求
+            // 使用返回的 preview_html 更新预览，不重载画布 iframe
             if (result.preview_html) {
                 const previewBox = document.getElementById('modalWidgetPreview');
                 if (previewBox) {
@@ -13642,9 +13381,7 @@
             return true;
         }
 
-        if (typeof loadLayoutPreview === 'function') {
-            loadLayoutPreview();
-        }
+        loadCanvas();
         return false;
     }
 
@@ -13654,7 +13391,7 @@
         if (!iframe) {
             console.warn('[ThemeEditor] iframe not found; skip local preview update');
             if (isNewWidget) {
-                loadLayoutPreview();
+                loadCanvas();
             }
             return;
         }
@@ -13676,7 +13413,7 @@
                     }
                     console.warn('[ThemeEditor] iframe not accessible after retries; skip full preview reload');
                     if (isNewWidget) {
-                        loadLayoutPreview();
+                        loadCanvas();
                     }
                     return;
                 }
@@ -13715,7 +13452,6 @@
                         // 尝试多种方式查找插槽
                         const safeSlotId = cssIdentifier(slotId);
                         slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
-                                 iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId)) ||
                                  iframe.contentDocument.querySelector(`.slot-${safeSlotId}`) ||
                                  iframe.contentDocument.querySelector(`#slot-${safeSlotId}`);
                     }
@@ -13753,7 +13489,7 @@
                             // Exclusive replace owns this slot's widgets only. Never wipe
                             // nested [data-wslot] shells if the DOM was mis-nested.
                             Array.from(slotEl.children).forEach((child) => {
-                                if (child.matches?.('[data-wslot], [data-slot], [data-slot-id]')) {
+                                if (child.matches?.('[data-wslot]')) {
                                     return;
                                 }
                                 child.remove();
@@ -13788,7 +13524,7 @@
                             return;
                         }
                         console.log(`[ThemeEditor] New widget ${layoutId} slot not found, triggering layout refresh`);
-                        loadLayoutPreview();
+                        loadCanvas();
                     }
                 } else {
                     // Existing widget config save must stay local; full iframe reload flashes the whole page.
@@ -13806,7 +13542,7 @@
 
                 console.warn('[ThemeEditor] iframe update failed after retries; skip full preview reload');
                 if (isNewWidget) {
-                    loadLayoutPreview();
+                    loadCanvas();
                 }
             }
         }
@@ -13878,10 +13614,8 @@
             area.addEventListener('drop', handleDrop);
         });
 
-        // 容器内插槽 - 绑定拖放事件（支持新旧两种属性标记）
-        // 旧版: .container-slot, data-slot
-        // 新版: [data-wslot]
-        document.querySelectorAll('.container-slot, .slot-widgets, [data-wslot]').forEach(slot => {
+        // 容器内插槽：框架约定仅 [data-wslot]
+        document.querySelectorAll('[data-wslot]').forEach(slot => {
             slot.addEventListener('dragover', handleSlotDragOver);
             slot.addEventListener('dragleave', handleSlotDragLeave);
             slot.addEventListener('drop', handleSlotDrop);
@@ -13898,10 +13632,10 @@
     function getSlotInfo(slotEl) {
         if (!slotEl) return { exclusive: false, multiple: true, max: -1, currentCount: 0 };
 
-        const exclusiveAttr = slotEl.dataset.wslotExclusive || slotEl.dataset.slotExclusive || slotEl.dataset.exclusive;
-        const multipleAttr = slotEl.dataset.wslotMultiple || slotEl.dataset.slotMultiple || slotEl.dataset.multiple;
-        const maxAttr = slotEl.dataset.wslotMax || slotEl.dataset.slotMax;
-        const slotId = slotEl.dataset.wslot || slotEl.dataset.slot;
+        const exclusiveAttr = slotEl.dataset.wslotExclusive;
+        const multipleAttr = slotEl.dataset.wslotMultiple;
+        const maxAttr = slotEl.dataset.wslotMax;
+        const slotId = slotEl.dataset.wslot;
 
         const exclusive = exclusiveAttr === 'true';
         const multiple = multipleAttr !== 'false'; // 默认允许多个
@@ -14119,17 +13853,16 @@
 	        const anchorInfo = resolveAnchorPlacementInfo(layoutId);
 	        const parentSlotId = String(anchorInfo?.slotId || '').trim();
 	        const candidates = [];
-	        if (selectedWidget.matches?.('[data-wslot], [data-slot], [data-slot-id]')) {
+	        if (selectedWidget.matches?.('[data-wslot]')) {
 	            candidates.push(selectedWidget);
 	        }
-	        selectedWidget.querySelectorAll?.('[data-wslot], [data-slot], [data-slot-id]').forEach(slotEl => {
+	        selectedWidget.querySelectorAll?.('[data-wslot]').forEach(slotEl => {
 	            candidates.push(slotEl);
 	        });
 
 	        for (const slotEl of candidates) {
 	            const slotId = String(
 	                slotEl.getAttribute('data-wslot')
-	                || slotEl.getAttribute('data-slot')
 	                || slotEl.getAttribute('data-slot-id')
 	                || ''
 	            ).trim();
@@ -14200,13 +13933,13 @@
 	    }
 
 	    /**
-	     * 解析插槽元素（向上查找最近的 [data-wslot] 或 .container-slot）
+	     * 解析插槽元素（向上查找最近的 [data-wslot]）
 	     * @param {Element} el
      * @returns {Element|null}
      */
     function resolveSlotElement(el) {
-        if (el.dataset && (el.dataset.wslot || el.classList.contains('container-slot'))) return el;
-        return el.closest('[data-wslot]') || el.closest('.container-slot');
+        if (el.dataset && el.dataset.wslot) return el;
+        return el.closest('[data-wslot]');
     }
 
     /**
@@ -14220,7 +13953,7 @@
         const acceptCodes = normalizeCodeList(acceptAttr);
         const rejectAttr = slot.dataset.wslotReject || '';
         const rejectCodes = normalizeCodeList(rejectAttr);
-        const slotId = slot.dataset.wslot || slot.dataset.slot;
+        const slotId = slot.dataset.wslot;
 
         return slotAcceptsWidgetCodes(
             acceptCodes,
@@ -14313,7 +14046,7 @@
                     switchPreviewView('preview');
                 }
 
-                // Prefer surgical iframe patch. Full loadLayoutPreview freezes the whole
+                // Prefer surgical iframe patch. Full loadCanvas freezes the whole
                 // editor behind previewLoading — only use it when preview_html is missing.
                 applyWidgetMutationPreview({
                     previewHtml: result.preview_html,
@@ -14510,8 +14243,8 @@
             area.classList.remove('drag-over', 'drag-invalid', 'drag-allowed', 'drag-replace');
         });
 
-        // 移除插槽高亮（支持新旧两种标记方式）
-        document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
+        // 移除插槽高亮
+        document.querySelectorAll('[data-wslot]').forEach(slot => {
             slot.classList.remove('drag-over', 'drag-invalid', 'drag-allowed', 'drag-replace');
         });
 
@@ -14622,7 +14355,7 @@
         e.stopImmediatePropagation(); // 防止同一 drop 触发多次保存
 
         // 检查是否是插槽区域的放置（由 handleSlotDrop 处理）
-        if (e.target.closest('[data-wslot], .container-slot, .slot-widgets')) return;
+        if (e.target.closest('[data-wslot]')) return;
 
         const area = this.classList.contains('preview-area') ? this : this.closest('.preview-area');
         if (!area) return;
@@ -14633,7 +14366,7 @@
 
         const areaCode = area.dataset.area;
         if (!areaCode) return;
-        const slotId = area.dataset.wslot || area.dataset.slot || null;
+        const slotId = area.dataset.wslot || null;
 
         // 获取部件数据（委托 getDropWidgetData）
         const widgetData = getDropWidgetData(e);
@@ -14754,7 +14487,7 @@
         slot.classList.remove('drag-over', 'drag-invalid', 'drag-replace');
         removeInsertionIndicators(slot);
 
-        const slotId = slot.dataset.wslot || slot.dataset.slot;
+        const slotId = slot.dataset.wslot;
         const slotName = slot.dataset.wslotName || slotId;
         const areaCode = slot.dataset.area || slot.closest('.preview-area')?.dataset.area || 'content';
         if (!slotId) return;
@@ -14884,9 +14617,9 @@
             targetContainer = document.querySelector(`.area-widgets${dataAttributeSelector('data-area', area)}`);
         }
 
-        // 如果还是没有，查找旧版插槽容器（兼容性）
         if (!targetContainer && slotId) {
-            targetContainer = document.querySelector(`.slot-widgets${dataAttributeSelector('data-slot', slotId)}`);
+            targetContainer = document.querySelector(`[data-wslot="${cssIdentifier(slotId)}"] .area-widgets`)
+                || document.querySelector(`[data-wslot="${cssIdentifier(slotId)}"]`);
         }
 
         if (!targetContainer) {
@@ -14928,7 +14661,8 @@
      * 获取插槽内下一个排序值
      */
     function getNextSlotSortOrder(slotId) {
-        const slotWidgets = document.querySelector(`.slot-widgets${dataAttributeSelector('data-slot', slotId)}`);
+        const slotWidgets = document.querySelector(`[data-wslot="${cssIdentifier(slotId)}"] .area-widgets`)
+            || document.querySelector(`[data-wslot="${cssIdentifier(slotId)}"]`);
         if (!slotWidgets) return 0;
         return slotWidgets.querySelectorAll('.preview-widget-item').length;
     }
@@ -15058,15 +14792,15 @@
             }
         });
 
-        // 高亮匹配的容器内插槽（支持新旧两种属性标记）
+        // 高亮匹配的容器内插槽
         if (widgetData) {
             const widgetCodes = collectWidgetSupportCodes(widgetData);
 
-            // 查找所有插槽（包括新旧两种标记方式）
-            document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
-                // 获取插槽ID（兼容新旧属性）
-                const slotId = slot.dataset.wslot || slot.dataset.slot;
-                // 获取接受的部件类型（兼容新旧属性）
+            // 查找所有插槽
+            document.querySelectorAll('[data-wslot]').forEach(slot => {
+                // 获取插槽 ID
+                const slotId = slot.dataset.wslot;
+                // 获取接受的部件类型
                 const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
                 const acceptCodes = normalizeCodeList(acceptAttr);
                 const rejectCodes = normalizeCodeList(slot.dataset.wslotReject || '');
@@ -15199,20 +14933,7 @@
         return result;
     }
 
-    /**
-     * 添加部件到区域（委托 saveWidget）
-     * @param {string} area 区域代码
-     * @param {object} widgetData 部件数据
-     * @param {object} options 选项 { slotId, exclusive, sort_order }
-     */
-    async function addWidget(area, widgetData, options = {}) {
-        const slotId = options.slotId || widgetData.slot || null;
-        const exclusive = options.exclusive !== undefined ? options.exclusive : isExclusiveSlot(slotId, widgetData.code);
-        const sortOrder = options.sort_order != null ? options.sort_order : getNextSortOrder(area);
-
-        return saveWidget({ area, slotId, widgetData, sortOrder, exclusive });
-    }
-
+    
     /**
      * 判断插槽是否为独占类型（兜底逻辑）
      *
@@ -15503,7 +15224,7 @@
             return null;
         }
 
-        const fromDom = bar.closest('[data-wslot], [data-slot], .content-slot');
+        const fromDom = bar.closest('[data-wslot]');
         if (fromDom instanceof HTMLElement) {
             return fromDom;
         }
@@ -15515,14 +15236,13 @@
             || ''
         ).trim();
         if (slotId) {
-            const byId = doc.querySelector(dataAttributeSelector('data-wslot', slotId))
-                || doc.querySelector(dataAttributeSelector('data-slot', slotId));
+            const byId = doc.querySelector(dataAttributeSelector('data-wslot', slotId));
             if (byId instanceof HTMLElement) {
                 return byId;
             }
         }
 
-        const hovered = doc.querySelector('[data-wslot][data-w-slot-hover-target="true"], [data-slot][data-w-slot-hover-target="true"], .content-slot[data-w-slot-hover-target="true"], .content-slot.slot-hover-target');
+        const hovered = doc.querySelector('[data-wslot][data-w-slot-hover-target="true"]');
         if (hovered instanceof HTMLElement) {
             return hovered;
         }
@@ -15534,7 +15254,7 @@
         if (!(toolbar instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
             return;
         }
-        const slotId = owner.getAttribute('data-wslot') || owner.getAttribute('data-slot') || '';
+        const slotId = owner.getAttribute('data-wslot') || '';
         if (!slotId) {
             return;
         }
@@ -15584,7 +15304,6 @@
         if (slotEl instanceof HTMLElement) {
             const slotId = String(
                 slotEl.getAttribute('data-wslot')
-                || slotEl.getAttribute('data-slot')
                 || bar.dataset.slotId
                 || bar.getAttribute('data-slot-id')
                 || ''
@@ -15699,9 +15418,9 @@
             toolbar.setAttribute('data-w-float-self', '1');
             toolbar.setAttribute('data-w-placement', 'top-end');
             toolbar.setAttribute('data-w-portal', '0');
-            const ownerSlot = toolbar.parentElement?.matches?.('[data-wslot], [data-slot], .content-slot')
+            const ownerSlot = toolbar.parentElement?.matches?.('[data-wslot]')
                 ? toolbar.parentElement
-                : toolbar.closest('[data-wslot], [data-slot], .content-slot');
+                : toolbar.closest('[data-wslot]');
             syncSlotToolbarOwnerMeta(toolbar, ownerSlot);
             if (window.Weline?.UI?.floating?.attach) {
                 window.Weline.UI.floating.attach(toolbar, {
@@ -15827,7 +15546,7 @@
             const layoutId = identity.layoutId;
             const slotId = wrapper.getAttribute('data-slot-id') ||
                            wrapper.closest('[data-wslot]')?.getAttribute('data-wslot') ||
-                           wrapper.closest('[data-slot]')?.getAttribute('data-slot') || '';
+                           wrapper.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
             const isExclusive = isExclusiveSlot(slotId, '');
 
             // 检查是否已有操作按钮
@@ -15903,8 +15622,8 @@
                 return;
             }
 
-            const slotEl = wrapper.closest('[data-wslot], [data-slot]');
-            const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || '';
+            const slotEl = wrapper.closest('[data-wslot]');
+            const slotId = slotEl?.getAttribute('data-wslot') || '';
             const area = slotEl?.getAttribute('data-wslot-position')
                 || (slotEl?.closest('header') ? 'header' : (slotEl?.closest('footer') ? 'footer' : 'content'));
 
@@ -16183,7 +15902,7 @@
                         if (targetWidget) {
                             effectiveSlotId = targetWidget.getAttribute('data-slot-id') ||
                                 targetWidget.closest('[data-wslot]')?.getAttribute('data-wslot') ||
-                                targetWidget.closest('[data-slot]')?.getAttribute('data-slot') || slotId;
+                                targetWidget.closest('[data-wslot]')?.getAttribute('data-wslot') || slotId;
                         }
                     }
                     handleWidgetAiAction(action, effectiveLayoutId, effectiveSlotId, button);
@@ -16203,7 +15922,7 @@
                         if (topW) {
                             topmostSlotId = topW.getAttribute('data-slot-id') ||
                                 topW.closest('[data-wslot]')?.getAttribute('data-wslot') ||
-                                topW.closest('[data-slot]')?.getAttribute('data-slot') || topmostSlotId;
+                                topW.closest('[data-wslot]')?.getAttribute('data-wslot') || topmostSlotId;
                         }
                     }
                     if (action === 'replace') handleWidgetReplace(topmostLayoutId, topmostSlotId);
@@ -16633,10 +16352,8 @@
                 return;
             }
 
-            // 查找点击的 slot 元素（支持多种标记方式）
-            const slotEl = e.target.closest('[data-slot]') ||
-                          e.target.closest('[data-wslot]') ||
-                          e.target.closest('.content-slot');
+            // 查找点击的 slot 元素（框架 data-wslot）
+            const slotEl = e.target.closest('[data-wslot]');
 
             if (!slotEl) return;
 
@@ -16654,7 +16371,7 @@
             }
 
             // 获取 slot 信息
-            const slotId = slotEl.getAttribute('data-slot') ||
+            const slotId = slotEl.getAttribute('data-wslot') ||
                           slotEl.getAttribute('data-wslot') || '';
             const slotName = slotEl.getAttribute('data-name') ||
                             slotEl.getAttribute('data-wslot-name') ||
@@ -16689,7 +16406,7 @@
             handleSlotSelected(slotInfo);
 
             // 高亮被点击的 slot
-            doc.querySelectorAll('[data-slot], [data-wslot], .content-slot').forEach(el => {
+            doc.querySelectorAll('[data-wslot]').forEach(el => {
                 el.classList.remove('slot-selected');
             });
             slotEl.classList.add('slot-selected');
@@ -16717,8 +16434,7 @@
             // 尝试从 iframe 获取插槽的 accept 属性
             const iframe = elements.previewFrame;
             if (iframe && iframe.contentDocument) {
-                const slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
-                               iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId));
+                const slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId));
                 if (slotEl) {
                     slotInfo.accept = slotEl.getAttribute('data-wslot-accept') ||
                                       slotEl.getAttribute('data-accept') || '*';
@@ -16857,7 +16573,7 @@
                 if (iframe && iframe.contentDocument && widgetSelector) {
                     const widgetEl = iframe.contentDocument.querySelector(widgetSelector);
                     if (widgetEl) {
-                        const slot = widgetEl.closest('[data-wslot], [data-slot]');
+                        const slot = widgetEl.closest('[data-wslot]');
 
                         // 移除部件元素；不回填「插槽原本为空」空态提示
                         widgetEl.remove();
@@ -16953,66 +16669,7 @@
         await persistSlotSortOrder(slotId);
     }
 
-    /**
-     * 交换两个部件的排序（保留用于非插槽内场景，插槽内排序请用 persistSlotSortOrder）
-     * @deprecated 插槽内排序已改用 persistSlotSortOrder，此函数仅作备用
-     */
-    async function swapWidgetOrder(layoutId1, layoutId2) {
-        const nodeUid1 = validNodeUid(layoutId1) || '';
-        const nodeUid2 = validNodeUid(layoutId2) || '';
-        try {
-            const result = await apiJson(config.apiBase + '/swap-widget-order', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    theme_id: state.themeId,
-                    node_uid_1: nodeUid1,
-                    node_uid_2: nodeUid2,
-                    layout_id_1: /^\d+$/.test(String(layoutId1 || '')) ? parseInt(layoutId1, 10) : 0,
-                    layout_id_2: /^\d+$/.test(String(layoutId2 || '')) ? parseInt(layoutId2, 10) : 0,
-                })
-            });
-
-            if (result.success) {
-                await queueLayoutNodePlacementOwnership(result.data?.nodes || [], 'layout_nodes_swapped');
-                const iframe = elements.previewFrame;
-                if (iframe && iframe.contentDocument) {
-                    const sel1 = resolveWidgetElementSelector({
-                        layoutId: String(layoutId1 || ''),
-                        nodeUid: result.data?.node_uid_1 || nodeUid1,
-                    });
-                    const sel2 = resolveWidgetElementSelector({
-                        layoutId: String(layoutId2 || ''),
-                        nodeUid: result.data?.node_uid_2 || nodeUid2,
-                    });
-                    const el1 = sel1 ? iframe.contentDocument.querySelector(sel1) : null;
-                    const el2 = sel2 ? iframe.contentDocument.querySelector(sel2) : null;
-
-                    if (el1 && el2) {
-                        if (el1.compareDocumentPosition(el2) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                            el2.parentNode.insertBefore(el1, el2.nextSibling);
-                        } else {
-                            el2.parentNode.insertBefore(el1, el2);
-                        }
-
-                        const slotId = el1.getAttribute('data-slot-id') ||
-                                       el1.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
-                        updateSiblingMoveButtons(slotId);
-                    }
-                }
-
-                showToast('部件位置已更新', 'success');
-            } else {
-                showToast(result.message || '移动失败', 'error');
-            }
-        } catch (err) {
-            console.error('[ThemeEditor] Swap widget order error:', err);
-            showToast('移动部件时发生错误', 'error');
-        }
-    }
-
+    
     /**
      * 更新同层部件的移动按钮状态
      */
@@ -17021,8 +16678,7 @@
         if (!iframe || !iframe.contentDocument) return;
 
         // 找到插槽
-        let slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
-                     iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId));
+        let slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId));
 
         if (!slotEl) return;
 
@@ -17220,8 +16876,7 @@
         if (!iframe || !iframe.contentDocument || !slotId) return false;
 
         const iframeDoc = iframe.contentDocument;
-        const slotEl = iframeDoc.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
-                       iframeDoc.querySelector(dataAttributeSelector('data-slot', slotId));
+        const slotEl = iframeDoc.querySelector(dataAttributeSelector('data-wslot', slotId));
         if (!slotEl) return false;
 
         // 找到装部件的容器：取第一个带 data-node-uid / data-layout-id 的节点的 parentNode
@@ -17263,13 +16918,13 @@
                 });
                 return true;
             } else {
-                loadLayoutPreview();
+                loadCanvas();
                 showToast(result.message || '排序保存失败', 'error');
                 return false;
             }
         } catch (err) {
             console.error('[ThemeEditor] persistSlotSortOrder error:', err);
-            loadLayoutPreview();
+            loadCanvas();
             showToast('保存排序时发生错误', 'error');
             return false;
         }
@@ -17346,8 +17001,10 @@
         // 加载配置面板
         openConfigPanelForWidgetSelection();
         setConfigMode('widget');
-        loadWidgetConfig(widgetElement);
+        showWidgetConfigLoadingState(widgetElement);
+        const loadPromise = loadWidgetConfig(widgetElement);
         markPreviewWidgetSelected(identity.layoutId || '');
+        return loadPromise;
     }
 
     /**
@@ -17664,6 +17321,13 @@
      * 加载部件配置（用于左侧面板，保留兼容性）
      */
     async function loadWidgetConfig(widgetElement) {
+        if (!widgetElement) {
+            return;
+        }
+        // 若点选路径尚未写入 loading，这里再兜底一次（兼容其它调用方）。
+        if (!elements.configContent?.querySelector('[data-widget-config-loading="1"]')) {
+            showWidgetConfigLoadingState(widgetElement);
+        }
         const layoutId = resolveDomWidgetIdentity(widgetElement).layoutId;
         const widgetModule = widgetElement.dataset.widgetModule;
         const widgetCode = widgetElement.dataset.widgetCode;
@@ -18348,7 +18012,7 @@
             if (options.reload === false) {
                 return;
             }
-            loadLayoutPreview({ locale: nextLocale || getActiveConfigLocale() });
+            loadCanvas({ locale: nextLocale || getActiveConfigLocale() });
             if (options.toast !== false) {
                 showToast(
                     nextLocale ? `${translateUiText('已切换到')} ${nextLocale}` : translateUiText('已切换到默认语言'),
@@ -18394,7 +18058,7 @@
                     );
                 }
                 if (options.refreshPreview !== false) {
-                    loadLayoutPreview({ locale: getActiveConfigLocale() });
+                    loadCanvas({ locale: getActiveConfigLocale() });
                     return;
                 }
                 return;
@@ -18406,7 +18070,7 @@
                 throwOnError: true,
             });
             if (options.refreshPreview !== false) {
-                loadLayoutPreview({ locale: getActiveConfigLocale() });
+                loadCanvas({ locale: getActiveConfigLocale() });
             }
         } catch (error) {
             state.configLocale = previousLocale;
@@ -19338,7 +19002,7 @@
                 if (previewHtml) {
                     updateWidgetPreviewInIframe(layoutId, previewHtml);
                 } else if (options.refreshPreview !== false) {
-                    loadLayoutPreview();
+                    loadCanvas();
                 }
 
                 if (options.toast !== false) {
@@ -19620,11 +19284,9 @@
                 if (iframe && iframe.contentDocument) {
                     const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                     if (widgetEl) {
-                        const slot = widgetEl.closest('[data-wslot], [data-slot], [data-slot-id]');
+                        const slot = widgetEl.closest('[data-wslot]');
                         const actualSlotId = slot ? firstNonEmptyValue(
                             slot.getAttribute('data-wslot'),
-                            slot.getAttribute('data-slot'),
-                            slot.getAttribute('data-slot-id'),
                             slotIdFromEl,
                             result.slot_id
                         ) : firstNonEmptyValue(slotIdFromEl, result.slot_id);
@@ -19728,17 +19390,7 @@
         }
     }
 
-    function buildFormBody(payload) {
-        const body = new URLSearchParams();
-        Object.entries(payload || {}).forEach(([key, value]) => {
-            if (value === undefined || value === null) {
-                return;
-            }
-            body.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
-        });
-        return body.toString();
-    }
-
+    
     async function publishEmbeddedLayout(options = {}) {
         if (!state.themeId) {
             const message = translateUiText('请先选择主题');
@@ -20123,7 +19775,7 @@
         const previewWindow = window.open('about:blank', '_blank');
         try {
             await flushPendingEditorMutations();
-            const previewUrl = await buildAuthorizedLayoutPreviewUrl();
+            const previewUrl = await buildAuthorizedCanvasUrl();
             if (previewWindow) {
                 previewWindow.location.href = previewUrl;
             } else {
@@ -20145,23 +19797,11 @@
             showToast('请先选择主题', 'warning');
             return;
         }
-        if (!layoutHasUsablePreviewSample()) {
-            showToast(translateUiText('当前布局尚未接入预览取样（preview_sample），暂不可启动店面预览'), 'warning');
-            return;
-        }
-
         try {
             await flushPendingEditorMutations();
-            if (layoutRequiresPreviewSample() && !state.previewEntityRoute) {
-                await refreshPreviewSample();
-            }
             showToast('正在启动预览...', 'info');
 
             const previewStatus = state.previewStatus === 'published' ? 'published' : 'draft';
-            const themePublicRoute = String(
-                state.previewEntityRoute
-                || (getEffectiveLayoutType() === 'promotion' ? 'promotion' : '')
-            ).replace(/^\/+|\/+$/g, '');
 
             const result = await apiJson(config.apiStartPreview, {
                 method: 'POST',
@@ -20178,8 +19818,6 @@
                     preview_mode: 'live',
                     status: previewStatus,
                     locale: getPreviewLocaleForRequest(),
-                    theme_public_route: themePublicRoute,
-                    preview_entity_route: themePublicRoute,
                     editor_context: buildTypedEditorContext('layout', {
                         area: 'frontend',
                         theme_id: parseInt(getCurrentWindowParam('frontend_theme_id') || String(state.themeId), 10) || state.themeId,
@@ -20215,7 +19853,7 @@
         const previewWindow = window.open('about:blank', '_blank');
         try {
             // 使用 status=published 明确指定查看已发布版本
-            const previewUrl = await buildAuthorizedLayoutPreviewUrl({status: 'published'});
+            const previewUrl = await buildAuthorizedCanvasUrl({status: 'published'});
             if (previewWindow) {
                 previewWindow.location.href = previewUrl;
             } else {
@@ -21056,7 +20694,7 @@
 
     function resetStructureViewToEmptySlots() {
         document.querySelectorAll('#previewViewStructure .area-slot').forEach(areaEl => {
-            const areaCode = areaEl.dataset.area || areaEl.dataset.slot || 'content';
+            const areaCode = areaEl.dataset.area || areaEl.dataset.wslot || 'content';
             const widgetsContainer = areaEl.querySelector('.area-widgets');
             if (!widgetsContainer) {
                 return;
@@ -21322,14 +20960,6 @@
     }
 
     /**
-     * 批量合并刷新请求 - 已禁用，不再触发 layout-preview 请求
-     */
-    const schedulePreviewRefresh = debounce(() => {
-        // 禁用：不再自动刷新，避免重复请求 layout-preview
-        console.log('[ThemeEditor] schedulePreviewRefresh disabled - use manual refresh button');
-    }, 150);
-
-    /**
      * 完整刷新 iframe（仅手动刷新按钮使用）
      */
     function fullReloadPreview() {
@@ -21343,7 +20973,7 @@
         }
 
         // 刷新 iframe（添加时间戳避免缓存）
-        setLayoutPreviewSource();
+        setCanvasSource();
         fetchLayoutSlots();
         return;
 
@@ -21457,6 +21087,21 @@
                     return;
                 }
 
+                // Broken markup hrefs (e.g. href="<div class=…") must never become canvas paths.
+                // Homepage `/` sanitizes to '' and remains safe.
+                let hrefPathProbe = String(href || '');
+                try {
+                    hrefPathProbe = new URL(href, iframeDoc.baseURI).pathname || hrefPathProbe;
+                } catch (_err) {
+                    // keep raw href for safety check
+                }
+                if (!isSafeStorefrontPublicRoute(hrefPathProbe)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showToast(translateUiText('预览链接无效，已忽略'), 'warning');
+                    return;
+                }
+
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -21520,20 +21165,8 @@
      * 后台编辑器 iframe 使用 editor_mode=1 参数，
      * 支持通过 status 参数切换 draft/published 版本
      */
-    function loadLayoutPreview(overrides = {}) {
+    function loadCanvas(overrides = {}) {
         if (!elements.previewFrame || !state.themeId) {
-            return;
-        }
-
-        if (!layoutHasUsablePreviewSample()) {
-            if (elements.previewLoading) {
-                elements.previewLoading.classList.add('hidden');
-            }
-            elements.previewFrame.removeAttribute('src');
-            showToast(
-                translateUiText('该布局尚未登记店面入口（preview_sample / module router），暂不可预览'),
-                'warning'
-            );
             return;
         }
 
@@ -21543,11 +21176,9 @@
         }
 
         const previewOverrides = Object.assign({}, overrides);
-        // Path is the sample route; do not also pass theme_public_route as a query override.
-        delete previewOverrides.theme_public_route;
 
-        // Canvas iframe = real storefront route (path=layout; not start-preview).
-        const navigation = setLayoutPreviewSource(previewOverrides);
+        // Canvas iframe src = real storefront route (path=layout; not start-preview).
+        const navigation = setCanvasSource(previewOverrides);
         fetchLayoutSlots(previewOverrides);
         return navigation;
     }
@@ -21652,25 +21283,12 @@
         if (element.matches(`.preview-widget-item, .widget-wrapper, .preview-widget, ${PREVIEW_OR_CODE_WIDGET_MATCH}`)) {
             return false;
         }
-        if (element.hasAttribute('data-wslot')) {
-            return true;
-        }
-        if (element.matches('.area-slot, .content-slot, .header-slot, .footer-slot, .container-slot, .slot-widgets')) {
-            return true;
-        }
-        return element.hasAttribute('data-slot')
-            && !element.hasAttribute('data-layout-id')
-            && !element.hasAttribute('data-node-uid')
-            && !element.hasAttribute('data-widget-code');
+        // Framework slot contract: identity is data-wslot only.
+        return element.hasAttribute('data-wslot');
     }
 
     function getSlotIdFromElement(element) {
-        return String(
-            element?.getAttribute('data-wslot')
-            || element?.getAttribute('data-slot')
-            || element?.getAttribute('data-slot-id')
-            || ''
-        ).trim();
+        return String(element?.getAttribute('data-wslot') || '').trim();
     }
 
     function collectDomSlotsFromDocument(doc) {
@@ -21679,7 +21297,7 @@
             return slots;
         }
 
-        doc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id], .area-slot, .content-slot, .header-slot, .footer-slot, .container-slot, .slot-widgets')
+        doc.querySelectorAll('[data-wslot]')
             .forEach((element) => {
                 if (!isSlotInfoElement(element)) {
                     return;
@@ -21781,7 +21399,7 @@
                 slotElement = findIframeSlotElement(iframeDoc, normalizedSlotId);
 
                 if (slotElement) {
-                    iframeDoc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id], .content-slot').forEach(element => {
+                    iframeDoc.querySelectorAll('[data-wslot]').forEach(element => {
                         element.classList.remove('slot-selected');
                     });
                     slotElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -21851,8 +21469,8 @@
 
         const iframeDoc = getPreviewDocument();
         if (iframeDoc) {
-            iframeDoc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id]').forEach(slotEl => {
-                const slotId = slotEl.getAttribute('data-wslot') || slotEl.getAttribute('data-slot') || slotEl.getAttribute('data-slot-id') || '';
+            iframeDoc.querySelectorAll('[data-wslot]').forEach(slotEl => {
+                const slotId = slotEl.getAttribute('data-wslot') || '';
                 if (!slotId || isSyntheticContainerSlotId(slotId)) {
                     return;
                 }
@@ -22013,12 +21631,12 @@
                 return;
             }
             seen.add(anchorId);
-            const slotEl = element.closest('[data-wslot], [data-slot], [data-slot-id]');
-            const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
+            const slotEl = element.closest('[data-wslot]');
+            const slotId = slotEl?.getAttribute('data-wslot') || '';
             const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
             const innerSlots = [];
             const innerSlotSeen = new Set();
-            element.querySelectorAll?.('[data-wslot], [data-slot], [data-slot-id]')?.forEach(inner => {
+            element.querySelectorAll?.('[data-wslot]')?.forEach(inner => {
                 if (inner === slotEl) {
                     return;
                 }
@@ -22026,7 +21644,7 @@
                 if (ownerWidget && ownerWidget !== element) {
                     return;
                 }
-                const innerSlotId = inner.getAttribute('data-wslot') || inner.getAttribute('data-slot') || inner.getAttribute('data-slot-id') || '';
+                const innerSlotId = inner.getAttribute('data-wslot') || '';
                 if (!innerSlotId || isSyntheticContainerSlotId(innerSlotId) || innerSlotSeen.has(innerSlotId)) {
                     return;
                 }
@@ -22240,8 +21858,8 @@
         if (!widgetEl) {
             return null;
         }
-        const slotEl = widgetEl.closest('[data-wslot], [data-slot], [data-slot-id]');
-        const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
+        const slotEl = widgetEl.closest('[data-wslot]');
+        const slotId = slotEl?.getAttribute('data-wslot') || '';
         const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
         const siblingContainer = widgetEl.parentElement;
         const siblings = siblingContainer
@@ -22589,7 +22207,7 @@
         clearSlotSelection();
         deselectArea();
         deselectWidget();
-        const previewUrl = await setLayoutPreviewSource(previewOverrides);
+        const previewUrl = await setCanvasSource(previewOverrides);
         if (!previewUrl) {
             return;
         }

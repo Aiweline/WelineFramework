@@ -16,9 +16,11 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
         AclService::resetRequestCache();
+        AclService::clearProcessCache();
         RouteBefore::resetRequestCache();
+        RouteBefore::clearProcessCache();
         AclTaglib::resetRequestState();
         ResourceTreeService::clearProcessCache();
-        return 4;
+        return 6;
     }
 }

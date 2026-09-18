@@ -21,7 +21,9 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\ResultManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Security\Token;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
@@ -701,7 +703,13 @@ class PcController extends Core
         $response = Response::json($data);
         $context = Context::getCurrent();
         if ($context !== null && $context->get('meta.type') === 'request') {
-            if (\ob_get_level() > 0 && \ob_get_length() > 0) {
+            if (Runtime::isPersistent()) {
+                // Never ob_clean() under WLS — process-global and cross-fiber unsafe.
+                // Drop only this fiber's active capture frames before terminate.
+                if (FiberOutputBuffer::hasActiveCapture()) {
+                    FiberOutputBuffer::resetCurrent();
+                }
+            } elseif (\ob_get_level() > 0 && \ob_get_length() > 0) {
                 \ob_clean();
             }
             throw new \Weline\Framework\Http\ResponseTerminateException($response);

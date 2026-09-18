@@ -40,7 +40,28 @@ final class WelineAttributeModuleLoadContractTest extends TestCase
         self::assertStringContainsString('MutationObserver 反馈环', $js);
         self::assertStringContainsString('delivery_storm', $js);
         self::assertStringContainsString('startMarkerDiscovery', $js);
-        self::assertStringContainsString('scanScheduled', $js);
+        self::assertStringContainsString('observeMutationsCoalesced', $js);
+        self::assertStringContainsString('observeDomMutations', $js);
+        self::assertStringContainsString('Weline.dom = Object.assign', $js);
+        self::assertStringContainsString('discoveryHandle', $js);
+        self::assertStringNotContainsString('cartFlagStorageKey', $js);
+    }
+
+    public function testObserveMutationsCoalescedUsesTrailingIdleNotDoubleRaf(): void
+    {
+        $js = (string) \file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/weline.js'
+        );
+
+        self::assertStringContainsString('function observeMutationsCoalesced', $js);
+        self::assertStringContainsString('Weline.observeMutationsCoalesced = observeMutationsCoalesced', $js);
+        self::assertStringContainsString('scheduleFlushTrailing', $js);
+        self::assertStringContainsString('Quiet window FIRST', $js);
+        self::assertStringContainsString('window.setTimeout', $js);
+        self::assertStringContainsString('requestIdleCallback', $js);
+        self::assertStringContainsString('withPaused', $js);
+        self::assertStringContainsString('禁止双 rAF', $js);
+        self::assertStringNotContainsString('requestIdleCallback(kickFlush, { timeout: idleTimeoutMs })', $js);
         self::assertStringNotContainsString('cartFlagStorageKey', $js);
     }
 

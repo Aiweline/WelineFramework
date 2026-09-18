@@ -405,6 +405,60 @@
         gap: var(--weline-space-1);
     }
 
+    .w-system-config__hint--collapsible {
+        align-items: flex-start;
+    }
+
+    .w-system-config__hint-details {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .w-system-config__hint-summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--weline-space-2) var(--weline-space-3);
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .w-system-config__hint-summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .w-system-config__hint-summary-title {
+        min-width: 0;
+        font-weight: var(--weline-font-weight-semibold, 600);
+    }
+
+    .w-system-config__hint-summary-action {
+        flex: 0 0 auto;
+        color: var(--weline-theme-primary);
+        font-size: var(--weline-font-size-sm);
+        white-space: nowrap;
+    }
+
+    .w-system-config__hint-summary-action::after {
+        content: attr(data-collapsed-label);
+    }
+
+    .w-system-config__hint-details[open] > .w-system-config__hint-summary .w-system-config__hint-summary-action::after {
+        content: attr(data-expanded-label);
+    }
+
+    .w-system-config__hint-body {
+        margin-top: var(--weline-space-2);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        max-height: min(40vh, 22rem);
+        overflow: auto;
+        padding-inline-end: var(--weline-space-1);
+    }
+
     .w-system-config__adapter {
         display: flex;
         flex-direction: column;

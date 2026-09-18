@@ -27,7 +27,7 @@ final class ThemeEditorResponseTerminateContractTest extends TestCase
         self::assertStringContainsString('Editor bridge received HTML instead of JSON', $src);
         self::assertStringContainsString('editorBridgeAllowsHtmlResponse', $src);
         self::assertStringContainsString('/theme/backend/widget/paramrender/form', $src);
-        self::assertStringContainsString('/theme/backend/theme-editor/layout-preview', $src);
+        self::assertStringNotContainsString('/theme/backend/theme-editor/layout-preview', $src);
         self::assertDoesNotMatchRegularExpression(
             '/if \(\$status < 200 \|\| \$status >= 300\) \{\s*throw \$e;/',
             $src,

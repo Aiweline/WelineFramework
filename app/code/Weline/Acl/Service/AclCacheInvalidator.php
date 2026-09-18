@@ -26,7 +26,9 @@ final class AclCacheInvalidator
     public static function flushAfterRoleAccessChange(?int $roleId = null): void
     {
         AclService::resetRequestCache();
+        AclService::clearProcessCache();
         RouteBefore::resetRequestCache();
+        RouteBefore::clearProcessCache();
         AclTaglib::resetRequestState();
         ResourceTreeService::invalidateBackendMenuTreeCache();
 

@@ -108,9 +108,6 @@ final class Detail extends FrontendController
         }
 
         $name = trim((string)($displayOffer['name'] ?? ''));
-        $publicRoute = $canonicalSlug !== ''
-            ? 'product/' . $canonicalSlug
-            : 'product/' . (int)($displayOffer['product_id'] ?? 0);
 
         $this->layoutType = 'product';
         $this->request->setGet('page_type', 'product');
@@ -136,7 +133,6 @@ final class Detail extends FrontendController
             $this->request->setGet('theme_layout_source_target_id', (string)$resolvedTargetId);
         }
         $this->assign('product_layout_resolution', $layoutResolution);
-        $this->request->setGet('theme_public_route', $publicRoute);
         $this->request->setGet('theme_page_title', $name !== '' ? $name : (string)__('商品详情'));
         $seoTitle = trim((string)($displayOffer['meta_name'] ?? '')) ?: ($name !== '' ? $name : (string)__('商品详情'));
         $seoDescription = trim((string)($displayOffer['meta_description'] ?? ''));
@@ -159,13 +155,23 @@ final class Detail extends FrontendController
 
         $productIdForCrumbs = max(0, (int)($displayOffer['product_id'] ?? $productIdForLabels));
         $websiteIdForCrumbs = max(0, (int)($displayOffer['website_id'] ?? $this->request->getParam('website_id', 0)));
+        // Prefer the live request URL (currency/locale already applied by the router) so SEO
+        // canonical/hreflang match the path the shopper is on — including non-default currencies
+        // that getUrl() may omit when framework fallback currency equals the active code.
         $canonicalUrl = '';
         try {
-            $canonicalUrl = $this->getUrl(
-                'product/' . ($canonicalSlug !== '' ? $canonicalSlug : (string)$productIdForCrumbs)
-            );
+            $canonicalUrl = (string)$this->request->getUrlBuilder()->getCurrentUrl([], true);
         } catch (\Throwable) {
             $canonicalUrl = '';
+        }
+        if ($canonicalUrl === '') {
+            try {
+                $canonicalUrl = $this->getUrl(
+                    'product/' . ($canonicalSlug !== '' ? $canonicalSlug : (string)$productIdForCrumbs)
+                );
+            } catch (\Throwable) {
+                $canonicalUrl = '';
+            }
         }
         $preferredCategoryId = max(0, (int)$this->request->getParam('category_id', 0));
         $crumbBundle = $this->breadcrumbs->build(
@@ -184,7 +190,7 @@ final class Detail extends FrontendController
         $this->assign('storefront_product_breadcrumbs', $crumbBundle['primary']);
         $this->assign('storefront_product_breadcrumb_trails', $crumbBundle['trails']);
         $this->assign('items', $visibleCrumbs);
-        $this->assign('seo', [
+        $seoProfile = [
             'page_type' => 'product',
             'title' => $seoTitle,
             'description' => $seoDescription,
@@ -193,18 +199,14 @@ final class Detail extends FrontendController
             'product' => $seoProduct,
             'breadcrumbs' => $crumbBundle['primary'],
             'breadcrumb_trails' => $crumbBundle['trails'],
-        ]);
+        ];
+        if ($canonicalUrl !== '') {
+            $seoProfile['canonical_url'] = $canonicalUrl;
+            $seoProfile['canonical'] = $canonicalUrl;
+        }
+        $this->assign('seo', $seoProfile);
         if (class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
-            \Weline\Seo\Service\Head\SeoPageProfileBag::publish([
-                'page_type' => 'product',
-                'title' => $seoTitle,
-                'description' => $seoDescription,
-                'keywords' => $seoKeywords,
-                'image' => $seoImage,
-                'product' => $seoProduct,
-                'breadcrumbs' => $crumbBundle['primary'],
-                'breadcrumb_trails' => $crumbBundle['trails'],
-            ]);
+            \Weline\Seo\Service\Head\SeoPageProfileBag::publish($seoProfile);
         }
         $this->assign('meta_title', $seoTitle);
         $this->assign('meta_description', $seoDescription);

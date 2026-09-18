@@ -115,12 +115,6 @@ class Router implements RouterInterface
         if ((string)($request?->getParam('target_value', '') ?? '') === '') {
             $queryOverrides['target_value'] = $layoutType;
         }
-        // Always bind the public alias being rewritten (e.g. product/{slug}) so Theme
-        // visual preview re-selects layout and Product widgets resolve the entity.
-        // Overwrite stale theme_public_route left from a prior preview navigation.
-        if ($normalizedPath !== '' && !str_starts_with($normalizedPath, 'theme/')) {
-            $queryOverrides['theme_public_route'] = $normalizedPath;
-        }
 
         self::applyQueryOverrides($request, $queryOverrides);
 
@@ -223,7 +217,6 @@ class Router implements RouterInterface
             'page_type' => (string)$resolved['layout_path'],
             'layout_type' => (string)$resolved['layout_path'],
             'layout_option' => $layoutOption,
-            'theme_public_route' => $normalizedPath,
         ]);
 
         $path = 'theme/frontend/policy';

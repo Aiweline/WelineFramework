@@ -45,5 +45,12 @@ final class ThemeSocialSameAsSeoContextServiceTest extends TestCase
 
         $service = new ThemeSocialSameAsSeoContextService($layoutService);
         self::assertSame([], $service->resolve(['organization' => ['sameAs' => ['https://example.com/a']]]));
+
+        // No theme in unit isolation → still emit defaultSameAsUrls for Trust / entity example.
+        $withoutTheme = $service->resolve(['page_type' => 'product', 'organization' => []]);
+        self::assertSame(
+            ['organization' => ['sameAs' => FooterDefaultLinksHelper::defaultSameAsUrls()]],
+            $withoutTheme,
+        );
     }
 }

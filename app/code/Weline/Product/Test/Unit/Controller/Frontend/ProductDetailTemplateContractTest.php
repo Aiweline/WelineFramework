@@ -82,7 +82,10 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString("setGet('page_type', 'product')", $controller);
         self::assertStringContainsString("\$seoProduct['storefront_offers'] = \$offers", $controller);
         self::assertStringContainsString("\$this->assign('product', \$seoProduct)", $controller);
-        self::assertStringContainsString("\$this->assign('seo', [", $controller);
+        self::assertStringContainsString('$seoProfile = [', $controller);
+        self::assertStringContainsString('getCurrentUrl([], true)', $controller);
+        self::assertStringContainsString("\$seoProfile['canonical_url'] = \$canonicalUrl", $controller);
+        self::assertStringContainsString("\$this->assign('seo', \$seoProfile)", $controller);
         self::assertStringContainsString("\$this->assign('meta_title', \$seoTitle)", $controller);
         self::assertStringContainsString("\$this->assign('meta_description', \$seoDescription)", $controller);
         self::assertStringContainsString("\$this->assign('meta_keywords', \$seoKeywords)", $controller);

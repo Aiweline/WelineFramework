@@ -8,7 +8,7 @@
     'use strict';
 
     // Bundle is type=module and concatenates sources; a hard throw here aborts the
-    // rest of weline-theme-editor.js (including loadLayoutPreview / widget library).
+    // rest of weline-theme-editor.js (including loadCanvas / widget library).
     // Defer until Weline.UI is present instead of failing the whole editor boot.
     let bootAttempts = 0;
     const maxBootAttempts = 120;

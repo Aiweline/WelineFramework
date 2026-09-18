@@ -73,12 +73,29 @@ moduleDescribe(test, MODULE, 'Express review light confirm', () => {
       expect(js).toContain('weline:checkout:address-updated');
       expect(js).toContain('shipping_address');
       expect(js).toContain('collectShippingAddress');
+      expect(js).toContain("express_pay_confirmed");
+      expect(js).toContain("express_pay_transaction");
+      expect(js).toContain('data-express-payment-method');
       const flow = fs.readFileSync(
         path.join(ROOT_DIR, 'app/code/Weline/Checkout/Service/ExpressCheckoutFlowService.php'),
         'utf8',
       );
       expect(flow).toContain('extractAddressFromParams');
       expect(flow).toContain("'address_readonly' => false");
+      expect(flow).toContain("'payment_method' => $methodCode");
+      expect(flow).toContain("'method_label' => $methodLabel");
+      const observer = fs.readFileSync(
+        path.join(ROOT_DIR, 'app/code/Weline/Checkout/Observer/RegisterCheckoutEventChainsObserver.php'),
+        'utf8',
+      );
+      expect(observer).toContain('express_pay_confirmed');
+      expect(observer).toContain('express_pay_transaction');
+      const productJs = fs.readFileSync(
+        path.join(ROOT_DIR, 'app/code/Weline/Payment/view/statics/js/product-express-pay.js'),
+        'utf8',
+      );
+      expect(productJs).toContain('toastPaymentMethod');
+      expect(productJs).toContain('method_label');
     },
   );
 

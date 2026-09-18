@@ -229,7 +229,11 @@ class Url implements UrlInterface
             return;
         }
         self::$parserServer['WELINE_URL_PATH_LANG'] = $code;
-        $_SERVER['WELINE_URL_PATH_LANG'] = $code;
+        if (!\class_exists(\Weline\Framework\Runtime\Runtime::class)
+            || !\Weline\Framework\Runtime\Runtime::isPersistent()
+        ) {
+            $_SERVER['WELINE_URL_PATH_LANG'] = $code;
+        }
         if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
             try {
                 \Weline\Framework\Env\WelineEnv::setServer(
@@ -262,7 +266,7 @@ class Url implements UrlInterface
 
         $existingOrigin = (string)(
             self::$parserServer['WELINE_ORIGIN_REQUEST_URI']
-            ?? $_SERVER['WELINE_ORIGIN_REQUEST_URI']
+            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
             ?? ''
         );
         $existingIsPretty = $existingOrigin !== ''
@@ -270,8 +274,12 @@ class Url implements UrlInterface
         if (!$existingIsPretty) {
             self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] = $uri;
             self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $uri;
-            $_SERVER['ORIGIN_REQUEST_URI'] = $uri;
+            if (!\class_exists(\Weline\Framework\Runtime\Runtime::class)
+                || !\Weline\Framework\Runtime\Runtime::isPersistent()
+            ) {
+                $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $uri;
+                $_SERVER['ORIGIN_REQUEST_URI'] = $uri;
+            }
             if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
                 try {
                     \Weline\Framework\Env\WelineEnv::setServer(
@@ -310,12 +318,12 @@ class Url implements UrlInterface
         self::lockVisitorFacingRequestUri($visitorUri);
         $origin = (string)(
             self::$parserServer['WELINE_ORIGIN_REQUEST_URI']
-            ?? $_SERVER['WELINE_ORIGIN_REQUEST_URI']
+            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
             ?? $visitorUri
         );
         $pathLang = \trim((string)(
             self::$parserServer['WELINE_URL_PATH_LANG']
-            ?? $_SERVER['WELINE_URL_PATH_LANG']
+            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', '')
             ?? ''
         ));
         if (!isset($parse['server']) || !\is_array($parse['server'])) {
@@ -866,10 +874,28 @@ class Url implements UrlInterface
         // the same non-default currency/lang the switchers and runtime already show.
         $currency = self::normalizeCurrency(State::getCurrency() ?: w_env('user.currency'));
         $language = self::normalizeLanguage(State::getLang() ?: w_env('user.lang'));
-        $websiteCurrency = self::normalizeCurrency(w_env('website.currency')) ?: self::getFrameworkDefaultCurrency();
-        $websiteLanguage = self::normalizeLanguage(w_env('website.language')) ?: self::getFrameworkDefaultLanguage();
-        $frameworkCurrency = self::getFrameworkDefaultCurrency();
-        $frameworkLanguage = self::getFrameworkDefaultLanguage();
+        $websiteCurrency = self::normalizeCurrency(w_env('website.currency'));
+        if ($websiteCurrency === '') {
+            try {
+                $websiteCurrency = self::normalizeCurrency(State::resolveWebsiteDefaultCurrency());
+            } catch (\Throwable) {
+                $websiteCurrency = '';
+            }
+        }
+        if ($websiteCurrency === '') {
+            $websiteCurrency = self::getFrameworkDefaultCurrency();
+        }
+        $websiteLanguage = self::normalizeLanguage(w_env('website.language'));
+        if ($websiteLanguage === '') {
+            try {
+                $websiteLanguage = self::normalizeLanguage(State::resolveWebsiteDefaultLanguage());
+            } catch (\Throwable) {
+                $websiteLanguage = '';
+            }
+        }
+        if ($websiteLanguage === '') {
+            $websiteLanguage = self::getFrameworkDefaultLanguage();
+        }
 
         if (Env::isAreaRoutePathSegment($currency)) {
             $currency = '';
@@ -878,12 +904,14 @@ class Url implements UrlInterface
             $language = '';
         }
 
-        // 默认值（网站默认或框架默认）不拼接到 URL 段中。
-        if ('' !== $currency && $currency !== $websiteCurrency && $currency !== $frameworkCurrency) {
+        // Only the website defaults omit path segments (same contract as LocalizedUrlBuilder).
+        // Do not also suppress the framework fallback currency/language — that hid CNY on
+        // USD-default storefronts and reinjected USD when website.currency env was empty.
+        if ('' !== $currency && $currency !== $websiteCurrency) {
             $prefix .= '/' . $currency;
         }
 
-        if ('' !== $language && $language !== $websiteLanguage && $language !== $frameworkLanguage) {
+        if ('' !== $language && $language !== $websiteLanguage) {
             $prefix .= '/' . $language;
         }
 
@@ -2073,12 +2101,12 @@ class Url implements UrlInterface
         // working URL into /pagebuilder/frontend/page/view?page_id=…
         $lockedVisitorUri = (string)(
             self::$parserServer['WELINE_ORIGIN_REQUEST_URI']
-            ?? $_SERVER['WELINE_ORIGIN_REQUEST_URI']
+            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
             ?? ''
         );
         $lockedPathLang = \trim((string)(
             self::$parserServer['WELINE_URL_PATH_LANG']
-            ?? $_SERVER['WELINE_URL_PATH_LANG']
+            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', '')
             ?? ''
         ));
         $decode_url = self::decode_url($url);
@@ -2509,7 +2537,11 @@ class Url implements UrlInterface
             $websiteUrl = '';
         }
         if ($websiteUrl === '') {
-            $websiteUrl = (string)($_SERVER['WELINE_WEBSITE_URL'] ?? '');
+            try {
+                $websiteUrl = (string)(\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', '') ?? '');
+            } catch (\Throwable) {
+                $websiteUrl = '';
+            }
         }
         if ($websiteUrl === '') {
             return '';

@@ -76,9 +76,14 @@ declare(strict_types=1);
     public static function render(array \$__vars): string
     {
         extract(\$__vars, EXTR_SKIP);
-        ob_start();
+        \\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture();
+        try {
         {$close}{$safeBody}{$php}
-        return ob_get_clean();
+            return \\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture();
+        } catch (\\Throwable \$__e) {
+            \\Weline\\Framework\\Runtime\\FiberOutputBuffer::discardCapture();
+            throw \$__e;
+        }
     }
     
     /**

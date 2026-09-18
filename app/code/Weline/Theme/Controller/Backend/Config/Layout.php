@@ -314,8 +314,28 @@ class Layout extends BackendController
         $this->assign('previewUrlBackend', $previewUrlBackend);
         $this->assign('themeMode', $themeMode);
 
-        // 使用新的可视化编辑器模板
-        return $this->fetch('Weline_Theme::templates/backend/config/visual-editor.phtml');
+        // Old config/visual-editor shell is retired. Always open ThemeEditor.
+        /** @var Url $url */
+        $url = ObjectManager::getInstance(Url::class);
+        $resolvedThemeId = $theme ? (int)$theme->getId() : 0;
+        $editorArea = $area === 'backend' ? 'backend' : 'frontend';
+        $params = [
+            'editor_area' => $editorArea,
+            'preview_area' => $editorArea,
+        ];
+        if ($resolvedThemeId > 0) {
+            $params['theme_id'] = $resolvedThemeId;
+            if ($editorArea === 'backend') {
+                $params['backend_theme_id'] = $resolvedThemeId;
+            } else {
+                $params['frontend_theme_id'] = $resolvedThemeId;
+            }
+        }
+        $this->request->getResponse()->redirect(
+            $url->getBackendUrl('theme/backend/theme-editor', $params)
+        );
+
+        return '';
     }
 
     /**
@@ -1071,7 +1091,8 @@ class Layout extends BackendController
      */
     private function getLayoutPreviewUrl(Url $url, array $layouts, int $themeId, string $scopePath): string
     {
-        // 统一走 ThemeEditor layout-preview 链路，避免业务路由差异影响主题预览
+        // Frontend preview must use the real storefront path + editor markers.
+        // Never open theme-preview/content or theme-editor/layout-preview as a fake canvas shell.
         $layoutType = 'homepage';
         $layoutOption = 'default';
         $priorityOrder = ['account', 'homepage', 'category', 'product', 'cart', 'checkout', 'default'];
@@ -1096,22 +1117,30 @@ class Layout extends BackendController
             $versionId = null;
         }
 
+        /** @var \Weline\Theme\Service\ThemePageTypeResolver $pageTypeResolver */
+        $pageTypeResolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePageTypeResolver::class);
+        $storefrontPath = $pageTypeResolver->getFrontendUrlPathForPreview($layoutType);
+
         $params = [
             'theme_id' => $themeId,
-            'layout_type' => $layoutType,
-            'layout_option' => $layoutOption,
+            'frontend_theme_id' => $themeId,
             'editor_mode' => '1',
+            'shell' => 'theme-editor',
             'preview_mode' => 'version',
             'status' => 'draft',
             'editor_area' => 'frontend',
+            'preview_area' => 'frontend',
             'scope' => $scopePath,
             '_t' => time(),
         ];
+        if ($layoutOption !== '' && $layoutOption !== 'default') {
+            $params['layout_option'] = $layoutOption;
+        }
         if ($versionId !== null && $versionId > 0) {
             $params['version_id'] = $versionId;
         }
 
-        return $url->getBackendUrl('theme/backend/theme-editor/layout-preview', $params);
+        return $url->getFrontendUrl($storefrontPath, $params);
     }
     
     /**

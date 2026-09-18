@@ -15,7 +15,6 @@ final class Index extends FrontendController
     {
         $this->layoutType = 'default';
         $this->request->setGet('page_type', 'compare');
-        $this->request->setGet('theme_public_route', 'compare');
         $this->request->setGet('theme_page_title', (string)__('商品对比'));
         $this->assign('page_title', (string)__('商品对比'));
 

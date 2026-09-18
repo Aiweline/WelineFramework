@@ -1033,6 +1033,7 @@ operation：%{id},operation：%{id}
 "未知阶段 code：%{1}。可选：%{2}","Unknown stage code: %{1}. Options: %{2}"
 "优先阶段过滤：%{1}（schema 三阶段全量路径仍必执行）","Priority stage filtering: %{1} (schema three-stage full path must still be executed)"
 "--route：复用已安装数据库结构，不执行声明式 Schema 更新。","--route: Reuse the installed database structure and do not perform declarative Schema updates."
+"委托升级 orphan 前 ACL 落盘失败：%{1}","委托升级 orphan 前 ACL 落盘失败：%{1}"
 委托部分更新已运行！,"Delegated partial update is now running!"
 "- 路由源指纹命中（全跳=%{all}，变更模块 %{n}），保留磁盘路由文件供 seed/跳扫","- 路由源指纹命中（全跳=%{all}，变更模块 %{n}），保留磁盘路由文件供 seed/跳扫"
 "清理模块 %{1} 的缓存...","Cleaning cache for module %{1}..."
@@ -1071,7 +1072,9 @@ operation：%{id},operation：%{id}
 "- 路由 Fiber 收集：%{total} 模块，并发 %{c}","- 路由 Fiber 收集：%{total} 模块，并发 %{c}"
 "- 路由扫描进度：[%{i}/%{total}] %{module}","- 路由扫描进度：[%{i}/%{total}] %{module}"
 模块路由注册失败：%{1},模块路由注册失败：%{1}
-"✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入","✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入"
+"✓ 路由扫描收集完成（内存缓冲）；先落盘控制器 ACL，再 orphan diff，路由文件仍在 route_update 提交时写入","✓ 路由扫描收集完成（内存缓冲）；先落盘控制器 ACL，再 orphan diff，路由文件仍在 route_update 提交时写入"
+"- orphan 前落盘暂存控制器 ACL 事件：%{n} 条…","- orphan 前落盘暂存控制器 ACL 事件：%{n} 条…"
+"orphan 前 ACL 落盘失败：%{1}","orphan 前 ACL 落盘失败：%{1}"
 "路由收集后 ACL 同步失败：%{1}","ACL sync failed after route collection: %{1}"
 "✓ 所有阶段准备完成","✓ All stages are ready"
 阶段准备失败：%{1},"Phase preparation failed: %{1}"
@@ -2436,6 +2439,7 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,"Route path"
 HTTP方法,"HTTP method"
 控制器,Controller
+"✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入","✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入"
 "模块 %{1} Schema 收集失败：%{2}","模块 %{1} Schema 收集失败：%{2}"
 "- 批量收集数据库更新任务...","- Batch collection of database update tasks..."
 "- 批量收集路由注册任务...","- Batch collection of route registration tasks..."

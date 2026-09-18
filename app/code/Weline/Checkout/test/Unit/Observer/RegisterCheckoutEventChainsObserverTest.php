@@ -37,6 +37,29 @@ final class RegisterCheckoutEventChainsObserverTest extends TestCase
             self::assertStringEndsWith('_checkout_success', (string)($chain['complete_event'] ?? ''));
             self::assertNotSame('checkout_success', $chain['complete_event'] ?? null);
         }
+        $express = null;
+        foreach ($chains as $chain) {
+            if (($chain['id'] ?? '') === 'checkout_express_pay') {
+                $express = $chain;
+                break;
+            }
+        }
+        self::assertNotNull($express);
+        $expressEvents = array_map(
+            static fn ($s) => (string)($s['event'] ?? ''),
+            is_array($express['steps'] ?? null) ? $express['steps'] : []
+        );
+        self::assertSame(
+            [
+                'express_pay',
+                'express_pay_started',
+                'express_pay_confirmed',
+                'express_pay_transaction',
+                'checkout_success',
+            ],
+            $expressEvents
+        );
+        self::assertSame('express_pay_checkout_success', $express['complete_event'] ?? null);
     }
 
     public function testEventXmlRegistersObserver(): void

@@ -91,12 +91,9 @@
                     </div>
 
                     <div class="w-alert" data-rate-mode-section='manual' data-tone="info" style="--w-mb:var(--weline-space-4);">
-                        <lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang>
+                        <lang>手动模式下，请在货币列表中维护各币种相对于当前基准货币的汇率。切换基准货币时，系统会按已有汇率比例自动换算到新基准。</lang>
                     </div>
 
-                    <div data-rate-mode-section='auto'>
-                    <!-- 自动导入开关 -->
-                    </div>
                     <div data-rate-mode-section='auto' style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label"><lang>启用自动导入</lang></label>
                         <div class="w-switch">
@@ -222,11 +219,10 @@
                         <input type='hidden' name='import_cron_time' id='import_cron_time' 
                                value='<?= htmlspecialchars($import_cron_time ?? '0 2 * * *') ?>' required>
                     </div>
-                    </div>
 
                     <!-- 基准货币 -->
-                    <div style="--w-mb:var(--weline-space-4);">
-                        <label class="w-field__label">
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="base_currency">
                             <lang>基准货币</lang>
                             <i class="mdi weline-icon--help-circle w-text" title='<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>' data-w-placement='top' data-w-component="tooltip" data-w-tooltip="<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>" data-tone="muted"></i>
                         </label>
@@ -254,12 +250,12 @@
                             <w:icon name="warning" size="sm"></w:icon>
                             <strong><lang>警告：切换基准货币的影响</lang></strong>
                             <ul style="--w-mb:var(--weline-space-2);--w-mt:var(--weline-space-2);">
-                                <li><lang>所有货币的汇率都是相对于基准货币计算的，切换基准货币会导致所有汇率数据失效</lang></li>
-                                <li><lang>切换后，您需要重新导入汇率数据，否则汇率计算将不准确</lang></li>
-                                <li><lang>建议：切换基准货币前，先备份当前汇率数据，然后执行"手动导入"更新所有汇率</lang></li>
+                                <li><lang>切换前会弹出汇率对照表，列出每个货币从旧汇率到新汇率的纠正结果</lang></li>
+                                <li><lang>只有您点击「确认并应用这些汇率」后，才会写入新基准与纠正后的 rate</lang></li>
+                                <li><lang>取消则不改动数据库；手动/自动模式均走同一确认流程</lang></li>
                             </ul>
                             <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
-                                <button type='button' class="w-button" id='confirm_base_currency_change' data-tone="warning" data-size="sm">
+                                <button type='button' class="w-button" id='confirm_base_currency_change' data-currency-config-action='preview-base-change' data-tone="warning" data-size="sm">
                                     <w:icon name="check" size="sm"></w:icon><lang>我已了解，确认切换</lang>
                                 </button>
                                 <button type='button' class="w-button" data-currency-config-action='reset-base' data-tone="neutral" data-size="sm">
@@ -297,7 +293,7 @@
                     </div>
 
                     <!-- 最后导入时间 -->
-                    <div style="--w-mb:var(--weline-space-4);">
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label"><lang>最后导入时间</lang></label>
                         <input type='text' class="w-input" readonly value='<?= htmlspecialchars($last_import_time_formatted ?? __('从未导入')) ?>'>
                     </div>
@@ -317,38 +313,55 @@
     </div>
 </div>
 
-<!-- 基准货币切换确认模态框 -->
+<!-- 基准货币切换：汇率对照确认（确认前不写库） -->
 <div class="w-dialog" id='baseCurrencyChangeModal' tabindex='-1' aria-labelledby='baseCurrencyChangeModalLabel' aria-hidden='true' data-w-component="dialog" data-state="closed" hidden>
     <div class="w-dialog__frame">
-        <div class="w-dialog__surface">
+        <div class="w-dialog__surface" style="max-width:52rem;width:min(96vw,52rem);">
             <div class="w-dialog__header w-text" data-w-background="warning" data-tone="muted">
                 <h5 class="w-dialog__title" id='baseCurrencyChangeModalLabel'>
                     <w:icon name="warning" size="sm"></w:icon>
-                    <lang>确认切换基准货币</lang>
+                    <lang>确认汇率纠正对照</lang>
                 </h5>
-                <button type='button' class="w-button" aria-label='Close' data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                <button type='button' class="w-button" aria-label='Close' data-w-action="dialog.close" data-currency-config-action='cancel-base-preview' data-tone="quiet" data-size="sm"></button>
             </div>
             <div class="w-dialog__body">
                 <div class="w-alert" data-tone="warning" style="--w-mb:var(--weline-space-4);">
-                    <strong><lang>警告：此操作将影响所有货币汇率数据！</lang></strong>
+                    <strong><lang>请先核对下表。只有点击「确认并应用」后，才会写入新的基准货币与汇率。</lang></strong>
                 </div>
-                <p><lang>您正在将基准货币从</lang> <strong id='modal_old_base_currency'></strong> <lang>切换为</lang> <strong id='modal_new_base_currency'></strong></p>
-                <ul style="--w-mb:var(--weline-space-4);">
-                    <li><lang>所有货币的汇率将根据新的基准货币重新计算</lang></li>
-                    <li><lang>系统将自动更新所有货币数据</lang></li>
-                    <li><lang>此操作不可撤销，请确保您已了解影响</lang></li>
-                </ul>
-                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
-                    <w:icon name="info" size="sm"></w:icon>
-                    <lang>切换后，系统将自动更新所有货币汇率，请等待更新完成</lang>
+                <p style="--w-mb:var(--weline-space-2);">
+                    <lang>基准货币将从</lang>
+                    <strong id='modal_old_base_currency'></strong>
+                    <lang>切换为</lang>
+                    <strong id='modal_new_base_currency'></strong>
                 </p>
+                <p class="w-text" data-tone="muted" data-size="sm" id='modal_rate_formula' style="--w-mb:var(--weline-space-4);"></p>
+                <div id='modal_rate_preview_loading' class="w-text" data-tone="muted" style="display:none;--w-mb:var(--weline-space-4);">
+                    <lang>正在计算汇率对照…</lang>
+                </div>
+                <div id='modal_rate_preview_error' class="w-alert" data-tone="danger" style="display:none;--w-mb:var(--weline-space-4);"></div>
+                <div style="max-height:22rem;overflow:auto;--w-mb:var(--weline-space-2);">
+                    <table class="w-table" id='modal_rate_preview_table' style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th><lang>货币</lang></th>
+                                <th><lang>原汇率含义</lang></th>
+                                <th><lang>原 rate</lang></th>
+                                <th><lang>新汇率含义</lang></th>
+                                <th><lang>新 rate</lang></th>
+                                <th><lang>状态</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody id='modal_rate_preview_body'></tbody>
+                    </table>
+                </div>
+                <p class="w-text" data-tone="muted" data-size="sm" id='modal_rate_preview_summary' style="--w-mb:0;"></p>
             </div>
             <div class="w-dialog__footer">
-                <button type='button' class="w-button" data-w-action="dialog.close" data-tone="neutral">
-                    <w:icon name="close" size="sm"></w:icon><lang>取消</lang>
+                <button type='button' class="w-button" data-w-action="dialog.close" data-currency-config-action='cancel-base-preview' data-tone="neutral">
+                    <w:icon name="close" size="sm"></w:icon><lang>取消，不修改</lang>
                 </button>
-                <button type='button' class="w-button" id='confirmBaseCurrencyChangeBtn' data-tone="warning">
-                    <w:icon name="check" size="sm"></w:icon><lang>确认切换并更新</lang>
+                <button type='button' class="w-button" id='confirmBaseCurrencyChangeBtn' data-tone="warning" disabled>
+                    <w:icon name="check" size="sm"></w:icon><lang>确认并应用这些汇率</lang>
                 </button>
             </div>
         </div>
@@ -366,7 +379,7 @@
                 </h5>
             </div>
             <div class="w-dialog__body">
-                <p style="--w-mb:var(--weline-space-4);"><lang>正在重新计算所有货币的汇率，请稍候...</lang></p>
+                <p style="--w-mb:var(--weline-space-4);"><lang>正在通过 SSE 推送基准货币切换与汇率纠正进度，请稍候…</lang></p>
                 
                 <div class="w-progress" style='height: 30px;'>
                     <div id='update_progress_bar' class="w-progress__bar progress-bar-striped progress-bar-animated" role='progressbar' style='width: 0%' aria-valuenow='0' aria-valuemin='0' aria-valuemax='100'>
@@ -376,9 +389,11 @@
                 
                 <div style="--w-mb:var(--weline-space-2);">
                     <small class="w-text" data-tone="muted">
-                        <lang>当前处理：</lang><span id='update_current_currency' class="w-text" data-weight="strong">-</span>
+                        <lang>当前步骤：</lang><span id='update_current_currency' class="w-text" data-weight="strong">-</span>
                     </small>
                 </div>
+
+                <div id='update_sse_log' data-w-border="border" data-w-radius="md" style="max-height:14rem;overflow:auto;--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-3);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-3);--w-mb:var(--weline-space-4);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--weline-font-size-sm);"></div>
                 
                 <div class="w-grid w-text" data-align="center" style="--w-mt:var(--weline-space-4);">
                     <div style="--w-span:4;">
@@ -388,15 +403,16 @@
                         </div>
                     </div>
                     <div style="--w-span:4;">
-                        <div class="w-text" data-w-border="border" data-w-radius="md" data-w-background="success" data-tone="inverse" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
-                            <div class="h5" id='update_success_count' style="--w-mb:0;">0</div>
-                            <small><lang>成功</lang></small>
+                        <?php /* 浅底+inverse 白字叠浅绿/浅红对比度崩；与总计同结构，语义色只上数字与标签 */ ?>
+                        <div data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                            <div class="h5 w-text" id='update_success_count' data-tone="success" style="--w-mb:0;">0</div>
+                            <small class="w-text" data-tone="success"><lang>成功</lang></small>
                         </div>
                     </div>
                     <div style="--w-span:4;">
-                        <div class="w-text" data-w-border="border" data-w-radius="md" data-w-background="danger" data-tone="inverse" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
-                            <div class="h5" id='update_fail_count' style="--w-mb:0;">0</div>
-                            <small><lang>失败</lang></small>
+                        <div data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                            <div class="h5 w-text" id='update_fail_count' data-tone="danger" style="--w-mb:0;">0</div>
+                            <small class="w-text" data-tone="danger"><lang>失败</lang></small>
                         </div>
                     </div>
                 </div>
@@ -427,6 +443,12 @@
     var WelineCurrencyConfig = {
         changeModalInstance: null,
         progressModalInstance: null,
+
+        resolveForm: function() {
+            return document.querySelector('[data-testid="currency-config-form"]')
+                || document.querySelector('form.w-form')
+                || document.querySelector('form.needs-validation');
+        },
         
         init: function() {
             var self = this;
@@ -436,7 +458,6 @@
             this.changeModalInstance = changeModal;
             this.progressModalInstance = progressModal;
             
-            // 监听表单提交
             self.updateRateModeSections();
             document.querySelectorAll('input[name="rate_mode"]').forEach(function(input) {
                 input.addEventListener('change', function() {
@@ -444,7 +465,7 @@
                 });
             });
 
-            var form = document.querySelector('form.needs-validation');
+            var form = self.resolveForm();
             var baseCurrencySelect = document.getElementById('base_currency');
             
             if (form) {
@@ -453,72 +474,64 @@
                     var newValue = baseCurrencySelect.value;
                     
                     if (newValue !== originalValue) {
-                        if (!form.dataset.baseCurrencyConfirmed) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            
-                            document.getElementById('modal_old_base_currency').textContent = originalValue;
-                            document.getElementById('modal_new_base_currency').textContent = newValue;
-                            
-                            if (self.changeModalInstance) {
-                                Weline.UI.dialog.open(self.changeModalInstance);
-                            }
-                        } else {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            self.submitFormWithCurrencyUpdate(originalValue, newValue, form);
-                        }
+                        e.preventDefault();
+                        e.stopPropagation();
+                        self.openBaseCurrencyPreview(originalValue, newValue, form);
                     }
                 });
-                
-                // 确认切换按钮事件
-                var confirmModalBtn = document.getElementById('confirmBaseCurrencyChangeBtn');
-                if (confirmModalBtn) {
-                    confirmModalBtn.addEventListener('click', function() {
-                        var originalValue = baseCurrencySelect.getAttribute('data-original-value');
-                        var newValue = baseCurrencySelect.value;
-                        
-                        form.dataset.baseCurrencyConfirmed = 'true';
-                        
-                        if (self.changeModalInstance) {
-                            Weline.UI.dialog.close(self.changeModalInstance, 'confirmed');
-                        }
-                        
-                        self.submitFormWithCurrencyUpdate(originalValue, newValue, form);
-                    });
-                }
-                
-                var confirmBtn = document.getElementById('confirm_base_currency_change');
-                if (confirmBtn) {
-                    confirmBtn.addEventListener('click', function() {
-                        var originalValue = baseCurrencySelect.getAttribute('data-original-value');
-                        var newValue = baseCurrencySelect.value;
-                        
-                        document.getElementById('modal_old_base_currency').textContent = originalValue;
-                        document.getElementById('modal_new_base_currency').textContent = newValue;
-                        
-                        if (self.changeModalInstance) {
-                            Weline.UI.dialog.open(self.changeModalInstance);
-                        }
-                    });
-                }
+            }
+
+            var confirmModalBtn = document.getElementById('confirmBaseCurrencyChangeBtn');
+            if (confirmModalBtn) {
+                confirmModalBtn.addEventListener('click', function() {
+                    if (confirmModalBtn.disabled) {
+                        return;
+                    }
+                    var activeForm = self.resolveForm();
+                    var originalValue = baseCurrencySelect.getAttribute('data-original-value');
+                    var newValue = baseCurrencySelect.value;
+                    
+                    if (self.changeModalInstance) {
+                        Weline.UI.dialog.close(self.changeModalInstance, 'confirmed');
+                    }
+                    
+                    self.applyBaseCurrencyWithSse(originalValue, newValue, activeForm);
+                });
+            }
+
+            var confirmBtn = document.getElementById('confirm_base_currency_change');
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    var activeForm = self.resolveForm();
+                    var originalValue = baseCurrencySelect.getAttribute('data-original-value');
+                    var newValue = baseCurrencySelect.value;
+                    if (newValue === originalValue) {
+                        Weline.UI.toast.info('<?= __('基准货币未变化') ?>');
+                        return;
+                    }
+                    self.openBaseCurrencyPreview(originalValue, newValue, activeForm);
+                });
             }
             
-            // 频率改变事件
-            document.getElementById('cron_frequency').addEventListener('change', function() {
-                var frequency = this.value;
-                
-                document.getElementById('time_selector').style.display = 
-                    (frequency === 'daily' || frequency === 'weekly' || frequency === 'monthly') ? 'block' : 'none';
-                document.getElementById('weekday_selector').style.display = 
-                    (frequency === 'weekly') ? 'block' : 'none';
-                document.getElementById('day_selector').style.display = 
-                    (frequency === 'monthly') ? 'block' : 'none';
-                document.getElementById('custom_selector').style.display = 
-                    (frequency === 'custom') ? 'block' : 'none';
-                
-                self.updateCronExpression();
-            });
+            var cronFrequency = document.getElementById('cron_frequency');
+            if (cronFrequency) {
+                cronFrequency.addEventListener('change', function() {
+                    var frequency = this.value;
+                    
+                    document.getElementById('time_selector').style.display = 
+                        (frequency === 'daily' || frequency === 'weekly' || frequency === 'monthly') ? 'block' : 'none';
+                    document.getElementById('weekday_selector').style.display = 
+                        (frequency === 'weekly') ? 'block' : 'none';
+                    document.getElementById('day_selector').style.display = 
+                        (frequency === 'monthly') ? 'block' : 'none';
+                    document.getElementById('custom_selector').style.display = 
+                        (frequency === 'custom') ? 'block' : 'none';
+                    
+                    self.updateCronExpression();
+                });
+            }
 
             ['cron_hour', 'cron_minute', 'cron_weekday', 'cron_day', 'cron_custom'].forEach(function(id) {
                 var control = document.getElementById(id);
@@ -547,7 +560,18 @@
                     self.testApi({ target: trigger });
                     return;
                 }
-                if (action === 'reset-base') {
+                if (action === 'preview-base-change') {
+                    var activeForm = self.resolveForm();
+                    var originalValue = baseCurrencySelect.getAttribute('data-original-value');
+                    var newValue = baseCurrencySelect.value;
+                    if (newValue === originalValue) {
+                        Weline.UI.toast.info('<?= __('基准货币未变化') ?>');
+                        return;
+                    }
+                    self.openBaseCurrencyPreview(originalValue, newValue, activeForm);
+                    return;
+                }
+                if (action === 'reset-base' || action === 'cancel-base-preview') {
                     self.resetBaseCurrency();
                     return;
                 }
@@ -556,9 +580,10 @@
                 }
             });
             
-            // 解析现有 Cron 表达式
-            var currentCron = document.getElementById('import_cron_time').value;
-            this.parseCronExpression(currentCron);
+            var cronInput = document.getElementById('import_cron_time');
+            if (cronInput) {
+                this.parseCronExpression(cronInput.value);
+            }
         },
         
         updateRateModeSections: function() {
@@ -665,7 +690,7 @@
             var originalValue = selectElement.getAttribute('data-original-value');
             var newValue = selectElement.value;
             var warningDiv = document.getElementById('base_currency_warning');
-            var form = document.querySelector('form.needs-validation');
+            var form = this.resolveForm();
             
             if (newValue !== originalValue) {
                 warningDiv.style.display = 'block';
@@ -683,54 +708,328 @@
             baseCurrencySelect.value = originalValue;
             document.getElementById('base_currency_warning').style.display = 'none';
             
-            var form = document.querySelector('form.needs-validation');
+            var form = this.resolveForm();
             if (form) delete form.dataset.baseCurrencyConfirmed;
+
+            var confirmBtn = document.getElementById('confirmBaseCurrencyChangeBtn');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+            }
         },
-        
-        submitFormWithCurrencyUpdate: function(oldBaseCurrency, newBaseCurrency, form) {
+
+        openBaseCurrencyPreview: function(oldBaseCurrency, newBaseCurrency, form) {
             var self = this;
+            form = form || this.resolveForm();
+            var confirmBtn = document.getElementById('confirmBaseCurrencyChangeBtn');
+            var loadingEl = document.getElementById('modal_rate_preview_loading');
+            var errorEl = document.getElementById('modal_rate_preview_error');
+            var bodyEl = document.getElementById('modal_rate_preview_body');
+            var summaryEl = document.getElementById('modal_rate_preview_summary');
+            var formulaEl = document.getElementById('modal_rate_formula');
+            var previewUrl = '@backend-url{'currency/backend/config/preview-base-currency-change'}';
+
+            document.getElementById('modal_old_base_currency').textContent = oldBaseCurrency;
+            document.getElementById('modal_new_base_currency').textContent = newBaseCurrency;
+            if (formulaEl) {
+                formulaEl.textContent = '';
+            }
+            if (bodyEl) {
+                bodyEl.innerHTML = '';
+            }
+            if (summaryEl) {
+                summaryEl.textContent = '';
+            }
+            if (errorEl) {
+                errorEl.style.display = 'none';
+                errorEl.textContent = '';
+            }
+            if (loadingEl) {
+                loadingEl.style.display = '';
+            }
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+            }
+
+            if (this.changeModalInstance) {
+                Weline.UI.dialog.open(this.changeModalInstance);
+            } else {
+                Weline.UI.toast.error('<?= __('无法打开确认弹窗') ?>');
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', previewUrl, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.withCredentials = true;
+            xhr.onload = function() {
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
+                var data = null;
+                try {
+                    data = JSON.parse(xhr.responseText || '{}');
+                } catch (e) {
+                    data = null;
+                }
+                if (xhr.status < 200 || xhr.status >= 300 || !data || !data.success || !data.data) {
+                    if (errorEl) {
+                        errorEl.style.display = '';
+                        var fallback = '<?= __('预览失败') ?>' + (xhr.status ? (' (HTTP ' + xhr.status + ')') : '');
+                        if (!data || !data.message) {
+                            var raw = String(xhr.responseText || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                            if (raw && raw.length < 180) {
+                                fallback += ': ' + raw;
+                            }
+                        }
+                        errorEl.textContent = (data && data.message) ? data.message : fallback;
+                    }
+                    return;
+                }
+
+                var preview = data.data;
+                if (formulaEl) {
+                    formulaEl.textContent = preview.formula || '';
+                }
+                if (Array.isArray(preview.errors) && preview.errors.length) {
+                    if (errorEl) {
+                        errorEl.style.display = '';
+                        errorEl.textContent = preview.errors.map(function(item) {
+                            return (item.currency || '') + ': ' + (item.error || '');
+                        }).join('；');
+                    }
+                }
+
+                if (bodyEl) {
+                    bodyEl.innerHTML = '';
+                    (preview.changes || []).forEach(function(row) {
+                        var tr = document.createElement('tr');
+                        var statusText = row.is_new_base
+                            ? '<?= __('新基准（rate=1）') ?>'
+                            : (row.changed ? '<?= __('将纠正') ?>' : '<?= __('不变') ?>');
+
+                        tr.innerHTML =
+                            '<td><strong>' + self.escapeHtml(row.code) + '</strong><br><span class="w-text" data-size="sm" data-tone="muted">' + self.escapeHtml(row.name || '') + '</span></td>' +
+                            '<td>' + self.escapeHtml(row.old_meaning || '') + '</td>' +
+                            '<td><code>' + self.escapeHtml(String(row.old_rate)) + '</code></td>' +
+                            '<td>' + self.escapeHtml(row.new_meaning || '') + '</td>' +
+                            '<td><code>' + self.escapeHtml(String(row.new_rate)) + '</code></td>' +
+                            '<td>' + statusText + '</td>';
+                        bodyEl.appendChild(tr);
+                    });
+                }
+
+                if (summaryEl) {
+                    // 勿在 PHP 侧裸调 __('%{1}')，否则占位符会被译空；用字面模板再在前端替换。
+                    var summaryTpl = <?= json_encode('共 %{1} 个货币，其中 %{2} 个将纠正写入。确认前不会修改数据库。', JSON_UNESCAPED_UNICODE) ?>;
+                    summaryEl.textContent = summaryTpl
+                        .replace('%{1}', String(preview.total_count || (preview.changes || []).length || 0))
+                        .replace('%{2}', String(preview.changed_count || 0));
+                }
+
+                if (confirmBtn) {
+                    confirmBtn.disabled = (preview.changes || []).length === 0;
+                }
+            };
+            xhr.onerror = function() {
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
+                if (errorEl) {
+                    errorEl.style.display = '';
+                    errorEl.textContent = '<?= __('预览请求失败') ?>';
+                }
+            };
+            xhr.send(new URLSearchParams({
+                old_base_currency: oldBaseCurrency,
+                new_base_currency: newBaseCurrency
+            }).toString());
+        },
+
+        escapeHtml: function(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        },
+
+        appendSseLog: function(message) {
+            var logEl = document.getElementById('update_sse_log');
+            if (!logEl) {
+                return;
+            }
+            var line = document.createElement('div');
+            line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + String(message || '');
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        },
+
+        setProgressPercent: function(percent) {
+            percent = Math.max(0, Math.min(100, Number(percent) || 0));
+            var bar = document.getElementById('update_progress_bar');
+            var text = document.getElementById('update_progress_text');
+            if (bar) {
+                bar.style.width = percent + '%';
+                bar.setAttribute('aria-valuenow', String(percent));
+            }
+            if (text) {
+                text.textContent = Math.round(percent) + '%';
+            }
+        },
+
+        applyBaseCurrencyWithSse: function(oldBaseCurrency, newBaseCurrency, form) {
+            var self = this;
+            form = form || this.resolveForm();
             var baseCurrencySelect = document.getElementById('base_currency');
-            
+            var streamUrl = '@backend-url{'currency/backend/config/apply-base-currency-change-stream'}';
+
             if (this.progressModalInstance) {
                 Weline.UI.dialog.open(this.progressModalInstance);
             }
-            
             this.resetProgress();
-            
-            var formData = new FormData(form);
-            formData.append('isAjax', '1');
-            
-            Weline.adminRequest('currency', form.action || window.location.href, {
+            this.appendSseLog('<?= __('连接 SSE，准备写入…') ?>');
+
+            var body = new URLSearchParams();
+            if (form) {
+                new FormData(form).forEach(function(value, key) {
+                    body.append(key, value);
+                });
+            }
+            body.set('old_base_currency', oldBaseCurrency);
+            body.set('new_base_currency', newBaseCurrency);
+            body.set('base_currency', newBaseCurrency);
+            body.set('confirm_base_currency_apply', '1');
+
+            fetch(streamUrl, {
                 method: 'POST',
-                body: formData
-            })
-            .then(function(response){ return response; })
-            .then(function(data) {
-                if (data.success && data.base_currency_changed) {
-                    self.updateCurrencyRates(oldBaseCurrency, newBaseCurrency, form);
-                } else if (data.success) {
-                    if (self.progressModalInstance) {
-                        Weline.UI.dialog.close(self.progressModalInstance, 'complete');
-                    }
-                    Weline.UI.toast.success(data.message || '<?= __('配置保存成功！') ?>');
-                    baseCurrencySelect.setAttribute('data-original-value', newBaseCurrency);
-                    form.dataset.baseCurrencyConfirmed = '';
-                    setTimeout(function() { window.location.reload(); }, 1000);
-                } else {
-                    if (self.progressModalInstance) {
-                        Weline.UI.dialog.close(self.progressModalInstance, 'error');
-                    }
-                    Weline.UI.toast.error(data.message || '<?= __('配置保存失败') ?>');
-                    form.dataset.baseCurrencyConfirmed = '';
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'text/event-stream',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'include',
+                body: body.toString()
+            }).then(function(response) {
+                var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
                 }
-            })
-            .catch(function(error) {
-                if (self.progressModalInstance) {
-                    Weline.UI.dialog.close(self.progressModalInstance, 'error');
+                if (contentType.indexOf('text/event-stream') === -1) {
+                    return response.json().then(function(data) {
+                        throw new Error((data && data.message) ? data.message : '<?= __('未返回 SSE 流') ?>');
+                    });
                 }
-                Weline.UI.toast.error('<?= __('请求失败') ?>');
-                form.dataset.baseCurrencyConfirmed = '';
+                return self.consumeSse(response, function(eventName, data) {
+                    var message = (data && data.message) ? String(data.message) : eventName;
+                    var progress = data && data.progress != null ? Number(data.progress) : null;
+                    if (isFinite(progress)) {
+                        self.setProgressPercent(progress);
+                    }
+                    if (data && data.currency) {
+                        document.getElementById('update_current_currency').textContent = data.currency;
+                    } else if (data && data.step) {
+                        document.getElementById('update_current_currency').textContent = data.step;
+                    }
+                    if (data && data.total != null) {
+                        document.getElementById('update_total_count').textContent = String(data.total);
+                    }
+                    if (data && data.current != null) {
+                        document.getElementById('update_success_count').textContent = String(data.current);
+                    }
+                    if (eventName === 'done') {
+                        document.getElementById('update_total_count').textContent = String(data.total_count || 0);
+                        document.getElementById('update_success_count').textContent = String(data.success_count || 0);
+                        document.getElementById('update_fail_count').textContent = String(data.fail_count || 0);
+                        self.setProgressPercent(100);
+                        document.getElementById('update_progress_bar').classList.remove('progress-bar-animated');
+                        document.getElementById('update_progress_footer').style.display = 'block';
+                        if (baseCurrencySelect) {
+                            baseCurrencySelect.setAttribute('data-original-value', newBaseCurrency);
+                        }
+                        document.getElementById('base_currency_warning').style.display = 'none';
+                        Weline.UI.toast.success(message);
+                    }
+                    if (eventName === 'error') {
+                        document.getElementById('update_errors').style.display = 'block';
+                        var list = document.getElementById('update_errors_list');
+                        list.innerHTML = '';
+                        var li = document.createElement('li');
+                        li.textContent = message;
+                        list.appendChild(li);
+                        document.getElementById('update_progress_footer').style.display = 'block';
+                        Weline.UI.toast.error(message);
+                        self.resetBaseCurrency();
+                    }
+                    self.appendSseLog(message);
+                });
+            }).catch(function(error) {
+                self.appendSseLog(error && error.message ? error.message : '<?= __('SSE 失败') ?>');
+                document.getElementById('update_errors').style.display = 'block';
+                document.getElementById('update_progress_footer').style.display = 'block';
+                Weline.UI.toast.error(error && error.message ? error.message : '<?= __('SSE 失败') ?>');
+                self.resetBaseCurrency();
             });
+        },
+
+        consumeSse: function(response, onEvent) {
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder('utf-8');
+            var buffer = '';
+            var eventName = 'message';
+            var dataLines = [];
+
+            function flushEvent() {
+                if (!dataLines.length) {
+                    eventName = 'message';
+                    return;
+                }
+                var raw = dataLines.join('\n');
+                dataLines = [];
+                var payload = raw;
+                try {
+                    payload = JSON.parse(raw);
+                } catch (e) {}
+                onEvent(eventName || 'message', payload);
+                eventName = 'message';
+            }
+
+            function pump() {
+                return reader.read().then(function(result) {
+                    if (result.done) {
+                        buffer += decoder.decode();
+                        if (buffer.trim()) {
+                            buffer.split(/\r?\n/).forEach(function(line) {
+                                if (line.indexOf('event:') === 0) {
+                                    eventName = line.slice(6).trim();
+                                } else if (line.indexOf('data:') === 0) {
+                                    dataLines.push(line.slice(5).trim());
+                                } else if (line === '') {
+                                    flushEvent();
+                                }
+                            });
+                            flushEvent();
+                        }
+                        return;
+                    }
+                    buffer += decoder.decode(result.value, { stream: true });
+                    var parts = buffer.split(/\r?\n/);
+                    buffer = parts.pop();
+                    parts.forEach(function(line) {
+                        if (line.indexOf('event:') === 0) {
+                            eventName = line.slice(6).trim();
+                        } else if (line.indexOf('data:') === 0) {
+                            dataLines.push(line.slice(5).trim());
+                        } else if (line === '') {
+                            flushEvent();
+                        }
+                    });
+                    return pump();
+                });
+            }
+
+            return pump();
         },
         
         updateCurrencyRates: function(oldBaseCurrency, newBaseCurrency, form) {
@@ -789,6 +1088,10 @@
             document.getElementById('update_errors').style.display = 'none';
             document.getElementById('update_errors_list').innerHTML = '';
             document.getElementById('update_progress_footer').style.display = 'none';
+            var logEl = document.getElementById('update_sse_log');
+            if (logEl) {
+                logEl.innerHTML = '';
+            }
         },
         
         updateProgress: function(total, success, fail, errors) {

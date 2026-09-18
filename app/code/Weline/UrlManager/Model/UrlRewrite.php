@@ -61,6 +61,23 @@ class UrlRewrite extends Model
         $this->setData(self::schema_fields_PATH_FINGERPRINT, self::pathFingerprint($path));
     }
 
+    public function save_after()
+    {
+        parent::save_after();
+        self::invalidateSeoRewriteCaches();
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        self::invalidateSeoRewriteCaches();
+    }
+
+    public static function invalidateSeoRewriteCaches(): void
+    {
+        \Weline\UrlManager\Observer\SeoUrlGenerateRewrite::invalidateCaches();
+    }
+
     public static function pathFingerprint(string $path): string
     {
         return \hash('sha256', $path);

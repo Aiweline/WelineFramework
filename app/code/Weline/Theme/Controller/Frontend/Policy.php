@@ -33,7 +33,7 @@ class Policy extends FrontendController
      */
     public function index()
     {
-        if ((string)$this->request->getParam('theme_public_route', '') !== '') {
+        if ((string)$this->request->getParam('layout_type', '') !== '') {
             return $this->renderPublicThemeLayout();
         }
 
@@ -193,7 +193,19 @@ class Policy extends FrontendController
 
     private function renderThroughThemeLayout(): string
     {
-        return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+        $layoutType = $this->sanitizeLayoutName((string)$this->request->getParam('layout_type', 'policy'));
+        $layoutOption = $this->sanitizeLayoutName((string)$this->request->getParam('layout_option', 'default'));
+        if (str_contains($layoutType, '.')) {
+            [$type, $option] = explode('.', $layoutType, 2);
+            $layoutType = $type !== '' ? $type : 'policy';
+            if ($layoutOption === 'default' && $option !== '') {
+                $layoutOption = $option;
+            }
+        }
+
+        return (string)$this->fetch(
+            'Weline_Theme::theme/frontend/layouts/' . $layoutType . '/' . $layoutOption . '.phtml'
+        );
     }
 
     /**

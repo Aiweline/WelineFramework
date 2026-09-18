@@ -38,6 +38,12 @@ final class UpgradeSpeedSkipContractTest extends TestCase
         self::assertStringContainsString('resolveRouteFingerprintPlan', $src);
         self::assertStringContainsString('seed_partial', $src);
         self::assertStringContainsString("'touched_modules' => \$touchedForAcl", $src);
+        self::assertStringContainsString('flushDeferredControllerAttributes', $src);
+        self::assertStringContainsString('orphan 前落盘暂存控制器 ACL', $src);
+        self::assertMatchesRegularExpression(
+            '/flushDeferredControllerAttributes\(\).*after_route_collection/s',
+            $src
+        );
         self::assertStringContainsString('force-optimize', $src);
         self::assertStringContainsString('OPTIMIZE_STAMP_KEY', $src);
         self::assertStringContainsString('seedBatchFromDisk', $src);
@@ -82,7 +88,7 @@ final class UpgradeSpeedSkipContractTest extends TestCase
         $srcFp = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/Http/StaticErrorPagePublishFingerprint.php'
         );
-        self::assertStringContainsString('404v5|', $srcFp);
+        self::assertStringContainsString('404v6|', $srcFp);
         self::assertStringContainsString('maintv3|', $srcFp);
         self::assertStringContainsString('localeDictionaryToken', $srcFp);
         self::assertStringContainsString('mergeUpdates', (string)\file_get_contents(

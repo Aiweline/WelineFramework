@@ -18,8 +18,8 @@ class ActiveLocaleCodeProvider
     private const FIELD_IS_ACTIVE = 'is_active';
     private const FIELD_CODE = 'code';
 
-    /** @var array<string, list<string>> */
-    private array $installedActiveCodes = [];
+    /** @var array<string, list<string>> 进程级 installed+active 列表 */
+    private static array $processInstalledActiveCodes = [];
 
     public function __construct(
         private readonly Locals $locals,
@@ -42,11 +42,17 @@ class ActiveLocaleCodeProvider
     }
 
     /**
-     * Drop request/process memo so the next read reloads from Locals/Locale.
+     * Drop process memo so the next read reloads from Locals/Locale.
+     * Called on locale catalog change and process cache reset.
      */
     public function reset(): void
     {
-        $this->installedActiveCodes = [];
+        self::clearProcessCache();
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processInstalledActiveCodes = [];
     }
 
     /**
@@ -55,8 +61,8 @@ class ActiveLocaleCodeProvider
     public function getInstalledActiveCodes(): array
     {
         $cacheKey = DictionaryCacheNamespace::cacheKey('installed-active-locales');
-        if (isset(DictionaryCacheNamespace::localCache($this->installedActiveCodes, 128)[$cacheKey])) {
-            return DictionaryCacheNamespace::localCache($this->installedActiveCodes, 128)[$cacheKey];
+        if (isset(DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey])) {
+            return DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey];
         }
 
         $codes = [];
@@ -68,7 +74,7 @@ class ActiveLocaleCodeProvider
             $this->pushCode($codes, $seen, $code);
         }
 
-        return DictionaryCacheNamespace::localCache($this->installedActiveCodes, 128)[$cacheKey] = $codes;
+        return DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
     }
 
     /**

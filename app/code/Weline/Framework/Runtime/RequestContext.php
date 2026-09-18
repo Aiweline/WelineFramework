@@ -25,6 +25,7 @@ class RequestContext
 
     private const STORAGE_PATH = 'runtime.request_context.storage';
     private const CLEANUP_PATH = 'runtime.request_context.cleanup_callbacks';
+    private const CAPTURE_DISCARD_PATH = 'runtime.request_context.capture_discard_callbacks';
     private const REQUEST_ID_PATH = 'runtime.request_context.request_id';
     private const CONNECTION_ID_PATH = 'runtime.request_context.connection_id';
     private const START_TIME_PATH = 'runtime.request_context.start_time';
@@ -41,6 +42,7 @@ class RequestContext
         $context = self::ensureContext(true);
         $context->set(self::STORAGE_PATH, []);
         $context->set(self::CLEANUP_PATH, []);
+        $context->set(self::CAPTURE_DISCARD_PATH, []);
         $requestId = self::generateRequestId();
         $connectionId = self::isWlsRequestContext($context)
             ? self::resolveConnectionId($context, (array)$context->get('input.server', []))
@@ -100,9 +102,9 @@ class RequestContext
         $context->set('runtime.connection_id', $normalized ?? '');
         $context->set('runtime.chain_id', self::buildChainId($context, $normalized));
         if ($normalized !== null) {
-            $_SERVER['WELINE_CONNECTION_ID'] = $normalized;
+            self::publishServer('WELINE_CONNECTION_ID', $normalized);
         } else {
-            unset($_SERVER['WELINE_CONNECTION_ID']);
+            self::forgetServer('WELINE_CONNECTION_ID');
         }
     }
 
@@ -207,6 +209,74 @@ class RequestContext
         $context->set(self::INITIALIZED_PATH, true);
     }
 
+    /**
+     * Register a callback when FiberOutputBuffer::discardCapture() drops a capture frame.
+     * Used so once-per-request asset flags can reset when HTML containing those assets is discarded.
+     */
+    public static function onCaptureDiscard(callable $callback, ?string $name = null): void
+    {
+        $context = self::ensureContext();
+        $callbacks = (array)$context->get(self::CAPTURE_DISCARD_PATH, []);
+        if ($name !== null) {
+            $callbacks[$name] = $callback;
+        } else {
+            $callbacks[] = $callback;
+        }
+        $context->set(self::CAPTURE_DISCARD_PATH, $callbacks);
+        $context->set(self::INITIALIZED_PATH, true);
+    }
+
+    public static function removeCaptureDiscard(string $name): void
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return;
+        }
+        $callbacks = (array)$context->get(self::CAPTURE_DISCARD_PATH, []);
+        if (!\array_key_exists($name, $callbacks)) {
+            return;
+        }
+        unset($callbacks[$name]);
+        $context->set(self::CAPTURE_DISCARD_PATH, $callbacks);
+    }
+
+    /**
+     * Run capture-discard listeners without clearing request storage (unlike cleanup()).
+     */
+    public static function notifyCaptureDiscarded(): void
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return;
+        }
+
+        $callbacks = (array)$context->get(self::CAPTURE_DISCARD_PATH, []);
+        if ($callbacks === []) {
+            return;
+        }
+        // Snapshot then clear so a callback that re-registers sees a clean slate.
+        $context->set(self::CAPTURE_DISCARD_PATH, []);
+        foreach ($callbacks as $callback) {
+            if (!\is_callable($callback)) {
+                continue;
+            }
+            try {
+                $callback();
+            } catch (\Throwable $e) {
+                $message = '[RequestContext] Capture-discard callback error: ' . $e->getMessage();
+                try {
+                    if (\function_exists('w_log_error')) {
+                        \w_log_error($message);
+                    } else {
+                        \error_log($message);
+                    }
+                } catch (\Throwable) {
+                    // Logging must never mask discard recovery.
+                }
+            }
+        }
+    }
+
     public static function cleanup(): void
     {
         $context = Context::getCurrent();
@@ -241,6 +311,7 @@ class RequestContext
         try {
             $context->set(self::STORAGE_PATH, []);
             $context->set(self::CLEANUP_PATH, []);
+            $context->set(self::CAPTURE_DISCARD_PATH, []);
             $context->set(self::REQUEST_ID_PATH, null);
             $context->set(self::CONNECTION_ID_PATH, null);
             $context->set(self::START_TIME_PATH, 0.0);
@@ -280,7 +351,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.area', $area);
         self::set('env.area', $area);
-        $_SERVER['WELINE_AREA'] = $area;
+        self::publishServer('WELINE_AREA', $area);
     }
 
     public static function getWelineAreaRoute(): string
@@ -298,7 +369,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.area_route', $route);
         self::set('env.area_route', $route);
-        $_SERVER['WELINE_AREA_ROUTE'] = $route;
+        self::publishServer('WELINE_AREA_ROUTE', $route);
     }
 
     public static function getWelineWebsiteId(): int
@@ -325,7 +396,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.website_id', $websiteId);
         self::set('env.website_id', (string)$websiteId);
-        $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
+        self::publishServer('WELINE_WEBSITE_ID', (string)$websiteId);
     }
 
     public static function getWelineStoreId(): int
@@ -354,7 +425,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.store_id', $storeId);
         self::set('env.store_id', (string)$storeId);
-        $_SERVER['WELINE_STORE_ID'] = (string)$storeId;
+        self::publishServer('WELINE_STORE_ID', (string)$storeId);
     }
 
     public static function getWelineStoreCode(): string
@@ -381,7 +452,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.store_code', $storeCode);
         self::set('env.store_code', $storeCode);
-        $_SERVER['WELINE_STORE_CODE'] = $storeCode;
+        self::publishServer('WELINE_STORE_CODE', $storeCode);
     }
 
     public static function getWelineStoreMode(): string
@@ -408,7 +479,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.store_mode', $storeMode);
         self::set('env.store_mode', $storeMode);
-        $_SERVER['WELINE_STORE_MODE'] = $storeMode;
+        self::publishServer('WELINE_STORE_MODE', $storeMode);
     }
 
     public static function getWelineChannelId(): int
@@ -437,7 +508,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.channel_id', $channelId);
         self::set('env.channel_id', (string)$channelId);
-        $_SERVER['WELINE_CHANNEL_ID'] = (string)$channelId;
+        self::publishServer('WELINE_CHANNEL_ID', (string)$channelId);
     }
 
     public static function getWelineChannelCode(): string
@@ -464,7 +535,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.channel_code', $channelCode);
         self::set('env.channel_code', $channelCode);
-        $_SERVER['WELINE_CHANNEL_CODE'] = $channelCode;
+        self::publishServer('WELINE_CHANNEL_CODE', $channelCode);
     }
 
     public static function installScopeIdentity(ScopeIdentity $identity): void
@@ -649,7 +720,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.website_code', $code);
         self::set('env.website_code', $code);
-        $_SERVER['WELINE_WEBSITE_CODE'] = $code;
+        self::publishServer('WELINE_WEBSITE_CODE', $code);
     }
 
     public static function getWelineWebsiteUrl(): string
@@ -667,7 +738,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.website_url', $url);
         self::set('env.website_url', $url);
-        $_SERVER['WELINE_WEBSITE_URL'] = $url;
+        self::publishServer('WELINE_WEBSITE_URL', $url);
     }
 
     public static function getWelineUserLang(): string
@@ -685,7 +756,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.language', $lang);
         self::set('env.user.lang', $lang);
-        $_SERVER['WELINE_USER_LANG'] = $lang;
+        self::publishServer('WELINE_USER_LANG', $lang);
         \Weline\Framework\App\State::resetLangLocalCache();
     }
 
@@ -704,7 +775,7 @@ class RequestContext
         $context = self::ensureContext();
         $context->set('route.currency', $currency);
         self::set('env.user.currency', $currency);
-        $_SERVER['WELINE_USER_CURRENCY'] = $currency;
+        self::publishServer('WELINE_USER_CURRENCY', $currency);
         \Weline\Framework\App\State::resetLangLocalCache();
     }
 
@@ -826,6 +897,32 @@ class RequestContext
         return $area === self::AREA_BACKEND || $area === self::AREA_REST_BACKEND;
     }
 
+    private static function publishServer(string $key, mixed $value): void
+    {
+        \Weline\Framework\Env\WelineEnv::setServer($key, $value, 'RequestContext');
+        self::mirrorProcessServer($key, $value);
+    }
+
+    private static function forgetServer(string $key): void
+    {
+        \Weline\Framework\Env\WelineEnv::removeServer($key);
+        self::unmirrorProcessServer($key);
+    }
+
+    private static function mirrorProcessServer(string $key, mixed $value): void
+    {
+        if (!Runtime::isPersistent()) {
+            $_SERVER[$key] = $value;
+        }
+    }
+
+    private static function unmirrorProcessServer(string $key): void
+    {
+        if (!Runtime::isPersistent()) {
+            unset($_SERVER[$key]);
+        }
+    }
+
     public static function syncFromServer(): void
     {
         $context = self::ensureContext(true);
@@ -892,22 +989,26 @@ class RequestContext
             $context->set('runtime.chain_id', '');
         }
 
-        $_SERVER['WELINE_AREA'] = self::AREA_FRONTEND;
-        $_SERVER['WELINE_AREA_ROUTE'] = '';
-        $_SERVER['WELINE_IS_BACKEND'] = false;
-        unset(
-            $_SERVER['WELINE_WEBSITE_ID'],
-            $_SERVER['WELINE_WEBSITE_CODE'],
-            $_SERVER['WELINE_WEBSITE_URL'],
-            $_SERVER['WELINE_STORE_ID'],
-            $_SERVER['WELINE_STORE_CODE'],
-            $_SERVER['WELINE_STORE_MODE'],
-            $_SERVER['WELINE_CHANNEL_ID'],
-            $_SERVER['WELINE_CHANNEL_CODE'],
-            $_SERVER['WELINE_USER_LANG'],
-            $_SERVER['WELINE_USER_CURRENCY'],
-            $_SERVER['WELINE_CONNECTION_ID'],
-        );
+        // Context 字段已在上面清空。这里只镜像 FPM 的进程表，禁止再走 setServer：
+        // setServer 会 RequestContext::set() 并把 initialized 重新写成 true。
+        self::mirrorProcessServer('WELINE_AREA', self::AREA_FRONTEND);
+        self::mirrorProcessServer('WELINE_AREA_ROUTE', '');
+        self::mirrorProcessServer('WELINE_IS_BACKEND', false);
+        foreach ([
+            'WELINE_WEBSITE_ID',
+            'WELINE_WEBSITE_CODE',
+            'WELINE_WEBSITE_URL',
+            'WELINE_STORE_ID',
+            'WELINE_STORE_CODE',
+            'WELINE_STORE_MODE',
+            'WELINE_CHANNEL_ID',
+            'WELINE_CHANNEL_CODE',
+            'WELINE_USER_LANG',
+            'WELINE_USER_CURRENCY',
+            'WELINE_CONNECTION_ID',
+        ] as $serverKey) {
+            self::unmirrorProcessServer($serverKey);
+        }
         \Weline\Framework\App\State::resetLangLocalCache();
     }
 
@@ -1256,7 +1357,9 @@ class RequestContext
         $context->set('runtime.connection_id', $connectionId ?? '');
         $context->set('runtime.chain_id', self::buildChainId($context, $connectionId));
 
-        $_SERVER = \array_replace(\is_array($_SERVER ?? null) ? $_SERVER : [], $server);
+        if (!Runtime::isPersistent()) {
+            $_SERVER = \array_replace(\is_array($_SERVER ?? null) ? $_SERVER : [], $server);
+        }
 
         self::set('env.area', $area);
         self::set('env.area_route', $areaRoute);
@@ -1299,7 +1402,6 @@ class RequestContext
             $context->get('runtime.connection_id', null),
             $context->getRuntimeAttr('connection_id', null),
             $server['WELINE_CONNECTION_ID'] ?? null,
-            $_SERVER['WELINE_CONNECTION_ID'] ?? null,
         ];
 
         foreach ($candidates as $candidate) {

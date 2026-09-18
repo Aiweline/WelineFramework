@@ -16,7 +16,7 @@ final class SearchIndexTemplateContractTest extends TestCase
 
         self::assertStringContainsString("\$this->layoutType = 'search'", $controller);
         self::assertStringContainsString("setGet('page_type', 'search')", $controller);
-        self::assertStringContainsString("setGet('theme_public_route', 'search')", $controller);
+        self::assertStringNotContainsString('theme_public_route', $controller);
         self::assertStringContainsString('getParam(\'q\'', $controller);
         self::assertStringContainsString('SearchParamGuard', $controller);
         self::assertStringNotContainsString('website_id\' => $this->request', $controller);

@@ -31,7 +31,6 @@ final class ThemePreviewEntryApplication
         string $status = 'draft',
         string $editorArea = 'frontend',
         string $previewMode = 'default',
-        ?string $themePublicRoute = null,
     ): array {
         if ($themeId <= 0) {
             return ['ok' => false, 'message' => __('请选择主题')];
@@ -143,20 +142,22 @@ final class ThemePreviewEntryApplication
                 $context,
                 true
             );
-            $params['layout_type'] = $layoutType;
-            $params['layout_option'] = $layoutOption;
             $params['editor_mode'] = '1';
+            $params['shell'] = PreviewContextService::SHELL_THEME_EDITOR;
             $params['status'] = $previewStatus;
             $params['editor_area'] = PreviewContextService::AREA_BACKEND;
+            $params['preview_area'] = PreviewContextService::AREA_BACKEND;
             $params['preview_mode'] = $context['preview_mode'];
             $params['_t'] = \time();
             if ($resolvedVersionId !== null && $resolvedVersionId > 0) {
                 $params['version_id'] = $resolvedVersionId;
             }
+            unset($params['layout_type'], $params['layout_option']);
 
+            // Real admin homepage. Dashboard owns its layout; do not open a custom preview shell.
             return [
                 'ok' => true,
-                'redirect' => $url->getBackendUrl('theme/backend/theme-editor/layout-preview', $params),
+                'redirect' => $url->getBackendUrl('weline_dashboard/backend/dashboard', $params),
             ];
         }
 

@@ -881,7 +881,6 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/widget-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetPreview(),
                 '/theme/backend/theme-editor/layout-options' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutOptionsPayload(),
                 '/theme/backend/theme-editor/layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutConfigPayload(),
-                '/theme/backend/theme-editor/layout-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutPreview(),
                 '/theme/backend/theme-editor/scoped-workspace' => $method === 'POST'
                     ? ($themeEditor ??= $this->createDirectThemeEditor())->postScopedWorkspace()
                     : ($themeEditor ??= $this->createDirectThemeEditor())->getScopedWorkspace(),
@@ -916,7 +915,6 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/render-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postRenderWidget(),
                 '/theme/backend/theme-editor/save-compiled-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveCompiledLayout(),
                 '/theme/backend/theme-editor/start-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postStartPreview(),
-                '/theme/backend/theme-editor/preview-sample' => ($themeEditor ??= $this->createDirectThemeEditor())->postPreviewSample(),
                 '/theme/backend/theme-editor/exit-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postExitPreview(),
                 '/theme/backend/theme-editor/resolve-navigation' => ($themeEditor ??= $this->createDirectThemeEditor())->postResolveNavigation(),
                 '/theme/backend/theme-editor/resolve-file-image-previews' => ($themeEditor ??= $this->createDirectThemeEditor())->postResolveFileImagePreviews(),
@@ -992,7 +990,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             }
             $trimmed = ltrim($response);
             $isHtml = $trimmed !== '' && ($trimmed[0] === '<' || str_starts_with($trimmed, '<!'));
-            // paramrender form / layout-preview 等接口本身就返回 HTML；须包装给 apiText，
+            // paramrender form 等接口本身就返回 HTML；须包装给 apiText，
             // 不能当成登录页/错误页。其它路径上的意外 HTML（嵌套渲染 terminate）仍拒绝。
             if ($isHtml && $this->editorBridgeAllowsHtmlResponse($path)) {
                 return [
@@ -1023,7 +1021,6 @@ class ThemeQueryProvider implements QueryProviderInterface
     private function editorBridgeAllowsHtmlResponse(string $path): bool
     {
         return in_array($path, [
-            '/theme/backend/theme-editor/layout-preview',
             '/theme/backend/widget/paramrender/form',
             '/theme/backend/widget/paramrender/field',
         ], true);
@@ -1114,6 +1111,10 @@ class ThemeQueryProvider implements QueryProviderInterface
         }
     }
 
+    /**
+     * Scope ACL source_id 必须已由 ThemeEditor #[Acl] 收集进 ACL 表；
+     * 否则即使超管（role_id=1）也会因资源不存在而 backend_acl_denied。
+     */
     private function assertScopedEditorRequestAcl(string $path, string $method): void
     {
         $sourceId = $this->scopedEditorRequestAclSourceId($path, $method);

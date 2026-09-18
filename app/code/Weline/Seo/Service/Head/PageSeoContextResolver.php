@@ -257,6 +257,12 @@ class PageSeoContextResolver
             '_options' => $options,
         ];
 
+        // Normalize canonical BEFORE i18n alternates so hreflang never rebuilds from a
+        // pre-strip getUrl that still carries the site-default currency segment.
+        $context['canonical_url'] = $this->canonicalizeUrl(
+            $this->absoluteUrl($template, (string) ($context['canonical_url'] ?? ''))
+        );
+
         $context = $this->mergeIntegrationContext(
             $context,
             $this->resolveIntegrationContext($template, $context)
@@ -268,6 +274,7 @@ class PageSeoContextResolver
         $context['canonical_url'] = $this->canonicalizeUrl(
             $this->absoluteUrl($template, (string) ($context['canonical_url'] ?? ''))
         );
+        $context = $this->syncSelfHreflangToCanonical($context);
         $resolvedUrl = $this->absoluteUrl($template, (string) ($context['url'] ?? ''));
         if ($resolvedUrl !== '') {
             $context['url'] = $resolvedUrl;
@@ -292,6 +299,35 @@ class PageSeoContextResolver
 
         // TASK-P1D-004-SEO：dev/test 强制 noindex，配置与显式 robots 均不可关闭
         $context = (new \Weline\Seo\Service\StoreModeSeoHardGate())->applyToPageContext($context);
+
+        return $context;
+    }
+
+    /**
+     * Keep the current-locale hreflang href identical to the final canonical URL.
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function syncSelfHreflangToCanonical(array $context): array
+    {
+        $canonical = trim((string) ($context['canonical_url'] ?? ''));
+        if ($canonical === '' || !isset($context['alternates']) || !is_array($context['alternates'])) {
+            return $context;
+        }
+
+        $locale = trim((string) ($context['locale'] ?? ''));
+        $candidates = array_values(array_unique(array_filter([
+            $locale,
+            str_replace('-', '_', $locale),
+            str_replace('_', '-', $locale),
+        ], static fn (string $code): bool => $code !== '')));
+
+        foreach ($candidates as $code) {
+            if (array_key_exists($code, $context['alternates'])) {
+                $context['alternates'][$code] = $canonical;
+            }
+        }
 
         return $context;
     }
@@ -645,11 +681,20 @@ class PageSeoContextResolver
         }
 
         $currentCurrency = strtoupper(trim((string) \w_env('user.currency', '')));
-        $defaultCurrency = strtoupper(trim((string) (
-            \w_env('website.currency', '')
-            ?: \Weline\Framework\App\Env::get('currency', 'CNY')
-            ?: 'CNY'
-        )));
+        $defaultCurrency = '';
+        try {
+            $defaultCurrency = strtoupper(trim(\Weline\Framework\App\State::resolveWebsiteDefaultCurrency()));
+        } catch (\Throwable) {
+            $defaultCurrency = '';
+        }
+        if ($defaultCurrency === '') {
+            $defaultCurrency = strtoupper(trim((string) (
+                \w_env('website.currency', '')
+                ?: \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CURRENCY', '')
+                ?: \Weline\Framework\App\Env::get('currency', 'CNY')
+                ?: 'CNY'
+            )));
+        }
         if ($currentCurrency === '') {
             $currentCurrency = $defaultCurrency;
         }

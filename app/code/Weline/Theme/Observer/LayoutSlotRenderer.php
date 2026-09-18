@@ -135,7 +135,7 @@ class LayoutSlotRenderer implements ObserverInterface
                 $this->bootstrapEditorCanvasIdentity();
             } else {
                 // Align processSlots identity with start-preview Token (scope/layout_option/target),
-                // same as theme-preview/content — otherwise storefront falls back to RequestContext
+                // same as storefront editor_mode canvas — otherwise storefront falls back to RequestContext
                 // defaults and draft edits from the visual editor never appear.
                 $this->installPreviewLayoutIdentityFromToken();
             }
@@ -225,18 +225,6 @@ class LayoutSlotRenderer implements ObserverInterface
             return;
         }
 
-        // Non-editor preview: content renderer already filled wrappers — skip re-process
-        // to avoid duplicates. Editor preview must still processSlots so CoW can drop
-        // empty/shredded template shells and park wrapper inners through DOM safely.
-        $skipFilledWrappers = $this->isThemePreviewContentRequest($template)
-            && $this->htmlHasRenderedWidgetWrappers($html)
-            && !$this->shouldShowEditorSlotDiagnostics()
-            && !$this->isEditorOrPreviewMode();
-        if ($skipFilledWrappers) {
-            $html = $this->slotRenderer->finalizePreviewWidgetHealth($html);
-            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
-            return;
-        }
 
         // 鐢熶骇鐜妫€鏌ワ細濡傛灉鏈夌紦瀛樹笖涓嶆槸棰勮妯″紡锛屽彲浠ヨ烦杩囧疄鏃舵覆鏌?
         // 娉ㄦ剰锛氳繖閲屾垜浠粛鐒舵墽琛屽疄鏃舵覆鏌擄紝鍥犱负缂撳瓨妯℃澘搴旇鍦ㄦ洿楂樺眰绾у鐞?
@@ -1636,38 +1624,10 @@ HTML;
             return false;
         }
 
-        return str_contains($uri, 'theme/backend/theme-editor/layout-preview')
-            || str_contains($uri, 'theme/backend/theme-editor/compile-layout')
+        return str_contains($uri, 'theme/backend/theme-editor/compile-layout')
             || str_contains($uri, 'theme/backend/theme-editor/get-compile-layout');
     }
 
-    private function isThemePreviewContentTemplate(string $template): bool
-    {
-        $normalized = \strtolower(\str_replace('\\', '/', $template));
-
-        return \str_contains($normalized, 'templates/frontend/theme-preview/content.phtml')
-            || \str_contains($normalized, 'templates/backend/theme-preview/content.phtml');
-    }
-
-    private function isThemePreviewContentRequest(string $template): bool
-    {
-        if ($this->isThemePreviewContentTemplate($template)) {
-            return true;
-        }
-
-        $uri = \strtolower((string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''));
-
-        return \str_contains($uri, 'theme/frontend/theme-preview/content')
-            || \str_contains($uri, 'theme/backend/theme-preview/content');
-    }
-
-    private function htmlHasRenderedWidgetWrappers(string $html): bool
-    {
-        return \str_contains($html, 'class="widget-wrapper"')
-            || \str_contains($html, "class='widget-wrapper'")
-            || \str_contains($html, 'data-node-uid=')
-            || \str_contains($html, 'data-layout-id=');
-    }
 
     /**
      * 鍒ゆ柇鏄惁涓哄竷灞€妯℃澘

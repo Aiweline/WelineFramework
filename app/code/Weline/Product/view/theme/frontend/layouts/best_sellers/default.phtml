@@ -46,7 +46,7 @@ $meta = $this->getData('meta') ?? [];
 
             <w:slot id="content"
                     name="内容区"
-                    accept="layout-best-sellers-content,layout-default-content,content,product-list,product-grid,bestsellers,product-carousel"
+                    accept="layout-best-sellers-content,layout-default-content,content,product-list,product-grid,bestsellers,product-carousel,banner"
                     reject="header,footer"
                     multiple="true"
                     position="content"
@@ -55,6 +55,16 @@ $meta = $this->getData('meta') ?? [];
                       id="main-content"
                       data-layout="best_sellers"
                       data-testid="storefront-best-sellers-layout">
+                    <w:slot id="best-sellers-hero"
+                            name="热销榜页头"
+                            accept="layout-best-sellers-hero,best-sellers-hero,banner,content"
+                            exclusive="true"
+                            multiple="false"
+                            position="content"
+                            class="best-sellers-layout__hero-slot">
+                        <?php /* Product 自有部件默认观感（同 homepage-hero）：exclusive 避免模板壳与无 template_ref 的布局行叠成双页头 */ ?>
+                        <w:widget type="banner" name="best-sellers-hero" />
+                    </w:slot>
                     <w:slot id="best-sellers-main"
                             name="热销榜主区"
                             accept="layout-best-sellers-main,bestsellers,product-grid,product-list,content"

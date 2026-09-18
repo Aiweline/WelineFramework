@@ -312,16 +312,12 @@ class RouteUpdateStage extends AbstractStage
             $moduleHelper = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Framework\Module\Helper\Data::class
             );
-            // 先落 ACL（扫描期已 defer），再写路由文件
+            // 先落 ACL（扫描期已 defer），再写路由文件。
+            // 禁止在此处 clear CollectedAclSourceIdsRegistry / LiveSourceSet：
+            // orphan diff（after_route_collection）依赖 registry；提前清空会导致
+            // 刚写入的方法级 ACL（如 Theme scope_*）被当成孤儿删掉。
             $note(__('   - route_update：正在批量写入控制器 ACL（可能较慢）…'));
             $moduleHelper->flushDeferredControllerAttributes();
-            // ACL 事件与观察者工作集已卸；diff 若已跑过，registry 也可卸。
-            if (\class_exists(\Weline\Acl\Service\CollectedAclSourceIdsRegistry::class)) {
-                \Weline\Acl\Service\CollectedAclSourceIdsRegistry::clear();
-            }
-            if (\class_exists(\Weline\Acl\Service\Resource\LiveSourceSet::class)) {
-                \Weline\Acl\Service\Resource\LiveSourceSet::clear();
-            }
             $note(__('   - route_update：ACL 写入完成'));
 
             // 增量模式：路由在注册过程中已经按文件即时写入，这里不再做全量 flush

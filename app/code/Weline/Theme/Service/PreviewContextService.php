@@ -493,13 +493,12 @@ final class PreviewContextService
         // which must clear a sticky session locale from a prior editor language switch.
         $context = $this->applyExplicitLocaleOverride($context);
 
-        $hasRawPreviewSelection = $this->isRawPreviewContentRequest()
-            || $rawFrontendThemeId > 0
+        $hasRawPreviewSelection = $rawFrontendThemeId > 0
             || $rawBackendThemeId > 0
             || $rawLegacyPreviewThemeId > 0
             || $rawRequestThemeId > 0
             || $this->getRawQueryInt('weline_theme_id') > 0
-            || $this->hasAnyRawQueryKey(['layout_type', 'page_type', 'layout_option']);
+            || $this->hasAnyRawQueryKey(['layout_type', 'page_type', 'layout_option', 'editor_mode', 'shell']);
         if ($hasRawPreviewSelection && !$hasExplicitPreviewToken) {
             // A direct preview URL is an explicit selection. Do not let a stale
             // browser session context carry an old preview scope or page target
@@ -522,8 +521,12 @@ final class PreviewContextService
                     $context['target_value'] = $layoutTargetValue;
                 }
             }
-            if (!$this->hasRawQueryKey('shell') && $this->isRawPreviewContentRequest()) {
-                $context['shell'] = self::SHELL_PREVIEW;
+            if ($this->hasRawQueryKey('shell')) {
+                $context['shell'] = $this->normalizeShell(
+                    (string)($this->getRawQueryString('shell', self::SHELL_PREVIEW) ?? self::SHELL_PREVIEW)
+                );
+            } elseif ($this->hasAnyRawQueryKey(['editor_mode'])) {
+                $context['shell'] = self::SHELL_THEME_EDITOR;
             }
         }
 
@@ -550,14 +553,6 @@ final class PreviewContextService
         }
 
         return $context;
-    }
-
-    private function isRawPreviewContentRequest(): bool
-    {
-        $path = \strtolower($this->extractRequestPath());
-
-        return \str_contains($path, '/theme/frontend/theme-preview/content')
-            || \str_contains($path, '/theme/backend/theme-preview/content');
     }
 
     private function hasRawQueryKey(string $key): bool
@@ -706,7 +701,6 @@ final class PreviewContextService
     /**
      * Prefer an explicitly requested preview language over a sticky token locale.
      * Theme-editor live canvas: visitor language is the real path only (no ?locale=/lang=).
-     * Theme-preview content gateway may still use query locale for identity.
      *
      * @param array<string, mixed> $context
      * @return array<string, mixed>

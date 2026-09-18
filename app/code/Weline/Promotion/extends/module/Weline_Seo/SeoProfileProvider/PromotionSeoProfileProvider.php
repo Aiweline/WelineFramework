@@ -75,13 +75,6 @@ final class PromotionSeoProfileProvider implements SeoProfileProviderInterface
             return true;
         }
 
-        $route = strtolower(trim((string)($this->templateGet($template, 'theme_public_route')
-            ?? $context['theme_public_route']
-            ?? '')));
-        if ($route === 'promotion' || str_starts_with($route, 'promotion/')) {
-            return true;
-        }
-
         $url = trim((string)($context['canonical_url'] ?? $context['url'] ?? ''));
         $path = strtolower(trim((string)(parse_url($url, PHP_URL_PATH) ?: ''), '/'));
         // Strip optional locale prefix like en_US/

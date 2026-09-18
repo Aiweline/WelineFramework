@@ -31,10 +31,6 @@ class Index extends FrontendController
 
         $data = $this->pageService->build($pageType);
 
-        $themePublicRoute = $pageType === 'index'
-            ? 'promotion'
-            : 'promotion/' . strtolower(trim($pageType, '/'));
-        $this->request->setGet('theme_public_route', $themePublicRoute);
         $this->request->setData('params', $this->request->getParameterBag()->all());
 
         $this->forceThemeShell();

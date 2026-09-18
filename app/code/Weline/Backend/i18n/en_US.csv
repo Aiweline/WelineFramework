@@ -37,7 +37,9 @@
 "AI 使用统计区块","AI usage statistics block"
 "在后台统计/仪表盘等 Tab 面板中展示 AI 使用量统计（今日 tokens、花费等），可由 Weline_Ai 等模块实现。","Displays AI usage statistics (today's tokens, costs, etc.) in backend statistics/dashboard tab panels, which can be implemented by modules such as Weline_Ai."
 后台页面凭证已失效，请刷新页面后重试。,"The background page credentials have expired. Please refresh the page and try again."
-当前后台账号无权执行该操作。,"The current background account does not have the permission to perform this operation."
+当前后台账号无权执行该操作。,"The current backend account does not have permission to perform this operation."
+"ACL 资源未注册或未启用：%{1}。超管也不会自动放行，请先执行 setup:upgrade 收集权限。","ACL source is missing or disabled: %{1}. Super admin will not bypass until setup:upgrade collects it."
+"当前站点关闭了超管 ACL 旁路，且角色未授权资源：%{1}。","Super-admin ACL bypass is off for this site, and the role is not granted: %{1}."
 信息,Information
 成功,Success
 警告,Warning

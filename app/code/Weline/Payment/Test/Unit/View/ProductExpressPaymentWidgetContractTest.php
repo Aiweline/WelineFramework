@@ -38,6 +38,7 @@ final class ProductExpressPaymentWidgetContractTest extends TestCase
         self::assertStringContainsString('data-product-express-pay', $tpl);
         self::assertStringContainsString('weline-pixel::express_pay', $tpl);
         self::assertStringContainsString('data-pixel-event="express_pay"', $tpl);
+        self::assertStringContainsString('data-method-label=', $tpl);
         self::assertStringContainsString('w-payment-express--collapsible', $tpl);
         self::assertStringContainsString('w-payment-express__disclosure', $tpl);
         self::assertStringContainsString('w-payment-express__methods--always', $tpl);

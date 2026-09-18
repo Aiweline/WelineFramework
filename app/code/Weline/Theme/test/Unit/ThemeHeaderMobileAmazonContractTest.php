@@ -18,8 +18,7 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('header-mobile-menu-btn js-header-drawer-trigger', $source);
         self::assertStringContainsString('hamburger-menu-btn--fallback', $source);
         self::assertStringContainsString('hamburger-menu-btn--fallback js-header-drawer-trigger', $source);
-        self::assertStringContainsString("'text' => '全部商品'", $source);
-        self::assertStringContainsString("'url' => '/products'", $source);
+        self::assertStringContainsString("\$headerEsc('全部')", $source);
         self::assertStringContainsString('header-nav-all-root', $source);
         self::assertStringContainsString('header-mobile-menu-icon', $source);
         self::assertStringContainsString('categories-sidebar-close-icon', $source);
@@ -64,7 +63,20 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
             '/\.header-nav-fill-inner\s*\{[^}]*width:\s*auto;/s',
             $source
         );
-        self::assertStringContainsString('内容自适应且未被压缩时', $source);
+        // 两行栈后左右按全宽算「更多」，禁止只定义 clustersOnSeparateRows 却不接入量宽
+        self::assertStringContainsString('function clustersOnSeparateRows()', $source);
+        self::assertStringContainsString('rowThreshold', $source);
+        self::assertStringContainsString('跳过互让', $source);
+        self::assertMatchesRegularExpression(
+            '/function measureNavAvailableWidth\(\)\s*\{[\s\S]*?clustersOnSeparateRows\(\)/',
+            $source
+        );
+        self::assertMatchesRegularExpression(
+            '/function measureCatAvailableWidth\(\)\s*\{[\s\S]*?clustersOnSeparateRows\(\)/',
+            $source
+        );
+        self::assertStringContainsString('已换两行：右簇独占第二行', $source);
+        self::assertStringContainsString('已换两行：左簇独占第一行', $source);
         self::assertStringNotContainsString('function checkNavFillOverflow()', $source);
         self::assertMatchesRegularExpression(
             '/\.header-nav-links\s*\{[^}]*gap:\s*var\(--weline-space-5\)/s',
@@ -82,8 +94,16 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
             '/@media \(max-width: 768px\) \{[\s\S]*?\.header-nav-all \{[\s\S]*?display:\s*flex !important;/s',
             $source
         );
-        self::assertStringContainsString("matchMedia('(max-width: 768px)')", $source);
-        self::assertStringContainsString('headerCategories.classList.remove(\'hide-narrow\')', $source);
+        self::assertStringContainsString("headerCategories.classList.remove('hide-narrow')", $source);
+        self::assertStringContainsString('clearHideNarrowAndReflow', $source);
+        self::assertStringContainsString('禁止 hide-narrow 整块 display:none', $source);
+        self::assertStringContainsString('部分吐回', $source);
+        self::assertStringNotContainsString('const shouldHide = width < 200', $source);
+        // 左簇整体 More：候选=分类+政策，宿主在左簇末（不夹在政策前）
+        self::assertStringContainsString('function collectLeftOverflowCandidates()', $source);
+        self::assertStringContainsString('header-left-cluster-more', $source);
+        self::assertStringContainsString('政策已列入溢出候选，不再单独预留', $source);
+        self::assertStringContainsString('左簇整体 More：挂在左簇末尾', $source);
         self::assertDoesNotMatchRegularExpression(
             '/@media \(max-width: 768px\) \{[\s\S]*?\.nav-more-wrapper \{\s*display:\s*flex;/s',
             $source

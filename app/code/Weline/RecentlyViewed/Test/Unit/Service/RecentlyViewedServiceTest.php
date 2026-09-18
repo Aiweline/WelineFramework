@@ -6,6 +6,7 @@ namespace Weline\RecentlyViewed\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\RecentlyViewed\Service\RecentlyViewedSessionStore;
 use Weline\RecentlyViewed\Service\RecentlyViewedService;
 
@@ -51,37 +52,77 @@ final class RecentlyViewedServiceTest extends TestCase
         self::assertSame([20], $service->listIds(6, 10));
     }
 
-    public function testMapOfferPrefersSlugOverNumericProductId(): void
+    public function testNormalizeOfferSlugPrefersSlugOverNumericProductId(): void
     {
         $service = new RecentlyViewedService(new RecentlyViewedSessionStore());
-        $map = new ReflectionMethod(RecentlyViewedService::class, 'mapOffer');
-        $map->setAccessible(true);
+        $normalize = new ReflectionMethod(RecentlyViewedService::class, 'normalizeOfferSlug');
+        $normalize->setAccessible(true);
 
-        $withSlug = $map->invoke($service, [
+        $withSlug = $normalize->invoke($service, [
             'product_id' => 113,
             'name' => 'Demo',
             'slug' => 'hanfu-demo-slug',
             'unit_price_minor' => 12800,
+            'currency' => 'USD',
         ]);
-        self::assertSame('hanfu-demo-slug', $withSlug['slug'] ?? null);
-        self::assertSame('product/hanfu-demo-slug', $withSlug['url'] ?? null);
-        self::assertStringNotContainsString('product/113', (string)($withSlug['url'] ?? ''));
+        $cardWithSlug = ProductCardRenderer::fromStorefrontOffer($withSlug, 0);
+        self::assertSame('hanfu-demo-slug', $cardWithSlug['slug'] ?? null);
+        self::assertStringContainsString('product/hanfu-demo-slug', (string)($cardWithSlug['url'] ?? ''));
+        self::assertStringNotContainsString('product/113', (string)($cardWithSlug['url'] ?? ''));
+        self::assertSame('USD', $cardWithSlug['currency'] ?? null);
 
-        $fromSourceSlug = $map->invoke($service, [
+        $fromSourceSlug = $normalize->invoke($service, [
             'product_id' => 117,
             'name' => 'Source',
             'source_slug' => 'from-source-slug',
             'unit_price_minor' => 9900,
+            'currency' => 'EUR',
         ]);
-        self::assertSame('from-source-slug', $fromSourceSlug['slug'] ?? null);
-        self::assertSame('product/from-source-slug', $fromSourceSlug['url'] ?? null);
+        $cardFromSource = ProductCardRenderer::fromStorefrontOffer($fromSourceSlug, 0);
+        self::assertSame('from-source-slug', $cardFromSource['slug'] ?? null);
+        self::assertStringContainsString('product/from-source-slug', (string)($cardFromSource['url'] ?? ''));
+        self::assertSame('EUR', $cardFromSource['currency'] ?? null);
 
-        $fallback = $map->invoke($service, [
+        $fallback = $normalize->invoke($service, [
             'product_id' => 99,
             'name' => 'No slug',
             'unit_price_minor' => 100,
+            'currency' => 'USD',
         ]);
-        self::assertSame('', $fallback['slug'] ?? null);
-        self::assertSame('product/99', $fallback['url'] ?? null);
+        $cardFallback = ProductCardRenderer::fromStorefrontOffer($fallback, 0);
+        self::assertSame('', $cardFallback['slug'] ?? null);
+        self::assertStringContainsString('product/99', (string)($cardFallback['url'] ?? ''));
+    }
+
+    public function testCardMappingKeepsOfferCurrencyNotDefaultCny(): void
+    {
+        $service = new RecentlyViewedService(new RecentlyViewedSessionStore());
+        $normalize = new ReflectionMethod(RecentlyViewedService::class, 'normalizeOfferSlug');
+        $normalize->setAccessible(true);
+
+        $offer = $normalize->invoke($service, [
+            'product_id' => 42,
+            'name' => 'USD priced hanfu',
+            'slug' => 'usd-priced-hanfu',
+            'unit_price_minor' => 2750,
+            'currency' => 'USD',
+            'sellable' => true,
+            'global_offer_uuid' => 'offer-usd-42',
+        ]);
+        $card = ProductCardRenderer::fromStorefrontOffer($offer, 0);
+
+        self::assertSame('USD', $card['currency'] ?? null);
+        self::assertSame(27.5, (float)($card['price'] ?? 0));
+        self::assertNotSame('CNY', $card['currency'] ?? 'CNY');
+    }
+
+    public function testServiceSourceUsesFromStorefrontOffer(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/RecentlyViewedService.php';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $source);
+        self::assertStringContainsString('normalizeOfferSlug', $source);
+        self::assertStringNotContainsString('private function mapOffer', $source);
     }
 }

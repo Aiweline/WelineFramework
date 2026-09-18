@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\StorefrontNotFoundStaticPage;
 
 final class StorefrontNotFoundStaticPageTest extends TestCase
@@ -27,9 +28,9 @@ final class StorefrontNotFoundStaticPageTest extends TestCase
                 StorefrontNotFoundStaticPage::resolveLang('/', '', 'foo=bar; WELINE_USER_LANG=ja_JP')
             );
             self::assertSame('zh_Hans_CN', StorefrontNotFoundStaticPage::resolveLang('/products'));
-            $_SERVER['WELINE_USER_LANG'] = 'en_US';
+            WelineEnv::setServer('WELINE_USER_LANG', 'en_US', 'storefront-not-found-test');
             self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/products'));
-            unset($_SERVER['WELINE_USER_LANG']);
+            WelineEnv::removeServer('WELINE_USER_LANG');
             self::assertSame(
                 'en_US',
                 StorefrontNotFoundStaticPage::resolveLang('/pub/errors/storefront-not-found/en_US.html')
