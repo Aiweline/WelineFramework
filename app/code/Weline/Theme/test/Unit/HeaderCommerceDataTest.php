@@ -41,6 +41,8 @@ final class HeaderCommerceDataTest extends TestCase
     {
         self::assertSame('¥12.50', HeaderCommerceData::formatMoney(12.5, 'CNY'));
         self::assertSame('$12.50', HeaderCommerceData::formatMoney(12.5, 'USD'));
+        self::assertSame('£12.50', HeaderCommerceData::formatMoney(12.5, 'GBP'));
+        self::assertStringNotContainsString('USD', HeaderCommerceData::formatMoney(12.5, 'USD'));
     }
 
     public function testDemoCartSummaryProvidesObservableChrome(): void

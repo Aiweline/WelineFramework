@@ -1,5 +1,6 @@
 /**
- * 结账成功页转化去重：主 track 事件流照常；仅沙盒厂商二次 fanout 黄标丢弃。
+ * 结账成功页转化去重：先面板，再去重，最后桥接。
+ * 同键二次与别名交叉不触发 gtag purchase；无单号 purchase 族不桥接。
  *
  * @weline-e2e-spec { module: Weline_Checkout, type: flow, layer: frontend }
  * @weline-e2e-runtime wls
@@ -26,27 +27,31 @@ moduleDescribe(test, MODULE, 'checkout success conversion dedupe', () => {
       });
       await expect(page.locator('[data-testid="checkout-success"]')).toBeVisible({ timeout: 20000 });
 
+      await page.waitForFunction(
+        () => !!(window.WelinePixel && typeof window.WelinePixel.track === 'function'),
+        null,
+        { timeout: 15000 }
+      ).catch(async () => {
+        await page.addScriptTag({
+          url: '/Weline/Visitor/view/statics/js/pixel.js?v=e2e-bridge-gate',
+        });
+        await page.waitForFunction(
+          () => !!(window.WelinePixel && typeof window.WelinePixel.track === 'function'),
+          null,
+          { timeout: 15000 }
+        );
+      });
+
       const result = await page.evaluate(async () => {
-        const waitPixel = () =>
-          new Promise((resolve, reject) => {
-            let n = 0;
-            const tick = () => {
-              n += 1;
-              if (window.WelinePixel && typeof window.WelinePixel.track === 'function') {
-                resolve(true);
-                return;
-              }
-              if (n > 100) {
-                reject(new Error('pixel_timeout'));
-                return;
-              }
-              setTimeout(tick, 50);
-            };
-            tick();
-          });
-        await waitPixel();
+        if (!(window.WelinePixel && typeof window.WelinePixel.track === 'function')) {
+          throw new Error('pixel_timeout');
+        }
         const cfg = (window.__WelineVisitorTrackingConfig && window.__WelineVisitorTrackingConfig.conversionDedupe) || {};
         const key = 'e2e-dedupe-' + Date.now();
+        let ttlDays = parseInt(cfg.ttlDays, 10);
+        if (!isFinite(ttlDays) || ttlDays < 1) {
+          ttlDays = 180;
+        }
         let yellow = null;
         let streamCheckout = 0;
         const sb = window.WelineEventSandbox || window.WelinePixelSandbox;
@@ -67,6 +72,16 @@ moduleDescribe(test, MODULE, 'checkout success conversion dedupe', () => {
           currency: 'USD',
           items: [{ item_id: 'sku-e2e', item_name: 'E2E Item', price: 12.34, quantity: 1 }],
         };
+        let purchaseGtag = 0;
+        const origGtag = window.gtag;
+        window.gtag = function () {
+          if (arguments[0] === 'event' && arguments[1] === 'purchase') {
+            purchaseGtag += 1;
+          }
+          if (typeof origGtag === 'function') {
+            return origGtag.apply(window, arguments);
+          }
+        };
         const first = window.WelinePixel.track('checkout_success', {
           order_uuid: key,
           transaction_id: key,
@@ -77,6 +92,16 @@ moduleDescribe(test, MODULE, 'checkout success conversion dedupe', () => {
           transaction_id: key,
           ...ecommerce,
         });
+        const crossed = window.WelinePixel.track('payment_success', {
+          transaction_id: 'other-txn-' + key,
+          order_uuid: key,
+          ...ecommerce,
+        });
+        const chain = window.WelinePixel.track('express_pay_checkout_success', {
+          chain_id: 'checkout_express_pay',
+          funnel_complete: true,
+        });
+        const purchaseAfterChain = purchaseGtag;
         let stored = false;
         try {
           for (let i = 0; i < localStorage.length; i++) {
@@ -103,9 +128,13 @@ moduleDescribe(test, MODULE, 'checkout success conversion dedupe', () => {
         });
         return {
           enabled: cfg.enabled !== false,
-          ttlDays: cfg.ttlDays || 0,
+          ttlDays,
           firstOk: !!first,
           secondOk: !!second,
+          crossedOk: !!crossed,
+          chainOk: !!chain,
+          purchaseGtag,
+          purchaseAfterChain,
           stored,
           streamCheckout,
           hasSandboxVendor,
@@ -118,6 +147,10 @@ moduleDescribe(test, MODULE, 'checkout success conversion dedupe', () => {
       expect(result.ttlDays).toBeGreaterThanOrEqual(1);
       expect(result.firstOk).toBe(true);
       expect(result.secondOk).toBe(true);
+      expect(result.crossedOk).toBe(true);
+      expect(result.chainOk).toBe(true);
+      expect(result.purchaseGtag).toBeLessThanOrEqual(1);
+      expect(result.purchaseAfterChain).toBe(result.purchaseGtag);
       expect(result.stored).toBe(true);
       expect(result.streamCheckout).toBeGreaterThanOrEqual(2);
       if (result.hasSandboxVendor) {

@@ -13,53 +13,6 @@ use Weline\Theme\Model\ThemeLayout;
 
 final class ThemePageTypeResolver
 {
-    private const LAYOUT_TO_PAGE_TYPE = [
-        ThemeLayout::PAGE_TYPE_HOME => ThemeLayout::PAGE_TYPE_HOME,
-        ThemeLayout::PAGE_TYPE_CATEGORY => ThemeLayout::PAGE_TYPE_CATEGORY,
-        ThemeLayout::PAGE_TYPE_PRODUCT => ThemeLayout::PAGE_TYPE_PRODUCT,
-        ThemeLayout::PAGE_TYPE_PRODUCT_LIST => ThemeLayout::PAGE_TYPE_PRODUCT_LIST,
-        'cms' => ThemeLayout::PAGE_TYPE_CMS,
-        ThemeLayout::PAGE_TYPE_CMS => ThemeLayout::PAGE_TYPE_CMS,
-        ThemeLayout::PAGE_TYPE_CART => ThemeLayout::PAGE_TYPE_CART,
-        ThemeLayout::PAGE_TYPE_CHECKOUT => ThemeLayout::PAGE_TYPE_CHECKOUT,
-        ThemeLayout::PAGE_TYPE_ACCOUNT => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        ThemeLayout::PAGE_TYPE_DASHBOARD => ThemeLayout::PAGE_TYPE_DASHBOARD,
-        'account.auth' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/login' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/register' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/forgot-password' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/set-password' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/social-login' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/logout' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/orders' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account/profile' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        'account.challenge' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-        ThemeLayout::PAGE_TYPE_SEARCH => ThemeLayout::PAGE_TYPE_SEARCH,
-        ThemeLayout::PAGE_TYPE_BLOG => ThemeLayout::PAGE_TYPE_BLOG,
-        ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => ThemeLayout::PAGE_TYPE_BLOG_CATEGORY,
-        ThemeLayout::PAGE_TYPE_PROMOTION => ThemeLayout::PAGE_TYPE_PROMOTION,
-        ThemeLayout::PAGE_TYPE_ACTIVITY => ThemeLayout::PAGE_TYPE_ACTIVITY,
-        ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
-        ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
-        'checkout_success' => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
-        'checkout_failure' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
-        'checkout_failer' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
-        ThemeLayout::PAGE_TYPE_FAQ => ThemeLayout::PAGE_TYPE_FAQ,
-        ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE => ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE,
-        ThemeLayout::PAGE_TYPE_GUIDE => ThemeLayout::PAGE_TYPE_GUIDE,
-        ThemeLayout::PAGE_TYPE_ABOUT => ThemeLayout::PAGE_TYPE_ABOUT,
-        ThemeLayout::PAGE_TYPE_CONTACT => ThemeLayout::PAGE_TYPE_CONTACT,
-        'customer_service' => ThemeLayout::PAGE_TYPE_CONTACT,
-        ThemeLayout::PAGE_TYPE_QA => ThemeLayout::PAGE_TYPE_QA,
-        ThemeLayout::PAGE_TYPE_RMA => ThemeLayout::PAGE_TYPE_RMA,
-        ThemeLayout::PAGE_TYPE_POLICY => ThemeLayout::PAGE_TYPE_POLICY,
-        ThemeLayout::PAGE_TYPE_TERMS => ThemeLayout::PAGE_TYPE_TERMS,
-        ThemeLayout::PAGE_TYPE_NOT_FOUND => ThemeLayout::PAGE_TYPE_NOT_FOUND,
-        ThemeLayout::PAGE_TYPE_ERROR => ThemeLayout::PAGE_TYPE_ERROR,
-        ThemeLayout::PAGE_TYPE_SITEMAP => ThemeLayout::PAGE_TYPE_SITEMAP,
-        ThemeLayout::PAGE_TYPE_DEFAULT => ThemeLayout::PAGE_TYPE_DEFAULT,
-    ];
-
     public function extractBaseLayoutType(?string $layoutType): string
     {
         $layoutType = trim((string)$layoutType);
@@ -112,50 +65,12 @@ final class ThemePageTypeResolver
             return ThemeLayout::PAGE_TYPE_DEFAULT;
         }
 
-        if (isset(self::LAYOUT_TO_PAGE_TYPE[$baseLayoutType])) {
-            return self::LAYOUT_TO_PAGE_TYPE[$baseLayoutType];
-        }
-
-        // 嵌套 layoutType：account/login → page_type=account（编辑器/预览仍归账户族）
-        if (str_starts_with($baseLayoutType, 'account/')) {
-            return ThemeLayout::PAGE_TYPE_ACCOUNT;
-        }
-
         return $baseLayoutType;
     }
 
-    /**
-     * Path ↔ layout 1:1.
-     *
-     * - Explicit storefront path (click / sample / theme_public_route) wins unchanged.
-     * - Otherwise the preview route IS the layout path (homepage → "").
-     * - Dynamic slug pages must pass themePublicRoute / preview_sample — never invent
-     *   theme-preview/content or module-aliased paths from a lookup table.
-     */
-    public function getPreviewRouteByPageType(?string $pageType, ?string $themePublicRoute = null): string
+    public function getPreviewPathByPageType(?string $pageType): string
     {
-        $publicRoute = $this->normalizeStorefrontPublicRoute((string)$themePublicRoute);
-        if ($publicRoute !== '') {
-            return $publicRoute;
-        }
-
-        $layoutPath = strtolower(trim(str_replace('\\', '/', (string)$pageType), '/'));
-        if ($layoutPath === ''
-            || $layoutPath === ThemeLayout::PAGE_TYPE_DEFAULT
-            || $layoutPath === ThemeLayout::PAGE_TYPE_HOME
-            || $layoutPath === 'index'
-            || $layoutPath === 'index/index'
-            || $this->isNonStorefrontPublicRoute($layoutPath)
-        ) {
-            return '';
-        }
-
-        return $layoutPath;
-    }
-
-    public function getPreviewPathByPageType(?string $pageType, ?string $themePublicRoute = null): string
-    {
-        $route = $this->getPreviewRouteByPageType($pageType, $themePublicRoute);
+        $route = $this->storefrontPathForLayout($pageType);
 
         return $route === '' ? '/' : '/' . ltrim($route, '/');
     }
@@ -166,25 +81,87 @@ final class ThemePageTypeResolver
      * Homepage must be "/" — never "". getFrontendUrl('') reuses the current
      * REQUEST_URI via getBaseUrl(); under BinQuery that is /framework/query-bin.
      */
-    public function getFrontendUrlPathForPreview(?string $pageType, ?string $themePublicRoute = null): string
+    public function getFrontendUrlPathForPreview(?string $pageType): string
     {
-        $route = $this->getPreviewRouteByPageType($pageType, $themePublicRoute);
+        $route = $this->storefrontPathForLayout($pageType);
 
         return $route === '' ? '/' : $route;
     }
 
     /**
+     * Path ↔ layout 1:1. Homepage and non-storefront names are "/".
+     */
+    private function storefrontPathForLayout(?string $pageType): string
+    {
+        $layoutPath = strtolower(trim(str_replace('\\', '/', (string)$pageType), '/'));
+        if ($layoutPath === ''
+            || $layoutPath === ThemeLayout::PAGE_TYPE_DEFAULT
+            || $layoutPath === ThemeLayout::PAGE_TYPE_HOME
+            || $layoutPath === 'index'
+            || $layoutPath === 'index/index'
+            || $this->isNonStorefrontPublicRoute($layoutPath)
+            || !$this->isSafeStorefrontPublicRoute($layoutPath)
+        ) {
+            return '';
+        }
+
+        return $layoutPath;
+    }
+
+    /**
      * Strip aliases and reject API / query-bin paths that must never become
      * live storefront preview targets.
+     *
+     * Also reject markup leaks (e.g. broken `<a href="<div class=…">`) — those
+     * become `/%3cdiv%20…` canvas URLs and trip trusted_request_path_invalid.
      */
     public function normalizeStorefrontPublicRoute(string $route): string
     {
         $normalized = strtolower(trim(str_replace('\\', '/', $route), '/'));
-        if ($normalized === '' || $this->isNonStorefrontPublicRoute($normalized)) {
+        if ($normalized === ''
+            || $this->isNonStorefrontPublicRoute($normalized)
+            || !$this->isSafeStorefrontPublicRoute($normalized)
+        ) {
             return '';
         }
 
         return $normalized;
+    }
+
+    /**
+     * True when a public route can be placed on a storefront URL path.
+     * Empty path (homepage) is safe.
+     */
+    public function isSafeStorefrontPublicRoute(string $route): bool
+    {
+        $normalized = trim(str_replace('\\', '/', $route), '/');
+        if ($normalized === '') {
+            return true;
+        }
+
+        // Markup / whitespace / controls never belong in a storefront path.
+        // CanonicalStorefrontUrl rejects encoded spaces (%20) and similar bytes.
+        if (\preg_match('/[<>"\'`\\\\\x00-\x20\x7F]/', $normalized) === 1) {
+            return false;
+        }
+        if (\str_contains($normalized, '//')) {
+            return false;
+        }
+
+        foreach (\explode('/', $normalized) as $segment) {
+            if ($segment === '.' || $segment === '..') {
+                return false;
+            }
+            if (\preg_match('/%(?:00|0[1-9A-Fa-f]|1[0-9A-Fa-f]|20|7[Ff]|2[Ff]|3[CcEe]|5[Cc])/', $segment) === 1) {
+                return false;
+            }
+            // Mirror CanonicalStorefrontUrl path characters (plus % for UTF-8 slugs).
+            if (\preg_match('/\\A[A-Za-z0-9._~!$&\'()*+,;=:@%-]+\\z/D', $segment) !== 1) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function isNonStorefrontPublicRoute(string $route): bool

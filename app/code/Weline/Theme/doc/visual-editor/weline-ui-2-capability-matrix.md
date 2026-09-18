@@ -19,7 +19,7 @@
 | `TE-CAP-001` | 编辑身份选择 | 模板 `themeSelect/pageTypeSelect/layoutOptionSelect/editorAreaSelect/editorLangSwitcher`；JS `setCurrentLayoutSelection()`、`navigateEditorShell()` | Weline Select/Combobox + 布局身份状态 | 主题、layout type/option、frontend/backend、locale、scope/target 切换后身份和 URL 一致 |
 | `TE-CAP-002` | 布局锁定与虚拟布局 | `parseLayoutLock()`、`enforceLayoutLock()`、`load/saveLockedVirtualLayoutSource()`、`publishLatestLockedVirtualLayoutVersion()` | Weline Alert/Badge/disabled 状态，保留虚拟布局 API | 锁定时不能突破身份；草稿加载、源码保存、版本发布可用 |
 | `TE-CAP-003` | 响应式工作区 | `initSidePanels()`、`setSidePanelOpen()`、`toggleEditorFullscreen()` | Weline Drawer/Toolbar，原生 Fullscreen | 左配置、中预览、右部件库在 375/768/1024/1440 可达；面板偏好与全屏还原 |
-| `TE-CAP-004` | 实时预览与结构视图 | `switchPreviewView()`、`kickoffLayoutPreview()`/`loadLayoutPreview()`、`resetStructureViewToEmptySlots()`；模板早期 `modulepreload` + 主脚本先于 async `widget-param` | Weline Tabs + 路由懒加载预览 | 实时/结构视图双向切换，loading/error/empty 状态不丢；backend 已注入预览 URL 时不二次整页导航 |
+| `TE-CAP-004` | 实时预览与结构视图 | `switchPreviewView()`、``loadCanvas()`、`resetStructureViewToEmptySlots()`；模板早期 `modulepreload` + 主脚本先于 async `widget-param` | Weline Tabs + 路由懒加载预览 | 实时/结构视图双向切换，loading/error/empty 状态不丢；backend 已注入预览 URL 时不二次整页导航 |
 | `TE-CAP-005` | 草稿、已发布与真实前端预览 | `switchPreviewStatus()`、`openPreview()`、`openFrontendPreview()`、`openPublishedPreview()` | Weline Menu/Button/Badge | draft/published 状态明确；后台 iframe 与真实前端预览都可达 |
 | `TE-CAP-006` | iframe 通信和链接拦截 | `handleIframeMessage()`、`setupIframeLinkInterception()`、`initCmsContextBridge()` | 保留同源预览 bridge，UI 事件纳入 `Weline.Theme.Editor` | slot/widget 选择、局部更新、CMS 上下文和嵌入式保存消息不丢 |
 | `TE-CAP-007` | Slot 发现与诊断 | `fetchLayoutSlots()`、`collectDomSlotsFromDocument()`、`renderSlotsInfo()`、`renderMissingSlotWarnings()` | Weline Tree/Alert/Empty State | 合并 catalog/DOM slot，过滤 synthetic container，缺失警告和定位可用 |
@@ -61,7 +61,7 @@
 - 部件：`save-widget`、`update-config`、`remove-widget`、`widgets`、`render-widget`、`widget-preview`、`paramrender/form`。
 - 布局：`layout-options`、`layout-config`、`save-layout-selection`、`save-layout-config`、`compile-layout`、`save-compiled-layout`。
 - 注入：`default-injections`、`apply-default-injection`。
-- 预览/发布：`preview`、`layout-preview`、frontend preview、`publish`、`start-preview`、`exit-preview`、`publish-and-exit`。
+- 预览/发布：`preview`、frontend preview、`publish`、`start-preview`、`exit-preview`、`publish-and-exit`。
 - 版本：`versions`、`save-version`、`switch-version`、`restore-original`、`publish-version`、`delete-version`、`rename-version`。
 - AI/虚拟主题：`ai-translate-config`、Theme Ai `agents`/`component-stream`/`refine-stream`/`publish`/`prepare-refine`；VirtualTheme `ai-catalog`/`create-draft`/`block-action`/`source`/`save-source`/`publish-version`（绿field 后门禁 fail-closed，悬停 AI 不再依赖）。
 - 部件库筛选：`widgets?library_tabs=&ai_generated=`、`default-injections?install_mode=&ai_generated=`。

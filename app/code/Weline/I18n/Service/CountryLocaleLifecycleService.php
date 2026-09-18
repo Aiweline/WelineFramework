@@ -762,6 +762,10 @@ class CountryLocaleLifecycleService
                 } catch (\Throwable) {
                 }
                 try {
+                    ObjectManager::getInstance(ActiveLocaleCodeProvider::class)->reset();
+                } catch (\Throwable) {
+                }
+                try {
                     ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
                         ->dispatch('Weline_I18n::locale_catalog_changed');
                 } catch (\Throwable) {

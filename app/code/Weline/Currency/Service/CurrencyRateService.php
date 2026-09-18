@@ -332,6 +332,26 @@ class CurrencyRateService
         return strtoupper(trim($currencyCode));
     }
 
+    /**
+     * Drop process + shared definition caches after rate/base edits.
+     * Without this, WLS workers keep rate=0 definitions for up to site.currency_ttl.
+     */
+    public function invalidateCachedDefinitions(): void
+    {
+        $codes = array_keys(self::$definitionCache);
+        self::$definitionCache = [];
+        self::$baseCurrencyCache = null;
+
+        foreach (array_unique([...$codes, ...array_keys(self::FALLBACK_DEFINITIONS)]) as $code) {
+            $code = $this->normalizeCurrencyCode((string)$code);
+            if ($code === '') {
+                continue;
+            }
+            $this->runtimeCacheDelete('currency.definition.' . $code);
+        }
+        $this->runtimeCacheDelete('currency.base');
+    }
+
     private function runtimeCacheGet(string $key): mixed
     {
         $cache = self::runtimeCache();
@@ -357,6 +377,21 @@ class CurrencyRateService
 
         try {
             $cache->set(self::CACHE_NAMESPACE, $key, $value, $this->cacheTtl());
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private function runtimeCacheDelete(string $key): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->delete(self::CACHE_NAMESPACE, $key);
         } catch (\Throwable) {
             self::$runtimeCache = null;
             self::$runtimeCacheResolved = true;

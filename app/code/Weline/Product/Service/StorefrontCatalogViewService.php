@@ -690,6 +690,7 @@ final class StorefrontCatalogViewService
                             'combination' => $selection->parseCombinationKey($combinationKey),
                             'stock' => $snapshot->stock,
                             'sellable' => $snapshot->sellable,
+                            'currency_unavailable' => ($snapshot->fulfillmentMetadata['currency_unavailable'] ?? '') === '1',
                             'quote_only' => $quoteOnly,
                             'unit_price_minor' => $snapshot->unitPriceMinor,
                             'currency' => $snapshot->currency,
@@ -897,6 +898,7 @@ final class StorefrontCatalogViewService
                 'unit_price_minor' => $snapshot->unitPriceMinor,
                 'stock' => $snapshot->stock,
                 'sellable' => $snapshot->sellable,
+                'currency_unavailable' => ($snapshot->fulfillmentMetadata['currency_unavailable'] ?? '') === '1',
                 'message' => $snapshot->message,
             ];
         }

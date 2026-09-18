@@ -235,6 +235,82 @@ final class MediaStorageService
         ]);
     }
 
+    /**
+     * Replace physical bytes of an existing FileAsset; keep name and locale metadata.
+     *
+     * @param array<string,mixed> $assetMetadata
+     * @return array<string,mixed>
+     */
+    public function replaceExistingFile(
+        string $diskCode,
+        string $objectKeyOrHash,
+        string $bytes,
+        string $mimeType,
+        FileAccessContext $access,
+        array $assetMetadata = [],
+    ): array {
+        $byteCount = strlen($bytes);
+        if ($byteCount < 1 || $byteCount > self::MAX_IMAGE_BYTES) {
+            throw new \InvalidArgumentException((string)__('生成图片超过保存大小限制。'));
+        }
+        $objectKey = str_starts_with($objectKeyOrHash, 'mm_')
+            ? $this->objectKeyFromHash($objectKeyOrHash)
+            : trim(str_replace('\\', '/', $objectKeyOrHash), '/');
+        StorageObjectReference::assertObjectKey($objectKey);
+        $disk = $this->storage->disk($diskCode);
+        if (!$disk->exists($objectKey)) {
+            throw new \RuntimeException((string)__('目标文件不存在，无法覆盖。'));
+        }
+        $filename = basename($objectKey);
+        $detectedMime = $this->detectImageMime($bytes);
+        $claimedMime = strtolower(trim($mimeType));
+        if ($claimedMime !== '' && $claimedMime !== 'application/octet-stream' && $claimedMime !== $detectedMime) {
+            throw new \InvalidArgumentException((string)__('生成图片声明类型与实际内容不一致。'));
+        }
+        $imageInfo = @getimagesizefromstring($bytes);
+        $width = is_array($imageInfo) ? max(0, (int)($imageInfo[0] ?? 0)) : 0;
+        $height = is_array($imageInfo) ? max(0, (int)($imageInfo[1] ?? 0)) : 0;
+
+        $stream = fopen('php://temp/maxmemory:2097152', 'w+b');
+        if ($stream === false) {
+            throw new \RuntimeException((string)__('无法创建图片保存流。'));
+        }
+        $source = $this->resourceFactory->stream($stream);
+        try {
+            $this->writeAll($source->stream(), $bytes);
+            if (!rewind($source->stream())) {
+                throw new \RuntimeException((string)__('无法重置图片保存流。'));
+            }
+            $asset = $this->assets->replaceContent(
+                $disk->diskCode(),
+                $objectKey,
+                $source->stream(),
+                $filename,
+                $detectedMime,
+                $access->localeCode,
+                $access,
+                $width > 0 ? $width : null,
+                $height > 0 ? $height : null,
+            );
+        } finally {
+            $source->close();
+        }
+
+        return array_replace($asset, [
+            'hash' => $this->encodeHash($objectKey),
+            'phash' => $this->encodeHash(trim(dirname($objectKey), '/.')),
+            'name' => $filename,
+            'mime' => $detectedMime,
+            'size' => $byteCount,
+            'width' => $width > 0 ? $width : null,
+            'height' => $height > 0 ? $height : null,
+            'ts' => time(),
+            'path' => $objectKey,
+            'overwritten' => true,
+            'ai_meta' => $assetMetadata,
+        ]);
+    }
+
     public function sanitizeLeafName(string $name): ?string
     {
         $name = trim($name);

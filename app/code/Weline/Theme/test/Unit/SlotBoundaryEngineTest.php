@@ -13,7 +13,6 @@ use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Theme\Service\SlotBoundaryScanner;
 use Weline\Theme\Service\SlotHtmlOpaqueParker;
 use Weline\Theme\Service\SlotRendererService;
-use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Taglib\Slot;
 
 final class SlotBoundaryEngineTest extends TestCore
@@ -107,42 +106,6 @@ HTML;
         $this->assertStringNotContainsString('if (1 < 2)', $parked);
         $restored = $parker->restore($parked);
         $this->assertStringContainsString('if (1 < 2)', $restored);
-    }
-
-    public function testExtractSlotInnerPreservesFollowingSlotStyleAfterScriptLt(): void
-    {
-        $renderer = new ThemePreviewContentRenderer(
-            $this->createMock(\Weline\Theme\Service\ThemeLayoutService::class),
-            $this->createMock(\Weline\Theme\Service\SlotRendererService::class),
-            new \Weline\Theme\Service\ThemePageTypeResolver(),
-            ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class),
-        );
-
-        $promo = '<section class="wc-theme_widget_promo_banner"><script>'
-            . '(function () { var hoursSinceClosed = 1; if (hoursSinceClosed < 24) {} })();'
-            . '</script></section>';
-        $featured = '<div class="widget-wrapper">'
-            . '<section class="wc-theme_widget_featured_products">'
-            . '<style>.wc-theme_widget_featured_products{display:grid}</style>'
-            . '<div class="products-grid columns-4"><article>ok</article></div>'
-            . '</section></div>';
-
-        $html = SlotBoundaryMarkers::open('homepage-promo')
-            . '<div data-preview-slot="homepage-promo" data-wslot="homepage-promo">' . $promo . '</div>'
-            . SlotBoundaryMarkers::close('homepage-promo')
-            . SlotBoundaryMarkers::open('homepage-featured')
-            . '<div data-preview-slot="homepage-featured" data-wslot="homepage-featured">' . $featured . '</div>'
-            . SlotBoundaryMarkers::close('homepage-featured');
-
-        $method = new \ReflectionMethod(ThemePreviewContentRenderer::class, 'extractSlotHtml');
-        $method->setAccessible(true);
-        /** @var array<string,string> $slotHtml */
-        $slotHtml = $method->invoke($renderer, $html, ['homepage-promo', 'homepage-featured']);
-
-        $featuredHtml = (string) ($slotHtml['homepage-featured'] ?? '');
-        $this->assertStringContainsString('wc-theme_widget_featured_products', $featuredHtml);
-        $this->assertStringContainsString('display:grid', $featuredHtml);
-        $this->assertStringContainsString('products-grid', $featuredHtml);
     }
 
     public function testMissingBoundaryMarkersDoNotRequireHardThrow(): void

@@ -1053,6 +1053,12 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     color: var(--weline-chrome-text-light, #ffffff);
 }
 
+.weline-header .w-currency-switcher__code {
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: 400;
+    color: var(--weline-chrome-text-light-secondary, #dddddd);
+}
+
 .weline-header .currency-switcher-icon,
 .weline-header .language-switcher-icon,
 .weline-header .header-cart-icon,

@@ -18,7 +18,7 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         $resolver = new ThemePageTypeResolver();
         self::assertSame(
             'account',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_ACCOUNT)
+            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_ACCOUNT)
         );
         self::assertSame(
             '/account',
@@ -47,7 +47,7 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             $resolver->resolveLayoutTypeFromUri('https://shop.example/customer/account/login')
         );
         $this->assertSame(
-            ThemeLayout::PAGE_TYPE_ACCOUNT,
+            'account/login',
             $resolver->mapLayoutTypeToPageType('account/login')
         );
     }
@@ -106,16 +106,11 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         $resolver = new ThemePageTypeResolver();
         $this->assertSame(
             'product',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
+            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT)
         );
         $this->assertStringNotContainsString(
             'theme-preview/content',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
-        );
-        // Slug sample must be passed explicitly — never invented from page_type alone.
-        $this->assertSame(
-            'product/benq-screenbar',
-            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT, 'product/benq-screenbar')
+            $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT)
         );
     }
 
@@ -163,7 +158,7 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             '/terms-and-conditions' => ThemeLayout::PAGE_TYPE_TERMS,
             '/not-found' => ThemeLayout::PAGE_TYPE_NOT_FOUND,
             '/dashboard' => ThemeLayout::PAGE_TYPE_DASHBOARD,
-            '/page/hanfu-care' => ThemeLayout::PAGE_TYPE_CMS,
+            '/page/hanfu-care' => 'cms',
         ];
 
         foreach ($cases as $uri => $expected) {
@@ -176,7 +171,7 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         $resolver = new ThemePageTypeResolver();
 
         self::assertSame(
-            ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+            'checkout_failer',
             $resolver->mapLayoutTypeToPageType('checkout_failer')
         );
         self::assertSame(

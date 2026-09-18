@@ -296,7 +296,7 @@ final class ConfigCacheInvalidationService
         array $fallbackScopes,
         array $fallbackLocales,
     ): void {
-        unset(SystemConfig::$configs[$area][$module]);
+        SystemConfig::clearProcessCache($area, $module);
 
         /** @var ScopeConfigCacheInvalidator $impact */
         $impact = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class);

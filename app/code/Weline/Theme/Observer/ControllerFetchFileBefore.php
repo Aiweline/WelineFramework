@@ -273,20 +273,9 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $editorArea = (string)$request->getParam('preview_area', '');
             }
             $editorArea = strtolower(trim($editorArea));
-
-            $currentPath = strtolower(trim((string)$request->getUrlPath()));
-            $isThemeEditorInnerPreviewRoute = str_contains($currentPath, '/theme/backend/theme-editor/layout-preview');
-            $isVirtualThemePreview = (int)$request->getParam('virtual_theme_id', 0) > 0
-                || (string)$request->getParam('visual_editor', '') === '1';
-            if ($isThemeEditorInnerPreviewRoute && $editorArea === 'frontend') {
-                // ThemeEditor 的内层预览 iframe 允许按 preview_area/editor_area 切到 frontend；
-                // 但 backend 编辑器外壳页本身必须保持 backend，避免污染后台布局与静态资源。
-                $area = 'frontend';
-            } elseif ($editorArea === 'backend') {
-                $area = 'backend';
-            } else {
-                $area = 'backend';
-            }
+            // Backend requests stay on the backend layout. The visual canvas is the
+            // real storefront (or real admin) URL, not a theme-editor preview shell.
+            $area = 'backend';
         }
         
         // 设置主题相关数据到 theme 对象中（由Helper处理业务逻辑，不在模板中处理）

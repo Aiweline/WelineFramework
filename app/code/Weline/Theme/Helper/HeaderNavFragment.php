@@ -168,8 +168,6 @@ final class HeaderNavFragment
     {
         try {
             $requestPath = \strtolower((string)($template->request->getPathInfo() ?: \w_env_request_uri()));
-            $isThemePreviewContent = \str_contains($requestPath, 'theme/frontend/theme-preview/content')
-                || \str_contains($requestPath, 'theme/backend/theme-preview/content');
 
             if ((string)$template->request->getGet('visual_editor', '') === '1'
                 || (string)$template->request->getGet('preview', '') === '1'
@@ -178,17 +176,15 @@ final class HeaderNavFragment
                 return true;
             }
 
-            // Editor iframe uses editor_mode=1 but nav HTML is catalog-backed chrome.
-            // Allow scope-hot fragment cache on theme-preview/content to avoid cold
-            // mega-menu/sidebar SSR on every iframe reload.
-            if (!$isThemePreviewContent) {
-                $editorMode = \trim((string)($template->request->getParam('editor_mode', '') ?? ''));
-                if ($editorMode === '1' || \strtolower($editorMode) === 'true') {
-                    return true;
-                }
-                if ((bool)$template->getData('editor_mode')) {
-                    return true;
-                }
+            // Editor iframe uses editor_mode=1 on the real storefront path.
+            // Catalog-backed chrome may still use fragment cache; bypass only when
+            // the request is a generic preview/editor shell that must stay cold.
+            $editorMode = \trim((string)($template->request->getParam('editor_mode', '') ?? ''));
+            if ($editorMode === '1' || \strtolower($editorMode) === 'true') {
+                return true;
+            }
+            if ((bool)$template->getData('editor_mode')) {
+                return true;
             }
         } catch (\Throwable) {
             return true;

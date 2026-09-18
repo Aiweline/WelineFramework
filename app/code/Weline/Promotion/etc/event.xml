@@ -9,11 +9,4 @@
                   shared="true"
                   sort="10"/>
     </event>
-    <event name="Weline_Theme::layout_preview_sample">
-        <observer name="Weline_Promotion::layout_preview_sample"
-                  instance="Weline\Promotion\Observer\LayoutPreviewSampleObserver"
-                  disabled="false"
-                  shared="true"
-                  sort="10"/>
-    </event>
 </config>

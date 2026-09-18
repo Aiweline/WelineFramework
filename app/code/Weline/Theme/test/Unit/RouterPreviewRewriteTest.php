@@ -63,7 +63,6 @@ class RouterPreviewRewriteTest extends TestCore
         $this->assertSame(11, (int)$request->getParam('frontend_theme_id', 0));
         $this->assertSame(11, (int)($request->getParams()['frontend_theme_id'] ?? 0));
         $this->assertSame('homepage', (string)$request->getParam('page_type', ''));
-        $this->assertSame('index/index', (string)$request->getParam('theme_public_route', ''));
     }
 
     public function testDefaultThemePublicProductsRouteDefersToInstalledProductModule(): void
@@ -141,7 +140,6 @@ class RouterPreviewRewriteTest extends TestCore
 
         $this->assertSame('theme/frontend/theme-preview/gateway', $path);
         $this->assertSame('product', (string)$request->getParam('page_type', ''));
-        $this->assertSame('product/benq-screenbar', (string)$request->getParam('theme_public_route', ''));
         $this->assertSame(11, (int)$request->getParam('frontend_theme_id', 0));
     }
 

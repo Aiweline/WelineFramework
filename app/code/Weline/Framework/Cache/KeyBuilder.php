@@ -591,12 +591,7 @@ class KeyBuilder
             }
         }
 
-        // Renderers read the current Context through w_env(); globals can still
-        // contain an earlier request snapshot. Retain globals for empty/CLI input.
-        if ($serverKey !== '' && isset($_SERVER[$serverKey]) && $_SERVER[$serverKey] !== '') {
-            return $_SERVER[$serverKey];
-        }
-
+        // Request scope lives on Context. Do not read the process $_SERVER table.
         if ($serverKey !== '') {
             try {
                 if (\class_exists(\Weline\Framework\Env\WelineEnv::class)) {

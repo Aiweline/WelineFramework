@@ -85,8 +85,7 @@ final class PreviewRequestInspector
     {
         $path = $this->normalizePath($path);
 
-        if (\str_contains($path, '/theme/backend/theme-editor/layout-preview')
-            || \str_contains($path, '/theme/backend/theme-editor/compile-layout')) {
+        if (\str_contains($path, '/theme/backend/theme-editor/compile-layout')) {
             return true;
         }
 

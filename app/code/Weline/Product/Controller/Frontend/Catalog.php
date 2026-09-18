@@ -41,7 +41,6 @@ final class Catalog extends FrontendController
         $this->request->setGet('page_type', $surface['page_type']);
         $this->request->setGet('layout_type', $surface['layout_type']);
         $this->request->setGet('layout_option', 'default');
-        $this->request->setGet('theme_public_route', $surface['public_route']);
         $this->request->setGet('theme_page_title', $surface['title']);
         // Catalog template owns sort/count toolbar; hide layout slot placeholder.
         $this->assign('showToolbar', false);

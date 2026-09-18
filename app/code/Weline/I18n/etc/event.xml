@@ -71,4 +71,11 @@
                   shared="true"
                   sort="110"/>
     </event>
+    <event name="Weline_I18n::locale_catalog_changed">
+        <observer name="Weline_I18n::locale_catalog_clear_active_locales"
+                  instance="Weline\I18n\Observer\LocaleCatalogChangedClearActiveLocales"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
 </config>

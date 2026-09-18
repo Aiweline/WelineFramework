@@ -107,7 +107,7 @@ Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”�
 
 两条预览入口不得混用：
 
-- `#btnPreview`（后台预览 / 抛弃外框）与编辑器 iframe：只打开 `/theme/frontend/theme-preview/content`（后台登录 + typed `editor_context`）。**禁止**调用 `start-preview`，**禁止**挂载或持久化 `weline_preview_token` / 预览 Cookie / `shell=preview`，因此也不得出现真实店面「预览模式」退出浮窗。
+- `#btnPreview`（后台预览 / 抛弃外框）与编辑器 iframe：打开**真实店面 path** + `editor_mode=1` / `shell=theme-editor` / typed `editor_context`（`buildCanvasStorefrontPreviewUrl`）。**禁止**用 `theme-preview/content` 或 `layout-preview` 代替店面地址；**禁止**调用 `start-preview`，**禁止**挂载或持久化 `weline_preview_token` / 预览 Cookie / `shell=preview`，因此也不得出现真实店面「预览模式」退出浮窗。
 - `#btnFrontendPreview`（前端预览）：才允许 `postStartPreview` 生成 Token、种 HttpOnly Cookie、`persist shell=preview`，并打开真实店面 URL；此时才注入可拖动的退出/发布浮窗。
 
 退出真实预览必须经过前台 preview gateway 清理服务端上下文、Token 能力与 HttpOnly Cookie；返回后台编辑器的重定向必须是经同源校验后的绝对 HTTPS URL，避免被前台 locale 路由加上语言前缀。

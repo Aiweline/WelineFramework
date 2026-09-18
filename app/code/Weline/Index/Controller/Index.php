@@ -12,7 +12,6 @@ class Index extends FrontendController
         if ($this->shouldUseThemeHomepageLayout()) {
             $this->layoutType = 'homepage';
             $this->request->setGet('page_type', 'homepage');
-            $this->request->setGet('theme_public_route', 'index/index');
             $title = (string)__('首页');
             $this->request->setGet('theme_page_title', $title);
             $this->assign('page_title', $title);

@@ -218,7 +218,8 @@ class ThemeEditorPreviewContractTest extends TestCore
         $this->assertStringContainsString('id="previewFrame"', $html);
         // Canvas starts blank; JS injects the authorized content URL with editor_context.
         $this->assertStringContainsString('src="about:blank"', $html);
-        $this->assertStringContainsString('data-api-frontend-layout-preview=', $html);
+        $this->assertStringNotContainsString('data-api-frontend-layout-preview=', $html);
+        $this->assertStringNotContainsString('data-api-layout-preview=', $html);
         $this->assertStringContainsString('data-api-start-preview=', $html);
         $this->assertStringContainsString('id="widgetListLoading"', $html);
     }

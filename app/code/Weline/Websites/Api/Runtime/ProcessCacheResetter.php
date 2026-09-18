@@ -21,6 +21,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         \Weline\Websites\Service\WebsiteAclGrantService::clearRequestCache();
         \Weline\Websites\Data\WebsiteData::clearProcessCache();
         \Weline\Websites\Service\ScopePathMatchCache::clearProcessCache();
+        \Weline\Websites\Api\Localization\LocalizationProvider::clearProcessCache();
+        \Weline\Framework\App\State::clearProcessLocalizationCaches();
 
         $pageClass = '\\GuoLaiRen\\PageBuilder\\Controller\\Frontend\\Page';
         if (!\class_exists($pageClass) || !\is_callable([$pageClass, 'clearProcessCaches'])) {

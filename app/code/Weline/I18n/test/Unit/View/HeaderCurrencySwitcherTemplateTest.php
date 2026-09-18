@@ -40,6 +40,32 @@ final class HeaderCurrencySwitcherTemplateTest extends TestCase
         self::assertStringNotContainsString('id="w-currency-switcher-menu"', $content);
     }
 
+    public function testCurrencySwitcherSkipsNonConvertibleRates(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('$currencyIsConvertible', $content);
+        self::assertStringContainsString('rate<=0', $content);
+        self::assertStringContainsString('getBaseCurrency()', $content);
+        self::assertStringContainsString('!$currencyIsConvertible($currencyCode, $rate)', $content);
+    }
+
+    public function testCurrencyTriggerPrefersSymbolGlyph(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('$triggerCurrencyLabel', $content);
+        self::assertStringContainsString('CurrencySymbol::forCode', $content);
+        self::assertStringContainsString('data-currency-symbol=', $content);
+        self::assertStringContainsString('w-currency-switcher__code', $content);
+        self::assertStringNotContainsString(
+            '<span class="w-currency-switcher__current current-currency"><?= $escape($displayCurrentCurrency) ?></span>',
+            $content
+        );
+    }
+
     public function testSwitcherInstanceIdsStayUniqueWithoutSharedRequestContext(): void
     {
         $first = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency-switcher-menu');
@@ -49,5 +75,4 @@ final class HeaderCurrencySwitcherTemplateTest extends TestCase
         self::assertMatchesRegularExpression('/^w-currency-switcher-menu-[0-9a-f]{24}$/D', $first);
         self::assertMatchesRegularExpression('/^w-currency-switcher-menu-[0-9a-f]{24}$/D', $second);
     }
-
 }

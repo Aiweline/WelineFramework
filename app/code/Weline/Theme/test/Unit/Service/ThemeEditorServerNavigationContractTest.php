@@ -49,6 +49,22 @@ final class ThemeEditorServerNavigationContractTest extends TestCase
         self::assertStringContainsString('postResolveNavigation()', $provider);
     }
 
+    public function testBothEditorBundlesSanitizeMarkupLeaksFromCanvasPaths(): void
+    {
+        foreach ([
+            'app/code/Weline/Theme/view/statics/js/theme-editor.js',
+            'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js',
+        ] as $path) {
+            $source = $this->read($path);
+
+            self::assertStringContainsString('function sanitizeStorefrontPublicRoute(route)', $source, $path);
+            self::assertStringContainsString('function isSafeStorefrontPublicRoute(route)', $source, $path);
+            self::assertStringContainsString('sanitizeStorefrontPublicRoute(', $source, $path);
+            self::assertStringContainsString('isSafeStorefrontPublicRoute(hrefPathProbe)', $source, $path);
+            self::assertStringContainsString('预览链接无效，已忽略', $source, $path);
+        }
+    }
+
     private function read(string $relativePath): string
     {
         $root = \dirname(__DIR__, 7);

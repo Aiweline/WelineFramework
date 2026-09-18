@@ -22,7 +22,6 @@ class Index extends FrontendController
         $this->request->setGet('page_type', 'cart');
         $this->request->setGet('layout_type', 'cart');
         $this->request->setGet('layout_option', 'default');
-        $this->request->setGet('theme_public_route', 'cart');
         $this->request->setGet('theme_page_title', WidgetI18n::label('购物车'));
 
         $this->assign('page_title', WidgetI18n::label('购物车'));

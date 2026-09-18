@@ -41,6 +41,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
     private const REQUEST_STATE_KEY = 'acl.route_before.state.v1';
     private static bool $stateManagerRegistered = false;
 
+    /** @var array<string, list<string>> */
+    private static array $processWhitelistByType = [];
+
     /**
      * @var \Weline\Acl\Model\WhiteAclSource
      */
@@ -181,6 +184,12 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         RequestContext::remove(self::REQUEST_STATE_KEY);
     }
 
+    /** 白名单变更时清空进程级白名单表。 */
+    public static function clearProcessCache(): void
+    {
+        self::$processWhitelistByType = [];
+    }
+
     /**
      * @return array{
      *     backend_whitelist: array|false,
@@ -227,12 +236,19 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         if ($state['backend_whitelist'] !== false) {
             return $state['backend_whitelist'];
         }
+        $type = \Weline\Acl\Model\WhiteAclSource::type_PC;
+        if (isset(self::$processWhitelistByType[$type])) {
+            $white_lists = self::$processWhitelistByType[$type];
+            $state['backend_whitelist'] = $white_lists;
+            self::storeRequestState($state);
+            return $white_lists;
+        }
         $white_acl_cache_key = 'backend_white_acl_sources';
         $white_lists = $this->aclCache->get($white_acl_cache_key);
         if (empty($white_lists)) {
             $white_lists = $this->whiteAclSource
                 ->fields('path')
-                ->where('type', \Weline\Acl\Model\WhiteAclSource::type_PC)
+                ->where('type', $type)
                 ->select()
                 ->fetchArray();
             $paths = [];
@@ -242,6 +258,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $white_lists = $paths;
             $this->aclCache->set($white_acl_cache_key, $white_lists);
         }
+        self::$processWhitelistByType[$type] = $white_lists;
         $state['backend_whitelist'] = $white_lists;
         self::storeRequestState($state);
         return $white_lists;
@@ -596,12 +613,19 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         if ($state['frontend_whitelist'] !== false) {
             return $state['frontend_whitelist'];
         }
+        $type = \Weline\Acl\Model\WhiteAclSource::type_API;
+        if (isset(self::$processWhitelistByType[$type])) {
+            $white_lists = self::$processWhitelistByType[$type];
+            $state['frontend_whitelist'] = $white_lists;
+            self::storeRequestState($state);
+            return $white_lists;
+        }
         $white_acl_cache_key = 'frontend_api_white_acl_sources';
         $white_lists = $this->aclCache->get($white_acl_cache_key);
         if (empty($white_lists)) {
             $white_lists = $this->whiteAclSource
                 ->fields('path')
-                ->where('type', \Weline\Acl\Model\WhiteAclSource::type_API)
+                ->where('type', $type)
                 ->select()
                 ->fetchArray();
             $paths = [];
@@ -611,6 +635,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $white_lists = $paths;
             $this->aclCache->set($white_acl_cache_key, $white_lists);
         }
+        self::$processWhitelistByType[$type] = $white_lists;
         $state['frontend_whitelist'] = $white_lists;
         self::storeRequestState($state);
         return $white_lists;

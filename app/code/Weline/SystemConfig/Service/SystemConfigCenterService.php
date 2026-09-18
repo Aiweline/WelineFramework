@@ -1096,29 +1096,40 @@ class SystemConfigCenterService
             $text = (string)__(
                 '当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。'
             );
-        } else {
-            $parts = [
-                (string)__('应用默认 CSP（不可覆盖）') . '：' . $floor,
+            $hints[] = [
+                'group' => 'framework_security_headers',
+                'type' => 'warning',
+                'description' => $text,
+                'text' => $text,
             ];
-            foreach ($rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $module = \trim((string)($row['module'] ?? ''));
-                $policy = \trim((string)($row['policy'] ?? ''));
-                if ($module === '' || $policy === '') {
-                    continue;
-                }
-                $parts[] = $module . ' → ' . $policy;
-            }
-            $text = \implode("\n", $parts);
+
+            return $hints;
         }
+
+        $title = (string)__('应用默认 CSP（不可覆盖）');
+        $parts = [$floor];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $module = \trim((string)($row['module'] ?? ''));
+            $policy = \trim((string)($row['policy'] ?? ''));
+            if ($module === '' || $policy === '') {
+                continue;
+            }
+            $parts[] = $module . ' → ' . $policy;
+        }
+        $body = \implode("\n", $parts);
+        $legacy = $title . '：' . $body;
 
         $hints[] = [
             'group' => 'framework_security_headers',
             'type' => 'warning',
-            'description' => $text,
-            'text' => $text,
+            'title' => $title,
+            'description' => $legacy,
+            'text' => $body,
+            'collapsible' => true,
+            'collapsed' => true,
         ];
 
         return $hints;

@@ -24,11 +24,7 @@ class CspPolicy extends FrontendRestController
         $service = new SecurityHeaderPolicyService();
         $csp = $service->resolveCurrentDocumentCsp();
         $etag = '"' . \hash('sha256', $csp) . '"';
-        $inm = \trim((string)(
-            $_SERVER['HTTP_IF_NONE_MATCH']
-            ?? WelineEnv::server('HTTP_IF_NONE_MATCH', '')
-            ?? ''
-        ));
+        $inm = \trim((string)(WelineEnv::server('HTTP_IF_NONE_MATCH', '') ?? ''));
 
         $response = $this->request->getResponse();
         $response->setHeader('Content-Type', 'text/plain; charset=utf-8');

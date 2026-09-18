@@ -16,12 +16,12 @@ use Weline\SystemConfig\Api\ConfigStore;
  *   "version": 3,
  *   "chains": [
  *     {
- *       "id": "demo_cross_page",
- *       "name": "演示跨页漏斗",
- *       "complete_event": "demo_funnel_complete",
+ *       "id": "checkout_express_pay",
+ *       "name": "快捷支付结账",
+ *       "complete_event": "express_pay_checkout_success",
  *       "steps": [
- *         {"type":"page","path_prefix":"/"},
- *         {"type":"track","event":"chain_step_b"}
+ *         {"type":"track","event":"express_pay"},
+ *         {"type":"track","event":"checkout_success"}
  *       ]
  *     }
  *   ]
@@ -279,31 +279,6 @@ final class EventChainService
             'chains' => $published['chains'],
             'chain' => $row,
         ];
-    }
-
-    /**
-     * 发布/确保演示跨页链（测试用）：page(/) → track(chain_demo_step_b) → complete demo_funnel_complete。
-     *
-     * @return array{version: int, chains: list<array<string, mixed>>, chain: array<string, mixed>|null}
-     */
-    public function ensureDemoCrossPageChain(int $websiteId): array
-    {
-        return $this->upsertChain($websiteId, [
-            'id' => 'demo_cross_page',
-            'name' => '演示跨页漏斗',
-            'complete_event' => 'demo_funnel_complete',
-            'steps' => [
-                [
-                    'type' => 'page',
-                    'label' => '任意页打开（步骤1）',
-                ],
-                [
-                    'type' => 'track',
-                    'event' => 'chain_demo_step_b',
-                    'label' => '第二步 track（可在另一页触发）',
-                ],
-            ],
-        ]);
     }
 
     /**

@@ -647,13 +647,14 @@ class PixelEventService
         }
 
         // 转化事件去重：TTL 内同 website+event+业务键直接丢弃
-        if ($this->conversionDedupe()->isDuplicate($websiteId, $eventName, $prepared['post'])) {
+        $skipReason = $this->conversionDedupe()->skipReason($websiteId, $eventName, $prepared['post']);
+        if ($skipReason !== null) {
             return $this->successResponse([
                 'pixel_id' => null,
                 'pixel_additional_id' => null,
                 'buffered' => false,
                 'skipped' => true,
-                'reason' => 'duplicate',
+                'reason' => $skipReason,
                 'event_id' => $prepared['event_id'],
                 'event' => $eventName,
             ]);

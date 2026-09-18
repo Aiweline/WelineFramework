@@ -12,7 +12,6 @@ use Weline\Theme\Service\SlotBoundaryScanner;
 use Weline\Theme\Service\SlotHtmlOpaqueParker;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\TemplateInlineWidgetMerger;
-use Weline\Theme\Service\ThemePreviewContentRenderer;
 
 #[RunTestsInSeparateProcesses]
 #[PreserveGlobalState(false)]
@@ -20,7 +19,7 @@ final class SlotHtmlBoundaryBehaviorTest extends TestCase
 {
     protected function setUp(): void
     {
-        foreach ([SlotBoundaryScanner::class, SlotHtmlOpaqueParker::class, SlotRendererService::class, TemplateInlineWidgetMerger::class, ThemePreviewContentRenderer::class] as $class) {
+        foreach ([SlotBoundaryScanner::class, SlotHtmlOpaqueParker::class, SlotRendererService::class, TemplateInlineWidgetMerger::class] as $class) {
             $path = dirname(__DIR__, 3) . '/Service/' . substr($class, strrpos($class, '\\') + 1) . '.php';
             if (!class_exists($class, false)) {
                 require_once $path;
@@ -144,23 +143,6 @@ final class SlotHtmlBoundaryBehaviorTest extends TestCase
         self::assertNotNull($template);
         self::assertStringContainsString('WELINE_SLOT_OPAQUE', (string)($template['html'] ?? ''));
     }
-
-    public function testPreviewExtractionKeepsWidgetContentAfterLiteralClosingTags(): void
-    {
-        require_once dirname(__DIR__, 3) . '/Model/ThemeLayout.php';
-        $content = '<script>const close="</div>";</script><!-- literal </div> -->'
-            . '<section><div>first widget</div><span>trailing content</span></section>';
-        $related = '<div class="widget-wrapper"><section>following slot</section></div>';
-        $html = '<html><body><!--@weline-slot:product-main--><div data-wslot="product-main">'
-            . $content . '</div><!--@/weline-slot:product-main-->'
-            . '<!--@weline-slot:product-related--><div data-wslot="product-related">'
-            . $related . '</div><!--@/weline-slot:product-related--></body></html>';
-        $class = new \ReflectionClass(ThemePreviewContentRenderer::class);
-        self::assertSame(['product-main' => $content, 'product-related' => $related], $class->getMethod('extractSlotHtml')->invoke(
-            $class->newInstanceWithoutConstructor(), $html, ['product-main', 'product-related'],
-        ));
-    }
-
 
     public static function largeSlotOpeningTags(): iterable
     {

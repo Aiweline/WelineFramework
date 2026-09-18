@@ -1800,9 +1800,21 @@ function suiteAssembleHtml(array $t, array $imgs, callable $h): string
             . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
             . $h((string)$t['look_body']) . '</p></div>';
         $poolOffset += 1;
+    } elseif ($nPool >= 1 && $hero) {
+        // 整池仅 1 张：hero 自复用组 pair（§5.2 单图不得缺 pair）
+        $pair = $figureStack([
+            $img($hero, (string)$t['alt_hero']),
+            $img($hero, (string)$t['alt_look'] . ' 1'),
+        ], 'weline-detail-figure-stack--caption')
+            . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
+            . $h((string)$t['look_body']) . '</p></div>';
     }
 
     $featureMedia = $pick($poolOffset);
+    if ($featureMedia === null && $nPool >= 1 && $hero) {
+        // 单图：feature 复用 hero，保证 poem-aside + feature 齐
+        $featureMedia = $hero;
+    }
     if ($featureMedia !== null) {
         $featureBlock = '<div class="weline-detail-feature weline-detail-feature--reverse">'
             . '<div class="weline-detail-feature__media">' . $img($featureMedia, (string)$t['alt_look'] . ' · 形制') . '</div>'
@@ -1810,7 +1822,9 @@ function suiteAssembleHtml(array $t, array $imgs, callable $h): string
             . $h((string)$t['look_body']) . '</p>'
             . '<p class="weline-detail-feature__note">' . $h((string)($t['inspire_note'] ?? '')) . '</p></div>'
             . '</div>';
-        $poolOffset++;
+        if ($featureMedia !== $hero || $poolOffset < $nPool) {
+            $poolOffset++;
+        }
     }
 
     // 图充足时再补一张 caption hero（非 fullbleed）

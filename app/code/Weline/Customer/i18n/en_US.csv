@@ -121,20 +121,20 @@ lock,lock
 缺少重置令牌。,"The reset token is required."
 请输入新密码。,"Please enter a new password."
 密码已重置，请使用新密码登录。,"Your password has been reset. Please sign in with the new password."
-个人资料,"Personal information"
-安全设置,"Security settings"
-注册,Register
 登录页工具,登录页工具
 两步验证页工具,两步验证页工具
 您已退出登录,您已退出登录
 当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。,当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。
 返回首页,返回首页
 重新登录,重新登录
+注册,Register
+个人资料,"Personal information"
 这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。
 账户中心,账户中心
 "这里预留账户导航 slot，可由会员模块接入真实菜单。","这里预留账户导航 slot，可由会员模块接入真实菜单。"
 我的订单,"My Orders"
 这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。,这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。
+安全设置,"Security settings"
 "绑定 Google / Facebook / Instagram","Link Google / Facebook / Instagram"
 "Google 登录指南","Google sign-in guide"
 "使用 Google 账户授权后，可一键登录本站顾客账户，或把 Google 绑定到已有账户，无需重复输入密码。","After authorizing with Google, you can sign in to your store account in one click, or link Google to an existing account without re-entering your password."

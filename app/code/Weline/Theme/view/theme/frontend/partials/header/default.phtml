@@ -255,6 +255,16 @@ $defaultNavItemsFactory = static function (): array {
 <a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 <div hidden data-weline-load="headerSearch" data-w-header-search-loader="true" aria-hidden="true"></div>
 <?php // headerSearch：布局兜底声明（部件未挂时仍可加载），禁止 @static 直引 ?>
+<?php // 像素引导：空槽 + Visitor required default_injections；禁止 Theme 内嵌非 Theme 部件 ?>
+<w:slot id="header-pixel-bootstrap"
+        name="店面像素引导"
+        accept="storefront-pixel-bootstrap,layout-header-pixel-bootstrap,pixel-bootstrap"
+        reject="navigation,product,category,footer,banner,search,logo,notice"
+        multiple="false"
+        exclusive="true"
+        position="header"
+        class="header-pixel-bootstrap-slot"
+        data-testid="header-pixel-bootstrap-slot"></w:slot>
 
 <w:slot id="header"
         name="整体头部"
@@ -523,7 +533,9 @@ $defaultNavItemsFactory = static function (): array {
         </div>
     </div>
 
-    <!-- 底部导航栏：全宽背景 + 版心内容；左右两大簇（左：全部+分类；右：扩展博客+快捷导航） -->
+    <!-- 底部导航栏：全宽背景 + 版心内容；左右两大簇各自 More（禁止只给分类菜单做 More）
+         左簇：全部 + 分类 + 政策/关于 → 左簇末一个 More（候选=分类+政策，非整段只藏 menu）
+         右簇：扩展链 + 快捷导航 → 右簇自己的 More；左右互让、互不合并成一个 More -->
     <div class="header-main-nav">
         <div class="header-main-nav-inner">
             <div class="header-nav-left-cluster">
@@ -587,7 +599,7 @@ $defaultNavItemsFactory = static function (): array {
                     position="header"
                     class="header-nav-extensions"></w:slot>
 
-            <!-- 「更多」：默认 display:none 不占 flex gap；溢出时再显示并申请宽度 -->
+            <!-- 右簇自己的 More（与左簇 header-left-cluster-more 分立）：默认 display:none 不占 flex gap；溢出时再显示 -->
             <div class="nav-more-wrapper"
                  id="nav-more-wrapper"
                  data-w-component="menu"
@@ -2397,19 +2409,24 @@ textarea::-webkit-scrollbar-thumb:hover,
     position: relative;
 }
 
-/* 分类后政策槽：固定内容宽（单一下拉），不参与挤占分类「更多」预算 */
+/* 分类后政策槽：与分类同属左簇溢出候选，隐藏项不占宽 */
 .header-policy-links-slot {
     display: flex;
     align-items: center;
-    flex: 0 0 auto;
-    flex-shrink: 0;
+    flex: 0 1 auto;
     min-width: 0;
     max-width: none;
     width: auto;
-    overflow: visible;
+    overflow: hidden;
 }
 .header-policy-links-slot:empty {
     display: none;
+}
+.header-policy-links .header-policy-links__inline.is-nav-overflow-hidden,
+.header-policy-links .header-policy-links__menu-wrap.is-nav-overflow-hidden,
+.header-policy-links .header-policy-links__inline.hidden,
+.header-policy-links .header-policy-links__menu-wrap.hidden {
+    display: none !important;
 }
 @media (max-width: 768px) {
     .header-policy-links-slot {
@@ -2516,6 +2533,28 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .header-nav-right-cluster > .header-nav-extension-link.is-nav-overflow-hidden,
 .header-nav-right-cluster .nav-links-list > li.is-nav-overflow-hidden {
+    display: none !important;
+}
+
+/* 左簇整体 More：挂在左簇末（分类+政策之后），未展开不占位 */
+.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+}
+.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more[style*="display: none"],
+.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more[hidden] {
+    display: none !important;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+    flex: 0 0 0;
+}
+.categories-list > .category-item.is-nav-overflow-hidden {
     display: none !important;
 }
 
@@ -4412,7 +4451,9 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         // 搜索相关功能已移至 search.js 模块
         // 搜索分类下拉菜单同步和搜索建议功能由 Weline.Search 模块处理
 
-        // 导航链接"更多"按钮功能
+        // 主栏溢出 More：左右簇各自一套，禁止「只做分类菜单 More」
+        // - 左：分类 + 政策/关于 → 左簇末 header-left-cluster-more（collectLeftOverflowCandidates）
+        // - 右：扩展链 + 快捷导航 → nav-more-wrapper；先左后右互让，不得合并成一个全局 More
         const categoriesList = document.getElementById('categories-list');
         let categoriesOverflowWrapper = document.getElementById('categories-overflow-wrapper');
         let categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
@@ -4424,21 +4465,36 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         const headerNavFill = document.getElementById('header-nav-fill');
         const headerMainNav = document.querySelector('.header-main-nav');
 
-        if (categoriesList && !categoriesOverflowWrapper) {
-            categoriesOverflowWrapper = document.createElement('li');
-            categoriesOverflowWrapper.className = 'categories-overflow-wrapper';
+        if ((categoriesList || document.querySelector('.header-nav-left-cluster')) && !categoriesOverflowWrapper) {
+            categoriesOverflowWrapper = document.createElement('div');
+            categoriesOverflowWrapper.className = 'categories-overflow-wrapper header-left-cluster-more';
             categoriesOverflowWrapper.id = 'categories-overflow-wrapper';
             categoriesOverflowWrapper.style.display = 'none';
             categoriesOverflowWrapper.setAttribute('data-w-component', 'popover');
             categoriesOverflowWrapper.setAttribute('data-w-open-on', 'hover');
             categoriesOverflowWrapper.setAttribute('data-w-placement', 'bottom-start');
             categoriesOverflowWrapper.innerHTML = '<button class="categories-overflow-btn w-button" id="categories-overflow-btn" type="button" data-w-popover-trigger data-tone="quiet" aria-haspopup="dialog" aria-expanded="false" aria-label="' + escapeHeaderHtml(headerMoreCategoriesLabel) + '"><span>' + escapeHeaderHtml(headerMoreLabel) + '</span><i class="fas fa-chevron-down" aria-hidden="true"></i></button><div class="w-popover w-mega-menu w-mega-menu--split header-category-panel categories-overflow-panel w-surface-body is-megamenu is-mega-panel-split" data-w-component="mega-menu" data-surface="body" data-w-popover-panel data-w-mega-menu data-mega-menu data-w-gap="0" role="dialog" data-state="closed" aria-hidden="true" hidden><div class="mega-menu-layout" id="categories-overflow-dropdown" role="presentation"></div></div>';
-            categoriesList.appendChild(categoriesOverflowWrapper);
+            const leftHost = document.querySelector('.header-nav-left-cluster');
+            if (leftHost) {
+                leftHost.appendChild(categoriesOverflowWrapper);
+            } else if (categoriesList) {
+                categoriesList.appendChild(categoriesOverflowWrapper);
+            }
             categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
             categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');
             if (window.Weline && window.Weline.UI && typeof window.Weline.UI.mount === 'function') {
                 window.Weline.UI.mount(categoriesOverflowWrapper);
             }
+        }
+        // 左簇整体 More（禁止只挂在 categories-list 末、夹在政策前）：宿主=左簇末，候选=分类+政策
+        if (categoriesOverflowWrapper) {
+            const leftHost = document.querySelector('.header-nav-left-cluster');
+            if (leftHost && categoriesOverflowWrapper.parentElement !== leftHost) {
+                leftHost.appendChild(categoriesOverflowWrapper);
+            } else if (leftHost && leftHost.lastElementChild !== categoriesOverflowWrapper) {
+                leftHost.appendChild(categoriesOverflowWrapper);
+            }
+            categoriesOverflowWrapper.classList.add('header-left-cluster-more');
         }
 
         // More Mega：与一级分类相同 bottom-start，打开后再贴一次触发器（内容撑开宽度后）
@@ -4498,8 +4554,13 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 if (!leftCluster || !rightCluster) {
                     return false;
                 }
-                // offsetTop 比 getBoundingClientRect 轻，拖窗够用
-                return Math.abs(leftCluster.offsetTop - rightCluster.offsetTop) > 8;
+                // 同行也可能因 align-items / 字高差数 px（实测 ~11）；
+                // 只有明显跨到下一 flex 行才算分行，否则会跳过互让、左撑满右被挤扁。
+                const rowThreshold = Math.max(
+                    24,
+                    Math.floor((leftCluster.offsetHeight || 40) * 0.75)
+                );
+                return Math.abs(leftCluster.offsetTop - rightCluster.offsetTop) >= rowThreshold;
             }
 
             function syncNavStackMode() {
@@ -4521,6 +4582,11 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     lastCatHideFrom = null;
                     navMenuBuiltFor = null;
                     catMenuBuiltFor = null;
+                    // 栈切换会改 gap/padding 语义，禁止沿用单行缓存去算两行全宽
+                    cachedInnerPadGap = null;
+                    cachedRightPad = null;
+                    cachedLeftGap = null;
+                    cachedAllW = null;
                 }
             }
 
@@ -4612,7 +4678,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
             }
 
             /**
-             * 左簇实际占用：仅「全部」+ 仍显示的分类/分类更多 + 政策下拉（不含 flex 吃掉的空白）。
+             * 左簇实际占用：全部 + 仍显示的分类 + 仍显示的政策单元 + 左簇末 More（不含 flex 空白）。
              * 左空时 ≈0，右可用宽 = 主栏 − 左占用 − gap。
              */
             function measurePolicyLinksWidth() {
@@ -4623,8 +4689,32 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 if (slot.hidden || slot.offsetParent === null) {
                     return 0;
                 }
-                const w = slot.offsetWidth;
-                return w > 0 ? w : 0;
+                const units = slot.querySelectorAll(
+                    '.header-policy-links__inline, .header-policy-links__menu-wrap'
+                );
+                if (!units.length) {
+                    const w = slot.offsetWidth;
+                    return w > 0 ? w : 0;
+                }
+                let sum = 0;
+                let visible = 0;
+                const gap = cachedLeftGap != null ? cachedLeftGap : 8;
+                units.forEach(function(el) {
+                    if (
+                        el.classList.contains('hidden')
+                        || el.classList.contains('is-nav-overflow-hidden')
+                        || el.getAttribute('hidden') !== null
+                    ) {
+                        return;
+                    }
+                    const w = el.offsetWidth;
+                    if (w <= 0) {
+                        return;
+                    }
+                    sum += w + (visible > 0 ? gap : 0);
+                    visible += 1;
+                });
+                return sum;
             }
 
             function measureLeftOccupiedWidth() {
@@ -4642,14 +4732,12 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     const catGap = parseFloat(window.getComputedStyle(categoriesList).columnGap
                         || window.getComputedStyle(categoriesList).gap) || 8;
                     Array.from(categoriesList.children).forEach(function(el) {
-                        if (el === categoriesOverflowWrapper) {
-                            const shown = categoriesOverflowWrapper.style.display !== 'none'
-                                && !categoriesOverflowWrapper.hidden
-                                && categoriesOverflowWrapper.offsetParent !== null;
-                            if (!shown) {
-                                return;
-                            }
-                        } else if (
+                        if (el === categoriesOverflowWrapper
+                            || el.classList.contains('categories-overflow-wrapper')) {
+                            // More 已迁到左簇末，list 内残留不计
+                            return;
+                        }
+                        if (
                             el.classList.contains('hidden')
                             || el.classList.contains('is-nav-overflow-hidden')
                             || el.getAttribute('hidden') !== null
@@ -4672,6 +4760,21 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 if (policyW > 0) {
                     occupied = occupied > 0 ? occupied + cachedLeftGap + policyW : policyW;
                 }
+                // 左簇末 More（分类+政策之后）
+                if (categoriesOverflowWrapper
+                    && categoriesOverflowWrapper.parentElement === leftCluster) {
+                    const moreShown = categoriesOverflowWrapper.style.display !== 'none'
+                        && !categoriesOverflowWrapper.hidden
+                        && window.getComputedStyle(categoriesOverflowWrapper).display !== 'none';
+                    if (moreShown) {
+                        const moreW = categoriesOverflowWrapper.offsetWidth;
+                        if (moreW > 0) {
+                            occupied = occupied > 0
+                                ? occupied + cachedLeftGap + moreW
+                                : moreW;
+                        }
+                    }
+                }
                 return occupied;
             }
 
@@ -4685,6 +4788,29 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                         gap: parseFloat(innerStyle.columnGap || innerStyle.gap) || 0
                     };
                 }
+                if (!cachedRightPad && rightCluster) {
+                    const style = window.getComputedStyle(rightCluster);
+                    cachedRightPad = {
+                        l: parseFloat(style.paddingInlineStart || style.paddingLeft) || 0,
+                        r: parseFloat(style.paddingInlineEnd || style.paddingRight) || 0
+                    };
+                }
+                const rightPad = cachedRightPad
+                    ? (cachedRightPad.l + cachedRightPad.r)
+                    : 0;
+                // 已换两行：右簇独占第二行，按主栏 100% 内容宽算（不再扣左占用）
+                if (clustersOnSeparateRows()) {
+                    const fullRow = Math.max(0, mainW - rightPad);
+                    if (!rightCluster) {
+                        return fullRow;
+                    }
+                    const layout = Math.max(
+                        0,
+                        rightCluster.clientWidth - rightPad
+                    );
+                    // reflow 未完成时 layout 可能偏小，取与全宽较大者
+                    return Math.max(layout, fullRow);
+                }
                 const gap = cachedInnerPadGap ? cachedInnerPadGap.gap : 0;
                 // 互让：右可用 = 主栏内容宽 − 左实际占用 − 簇间距（左空则右几乎拿满）
                 const reciprocal = Math.max(0, mainW - measureLeftOccupiedWidth() - gap);
@@ -4694,16 +4820,9 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     }
                     return reciprocal;
                 }
-                if (!cachedRightPad) {
-                    const style = window.getComputedStyle(rightCluster);
-                    cachedRightPad = {
-                        l: parseFloat(style.paddingInlineStart || style.paddingLeft) || 0,
-                        r: parseFloat(style.paddingInlineEnd || style.paddingRight) || 0
-                    };
-                }
                 const layout = Math.max(
                     0,
-                    rightCluster.clientWidth - cachedRightPad.l - cachedRightPad.r
+                    rightCluster.clientWidth - rightPad
                 );
                 // 取较大值：左若被错误撑宽导致 layout 偏小，仍以互让宽为准
                 return Math.max(layout, reciprocal);
@@ -4725,7 +4844,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
             }
 
             function measureCatAvailableWidth() {
-                // 先给右簇留足自然宽，再扣政策下拉；左分类在剩余里进更多——避免左按内容撑满、右只剩「更多」
+                // 左簇整体（分类+政策）在「主栏−全部−右自然宽」内互让；政策已列入溢出候选，不再单独预留
                 const mainW = measureMainInnerContentWidth();
                 const allW = measureAllButtonWidth();
                 if (!cachedInnerPadGap && mainNavInner) {
@@ -4742,14 +4861,46 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 }
                 const gap = cachedInnerPadGap ? cachedInnerPadGap.gap : 0;
                 const leftGap = cachedLeftGap != null ? cachedLeftGap : 0;
-                const policyW = measurePolicyLinksWidth();
-                const policyReserve = policyW > 0 ? (policyW + leftGap) : 0;
+                // 已换两行：左簇独占第一行，按主栏 100% 内容宽算（不预留右簇自然宽）
+                if (clustersOnSeparateRows()) {
+                    let fullRow = Math.max(0, mainW - allW - gap - 8);
+                    if (leftCluster) {
+                        const layout = Math.max(0, leftCluster.clientWidth - allW - leftGap - 8);
+                        fullRow = Math.max(fullRow, layout);
+                    }
+                    return fullRow;
+                }
                 const rightReserve = measureRightNaturalReserve();
                 if (rightReserve > 0) {
-                    return Math.max(0, mainW - allW - gap - rightReserve - policyReserve - 8);
+                    return Math.max(0, mainW - allW - gap - rightReserve - 8);
                 }
-                // 无右项时：左可用 = 主栏 − 全部 − 政策下拉 − gap（不要用可能被撑大的 leftCluster.clientWidth）
-                return Math.max(0, mainW - allW - gap - policyReserve - 8);
+                return Math.max(0, mainW - allW - gap - 8);
+            }
+
+            function collectLeftOverflowCandidates() {
+                // 硬约束：左簇 More 不能只收分类 menu；政策直链/下拉与分类同列候选，从簇末往前藏
+                const cats = categoriesList
+                    ? Array.from(categoriesList.children).filter(function(item) {
+                        return item !== categoriesOverflowWrapper
+                            && !item.classList.contains('categories-overflow-wrapper');
+                    })
+                    : [];
+                const policyUnits = [];
+                const policyRoot = document.querySelector(
+                    '.header-policy-links-slot .header-policy-links, .header-policy-links-slot [data-testid="header-policy-links"]'
+                );
+                if (policyRoot) {
+                    Array.from(policyRoot.children).forEach(function(child) {
+                        if (child.matches('a.header-policy-links__inline, .header-policy-links__menu-wrap')) {
+                            policyUnits.push(child);
+                        }
+                    });
+                }
+                return cats.concat(policyUnits);
+            }
+
+            function isLeftCategoryCandidate(el) {
+                return !!(el && el.classList && el.classList.contains('category-item'));
             }
 
             function measureFlexChildrenOffDom(elements, morePrototype, gap) {
@@ -4820,22 +4971,29 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 return navNaturalCache;
             }
 
-            function ensureCatNaturalMetrics(categoryItems) {
-                const catKey = categoryItems.map(function(item) {
-                    const link = item.querySelector('a');
-                    return (link && link.getAttribute('href') || '') + '\t' + ((link && link.textContent) || item.textContent || '').trim();
+            function ensureCatNaturalMetrics(candidates) {
+                const catKey = candidates.map(function(item) {
+                    if (isLeftCategoryCandidate(item)) {
+                        const link = item.querySelector('a');
+                        return 'c\t' + (link && link.getAttribute('href') || '') + '\t' + ((link && link.textContent) || item.textContent || '').trim();
+                    }
+                    if (item.matches && item.matches('a')) {
+                        return 'p\t' + (item.getAttribute('href') || '') + '\t' + (item.textContent || '').trim();
+                    }
+                    const trig = item.querySelector('[data-w-menu-trigger], .header-policy-links__trigger, a');
+                    return 'p\t' + ((trig && trig.textContent) || item.textContent || '').trim();
                 }).join('\n');
-                const gap = categoriesList
-                    ? (parseFloat(window.getComputedStyle(categoriesList).gap) || 8)
-                    : 8;
-                if (catNaturalCache.key === catKey && catNaturalCache.widths.length === categoryItems.length) {
+                const gap = leftCluster
+                    ? (parseFloat(window.getComputedStyle(leftCluster).gap) || 8)
+                    : (categoriesList ? (parseFloat(window.getComputedStyle(categoriesList).gap) || 8) : 8);
+                if (catNaturalCache.key === catKey && catNaturalCache.widths.length === candidates.length) {
                     catNaturalCache.gap = gap;
-                    if (!catNaturalCache.prefix || catNaturalCache.prefix.length !== categoryItems.length) {
+                    if (!catNaturalCache.prefix || catNaturalCache.prefix.length !== candidates.length) {
                         catNaturalCache.prefix = buildWidthPrefix(catNaturalCache.widths, gap);
                     }
                     return catNaturalCache;
                 }
-                const measured = measureFlexChildrenOffDom(categoryItems, categoriesOverflowWrapper, gap);
+                const measured = measureFlexChildrenOffDom(candidates, categoriesOverflowWrapper, gap);
                 const widths = measured.widths;
                 catNaturalCache = {
                     key: catKey,
@@ -4878,6 +5036,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
 
             /**
              * 滞回：变窄（可见变少）立即采用 raw；变宽（吐回项）需 A−δ 仍装得下才放行。
+             * 变宽时允许部分吐回（落到 strict），禁止整段锁死在旧 hideFrom（只缩不放）。
              */
             function resolveHideFromWithHysteresis(prefix, moreW, availableWidth, count, prevHideFrom) {
                 const raw = computeHideFromRaw(prefix, moreW, availableWidth, count);
@@ -4899,8 +5058,12 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                         Math.max(0, availableWidth - OVERFLOW_HYSTERESIS_PX),
                         count
                     );
-                    if (visibleOf(strict) >= rawVis) {
+                    const strictVis = visibleOf(strict);
+                    if (strictVis >= rawVis) {
                         return raw;
+                    }
+                    if (strictVis > prevVis) {
+                        return strict;
                     }
                     return prevHideFrom;
                 }
@@ -4966,19 +5129,52 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 navMenuBuiltFor = hideFrom;
             }
 
-            function applyCatVisibility(categoryItems, hideFrom) {
-                for (let i = 0; i < categoryItems.length; i++) {
-                    categoryItems[i].classList.toggle('hidden', hideFrom >= 0 && i >= hideFrom);
+            function applyCatVisibility(candidates, hideFrom) {
+                for (let i = 0; i < candidates.length; i++) {
+                    const hide = hideFrom >= 0 && i >= hideFrom;
+                    candidates[i].classList.toggle('hidden', hide);
+                    candidates[i].classList.toggle('is-nav-overflow-hidden', hide);
                 }
                 if (hideFrom < 0) {
                     categoriesOverflowWrapper.style.display = 'none';
+                    categoriesOverflowWrapper.hidden = true;
                     categoriesOverflowWrapper.classList.remove('active');
                 } else {
+                    categoriesOverflowWrapper.hidden = false;
                     categoriesOverflowWrapper.style.display = 'flex';
                 }
             }
 
-            function rebuildCatMoreMenu(categoryItems, hideFrom) {
+            function collectPolicyOverflowEntries(unit) {
+                const entries = [];
+                if (!unit) {
+                    return entries;
+                }
+                if (unit.matches && unit.matches('a')) {
+                    entries.push({
+                        label: (unit.textContent || '').trim(),
+                        href: unit.getAttribute('href') || '#'
+                    });
+                    return entries;
+                }
+                Array.from(unit.querySelectorAll('a.header-policy-links__item, a.w-menu__item, a')).forEach(function(a) {
+                    const label = (a.textContent || '').trim();
+                    if (!label) {
+                        return;
+                    }
+                    entries.push({ label: label, href: a.getAttribute('href') || '#' });
+                });
+                if (!entries.length) {
+                    const trig = unit.querySelector('[data-w-menu-trigger], .header-policy-links__trigger');
+                    const label = ((trig && trig.textContent) || unit.textContent || '').trim();
+                    if (label) {
+                        entries.push({ label: label, href: '#' });
+                    }
+                }
+                return entries;
+            }
+
+            function rebuildCatMoreMenu(candidates, hideFrom) {
                 if (window.Weline && window.Weline.UI && typeof window.Weline.UI.unmount === 'function') {
                     window.Weline.UI.unmount(categoriesOverflowWrapper);
                 }
@@ -4988,7 +5184,60 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     catMenuBuiltFor = -1;
                     return;
                 }
-                buildCategoriesOverflowMega(categoryItems.slice(hideFrom), categoriesOverflowDropdown);
+                const hidden = candidates.slice(hideFrom);
+                const catHidden = hidden.filter(isLeftCategoryCandidate);
+                const policyHidden = hidden.filter(function(el) { return !isLeftCategoryCandidate(el); });
+                if (catHidden.length) {
+                    buildCategoriesOverflowMega(catHidden, categoriesOverflowDropdown);
+                } else {
+                    // 仅政策进 More：仍用 mega 壳，侧栏塞直链
+                    buildCategoriesOverflowMega([], categoriesOverflowDropdown);
+                }
+                if (policyHidden.length) {
+                    const sidebar = categoriesOverflowDropdown.querySelector('.mega-menu-sidebar');
+                    const panels = categoriesOverflowDropdown.querySelector('.mega-menu-panels');
+                    if (sidebar && typeof appendLeafTab === 'function') {
+                        // appendLeafTab 在 buildCategoriesOverflowMega 闭包内，下面用直写
+                    }
+                    policyHidden.forEach(function(unit) {
+                        collectPolicyOverflowEntries(unit).forEach(function(entry) {
+                            if (!entry.label) {
+                                return;
+                            }
+                            // 无空 mega 时补最简侧栏+面板
+                            if (!sidebar || !panels) {
+                                return;
+                            }
+                            const tabIndex = sidebar.querySelectorAll('.mega-menu-sidebar-item').length;
+                            const panelId = 'categories-overflow-mega-panel-policy-' + tabIndex;
+                            const tabId = 'categories-overflow-mega-tab-policy-' + tabIndex;
+                            const isActive = tabIndex === 0 && catHidden.length === 0;
+                            const wrap = document.createElement('li');
+                            wrap.className = 'mega-menu-sidebar-item-wrap';
+                            wrap.setAttribute('role', 'presentation');
+                            wrap.innerHTML = ''
+                                + '<a href="' + escapeHeaderHtml(entry.href) + '" class="mega-menu-sidebar-item' + (isActive ? ' is-active' : '') + '"'
+                                + ' role="tab" id="' + escapeHeaderHtml(tabId) + '"'
+                                + ' data-mega-tab="' + escapeHeaderHtml(panelId) + '"'
+                                + ' aria-selected="' + (isActive ? 'true' : 'false') + '"'
+                                + ' aria-controls="' + escapeHeaderHtml(panelId) + '">'
+                                + '<span class="mega-menu-sidebar-item__label">' + escapeHeaderHtml(entry.label) + '</span>'
+                                + '</a>';
+                            sidebar.appendChild(wrap);
+                            const panel = document.createElement('div');
+                            panel.className = 'mega-menu-panel' + (isActive ? ' is-active' : '');
+                            panel.id = panelId;
+                            panel.setAttribute('role', 'tabpanel');
+                            panel.setAttribute('aria-labelledby', tabId);
+                            if (!isActive) {
+                                panel.hidden = true;
+                            }
+                            panel.innerHTML = '<div class="mega-menu-panel__body"><a class="mega-menu-card__title" href="'
+                                + escapeHeaderHtml(entry.href) + '">' + escapeHeaderHtml(entry.label) + '</a></div>';
+                            panels.appendChild(panel);
+                        });
+                    });
+                }
                 if (window.Weline && window.Weline.UI && typeof window.Weline.UI.mount === 'function') {
                     window.Weline.UI.mount(categoriesOverflowWrapper);
                 }
@@ -5048,18 +5297,15 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     rebuildNavMoreMenu(candidates, hideFrom);
                 }
             }
-            
-            // 初始调整
+
             function adjustCategoriesOverflow(lightOnly) {
-                if (!categoriesList || !categoriesOverflowWrapper || !categoriesOverflowBtn || !categoriesOverflowDropdown || !headerMainNav) {
+                if (!categoriesOverflowWrapper || !categoriesOverflowBtn || !categoriesOverflowDropdown || !headerMainNav) {
                     return;
                 }
 
-                const categoryItems = Array.from(categoriesList.children).filter(function(item) {
-                    return item !== categoriesOverflowWrapper;
-                });
+                const candidates = collectLeftOverflowCandidates();
 
-                if (categoryItems.length === 0) {
+                if (candidates.length === 0) {
                     if (lastCatHideFrom !== -1 || lastCatCandidateCount !== 0) {
                         applyCatVisibility([], -1);
                         if (!lightOnly) {
@@ -5072,23 +5318,23 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                 }
 
                 const availableWidth = measureCatAvailableWidth();
-                const metrics = ensureCatNaturalMetrics(categoryItems);
+                const metrics = ensureCatNaturalMetrics(candidates);
                 const hideFrom = resolveHideFromWithHysteresis(
                     metrics.prefix,
                     metrics.moreW,
                     availableWidth,
-                    categoryItems.length,
+                    candidates.length,
                     lastCatHideFrom
                 );
 
-                if (hideFrom !== lastCatHideFrom || categoryItems.length !== lastCatCandidateCount) {
-                    applyCatVisibility(categoryItems, hideFrom);
+                if (hideFrom !== lastCatHideFrom || candidates.length !== lastCatCandidateCount) {
+                    applyCatVisibility(candidates, hideFrom);
                     lastCatHideFrom = hideFrom;
-                    lastCatCandidateCount = categoryItems.length;
+                    lastCatCandidateCount = candidates.length;
                 }
 
                 if (!lightOnly && catMenuBuiltFor !== hideFrom) {
-                    rebuildCatMoreMenu(categoryItems, hideFrom);
+                    rebuildCatMoreMenu(candidates, hideFrom);
                 }
             }
 
@@ -5442,47 +5688,31 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         // 右侧快捷导航 More：仅由上方 adjustNavLinks 写入 w-menu__item 并 Weline.UI.mount(menu)
         // 已删除 checkNavFillOverflow（会覆盖为 li/a 且不 mount，破坏通用 menu 悬浮）
 
-        // 检测 header-categories 宽度：仅桌面收窄时整块隐藏；≤768 用 More 收纳，禁止 hide-narrow 留残链
+        // 分类窄宽：禁止 hide-narrow 整块 display:none。
+        // 旧逻辑用 offsetWidth<200 隐藏；一旦隐藏 offsetWidth 恒为 0 → 加宽永不恢复，且 More 一并消失。
+        // ≤768 / 桌面一律交给 adjustCategoriesOverflow 收纳到 More。
         (function() {
             const headerCategories = document.querySelector('.header-categories');
             if (!headerCategories) return;
-            let catWidthRaf = 0;
-            let lastHideNarrow = null;
 
-            function checkCategoriesWidth() {
-                if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-                    if (lastHideNarrow !== false) {
-                        headerCategories.classList.remove('hide-narrow');
-                        lastHideNarrow = false;
-                    }
+            function clearHideNarrowAndReflow() {
+                if (!headerCategories.classList.contains('hide-narrow')) {
                     return;
                 }
-                const width = headerCategories.offsetWidth;
-                const shouldHide = width < 200;
-                if (shouldHide === lastHideNarrow) {
-                    return;
+                headerCategories.classList.remove('hide-narrow');
+                if (typeof scheduleOverflowAdjust === 'function') {
+                    scheduleOverflowAdjust();
+                } else {
+                    window.dispatchEvent(new Event('resize'));
                 }
-                headerCategories.classList.toggle('hide-narrow', shouldHide);
-                lastHideNarrow = shouldHide;
             }
 
-            function scheduleCheckCategoriesWidth() {
-                if (catWidthRaf) {
-                    return;
-                }
-                catWidthRaf = window.requestAnimationFrame(function() {
-                    catWidthRaf = 0;
-                    checkCategoriesWidth();
-                });
-            }
-
+            clearHideNarrowAndReflow();
+            window.addEventListener('resize', clearHideNarrowAndReflow, { passive: true });
             if (window.ResizeObserver) {
-                const resizeObserver = new ResizeObserver(scheduleCheckCategoriesWidth);
+                const resizeObserver = new ResizeObserver(clearHideNarrowAndReflow);
                 resizeObserver.observe(headerCategories);
             }
-
-            window.addEventListener('resize', scheduleCheckCategoriesWidth, { passive: true });
-            scheduleCheckCategoriesWidth();
         })();
 
     }

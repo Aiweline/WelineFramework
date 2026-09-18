@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class PixelBootstrapHtmlService
 {
-    private const PIXEL_SCRIPT_VERSION = '20260916-conversion-dedupe-yellow';
+    private const PIXEL_SCRIPT_VERSION = '20260918-pageview-dedupe1';
 
     public function __construct(
         private readonly VisitorTrackingConfig $trackingConfig
@@ -29,10 +29,13 @@ class PixelBootstrapHtmlService
     }
 
     /**
-     * 返回可直接拼接到 </body> 前的引导 HTML；像素与 GA4 均被禁用时返回空串。
+     * 返回可直接拼接到页头/页尾的引导 HTML；像素与 GA4 均被禁用时返回空串。
+     *
+     * @param array{eager?:bool} $options eager=true：header 部件路径，解析后立刻拉 pixel.js（带 track 队列）
      */
-    public function render(): string
+    public function render(array $options = []): string
     {
+        $eager = !empty($options['eager']);
         $config = $this->trackingConfig->getRuntimeConfig();
 
         $pixelEnabled = !empty($config['pixel']['enabled']);
@@ -59,13 +62,13 @@ class PixelBootstrapHtmlService
             return '';
         }
 
-        return $this->renderPixelBootstrap($config, $pixelName);
+        return $this->renderPixelBootstrap($config, $pixelName, $eager);
     }
 
     /**
      * @param array<string, mixed> $config
      */
-    private function renderPixelBootstrap(array $config, string $pixelName): string
+    private function renderPixelBootstrap(array $config, string $pixelName, bool $eager = false): string
     {
         $configJson = \json_encode(
             $config,
@@ -92,13 +95,15 @@ class PixelBootstrapHtmlService
         // 这里由服务端直接给出正确地址，避免 404。
         $workerScriptUrl = $this->moduleStaticUrl('Weline/Frontend', 'js/weline-api-worker.js');
         $safePixelName = \htmlspecialchars($pixelName, \ENT_QUOTES, 'UTF-8');
+        $eagerJs = $eager ? 'true' : 'false';
 
         return <<<HTML
-<script>
+<script data-weline-pixel-bootstrap="1" data-weline-pixel-eager="{$eagerJs}">
 (function () {
     'use strict';
 
     var visitorTrackingConfig = {$configJson};
+    var eagerLoad = {$eagerJs};
     window.__WelineVisitorTrackingConfig = visitorTrackingConfig;
     window.__WelinePixelEnv = Object.assign({}, window.__WelinePixelEnv || {}, {$pixelEnvJson});
     window.__SITE_GA4__ = Object.assign({}, window.__SITE_GA4__ || {}, visitorTrackingConfig.ga4 || {}, {
@@ -109,7 +114,20 @@ class PixelBootstrapHtmlService
     } catch (error) {
     }
 
+    // track 队列：pixel.js 未就绪时先缓冲，避免结账确认等业务 track 静默丢事件。
+    window.__WelinePixelPending = window.__WelinePixelPending || [];
+    if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+        window.WelinePixel = {
+            track: function () {
+                window.__WelinePixelPending.push({ fn: 'track', args: Array.prototype.slice.call(arguments) });
+            }
+        };
+    }
+
     if (window.__WelinePixelLazyScheduled) {
+        if (eagerLoad && typeof window.__WelineLoadPixel === 'function') {
+            window.__WelineLoadPixel('header-widget-reentry');
+        }
         return;
     }
     window.__WelinePixelLazyScheduled = true;
@@ -137,8 +155,28 @@ class PixelBootstrapHtmlService
         console.log.apply(console, args);
     }
 
+    function flushPendingTracks() {
+        var q = window.__WelinePixelPending || [];
+        window.__WelinePixelPending = [];
+        if (!q.length || !window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+            return;
+        }
+        // 跳过仍是 stub 的情况（pixel.js 未真正替换）
+        if (window.WelinePixel.__welineStub) {
+            window.__WelinePixelPending = q;
+            return;
+        }
+        for (var i = 0; i < q.length; i++) {
+            try {
+                window.WelinePixel.track.apply(window.WelinePixel, q[i].args || []);
+            } catch (eFlush) {
+            }
+        }
+    }
+
     function loadWelinePixel(reason) {
         if (window.__WelinePixelLazyLoaded || window.__WelinePixelLoaded) {
+            flushPendingTracks();
             return;
         }
 
@@ -157,6 +195,7 @@ class PixelBootstrapHtmlService
         script.src = '{$scriptUrl}';
         script.async = true;
         script.onload = function () {
+            flushPendingTracks();
             devLog('loaded', { reason: reason || 'schedule', hasTrack: !!(window.WelinePixel && window.WelinePixel.track) });
         };
         script.onerror = function () {
@@ -167,6 +206,11 @@ class PixelBootstrapHtmlService
     }
 
     function scheduleWelinePixel() {
+        // Header 部件 / eager：立刻拉 pixel.js，不等人 load / idle。
+        if (eagerLoad) {
+            loadWelinePixel('header-widget-eager');
+            return;
+        }
         // Local/dev: load immediately so CTA clicks are measurable while debugging.
         // Production keeps the delayed idle schedule.
         if (isLocalDevHost()) {
@@ -219,30 +263,25 @@ class PixelBootstrapHtmlService
             dataCtaEvent: cta.getAttribute('data-cta-event') || '',
             pixelClass: pixelClass,
             className: className,
-            pixelReady: !!(window.WelinePixel && typeof window.WelinePixel.track === 'function'),
-            env: {
-                page_location: window.location.href,
-                page_path: window.location.pathname || '/',
-                page_title: document.title || '',
-                page_referrer: document.referrer || '',
-                page_hostname: window.location.hostname || '',
-                website_id: (window.__WelinePixelEnv && window.__WelinePixelEnv.website_id) || '',
-                website_code: (window.__WelinePixelEnv && window.__WelinePixelEnv.website_code) || '',
-                website_url: (window.__WelinePixelEnv && window.__WelinePixelEnv.website_url) || '',
-                language: (window.__WelinePixelEnv && window.__WelinePixelEnv.language) || '',
-                currency: (window.__WelinePixelEnv && window.__WelinePixelEnv.currency) || ''
-            }
+            pixelReady: !!(window.WelinePixel && typeof window.WelinePixel.track === 'function' && !window.WelinePixel.__welineStub)
         };
         if (isLocalDevHost()) {
             console.log('[WelineCTA] click', info);
         }
-        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function' || window.WelinePixel.__welineStub) {
             loadWelinePixel('cta-click');
         }
     }, true);
 
+    // 标记 stub，便于 flush / CTA 判断真实 pixel.js
+    if (window.WelinePixel && !window.__WelinePixelLoaded) {
+        window.WelinePixel.__welineStub = true;
+    }
+
     window.__WelineLoadPixel = loadWelinePixel;
-    if (document.readyState === 'complete') {
+    if (eagerLoad) {
+        scheduleWelinePixel();
+    } else if (document.readyState === 'complete') {
         scheduleWelinePixel();
     } else {
         window.addEventListener('load', scheduleWelinePixel, { once: true });

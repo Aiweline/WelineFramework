@@ -3,6 +3,123 @@ const globalObject = window;
 const Weline = globalObject.Weline = globalObject.Weline || {};
 const runtimeId = 'weline-ui-2';
 const existingRuntime = Weline.UI?.__runtimeId === runtimeId ? Weline.UI : null;
+
+/**
+ * Prefer Weline.dom.observe (shared document bus). Fallback: observeMutationsCoalesced /
+ * local quiet-window semantics — never double-rAF / microtask reobserve.
+ */
+function resolveObserveMutationsCoalesced() {
+    if (Weline.dom && typeof Weline.dom.observe === 'function') {
+        return Weline.dom.observe.bind(Weline.dom);
+    }
+    if (typeof Weline.observeMutationsCoalesced === 'function') {
+        return Weline.observeMutationsCoalesced;
+    }
+    return function observeMutationsCoalescedFallback(spec) {
+        /* ARCH_MO_FALLBACK_START */
+        const options = (spec && spec.options) || { childList: true, subtree: true };
+        const idleTimeoutMs = (function () {
+            const n = Number(spec && spec.idleTimeoutMs);
+            return Number.isFinite(n) && n >= 0 ? n : 100;
+        })();
+        let target = spec && spec.target ? spec.target : null;
+        let paused = 0;
+        let flushScheduled = false;
+        let idleHandle = null;
+        let timeoutHandle = null;
+        let disposed = false;
+        let observer = null;
+
+        function clearIdleTimers() {
+            if (idleHandle != null && typeof globalObject.cancelIdleCallback === 'function') {
+                try { globalObject.cancelIdleCallback(idleHandle); } catch (_e) { /* ignore */ }
+                idleHandle = null;
+            }
+            if (timeoutHandle != null) {
+                globalObject.clearTimeout(timeoutHandle);
+                timeoutHandle = null;
+            }
+        }
+
+        function disconnectQuiet() {
+            if (!observer) return;
+            try { observer.disconnect(); } catch (_e) { /* ignore */ }
+        }
+
+        function observeNow() {
+            if (disposed || !observer || !target || paused > 0 || flushScheduled) return;
+            try { observer.observe(target, options); } catch (_e) { /* ignore */ }
+        }
+
+        function runFlush() {
+            if (disposed) return;
+            flushScheduled = false;
+            clearIdleTimers();
+            disconnectQuiet();
+            try {
+                if (typeof spec.onFlush === 'function') spec.onFlush();
+            } finally {
+                if (!disposed && paused === 0) observeNow();
+            }
+        }
+
+        function scheduleFlushTrailing() {
+            if (disposed) return;
+            clearIdleTimers();
+            flushScheduled = true;
+            disconnectQuiet();
+            // Quiet window FIRST — rIC({timeout}) alone can fire within ms and reobserve too soon.
+            timeoutHandle = globalObject.setTimeout(() => {
+                timeoutHandle = null;
+                const run = () => {
+                    idleHandle = null;
+                    runFlush();
+                };
+                if (typeof globalObject.requestIdleCallback === 'function') {
+                    idleHandle = globalObject.requestIdleCallback(run, { timeout: 50 });
+                } else {
+                    run();
+                }
+            }, idleTimeoutMs);
+        }
+
+        if (typeof MutationObserver === 'function') {
+            observer = new MutationObserver((records) => {
+                if (disposed || paused > 0) return;
+                disconnectQuiet();
+                if (typeof spec.onRecords === 'function') {
+                    try { spec.onRecords(records); } catch (_e) { /* ignore */ }
+                }
+                scheduleFlushTrailing();
+            });
+        }
+
+        const api = {
+            get observer() { return observer; },
+            kick() { scheduleFlushTrailing(); },
+            pause() { paused += 1; disconnectQuiet(); },
+            resume() {
+                if (paused > 0) paused -= 1;
+                if (paused === 0 && !flushScheduled && !disposed) observeNow();
+            },
+            withPaused(fn) {
+                api.pause();
+                try { return fn(); } finally { api.resume(); }
+            },
+            disconnect() {
+                disposed = true;
+                flushScheduled = false;
+                clearIdleTimers();
+                disconnectQuiet();
+                observer = null;
+            },
+            start() { if (!disposed) observeNow(); },
+        };
+        if (!spec || spec.autoStart !== false) api.start();
+        return api;
+        /* ARCH_MO_FALLBACK_END */
+    };
+}
 const definitions = new Map();
 const instances = new WeakMap();
 const cleanupByElement = new WeakMap();
@@ -837,47 +954,34 @@ function installElevateLayerRuntime() {
         queueMicrotask(() => syncElevateHost(host));
     }, true);
 
-    let elevateSyncScheduled = false;
+    // Dense class churn: disconnect + trailing idle (never queueMicrotask reobserve).
     const pendingElevateHosts = new Set();
     const elevateObserveOptions = {
         subtree: true,
         attributes: true,
         attributeFilter: ['class', 'data-state', 'aria-expanded'],
     };
-    const observer = new MutationObserver((records) => {
-        // Dense class churn (editor chrome / floating) would otherwise trip DEV delivery_storm.
-        try {
-            observer.disconnect();
-        } catch (_error) {
-        }
-        for (const record of records) {
-            if (!(record.target instanceof Element)) continue;
-            const host = record.target.closest('[data-wf-host]') || (
-                record.target.hasAttribute('data-wf-host') ? record.target : null
-            );
-            if (host instanceof HTMLElement) pendingElevateHosts.add(host);
-        }
-        if (elevateSyncScheduled) return;
-        elevateSyncScheduled = true;
-        const flush = () => {
-            elevateSyncScheduled = false;
+    resolveObserveMutationsCoalesced()({
+        target: document.documentElement,
+        options: elevateObserveOptions,
+        idleTimeoutMs: 100,
+        onRecords(records) {
+            for (const record of records) {
+                if (!(record.target instanceof Element)) continue;
+                const host = record.target.closest('[data-wf-host]') || (
+                    record.target.hasAttribute('data-wf-host') ? record.target : null
+                );
+                if (host instanceof HTMLElement) pendingElevateHosts.add(host);
+            }
+        },
+        onFlush() {
             const batch = Array.from(pendingElevateHosts);
             pendingElevateHosts.clear();
             for (const host of batch) {
                 if (host.isConnected) syncElevateHost(host);
             }
-            try {
-                observer.observe(document.documentElement, elevateObserveOptions);
-            } catch (_error) {
-            }
-        };
-        if (typeof queueMicrotask === 'function') {
-            queueMicrotask(flush);
-        } else {
-            setTimeout(flush, 0);
-        }
+        },
     });
-    observer.observe(document.documentElement, elevateObserveOptions);
 }
 
 function floatingPortalContains(record, target, visited = new Set()) {
@@ -3669,28 +3773,27 @@ function start() {
     initializeThemePreference();
     installElevateLayerRuntime();
     mount(document);
-    let uiMountScheduled = false;
     const pendingUiMount = new Set();
     const pendingUiUnmount = new Set();
     const uiMountObserveOptions = { childList: true, subtree: true };
-    observer = new MutationObserver((records) => {
-        // Dense widget hydrate must not deliver >40 times / ~250ms (DEV delivery_storm).
-        try {
-            observer.disconnect();
-        } catch (_error) {
-        }
-        for (const record of records) {
-            record.removedNodes.forEach((node) => {
-                if (node instanceof Element && !node.isConnected) pendingUiUnmount.add(node);
-            });
-            record.addedNodes.forEach((node) => {
-                if (node instanceof Element && node.isConnected) pendingUiMount.add(node);
-            });
-        }
-        if (uiMountScheduled) return;
-        uiMountScheduled = true;
-        const flush = () => {
-            uiMountScheduled = false;
+    // Dense hydrate: only mount/unmount discovered nodes — never remount document
+    // (full remount re-mutates the tree and starves microtasks / widget-library fetch).
+    const uiMountHandle = resolveObserveMutationsCoalesced()({
+        target: document.documentElement,
+        options: uiMountObserveOptions,
+        idleTimeoutMs: 100,
+        label: 'weline-ui:mount',
+        onRecords(records) {
+            for (const record of records) {
+                record.removedNodes.forEach((node) => {
+                    if (node instanceof Element && !node.isConnected) pendingUiUnmount.add(node);
+                });
+                record.addedNodes.forEach((node) => {
+                    if (node instanceof Element && node.isConnected) pendingUiMount.add(node);
+                });
+            }
+        },
+        onFlush() {
             const unmountBatch = Array.from(pendingUiUnmount);
             const mountBatch = Array.from(pendingUiMount);
             pendingUiUnmount.clear();
@@ -3701,18 +3804,9 @@ function start() {
             mountBatch.forEach((node) => {
                 if (node.isConnected) mount(node);
             });
-            try {
-                observer.observe(document.documentElement, uiMountObserveOptions);
-            } catch (_error) {
-            }
-        };
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => requestAnimationFrame(flush));
-        } else {
-            setTimeout(flush, 0);
-        }
+        },
     });
-    observer.observe(document.documentElement, uiMountObserveOptions);
+    observer = uiMountHandle.observer;
     document.dispatchEvent(new CustomEvent('weline:ui:ready', { detail: { version: UI.__version } }));
 }
 

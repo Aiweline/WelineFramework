@@ -68,6 +68,10 @@ final class ConfigCenterSaveFormActionContractTest extends TestCase
         self::assertStringContainsString('/* Weline UI source: js/system-config-guide.js */', $publishedJs);
         $publishedCss = (string)\file_get_contents(\dirname(__DIR__, 4) . '/Theme/view/statics/ui/pages/weline-system-config.css');
         self::assertStringContainsString('reauth-field:not([hidden])', $publishedCss);
+        self::assertStringContainsString('system-config-collapsible-hint', $src);
+        self::assertStringContainsString('w-system-config__hint-details', $src);
+        self::assertStringContainsString('w-system-config__hint-details', $css);
+        self::assertStringContainsString('w-system-config__hint-details', $publishedCss);
         self::assertStringContainsString('选择后立即解析填入下方 Client ID / Secret', $src);
         self::assertStringContainsString('data-w-google-oauth-json-status', $src);
         self::assertStringContainsString('当前后台登录密码', $src);

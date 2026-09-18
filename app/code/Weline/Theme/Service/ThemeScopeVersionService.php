@@ -105,6 +105,22 @@ final class ThemeScopeVersionService
             ->fetch();
 
         $version->setIsPublished(true)->save();
+
+        try {
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPointerResolver $pointers */
+            $pointers = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPointerResolver::class,
+            );
+            $pointers->invalidateChrome($themeId, $scope);
+            // Leaf scopes inherit published chrome; flush their cached pointers too.
+            foreach (['default.__store__.default', 'default.__store__.__channel__', 'default.__website__.default', 'default.default.default'] as $leaf) {
+                if ($leaf !== $scope) {
+                    $pointers->invalidateChrome($themeId, $leaf);
+                }
+            }
+        } catch (\Throwable) {
+            // Pointer invalidation is best-effort; ThemeRuntimeCacheCleaner may also bump.
+        }
     }
 
     /**

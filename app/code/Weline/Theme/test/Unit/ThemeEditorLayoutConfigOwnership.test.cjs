@@ -60,7 +60,7 @@ function layoutEditor(initial = {}, validate = async () => ({success: true})) {
         getCurrentWindowParam: () => 'default', getLayoutLockVirtualPayload: () => ({}),
         apiJson: async (_url, options) => { requests.push(JSON.parse(options.body)); return validate(); },
         queueLayoutConfigOwnership: async (config, locale) => { patches.push({config: plain(config), locale}); },
-        showToast() {}, fetchLayoutSlots() {}, loadLayoutPreview() {}, console,
+        showToast() {}, fetchLayoutSlots() {}, loadCanvas() {}, console,
     });
     const functions = ['collectWidgetConfigData', 'scopedValuesEqual', 'bindLayoutConfigEvents', 'saveLayoutConfig'];
     for (const name of ['rememberLayoutConfigValues', 'collectLayoutConfigChanges']) {

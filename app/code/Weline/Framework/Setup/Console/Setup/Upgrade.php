@@ -2286,6 +2286,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
             // 更新路由（支持指定模块）
             $routeUpdateService->updateRoutes($argsModule ?: []);
+            // 委托部分更新同样须先 flush ACL 再 orphan，避免误删方法级 source。
+            try {
+                /** @var \Weline\Framework\Module\Helper\Data $moduleHelperForAcl */
+                $moduleHelperForAcl = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
+                $moduleHelperForAcl->flushDeferredControllerAttributes();
+            } catch (\Throwable $e) {
+                $this->printing->warning(__('委托升级 orphan 前 ACL 落盘失败：%{1}', [$e->getMessage()]));
+            }
             $afterRouteCollectionEventData = [
                 'touched_modules' => $argsModule ?: null,
             ];
@@ -3015,7 +3023,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 unset($routeBatch);
             }
             $this->printing->success(__(
-                '✓ 路由扫描收集完成（内存缓冲）；ACL 与路由文件将在提交 route_update 时一次写入'
+                '✓ 路由扫描收集完成（内存缓冲）；先落盘控制器 ACL，再 orphan diff，路由文件仍在 route_update 提交时写入'
             ));
             $this->noteSetupMemory('路由扫描收集后');
             if ($this->routeFingerprintPending !== []) {
@@ -3030,6 +3038,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     }
                 }
                 $this->persistRouteFingerprints($toPersist);
+            }
+            // Defer 队列必须在 orphan diff 前落盘并写入 CollectedAclSourceIdsRegistry；
+            // 否则 touched 模块上「尚未 flush 的方法级 ACL」会被当成孤儿删掉。
+            try {
+                /** @var \Weline\Framework\Module\Helper\Data $moduleHelperForAcl */
+                $moduleHelperForAcl = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
+                $deferredAclCount = $moduleHelperForAcl->getDeferredControllerAttributesCount();
+                if ($deferredAclCount > 0) {
+                    $this->printing->note(__(
+                        '   - orphan 前落盘暂存控制器 ACL 事件：%{n} 条…',
+                        ['n' => $deferredAclCount]
+                    ));
+                }
+                $moduleHelperForAcl->flushDeferredControllerAttributes();
+            } catch (\Throwable $e) {
+                $this->printing->error(__('orphan 前 ACL 落盘失败：%{1}', [$e->getMessage()]));
+                throw new Exception(__('orphan 前 ACL 落盘失败：%{1}', [$e->getMessage()]));
             }
             // 路由收集完成后做 ACL diff（清理已卸载模块的 type=pc 等）
             try {

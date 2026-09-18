@@ -4,7 +4,6 @@
 "Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.","Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result."
 "Layout path resolve","Layout path resolve"
 "Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty.","Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty."
-"Layout preview sample","Layout preview sample"
 字体子集预热收集,字体子集预热收集
 "系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。","系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。"
 "Theme 查询器不支持的操作：%{1}","Theme 查询器不支持的操作：%{1}"
@@ -685,8 +684,6 @@ FAQ/常见问题,"Preguntas frecuentes"
 订单尚未完成,订单尚未完成
 结账成功,结账成功
 页面,页面
-"Theme 预览需要有效 Token 或后台登录状态。","Theme 预览需要有效 Token 或后台登录状态。"
-"Theme 预览缺少冻结的 ScopeIdentity。","Theme 预览缺少冻结的 ScopeIdentity。"
 "缺少预览 Token","缺少预览 Token"
 "预览 Token 无效或已过期","预览 Token 无效或已过期"
 "预览 Token 无法写入 Cookie","预览 Token 无法写入 Cookie"
@@ -841,7 +838,6 @@ AI翻译服务未找到，请确保AI模块已安装,AI翻译服务未找到，�
 重命名失败,重命名失败
 缺少前端主题ID,缺少前端主题ID
 "Preview started","Preview started"
-"缺少 layout_path","缺少 layout_path"
 "Missing navigation target","Missing navigation target"
 "Missing preview token","Missing preview token"
 "Preview token is invalid or expired","Preview token is invalid or expired"
@@ -1053,60 +1049,21 @@ Dashboard,Dashboard
 参数配置,参数配置
 参数保存成功,参数保存成功
 参数保存失败,参数保存失败
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
 加入收藏,加入收藏
 加入对比,加入对比
 快速查看,快速查看
-搜索商品、分类与关键词...,"Busca productos, categorías y palabras clave..."
-分类,分类
-汉服分类展示图,汉服分类展示图
-查看全部,查看全部
-请填写视频地址,请填写视频地址
-请粘贴嵌入代码（iframe）或视频链接,请粘贴嵌入代码（iframe）或视频链接
-"请填写自托管视频地址（mp4 等）","请填写自托管视频地址（mp4 等）"
-无法识别该视频地址，请检查链接是否正确,无法识别该视频地址，请检查链接是否正确
-"YouTube 视频","YouTube 视频"
-"Vimeo 视频","Vimeo 视频"
-您的浏览器不支持视频标签。,您的浏览器不支持视频标签。
-"在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览","在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览"
-件商品,件商品
-查看全部新品,查看全部新品
-商品,商品
-查看规格图,查看规格图
-减少数量,减少数量
-数量,数量
-增加数量,增加数量
-购物车是空的,购物车是空的
-"浏览%1 %2件商品","Ver %1 · %2 artículos"
-继续购物,继续购物
-小计,小计
-去结算,去结算
-正在前往结算...,正在前往结算...
-查看购物车,查看购物车
-税费与运费将在结算时计算,税费与运费将在结算时计算
-正在加载购物车...,正在加载购物车...
-正在更新购物车...,正在更新购物车...
-商品小计,商品小计
-优惠券,优惠券
-叠加优惠,叠加优惠
-自动优惠,自动优惠
-关闭通知,关闭通知
-上一张,上一张
-下一张,下一张
-第%d张,第%d张
-剩余,剩余
-天,天
-时,时
-分,分
-秒,秒
 面包屑,面包屑
-点击配置此部件,点击配置此部件
-无模板,无模板
-选择作用范围,选择作用范围
-搜索作用范围,搜索作用范围
-未找到匹配作用范围,未找到匹配作用范围
+"寻衣 · 形制 · 织绣","寻衣 · 形制 · 织绣"
+"东方衣冠 · 全球配送","东方衣冠 · 全球配送"
+帮助中心,"Centro de ayuda"
+订单跟踪,订单跟踪
+打开菜单,打开菜单
+长,长
+寻衣,寻衣
+收藏,收藏
+登录,登录
+衣囊,衣囊
+主导航,主导航
 回到顶部,回到顶部
 站点偏好,站点偏好
 法律与政策,法律与政策
@@ -1126,6 +1083,9 @@ NEW,NEW
 拖入弹窗内容,拖入弹窗内容
 弹窗底部,弹窗底部
 拖入按钮,拖入按钮
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","您的订单已支付成功，预计 2 个工作日内发货。"
 订单已确认,订单已确认
 清晰表达你的页面主张,清晰表达你的页面主张
@@ -1177,12 +1137,16 @@ ERROR,ERROR
 语言,语言
 货币,货币
 关闭菜单,关闭菜单
+搜索商品、分类与关键词...,"Busca productos, categorías y palabras clave..."
 Weline,Weline
 网站Logo,网站Logo
 搜索商品...,"Busca productos..."
 搜索,Buscar
 切换语言,切换语言
 切换货币,切换货币
+分类,分类
+汉服分类展示图,汉服分类展示图
+查看全部,查看全部
 导航菜单,导航菜单
 我的账户,"Mi cuenta"
 我的收藏,我的收藏
@@ -1192,8 +1156,12 @@ Weline,Weline
 "示例商品 1","示例商品 1"
 "示例商品 2","示例商品 2"
 "示例商品 3","示例商品 3"
+购物车是空的,购物车是空的
 去购物,去购物
 删除,删除
+小计,小计
+查看购物车,查看购物车
+去结算,去结算
 关注我们,关注我们
 微信扫码关注,微信扫码关注
 微信二维码,微信二维码
@@ -1224,6 +1192,14 @@ Weline,Weline
 第一页,第一页
 最后一页,最后一页
 支付方式,"Métodos de pago"
+请填写视频地址,请填写视频地址
+请粘贴嵌入代码（iframe）或视频链接,请粘贴嵌入代码（iframe）或视频链接
+"请填写自托管视频地址（mp4 等）","请填写自托管视频地址（mp4 等）"
+无法识别该视频地址，请检查链接是否正确,无法识别该视频地址，请检查链接是否正确
+"YouTube 视频","YouTube 视频"
+"Vimeo 视频","Vimeo 视频"
+您的浏览器不支持视频标签。,您的浏览器不支持视频标签。
+"在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览","在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览"
 欢迎回来,欢迎回来
 登录后继续浏览优惠与订单,登录后继续浏览优惠与订单
 "安全登录 · 订单与优惠同步","安全登录 · 订单与优惠同步"
@@ -1258,16 +1234,20 @@ Weline,Weline
 婚礼与礼服,婚礼与礼服
 节庆与雅集,节庆与雅集
 日常通勤,日常通勤
+件商品,件商品
 暂无匹配的问题,暂无匹配的问题
 搜索问题,搜索问题
 今日特价,"Ofertas de hoy"
-客户服务,客户服务
-主导航,主导航
+客户服务,"Atención al cliente"
 分类菜单,分类菜单
 快捷导航,快捷导航
 请在部件配置中添加真实内容,请在部件配置中添加真实内容
 限时活动,限时活动
 活动已结束,活动已结束
+天,天
+时,时
+分,分
+秒,秒
 内容标题,内容标题
 请选择真实图片,请选择真实图片
 图文标题,图文标题
@@ -1284,6 +1264,7 @@ Weline,Weline
 全部加入购物车,全部加入购物车
 请至少选择一个商品,请至少选择一个商品
 已添加,已添加
+查看全部新品,查看全部新品
 限时抢购，错过不再,限时抢购，错过不再
 距离结束,距离结束
 精选轮播,精选轮播
@@ -1296,7 +1277,6 @@ Weline,Weline
 产品列表、文章、自定义内容,产品列表、文章、自定义内容
 购物车、最近浏览、订阅,购物车、最近浏览、订阅
 客户评价、品牌Logo、FAQ等,客户评价、品牌Logo、FAQ等
-打开菜单,打开菜单
 Logo,Logo
 搜索框,搜索框
 用户区域,用户区域
@@ -1310,20 +1290,37 @@ Logo,Logo
 面包屑导航,面包屑导航
 请输入您的邮箱,请输入您的邮箱
 我们不会向您发送垃圾邮件,我们不会向您发送垃圾邮件
+商品,商品
+查看规格图,查看规格图
+减少数量,减少数量
+数量,数量
+增加数量,增加数量
+"浏览%1 %2件商品","Ver %1 · %2 artículos"
+继续购物,继续购物
+正在前往结算...,正在前往结算...
+税费与运费将在结算时计算,税费与运费将在结算时计算
+正在加载购物车...,正在加载购物车...
+正在更新购物车...,正在更新购物车...
+商品小计,商品小计
+优惠券,优惠券
+叠加优惠,叠加优惠
+自动优惠,自动优惠
+关闭通知,关闭通知
 全球配送，售后无忧,全球配送，售后无忧
-帮助中心,"Centro de ayuda"
-订单跟踪,订单跟踪
-收藏,收藏
 热门分类,热门分类
 热卖精选,热卖精选
 特色推荐,特色推荐
 限时特惠,限时特惠
-博客,博客
+博客,Blog
 热卖,热卖
 新品,新品
 促销活动,Promociones
 暂停轮播,暂停轮播
 播放轮播,播放轮播
+上一张,上一张
+下一张,下一张
+第%d张,第%d张
+剩余,剩余
 打印,打印
 仪表盘部件区域,仪表盘部件区域
 指标区,指标区
@@ -1565,10 +1562,6 @@ JSON格式数组,JSON格式数组
 恢复继承,恢复继承
 选择布局类型,选择布局类型
 选择布局选项,选择布局选项
-预览取样,预览取样
-选择店面取样路由,选择店面取样路由
-"活动首页 /promotion","活动首页 /promotion"
-"取样 deals /promotion/deals","取样 deals /promotion/deals"
 配置语言,配置语言
 更多,更多
 版本历史,版本历史
@@ -1688,6 +1681,8 @@ Favicon,Favicon
 搜索变量名或色值,搜索变量名或色值
 另存为我的盘,另存为我的盘
 保存当前我的盘,保存当前我的盘
+点击配置此部件,点击配置此部件
+无模板,无模板
 前台主题,前台主题
 后台主题,后台主题
 已选,已选
@@ -2368,6 +2363,13 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 正在压缩备份文件...,正在压缩备份文件...
 当前主题未安装：卸载失败！,当前主题未安装：卸载失败！
 卸载主题,卸载主题
+无效语种：%{lang},无效语种：%{lang}
+"已清除 404 静态指纹 %{count} 个（--force）","已清除 404 静态指纹 %{count} 个（--force）"
+"=== 发布前台 404 静态页 ===","=== 发布前台 404 静态页 ==="
+"前台 404 静态页发布完成：%{count} 个快照，耗时 %{sec}s","前台 404 静态页发布完成：%{count} 个快照，耗时 %{sec}s"
+"仅发布语种：%{lang}（站 %{code}）","仅发布语种：%{lang}（站 %{code}）"
+"抽检 %{path}：%{kb} KB，词典袋=%{bag}","抽检 %{path}：%{kb} KB，词典袋=%{bag}"
+"发布前台 404 静态页（website×locale，与 setup:upgrade 后置同源）","发布前台 404 静态页（website×locale，与 setup:upgrade 后置同源）"
 "已合编 theme=%{id} area=%{area} hash=%{hash} empty=%{empty}","已合编 theme=%{id} area=%{area} hash=%{hash} empty=%{empty}"
 "主题整盘合编结束，共 %{n} 次","主题整盘合编结束，共 %{n} 次"
 当前主题未安装：激活失败！,当前主题未安装：激活失败！
@@ -2395,6 +2397,17 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 静态文件：weline.modules.js编译文件！,静态文件：weline.modules.js编译文件！
 "编译 Weline UI 2.0 静态资源包！","编译 Weline UI 2.0 静态资源包！"
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
+选择作用范围,选择作用范围
+搜索作用范围,搜索作用范围
+未找到匹配作用范围,未找到匹配作用范围
+"Layout preview sample","Layout preview sample"
+"缺少 layout_path","缺少 layout_path"
+预览取样,预览取样
+选择店面取样路由,选择店面取样路由
+"活动首页 /promotion","活动首页 /promotion"
+"取样 deals /promotion/deals","取样 deals /promotion/deals"
+"Theme 预览需要有效 Token 或后台登录状态。","Theme 预览需要有效 Token 或后台登录状态。"
+"Theme 预览缺少冻结的 ScopeIdentity。","Theme 预览缺少冻结的 ScopeIdentity。"
 自动登录,自动登录
 评价页,评价页
 退货,退货
@@ -2451,7 +2464,6 @@ SSL安全,SSL安全
 "Modules provide a storefront sample route for shell_plus_slug layouts (e.g. promotion/deals) used by start-preview.","Modules provide a storefront sample route for shell_plus_slug layouts (e.g. promotion/deals) used by start-preview."
 "Layout canvas body hydrate (deprecated)","Layout canvas body hydrate (deprecated)"
 "Deprecated. Theme hydrates editor canvas via StorefrontSampleCanvasHydrator (preview_sample → real controller, content-only). Do not register module observers.","Deprecated. Theme hydrates editor canvas via StorefrontSampleCanvasHydrator (preview_sample → real controller, content-only). Do not register module observers."
-登录,登录
 个人资料,个人资料
 这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。
 您已退出登录,您已退出登录
@@ -2958,3 +2970,4 @@ Product,Product
 其他政策,"Otras políticas"
 无障碍声明,"Declaración de accesibilidad"
 配送政策,"Política de envío"
+部件库加载失败，请稍后重试,"No se pudo cargar la biblioteca de widgets. Inténtelo de nuevo más tarde."

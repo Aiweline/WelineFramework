@@ -2,6 +2,9 @@
 use Weline\Theme\Helper\WidgetI18n;
 /** @var \Weline\Framework\View\Template $this */
 $checkoutPageSubtitle = (string)($this->getData('checkout_page_subtitle') ?? '');
+$currencySymbolMap = class_exists(\Weline\Currency\Helper\CurrencySymbol::class)
+    ? \Weline\Currency\Helper\CurrencySymbol::clientMap()
+    : ['CNY' => '¥', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $copy = [
     'loading' => (string)__('正在加载结账信息...'),
     'loading_shipping' => (string)__('正在更新配送方式...'),
@@ -994,6 +997,7 @@ $copy = [
     'use strict';
 
     const copy = <?= json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const currencySymbolMap = <?= json_encode($currencySymbolMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || {};
     const successPageUrl = "@url{'checkout/success'}";
     const root = document.querySelector('[data-weline-checkout]');
     if (!root) {
@@ -1172,13 +1176,16 @@ $copy = [
     }
 
     function money(amount) {
-        const currency = checkoutState.currency || 'CNY';
+        const currency = String(checkoutState.currency || 'CNY').toUpperCase().trim() || 'CNY';
         const numericAmount = Number(amount || 0);
         const formattedAmount = new Intl.NumberFormat(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
-        return currency + ' ' + formattedAmount;
+        const symbol = currencySymbolMap[currency]
+            || ({CNY:'¥',RMB:'¥',USD:'$',EUR:'€',GBP:'£',JPY:'¥'}[currency])
+            || currency;
+        return symbol + formattedAmount;
     }
 
     function formAddress() {
@@ -2482,6 +2489,7 @@ $copy = [
     root.addEventListener('weline:checkout:express-pay', async function (event) {
         const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
         const paymentMethod = text(detail.payment_method || 'paypal').trim() || 'paypal';
+        const methodLabel = text(detail.method_label || '') || ('使用 ' + paymentMethod + ' 快捷支付');
         const expressButton = detail.button instanceof HTMLElement
             ? detail.button
             : (event.target && event.target.closest
@@ -2511,6 +2519,17 @@ $copy = [
                 }
                 return;
             }
+            try {
+                if (window.WelinePixel && typeof window.WelinePixel.track === 'function') {
+                    window.WelinePixel.track('express_pay_started', {
+                        payment_method: paymentMethod,
+                        method_label: methodLabel,
+                        source: 'checkout_express_pay',
+                        trigger: 'express_started',
+                        transaction_no: text((result && result.transaction_no) || ''),
+                    }, { element: expressButton, keepalive: true });
+                }
+            } catch (trackErr) {}
         } catch (error) {
             setMessage(error.message || copy.load_failed, 'error');
             if (expressButton) {

@@ -8,6 +8,16 @@ use PHPUnit\Framework\TestCase;
 
 final class CustomerServiceWidgetUiContractTest extends TestCase
 {
+    public function testBodyEndHookOmitsWidgetTranslationsDuringStaticErrorPublish(): void
+    {
+        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $content = (string) file_get_contents($hookFile);
+
+        $this->assertStringContainsString('omitClientDictionaries', $content);
+        $this->assertStringContainsString('StaticErrorPagePublisher::CTX_PUBLISHING', $content);
+        $this->assertStringContainsString('new \\stdClass()', $content);
+    }
+
     public function testFrontendWidgetUsesWelineFormControls(): void
     {
         $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';

@@ -46,6 +46,12 @@ use Weline\Framework\View\Taglib\Ast\PhpPlaceholder as AstPhpPlaceholder;
 
 class Taglib
 {
+    /**
+     * Bumped when compiled Taglib output shape changes (e.g. form body capture).
+     * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
+     */
+    public const COMPILER_GENERATION = '20260918-fiber-form-ob-v2';
+
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
     private const PHP_CLOSE_TAG = '?' . '>';
@@ -1330,10 +1336,11 @@ class Taglib
                 },
                 'callback' => static function ($tag_key, $config, $tag_data, $attributes): string {
                     if ($tag_key === 'tag-end') {
-                        // Flush the body buffer started after open(), so captcha can
+                        // End Fiber-local body capture started after open(), so captcha can
                         // replace data-weline-form-captcha-slot ahead of submit controls.
+                        // Native ob_start is process-global and unsafe under WLS Fiber concurrency.
                         return self::PHP_OPEN_TAG
-                            . 'php $Taglib__form_body = \\ob_get_clean();'
+                            . 'php $Taglib__form_body = \\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture();'
                             . ' if (!\\is_string($Taglib__form_body)) { $Taglib__form_body = \'\'; }'
                             . ' echo \\Weline\\Framework\\View\\Form\\FormRenderer::close($Taglib__form_body);'
                             . self::PHP_CLOSE_TAG;
@@ -1365,7 +1372,7 @@ class Taglib
                         . ' echo \\Weline\\Framework\\View\\Form\\FormRenderer::open('
                         . 'is_array($Taglib__form_attributes) ? $Taglib__form_attributes : []'
                         . ');'
-                        . ' \\ob_start();'
+                        . ' \\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture();'
                         . self::PHP_CLOSE_TAG;
                 },
             ],
@@ -4196,7 +4203,12 @@ class Taglib
             '$_local_vars = array_diff_key($_local_vars, array_flip($_excluded)); ' .
             'extract($_template->getData(), EXTR_SKIP); ' .
             'extract($_local_vars, EXTR_SKIP); ' .
-            'ob_start(); ' . self::PHP_CLOSE_TAG . $childPhp . self::PHP_OPEN_TAG . 'php return ob_get_clean(); })(get_defined_vars())';
+            '\\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture(); try { '
+            . self::PHP_CLOSE_TAG . $childPhp . self::PHP_OPEN_TAG
+            . 'php return \\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture();'
+            . ' } catch (\\Throwable $__weline_children_e) {'
+            . ' \\Weline\\Framework\\Runtime\\FiberOutputBuffer::discardCapture();'
+            . ' throw $__weline_children_e; } })(get_defined_vars())';
     }
 
     public function renderRuntimeTag(

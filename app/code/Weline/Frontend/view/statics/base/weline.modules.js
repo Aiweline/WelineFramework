@@ -162,8 +162,8 @@
             description: "支付生命周期：weline:payment:* 统一事件"
         },
         productExpressPay: {
-            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260914-express-pixel1"],
-            paths: ["/Weline/Payment/view/statics/js/product-express-pay.js?v=20260914-express-pixel1"],
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260918-express-ga4params1"],
+            paths: ["/Weline/Payment/view/statics/js/product-express-pay.js?v=20260918-express-ga4params1"],
             globalVar: "WelineProductExpressPay",
             load: "lazy",
             description: "PDP 快捷智能支付：加车后 startExpressCheckout 并打开支付商窗体"
@@ -255,8 +255,8 @@
             description: "结账生命周期：weline:checkout:order-created / success"
         },
         checkoutExpressReview: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260915-tax-identity1"],
-            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260915-tax-identity1"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260918-express-ga4params1"],
+            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260918-express-ga4params1"],
             globalVar: "WelineCheckoutExpressReview",
             load: "lazy",
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
@@ -330,8 +330,8 @@
             description: "顶栏收藏角标水合（SSR 游客空角标）"
         },
         storeMusic: {
-            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20260917-storemusic-speccenter"],
-            paths: ["/Weline/StoreMusic/view/statics/js/store-music.js?v=20260917-storemusic-speccenter"],
+            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20260917-storemusic-speccenter2"],
+            paths: ["/Weline/StoreMusic/view/statics/js/store-music.js?v=20260917-storemusic-speccenter2"],
             globalVar: "WelineStoreMusic",
             load: "defer",
             description: "进店音乐"

@@ -300,6 +300,11 @@ final class McpServer
      */
     private function prepareStdio($input, $output): void
     {
+        // STDOUT is JSON-RPC only; PHP notices/warnings must never land on it.
+        @ini_set('display_errors', 'stderr');
+        @ini_set('display_startup_errors', '0');
+        @ini_set('html_errors', '0');
+        @ini_set('log_errors', '1');
         @ini_set('default_socket_timeout', '-1');
         if (function_exists('set_time_limit')) {
             @set_time_limit(0);

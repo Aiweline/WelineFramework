@@ -1,5 +1,5 @@
 {
-    "version": "1.2.0",
+    "version": "1.3.3",
     "events": [
         {
             "weline_event": "page_view",
@@ -47,6 +47,52 @@
                 "*"
             ],
             "label_zh": "页面进入"
+        },
+        {
+            "weline_event": "page_hide",
+            "ga4_event": "user_engagement",
+            "google_recommended": false,
+            "event_family": "page",
+            "require_exact_marker": false,
+            "skip_gtm_push": true,
+            "required_params": [
+                "page_location"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::page_hide"
+                ],
+                "attrs": [
+                    "data-pixel-event=page_hide"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "页面隐藏"
+        },
+        {
+            "weline_event": "page_exit",
+            "ga4_event": "page_exit",
+            "google_recommended": false,
+            "event_family": "page",
+            "require_exact_marker": false,
+            "skip_gtm_push": true,
+            "required_params": [
+                "page_location"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::page_exit"
+                ],
+                "attrs": [
+                    "data-pixel-event=page_exit"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "页面退出"
         },
         {
             "weline_event": "cta_click",
@@ -203,7 +249,7 @@
         },
         {
             "weline_event": "quick_buy",
-            "ga4_event": "quick_buy",
+            "ga4_event": "begin_checkout",
             "google_recommended": false,
             "event_family": "ecommerce",
             "require_exact_marker": true,
@@ -229,14 +275,16 @@
         },
         {
             "weline_event": "express_pay",
-            "ga4_event": "express_pay",
+            "ga4_event": "add_payment_info",
             "google_recommended": false,
             "event_family": "ecommerce",
             "require_exact_marker": true,
             "skip_gtm_push": false,
             "required_params": [
+                "currency",
+                "value",
                 "items",
-                "selected_options"
+                "payment_type"
             ],
             "markers": {
                 "classes": [
@@ -295,7 +343,7 @@
         },
         {
             "weline_event": "quick_buy_checkout_ready",
-            "ga4_event": "quick_buy_checkout_ready",
+            "ga4_event": "add_payment_info",
             "google_recommended": false,
             "event_family": "ecommerce",
             "require_exact_marker": false,
@@ -316,12 +364,16 @@
         },
         {
             "weline_event": "express_pay_started",
-            "ga4_event": "express_pay_started",
+            "ga4_event": "begin_checkout",
             "google_recommended": false,
             "event_family": "ecommerce",
             "require_exact_marker": false,
             "skip_gtm_push": false,
-            "required_params": [],
+            "required_params": [
+                "currency",
+                "value",
+                "items"
+            ],
             "markers": {
                 "classes": [
                     "weline-pixel::express_pay_started"
@@ -334,6 +386,56 @@
                 "checkout"
             ],
             "label_zh": "快捷支付已拉起"
+        },
+        {
+            "weline_event": "express_pay_confirmed",
+            "ga4_event": "add_shipping_info",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "currency",
+                "value",
+                "items",
+                "shipping_tier"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::express_pay_confirmed"
+                ],
+                "attrs": [
+                    "data-pixel-event=express_pay_confirmed"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷支付确认方式"
+        },
+        {
+            "weline_event": "express_pay_transaction",
+            "ga4_event": "express_pay_transaction",
+            "google_recommended": false,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": true,
+            "required_params": [
+                "payment_type",
+                "transaction_id"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::express_pay_transaction"
+                ],
+                "attrs": [
+                    "data-pixel-event=express_pay_transaction"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "快捷支付交易"
         },
         {
             "weline_event": "friend_help_pay_checkout_success",
@@ -645,6 +747,371 @@
                 "account"
             ],
             "label_zh": "注册成功"
+        },
+        {
+            "weline_event": "purchase",
+            "ga4_event": "purchase",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "transaction_id",
+                "value",
+                "currency",
+                "items"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::purchase"
+                ],
+                "attrs": [
+                    "data-pixel-event=purchase"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "购买（GA4 同名）"
+        },
+        {
+            "weline_event": "add_payment_info",
+            "ga4_event": "add_payment_info",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "currency",
+                "value"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::add_payment_info"
+                ],
+                "attrs": [
+                    "data-pixel-event=add_payment_info"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "添加支付信息"
+        },
+        {
+            "weline_event": "add_shipping_info",
+            "ga4_event": "add_shipping_info",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "currency",
+                "value"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::add_shipping_info"
+                ],
+                "attrs": [
+                    "data-pixel-event=add_shipping_info"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "添加配送信息"
+        },
+        {
+            "weline_event": "add_to_wishlist",
+            "ga4_event": "add_to_wishlist",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "currency",
+                "value",
+                "items"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::add_to_wishlist"
+                ],
+                "attrs": [
+                    "data-pixel-event=add_to_wishlist"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "加入心愿单"
+        },
+        {
+            "weline_event": "remove_from_cart",
+            "ga4_event": "remove_from_cart",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "currency",
+                "value",
+                "items"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::remove_from_cart"
+                ],
+                "attrs": [
+                    "data-pixel-event=remove_from_cart"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "移出购物车"
+        },
+        {
+            "weline_event": "view_cart",
+            "ga4_event": "view_cart",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "currency",
+                "value",
+                "items"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::view_cart"
+                ],
+                "attrs": [
+                    "data-pixel-event=view_cart"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "查看购物车"
+        },
+        {
+            "weline_event": "select_item",
+            "ga4_event": "select_item",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::select_item"
+                ],
+                "attrs": [
+                    "data-pixel-event=select_item"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "选择商品"
+        },
+        {
+            "weline_event": "view_item_list",
+            "ga4_event": "view_item_list",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "items"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::view_item_list"
+                ],
+                "attrs": [
+                    "data-pixel-event=view_item_list"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "查看商品列表"
+        },
+        {
+            "weline_event": "view_promotion",
+            "ga4_event": "view_promotion",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::view_promotion"
+                ],
+                "attrs": [
+                    "data-pixel-event=view_promotion"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "查看促销"
+        },
+        {
+            "weline_event": "select_promotion",
+            "ga4_event": "select_promotion",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::select_promotion"
+                ],
+                "attrs": [
+                    "data-pixel-event=select_promotion"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "选择促销"
+        },
+        {
+            "weline_event": "refund",
+            "ga4_event": "refund",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "transaction_id",
+                "value",
+                "currency"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::refund"
+                ],
+                "attrs": [
+                    "data-pixel-event=refund"
+                ]
+            },
+            "page_scopes": [
+                "checkout"
+            ],
+            "label_zh": "退款"
+        },
+        {
+            "weline_event": "share",
+            "ga4_event": "share",
+            "google_recommended": true,
+            "event_family": "ecommerce",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::share"
+                ],
+                "attrs": [
+                    "data-pixel-event=share"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "分享（GA4 同名）"
+        },
+        {
+            "weline_event": "search",
+            "ga4_event": "search",
+            "google_recommended": true,
+            "event_family": "search",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [
+                "search_term"
+            ],
+            "markers": {
+                "classes": [
+                    "weline-pixel::search"
+                ],
+                "attrs": [
+                    "data-pixel-event=search"
+                ]
+            },
+            "page_scopes": [],
+            "label_zh": "搜索（GA4 同名）"
+        },
+        {
+            "weline_event": "sign_up",
+            "ga4_event": "sign_up",
+            "google_recommended": true,
+            "event_family": "account",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::sign_up"
+                ],
+                "attrs": [
+                    "data-pixel-event=sign_up"
+                ]
+            },
+            "page_scopes": [
+                "account"
+            ],
+            "label_zh": "注册（GA4 同名）"
+        },
+        {
+            "weline_event": "generate_lead",
+            "ga4_event": "generate_lead",
+            "google_recommended": true,
+            "event_family": "lead",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::generate_lead"
+                ],
+                "attrs": [
+                    "data-pixel-event=generate_lead"
+                ]
+            },
+            "page_scopes": [
+                "*"
+            ],
+            "label_zh": "线索（GA4 同名）"
+        },
+        {
+            "weline_event": "select_content",
+            "ga4_event": "select_content",
+            "google_recommended": true,
+            "event_family": "search",
+            "require_exact_marker": false,
+            "skip_gtm_push": false,
+            "required_params": [],
+            "markers": {
+                "classes": [
+                    "weline-pixel::select_content"
+                ],
+                "attrs": [
+                    "data-pixel-event=select_content"
+                ]
+            },
+            "page_scopes": [],
+            "label_zh": "选择内容（GA4 同名）"
         },
         {
             "weline_event": "site_error",

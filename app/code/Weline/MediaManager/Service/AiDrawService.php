@@ -212,9 +212,44 @@ class AiDrawService
         }
 
         if ($saveMode === 'overwrite') {
-            throw new \InvalidArgumentException((string)__(
-                '统一 FileAsset 模式不允许原位覆盖共享资源，请另存为新资源后更新业务引用。',
-            ));
+            $target = \trim((string)($input['target'] ?? ''));
+            $filename = \trim((string)($input['filename'] ?? ''));
+            $sourceFileHash = \trim((string)($input['source_file_hash'] ?? ''));
+            if ($generationIds === [] || $sessionId === '') {
+                throw new \InvalidArgumentException(__('缺少生成结果 ID'));
+            }
+            if (\count($generationIds) !== 1) {
+                throw new \InvalidArgumentException((string)__('覆盖保存一次只能选择一张生成图。'));
+            }
+            $objectKey = '';
+            if ($filename !== '' && $target !== '') {
+                $safeName = $this->mediaStorage->sanitizeLeafName($filename)
+                    ?? throw new \InvalidArgumentException((string)__('文件名无效。'));
+                $directory = $this->mediaStorage->objectKeyFromHash($target, true);
+                $objectKey = trim(($directory === '' ? '' : $directory . '/') . $safeName, '/');
+            } elseif ($sourceFileHash !== '') {
+                $objectKey = $this->mediaStorage->objectKeyFromHash($sourceFileHash);
+            } else {
+                throw new \InvalidArgumentException((string)__('覆盖保存需要指定目标文件或原图。'));
+            }
+
+            $loaded = $this->sessionStore->loadGeneration($sessionId, $adminId, $generationIds[0]);
+            if ($loaded === null) {
+                throw new \RuntimeException(__('生成结果已过期，请重新生成'));
+            }
+            $updated = $this->mediaStorage->replaceExistingFile(
+                $diskCode,
+                $objectKey,
+                $loaded['bytes'],
+                (string)($loaded['meta']['mime_type'] ?? 'image/png'),
+                $fileAccess,
+                [
+                    'ai_generation_id' => $generationIds[0],
+                    'ai_session_id_hash' => hash('sha256', $sessionId),
+                ],
+            );
+
+            return ['updated' => [$updated], 'added' => []];
         }
         if ($saveMode !== 'save_as') {
             throw new \InvalidArgumentException((string)__('图片保存模式无效。'));

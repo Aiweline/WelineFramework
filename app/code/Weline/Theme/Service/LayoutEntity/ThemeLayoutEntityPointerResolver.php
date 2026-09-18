@@ -133,6 +133,15 @@ final class ThemeLayoutEntityPointerResolver
             self::$processCache[$this->chromeKey($themeId, $scope, true)],
             self::$processCache[$this->chromeKey($themeId, $scope, false)],
         );
+        $hotCache = $this->resolveHotCache();
+        if ($hotCache instanceof StorefrontScopeHotCache) {
+            try {
+                $hotCache->forgetPolicy(self::pointerCachePolicy(), $this->chromeKey($themeId, $scope, true));
+                $hotCache->forgetPolicy(self::pointerCachePolicy(), $this->chromeKey($themeId, $scope, false));
+            } catch (\Throwable) {
+                // Best-effort; callers may also bump theme generation.
+            }
+        }
     }
 
     public function invalidatePage(

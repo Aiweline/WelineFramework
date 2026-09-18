@@ -105,8 +105,15 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             'express_modes' => ['redirect'],
             'express_next_action' => 'redirect',
             // CNY/CN：本站默认币种与收货国；Sandbox/部分商户可测，正式以 PayPal 商户能力为准。
-            'supported_currencies' => ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'HKD', 'SGD', 'CNY'],
-            'supported_countries' => ['US', 'GB', 'DE', 'CA', 'AU', 'FR', 'IT', 'ES', 'JP', 'HK', 'SG', 'CN', 'XZ'],
+            // 欧美主战场 + PayPal 官方可交易币（见 developer.paypal.com/reference/currency-codes）
+            'supported_currencies' => [
+                'USD', 'EUR', 'GBP', 'CAD', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'MXN',
+                'AUD', 'JPY', 'HKD', 'SGD', 'CNY',
+            ],
+            'supported_countries' => [
+                'US', 'GB', 'DE', 'CA', 'AU', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'IE', 'PT',
+                'SE', 'NO', 'DK', 'FI', 'CH', 'PL', 'MX', 'JP', 'HK', 'SG', 'CN', 'XZ',
+            ],
             'supported_discount_actions' => ['discount_fixed_amount', 'discount_percentage', 'free_shipping'],
         ];
     }

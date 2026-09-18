@@ -107,4 +107,27 @@ HTML;
         $issues = $inspector->inspect($inner, ['code' => 'footer-container', 'slot_id' => 'footer']);
         self::assertSame([], $issues, json_encode($issues, JSON_UNESCAPED_UNICODE));
     }
+
+    public function testFindMatchingDivCloseIgnoresDivTokensInsideScriptAndStyle(): void
+    {
+        $service = $this->getMockBuilder(SlotRendererService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getMock();
+
+        $method = new ReflectionMethod(SlotRendererService::class, 'findMatchingDivClose');
+        $method->setAccessible(true);
+
+        $inner = '<div class="root">'
+            . '<script>var html = "</div><div class=fake>";</script>'
+            . '<style>.x::before { content: "</div>"; }</style>'
+            . '<span>ok</span>'
+            . '</div>';
+        $html = '<div class="widget-wrapper" data-widget-code="header-policy-links">' . $inner . '</div>';
+        $openEnd = strpos($html, '>') + 1;
+
+        $closeAt = $method->invoke($service, $html, $openEnd);
+        self::assertNotNull($closeAt);
+        self::assertSame($inner, substr($html, $openEnd, $closeAt - $openEnd));
+    }
 }

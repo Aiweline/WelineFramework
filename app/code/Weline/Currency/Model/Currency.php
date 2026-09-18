@@ -294,24 +294,38 @@ class Currency extends Model
     public function save_after()
     {
         parent::save_after();
-        $this->invalidateStorefrontPriceVersion();
-        // 清除货币缓存
-        try {
-            w_cache('currency')->clear();
-            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
-        } catch (\Throwable $e) {
-            // 缓存清除失败，静默处理
-        }
+        $this->invalidateStorefrontPriceCaches();
     }
 
     public function delete_after(): void
     {
         parent::delete_after();
+        $this->invalidateStorefrontPriceCaches();
+    }
+
+    private function invalidateStorefrontPriceCaches(): void
+    {
         $this->invalidateStorefrontPriceVersion();
+        try {
+            ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class)
+                ->invalidateCachedDefinitions();
+        } catch (\Throwable) {
+        }
         try {
             w_cache('currency')->clear();
             \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
+            \Weline\Currency\Service\Repository\CurrencyCatalog::clearProcessCache();
+            \Weline\Currency\Taglib\CurrencySelect::clearProcessCaches();
         } catch (\Throwable) {
+        }
+        // Rate changes must drop catalog offer projections (vary=currency). Generation
+        // bump alone can miss process/shared entries keyed without a price fingerprint.
+        if (class_exists(\Weline\Product\Service\StorefrontCatalogCacheCoordinator::class)) {
+            try {
+                ObjectManager::getInstance(\Weline\Product\Service\StorefrontCatalogCacheCoordinator::class)
+                    ->notifyCatalogChanged(0, 'currency-rate-changed');
+            } catch (\Throwable) {
+            }
         }
     }
 

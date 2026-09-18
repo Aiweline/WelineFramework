@@ -237,6 +237,11 @@ final class HardConstraintsCatalog
                 'doc' => 'app/code/Weline/Theme/doc/前端JS模块加载规范.md',
             ],
             [
+                'id' => 'dom_mutation_observe_via_weline_dom',
+                'summary' => 'MANDATORY architecture: Document-wide MutationObserver (document / documentElement / body + childList|subtree) MUST use Weline.dom.observe (shared coalesced bus in weline.js)—never raw `new MutationObserver` on those roots from Theme/UI/Captcha/business widgets. The bus keeps ONE physical observer per target+options fingerprint, fans out onRecords/onFlush after a setTimeout quiet window (forbid rIC({timeout}) alone / double-rAF immediate reobserve). Element-scoped observers may stay private; DEV delivery_storm guard is a safety net only, not the fix. Authoritative: Frontend/doc/架构/DOM-Mutation观察总线.md + Theme 前端JS模块加载规范 §1.2.',
+                'doc' => 'app/code/Weline/Frontend/doc/架构/DOM-Mutation观察总线.md',
+            ],
+            [
                 'id' => 'taglib_before_hand_rolled_controls',
                 'summary' => 'MANDATORY before ANY selective/domain picker in .phtml (country, region, website/store/channel scope, language, currency, website, file, icon, ACL, DataTable filters, provider/enum dropdowns that map to a Taglib): FIRST open Taglib 场景映射表.md + 标签全量索引.md and pick the official Taglib/Hook. Architecturally, selectable options SHOULD be tags—not hand-rolled <select>/<input type=text> ISO codes/chip rows. Examples: country/region → <w:theme:address selection=single|multi>; scope → <w:scope>; language → <w:i18n:switcher>. Only invent a new Taglib in the owning module when the catalog has none; never bypass an existing tag with raw HTML.',
                 'doc' => 'app/code/Weline/Taglib/doc/场景映射表.md',

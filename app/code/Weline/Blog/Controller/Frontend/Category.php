@@ -56,10 +56,6 @@ final class Category extends FrontendController
 
         $this->layoutType = 'blog_category';
         $this->request->setGet('page_type', 'blog_category');
-        $this->request->setGet(
-            'theme_public_route',
-            ltrim(BlogNamespace::categoryPublicPath($slug), '/'),
-        );
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);

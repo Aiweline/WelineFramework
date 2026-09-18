@@ -189,8 +189,8 @@ test('switchLang reloads when the authoritative href is the current URL', async 
 
 test('getCurrentLang prefers document data-lang over legacy Cookie (theme preview)', () => {
     const runtime = bootI18n({
-        pathname: '/theme/frontend/theme-preview/content',
-        search: '?locale=en_US&editor_mode=1',
+        pathname: '/',
+        search: '?locale=en_US&editor_mode=1&shell=theme-editor',
         cookie: 'WELINE_USER_LANG=zh_Hans_CN',
         dataLang: 'en_US',
         documentLang: 'en-US',
@@ -201,8 +201,8 @@ test('getCurrentLang prefers document data-lang over legacy Cookie (theme previe
 
 test('getCurrentLang prefers query locale when document lang is absent', () => {
     const runtime = bootI18n({
-        pathname: '/theme/frontend/theme-preview/content',
-        search: '?locale=en_US&editor_mode=1',
+        pathname: '/',
+        search: '?locale=en_US&editor_mode=1&shell=theme-editor',
         cookie: 'WELINE_USER_LANG=zh_Hans_CN',
         dataLang: '',
         documentLang: '',

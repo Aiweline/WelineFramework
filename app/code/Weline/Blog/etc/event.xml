@@ -9,13 +9,6 @@
                   shared="true"
                   sort="30"/>
     </event>
-    <event name="Weline_Theme::layout_preview_sample">
-        <observer name="Weline_Blog::layout_preview_sample"
-                  instance="Weline\Blog\Observer\LayoutPreviewSampleObserver"
-                  disabled="false"
-                  shared="true"
-                  sort="30"/>
-    </event>
     <event name="Weline_Framework_Router::process_uri_before">
         <observer name="Weline_Blog::claim_blog_namespace_uri_before"
                   instance="Weline\Blog\Observer\ClaimBlogNamespaceUriBefore"

@@ -8,14 +8,15 @@ use PHPUnit\Framework\TestCase;
 
 final class HeaderNavFragmentBypassTest extends TestCase
 {
-    public function testThemePreviewContentAllowsEditorModeFragmentCache(): void
+    public function testEditorModeBypassesFragmentCacheOnStorefrontCanvas(): void
     {
         $source = \file_get_contents(
             \dirname(__DIR__, 3) . '/Helper/HeaderNavFragment.php'
         );
         self::assertIsString($source);
-        self::assertStringContainsString('theme/frontend/theme-preview/content', $source);
-        self::assertStringContainsString('if (!$isThemePreviewContent)', $source);
+        self::assertStringContainsString("getParam('editor_mode'", $source);
+        self::assertStringNotContainsString('theme/frontend/theme-preview/content', $source);
+        self::assertStringNotContainsString('$isThemePreviewContent', $source);
     }
 
     public function testNavigationFragmentsExposeCacheAndRenderTimingPhases(): void

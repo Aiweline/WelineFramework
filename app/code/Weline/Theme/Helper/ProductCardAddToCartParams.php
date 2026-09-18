@@ -71,11 +71,14 @@ final class ProductCardAddToCartParams
     }
 
     private const PURCHASE_ACTIONS_ASSETS_FLAG = 'theme.product_card_purchase_actions_assets_emitted';
+    private const PURCHASE_ACTIONS_DISCARD_HOOK = 'theme.product_card_purchase_actions_discard';
     private const PURCHASE_ACTIONS_STYLE_MARKER = 'data-weline-product-card-purchase-actions';
 
     /**
      * Emit purchase-actions CSS once per request when the product-card purchase partial renders.
      * Styles travel with the component — do not inject from layout/preview page heads.
+     *
+     * Flag is set only after $emitAssets runs; Fiber discardCapture resets it for re-render.
      *
      * @param callable():void $emitAssets
      */
@@ -85,17 +88,24 @@ final class ProductCardAddToCartParams
             return;
         }
 
-        RequestContext::set(self::PURCHASE_ACTIONS_ASSETS_FLAG, true);
         $emitAssets();
+        RequestContext::set(self::PURCHASE_ACTIONS_ASSETS_FLAG, true);
+        RequestContext::onCaptureDiscard(
+            static function (): void {
+                self::resetPurchaseActionsAssetsEmission();
+            },
+            self::PURCHASE_ACTIONS_DISCARD_HOOK
+        );
     }
 
     /**
-     * Allow a subsequent component render (e.g. DEV/preview widget repair) to emit again.
+     * Allow a subsequent component render (e.g. DEV/preview widget repair / Fiber discard) to emit again.
      * The first emission may live only in HTML that is about to be replaced.
      */
     public static function resetPurchaseActionsAssetsEmission(): void
     {
         RequestContext::remove(self::PURCHASE_ACTIONS_ASSETS_FLAG);
+        RequestContext::removeCaptureDiscard(self::PURCHASE_ACTIONS_DISCARD_HOOK);
     }
 
     /**

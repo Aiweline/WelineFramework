@@ -23,14 +23,15 @@ final class BestSellers extends FrontendController
         $this->request->setGet('page_type', 'products');
         $this->request->setGet('layout_type', 'best_sellers');
         $this->request->setGet('layout_option', 'default');
-        $this->request->setGet('theme_public_route', 'best-sellers');
         $this->request->setGet('theme_page_title', $title);
 
         $items = $this->widgetCatalog->bestSellerCards(24);
+        $count = count($items);
 
+        $this->request->setData('storefront_best_sellers_count', $count);
         $this->assign('page_title', $title);
         $this->assign('storefront_best_sellers', $items);
-        $this->assign('storefront_best_sellers_count', count($items));
+        $this->assign('storefront_best_sellers_count', $count);
         $this->assign('seo', [
             'page_type' => 'products',
             'title' => $title,

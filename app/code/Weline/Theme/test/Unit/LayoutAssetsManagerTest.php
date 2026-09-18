@@ -194,7 +194,7 @@ class LayoutAssetsManagerTest extends TestCore
 
         /** @var Request $request */
         $request = ObjectManager::getInstance(Request::class);
-        $request->setServer('REQUEST_URI', '/theme/backend/theme-editor/layout-preview');
+        $request->setServer('REQUEST_URI', '/?editor_mode=1&shell=theme-editor');
         $request->setGet('frontend_theme_id', (int)$theme->getId());
         $request->setGet('editor_area', 'frontend');
         $request->setGet('shell', 'theme-editor');

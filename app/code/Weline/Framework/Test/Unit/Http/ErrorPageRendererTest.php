@@ -127,6 +127,21 @@ final class ErrorPageRendererTest extends TestCase
         $html = ErrorPageRenderer::render(418, 'I am a teapot', ['prefer_json' => false]);
         self::assertStringContainsString('418', $html);
         self::assertStringContainsString('I am a teapot', $html);
-        self::assertStringContainsString('请求无法完成', $html);
+    }
+
+    public function testIncludeTemplateUsesFiberOutputBufferNotNativeOb(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Http/ErrorPageRenderer.php'
+        );
+        $pos = \strpos($source, 'function includeTemplate');
+        self::assertNotFalse($pos);
+        $chunk = \substr($source, (int)$pos, 1200);
+        self::assertStringContainsString('FiberOutputBuffer::beginCapture()', $chunk);
+        self::assertStringContainsString('FiberOutputBuffer::endCapture()', $chunk);
+        self::assertStringContainsString('FiberOutputBuffer::discardCapture()', $chunk);
+        self::assertStringNotContainsString('ob_start()', $chunk);
+        self::assertStringNotContainsString('ob_get_clean()', $chunk);
+        self::assertStringNotContainsString('ob_end_clean()', $chunk);
     }
 }

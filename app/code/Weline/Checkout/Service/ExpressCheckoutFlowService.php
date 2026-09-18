@@ -344,6 +344,10 @@ final class ExpressCheckoutFlowService
             ?? $address['email']
             ?? ($ctx['payer_email'] ?? '')
         ));
+        $methodCode = strtolower(trim((string) ($ctx['method_code'] ?? '')));
+        $methodLabel = $methodCode !== ''
+            ? ((string) __('支付方式') . '：' . $methodCode)
+            : (string) __('快捷支付');
 
         return [
             'success' => true,
@@ -352,6 +356,9 @@ final class ExpressCheckoutFlowService
                 'transaction_no' => $transactionNo,
                 'order_uuid' => $orderUuid,
                 'checkout_group_uuid' => (string) ($order['checkout_group_uuid'] ?? ''),
+                'payment_method' => $methodCode,
+                'method_code' => $methodCode,
+                'method_label' => $methodLabel,
                 'address' => $address,
                 'address_readonly' => false,
                 'address_editable' => true,
@@ -375,6 +382,7 @@ final class ExpressCheckoutFlowService
                     'not_charged' => (string) __('尚未扣款，确认后向支付商收款'),
                     'cta' => (string) __('确认并付款'),
                     'address_hint' => (string) __('请确认收货地址；不对可更换或新增'),
+                    'payment_method_hint' => $methodLabel,
                 ],
             ],
         ] + [
@@ -384,6 +392,9 @@ final class ExpressCheckoutFlowService
             'can_confirm' => $canConfirm,
             'address' => $address,
             'shipping_methods' => $shippingMethods,
+            'payment_method' => $methodCode,
+            'method_code' => $methodCode,
+            'method_label' => $methodLabel,
         ];
     }
 

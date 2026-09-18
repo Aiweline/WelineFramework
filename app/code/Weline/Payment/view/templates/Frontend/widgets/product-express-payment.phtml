@@ -131,6 +131,7 @@ if ($logoFileHtml === '' && $logoRaw === '') {
                 data-product-express-pay
                 data-pixel-event="express_pay"
                 data-method-code="<?= $esc($code) ?>"
+                data-method-label="<?= $esc((string) __('使用 %{1} 快捷支付', [$label])) ?>"
                 data-product-id="<?= (int) $productId ?>"
                 data-testid="product-express-<?= $esc($code) ?>"
                 aria-label="<?= $esc((string) __('使用 %{1} 快捷支付', [$label])) ?>"

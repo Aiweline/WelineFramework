@@ -90,4 +90,22 @@ final class TrackingVendorAdminUiContractTest extends TestCase
         self::assertStringContainsString('.tvp-topbar', $css);
         self::assertStringContainsString('justify-content: space-between', $css);
     }
+
+    public function testGa4AndGtmVendorsEmbedUnifiedSystemConfig(): void
+    {
+        $src = $this->template();
+        self::assertStringContainsString('data-testid="tv-system-config-embed"', $src);
+        self::assertStringContainsString('<w:config:embed', $src);
+        self::assertStringContainsString('module="Weline_Visitor"', $src);
+        self::assertStringContainsString('group="visitor_ga4"', $src);
+        self::assertStringContainsString('group="visitor_gtm"', $src);
+        self::assertStringContainsString('data-testid="tv-open-system-config"', $src);
+        self::assertStringContainsString('data-testid="tv-cred-legacy-hint"', $src);
+        self::assertStringContainsString('weline_systemconfig/backend/config', $src);
+        // 禁止在 w:config:embed 属性内插 PHP 开标签
+        self::assertDoesNotMatchRegularExpression(
+            '/<w:config:embed[^>]*(<\?=|<\?php)/',
+            $src
+        );
+    }
 }

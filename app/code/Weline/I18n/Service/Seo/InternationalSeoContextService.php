@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service\Seo;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Env\WelineEnv;
+use Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 
 class InternationalSeoContextService
@@ -14,6 +16,7 @@ class InternationalSeoContextService
 
     public function __construct(
         private readonly ActiveLocaleCodeProvider $activeLocaleCodeProvider,
+        private readonly LocalizedUrlBuilderInterface $localizedUrlBuilder = new LocalizedUrlBuilder(),
     ) {
     }
 
@@ -53,15 +56,30 @@ class InternationalSeoContextService
             [$currentLocale],
         ));
 
-        $baseUrl = $this->siteRoot((string)($context['canonical_url'] ?? $context['url'] ?? ''));
-        $routePath = $this->routePath((string)($context['canonical_url'] ?? $context['url'] ?? ''), $locales);
-        $generatedAlternates = $this->buildAlternates($baseUrl, $routePath, $locales, $defaultLocale);
+        $canonicalSource = (string)($context['canonical_url'] ?? $context['url'] ?? '');
+        $baseUrl = $this->siteRoot($canonicalSource);
+        $routePath = $this->routePath($canonicalSource, $locales);
+        $currency = $this->currencyFromUrl($canonicalSource);
+        $defaultCurrency = $this->websiteDefaultCurrency();
+        $generatedAlternates = $this->buildAlternates(
+            $baseUrl,
+            $routePath,
+            $locales,
+            $defaultLocale,
+            $currency,
+            $defaultCurrency,
+        );
         $contextAlternates = $this->normalizeUrlMap((array)($context['alternates'] ?? []), $baseUrl);
         $explicitAlternates = $this->normalizeUrlMap(
             $this->toArray($this->readTemplate($template, 'i18n_alternates') ?: $this->read($seo, ['i18n_alternates'])),
             $baseUrl,
         );
         $alternates = array_replace($generatedAlternates, $contextAlternates, $explicitAlternates);
+        // Self hreflang must equal the page canonical — never rebuild with a divergent currency policy.
+        $absoluteCanonical = $this->absoluteUrl($canonicalSource, $baseUrl);
+        if ($absoluteCanonical !== '' && $currentLocale !== '') {
+            $alternates[$currentLocale] = $absoluteCanonical;
+        }
         if (!isset($alternates['x-default']) && isset($alternates[$defaultLocale])) {
             $alternates['x-default'] = $alternates[$defaultLocale];
         }
@@ -229,15 +247,28 @@ class InternationalSeoContextService
      * @param string[] $locales
      * @return array<string, string>
      */
-    private function buildAlternates(string $baseUrl, string $routePath, array $locales, string $defaultLocale): array
-    {
+    private function buildAlternates(
+        string $baseUrl,
+        string $routePath,
+        array $locales,
+        string $defaultLocale,
+        string $currency,
+        string $defaultCurrency,
+    ): array {
         if ($baseUrl === '') {
             return [];
         }
 
         $alternates = [];
         foreach ($locales as $locale) {
-            $alternates[$locale] = $this->buildLocaleUrl($baseUrl, $routePath, $locale, $defaultLocale);
+            $alternates[$locale] = $this->localizedUrlBuilder->build(
+                $baseUrl,
+                $routePath,
+                $locale,
+                $defaultLocale,
+                $currency !== '' ? $currency : $defaultCurrency,
+                $defaultCurrency,
+            );
         }
         if (isset($alternates[$defaultLocale])) {
             $alternates['x-default'] = $alternates[$defaultLocale];
@@ -245,28 +276,45 @@ class InternationalSeoContextService
         return $alternates;
     }
 
-    private function buildLocaleUrl(string $baseUrl, string $routePath, string $locale, string $defaultLocale): string
+    private function websiteDefaultCurrency(): string
     {
-        $prefix = trim($this->localePrefix($locale, $defaultLocale), '/');
-        $route = trim($routePath, '/');
-        $path = trim($prefix . '/' . $route, '/');
-        return rtrim($baseUrl, '/') . ($path === '' ? '/' : '/' . $path);
+        try {
+            $resolved = strtoupper(trim(State::resolveWebsiteDefaultCurrency()));
+            if ($resolved !== '') {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return strtoupper($this->firstNonEmpty([
+            $this->env('website.currency'),
+            self::DEFAULT_CURRENCY,
+        ]));
     }
 
-    private function localePrefix(string $locale, string $defaultLocale): string
+    private function currencyFromUrl(string $url): string
     {
-        $segments = [];
-        $currency = strtoupper($this->firstNonEmpty([$this->env('user.currency'), $_SERVER['WELINE_USER_CURRENCY'] ?? '']));
-        $websiteCurrency = strtoupper($this->firstNonEmpty([$this->env('website.currency'), self::DEFAULT_CURRENCY]));
-        if ($currency !== '' && $currency !== $websiteCurrency && $currency !== self::DEFAULT_CURRENCY) {
-            $segments[] = $currency;
+        $path = '';
+        if ($url !== '') {
+            $parts = parse_url($url);
+            if (is_array($parts)) {
+                $path = (string)($parts['path'] ?? '');
+            }
+        }
+        if ($path === '') {
+            return '';
         }
 
-        if ($locale !== '' && $locale !== $defaultLocale && $locale !== self::DEFAULT_LOCALE) {
-            $segments[] = $locale;
+        $segments = array_values(array_filter(
+            explode('/', trim($path, '/')),
+            static fn (string $segment): bool => $segment !== '',
+        ));
+        $first = (string)($segments[0] ?? '');
+        if ($first !== '' && preg_match('/^[A-Za-z]{3}$/', $first) === 1 && strtoupper($first) === $first) {
+            return strtoupper($first);
         }
 
-        return $segments === [] ? '' : '/' . implode('/', $segments);
+        return '';
     }
 
     /**
@@ -295,12 +343,16 @@ class InternationalSeoContextService
             $localeMap[strtolower($locale)] = true;
             $localeMap[strtolower($this->toBcp47($locale))] = true;
         }
-        $currencyMap = $this->currencyPrefixMap();
 
         while ($segments !== []) {
             $first = (string)$segments[0];
             $normalizedLocale = strtolower($this->normalizeLocale($first));
-            if (isset($localeMap[strtolower($first)]) || isset($localeMap[$normalizedLocale]) || isset($currencyMap[strtoupper($first)])) {
+            if (isset($localeMap[strtolower($first)]) || isset($localeMap[$normalizedLocale])) {
+                array_shift($segments);
+                continue;
+            }
+            // Leading ISO-4217 currency (USD/EUR/CNY).
+            if (preg_match('/^[A-Za-z]{3}$/', $first) === 1 && strtoupper($first) === $first) {
                 array_shift($segments);
                 continue;
             }
@@ -308,27 +360,6 @@ class InternationalSeoContextService
         }
 
         return $segments === [] ? '/' : '/' . implode('/', $segments);
-    }
-
-    /**
-     * @return array<string, bool>
-     */
-    private function currencyPrefixMap(): array
-    {
-        $currencies = [
-            $this->env('user.currency'),
-            $_SERVER['WELINE_USER_CURRENCY'] ?? '',
-            $this->env('website.currency'),
-            self::DEFAULT_CURRENCY,
-        ];
-        $map = [];
-        foreach ($currencies as $currency) {
-            $currency = strtoupper(trim((string)$currency));
-            if ($currency !== '') {
-                $map[$currency] = true;
-            }
-        }
-        return $map;
     }
 
     private function siteRoot(string $url): string

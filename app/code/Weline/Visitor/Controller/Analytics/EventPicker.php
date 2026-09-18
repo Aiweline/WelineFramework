@@ -216,7 +216,7 @@ class EventPicker extends FrontendController
     private function genericAutoDiscoverNames(): array
     {
         return [
-            'click', 'page_view', 'page_enter', 'page_leave', 'page_exit',
+            'click', 'page_view', 'page_enter', 'page_leave', 'page_exit', 'page_hide',
             'scroll', 'mousemove', 'mouseover', 'mouseout', 'hover',
             'focus', 'blur', 'input', 'change', 'submit', 'load', 'unload',
             'resize', 'keydown', 'keyup', 'keypress', 'touchstart', 'touchend',

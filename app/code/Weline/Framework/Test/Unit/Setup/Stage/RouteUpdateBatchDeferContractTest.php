@@ -23,6 +23,10 @@ final class RouteUpdateBatchDeferContractTest extends TestCase
             '/flushDeferredControllerAttributes\(\).*flushBatchRouters\(\)/s',
             $src
         );
+        // orphan 依赖 registry：commit 不得在 after_route_collection 前 clear
+        self::assertStringContainsString('禁止在此处 clear CollectedAclSourceIdsRegistry', $src);
+        self::assertStringNotContainsString('CollectedAclSourceIdsRegistry::clear()', $src);
+        self::assertStringNotContainsString('LiveSourceSet::clear()', $src);
     }
 
     public function testModuleHelperDefersControllerAttributesWhenEnabled(): void

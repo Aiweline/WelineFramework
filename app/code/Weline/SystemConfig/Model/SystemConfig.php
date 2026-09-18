@@ -88,8 +88,38 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public array $_index_sort_keys = ['module', 'area', 'scope', 'locale', 'key'];
     public array $_unit_primary_keys = ['key', 'module', 'area', 'scope', 'locale'];
 
-    /** @var array<string, array<string, array<int, array<string, mixed>>>> */
+    /**
+     * 进程级 module rows：area → module → rowsCacheKey → rows。
+     * 键含 scope/locale/versionVector；模块变更时 unset 整块 [$area][$module]。
+     *
+     * @var array<string, array<string, array<string, list<array<string, mixed>>>>>
+     */
     public static array $configs = [];
+
+    public static function clearProcessCache(?string $area = null, ?string $module = null): void
+    {
+        if ($area === null && $module === null) {
+            self::$configs = [];
+            return;
+        }
+        if ($area !== null && $module !== null) {
+            unset(self::$configs[$area][$module]);
+            if (isset(self::$configs[$area]) && self::$configs[$area] === []) {
+                unset(self::$configs[$area]);
+            }
+            return;
+        }
+        if ($area !== null) {
+            unset(self::$configs[$area]);
+            return;
+        }
+        foreach (self::$configs as $areaKey => $modules) {
+            unset(self::$configs[$areaKey][$module]);
+            if (self::$configs[$areaKey] === []) {
+                unset(self::$configs[$areaKey]);
+            }
+        }
+    }
 
     public function __init()
     {
@@ -161,11 +191,21 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return RequestContext::get($requestCacheKey);
         }
 
+        $processKey = $this->buildModuleRowsCacheKey($module, $area, $scope, $locale);
+        if (isset(self::$configs[$area][$module][$processKey])
+            && \is_array(self::$configs[$area][$module][$processKey])
+        ) {
+            $rows = self::$configs[$area][$module][$processKey];
+            RequestContext::set($requestCacheKey, $rows);
+            return $rows;
+        }
+
         $cache = $this->scopedConfigCache($module, $area, $scope, $locale);
-        $cacheEntry = $this->readCacheEnvelope($cache, $this->buildModuleRowsCacheKey($module, $area, $scope, $locale));
+        $cacheEntry = $this->readCacheEnvelope($cache, $processKey);
         // Empty envelopes are not durable hits: a prior negative cache must not hide
         // rows inserted after the empty snapshot was written.
         if ($cacheEntry['hit'] && \is_array($cacheEntry['value']) && $cacheEntry['value'] !== []) {
+            self::$configs[$area][$module][$processKey] = $cacheEntry['value'];
             RequestContext::set($requestCacheKey, $cacheEntry['value']);
             return $cacheEntry['value'];
         }
@@ -190,10 +230,10 @@ class SystemConfig extends \Weline\Framework\Database\Model
         }
 
         $rows = array_values($rowsByKey);
-        self::$configs[$area][$module] = $rows;
+        self::$configs[$area][$module][$processKey] = $rows;
         RequestContext::set($requestCacheKey, $rows);
         if ($rows !== []) {
-            $this->writeCacheEnvelope($cache, $this->buildModuleRowsCacheKey($module, $area, $scope, $locale), $rows);
+            $this->writeCacheEnvelope($cache, $processKey, $rows);
         }
 
         return $rows;

@@ -57,14 +57,26 @@
 
 默认 `modulesLoad.deferByDefault=true`：部件 `data-weline-load` 走空闲延后；`data-weline-declare` 在 `loadDeclaredDeferred=true` 时同样调度延后加载。
 
-### 1.2 开发环境：MutationObserver 反馈环防护
+### 1.2 MutationObserver：架构总线 vs DEV 护栏
 
-`weline.js` 在 **DEV / `runtimeConfig.debug` / `?debug=1`** 下包装原生 `MutationObserver`：
+**架构入口（硬）**：对 `document` / `documentElement` / `body` 的 `childList|subtree` 观察必须用 **`Weline.dom.observe`**（共享总线，同 target+options 仅一个物理观察者）。权威：[DOM-Mutation观察总线.md](../../Frontend/doc/架构/DOM-Mutation观察总线.md)；MCP `dom_mutation_observe_via_weline_dom`。
+
+**合并语义**：
+
+1. 首次投递立刻 `disconnect`
+2. **安静窗** `setTimeout(100)`（可再接 `requestIdleCallback`）；**禁止**仅用 `requestIdleCallback({ timeout: 100 })`——其 timeout 会在主线程空档几乎立刻执行
+3. flush 内 **`takeRecords` 抽干**，再 `onFlush`（仍断开时 mount/scan，必要时幂等整树补漏）
+4. **安静后再 `observe`**
+5. **Vue 式保险丝**：同栈嵌套 flush ≥50（`max_flush_depth`）或 250ms 内 flush ≥40（`flush_storm`）→ 停观察 + `weline:dom:mutation-loop`
+
+禁止把「双 `requestAnimationFrame` / `queueMicrotask` 立刻 re-observe」当作合并窗口。一作方禁止对 document 根裸 `new MutationObserver`；仅无总线时可用 `/* ARCH_MO_FALLBACK_START */` … `/* ARCH_MO_FALLBACK_END */` 降级（契约剥离后仍禁止）。
+
+`weline.js` 在 **DEV / `runtimeConfig.debug` / `?debug=1`** 下另有看门狗（护栏，不是修法）：
 
 - **同步重入**：回调内改 DOM 导致同一观察者嵌套投递 → `disconnect` + `console.error`
-- **短窗风暴**：约 250ms 内同一观察者投递 > 40 次 → 同上（覆盖微任务连发）
+- **短窗风暴**：约 250ms 内同一观察者投递 > 40 次 → 同上
 
-控制台关键字：`[Weline:DEV] MutationObserver 反馈环`；事件：`weline:dev:mutation-loop`；详情含 `observeStack`。生产不包装。业务侧正确做法：回调加重入/`__painting` 守卫，或只发现新节点、禁止每次全量重绘。
+控制台关键字：`[Weline:DEV] MutationObserver 反馈环`；事件：`weline:dev:mutation-loop` / `weline:dom:mutation-loop`。触发后应改走 `Weline.dom.observe`，不得放宽阈值。
 ## 2. 注册模块（收集门槛）
 
 收集**不是**扫任意 `.js`，只扫各启用模块里**固定文件名、固定目录层级**的登记源文件，再编译合并。实现：`Theme\Config\Reader\WelineModules` + `resource:compile welineModules`。

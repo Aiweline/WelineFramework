@@ -135,6 +135,29 @@ final class FiberOutputBufferTest extends TestCase
         }
     }
 
+    public function testDiscardCaptureNotifiesRequestContextListeners(): void
+    {
+        FiberOutputBuffer::uninstall();
+        Runtime::setMode(RuntimeInterface::MODE_FPM);
+        $notified = false;
+        \Weline\Framework\Runtime\RequestContext::onCaptureDiscard(static function () use (&$notified): void {
+            $notified = true;
+        }, 'fiber-output-buffer-test');
+        $baseline = \ob_get_level();
+        \ob_start();
+        try {
+            FiberOutputBuffer::beginCapture();
+            echo 'x';
+            FiberOutputBuffer::discardCapture();
+            self::assertTrue($notified);
+        } finally {
+            \Weline\Framework\Runtime\RequestContext::removeCaptureDiscard('fiber-output-buffer-test');
+            while (\ob_get_level() > $baseline) {
+                \ob_end_clean();
+            }
+        }
+    }
+
     public function testNonPersistentEndCapturePreservesCallerOutputBuffer(): void
     {
         FiberOutputBuffer::uninstall();
@@ -153,5 +176,48 @@ final class FiberOutputBufferTest extends TestCase
                 \ob_end_clean();
             }
         }
+    }
+
+    public function testPersistentNestedCaptureUnderNativeFormBufferReturnsHtml(): void
+    {
+        // Mirrors `<w:form>` compiled `ob_start` wrapping a nested Template::fetch.
+        FiberOutputBuffer::beginCapture();
+        echo 'outer-before;';
+        \ob_start();
+        FiberOutputBuffer::beginCapture();
+        echo 'DROPDOWN';
+        $nested = FiberOutputBuffer::endCapture();
+        echo $nested;
+        echo 'after-nested;';
+        $formBody = (string)\ob_get_clean();
+        echo 'FORM[' . $formBody . ']';
+        $outer = FiberOutputBuffer::endCapture();
+
+        self::assertSame('DROPDOWN', $nested);
+        self::assertSame('DROPDOWNafter-nested;', $formBody);
+        self::assertSame('outer-before;FORM[DROPDOWNafter-nested;]', $outer);
+    }
+
+    public function testNativeNestedCapturesPairIndependentlyOfFiberFrames(): void
+    {
+        FiberOutputBuffer::beginCapture();
+        echo 'page;';
+        \ob_start();
+        FiberOutputBuffer::beginCapture();
+        echo 'header-native;';
+        FiberOutputBuffer::beginCapture();
+        echo 'child';
+        $child = FiberOutputBuffer::endCapture();
+        echo $child;
+        $header = FiberOutputBuffer::endCapture();
+        $legacy = (string)\ob_get_clean();
+        echo 'LEGACY[' . $legacy . ']';
+        $page = FiberOutputBuffer::endCapture();
+
+        self::assertSame('child', $child);
+        self::assertSame('header-native;child', $header);
+        // Nested native capture owns the bytes; the legacy caller buffer stays empty.
+        self::assertSame('', $legacy);
+        self::assertSame('page;LEGACY[]', $page);
     }
 }

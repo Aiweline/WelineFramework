@@ -32,7 +32,6 @@ final class Index extends FrontendController
         $title = WidgetI18n::label('常问问题');
         $this->layoutType = ThemeLayout::PAGE_TYPE_FAQ;
         $this->request->setGet('page_type', 'faq');
-        $this->request->setGet('theme_public_route', FaqNamespace::PREFIX);
         $this->request->setGet('theme_page_title', $title);
 
         $spiPages = [];

@@ -17,9 +17,10 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
 final class ProductCardRenderer
 {
     private const CSS_FLAG = 'product.product_card_css_emitted';
+    private const CSS_DISCARD_HOOK = 'product.product_card_css_discard';
     /** Kept for contracts / call sites; emission is now an inline <style> (body <link> is unreliable + ThemeEditor strips //link). */
     public const CSS_LINK_MARKER = 'data-weline-product-card-css';
-    private const CSS_VERSION = '20260917-product-card-widget-css-only';
+    private const CSS_VERSION = '20260918-product-card-css-fpc-heal';
     /** Keep the first two desktop rows available without flooding the network. */
     private const INITIAL_VIEWPORT_IMAGE_COUNT = 8;
 
@@ -63,7 +64,7 @@ final class ProductCardRenderer
             ],
         );
 
-        // CSS 只由货架/列表宿主显式 emitStylesheetLinkOnce()；禁止 render 再夹一套。
+        // CSS：宿主 emit + 卡 partial 兜底 emitStylesheetLinkOnce()（once）；禁止 link 注入。
         return $html;
     }
 
@@ -131,6 +132,7 @@ final class ProductCardRenderer
         $product['name'] = trim((string)($product['name'] ?? ''));
         $product['sku'] = trim((string)($product['sku'] ?? ''));
         $product['currency'] = trim((string)($product['currency'] ?? 'CNY')) ?: 'CNY';
+        $product['currency_unavailable'] = !empty($product['currency_unavailable']);
         $product['price'] = (float)($product['price'] ?? 0);
         $product['original_price'] = (float)($product['original_price'] ?? 0);
         $product['rating'] = (float)($product['rating'] ?? 0);
@@ -265,6 +267,7 @@ final class ProductCardRenderer
             'is_new' => !empty($offer['is_new']),
             'is_demo' => !empty($offer['is_demo']),
             'sellable' => !empty($offer['sellable']),
+            'currency_unavailable' => !empty($offer['currency_unavailable']),
             'quote_only' => !empty($offer['quote_only']),
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
             'campaign_label' => trim((string)($offer['campaign_label'] ?? '')),
@@ -321,27 +324,40 @@ final class ProductCardRenderer
     }
 
     /**
-     * Allow preview / widget repair passes to emit card CSS again.
+     * Allow preview / widget repair passes / Fiber discard to emit card CSS again.
      */
     public static function resetProductCardCssEmission(): void
     {
         RequestContext::remove(self::CSS_FLAG);
+        RequestContext::removeCaptureDiscard(self::CSS_DISCARD_HOOK);
     }
 
     /**
-     * 货架/列表宿主按需注入 canonical product-card.css（每请求一次）。
-     * 唯一入口：部件或 PLP 模板显式调用；render()/Taglib 不得再夹。
+     * 货架/列表宿主与卡 partial 按需注入 canonical product-card.css（每请求一次）。
+     * 内联 <style> 随宿主/卡走（body <link> 易被 FPC/预览消毒丢掉）。
      *
-     * 内联 <style> 随宿主走（body <link> 易被 FPC/预览消毒丢掉）。
+     * 仅在成功产出非空 style 后置位；Fiber discardCapture 会复位以便重渲再发。
      */
     public static function emitStylesheetLinkOnce(): string
     {
         if (RequestContext::has(self::CSS_FLAG)) {
             return '';
         }
-        RequestContext::set(self::CSS_FLAG, true);
 
-        return self::buildProductCardStyleTag();
+        $tag = self::buildProductCardStyleTag();
+        if ($tag === '') {
+            return '';
+        }
+
+        RequestContext::set(self::CSS_FLAG, true);
+        RequestContext::onCaptureDiscard(
+            static function (): void {
+                self::resetProductCardCssEmission();
+            },
+            self::CSS_DISCARD_HOOK
+        );
+
+        return $tag;
     }
 
     /**

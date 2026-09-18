@@ -1,0 +1,37 @@
+<?php
+/**
+ * 店面像素引导（header chrome）
+ *
+ * 经 Theme/hanfu header 空槽 `header-pixel-bootstrap` + required default_injections 注入。
+ * eager：解析后立刻拉 pixel.js，并带 track 队列，避免结账确认时静默丢事件。
+ * body-end Hook 仍作兜底；`__WelinePixelLazyScheduled` 防双载。
+ *
+ * 注意：本文件勿写 declare(strict_types=1)——视图编译器会在文件头插入 hash 注释块，
+ * 会导致 E_COMPILE_ERROR，chrome 槽渲染失败后静默回退到 body-end 懒加载。
+ *
+ * @widget.name {店面像素引导}
+ * @widget.description {页头注入 Weline Pixel 引导（eager）；默认安装到 header-pixel-bootstrap}
+ * @widget.type {header}
+ * @widget.code {storefront-pixel-bootstrap}
+ * @widget.area {frontend}
+ * @widget.page_layouts {["*"]}
+ * @widget.position {["header"]}
+ * @widget.slot {header-pixel-bootstrap}
+ * @widget.supports {["storefront-pixel-bootstrap","layout-header-pixel-bootstrap","pixel-bootstrap"]}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Visitor\Service\PixelBootstrapHtmlService;
+
+try {
+    /** @var PixelBootstrapHtmlService $bootstrap */
+    $bootstrap = ObjectManager::getInstance(PixelBootstrapHtmlService::class);
+    echo $bootstrap->render(['eager' => true]);
+} catch (\Throwable) {
+    // 引导失败时不阻断页头渲染；body-end 仍可兜底
+}
+?>
+<style>
+.header-pixel-bootstrap-slot:empty { display: none !important; }
+.header-pixel-bootstrap-slot { display: contents; }
+</style>

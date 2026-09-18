@@ -33,7 +33,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         foreach ([
             'function initSidePanels(',
             'function switchPreviewView(',
-            'function loadLayoutPreview(',
+            'function loadCanvas(',
             'function fetchLayoutSlots(',
             'function loadLayoutConfig(',
             'function saveLayoutConfig(',
@@ -329,14 +329,18 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('.slot-mode-hit-area', $styles);
 
         $uiBundle = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
-        foreach ([$editor, $uiBundle] as $parent) {
+        $authority = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+        foreach ([$authority, $uiBundle] as $parent) {
             self::assertStringContainsString("normalizeSelectionTarget(state.selectionTarget) === 'slot'", $parent);
             self::assertStringContainsString("normalizeSelectionTarget(state.selectionTarget) === 'widget'", $parent);
             self::assertStringContainsString('插槽模式只激活插槽，不点选/打开部件配置。', $parent);
             self::assertStringContainsString('部件模式只触发部件，忽略插槽选中。', $parent);
             self::assertStringContainsString('部件模式不激活插槽工具条选择。', $parent);
             self::assertStringContainsString('部件模式只命中部件，父页委托不得再选中插槽。', $parent);
-            self::assertStringContainsString('部件模式只触发部件，忽略旧版插槽点击消息。', $parent);
+            self::assertStringContainsString("data.type === 'slot-selected'", $parent);
+            self::assertStringNotContainsString("case 'slot-clicked'", $parent);
+            self::assertStringNotContainsString('忽略旧版插槽点击消息', $parent);
+            self::assertStringNotContainsString(".slot-widgets[data-slot", $parent);
             self::assertStringContainsString('默认模式：点在「父插槽包裹的部件本体」上时交给部件选中，避免同一次点击再 toast 插槽。', $parent);
         }
         self::assertStringContainsString('部件模式只触发部件，不激活插槽。', $engine);
@@ -471,11 +475,16 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         $previewPage = $this->read('app/code/Weline/Theme/view/ui/js/pages/theme-preview.js');
         $editor = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
         $ui = $this->read('app/code/Weline/Theme/view/ui/js/weline-ui.js');
+        $frontend = $this->read('app/code/Weline/Frontend/view/statics/js/weline.js');
 
-        foreach ([$engine, $previewPage] as $source) {
-            self::assertStringContainsString('delivery_storm', $source);
-            self::assertStringContainsString('observer.disconnect()', $source);
-            self::assertStringContainsString('requestAnimationFrame', $source);
+        self::assertStringContainsString('observeMutationsCoalesced', $frontend);
+        self::assertStringContainsString('requestIdleCallback', $frontend);
+        self::assertStringContainsString('idleTimeoutMs', $frontend);
+
+        foreach ([$engine, $previewPage, $ui] as $source) {
+            self::assertStringContainsString('Weline.dom.observe', $source);
+            self::assertStringContainsString('idleTimeoutMs: 100', $source);
+            self::assertStringContainsString('never double-rAF', $source);
         }
         self::assertStringContainsString('pendingSlots', $engine);
         self::assertStringContainsString('pendingMountRoots', $previewPage);
@@ -484,7 +493,16 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('syncingFloat', $editor);
         self::assertStringContainsString('pendingElevateHosts', $ui);
         self::assertStringContainsString('pendingUiMount', $ui);
-        self::assertStringContainsString('uiMountScheduled', $ui);
+        self::assertStringContainsString('resolveObserveMutationsCoalesced', $ui);
+        self::assertStringContainsString('never remount document', $ui);
+        self::assertStringNotContainsString('needsFullScan', $ui);
+        self::assertStringNotContainsString('mount(document.documentElement)', $ui);
+        self::assertStringContainsString('同步立刻发请求', $editor);
+        self::assertStringContainsString('showWidgetConfigLoadingState', $editor);
+        self::assertStringContainsString('正在加载配置', $editor);
+        self::assertStringNotContainsString('uiMountScheduled', $ui);
+        self::assertStringNotContainsString('queueMicrotask(flush)', $ui);
+        self::assertStringNotContainsString('requestAnimationFrame(() => requestAnimationFrame(flush)', $ui);
     }
 
     public function testSlotInitDefaultsUsesEditorContextIdentityMirrors(): void
@@ -523,16 +541,46 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             self::assertStringContainsString('Prefer surgical iframe patch', $js);
             self::assertStringContainsString('Allow reset to supersede an in-flight page fetch', $js);
             self::assertDoesNotMatchRegularExpression(
-                '/if \(typeof loadLayoutPreview === \'function\'\) \{\s*loadLayoutPreview\(\);\s*\} else if \(result\.preview_html/',
+                '/if \(typeof loadCanvas === \'function\'\) \{\s*loadCanvas\(\);\s*\} else if \(result\.preview_html/',
                 $js
             );
         }
 
         self::assertStringContainsString('列表响应一律不批量渲染 preview_html', $controller);
+        self::assertStringContainsString('列表不批量渲染 preview_html（与 getWidgets 一致）', $controller);
+        self::assertStringContainsString('不批量渲染 preview_html（贵且易打满 Worker）', $controller);
+        self::assertStringNotContainsString(
+            "\$item['preview_html'] = \$this->buildWidgetPreviewHtml(\$widgetMeta, \$theme, \$editorArea);",
+            $controller
+        );
         self::assertStringNotContainsString(
             "\$widget['preview_html'] = \$this->buildWidgetPreviewHtml(\$widget, \$theme, \$editorArea);\n            }\n            unset(\$widget);\n        }",
             $controller
         );
+    }
+
+    public function testWidgetLibraryTabCountsShowEllipsisWhileLoading(): void
+    {
+        $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        $legacy = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+        $css = $this->read('app/code/Weline/Theme/view/ui/css/pages/theme-editor.css');
+
+        foreach ([$editor, $legacy] as $js) {
+            self::assertStringContainsString("el.textContent = loading ? '…' : String(counts[tab] || 0);", $js);
+            self::assertStringContainsString('updateWidgetLibraryTabCounts();', $js);
+            self::assertStringContainsString('const widgetsLoading = state.widgetLibraryRenderMode !== \'applications\'', $js);
+            self::assertStringContainsString("translateUiText('部件库加载失败，请稍后重试')", $js);
+        }
+        self::assertStringContainsString('.widget-library-tab-count.is-loading', $css);
+        self::assertStringContainsString('-webkit-line-clamp: 2', $css);
+        self::assertStringContainsString('flex-direction: column', $css);
+    }
+
+    public function testWidgetLibraryTabResolverIgnoresNestedSupportArrays(): void
+    {
+        $resolver = $this->read('app/code/Weline/Theme/Service/WidgetLibraryTabResolver.php');
+        self::assertStringContainsString("\$nested = \$item['id'] ?? \$item['code'] ?? \$item['name'] ?? null;", $resolver);
+        self::assertStringContainsString('if (!is_scalar($item))', $resolver);
     }
 
     public function testWidgetLibrarySlotFullLoadDisablesPagination(): void
@@ -716,7 +764,6 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString("'interaction_mode'", $editor);
         self::assertStringContainsString('refreshPreview,', $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js'));
         foreach ([
-            "'/theme/backend/theme-editor/layout-preview'",
             "'/theme/backend/theme-editor/scoped-workspace'",
             "'/theme/backend/theme-editor/publish-scoped-workspace'",
         ] as $endpoint) {
@@ -900,14 +947,13 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
 
     public function testRawTypedFrontendPreviewRequiresExactScopeReadAcl(): void
     {
-        $content = $this->read('app/code/Weline/Theme/Controller/Frontend/ThemePreview/Content.php');
+        self::assertFileDoesNotExist(
+            BP . '/app/code/Weline/Theme/Controller/Frontend/ThemePreview/Content.php',
+            'Frontend theme-preview/content HTTP shell must be fully deleted'
+        );
         $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
         $template = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
 
-        self::assertStringNotContainsString("setData('skip_view_file_cache', true)", $content);
-        self::assertStringContainsString('ThemePreviewRenderCache::class', $content);
-        self::assertStringContainsString('$previewRenderCache->remember(', $content);
-        self::assertStringContainsString('assign(\'editor_mode\', $isEditorMode)', $content);
         $header = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml');
         self::assertStringContainsString('$headerFlattenNavForEditor', $header);
         self::assertStringContainsString('editor-preview-light', $header);
@@ -916,12 +962,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             '$sidebarNavItems = $headerFlattenNavForEditor($sidebarNavItems);',
             $header
         );
-        self::assertStringContainsString('private function assertBackendScopePreviewAllowed()', $content);
-        self::assertStringContainsString('BackendUserContextProviderInterface::class', $content);
-        self::assertStringContainsString('ResourceAuthorizationServiceInterface::class', $content);
-        self::assertStringContainsString("'Weline_Theme::theme_visual_editor_scope_read'", $content);
-        self::assertStringContainsString('$this->assertBackendScopePreviewAllowed();', $content);
-        self::assertStringContainsString('async function buildAuthorizedLayoutPreviewUrl(', $editor);
+        self::assertStringContainsString('async function buildAuthorizedCanvasUrl(', $editor);
         self::assertStringContainsString("url.searchParams.delete('weline_preview_token')", $editor);
         self::assertStringContainsString('async function openFrontendPreview()', $editor);
         self::assertMatchesRegularExpression(
@@ -938,7 +979,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             "const previewStatus = state.previewStatus === 'published' ? 'published' : 'draft';",
             $editor,
         );
-        $authorizedStart = strpos($editor, 'async function buildAuthorizedLayoutPreviewUrl(');
+        $authorizedStart = strpos($editor, 'async function buildAuthorizedCanvasUrl(');
         $authorizedEnd = strpos($editor, 'function resolveThemePreviewGatewayUrl(', $authorizedStart ?: 0);
         self::assertNotFalse($authorizedStart);
         self::assertNotFalse($authorizedEnd);
@@ -946,9 +987,9 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringNotContainsString('apiStartPreview', $authorizedBlock);
         self::assertStringNotContainsString("url.searchParams.set('weline_preview_token'", $authorizedBlock);
         self::assertStringContainsString('handlePreviewExitFromIframe', $editor);
-        self::assertStringContainsString('setLayoutPreviewSource({ _t: Date.now() })', $editor);
+        self::assertStringContainsString('setCanvasSource({ _t: Date.now() })', $editor);
         self::assertStringContainsString('editor_context: editorContext,', $editor);
-        self::assertStringContainsString('async function setLayoutPreviewSource(', $editor);
+        self::assertStringContainsString('async function setCanvasSource(', $editor);
         self::assertStringContainsString("data-initial-preview-token=", $template);
         self::assertStringContainsString('theme/frontend/theme-preview/gateway', $template);
         self::assertStringNotContainsString(
@@ -959,16 +1000,16 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
 
     public function testEditorPreviewLocaleOverrideDoesNotWriteLanguageCookie(): void
     {
-        $content = $this->read('app/code/Weline/Theme/Controller/Frontend/ThemePreview/Content.php');
         $previewContext = $this->read('app/code/Weline/Theme/Service/PreviewContextService.php');
         $state = $this->read('app/code/Weline/Framework/App/State.php');
         $fileImage = $this->read('app/code/Weline/FileManager/extends/module/Weline_Theme/Integration/FileImageLayoutValueHydrator.php');
         $engine = $this->read('app/code/Weline/Theme/view/statics/js/editor-mode.js');
         $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
-
-        self::assertStringContainsString('State::setRequestLanguageOverride($locale)', $content);
-        self::assertStringContainsString("State::setRequestLanguageOverride('')", $content);
-        self::assertStringContainsString('never write WELINE_USER_LANG', $content);
+        self::assertFileDoesNotExist(
+            BP . '/app/code/Weline/Theme/Controller/Frontend/ThemePreview/Content.php',
+            'Frontend theme-preview/content HTTP shell must be fully deleted'
+        );
+        // Locale is path-first on storefront canvas (no custom content shell).
         self::assertStringContainsString("strcasecmp(\$rawLocaleParam, 'default') === 0", $previewContext);
         self::assertStringContainsString("\$context['locale'] = ''", $previewContext);
         self::assertStringContainsString('REQUEST_LANGUAGE_OVERRIDE', $state);
@@ -1028,6 +1069,8 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('widgetConfig_${i}_${identityKey}', $editor);
         self::assertStringContainsString('loadWidgetConfigForAccordion(identity, widgetElement = null, configBodyEl = null)', $editor);
         self::assertStringContainsString('configBodyEl instanceof HTMLElement', $editor);
+        self::assertStringContainsString('widgetData.has_params === false', $editor);
+        self::assertStringContainsString('没有配置项|no configuration items', $editor);
         $this->assertEditorBundleVersionedLinksMatch($template);
     }
 

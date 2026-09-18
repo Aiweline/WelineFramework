@@ -68,7 +68,8 @@ final class StaticErrorPagePublishFingerprint
     ): string {
         return \hash(
             'sha256',
-            '404v5|'
+            // 404v6: strip client widgetTranslations / multi-locale bags from snapshots.
+            '404v6|'
             . $websiteCode . '|'
             . $lang . '|'
             . $websiteId . '|'

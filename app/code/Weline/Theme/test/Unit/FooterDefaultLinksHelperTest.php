@@ -86,11 +86,31 @@ final class FooterDefaultLinksHelperTest extends TestCase
             ['fab fa-instagram', 'fab fa-pinterest', 'fab fa-tiktok', 'fab fa-youtube'],
             array_column($items, 'icon'),
         );
+        foreach ($items as $item) {
+            $this->assertMatchesRegularExpression('#^https://#', (string)$item['url']);
+        }
+        $this->assertSame(
+            [
+                'https://www.instagram.com/changan.hanfu',
+                'https://www.pinterest.com/changanhanfu',
+                'https://www.tiktok.com/@changan.hanfu',
+                'https://www.youtube.com/@changanhanfu',
+            ],
+            FooterDefaultLinksHelper::defaultSameAsUrls(),
+        );
     }
 
     public function testNormalizeSocialItemsOnlyReturnsActionableProfileLinks(): void
     {
-        self::assertSame([], FooterDefaultLinksHelper::normalizeSocialItems(null));
+        $defaults = FooterDefaultLinksHelper::defaultSocialItems();
+        self::assertSame($defaults, FooterDefaultLinksHelper::normalizeSocialItems(null));
+        self::assertSame(
+            $defaults,
+            FooterDefaultLinksHelper::normalizeSocialItems([
+                ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
+                ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => ''],
+            ]),
+        );
 
         self::assertSame(
             [[

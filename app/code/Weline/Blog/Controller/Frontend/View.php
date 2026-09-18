@@ -49,7 +49,6 @@ final class View extends FrontendController
 
         $this->assign('blog_article', $article->toArray());
         $this->request->setGet('page_type', 'blog_post');
-        $this->request->setGet('theme_public_route', 'blog/' . $slug);
         $this->request->setGet('theme_page_title', $article->title);
         $this->assign('page_title', $article->title);
         $this->assign('title', $article->title);

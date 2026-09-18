@@ -37,7 +37,6 @@ use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\ThemeMetaIdentityService;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
-use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Service\ThemeResourceCatalog;
 use Weline\Theme\Service\ThemeEditorDraftResetService;
 use Weline\Theme\Service\ThemeFactoryResetService;
@@ -209,23 +208,6 @@ class ThemeEditor extends BackendController
         );
         $requestedBackendThemeId = (int)$this->request->getParam('backend_theme_id', 0);
         $pageType = (string)$this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $themePublicRoute = $this->normalizeThemePublicRoute(
-            (string)$this->request->getParam('theme_public_route', '')
-        );
-        // Path ↔ layout: when a public route is present it is authoritative for chrome page_type.
-        // Never rewrite theme_public_route aliases here — canvas keeps the clicked path.
-        if ($themePublicRoute !== '') {
-            try {
-                /** @var \Weline\Theme\Service\LayoutResolveService $layoutResolve */
-                $layoutResolve = ObjectManager::getInstance(\Weline\Theme\Service\LayoutResolveService::class);
-                $resolved = $layoutResolve->resolveFromPath($themePublicRoute);
-                if (!empty($resolved['claimed']) && (string)($resolved['layout_path'] ?? '') !== '') {
-                    $pageType = (string)$resolved['layout_path'];
-                }
-            } catch (\Throwable) {
-                // Keep request page_type when resolve is unavailable.
-            }
-        }
         $editorArea = $this->resolveRequestedEditorArea();
         $scopeCatalog = ObjectManager::getInstance(ScopeSelectorCatalogInterface::class)->build(
             (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
@@ -534,12 +516,12 @@ class ThemeEditor extends BackendController
         $this->assign('locale_options_html', $localeOptionsHtml);
         $this->assign('widget_library_html', $widgetLibraryHtml);
         $this->assign('has_draft', $hasDraft);
-        $this->assign('theme_public_route', $themePublicRoute);
 
-        // Editor iframe / #btnPreview use theme-preview/content under the backend
-        // session + typed editor_context. Do NOT mint weline_preview_token here —
+        // Editor iframe / #btnPreview use the real storefront path + editor markers
+        // (editor_mode / shell / editor_context). Do NOT mint weline_preview_token here —
         // that token is reserved for #btnFrontendPreview / postStartPreview (live
-        // storefront preview with Cookie + exit float).
+        // storefront preview with Cookie + exit float). Never open theme-preview/content
+        // as a fake canvas shell.
         $this->assign('initial_preview_token', '');
 
         return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml');
@@ -1774,19 +1756,8 @@ class ThemeEditor extends BackendController
                     $pendingTotal++;
                 }
                 $item['is_ai_generated'] = WidgetLibraryTabResolver::isAiGenerated($item);
-                $widgetMeta = is_array($item['widget'] ?? null) ? $item['widget'] : [
-                    'module' => (string)($item['module'] ?? ''),
-                    'type' => (string)($item['type'] ?? ''),
-                    'code' => (string)($item['code'] ?? ''),
-                    'name' => (string)($item['name'] ?? ''),
-                ];
-                try {
-                    $item['preview_html'] = $this->buildWidgetPreviewHtml($widgetMeta, $theme, $editorArea);
-                } catch (\Throwable) {
-                    $item['preview_html'] = '<div class="widget-preview-placeholder">'
-                        . htmlspecialchars((string)($item['name'] ?? $item['code'] ?? ''), ENT_QUOTES, 'UTF-8')
-                        . '</div>';
-                }
+                // 列表不批量渲染 preview_html（与 getWidgets 一致）；前端本地占位 + 可视区懒加载。
+                unset($item['preview_html']);
             }
             unset($item);
 
@@ -2237,23 +2208,7 @@ class ThemeEditor extends BackendController
             $filterOptions
         );
         
-        // 预编译预览 HTML
-        if (!empty($result['exclusive_widgets'])) {
-            foreach ($result['exclusive_widgets'] as &$widget) {
-                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
-            }
-        }
-        if (!empty($result['regular_widgets'])) {
-            foreach ($result['regular_widgets'] as &$widget) {
-                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
-            }
-        }
-        if (!empty($result['matched_widgets'])) {
-            foreach ($result['matched_widgets'] as &$widget) {
-                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
-            }
-        }
-        
+        // 不批量渲染 preview_html（贵且易打满 Worker）；前端占位 + 可视区懒加载。
         return $this->fetchJson([
             'success' => true,
             'data' => $result,
@@ -3971,14 +3926,29 @@ class ThemeEditor extends BackendController
         $area = $this->normalizeThemeConfigArea($slotArea);
 
         $params = $this->getWidgetParamDefinitions($widgetModule, $widgetCode, $area, $widgetType);
-        if (empty($params)) {
+        $config = $this->ensureScopedNodeI18nInstance($node, $nodeUid);
+        // 无 @param 是合法空态（如 category-filters），不得 success=false：
+        // BinQuery / editorRequest 会当业务失败抛错，手风琴误显「加载配置失败」。
+        if ($params === []) {
             return $this->fetchJson([
-                'success' => false,
+                'success' => true,
+                'data' => [
+                    'layout_id' => 0,
+                    'node_uid' => $nodeUid,
+                    'widget_module' => $widgetModule,
+                    'widget_type' => $widgetType,
+                    'widget_code' => $widgetCode,
+                    'params' => [],
+                    'config' => is_array($config) ? $config : [],
+                    'locale' => $locale,
+                    'preview_html' => null,
+                    'has_params' => false,
+                ],
+                'preview_html' => null,
                 'message' => __('该部件没有配置项'),
             ]);
         }
 
-        $config = $this->ensureScopedNodeI18nInstance($node, $nodeUid);
         $identify = $this->resolveThemeConfigIdentifyForScopedNode(
             $widgetModule,
             $widgetType,
@@ -4002,19 +3972,10 @@ class ThemeEditor extends BackendController
         );
         $config = $this->materializeWidgetConfigPaths($config, []);
 
-        $previewHtml = $this->tryBuildPreviewHtmlForWidget(
-            [
-                'widget_module' => $widgetModule,
-                'widget_type' => $widgetType,
-                'widget_code' => $widgetCode,
-                'area' => $slotArea,
-                'slot_id' => $node['slot_id'] ?? null,
-                'node_uid' => $nodeUid,
-                'config' => $config,
-            ],
-            $config,
-            $locale === null || $locale === '' ? null : (string)$locale,
-        );
+        // GET 配置只返回 schema+values；禁止在此渲染 preview_html（单部件预览可达数十秒，
+        // 会堵住微任务/Worker，表现为「点部件后配置一直加载不出来」）。
+        // 画布预览仍由 save-widget / save-widget-config 返回 preview_html 做局部补丁。
+        $previewHtml = null;
 
         return $this->fetchJson([
             'success' => true,
@@ -4028,6 +3989,7 @@ class ThemeEditor extends BackendController
                 'config' => $config,
                 'locale' => $locale,
                 'preview_html' => $previewHtml,
+                'has_params' => true,
             ],
             'preview_html' => $previewHtml,
         ]);
@@ -4752,7 +4714,11 @@ class ThemeEditor extends BackendController
                 ];
             }
 
-            $html = $this->renderUnifiedLayoutPreview($themeId, $layoutType, $layoutOption, $editorArea, $context);
+            // Frontend: compile against the real layout template (storefront parity).
+            // Backend: real backend layout template (not a content.phtml rewrite stub).
+            $html = $editorArea === PreviewContextService::AREA_FRONTEND
+                ? $this->renderFrontendLayoutTemplateHtml($themeId, $layoutType, $layoutOption, $context)
+                : $this->renderUnifiedLayoutPreview($themeId, $layoutType, $layoutOption, $editorArea, $context);
             if ($editorArea === PreviewContextService::AREA_BACKEND && !$this->isDashboardPreviewLayout($layoutType)) {
                 $html = $this->injectBackendStructuralSlots($html);
             }
@@ -5767,16 +5733,6 @@ class ThemeEditor extends BackendController
             }
         }
 
-        // 移除所有指向 layout-preview 的链接和图片
-        foreach ($xpath->query('//a[@href] | //img[@src]') as $element) {
-            $href = $element->getAttribute('href');
-            $src = $element->getAttribute('src');
-            if (($href && strpos($href, 'layout-preview') !== false) ||
-                ($src && strpos($src, 'layout-preview') !== false)) {
-                $element->parentNode?->removeChild($element);
-            }
-        }
-
         // 移除内联事件、危险 URL 和危险 CSS。
         $uriAttributes = ['href', 'src', 'xlink:href', 'action', 'formaction', 'poster'];
         foreach ($xpath->query('//*') as $node) {
@@ -5898,9 +5854,6 @@ class ThemeEditor extends BackendController
             $session->setData('preview_theme_id', $themeId);
             $session->setData('preview_theme_area', $editorArea);
 
-            // 获取原始编译后的 HTML
-            $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
-            
             $this->assign('editor_mode', false);
             $this->assign('theme_id', $themeId);
             $this->assign('layout_type', $layoutType);
@@ -5919,7 +5872,9 @@ class ThemeEditor extends BackendController
             $this->assign('meta', $meta);
             
             $this->welineTheme->load($themeId);
-            $html = $this->renderUnifiedLayoutPreview($themeId, (string)$layoutType, (string)$layoutOption, $editorArea);
+            $html = $editorArea === PreviewContextService::AREA_FRONTEND
+                ? $this->renderFrontendLayoutTemplateHtml($themeId, (string)$layoutType, (string)$layoutOption)
+                : $this->renderUnifiedLayoutPreview($themeId, (string)$layoutType, (string)$layoutOption, $editorArea);
 
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => true,
@@ -5932,106 +5887,6 @@ class ThemeEditor extends BackendController
                 'message' => $e->getMessage(),
             ]), 'save_compiled_layout');
         }
-    }
-
-    /**
-     * 获取布局预览 (iframe) - 编译后的页面带编辑模式
-     *
-     * 禁用后端布局包装，直接输出前端布局 HTML（与 MediaManager iframe 一致）。
-     * 若主题目录无 backend 则默认用 frontend 布局。
-     *
-     * 预览模式会读取草稿数据
-     */
-    public function getLayoutPreview()
-    {
-        $previewContextService = $this->getPreviewContextService();
-        $layoutType = (string)$this->request->getParam('layout_type', 'homepage');
-        if ($layoutType === '') {
-            $layoutType = 'homepage';
-        }
-        $layoutOption = (string)$this->request->getParam('layout_option', 'default');
-        if ($layoutOption === '') {
-            $layoutOption = 'default';
-        }
-        $editorArea = $this->resolveRequestedEditorArea(PreviewContextService::AREA_BACKEND);
-        $context = $this->persistEditorContext([
-            'frontend_theme_id' => (int)$this->request->getParam('frontend_theme_id', 0),
-            'backend_theme_id' => (int)$this->request->getParam('backend_theme_id', 0),
-            'editor_area' => $editorArea,
-            'shell' => PreviewContextService::SHELL_THEME_EDITOR,
-            'preview_mode' => (string)$this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE),
-            'status' => (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
-            'version_id' => (int)$this->request->getParam('version_id', 0) ?: null,
-            'scope' => (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
-            'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
-            'target_value' => $layoutType,
-        ]);
-        $themeId = $previewContextService->getThemeIdForArea($editorArea, $context, true);
-        if ($editorArea === PreviewContextService::AREA_BACKEND
-            && !$this->resolveThemeLayoutExists($themeId, $editorArea, $layoutType, $layoutOption)
-        ) {
-            // backend 预览请求可能沿用 frontend 的 layout_type（如 homepage），
-            // 优先回退到可视化 Dashboard 画布；仅当 Dashboard 布局也不存在时才使用通用默认壳层。
-            $layoutType = $this->resolveThemeLayoutExists(
-                $themeId,
-                $editorArea,
-                ThemeLayout::PAGE_TYPE_DASHBOARD,
-                'default'
-            ) ? ThemeLayout::PAGE_TYPE_DASHBOARD : ThemeLayout::PAGE_TYPE_DEFAULT;
-            $layoutOption = 'default';
-            $context['target_value'] = $layoutType;
-        }
-        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-        $session->setData('preview_theme_id', $themeId);
-        $session->setData('preview_theme_area', $editorArea);
-
-        $this->request->setData('skip_view_file_cache', true);
-
-        try {
-            w_cache('view')->clear();
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-            \Weline\Theme\Helper\ThemeData::clearCache();
-        } catch (\Throwable $e) {
-        }
-
-        $html = $this->renderUnifiedLayoutPreview(
-            $themeId,
-            $layoutType,
-            $layoutOption,
-            $editorArea,
-            $context
-        );
-        if ($html === '') {
-            return $this->dispatchThemeEditorResultAfter(
-                $this->renderLayoutNotFoundError($layoutType, $layoutOption),
-                'layout_preview'
-            );
-        }
-
-        if ($editorArea === PreviewContextService::AREA_BACKEND && !$this->isDashboardPreviewLayout($layoutType)) {
-            $html = $this->injectBackendStructuralSlots($html);
-        }
-
-        // ControllerFetchFileAfter 在控制器返回后读取 layoutType 并套用真实后台布局。
-        // renderUnifiedLayoutPreview 会恢复临时状态，因此此处为最终响应重新声明一次。
-        $this->layoutType = $layoutType;
-
-        return $this->dispatchThemeEditorResultAfter(
-            $this->injectEditorModeAssets($html),
-            'layout_preview'
-        );
-    }
-
-    /**
-     * 注入编辑模式的 CSS 和 JS 到 HTML 中
-     */
-    private function injectEditorModeAssets(string $html): string
-    {
-        $injector = ObjectManager::getInstance(\Weline\Theme\Service\EditorModeAssetInjector::class);
-        return $injector->inject(
-            $html,
-            (string)($this->getTemplate()->getData('preview_exit_url') ?? ''),
-        );
     }
 
     private function injectBackendStructuralSlots(string $html): string
@@ -7786,7 +7641,9 @@ HTML;
     }
 
     /**
-     * Render preview layout via shared fetch lifecycle.
+     * Backend layout preview from the real backend layout template.
+     * Frontend visual canvas must use the real storefront path
+     * ({@see renderFrontendLayoutTemplateHtml}).
      */
     private function renderUnifiedLayoutPreview(
         int $themeId,
@@ -7795,6 +7652,12 @@ HTML;
         string $editorArea,
         array $context = []
     ): string {
+        if ($editorArea === PreviewContextService::AREA_FRONTEND) {
+            throw new \RuntimeException(
+                (string)__('Frontend layout HTML must use the real layout template path.')
+            );
+        }
+
         $previousLayoutType = $this->layoutType;
 
         try {
@@ -7821,8 +7684,6 @@ HTML;
             );
 
             $this->assign('editor_mode', true);
-            $this->assign('theme_preview_content', true);
-            $this->assign('layout_preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE);
             $this->assign('preview_mode', false); // 部件布尔：整页预览与店面保真，禁止 is-preview
             $this->assign('theme_id', $themeId);
             $this->assign('preview_context', $context);
@@ -7888,79 +7749,14 @@ HTML;
                     PreviewContextService::AREA_BACKEND
                 );
             }
-            $layoutIdentity = $this->resolveVersionLayoutIdentity($context);
-            $editorModeFlag = \trim((string)$this->request->getParam('editor_mode', ''));
-            $isEditorMode = ($editorModeFlag === '1' || \strtolower($editorModeFlag) === 'true');
-            // Editor discards prebuilt content to keep nested w:slot shells. Skip that
-            // throwaway build so request-memo gates are not claimed then starved — not a
-            // preview-only skip of Hook/widget storefront delivery.
-            if ($isEditorMode) {
-                $previewPayload = [
-                    'content' => '',
-                    'meta' => [],
-                    'page_type' => $layoutType,
-                    'status' => (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT),
-                    'used_seed' => false,
-                ];
-            } else {
-                /** @var ThemePreviewContentRenderer $previewContentRenderer */
-                $previewContentRenderer = ObjectManager::getInstance(ThemePreviewContentRenderer::class);
-                $previewPayload = $previewContentRenderer->build(
-                    $themeId,
-                    $layoutType,
-                    (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT),
-                    $versionId > 0 ? $versionId : null,
-                    $layoutIdentity,
-                    $typedEditorContext,
-                );
-            }
-            $this->assign(
-                'content',
-                // Same rule as ThemePreview\Content: editor must keep nested slot shells.
-                $isEditorMode ? '' : (string)($previewPayload['content'] ?? ''),
+            $this->applyThemeLayoutRuntimeContextToRequest(array_merge(
+                $context,
+                $this->buildThemeLayoutRuntimeParams($this->resolveVersionLayoutIdentity($context))
+            ));
+            $html = (string)$this->fetch(
+                'Weline_Theme::theme/backend/layouts/' . $layoutType . '/' . $layoutOption . '.phtml'
             );
 
-            $layoutIdentify = $this->buildLayoutConfigIdentify($layoutType, $layoutOption);
-            $targetIdentify = $this->buildTargetLayoutConfigIdentify($editorArea, $layoutType, $layoutOption);
-            $layoutDefinitions = $this->loadLayoutParamDefinitions($this->welineTheme, $editorArea, $layoutType, $layoutOption, $layoutIdentify);
-            $layoutMeta = $this->getLayoutConfigValues(
-                $this->welineTheme,
-                $layoutIdentify,
-                (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
-                (string)$this->request->getParam('locale', '') ?: null,
-                $layoutDefinitions,
-                $targetIdentify
-            );
-            if ($typedEditorContext instanceof ThemeEditorContext) {
-                /** @var ThemeScopedPreviewResolver $scopedPreview */
-                $scopedPreview = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
-                $layoutMeta = $scopedPreview->resolveLayoutMeta(
-                    $typedEditorContext,
-                    (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT),
-                );
-            }
-            $layoutMeta = array_merge([
-                'showHeader' => true,
-                'showSidebar' => true,
-                'showFooter' => true,
-                'showRightSidebar' => true,
-                'showStatistics' => true,
-                'showFeatures' => true,
-                'showProducts' => true,
-                'showTestimonials' => true,
-                'showNews' => true,
-                'showPartners' => true,
-            ], $previewPayload['meta'], $layoutMeta);
-            if ($isEditorMode) {
-                unset($layoutMeta['content']);
-            }
-            $this->assign('meta', $layoutMeta);
-
-            $previewContentTemplate = $editorArea === PreviewContextService::AREA_BACKEND
-                ? 'Weline_Theme::templates/backend/theme-preview/content.phtml'
-                : 'Weline_Theme::templates/frontend/theme-preview/content.phtml';
-
-            $html = (string)$this->fetch($previewContentTemplate);
             return $typedEditorContext instanceof ThemeEditorContext
                 ? $this->injectScopedPreviewAppearance(
                     $html,
@@ -8169,54 +7965,57 @@ HTML;
     }
     
     /**
-     * 渲染布局预览HTML（用于提取插槽内容）
+     * Frontend layout HTML from the real layout template (storefront parity).
+     * Replaces the deleted theme-preview/content shell used by getOriginalSlotContent /
+     * compile-layout for frontend area.
+     *
+     * @param array<string, mixed> $context
      */
-    private function renderLayoutPreviewHtml(int $themeId, string $pageType, string $layoutType, string $layoutOption, array $context = []): string
-    {
+    private function renderFrontendLayoutTemplateHtml(
+        int $themeId,
+        string $layoutType,
+        string $layoutOption,
+        array $context = []
+    ): string {
         try {
             $session = ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
             $session->setData('preview_theme_id', $themeId);
             $session->setData('preview_theme_area', PreviewContextService::AREA_FRONTEND);
             $this->request->setGet('status', ThemeLayout::STATUS_DRAFT);
             $this->request->setGet('editor_area', PreviewContextService::AREA_FRONTEND);
+            $this->request->setGet('layout_type', $layoutType);
+            $this->request->setGet('layout_option', $layoutOption);
+            $this->request->setGet('theme_id', (string)$themeId);
             $this->applyThemeLayoutRuntimeContextToRequest($context);
 
-            return $this->renderUnifiedLayoutPreview(
-                $themeId,
-                $layoutType,
-                $layoutOption,
-                PreviewContextService::AREA_FRONTEND,
-                $context
-            );
-
             $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
-            
-            // 设置渲染参数（与getLayoutPreview()相同）
             $this->assign('editor_mode', true);
-            $this->assign('theme_preview_content', true);
-            $this->assign('layout_preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE);
             $this->assign('preview_mode', false);
             $this->assign('theme_id', $themeId);
-            $this->assign('page_type', $pageType);
+            $this->assign('page_type', $layoutType);
             $this->assign('layout_type', $layoutType);
-            $this->assign('meta', [
-                'showHeader' => true,
-                'showFooter' => true,
-                'showStatistics' => true,
-                'showFeatures' => true,
-                'showProducts' => true,
-                'showTestimonials' => true,
-                'showNews' => true,
-                'showPartners' => true,
-            ]);
-            
-            // 渲染模板（会触发插槽渲染事件，应用draft配置）
-            $html = $this->fetch($templatePath);
-            
-            return $html ?: '';
-        } catch (\Exception $e) {
+            $this->assign('layout_option', $layoutOption);
+            if ($this->getTemplate()->getData('meta') === null) {
+                $this->assign('meta', [
+                    'showHeader' => true,
+                    'showFooter' => true,
+                ]);
+            }
+
+            $html = (string)$this->fetch($templatePath);
+
+            return $html !== '' ? $html : '';
+        } catch (\Throwable) {
             return '';
         }
+    }
+
+    /**
+     * 渲染布局预览HTML（用于提取插槽内容）— 真实 frontend layout，非 content 壳。
+     */
+    private function renderLayoutPreviewHtml(int $themeId, string $pageType, string $layoutType, string $layoutOption, array $context = []): string
+    {
+        return $this->renderFrontendLayoutTemplateHtml($themeId, $layoutType, $layoutOption, $context);
     }
     
     /**
@@ -8229,8 +8028,6 @@ HTML;
             $this->applyThemeLayoutRuntimeContextToRequest($context);
             
             $this->assign('editor_mode', true);
-            $this->assign('theme_preview_content', true);
-            $this->assign('layout_preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE);
             $this->assign('preview_mode', false);
             $this->assign('theme_id', $themeId);
             $this->assign('page_type', $pageType);
@@ -8769,11 +8566,6 @@ HTML;
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $layoutOption = (string)($data['layout_option'] ?? $this->request->getParam('layout_option', 'default'));
         $frontendThemeId = (int)($data['frontend_theme_id'] ?? $data['theme_id'] ?? $this->request->getParam('frontend_theme_id', $this->request->getParam('theme_id', 0)));
-        $themePublicRoute = $this->normalizeThemePublicRoute(
-            (string)($data['theme_public_route']
-                ?? $data['preview_entity_route']
-                ?? $this->request->getParam('theme_public_route', $this->request->getParam('preview_entity_route', '')))
-        );
         $identity = $this->resolveVersionLayoutIdentity($data);
         if (!$frontendThemeId) {
             return $this->fetchJson([
@@ -8802,7 +8594,6 @@ HTML;
                 'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
                 'target_value' => $pageType,
                 'layout_option' => $layoutOption,
-                'theme_public_route' => $themePublicRoute,
                 'editor_context' => $typedEditorContext?->toArray(),
             ], $this->buildThemeLayoutRuntimeParams($identity)));
             $context = $this->getPreviewContextService()->ensureThemeIds($context, true, true);
@@ -8821,7 +8612,7 @@ HTML;
                 'message' => __('Preview started'),
                 'data' => [
                     'token' => $token,
-                    'preview_url' => $this->buildFrontendPreviewUrl($context, $pageType, $layoutOption, $themePublicRoute),
+                    'preview_url' => $this->buildFrontendPreviewUrl($context, $pageType, $layoutOption),
                     'context' => $context,
                     'expires_in' => 3600,
                 ],
@@ -8832,59 +8623,6 @@ HTML;
                 'message' => $e->getMessage(),
             ]);
         }
-    }
-
-    /**
-     * Reverse-resolve storefront path for any layout (fixed hub + slug samples).
-     * Route: /backend/theme-editor/preview-sample (POST)
-     */
-    public function postPreviewSample()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $layoutPath = \strtolower(\trim(\str_replace('\\', '/', (string)($data['layout_path']
-            ?? $data['layout_type']
-            ?? $data['page_type']
-            ?? '')), '/'));
-        $layoutOption = \trim((string)($data['layout_option'] ?? 'default'));
-        $preferredSlug = \strtolower(\trim((string)($data['preferred_slug'] ?? '')));
-        $websiteId = (int)($data['website_id'] ?? 0);
-        $locale = \trim((string)($data['locale'] ?? ''));
-
-        if ($layoutPath === '') {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少 layout_path'),
-            ]);
-        }
-
-        /** @var \Weline\Theme\Service\LayoutResolveService $resolve */
-        $resolve = ObjectManager::getInstance(\Weline\Theme\Service\LayoutResolveService::class);
-        $sample = $resolve->resolvePreviewSample(
-            $layoutPath,
-            $layoutOption !== '' ? $layoutOption : 'default',
-            $preferredSlug,
-            $websiteId,
-            $locale,
-        );
-
-        return $this->fetchJson([
-            'success' => true,
-            'data' => [
-                'preview_kind' => $resolve->previewKindForLayoutPath($layoutPath),
-                'preview_entity_route' => (string)($sample['preview_entity_route'] ?? ''),
-                'entity_slug' => (string)($sample['entity_slug'] ?? ''),
-                'sample_source' => (string)($sample['sample_source'] ?? 'none'),
-                'claimed' => (bool)($sample['claimed'] ?? false),
-            ],
-        ]);
     }
 
     public function postResolveNavigation()
@@ -9317,39 +9055,19 @@ HTML;
     private function buildFrontendPreviewUrl(
         array $context,
         string $pageType,
-        string $layoutOption = 'default',
-        string $themePublicRoute = ''
+        string $layoutOption = 'default'
     ): string {
         $token = \trim((string)($context['preview_token'] ?? ''));
         if ($token === '') {
             throw new \InvalidArgumentException((string)__('Preview token is required'));
         }
 
-        $publicRoute = $this->normalizeThemePublicRoute($themePublicRoute);
-        if ($publicRoute === '') {
-            $publicRoute = $this->normalizeThemePublicRoute((string)($context['theme_public_route'] ?? ''));
-        }
-        if ($publicRoute === '') {
-            $publicRoute = $this->normalizeThemePublicRoute(
-                (string)$this->request->getParam(
-                    'theme_public_route',
-                    $this->request->getParam('preview_entity_route', '')
-                )
-            );
-        }
-
         // Homepage must be "/" — getFrontendUrl('') reuses REQUEST_URI (query-bin under BinQuery).
         $baseUrl = $this->_url->getFrontendUrl(
-            $this->getThemePageTypeResolver()->getFrontendUrlPathForPreview($pageType, $publicRoute)
+            $this->getThemePageTypeResolver()->getFrontendUrlPathForPreview($pageType)
         );
 
         return $this->previewTokenService->getPreviewUrl($baseUrl, $token);
-    }
-
-    private function normalizeThemePublicRoute(string $route): string
-    {
-        // Preserve storefront path as given — never remap aliases; reject API/query-bin.
-        return $this->getThemePageTypeResolver()->normalizeStorefrontPublicRoute($route);
     }
 
     private function buildEditorShellUrl(array $context, string $pageType): string

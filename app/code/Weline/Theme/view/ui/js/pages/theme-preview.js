@@ -174,45 +174,101 @@ function initialize() {
     mount(document);
     bindPreviewExitButtons();
 
-    // Dense storefront hydrate would otherwise trip DEV delivery_storm; coalesce like ModuleLoader.
-    let mountScheduled = false;
+    // Dense storefront hydrate: disconnect + trailing idle (never double-rAF reobserve).
     const pendingMountRoots = new Set();
     const mountObserveOptions = { childList: true, subtree: true };
-    const observer = new MutationObserver((records) => {
-        try {
-            observer.disconnect();
-        } catch (_) {}
-        records.forEach((record) => record.addedNodes.forEach((node) => {
-            if (node instanceof Element) {
-                pendingMountRoots.add(node);
-            }
-        }));
-        if (mountScheduled) {
-            return;
-        }
-        mountScheduled = true;
-        const flush = () => {
-            mountScheduled = false;
-            const batch = Array.from(pendingMountRoots);
-            pendingMountRoots.clear();
-            batch.forEach((node) => {
-                if (node.isConnected) {
-                    mount(node);
-                }
-            });
-            try {
-                if (document.body) {
-                    observer.observe(document.body, mountObserveOptions);
-                }
-            } catch (_) {}
-        };
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => requestAnimationFrame(flush));
-        } else {
-            setTimeout(flush, 0);
-        }
-    });
-    observer.observe(document.body, mountObserveOptions);
+    if (!document.body) {
+        // no-op when body missing
+    } else {
+        const coalesce = (typeof window.Weline?.dom?.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : (typeof window.Weline?.observeMutationsCoalesced === 'function')
+            ? window.Weline.observeMutationsCoalesced
+            : function observeMutationsCoalescedFallback(spec) {
+                /* ARCH_MO_FALLBACK_START */
+                const options = (spec && spec.options) || { childList: true, subtree: true };
+                const idleTimeoutMs = 100;
+                let flushScheduled = false;
+                let idleHandle = null;
+                let timeoutHandle = null;
+                let disposed = false;
+                const clearTimers = () => {
+                    if (idleHandle != null && typeof window.cancelIdleCallback === 'function') {
+                        try { window.cancelIdleCallback(idleHandle); } catch (_) {}
+                        idleHandle = null;
+                    }
+                    if (timeoutHandle != null) {
+                        window.clearTimeout(timeoutHandle);
+                        timeoutHandle = null;
+                    }
+                };
+                const runFlush = () => {
+                    if (disposed) return;
+                    flushScheduled = false;
+                    clearTimers();
+                    try { mo.disconnect(); } catch (_) {}
+                    try { if (typeof spec.onFlush === 'function') spec.onFlush(); } finally {
+                        if (!disposed && document.body) {
+                            try { mo.observe(document.body, options); } catch (_) {}
+                        }
+                    }
+                };
+                const schedule = () => {
+                    if (disposed) return;
+                    clearTimers();
+                    flushScheduled = true;
+                    try { mo.disconnect(); } catch (_) {}
+                    timeoutHandle = window.setTimeout(() => {
+                        timeoutHandle = null;
+                        const run = () => {
+                            idleHandle = null;
+                            runFlush();
+                        };
+                        if (typeof window.requestIdleCallback === 'function') {
+                            idleHandle = window.requestIdleCallback(run, { timeout: 50 });
+                        } else {
+                            run();
+                        }
+                    }, idleTimeoutMs);
+                };
+                const mo = new MutationObserver((records) => {
+                    if (disposed) return;
+                    try { mo.disconnect(); } catch (_) {}
+                    if (typeof spec.onRecords === 'function') {
+                        try { spec.onRecords(records); } catch (_) {}
+                    }
+                    schedule();
+                });
+                try { mo.observe(document.body, options); } catch (_) {}
+                return {
+                    disconnect() {
+                        disposed = true;
+                        flushScheduled = false;
+                        clearTimers();
+                        try { mo.disconnect(); } catch (_) {}
+                    },
+                };
+                /* ARCH_MO_FALLBACK_END */
+            };
+        coalesce({
+            target: document.body,
+            options: mountObserveOptions,
+            idleTimeoutMs: 100,
+            onRecords(records) {
+                records.forEach((record) => record.addedNodes.forEach((node) => {
+                    if (node instanceof Element) pendingMountRoots.add(node);
+                }));
+            },
+            onFlush() {
+                const batch = Array.from(pendingMountRoots);
+                pendingMountRoots.clear();
+                // Only newly added roots — never remount(document) (feeds delivery_storm / starves parent microtasks).
+                batch.forEach((node) => {
+                    if (node.isConnected) mount(node);
+                });
+            },
+        });
+    }
 
     document.addEventListener('click', (event) => {
         const target = event.target instanceof Element ? event.target : null;

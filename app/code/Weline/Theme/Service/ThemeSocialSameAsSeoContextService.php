@@ -30,38 +30,45 @@ class ThemeSocialSameAsSeoContextService
         }
 
         $theme = ThemeData::getCurrentTheme();
-        if ($theme === null || (int) $theme->getId() <= 0) {
+        if ($theme !== null && (int) $theme->getId() > 0) {
+            $themeId = (int) $theme->getId();
+            $pageTypes = [];
+            $current = trim((string) ($context['page_type'] ?? ''));
+            if ($current === 'home') {
+                $current = ThemeLayout::PAGE_TYPE_HOME;
+            }
+            foreach ([$current, ThemeLayout::PAGE_TYPE_HOME, ThemeLayout::PAGE_TYPE_DEFAULT] as $pageType) {
+                $pageType = trim((string) $pageType);
+                if ($pageType === '' || isset($pageTypes[$pageType])) {
+                    continue;
+                }
+                $pageTypes[$pageType] = true;
+                try {
+                    $layout = $this->layoutService->getPublishedLayout($themeId, $pageType);
+                } catch (\Throwable) {
+                    continue;
+                }
+                $urls = $this->extractSocialUrls(is_array($layout) ? $layout : []);
+                if ($urls !== []) {
+                    return [
+                        'organization' => [
+                            'sameAs' => $urls,
+                        ],
+                    ];
+                }
+            }
+        }
+
+        $fallback = FooterDefaultLinksHelper::defaultSameAsUrls();
+        if ($fallback === []) {
             return [];
         }
 
-        $themeId = (int) $theme->getId();
-        $pageTypes = [];
-        $current = trim((string) ($context['page_type'] ?? ''));
-        if ($current === 'home') {
-            $current = ThemeLayout::PAGE_TYPE_HOME;
-        }
-        foreach ([$current, ThemeLayout::PAGE_TYPE_HOME, ThemeLayout::PAGE_TYPE_DEFAULT] as $pageType) {
-            $pageType = trim((string) $pageType);
-            if ($pageType === '' || isset($pageTypes[$pageType])) {
-                continue;
-            }
-            $pageTypes[$pageType] = true;
-            try {
-                $layout = $this->layoutService->getPublishedLayout($themeId, $pageType);
-            } catch (\Throwable) {
-                continue;
-            }
-            $urls = $this->extractSocialUrls(is_array($layout) ? $layout : []);
-            if ($urls !== []) {
-                return [
-                    'organization' => [
-                        'sameAs' => $urls,
-                    ],
-                ];
-            }
-        }
-
-        return [];
+        return [
+            'organization' => [
+                'sameAs' => $fallback,
+            ],
+        ];
     }
 
     /**

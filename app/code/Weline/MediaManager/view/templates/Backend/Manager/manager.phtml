@@ -116,7 +116,7 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
 </style>
 </notempty>
 <css>Weline_MediaManager::css/manager.css</css>
-<script src="@static(Weline_MediaManager::js/manager.js)&v=20260916-identity-bar-collapse2" defer></script>
+<script src="@static(Weline_MediaManager::js/manager.js)&v=20260918-statusbar-float" defer></script>
 
 <div class="mmf-wrap<notempty name="is_iframe"> mmf-iframe-mode</notempty>">
     <div class="mmf-chrome-backdrop" data-mmf-chrome-backdrop hidden aria-hidden="true"></div>
@@ -268,7 +268,7 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
             <div class="mmf-loading"><span class="mmf-spinner"></span><lang>Loading...</lang></div>
         </div>
 
-        <!-- 状态栏 -->
+        <!-- 状态栏：悬浮在文件区底部 -->
         <div class="mmf-statusbar">
             <span class="mmf-status-info"></span>
             <span class="mmf-status-size"></span>
@@ -373,6 +373,20 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
          data-w-viewport-padding="8"
          data-state="closed"
          role="menu" aria-hidden="true" hidden></div>
+</div>
+
+<!-- 拖入/粘贴时才出现的覆盖目标选择 -->
+<div class="mmf-overwrite-pick-overlay" id="mmf-overwrite-pick-overlay" hidden aria-hidden="true">
+    <div class="mmf-overwrite-pick-dialog" role="dialog" aria-modal="true" aria-labelledby="mmf-overwrite-pick-title">
+        <div class="mmf-overwrite-pick-title" id="mmf-overwrite-pick-title"><lang>指定覆盖目标（可选）</lang></div>
+        <p class="mmf-overwrite-pick-hint"><lang>可为每个入站文件搜索当前目录里要覆盖的已有文件；选定后只替换物理内容，目标文件名与元数据全部保留。不选则按新建上传。</lang></p>
+        <div class="mmf-overwrite-pick-rows" id="mmf-overwrite-pick-rows" data-mmf-overwrite-pick-rows></div>
+        <div class="mmf-overwrite-pick-error" id="mmf-overwrite-pick-error" role="alert" hidden></div>
+        <div class="mmf-overwrite-pick-actions">
+            <button type="button" class="mmf-btn" id="mmf-overwrite-pick-cancel"><lang>取消上传</lang></button>
+            <button type="button" class="mmf-btn mmf-btn-primary" id="mmf-overwrite-pick-confirm"><lang>继续</lang></button>
+        </div>
+    </div>
 </div>
 
 <!-- 对话框 -->
@@ -515,22 +529,35 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
         <div class="mmf-ai-save-title"><lang>保存图片</lang></div>
         <div class="mmf-ai-save-options">
             <label class="mmf-ai-save-option" id="mmf-ai-save-overwrite-wrap" style="display:none;">
-                <input type="radio" name="mmf_ai_save_mode" value="overwrite">
+                <input type="radio" name="mmf_ai_save_mode" value="overwrite" data-mmf-ai-save-mode>
                 <span><lang>覆盖原图</lang></span>
             </label>
             <label class="mmf-ai-save-option">
-                <input type="radio" name="mmf_ai_save_mode" value="save_as" checked>
+                <input type="radio" name="mmf_ai_save_mode" value="replace_target" data-mmf-ai-save-mode>
+                <span><lang>覆盖指定文件</lang></span>
+            </label>
+            <label class="mmf-ai-save-option">
+                <input type="radio" name="mmf_ai_save_mode" value="save_as" checked data-mmf-ai-save-mode>
                 <span><lang>另存为新文件</lang></span>
             </label>
         </div>
-        <label class="mmf-ai-field-label"><lang>文件名</lang></label>
-        <input type="text" class="mmf-ai-save-filename" id="mmf-ai-save-filename">
-        <label class="mmf-ai-field-label" for="mmf-ai-save-alt"><lang>默认 Alt（必填）</lang></label>
-        <input type="text" class="mmf-ai-save-metadata" id="mmf-ai-save-alt" required>
-        <label class="mmf-ai-field-label" for="mmf-ai-save-description"><lang>资源描述（必填）</lang></label>
-        <textarea class="mmf-ai-save-metadata" id="mmf-ai-save-description" rows="3" required></textarea>
-        <label class="mmf-ai-field-label" for="mmf-ai-save-caption"><lang>默认 Caption（可选）</lang></label>
-        <input type="text" class="mmf-ai-save-metadata" id="mmf-ai-save-caption">
+        <div class="mmf-ai-save-target-pick" id="mmf-ai-save-target-pick" hidden>
+            <label class="mmf-ai-field-label" for="mmf-ai-save-target-search"><lang>搜索当前目录文件</lang></label>
+            <input type="search" class="mmf-ai-save-filename" id="mmf-ai-save-target-search" autocomplete="off" placeholder="@lang{输入文件名过滤}">
+            <div class="mmf-overwrite-pick-candidates" id="mmf-ai-save-target-list" role="listbox" aria-label="@lang{覆盖目标列表}"></div>
+            <input type="hidden" id="mmf-ai-save-target-name" value="">
+            <p class="mmf-overwrite-pick-selected" id="mmf-ai-save-target-selected" hidden></p>
+        </div>
+        <div class="mmf-ai-save-newfile-fields" id="mmf-ai-save-newfile-fields">
+            <label class="mmf-ai-field-label"><lang>文件名</lang></label>
+            <input type="text" class="mmf-ai-save-filename" id="mmf-ai-save-filename">
+            <label class="mmf-ai-field-label" for="mmf-ai-save-alt"><lang>默认 Alt（必填）</lang></label>
+            <input type="text" class="mmf-ai-save-metadata" id="mmf-ai-save-alt" required>
+            <label class="mmf-ai-field-label" for="mmf-ai-save-description"><lang>资源描述（必填）</lang></label>
+            <textarea class="mmf-ai-save-metadata" id="mmf-ai-save-description" rows="3" required></textarea>
+            <label class="mmf-ai-field-label" for="mmf-ai-save-caption"><lang>默认 Caption（可选）</lang></label>
+            <input type="text" class="mmf-ai-save-metadata" id="mmf-ai-save-caption">
+        </div>
         <div class="mmf-ai-save-error" id="mmf-ai-save-error" role="alert" style="display:none;"></div>
         <div class="mmf-ai-save-actions">
             <button type="button" class="mmf-btn" id="mmf-ai-save-cancel"><lang>取消</lang></button>
@@ -739,6 +766,21 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
                 uploadOverwriteConfirmMessage: <?= $mmfJson(__('将替换「%{name}」的文件内容；已有多语言文案将保留。此操作不可撤销。')) ?>,
                 uploadOverwriteConfirm: <?= $mmfJson(__('确认覆盖')) ?>,
                 uploadConfirmNewName: <?= $mmfJson(__('确定')) ?>,
+                overwritePickTitle: <?= $mmfJson(__('指定覆盖目标（可选）')) ?>,
+                overwritePickHint: <?= $mmfJson(__('可为每个入站文件搜索当前目录里要覆盖的已有文件；选定后只替换物理内容，目标文件名与元数据全部保留。不选则按新建上传。')) ?>,
+                overwritePickIncoming: <?= $mmfJson(__('入站文件')) ?>,
+                overwritePickTarget: <?= $mmfJson(__('覆盖目标')) ?>,
+                overwritePickSearch: <?= $mmfJson(__('搜索当前目录文件')) ?>,
+                overwritePickNone: <?= $mmfJson(__('不覆盖（新建）')) ?>,
+                overwritePickClear: <?= $mmfJson(__('清除映射')) ?>,
+                overwritePickEmpty: <?= $mmfJson(__('当前目录没有可覆盖的文件')) ?>,
+                overwritePickNoMatch: <?= $mmfJson(__('没有匹配的文件')) ?>,
+                overwritePickSelected: <?= $mmfJson(__('已选目标：%{name}')) ?>,
+                overwritePickCancelUpload: <?= $mmfJson(__('取消上传')) ?>,
+                overwritePickContinue: <?= $mmfJson(__('继续')) ?>,
+                overwritePickDuplicateTarget: <?= $mmfJson(__('多个入站文件不能映射到同一个覆盖目标「%{name}」')) ?>,
+                aiSaveReplaceTarget: <?= $mmfJson(__('覆盖指定文件')) ?>,
+                aiSaveTargetRequired: <?= $mmfJson(__('请选择当前目录中要覆盖的文件')) ?>,
                 assetMetadataMissing: <?= $mmfJson(__('当前文件尚未建立可编辑的资源实体')) ?>,
                 assetMetadataEditorUnavailable: <?= $mmfJson(__('资源信息编辑器尚未就绪')) ?>,
                 assetDisplayNamePrompt: <?= $mmfJson(__('请填写当前语言下的资源名称。')) ?>,

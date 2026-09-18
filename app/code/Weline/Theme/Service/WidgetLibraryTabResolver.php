@@ -91,6 +91,16 @@ final class WidgetLibraryTabResolver
                 continue;
             }
             foreach ($value as $item) {
+                if (is_array($item)) {
+                    $nested = $item['id'] ?? $item['code'] ?? $item['name'] ?? null;
+                    if (!is_scalar($nested)) {
+                        continue;
+                    }
+                    $item = $nested;
+                }
+                if (!is_scalar($item)) {
+                    continue;
+                }
                 $code = self::normalizeCode((string)$item);
                 if ($code !== '') {
                     $codes[] = $code;

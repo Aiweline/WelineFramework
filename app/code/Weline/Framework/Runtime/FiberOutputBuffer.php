@@ -30,6 +30,27 @@ final class FiberOutputBuffer
     /** @var list<int> Native output-buffer baselines owned by non-persistent captures. */
     private static array $nonPersistentCaptureBaselines = [];
 
+    /**
+     * Persistent captures that must use nested native `ob_start` because a legacy
+     * caller buffer (e.g. `<w:form>` compiled `ob_start`) sits above the installed
+     * Fiber handler. Echoes never reach {@see handleChunk} until that layer is
+     * closed; a fiber frame would stay empty and `Template::ob_file` would return "".
+     *
+     * Baselines/modes are fiber-local so begin/end stay paired.
+     *
+     * @var \WeakMap<\Fiber, list<int>>|null
+     */
+    private static ?\WeakMap $fiberNativeNestedBaselines = null;
+
+    /** @var list<int> */
+    private static array $mainNativeNestedBaselines = [];
+
+    /** @var \WeakMap<\Fiber, list<'native'|'fiber'>>|null */
+    private static ?\WeakMap $fiberCaptureModes = null;
+
+    /** @var list<'native'|'fiber'> */
+    private static array $mainCaptureModes = [];
+
     private static ?int $memoryLimitBytes = null;
 
     private static int $missingFrameWarnings = 0;
@@ -102,6 +123,19 @@ final class FiberOutputBuffer
 
         self::ensureInstalled('begin_capture');
         self::flushInstalledBufferIntoCurrentFrame();
+
+        // `<w:form>` / Taglib children buffers open native layers above our handler.
+        // Echoes land in that native layer; a logical fiber frame would stay empty
+        // and nested Template::fetch would return "" (search type-dropdown, etc.).
+        if (self::mustUseNativeNestedCapture()) {
+            self::pushCaptureMode('native');
+            $baselines =& self::nativeNestedBaselinesRef();
+            $baselines[] = \ob_get_level();
+            \ob_start();
+            return;
+        }
+
+        self::pushCaptureMode('fiber');
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
             self::$mainBufferStack[] = new FiberOutputCaptureFrame();
@@ -117,28 +151,12 @@ final class FiberOutputBuffer
     public static function endCapture(): string
     {
         if (!Runtime::isPersistent()) {
-            $baseline = \array_pop(self::$nonPersistentCaptureBaselines);
-            if (!\is_int($baseline) || \ob_get_level() <= $baseline) {
-                return '';
-            }
+            return self::endNativeBaselineCapture(self::$nonPersistentCaptureBaselines);
+        }
 
-            // A legacy include may leak a nested native buffer. Fold only the
-            // layers created above this capture into our owned layer; never
-            // consume a caller/PHPUnit/FPM buffer below the recorded baseline.
-            while (\ob_get_level() > $baseline + 1) {
-                $before = \ob_get_level();
-                $nested = \ob_get_clean();
-                if (\ob_get_level() >= $before) {
-                    return '';
-                }
-                if (\is_string($nested) && $nested !== '') {
-                    echo $nested;
-                }
-            }
-
-            return \ob_get_level() === $baseline + 1
-                ? (string)\ob_get_clean()
-                : '';
+        $mode = self::popCaptureMode();
+        if ($mode === 'native') {
+            return self::endNativeBaselineCapture(self::nativeNestedBaselinesRef());
         }
 
         self::flushInstalledBufferIntoCurrentFrame();
@@ -178,28 +196,33 @@ final class FiberOutputBuffer
     public static function discardCapture(): void
     {
         if (!Runtime::isPersistent()) {
-            $baseline = \array_pop(self::$nonPersistentCaptureBaselines);
-            if (!\is_int($baseline)) {
-                return;
-            }
-            while (\ob_get_level() > $baseline) {
-                $before = \ob_get_level();
-                if (!@\ob_end_clean() || \ob_get_level() >= $before) {
-                    break;
-                }
-            }
+            self::discardNativeBaselineCapture(self::$nonPersistentCaptureBaselines);
+            RequestContext::notifyCaptureDiscarded();
             return;
         }
+
+        $mode = self::popCaptureMode();
+        if ($mode === 'native') {
+            self::discardNativeBaselineCapture(self::nativeNestedBaselinesRef());
+            RequestContext::notifyCaptureDiscarded();
+            return;
+        }
+
+        // Drain process-level chunks into the frame we are about to discard so they
+        // cannot leak into a sibling fiber's next capture after a mid-render Error.
+        self::flushInstalledBufferIntoCurrentFrame();
 
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
             if (self::$mainBufferStack !== []) {
                 \array_pop(self::$mainBufferStack);
             }
+            RequestContext::notifyCaptureDiscarded();
             return;
         }
 
         if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
+            RequestContext::notifyCaptureDiscarded();
             return;
         }
 
@@ -212,22 +235,18 @@ final class FiberOutputBuffer
         } else {
             self::$fiberBufferStacks[$fiber] = $stack;
         }
+        RequestContext::notifyCaptureDiscarded();
     }
 
     public static function resetCurrent(): void
     {
         if (!Runtime::isPersistent()) {
-            while (self::$nonPersistentCaptureBaselines !== []) {
-                $baseline = \array_pop(self::$nonPersistentCaptureBaselines);
-                while (\is_int($baseline) && \ob_get_level() > $baseline) {
-                    $before = \ob_get_level();
-                    if (!@\ob_end_clean() || \ob_get_level() >= $before) {
-                        break 2;
-                    }
-                }
-            }
+            self::discardAllNativeBaselineCaptures(self::$nonPersistentCaptureBaselines);
             return;
         }
+
+        self::discardAllNativeBaselineCaptures(self::nativeNestedBaselinesRef());
+        self::clearCaptureModes();
 
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
@@ -253,6 +272,13 @@ final class FiberOutputBuffer
     {
         if (!Runtime::isPersistent()) {
             $baseline = self::$nonPersistentCaptureBaselines[\array_key_last(self::$nonPersistentCaptureBaselines)] ?? null;
+            return \is_int($baseline) && \ob_get_level() > $baseline;
+        }
+
+        $modes = self::captureModesSnapshot();
+        if ($modes !== [] && $modes[\array_key_last($modes)] === 'native') {
+            $baselines = self::nativeNestedBaselinesSnapshot();
+            $baseline = $baselines[\array_key_last($baselines)] ?? null;
             return \is_int($baseline) && \ob_get_level() > $baseline;
         }
 
@@ -286,6 +312,7 @@ final class FiberOutputBuffer
 
         $statuses = \ob_get_status(true);
         $topStatus = $statuses !== [] ? $statuses[\array_key_last($statuses)] : [];
+        $nativeBaselines = self::nativeNestedBaselinesSnapshot();
 
         return [
             'persistent' => Runtime::isPersistent(),
@@ -299,6 +326,8 @@ final class FiberOutputBuffer
             'stack_depth' => $stackDepth,
             'top_bytes' => $topBytes,
             'main_depth' => \count(self::$mainBufferStack),
+            'native_nested_depth' => \count($nativeBaselines),
+            'capture_modes' => self::captureModesSnapshot(),
         ];
     }
 
@@ -533,6 +562,187 @@ final class FiberOutputBuffer
         if ($clearCaptureStacks) {
             self::$fiberBufferStacks = null;
             self::$mainBufferStack = [];
+            self::discardAllNativeBaselineCaptures(self::$mainNativeNestedBaselines);
+            self::$fiberNativeNestedBaselines = null;
+            self::$mainCaptureModes = [];
+            self::$fiberCaptureModes = null;
+        }
+    }
+
+    /**
+     * Only when a real caller buffer sits above the installed Fiber handler.
+     * Do not treat "handler temporarily inactive" as native-nest — that forced
+     * every template into native mode and broke begin/end pairing.
+     */
+    private static function mustUseNativeNestedCapture(): bool
+    {
+        return self::isInstalledBufferActive()
+            && \ob_get_level() > self::$installedLevel;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function &nativeNestedBaselinesRef(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return self::$mainNativeNestedBaselines;
+        }
+
+        self::$fiberNativeNestedBaselines ??= new \WeakMap();
+        if (!isset(self::$fiberNativeNestedBaselines[$fiber])) {
+            self::$fiberNativeNestedBaselines[$fiber] = [];
+        }
+        $baselines =& self::$fiberNativeNestedBaselines[$fiber];
+
+        return $baselines;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function nativeNestedBaselinesSnapshot(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return self::$mainNativeNestedBaselines;
+        }
+
+        if (self::$fiberNativeNestedBaselines === null || !isset(self::$fiberNativeNestedBaselines[$fiber])) {
+            return [];
+        }
+
+        return self::$fiberNativeNestedBaselines[$fiber];
+    }
+
+    /**
+     * @param 'native'|'fiber' $mode
+     */
+    private static function pushCaptureMode(string $mode): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$mainCaptureModes[] = $mode;
+            return;
+        }
+
+        self::$fiberCaptureModes ??= new \WeakMap();
+        $modes = self::$fiberCaptureModes[$fiber] ?? [];
+        $modes[] = $mode;
+        self::$fiberCaptureModes[$fiber] = $modes;
+    }
+
+    /**
+     * @return 'native'|'fiber'|null
+     */
+    private static function popCaptureMode(): ?string
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            $mode = \array_pop(self::$mainCaptureModes);
+
+            return \is_string($mode) ? $mode : null;
+        }
+
+        if (self::$fiberCaptureModes === null || !isset(self::$fiberCaptureModes[$fiber])) {
+            return null;
+        }
+
+        $modes = self::$fiberCaptureModes[$fiber];
+        $mode = \array_pop($modes);
+        if ($modes === []) {
+            unset(self::$fiberCaptureModes[$fiber]);
+        } else {
+            self::$fiberCaptureModes[$fiber] = $modes;
+        }
+
+        return \is_string($mode) ? $mode : null;
+    }
+
+    /**
+     * @return list<'native'|'fiber'>
+     */
+    private static function captureModesSnapshot(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return self::$mainCaptureModes;
+        }
+
+        if (self::$fiberCaptureModes === null || !isset(self::$fiberCaptureModes[$fiber])) {
+            return [];
+        }
+
+        return self::$fiberCaptureModes[$fiber];
+    }
+
+    private static function clearCaptureModes(): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$mainCaptureModes = [];
+            return;
+        }
+
+        if (self::$fiberCaptureModes !== null && isset(self::$fiberCaptureModes[$fiber])) {
+            unset(self::$fiberCaptureModes[$fiber]);
+        }
+    }
+
+    /**
+     * @param list<int> $baselines
+     */
+    private static function endNativeBaselineCapture(array &$baselines): string
+    {
+        $baseline = \array_pop($baselines);
+        if (!\is_int($baseline) || \ob_get_level() <= $baseline) {
+            return '';
+        }
+
+        // A legacy include may leak a nested native buffer. Fold only the
+        // layers created above this capture into our owned layer; never
+        // consume a caller/PHPUnit/FPM buffer below the recorded baseline.
+        while (\ob_get_level() > $baseline + 1) {
+            $before = \ob_get_level();
+            $nested = \ob_get_clean();
+            if (\ob_get_level() >= $before) {
+                return '';
+            }
+            if (\is_string($nested) && $nested !== '') {
+                echo $nested;
+            }
+        }
+
+        return \ob_get_level() === $baseline + 1
+            ? (string)\ob_get_clean()
+            : '';
+    }
+
+    /**
+     * @param list<int> $baselines
+     */
+    private static function discardNativeBaselineCapture(array &$baselines): void
+    {
+        $baseline = \array_pop($baselines);
+        if (!\is_int($baseline)) {
+            return;
+        }
+        while (\ob_get_level() > $baseline) {
+            $before = \ob_get_level();
+            if (!@\ob_end_clean() || \ob_get_level() >= $before) {
+                break;
+            }
+        }
+    }
+
+    /**
+     * @param list<int> $baselines
+     */
+    private static function discardAllNativeBaselineCaptures(array &$baselines): void
+    {
+        while ($baselines !== []) {
+            self::discardNativeBaselineCapture($baselines);
         }
     }
 

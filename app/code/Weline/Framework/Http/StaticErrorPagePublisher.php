@@ -22,6 +22,13 @@ final class StaticErrorPagePublisher
     public const DEFAULT_CONCURRENCY = 4;
 
     /**
+     * RequestContext flag while baking static 404/maintenance HTML.
+     * Hooks must not embed client-side multi-locale translation dictionaries —
+     * each snapshot is already SSR'd for one locale.
+     */
+    public const CTX_PUBLISHING = 'framework.http.static_error_page_publishing';
+
+    /**
      * @param callable(array{
      *     website_id: int,
      *     website_code: string,

@@ -26,6 +26,7 @@ class StateTest extends TestCore
         Context::enter(new Context());
         try {
             State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
             WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
                 'REQUEST_METHOD' => 'GET',
                 'REQUEST_URI' => '/products',
@@ -47,11 +48,64 @@ class StateTest extends TestCore
         } finally {
             State::resetLangLocalCache();
             State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
             Context::leave();
             if ($previous !== null) {
                 Context::enter($previous);
             }
         }
+    }
+
+    public function testGetLangAndCurrencyReuseParsedRouteWithoutPathLocale(): void
+    {
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
+        try {
+            State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
+            WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/catalog/product/view',
+                'HTTP_HOST' => 'example.test',
+            ]);
+            $context = Context::current();
+            $context->set('route.url_parsed', true);
+            $context->set('route.language', 'en_US');
+            $context->set('route.currency', 'USD');
+            WelineEnv::set('url_parsed', true, 'StateTest parsed route');
+            WelineEnv::set('user.lang', 'en_US', 'StateTest parsed route');
+            WelineEnv::set('user.currency', 'USD', 'StateTest parsed route');
+
+            self::assertSame('en_US', State::getLang());
+            self::assertSame('USD', State::getCurrency());
+        } finally {
+            State::resetLangLocalCache();
+            State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
+        }
+    }
+
+    public function testAllowedLanguageMapsStayIsolatedPerWebsiteScope(): void
+    {
+        State::clearProcessLocalizationCaches();
+        $mapsProperty = new \ReflectionProperty(State::class, 'allowedLanguageCodeMapsByScope');
+        $mapsProperty->setValue(null, [
+            'id:1' => ['en_us' => true],
+            'id:2' => ['zh_hans_cn' => true, 'ja_jp' => true],
+        ]);
+
+        $maps = $mapsProperty->getValue(null);
+        self::assertIsArray($maps);
+        self::assertTrue(isset($maps['id:1']['en_us']));
+        self::assertTrue(isset($maps['id:2']['ja_jp']));
+        self::assertFalse(isset($maps['id:1']['ja_jp']));
+
+        State::clearProcessLocalizationCaches();
+        self::assertSame([], $mapsProperty->getValue(null));
     }
 
     public function testGetStateCode()
@@ -384,14 +438,14 @@ class StateTest extends TestCore
             $map[strtolower($code)] = true;
         }
 
-        $scope = (string)\w_env('website_id', '')
-            . '|' . (string)\w_env('website.code', '')
-            . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', '');
-
-        $mapProperty = new \ReflectionProperty(State::class, 'allowedLanguageCodeMap');
-        $mapProperty->setValue(null, $map);
-        $scopeProperty = new \ReflectionProperty(State::class, 'allowedLanguageCodeScope');
-        $scopeProperty->setValue(null, $scope);
+        $scope = self::currentWebsiteScopeKeyForTest();
+        $mapsProperty = new \ReflectionProperty(State::class, 'allowedLanguageCodeMapsByScope');
+        $maps = $mapsProperty->getValue(null);
+        if (!\is_array($maps)) {
+            $maps = [];
+        }
+        $maps[$scope] = $map;
+        $mapsProperty->setValue(null, $maps);
     }
 
     /** @param list<string> $codes */
@@ -402,13 +456,20 @@ class StateTest extends TestCore
             $map[strtoupper($code)] = true;
         }
 
-        $scope = (string)\w_env('website_id', '')
-            . '|' . (string)\w_env('website.code', '')
-            . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', '');
+        $scope = self::currentWebsiteScopeKeyForTest();
+        $mapsProperty = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMapsByScope');
+        $maps = $mapsProperty->getValue(null);
+        if (!\is_array($maps)) {
+            $maps = [];
+        }
+        $maps[$scope] = $map;
+        $mapsProperty->setValue(null, $maps);
+    }
 
-        $mapProperty = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap');
-        $mapProperty->setValue(null, $map);
-        $scopeProperty = new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope');
-        $scopeProperty->setValue(null, $scope);
+    private static function currentWebsiteScopeKeyForTest(): string
+    {
+        $method = new \ReflectionMethod(State::class, 'currentWebsiteScopeKey');
+
+        return (string)$method->invoke(null);
     }
 }

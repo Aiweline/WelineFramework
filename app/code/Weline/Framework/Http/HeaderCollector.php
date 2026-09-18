@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http;
 
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Runtime\StateManager;
 
 class HeaderCollector implements HeaderCollectorInterface
@@ -250,11 +251,11 @@ class HeaderCollector implements HeaderCollectorInterface
             }
         } catch (\Throwable) {
         }
-        $https = $_SERVER['HTTPS'] ?? '';
-        if ($https !== '' && \strtolower((string)$https) !== 'off') {
+        $https = (string)(WelineEnv::server('HTTPS', '') ?? '');
+        if ($https !== '' && \strtolower($https) !== 'off') {
             return true;
         }
-        $proto = \strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        $proto = \strtolower((string)(WelineEnv::server('HTTP_X_FORWARDED_PROTO', '') ?? ''));
 
         return $proto === 'https';
     }

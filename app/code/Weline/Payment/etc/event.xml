@@ -9,13 +9,6 @@
                   shared="true"
                   sort="60"/>
     </event>
-    <event name="Weline_Theme::layout_preview_sample">
-        <observer name="Weline_Payment::layout_preview_sample"
-                  instance="Weline\Payment\Observer\LayoutPreviewSampleObserver"
-                  disabled="false"
-                  shared="true"
-                  sort="60"/>
-    </event>
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Payment::setup_upgrade_validate_payment_guide_i18n"
                   instance="Weline\Payment\Observer\SetupUpgradeValidatePaymentGuideI18n"

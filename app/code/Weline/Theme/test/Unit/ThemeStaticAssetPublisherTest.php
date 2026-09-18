@@ -109,7 +109,7 @@ class ThemeStaticAssetPublisherTest extends TestCore
     {
         /** @var Request $request */
         $request = ObjectManager::getInstance(Request::class);
-        $request->setServer('REQUEST_URI', '/theme/frontend/theme-preview/content');
+        $request->setServer('REQUEST_URI', '/theme/frontend/theme-preview/gateway?frontend_theme_id=990003&shell=preview');
         $request->setGet('frontend_theme_id', 990003);
         $request->setGet('editor_area', 'frontend');
         $request->setGet('shell', 'preview');

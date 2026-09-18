@@ -9,13 +9,6 @@
                   shared="true"
                   sort="20"/>
     </event>
-    <event name="Weline_Theme::layout_preview_sample">
-        <observer name="Weline_Product::layout_preview_sample"
-                  instance="Weline\Product\Observer\LayoutPreviewSampleObserver"
-                  disabled="false"
-                  shared="true"
-                  sort="20"/>
-    </event>
     <event name="Weline_DeveloperWorkspace::api_doc_collect_after">
         <observer name="Weline_Product::api_doc_demo"
                   instance="Weline\Product\Observer\ApiDocDemoObserver"

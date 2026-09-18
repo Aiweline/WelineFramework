@@ -40,4 +40,28 @@ final class WidgetLibraryTabResolverTest extends TestCase
             'is_ai_generated' => false,
         ]));
     }
+
+    public function testIgnoresNestedSupportArraysWithoutCastWarning(): void
+    {
+        $prev = set_error_handler(static function (int $severity, string $message): bool {
+            if (str_contains($message, 'Array to string conversion')) {
+                throw new \RuntimeException($message);
+            }
+            return false;
+        });
+        try {
+            self::assertSame('basic', WidgetLibraryTabResolver::resolve([
+                'module' => 'Weline_Theme',
+                'type' => 'theme_component',
+                'code' => 'basic/text',
+                'supports' => [['id' => 'builder-component'], 'content'],
+                'slots' => [['code' => 'logo'], 'header'],
+            ]));
+        } finally {
+            restore_error_handler();
+            if ($prev !== null) {
+                set_error_handler($prev);
+            }
+        }
+    }
 }

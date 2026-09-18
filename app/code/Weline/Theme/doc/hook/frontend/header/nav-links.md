@@ -81,7 +81,7 @@
 - `.header-nav-links`：导航容器
 - `.nav-links-list`：链接列表 `<ul>` 元素
 - `.nav-more-wrapper` / `.nav-more-btn` / `.nav-more-menu`（`#nav-more-dropdown`）：通用 menu 悬浮收纳超出宽度的链接
-- `#header-nav-fill` / `.header-nav-fill-inner` 与父槽 `.header-nav-right-slot` / `.header-nav-links-slot`：桌面宽屏按条目内容自适应宽度（`flex: 0 1 auto`），不与左侧分类 `flex: 1` 平分中间空白；左侧吃满剩余空间后再折叠「更多」。窄屏（≤992 换行 / ≤768 单行压缩）仍可由 `adjustNavLinks` 收进 More。
+- `#header-nav-fill` / `.header-nav-fill-inner` 与父槽 `.header-nav-right-slot` / `.header-nav-links-slot`：桌面宽屏按条目内容自适应宽度（`flex: 0 1 auto`），不与左侧分类 `flex: 1` 平分中间空白；左侧吃满剩余空间后再折叠「更多」。**单行互让**：左预算预留右簇自然宽，右按「主栏−左实占」；`clustersOnSeparateRows` 仅 `is-nav-stacked` 或明显跨行（阈值 `max(24, 左簇高×0.75)`），禁止同行 offsetTop 抖动跳过互让。窄屏两行栈（`is-nav-stacked` / ≤768）时，左右已分行则各自按该行 **100% 主栏内容宽** 算 More，放得下则隐藏。
 
 ## 注意事项
 

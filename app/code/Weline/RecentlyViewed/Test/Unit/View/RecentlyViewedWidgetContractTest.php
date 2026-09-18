@@ -40,6 +40,7 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('Never return a blank string', $source);
         self::assertStringContainsString('Keep visually hidden', $source);
         self::assertStringContainsString('RecentlyViewedService', $source);
+        self::assertStringContainsString('<w:product:card', $source);
         self::assertStringContainsString('data-weline-load="recentlyViewed"', $source);
         self::assertStringContainsString('"limit":24', $source);
         self::assertStringContainsString('@param limit {default=24', $source);

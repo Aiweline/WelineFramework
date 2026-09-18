@@ -281,7 +281,6 @@ foreach ($orphans as $orphan) {
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/theme/backend/theme-editor/layout-preview` | GET | 获取布局预览（iframe） |
 | `/theme/backend/theme-editor/compile-layout` | GET | 编译布局获取插槽信息 |
 | `/theme/backend/theme-editor/save-widget` | POST | 保存部件到插槽 |
 | `/theme/backend/theme-editor/render-widget` | POST | 渲染单个部件预览 |

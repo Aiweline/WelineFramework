@@ -29,8 +29,8 @@ final class HanfuDesignThemeOverrideContractTest extends TestCase
         $nav = (string)file_get_contents(
             $this->designRoot() . '/frontend/partials/header/nav-defaults.phtml'
         );
-        self::assertStringContainsString('女士汉服', $nav);
-        self::assertStringContainsString('认识长安的审美', $nav);
+        self::assertStringContainsString('全部衣裳', $nav);
+        self::assertStringContainsString('衣冠札记', $nav);
         self::assertStringContainsString('return [', $nav);
     }
 

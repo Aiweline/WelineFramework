@@ -48,13 +48,11 @@ try {
     ) {
         $isPreviewMode = true;
     }
-    $themePublicRoute = \trim(\str_replace('\\', '/', (string)$request->getParam('theme_public_route', '')), '/');
     $requestPath = \strtolower(\trim(\str_replace('\\', '/', (string)($request->getUrlPath() ?: $request->getUri() ?: '')), '/'));
     if (\str_contains($requestPath, '?')) {
         $requestPath = \explode('?', $requestPath, 2)[0];
     }
-    $hasPublicRoute = $themePublicRoute !== ''
-        || (bool)\preg_match('#^product/([a-z0-9][a-z0-9-]*)#', $requestPath)
+    $hasPublicRoute = (bool)\preg_match('#^product/([a-z0-9][a-z0-9-]*)#', $requestPath)
         || (int)$request->getParam('id', 0) > 0
         || \trim((string)$request->getParam('slug', '')) !== '';
 } catch (\Throwable) {
@@ -74,8 +72,7 @@ $storefrontOffers = is_array($storefrontOffers)
     : [];
 $selectedOfferUuid = trim((string)($this->getData('selected_offer_uuid') ?? ''));
 
-// Prefer catalog resolve (path/query/assigns) before editor mock. Skipping resolve when
-// theme_public_route is absent made bare-/product Policy shells stick on R43 forever.
+// Prefer catalog resolve (path/query/assigns) before editor mock.
 if ($offer === []) {
     $offer = StorefrontOfferResolver::resolve($this);
     $offer = is_array($offer) ? $offer : [];
@@ -231,6 +228,7 @@ $canPickCampaign = count($eligibleCampaigns) > 1;
 $stock = max(0, (int)($offer['stock'] ?? 0));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
+$currencyUnavailable = !empty($offer['currency_unavailable']);
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
 $shippingProfileCode = trim((string)($offer['shipping_profile_code']
     ?? ($offer['fulfillment_metadata']['shipping_profile_code'] ?? '')));
@@ -429,14 +427,8 @@ if ($shortDescription !== '') {
     }
 }
 $currencyCode = strtoupper(trim((string)($offer['currency'] ?? 'CNY')));
-$currencySymbol = match ($currencyCode) {
-    'CNY', 'RMB' => '¥',
-    'USD' => '$',
-    'EUR' => '€',
-    'GBP' => '£',
-    'JPY' => '¥',
-    default => $currencyCode . ' ',
-};
+$currencySymbol = \Weline\Currency\Helper\CurrencySymbol::forCode($currencyCode);
+$currencySymbolClientMap = \Weline\Currency\Helper\CurrencySymbol::clientMap();
 $priceWhole = (int) floor($minor / 100);
 $priceFraction = sprintf('%02d', $minor % 100);
 $stockLabel = $quoteOnly
@@ -444,7 +436,9 @@ $stockLabel = $quoteOnly
     : ($stock > 0
         ? ($stock <= 10 ? __('仅剩 %{1} 件', [$stock]) : __('有货'))
         : __('暂时缺货'));
-$stockTone = !$quoteOnly && $stock > 0 && $sellable ? 'in-stock' : 'out-stock';
+$stockTone = ($currencyUnavailable && $stock > 0) || (!$quoteOnly && $stock > 0 && $sellable)
+    ? 'in-stock'
+    : 'out-stock';
 $requiresShipping = !isset($offer['requires_shipping']) || !empty($offer['requires_shipping']);
 $showPrimeBadge = $sellable && $requiresShipping && !$quoteOnly;
 $maxQty = $quoteOnly ? 1 : max(1, min(30, $stock > 0 ? $stock : 30));
@@ -495,6 +489,10 @@ if ($productBreadcrumbs === []) {
          data-promotion-theme-id="<?= (int)$selectedCampaignThemeId ?>"
          data-catalog-price-minor="<?= (int)$catalogPriceMinor ?>"
          data-offer-price-minor="<?= (int)$minor ?>"
+         data-price="<?= $escape(number_format($minor / 100, 2, '.', '')) ?>"
+         data-pixel-value="<?= $escape(number_format($minor / 100, 2, '.', '')) ?>"
+         data-pixel-currency="<?= $escape($currencyCode) ?>"
+         data-currency="<?= $escape($currencyCode) ?>"
          data-quick-add="<?= $quickAdd ? '1' : '0' ?>"
          data-widget-module="Weline_Product"
          data-widget-code="product-info"
@@ -684,7 +682,9 @@ if ($productBreadcrumbs === []) {
 
                 <hr class="product-native-detail__divider">
 
-                <?php if ($minor > 0): ?>
+                <?php if ($currencyUnavailable): ?>
+                    <p class="product-native-detail__unavailable" data-testid="currency-unavailable"><?= __('当前货币暂不可用') ?></p>
+                <?php elseif ($minor > 0): ?>
                     <div class="product-native-detail__price-block">
                         <span class="product-native-detail__price-label"><?= __('价格') ?>:</span>
                         <span class="product-native-detail__price">
@@ -916,7 +916,7 @@ if ($productBreadcrumbs === []) {
                                 if ($variantSku !== '' && $variantLabel !== $variantSku) {
                                     $variantLabel .= ' · ' . $variantSku;
                                 }
-                                if (!(bool)($variant['sellable'] ?? false)) {
+                                if (!(bool)($variant['sellable'] ?? false) && empty($variant['currency_unavailable'])) {
                                     $variantLabel .= ' · ' . (string)__('暂不可购买');
                                 }
                                 ?>
@@ -937,7 +937,7 @@ if ($productBreadcrumbs === []) {
                    aria-label="<?= $escape(__('购买选项')) ?>"
                    data-deal-type="<?= $escape($dealDiscountType) ?>"
                    data-deal-value="<?= $escape((string)$dealDiscountValue) ?>">
-                <?php if ($minor > 0): ?>
+                <?php if ($minor > 0 && !$currencyUnavailable): ?>
                     <div class="product-native-detail__buybox-price">
                         <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
                         <span class="product-native-detail__price-whole"><?= $priceWhole ?></span>
@@ -984,7 +984,11 @@ if ($productBreadcrumbs === []) {
                     </p>
                 <?php endif; ?>
                 <p class="product-native-detail__delivery">
-                    <?= $sellable ? __('预计 2–5 个工作日送达') : __('当前规格暂不可售') ?>
+                    <?php if ($currencyUnavailable): ?>
+                        <?= __('当前货币暂不可用') ?>
+                    <?php else: ?>
+                        <?= $sellable ? __('预计 2–5 个工作日送达') : __('当前规格暂不可售') ?>
+                    <?php endif; ?>
                 </p>
 
                 <?php
@@ -998,7 +1002,7 @@ if ($productBreadcrumbs === []) {
                     <p class="product-native-detail__unavailable"><?= $escape($offerMessage) ?></p>
                 <?php endif; ?>
 
-                <?php if (!$quoteOnly): ?>
+                <?php if (!$quoteOnly && !$currencyUnavailable): ?>
                     <div class="product-native-detail__qty-row"<?= $sellable ? '' : ' hidden' ?>>
                         <label class="product-native-detail__qty-label" for="<?= $escape($qtyFieldId) ?>">
                             <?= __('数量') ?>:
@@ -1054,7 +1058,7 @@ if ($productBreadcrumbs === []) {
                         ?>
                     <?php endif; ?>
                 </w:slot>
-                <?php if (!$isPreviewMode && !$quoteOnly): ?>
+                <?php if (!$isPreviewMode && !$quoteOnly && !$currencyUnavailable): ?>
                     <?php
                     // Theme slot injections can early-return empty when widget data bag lacks offer.
                     // Failsafe CTAs use the parent product-info offer; JS moves them into the slot if empty.
@@ -1250,7 +1254,7 @@ if ($productBreadcrumbs === []) {
         </div>
     </div>
 
-    <?php if (!$quickAdd && !$quoteOnly && !$isPreviewMode): ?>
+    <?php if (!$quickAdd && !$quoteOnly && !$isPreviewMode && !$currencyUnavailable): ?>
         <?php
         // Sticky dock proxies live Cart/Checkout CTAs — no second commerce source.
         $stickyAddLabel = ($sellable && $offerUuid !== '') ? __('加入购物车') : __('暂不可售');
@@ -2203,7 +2207,8 @@ if ($productBreadcrumbs === []) {
         background: var(--color-bg-primary, #fffefa);
         border: 1px solid var(--color-border-default, #d4cfc5);
         border-radius: var(--pdp-radius, 4px);
-        overflow: hidden;
+        /* 禁 overflow:hidden：长拼版/竖图会被壳裁顶裁底（#402 用户已验「又裁减」） */
+        overflow: visible;
         box-shadow: var(--shadow-sm, 0 1px 2px color-mix(in srgb, var(--color-text-primary, #1c1c1c) 6%, transparent));
     }
     /* 图文左右对照：有字详情图旁放可翻译文案（grid 技能：≥640px 双列） */
@@ -3844,6 +3849,9 @@ if ($productBreadcrumbs === []) {
             const next = Object.assign({}, offer, {
                 stock: live.stock,
                 sellable: live.sellable,
+                currency_unavailable: live.currency_unavailable != null
+                    ? !!live.currency_unavailable
+                    : !!offer.currency_unavailable,
                 quote_only: live.quote_only,
                 currency: live.currency || offer.currency,
                 message: live.message,
@@ -3909,6 +3917,25 @@ if ($productBreadcrumbs === []) {
         } catch (error) {
             // Embedded catalog snapshot remains usable when live refresh fails.
         }
+    }
+
+    function isOfferStocked(offer) {
+        if (!offer || offer.quote_only) {
+            return false;
+        }
+        const stock = Math.max(0, Number(offer.stock) || 0);
+        if (offer.currency_unavailable) {
+            return stock > 0;
+        }
+        return isOfferPurchasable(offer);
+    }
+
+    function isOptionStocked(axisCode, axisValue, current) {
+        const probe = Object.assign({}, current);
+        probe[axisCode] = axisValue;
+        return offers.some(function (offer) {
+            return combinationMatches(offer.combination || {}, probe) && isOfferStocked(offer);
+        });
     }
 
     function isOfferPurchasable(offer) {
@@ -3993,8 +4020,13 @@ if ($productBreadcrumbs === []) {
         return normalizeSelection(best.combination || desired);
     }
 
+    const currencySymbolMap = <?= json_encode($currencySymbolClientMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || {};
     function currencySymbol(code) {
-        switch (String(code || '').toUpperCase()) {
+        const normalized = String(code || '').toUpperCase().trim();
+        if (normalized !== '' && currencySymbolMap[normalized]) {
+            return String(currencySymbolMap[normalized]);
+        }
+        switch (normalized) {
             case 'CNY':
             case 'RMB':
             case 'JPY':
@@ -4006,7 +4038,7 @@ if ($productBreadcrumbs === []) {
             case 'GBP':
                 return '£';
             default:
-                return String(code || '') + ' ';
+                return normalized !== '' ? normalized : '¥';
         }
     }
 
@@ -4064,6 +4096,9 @@ if ($productBreadcrumbs === []) {
     }
 
     function renderPrice(offerOrMinor, currency) {
+        if (offerOrMinor && typeof offerOrMinor === 'object' && offerOrMinor.currency_unavailable) {
+            return;
+        }
         const priced = (offerOrMinor && typeof offerOrMinor === 'object')
             ? priceFromOffer(offerOrMinor)
             : applyDealToMinor(offerOrMinor);
@@ -4073,8 +4108,19 @@ if ($productBreadcrumbs === []) {
         const whole = Math.floor(Math.max(0, Number(priced.minor) || 0) / 100);
         const fraction = String(Math.max(0, Number(priced.minor) || 0) % 100).padStart(2, '0');
         const symbol = currencySymbol(displayCurrency);
-        // HelpPay 快捷购买等读 data-offer-price-minor（须与现价同步）。
-        root.setAttribute('data-offer-price-minor', String(Math.max(0, Number(priced.minor) || 0)));
+        // HelpPay / Visitor pixel：minor 权威 + major/currency 镜像（规格切换须同步）。
+        const offerMinor = Math.max(0, Number(priced.minor) || 0);
+        const offerMajor = (offerMinor / 100).toFixed(2);
+        root.setAttribute('data-offer-price-minor', String(offerMinor));
+        root.setAttribute('data-price', offerMajor);
+        root.setAttribute('data-pixel-value', offerMajor);
+        if (displayCurrency) {
+            const code = String(displayCurrency).trim().toUpperCase();
+            if (code) {
+                root.setAttribute('data-pixel-currency', code);
+                root.setAttribute('data-currency', code);
+            }
+        }
         if (offerOrMinor && typeof offerOrMinor === 'object') {
             const catalog = Math.max(0, Number(offerOrMinor.catalog_price_minor) || 0);
             if (catalog > 0) {
@@ -4219,7 +4265,6 @@ if ($productBreadcrumbs === []) {
             return;
         }
         const stock = Math.max(0, Number(offer.stock) || 0);
-        const sellable = !!offer.sellable;
         const quoteOnly = !!offer.quote_only;
         stockNode.classList.remove('product-native-detail__stock--in-stock', 'product-native-detail__stock--out-stock');
         if (quoteOnly) {
@@ -4227,7 +4272,7 @@ if ($productBreadcrumbs === []) {
             stockNode.classList.add('product-native-detail__stock--out-stock');
             return;
         }
-        if (stock > 0 && sellable) {
+        if (isOfferStocked(offer)) {
             stockNode.textContent = stock <= 10
                 // __() defaults args='' and would strip %{1} to empty; keep sentinel for JS replace.
                 ? (<?= json_encode((string)__('仅剩 %{1} 件', ['%{1}']), JSON_UNESCAPED_UNICODE) ?>).replace('%{1}', String(stock))
@@ -4636,6 +4681,9 @@ if ($productBreadcrumbs === []) {
 
     function renderPurchaseButtons(offer) {
         const exactOffer = offer && findExactOffer(selection);
+        if (exactOffer && exactOffer.currency_unavailable) {
+            return;
+        }
         const quoteOnly = !!(exactOffer && exactOffer.quote_only);
         const purchasable = !!(exactOffer && isOfferPurchasable(exactOffer) && exactOffer.global_offer_uuid);
         const deliveryNode = root.querySelector('.product-native-detail__delivery');
@@ -4740,14 +4788,14 @@ if ($productBreadcrumbs === []) {
             const axisValue = button.dataset.variantValue || '';
             const selected = selection[axisCode] === axisValue;
             const exists = isOptionAvailable(axisCode, axisValue, selection);
-            const purchasable = isOptionPurchasable(axisCode, axisValue, selection);
+            const stocked = isOptionStocked(axisCode, axisValue, selection);
             const quoteOnlyOption = isOptionQuoteOnly(axisCode, axisValue, selection);
             button.classList.toggle('is-selected', selected);
             button.classList.toggle('is-disabled', !exists);
-            button.classList.toggle('is-out-of-stock', exists && !purchasable && !quoteOnlyOption);
+            button.classList.toggle('is-out-of-stock', exists && !stocked && !quoteOnlyOption);
             button.setAttribute('aria-current', selected ? 'true' : 'false');
             button.disabled = !exists;
-            if (exists && !purchasable && !quoteOnlyOption) {
+            if (exists && !stocked && !quoteOnlyOption) {
                 const baseLabel = button.dataset.variantLabel || axisValue;
                 button.setAttribute('title', outOfStockLabel);
                 button.setAttribute('aria-label', baseLabel + ' · ' + outOfStockLabel);
@@ -4955,7 +5003,7 @@ if ($productBreadcrumbs === []) {
         const priceNode = modal.querySelector('[data-quote-field="price"]');
         if (priceWrap && priceNode) {
             priceWrap.hidden = minor <= 0;
-            priceNode.textContent = currency + ' ' + (minor / 100).toFixed(2);
+            priceNode.textContent = currencySymbol(currency) + (minor / 100).toFixed(2);
         }
         const campaignWrap = modal.querySelector('[data-quote-field="campaign-wrap"]');
         const campaignNode = modal.querySelector('[data-quote-field="campaign"]');

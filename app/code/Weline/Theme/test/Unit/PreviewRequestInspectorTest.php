@@ -35,12 +35,12 @@ class PreviewRequestInspectorTest extends TestCase
 
     public function testIsEditorModeDetectsQueryFlag(): void
     {
-        $on = new PreviewRequestInspector($this->createRequest('/theme/frontend/theme-preview/content', [
+        $on = new PreviewRequestInspector($this->createRequest('/', [
             'editor_mode' => '1',
         ]));
         $this->assertTrue($on->isEditorMode());
 
-        $truthy = new PreviewRequestInspector($this->createRequest('/theme/frontend/theme-preview/content', [
+        $truthy = new PreviewRequestInspector($this->createRequest('/catalog/product/view', [
             'editor_mode' => 'true',
         ]));
         $this->assertTrue($truthy->isEditorMode());
@@ -49,8 +49,9 @@ class PreviewRequestInspectorTest extends TestCase
     public function testPreviewShellRouteAllowsStoredPreviewContextButBlocksCookieTokenOnThemeEditor(): void
     {
         $inspector = new PreviewRequestInspector(
-            $this->createRequest('/theme/backend/theme-editor/layout-preview', [
+            $this->createRequest('/', [
                 'editor_mode' => '1',
+                'shell' => 'theme-editor',
             ])
         );
 

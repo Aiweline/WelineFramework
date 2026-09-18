@@ -48,6 +48,7 @@ final class StorefrontVariantAvailabilityService
                     'combination' => \is_array($offer['combination'] ?? null) ? $offer['combination'] : [],
                     'stock' => (int)($offer['stock'] ?? 0),
                     'sellable' => !empty($offer['sellable']),
+                    'currency_unavailable' => !empty($offer['currency_unavailable']),
                     'quote_only' => !empty($offer['quote_only']),
                     'unit_price_minor' => (int)($offer['unit_price_minor'] ?? 0),
                     'currency' => (string)($offer['currency'] ?? 'CNY'),

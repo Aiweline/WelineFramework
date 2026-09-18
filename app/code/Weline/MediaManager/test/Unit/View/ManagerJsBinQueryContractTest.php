@@ -110,9 +110,19 @@ final class ManagerJsBinQueryContractTest extends TestCase
         );
         self::assertStringContainsString("t('fileSizeExceeded'", $js);
         self::assertMatchesRegularExpression(
-            '/findOversizedUploadFile\(fileList\)[\s\S]*resolveUploadNameConflicts\(files, targetHash\)[\s\S]*requestUploadMetadata\(resolvedFiles, overwriteFlags\)/',
+            '/findOversizedUploadFile\(fileList\)[\s\S]*source === \'drop\' \|\| source === \'paste\'[\s\S]*promptOptionalOverwriteTargets\(files, targetHash\)[\s\S]*resolveUploadNameConflicts\(mapped\.files, targetHash, mapped\.overwriteFlags\)[\s\S]*requestUploadMetadata\(resolvedFiles, overwriteFlags\)/',
             $js
         );
+        self::assertStringContainsString('function promptOptionalOverwriteTargets(fileList, targetHash)', $js);
+        self::assertStringContainsString('function directoryChildFiles(targetHash)', $js);
+        self::assertStringContainsString('mmf-overwrite-pick-overlay', $template);
+        self::assertStringContainsString('data-mmf-overwrite-pick-rows', $template);
+        self::assertStringNotContainsString('mmf-overwrite-dock', $template);
+        self::assertStringContainsString('mmf-ai-save-target-pick', $template);
+        self::assertStringContainsString("value=\"replace_target\"", $template);
+        self::assertStringContainsString('function syncAiSaveModeFields()', $js);
+        self::assertStringContainsString('function renderAiSaveTargetCandidates()', $js);
+        self::assertStringContainsString("t('overwritePickDuplicateTarget'", $js);
         self::assertStringContainsString("t('uploadModePrompt')", $js);
         self::assertStringContainsString("upload: t('confirmUploadOnly')", $js);
         self::assertStringContainsString("translate: t('uploadWithOneClickTranslate')", $js);
@@ -134,7 +144,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
             '/function confirmUploadName\([\s\S]*?ensureUploadFileExtension\(/',
             $js
         );
-        self::assertStringContainsString('function resolveUploadNameConflicts(fileList, targetHash)', $js);
+        self::assertStringContainsString('function resolveUploadNameConflicts(fileList, targetHash, presetOverwriteFlags)', $js);
         self::assertStringContainsString("t('uploadNameConflictMessage'", $js);
         self::assertStringContainsString("t('uploadOverwriteExisting')", $js);
         self::assertStringContainsString("t('uploadOverwriteConfirmMessage'", $js);

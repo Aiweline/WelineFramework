@@ -226,6 +226,13 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         // 收集完成，释放事件大数组引用以降低内存峰值（后续仅用 pending_* 与 loaded_*）
         $eventDataArray = [];
 
+        // 仍挂在 pending_method_acls 的方法级权限：父级已齐则落 pending_method_level_acls，
+        // 避免 processModule 结束 unset 时静默丢弃（Theme scope_* 曾因此升级后消失）。
+        if (!empty($this->pending_method_acls[$module])) {
+            foreach (\array_keys($this->pending_method_acls[$module]) as $pendingClass) {
+                $this->processPendingMethodAcls($module, (string)$pendingClass);
+            }
+        }
         // 不在此处按模块落库：execute() 末尾 flushAllPendingAclsBatched 一次批量 upsert。
         // 释放仅用于收集期的内存索引。
         unset($this->loaded_controller_acl_names[$module], $this->pending_method_acls[$module]);
@@ -348,12 +355,16 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         
         // 设置路由信息
         $this->setRouteInfo($acl, $data, $type);
+        // 方法级 #[Acl] 默认未带 is_backend/is_enable；必须从路由事件回填，
+        // 否则 ResourceAuthorizationService 会因 is_backend=0 拒绝超管旁路。
+        $acl->setIsEnable((bool)($data->getData('is_enable') ?? true))
+            ->setIsBackend((bool)($data->getData('is_backend') ?? false));
         
         // 收集到批量保存数组，不立即保存
         if (!isset($this->pending_method_level_acls[$module])) {
             $this->pending_method_level_acls[$module] = [];
         }
-        $this->pending_method_level_acls[$module][] = $acl->getData();
+        $this->pending_method_level_acls[$module][] = $this->normalizeAclDataForPersistence($acl->getData());
     }
 
     /**
@@ -676,6 +687,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             
             // 设置路由信息
             $this->setRouteInfo($acl, $data, $type);
+            $acl->setIsEnable((bool)($data->getData('is_enable') ?? true))
+                ->setIsBackend((bool)($data->getData('is_backend') ?? false));
             
             // 收集到批量保存数组，不立即保存
             if (!isset($this->pending_method_level_acls[$module])) {

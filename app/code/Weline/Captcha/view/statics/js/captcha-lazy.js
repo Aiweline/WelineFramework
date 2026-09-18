@@ -11,9 +11,8 @@
  * the same URL returns 200 when opened alone.
  *
  * MutationObserver: document-wide childList/attributes fire densely during deferred
- * widget load (region.list / header modules). DEV weline.js trips delivery_storm at
- * >40 deliveries / ~250ms. Always disconnect+coalesce scans; pause observer while we
- * write DOM (replaceWith / stylesheet / Form.mount) so our own mutations never re-enter.
+ * widget load (region.list / header modules). Use Weline.observeMutationsCoalesced
+ * (disconnect + trailing idle 100ms); pause via handle.withPaused while writing DOM.
  */
 (function (w, d) {
     'use strict';
@@ -36,13 +35,15 @@
     var visibilityState = typeof WeakMap === 'function' ? new WeakMap() : null;
     var inflightByUrl = Object.create(null);
     var ensurePromiseByHost = typeof WeakMap === 'function' ? new WeakMap() : null;
+    var mutationHandle = null;
     var mutationObserver = null;
-    var observerPaused = 0;
-    var scanScheduled = false;
 
     function pauseObserver() {
-        observerPaused += 1;
-        if (mutationObserver && observerPaused === 1) {
+        if (mutationHandle && typeof mutationHandle.pause === 'function') {
+            mutationHandle.pause();
+            return;
+        }
+        if (mutationObserver) {
             try {
                 mutationObserver.disconnect();
             } catch (_error) {
@@ -51,10 +52,11 @@
     }
 
     function resumeObserver() {
-        if (observerPaused > 0) {
-            observerPaused -= 1;
+        if (mutationHandle && typeof mutationHandle.resume === 'function') {
+            mutationHandle.resume();
+            return;
         }
-        if (mutationObserver && observerPaused === 0 && !scanScheduled) {
+        if (mutationObserver) {
             try {
                 mutationObserver.observe(d.documentElement, OBSERVE_OPTIONS);
             } catch (_error) {
@@ -63,6 +65,9 @@
     }
 
     function withObserverPaused(fn) {
+        if (mutationHandle && typeof mutationHandle.withPaused === 'function') {
+            return mutationHandle.withPaused(fn);
+        }
         pauseObserver();
         try {
             return fn();
@@ -78,25 +83,32 @@
     }
 
     function scheduleDomScan() {
-        if (scanScheduled) {
+        if (mutationHandle && typeof mutationHandle.kick === 'function') {
+            mutationHandle.kick();
             return;
         }
-        scanScheduled = true;
+        // Fallback without coalesced handle: trailing idle 100ms (never double-rAF).
         pauseObserver();
+        if (scheduleDomScan._timer) {
+            w.clearTimeout(scheduleDomScan._timer);
+            scheduleDomScan._timer = null;
+        }
         var flush = function () {
+            scheduleDomScan._timer = null;
             try {
                 runDomScan();
             } finally {
-                scanScheduled = false;
                 resumeObserver();
             }
         };
-        if (typeof w.requestAnimationFrame === 'function') {
-            w.requestAnimationFrame(function () {
-                w.requestAnimationFrame(flush);
-            });
+        if (typeof w.requestIdleCallback === 'function') {
+            // Quiet window first; do not use rIC({timeout:100}) alone.
+            scheduleDomScan._timer = w.setTimeout(function () {
+                scheduleDomScan._timer = null;
+                scheduleDomScan._idle = w.requestIdleCallback(flush, { timeout: 50 });
+            }, 100);
         } else {
-            w.setTimeout(flush, 0);
+            scheduleDomScan._timer = w.setTimeout(flush, 100);
         }
     }
 
@@ -520,12 +532,29 @@
         d.addEventListener('weline:captcha:refresh-requested', onRefreshEvent);
         d.addEventListener('weline:captcha:degrade', onDegradeEvent);
         if (typeof MutationObserver === 'function') {
-            mutationObserver = new MutationObserver(function () {
-                // Dense page mutations (widgets / region.list) would otherwise exceed
-                // DEV delivery_storm; disconnect immediately and coalesce into one scan.
-                scheduleDomScan();
-            });
-            mutationObserver.observe(d.documentElement, OBSERVE_OPTIONS);
+            var observeApi = (w.Weline && w.Weline.dom && typeof w.Weline.dom.observe === 'function')
+                ? w.Weline.dom.observe
+                : (w.Weline && typeof w.Weline.observeMutationsCoalesced === 'function'
+                    ? w.Weline.observeMutationsCoalesced
+                    : null);
+            if (observeApi) {
+                mutationHandle = observeApi({
+                    target: d.documentElement,
+                    options: OBSERVE_OPTIONS,
+                    idleTimeoutMs: 100,
+                    onFlush: function () {
+                        runDomScan();
+                    },
+                });
+                mutationObserver = mutationHandle.observer;
+            } else {
+                /* ARCH_MO_FALLBACK_START */
+                mutationObserver = new MutationObserver(function () {
+                    scheduleDomScan();
+                });
+                mutationObserver.observe(d.documentElement, OBSERVE_OPTIONS);
+                /* ARCH_MO_FALLBACK_END */
+            }
         }
         return api;
     }

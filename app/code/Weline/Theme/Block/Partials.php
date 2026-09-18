@@ -1447,6 +1447,12 @@ class Partials extends Block
             return;
         }
 
+        // Same contract as SlotRendererService / Template: never yield with
+        // unflushed process-level chunks, or peer fibers steal/discard HTML.
+        if (!\Weline\Framework\Runtime\FiberOutputBuffer::flushBeforeYield()) {
+            return;
+        }
+
         self::$fiberRenderYieldAt[$fiber] = $now;
         SchedulerSystem::yield();
     }

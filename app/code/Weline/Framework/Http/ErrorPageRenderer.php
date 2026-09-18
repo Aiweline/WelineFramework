@@ -17,6 +17,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 
 final class ErrorPageRenderer
 {
@@ -336,7 +337,7 @@ final class ErrorPageRenderer
      */
     private static function includeTemplate(string $file, array $vars): string
     {
-        \ob_start();
+        FiberOutputBuffer::beginCapture();
         try {
             // Expose both camelCase and legacy names for site overrides.
             $statusCode = (int)$vars['statusCode'];
@@ -353,9 +354,9 @@ final class ErrorPageRenderer
             $isDev = (bool)$vars['isDev'];
             $accent = (string)$vars['accent'];
             include $file;
-            return (string)\ob_get_clean();
+            return FiberOutputBuffer::endCapture();
         } catch (\Throwable) {
-            \ob_end_clean();
+            FiberOutputBuffer::discardCapture();
             return '';
         }
     }
@@ -545,9 +546,6 @@ HTML;
                     $requestUri = '';
                 }
             }
-            if ($requestUri === '') {
-                $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
-            }
             if ($requestUri !== '') {
                 $uriPath = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: '');
                 $uriQuery = (string)(\parse_url($requestUri, \PHP_URL_QUERY) ?: '');
@@ -575,9 +573,6 @@ HTML;
                     } catch (\Throwable) {
                         $host = '';
                     }
-                }
-                if ($host === '') {
-                    $host = (string)($_SERVER['HTTP_HOST'] ?? '');
                 }
             }
 

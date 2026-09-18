@@ -273,9 +273,9 @@ switch,switch
 部分发货,"Partial Shipment"
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
-我的订单,"My Orders"
 订单留言,"Order note"
 如有特殊要求请留言,"Leave a message if you have special requirements"
+我的订单,"My Orders"
 查看订单进度与支付状态,"View order progress and payment status"
 已关闭,Closed
 未知状态,"unknown status"

@@ -106,14 +106,24 @@ if ($brands === []) {
                 $rawLink = trim((string)($catalogLink !== '' ? $catalogLink : ($brand['link'] ?? '')));
                 $linkIsAbsolute = false;
                 $linkPath = '';
+                $linkHref = '';
                 if ($rawLink !== '') {
                     if (preg_match('#^(?:https?:)?//#i', $rawLink) === 1) {
                         $linkIsAbsolute = true;
                         $linkPath = LegacyMediaUrl::sanitize($rawLink);
+                        $linkHref = $linkPath;
                     } else {
-                        // blog/* (no leading slash) so @url / <base> apply locale+currency.
+                        // blog/* (no leading slash) so locale+currency apply via Url service.
+                        // Avoid @url inside templates that may be re-included from closures.
                         $sanitizedLink = LegacyMediaUrl::sanitize($rawLink);
                         $linkPath = ltrim($sanitizedLink !== '' ? $sanitizedLink : $rawLink, '/');
+                        try {
+                            /** @var \Weline\Framework\Http\Url $url */
+                            $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+                            $linkHref = (string)$url->getUrl($linkPath);
+                        } catch (\Throwable) {
+                            $linkHref = '/' . $linkPath;
+                        }
                     }
                 }
                 $sourceUrl = LegacyMediaUrl::sanitize($brand['source_url'] ?? ($canonical['source_url'] ?? ''));
@@ -138,10 +148,10 @@ if ($brands === []) {
                          data-technique="<?= $esc($name) ?>"
                          data-source-url="<?= $esc($sourceUrl) ?>"
                          data-license="<?= $esc($license) ?>">
-                    <?php if ($linkIsAbsolute && $linkPath !== ''): ?>
-                        <a class="heritage-primary" href="<?= $esc($linkPath) ?>" title="<?= $esc($name) ?>">
-                    <?php elseif ($linkPath !== ''): ?>
-                        <a class="heritage-primary" href="@url{$linkPath}" title="<?= $esc($name) ?>">
+                    <?php if ($linkIsAbsolute && $linkHref !== ''): ?>
+                        <a class="heritage-primary" href="<?= $esc($linkHref) ?>" title="<?= $esc($name) ?>">
+                    <?php elseif ($linkHref !== ''): ?>
+                        <a class="heritage-primary" href="<?= $esc($linkHref) ?>" title="<?= $esc($name) ?>">
                     <?php else: ?>
                         <div class="heritage-primary">
                     <?php endif; ?>
@@ -161,7 +171,7 @@ if ($brands === []) {
                                 <span class="heritage-caption brand-caption"><?= $esc($caption) ?></span>
                             <?php endif; ?>
                         </span>
-                    <?= $linkPath !== '' ? '</a>' : '</div>' ?>
+                    <?= $linkHref !== '' ? '</a>' : '</div>' ?>
 
                     <?php if ($sourceUrl !== ''): ?>
                         <a class="heritage-source" href="<?= $esc($sourceUrl) ?>" target="_blank" rel="noopener noreferrer"

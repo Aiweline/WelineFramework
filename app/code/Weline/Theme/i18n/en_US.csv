@@ -4,7 +4,6 @@
 "Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.","Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result."
 "Layout path resolve","Layout path resolve"
 "Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty.","Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty."
-"Layout preview sample","Layout preview sample"
 字体子集预热收集,"Font subset warm-up collection"
 "系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。","Triggered before system upgrade warm-up. Each module view/fonts is automatically scanned by default; additional paths or languages ​​can be appended to fonts / languages. Existing language subsets will skip rebuilding."
 "Theme 查询器不支持的操作：%{1}","Operations not supported by Theme queryer: %{1}"
@@ -685,8 +684,6 @@ FAQ/常见问题,FAQ
 订单尚未完成,订单尚未完成
 结账成功,结账成功
 页面,页面
-"Theme 预览需要有效 Token 或后台登录状态。","Theme preview requires a valid token or an authenticated backend session."
-"Theme 预览缺少冻结的 ScopeIdentity。","Theme preview requires a frozen ScopeIdentity."
 "缺少预览 Token","Missing Preview Token"
 "预览 Token 无效或已过期","预览 Token 无效或已过期"
 "预览 Token 无法写入 Cookie","预览 Token 无法写入 Cookie"
@@ -841,7 +838,6 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 重命名失败,"Rename failed"
 缺少前端主题ID,"Missing frontend theme ID"
 "Preview started","Preview started"
-"缺少 layout_path","缺少 layout_path"
 "Missing navigation target","Missing navigation target"
 "Missing preview token","Missing preview token"
 "Preview token is invalid or expired","Preview token is invalid or expired"
@@ -1053,60 +1049,21 @@ Dashboard,Dashboard
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
 加入收藏,"Add to Favorites"
 加入对比,"Add to Compare"
 快速查看,"Quick View"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-分类,Classification
-汉服分类展示图,"Hanfu category showcase image"
-查看全部,"View all"
-请填写视频地址,请填写视频地址
-请粘贴嵌入代码（iframe）或视频链接,请粘贴嵌入代码（iframe）或视频链接
-"请填写自托管视频地址（mp4 等）","请填写自托管视频地址（mp4 等）"
-无法识别该视频地址，请检查链接是否正确,无法识别该视频地址，请检查链接是否正确
-"YouTube 视频","YouTube 视频"
-"Vimeo 视频","Vimeo 视频"
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-"在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览","在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览"
-件商品,"items of goods"
-查看全部新品,"View all new products"
-商品,Products
-查看规格图,查看规格图
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-购物车是空的,"Shopping cart is empty"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-继续购物,"Continue shopping"
-小计,Subtotal
-去结算,"Proceed to Checkout"
-正在前往结算...,"Proceeding to checkout..."
-查看购物车,"View cart"
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-关闭通知,"Close notification"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 面包屑,"bread crumbs"
-点击配置此部件,"Click to configure this widget"
-无模板,"No template"
-选择作用范围,"Select scope."
-搜索作用范围,"Search scope."
-未找到匹配作用范围,"No matching scope found."
+"寻衣 · 形制 · 织绣","寻衣 · 形制 · 织绣"
+"东方衣冠 · 全球配送","东方衣冠 · 全球配送"
+帮助中心,"Help Center"
+订单跟踪,"Order Tracking"
+打开菜单,"Open menu"
+长,长
+寻衣,寻衣
+收藏,Favorite
+登录,"Log in"
+衣囊,衣囊
+主导航,"Main navigation"
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
@@ -1126,6 +1083,9 @@ NEW,NEW
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1177,12 +1137,16 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
+分类,Classification
+汉服分类展示图,"Hanfu category showcase image"
+查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1192,8 +1156,12 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
+购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
+小计,Subtotal
+查看购物车,"View cart"
+去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1224,6 +1192,14 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+请填写视频地址,请填写视频地址
+请粘贴嵌入代码（iframe）或视频链接,请粘贴嵌入代码（iframe）或视频链接
+"请填写自托管视频地址（mp4 等）","请填写自托管视频地址（mp4 等）"
+无法识别该视频地址，请检查链接是否正确,无法识别该视频地址，请检查链接是否正确
+"YouTube 视频","YouTube 视频"
+"Vimeo 视频","Vimeo 视频"
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+"在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览","在左侧「视频地址」填入 YouTube / Vimeo 链接后即可预览"
 欢迎回来,"Welcome back"
 登录后继续浏览优惠与订单,"Continue browsing deals and orders after signing in"
 "安全登录 · 订单与优惠同步","Secure sign-in · Orders and offers stay in sync"
@@ -1258,16 +1234,20 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday & Work"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
 客户服务,"Customer Service"
-主导航,"Main navigation"
 分类菜单,"Category menu"
 快捷导航,"Quick navigation"
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1284,6 +1264,7 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+查看全部新品,"View all new products"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 距离结束,"Ends in"
 精选轮播,"Featured Carousel"
@@ -1296,7 +1277,6 @@ Weline,Weline
 产品列表、文章、自定义内容,"Product list, articles, custom content"
 购物车、最近浏览、订阅,"Shopping cart, recently viewed items, subscriptions"
 客户评价、品牌Logo、FAQ等,"Customer reviews, brand logo, FAQs, etc."
-打开菜单,"Open menu"
 Logo,Logo
 搜索框,"Search box"
 用户区域,"User area"
@@ -1310,10 +1290,23 @@ Logo,Logo
 面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
+商品,Products
+查看规格图,查看规格图
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+继续购物,"Continue shopping"
+正在前往结算...,"Proceeding to checkout..."
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+关闭通知,"Close notification"
 全球配送，售后无忧,全球配送，售后无忧
-帮助中心,"Help Center"
-订单跟踪,"Order Tracking"
-收藏,Favorite
 热门分类,"Popular Categories"
 热卖精选,热卖精选
 特色推荐,"Featured Recommendations"
@@ -1324,6 +1317,10 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1565,10 +1562,6 @@ JSON格式数组,"JSON format array"
 恢复继承,"Restore inheritance"
 选择布局类型,"Select layout type"
 选择布局选项,"Select layout options"
-预览取样,预览取样
-选择店面取样路由,选择店面取样路由
-"活动首页 /promotion","活动首页 /promotion"
-"取样 deals /promotion/deals","取样 deals /promotion/deals"
 配置语言,"Configuration language"
 更多,More
 版本历史,"Version History"
@@ -1688,6 +1681,8 @@ Favicon,Favicon
 搜索变量名或色值,"Search variable name or color"
 另存为我的盘,"Save as my disk"
 保存当前我的盘,"Save current my disk"
+点击配置此部件,"Click to configure this widget"
+无模板,"No template"
 前台主题,"Frontend Theme"
 后台主题,"Backend Theme"
 已选,Selected
@@ -2368,6 +2363,13 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 正在压缩备份文件...,"Compressing backup file..."
 当前主题未安装：卸载失败！,"Current theme not installed: uninstall failed!"
 卸载主题,"Uninstall Theme"
+无效语种：%{lang},无效语种：%{lang}
+"已清除 404 静态指纹 %{count} 个（--force）","已清除 404 静态指纹 %{count} 个（--force）"
+"=== 发布前台 404 静态页 ===","=== 发布前台 404 静态页 ==="
+"前台 404 静态页发布完成：%{count} 个快照，耗时 %{sec}s","前台 404 静态页发布完成：%{count} 个快照，耗时 %{sec}s"
+"仅发布语种：%{lang}（站 %{code}）","仅发布语种：%{lang}（站 %{code}）"
+"抽检 %{path}：%{kb} KB，词典袋=%{bag}","抽检 %{path}：%{kb} KB，词典袋=%{bag}"
+"发布前台 404 静态页（website×locale，与 setup:upgrade 后置同源）","发布前台 404 静态页（website×locale，与 setup:upgrade 后置同源）"
 "已合编 theme=%{id} area=%{area} hash=%{hash} empty=%{empty}","Compiled theme=%{id} area=%{area} hash=%{hash} empty=%{empty}"
 "主题整盘合编结束，共 %{n} 次","The theme compilation is completed, a total of %{n} times"
 当前主题未安装：激活失败！,"Current theme not installed: activation failed!"
@@ -2395,6 +2397,17 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+选择作用范围,"Select scope."
+搜索作用范围,"Search scope."
+未找到匹配作用范围,"No matching scope found."
+"Layout preview sample","Layout preview sample"
+"缺少 layout_path","缺少 layout_path"
+预览取样,预览取样
+选择店面取样路由,选择店面取样路由
+"活动首页 /promotion","活动首页 /promotion"
+"取样 deals /promotion/deals","取样 deals /promotion/deals"
+"Theme 预览需要有效 Token 或后台登录状态。","Theme preview requires a valid token or an authenticated backend session."
+"Theme 预览缺少冻结的 ScopeIdentity。","Theme preview requires a frozen ScopeIdentity."
 自动登录,Auto-login
 评价页,评价页
 退货,"Return the goods"
@@ -2451,7 +2464,6 @@ SSL安全,"SSL security"
 "Modules provide a storefront sample route for shell_plus_slug layouts (e.g. promotion/deals) used by start-preview.","Modules provide a storefront sample route for shell_plus_slug layouts (e.g. promotion/deals) used by start-preview."
 "Layout canvas body hydrate (deprecated)","Layout canvas body hydrate (deprecated)"
 "Deprecated. Theme hydrates editor canvas via StorefrontSampleCanvasHydrator (preview_sample → real controller, content-only). Do not register module observers.","Deprecated. Theme hydrates editor canvas via StorefrontSampleCanvasHydrator (preview_sample → real controller, content-only). Do not register module observers."
-登录,"Log in"
 个人资料,"Personal information"
 这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,"This is the default placeholder for personal information. After the membership module is accessed, it will be replaced with the real information form, account security and address entry."
 您已退出登录,"You are logged out"
@@ -3935,3 +3947,4 @@ Chiffon,Chiffon
 其他政策,"Other policies"
 无障碍声明,"Accessibility statement"
 配送政策,"Shipping policy"
+部件库加载失败，请稍后重试,"Widget library failed to load. Please try again."

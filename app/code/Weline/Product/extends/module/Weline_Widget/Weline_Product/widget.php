@@ -373,4 +373,65 @@ return [
             ],
         ],
     ],
+    'best-sellers-hero' => [
+        'name' => '热销榜页头',
+        'description' => '热销榜页深色页头：眉题、标题、导语、件数与背景图均可配置',
+        'type' => 'banner',
+        'code' => 'best-sellers-hero',
+        'area' => 'frontend',
+        'template' => 'Weline_Product::templates/frontend/widgets/best-sellers-hero.phtml',
+        'page_layouts' => ['best_sellers'],
+        'position' => ['content'],
+        'slot' => 'best-sellers-hero',
+        'supports' => [
+            'layout-best-sellers-hero',
+            'layout-best-sellers-main',
+            'layout-best-sellers-content',
+            'banner',
+            'content',
+        ],
+        // 默认观感由 best_sellers 布局槽内嵌 <w:widget> 提供（同 homepage-hero）；
+        // 禁止再声明 required default_injections，否则无 template_ref 的布局行会与模板壳叠成双页头。
+        'params' => [
+            'eyebrow' => [
+                'default' => '本站人气排行',
+                'type' => 'string',
+                'label' => '眉题',
+            ],
+            'title' => [
+                'default' => '热销榜',
+                'type' => 'string',
+                'label' => '标题',
+            ],
+            'lede' => [
+                'default' => '按店面热度排序的热销商品，帮你快速找到大家都在买的好物。',
+                'type' => 'textarea',
+                'label' => '导语',
+            ],
+            'count_template' => [
+                'default' => '共 %{1} 件热销商品',
+                'type' => 'string',
+                'label' => '件数文案',
+                'description' => '用 %{1} 表示实际件数',
+            ],
+            'show_count' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '显示件数',
+            ],
+            'background_image' => [
+                'default' => '',
+                'type' => 'media_image',
+                'label' => '背景图片',
+                'description' => '推荐 1920×400',
+                'media_options' => [
+                    'default_directory' => 'banner',
+                    'aspect_ratio' => '1920/400',
+                    'recommend_width' => '1920',
+                    'recommend_height' => '400',
+                    'aspect_ratio_tolerance' => '0.15',
+                ],
+            ],
+        ],
+    ],
 ];

@@ -15,6 +15,14 @@ use Weline\Websites\Model\WebsiteLanguage;
 final class LocalizationProvider implements LocalizationProviderInterface
 {
     private const FALLBACK_CACHE_PREFIX = 'websites.localization_provider.fallback.v1.';
+    private const PROCESS_FALLBACK_MAX = 256;
+
+    /**
+     * 进程级：website_id + dimension → codes（同 Worker 多请求共享）。
+     *
+     * @var array<string, array<int, string>>
+     */
+    private static array $processFallbackByKey = [];
 
     public function priority(): int
     {
@@ -70,30 +78,74 @@ final class LocalizationProvider implements LocalizationProviderInterface
         return null;
     }
 
+    public static function clearProcessCache(): void
+    {
+        self::$processFallbackByKey = [];
+    }
+
     /**
      * Backend and bootstrap requests may know the website id before a full
      * WebsiteData snapshot has been installed. Cache that fallback lookup in
-     * the current request, including an intentionally empty result.
+     * the process (keyed by website) and mirror into the current request.
      *
      * @param callable(): array $loader
      * @return array<int, string>
      */
     private function fallbackCodes(string $dimension, int $websiteId, callable $loader): array
     {
-        if (RequestContext::getId() === null) {
-            return $loader();
+        $processKey = $dimension . '.' . $websiteId;
+        if (\array_key_exists($processKey, self::$processFallbackByKey)) {
+            $codes = self::$processFallbackByKey[$processKey];
+            $this->rememberRequestFallback($dimension, $websiteId, $codes);
+
+            return $codes;
         }
 
-        $key = self::FALLBACK_CACHE_PREFIX . $dimension . '.' . $websiteId;
-        if (RequestContext::has($key)) {
-            $codes = RequestContext::get($key, []);
-            return \is_array($codes) ? $codes : [];
+        if (RequestContext::getId() !== null) {
+            $key = self::FALLBACK_CACHE_PREFIX . $dimension . '.' . $websiteId;
+            if (RequestContext::has($key)) {
+                $codes = RequestContext::get($key, []);
+                $codes = \is_array($codes) ? $codes : [];
+                self::rememberProcessFallback($processKey, $codes);
+
+                return $codes;
+            }
         }
 
         $codes = $loader();
-        RequestContext::set($key, $codes);
+        self::rememberProcessFallback($processKey, $codes);
+        $this->rememberRequestFallback($dimension, $websiteId, $codes);
 
         return $codes;
+    }
+
+    /**
+     * @param array<int, string> $codes
+     */
+    private function rememberRequestFallback(string $dimension, int $websiteId, array $codes): void
+    {
+        if (RequestContext::getId() === null) {
+            return;
+        }
+        RequestContext::set(self::FALLBACK_CACHE_PREFIX . $dimension . '.' . $websiteId, $codes);
+    }
+
+    /**
+     * @param array<int, string> $codes
+     */
+    private static function rememberProcessFallback(string $processKey, array $codes): void
+    {
+        if (\count(self::$processFallbackByKey) >= self::PROCESS_FALLBACK_MAX
+            && !\array_key_exists($processKey, self::$processFallbackByKey)
+        ) {
+            self::$processFallbackByKey = \array_slice(
+                self::$processFallbackByKey,
+                -((int)(self::PROCESS_FALLBACK_MAX / 2)),
+                null,
+                true,
+            );
+        }
+        self::$processFallbackByKey[$processKey] = $codes;
     }
 
     private function websiteId(): ?int

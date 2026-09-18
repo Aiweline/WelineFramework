@@ -509,6 +509,112 @@
         return message || String(fallback || '请求失败');
     };
 
+    const BACKEND_ACL_DENIED_CODE = 'backend_acl_denied';
+    const BACKEND_ACL_EXCEPTION_MARK = 'FrontendWorkerBackendAuthorizationException';
+    const BACKEND_ACL_DEFAULT_MESSAGE = '当前后台账号无权执行该操作。';
+
+    const readErrorEnvelope = (error) => {
+        const responseData = error && error.response && error.response.data
+            ? error.response.data
+            : null;
+        if (responseData && typeof responseData === 'object' && responseData.error) {
+            return responseData;
+        }
+        if (responseData && typeof responseData === 'object' && responseData.data && responseData.data.error) {
+            return responseData.data;
+        }
+        return responseData && typeof responseData === 'object' ? responseData : null;
+    };
+
+    const isBackendAclDeniedError = (error) => {
+        if (!error) {
+            return false;
+        }
+        const code = String(error.code || '').trim();
+        if (code === BACKEND_ACL_DENIED_CODE) {
+            return true;
+        }
+        const envelope = readErrorEnvelope(error);
+        const nestedError = envelope && envelope.error && typeof envelope.error === 'object'
+            ? envelope.error
+            : null;
+        if (nestedError && String(nestedError.code || '').trim() === BACKEND_ACL_DENIED_CODE) {
+            return true;
+        }
+        const exceptionClass = nestedError && nestedError.debug
+            ? String(nestedError.debug.exception_class || '')
+            : '';
+        if (exceptionClass.indexOf(BACKEND_ACL_EXCEPTION_MARK) !== -1) {
+            return true;
+        }
+        const message = String(error.message || (nestedError && nestedError.message) || '');
+        return message.indexOf(BACKEND_ACL_EXCEPTION_MARK) !== -1;
+    };
+
+    const cleanBackendAclMessage = (raw) => {
+        let text = String(raw || '').trim();
+        if (!text) {
+            return BACKEND_ACL_DEFAULT_MESSAGE;
+        }
+        text = text.replace(
+            /^Weline\\Framework\\Runtime\\FrontendWorkerBackendAuthorizationException:\s*/i,
+            ''
+        );
+        text = text.replace(/\s+in\s+\/.+:\d+\s*$/i, '');
+        text = text.trim();
+        return text || BACKEND_ACL_DEFAULT_MESSAGE;
+    };
+
+    const resolveBackendAclMessage = (error) => {
+        const envelope = readErrorEnvelope(error);
+        const nestedError = envelope && envelope.error && typeof envelope.error === 'object'
+            ? envelope.error
+            : null;
+        const debugMessage = nestedError && nestedError.debug
+            ? String(nestedError.debug.exception_message || '').trim()
+            : '';
+        if (debugMessage) {
+            return cleanBackendAclMessage(debugMessage);
+        }
+        if (nestedError && nestedError.message) {
+            return cleanBackendAclMessage(nestedError.message);
+        }
+        if (error && error.message) {
+            return cleanBackendAclMessage(error.message);
+        }
+        return BACKEND_ACL_DEFAULT_MESSAGE;
+    };
+
+    const showBackendAclDeniedUi = (error) => {
+        if (!error || error._welineBackendAclUiShown) {
+            return true;
+        }
+        error._welineBackendAclUiShown = true;
+        const message = resolveBackendAclMessage(error);
+        try {
+            if (isDevMode()) {
+                const dialog = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                if (dialog && typeof dialog.alert === 'function') {
+                    Promise.resolve(dialog.alert(message)).catch(() => {});
+                    return true;
+                }
+            }
+            const toast = window.Weline && window.Weline.UI && window.Weline.UI.toast;
+            if (toast && typeof toast.error === 'function') {
+                toast.error(message);
+                return true;
+            }
+            if (toast && typeof toast.show === 'function') {
+                toast.show(message, { tone: 'danger' });
+                return true;
+            }
+        } catch (uiError) {
+            console.error('[Weline.Api] backend ACL UI failed:', uiError);
+        }
+        console.error('[Weline.Api]', message);
+        return true;
+    };
+
     // Cache-bust once per page load so rebuildConfig does not churn the Worker URL.
     const cachedDevWorkerUrls = {};
 
@@ -1992,6 +2098,11 @@
                     }
                     return;
                 }
+            }
+            // ACL / 环境授权异常：DEV 居中 dialog，现场右上角 toast；silent 也强制提示。
+            if (isBackendAclDeniedError(error)) {
+                showBackendAclDeniedUi(error);
+                return;
             }
             if (silent) return;
             const requestCb = requestOptions && (requestOptions.onError || requestOptions.onHttpError);

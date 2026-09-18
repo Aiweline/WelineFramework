@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\RecentlyViewed\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
 
 /**
  * Recently-viewed read/write facade. Storage is cookie MRU for all shoppers.
@@ -43,7 +44,8 @@ final class RecentlyViewedService
     }
 
     /**
-     * Storefront card shape aligned with Product widget catalog cards.
+     * Storefront card shape via ProductCardRenderer::fromStorefrontOffer
+     * (currency / price / sellable aligned with catalog/category cards).
      *
      * @return list<array<string, mixed>>
      */
@@ -82,7 +84,14 @@ final class RecentlyViewedService
             if (!is_array($offer)) {
                 continue;
             }
-            $cards[] = $this->mapOffer($offer);
+            $card = ProductCardRenderer::fromStorefrontOffer(
+                $this->normalizeOfferSlug($offer),
+                count($cards),
+            );
+            if ((int)($card['id'] ?? 0) <= 0) {
+                continue;
+            }
+            $cards[] = $card;
             if (count($cards) >= $limit) {
                 break;
             }
@@ -92,41 +101,21 @@ final class RecentlyViewedService
     }
 
     /**
+     * Prefer catalog slug; fall back to source_slug so cards match /products links.
+     *
      * @param array<string, mixed> $offer
      * @return array<string, mixed>
      */
-    private function mapOffer(array $offer): array
+    private function normalizeOfferSlug(array $offer): array
     {
-        $productId = max(0, (int)($offer['product_id'] ?? 0));
-        $priceMinor = (int)($offer['unit_price_minor'] ?? $offer['price_minor'] ?? 0);
-        $price = $priceMinor > 0
-            ? $priceMinor / 100
-            : (float)($offer['price'] ?? 0);
-        $originalMinor = (int)($offer['compare_at_price_minor'] ?? $offer['original_price_minor'] ?? 0);
-        $originalPrice = $originalMinor > 0
-            ? $originalMinor / 100
-            : (float)($offer['original_price'] ?? 0);
-        // Prefer catalog slug (source_slug falls back) so cards match /products
-        // listing links; numeric id is last-resort when EAV slug is missing.
-        $slug = strtolower(trim((string)($offer['slug'] ?? $offer['source_slug'] ?? '')));
-        if ($slug !== '' && preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
-            $slug = '';
+        $slug = strtolower(trim((string)($offer['slug'] ?? '')));
+        if ($slug === '') {
+            $slug = strtolower(trim((string)($offer['source_slug'] ?? '')));
         }
-        $url = $slug !== '' ? 'product/' . $slug : 'product/' . $productId;
+        if ($slug !== '' && preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) === 1) {
+            $offer['slug'] = $slug;
+        }
 
-        return [
-            'id' => $productId,
-            'product_id' => $productId,
-            'name' => (string)($offer['name'] ?? ''),
-            'slug' => $slug,
-            'url' => $url,
-            'image' => (string)($offer['image'] ?? $offer['thumbnail'] ?? ''),
-            'price' => $price,
-            'original_price' => $originalPrice,
-            'rating' => (float)($offer['rating'] ?? 0),
-            'review_count' => (int)($offer['review_count'] ?? 0),
-            'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
-            'sellable' => !empty($offer['sellable']),
-        ];
+        return $offer;
     }
 }

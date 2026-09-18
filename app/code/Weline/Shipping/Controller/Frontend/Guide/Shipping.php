@@ -17,7 +17,6 @@ final class Shipping extends FrontendController
         $this->request->setGet('page_type', 'guide');
         $this->request->setGet('layout_type', 'guide');
         $this->request->setGet('layout_option', 'default');
-        $this->request->setGet('theme_public_route', 'guide/shipping');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);

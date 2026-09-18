@@ -191,11 +191,21 @@
                 prog[chain.id] = { i: 0, hits: [] };
             }
             try {
+                // 监视流必须用 chain_step，禁止复用 signal.event（如 page_view）：
+                // 多条链同页起步时否则会刷出「多个 page_view」假象（实为链进度，非真实 PV）。
                 if (window.WelineEventSandbox && typeof window.WelineEventSandbox.emit === 'function') {
                     window.WelineEventSandbox.emit({
-                        eventName: signal.event || signal.type || 'chain_step',
-                        name: signal.event || signal.type || 'chain_step',
-                        payload: { path: signal.path || '', type: signal.type || '' }
+                        eventName: 'chain_step',
+                        name: 'chain_step',
+                        payload: {
+                            path: signal.path || '',
+                            type: signal.type || '',
+                            signal_event: signal.event || '',
+                            chain_id: chain.id,
+                            chain_name: chain.name || '',
+                            step_i: st.i,
+                            steps: (chain.steps && chain.steps.length) || 0
+                        }
                     }, {
                         source: 'chain',
                         event_hit: true,

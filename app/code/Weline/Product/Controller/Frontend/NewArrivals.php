@@ -24,7 +24,6 @@ final class NewArrivals extends FrontendController
         $this->request->setGet('page_type', 'products');
         $this->request->setGet('layout_type', 'products');
         $this->request->setGet('layout_option', 'default');
-        $this->request->setGet('theme_public_route', 'new-arrivals');
         $this->request->setGet('theme_page_title', $title);
 
         $items = $this->widgetCatalog->newArrivalCards(24, 3650);

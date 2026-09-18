@@ -1,11 +1,23 @@
 /**
  * Express review page: confirm provider address (editable like checkout), shipping, capture.
+ * 事件链：确认支付方式 → 交易 →（成功页 checkout_success 闭环）。
  */
 (function (global) {
   'use strict';
 
   function text(v) {
     return String(v == null ? '' : v).trim();
+  }
+
+  function trackPixel(name, payload, element) {
+    try {
+      if (global.WelinePixel && typeof global.WelinePixel.track === 'function') {
+        global.WelinePixel.track(name, payload || {}, {
+          element: element || null,
+          keepalive: true,
+        });
+      }
+    } catch (e) {}
   }
 
   function money(amount, currency) {
@@ -137,7 +149,11 @@
     var statusEl = root.querySelector('[data-express-status]');
     var confirmBtn = root.querySelector('[data-express-confirm]');
     var cancelBtn = root.querySelector('[data-express-cancel]');
+    var methodEl = root.querySelector('[data-express-payment-method]');
+    var paymentMethod = '';
+    var methodLabel = '';
     var selectedServiceCode = '';
+    var lastReview = null;
     var setStatus = function (msg, isError) {
       if (!statusEl) {
         return;
@@ -145,6 +161,61 @@
       statusEl.textContent = msg || '';
       statusEl.classList.toggle('is-error', !!isError);
     };
+
+    function applyPaymentMethod(data) {
+      var code = text(
+        (data && (data.payment_method || data.method_code)) || ''
+      ).toLowerCase();
+      var label = text((data && data.method_label) || '');
+      if (code) {
+        paymentMethod = code;
+      }
+      if (label) {
+        methodLabel = label;
+      } else if (paymentMethod) {
+        methodLabel = '支付方式：' + paymentMethod;
+      }
+      if (methodEl) {
+        if (methodLabel) {
+          methodEl.hidden = false;
+          methodEl.textContent = methodLabel;
+        } else {
+          methodEl.hidden = true;
+          methodEl.textContent = '';
+        }
+      }
+      if (paymentMethod) {
+        root.setAttribute('data-payment-method', paymentMethod);
+      }
+    }
+
+    function chainPayload(extra) {
+      var totals = (lastReview && lastReview.totals) || {};
+      var currency = text(totals.currency || 'CNY') || 'CNY';
+      var grand = 0;
+      if (totals.grand_total != null && totals.grand_total !== '') {
+        grand = Number(totals.grand_total);
+      } else if (totals.grand_total_minor != null) {
+        grand = Number(totals.grand_total_minor) / 100;
+      }
+      var payload = {
+        payment_method: paymentMethod || 'paypal',
+        payment_type: paymentMethod || 'paypal',
+        transaction_no: transactionNo,
+        transaction_id: transactionNo,
+        checkout_group_uuid: checkoutGroupUuid,
+        currency: currency,
+        value: Number.isFinite(grand) ? grand : 0,
+        shipping_tier: selectedServiceCode || '',
+        shipping_method: selectedServiceCode || '',
+        service_code: selectedServiceCode || '',
+        source: 'express_review',
+      };
+      if (lastReview && lastReview.order_uuid) {
+        payload.order_uuid = text(lastReview.order_uuid);
+      }
+      return Object.assign(payload, extra || {});
+    }
 
     if (!transactionNo && !checkoutGroupUuid) {
       setStatus('缺少支付单号，请从商品页重新发起快捷支付', true);
@@ -236,6 +307,8 @@
 
     function renderReview(data) {
       data = data && typeof data === 'object' ? data : {};
+      lastReview = data;
+      applyPaymentMethod(data);
       var address = data.address || {};
       var requiresShipping = data.requires_shipping !== false;
       var addressBlock = root.querySelector('[data-express-address-block]');
@@ -474,6 +547,10 @@
       confirmBtn.addEventListener('click', async function () {
         confirmBtn.disabled = true;
         setStatus('确认收款中…', false);
+        trackPixel('express_pay_confirmed', chainPayload({
+          method_label: methodLabel,
+          trigger: 'confirm_click',
+        }), confirmBtn);
         try {
           var selected = collectShippingAddress(root);
           var phoneInput = root.querySelector('#express-phone');
@@ -494,6 +571,15 @@
           if (!result || result.success === false) {
             throw new Error((result && result.message) || '确认失败');
           }
+          rememberTransactionNo(result);
+          if (result.data) {
+            rememberTransactionNo(result.data);
+          }
+          trackPixel('express_pay_transaction', chainPayload({
+            method_label: methodLabel,
+            trigger: 'capture_started',
+            order_uuid: text((result.data && result.data.order_uuid) || result.order_uuid || ''),
+          }), confirmBtn);
           var redirect = text(
             (result.data && result.data.redirect_url) || result.redirect_url || '/payment/handoff'
           );

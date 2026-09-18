@@ -3062,11 +3062,11 @@ body:has(.theme-editor-container) .footer {
     width: 100%;
     min-width: 0;
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    line-height: 1.1;
-    white-space: nowrap;
+    gap: 3px;
+    line-height: 1.15;
 }
 
 .widget-library-tab-main .w-icon {
@@ -3076,8 +3076,15 @@ body:has(.theme-editor-container) .footer {
 
 .widget-library-tab-main span {
     min-width: 0;
+    max-width: 100%;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .widget-library-tab:hover {
@@ -3091,6 +3098,11 @@ body:has(.theme-editor-container) .footer {
     border-color: var(--w-theme-editor-accent);
     background: var(--w-theme-editor-accent-light);
     box-shadow: inset 0 0 0 1px var(--w-theme-editor-accent-light);
+}
+
+.widget-library-tab-count.is-loading {
+    opacity: 0.65;
+    letter-spacing: 0.08em;
 }
 
 .widget-library-tab-count {

@@ -950,7 +950,7 @@
         if (node && node.src) {
             return String(node.src).replace('weline-panel-visitor.js', 'event-sandbox-monitor.js');
         }
-        return '/Weline/Visitor/view/statics/js/event-sandbox-monitor.js?v=20260916-event-sandbox-monitor10';
+        return '/Weline/Visitor/view/statics/js/event-sandbox-monitor.js?v=20260918-clear-stream';
     }
 
     function loadLifecycleAssistant() {

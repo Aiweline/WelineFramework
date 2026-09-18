@@ -10,6 +10,9 @@ use Weline\Currency\Model\Currency;
 
 final class CurrencyCatalog implements CurrencyCatalogInterface
 {
+    /** @var list<CurrencyRecord>|null */
+    private static ?array $activeCache = null;
+
     public function __construct(
         private readonly Currency $currency,
     ) {
@@ -17,6 +20,10 @@ final class CurrencyCatalog implements CurrencyCatalogInterface
 
     public function active(): array
     {
+        if (self::$activeCache !== null) {
+            return self::$activeCache;
+        }
+
         $records = [];
         $rows = $this->currency->reset()
             ->where(Currency::schema_fields_STATUS, 1)
@@ -42,6 +49,11 @@ final class CurrencyCatalog implements CurrencyCatalogInterface
             );
         }
 
-        return $records;
+        return self::$activeCache = $records;
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$activeCache = null;
     }
 }

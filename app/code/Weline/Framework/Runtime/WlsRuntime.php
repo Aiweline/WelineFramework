@@ -5274,7 +5274,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // Path locale is request-scoped. Clear leftovers from the previous
             // fiber/request before Url::parser may re-detect /en_US/… — otherwise
             // an unprefixed /about can inherit en_US, or the opposite after rewrite.
-            unset($_SERVER['WELINE_URL_PATH_LANG']);
+            $this->forgetRequestServer('WELINE_URL_PATH_LANG');
             try {
                 WelineEnv::removeServer('WELINE_URL_PATH_LANG');
             } catch (\Throwable) {
@@ -5302,15 +5302,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             if (Runtime::isPersistent()) {
                 StateManager::runWlsPersistentRequestEntryBaseline();
             }
-            $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
+            $this->putRequestServer('WLS_REQUEST_COUNT',  $this->requestCount);
             Context::current()->set('runtime.request_count', $this->requestCount);
             $app->bootstrapRequestCycle();
             if ($request !== null) {
                 $this->installBackendWarmupContext($request);
             }
-            $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
+            $timing['uri'] = ($this->requestServer('REQUEST_URI') ?? '') ?: '/';
             WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
-            WelineEnv::set('request.method', $_SERVER['REQUEST_METHOD'] ?? 'GET', 'WlsRuntime handle');
+            WelineEnv::set('request.method', $this->requestServer('REQUEST_METHOD') ?? 'GET', 'WlsRuntime handle');
             if ($request !== null) {
                 $this->applyFrontendRootStartPageRoute($request);
                 $timing['uri'] = (string)(WelineEnv::get('request.uri', $timing['uri']) ?: $timing['uri']);
@@ -5561,8 +5561,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 return $this->buildSseFailedResponse($statusCode, $message, ['redirect' => $redirectUrl]);
             }
             // 记录重定向信息
-            $redirectCount = (int) ($_SERVER['WLS_REDIRECT_COUNT'] ?? 0);
-            $currentUri = $_SERVER['REQUEST_URI'] ?? '/';
+            $redirectCount = (int) ($this->requestServer('WLS_REDIRECT_COUNT') ?? 0);
+            $currentUri = $this->requestServer('REQUEST_URI') ?? '/';
             // 同步到 WelineEnv
             WelineEnv::set('wls.redirect_count', (string) $redirectCount, 'WlsRuntime catch RedirectException');
             WelineEnv::set('request.uri', $currentUri, 'WlsRuntime catch RedirectException');
@@ -5771,7 +5771,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $timing['method'] = $requestMeta['method'] ?: 'GET';
                 $timing['ip'] = $requestMeta['ip'] ?: 'unknown';
                 $timing['timestamp'] = date('Y-m-d H:i:s');
-                $timing['redirect_count'] = (int) ($_SERVER['WLS_REDIRECT_COUNT'] ?? 0);
+                $timing['redirect_count'] = (int) ($this->requestServer('WLS_REDIRECT_COUNT') ?? 0);
                 $timing['instance'] = $requestMeta['instance'];
                 $timing['worker_id'] = $requestMeta['worker_id'];
                 $timing['worker_port'] = $requestMeta['worker_port'];
@@ -5875,7 +5875,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return;
         }
 
-        $currentUri = (string)(WelineEnv::get('request.uri', $_SERVER['REQUEST_URI'] ?? '/') ?: '/');
+        $currentUri = (string)(WelineEnv::get('request.uri', $this->requestServer('REQUEST_URI') ?? '/') ?: '/');
         $this->ensureWebsiteContextForStartPage($request);
         if (!$this->isRootRequestUri($currentUri) && !$this->isWebsiteRootRequestUri($request, $currentUri)) {
             return;
@@ -5900,9 +5900,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
         $canonicalQuery = $this->parseUriQuery($canonicalUri);
 
-        $_SERVER['REQUEST_URI'] = $canonicalUri;
-        $_SERVER['PATH_INFO'] = $canonicalPath;
-        $_SERVER['QUERY_STRING'] = $canonicalQuery;
+        $this->putRequestServer('REQUEST_URI',  $canonicalUri);
+        $this->putRequestServer('PATH_INFO',  $canonicalPath);
+        $this->putRequestServer('QUERY_STRING',  $canonicalQuery);
         $fullRequestUri = $this->buildStartPageFullRequestUri($request, $canonicalUri);
 
         $request->setServer('REQUEST_URI', $canonicalUri);
@@ -5916,8 +5916,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $request->invalidateUriCache();
         Request::clearStaticUrlPathCache();
 
-        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $canonicalUri;
-        $_SERVER['WELINE_FULL_REQUEST_URI'] = $fullRequestUri;
+        $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI',  $canonicalUri);
+        $this->putRequestServer('WELINE_FULL_REQUEST_URI',  $fullRequestUri);
         WelineEnv::set('request.uri', $canonicalUri, 'WlsRuntime start page route');
         WelineEnv::set('origin_request_uri', $canonicalUri, 'WlsRuntime start page route');
         WelineEnv::set('full_request_uri', $fullRequestUri, 'WlsRuntime start page route');
@@ -5943,7 +5943,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     {
         $websiteCode = \trim(RequestContext::getWelineWebsiteCode());
         if ($websiteCode === '') {
-            $websiteCode = \trim((string)($request->getServer('WELINE_WEBSITE_CODE') ?: ($_SERVER['WELINE_WEBSITE_CODE'] ?? '')));
+            $websiteCode = \trim((string)($request->getServer('WELINE_WEBSITE_CODE') ?: ($this->requestServer('WELINE_WEBSITE_CODE') ?? '')));
         }
         if ($websiteCode !== '') {
             RequestContext::setWelineWebsiteCode($websiteCode);
@@ -5987,7 +5987,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $request->getServer('HTTP_HOST')
             ?: $request->getServer('HOST')
             ?: $request->getServer('SERVER_NAME')
-            ?: ($_SERVER['HTTP_HOST'] ?? '')
+            ?: ($this->requestServer('HTTP_HOST') ?? '')
         ));
         if ($host === '') {
             return '';
@@ -5995,19 +5995,19 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $scheme = \strtolower(\trim((string)(
             $request->getServer('REQUEST_SCHEME')
-            ?: ($_SERVER['REQUEST_SCHEME'] ?? '')
+            ?: ($this->requestServer('REQUEST_SCHEME') ?? '')
         )));
         if ($scheme === '') {
-            $https = \strtolower(\trim((string)($request->getServer('HTTPS') ?: ($_SERVER['HTTPS'] ?? ''))));
+            $https = \strtolower(\trim((string)($request->getServer('HTTPS') ?: ($this->requestServer('HTTPS') ?? ''))));
             $scheme = ($https !== '' && !\in_array($https, ['off', '0', 'false'], true)) ? 'https' : 'http';
         }
 
         $uri = (string)(
             $request->getServer('WELINE_ORIGIN_REQUEST_URI')
-            ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '')
-            ?: ($_SERVER['ORIGIN_REQUEST_URI'] ?? '')
+            ?: ($this->requestServer('WELINE_ORIGIN_REQUEST_URI') ?? '')
+            ?: ($this->requestServer('ORIGIN_REQUEST_URI') ?? '')
             ?: WelineEnv::get('origin_request_uri', '')
-            ?: WelineEnv::get('request.uri', $_SERVER['REQUEST_URI'] ?? '/')
+            ?: WelineEnv::get('request.uri', $this->requestServer('REQUEST_URI') ?? '/')
             ?: '/'
         );
         if ($uri === '') {
@@ -6026,7 +6026,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $request->getServer('HTTP_HOST')
             ?: $request->getServer('HOST')
             ?: $request->getServer('SERVER_NAME')
-            ?: ($_SERVER['HTTP_HOST'] ?? '')
+            ?: ($this->requestServer('HTTP_HOST') ?? '')
         ));
         if ($host === '') {
             return $uri;
@@ -6034,10 +6034,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $scheme = \strtolower(\trim((string)(
             $request->getServer('REQUEST_SCHEME')
-            ?: ($_SERVER['REQUEST_SCHEME'] ?? '')
+            ?: ($this->requestServer('REQUEST_SCHEME') ?? '')
         )));
         if ($scheme === '') {
-            $https = \strtolower(\trim((string)($request->getServer('HTTPS') ?: ($_SERVER['HTTPS'] ?? ''))));
+            $https = \strtolower(\trim((string)($request->getServer('HTTPS') ?: ($this->requestServer('HTTPS') ?? ''))));
             $scheme = ($https !== '' && !\in_array($https, ['off', '0', 'false'], true)) ? 'https' : 'http';
         }
 
@@ -6166,7 +6166,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $websiteUrl = (string)(
             RequestContext::getWelineWebsiteUrl()
             ?: $request->getServer('WELINE_WEBSITE_URL')
-            ?: ($_SERVER['WELINE_WEBSITE_URL'] ?? '')
+            ?: ($this->requestServer('WELINE_WEBSITE_URL') ?? '')
         );
         if ($websiteUrl === '') {
             return '';
@@ -6360,6 +6360,34 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         return $response->toHttpString(false);
     }
 
+    private function requestServer(string $key, mixed $default = null): mixed
+    {
+        try {
+            return WelineEnv::server($key, $default);
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+
+    private function putRequestServer(string $key, mixed $value): void
+    {
+        WelineEnv::setServer($key, $value, 'WlsRuntime');
+        if (!Runtime::isPersistent()) {
+            $_SERVER[$key] = $value;
+        }
+    }
+
+    private function forgetRequestServer(string $key): void
+    {
+        try {
+            WelineEnv::removeServer($key);
+        } catch (\Throwable) {
+        }
+        if (!Runtime::isPersistent()) {
+            unset($_SERVER[$key]);
+        }
+    }
+
     private function processUrlParse(array $parse): void
     {
         // 防御性检查：如果 parse 缺少 server 字段（如 parserMatchs 早期返回），
@@ -6368,7 +6396,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             w_log_warning('[WlsRuntime] processUrlParse: parse[server] is missing! URL parse data may be incomplete. '
                 . 'area=' . ($parse['area'] ?? '(none)') 
                 . ', uri=' . ($parse['uri'] ?? '(none)')
-                . ', REQUEST_URI=' . ($_SERVER['REQUEST_URI'] ?? '(none)')
+                . ', REQUEST_URI=' . ($this->requestServer('REQUEST_URI') ?? '(none)')
             );
             // 回退到当前 $_SERVER（已被 GlobalsEmulator 正确初始化）
             $parse['server'] = [];
@@ -6392,18 +6420,18 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             if (isset($parse['uri']) && $parse['uri'] !== '') {
                 $parse['server']['REQUEST_URI'] = \Weline\Framework\Http\Url::decode_url($this->normalizeParsedUri($parse['uri']));
             } else {
-                $parse['server']['REQUEST_URI'] = (string)($_SERVER['REQUEST_URI'] ?? '/');
+                $parse['server']['REQUEST_URI'] = (string)($this->requestServer('REQUEST_URI') ?? '/');
             }
         }
         
         // 合并而非替换 $_SERVER
         foreach ($parse['server'] as $key => $value) {
-            $_SERVER[$key] = $value;
+            $this->putRequestServer($key, $value);
         }
 
         // 确保 WELINE_AREA 与本次解析结果一致（防御 cache/合并遗漏导致 MessageManager、ACL 等误判区域）
         if (isset($parse['area']) && $parse['area'] !== '') {
-            $_SERVER['WELINE_AREA'] = $parse['area'];
+            $this->putRequestServer('WELINE_AREA',  $parse['area']);
             RequestContext::area($parse['area']);
 
             // 诊断日志：记录 WELINE_AREA 设置（已移除临时调试代码）
@@ -6422,7 +6450,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         );
         WelineEnv::set('request.scheme', $scheme, 'WlsRuntime processUrlParse');
         WelineEnv::set('server.http_host', $host, 'WlsRuntime processUrlParse');
-        $currentUri = $this->normalizeParsedUri($parse['uri'] ?? ($_SERVER['REQUEST_URI'] ?? '/'));
+        $currentUri = $this->normalizeParsedUri($parse['uri'] ?? ($this->requestServer('REQUEST_URI') ?? '/'));
         if ($currentUri === '') {
             $currentUri = '/';
         }
@@ -6435,50 +6463,50 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // (/pagebuilder/frontend/page/view?page_id=…) made PageBuilder lose the
         // path locale and fall back to the site default after SEO rewrite.
         $visitorOrigin = (string)(
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI']
-            ?? $_SERVER['ORIGIN_REQUEST_URI']
-            ?? $_SERVER['REQUEST_URI']
+            $this->requestServer('WELINE_ORIGIN_REQUEST_URI')
+            ?? $this->requestServer('ORIGIN_REQUEST_URI')
+            ?? $this->requestServer('REQUEST_URI')
             ?? ''
         );
-        $_SERVER['REQUEST_URI'] = $currentUri;
+        $this->putRequestServer('REQUEST_URI',  $currentUri);
         $visitorIsInternal = $visitorOrigin !== ''
             && \str_contains(\strtolower($visitorOrigin), 'pagebuilder/frontend/page');
         $currentIsInternal = \str_contains(\strtolower($currentUri), 'pagebuilder/frontend/page');
         if ($visitorOrigin !== '' && !$visitorIsInternal) {
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $visitorOrigin;
+            $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI',  $visitorOrigin);
         } elseif (!$currentIsInternal) {
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $currentUri;
+            $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI',  $currentUri);
         } elseif ($visitorOrigin !== '') {
             // Both look internal — keep existing rather than inventing a new one.
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $visitorOrigin;
+            $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI',  $visitorOrigin);
         } else {
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $currentUri;
+            $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI',  $currentUri);
         }
-        $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $_SERVER['WELINE_ORIGIN_REQUEST_URI'];
+        $this->putRequestServer('WELINE_FULL_REQUEST_URI',  $scheme . '://' . $host . $this->requestServer('WELINE_ORIGIN_REQUEST_URI'));
         WelineEnv::set('request.uri', $currentUri, 'WlsRuntime processUrlParse');
-        WelineEnv::set('origin_request_uri', $_SERVER['WELINE_ORIGIN_REQUEST_URI'], 'WlsRuntime processUrlParse');
-        WelineEnv::set('full_request_uri', $_SERVER['WELINE_FULL_REQUEST_URI'], 'WlsRuntime processUrlParse');
-        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $_SERVER['WELINE_ORIGIN_REQUEST_URI'], 'WlsRuntime processUrlParse');
+        WelineEnv::set('origin_request_uri', $this->requestServer('WELINE_ORIGIN_REQUEST_URI'), 'WlsRuntime processUrlParse');
+        WelineEnv::set('full_request_uri', $this->requestServer('WELINE_FULL_REQUEST_URI'), 'WlsRuntime processUrlParse');
+        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $this->requestServer('WELINE_ORIGIN_REQUEST_URI'), 'WlsRuntime processUrlParse');
         
         // 设置后端标识
-        $welineArea = $_SERVER['WELINE_AREA'] ?? '';
-        $_SERVER['WELINE_IS_BACKEND'] = ($welineArea === 'backend' || $welineArea === 'rest_backend');
+        $welineArea = $this->requestServer('WELINE_AREA') ?? '';
+        $this->putRequestServer('WELINE_IS_BACKEND',  ($welineArea === 'backend' || $welineArea === 'rest_backend'));
         
         // 存入请求上下文
         RequestContext::area($welineArea);
         
         // 处理语言和货币
         if (!empty($parse['currency'])) {
-            $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
+            $this->putRequestServer('WELINE_USER_CURRENCY',  $parse['currency']);
             RequestContext::currency($parse['currency']);
             // 同步到 WelineEnv
             WelineEnv::set('user.currency', $parse['currency'], 'WlsRuntime processUrlParse');
         } else {
             // 设置默认值，确保模板访问时不会出现 undefined 警告
-            $_SERVER['WELINE_USER_CURRENCY'] = $_SERVER['WELINE_USER_CURRENCY'] ?? RequestContext::currency();
+            $this->putRequestServer('WELINE_USER_CURRENCY',  $this->requestServer('WELINE_USER_CURRENCY') ?? RequestContext::currency());
         }
         if (!empty($parse['language'])) {
-            $_SERVER['WELINE_USER_LANG'] = $parse['language'];
+            $this->putRequestServer('WELINE_USER_LANG',  $parse['language']);
             RequestContext::locale($parse['language']);
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $parse['language'], 'WlsRuntime processUrlParse');
@@ -6486,42 +6514,42 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // visitor URL actually contained a locale segment. parse['language']
             // often falls back to Cookie/default and must not poison PATH_LANG
             // for unprefixed URLs like /about.
-            $existingPathLang = \trim((string)($_SERVER['WELINE_URL_PATH_LANG'] ?? ''));
+            $existingPathLang = \trim((string)($this->requestServer('WELINE_URL_PATH_LANG') ?? ''));
             if ($existingPathLang === '') {
-                $originForLang = (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['ORIGIN_REQUEST_URI'] ?? '');
+                $originForLang = (string)($this->requestServer('WELINE_ORIGIN_REQUEST_URI') ?? $this->requestServer('ORIGIN_REQUEST_URI') ?? '');
                 if ($originForLang !== ''
                     && \preg_match(
                         '#(?:^|/)(' . \preg_quote((string)$parse['language'], '#') . ')(?:/|$)#i',
                         $originForLang
                     ) === 1
                 ) {
-                    $_SERVER['WELINE_URL_PATH_LANG'] = $parse['language'];
+                    $this->putRequestServer('WELINE_URL_PATH_LANG',  $parse['language']);
                     WelineEnv::setServer('WELINE_URL_PATH_LANG', $parse['language'], 'WlsRuntime processUrlParse');
                 }
             }
         } else {
             // 设置默认值，确保模板访问时不会出现 undefined 警告
-            $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? RequestContext::locale();
+            $this->putRequestServer('WELINE_USER_LANG',  $this->requestServer('WELINE_USER_LANG') ?? RequestContext::locale());
             // Do not clear WELINE_URL_PATH_LANG here: SEO rewrite re-parses the
             // controller path (no locale segment) after Url::detectLanguage already
             // captured the visitor-facing /en_US/… locale.
         }
         
         // 存储网站信息到上下文
-        if (!empty($_SERVER['WELINE_WEBSITE_ID'])) {
-            RequestContext::websiteId((int) $_SERVER['WELINE_WEBSITE_ID']);
+        if (!empty($this->requestServer('WELINE_WEBSITE_ID'))) {
+            RequestContext::websiteId((int) $this->requestServer('WELINE_WEBSITE_ID'));
         }
         
         // 标记 URL 解析已完成
         // CheckFullPageCache 在 url_parsed_after 事件中可以使用此标志判断
-        $_SERVER['WELINE_URL_PARSED'] = true;
+        $this->putRequestServer('WELINE_URL_PARSED',  true);
         WelineEnv::set('url_parsed', true, 'WlsRuntime processUrlParse');
         WelineEnv::getInstance()->initFromSnapshot(
             \is_array($_GET ?? null) ? $_GET : [],
             \is_array($_POST ?? null) ? $_POST : [],
             \is_array($_COOKIE ?? null) ? $_COOKIE : [],
             \is_array($_FILES ?? null) ? $_FILES : [],
-            \is_array($_SERVER ?? null) ? $_SERVER : [],
+            \is_array($serverSnap = WelineEnv::server(null, [])) ? $serverSnap : [],
         );
     }
     
@@ -6545,7 +6573,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     {
         // Always clear per-request so a previous fiber/request cannot leak a
         // path locale into an unprefixed URL (or the opposite).
-        unset($_SERVER['WELINE_URL_PATH_LANG']);
+        $this->forgetRequestServer('WELINE_URL_PATH_LANG');
         try {
             WelineEnv::removeServer('WELINE_URL_PATH_LANG');
         } catch (\Throwable) {
@@ -6567,14 +6595,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         
         // 设置到 $_SERVER（URL 路径中的值优先级最高）
         if ($currency !== '') {
-            $_SERVER['WELINE_USER_CURRENCY'] = $currency;
+            $this->putRequestServer('WELINE_USER_CURRENCY',  $currency);
             RequestContext::currency($currency);
             // 同步到 WelineEnv
             WelineEnv::set('user.currency', $currency, 'WlsRuntime parseUrlLangCurrency');
         }
         if ($language !== '') {
-            $_SERVER['WELINE_USER_LANG'] = $language;
-            $_SERVER['WELINE_URL_PATH_LANG'] = $language;
+            $this->putRequestServer('WELINE_USER_LANG',  $language);
+            $this->putRequestServer('WELINE_URL_PATH_LANG',  $language);
             RequestContext::locale($language);
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $language, 'WlsRuntime parseUrlLangCurrency');
@@ -6810,11 +6838,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function shouldEmitDynamicFirstRenderHeaders(?Request $request = null): bool
     {
-        if ((string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') === '1'
-            || (string)($_SERVER['HTTP_X_WLS_DYNAMIC_WARMUP'] ?? '') === '1'
-            || (string)($_SERVER['HTTP_X_WLS_FPC_BYPASS'] ?? '') === '1'
-            || (string)($_SERVER['WLS_FPC_BYPASS'] ?? '') === '1'
-            || (string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1') {
+        if ((string)($this->requestServer('HTTP_X_WLS_DYNAMIC_BENCHMARK') ?? '') === '1'
+            || (string)($this->requestServer('HTTP_X_WLS_DYNAMIC_WARMUP') ?? '') === '1'
+            || (string)($this->requestServer('HTTP_X_WLS_FPC_BYPASS') ?? '') === '1'
+            || (string)($this->requestServer('WLS_FPC_BYPASS') ?? '') === '1'
+            || (string)($this->requestServer('WLS_INTERNAL_DYNAMIC_WARMUP') ?? '') === '1') {
             return true;
         }
         if ($request !== null) {
@@ -6831,13 +6859,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function currentWarmupStatus(): string
     {
-        if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1') {
+        if ((string)($this->requestServer('WLS_INTERNAL_DYNAMIC_WARMUP') ?? '') === '1') {
             return 'dynamic-warmup';
         }
-        if ((string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') === '1') {
+        if ((string)($this->requestServer('HTTP_X_WLS_DYNAMIC_BENCHMARK') ?? '') === '1') {
             return 'dynamic-benchmark';
         }
-        if ((string)($_SERVER['WLS_INTERNAL_WARMUP'] ?? '') === '1') {
+        if ((string)($this->requestServer('WLS_INTERNAL_WARMUP') ?? '') === '1') {
             return 'internal-warmup';
         }
 
@@ -6849,9 +6877,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if ($fpcHit) {
             return 'HIT';
         }
-        if ((string)($_SERVER['WLS_FPC_BYPASS'] ?? '') === '1'
-            || (string)($_SERVER['HTTP_X_WLS_FPC_BYPASS'] ?? '') === '1'
-            || (string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') === '1') {
+        if ((string)($this->requestServer('WLS_FPC_BYPASS') ?? '') === '1'
+            || (string)($this->requestServer('HTTP_X_WLS_FPC_BYPASS') ?? '') === '1'
+            || (string)($this->requestServer('HTTP_X_WLS_DYNAMIC_BENCHMARK') ?? '') === '1') {
             return 'BYPASS';
         }
 
@@ -7255,7 +7283,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private function withBackendLoginReturnUrl(string $redirectUrl, ?Request $request): string
     {
-        $method = strtoupper((string)($request?->getMethod() ?: ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
+        $method = strtoupper((string)($request?->getMethod() ?: ($this->requestServer('REQUEST_METHOD') ?? 'GET')));
         if (!$this->isBackendLoginReturnDocumentRequest($request, $method)) {
             return $redirectUrl;
         }
@@ -7274,8 +7302,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $uri = (string)(
             ($request?->getServer('WELINE_ORIGIN_REQUEST_URI') ?: null)
             ?: ($request?->getServer('REQUEST_URI') ?: null)
-            ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? null)
-            ?: ($_SERVER['REQUEST_URI'] ?? '')
+            ?: ($this->requestServer('WELINE_ORIGIN_REQUEST_URI') ?? null)
+            ?: ($this->requestServer('REQUEST_URI') ?? '')
         );
         if ($uri === '') {
             return $redirectUrl;
@@ -7283,7 +7311,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if ($this->isBackendLoginReturnApiOrInterfaceUri($uri)) {
             return $redirectUrl;
         }
-        $queryString = (string)($_SERVER['QUERY_STRING'] ?? $request?->getServer('QUERY_STRING') ?? '');
+        $queryString = (string)($this->requestServer('QUERY_STRING') ?? $request?->getServer('QUERY_STRING') ?? '');
         if ($queryString !== '' && !str_contains($uri, '?')) {
             $uri .= '?' . $queryString;
         }
@@ -7364,7 +7392,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
         $value = (string)(
             ($request?->getServer($serverKey) ?: null)
-            ?: ($_SERVER[$serverKey] ?? '')
+            ?: ($this->requestServer($serverKey, '') ?? '')
         );
         if ($value !== '') {
             return $value;
@@ -7560,7 +7588,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
         } else {
             // 兜底：从 $_SERVER 读取（仅在 Request 对象不可用时）
-            $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+            $accept = strtolower((string)($this->requestServer('HTTP_ACCEPT') ?? ''));
         }
 
         if ($accept === '') {

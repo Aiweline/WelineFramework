@@ -90,8 +90,15 @@ final class PreviewNavigationResolver
         $clickedPath = \trim((string)($candidate['path'] ?? ''), '/');
         $publicRoute = $this->normalizeStorefrontPublicRoute((string)($candidate['path'] ?? ''));
         // Never invent a different hub (e.g. layout_path) — path stays what was clicked.
+        // Do not fall back to markup/unsafe clicked paths (broken href="<div…").
         if ($publicRoute === '') {
-            $publicRoute = \strtolower($clickedPath);
+            $fallback = \strtolower($clickedPath);
+            if ($fallback !== ''
+                && $this->themePageTypeResolver->isSafeStorefrontPublicRoute($fallback)
+                && !$this->themePageTypeResolver->isNonStorefrontPublicRoute($fallback)
+            ) {
+                $publicRoute = $fallback;
+            }
         }
 
         $resolved = $this->resolveLayoutFromPublicPath($publicRoute);
@@ -118,7 +125,6 @@ final class PreviewNavigationResolver
             'target_value' => $pageType,
             'layout_option' => $layoutOption,
             // Authoritative canvas path = clicked path (normalized), not rebuilt from layout_path.
-            'theme_public_route' => $publicRoute,
         ]);
 
         // Shell URL is only a chrome hint; canvas loads public_route + editor markers.
@@ -134,11 +140,6 @@ final class PreviewNavigationResolver
         }
         if ($layoutOption !== 'default') {
             $params['layout_option'] = $layoutOption;
-        }
-        if ($publicRoute !== '' && !\str_starts_with($publicRoute, 'theme/')) {
-            $params['theme_public_route'] = $publicRoute;
-        } else {
-            unset($params['theme_public_route']);
         }
 
         $response = $this->buildResponse(
@@ -194,7 +195,12 @@ final class PreviewNavigationResolver
         } catch (\Throwable) {
         }
 
-        return \strtolower(\implode('/', $segments));
+        $normalized = \strtolower(\implode('/', $segments));
+        if ($normalized === '' || !$this->themePageTypeResolver->isSafeStorefrontPublicRoute($normalized)) {
+            return '';
+        }
+
+        return $normalized;
     }
 
     /**

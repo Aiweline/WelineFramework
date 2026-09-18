@@ -90,12 +90,9 @@ final class ProcessPreviewThemeUriLiveCanvasLocaleContractTest extends TestCase
         );
     }
 
-    public function testThemePreviewContentStillOwnsDedicatedApplyPreviewLocale(): void
+    public function testFrontendThemePreviewContentControllerIsDeleted(): void
     {
         $path = dirname(__DIR__, 3) . '/Controller/Frontend/ThemePreview/Content.php';
-        self::assertFileExists($path);
-        $source = (string)file_get_contents($path);
-        self::assertStringContainsString('function applyPreviewLocale', $source);
-        self::assertStringContainsString('State::setRequestLanguageOverride($locale)', $source);
+        self::assertFileDoesNotExist($path, 'Frontend theme-preview/content HTTP shell must be fully deleted');
     }
 }

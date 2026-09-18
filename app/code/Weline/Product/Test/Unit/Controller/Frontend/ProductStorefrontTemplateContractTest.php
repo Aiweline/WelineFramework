@@ -16,7 +16,7 @@ final class ProductStorefrontTemplateContractTest extends TestCase
 
         self::assertStringContainsString("\$this->layoutType = \$surface['layout_type']", $controller);
         self::assertStringContainsString("setGet('page_type', \$surface['page_type'])", $controller);
-        self::assertStringContainsString("setGet('theme_public_route', \$surface['public_route'])", $controller);
+        self::assertStringNotContainsString('theme_public_route', $controller);
         self::assertStringContainsString("assign('showToolbar', false)", $controller);
         self::assertStringContainsString('StorefrontCategoryListingFilter', $controller);
         self::assertStringContainsString('StorefrontListingPager', $controller);

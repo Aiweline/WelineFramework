@@ -1927,7 +1927,7 @@
             return;
         }
         var queued = false;
-        var observer = new MutationObserver(function () {
+        var runDiscover = function () {
             if (window.Weline.MiniCart.__painting) {
                 return;
             }
@@ -1943,9 +1943,27 @@
                 // 只发现新插入的迷你购物车根；禁止在此重绘（防 childList 反馈死循环）。
                 bootMiniCartRoots({ paintCache: false });
             });
+        };
+        var observeApi = (window.Weline && window.Weline.dom && typeof window.Weline.dom.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : null;
+        if (observeApi) {
+            window.Weline.MiniCart.__observer = observeApi({
+                target: document.documentElement,
+                options: { childList: true, subtree: true },
+                idleTimeoutMs: 100,
+                label: 'mini-cart-icon',
+                onFlush: runDiscover,
+            });
+            return;
+        }
+        /* ARCH_MO_FALLBACK_START */
+        var observer = new MutationObserver(function () {
+            runDiscover();
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });
         window.Weline.MiniCart.__observer = observer;
+        /* ARCH_MO_FALLBACK_END */
     }
 
     function boot() {

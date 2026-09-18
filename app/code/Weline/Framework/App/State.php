@@ -24,15 +24,35 @@ class State extends DataObject
 
     public const area_base = 'base';
 
-    /** @var array<string, true>|null */
-    private static ?array $allowedCurrencyCodeMap = null;
+    /**
+     * 进程级：按网站 scope 缓存允许语言表（同 Worker 多 Fiber 共享）。
+     *
+     * @var array<string, array<string, true>>
+     */
+    private static array $allowedLanguageCodeMapsByScope = [];
 
-    private static string $allowedCurrencyCodeScope = '';
+    /**
+     * 进程级：按网站 scope 缓存允许货币表。
+     *
+     * @var array<string, array<string, true>>
+     */
+    private static array $allowedCurrencyCodeMapsByScope = [];
 
-    /** @var array<string, true>|null language code lower-case => true */
-    private static ?array $allowedLanguageCodeMap = null;
+    /**
+     * 进程级：按网站 scope 缓存站点默认语言。
+     *
+     * @var array<string, string>
+     */
+    private static array $websiteDefaultLanguageByScope = [];
 
-    private static string $allowedLanguageCodeScope = '';
+    /**
+     * 进程级：按网站 scope 缓存站点默认货币。
+     *
+     * @var array<string, string>
+     */
+    private static array $websiteDefaultCurrencyByScope = [];
+
+    private const PROCESS_LOCALIZATION_MAP_MAX = 64;
 
     /**
      * @var array{
@@ -112,6 +132,13 @@ class State extends DataObject
         if ($resolved?->hasCompleteFrozenScope() && self::getRequestLanguageOverride() === '') {
             return $resolved->lang;
         }
+        // URL 解析完成后 route.language / user.lang 已是本请求权威结果，勿再拆路径。
+        if (self::getRequestLanguageOverride() === '') {
+            $routeLang = self::resolvedRouteLanguage();
+            if ($routeLang !== '') {
+                return $routeLang;
+            }
+        }
         $pathLang = self::detectLanguageFromRequestPath();
         if ($pathLang !== '' && self::isAllowedLanguageCode($pathLang)) {
             return self::normalizeLanguageSegment($pathLang);
@@ -174,6 +201,10 @@ class State extends DataObject
         $resolved = StorefrontCacheKeyContext::current();
         if ($resolved?->hasCompleteFrozenScope()) {
             return $resolved->currency;
+        }
+        $routeCurrency = self::resolvedRouteCurrency();
+        if ($routeCurrency !== '') {
+            return $routeCurrency;
         }
         $currency = self::detectCurrencyFromRequestPath();
         if ($currency !== '' && self::isAllowedCurrencyCode($currency)) {
@@ -250,11 +281,6 @@ class State extends DataObject
                 return self::normalizeLanguageSegment($locked);
             }
         } catch (\Throwable) {
-        }
-
-        $locked = \trim((string)($_SERVER['WELINE_URL_PATH_LANG'] ?? ''));
-        if ($locked !== '') {
-            return self::normalizeLanguageSegment($locked);
         }
 
         return '';
@@ -480,15 +506,23 @@ class State extends DataObject
 
     /**
      * 单元测试 / WLS 请求切换后重置路径解析缓存。
+     * 语/币允许表与站点默认值是进程级共享，不在此清空。
      */
     public static function resetRequestPathLocalizationCache(): void
     {
         self::$pathLocalizationCache = null;
         self::$pathLocalizationResolving = false;
-        self::$allowedLanguageCodeMap = null;
-        self::$allowedLanguageCodeScope = '';
-        self::$allowedCurrencyCodeMap = null;
-        self::$allowedCurrencyCodeScope = '';
+    }
+
+    /**
+     * 网站关联语/币或默认值变更时清空进程级 localization 表。
+     */
+    public static function clearProcessLocalizationCaches(): void
+    {
+        self::$allowedLanguageCodeMapsByScope = [];
+        self::$allowedCurrencyCodeMapsByScope = [];
+        self::$websiteDefaultLanguageByScope = [];
+        self::$websiteDefaultCurrencyByScope = [];
     }
 
     /**
@@ -496,6 +530,11 @@ class State extends DataObject
      */
     public static function resolveWebsiteDefaultLanguage(): string
     {
+        $scope = self::currentWebsiteScopeKey();
+        if (isset(self::$websiteDefaultLanguageByScope[$scope])) {
+            return self::$websiteDefaultLanguageByScope[$scope];
+        }
+
         try {
             if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                 $fromWebsite = self::normalizeLanguageSegment(
@@ -504,7 +543,7 @@ class State extends DataObject
                 if ($fromWebsite !== '' && self::isLanguageSegmentCandidate($fromWebsite)) {
                     $allowedMap = self::resolveAllowedLanguageCodeMap();
                     if ($allowedMap === [] || isset($allowedMap[\strtolower($fromWebsite)])) {
-                        return $fromWebsite;
+                        return self::rememberWebsiteDefaultLanguage($scope, $fromWebsite);
                     }
                 }
             }
@@ -535,7 +574,7 @@ class State extends DataObject
                 continue;
             }
 
-            return $code;
+            return self::rememberWebsiteDefaultLanguage($scope, $code);
         }
 
         if ($allowedMap !== []) {
@@ -544,14 +583,14 @@ class State extends DataObject
                 foreach ($codes as $code) {
                     $code = self::normalizeLanguageSegment((string)$code);
                     if ($code !== '' && self::isLanguageSegmentCandidate($code)) {
-                        return $code;
+                        return self::rememberWebsiteDefaultLanguage($scope, $code);
                     }
                 }
             } catch (\Throwable) {
             }
         }
 
-        return 'zh_Hans_CN';
+        return self::rememberWebsiteDefaultLanguage($scope, 'zh_Hans_CN');
     }
 
     /**
@@ -560,13 +599,18 @@ class State extends DataObject
      */
     public static function resolveWebsiteDefaultCurrency(): string
     {
+        $scope = self::currentWebsiteScopeKey();
+        if (isset(self::$websiteDefaultCurrencyByScope[$scope])) {
+            return self::$websiteDefaultCurrencyByScope[$scope];
+        }
+
         try {
             if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                 $fromWebsite = \strtoupper(\trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? '')));
                 if (self::isCurrencySegmentCandidate($fromWebsite)) {
                     $allowedMap = self::resolveAllowedCurrencyCodeMap();
                     if ($allowedMap === [] || isset($allowedMap[$fromWebsite])) {
-                        return $fromWebsite;
+                        return self::rememberWebsiteDefaultCurrency($scope, $fromWebsite);
                     }
                 }
             }
@@ -597,24 +641,24 @@ class State extends DataObject
                 continue;
             }
 
-            return $code;
+            return self::rememberWebsiteDefaultCurrency($scope, $code);
         }
 
         try {
             $codes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredCurrencyCodes();
             foreach (self::normalizeCurrencyCodeList($codes) as $code) {
                 if ($allowedMap === [] || isset($allowedMap[$code])) {
-                    return $code;
+                    return self::rememberWebsiteDefaultCurrency($scope, $code);
                 }
             }
         } catch (\Throwable) {
         }
 
         if ($allowedMap !== []) {
-            return (string)array_key_first($allowedMap);
+            return self::rememberWebsiteDefaultCurrency($scope, (string)array_key_first($allowedMap));
         }
 
-        return 'CNY';
+        return self::rememberWebsiteDefaultCurrency($scope, 'CNY');
     }
 
     /**
@@ -657,11 +701,9 @@ class State extends DataObject
      */
     private static function resolveAllowedLanguageCodeMap(): array
     {
-        $scope = (string)\w_env('website_id', '')
-            . '|' . (string)\w_env('website.code', '')
-            . '|' . (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', '');
-        if (self::$allowedLanguageCodeMap !== null && self::$allowedLanguageCodeScope === $scope) {
-            return self::$allowedLanguageCodeMap;
+        $scope = self::currentWebsiteScopeKey();
+        if (isset(self::$allowedLanguageCodeMapsByScope[$scope])) {
+            return self::$allowedLanguageCodeMapsByScope[$scope];
         }
 
         $map = [];
@@ -673,10 +715,7 @@ class State extends DataObject
         } catch (\Throwable) {
         }
 
-        self::$allowedLanguageCodeScope = $scope;
-        self::$allowedLanguageCodeMap = $map;
-
-        return self::$allowedLanguageCodeMap;
+        return self::rememberProcessScopeMap(self::$allowedLanguageCodeMapsByScope, $scope, $map);
     }
 
     /**
@@ -794,11 +833,9 @@ class State extends DataObject
      */
     private static function resolveAllowedCurrencyCodeMap(): array
     {
-        $scope = (string)\w_env('website_id', '')
-            . '|' . (string)\w_env('website.code', '')
-            . '|' . (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', '');
-        if (self::$allowedCurrencyCodeMap !== null && self::$allowedCurrencyCodeScope === $scope) {
-            return self::$allowedCurrencyCodeMap;
+        $scope = self::currentWebsiteScopeKey();
+        if (isset(self::$allowedCurrencyCodeMapsByScope[$scope])) {
+            return self::$allowedCurrencyCodeMapsByScope[$scope];
         }
 
         $map = [];
@@ -810,10 +847,7 @@ class State extends DataObject
         } catch (\Throwable) {
         }
 
-        self::$allowedCurrencyCodeScope = $scope;
-        self::$allowedCurrencyCodeMap = $map;
-
-        return self::$allowedCurrencyCodeMap;
+        return self::rememberProcessScopeMap(self::$allowedCurrencyCodeMapsByScope, $scope, $map);
     }
 
     /**
@@ -906,17 +940,10 @@ class State extends DataObject
         } catch (\Throwable) {
         }
 
-        if (isset($_GET) && \is_array($_GET) && $_GET !== []) {
-            return $_GET;
-        }
-
         $query = '';
         try {
             $query = (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
         } catch (\Throwable) {
-        }
-        if ($query === '') {
-            $query = (string)($_SERVER['QUERY_STRING'] ?? '');
         }
         if ($query === '') {
             return [];
@@ -965,5 +992,153 @@ class State extends DataObject
         }
 
         return [];
+    }
+
+    /**
+     * URL 解析完成后的本请求语言（Context route.language / WelineEnv user.lang）。
+     */
+    private static function resolvedRouteLanguage(): string
+    {
+        if (!self::isRouteLocalizationParsed()) {
+            return '';
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $lang = self::normalizeLanguageSegment((string)$context->get('route.language', ''));
+            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)) {
+                return $lang;
+            }
+        }
+
+        try {
+            $lang = self::normalizeLanguageSegment((string)\Weline\Framework\Env\WelineEnv::get('user.lang', ''));
+            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)) {
+                return $lang;
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    /**
+     * URL 解析完成后的本请求货币。
+     */
+    private static function resolvedRouteCurrency(): string
+    {
+        if (!self::isRouteLocalizationParsed()) {
+            return '';
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $currency = \strtoupper(\trim((string)$context->get('route.currency', '')));
+            if (self::isCurrencySegmentCandidate($currency)) {
+                return $currency;
+            }
+        }
+
+        try {
+            $currency = \strtoupper(\trim((string)\Weline\Framework\Env\WelineEnv::get('user.currency', '')));
+            if (self::isCurrencySegmentCandidate($currency)) {
+                return $currency;
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    private static function isRouteLocalizationParsed(): bool
+    {
+        $context = Context::getCurrent();
+        if ($context !== null && (bool)$context->get('route.url_parsed', false)) {
+            return true;
+        }
+
+        try {
+            return (bool)\Weline\Framework\Env\WelineEnv::get('url_parsed', false);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 进程级网站 scope：优先 website_id，其次 website.code。
+     */
+    private static function currentWebsiteScopeKey(): string
+    {
+        $websiteId = '';
+        try {
+            $websiteId = \trim((string)\w_env('website_id', ''));
+        } catch (\Throwable) {
+        }
+        if ($websiteId === '') {
+            try {
+                $websiteId = \trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', ''));
+            } catch (\Throwable) {
+            }
+        }
+        if ($websiteId !== '') {
+            return 'id:' . $websiteId;
+        }
+
+        $code = '';
+        try {
+            $code = \trim((string)\w_env('website.code', ''));
+        } catch (\Throwable) {
+        }
+        if ($code === '') {
+            try {
+                $code = \trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CODE', ''));
+            } catch (\Throwable) {
+            }
+        }
+        if ($code !== '') {
+            return 'code:' . $code;
+        }
+
+        return 'none';
+    }
+
+    private static function rememberWebsiteDefaultLanguage(string $scope, string $language): string
+    {
+        self::rememberProcessScopeScalar(self::$websiteDefaultLanguageByScope, $scope, $language);
+
+        return $language;
+    }
+
+    private static function rememberWebsiteDefaultCurrency(string $scope, string $currency): string
+    {
+        self::rememberProcessScopeScalar(self::$websiteDefaultCurrencyByScope, $scope, $currency);
+
+        return $currency;
+    }
+
+    /**
+     * @param array<string, string> $bucket
+     */
+    private static function rememberProcessScopeScalar(array &$bucket, string $scope, string $value): void
+    {
+        if (\count($bucket) >= self::PROCESS_LOCALIZATION_MAP_MAX && !\array_key_exists($scope, $bucket)) {
+            $bucket = \array_slice($bucket, -((int)(self::PROCESS_LOCALIZATION_MAP_MAX / 2)), null, true);
+        }
+        $bucket[$scope] = $value;
+    }
+
+    /**
+     * @param array<string, array<string, true>> $bucket
+     * @param array<string, true> $map
+     * @return array<string, true>
+     */
+    private static function rememberProcessScopeMap(array &$bucket, string $scope, array $map): array
+    {
+        if (\count($bucket) >= self::PROCESS_LOCALIZATION_MAP_MAX && !\array_key_exists($scope, $bucket)) {
+            $bucket = \array_slice($bucket, -((int)(self::PROCESS_LOCALIZATION_MAP_MAX / 2)), null, true);
+        }
+        $bucket[$scope] = $map;
+
+        return $map;
     }
 }

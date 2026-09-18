@@ -14,10 +14,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\PreparedContentStore;
 use Weline\Framework\View\Template;
-use Weline\Theme\Api\TargetPreviewPayloadProviderInterface;
-use Weline\Theme\Service\PreviewContextService;
-use Weline\Theme\Service\ThemeTargetIdentityResolver;
-use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
 /**
  * Keep layout rendering lifecycle unified for controller template fetch.
@@ -835,18 +831,9 @@ HTML;
             $metaData = [];
         }
         $metaData['contentTemplate'] = $contentTemplate;
-        $targetPreviewMeta = $this->resolveTargetPreviewMeta($template, $contentTemplate);
-        $hasTargetPreviewContent = array_key_exists('content', $targetPreviewMeta);
-        if (!empty($targetPreviewMeta) || $hasTargetPreviewContent) {
-            $metaData = array_merge($metaData, $targetPreviewMeta);
-        }
-        $isEditorPreviewTemplate = (bool)$template->getData('editor_mode')
-            || (bool)$template->getData('theme_preview_content')
-            || in_array((string)$template->getData('layout_preview_mode'), ['live', 'version', 'draft', 'default'], true);
+        $isEditorPreviewTemplate = (bool)$template->getData('editor_mode');
         // Editor must keep nested w:slot shells; never preserve prebuilt meta.content dumps.
-        $preserveAssignedContentMeta = !$isEditorPreviewTemplate
-            && ($hasTargetPreviewContent
-                || $this->shouldPreserveAssignedContentMeta($template, $contentTemplate, $metaData));
+        $preserveAssignedContentMeta = !$isEditorPreviewTemplate && array_key_exists('content', $metaData);
         if ($contentRenderKey !== '') {
             unset($metaData['content']);
             $metaData['contentRenderKey'] = $contentRenderKey;
@@ -891,166 +878,6 @@ HTML;
         return $contentRenderKey;
     }
 
-    /**
-     * @param array<string, mixed> $metaData
-     */
-    private function shouldPreserveAssignedContentMeta(Template $template, string $contentTemplate, array $metaData): bool
-    {
-        if (!array_key_exists('content', $metaData)) {
-            return false;
-        }
-
-        $targetPreviewPayload = $template->getData('target_preview_payload');
-        if (!is_array($targetPreviewPayload) || empty($targetPreviewPayload)) {
-            return false;
-        }
-
-        return $this->isThemePreviewContentTemplate($contentTemplate);
-    }
-
-    private function isThemePreviewContentTemplate(string $contentTemplate): bool
-    {
-        $normalized = str_replace('\\', '/', strtolower($contentTemplate));
-        return str_contains($normalized, 'templates/frontend/theme-preview/content.phtml')
-            || str_contains($normalized, 'templates/backend/theme-preview/content.phtml');
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function resolveTargetPreviewMeta(Template $template, string $contentTemplate): array
-    {
-        if (!$this->isThemePreviewContentTemplate($contentTemplate)) {
-            return [];
-        }
-
-        $cachedMeta = $template->getData('target_preview_meta');
-        if (is_array($cachedMeta)) {
-            return $cachedMeta;
-        }
-
-        [$targetType, $targetId] = $this->resolvePreviewTarget();
-        if ($targetType === '') {
-            $template->setData('target_preview_meta', []);
-            return [];
-        }
-
-        $layoutType = trim((string)($template->getData('layoutType') ?: $this->readRequestValue('layout_type')));
-        if ($layoutType === '') {
-            $layoutType = trim((string)$this->readRequestValue('page_type'));
-        }
-        $layoutOption = trim((string)($template->getData('layoutOption') ?: $this->readRequestValue('layout_option')));
-        $layoutOption = $layoutOption !== '' ? $layoutOption : 'default';
-        $baseLayoutType = str_contains($layoutType, '.') ? explode('.', $layoutType, 2)[0] : $layoutType;
-        $scope = trim((string)$this->readRequestValue('scope'));
-        $scope = $scope !== '' ? $scope : PreviewContextService::DEFAULT_SCOPE;
-
-        try {
-            /** @var ThemeTargetTypeRegistry $targetTypeRegistry */
-            $targetTypeRegistry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
-            $provider = $targetTypeRegistry->get($targetType);
-            if (!$provider instanceof TargetPreviewPayloadProviderInterface) {
-                $template->setData('target_preview_meta', []);
-                return [];
-            }
-            if (!$provider->canUseLayoutType($layoutType) && !$provider->canUseLayoutType($baseLayoutType)) {
-                $template->setData('target_preview_meta', []);
-                return [];
-            }
-
-            $payload = $provider->resolvePreviewPayload($targetId, [
-                'layout_type' => $provider->canUseLayoutType($layoutType) ? $layoutType : $baseLayoutType,
-                'layout_option' => $layoutOption,
-                'editor_area' => (string)$this->readRequestValue('editor_area') ?: PreviewContextService::AREA_FRONTEND,
-                'preview_area' => (string)$this->readRequestValue('preview_area') ?: PreviewContextService::AREA_FRONTEND,
-                'preview_mode' => (string)$this->readRequestValue('preview_mode') ?: PreviewContextService::DEFAULT_PREVIEW_MODE,
-                'status' => (string)$this->readRequestValue('status') ?: PreviewContextService::DEFAULT_STATUS,
-                'scope' => $scope,
-                'store_id' => (int)$this->readRequestValue('store_id'),
-                'store_code' => (string)$this->readRequestValue('store_code'),
-                'store_mode' => (string)$this->readRequestValue('store_mode') ?: 'normal',
-                'locale_code' => (string)$this->readRequestValue('locale_code') ?: (string)$this->readRequestValue('locale'),
-                'locale' => (string)$this->readRequestValue('locale') ?: (string)$this->readRequestValue('locale_code'),
-                'preview' => true,
-            ]);
-            $payload = is_array($payload) ? $payload : [];
-            $meta = $this->buildTargetPreviewMeta($payload);
-            $template->setData('target_preview_payload', $payload);
-            $template->setData('target_preview_meta', $meta);
-
-            return $meta;
-        } catch (\Throwable) {
-            $template->setData('target_preview_meta', []);
-            return [];
-        }
-    }
-
-    /**
-     * @return array{0:string,1:int}
-     */
-    private function resolvePreviewTarget(): array
-    {
-        /** @var ThemeTargetIdentityResolver $identityResolver */
-        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
-        return $identityResolver->resolveFirst([
-            [
-                'target_type' => $this->readRequestValue('theme_layout_target_type'),
-                'target_id' => $this->readRequestValue('theme_layout_target_id'),
-            ],
-            [
-                'target_type' => $this->readRequestValue('theme_layout_source_target_type'),
-                'target_id' => $this->readRequestValue('theme_layout_source_target_id'),
-            ],
-        ]);
-    }
-
-    private function readRequestValue(string $key): mixed
-    {
-        try {
-            /** @var Request $request */
-            $request = ObjectManager::getInstance(Request::class);
-            $value = $request->getData($key);
-            if ($value !== null && $value !== '') {
-                return $value;
-            }
-
-            $value = $request->getParam($key, null);
-            if ($value !== null && $value !== '') {
-                return $value;
-            }
-
-            return $request->getGet($key, '');
-        } catch (\Throwable) {
-            return '';
-        }
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     * @return array<string,mixed>
-     */
-    private function buildTargetPreviewMeta(array $payload): array
-    {
-        $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
-        $content = is_array($payload['content'] ?? null) ? $payload['content'] : [];
-        if (!array_key_exists('content', $meta) && array_key_exists('html', $content)) {
-            $meta['content'] = (string)$content['html'];
-        }
-        if (!array_key_exists('title', $meta) && array_key_exists('title', $content)) {
-            $meta['title'] = (string)$content['title'];
-        }
-
-        return $meta;
-    }
-
-    /**
-     * Account layouts read sidebar from meta. Keep the controller's root assign
-     * and meta assign in sync before layout rendering, and log the rare empty
-     * state with enough request context to identify the producer.
-     *
-     * @param array<string, mixed> $metaData
-     * @return array<string, mixed>
-     */
     private function ensureAccountSidebarMeta(
         Template $template,
         string $layoutTemplate,
@@ -1240,8 +1067,6 @@ HTML;
         $template = $this->getTemplateInstance();
         $editorFlags = [
             'editor_mode' => $template->getData('editor_mode'),
-            'theme_preview_content' => $template->getData('theme_preview_content'),
-            'layout_preview_mode' => $template->getData('layout_preview_mode'),
         ];
 
         if ($this->isBackendLayoutTemplate($layoutTemplate)) {
@@ -1317,14 +1142,6 @@ HTML;
     private function detectAreaFromTemplatePath(string $templatePath): string
     {
         $normalizedPath = str_replace('\\', '/', strtolower($templatePath));
-        if (str_contains($normalizedPath, '/templates/frontend/theme-preview/content.phtml')
-            || str_contains($normalizedPath, '/templates/backend/theme-preview/content.phtml')
-        ) {
-            $requestArea = $this->resolveEditorAreaFromRequest();
-            if ($requestArea !== '') {
-                return $requestArea;
-            }
-        }
         if (str_contains($normalizedPath, '/theme/backend/layouts/')
             || str_contains($normalizedPath, 'theme/backend/layouts/')) {
             return 'backend';
@@ -1333,21 +1150,6 @@ HTML;
         return 'frontend';
     }
 
-    private function resolveEditorAreaFromRequest(): string
-    {
-        try {
-            /** @var Request $request */
-            $request = ObjectManager::getInstance(Request::class);
-            $area = strtolower(trim((string)$request->getParam('editor_area', '')));
-            if ($area === '') {
-                $area = strtolower(trim((string)$request->getParam('preview_area', '')));
-            }
-
-            return $area === 'backend' ? 'backend' : ($area === 'frontend' ? 'frontend' : '');
-        } catch (\Throwable) {
-            return '';
-        }
-    }
 
     private function traceTemplateLabel(string $templatePath): string
     {

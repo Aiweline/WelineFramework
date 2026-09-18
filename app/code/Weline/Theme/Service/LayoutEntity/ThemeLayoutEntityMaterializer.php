@@ -45,6 +45,11 @@ final class ThemeLayoutEntityMaterializer
         $path = $this->paths->chromePhtml($themeId, $scope, $versionId);
         $this->writePhtml($path, $phtml);
         $this->configStore->writeChromeConfig($themeId, $scope, $versionId, $configByUid);
+        // Drop stale request-time snapshots (legacy bare + every locale variant)
+        // so the next storefront hit re-renders under the request language.
+        foreach ($this->paths->chromeRenderedHtmlSnapshots($themeId, $scope, $versionId) as $rendered) {
+            @\unlink($rendered);
+        }
         $this->opcacheCompile($path);
 
         return $path;

@@ -307,7 +307,7 @@
     <w:config:field
         key="visitor/tracking/ga4_debug_mode"
         label="启用 GA4 debug_mode"
-        description="仅用于联调，会在 gtag config 和事件参数中附带 debug_mode。生产站点不建议开启。"
+        description="仅用于联调：gtag config/事件会附带 debug_mode，供 GA4 DebugView 实时查看。请确认 DebugView 打开的是同一 Measurement ID；若仍无事件，到管理 → 数据设置 → 数据过滤器，将「内部流量」临时改为测试/关闭（Active 会挡掉 DebugView）。生产站点用完请关闭。"
         type="switch"
         value-type="bool"
         default="0"

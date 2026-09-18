@@ -339,17 +339,25 @@
             return;
         }
         let timer = 0;
+        let discoverHandle = null;
         const schedule = function (rootHint) {
             if (timer) {
                 return;
             }
             timer = window.setTimeout(function () {
                 timer = 0;
-                bind(rootHint || document);
+                const run = function () {
+                    bind(rootHint || document);
+                };
+                if (discoverHandle && typeof discoverHandle.withPaused === 'function') {
+                    discoverHandle.withPaused(run);
+                } else {
+                    run();
+                }
             }, DISCOVER_DEBOUNCE_MS);
         };
 
-        const observer = new MutationObserver(function (records) {
+        const onRecords = function (records) {
             for (let i = 0; i < records.length; i++) {
                 const record = records[i];
                 if (record.type === 'attributes') {
@@ -374,17 +382,41 @@
                     }
                 }
             }
-        });
+        };
 
+        const observeOptions = {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: [ATTR_WHEN, ATTR_ON],
+        };
         const rootEl = document.documentElement || document.body;
-        if (rootEl) {
-            observer.observe(rootEl, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: [ATTR_WHEN, ATTR_ON],
-            });
+        if (!rootEl) {
+            return;
         }
+
+        const observeApi = (window.Weline && window.Weline.dom && typeof window.Weline.dom.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : (window.Weline && typeof window.Weline.observeMutationsCoalesced === 'function'
+                ? window.Weline.observeMutationsCoalesced
+                : null);
+
+        if (observeApi) {
+            discoverHandle = observeApi({
+                target: rootEl,
+                options: observeOptions,
+                idleTimeoutMs: 100,
+                label: 'weline-api-dom:late-discovery',
+                onRecords: onRecords,
+                onFlush: function () { /* discovery scheduled from onRecords */ },
+            });
+            return;
+        }
+
+        /* ARCH_MO_FALLBACK_START */
+        const observer = new MutationObserver(onRecords);
+        observer.observe(rootEl, observeOptions);
+        /* ARCH_MO_FALLBACK_END */
     }
 
     function attachToWeline(api) {

@@ -23,7 +23,6 @@ final class SocialLogin extends FrontendController
         // payment_guide layout injects controller HTML into {{content}}; help layout does not.
         $this->layoutType = 'payment_guide';
         $this->request->setGet('page_type', 'payment_guide');
-        $this->request->setGet('theme_public_route', 'guide/social-login');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);
@@ -66,13 +65,9 @@ final class SocialLogin extends FrontendController
             $layoutType = 'payment_guide';
         }
         $template = (string) ($entry[$pageType === 'policy' ? 'policy_template' : 'guide_template'] ?? '');
-        $publicRoute = $pageType === 'policy'
-            ? 'guide/social-login/' . $code . '/policy'
-            : 'guide/social-login/' . $code;
 
         $this->layoutType = $layoutType;
         $this->request->setGet('page_type', $layoutType);
-        $this->request->setGet('theme_public_route', $publicRoute);
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $this->assign('title', $title);

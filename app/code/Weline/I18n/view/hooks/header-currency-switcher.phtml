@@ -93,6 +93,28 @@ if (class_exists(CurrencyLocalDescriptionService::class)) {
     }
 }
 
+$storefrontBaseCurrency = 'CNY';
+if (class_exists(\Weline\Currency\Service\CurrencyRateService::class)) {
+    try {
+        $storefrontBaseCurrency = strtoupper(trim(
+            (string)ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class)->getBaseCurrency()
+        )) ?: 'CNY';
+    } catch (\Throwable) {
+        $storefrontBaseCurrency = 'CNY';
+    }
+}
+/** rate<=0 is not convertible (fail-closed); hide from switcher except base currency. */
+$currencyIsConvertible = static function (string $currencyCode, float $rate) use ($storefrontBaseCurrency): bool {
+    if ($currencyCode === '' ) {
+        return false;
+    }
+    if ($currencyCode === $storefrontBaseCurrency) {
+        return true;
+    }
+
+    return $rate > 0.0;
+};
+
 if (class_exists(\Weline\Currency\Data\CurrencyData::class)) {
     try {
         $currencies = \Weline\Currency\Data\CurrencyData::getCurrencies();
@@ -100,6 +122,10 @@ if (class_exists(\Weline\Currency\Data\CurrencyData::class)) {
             foreach ($currencies as $currency) {
                 if (is_array($currency)) {
                     $currencyCode = strtoupper((string)($currency['code'] ?? ''));
+                    $rate = (float)($currency['rate'] ?? 0);
+                    if (!$currencyIsConvertible($currencyCode, $rate)) {
+                        continue;
+                    }
                     $i18nCurrencies[] = [
                         'code' => $currencyCode,
                         'name' => $normalizeCurrencyName($currencyCode, (string)($currency['name'] ?? $currencyCode)),
@@ -108,6 +134,10 @@ if (class_exists(\Weline\Currency\Data\CurrencyData::class)) {
                     ];
                 } elseif (is_object($currency)) {
                     $currencyCode = strtoupper((string)($currency->getCode() ?? $currency->getData('code') ?? ''));
+                    $rate = (float)($currency->getRate() ?? $currency->getData('rate') ?? 0);
+                    if (!$currencyIsConvertible($currencyCode, $rate)) {
+                        continue;
+                    }
                     $i18nCurrencies[] = [
                         'code' => $currencyCode,
                         'name' => $normalizeCurrencyName($currencyCode, (string)($currency->getName() ?? $currency->getData('name') ?? $currencyCode)),
@@ -173,11 +203,38 @@ foreach ($currencies as $currency) {
     if (isset($seenCurrencyCodes[$currencyCode])) {
         continue;
     }
+
+    // Event payloads may reintroduce rate<=0 codes; keep fail-closed switcher.
+    if (array_key_exists('rate', $currency)
+        && !$currencyIsConvertible($currencyCode, (float)$currency['rate'])
+    ) {
+        continue;
+    }
+    if (!array_key_exists('rate', $currency)
+        && class_exists(\Weline\Currency\Service\CurrencyRateService::class)
+    ) {
+        try {
+            $def = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class)
+                ->getCurrencyDefinition($currencyCode);
+            $rate = (float)($def['rate'] ?? 0);
+            if (!$currencyIsConvertible($currencyCode, $rate)) {
+                continue;
+            }
+        } catch (\Throwable) {
+            // Keep candidate when definition lookup fails; base-only filter already applied.
+        }
+    }
+
     $seenCurrencyCodes[$currencyCode] = true;
 
     $currencySymbol = trim((string)($currency['symbol'] ?? $currency['icon'] ?? ''));
-    if ($currencySymbol === '') {
+    if ($currencySymbol === '' || strcasecmp($currencySymbol, $currencyCode) === 0) {
         $currencySymbol = $intlCurrencySymbol($currencyCode, $currentLocale);
+    }
+    if (($currencySymbol === '' || strcasecmp($currencySymbol, $currencyCode) === 0)
+        && class_exists(\Weline\Currency\Helper\CurrencySymbol::class)
+    ) {
+        $currencySymbol = \Weline\Currency\Helper\CurrencySymbol::forCode($currencyCode);
     }
 
     $currencyName = $normalizeCurrencyName($currencyCode, (string)($currency['name'] ?? $currencyCode));
@@ -236,6 +293,12 @@ foreach ($currencies as $currency) {
         break;
     }
 }
+if ($currentCurrencySymbol === '' || strcasecmp($currentCurrencySymbol, (string)$displayCurrentCurrency) === 0) {
+    if (class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+        $currentCurrencySymbol = \Weline\Currency\Helper\CurrencySymbol::forCode((string)$displayCurrentCurrency);
+    }
+}
+$triggerCurrencyLabel = $currentCurrencySymbol !== '' ? $currentCurrencySymbol : (string)$displayCurrentCurrency;
 ?>
 <?php
 // 与语言切换器一致：Phrase exclusive 下框架文案走 WidgetI18n，避免英文页仍显示中文源串。
@@ -257,11 +320,11 @@ $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency
         data-w-menu-trigger
         aria-controls="<?= $escape($currencySwitcherId) ?>"
         aria-expanded="false"
-        aria-label="<?= $escape($i18nChrome('切换货币')) ?>"
+        aria-label="<?= $escape($i18nChrome('切换货币') . ' · ' . (string)$displayCurrentCurrency) ?>"
     >
         <w:icon name="cash" size="sm" />
-        <span class="w-currency-switcher__current current-currency"><?= $escape($displayCurrentCurrency) ?></span>
-        <?php if ($currentCurrencySymbol !== ''): ?><span><?= $escape($currentCurrencySymbol) ?></span><?php endif; ?>
+        <span class="w-currency-switcher__current current-currency"><?= $escape($triggerCurrencyLabel) ?></span>
+        <span class="w-currency-switcher__code"<?= $triggerCurrencyLabel === (string)$displayCurrentCurrency ? ' hidden' : '' ?>><?= $escape((string)$displayCurrentCurrency) ?></span>
         <w:icon name="chevron-down" size="xs" />
     </button>
     <div
@@ -290,6 +353,7 @@ $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency
                data-currency-option="true"
                data-w-choice-option
                data-currency="<?= $escape($currencyCode) ?>"
+               data-currency-symbol="<?= $escape($currencySymbol !== '' ? $currencySymbol : $currencyCode) ?>"
                data-search="<?= $escape($currency['search'] ?? $currencyCode) ?>"
                role="menuitem"
                aria-current="<?= $isCurrent ? 'true' : 'false' ?>"

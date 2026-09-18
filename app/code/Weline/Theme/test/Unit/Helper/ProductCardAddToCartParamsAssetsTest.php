@@ -33,6 +33,21 @@ final class ProductCardAddToCartParamsAssetsTest extends TestCase
         self::assertSame(2, $hits);
     }
 
+    public function testCaptureDiscardResetsPurchaseActionsEmissionFlag(): void
+    {
+        $hits = 0;
+        $emit = static function () use (&$hits): void {
+            $hits++;
+        };
+
+        ProductCardAddToCartParams::resetPurchaseActionsAssetsEmission();
+        ProductCardAddToCartParams::emitPurchaseActionsAssetsOnce($emit);
+        self::assertSame(1, $hits);
+        RequestContext::notifyCaptureDiscarded();
+        ProductCardAddToCartParams::emitPurchaseActionsAssetsOnce($emit);
+        self::assertSame(2, $hits);
+    }
+
     public function testBuildPurchaseActionsStyleTagContainsMarkerAndThemeTokenRules(): void
     {
         $tag = ProductCardAddToCartParams::buildPurchaseActionsStyleTag();

@@ -47,7 +47,6 @@ final class Index extends FrontendController
 
         $this->layoutType = 'search';
         $this->request->setGet('page_type', 'search');
-        $this->request->setGet('theme_public_route', 'search');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
         $description = $q !== ''

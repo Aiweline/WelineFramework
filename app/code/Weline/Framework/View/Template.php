@@ -925,8 +925,15 @@ class Template extends DataObject
             $eventsManager->dispatch('Weline_Framework_Template::after_compile', $eventData);
             $repContent = $eventData->getData('content');
 
-            // Embed content hash in compiled file for cross-platform reliable cache detection
-            $contentHash = md5_file($tplFile) . '-' . filesize($tplFile);
+            // Embed content hash in compiled file for cross-platform reliable cache detection.
+            // Include Taglib compiler generation so Taglib output-shape changes invalidate view/tpl.
+            $contentHash = \md5(
+                (string)\md5_file($tplFile)
+                . '|'
+                . (string)\filesize($tplFile)
+                . '|'
+                . \Weline\Framework\View\Taglib::COMPILER_GENERATION
+            ) . '-' . \filesize($tplFile);
             $hashHeader = "<?php /* hash:{$contentHash} */ ?>\n";
             $compiledContent = $hashHeader . $repContent;
 
@@ -1031,7 +1038,13 @@ class Template extends DataObject
         // var/cache/template, but this method returns whether the per-locale
         // com_*.phtml file itself is fresh. Do not let an enhanced-cache hit
         // mask a stale compiled file in the language directory.
-        $currentHash = md5_file($templateFile) . '-' . $templateSize;
+        $currentHash = \md5(
+            (string)\md5_file($templateFile)
+            . '|'
+            . $templateSize
+            . '|'
+            . \Weline\Framework\View\Taglib::COMPILER_GENERATION
+        ) . '-' . $templateSize;
 
         // Check for embedded hash in compiled file (our new format)
         $compiledContent = @file_get_contents($compiledFile);
@@ -1751,11 +1764,11 @@ class Template extends DataObject
             }
             $first = \explode('/', $path)[0] ?? '';
 
-            // Prefer raw query for cache identity so Request data-bag leftovers cannot collapse keys.
-            $q = \trim((string)($_GET['q'] ?? ''));
-            $type = \trim((string)($_GET['type'] ?? ''));
-            $categoryId = (int)($_GET['category_id'] ?? 0);
-            $blogCategoryId = (int)($_GET['blog_category_id'] ?? 0);
+            // Query identity comes from the request Context, not the process $_GET table.
+            $q = \trim((string)(WelineEnv::getGet('q', '') ?? ''));
+            $type = \trim((string)(WelineEnv::getGet('type', '') ?? ''));
+            $categoryId = (int)(WelineEnv::getGet('category_id', 0) ?? 0);
+            $blogCategoryId = (int)(WelineEnv::getGet('blog_category_id', 0) ?? 0);
             if ($q === '' && \is_object($request)) {
                 $q = \trim((string)($request->getParam('q') ?? ''));
             }

@@ -56,7 +56,8 @@ async function waitForThemeEditor(page) {
   }, null, {
     timeout: 60000,
   });
-  await expect(page.locator('#previewFrame')).toHaveAttribute('src', /theme-preview|layout-preview/, { timeout: 60000 });
+  await expect(page.locator('#previewFrame')).toHaveAttribute('src', /[?&]editor_mode=1/, { timeout: 60000 });
+  await expect(page.locator('#previewFrame')).not.toHaveAttribute('src', /theme-preview\/content/);
   await page.waitForFunction(() => {
     const editor = window.Weline?.Theme?.Editor || window.ThemeEditor;
     return Boolean(editor && typeof editor.apiJson === 'function' && typeof editor.patchWidgetConfigFields === 'function');

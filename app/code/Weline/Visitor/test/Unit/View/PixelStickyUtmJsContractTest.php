@@ -33,7 +33,7 @@ class PixelStickyUtmJsContractTest extends TestCore
     public function testBothFilesContainStickyApiAndVersion(): void
     {
         foreach ($this->sources() as $source) {
-            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.16-dedupe-yellow'", $source);
+            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.18-pageview-dedupe1'", $source);
             self::assertStringContainsString('function __getStickyUtmPack()', $source);
             self::assertStringContainsString('payload.sticky =', $source);
         }

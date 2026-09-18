@@ -273,9 +273,9 @@ switch,转变
 部分发货,部分发货
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot 必填字段为空：%{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot 数值/hash 非法"
-我的订单,我的订单
 订单留言,订单留言
 如有特殊要求请留言,如有特殊要求请留言
+我的订单,我的订单
 查看订单进度与支付状态,查看订单进度与支付状态
 已关闭,已关闭
 未知状态,未知状态

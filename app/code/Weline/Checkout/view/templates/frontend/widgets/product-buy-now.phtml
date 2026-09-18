@@ -49,8 +49,7 @@ $productId = max(0, (int)($offer['product_id'] ?? $cardProductId));
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
-
-if ($quoteOnly) {
+if (!empty($offer['currency_unavailable']) || $quoteOnly) {
     return;
 }
 

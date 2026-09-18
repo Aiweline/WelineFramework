@@ -99,7 +99,7 @@ class PreviewContextServiceTest extends TestCase
     public function testRawQueryLocaleOverridesStickyTokenLocaleWithoutChangingTheme(): void
     {
         $this->setRequestUri(
-            '/theme/frontend/theme-preview/content?theme_id=11&locale=en_US&weline_preview_token=pv_11_oldtoken'
+            '/?theme_id=11&locale=en_US&weline_preview_token=pv_11_oldtoken&shell=preview'
         );
         $service = $this->createService(
             [
@@ -131,7 +131,7 @@ class PreviewContextServiceTest extends TestCase
     public function testRawQueryDefaultLocaleClearsStickyTokenLocale(): void
     {
         $this->setRequestUri(
-            '/theme/frontend/theme-preview/content?locale=default&weline_preview_token=pv_11_oldtoken'
+            '/?locale=default&weline_preview_token=pv_11_oldtoken&shell=preview'
         );
         $service = $this->createService(
             [
@@ -158,11 +158,12 @@ class PreviewContextServiceTest extends TestCase
     public function testRequestParamLocaleOverridesTokenWhenRawQueryMissing(): void
     {
         // WLS may expose a path-only REQUEST_URI while locale remains in the request bag.
-        $this->setRequestUri('/theme/frontend/theme-preview/content');
+        $this->setRequestUri('/');
         $service = $this->createService(
             [
                 'locale' => 'en_US',
                 'weline_preview_token' => 'pv_11_oldtoken',
+                'shell' => PreviewContextService::SHELL_PREVIEW,
             ],
             [
                 'token' => 'pv_11_oldtoken',
@@ -183,7 +184,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testRawQueryFrontendThemeIdOverridesRequestParamBagValue(): void
     {
-        $this->setRequestUri('/theme/frontend/theme-preview/content?frontend_theme_id=6&preview_theme=6&editor_area=frontend');
+        $this->setRequestUri('/?frontend_theme_id=6&preview_theme=6&editor_area=frontend&shell=preview');
 
         $service = $this->createService(
             [
@@ -203,7 +204,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testRawQueryPreviewTokenOverridesRequestParamBagToken(): void
     {
-        $this->setRequestUri('/theme/frontend/theme-preview/content?frontend_theme_id=6&weline_preview_token=pv_6_raw_token');
+        $this->setRequestUri('/?frontend_theme_id=6&weline_preview_token=pv_6_raw_token&shell=preview');
 
         $service = $this->createService(
             [
@@ -221,7 +222,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testFrontendPreviewShellNormalizesEditorAreaToFrontend(): void
     {
-        $this->setRequestUri('/theme/frontend/theme-preview/content?frontend_theme_id=6&backend_theme_id=9&editor_area=backend&shell=preview');
+        $this->setRequestUri('/?frontend_theme_id=6&backend_theme_id=9&editor_area=backend&shell=preview');
 
         $service = $this->createService(
             [
@@ -243,7 +244,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testDirectPreviewUrlResetsStoredScopeAndTargetContext(): void
     {
-        $this->setRequestUri('/theme/frontend/theme-preview/content?theme_id=1&page_type=category&layout_type=category&layout_option=default&editor_area=frontend&preview_mode=live&status=draft');
+        $this->setRequestUri('/?theme_id=1&page_type=category&layout_type=category&layout_option=default&editor_area=frontend&preview_mode=live&status=draft&shell=preview');
 
         $service = $this->createService(
             [
@@ -254,6 +255,7 @@ class PreviewContextServiceTest extends TestCase
                 'editor_area' => 'frontend',
                 'preview_mode' => 'live',
                 'status' => 'draft',
+                'shell' => PreviewContextService::SHELL_PREVIEW,
             ],
             null,
             [
