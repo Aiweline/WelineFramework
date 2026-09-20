@@ -7,10 +7,12 @@ namespace Weline\Theme\Service\LayoutEntity;
 /**
  * Storefront contract for required default_injections.
  *
- * Design (2026-09-20): if the slot exists and the injection is required, the
- * widget MUST appear unless this theme layout version recorded a human uninstall
- * (`user_deleted@{versionId}`). Missing published entities, param-only page-config,
- * or stale snapshots are not valid omission reasons.
+ * Design (2026-09-20, corrected): 有部件必入声明槽 — subject is the widget.
+ * When a required `default_injections` declaration exists and this theme layout
+ * version did not record a human uninstall (`user_deleted@{versionId}`), the
+ * widget MUST appear in its declared slot. The slot is destination only, not
+ * the trigger. Missing published entities, param-only page-config, or stale
+ * snapshots are not valid omission reasons.
  *
  * Published render merges/overlays required injections; this class does not write layouts.
  */
@@ -53,7 +55,8 @@ final class RequiredDefaultInjectionContract
 
     /**
      * Detect whether slot inner HTML already contains the widget markers.
-     * Purchase CTAs also stamp product-add-to-cart / product-buy-now via data-action.
+     * Zero-tolerance: only data-widget-code / data-testid count — loose data-action /
+     * class markers must not suppress required injection.
      */
     public static function slotInnerHasWidgetCode(string $innerHtml, string $module, string $code): bool
     {
@@ -63,19 +66,33 @@ final class RequiredDefaultInjectionContract
             return false;
         }
         $innerNorm = strtolower($innerHtml);
-        $present = str_contains($innerNorm, 'data-widget-code="' . $code . '"')
+        $testid = str_replace('_', '-', $code);
+
+        return str_contains($innerNorm, 'data-widget-code="' . $code . '"')
             || str_contains($innerNorm, "data-widget-code='" . $code . "'")
             || str_contains($innerNorm, 'data-testid="' . $code . '"')
-            || str_contains($innerNorm, 'data-testid="' . str_replace('_', '-', $code) . '"');
-        if (!$present && ($code === 'product-add-to-cart' || $code === 'product-buy-now')) {
-            $present = str_contains($innerNorm, 'data-action="add"')
-                || str_contains($innerNorm, 'data-action="buy-now"');
-        }
-        if (!$present && $code === 'product-express-payment') {
-            $present = str_contains($innerNorm, 'w-payment-express');
-        }
+            || str_contains($innerNorm, "data-testid='" . $code . "'")
+            || str_contains($innerNorm, 'data-testid="' . $testid . '"')
+            || str_contains($innerNorm, "data-testid='" . $testid . "'");
+    }
 
-        return $present;
+    /**
+     * Full required injection items (including render node) for a page type.
+     *
+     * @param list<array<string, mixed>> $declarations
+     * @return list<array{slot_id:string,widget_module:string,widget_code:string,node:array<string,mixed>}>
+     */
+    public static function requiredInjections(array $declarations, string $pageType): array
+    {
+        return self::requiredForPage($declarations, $pageType);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $omissions
+     */
+    public static function isUninstalled(array $omissions, string $slotId, string $module, string $code): bool
+    {
+        return self::isOmitted($omissions, $slotId, $module, $code);
     }
 
     /**
@@ -192,7 +209,11 @@ final class RequiredDefaultInjectionContract
                 continue;
             }
             $existingModule = trim((string)($widget['widget_module'] ?? ''));
-            if ($existingModule === '' || $existingModule === $module) {
+            // Empty module on a seeded ghost must not suppress a required module.
+            if ($existingModule === $module) {
+                return true;
+            }
+            if ($existingModule === '' && $module === '') {
                 return true;
             }
         }

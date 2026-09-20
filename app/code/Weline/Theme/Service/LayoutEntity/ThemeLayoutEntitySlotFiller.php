@@ -80,19 +80,10 @@ final class ThemeLayoutEntitySlotFiller
             $published,
         );
         if ($resolved === null) {
-            $rendered = \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
-                ->append('', $themeId, $pageType, $status, $scope, 'required', null);
-            if ($rendered === '') {
-                $probe = $this->resolveEditorIdentity($themeId, $pageType, $area, $scope);
-                throw new \RuntimeException(
-                    'theme_layout_entity_missing: theme=' . $themeId
-                    . ' scope=' . $scope
-                    . ' page=' . $pageType
-                    . ' identity=' . $this->paths->identityKey($probe['identity_hash']),
-                );
-            }
-
-            return $this->spliceSolidifiedSlots($html, $rendered);
+            // Entity missing: still 有部件必入声明槽 against the page shell — never append('') which
+            // cannot see slot destinations and would silently skip all required fills.
+            return \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
+                ->append($html, $themeId, $pageType, $status, $scope, 'required', null);
         }
 
         $pageScope = $resolved['scope'];
@@ -150,8 +141,8 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
-     * True when the shell HTML has a required-injection slot boundary whose inner
-     * still lacks the corresponding widget markers (triggers a second overlay pass).
+     * True when any slot region for a required injection lacks widget markers
+     * (nested duplicate slot ids: any empty region triggers a second overlay pass).
      */
     private function shellMissingRequiredInjections(string $html, string $pageType): bool
     {
@@ -182,21 +173,76 @@ final class ThemeLayoutEntitySlotFiller
                 if ($slotId === '') {
                     continue;
                 }
-                $inner = $this->extractSlotInnerForPresence($html, $slotId);
-                if ($inner === null) {
-                    continue;
-                }
                 $module = (string)($target['widget_module'] ?? '');
                 $code = (string)($target['widget_code'] ?? '');
+                if ($this->anySlotRegionMissingWidget($html, $slotId, $module, $code)) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                'required_default_injection_shell_scan_failed: ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
+
+        return false;
+    }
+
+    private function anySlotRegionMissingWidget(
+        string $html,
+        string $slotId,
+        string $module,
+        string $code,
+    ): bool {
+        $regions = $this->boundaryScanner->enumerateRegions($html, $slotId);
+        if ($regions !== []) {
+            $sawRegion = false;
+            foreach ($regions as $region) {
+                if (!\is_array($region)) {
+                    continue;
+                }
+                $innerStart = (int)($region['inner_start'] ?? -1);
+                $innerEnd = (int)($region['inner_end'] ?? -1);
+                if ($innerStart < 0 || $innerEnd < $innerStart) {
+                    continue;
+                }
+                $sawRegion = true;
+                $inner = \substr($html, $innerStart, $innerEnd - $innerStart);
                 if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
                     return true;
                 }
             }
-        } catch (\Throwable) {
+            if ($sawRegion) {
+                return false;
+            }
+        }
+
+        $inner = $this->extractSlotInnerForPresence($html, $slotId);
+        if ($inner === null) {
             return false;
         }
 
-        return false;
+        return !RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code);
+    }
+
+    /**
+     * Soft degrade / chrome-only paths: still enforce 有部件必入声明槽 on the shell HTML.
+     */
+    public function fillRequiredDefaultsOnShell(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $status,
+        string $scope = 'default',
+    ): string {
+        if ($html === '' || $themeId < 1 || \trim($pageType) === '') {
+            return $html;
+        }
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
+            ->append($html, $themeId, $pageType, $status, $scope, 'required', null);
     }
 
     /**

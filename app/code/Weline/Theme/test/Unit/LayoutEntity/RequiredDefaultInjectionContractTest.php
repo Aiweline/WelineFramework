@@ -33,6 +33,22 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertCount(1, $merged['list-filters']);
     }
 
+    public function testEmptyModuleSeedDoesNotSuppressRequiredModule(): void
+    {
+        $slots = [
+            'list-filters' => [[
+                'widget_module' => '',
+                'widget_code' => 'category-filters',
+                'sort_order' => 0,
+            ]],
+        ];
+
+        $merged = RequiredDefaultInjectionContract::merge($slots, 'products', [$this->filtersDeclaration()], []);
+
+        self::assertCount(2, $merged['list-filters']);
+        self::assertSame('Weline_Filters', $merged['list-filters'][1]['widget_module']);
+    }
+
     public function testVersionUninstallSuppressesOnlyThatVersion(): void
     {
         self::assertSame('user_deleted@89', RequiredDefaultInjectionContract::userDeletedSource(89));
@@ -72,17 +88,17 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertSame('category-filters', $targets[0]['widget_code']);
         self::assertArrayNotHasKey('node', $targets[0]);
 
-        $omittedMerge = RequiredDefaultInjectionContract::merge([], 'products', [$this->filtersDeclaration()], [[
+        $items = RequiredDefaultInjectionContract::requiredInjections([$this->filtersDeclaration()], 'products');
+        self::assertCount(1, $items);
+        self::assertArrayHasKey('node', $items[0]);
+        self::assertTrue(RequiredDefaultInjectionContract::isUninstalled([[
             'slot_id' => 'list-filters',
             'widget_module' => 'Weline_Filters',
             'widget_code' => 'category-filters',
-        ]]);
-        self::assertSame([], $omittedMerge);
-        // Uninstall suppresses merge but requiredTargets still enumerates declarations.
-        self::assertCount(1, RequiredDefaultInjectionContract::requiredTargets([$this->filtersDeclaration()], 'products'));
+        ]], 'list-filters', 'Weline_Filters', 'category-filters'));
     }
 
-    public function testSlotInnerHasWidgetCodeDetectsMarkersAndPurchaseActions(): void
+    public function testSlotInnerHasWidgetCodeRequiresExplicitMarkers(): void
     {
         self::assertTrue(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
             '<div data-widget-code="category-filters"></div>',
@@ -90,14 +106,25 @@ final class RequiredDefaultInjectionContractTest extends TestCase
             'category-filters',
         ));
         self::assertTrue(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
+            '<button data-testid="product-add-to-cart">Add</button>',
+            'Weline_Cart',
+            'product-add-to-cart',
+        ));
+        // Loose action/class markers must not suppress required injection.
+        self::assertFalse(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
             '<button data-action="add">Add</button>',
             'Weline_Cart',
             'product-add-to-cart',
         ));
-        self::assertTrue(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
+        self::assertFalse(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
             '<button data-action="buy-now">Buy</button>',
             'Weline_Checkout',
             'product-buy-now',
+        ));
+        self::assertFalse(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
+            '<div class="w-payment-express"></div>',
+            'Weline_Payment',
+            'product-express-payment',
         ));
         self::assertFalse(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
             '<div class="empty"></div>',
@@ -112,25 +139,35 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('shellMissingRequiredInjections', $src);
         self::assertStringNotContainsString('shellMissingRequiredPurchaseWidgets', $src);
         self::assertStringContainsString('RequiredDefaultInjectionContract::requiredTargets', $src);
+        self::assertStringContainsString('anySlotRegionMissingWidget', $src);
+        self::assertStringContainsString('fillRequiredDefaultsOnShell', $src);
+        self::assertStringContainsString('required_default_injection_shell_scan_failed', $src);
+        // Entity-missing path must overlay the shell HTML, never append('').
+        self::assertStringNotContainsString("->append('',", $src);
+        self::assertStringContainsString('->append($html,', $src);
     }
 
-    public function testOverlayAppendOnlyFillsExistingSlotsAndLogsFailures(): void
+    public function testOverlayZeroToleranceThrowsOnRenderFailureAndFillsAllRegions(): void
     {
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionStorefrontOverlay.php'
         );
-        self::assertStringContainsString('extractSlotInnerForPresence', $src);
-        self::assertStringContainsString('[RequiredDefaultInjection] ensureRequired failed:', $src);
-        self::assertStringContainsString('[RequiredDefaultInjection] renderNode failed:', $src);
-        // 有槽才注：null inner → continue，禁止文末新建 ghost slot。
-        self::assertMatchesRegularExpression(
-            '/extractSlotInnerForPresence\(\$rendered,\s*\(string\)\$slotId\);\s*if\s*\(\$inner\s*===\s*null\)\s*\{\s*continue;/s',
-            $src,
-        );
+        self::assertStringContainsString('有部件必入声明槽', $src);
+        self::assertStringContainsString('Multi-pass', $src);
+        self::assertStringContainsString('listSlotRegions', $src);
+        self::assertStringContainsString('required_default_injection_render_failed', $src);
+        self::assertStringContainsString('required_default_injection_ensure_failed', $src);
+        self::assertStringContainsString('required_default_injection_unfilled', $src);
+        self::assertStringContainsString('requiredInjections', $src);
+        // Destination absent: continue (no ghost); never append open markers at end.
+        self::assertStringContainsString('Destination not in tree yet', $src);
         self::assertStringNotContainsString(
             "\$rendered .= SlotBoundaryMarkers::open(\$slotId)",
             $src,
         );
+        self::assertStringNotContainsString("error_log('[RequiredDefaultInjection]", $src);
+        self::assertStringNotContainsString('有槽才注', $src);
+        self::assertStringNotContainsString('有槽必注', $src);
     }
 
     public function testStorefrontFillerLoadsSolidifiedPhtmlNotRequestInjection(): void
@@ -139,6 +176,13 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('function includeEntityPhtml', $src);
         self::assertStringContainsString('RequiredDefaultInjectionStorefrontOverlay', $src);
         self::assertStringContainsString('ThemeLayout::STATUS_PUBLISHED', $src);
+    }
+
+    public function testLayoutSlotRendererSoftPathStillRunsRequiredOverlay(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php');
+        self::assertStringContainsString('fillRequiredDefaultsOnShell', $src);
+        self::assertStringContainsString('required_default_injection_failed', $src);
     }
 
     /**
