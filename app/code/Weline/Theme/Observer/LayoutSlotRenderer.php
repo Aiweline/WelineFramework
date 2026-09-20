@@ -374,14 +374,39 @@ class LayoutSlotRenderer implements ObserverInterface
                     'area' => $area,
                 ], 'theme_layout_entity');
             }
-            // Soft degrade: keep chrome injection even when page entity is missing.
+            // Soft degrade: chrome + 有部件必入声明槽 on shell. Entity missing must not leave
+            // required widgets absent; when required fill succeeds, deliver the page.
             $html = $this->fillChromeFromEntity($html, $themeId, $area);
+            try {
+                /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $filler */
+                $filler = ObjectManager::getInstance(
+                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+                );
+                $html = $filler->fillRequiredDefaultsOnShell($html, $themeId, $pageType, $status);
+            } catch (\Throwable $requiredError) {
+                if (\function_exists('w_log_error')) {
+                    \w_log_error(
+                        'required_default_injection_soft_path_failed: ' . $requiredError->getMessage(),
+                        [
+                            'theme_id' => $themeId,
+                            'page_type' => $pageType,
+                        ],
+                        'theme_layout_entity',
+                    );
+                }
+                throw new \RuntimeException(
+                    'required_default_injection_failed: ' . $requiredError->getMessage(),
+                    0,
+                    $requiredError,
+                );
+            }
             if (\defined('DEV') && DEV) {
                 return $html . "\n<!-- theme_layout_entity_missing: "
                     . \htmlspecialchars($e->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                     . " -->\n";
             }
-            throw new \RuntimeException('theme_layout_entity_missing: ' . $e->getMessage(), 0, $e);
+
+            return $html;
         }
     }
 
