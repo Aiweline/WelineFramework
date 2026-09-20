@@ -21,7 +21,9 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString('scopeFallbackChain', $src);
         self::assertStringContainsString('resolveEditorIdentity($themeId, $pageType, $area, $candidateScope)', $src);
         self::assertStringContainsString("'identity_key' => \$identityKey", $src);
-        self::assertStringContainsString('structureHasPlacements', $src);
+        self::assertStringContainsString('function includeEntityPhtml', $src);
+        self::assertStringContainsString('pageCurrentJson', $src);
+        self::assertStringNotContainsString('processSlotsWithLayout', $src);
         self::assertStringContainsString('orderChromeSlotsForInjection', $src);
         self::assertStringContainsString('header-nav-extensions', $src);
         self::assertStringContainsString('theme_layout_entity_chrome_soft_skip', $src);

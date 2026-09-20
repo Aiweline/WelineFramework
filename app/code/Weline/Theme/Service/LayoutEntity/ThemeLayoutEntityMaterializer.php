@@ -56,6 +56,23 @@ final class ThemeLayoutEntityMaterializer
     }
 
     /**
+     * Config-only writes must not rewrite chrome.phtml. Drop locale snapshots so the
+     * next hit re-renders widgets from the existing solidified template + new sidecar.
+     */
+    public function bustChromeRenderedSnapshots(ThemeScopeVersion $version): void
+    {
+        $themeId = $version->getThemeId();
+        $scope = $version->getScope();
+        $versionId = $version->getVersionId();
+        if ($themeId < 1 || $scope === '' || $versionId < 1) {
+            return;
+        }
+        foreach ($this->paths->chromeRenderedHtmlSnapshots($themeId, $scope, $versionId) as $rendered) {
+            @\unlink($rendered);
+        }
+    }
+
+    /**
      * Materialize page layout.phtml + page-config.json for content nodes only.
      *
      * @param array<string|int, mixed> $contentNodes

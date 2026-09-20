@@ -32,5 +32,14 @@ final class ThemeLayoutEntityChromePayloadMergeTest extends TestCase
 
         self::assertStringContainsString('migratePublishActiveThemeCategoryFilters', $src);
         self::assertStringContainsString('bakeChromeFromNodes', $src);
+        $start = strpos($src, 'function migratePublishActiveThemeCategoryFilters');
+        $end = strpos($src, 'private function migrateProductListPageTypeToProducts');
+        self::assertNotFalse($start);
+        self::assertNotFalse($end);
+        self::assertGreaterThan($start, $end);
+        $body = substr($src, (int)$start, (int)$end - (int)$start);
+        self::assertStringContainsString('PAGE_TYPE_PRODUCT_LIST', $body);
+        self::assertStringContainsString("'is_active_frontend'", $body);
+        self::assertStringContainsString('published_release_id', $body);
     }
 }
