@@ -75,6 +75,27 @@ final class WidgetDefaultInjectionRequiredContractTest extends TestCase
         self::assertStringNotContainsString("'强烈推荐'", $js);
     }
 
+    public function testApplyInitialItemDoesNotCountPublishedNoOp(): void
+    {
+        $src = $this->serviceSource();
+        $pos = strpos($src, 'function applyInitialItem(');
+        self::assertNotFalse($pos);
+        $snippet = substr($src, $pos, 1800);
+        self::assertStringContainsString('STATUS_PUBLISHED', $snippet);
+        self::assertStringContainsString('if ($nodeUid === \'\')', $snippet);
+        self::assertStringContainsString('Published layouts are immutable', $snippet);
+    }
+
+    public function testApplyRequiredMissingRejectsEmptyPublishedWrite(): void
+    {
+        $src = $this->serviceSource();
+        $pos = strpos($src, 'function applyRequiredMissingForIdentity(');
+        self::assertNotFalse($pos);
+        $snippet = substr($src, $pos, 3200);
+        self::assertStringContainsString('published_immutable', $snippet);
+        self::assertStringContainsString('if ($nodeUid === \'\')', $snippet);
+    }
+
     public function testFooterCustomerDeclarationsAreRequired(): void
     {
         $widgetPhp = dirname(__DIR__, 4) . '/Customer/extends/module/Weline_Widget/Weline_Customer/widget.php';

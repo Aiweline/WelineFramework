@@ -667,6 +667,17 @@ class WidgetDefaultInjectionService
             }
             try {
                 $nodeUid = $this->saveInjection($themeId, $item, $status);
+                if ($nodeUid === '') {
+                    $result['skipped']++;
+                    $result['blockers'][] = [
+                        'injection_key' => (string)($item['injection_key'] ?? ''),
+                        'blocker' => [
+                            'code' => 'published_immutable',
+                            'message' => 'Default injection writes draft only; publish the layout to bake storefront entities.',
+                        ],
+                    ];
+                    continue;
+                }
                 $this->markInitialHandled($themeId, $item, self::SOURCE_MANUAL_APPLY, true);
                 $item['node_uid'] = $nodeUid;
                 $item['status'] = $status;
@@ -800,7 +811,7 @@ class WidgetDefaultInjectionService
                 ->where(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE, $identity['locale_code'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
-                ->where(ThemeWidgetDefaultInjection::schema_fields_SOURCE, self::SOURCE_USER_DELETED)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SOURCE, 'user_deleted%', 'like')
                 ->where(ThemeWidgetDefaultInjection::schema_fields_SLOT_ID, $slotId);
             if ($pageType !== null && $pageType !== '') {
                 $query->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, $pageType);
@@ -856,7 +867,7 @@ class WidgetDefaultInjectionService
                 ->where(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE, $identity['locale_code'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
-                ->where(ThemeWidgetDefaultInjection::schema_fields_SOURCE, self::SOURCE_USER_DELETED);
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SOURCE, 'user_deleted%', 'like');
             if ($pageType !== null && $pageType !== '') {
                 $query->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, $pageType);
             }
@@ -1006,8 +1017,19 @@ class WidgetDefaultInjectionService
         }
 
         $source = (string)($row[ThemeWidgetDefaultInjection::schema_fields_SOURCE] ?? '');
-        if ($source === self::SOURCE_USER_DELETED) {
-            return true;
+        if (\Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::isUninstallSource($source)) {
+            $versionId = $this->resolveEditingVersionId(
+                $themeId,
+                (string)($item['page_type'] ?? ''),
+                (array)($item['identity'] ?? []),
+            );
+            if (
+                $versionId <= 0
+                || \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::matchesVersionUninstall($source, $versionId)
+                || !\str_contains($source, '@')
+            ) {
+                return true;
+            }
         }
 
         $identity = $this->normalizeIdentity((array)($item['identity'] ?? []));
@@ -1070,7 +1092,13 @@ class WidgetDefaultInjectionService
             'component_area' => $componentArea,
         ];
         $item['injection_key'] = $this->buildInjectionKey($item);
-        $this->markInitialHandled($themeId, $item, self::SOURCE_USER_DELETED, true);
+        $versionId = $this->resolveEditingVersionId($themeId, trim($pageType), $identity);
+        $this->markInitialHandled(
+            $themeId,
+            $item,
+            \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::userDeletedSource($versionId),
+            true,
+        );
     }
 
     private function saveInjection(int $themeId, array $item, string $status): string
@@ -1158,7 +1186,15 @@ class WidgetDefaultInjectionService
                 if ($this->widgetExists($themeId, $item['page_type'], $item['identity'], $status, $item)) {
                     continue;
                 }
-                $this->saveInjection($themeId, $item, $status);
+                // Published layouts are immutable here; only draft accepts ADD_NODE.
+                // Counting a published no-op as applied falsely marks decisions and skips refill.
+                if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                    continue;
+                }
+                $nodeUid = $this->saveInjection($themeId, $item, $status);
+                if ($nodeUid === '') {
+                    continue;
+                }
                 $applied++;
             }
             $this->markInitialHandled(
@@ -1188,7 +1224,90 @@ class WidgetDefaultInjectionService
             return false;
         }
 
-        return (string)($row[ThemeWidgetDefaultInjection::schema_fields_SOURCE] ?? '') === self::SOURCE_USER_DELETED;
+        return \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::matchesVersionUninstall(
+            (string)($row[ThemeWidgetDefaultInjection::schema_fields_SOURCE] ?? ''),
+            $this->resolveEditingVersionId(
+                $themeId,
+                trim((string)($item['page_type'] ?? '')),
+                (array)($item['identity'] ?? []),
+            ),
+        );
+    }
+
+    /**
+     * Storefront omissions for the published theme layout version only.
+     * A plain `user_deleted` row without a version is not an uninstall of this version.
+     *
+     * @return list<array{slot_id:string,widget_module:string,widget_code:string}>
+     */
+    public function uninstalledInjectionsForVersion(int $themeId, string $pageType, int $versionId): array
+    {
+        if ($themeId <= 0 || trim($pageType) === '' || $versionId <= 0) {
+            return [];
+        }
+
+        try {
+            $rows = (clone $this->defaultInjectionRecord)->clearQuery()->clearData()
+                ->where(ThemeWidgetDefaultInjection::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, trim($pageType))
+                ->where(
+                    ThemeWidgetDefaultInjection::schema_fields_SOURCE,
+                    \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::userDeletedSource($versionId),
+                )
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $list = [];
+        $rows = \is_array($rows) ? $rows : [];
+        if ($rows !== [] && !isset($rows[0]) && isset($rows[ThemeWidgetDefaultInjection::schema_fields_ID])) {
+            $rows = [$rows];
+        }
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_WIDGET_CODE] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $list[] = [
+                'slot_id' => trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_SLOT_ID] ?? '')),
+                'widget_module' => trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_WIDGET_MODULE] ?? '')),
+                'widget_code' => $code,
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    private function resolveEditingVersionId(int $themeId, string $pageType, array $identity): int
+    {
+        if ($themeId <= 0 || trim($pageType) === '') {
+            return 0;
+        }
+
+        try {
+            /** @var ThemeLayoutVersionService $versions */
+            $versions = ObjectManager::getInstance(ThemeLayoutVersionService::class);
+            $current = $versions->getCurrentVersion($themeId, $pageType, $identity);
+            if ($current instanceof ThemeLayoutVersion && $current->getVersionId() > 0) {
+                return $current->getVersionId();
+            }
+            $published = $versions->getPublishedVersion($themeId, $pageType, $identity);
+            if ($published instanceof ThemeLayoutVersion && $published->getVersionId() > 0) {
+                return $published->getVersionId();
+            }
+        } catch (\Throwable) {
+            return 0;
+        }
+
+        return 0;
     }
 
     /**

@@ -210,18 +210,47 @@ final class SlotBoundaryScanner
 
     /**
      * Extract slot inner via boundary region when present, else wrapper inner.
+     *
+     * @param bool $preferDeepest When true (default), nested regions win — preview
+     *                            edits target the innermost open slot. Storefront
+     *                            solidified splice must pass false so a filled
+     *                            page-level slot is not replaced by an empty
+     *                            nested placeholder of the same id inside a container widget.
+     * @param bool $preferNonEmpty Prefer a region whose inner has non-whitespace
+     *                             markup when duplicate slot ids exist.
      */
-    public function extractSlotInner(string $html, string $slotId): ?string
-    {
-        // Preview extracts several slots from the same page. Scan the requested
-        // region only instead of reparsing every widget for every slot.
-        foreach ($this->enumerateRegions($html, $slotId) as $region) {
-            if ($region['id'] === $slotId) {
-                return substr($html, $region['inner_start'], $region['inner_end'] - $region['inner_start']);
+    public function extractSlotInner(
+        string $html,
+        string $slotId,
+        bool $preferDeepest = true,
+        bool $preferNonEmpty = false,
+    ): ?string {
+        $regions = $this->enumerateRegions($html, $slotId);
+        if ($regions === []) {
+            return $this->extractWrapperInnerBySlotId($html, $slotId);
+        }
+        if ($preferNonEmpty) {
+            $nonEmpty = [];
+            foreach ($regions as $region) {
+                $inner = substr($html, $region['inner_start'], $region['inner_end'] - $region['inner_start']);
+                if (trim($inner) !== '') {
+                    $nonEmpty[] = $region;
+                }
+            }
+            if ($nonEmpty !== []) {
+                $regions = $nonEmpty;
             }
         }
+        if (!$preferDeepest) {
+            usort(
+                $regions,
+                static fn(array $a, array $b): int => ((int)$a['depth'] <=> (int)$b['depth'])
+                    ?: ((int)$a['region_start'] <=> (int)$b['region_start']),
+            );
+        }
+        $region = $regions[0];
 
-        return $this->extractWrapperInnerBySlotId($html, $slotId);
+        return substr($html, $region['inner_start'], $region['inner_end'] - $region['inner_start']);
     }
 
     public function replaceWrapperInner(string $html, array $region, string $newInner): string

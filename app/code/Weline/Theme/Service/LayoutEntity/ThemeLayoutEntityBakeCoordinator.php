@@ -93,16 +93,18 @@ final class ThemeLayoutEntityBakeCoordinator
      */
     public function bakeChromeFromNodes(int $themeId, string $scope, array $nodes, bool $structural = true): string
     {
+        // Config edits must not rewrite chrome.phtml. Sidecar + snapshot bust live in updateConfigSidecarsOnly.
+        if (!$structural) {
+            $version = $this->scopeVersions->ensureCurrent($themeId, $scope);
+            $this->materializer->bustChromeRenderedSnapshots($version);
+
+            return '';
+        }
+
         $version = $this->scopeVersions->ensureCurrent($themeId, $scope);
         $chromeNodes = $this->slotTree->filterChromeNodes($nodes);
-        if ($structural) {
-            $this->scopeVersions->setChromePayload($version, $chromeNodes);
-            $version = $this->scopeVersions->getCurrent($themeId, $scope) ?? $version;
-        } else {
-            // Config-only on chrome: refresh payload configs without new structure_key bump handled in setChromePayload
-            $this->scopeVersions->setChromePayload($version, $chromeNodes);
-            $version = $this->scopeVersions->getCurrent($themeId, $scope) ?? $version;
-        }
+        $this->scopeVersions->setChromePayload($version, $chromeNodes);
+        $version = $this->scopeVersions->getCurrent($themeId, $scope) ?? $version;
 
         $path = $this->materializer->materializeChrome($version);
         if (!\is_file($path)) {
@@ -169,6 +171,15 @@ final class ThemeLayoutEntityBakeCoordinator
             $path,
             $published,
             $releaseId,
+        );
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $this->writePageCurrentPointer(
+            $paths,
+            $themeId,
+            $scope,
+            $identityKey,
+            $paths->pageStructureOrRelease($structureKey, $published, $releaseId),
+            $published,
         );
 
         return $path;
@@ -297,6 +308,41 @@ final class ThemeLayoutEntityBakeCoordinator
         }
 
         return false;
+    }
+
+    private function writePageCurrentPointer(
+        ThemeLayoutEntityPaths $paths,
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+        bool $published,
+    ): void {
+        if ($structureOrRelease === '' || $identityKey === '') {
+            return;
+        }
+        $file = $paths->pageCurrentJson($themeId, $scope, $identityKey);
+        $dir = \dirname($file);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+            return;
+        }
+        $existing = [];
+        if (\is_file($file)) {
+            $decoded = \json_decode((string)\file_get_contents($file), true);
+            if (\is_array($decoded)) {
+                $existing = $decoded;
+            }
+        }
+        $existing[$published ? 'published' : 'draft'] = $structureOrRelease;
+        $json = \json_encode($existing, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return;
+        }
+        $tmp = $file . '.tmp';
+        if (@\file_put_contents($tmp, $json . "\n") === false) {
+            return;
+        }
+        @\rename($tmp, $file);
     }
 
     /** @param array<string|int, mixed> $nodes */

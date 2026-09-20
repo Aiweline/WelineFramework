@@ -15,7 +15,8 @@ use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
 
 /**
- * Storefront hard-cut slot fill from baked layout entities (no getLayoutData / DB).
+ * Storefront hard-cut slot fill: include the solidified layout.phtml.
+ * Slot membership is the file. Config/i18n overlays do not rebuild that file.
  */
 final class ThemeLayoutEntitySlotFiller
 {
@@ -32,9 +33,9 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
-     * Fill shell HTML from entity chrome + page structure sidecar.
+     * Fill shell HTML by including the solidified page layout.phtml (published and draft).
      *
-     * @throws \RuntimeException when page entity / structure is missing (storefront hard fail)
+     * @throws \RuntimeException when the solidified page template is missing (storefront hard fail)
      */
     public function fill(
         string $html,
@@ -79,72 +80,152 @@ final class ThemeLayoutEntitySlotFiller
             $published,
         );
         if ($resolved === null) {
-            $probe = $this->resolveEditorIdentity($themeId, $pageType, $area, $scope);
-            throw new \RuntimeException(
-                'theme_layout_entity_missing: theme=' . $themeId
-                . ' scope=' . $scope
-                . ' page=' . $pageType
-                . ' identity=' . $this->paths->identityKey($probe['identity_hash']),
-            );
+            $rendered = \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
+                ->append('', $themeId, $pageType, $status, $scope, 'required', null);
+            if ($rendered === '') {
+                $probe = $this->resolveEditorIdentity($themeId, $pageType, $area, $scope);
+                throw new \RuntimeException(
+                    'theme_layout_entity_missing: theme=' . $themeId
+                    . ' scope=' . $scope
+                    . ' page=' . $pageType
+                    . ' identity=' . $this->paths->identityKey($probe['identity_hash']),
+                );
+            }
+
+            return $this->spliceSolidifiedSlots($html, $rendered);
         }
 
         $pageScope = $resolved['scope'];
         $identityKey = $resolved['identity_key'];
         $structureOrRelease = $resolved['structure_or_release'];
-
-        $structurePath = $this->paths->pageStructureJson(
-            $themeId,
-            $pageScope,
-            $identityKey,
-            $structureOrRelease,
-        );
-        if (!\is_file($structurePath)) {
-            throw new \RuntimeException('theme_layout_entity_structure_missing: ' . $structurePath);
+        $phtml = $this->paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
+        if (!\is_file($phtml)) {
+            throw new \RuntimeException('theme_layout_entity_phtml_missing: ' . $phtml);
         }
 
-        $decoded = \json_decode((string)\file_get_contents($structurePath), true);
-        $slots = \is_array($decoded['slots'] ?? null) ? $decoded['slots'] : [];
-        if ($slots === []) {
-            return $html;
-        }
-
-        $configByUid = $this->configStore->readPageConfig(
-            $themeId,
-            $pageScope,
-            $identityKey,
-            $structureOrRelease,
-        );
-        $layoutData = $this->buildLayoutDataFromStructure($slots, $configByUid);
-        $layoutData = $this->healWidgetModules($layoutData);
-        // Baked entity config is language-neutral structure; storefront locale media/copy
-        // lives in RESOURCE_I18N and must overlay before widget render (hero banners, etc.).
-        // Prefer request scope for i18n identity (editor publishes under website/store),
-        // not only the entity directory scope (may be an ancestor without i18n rows).
-        $overlayScope = \trim((string)$this->resolveScope());
-        if ($overlayScope === '') {
-            $overlayScope = $pageScope;
-        }
-        $layoutData = $this->layoutResolver->overlayLocaleOnLayout(
-            $layoutData,
+        $this->primeLocaleConfigs(
             $themeId,
             $pageType,
             $status,
             $area,
-            [
-                'layout_option' => 'default',
-                'scope' => $overlayScope,
-                'target_type' => 'global',
-                'target_id' => 0,
-            ],
+            $pageScope,
+            $identityKey,
+            $structureOrRelease,
         );
-        $this->prefetchDictionaryModules($slots);
 
-        // Page content from baked structure; nested chrome extension slots merge from entity payload.
-        $layoutData['layout_type'] = $pageType;
-        $layoutData['page_type'] = $pageType;
-        $layoutData['status'] = $status;
+        $rendered = $this->includeEntityPhtml($phtml);
+        $structurePath = $this->paths->pageStructureJson($themeId, $pageScope, $identityKey, $structureOrRelease);
+        $rendered = \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
+            ->append(
+                $rendered,
+                $themeId,
+                $pageType,
+                $status,
+                $pageScope,
+                $structureOrRelease,
+                $structurePath,
+            );
+        if ($rendered === '') {
+            return $html;
+        }
 
-        return $this->slotRenderer->processSlotsWithLayout($html, $layoutData, false, $themeId, $area);
+        $html = $this->spliceSolidifiedSlots($html, $rendered);
+        // Nested empty placeholders inside container widgets can survive splice when the
+        // page-level slot was empty/incomplete. Re-run required overlay on the shell when
+        // any required target has a slot boundary but still lacks its widget markers.
+        if (!$this->shellMissingRequiredInjections($html, $pageType)) {
+            return $html;
+        }
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
+            ->append(
+                $html,
+                $themeId,
+                $pageType,
+                $status,
+                $pageScope,
+                $structureOrRelease,
+                $structurePath,
+            );
+    }
+
+    /**
+     * True when the shell HTML has a required-injection slot boundary whose inner
+     * still lacks the corresponding widget markers (triggers a second overlay pass).
+     */
+    private function shellMissingRequiredInjections(string $html, string $pageType): bool
+    {
+        $pageType = \trim($pageType);
+        if ($html === '' || $pageType === '' || !\str_contains($html, '<!--@weline-slot:')) {
+            return false;
+        }
+
+        try {
+            /** @var \Weline\Theme\Service\ThemeComponentCatalog $catalog */
+            $catalog = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemeComponentCatalog::class,
+            );
+            $declarations = [];
+            foreach ($catalog->getDefinitions('frontend', null) as $definition) {
+                if (!\is_object($definition)) {
+                    continue;
+                }
+                $declarations[] = [
+                    'module' => (string)($definition->module ?? ''),
+                    'type' => (string)($definition->type ?? ''),
+                    'code' => (string)($definition->code ?? ''),
+                    'default_injections' => $definition->defaultInjections ?? [],
+                ];
+            }
+            foreach (RequiredDefaultInjectionContract::requiredTargets($declarations, $pageType) as $target) {
+                $slotId = \trim((string)($target['slot_id'] ?? ''));
+                if ($slotId === '') {
+                    continue;
+                }
+                $inner = $this->extractSlotInnerForPresence($html, $slotId);
+                if ($inner === null) {
+                    continue;
+                }
+                $module = (string)($target['widget_module'] ?? '');
+                $code = (string)($target['widget_code'] ?? '');
+                if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * Prefer wrapper-aware scan; fall back to raw boundary markers when the slot
+     * has markers but no data-wslot wrapper (empty nested compile output).
+     */
+    private function extractSlotInnerForPresence(string $html, string $slotId): ?string
+    {
+        $inner = $this->boundaryScanner->extractSlotInner($html, $slotId, false, true);
+        if ($inner !== null) {
+            return $inner;
+        }
+        try {
+            $open = SlotBoundaryMarkers::open($slotId);
+            $close = SlotBoundaryMarkers::close($slotId);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+        $openPos = \strpos($html, $open);
+        if ($openPos === false) {
+            return null;
+        }
+        $innerStart = $openPos + \strlen($open);
+        $closePos = \strpos($html, $close, $innerStart);
+        if ($closePos === false) {
+            return null;
+        }
+
+        return \substr($html, $innerStart, $closePos - $innerStart);
     }
 
     /**
@@ -540,6 +621,20 @@ final class ThemeLayoutEntitySlotFiller
 
     private function replaceSlotInner(string $html, string $slotId, string $newInner): string
     {
+        // Prefer data-wslot / data-slot-id wrapper inner so host classes
+        // (e.g. product-native-detail__actions) survive solidified splice.
+        $regions = $this->boundaryScanner->enumerateRegions($html, $slotId);
+        if ($regions !== []) {
+            usort(
+                $regions,
+                static fn(array $a, array $b): int => ((int)$a['depth'] <=> (int)$b['depth'])
+                    ?: ((int)$a['region_start'] <=> (int)$b['region_start']),
+            );
+            $region = $regions[0];
+
+            return $this->boundaryScanner->replaceWrapperInner($html, $region, $newInner);
+        }
+
         try {
             $open = SlotBoundaryMarkers::open($slotId);
             $close = SlotBoundaryMarkers::close($slotId);
@@ -768,11 +863,9 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
-     * Resolve page entity under the nearest scope that has a baked structure.
-     *
-     * Identity hashes include scope, so channel requests must recompute the
-     * identity for each ancestor (channel → store → website → global) instead of
-     * only changing the directory scope while keeping the channel identity key.
+     * Resolve the solidified layout.phtml. Published and draft both load a file.
+     * current.json is written at structural bake; workspace is only a one-time fallback
+     * for pages baked before that pointer existed.
      *
      * @return array{scope:string,identity_key:string,structure_or_release:string}|null
      */
@@ -784,23 +877,55 @@ final class ThemeLayoutEntitySlotFiller
         bool $published,
     ): ?array {
         foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
+            $identityKey = $this->identityKeyForScope($themeId, $pageType, $area, $candidateScope);
+            $fromPointer = $this->readPageCurrent($themeId, $candidateScope, $identityKey, $published);
+            if ($fromPointer !== null) {
+                return [
+                    'scope' => $candidateScope,
+                    'identity_key' => $identityKey,
+                    'structure_or_release' => $fromPointer,
+                ];
+            }
+        }
+
+        if (!$published) {
+            foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
+                $identityKey = $this->identityKeyForScope($themeId, $pageType, $area, $candidateScope);
+                $scanned = $this->scanSolidifiedSegment($themeId, $candidateScope, $identityKey, false);
+                if ($scanned === null) {
+                    continue;
+                }
+                $this->rememberPageCurrent($themeId, $candidateScope, $identityKey, $scanned, false);
+
+                return [
+                    'scope' => $candidateScope,
+                    'identity_key' => $identityKey,
+                    'structure_or_release' => $scanned,
+                ];
+            }
+
+            return null;
+        }
+
+        foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
             $identity = $this->resolveEditorIdentity($themeId, $pageType, $area, $candidateScope);
             $identityKey = $this->paths->identityKey($identity['identity_hash']);
             $structureOrRelease = $this->resolveStructureOrRelease(
                 $themeId,
                 $candidateScope,
                 $identityKey,
-                $published,
+                true,
                 $identity['release_id'],
             );
             if ($structureOrRelease === null) {
                 continue;
             }
-            // Empty baked shells (slots:[]) are placeholders from unfinished scope
-            // projection — keep walking ancestors until a real placement tree exists.
-            if (!$this->structureHasPlacements($themeId, $candidateScope, $identityKey, $structureOrRelease)) {
+            if (!$this->pagePhtmlHasSlots(
+                $this->paths->pagePhtml($themeId, $candidateScope, $identityKey, $structureOrRelease),
+            )) {
                 continue;
             }
+            $this->rememberPageCurrent($themeId, $candidateScope, $identityKey, $structureOrRelease, true);
 
             return [
                 'scope' => $candidateScope,
@@ -812,33 +937,281 @@ final class ThemeLayoutEntitySlotFiller
         return null;
     }
 
-    private function structureHasPlacements(
+    private function identityKeyForScope(int $themeId, string $pageType, string $area, string $scope): string
+    {
+        try {
+            $context = $this->layoutResolver->buildContext($themeId, $pageType, $area, [
+                'layout_option' => 'default',
+                'scope' => $scope,
+                'target_type' => 'global',
+                'target_id' => 0,
+                'locale_code' => 'default',
+            ]);
+
+            return $this->paths->identityKey($context->identityHash());
+        } catch (\Throwable) {
+            return $this->paths->identityKey(\hash('sha256', $pageType . '|' . $scope));
+        }
+    }
+
+    private function readPageCurrent(int $themeId, string $scope, string $identityKey, bool $published): ?string
+    {
+        $file = $this->paths->pageCurrentJson($themeId, $scope, $identityKey);
+        if (!\is_file($file)) {
+            return null;
+        }
+        $decoded = \json_decode((string)\file_get_contents($file), true);
+        if (!\is_array($decoded)) {
+            return null;
+        }
+        $keys = $published ? ['published'] : ['draft', 'published'];
+        foreach ($keys as $key) {
+            $segment = \trim((string)($decoded[$key] ?? ''));
+            if ($segment === '') {
+                continue;
+            }
+            $phtml = $this->paths->pagePhtml($themeId, $scope, $identityKey, $segment);
+            if ($this->pagePhtmlHasSlots($phtml)) {
+                return $segment;
+            }
+        }
+
+        return null;
+    }
+
+    private function rememberPageCurrent(
         int $themeId,
         string $scope,
         string $identityKey,
         string $structureOrRelease,
-    ): bool {
-        $structurePath = $this->paths->pageStructureJson(
-            $themeId,
-            $scope,
-            $identityKey,
-            $structureOrRelease,
-        );
-        if (!\is_file($structurePath)) {
-            return false;
+        bool $published,
+    ): void {
+        if ($structureOrRelease === '' || $identityKey === '') {
+            return;
         }
-        $decoded = \json_decode((string)\file_get_contents($structurePath), true);
-        $slots = \is_array($decoded['slots'] ?? null) ? $decoded['slots'] : [];
-        if ($slots === []) {
-            return false;
+        $file = $this->paths->pageCurrentJson($themeId, $scope, $identityKey);
+        $dir = \dirname($file);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+            return;
         }
-        foreach ($slots as $widgets) {
-            if (\is_array($widgets) && $widgets !== []) {
-                return true;
+        $existing = [];
+        if (\is_file($file)) {
+            $decoded = \json_decode((string)\file_get_contents($file), true);
+            if (\is_array($decoded)) {
+                $existing = $decoded;
             }
         }
+        $existing[$published ? 'published' : 'draft'] = $structureOrRelease;
+        $json = \json_encode($existing, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return;
+        }
+        $tmp = $file . '.tmp';
+        if (@\file_put_contents($tmp, $json . "\n") === false) {
+            return;
+        }
+        @\rename($tmp, $file);
+    }
 
-        return false;
+    /**
+     * Draft fallback only: pick an existing solidified file. Published storefront
+     * never fishes older r* / s* — it uses current.json or the published release id.
+     */
+    private function scanSolidifiedSegment(
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        bool $published,
+    ): ?string {
+        if ($published) {
+            return null;
+        }
+        $dir = $this->paths->pageIdentityDir($themeId, $scope, $identityKey);
+        if (!\is_dir($dir)) {
+            return null;
+        }
+        $draft = [];
+        $releases = [];
+        $entries = \scandir($dir) ?: [];
+        foreach ($entries as $name) {
+            if ($name === '.' || $name === '..' || $name === 'current.json') {
+                continue;
+            }
+            $phtml = $dir . $name . \DIRECTORY_SEPARATOR . 'layout.phtml';
+            if (!$this->pagePhtmlHasSlots($phtml)) {
+                continue;
+            }
+            if (\str_starts_with($name, 's')) {
+                $draft[] = $name;
+            }
+            if (\preg_match('/^r(\d+)$/', $name, $matches) === 1) {
+                $releases[(int)$matches[1]] = $name;
+            }
+        }
+        if ($draft !== []) {
+            \rsort($draft, \SORT_STRING);
+
+            return $draft[0];
+        }
+        if ($releases === []) {
+            return null;
+        }
+        \krsort($releases, \SORT_NUMERIC);
+
+        return \reset($releases) ?: null;
+    }
+
+    private function pagePhtmlHasSlots(string $path): bool
+    {
+        if (!\is_file($path)) {
+            return false;
+        }
+        $src = (string)\file_get_contents($path);
+
+        return $src !== '' && \str_contains($src, SlotBoundaryMarkers::OPEN_PREFIX);
+    }
+
+    private function includeEntityPhtml(string $path): string
+    {
+        \ob_start();
+        try {
+            include $path;
+            $html = (string)\ob_get_clean();
+        } catch (\Throwable $e) {
+            if (\ob_get_level() > 0) {
+                \ob_end_clean();
+            }
+            throw new \RuntimeException('theme_layout_entity_include_failed: ' . $e->getMessage(), 0, $e);
+        }
+
+        return $html;
+    }
+
+    private function spliceSolidifiedSlots(string $html, string $rendered): string
+    {
+        if (\preg_match_all('/<!--@weline-slot:([\w.-]+)-->/', $rendered, $matches) < 1) {
+            return $html;
+        }
+        $seen = [];
+        foreach ($matches[1] as $slotId) {
+            $slotId = (string)$slotId;
+            if (isset($seen[$slotId])) {
+                continue;
+            }
+            $seen[$slotId] = true;
+            $inner = $this->boundaryScanner->extractSlotInner($rendered, $slotId, false, true);
+            if ($inner === null) {
+                continue;
+            }
+            // Empty nested placeholders must not wipe a shell slot that already
+            // has markup; only replace when the solidified inner has content.
+            if (trim($inner) === '') {
+                continue;
+            }
+            $html = $this->replaceSlotInner($html, $slotId, $inner);
+        }
+
+        return $html;
+    }
+
+    private function primeLocaleConfigs(
+        int $themeId,
+        string $pageType,
+        string $status,
+        string $area,
+        string $pageScope,
+        string $identityKey,
+        string $structureOrRelease,
+    ): void {
+        try {
+            $configByUid = $this->configStore->readPageConfig(
+                $themeId,
+                $pageScope,
+                $identityKey,
+                $structureOrRelease,
+            );
+        } catch (\Throwable) {
+            return;
+        }
+        if ($configByUid === []) {
+            return;
+        }
+        $versionKey = $identityKey . '/' . $structureOrRelease;
+        foreach ($configByUid as $uid => $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $uid = \strtolower(\trim((string)$uid));
+            if ($uid === '') {
+                continue;
+            }
+            if ($this->configStore->needsStructureHydration($node)) {
+                $configByUid[$uid] = $this->configStore->hydratePageNodeFromStructure(
+                    $node,
+                    $uid,
+                    $themeId,
+                    $pageScope,
+                    $versionKey,
+                );
+            }
+        }
+        $this->prefetchDictionaryModules(['page' => \array_values($configByUid)]);
+        // Baked entity config is language-neutral structure; storefront locale media/copy
+        // lives in RESOURCE_I18N and must overlay before widget render (hero banners, etc.).
+        // Prefer request scope for i18n identity (editor publishes under website/store),
+        // not only the entity directory scope (may be an ancestor without i18n rows).
+        $layout = [];
+        foreach ($configByUid as $uid => $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $slot = (string)($node['slot_id'] ?? 'content');
+            $areaName = \trim((string)($node['area'] ?? ''));
+            if ($areaName === '') {
+                $areaName = $slot;
+            }
+            $node['node_uid'] = \strtolower(\trim((string)($node['node_uid'] ?? $uid)));
+            $layout[$areaName]['widgets'][] = $node;
+        }
+        $overlayScope = \trim($this->resolveScope());
+        if ($overlayScope === '') {
+            $overlayScope = $pageScope;
+        }
+        try {
+            $layout = $this->layoutResolver->overlayLocaleOnLayout(
+                $layout,
+                $themeId,
+                $pageType,
+                $status,
+                $area,
+                [
+                    'layout_option' => 'default',
+                    'scope' => $overlayScope,
+                    'target_type' => 'global',
+                    'target_id' => 0,
+                ],
+            );
+        } catch (\Throwable) {
+            $layout = $layout;
+        }
+        foreach ($layout as $areaData) {
+            if (!\is_array($areaData)) {
+                continue;
+            }
+            $widgets = $areaData['widgets'] ?? [];
+            if (!\is_array($widgets)) {
+                continue;
+            }
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+                if ($uid !== '') {
+                    RequestContext::set('theme.layout_entity.node.' . $uid, $widget);
+                }
+            }
+        }
     }
 
     /**
@@ -891,8 +1264,8 @@ final class ThemeLayoutEntitySlotFiller
         }
 
         $candidate = $this->paths->pageStructureOrRelease('', true, $preferredReleaseId);
-        $path = $this->paths->pageStructureJson($themeId, $scope, $identityKey, $candidate);
-        if (!\is_file($path)) {
+        $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $candidate);
+        if (!$this->pagePhtmlHasSlots($path)) {
             return null;
         }
 
