@@ -125,18 +125,28 @@ final class ThemeLayoutEntityPaths
         return $out;
     }
 
+    public function pageIdentityDir(int $themeId, string $scope, string $identityKey): string
+    {
+        return $this->themeScopeDir($themeId, $scope)
+            . 'pages' . \DIRECTORY_SEPARATOR
+            . $this->normalizePathSegment($identityKey, 'identity') . \DIRECTORY_SEPARATOR;
+    }
+
     /**
-     * @param string $structureOrRelease structure_key hash or release segment (e.g. r123)
+     * Points at the current solidified page segment. Config writes must not rewrite this file's target phtml.
      */
+    public function pageCurrentJson(int $themeId, string $scope, string $identityKey): string
+    {
+        return $this->pageIdentityDir($themeId, $scope, $identityKey) . 'current.json';
+    }
+
     public function pageDir(
         int $themeId,
         string $scope,
         string $identityKey,
         string $structureOrRelease,
     ): string {
-        return $this->themeScopeDir($themeId, $scope)
-            . 'pages' . \DIRECTORY_SEPARATOR
-            . $this->normalizePathSegment($identityKey, 'identity') . \DIRECTORY_SEPARATOR
+        return $this->pageIdentityDir($themeId, $scope, $identityKey)
             . $this->normalizePathSegment($structureOrRelease, 'structure') . \DIRECTORY_SEPARATOR;
     }
 

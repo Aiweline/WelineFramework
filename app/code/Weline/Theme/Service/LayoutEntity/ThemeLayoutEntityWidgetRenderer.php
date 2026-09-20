@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeComponentRenderer;
 use Weline\Theme\Service\ThemePlaceableRegistry;
@@ -41,15 +42,30 @@ final class ThemeLayoutEntityWidgetRenderer
             return '<!-- theme-layout-entity:invalid-widget-call -->';
         }
 
-        $entry = $this->configStore->readNodeConfig(
-            $configSource,
-            $nodeUid,
-            $themeId,
-            $scopeKey,
-            $versionKey,
-        );
+        $primed = RequestContext::get('theme.layout_entity.node.' . $nodeUid);
+        $entry = \is_array($primed) && $primed !== []
+            ? $primed
+            : $this->configStore->readNodeConfig(
+                $configSource,
+                $nodeUid,
+                $themeId,
+                $scopeKey,
+                $versionKey,
+            );
         if ($entry === []) {
             return '<!-- theme-layout-entity:missing-config:' . \htmlspecialchars($nodeUid, \ENT_QUOTES) . ' -->';
+        }
+
+        // Primed page-config may be param-only (legacy bake). Hydrate identity from structure.
+        if ($configSource === 'page' && $this->configStore->needsStructureHydration($entry)) {
+            $entry = $this->configStore->hydratePageNodeFromStructure(
+                $entry,
+                $nodeUid,
+                $themeId,
+                $scopeKey,
+                $versionKey,
+            );
+            RequestContext::set('theme.layout_entity.node.' . $nodeUid, $entry);
         }
 
         if (\array_key_exists('is_active', $entry) && empty($entry['is_active'])) {
@@ -73,13 +89,7 @@ final class ThemeLayoutEntityWidgetRenderer
         try {
             $theme = null;
             if ($themeId > 0) {
-                /** @var WelineTheme $themeModel */
-                $themeModel = ObjectManager::getInstance(WelineTheme::class);
-                $loaded = clone $themeModel;
-                $loaded->load($themeId);
-                if ((int)$loaded->getId() === $themeId) {
-                    $theme = $loaded;
-                }
+                $theme = $this->themeForRequest($themeId);
             }
 
             $definition = $this->placeableRegistry->find($module, $type, $code, $theme, 'frontend');
@@ -98,6 +108,27 @@ final class ThemeLayoutEntityWidgetRenderer
                 . \htmlspecialchars($nodeUid . ':' . $e->getMessage(), \ENT_QUOTES)
                 . ' -->';
         }
+    }
+
+    private function themeForRequest(int $themeId): ?WelineTheme
+    {
+        $cacheKey = 'theme.layout_entity.theme.' . $themeId;
+        $cached = RequestContext::get($cacheKey);
+        if ($cached instanceof WelineTheme) {
+            return clone $cached;
+        }
+
+        /** @var WelineTheme $themeModel */
+        $themeModel = ObjectManager::getInstance(WelineTheme::class);
+        $loaded = clone $themeModel;
+        $loaded->load($themeId);
+        if ((int)$loaded->getId() !== $themeId) {
+            return null;
+        }
+
+        RequestContext::set($cacheKey, $loaded);
+
+        return clone $loaded;
     }
 
     /**

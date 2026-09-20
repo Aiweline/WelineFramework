@@ -117,8 +117,135 @@ final class ThemeLayoutEntityConfigStore
             : $this->readPageConfigByKeys($themeId, $scopeKey, $versionKey);
 
         $entry = $map[$nodeUid] ?? null;
+        if (!\is_array($entry)) {
+            return [];
+        }
+        if ($configSource === 'page') {
+            $entry = $this->hydratePageNodeFromStructure($entry, $nodeUid, $themeId, $scopeKey, $versionKey);
+        }
 
-        return \is_array($entry) ? $entry : [];
+        return $entry;
+    }
+
+    /**
+     * Older bakes stored only widget params in page-config.json (no widget_module/code).
+     * Structure.json still has identity — merge so storefront render cannot evaporate.
+     *
+     * @param array<string, mixed> $entry
+     * @return array<string, mixed>
+     */
+    public function hydratePageNodeFromStructure(
+        array $entry,
+        string $nodeUid,
+        int $themeId,
+        string $scopeKey,
+        string $versionKey,
+    ): array {
+        $nodeUid = \strtolower(\trim($nodeUid));
+        if ($nodeUid === '' || !$this->needsStructureHydration($entry)) {
+            return $entry;
+        }
+        $meta = $this->structureNodeMeta($themeId, $scopeKey, $versionKey, $nodeUid);
+        if ($meta === []) {
+            return $entry;
+        }
+        foreach (['widget_module', 'widget_code', 'widget_type', 'slot_id', 'area'] as $key) {
+            $value = \trim((string)($meta[$key] ?? ''));
+            if ($value !== '' && \trim((string)($entry[$key] ?? '')) === '') {
+                $entry[$key] = $value;
+            }
+        }
+        if (!\array_key_exists('is_active', $entry) && \array_key_exists('is_active', $meta)) {
+            $entry['is_active'] = $meta['is_active'];
+        }
+        if (\trim((string)($entry['node_uid'] ?? '')) === '') {
+            $entry['node_uid'] = $nodeUid;
+        }
+
+        return $entry;
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
+    public function needsStructureHydration(array $entry): bool
+    {
+        return \trim((string)($entry['widget_module'] ?? '')) === ''
+            || \trim((string)($entry['widget_code'] ?? '')) === '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function structureNodeMeta(
+        int $themeId,
+        string $scopeKey,
+        string $versionKey,
+        string $nodeUid,
+    ): array {
+        $parts = \explode('/', \str_replace('\\', '/', $versionKey), 2);
+        $identityKey = $parts[0] ?? '';
+        $structureOrRelease = $parts[1] ?? '';
+        if ($identityKey === '' || $structureOrRelease === '') {
+            return [];
+        }
+        $path = $this->paths->pageStructureJson($themeId, $scopeKey, $identityKey, $structureOrRelease);
+        $slots = $this->readStructureSlotsCached($path);
+        foreach ($slots as $widgets) {
+            if (!\is_array($widgets)) {
+                continue;
+            }
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                if (\strtolower(\trim((string)($widget['node_uid'] ?? ''))) === $nodeUid) {
+                    return $widget;
+                }
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function readStructureSlotsCached(string $path): array
+    {
+        if ($path === '' || !\is_file($path)) {
+            return [];
+        }
+        $logicalKey = 'structure|' . $path;
+        $hotCache = $this->resolveHotCache();
+        if ($hotCache instanceof StorefrontScopeHotCache) {
+            $cached = $hotCache->rememberPolicy(
+                self::cachePolicy(),
+                $logicalKey,
+                fn(): array => $this->decodeStructureSlots($path),
+            );
+
+            return \is_array($cached) ? $cached : [];
+        }
+
+        return $this->decodeStructureSlots($path);
+    }
+
+    /**
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function decodeStructureSlots(string $path): array
+    {
+        $decoded = \json_decode((string)\file_get_contents($path), true);
+        $slots = \is_array($decoded['slots'] ?? null) ? $decoded['slots'] : [];
+        $out = [];
+        foreach ($slots as $slotId => $widgets) {
+            if (\is_array($widgets)) {
+                $out[(string)$slotId] = $widgets;
+            }
+        }
+
+        return $out;
     }
 
     /**
