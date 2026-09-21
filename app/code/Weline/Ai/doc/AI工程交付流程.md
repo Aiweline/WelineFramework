@@ -25,7 +25,7 @@
 1c 宿主计划模式    默认 Plan Mode；**简单可 skip**（仍须验收）
 2 扩展点选型       扩展点选型.md → 文档索引 / doc/event / Query / Hook
 3 计划拆解         plan.md + task.md（或任务笔记；仍在 Plan Mode）
-3b 工程团队        非简单：框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；验收 UI+原型实质签收；停工等确认
+3b 工程团队        非简单：一席一智能体；席间 channel+resume 互聊；框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；验收 UI+原型实质签收；停工等确认
 4 实现             用户批准后切回 Agent；宿主原生编辑 + TDD
 5 复审             架构/缺陷/安全 + 每触发专席合规复审（fail→返工）
 6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型签收后才可交出
@@ -83,17 +83,17 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 3b. 工程团队（复杂才自己选 team）
 
-- **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口。简单走监工，每句 `监工:`。复杂自己进入 team，并自选本波席位；面向用户的每一句必须是 `Team:{席位}:`，例如 `Team:架构师:`。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
+- **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口。简单走监工，每句 `监工:`。复杂自己进入 team；**父会话仅 `Team:项目经理:`**；其余席位必须是**真实子智能体**（`one_seat_one_agent`），禁止父会话换前缀扮演。席间经 `channel/{thread}.md` + resume **互聊**（`peer_talk_via_channel`）；项目经理只做交换机。转述子智能体结论时才出现 `Team:架构师:` 等前缀。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
 - **框架优先**：需求 / 设计 / 施工 / 复审先映射框架机制与组件，再谈业务补丁。
 - **全专席双轨**：凡触发专席（扩展点 / 事件 / Taglib / UI / i18n…）= 施工轨 + 合规复审轨；复审 fail → 返工，禁止带病进验收。
 - **流水线流动（`team_flow_on_contracts`）**：立项会后开 **对齐冻结会**（测试主持）——先钉可执行 UC + `contracts.md` + `deps.md`，再技术方案定稿与施工。施工按依赖**唤醒并发**；验收只执行已冻用例。禁止「开发完才补主路径用例」或全员空等终点。
-- **组件协商（UI in_scope）**：优先复用 `w-*` / Taglib / Widget；不足须 **原型 ∥ UI**（±主题）协商写入 `component-negotiate.md` 后再扩展。
+- **组件协商（UI in_scope）**：优先复用 `w-*` / Taglib / Widget；不足须 **原型 ∥ UI**（±主题）**真实子智能体通道互聊**写入 `component-negotiate.md` 后再扩展。
 - **验收实质签收（UI in_scope）**：测试 e2e 全绿不能代替；**UI** 写 `acceptance-ui.md`、**原型** 写 `acceptance-prototype.md` 亲自对照活页签收；任一 fail 禁止交出。
 - **免除**：内容运营（产品优化 / 详情优化 / 翻译优化 / 主图优化 / 新建文章 / 规格修复）两种前缀都不用。
 - **本机测试账号（`local_dev_test_accounts_self_serve`）**：开发环境后台默认 **admin / admin**；前台自建测试顾客。禁止向用户索要账号密码或「请你登录验证」。
 - **并发**：仅 team 模式，且文件或扩展点不重叠、**contracts + UC 已冻结**、本席依赖已满足，才多个子智能体。
-- **上报与停工**：跨轨或硬规则问题必须上报并开会。无人能拍板或重大架构矛盾 → 停工汇报，确认前禁止改 PHP / 模板 / CSS。停工句也要带 `Team:项目经理:`。
-- **纪要**：仅 team 模式写入 `doc/开发/team/{slug}/`（含 `surfaces.md` / `components.md` / `contracts.md` / `deps.md` / `{席位}-review.md`）。子智能体回报完成不是交付。
+- **上报与停工**：跨轨或硬规则问题必须上报并开会（通道互聊）。无人能拍板或重大架构矛盾 → 停工汇报，确认前禁止改 PHP / 模板 / CSS。停工句也要带 `Team:项目经理:`。
+- **纪要**：仅 team 模式写入 `doc/开发/team/{slug}/`（含 `roster.md` / `channel/` / `surfaces.md` / `components.md` / `contracts.md` / `deps.md` / `{席位}-review.md`）。子智能体回报完成不是交付。
 
 ### 4. 实现
 
@@ -158,7 +158,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 3. **禁止**在会经 `data-wslot` 注入的 **部件模板**里写含 `<?=` 的内联 `<script>`；脚本放 `view/statics/js/widgets/{code}.js`，模板用 `@static(...)` + `defer` + `data-no-extract="true"`。
 4. **禁止**在 Taglib `callback()` / `runtime_callback()` 返回的 HTML 里写裸 `@static(...)`（不会二次编译，浏览器会 404 `.../@static(Module::css/foo.css)`）；须用 `Template::fetchTagSource(DataInterface::dir_type_STATICS, ...)`，见 [如何自定义Tag.md](../../Taglib/doc/如何自定义Tag.md) §静态资源。
 5. **禁止**在布局 slot 的 `<else/>` 写业务/demo 占位 UI；空 slot + 部件 `default_injections` 负责开箱内容。
-6. **硬规则（布局内嵌归属）**：Theme `layouts/` / `partials/` 仅允许归属 `Weline_Theme` 的 `<w:widget>` / `fetch(...Weline_Theme::.../widgets/...)`；其他模块必须空 slot + `default_injections`。改后跑 `php bin/w frontend:check-theme-layout-widgets`。
+6. **硬规则（部件放置 / `theme_layout_widget_owner`）**：（1）**同模块**：布局已用 `<w:widget>` / `fetch(.../widgets/...)` 内嵌某部件 → **禁止**再在该部件 JSON 写 `default_injections`（二选一，删 JSON）。（2）**跨模块**：布局/partial **禁止**互调别的模块部件；外国部件**只能**空 `<w:slot>` + 拥有模块的 JSON `default_injections`。Theme 布局仅可内嵌 `Weline_Theme`。改后跑 `php bin/w frontend:check-theme-layout-widgets`。
 7. **必须**为前台字面 `<section>` 与 `w:slot wrapper="section"` 配置非空语义 section 身份（属性名 `weline-code`；部件根节点用 `WidgetUiScope`）；改模板后跑 `php bin/w frontend:check-section-code`。
 8. 视觉值优先主题 CSS 变量；浏览器业务请求走 `Weline.Api.*`。
 9. **内容区宽度（高压线·统一版心，`frontend_unified_content_container`）**：必须遵守 `theme-layout-content-width.md`——**禁止自写一套页面/模块容器**。已包 `.w-container` 的页面只能 `width:100%` + `padding-inline:0`（禁止再写 `max-width`/`padding-inline`）；未包容器的 checkout/cart 等独立壳须用 `--weline-layout-content-max-width` 与 `--weline-layout-content-padding-inline`（或 `.w-theme-content-width`），禁止 `1440px`/`1200px` fallback 与双重 gutter。特质 Hero/CTA 色可在局部 scope 自定义，宽度无例外。

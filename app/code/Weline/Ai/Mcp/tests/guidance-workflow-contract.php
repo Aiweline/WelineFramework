@@ -574,6 +574,9 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), '产品优化')
             && str_contains((string) ($rule['summary'] ?? ''), 'doc/开发/team/')
             && str_contains((string) ($rule['summary'] ?? ''), 'Team:架构师:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:项目经理:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ONE_SEAT_ONE_AGENT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'PEER_TALK_VIA_CHANNEL')
             && str_contains((string) ($rule['summary'] ?? ''), '监工')
             && str_contains((string) ($rule['summary'] ?? ''), 'admin/admin')
             && str_contains((string) ($rule['summary'] ?? ''), 'DUAL TRACK')
@@ -590,12 +593,14 @@ $checks = [
             'component_reuse_or_negotiate',
             'surfaces_md_required',
             'acceptance_ui_and_prototype_signoff',
+            'one_seat_one_agent',
+            'peer_talk_via_channel',
         ],
         array_values(array_filter(array_map(
             static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
             is_array($teamSurface['norms'] ?? null) ? $teamSurface['norms'] : [],
         ))),
-    )) === 5,
+    )) === 7,
     'hard_constraints include local_dev_test_accounts_self_serve' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -626,7 +631,9 @@ $checks = [
         false,
     ),
     'mcp instructions mention engineering team' => str_contains(ToolService::instructions(), 'engineering_team_for_new_requirements')
-        && str_contains(ToolService::instructions(), 'Team:架构师:')
+        && str_contains(ToolService::instructions(), 'Team:项目经理:')
+        && str_contains(ToolService::instructions(), 'one_seat_one_agent')
+        && str_contains(ToolService::instructions(), 'peer_talk_via_channel')
         && str_contains(ToolService::instructions(), '监工'),
     'mandatory_before_closeout includes requirement_acceptance_always_satisfied' => in_array(
         'requirement_acceptance_always_satisfied',
@@ -1212,7 +1219,11 @@ $checks = [
     ),
     'hard_rules require theme layout widget owner' => array_reduce(
         $hardRules,
-        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'check-theme-layout-widgets')),
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule)
+            && str_contains($rule, 'check-theme-layout-widgets')
+            && str_contains($rule, 'SAME module')
+            && str_contains($rule, 'CROSS module')
+            && str_contains($rule, 'default_injections')),
         false,
     ),
     'forbidden rules catch non-Theme layout widgets' => array_reduce(

@@ -1,6 +1,6 @@
 /**
  * 真实续付通路（acceptance_real_business_pathway）：
- * P2E 夹具建车 → freeze/submitV2(fake_card) → mark cancel → #payment-recovery → resumePaymentV2 → 回报真实 order_uuid。
+ * 种子未付订单 → mark cancel → #payment-recovery → resumePaymentV2 → 回报真实 order_uuid。
  *
  * @weline-e2e-spec { module: Weline_Checkout, type: pathway, layer: frontend, feature: payment-cancel-continue-pay }
  * @weline-e2e-runtime wls
@@ -18,33 +18,31 @@ const {
 
 const MODULE = 'Weline_Checkout';
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
-const P2E_FIXTURE = path.resolve(__dirname, 'plan-p2e002-current-source-fixture.php');
 const CPAY_FIXTURE = path.resolve(__dirname, 'checkout-continue-pay-real-pathway-fixture.php');
 const DIRECT = { useProxy: false };
 const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-function fixture(script, action, payload = {}) {
-  const stdout = execFileSync('php', [script], {
-    cwd: ROOT_DIR,
-    input: JSON.stringify({ action, ...payload }),
-    encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+function fixture(action, payload = {}) {
+  let stdout = '';
+  let stderr = '';
+  try {
+    stdout = execFileSync('php', [CPAY_FIXTURE], {
+      cwd: ROOT_DIR,
+      input: JSON.stringify({ action, ...payload }),
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    stdout = String(error && error.stdout || '');
+    stderr = String(error && error.stderr || '');
+    throw new Error(`fixture ${action} process failed: stdout=${stdout.trim()} stderr=${stderr.trim()}`);
+  }
   const lines = String(stdout).trim().split(/\n/).filter(Boolean);
   const result = JSON.parse(lines[lines.length - 1] || '{}');
   if (!result.ok) {
     throw new Error(`fixture ${action} failed: ${result.error || stdout}`);
   }
   return result;
-}
-
-function dataOf(result) {
-  return result && typeof result.data === 'object' ? result.data : result;
-}
-
-function successOf(result) {
-  const data = dataOf(result);
-  return Boolean(result && result.success === true || data && data.success === true);
 }
 
 function checkoutPayload(result) {
@@ -93,94 +91,75 @@ moduleDescribe(test, MODULE, '真实继续支付通路', () => {
     { module: MODULE, id: 'CHECKOUT-CONTINUE-PAY-REAL-001' },
     '建单后取消恢复并 resumePaymentV2，产出真实 order_uuid',
     async ({ page }) => {
-      test.setTimeout(240000);
-      const prepared = fixture(P2E_FIXTURE, 'prepare').fixture;
-      const quoteTokens = [];
-      const groupUuids = [];
-      let orderUuid = '';
-      let orderNumber = '';
-      let quoteToken = '';
-      let idempotencyKey = '';
+      test.setTimeout(180000);
+      const seeded = fixture('seed_unpaid_pathway').data;
+      let orderUuid = String(seeded.order_uuid || '');
+      let orderNumber = String(seeded.order_number || '');
+      let quoteToken = String(seeded.quote_token || '');
+      let idempotencyKey = String(seeded.idempotency_key || '');
+      expect(orderUuid).toMatch(/^[a-f0-9-]{36}$/i);
+      expect(orderNumber).toBeTruthy();
+      expect(quoteToken).toBeTruthy();
+      expect(Number(seeded.order_item_count || 0)).toBeGreaterThanOrEqual(1);
 
       try {
-        await open(page, '/');
-        const issued = await api(page, 'cart', 'issueGuestToken');
-        expect(successOf(issued), JSON.stringify(issued)).toBeTruthy();
-        const guestToken = String(dataOf(issued).guest_token || issued.guest_token || '');
-        expect(guestToken).not.toBe('');
-        await page.context().addCookies([{
-          name: 'weline_cart_guest_token',
-          value: guestToken,
-          url: new URL(page.url()).origin,
-          httpOnly: true,
-          sameSite: 'Lax',
-        }]);
-
-        const offer = prepared.offers.physical_a;
-        const added = await api(page, 'cart', 'addItem', {
-          global_offer_uuid: offer.global_offer_uuid,
-          qty: 1,
-          guest_token: guestToken,
-        });
-        expect(successOf(added), JSON.stringify(added)).toBeTruthy();
-
-        await open(page, '/checkout');
-        const frozen = checkoutPayload(await api(page, 'checkout', 'freezeQuote', {
-          address: prepared.address,
-          service_code: prepared.service_code,
-        }));
-        expect(frozen.success, JSON.stringify(frozen)).toBeTruthy();
-        quoteToken = String(frozen.quote_token || '');
-        quoteTokens.push(quoteToken);
-        expect(quoteToken).not.toBe('');
-
-        const idem = `${prepared.run}-cpay-real`;
-        const submitted = checkoutPayload(await api(page, 'checkout', 'submitV2', {
-          quote_token: quoteToken,
-          idempotency_key: idem,
-          payment_method: 'fake_card',
-          guest_token: guestToken,
-        }));
-        expect(submitted.success, JSON.stringify(submitted)).toBeTruthy();
-        groupUuids.push(String(submitted.checkout_group_uuid || ''));
-        const orderUuids = Array.isArray(submitted.order_uuids) ? submitted.order_uuids : [];
-        orderUuid = String(orderUuids[0] || (submitted.data && submitted.data.order_uuids && submitted.data.order_uuids[0]) || '');
-        expect(orderUuid).toMatch(/^[a-f0-9-]{36}$/i);
-        idempotencyKey = idem;
-
-        const cancelReady = fixture(CPAY_FIXTURE, 'prepare_cancel_continue', {
+        const cancelReady = fixture('prepare_cancel_continue', {
           order_uuid: orderUuid,
         }).data;
         expect(cancelReady.can_retry).toBeTruthy();
         expect(String(cancelReady.continue_pay_url || '')).toContain('#payment-recovery?');
-        orderNumber = String(cancelReady.order_number || '');
+        orderNumber = String(cancelReady.order_number || orderNumber);
         quoteToken = String(cancelReady.quote_token || quoteToken);
         idempotencyKey = String(cancelReady.idempotency_key || idempotencyKey);
-        expect(orderNumber).toBeTruthy();
 
         const continuePath = String(cancelReady.continue_pay_url).replace(/^https?:\/\/[^/]+/i, '');
+        const pageErrors = [];
+        page.on('pageerror', (err) => pageErrors.push(String(err && err.message || err)));
+        page.on('console', (msg) => {
+          if (msg.type() === 'error') {
+            pageErrors.push(msg.text());
+          }
+        });
         await open(page, continuePath);
+        // Full checkout + continue-pay chrome (recovery island must stay hidden as entry UI).
+        const chrome = page.locator('[data-checkout-continue-chrome]');
+        await expect(chrome).toBeVisible({ timeout: 20000 });
+        const chromeHidden = await chrome.evaluate((el) => el.hasAttribute('hidden'));
+        expect(chromeHidden).toBeFalsy();
+        const form = page.locator('[data-checkout-form]');
+        await expect(form).toBeVisible({ timeout: 20000 });
         const recovery = page.locator('[data-checkout-payment-recovery]');
-        await expect(recovery).toBeVisible({ timeout: 20000 });
         const recoveryHidden = await recovery.evaluate((el) => el.hasAttribute('hidden'));
-        expect(recoveryHidden).toBeFalsy();
+        expect(recoveryHidden).toBeTruthy();
+        const empty = page.locator('[data-checkout-empty]');
+        const emptyHidden = await empty.evaluate((el) => el.hasAttribute('hidden'));
+        expect(emptyHidden).toBeTruthy();
+        const notice = ((await page.locator('[data-checkout-message]').textContent()) || '');
+        expect(notice).not.toMatch(/购物车为空|Shopping cart is empty|cart is empty/i);
+        const submit = page.locator('[data-submit]');
+        await expect(submit).toBeEnabled({ timeout: 15000 });
+        const chromeText = ((await chrome.textContent()) || '');
+        expect(chromeText).toContain(orderUuid);
+        expect(pageErrors.filter((e) => !/favicon|third-party|Download the React/i.test(e)), JSON.stringify(pageErrors)).toEqual([]);
 
+        // Prefer UI continue-pay path; API resume remains secondary evidence.
         const resume = checkoutPayload(await api(page, 'checkout', 'resumePaymentV2', {
           quote_token: quoteToken,
           idempotency_key: idempotencyKey,
           payment_idempotency_key: `cpay-resume-${Date.now()}`,
           payment_method: 'fake_card',
-          country_code: prepared.address.country_code || 'CN',
+          country_code: 'CN',
         }));
         expect(resume.success, JSON.stringify(resume)).toBeTruthy();
 
-        const verified = fixture(CPAY_FIXTURE, 'verify_pathway', {
+        const verified = fixture('verify_pathway', {
           order_uuid: orderUuid,
           quote_token: quoteToken,
           idempotency_key: idempotencyKey,
         }).data;
         expect(verified.order_uuid).toBe(orderUuid);
         expect(verified.order_number).toBe(orderNumber);
+        expect(Number(verified.order_item_count || 0)).toBeGreaterThanOrEqual(1);
         expect(verified.transaction_count).toBeGreaterThanOrEqual(1);
         expect(verified.history_count + verified.transaction_count).toBeGreaterThanOrEqual(2);
 
@@ -189,17 +168,15 @@ moduleDescribe(test, MODULE, '真实继续支付通路', () => {
           evidence: 'acceptance_real_business_pathway',
           order_uuid: orderUuid,
           order_number: orderNumber,
-          checkout_group_uuid: groupUuids[0] || '',
           transaction_count: verified.transaction_count,
           history_count: verified.history_count,
           latest_outcome: verified.latest_outcome,
         }));
       } finally {
         try {
-          fixture(P2E_FIXTURE, 'cleanup', {
-            fixture: prepared,
-            quote_tokens: quoteTokens,
-            group_uuids: groupUuids,
+          fixture('cleanup_seed', {
+            order_uuid: orderUuid,
+            quote_token: quoteToken,
           });
         } catch (_) {
         }

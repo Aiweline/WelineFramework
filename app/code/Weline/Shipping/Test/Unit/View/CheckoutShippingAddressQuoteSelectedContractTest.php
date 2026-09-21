@@ -22,7 +22,7 @@ final class CheckoutShippingAddressQuoteSelectedContractTest extends TestCase
         self::assertStringContainsString('syncFormFromSelectedCard', $js);
         self::assertStringContainsString('resolveQuoteAddress: resolveQuoteAddress', $js);
         self::assertStringContainsString(
-            'checkout-shipping-address.js?v=20260916-phone-intl1',
+            'checkout-shipping-address.js?v=20260921-cpay-addr1',
             $modules,
         );
     }

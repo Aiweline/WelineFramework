@@ -65,6 +65,10 @@
 结账接口不支持该操作：%{1},"Checkout does not support operation: %{1}"
 购物车币种与当前请求币种不一致,"The shopping cart currency is inconsistent with the current request currency"
 结账报价失败,结账报价失败
+改址参数不完整,改址参数不完整
+无权修改该订单地址,无权修改该订单地址
+订单不存在,"Order does not exist"
+改址失败,改址失败
 支付恢复凭据不完整，请重新进入结账流程。,"Payment recovery details are incomplete. Please restart checkout."
 "支付重试幂等键长度须为 1..128。","The payment retry idempotency key must be 1 to 128 characters."
 找不到可恢复的支付状态，请从订单列表继续。,"No recoverable payment state was found. Please continue from your order list."
@@ -197,7 +201,6 @@
 结账,Checkout
 无效的请求方法,"Invalid request method"
 请先登录,"Please login first"
-订单不存在,"Order does not exist"
 无权操作此订单,"No permission to operate this order"
 订单已取消,"Order cancelled"
 取消订单失败：%{1},"Failed to cancel order: %{1}"
@@ -297,13 +300,19 @@ SKU,SKU
 订单已创建，支付仍在处理中。,"Your order was created and payment is still processing."
 订单已创建，但支付未完成。您可以重试支付，不会重复下单。,"Your order was created, but payment was not completed. You can retry without creating another order."
 重试支付,"Retry payment"
+正在继续支付未完成订单,"Continuing payment for an unfinished order"
+正在继续支付未完成订单。,"Continuing payment for an unfinished order."
+请补全收货信息后再支付。,"Please complete your shipping details before paying."
+正在继续支付...,正在继续支付...
 正在重试支付...,"Retrying payment..."
 订单编号,"Order reference"
 "Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api is not ready yet, please refresh the page and try again."
 无法恢复购物车会话，请刷新页面后重试。,"Unable to restore the cart session. Please refresh the page and try again."
 查看规格图,"View option image"
 关闭,Close
+切换结账,切换结账
 安全结账,"Secure checkout"
+零售,零售
 暂时无法结账,"Unable to checkout at the moment"
 购物车是空的,"Shopping cart is empty"
 先选择需要采购的商品，再回来完成配送与支付。,"First select the products you want to purchase, then come back to complete delivery and payment."
@@ -367,9 +376,6 @@ China,China
 定位完成，但当前未启用地址添加模块。,"Location completed"
 定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
 自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
-正在前往结账...,"Proceeding to checkout..."
-结账准备失败,"Checkout preparation failed"
-立即结账,"Proceed to checkout"
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -392,6 +398,9 @@ China,China
 配送,配送
 合计,合计
 错误代码：,错误代码：
+正在前往结账...,"Proceeding to checkout..."
+结账准备失败,"Checkout preparation failed"
+立即结账,"Proceed to checkout"
 订单列表,"order list"
 订单号关键词,"Order number keyword"
 全部状态,"All status"
@@ -465,6 +474,11 @@ China,China
 支付金额无效,"Payment amount is invalid"
 "Order %{1}","Order %{1}"
 "Checkout order %{1}","Checkout order %{1}"
+续付凭据不完整,续付凭据不完整
+无权继续支付该订单,无权继续支付该订单
+结账会话不可用于继续支付,结账会话不可用于继续支付
+订单不存在或不可用,订单不存在或不可用
+订单已不可继续支付,订单已不可继续支付
 批发快捷支付请使用完整结账,批发快捷支付请使用完整结账
 请选择支付方式,请选择支付方式
 购物车为空,购物车为空
@@ -523,20 +537,23 @@ China,China
 地址不存在,"Address not found"
 当前地址暂不可配送，请更换收货地址。,"This address cannot be shipped to. Please choose another delivery address."
 该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
+本地测试支付,本地测试支付
+仅用于本地开发验证，不会产生真实扣款。,仅用于本地开发验证，不会产生真实扣款。
+货到付款,货到付款
 万能结账,万能结账
 快捷购买,快捷购买
 找朋友代付,找朋友代付
-"收货地 %{1} 本身通常可送达时，原因一般不在国家。","收货地 %{1} 本身通常可送达时，原因一般不在国家。"
-暂时无法计算运费,暂时无法计算运费
-购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助补全商品重量后再结账。,购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助补全商品重量后再结账。
-需配送的商品缺少长宽高尺寸，体积重量无法计算。请联系客服补全尺寸后再试。,需配送的商品缺少长宽高尺寸，体积重量无法计算。请联系客服补全尺寸后再试。
-超出可配送重量,超出可配送重量
-订单计费重量超过当前配送方案上限。请减少件数、拆成多笔订单，或联系客服改用重货方案。,订单计费重量超过当前配送方案上限。请减少件数、拆成多笔订单，或联系客服改用重货方案。
-当前结账币种暂时无法换算运费。请切换币种，或联系客服协助处理。,当前结账币种暂时无法换算运费。请切换币种，或联系客服协助处理。
-当前地址暂无可用配送,当前地址暂无可用配送
-收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。,收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。
-当前收货国家：%{1}。,当前收货国家：%{1}。
-系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。
+"收货地 %{1} 本身通常可送达时，原因一般不在国家。","When destination %{1} is normally deliverable, the cause is usually not the country."
+暂时无法计算运费,"Unable to calculate shipping right now"
+购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助补全商品重量后再结账。,"Some items in your cart are missing weight. International shipping is calculated by weight, so we cannot quote yet. Please contact support to complete product weights before checkout."
+需配送的商品缺少长宽高尺寸，体积重量无法计算。请联系客服补全尺寸后再试。,"Shippable items are missing length/width/height, so dimensional weight cannot be calculated. Please contact support to complete dimensions and try again."
+超出可配送重量,"Exceeds shippable weight"
+订单计费重量超过当前配送方案上限。请减少件数、拆成多笔订单，或联系客服改用重货方案。,"The chargeable weight exceeds the limit for current shipping options. Please reduce quantity, split into multiple orders, or contact support for heavy-cargo options."
+当前结账币种暂时无法换算运费。请切换币种，或联系客服协助处理。,"Shipping cannot be converted for the current checkout currency. Please switch currency or contact support."
+当前地址暂无可用配送,"No shipping available for this address"
+收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。,"No shipping service matched this address. Please confirm the country or region, or contact support about delivery coverage."
+当前收货国家：%{1}。,"Current destination country: %{1}."
+系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,"No shipping options were returned. Please confirm the shipping address and product details, or contact support (common causes: missing weight/dimensions, or destination restrictions)."
 本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。,"This payment was not completed and the order is unpaid. Return to checkout to choose another payment method."
 结算结果,结算结果
 订单提交失败,订单提交失败
@@ -617,3 +634,5 @@ China,China
 订单已创建，正在前往支付页面。,"The order has been created and you are heading to the payment page."
 订单已创建，支付正在处理中。,"The order has been created and payment is being processed."
 您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。,"You cancelled this payment. The order is not paid yet. You can return to checkout and try again."
+系统暂未返回可用的配送方案。请确认收货地址，或联系客服了解具体原因。,"No shipping options were returned. Please confirm the shipping address, or contact support for details."
+购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助后再结账。,"Some cart items are missing weight. International shipping requires weight, so we cannot quote yet. Please contact support before checkout."
