@@ -17,7 +17,7 @@ use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
 final class ThemeEditorContextFactoryTest extends TestCase
 {
-    public function testDownstreamThemeMustMatchTheScopeDraftBinding(): void
+    public function testEditorContextAllowsThemeBesidesDraftBinding(): void
     {
         $catalog = $this->createMock(ScopeIdentityCatalogInterface::class);
         $catalog->method('authoritativeIdentity')->willReturnCallback(
@@ -45,19 +45,25 @@ final class ThemeEditorContextFactoryTest extends TestCase
             'draft_payload' => ['theme_id' => 11],
         ]);
 
+        $targetTypes = $this->getMockBuilder(ThemeTargetTypeRegistry::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['get', 'isValidTarget'])
+            ->getMock();
+        $provider = $this->createMock(TargetTypeProviderInterface::class);
+        $provider->method('canUseLayoutType')->willReturn(true);
+        $targetTypes->method('get')->willReturn($provider);
+        $targetTypes->method('isValidTarget')->willReturn(true);
+
         $factory = new ThemeEditorContextFactory(
             new SystemConfigScopeResolver(),
             $catalog,
             $themes,
             $themeContext,
-            $this->getMockBuilder(ThemeTargetTypeRegistry::class)->disableOriginalConstructor()->getMock(),
+            $targetTypes,
             $workspaces,
         );
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('theme_editor_context_theme_scope_mismatch');
-
-        $factory->fromInput([
+        $context = $factory->fromInput([
             'editor_context' => [
                 'scope' => ['identity' => ScopeIdentity::global()->toArray()],
                 'area' => 'frontend',
@@ -70,6 +76,9 @@ final class ThemeEditorContextFactoryTest extends TestCase
                 'target_id' => 0,
             ],
         ]);
+
+        self::assertSame(10, $context->themeId);
+        self::assertSame('layout', $context->resourceType);
     }
 
     public function testStorageScopeOnlyResolvesIdentityWithoutMissingFieldError(): void

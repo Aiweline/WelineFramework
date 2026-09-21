@@ -13,7 +13,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::notification_subscription', '消息订阅', 'settings', '管理消息订阅', 'Weline_Backend::notification_settings')]
+#[Acl('Weline_Backend::notification_subscription', '消息订阅', 'settings', '管理消息订阅', 'Weline_Backend::personal_center')]
 class NotificationSubscription extends BackendController
 {
     private TopicCollector $topicCollector;

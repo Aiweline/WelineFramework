@@ -175,7 +175,9 @@ class ThemeContextService implements ThemeContextProviderInterface
     {
         $scope = \trim($scope) !== '' ? \trim($scope) : 'default.default.default';
         if (\str_starts_with($scope, PreviewThemeScopeService::PREFIX)) {
-            return [$scope];
+            // Preview bucket holds only edits. Reads fall back to default so
+            // canvas init must not clone the dictionary (that scan is ~1e6 rows).
+            return [$scope, 'default'];
         }
 
         try {
@@ -232,10 +234,14 @@ class ThemeContextService implements ThemeContextProviderInterface
         }
 
         $normalizedArea = $area === null ? null : $this->normalizeArea($area);
+        if ($normalizedArea !== null && $this->getPreviewContextService()->isEditorThemeRequest()) {
+            return $this->resolvePreviewTheme($normalizedArea);
+        }
+
         if ($allowPreview && $normalizedArea !== null) {
-            $previewTheme = $this->resolvePreviewTheme($normalizedArea);
-            if ($previewTheme) {
-                return $previewTheme;
+            $tokenTheme = $this->loadTokenPreviewTheme($normalizedArea);
+            if ($tokenTheme && $tokenTheme->getId()) {
+                return $tokenTheme;
             }
         }
 
@@ -529,24 +535,57 @@ class ThemeContextService implements ThemeContextProviderInterface
 
     private function resolvePreviewTheme(string $area): ?WelineTheme
     {
+        $previewContextService = $this->getPreviewContextService();
+        if ($previewContextService->isEditorThemeRequest()) {
+            return $this->loadEditingRequestTheme();
+        }
+
+        return null;
+    }
+
+    private function loadEditingRequestTheme(): ?WelineTheme
+    {
         try {
-            $previewContextService = $this->getPreviewContextService();
-            if (!$previewContextService->hasAuthoritativePreviewContext()) {
-                return null;
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            $themeId = (int)$request->getParam('theme_id', 0);
+            if ($themeId <= 0) {
+                $themeId = (int)$request->getParam('frontend_theme_id', 0);
             }
-            $previewThemeId = $previewContextService->getThemeIdForArea($area, null, false);
         } catch (\Throwable) {
             return null;
         }
-
-        if (!$previewThemeId) {
+        if ($themeId <= 0) {
             return null;
         }
 
-        $previewTheme = $this->newThemeModel();
-        $previewTheme->load($previewThemeId);
+        $theme = $this->newThemeModel();
+        $theme->load($themeId);
 
-        return $previewTheme->getId() ? $previewTheme : null;
+        return $theme->getId() ? $theme : null;
+    }
+
+    /**
+     * 真实预览（start-preview Token）的店面地址不带 theme_id。
+     * 主题必须取 Token 里的 frontend_theme_id，不能回落到当前上线皮肤。
+     */
+    private function loadTokenPreviewTheme(string $area): ?WelineTheme
+    {
+        try {
+            $preview = $this->getPreviewContextService();
+            if (!$preview->hasAuthoritativePreviewContext()) {
+                return null;
+            }
+            $themeId = $preview->getThemeIdForArea($area);
+            if ($themeId <= 0) {
+                return null;
+            }
+            $theme = $this->newThemeModel();
+            $theme->load($themeId);
+
+            return $theme->getId() ? $theme : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

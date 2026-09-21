@@ -27,10 +27,17 @@ use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.2.418';
+    public const VERSION = '2.2.480';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
+        $from = $context->getFromSetupVersion();
+        // VERSION = 本脚本已覆盖到的最高历史迁移引入版；from 已达则跳过全量重跑（避免小版本 bump 卡死）
+        if (\version_compare($from, self::VERSION, '>=')) {
+            return;
+        }
+
+        $this->migratePublishActiveThemeCategoryFilters();
         $this->migrateSemanticIcons();
         $this->purgeLegacyLocalSharedChrome();
         $this->migrateHelpPageTypeToFaq();
@@ -38,7 +45,6 @@ class Upgrade implements UpgradeInterface
         $this->migrateScopedFooterHelpCenterLinkNodes();
         $this->migrateThemeLayoutEntitiesCutover();
         $this->migrateReconcileChromePayloadFromHomepageCarrier();
-        $this->migratePublishActiveThemeCategoryFilters();
         $this->migrateProductListPageTypeToProducts();
         $this->migrateCheckoutSuccessFailureLayoutPaths();
     }
@@ -650,20 +656,34 @@ class Upgrade implements UpgradeInterface
     }
 
     /**
-     * Active storefront themes (e.g. child hanfu) may have unpublished chrome / missing
-     * page workspaces after hard-cut — category filters / PDP slots stay as placeholders.
-     * Apply required defaults for homepage+category+product, publish, mark chrome published.
+     * Storefront resolves the published theme_binding / is_active_frontend theme,
+     * which can differ from legacy is_active (design child). Missing products
+     * page entities leave the Filters default_injection as a sidebar placeholder.
+     * Apply required defaults for homepage+category+product+products, then publish.
      */
     private function migratePublishActiveThemeCategoryFilters(): void
     {
         /** @var WelineTheme $themeModel */
         $themeModel = ObjectManager::getInstance(WelineTheme::class);
-        $active = clone $themeModel;
-        $active->clearData()->clearQuery()
-            ->where('is_active', 1)
-            ->select()
-            ->fetch();
-        $themes = $this->iterateRows($active);
+        $themes = [];
+        foreach (['is_active', 'is_active_frontend'] as $flag) {
+            $query = clone $themeModel;
+            $query->clearData()->clearQuery()
+                ->where($flag, 1)
+                ->select()
+                ->fetch();
+            foreach ($this->iterateRows($query) as $theme) {
+                $themeId = 0;
+                if (\is_object($theme) && \method_exists($theme, 'getId')) {
+                    $themeId = (int)$theme->getId();
+                } elseif (\is_array($theme)) {
+                    $themeId = (int)($theme['theme_id'] ?? $theme['id'] ?? 0);
+                }
+                if ($themeId > 0) {
+                    $themes[$themeId] = $theme;
+                }
+            }
+        }
         if ($themes === []) {
             return;
         }
@@ -697,6 +717,7 @@ class Upgrade implements UpgradeInterface
             ThemeLayout::PAGE_TYPE_HOME,
             ThemeLayout::PAGE_TYPE_CATEGORY,
             ThemeLayout::PAGE_TYPE_PRODUCT,
+            ThemeLayout::PAGE_TYPE_PRODUCT_LIST,
         ];
 
         foreach ($themes as $theme) {
@@ -712,7 +733,7 @@ class Upgrade implements UpgradeInterface
 
             foreach ($pageTypes as $pageType) {
                 try {
-                    $injection->applyRequiredMissingForIdentity(
+                    $appliedResult = $injection->applyRequiredMissingForIdentity(
                         $themeId,
                         $pageType,
                         $identity,
@@ -732,6 +753,13 @@ class Upgrade implements UpgradeInterface
                     if ($revision < 1) {
                         continue;
                     }
+                    $publishedReleaseId = (int)($state['published_release_id'] ?? 0);
+                    // Republishing homepage/PDP on every upgrade copies huge payloads and
+                    // can stall. Publish only when a required widget was just installed,
+                    // or when this page has never been published (products placeholder).
+                    if ($publishedReleaseId > 0 && (int)($appliedResult['applied'] ?? 0) < 1) {
+                        continue;
+                    }
                     $parent = isset($state['expected_parent_release_id'])
                         ? (int)$state['expected_parent_release_id']
                         : null;
@@ -744,7 +772,7 @@ class Upgrade implements UpgradeInterface
                         $parent,
                         'setup:upgrade',
                         'Weline_Theme',
-                        'Active theme required layout publish (home/category/product)',
+                        'Active theme required layout publish (home/category/product/products)',
                     );
                 } catch (\Throwable $e) {
                     w_log_warning(
@@ -780,6 +808,8 @@ class Upgrade implements UpgradeInterface
                 );
             }
         }
+
+        w_log_info('theme_active_required_layout_migrate_done');
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\SingleFlightInterface;
 use Weline\Framework\Cache\Service\SingleFlightCoordinator;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
 
 /**
  * 主题编辑器锁定服务
@@ -52,7 +53,8 @@ class EditorLockService
      */
     public function getLockInfo(int $themeId, string $pageType, string $contextKey = ''): ?array
     {
-        $cacheKey = $this->getLockCacheKey($themeId, $pageType, $contextKey);
+        $this->assertLockIdentity($themeId, $contextKey);
+        $cacheKey = $this->getLockCacheKey($contextKey);
         $lockInfo = $this->cache->get($cacheKey);
         
         $lockInfo = $this->normalizeLockInfo($lockInfo, $themeId, $pageType, $contextKey);
@@ -90,9 +92,8 @@ class EditorLockService
     ): array
     {
         $this->assertUserId($userId);
+        $this->assertLockIdentity($themeId, $contextKey);
         return $this->synchronized(
-            $themeId,
-            $pageType,
             $contextKey,
             fn (): array => $this->acquireLockUnlocked(
                 $themeId,
@@ -150,7 +151,7 @@ class EditorLockService
                     $currentLock['user_name'] = $userName;
                 }
                 $updated = $this->cache->set(
-                    $this->getLockCacheKey($themeId, $pageType, $contextKey),
+                    $this->getLockCacheKey($contextKey),
                     $currentLock,
                     self::LOCK_TIMEOUT,
                 );
@@ -183,8 +184,8 @@ class EditorLockService
             'last_activity' => time(),
         ];
         
-        $cacheKey = $this->getLockCacheKey($themeId, $pageType, $contextKey);
-        $this->cache->delete($this->getTakeoverCacheKey($themeId, $pageType, $contextKey));
+        $cacheKey = $this->getLockCacheKey($contextKey);
+        $this->cache->delete($this->getTakeoverCacheKey($contextKey));
         if (!$this->cache->set($cacheKey, $lockInfo, self::LOCK_TIMEOUT)) {
             throw new \RuntimeException((string)__('编辑锁写入失败'));
         }
@@ -207,9 +208,8 @@ class EditorLockService
     public function releaseLock(int $themeId, string $pageType, int $userId, string $contextKey = ''): bool
     {
         $this->assertUserId($userId);
+        $this->assertLockIdentity($themeId, $contextKey);
         return $this->synchronized(
-            $themeId,
-            $pageType,
             $contextKey,
             function () use ($themeId, $pageType, $userId, $contextKey): bool {
                 $currentLock = $this->getLockInfo($themeId, $pageType, $contextKey);
@@ -219,10 +219,10 @@ class EditorLockService
                 if (!$this->isSameEditorUser((int)$currentLock['user_id'], $userId)) {
                     return false;
                 }
-                if (!$this->cache->delete($this->getLockCacheKey($themeId, $pageType, $contextKey))) {
+                if (!$this->cache->delete($this->getLockCacheKey($contextKey))) {
                     throw new \RuntimeException((string)__('编辑锁释放失败'));
                 }
-                $this->cache->delete($this->getTakeoverCacheKey($themeId, $pageType, $contextKey));
+                $this->cache->delete($this->getTakeoverCacheKey($contextKey));
                 return true;
             },
         );
@@ -239,9 +239,8 @@ class EditorLockService
     public function updateActivity(int $themeId, string $pageType, int $userId, string $contextKey = ''): bool
     {
         $this->assertUserId($userId);
+        $this->assertLockIdentity($themeId, $contextKey);
         return $this->synchronized(
-            $themeId,
-            $pageType,
             $contextKey,
             function () use ($themeId, $pageType, $userId, $contextKey): bool {
                 $currentLock = $this->getLockInfo($themeId, $pageType, $contextKey);
@@ -250,7 +249,7 @@ class EditorLockService
                 }
                 $currentLock['last_activity'] = time();
                 $updated = $this->cache->set(
-                    $this->getLockCacheKey($themeId, $pageType, $contextKey),
+                    $this->getLockCacheKey($contextKey),
                     $currentLock,
                     self::LOCK_TIMEOUT,
                 );
@@ -277,9 +276,8 @@ class EditorLockService
     ): array
     {
         $this->assertUserId($userId);
+        $this->assertLockIdentity($themeId, $contextKey);
         return $this->synchronized(
-            $themeId,
-            $pageType,
             $contextKey,
             fn (): array => $this->requestTakeoverUnlocked(
                 $themeId,
@@ -337,7 +335,7 @@ class EditorLockService
             'requested_at' => time(),
         ];
         
-        $takeoverKey = $this->getTakeoverCacheKey($themeId, $pageType, $contextKey);
+        $takeoverKey = $this->getTakeoverCacheKey($contextKey);
         if (!$this->cache->set($takeoverKey, $takeoverInfo, self::TAKEOVER_WAIT)) {
             throw new \RuntimeException((string)__('编辑锁接管请求写入失败'));
         }
@@ -358,7 +356,8 @@ class EditorLockService
      */
     public function getTakeoverRequest(int $themeId, string $pageType, string $contextKey = ''): ?array
     {
-        $takeoverKey = $this->getTakeoverCacheKey($themeId, $pageType, $contextKey);
+        $this->assertLockIdentity($themeId, $contextKey);
+        $takeoverKey = $this->getTakeoverCacheKey($contextKey);
         $takeoverInfo = $this->cache->get($takeoverKey);
         if (!is_array($takeoverInfo)
             || (int)($takeoverInfo['requester_id'] ?? 0) < 1
@@ -393,9 +392,8 @@ class EditorLockService
     ): array
     {
         $this->assertUserId($userId);
+        $this->assertLockIdentity($themeId, $contextKey);
         return $this->synchronized(
-            $themeId,
-            $pageType,
             $contextKey,
             fn (): array => $this->forceTakeoverUnlocked(
                 $themeId,
@@ -460,7 +458,7 @@ class EditorLockService
         }
         
         // 强制接管
-        $cacheKey = $this->getLockCacheKey($themeId, $pageType, $contextKey);
+        $cacheKey = $this->getLockCacheKey($contextKey);
         $lockInfo = [
             'theme_id' => $themeId,
             'page_type' => $pageType,
@@ -473,7 +471,7 @@ class EditorLockService
         ];
         
         // 清除接管请求
-        $takeoverKey = $this->getTakeoverCacheKey($themeId, $pageType, $contextKey);
+        $takeoverKey = $this->getTakeoverCacheKey($contextKey);
         $this->cache->delete($takeoverKey);
         if (!$this->cache->set($cacheKey, $lockInfo, self::LOCK_TIMEOUT)) {
             throw new \RuntimeException((string)__('编辑锁接管写入失败'));
@@ -487,36 +485,50 @@ class EditorLockService
     }
 
     /**
-     * 获取锁定缓存键
+     * Lock identity is one hash. Theme, version and draft revision are inside it.
+     * Cache keys are editor_lock_{hash} / editor_takeover_{hash}.
      */
-    private function getLockCacheKey(int $themeId, string $pageType, string $contextKey = ''): string
+    public static function hashLockIdentity(ThemeEditorContext $context, int $versionId, int $draftRevisionId): string
     {
-        return self::CACHE_PREFIX . $themeId . '_' . $pageType . $this->contextKeySuffix($contextKey);
+        if ($context->themeId < 1) {
+            throw new \InvalidArgumentException((string)__('编辑锁资源身份无效'));
+        }
+        $hash = \hash('sha256', \implode("\0", [
+            $context->scope->canonicalKey(),
+            $context->area,
+            ThemeEditorContext::RESOURCE_LAYOUT,
+            (string)$context->themeId,
+            $context->identityLayoutType(),
+            $context->identityLayoutOption(),
+            $context->identityLocale(),
+            $context->identityTargetType(),
+            (string)$context->identityTargetId(),
+            (string)\max(0, $versionId),
+            (string)\max(0, $draftRevisionId),
+        ]));
+        if ($hash === '') {
+            throw new \InvalidArgumentException((string)__('编辑锁资源身份无效'));
+        }
+
+        return $hash;
     }
 
-    /**
-     * 获取接管请求缓存键
-     */
-    private function getTakeoverCacheKey(int $themeId, string $pageType, string $contextKey = ''): string
+    private function getLockCacheKey(string $identityHash): string
     {
-        return self::TAKEOVER_PREFIX . $themeId . '_' . $pageType . $this->contextKeySuffix($contextKey);
+        return self::CACHE_PREFIX . $identityHash;
+    }
+
+    private function getTakeoverCacheKey(string $identityHash): string
+    {
+        return self::TAKEOVER_PREFIX . $identityHash;
     }
 
     /** @template T @param callable():T $operation @return T */
-    private function synchronized(
-        int $themeId,
-        string $pageType,
-        string $contextKey,
-        callable $operation,
-    ): mixed {
-        $this->assertLockIdentity($themeId, $pageType, $contextKey);
-        $coordinationKey = 'theme_editor_lock_mutation_' . hash(
-            'sha256',
-            $themeId . "\0" . $pageType . "\0" . $contextKey,
-        );
+    private function synchronized(string $identityHash, callable $operation): mixed
+    {
+        $coordinationKey = 'theme_editor_lock_mutation_' . $identityHash;
         $token = $this->coordinator->acquire($coordinationKey, 2000, 10);
         if ($token === null) {
-            // SingleFlight 约定：协调锁超时时直接执行业务，避免误报「服务正忙」阻断同页编辑。
             return $operation();
         }
         try {
@@ -531,23 +543,9 @@ class EditorLockService
         return $lockUserId > 0 && $userId > 0 && $lockUserId === $userId;
     }
 
-    private function assertLockIdentity(int $themeId, string $pageType, string $contextKey): void
+    private function assertLockIdentity(int $themeId, string $identityHash): void
     {
-        // Align with ThemeEditorContext layoutType: nested paths like account/login
-        // and checkout/success are first-class page types. The old flat regex
-        // rejected "/" and uppercase, so nested pages always failed lock acquire
-        // with 「编辑锁资源身份无效」and the editor stayed read-only.
-        $pageTypeOk = preg_match('#^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,127}$#D', $pageType) === 1
-            && !str_contains($pageType, '//')
-            && !str_starts_with($pageType, '/')
-            && !str_ends_with($pageType, '/');
-
-        if ($themeId < 1
-            || !$pageTypeOk
-            || $contextKey === ''
-            || strlen($contextKey) > 2048
-            || preg_match('/[\x00-\x1F\x7F]/', $contextKey) === 1
-        ) {
+        if ($themeId < 1 || $identityHash === '') {
             throw new \InvalidArgumentException((string)__('编辑锁资源身份无效'));
         }
     }
@@ -601,11 +599,5 @@ class EditorLockService
             return mb_substr($userName, 0, 255, 'UTF-8');
         }
         return substr($userName, 0, 255);
-    }
-
-    private function contextKeySuffix(string $contextKey): string
-    {
-        $contextKey = trim($contextKey);
-        return $contextKey === '' ? '' : '_' . hash('sha256', $contextKey);
     }
 }

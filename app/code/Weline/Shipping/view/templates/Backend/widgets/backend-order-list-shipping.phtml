@@ -20,6 +20,7 @@
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Service\BackendOrderShipmentsService;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('backend-order-list-shipping');
@@ -30,6 +31,7 @@ $configuredTitle = trim((string)($this->getData('title') ?? ''));
 if ($configuredTitle !== '' && !str_starts_with($configuredTitle, 'Weline_')) {
     $title = $configuredTitle;
 }
+$title = WidgetI18n::label($title, '发货工作台');
 
 /** @var BackendOrderShipmentsService $shipmentsService */
 $shipmentsService = ObjectManager::getInstance(BackendOrderShipmentsService::class);

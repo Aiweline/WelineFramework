@@ -10,6 +10,7 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Theme\Service\PreviewExitService;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemePreviewEntryApplication;
+use Weline\Theme\Service\ThemePreviewGenerator;
 
 /**
  * 前台主题预览网关：先进入 Theme 模块再写入 Session，避免其它模块 Router 抢占 index/index
@@ -32,7 +33,7 @@ class Gateway extends FrontendController
         } catch (\Throwable) {
             $loggedIn = false;
         }
-        if (!$loggedIn) {
+        if (!$loggedIn && !$this->isTrustedPreviewCapture()) {
             if (!$this->wantsJsonExitResponse()) {
                 try {
                     ObjectManager::getInstance(PreviewExitService::class)->exit($this->resolveExitToken() ?: null);
@@ -90,9 +91,52 @@ class Gateway extends FrontendController
             return $this->error($result['message']);
         }
 
-        $this->request->getResponse()->redirect($result['redirect']);
+        $redirect = (string)$result['redirect'];
+        if ($this->isTrustedPreviewCapture()) {
+            $redirect = $this->appendPreviewCaptureFlag($redirect);
+        }
+        $this->request->getResponse()->redirect($redirect);
 
         return '';
+    }
+
+    private function appendPreviewCaptureFlag(string $redirect): string
+    {
+        if ($redirect === '' || \str_contains($redirect, 'weline_preview_capture=')) {
+            return $redirect;
+        }
+
+        $fragment = '';
+        $hashPos = \strpos($redirect, '#');
+        if ($hashPos !== false) {
+            $fragment = \substr($redirect, $hashPos);
+            $redirect = \substr($redirect, 0, $hashPos);
+        }
+
+        $separator = \str_contains($redirect, '?') ? '&' : '?';
+
+        return $redirect . $separator . 'weline_preview_capture=1' . $fragment;
+    }
+
+    private function isTrustedPreviewCapture(): bool
+    {
+        if ((string)$this->request->getParam('preview_gen', '') !== '1') {
+            return false;
+        }
+
+        $themeId = \max(0, (int)$this->request->getParam('preview_theme', 0));
+        $area = (string)$this->request->getParam(
+            'editor_area',
+            (string)$this->request->getParam('preview_area', 'frontend')
+        );
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+
+        return ThemePreviewGenerator::isValidCaptureSignature(
+            $themeId,
+            $area,
+            (int)$this->request->getParam('preview_exp', 0),
+            \trim((string)$this->request->getParam('preview_sig', ''))
+        );
     }
 
     private function shouldExitPreview(): bool

@@ -200,10 +200,11 @@ final class ConfigEmbedResolver
                 continue;
             }
             $value = trim((string)($attributes[$key] ?? ''));
-            // 允许显式空 website_code 表示 Global；其它键仅非空时写入
-            if ($key === 'website_code' || $value !== '') {
-                $input[$key] = $value;
+            // 标签编译器总会带上这些键。空值不是「明确选 Global」，否则会盖掉 target_scope。
+            if ($value === '') {
+                continue;
             }
+            $input[$key] = $value;
         }
 
         return $input;

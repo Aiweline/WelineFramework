@@ -10,7 +10,9 @@
           parent="Weline_Backend::i18n_group"
           icon="globe"
           order="10"/>
-    
+
+    <!-- 后台默认语言已迁到「个人中心 → 我的资料」；全局 env 回落仍由 BackendLanguage 控制器保留 -->
+
     <!-- 国家 -->
     <menu source="Weline_I18n::i18n_countries" name="i18n_countries" title="国家" action="/i18n/backend/countries"
           parent="Weline_Backend::i18n_group"

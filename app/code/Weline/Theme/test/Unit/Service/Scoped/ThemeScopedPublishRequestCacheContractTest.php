@@ -50,7 +50,7 @@ final class ThemeScopedPublishRequestCacheContractTest extends TestCase
             \dirname(__DIR__, 4) . '/Controller/Backend/ThemeEditor.php'
         );
         $start = \strpos($controller, 'private function assertCurrentScopedLayoutPublished(');
-        $end = \strpos($controller, 'private function resolveEditorLockContextKey(', (int)$start);
+        $end = \strpos($controller, 'private function editorLockIdentity(', (int)$start);
         self::assertNotFalse($start);
         self::assertNotFalse($end);
         $method = \substr($controller, (int)$start, (int)$end - (int)$start);

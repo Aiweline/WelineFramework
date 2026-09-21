@@ -31,10 +31,20 @@ class PaymentScopeConfigService
         'required_config',
     ];
 
+    private readonly ?ObjectManager $objectManager;
+    private ?SystemConfig $systemConfig;
+    private readonly ?\Closure $defaultEnvironmentReader;
+
     public function __construct(
-        private readonly ?ObjectManager $objectManager = null,
-        private ?SystemConfig $systemConfig = null
+        ?ObjectManager $objectManager = null,
+        ?SystemConfig $systemConfig = null,
+        ?callable $defaultEnvironmentReader = null,
     ) {
+        $this->objectManager = $objectManager;
+        $this->systemConfig = $systemConfig;
+        $this->defaultEnvironmentReader = $defaultEnvironmentReader === null
+            ? null
+            : \Closure::fromCallable($defaultEnvironmentReader);
     }
 
     /**
@@ -44,11 +54,10 @@ class PaymentScopeConfigService
     public function resolveScope(array $context = []): array
     {
         $scope = $this->resolveScopeStringFromContext($context);
-        $environment = $this->normalizeEnvironment((string) ($context['environment'] ?? ''));
 
         return [
             'scope' => $scope,
-            'environment' => $environment,
+            'environment' => self::DEFAULT_ENVIRONMENT,
             'scope_chain' => $this->getScopeChain($scope),
             'scope_key' => $scope,
         ];
@@ -80,6 +89,50 @@ class PaymentScopeConfigService
     public function normalizeEnvironment(string $environment): string
     {
         return strtolower(trim($environment)) === 'live' ? 'live' : self::DEFAULT_ENVIRONMENT;
+    }
+
+    /**
+     * 只认该方式在当前 Scope 已保存的 environment。空、请求参数和旧全站值都不改结果，空则沙箱。
+     *
+     * @param array<string, mixed> $methodConfig
+     */
+    public function selectMethodEnvironment(string $fallback, array $methodConfig): string
+    {
+        unset($fallback);
+        $method = strtolower(trim((string) ($methodConfig['environment'] ?? '')));
+        if ($method === 'live' || $method === 'sandbox') {
+            return $method;
+        }
+
+        return self::DEFAULT_ENVIRONMENT;
+    }
+
+    /**
+     * 旧全站键。结账不再读取；保留方法以免外部调用直接报错。
+     */
+    public function configuredEnvironment(string $scope): string
+    {
+        if ($this->defaultEnvironmentReader !== null) {
+            $value = ($this->defaultEnvironmentReader)($scope);
+
+            return $this->normalizeEnvironment(\is_string($value) ? $value : '');
+        }
+
+        try {
+            $value = $this->getSystemConfig()->getConfig(
+                'payment/general/default_environment',
+                self::MODULE_WELINE_PAYMENT,
+                SystemConfig::area_BACKEND,
+                self::DEFAULT_ENVIRONMENT,
+                $this->normalizeScope($scope),
+            );
+        } catch (\Throwable $throwable) {
+            w_log_error('读取支付默认环境失败: ' . $throwable->getMessage());
+
+            return self::DEFAULT_ENVIRONMENT;
+        }
+
+        return $this->normalizeEnvironment((string) $value);
     }
 
     /**
@@ -212,6 +265,8 @@ class PaymentScopeConfigService
             }
         }
 
+        $environment = $this->selectMethodEnvironment($environment, $config);
+
         return [
             'enabled' => $this->toBool($config['enabled'] ?? false),
             'is_default' => $this->toBool($config['is_default'] ?? $config['default'] ?? false),
@@ -249,7 +304,17 @@ class PaymentScopeConfigService
             return $this->normalizeListValue($value, \in_array($key, ['supported_currencies', 'supported_countries', 'currencies', 'countries', 'country_tags'], true));
         }
 
-        if (\in_array($key, ['enabled', 'is_default', 'default', 'sandbox', 'allow_partial_refund', 'require_authenticated_actor', 'express_enabled'], true)) {
+        if (\in_array($key, [
+            'enabled',
+            'is_default',
+            'default',
+            'sandbox',
+            'allow_partial_refund',
+            'require_authenticated_actor',
+            'express_enabled',
+            'google_pay_enabled',
+            'apple_pay_enabled',
+        ], true)) {
             return $this->toBool($value);
         }
 

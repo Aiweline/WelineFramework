@@ -534,8 +534,11 @@ class SchedulerSystem
         return FiberOutputBuffer::flushBeforeYield();
     }
 
+    private static ?\WeakMap $editorCanvasSuspendSites = null;
+
     private static function suspendCurrentFiber(): mixed
     {
+        self::rememberEditorCanvasSuspendSite();
         try {
             return \Fiber::suspend();
         } catch (\FiberError $e) {
@@ -544,5 +547,51 @@ class SchedulerSystem
             }
             throw $e;
         }
+    }
+
+    /**
+     * 编辑器画布请求如果挂起后没有定时器或 I/O 等待者，Worker 会把它叫醒。
+     * 这里留下挂起时的调用栈，方便对上是哪一次 yield / await 弄丢了唤醒。
+     */
+    private static function rememberEditorCanvasSuspendSite(): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if ($uri === '' || !\str_contains($uri, 'shell=theme-editor')) {
+            return;
+        }
+        $frames = [];
+        foreach (\debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 10) as $frame) {
+            $file = (string)($frame['file'] ?? '');
+            if ($file === '' || \str_contains($file, 'SchedulerSystem.php')) {
+                continue;
+            }
+            $frames[] = \basename($file) . ':' . (int)($frame['line'] ?? 0) . ' ' . (string)($frame['function'] ?? '');
+            if (\count($frames) >= 4) {
+                break;
+            }
+        }
+        self::$editorCanvasSuspendSites ??= new \WeakMap();
+        self::$editorCanvasSuspendSites[$fiber] = [
+            'uri' => \substr($uri, 0, 180),
+            'frames' => $frames,
+            'at' => \date('H:i:s'),
+        ];
+    }
+
+    /**
+     * @return array{uri:string,frames:list<string>,at:string}|null
+     */
+    public static function editorCanvasSuspendSite(\Fiber $fiber): ?array
+    {
+        if (self::$editorCanvasSuspendSites === null || !isset(self::$editorCanvasSuspendSites[$fiber])) {
+            return null;
+        }
+        $site = self::$editorCanvasSuspendSites[$fiber];
+
+        return \is_array($site) ? $site : null;
     }
 }

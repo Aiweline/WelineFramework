@@ -52,7 +52,7 @@ final class StorefrontScopeHotCache
         if (!Context::hasCurrent()) {
             return $builder();
         }
-        $key = 'framework.cache.request_memo.v1:' . hash('sha256', serialize([$resource, $logicalKey]));
+        $key = $this->requestMemoKey($resource, $logicalKey);
         if (RequestContext::has($key)) {
             return RequestContext::get($key);
         }
@@ -61,9 +61,20 @@ final class StorefrontScopeHotCache
         return $value;
     }
 
+    public function forgetRequestMemo(string $resource, string $logicalKey): void
+    {
+        if (!Context::hasCurrent()) {
+            return;
+        }
+        RequestContext::remove($this->requestMemoKey($resource, $logicalKey));
+    }
+
     public function rememberPolicy(CachePolicy|string $policy, string $logicalKey, callable $builder): mixed
     {
         $policy = $this->resolvePolicy($policy);
+        if (!KeyBuilder::policyAllowsSharedCache($policy)) {
+            return $this->rememberForRequest($policy->resource, $logicalKey, $builder);
+        }
         $traceMeta = RequestLifecycleTrace::isEnabled() ? [
             'resource' => $policy->resource,
             'scope' => $policy->scope,
@@ -79,6 +90,10 @@ final class StorefrontScopeHotCache
     public function forgetPolicy(CachePolicy|string $policy, string $logicalKey): void
     {
         $policy = $this->resolvePolicy($policy);
+        if (!KeyBuilder::policyAllowsSharedCache($policy)) {
+            $this->forgetRequestMemo($policy->resource, $logicalKey);
+            return;
+        }
         $key = $this->policyKey($policy, $logicalKey);
         if ($key === null) {
             return;
@@ -99,6 +114,9 @@ final class StorefrontScopeHotCache
     private function policyKey(CachePolicy $policy, string $logicalKey, ?array &$traceMeta = null): ?string
     {
         $context = StorefrontCacheKeyContext::currentOrRequestFence();
+        if (!KeyBuilder::policyAllowsSharedCache($policy, $context)) {
+            return null;
+        }
         $fingerprint = '';
         $namespacePaths = [];
         $canResolveDependencies = $context->hasCompleteFrozenScope()
@@ -132,6 +150,9 @@ final class StorefrontScopeHotCache
         array $dimensionFlags = ['website' => true],
         ?int $staleTtlSeconds = null,
     ): mixed {
+        if ($this->dimensionFlagsRequireRequestMemo($dimensionFlags)) {
+            return $this->rememberForRequest($poolIdentity, $logicalKey, $builder);
+        }
         $freshTtlSeconds = max(1, $freshTtlSeconds);
         $staleTtlSeconds = max(
             $freshTtlSeconds,
@@ -420,6 +441,27 @@ final class StorefrontScopeHotCache
         );
     }
 
+    /**
+     * Website-scoped remember must not publish under request-fence (keys would be
+     * request-unique or collide). Use request memo until storefront is frozen.
+     *
+     * @param array{website?:bool,lang?:bool,currency?:bool,include_area?:bool} $dimensionFlags
+     */
+    private function dimensionFlagsRequireRequestMemo(array $dimensionFlags): bool
+    {
+        if (!(bool)($dimensionFlags['website'] ?? false)) {
+            return false;
+        }
+        $context = StorefrontCacheKeyContext::currentOrRequestFence();
+
+        return !$context->cacheable;
+    }
+
+    private function requestMemoKey(string $resource, string $logicalKey): string
+    {
+        return 'framework.cache.request_memo.v1:' . hash('sha256', serialize([$resource, $logicalKey]));
+    }
+
     /** @param array{payload:mixed,fresh_until:float,stale_until:float,version:int} $entry */
     private function storeProcessEntry(string $key, array $entry): void
     {
@@ -428,6 +470,7 @@ final class StorefrontScopeHotCache
             unset(self::$processCache[array_key_first(self::$processCache)]);
         }
         self::$processCache[$key] = $entry;
+        // Per-store spam omitted: MemDiag cacheSnapshot tracks payload bytes / pool breakdown.
     }
 
     private function readShared(CachePoolInterface $pool, string $key, bool $explicitDimensions): mixed

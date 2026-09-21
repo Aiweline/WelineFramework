@@ -25,6 +25,7 @@
 | `ProviderInterface` | 支付生命周期 + verify/parse + 测连 + **`cspDirectives()` 自报 SDK/iframe 域名** |
 | 专属配置 | schema + config phtml |
 | 可选 `ProviderConnectInterface` | OAuth / 一键授权，经壳调度 |
+| 可选 `ProviderShipmentTrackingInterface` | 发货后向网关回传运单号，经壳听 `Weline_Order::order_shipped` 按 `method_code` 分发；PayPal 说明见配置页「发货物流回传」与 [paypal.md](payment-methods/paypal/paypal.md) |
 | 结账呈现 | `checkout_mode` + 模板或仅 `next_action`；iframe/SDK 自担 |
 | CSP | 经 Extends `Weline_Framework/Security/Csp/PaymentVendorsCsp` 聚合为应用默认；**禁止**在壳或 Framework Defaults 硬编码本网关域名 |
 

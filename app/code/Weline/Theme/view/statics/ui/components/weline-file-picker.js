@@ -47,6 +47,46 @@ function previewKindFromPath(path) {
     return 'file';
 }
 
+/** Prefer declared kind / typed file-image / live <img> over extensionless UUID paths. */
+function resolveItemPreviewKind(item, pathHint) {
+    if (!(item instanceof HTMLElement)) {
+        return previewKindFromPath(pathHint) || 'file';
+    }
+    const declared = String(item.dataset.kind || '').trim().toLowerCase();
+    if (declared === 'audio') return 'audio';
+    if (item.dataset.fileImageNode || item.getAttribute('data-file-image-node')) return 'image';
+    if (item.dataset.pendingPreview === '1' || item.getAttribute('data-pending-preview') === '1') {
+        return 'image';
+    }
+    const img = item.querySelector('img');
+    if (img instanceof HTMLImageElement) {
+        const src = String(img.currentSrc || img.getAttribute('src') || img.dataset.src || '').trim();
+        if (src && src !== 'about:blank' && !/^asset:\/\//i.test(src)) {
+            const fromSrc = previewKindFromPath(src);
+            if (fromSrc === 'image' || fromSrc === 'audio') return fromSrc;
+            if (/^data:image\//i.test(src) || /\/pub\/media\//i.test(src)) return 'image';
+        }
+        // Existing image node (even pending empty src) stays image — picker owns type display.
+        if (declared === 'image' || declared === '') return 'image';
+    }
+    if (declared === 'image') return 'image';
+    const path = String(pathHint || item.dataset.path || item.dataset.assetId || '').trim();
+    const fromPath = previewKindFromPath(path);
+    if (fromPath !== 'file') return fromPath;
+    return declared === 'file' ? 'file' : (fromPath || 'file');
+}
+
+function fileFormatBadge(path, preferred) {
+    const ext = extensionOfPath(path) || extensionOfPath(preferred);
+    return ext ? ext.toUpperCase() : 'FILE';
+}
+
+function fileKindGlyphText(kind, path, preferred) {
+    if (kind === 'audio') return '♪';
+    if (kind === 'file') return fileFormatBadge(path, preferred);
+    return '🖼';
+}
+
 function displayNameFromPath(path, preferred) {
     const raw = String(preferred || '').trim();
     const clean = String(path || '').split('?')[0].split('#')[0];
@@ -73,7 +113,10 @@ function clearPreviewImage(previewImage) {
 
 function openPreview(root, sourceElement, componentUI) {
     const item = sourceElement?.closest?.('[data-w-file-item]');
-    const kind = item?.dataset?.kind || previewKindFromPath(sourceElement?.dataset?.path || item?.dataset?.path || '');
+    const kind = resolveItemPreviewKind(
+        item instanceof HTMLElement ? item : null,
+        sourceElement?.dataset?.path || item?.dataset?.path || '',
+    );
     if (kind !== 'image') {
         componentUI.toast.warning(root.dataset.wEmptyMessage || 'No preview is available.');
         return false;
@@ -81,9 +124,10 @@ function openPreview(root, sourceElement, componentUI) {
     const dialog = root.querySelector('[data-w-file-preview-dialog]');
     const previewImage = dialog?.querySelector('[data-w-file-preview-image]');
     const image = sourceElement?.querySelector('img') || (sourceElement instanceof HTMLImageElement ? sourceElement : null);
+    // Prefer live <img> URL: data-path may be an asset UUID without extension.
     const source = normalizePreviewSource(
-        sourceElement?.dataset.path || image?.dataset.src || '',
-        image?.currentSrc || image?.src || '',
+        image?.currentSrc || image?.src || image?.dataset?.src || '',
+        sourceElement?.dataset.path || item?.dataset?.path || '',
     );
     if (!(dialog instanceof HTMLElement) || !(previewImage instanceof HTMLImageElement) || source === '') {
         componentUI.toast.warning(root.dataset.wEmptyMessage || 'No preview is available.');
@@ -169,6 +213,39 @@ function resolveMediaIdentity(element) {
     } catch (error) {
         return { incomplete: true, reason: (error && error.message) || 'w_scope_failed', root, code, scope, slot };
     }
+}
+
+/**
+ * Theme Editor file-image stamp locale.
+ * Default/all-language layouts store identity as ""/"default" but draft validation
+ * expects the website default locale (see ThemeScopedWorkspace::resolveFileAssetLocale).
+ * Never keep MediaManager's asset-row locale or admin cookie when the editor stamp differs.
+ */
+function resolveThemeEditorFileImageLocale(element) {
+    let locale = '';
+    const row = element && typeof element.closest === 'function'
+        ? element.closest('[data-locale-code]')
+        : null;
+    if (row) {
+        locale = row.getAttribute('data-locale-code') || row.dataset.localeCode || '';
+    }
+    if (!locale && element) {
+        locale = element.getAttribute('data-locale-code') || element.dataset.localeCode || '';
+    }
+    const themeEl = document.getElementById('themeEditor');
+    if (!locale && themeEl) {
+        locale = themeEl.getAttribute('data-config-locale')
+            || themeEl.getAttribute('data-locale-code')
+            || '';
+    }
+    // "default / 全语言" is a layout identity, not a FileAsset locale.
+    if (!locale || locale === 'default') {
+        locale = (themeEl && themeEl.getAttribute('data-default-locale')) || '';
+    }
+    if (!locale || locale === 'default') {
+        locale = document.documentElement.lang || 'zh_Hans_CN';
+    }
+    return String(locale).replace(/-/g, '_');
 }
 
 function registerFilePicker(UI) {
@@ -301,13 +378,11 @@ function registerFilePicker(UI) {
             }
             const url = new URL(connector);
             let currentValue = target && 'value' in target ? String(target.value || '') : '';
+            const stampLocale = resolveThemeEditorFileImageLocale(element);
             if (valueMode === 'file-image') {
                 const node = parseFileImageNode(currentValue);
                 if (node && node.usage && node.usage.asset_id) {
                     url.searchParams.set('asset_id', String(node.usage.asset_id));
-                    if (node.usage.locale_code) {
-                        url.searchParams.set('locale_code', String(node.usage.locale_code));
-                    }
                 }
                 currentValue = '';
                 if (!url.searchParams.get('usage')) {
@@ -368,15 +443,15 @@ function registerFilePicker(UI) {
                     url.searchParams.set('path', startPath);
                     url.searchParams.set('startPath', startPath);
                     url.searchParams.set('lockPath', '1');
-                    const locale = themeEl.getAttribute('data-config-locale')
-                        || themeEl.getAttribute('data-default-locale')
-                        || document.documentElement.lang
-                        || '';
-                    if (locale && locale !== 'default' && !url.searchParams.get('locale_code')) {
-                        url.searchParams.set('locale_code', String(locale).replace(/-/g, '_'));
+                    // Always stamp editor locale (site default for 全语言), never asset-row/cookie.
+                    if (stampLocale) {
+                        url.searchParams.set('locale_code', stampLocale);
                     }
                 }
             } catch (_themeErr) {}
+            if (stampLocale && !url.searchParams.get('locale_code')) {
+                url.searchParams.set('locale_code', stampLocale);
+            }
             url.searchParams.set('initialValue', currentValue);
             url.searchParams.set('ref_mode', refMode);
             if (identity && identity.path) url.searchParams.set('identity', identity.path);
@@ -403,8 +478,11 @@ function registerFilePicker(UI) {
         const close = (reason = '') => pickerDialog instanceof HTMLElement
             ? componentUI.dialog.close(pickerDialog, reason)
             : false;
-        const createItem = (file) => {
+        const createItem = (file, stampLocale = '') => {
             const typedNode = parseFileImageNode(file?.file_image_node || file?.file_image_json || '');
+            if (typedNode && stampLocale && typedNode.usage && typeof typedNode.usage === 'object') {
+                typedNode.usage.locale_code = stampLocale;
+            }
             const rawPath = String(
                 file?.path
                 || file?.url
@@ -417,8 +495,19 @@ function registerFilePicker(UI) {
             );
             const path = rawPath.replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '');
             if (path === '' && !typedNode) return null;
-            const kind = previewKindFromPath(path || String(file?.original_name || file?.name || 'image.png'));
-            const label = displayNameFromPath(path, file?.name || file?.display_name || '');
+            const nameHint = String(file?.original_name || file?.name || file?.display_name || '');
+            const previewHint = String(
+                file?.editor_preview_url || file?.thumb || file?.url || file?.path || nameHint || path || '',
+            );
+            let kind = typedNode
+                ? 'image'
+                : (previewKindFromPath(previewHint) || previewKindFromPath(path || nameHint) || 'file');
+            if (valueMode === 'file-image' && kind === 'file' && (typedNode || previewHint)) {
+                kind = previewKindFromPath(previewHint) === 'audio' ? 'audio' : 'image';
+            }
+            const label = kind === 'file'
+                ? fileFormatBadge(path || nameHint, nameHint)
+                : displayNameFromPath(path, file?.name || file?.display_name || '');
             const item = document.createElement('div');
             item.className = 'w-file-preview__item' + (kind !== 'image' ? ` w-file-preview__item--${kind}` : '');
             item.dataset.wFileItem = '';
@@ -451,12 +540,13 @@ function registerFilePicker(UI) {
                     image.remove();
                     const glyph = document.createElement('span');
                     glyph.className = 'w-file-preview__glyph';
-                    glyph.dataset.kind = 'file';
+                    glyph.dataset.kind = 'image';
                     glyph.setAttribute('aria-hidden', 'true');
-                    glyph.textContent = '📄';
+                    glyph.textContent = fileKindGlyphText('image', path, nameHint);
                     thumbnail.append(glyph);
-                    item.dataset.kind = 'file';
-                    item.classList.add('w-file-preview__item--file');
+                    // Keep kind=image so the picker still treats this as a picture slot.
+                    item.dataset.kind = 'image';
+                    item.classList.remove('w-file-preview__item--file');
                 };
                 thumbnail.append(image);
             } else {
@@ -464,7 +554,10 @@ function registerFilePicker(UI) {
                 glyph.className = 'w-file-preview__glyph';
                 glyph.dataset.kind = kind;
                 glyph.setAttribute('aria-hidden', 'true');
-                glyph.textContent = kind === 'audio' ? '♪' : '📄';
+                glyph.textContent = fileKindGlyphText(kind, path || nameHint, nameHint);
+                if (kind === 'file') {
+                    glyph.title = fileFormatBadge(path || nameHint, nameHint);
+                }
                 thumbnail.append(glyph);
             }
 
@@ -490,7 +583,13 @@ function registerFilePicker(UI) {
                 if (action === 'remove') button.dataset.wFileRemove = '';
                 else button.dataset.wFileMove = action;
                 button.setAttribute('aria-label', labelText);
-                button.append(componentUI.icon.create(icon, { size: 'sm' }));
+                const iconNode = componentUI?.icon?.create?.(icon, { size: 'sm' });
+                if (iconNode instanceof Node) {
+                    button.append(iconNode);
+                } else {
+                    // Fallback glyph: keep a visible × when icon registry misses "close".
+                    button.textContent = action === 'remove' ? '×' : '•';
+                }
                 actions.append(button);
             }
 
@@ -525,10 +624,11 @@ function registerFilePicker(UI) {
                     return;
                 }
             }
+            const stampLocale = valueMode === 'file-image' ? resolveThemeEditorFileImageLocale(element) : '';
             const append = multiple && data.multi === true;
             if (!append) preview.replaceChildren();
             selectedFiles.forEach((file) => {
-                const item = createItem(file);
+                const item = createItem(file, stampLocale);
                 if (item) preview.append(item);
             });
             syncTarget();
@@ -594,10 +694,11 @@ function registerFilePicker(UI) {
         }
         listen(window, 'message', receive);
 
-        // Upgrade SSR / legacy image thumbnails for audio & non-image paths.
+        // Upgrade SSR / legacy thumbnails: kind follows typed file-image / <img> / extension.
+        // Never demote UUID-only image paths to generic "file" document icons.
         items().forEach((item) => {
             const path = item.dataset.path || '';
-            const kind = previewKindFromPath(path) || item.dataset.kind || 'file';
+            const kind = resolveItemPreviewKind(item, path);
             item.dataset.kind = kind;
             item.classList.toggle('w-file-preview__item--audio', kind === 'audio');
             item.classList.toggle('w-file-preview__item--file', kind === 'file');
@@ -614,7 +715,9 @@ function registerFilePicker(UI) {
                 media.after(actions);
             }
             let nameEl = item.querySelector('.w-file-preview__name');
-            const label = displayNameFromPath(path, nameEl?.textContent || thumb?.getAttribute('aria-label') || '');
+            const label = kind === 'file'
+                ? fileFormatBadge(path, nameEl?.textContent || thumb?.getAttribute('aria-label') || '')
+                : displayNameFromPath(path, nameEl?.textContent || thumb?.getAttribute('aria-label') || '');
             if (!(nameEl instanceof HTMLElement)) {
                 nameEl = document.createElement('span');
                 nameEl.className = 'w-file-preview__name';
@@ -647,7 +750,7 @@ function registerFilePicker(UI) {
             } else if (actions instanceof HTMLElement && nameEl.nextElementSibling !== actions) {
                 nameEl.after(actions);
             }
-            if (!String(nameEl.textContent || '').trim()) {
+            if (!String(nameEl.textContent || '').trim() || kind === 'file') {
                 nameEl.textContent = label;
             }
             nameEl.title = label;
@@ -660,15 +763,17 @@ function registerFilePicker(UI) {
                         image.remove();
                         const glyph = document.createElement('span');
                         glyph.className = 'w-file-preview__glyph';
-                        glyph.dataset.kind = 'file';
+                        glyph.dataset.kind = 'image';
                         glyph.setAttribute('aria-hidden', 'true');
-                        glyph.textContent = '📄';
+                        glyph.textContent = fileKindGlyphText('image', path, label);
                         thumb.append(glyph);
-                        item.dataset.kind = 'file';
+                        item.dataset.kind = 'image';
+                        item.classList.remove('w-file-preview__item--file');
                     };
                 }
                 return;
             }
+            // Non-image: replace thumb with format/audio glyph (never leave a stale <img>).
             thumb.querySelector('img')?.remove();
             let glyph = thumb.querySelector('.w-file-preview__glyph');
             if (!(glyph instanceof HTMLElement)) {
@@ -678,7 +783,10 @@ function registerFilePicker(UI) {
                 thumb.append(glyph);
             }
             glyph.dataset.kind = kind;
-            glyph.textContent = kind === 'audio' ? '♪' : '📄';
+            glyph.textContent = fileKindGlyphText(kind, path, label);
+            if (kind === 'file') {
+                glyph.title = fileFormatBadge(path, label);
+            }
         });
 
         return { open, close, sync: syncTarget, element, previewDialog };

@@ -33,7 +33,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         }
 
         $switcherContent = (string)file_get_contents($switcher);
-        self::assertStringContainsString('createFrontendSession', $switcherContent);
+        self::assertStringNotContainsString('createFrontendSession', $switcherContent);
+        self::assertStringContainsString('$loggedIn = false', $switcherContent);
+        self::assertStringContainsString("data-customer-logged-in=\"<?= \$loggedIn ? '1' : '0' ?>\"", $switcherContent);
         self::assertStringNotContainsString('SessionFactory::class)->create()', $switcherContent);
         self::assertStringContainsString('data-selling-mode', $switcherContent);
         self::assertStringContainsString('selling-mode-segment', $switcherContent);
@@ -82,7 +84,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('clearGuestLoginFallback', $jsContent);
         self::assertStringContainsString("syncApplyPanels(root, 'tob')", $jsContent);
         self::assertStringNotContainsString('account.scanMounts', $jsContent);
-        self::assertStringNotContainsString('WelineAccountModule', $jsContent);
+        self::assertStringContainsString('WelineAccountModule', $jsContent);
+        self::assertStringContainsString('readFrontendSessionCache', $jsContent);
+        self::assertStringContainsString('ensureLogin', $jsContent);
         self::assertStringContainsString('customer/login-panel', $jsContent);
         self::assertStringContainsString('hydrateIdentityAttrs', $jsContent);
         self::assertStringContainsString('applyIdentity', $jsContent);
@@ -205,7 +209,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-b2b-deposit-note', $orderNoteContent);
         self::assertStringContainsString('w-badge', $orderNoteContent);
         self::assertStringContainsString('data-tone="primary"', $orderNoteContent);
-        self::assertStringContainsString('<lang>批发订单</lang>', $orderNoteContent);
+        self::assertStringContainsString("\$t('批发订单')", $orderNoteContent);
         self::assertStringContainsString('30%', $orderNoteContent);
 
         $checkoutHookContent = (string)file_get_contents($checkoutHook);
@@ -262,7 +266,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-b2b-mini-cart-type="1"', $b2bBoot);
         self::assertStringContainsString('b2bSellingMode', $b2bBoot);
         self::assertStringContainsString('data-has-membership', $b2bBoot);
-        self::assertStringContainsString('createFrontendSession', $b2bBoot);
+        self::assertStringNotContainsString('createFrontendSession', $b2bBoot);
+        self::assertStringContainsString('data-customer-logged-in="0"', $b2bBoot);
         self::assertStringContainsString('data-i18n-coupon-tob-unavailable', $b2bBoot);
         self::assertStringContainsString('批发不可用', $b2bBoot);
 
@@ -270,7 +275,10 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('enhanceMiniCarts', $jsContent);
         self::assertStringContainsString('didInitialMiniCartTypedRefresh', $jsContent);
         self::assertStringContainsString("enhanceMiniCarts({ refresh: false })", $jsContent);
-        self::assertStringContainsString("enhanceMiniCarts({ refresh: true })", $jsContent);
+        self::assertStringNotContainsString("enhanceMiniCarts({ refresh: true })", $jsContent);
+        self::assertStringNotContainsString("visibilitychange", $jsContent);
+        self::assertStringContainsString('ensureLogin', $jsContent);
+        self::assertStringContainsString('readFrontendSessionCache', $jsContent);
         self::assertStringContainsString('data-b2b-mini-cart-type-option', $jsContent);
         self::assertStringContainsString('data-cart-type-option', $jsContent);
         self::assertStringContainsString('weline:cart-type-changed', $jsContent);
@@ -337,8 +345,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $qtyTiers = self::bp('app/code/Weline/B2B/view/templates/frontend/partials/qty-tiers.phtml');
         self::assertFileExists($qtyTiers);
         $qtyTiersContent = (string)file_get_contents($qtyTiers);
-        self::assertStringContainsString('createFrontendSession', $qtyTiersContent);
+        self::assertStringNotContainsString('createFrontendSession', $qtyTiersContent);
         self::assertStringNotContainsString('SessionFactory::class)->create()', $qtyTiersContent);
+        self::assertStringContainsString('$tiersHidden = true', $qtyTiersContent);
         self::assertStringContainsString('data-b2b-qty-ladder', $qtyTiersContent);
         self::assertStringContainsString('b2b-qty-tiers__save', $qtyTiersContent);
         self::assertStringContainsString('b2b-qty-tiers__delta', $qtyTiersContent);

@@ -71,17 +71,9 @@ final class ThemeEditorContextFactory
                 throw new \InvalidArgumentException('theme_editor_context_theme_area_unsupported');
             }
         }
-        if ($resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING) {
-            $binding = $this->workspaces->load(new ThemeEditorContext(
-                scope: $scopeContext,
-                area: $area,
-                resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
-            ), true);
-            $boundThemeId = (int)($binding['draft_payload']['theme_id'] ?? 0);
-            if ($boundThemeId <= 0 || $themeId !== $boundThemeId) {
-                throw new \InvalidArgumentException('theme_editor_context_theme_scope_mismatch');
-            }
-        }
+        // Layout, meta, appearance and i18n are stored per theme_id inside the scope.
+        // The draft binding only selects which theme the website currently runs.
+        // Editing theme A must succeed while that binding is still theme B.
 
         $layoutType = (string)($raw['layout_type'] ?? $raw['page_type'] ?? 'default');
         $layoutOption = (string)($raw['layout_option'] ?? 'default');

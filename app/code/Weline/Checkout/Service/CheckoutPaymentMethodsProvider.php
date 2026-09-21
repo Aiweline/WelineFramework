@@ -87,6 +87,7 @@ final class CheckoutPaymentMethodsProvider
             $caps = \is_array($method['capabilities'] ?? null) ? $method['capabilities'] : [];
             $tpl = strtolower(trim((string) ($method['checkout_template_code'] ?? '')));
             $label = (string) ($method['label'] ?? $method['title'] ?? $method['name'] ?? $code);
+            $wallet = \is_array($method['paypal_wallet'] ?? null) ? $method['paypal_wallet'] : null;
 
             $normalized[] = [
                 'code' => $code,
@@ -101,6 +102,7 @@ final class CheckoutPaymentMethodsProvider
                 'requires_billing' => $this->methodRequiresBilling($code, $caps, $tpl),
                 'capabilities' => $caps,
                 'checkout_template_code' => $tpl,
+                'paypal_wallet' => $wallet,
                 'cod_fee_amount_minor' => $this->resolvePaymentCodFeeMinor(
                     $code,
                     $method,

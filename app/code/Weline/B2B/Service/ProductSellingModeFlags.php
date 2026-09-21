@@ -35,6 +35,20 @@ final class ProductSellingModeFlags
             }
         }
 
+        $productId = max(0, (int)($offer['product_id'] ?? 0));
+        $cacheKey = null;
+        if ($productId > 0 && RequestContext::isInitialized()) {
+            $cacheKey = 'b2b.selling_mode_flags.' . $productId
+                . '|' . max(0, (int)RequestContext::getWelineWebsiteId())
+                . '|' . max(0, (int)RequestContext::getWelineStoreId());
+            $cached = RequestContext::get($cacheKey);
+            if (is_array($cached) && array_key_exists('flags', $cached)) {
+                $flags = $cached['flags'];
+
+                return is_array($flags) ? $flags : null;
+            }
+        }
+
         $flags = [];
         foreach ([SellingModePolicy::PRODUCT_FLAG_TOC, SellingModePolicy::PRODUCT_FLAG_TOB] as $code) {
             if ($offer !== [] && array_key_exists($code, $offer)) {
@@ -47,7 +61,6 @@ final class ProductSellingModeFlags
             }
         }
 
-        $productId = max(0, (int)($offer['product_id'] ?? 0));
         if ($productId > 0) {
             $missing = [];
             foreach ([SellingModePolicy::PRODUCT_FLAG_TOC, SellingModePolicy::PRODUCT_FLAG_TOB] as $code) {
@@ -63,7 +76,12 @@ final class ProductSellingModeFlags
             }
         }
 
-        return $flags === [] ? null : self::normalize($flags);
+        $normalized = $flags === [] ? null : self::normalize($flags);
+        if ($cacheKey !== null) {
+            RequestContext::set($cacheKey, ['flags' => $normalized]);
+        }
+
+        return $normalized;
     }
 
     /**
@@ -82,11 +100,11 @@ final class ProductSellingModeFlags
             $storeId = max(0, (int)RequestContext::getWelineStoreId());
             $out = [];
             foreach ($codes as $code) {
-                $resolved = $repo->read($websiteId, $storeId, 'product', $productId, $code, '', ['']);
-                if (!$resolved->isExplicit()) {
+                $row = $repo->read($websiteId, $storeId, 'product', $productId, $code, '', ['']);
+                if (!$row->isExplicit()) {
                     continue;
                 }
-                $out[$code] = $resolved->value;
+                $out[$code] = $row->value;
             }
 
             return $out;

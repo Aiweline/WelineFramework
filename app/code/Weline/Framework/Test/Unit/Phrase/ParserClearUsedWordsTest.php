@@ -16,13 +16,14 @@ final class ParserClearUsedWordsTest extends TestCase
 
     public function testClearUsedWordsEmptiesRequestPhraseBag(): void
     {
-        $ref = new \ReflectionClass(Parser::class);
-        $prop = $ref->getProperty('usedWords');
-        $prop->setAccessible(true);
-        $prop->setValue(null, [
+        $method = new \ReflectionMethod(Parser::class, 'requestState');
+        $method->setAccessible(true);
+        /** @var \Weline\Framework\Phrase\ParserRequestState $state */
+        $state = $method->invoke(null);
+        $state->usedWords = [
             'hello' => 'hello',
             'world' => 'world',
-        ]);
+        ];
 
         self::assertSame(['hello' => 'hello', 'world' => 'world'], Parser::getUsedWords());
         Parser::clearUsedWords();
@@ -31,10 +32,11 @@ final class ParserClearUsedWordsTest extends TestCase
 
     public function testClearWorkerCachesAlsoClearsUsedWords(): void
     {
-        $ref = new \ReflectionClass(Parser::class);
-        $prop = $ref->getProperty('usedWords');
-        $prop->setAccessible(true);
-        $prop->setValue(null, ['keep' => 'keep']);
+        $method = new \ReflectionMethod(Parser::class, 'requestState');
+        $method->setAccessible(true);
+        /** @var \Weline\Framework\Phrase\ParserRequestState $state */
+        $state = $method->invoke(null);
+        $state->usedWords = ['keep' => 'keep'];
 
         Parser::clearWorkerCaches();
         self::assertSame([], Parser::getUsedWords());

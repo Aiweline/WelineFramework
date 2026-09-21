@@ -175,7 +175,11 @@ class PurchasePanel extends FrontendController
                 $label = trim((string)($option['label'] ?? ''));
                 $resolvedLabel = trim($variantLabels->resolve($axisCode, $value));
                 $labelCorrupt = $label !== '' && preg_match('/%[0-9A-Fa-f]{2}/', $label) === 1;
-                if ($resolvedLabel !== '' && ($label === '' || $label === $value || $labelCorrupt)) {
+                // Prefer EAV Option LocalDescription when resolve yields a real local
+                // name (differs from the identity token). Do not clobber an existing
+                // label with a bare identity fallback.
+                $resolvedIsLocal = $resolvedLabel !== '' && strcasecmp($resolvedLabel, $value) !== 0;
+                if ($resolvedLabel !== '' && ($label === '' || $label === $value || $labelCorrupt || $resolvedIsLocal)) {
                     $option['label'] = $resolvedLabel;
                 }
                 if (trim((string)($option['code'] ?? '')) === '') {

@@ -227,6 +227,61 @@ final class FrameworkCompileManifest
     }
 
     /**
+     * Human-readable delta for compile TOCTOU failures (editor/agent saves mid-compile).
+     *
+     * @param array<string, mixed> $before
+     * @param array<string, mixed> $after
+     * @return list<string>
+     */
+    public function describeSourceDelta(array $before, array $after, int $limit = 12): array
+    {
+        $limit = \max(1, \min(50, $limit));
+        $beforeSources = \is_array($before['sources'] ?? null) ? $before['sources'] : [];
+        $afterSources = \is_array($after['sources'] ?? null) ? $after['sources'] : [];
+        $lines = [];
+
+        $beforeHooks = (string)($before['hooks_sha256'] ?? '');
+        $afterHooks = (string)($after['hooks_sha256'] ?? '');
+        if (!\hash_equals($beforeHooks, $afterHooks)) {
+            $lines[] = 'hooks.php digest changed';
+        }
+
+        foreach ($beforeSources as $relative => $state) {
+            if (!\is_string($relative) || $relative === '') {
+                continue;
+            }
+            if (!isset($afterSources[$relative])) {
+                $lines[] = '-' . $relative;
+                if (\count($lines) >= $limit) {
+                    return $lines;
+                }
+            }
+        }
+        foreach ($afterSources as $relative => $state) {
+            if (!\is_string($relative) || $relative === '') {
+                continue;
+            }
+            if (!isset($beforeSources[$relative])) {
+                $lines[] = '+' . $relative;
+                if (\count($lines) >= $limit) {
+                    return $lines;
+                }
+                continue;
+            }
+            $beforeHash = (string)($beforeSources[$relative]['sha256'] ?? '');
+            $afterHash = (string)($state['sha256'] ?? '');
+            if ($beforeHash !== '' && $afterHash !== '' && !\hash_equals($beforeHash, $afterHash)) {
+                $lines[] = '~' . $relative;
+                if (\count($lines) >= $limit) {
+                    return $lines;
+                }
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
      * @param array<string, mixed> $sourceState
      * @return array<string, mixed>
      */

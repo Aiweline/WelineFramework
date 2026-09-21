@@ -23,6 +23,27 @@
 - 不要把所有 UI 都做成 Taglib（优先 layout / partial / component / widget）
 - **不要在 Taglib `callback()` / `runtime_callback()` 返回的 HTML 字符串里写裸 `@static(...)`**
 
+## 编译期静态镜像（`StaticMirrorCapableInterface`）
+
+金标准：`<lang>` / `@lang(提交)` 在编译期写出最终文案，访问时不再查字典。
+
+当标签属性/内容在编译期可确定（无 `<?= ?>`、无 `$var`）时，可实现可选接口
+`Weline\Framework\Taglib\StaticMirrorCapableInterface`，在 `callback()` 内先调
+`tryStaticMirror()`：返回非 null 则**直接烘焙最终 HTML/文本**；返回 null 则走原
+「吐 `<?php … ?>`」路径。
+
+辅助类：`Weline\Framework\Taglib\CompileTimeStaticMirror`（字面量探测）。
+
+已落地高优标签：
+
+| 标签 | 字面量时 | 动态时 |
+|------|----------|--------|
+| `theme:css` / `theme:js` | 直出 `<link>` / `<script>` | 仍吐 `fetchTagSource` PHP |
+| `icon` | 直出 SVG | 仍吐 `IconRegistry` PHP / `runtimeCallback` |
+| `file:image` | RequestContext 可解析且有 layout 时直出 `<img>` | 否则仍吐 `FileImageRenderer` PHP |
+
+禁止：对 select / ACL / DataTable / switcher / widget 等请求态控件做镜像。
+
 ## 静态资源：`@static` 与 Taglib callback（硬规则）
 
 ### 现象

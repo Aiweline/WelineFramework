@@ -333,8 +333,13 @@ final class CommerceAdminMenuContractTest extends TestCase
         $topbarSource = (string)\file_get_contents($topbar);
         self::assertStringContainsString('Weline_Admin::img/logo.png', $topbarSource);
         self::assertStringContainsString('$avatar === \'Weline_Admin::img/logo.jpg\'', $topbarSource);
+        self::assertStringContainsString('pathToMediaUrl', $topbarSource);
         self::assertStringNotContainsString("setConfig('admin_default_avatar'", $topbarSource);
         self::assertStringNotContainsString('data:image/', (string)\file_get_contents($message));
+
+        $sidebar = BP . 'app/code/Weline/Backend/view/templates/Backend/Profile/partials/sidebar.phtml';
+        self::assertFileExists($sidebar);
+        self::assertStringContainsString('pathToMediaUrl', (string)\file_get_contents($sidebar));
     }
 
     public function testOrderBackendTemplatesUseCurrentSchemaFieldConstants(): void

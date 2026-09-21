@@ -22,6 +22,7 @@ final class AccountCheckoutGroupLoader
         private readonly CheckoutGroup $checkoutGroupModel,
         private readonly RefundCase $refundCaseModel,
         private readonly OrderInvoice $orderInvoiceModel,
+        private readonly ?ContinuePayUrlBuilder $continuePayUrlBuilder = null,
     ) {
     }
 
@@ -107,13 +108,17 @@ final class AccountCheckoutGroupLoader
             }
 
             $meta = $groupMeta[$groupUuid] ?? null;
+            $groupStatus = (string) ($meta['status'] ?? ($orders[0]['status'] ?? ''));
+            $continuePay = $this->continuePayForGroup($orders, $groupStatus, $customerId, $websiteId);
             $result[] = [
                 'group_uuid' => $groupUuid,
                 'display_number' => $meta['display_number'] ?? ('G-' . substr($groupUuid, 0, 8)),
-                'status' => (string) ($meta['status'] ?? ($orders[0]['status'] ?? '')),
+                'status' => $groupStatus,
                 'grand_total_minor' => (int) ($meta['grand_total_minor'] ?? array_sum(array_column($orders, 'amount_minor'))),
                 'currency' => (string) ($meta['currency'] ?? 'CNY'),
                 'orders' => $orders,
+                'continue_pay_url' => $continuePay['continue_pay_url'],
+                'continue_pay_reachable' => $continuePay['reachable'],
             ];
         }
 
@@ -312,5 +317,59 @@ final class AccountCheckoutGroupLoader
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orders
+     * @return array{continue_pay_url:string,reachable:bool}
+     */
+    private function continuePayForGroup(array $orders, string $groupStatus, int $customerId, int $websiteId): array
+    {
+        $empty = ['continue_pay_url' => '', 'reachable' => false];
+        $status = strtolower(trim($groupStatus));
+        if ($status !== 'pending') {
+            // Mixed/group status: only when every order is still pending.
+            foreach ($orders as $order) {
+                if (strtolower(trim((string)($order['status'] ?? ''))) !== 'pending') {
+                    return $empty;
+                }
+            }
+            if ($orders === []) {
+                return $empty;
+            }
+        }
+        $primaryUuid = '';
+        foreach ($orders as $order) {
+            if (strtolower(trim((string)($order['status'] ?? ''))) !== 'pending') {
+                continue;
+            }
+            // ToB hang has its own deposit/balance CTAs.
+            if (strtolower(trim((string)($order['order_type'] ?? 'toc'))) === 'tob') {
+                return $empty;
+            }
+            $primaryUuid = trim((string)($order['order_uuid'] ?? ''));
+            if ($primaryUuid !== '') {
+                break;
+            }
+        }
+        if ($primaryUuid === '') {
+            return $empty;
+        }
+
+        $builder = $this->continuePayUrlBuilder;
+        if ($builder === null) {
+            try {
+                $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(ContinuePayUrlBuilder::class);
+                $builder = $resolved instanceof ContinuePayUrlBuilder ? $resolved : new ContinuePayUrlBuilder();
+            } catch (\Throwable) {
+                $builder = new ContinuePayUrlBuilder();
+            }
+        }
+        $built = $builder->build($primaryUuid, $customerId > 0 ? $customerId : null, $websiteId);
+
+        return [
+            'continue_pay_url' => (string)($built['continue_pay_url'] ?? ''),
+            'reachable' => !empty($built['reachable']) && trim((string)($built['continue_pay_url'] ?? '')) !== '',
+        ];
     }
 }

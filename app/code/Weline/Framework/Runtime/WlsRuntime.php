@@ -26,6 +26,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseObservabilityPolicy;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Http\WlsRequest;
 use Weline\Framework\Manager\ObjectManager;
@@ -5266,6 +5267,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $namespaceSnapshotStarted = true;
                 RequestContext::set('view.template.profile', []);
                 $requestMeta['request_id'] = (string)(RequestContext::getId() ?? '');
+                MemDiag::armFromRequest((string)($_SERVER['REQUEST_URI'] ?? ''));
+                \Weline\Framework\View\Helper\TitleLocaleProbe::armFromRequest(
+                    (string)($_SERVER['REQUEST_URI'] ?? '')
+                );
+                MemDiag::requestBegin([
+                    'uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+                    'pid' => (int)($requestMeta['pid'] ?? 0),
+                    'worker_id' => (string)($requestMeta['worker_id'] ?? ''),
+                    'request_count' => (int)($requestMeta['request_count'] ?? 0),
+                ]);
             }
             // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
             // 观察者调用 getUrlPath 导致 static $url_paths / Acl 路由判定沿用旧路径，误判无权限跳 admin。
@@ -5366,12 +5377,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 }
                 $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
                 $timing['total_ms'] = $timing['pre_telemetry_total_ms'];
-                $cachedFpcResponse->setHeader('X-WLS-Performance-Total', (string)$timing['total_ms']);
-                $cachedFpcResponse->setHeader('X-WLS-Performance-UrlParser', (string)($timing['url_parser_call_ms'] ?? 0));
-                $cachedFpcResponse->setHeader('X-WLS-Performance-UrlParserApply', (string)($timing['process_url_parse_ms'] ?? 0));
-                $cachedFpcResponse->setHeader('X-WLS-Performance-FPC-Hit', '1');
-                $cachedFpcResponse->setHeader('X-WLS-Performance-FPC-Source', $timing['fpc_source']);
-                if (!empty($this->getPerformanceConfig()['response_headers_enabled'])) {
+                if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                    $cachedFpcResponse->setHeader('X-WLS-Performance-Total', (string)$timing['total_ms']);
+                    $cachedFpcResponse->setHeader('X-WLS-Performance-UrlParser', (string)($timing['url_parser_call_ms'] ?? 0));
+                    $cachedFpcResponse->setHeader('X-WLS-Performance-UrlParserApply', (string)($timing['process_url_parse_ms'] ?? 0));
+                    $cachedFpcResponse->setHeader('X-WLS-Performance-FPC-Hit', '1');
+                    $cachedFpcResponse->setHeader('X-WLS-Performance-FPC-Source', $timing['fpc_source']);
                     $this->applyPerformanceHeaders($timing, $request);
                 }
                 $this->applyDynamicFirstRenderHeaders($timing, $request, true, $cachedFpcResponse);
@@ -5416,14 +5427,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // 计算总耗时（用于性能监控）
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             
-            // 如果总耗时超过阈值或 DEV 模式，按配置追加性能响应头
+            // 详细 Performance-* 头：仅 performanceBreakdown 闸门开启时写出
             $isDev = \defined('DEV') && DEV;
             $performanceConfig = $this->getPerformanceConfig();
             $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
-            if ($this->shouldEmitDynamicFirstRenderHeaders($request)
-                || (!empty($performanceConfig['response_headers_enabled'])
-                    && ($timing['total_ms'] >= $slowThreshold || $isDev))) {
-                // 尝试将性能数据添加到响应头（如果响应对象可用）
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()
+                && ($timing['total_ms'] >= $slowThreshold || $isDev)) {
                 try {
                     $request = ObjectManager::getInstance(Request::class);
                     if ($request && method_exists($request, 'getResponse')) {
@@ -5491,10 +5500,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $isDev = \defined('DEV') && DEV;
             $performanceConfig = $this->getPerformanceConfig();
             $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
-            $emitBenchmarkTiming = $this->shouldEmitDynamicFirstRenderHeaders($request);
-            if ($emitBenchmarkTiming
-                || (!empty($performanceConfig['response_headers_enabled'])
-                    && ($timing['total_ms'] >= $slowThreshold || $isDev))) {
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()
+                && ($timing['total_ms'] >= $slowThreshold || $isDev)) {
                 $this->applyPerformanceHeaders($timing, $request);
             }
             try {
@@ -5502,6 +5509,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             } catch (\Throwable) {
             }
             $this->applyDynamicFirstRenderHeaders($timing, $request, false);
+            $this->applyTitleLocaleProbeToPendingResponse($resultStr, $request);
             $this->clearRequestContextProfileSnapshots();
 
             return $resultStr;
@@ -5594,7 +5602,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 );
             }
             // 诊断头：便于在浏览器中确认 302 是否带 Cookie（0=未带，排查 Session/Nginx）
-            $redirectResponse->setHeader('X-WLS-Redirect-Cookies', (string)\count($cookies));
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                $redirectResponse->setHeader('X-WLS-Redirect-Cookies', (string)\count($cookies));
+            }
             return $redirectResponse->toHttpString(false);
             
         } catch (\Weline\Framework\Http\NoRouterException $noRouterEx) {
@@ -5735,6 +5745,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 RequestResetException::append($finalizationFailures, 'request_trace_snapshot', $e);
             } finally {
                 try {
+                    MemDiag::requestEnd();
+                } catch (\Throwable $e) {
+                    RequestResetException::append($finalizationFailures, 'memdiag_request_end', $e);
+                }
+                try {
                     RequestLifecycleTrace::reset();
                 } catch (\Throwable $e) {
                     RequestResetException::append($finalizationFailures, 'request_trace_reset', $e);
@@ -5745,6 +5760,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $this->reset();
             } catch (\Throwable $e) {
                 RequestResetException::append($finalizationFailures, 'runtime_reset', $e);
+            } finally {
+                try {
+                    MemDiag::afterReset();
+                } catch (\Throwable $e) {
+                    RequestResetException::append($finalizationFailures, 'memdiag_after_reset', $e);
+                }
+                try {
+                    \Weline\Framework\View\Helper\TitleLocaleProbe::reset();
+                } catch (\Throwable $e) {
+                    RequestResetException::append($finalizationFailures, 'title_locale_probe_reset', $e);
+                }
             }
             try {
                 if ($request instanceof WlsRequest) {
@@ -6283,7 +6309,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             . 'Content-Length: ' . \strlen($body) . "\r\n"
             . "Connection: keep-alive\r\n"
             . 'Server: ' . Response::SERVER_SIGNATURE . "\r\n"
-            . 'X-Powered-By: WLS/' . Response::SERVER_VERSION . ' PHP/' . \PHP_VERSION . "\r\n"
+            . (ResponseObservabilityPolicy::poweredByHeaderEnabled()
+                ? 'X-Powered-By: WLS/' . Response::SERVER_VERSION . ' PHP/' . \PHP_VERSION . "\r\n"
+                : '')
             . "\r\n"
             . $body;
     }
@@ -6814,8 +6842,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 return;
             }
 
-            $response->setHeader('X-WLS-First-Render-Total-Ms', (string)($timing['total_ms'] ?? 0));
-            $response->setHeader('X-WLS-Warmup-Status', $this->currentWarmupStatus());
+            // FPC 状态对外保留；First-Render/Warmup/Controller-Cache 走观测闸门
             $response->setHeader('X-WLS-FPC-Status', $this->currentFpcStatus($response, $fpcHit));
             if ($this->isInternalHomepageFpcPrimeRequest()) {
                 $receipt = ObjectManager::getInstance(FullPageCacheCoordinator::class)
@@ -6828,6 +6855,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $response->setHeader('X-WLS-Internal-FPC-Receipt', $encodedReceipt);
                 }
             }
+            if (!$this->shouldEmitDynamicFirstRenderHeaders($request)) {
+                return;
+            }
+            $response->setHeader('X-WLS-First-Render-Total-Ms', (string)($timing['total_ms'] ?? 0));
+            $response->setHeader('X-WLS-Warmup-Status', $this->currentWarmupStatus());
             $controllerCache = $this->resolveControllerCacheSource($timing, $response);
             if ($controllerCache !== '') {
                 $response->setHeader('X-WLS-Controller-Cache', $controllerCache);
@@ -6853,8 +6885,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
         }
 
-        $rawFlag = Env::get('wls.worker.dynamic_observability_headers_enabled', '1');
-        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on'], true);
+        return ResponseObservabilityPolicy::dynamicObservabilityEnabled();
     }
 
     private function currentWarmupStatus(): string
@@ -7269,7 +7300,56 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             );
         }
 
-        return $response->getBody();
+        $body = $response->getBody();
+        $this->applyTitleLocaleProbeToPendingResponse($body);
+
+        return $body;
+    }
+
+    /**
+     * Write title×locale probe headers onto the request Response while Context is live.
+     * Worker rebuilds a detached Response from the body string and merges pending headers.
+     */
+    private function applyTitleLocaleProbeToPendingResponse(string $body, ?Request $request = null): void
+    {
+        try {
+            // Re-arm from live Context/query — entry arm may have run before QUERY_STRING was ready.
+            \Weline\Framework\View\Helper\TitleLocaleProbe::armFromRequest(null);
+            if (!\Weline\Framework\View\Helper\TitleLocaleProbe::shouldEmit()) {
+                return;
+            }
+            if ($body === '' || \strncmp($body, 'WQB1', 4) === 0) {
+                return;
+            }
+            $headSample = \substr($body, 0, 16384);
+            if (\stripos($headSample, '<title') === false
+                && \stripos($body, '<title') === false
+            ) {
+                return;
+            }
+
+            $uri = \Weline\Framework\View\Helper\TitleLocaleProbe::armedRequestUri();
+            $locale = \Weline\Framework\View\Helper\TitleLocaleProbe::localeFromRequestUri($uri);
+            if ($locale === '') {
+                try {
+                    $locale = \trim((string)State::getLang());
+                } catch (\Throwable) {
+                    $locale = '';
+                }
+            }
+            $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
+            $analysis = \Weline\Framework\View\Helper\TitleLocaleProbe::analyze($body, $locale, $path);
+            // Request::getResponse() is detached; Worker merges snapshot of HeaderCollector::getInstance().
+            $shared = \Weline\Framework\Http\HeaderCollector::getInstance();
+            \Weline\Framework\View\Helper\TitleLocaleProbe::applyToResponse($shared, $analysis);
+            try {
+                $target = $request?->getResponse()
+                    ?? ObjectManager::getInstance(Request::class)->getResponse();
+                \Weline\Framework\View\Helper\TitleLocaleProbe::applyToResponse($target, $analysis);
+            } catch (\Throwable) {
+            }
+        } catch (\Throwable) {
+        }
     }
 
     /**

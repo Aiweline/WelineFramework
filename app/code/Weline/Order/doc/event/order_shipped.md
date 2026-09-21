@@ -6,7 +6,9 @@
 
 ## 触发时机
 
-在 `FulfillmentService::createShipment()` 方法中，发货记录创建成功后。
+- `FulfillmentService::createShipment()` / `updateTracking()`（后补运单号时 `notify_customer=false`）
+- `OrderTradeAdminCommandService::attachShipmentLogistics()`（发货）
+- `OrderTradeAdminCommandService::updateShipmentTracking()`（后补运单号；邮件仍受 `notify_customer` 门禁）
 
 ## 数据格式
 
@@ -14,7 +16,10 @@
 [
     'order' => Order对象,
     'order_id' => int,
-    'shipment' => Shipment对象,
+    'shipment' => OrderShipment对象,
+    'notify_customer' => bool, // 仅控制邮件；支付物流回传不依赖此字段
+    'tracking_number' => string,
+    'carrier' => string,
 ]
 ```
 
@@ -22,7 +27,11 @@
 
 - `order` (Order) - 订单对象
 - `order_id` (int) - 订单ID
-- `shipment` (Shipment) - 发货记录对象
+- `shipment` (OrderShipment) - 发货记录对象
+- `notify_customer` (bool) - 是否发客户邮件
+- `tracking_number` / `carrier` - 运单与承运商
+
+Payment 壳 `OrderShippedShipmentTrackingObserver` 按订单支付方式可选回传网关物流（见 `ProviderShipmentTrackingInterface`）。
 
 ## 使用场景
 

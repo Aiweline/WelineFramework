@@ -48,7 +48,7 @@ moduleDescribe(test, MODULE, 'Checkout currency address quote', () => {
       const widgetJs = fs.readFileSync(
         path.join(
           ROOT_DIR,
-          'app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.v20260914-quote-selected.js',
+          'app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js',
         ),
         'utf8',
       );

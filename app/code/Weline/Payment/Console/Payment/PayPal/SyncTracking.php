@@ -37,4 +37,17 @@ class SyncTracking extends CommandAbstract
 
         return empty($result['ok']) ? 'FAIL' : 'OK';
     }
+
+    private function optionValue(array $args, string $name): ?string
+    {
+        $prefix = '--' . $name . '=';
+        foreach ($args as $arg) {
+            $arg = (string) $arg;
+            if (str_starts_with($arg, $prefix)) {
+                return substr($arg, strlen($prefix));
+            }
+        }
+
+        return null;
+    }
 }

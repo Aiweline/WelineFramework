@@ -200,13 +200,7 @@ class ThemeEditor extends BackendController
         $this->useFullscreenEditorLayout();
 
         $previewContextService = $this->getPreviewContextService();
-        $themeContextService = $this->getThemeContextService();
-        $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
-        $requestedFrontendThemeId = (int)$this->request->getParam(
-            'frontend_theme_id',
-            (int)$this->request->getParam('preview_theme', $requestedThemeId)
-        );
-        $requestedBackendThemeId = (int)$this->request->getParam('backend_theme_id', 0);
+        $editingThemeId = (int)$this->request->getParam('theme_id', 0);
         $pageType = (string)$this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
         $editorArea = $this->resolveRequestedEditorArea();
         $scopeCatalog = ObjectManager::getInstance(ScopeSelectorCatalogInterface::class)->build(
@@ -220,102 +214,50 @@ class ThemeEditor extends BackendController
             : (string)$scopeCatalog['selected_scope'];
         $scopeContext = null;
         if (!$scopeLegacyReadonly) {
-            // For canonical scopes the binding is authoritative. Request theme
-            // ids are legacy navigation hints only and must not survive a
-            // failed/partial scoped-workspace read.
-            $requestedFrontendThemeId = 0;
-            $requestedBackendThemeId = 0;
             try {
                 $selectedIdentity = ScopeIdentity::fromArray((array)$scopeCatalog['selected_identity']);
                 $scopeContext = ObjectManager::getInstance(ScopeHierarchyInterface::class)
                     ->contextFromIdentity($selectedIdentity);
-                /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
-                $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
-                $frontendBinding = $scopedWorkspace->load(new ThemeEditorContext(
-                    scope: $scopeContext,
-                    area: PreviewContextService::AREA_FRONTEND,
-                    resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
-                ));
-                $requestedFrontendThemeId = (int)($frontendBinding['draft_payload']['theme_id'] ?? 0);
-
-                $backendBinding = $scopedWorkspace->load(new ThemeEditorContext(
-                    scope: $scopeContext,
-                    area: PreviewContextService::AREA_BACKEND,
-                    resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
-                ));
-                $requestedBackendThemeId = (int)($backendBinding['draft_payload']['theme_id'] ?? 0);
             } catch (\Throwable) {
-                // Setup may still be upgrading; legacy active-theme lookup remains the read fallback.
             }
         }
         $themeListUrl = $this->_url->getBackendUrl('theme/backend');
-
-        $frontendTheme = $requestedFrontendThemeId > 0
-            ? $this->loadThemeModel($requestedFrontendThemeId)
-            : $themeContextService->resolveTheme(PreviewContextService::AREA_FRONTEND);
-        if (!$frontendTheme?->getId()) {
-            /*
-            $this->getMessageManager()->addError(__('绯荤粺娌℃湁鍙敤鐨勫墠绔富棰橈紝璇峰厛婵€娲绘垨閫夋嫨涓€涓墠绔富棰樸€?));
-            */
-            $this->getMessageManager()->addError(__('No available frontend theme. Please activate or select one first.'));
+        if ($editingThemeId <= 0) {
+            $this->getMessageManager()->addError(__('Missing theme ID'));
+            return $this->redirect($themeListUrl);
+        }
+        $editingTheme = $this->loadThemeModel($editingThemeId);
+        if (!$editingTheme?->getId()) {
+            $this->getMessageManager()->addError(__('Theme does not exist.'));
             return $this->redirect($themeListUrl);
         }
 
-        $frontendHasBackend = $this->themeHasBackendDir($frontendTheme);
-        $backendTheme = null;
-        if ($requestedBackendThemeId > 0) {
-            $candidateBackendTheme = $this->loadThemeModel($requestedBackendThemeId);
-            if ($candidateBackendTheme?->getId() && $themeContextService->themeSupportsArea($candidateBackendTheme, PreviewContextService::AREA_BACKEND)) {
-                $backendTheme = $candidateBackendTheme;
-            } else {
-                /*
-                $this->getMessageManager()->addWarning(__('鎵€閫夊悗鍙颁富棰樹笉鍙敤锛屽凡鑷姩鍥為€€鍒板綋鍓嶅惎鐢ㄧ殑鍚庡彴涓婚銆?));
-                */
-                $this->getMessageManager()->addWarning(__('Selected backend theme is unavailable, fallback to the active backend theme.'));
-            }
-        }
-        if (!$backendTheme?->getId() && $frontendHasBackend) {
-            $backendTheme = $this->loadThemeModel((int)$frontendTheme->getId());
-        }
-        if (!$backendTheme?->getId()) {
-            $backendTheme = $themeContextService->resolveTheme(PreviewContextService::AREA_BACKEND);
-        }
-        if (!$backendTheme?->getId() && $frontendHasBackend) {
-            $backendTheme = $this->loadThemeModel((int)$frontendTheme->getId());
-        }
-
+        $frontendTheme = $editingTheme;
+        $backendTheme = $editingTheme;
+        $frontendHasBackend = $this->themeHasBackendDir($editingTheme);
         $context = $previewContextService->buildContext([
-            'frontend_theme_id' => (int)$frontendTheme->getId(),
-            'backend_theme_id' => (int)($backendTheme?->getId() ?: 0),
+            'frontend_theme_id' => $editingThemeId,
+            'backend_theme_id' => $editingThemeId,
             'editor_area' => $editorArea,
             'shell' => PreviewContextService::SHELL_THEME_EDITOR,
-            // The editor shell must recover from preview state left by an older
-            // request/session. Its iframe receives a separate short-lived token.
             'preview_token' => '',
             'preview_mode' => (string)$this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE),
             'status' => (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
             'version_id' => (int)$this->request->getParam('version_id', 0) ?: null,
-            // The catalog is the authoritative Scope boundary. Keeping a raw
-            // request string here would let a stale/forged Scope leak into the
-            // preview token and legacy projection while the editor itself is
-            // already using a different canonical typed identity.
             'scope' => $selectedScope !== '' ? $selectedScope : PreviewContextService::DEFAULT_SCOPE,
             'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
             'target_value' => $pageType,
-        ]);
-        $context = $previewContextService->ensureThemeIds($context, true, true);
+        ], false);
+        $context['frontend_theme_id'] = $editingThemeId;
+        $context['backend_theme_id'] = $editingThemeId;
         if (!$this->hasExplicitThemeLayoutRuntimeTargetRequest()) {
             $context = $this->clearThemeLayoutRuntimeTarget($context);
         }
-        if ($editorArea === PreviewContextService::AREA_BACKEND
-            && $previewContextService->getThemeIdForArea(PreviewContextService::AREA_BACKEND, $context, false) <= 0) {
-            $context['editor_area'] = PreviewContextService::AREA_FRONTEND;
-        }
         $context = $previewContextService->persistContext($context);
         $editorArea = (string)$context['editor_area'];
-        $frontendThemeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_FRONTEND, $context, true);
-        $backendThemeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_BACKEND, $context, true);
-        $currentThemeId = $previewContextService->getThemeIdForArea($editorArea, $context, true);
+        $frontendThemeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_FRONTEND, $context, false);
+        $backendThemeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_BACKEND, $context, false);
+        $currentThemeId = $previewContextService->getThemeIdForArea($editorArea, $context, false);
         $currentTheme = $editorArea === PreviewContextService::AREA_BACKEND
             ? ($backendTheme ?: $this->loadThemeModel($currentThemeId))
             : ($frontendTheme ?: $this->loadThemeModel($currentThemeId));
@@ -3885,6 +3827,21 @@ class ThemeEditor extends BackendController
         return $payload;
     }
 
+    private function widgetConfigWantsPreviewHtml(): bool
+    {
+        $requestData = $this->getEditorJsonPayload();
+        $raw = $requestData['with_preview'] ?? $this->request->getParam('with_preview', null);
+        if (is_bool($raw)) {
+            return $raw;
+        }
+        if (is_int($raw) || is_float($raw)) {
+            return ((int)$raw) === 1;
+        }
+        $normalized = strtolower(trim((string)$raw));
+
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
     /**
      * 获取部件配置信息 (GET)
      * 
@@ -3971,11 +3928,27 @@ class ThemeEditor extends BackendController
             $locale,
         );
         $config = $this->materializeWidgetConfigPaths($config, []);
+        $mediaPreviewUrls = $this->resolveTransientMediaPreviewUrls(
+            is_array($config) ? $config : [],
+        );
 
-        // GET 配置只返回 schema+values；禁止在此渲染 preview_html（单部件预览可达数十秒，
-        // 会堵住微任务/Worker，表现为「点部件后配置一直加载不出来」）。
-        // 画布预览仍由 save-widget / save-widget-config 返回 preview_html 做局部补丁。
-        $previewHtml = null;
+        // 打开配置不渲预览（单部件预览可达数十秒，会堵住「点部件」）。
+        // 自动保存后的画布回填显式带 with_preview=1，只在这一次渲染 preview_html。
+        $previewHtml = $this->widgetConfigWantsPreviewHtml()
+            ? $this->tryBuildPreviewHtmlForWidget(
+                [
+                    'node_uid' => $nodeUid,
+                    'widget_module' => $widgetModule,
+                    'widget_code' => $widgetCode,
+                    'widget_type' => $widgetType,
+                    'area' => $slotArea,
+                    'slot_id' => $node['slot_id'] ?? null,
+                    'config' => is_array($config) ? $config : [],
+                ],
+                is_array($config) ? $config : [],
+                is_string($locale) ? $locale : null,
+            )
+            : null;
 
         return $this->fetchJson([
             'success' => true,
@@ -3987,12 +3960,65 @@ class ThemeEditor extends BackendController
                 'widget_code' => $widgetCode,
                 'params' => $params,
                 'config' => $config,
+                'media_preview_urls' => $mediaPreviewUrls,
                 'locale' => $locale,
                 'preview_html' => $previewHtml,
                 'has_params' => true,
             ],
             'preview_html' => $previewHtml,
         ]);
+    }
+
+    /**
+     * Transient editor thumbnails for typed file-image nodes (never persist into config).
+     *
+     * @param array<string,mixed> $config
+     * @return array<string,string> asset_id => preview URL
+     */
+    private function resolveTransientMediaPreviewUrls(array $config): array
+    {
+        $resolver = null;
+        try {
+            if (interface_exists(\Weline\Widget\Api\Param\FileImagePreviewResolverInterface::class)) {
+                $resolver = ObjectManager::getInstance(
+                    \Weline\Widget\Api\Param\FileImagePreviewResolverInterface::class,
+                );
+            }
+        } catch (\Throwable) {
+            $resolver = null;
+        }
+        if (!$resolver instanceof \Weline\Widget\Api\Param\FileImagePreviewResolverInterface) {
+            return [];
+        }
+
+        $urls = [];
+        $walk = static function (mixed $value) use (&$walk, &$urls, $resolver): void {
+            if (!is_array($value)) {
+                return;
+            }
+            if (($value['type'] ?? null) === 'file-image' && is_array($value['usage'] ?? null)) {
+                $assetId = trim((string)($value['usage']['asset_id'] ?? ''));
+                if ($assetId === '' || array_key_exists($assetId, $urls)) {
+                    return;
+                }
+                try {
+                    $url = trim((string)$resolver->resolvePreviewUrl($value));
+                } catch (\Throwable) {
+                    $url = '';
+                }
+                if ($url !== '') {
+                    $urls[$assetId] = $url;
+                }
+
+                return;
+            }
+            foreach ($value as $child) {
+                $walk($child);
+            }
+        };
+        $walk($config);
+
+        return $urls;
     }
 
     /**
@@ -5156,7 +5182,8 @@ class ThemeEditor extends BackendController
             $resolvedLocale = trim((string)($layoutData['locale_code'] ?? ''));
         }
         if ($resolvedLocale === '' || strcasecmp($resolvedLocale, 'default') === 0) {
-            $resolvedLocale = trim((string)Env::default_LANGUAGE_CODE);
+            // Match the picker stamp: website default, not framework Env alone.
+            $resolvedLocale = trim($this->resolveEditorWebsiteDefaultLocale());
         }
         if ($resolvedLocale === '' || strcasecmp($resolvedLocale, 'default') === 0) {
             $resolvedLocale = trim((string)RequestContext::getWelineUserLang());
@@ -6819,7 +6846,6 @@ HTML;
             $themeId = $context->themeId;
             $pageType = $context->layoutType;
             $identity = $this->layoutIdentityFromEditorContext($context);
-            $this->versionService->initializeVersionIfNeeded($themeId, $pageType, null, $identity);
             $versions = $this->versionService->getVersions($themeId, $pageType, $limit, $identity);
             $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
             $publishedVersion = $this->versionService->getPublishedVersion($themeId, $pageType, $identity);
@@ -8103,7 +8129,6 @@ HTML;
             $themeId = $context->themeId;
             $pageType = $context->layoutType;
             $identity = $this->layoutIdentityFromEditorContext($context);
-            $this->versionService->initializeVersionIfNeeded($themeId, $pageType, null, $identity);
             $versions = $this->versionService->getVersions($themeId, $pageType, $limit, $identity);
             $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
             $publishedVersion = $this->versionService->getPublishedVersion($themeId, $pageType, $identity);
@@ -8120,6 +8145,107 @@ HTML;
                 ],
             ]);
         } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Copy one layout version snapshot into the theme currently being edited.
+     * Does not publish, does not change the source version flags, and does not
+     * insert the source row into the target version list.
+     */
+    public function postInheritVersion()
+    {
+        $data = $this->readJsonBody();
+        $sourceInput = $data['source'] ?? null;
+        if (!\is_array($sourceInput)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => 'theme_inherit_source_required',
+            ]);
+        }
+        if ((string)($sourceInput['resource_type'] ?? '') !== ThemeEditorContext::RESOURCE_LAYOUT) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => 'theme_inherit_source_resource_invalid',
+            ]);
+        }
+        if (!\array_key_exists('target_expected_revision', $sourceInput)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => 'theme_inherit_target_revision_required',
+            ]);
+        }
+
+        try {
+            /** @var ThemeEditorContextFactory $factory */
+            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            $target = $factory->fromInput($data, ThemeEditorContext::RESOURCE_LAYOUT);
+            $sourceContext = $factory->fromInput($sourceInput, ThemeEditorContext::RESOURCE_LAYOUT);
+            $sourceIdentity = $this->layoutIdentityFromEditorContext($sourceContext);
+            $versionId = (int)($sourceInput['version_id'] ?? 0);
+            $sourceVersion = $this->versionService->getVersion(
+                $sourceContext->themeId,
+                $sourceContext->layoutType,
+                $versionId,
+                $sourceIdentity,
+            );
+            if (!$sourceVersion instanceof ThemeLayoutVersion) {
+                throw new \RuntimeException('theme_layout_version_not_found');
+            }
+            $sourceIsCurrent = $sourceVersion->isCurrent();
+            $sourceIsPublished = $sourceVersion->isPublished();
+            $snapshot = $sourceVersion->getSnapshotData();
+            /** @var ThemeScopedWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+            /** @var ThemeLayoutSnapshotNormalizer $normalizer */
+            $normalizer = ObjectManager::getInstance(ThemeLayoutSnapshotNormalizer::class);
+            $scopedContext = $target->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+            $state = $workspace->load($scopedContext, true);
+            $written = $workspace->replaceEffectivePayload(
+                context: $scopedContext,
+                expectedRevision: (int)$sourceInput['target_expected_revision'],
+                expectedParentReleaseId: \array_key_exists('expected_parent_release_id', $state)
+                    ? ($state['expected_parent_release_id'] === null
+                        ? null
+                        : (int)$state['expected_parent_release_id'])
+                    : null,
+                effectivePayload: $normalizer->normalize($target, \is_array($snapshot) ? $snapshot : []),
+                actorId: 'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                actorName: (string)($this->session->getUsername() ?? ''),
+                summary: 'Inherit layout snapshot into the theme being edited',
+            );
+            $sourceAfter = $this->versionService->getVersion(
+                $sourceContext->themeId,
+                $sourceContext->layoutType,
+                $versionId,
+                $sourceIdentity,
+            );
+            if (!$sourceAfter instanceof ThemeLayoutVersion
+                || $sourceAfter->isCurrent() !== $sourceIsCurrent
+                || $sourceAfter->isPublished() !== $sourceIsPublished
+            ) {
+                throw new \RuntimeException('theme_inherit_source_version_mutated');
+            }
+            if ((int)($written['context']['theme_id'] ?? $target->themeId) !== $target->themeId
+                && isset($written['context'])
+            ) {
+                throw new \RuntimeException('theme_inherit_target_theme_mismatch');
+            }
+
+            return $this->fetchJson([
+                'success' => true,
+                'theme_id' => $target->themeId,
+                'message' => __('已继承到当前主题草稿'),
+                'data' => [
+                    'theme_id' => $target->themeId,
+                    'scoped_workspace' => $written,
+                ],
+            ]);
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -9149,34 +9275,23 @@ HTML;
     /** @param array<string,mixed> $payload */
     private function respondEditorLockAcquire(array $payload)
     {
-        $themeId = (int)($payload['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($payload['page_type']
-            ?? $payload['layout_type']
-            ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-
-        if (!$themeId) {
+        try {
+            $lock = $this->editorLockIdentity($payload);
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缺少主题ID'),
+                'message' => $e->getMessage(),
             ]);
         }
 
-        // 获取当前用户信息
         $userId = $this->session->getLoginUserID() ?: 0;
         $userName = $this->session->getLoginUsername() ?: '';
-        $lockContextKey = $this->resolveEditorLockContextKey(
-            $payload,
-            $themeId,
-            $pageType,
-        );
-
-        // 尝试获取锁定
         $result = $this->editorLockService->acquireLock(
-            $themeId,
-            $pageType,
+            $lock['theme_id'],
+            $lock['page_type'],
             $userId,
             $userName,
-            $lockContextKey,
+            $lock['hash'],
         );
         $lockMeta = $this->editorLockService->describeAcquireResult($result, $userId);
 
@@ -9202,19 +9317,17 @@ HTML;
             $data = $this->request->getParams();
         }
 
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
+        try {
+            $lock = $this->editorLockIdentity($data);
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缺少主题ID'),
+                'message' => $e->getMessage(),
             ]);
         }
 
         $userId = $this->session->getLoginUserID() ?: 0;
-        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
-        $result = $this->editorLockService->releaseLock($themeId, (string)$pageType, $userId, $lockContextKey);
+        $result = $this->editorLockService->releaseLock($lock['theme_id'], $lock['page_type'], $userId, $lock['hash']);
 
         return $this->fetchJson([
             'success' => $result,
@@ -9239,19 +9352,17 @@ HTML;
             $data = $this->request->getParams();
         }
 
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
+        try {
+            $lock = $this->editorLockIdentity($data);
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缺少主题ID'),
+                'message' => $e->getMessage(),
             ]);
         }
 
         $userId = $this->session->getLoginUserID() ?: 0;
-        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
-        $result = $this->editorLockService->updateActivity($themeId, (string)$pageType, $userId, $lockContextKey);
+        $result = $this->editorLockService->updateActivity($lock['theme_id'], $lock['page_type'], $userId, $lock['hash']);
 
         return $this->fetchJson([
             'success' => $result,
@@ -9273,26 +9384,23 @@ HTML;
             $data = $this->request->getParams();
         }
 
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
+        try {
+            $lock = $this->editorLockIdentity($data);
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缺少主题ID'),
+                'message' => $e->getMessage(),
             ]);
         }
 
         $userId = $this->session->getLoginUserID() ?: 0;
         $userName = $this->session->getLoginUsername() ?: '';
-        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
-
         $result = $this->editorLockService->requestTakeover(
-            $themeId,
-            (string)$pageType,
+            $lock['theme_id'],
+            $lock['page_type'],
             $userId,
             $userName,
-            $lockContextKey,
+            $lock['hash'],
         );
 
         return $this->fetchJson($result);
@@ -9306,25 +9414,18 @@ HTML;
      */
     public function getCheckTakeoverRequest()
     {
-        $themeId = (int)$this->request->getParam('theme_id', 0);
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
+        try {
+            $lock = $this->editorLockIdentity($this->getEditorJsonPayload());
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缺少主题ID'),
+                'message' => $e->getMessage(),
             ]);
         }
-
-        $lockContextKey = $this->resolveEditorLockContextKey(
-            $this->getEditorJsonPayload(),
-            $themeId,
-            (string)$pageType,
-        );
         $takeoverRequest = $this->editorLockService->getTakeoverRequest(
-            $themeId,
-            (string)$pageType,
-            $lockContextKey,
+            $lock['theme_id'],
+            $lock['page_type'],
+            $lock['hash'],
         );
 
         return $this->fetchJson([
@@ -9351,26 +9452,23 @@ HTML;
             $data = $this->request->getParams();
         }
 
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
+        try {
+            $lock = $this->editorLockIdentity($data);
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缺少主题ID'),
+                'message' => $e->getMessage(),
             ]);
         }
 
         $userId = $this->session->getLoginUserID() ?: 0;
         $userName = $this->session->getLoginUsername() ?: '';
-        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
-
         $result = $this->editorLockService->forceTakeover(
-            $themeId,
-            (string)$pageType,
+            $lock['theme_id'],
+            $lock['page_type'],
             $userId,
             $userName,
-            $lockContextKey,
+            $lock['hash'],
         );
 
         return $this->fetchJson($result);
@@ -10277,17 +10375,33 @@ HTML;
         }
     }
 
-    /** @param array<string,mixed> $input */
-    private function resolveEditorLockContextKey(array $input, int $themeId, string $pageType): string
+    /** @param array<string,mixed> $input
+     * @return array{theme_id:int,page_type:string,hash:string}
+     */
+    private function editorLockIdentity(array $input): array
     {
+        if (!\array_key_exists('editor_context', $input)) {
+            $requestContext = $this->request->getParam('editor_context', null);
+            if ($requestContext !== null && $requestContext !== '') {
+                $input['editor_context'] = $requestContext;
+            }
+        }
         /** @var ThemeEditorContextFactory $factory */
         $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
         $context = $factory->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
-        if ($context->themeId !== $themeId || $context->layoutType !== $pageType) {
-            throw new \InvalidArgumentException('theme_editor_lock_context_mismatch');
-        }
+        $identity = $this->layoutIdentityFromEditorContext($context);
+        $current = $this->versionService->getCurrentVersion($context->themeId, $context->layoutType, $identity);
+        $versionId = $current instanceof ThemeLayoutVersion ? (int)$current->getVersionId() : 0;
+        /** @var ThemeScopedWorkspaceInterface $workspace */
+        $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+        $state = $workspace->load($context->withResource(ThemeEditorContext::RESOURCE_LAYOUT), true);
+        $draftRevisionId = (int)($state['draft_revision_id'] ?? 0);
 
-        return $context->canonicalKey();
+        return [
+            'theme_id' => $context->themeId,
+            'page_type' => $context->layoutType,
+            'hash' => EditorLockService::hashLockIdentity($context, $versionId, $draftRevisionId),
+        ];
     }
 
     private function legacyScopeForEditorContext(ThemeEditorContext $context): string

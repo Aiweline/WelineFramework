@@ -22,5 +22,8 @@ final class ThemeBackendRuntimePollContractTest extends TestCase
         self::assertStringContainsString("resource('runtime_task')", $source);
         self::assertStringContainsString('.status({', $source);
         self::assertStringContainsString('pollRuntimeTask', $source);
+        self::assertStringContainsString('singlePreviewImage', $source);
+        self::assertStringContainsString('recovering: true', $source);
+        self::assertStringContainsString('/theme_previews/theme_', $source);
     }
 }

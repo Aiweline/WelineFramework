@@ -617,11 +617,14 @@ final class ProductSearchProjectionService
             $entityType,
             $entityIds,
             [AttributeValue::WEBSITE_STORE_ID],
+            null,
+            $attributeCodes,
         ) as $row) {
             if (!empty($row['cleared'])) {
                 continue;
             }
             $attributeCode = \trim((string)($row['attribute_code'] ?? ''));
+            // Defensive: SQL already filters attribute_codes; keep set check for safety.
             if ($attributeCode === '' || !isset($attributeCodeSet[$attributeCode])) {
                 continue;
             }

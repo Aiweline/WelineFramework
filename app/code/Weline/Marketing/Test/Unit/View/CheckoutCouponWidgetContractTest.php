@@ -32,7 +32,9 @@ final class CheckoutCouponWidgetContractTest extends TestCase
         $template = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-coupon.phtml',
         );
-        self::assertStringContainsString('data-testid="marketing-checkout-coupon"', $template);
+        self::assertStringContainsString('data-testid="checkout-coupon"', $template);
+        self::assertStringContainsString('data-widget-code="checkout-coupon"', $template);
+        self::assertStringContainsString('data-marketing-checkout-coupon', $template);
         self::assertStringContainsString('w-marketing-checkout-coupon__controls', $template);
         self::assertStringContainsString('@widget.default_injections', $template);
         self::assertStringContainsString('checkout-summary-discount', $template);

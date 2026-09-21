@@ -9,6 +9,7 @@ use Weline\Payment\Extends\Module\Weline_Payment\PaymentProvider\FakeProvider;
 use Weline\Payment\Extends\Module\Weline_Payment\PaymentProvider\PayPalProvider;
 use Weline\Payment\Interface\ProviderConnectInterface;
 use Weline\Payment\Interface\ProviderInterface;
+use Weline\Payment\Interface\ProviderShipmentTrackingInterface;
 
 /**
  * Shell must route by method_code; Callback/Facade must not import gateway OAuth.
@@ -27,8 +28,10 @@ final class PaymentShellAntiLeakContractTest extends TestCase
     {
         self::assertTrue(is_subclass_of(PayPalProvider::class, ProviderInterface::class));
         self::assertTrue(is_subclass_of(PayPalProvider::class, ProviderConnectInterface::class));
+        self::assertTrue(is_subclass_of(PayPalProvider::class, ProviderShipmentTrackingInterface::class));
         self::assertTrue(is_subclass_of(FakeProvider::class, ProviderInterface::class));
         self::assertFalse(is_subclass_of(FakeProvider::class, ProviderConnectInterface::class));
+        self::assertFalse(is_subclass_of(FakeProvider::class, ProviderShipmentTrackingInterface::class));
 
         $paypalMeta = (new PayPalProvider())->getDisplayMetadata();
         self::assertSame('template', $paypalMeta['checkout_mode'] ?? null);

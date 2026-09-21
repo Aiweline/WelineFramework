@@ -160,4 +160,63 @@ final class ThemeEditorContextTest extends TestCase
             layoutType: '/checkout/success',
         );
     }
+
+    public function testLayoutIdentityDiffersByEditingThemeId(): void
+    {
+        $scope = new ScopeContext(
+            identity: ScopeIdentity::website(0, 'default'),
+            storageScope: 'default.default.default',
+            storeMode: ScopeIdentity::MODE_NORMAL,
+            fallbackStorageScopes: ['default.default.default'],
+        );
+        $themeOne = new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: 1,
+            layoutType: 'homepage',
+        );
+        $themeThree = new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: 3,
+            layoutType: 'homepage',
+        );
+
+        self::assertNotSame($themeOne->identityHash(), $themeThree->identityHash());
+        self::assertNotSame($themeOne->canonicalKey(), $themeThree->canonicalKey());
+    }
+
+    public function testEditorLockHashesDoNotCollideAcrossThemeOrVersion(): void
+    {
+        $scope = new ScopeContext(
+            identity: ScopeIdentity::website(0, 'default'),
+            storageScope: 'default.default.default',
+            storeMode: ScopeIdentity::MODE_NORMAL,
+            fallbackStorageScopes: ['default.default.default'],
+        );
+        $themeOne = new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: 1,
+            layoutType: 'homepage',
+        );
+        $themeThree = new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: 3,
+            layoutType: 'homepage',
+        );
+        $themeOneVersionTen = \Weline\Theme\Service\EditorLockService::hashLockIdentity($themeOne, 10, 4);
+        $themeThreeVersionTen = \Weline\Theme\Service\EditorLockService::hashLockIdentity($themeThree, 10, 4);
+        $themeOneVersionEleven = \Weline\Theme\Service\EditorLockService::hashLockIdentity($themeOne, 11, 4);
+
+        self::assertNotSame($themeOneVersionTen, $themeThreeVersionTen);
+        self::assertNotSame($themeOneVersionTen, $themeOneVersionEleven);
+        self::assertNotSame($themeThreeVersionTen, $themeOneVersionEleven);
+        self::assertNotSame('editor_lock_' . $themeOneVersionTen, 'editor_lock_' . $themeThreeVersionTen);
+    }
 }

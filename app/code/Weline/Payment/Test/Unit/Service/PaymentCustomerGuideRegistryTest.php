@@ -7,6 +7,7 @@ namespace Weline\Payment\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Payment\Extends\Module\Weline_Payment\PaymentCustomerGuide\FakeCardCustomerGuide;
 use Weline\Payment\Extends\Module\Weline_Payment\PaymentCustomerGuide\PayPalCustomerGuide;
+use Weline\Payment\Extends\Module\Weline_Payment\PaymentCustomerGuide\StripeCustomerGuide;
 use Weline\Payment\Interface\PaymentCustomerGuideInterface;
 use Weline\Payment\Service\PaymentCustomerGuideRegistry;
 
@@ -27,6 +28,7 @@ final class PaymentCustomerGuideRegistryTest extends TestCase
         $guides = [
             new FakeCardCustomerGuide(),
             new PayPalCustomerGuide(),
+            new StripeCustomerGuide(),
         ];
 
         foreach ($guides as $guide) {

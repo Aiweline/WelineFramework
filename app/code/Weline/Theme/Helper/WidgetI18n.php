@@ -98,6 +98,11 @@ final class WidgetI18n
             $translated = str_replace('%{' . ($index + 1) . '}', (string)$value, $translated);
         }
 
+        // Never surface module codes (Weline_Theme, …) as "translated" chrome copy.
+        if ($translated === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($translated)) {
+            $translated = \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($key) ? '' : $key;
+        }
+
         self::setRequestMemo($memoKey, $translated);
 
         return $translated;
@@ -162,7 +167,18 @@ final class WidgetI18n
         }
 
         // Path locale wins over RequestContext/KeyBuilder, which can lag on /{locale}/ pages.
-        $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+        // Never fall back to process $_SERVER under WLS — it is not Fiber-local.
+        $requestUri = '';
+        try {
+            $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: '');
+        } catch (\Throwable) {
+        }
+        if ($requestUri === '') {
+            try {
+                $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '') ?: '');
+            } catch (\Throwable) {
+            }
+        }
         $pathLocale = self::localeFromRequestUri($requestUri);
         if ($pathLocale !== null) {
             return $pathLocale;

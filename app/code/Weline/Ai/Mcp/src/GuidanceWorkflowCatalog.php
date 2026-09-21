@@ -30,6 +30,8 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_REQUIREMENT_CLARIFY_USE_CASE = 'requirement_clarify_use_case';
 
+    public const SURFACE_ENGINEERING_TEAM = 'engineering_team';
+
     /** @return list<string> Repository-relative pinned doc paths. */
     public static function pinnedDocumentPaths(): array
     {
@@ -50,6 +52,7 @@ final class GuidanceWorkflowCatalog
             'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
             'app/code/Weline/Theme/doc/部件开发指南.md',
             'dev/ai-command/ai/需求澄清与用例规格.md',
+            'dev/ai-command/ai/工程团队.md',
         ];
     }
 
@@ -68,8 +71,8 @@ final class GuidanceWorkflowCatalog
             'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Every feature MUST Agent-run Playwright e2e to PASS (never ask the user to test; default headless via e2e_playwright_headless_default—do not pass --headed unless the user asks to watch; formal runner only: php bin/w e2e:run / npx playwright test—forbid node -e / chromium.launch probes per e2e_playwright_formal_runner_only). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / e2e_playwright_formal_runner_only / browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
             '【调用范围】闲聊可跳过 MCP。工程/编码任务：MCP 已挂载或可挂载时必须 ensure→prepare_project→遵守 hard_constraints，再原生编辑；检索工具按需。挂不上则宿主 Read AI硬规则索引.md。例外：打招呼 hi/你好 或「提取技能」可 list MCP 技能+指令。运行/翻译状态查询默认本机（runtime_status_query_local_first）；仅明示线上/生产才 SSH。细则见 mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
             '[Call scope] Skip MCP for pure chat AND content-ops skills (content_ops_skills_skip_mcp: 产品优化/详情优化/翻译优化/新建文章/规格修复—host Read doc/ai/skills + ai-command only). For engineering/coding when MCP is attached/attachable: MUST ensure→prepare_project→obey hard_constraints before host-native edits; retrieval tools as needed. If MCP cannot attach, host-Read AI硬规则索引.md. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands. Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / content_ops_skills_skip_mcp / greeting_lists_mcp_skills_and_commands.',
-            '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 Browser 真机验视觉+逻辑（WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
-            '[Every coding requirement] Analyze FE/BE scope; clarify/use-case (light when simple); host Plan Mode unless simple skip; ALWAYS acceptance—Web touches need local Browser WB-OP visual+logic even without Playwright e2e; layout/humanization/complaint/审图 force prototype+UI adjustments; then TDD→verify→汇审→delivery URLs.',
+            '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；③b **简单用监工（每句监工:），复杂由父会话自己选 team（每句 Team:席位:，如 Team:架构师:）**；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 Browser 真机验视觉+逻辑（WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
+            '[Every coding requirement] Analyze FE/BE scope; clarify/use-case (light when simple); host Plan Mode unless simple skip; non-simple requirements staff the engineering team (parent=项目经理, parallel subagents only on non-overlapping tracks, 停工 and wait on architecture contradictions; simple skip and content-ops exempt); ALWAYS acceptance—Web touches need local Browser WB-OP visual+logic even without Playwright e2e; layout/humanization/complaint/审图 force prototype+UI adjustments; then TDD→verify→汇审→delivery URLs.',
         ];
     }
 
@@ -275,6 +278,7 @@ final class GuidanceWorkflowCatalog
                 'requirement_fe_be_scope_analyzed',
                 'requirement_clarify_use_case_spec',
                 'host_plan_mode_enabled_or_simple_skip',
+                'engineering_team_staffed_or_exempt',
                 'feature_prototype_and_ui_participation_when_feature',
                 'requirement_framework_scrutiny',
                 'requirement_cross_layer_impact_gate',
@@ -333,6 +337,17 @@ final class GuidanceWorkflowCatalog
                     'Stay in Plan Mode through architecture_design + chapter plan until user approves implement; then SwitchMode to agent.',
                     'If host has no Plan Mode: plan read-only in chat; record host_plan_mode=unavailable + rationale≥24; do not edit business code yet (unless simple skip).',
                     'Plan body (plan_content_focus_only): ONLY 背景 + 方案 + 细节; forbid unrelated narrative that drifts the topic.',
+                ]],
+                ['id' => 'engineering_team', 'label' => '工程团队编制与停工门禁', 'tools' => ['get_skill'], 'docs' => [
+                    'dev/ai-command/ai/工程团队.md',
+                ], 'notes' => [
+                    'MANDATORY (engineering_team_for_new_requirements): parent itself picks the mode. Simple → 监工, user-facing lines start with 监工:. Complex → parent chooses team mode and seats; every user-facing line starts with Team:{席位}: e.g. Team:架构师:. Content-ops exempt.',
+                    'Parent is 项目经理. Framework first + dual_track_all: each triggered specialty seat has 施工 + 合规复审 (事件/扩展点/Taglib/UI/i18n…). Fail → rework before acceptance.',
+                    'FLOW (team_flow_on_contracts): after 立项会, 对齐冻结会 (测试主持) freezes executable UC + contracts.md + deps.md before tech finalization/build. Wake-on-deps concurrency. Forbid designing main-path use cases after development. Acceptance EXECUTES frozen UC only.',
+                    'UI in_scope: staff 原型+前端+主题+UI; components.md; insufficient → 原型∥UI negotiate component-negotiate.md. Acceptance: UI+原型 substantive signoff (acceptance-ui/acceptance-prototype)—e2e green does not waive 交出.',
+                    'Parallel subagents only when files/extension points do not overlap and contracts+UC are frozen; start only seats whose deps are satisfied.',
+                    'Cross-track findings escalate to a meeting (同意/异议/否决). If nobody can decide, or a major architecture contradiction: 停工汇报 and wait for user confirm—forbid PHP/phtml/CSS.',
+                    'Minutes: owning-module doc/开发/team/{slug}/ (surfaces.md, components.md, contracts.md, deps.md, align-freeze, {seat}-review). Subagent closed is not delivery. get_skill(engineering_team|weline-engineering-team).',
                 ]],
                 ['id' => 'extension_point', 'label' => '扩展点选型', 'docs' => [
                     'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
@@ -431,6 +446,7 @@ final class GuidanceWorkflowCatalog
                 'requirement_fe_be_scope_analyzed',
                 'requirement_clarify_use_case_spec',
                 'host_plan_mode_enabled_or_simple_skip',
+                'engineering_team_staffed_or_exempt',
                 'extension_point_selected',
                 'requirement_framework_scrutiny',
                 'requirement_cross_layer_impact_gate',
@@ -698,6 +714,7 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_MODULE_UPGRADE => self::moduleUpgradeGateSurface(),
             self::SURFACE_WEBUI_BROWSER_CLOSEOUT => self::webuiBrowserCloseoutSurface(),
             self::SURFACE_REQUIREMENT_CLARIFY_USE_CASE => self::requirementClarifyUseCaseSurface(),
+            self::SURFACE_ENGINEERING_TEAM => self::engineeringTeamSurface(),
         ];
     }
 
@@ -888,10 +905,12 @@ final class GuidanceWorkflowCatalog
             'norms' => [
                 ['id' => 'lang_tag_not_php', 'summary' => 'HTML 正文/属性用 <lang>/@lang，不用 <?= __() ?>'],
                 ['id' => 'at_lang_no_unquoted_comma', 'summary' => '@lang()/{} 源文含逗号必须加引号或改用 <lang>，禁止 @lang{a, b} 导致编译 ParseError'],
+                ['id' => 'chinese_source_default', 'summary' => '模板/菜单/__() 源串默认简体中文（正确）；禁止英文当默认源串'],
+                ['id' => 'active_locale_must_show_target_language', 'summary' => '活跃/默认 locale 非中文时必须显示该语种译文；禁止因源串是中文就在英文站露出中文；禁止把 en_US 第二列留成中文占位'],
                 ['id' => 'csv_bilingual_aligned', 'summary' => 'zh_Hans_CN.csv 与 en_US.csv source 键对齐；en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
                 ['id' => 'collect_after_csv', 'summary' => '改 CSV 或新增源串后必须 php bin/w i18n:collect，否则运行时词典不更新'],
                 ['id' => 'en_us_no_chinese_placeholder', 'summary' => '交付前抽检 en_US：用户可见词条第二列不得仍为纯中文（与 source 相同）'],
-                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到「翻译」作为任务时：按默认网站已选语言（Website::ID_DEFAULT）全语种写 CSV，禁止只译 en_US'],
+                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到「翻译」作为任务时：按默认网站已选语言（Website::ID_DEFAULT）全语种译写；模块 CSV 仅 zh_Hans_CN+en_US，其它语种进系统词典，禁止只译 en_US'],
             ],
             'verification_commands' => [
                 'php bin/w i18n:collect Weline_Module',
@@ -901,16 +920,23 @@ final class GuidanceWorkflowCatalog
                 'forbidden' => [
                     '<?= __(\'...\') ?> or <?= __("...") ?> in .phtml HTML body or attributes',
                     '__() for user-visible strings directly echoed in templates',
+                    'English (or non-Chinese) default source phrases in templates/menus/ACL for user-visible copy',
+                    'Showing Chinese source under en_US / non-Chinese active or website-default locale because en_US translate is still Chinese placeholder',
+                    'Rewriting template sources to English to “fix” English-locale display (keep Chinese sources; translate CSV/dictionary instead)',
                     'Unquoted commas inside @lang()/@lang{} source text (e.g. @lang{支持 .ico, .png} → ParseError)',
                     'Editing i18n/*.csv without running i18n:collect before claiming translation done',
                     'Shipping modules with missing en_US.csv or untranslated en_US rows for new strings',
+                    'Creating or writing module i18n/{locale}.csv for locales other than zh_Hans_CN / en_US',
                 ],
                 'required' => [
+                    'Use Simplified Chinese as the default source string in <lang>/@lang/menu/ACL/__()',
+                    'When active/default locale is not Chinese, render that locale’s translation (never Chinese placeholder)',
                     'Use <lang>text</lang> or @lang(text) for frontend template copy',
                     'Source text with commas: use <lang>a, b</lang> or quoted @lang(\'a, b\') / @lang{"a, b"}',
                     '__() only in PHP logic layer, not HTML output',
-                    'Maintain i18n/zh_Hans_CN.csv and i18n/en_US.csv with aligned keys for every new phrase',
-                    'Run php bin/w i18n:collect {Module} after CSV edits or new translatable strings',
+                    'Maintain i18n/zh_Hans_CN.csv and i18n/en_US.csv with aligned Chinese source keys for every new phrase',
+                    'Non-baseline locales: write system dictionary only (never extra module CSV files)',
+                    'Run php bin/w i18n:collect {Module} after zh/en CSV edits or new translatable strings',
                 ],
             ],
         ];
@@ -922,10 +948,10 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_MODULE_I18N_CSV,
             'label' => '模块翻译 CSV 门禁',
-            'description' => '模块须维护齐全 zh_Hans_CN/en_US CSV；用户提到翻译时须覆盖默认网站已选全部语言；en_US 第二列须为英文（禁止中文占位）；改词或改 CSV 后必须 i18n:collect 才生效。',
+            'description' => '源串默认简体中文（正确）；活跃/默认 locale 非中文时须显示目标语译文；模块须维护齐全 zh_Hans_CN/en_US CSV（禁止其它 locale CSV）；用户提到翻译时须覆盖默认网站已选全部语言（非中英语种进系统词典）；en_US 第二列须为英文；改中英 CSV 后必须 i18n:collect。',
             'triggers' => [
                 'csv', 'i18n:collect', 'en_us', 'zh_hans_cn', '翻译文件', '词典', 'collect',
-                '国际化', 'locale', '语言包', '翻译', 'translate',
+                '国际化', 'locale', '语言包', '翻译', 'translate', '默认语言', '英文环境',
             ],
             'authoritative_doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
             'authoritative_docs' => [
@@ -933,9 +959,11 @@ final class GuidanceWorkflowCatalog
                 'app/code/Weline/Framework/doc/3-开发/01-翻译函数使用指南.md',
             ],
             'norms' => [
-                ['id' => 'bilingual_csv_required', 'summary' => '每模块至少 zh_Hans_CN.csv + en_US.csv，source 键一致'],
+                ['id' => 'chinese_source_default', 'summary' => '模板/菜单/ACL/__() 用户可见源串默认简体中文（正确）；禁止英文源串导致中英 CSV 串列'],
+                ['id' => 'active_locale_must_show_target_language', 'summary' => '网站默认语或请求 locale 非中文时，界面必须显示该语种译文；禁止因源串是中文就在英文站露出中文；禁止 en_US 第二列中文占位'],
+                ['id' => 'bilingual_csv_required', 'summary' => '每模块至少 zh_Hans_CN.csv + en_US.csv，source 键一致；禁止其它 locale CSV'],
                 ['id' => 'en_us_real_english', 'summary' => 'en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
-                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到翻译任务时：解析默认网站 language_codes（本地 DB，website_id=0）并对每一语种写真实译文，禁止只译 en_US'],
+                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到翻译任务时：解析默认网站 language_codes（本地 DB，website_id=0）并对每一语种写真实译文；模块 CSV 仅中英，其它进系统词典；禁止只译 en_US'],
                 ['id' => 'frontend_backend_csv_sync', 'summary' => '前台加词须同步补后台 CSV 与 en 译文'],
                 ['id' => 'collect_mandatory', 'summary' => 'CSV 处理后必须 i18n:collect，禁止只改文件不收集'],
             ],
@@ -944,18 +972,24 @@ final class GuidanceWorkflowCatalog
             ],
             'template_surface_rules' => [
                 'forbidden' => [
+                    'Using English as default i18n source in templates/menus while expecting Chinese UI',
+                    'Showing Chinese under en_US / non-Chinese website-default or request locale because translate column is still Chinese source',
+                    'Rewriting template sources to English to fix English-locale display',
                     'Claiming i18n done after CSV edit without i18n:collect',
                     'Adding frontend <lang> strings without en_US.csv translation rows',
                     'Leaving en_US translate column as Chinese source (untranslated placeholder) for user-visible strings',
                     'Stopping at en_US when the user asked to 翻译 without narrowing locales',
+                    'Creating or writing module i18n CSV for locales other than zh_Hans_CN / en_US',
                     'Replacing i18n:collect with cache:clear only',
                 ],
                 'required' => [
+                    'Write Simplified Chinese source phrases in code; zh_Hans_CN identity + en_US English translate',
+                    'When active/default locale is not Chinese, show that locale’s translation (never Chinese placeholder)',
                     'Align zh_Hans_CN.csv and en_US.csv source keys for every new phrase',
                     'Fill en_US second column with real English before claiming translation done',
-                    'When the user mentions 翻译 as a task, fill i18n/{locale}.csv for every default-website selected language',
-                    'Run php bin/w i18n:collect after any CSV or translatable string change',
-                    'Record collect command in module doc/开发日志.md',
+                    'When the user mentions 翻译 as a task, cover every default-website selected language: zh/en in module CSV, others in system dictionary only',
+                    'Run php bin/w i18n:collect after any zh/en CSV or translatable string change',
+                    'Record collect/dictionary import in module doc/开发日志.md',
                 ],
             ],
         ];
@@ -1113,6 +1147,69 @@ final class GuidanceWorkflowCatalog
         ];
     }
 
+    /** @return array<string, mixed> */
+    public static function engineeringTeamSurface(): array
+    {
+        return [
+            'id' => self::SURFACE_ENGINEERING_TEAM,
+            'label' => '工程团队',
+            'description' => '父会话自己选模式：简单需求用监工，每句以监工:开头；复杂需求自己进入 team，每句以 Team:{席位}: 开头（如 Team:架构师:）。复杂 team：框架优先、全专席双轨（施工+合规复审）、组件复用或原型∥UI协商、验收UI+原型实质签收。内容运营两种前缀都不用。',
+            'triggers' => [
+                '工程团队', '大型团队', '子智能体', '停工汇报', '技术方案会', '问题上报',
+                '框架专席', '合规复审', '组件协商', '验收签收',
+                'engineering team', 'stop-work', 'dual track',
+            ],
+            'authoritative_skill' => 'weline-engineering-team',
+            'authoritative_doc' => 'dev/ai-command/ai/工程团队.md',
+            'authoritative_docs' => [
+                'dev/ai-command/ai/工程团队.md',
+                'app/code/Weline/Ai/doc/AI工程交付流程.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+                'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
+            ],
+            'norms' => [
+                ['id' => 'staff_before_code', 'summary' => '简单→监工（前缀监工:）；复杂→父会话自己选 team 与席位（前缀 Team:架构师: 这种）'],
+                ['id' => 'parent_is_pm', 'summary' => '父会话是项目经理；席位按波次上场，不全员同时开工'],
+                ['id' => 'framework_first', 'summary' => '需求/设计/施工/复审先映射框架机制与组件，再谈业务补丁'],
+                ['id' => 'dual_track_all_specialty_seats', 'summary' => '凡触发专席一律施工轨+合规复审轨；fail→返工，禁止带病进验收'],
+                ['id' => 'framework_seats_by_trigger', 'summary' => '扩展点/事件/查询/Taglib/Hook/Provider/i18n/ACL/Setup/合规按触发矩阵上场'],
+                ['id' => 'component_reuse_or_negotiate', 'summary' => 'UI优先复用组件；不足须原型∥UI（±主题）协商写入 component-negotiate.md'],
+                ['id' => 'surfaces_md_required', 'summary' => '复杂 team 强制 surfaces.md；UI in_scope 强制 components.md'],
+                ['id' => 'acceptance_ui_and_prototype_signoff', 'summary' => '涉UI验收：UI写acceptance-ui.md、原型写acceptance-prototype.md实质签收；e2e绿不能代替'],
+                ['id' => 'parallel_only_when_disjoint', 'summary' => '仅文件/扩展点不重叠且接口已冻结时并行子智能体'],
+                ['id' => 'escalate_then_meet', 'summary' => '跨轨或硬规则问题 result=escalate，专题会表态同意/异议/否决'],
+                ['id' => 'stop_on_architecture_conflict', 'summary' => '无人能拍板或重大架构矛盾：停工汇报，确认前禁止 PHP/phtml/CSS'],
+                ['id' => 'persist_team_minutes', 'summary' => '纪要落盘 owning-module doc/开发/team/{slug}/；子智能体 closed 不是交付'],
+            ],
+            'verification_commands' => [
+                'test -f dev/ai-command/ai/工程团队.md',
+                'rg -n "engineering_team_for_new_requirements" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
+                'rg -n "dual_track_all|acceptance-ui|component-negotiate|framework_first" dev/ai-command/ai/工程团队.md',
+            ],
+            'template_surface_rules' => [
+                'forbidden' => [
+                    'Staffing the large team on plan_complexity=simple or on content-ops (产品优化/新建文章)',
+                    'Parallel edits to the same file or extension point before the contract is frozen',
+                    'Treating a subagent closed/done report as delivery',
+                    'Writing PHP/phtml/CSS after 停工 before the user confirms',
+                    'Letting a subagent ask the user directly instead of a 停工汇报',
+                    'Entering acceptance without per-triggered-seat 合规复审 pass',
+                    'Handing off UI work with e2e green but without UI+原型 acceptance signoff',
+                    'Inventing parallel UI components without 原型∥UI component-negotiate.md',
+                ],
+                'required' => [
+                    'Read and follow dev/ai-command/ai/工程团队.md (or get_skill engineering_team)',
+                    'Parent session acts as 项目经理 and pastes the prompt skeleton into every subagent',
+                    'Map requirements/design to framework mechanisms and components first',
+                    'Run 施工 + 合规复审 dual track for every triggered specialty seat',
+                    'On UI in_scope: components.md; negotiate before extending components; acceptance-ui.md + acceptance-prototype.md before 交出',
+                    'Escalate cross-track findings; hold a meeting before continuing that lane',
+                    'On major architecture contradiction: write doc/开发/team/{slug}/stop-work.md and wait',
+                ],
+            ],
+        ];
+    }
+
     /**
      * @return list<array<string, mixed>>
      */
@@ -1217,6 +1314,9 @@ final class GuidanceWorkflowCatalog
     {
         if (str_contains($path, '需求澄清与用例规格')) {
             return self::SURFACE_REQUIREMENT_CLARIFY_USE_CASE;
+        }
+        if (str_contains($path, '工程团队')) {
+            return self::SURFACE_ENGINEERING_TEAM;
         }
         if (str_contains($path, 'WebUI浏览器验收与交付地址门禁')) {
             return self::SURFACE_WEBUI_BROWSER_CLOSEOUT;

@@ -18,9 +18,6 @@
  * @param enable_auto_detect {default=true,type="bool",label="启用自动定位（依赖 Weline_Location）"}
  */
 
-use Weline\Checkout\Service\CheckoutDeliveryContextService;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('checkout-delivery-context');
@@ -34,46 +31,19 @@ $autoDetect = (bool)($this->getData('enable_auto_detect') ?? true);
 
 // preview_storefront_delivery_parity: editor/preview MUST use the same context
 // + Hook + auto-detect path as the live storefront (no editor_mode stub/skip).
-$hasSessionCookie = false;
-try {
-    $hasSessionCookie = SessionCookieNameResolver::hasRequestCookie();
-} catch (\Throwable) {
-    // Public shell rendering may run with a minimal request context.
-}
-
-$context = [];
-if ($hasSessionCookie) {
-    try {
-        $context = ObjectManager::getInstance(CheckoutDeliveryContextService::class)->getContext();
-    } catch (\Throwable) {
-        $context = [
-            'country_code' => 'CN',
-            'country_name' => (string)__('China'),
-            'countries' => [],
-            'addresses' => [],
-            'selected' => null,
-            'is_logged_in' => false,
-            'can_auto_detect' => false,
-            'display_text' => (string)__('选择国家/地址'),
-            'checkout_address' => [],
-        ];
-    }
-} else {
-    // Do not start a guest Session while assembling the cacheable storefront
-    // shell. The panel refreshes this state through QueryBin on first use.
-    // Same guest shell applies on publish AND theme-preview/editor iframe.
-    $context = [
-        'country_code' => 'CN',
-        'country_name' => (string)__('China'),
-        'countries' => [],
-        'addresses' => [],
-        'selected' => null,
-        'is_logged_in' => false,
-        'can_auto_detect' => false,
-        'display_text' => (string)__('选择国家/地址'),
-        'checkout_address' => [],
-    ];
-}
+// Guest-safe SSR: never personalize by Session cookie; panel refreshes via QueryBin
+// on first open (interactive auth contract).
+$context = [
+    'country_code' => 'CN',
+    'country_name' => (string)__('China'),
+    'countries' => [],
+    'addresses' => [],
+    'selected' => null,
+    'is_logged_in' => false,
+    'can_auto_detect' => false,
+    'display_text' => (string)__('选择国家/地址'),
+    'checkout_address' => [],
+];
 
 $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选择国家/地址');
 ?>
@@ -81,6 +51,8 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-widget-code="checkout-delivery-context"
+         data-testid="checkout-delivery-context"
          data-checkout-delivery-widget>
     <button type="button"
             class="w-header-delivery-entry location-link delivery-entry"

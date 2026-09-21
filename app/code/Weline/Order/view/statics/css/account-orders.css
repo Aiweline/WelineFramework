@@ -271,6 +271,27 @@
     color: var(--color-text-dark, #111);
 }
 
+[data-account-orders="true"] .account-orders__continue-pay {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.15rem;
+    margin-left: 0.45rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    border: 1px solid color-mix(in srgb, var(--color-primary-dark, #9a6b00) 28%, var(--ao-border));
+    background: color-mix(in srgb, var(--color-primary, #f0c14b) 22%, transparent);
+    color: var(--color-primary-dark, #9a6b00);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    font-weight: 800;
+}
+
+[data-account-orders="true"] .account-orders__continue-pay:hover {
+    background: var(--color-primary, #f0c14b);
+    color: var(--color-text-dark, #111);
+}
+
 [data-account-orders="true"] .account-orders__partial {
     display: grid;
     gap: 0.55rem;

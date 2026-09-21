@@ -107,8 +107,12 @@ final class ParserExactWordPrefetchTest extends TestCase
         $provider = $this->installProvider();
         Parser::prefetchWords(['Menu hit'], 'fr_FR');
         $this->setOverlay([], 'fr_FR');
+        // prefetch 按 locale chain 写缓存：fr 无词时落到 en_US；getPrefetched 按 locale 只读。
+        self::assertNull(Parser::getPrefetchedGlobalWord('fr_FR', 'Menu hit'));
+        self::assertSame('Translated menu', Parser::getPrefetchedGlobalWord('en_US', 'Menu hit'));
         $layers = [
             'cache_key' => 'prefetch-fallback', 'lang' => 'fr_FR',
+            'locales' => ['fr_FR', 'en_US', 'zh_Hans_CN'],
             'modules' => [], 'module_words' => [], 'locale_words' => [],
         ];
         self::assertSame('Translated menu',

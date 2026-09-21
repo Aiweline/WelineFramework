@@ -33,7 +33,7 @@ class PixelStickyUtmJsContractTest extends TestCore
     public function testBothFilesContainStickyApiAndVersion(): void
     {
         foreach ($this->sources() as $source) {
-            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.18-pageview-dedupe1'", $source);
+            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.19-sticky-bus1'", $source);
             self::assertStringContainsString('function __getStickyUtmPack()', $source);
             self::assertStringContainsString('payload.sticky =', $source);
         }
@@ -50,9 +50,12 @@ class PixelStickyUtmJsContractTest extends TestCore
     public function testA09RewritesInternalAnchorsWithObserver(): void
     {
         foreach ($this->sources() as $source) {
-            self::assertStringContainsString('function __rewriteStickyAnchors(', $source);
-            self::assertStringContainsString('new MutationObserver', $source);
-            self::assertStringContainsString("querySelectorAll('a[href]')", $source);
+        self::assertStringContainsString('function __rewriteStickyAnchors(', $source);
+        self::assertStringContainsString('Weline.dom.observe', $source);
+        self::assertStringContainsString('visitor-pixel:sticky-utm', $source);
+        self::assertStringContainsString('new MutationObserver', $source);
+        self::assertStringContainsString("querySelectorAll('a[href]')", $source);
+        self::assertStringNotContainsString("attributeFilter: ['href']", $source);
         }
     }
 

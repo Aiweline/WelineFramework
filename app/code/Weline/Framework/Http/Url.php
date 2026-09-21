@@ -923,6 +923,45 @@ class Url implements UrlInterface
         return self::getPrefix();
     }
 
+    /**
+     * Backend links omit only the effective backend default language
+     * (personal preference, else global backend_default_language).
+     */
+    private static function getBackendLocalePrefix(): string
+    {
+        $prefix = '';
+        $currency = self::normalizeCurrency(State::getCurrency() ?: w_env('user.currency'));
+        $language = self::normalizeLanguage(State::getLang() ?: w_env('user.lang'));
+        $websiteCurrency = self::normalizeCurrency(w_env('website.currency'));
+        if ($websiteCurrency === '') {
+            try {
+                $websiteCurrency = self::normalizeCurrency(State::resolveWebsiteDefaultCurrency());
+            } catch (\Throwable) {
+                $websiteCurrency = '';
+            }
+        }
+        if ($websiteCurrency === '') {
+            $websiteCurrency = self::getFrameworkDefaultCurrency();
+        }
+        $backendLanguage = self::normalizeLanguage(State::resolveBackendEffectiveDefaultLanguage());
+
+        if (Env::isAreaRoutePathSegment($currency)) {
+            $currency = '';
+        }
+        if (Env::isAreaRoutePathSegment($language)) {
+            $language = '';
+        }
+
+        if ('' !== $currency && $currency !== $websiteCurrency) {
+            $prefix .= '/' . $currency;
+        }
+        if ('' !== $language && $language !== $backendLanguage) {
+            $prefix .= '/' . $language;
+        }
+
+        return $prefix;
+    }
+
     private static function getFrameworkDefaultCurrency(): string
     {
         $currency = self::normalizeCurrency(Env::get('currency', 'CNY'));
@@ -1022,9 +1061,8 @@ class Url implements UrlInterface
                 $path = $this->expandModuleStarPath($path);
                 $backendPrefix = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
                 $areaPath = $backendPrefix !== '' ? '/' . $backendPrefix . '/' : '/';
-                // 与前台 getFrontendUrl / getFrontendApiUrl 一致：非默认货币/语言写入路径段，默认值省略。
-                // 否则后台切语后菜单/@backend-url 仍落到无 locale 路径，请求回退网站默认语言。
-                $localePrefix = self::getLocalePrefix();
+                // 非后台默认语言写入路径段。省略的是后台默认语言，不是网站前台默认语言。
+                $localePrefix = self::getBackendLocalePrefix();
                 $localePath = $localePrefix === '' ? '' : ltrim($localePrefix, '/') . '/';
                 if ($path === '/' || $path === '') {
                     $url = $this->getRequest()->getBaseHost()
@@ -1091,7 +1129,7 @@ class Url implements UrlInterface
                 }
                 $backendPrefix = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
                 $areaPath = $backendPrefix !== '' ? '/' . $backendPrefix . '/' : '/';
-                $localePrefix = self::getLocalePrefix();
+                $localePrefix = self::getBackendLocalePrefix();
                 $localePath = $localePrefix === '' ? '' : ltrim($localePrefix, '/') . '/';
                 if ($path === '/' || $path === '') {
                     $url = $this->getRequest()->getBaseHost()
@@ -1212,11 +1250,14 @@ class Url implements UrlInterface
             }
         }
         $url = self::removeExtraDoubleSlashes($url);
+        /** @var EventsManager $eventManager */
+        $eventManager = ObjectManager::getInstance(EventsManager::class);
+        // Seo path 重写：仅 seo=on。禁止业务模块挂此事件做 query 注入（会漏覆盖、也易干扰重写）。
         if (Env::get('seo')) {
-            /** @var EventsManager $eventManager */
-            $eventManager = ObjectManager::getInstance(EventsManager::class);
             $eventManager->dispatch('Weline_Framework_Url::url_generate_rewrite', $url);
         }
+        // 通用 URL 生成后参数钩子：始终派发（seo on/off 都走）。Theme 画布身份等只挂这里。
+        $eventManager->dispatch('Weline_Framework_Url::url_generate_params', $url);
         return $url;
     }
 
@@ -1407,6 +1448,44 @@ class Url implements UrlInterface
             \array_replace($scopeContext, $context),
             ['full_request_uri' => false]
         );
+    }
+
+    /**
+     * Process-L1 identity for SEO decode results.
+     *
+     * Must not embed the current page request_uri / area_route / request_prefix:
+     * those copy one process entry per PDP for the same decoded URL and never hit
+     * across same-locale crawls (cap 4096 thrash).
+     */
+    private static function buildUrlProcessDecodeCacheKey(string $url, string $websiteId = ''): string
+    {
+        $currentServer = self::currentServer();
+        $parserServer = self::$parserServer;
+        $contextValue = static function (string $key, string $fallback = '') use ($currentServer, $parserServer): string {
+            $value = (string)($parserServer[$key] ?? '');
+            if ($value !== '') {
+                return $value;
+            }
+            return (string)($currentServer[$key] ?? $fallback);
+        };
+
+        return KeyBuilder::requestScopeHash([
+            'scope' => 'decode_url_process',
+            'cache_version' => '20260921-stable-storefront',
+            'url' => $url,
+            'website_id' => $websiteId !== '' ? $websiteId : $contextValue('WELINE_WEBSITE_ID'),
+            'website_code' => $contextValue('WELINE_WEBSITE_CODE'),
+            'lang' => $contextValue('WELINE_USER_LANG'),
+            'currency' => $contextValue('WELINE_USER_CURRENCY'),
+            'host' => (string)($currentServer['HTTP_HOST'] ?? $currentServer['SERVER_NAME'] ?? $parserServer['HTTP_HOST'] ?? $parserServer['SERVER_NAME'] ?? ''),
+            'area' => $contextValue('WELINE_AREA'),
+        ], [
+            'area_route' => false,
+            'request_prefix' => false,
+            'full_request_uri' => false,
+            'website_url' => false,
+            'base_url' => false,
+        ]);
     }
 
     public static function parse_url(string $url, string $key = '', string $default = ''): array|string
@@ -2277,9 +2356,7 @@ class Url implements UrlInterface
         # decode seo url
         if (Env::get('seo')) {
             $websiteId = (string)(self::currentServer()['WELINE_WEBSITE_ID'] ?? self::$parserServer['WELINE_WEBSITE_ID'] ?? '');
-            $processCacheKey = self::buildUrlRequestCacheKey('decode_url_process', $url, [
-                'website_id' => $websiteId,
-            ]);
+            $processCacheKey = self::buildUrlProcessDecodeCacheKey($url, $websiteId);
             $expiresAt = self::$processDecodeUrlExpiresAt[$processCacheKey] ?? 0;
             if ($expiresAt >= \time() && \array_key_exists($processCacheKey, self::$processDecodeUrls)) {
                 $cachedUrl = (string)self::$processDecodeUrls[$processCacheKey];
@@ -2306,8 +2383,10 @@ class Url implements UrlInterface
                 self::$decode_urls[self::buildUrlRequestCacheKey('decode_url', $url)] = $url;
             }
             if (\count(self::$processDecodeUrls) >= self::PROCESS_DECODE_CACHE_MAX_ITEMS) {
-                \array_shift(self::$processDecodeUrls);
-                \array_shift(self::$processDecodeUrlExpiresAt);
+                $oldest = \array_key_first(self::$processDecodeUrls);
+                if ($oldest !== null) {
+                    unset(self::$processDecodeUrls[$oldest], self::$processDecodeUrlExpiresAt[$oldest]);
+                }
             }
             self::$processDecodeUrls[$processCacheKey] = $url;
             self::$processDecodeUrlExpiresAt[$processCacheKey] = \time() + self::PROCESS_DECODE_CACHE_TTL;

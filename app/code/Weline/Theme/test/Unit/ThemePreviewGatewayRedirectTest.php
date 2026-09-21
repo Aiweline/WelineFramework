@@ -26,4 +26,17 @@ final class ThemePreviewGatewayRedirectTest extends TestCase
             $redirectMethod,
         );
     }
+
+    public function testUnsignedPreviewGenerationStillBouncesAndSignedCaptureDoesNot(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 2) . '/Controller/Frontend/ThemePreview/Gateway.php'
+        );
+
+        self::assertStringContainsString('if (!$loggedIn && !$this->isTrustedPreviewCapture())', $source);
+        self::assertStringContainsString('ThemePreviewGenerator::isValidCaptureSignature(', $source);
+        self::assertStringContainsString('appendPreviewCaptureFlag(', $source);
+        self::assertStringContainsString('weline_preview_capture=1', $source);
+        self::assertStringNotContainsString("if (!\$loggedIn) {\n", $source);
+    }
 }

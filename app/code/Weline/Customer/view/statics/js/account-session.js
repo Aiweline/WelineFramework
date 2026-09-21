@@ -247,12 +247,11 @@
                 this.stopOnlineKeepalive();
                 this.clearAccountMenuSignals();
                 roots.forEach((root) => this.applyHeaderGuest(root));
-                this.maybeStartSocialQuickPrompt();
                 return { applied: true, isLogin: false };
             }
             this.frontendUser = cache.user || null;
             roots.forEach((root) => this.applyHeaderSignedIn(root, this.frontendUser));
-            this.startOnlineKeepalive();
+            this.stopOnlineKeepalive();
             if (cache.signals) {
                 this.paintAccountMenuSignals(cache.signals);
             }
@@ -488,17 +487,11 @@
         }
 
         /**
-         * While signed-in, renew only when the cached renewAt is due — not on a
-         * fixed short poll. Login writes renewAt (= verifiedAt + sessionTtl - skew).
+         * Silent keepalive disabled (anonymous SSR interactive-auth contract).
+         * Session renew happens on interactive BinQuery / ensureLogin only.
          */
         startOnlineKeepalive() {
-            this.bindOnlineKeepaliveEvents();
-            if (this._keepaliveRunning) {
-                this.scheduleOnlineKeepalive(false);
-                return;
-            }
-            this._keepaliveRunning = true;
-            this.scheduleOnlineKeepalive(false);
+            this.stopOnlineKeepalive();
         }
 
         stopOnlineKeepalive() {
@@ -604,23 +597,42 @@
         /**
          * One-shot storefront chrome refresh after login (w_auth=1) or logout (w_auth=0).
          * Theme HeaderManager calls Weline.Account.handleAuthRefreshSignal().
-         * Also soft-reconciles guest SSR chrome when Session is already signed in
-         * (FPC / cookie-name split can still render the guest shell without w_auth).
+         * Silent page loads must NOT soft-reconcile via network — only localStorage paint
+         * (storefront-anonymous-ssr-interactive-auth). Editor / w_auth / auth pages still sync.
          */
         handleAuthRefreshSignal() {
-            return this.syncHeaderAccountChrome({ fromAuthSignal: true });
+            const editorPreview = this.isThemeEditorPreview();
+            const hasSignal = this.isLoginAuthSignal() || this.isLogoutAuthSignal();
+            if (editorPreview || hasSignal || this.hasAuthPending() || this.isStorefrontAuthPage()) {
+                return this.syncHeaderAccountChrome({
+                    force: editorPreview,
+                    fromAuthSignal: true,
+                });
+            }
+            return this.syncHeaderAccountChrome({ paintOnly: true });
+        }
+
+        isThemeEditorPreview() {
+            try {
+                if (/(?:[?&]editor_mode=1|[?&]shell=theme-editor\b)/.test(String(location.search || ''))) {
+                    return true;
+                }
+                const doc = document.documentElement;
+                return doc.dataset.wEditorPreview === 'true'
+                    || doc.dataset.wEditorInteraction === 'edit'
+                    || doc.dataset.wEditorInteraction === 'preview';
+            } catch (_e) {
+                return false;
+            }
         }
 
         /**
-         * Align header shell + dual-rendered header-account-links with account session.
-         * Prefer localStorage session cache; network account.current only when cache is
-         * missing/stale (past renewAt), w_auth signal, or options.force.
-         * Auth pages (login/register/forgot) always revalidate — never trust chrome cache alone
-         * (avoids “header signed-in + login form” mismatch).
-         * Covers FPC guest SSR, signed-in SSR with guest-cached hook fragments, and w_auth redirects.
+         * Align header shell with local session cache and (only on explicit triggers)
+         * account.current. Silent browsing: paintOnly / local cache — never network.
          */
         syncHeaderAccountChrome(options = {}) {
             const force = !!options.force;
+            const paintOnly = !!options.paintOnly;
             const onAuthPage = this.isStorefrontAuthPage();
             const loginSignal = this.isLoginAuthSignal();
             const logoutSignal = this.isLogoutAuthSignal();
@@ -639,10 +651,6 @@
                 return Promise.resolve({ synced: false, reason: 'no_roots' });
             }
 
-            // Logout always drops chrome. Login / auth-pending must NOT wipe an
-            // optimistic signed-in snapshot written by the login page — otherwise
-            // a failed account.current re-poisons guest negative-cache for guestRecheckMs
-            // and every subsequent FPC guest-SSR page stays "未登录".
             if (logoutSignal) {
                 this.beginAuthBoundary('logout');
                 this.clearAuthPending();
@@ -667,60 +675,54 @@
             });
 
             const cached = this.readFrontendSessionCache();
-            const cacheFresh = this.isFrontendSessionCacheFresh(cached);
-            // Guest SSR alone must not force a network round-trip when cache is still fresh.
-            // Auth pages / w_auth / auth-pending always force network so server session is SoT.
-            const needsNetwork = force || hasSignal || authPending || !cacheFresh || onAuthPage;
+            // Interactive-only network: force / w_auth / auth-pending / auth pages.
+            // Stale localStorage is acceptable until the shopper interacts.
+            const needsNetwork = !paintOnly && (force || hasSignal || authPending || onAuthPage);
 
-            if (!needsNetwork && cached) {
-                const isLogin = !!cached.isLogin;
-                const user = isLogin ? (cached.user || null) : null;
-                this.frontendUser = user;
-                Array.from(roots).forEach((root) => {
+            if (!needsNetwork) {
+                if (cached) {
+                    const isLogin = !!cached.isLogin;
+                    const user = isLogin ? (cached.user || null) : null;
+                    this.frontendUser = user;
+                    Array.from(roots).forEach((root) => {
+                        if (isLogin) {
+                            this.applyHeaderSignedIn(root, user);
+                        } else {
+                            this.applyHeaderGuest(root);
+                        }
+                    });
                     if (isLogin) {
-                        this.applyHeaderSignedIn(root, user);
+                        this._authRefreshHandled = true;
+                        if (cached.signals) {
+                            this.paintAccountMenuSignals(cached.signals);
+                        }
+                        try { window.__welineSocialQuickBooted = true; } catch (_e) { /* ignore */ }
+                        if (onAuthPage && this.leaveAuthPageIfSignedIn(true)) {
+                            return Promise.resolve({
+                                synced: true,
+                                refreshed: false,
+                                fromCache: true,
+                                isLogin: true,
+                                redirected: true,
+                                reason: 'auth_page_leave_cache',
+                            });
+                        }
                     } else {
-                        this.applyHeaderGuest(root);
+                        this.clearAccountMenuSignals();
                     }
-                });
-                if (isLogin) {
-                    this.startOnlineKeepalive();
-                    this._authRefreshHandled = true;
-                    if (cached.signals) {
-                        this.paintAccountMenuSignals(cached.signals);
-                    }
-                    try { window.__welineSocialQuickBooted = true; } catch (_e) { /* ignore */ }
-                    if (this.leaveAuthPageIfSignedIn(true)) {
-                        return Promise.resolve({
-                            synced: true,
-                            refreshed: false,
-                            fromCache: true,
-                            isLogin: true,
-                            redirected: true,
-                            reason: 'auth_page_leave_cache',
-                        });
-                    }
-                } else {
-                    // Guest cache hit: skip account.current network only; still start
-                    // the visible quick-login chooser (idempotent via __welineSocialQuickBooted).
-                    this.clearAccountMenuSignals();
-                    this.maybeStartSocialQuickPrompt();
                 }
                 if (hasSignal) {
                     this.stripAuthRefreshSignal();
                 }
                 return Promise.resolve({
-                    synced: true,
+                    synced: !!cached,
                     refreshed: false,
-                    fromCache: true,
-                    isLogin,
-                    reason: needsMenuReconcile ? 'cache_menu_reconcile' : 'cache_hit',
+                    fromCache: !!cached,
+                    isLogin: !!(cached && cached.isLogin),
+                    reason: paintOnly
+                        ? 'paint_only'
+                        : (needsMenuReconcile ? 'cache_menu_reconcile' : 'cache_or_guest_ssr'),
                 });
-            }
-
-            if (!force && !hasSignal && !authPending && !onAuthPage && guestRoots.length === 0 && !needsMenuReconcile && cacheFresh && cached && !cached.isLogin) {
-                this.maybeStartSocialQuickPrompt();
-                return Promise.resolve({ synced: false, reason: 'already_aligned' });
             }
 
             const targets = (hasSignal || authPending || onAuthPage)
@@ -735,15 +737,12 @@
                 .then((status) => {
                     const isLogin = !!(status && status.isLogin);
                     if (!isLogin && loginSignal) {
-                        // Landing from login redirect: keep optimistic signed-in chrome if
-                        // the login page already wrote a snapshot (cookie/query race).
                         const optimistic = this.readFrontendSessionCache();
                         if (optimistic && optimistic.isLogin) {
                             this.frontendUser = optimistic.user || null;
                             targets.forEach((root) => {
                                 this.applyHeaderSignedIn(root, this.frontendUser);
                             });
-                            this.startOnlineKeepalive();
                             this._authRefreshHandled = true;
                             this.clearAuthPending();
                             try { window.__welineSocialQuickBooted = true; } catch (_e) { /* ignore */ }
@@ -776,7 +775,6 @@
                     });
                     if (isLogin) {
                         this.clearAuthPending();
-                        this.startOnlineKeepalive();
                         this._authRefreshHandled = true;
                         this.refreshAccountMenuSignals();
                         try { window.__welineSocialQuickBooted = true; } catch (_e) { /* ignore */ }
@@ -788,16 +786,13 @@
                         this.stopOnlineKeepalive();
                         this._authRefreshHandled = true;
                         this.clearAccountMenuSignals();
-                        this.maybeStartSocialQuickPrompt();
                     } else {
-                        // Auth page + server says guest: drop any stale signed-in chrome cache.
                         if (onAuthPage) {
                             this.clearFrontendSessionCache();
                             this.frontendUser = null;
                             this.stopOnlineKeepalive();
                         }
                         this.clearAccountMenuSignals();
-                        this.maybeStartSocialQuickPrompt();
                     }
                     return { synced: true, refreshed: true, fromCache: false, isLogin };
                 })
@@ -810,7 +805,6 @@
                         targets.forEach((root) => {
                             this.applyHeaderSignedIn(root, this.frontendUser);
                         });
-                        this.startOnlineKeepalive();
                         this.clearAuthPending();
                         return {
                             synced: true,
@@ -1551,6 +1545,52 @@
             console.warn('[WelineApi.Account] ' + message);
             return { success: false, message, user: null, token: null };
         }
+
+        /**
+         * Interactive login gate. Checks session (force network when asked), otherwise
+         * mounts customer/login-panel. Call only from user actions / 401 recovery.
+         */
+        async ensureLogin(options = {}) {
+            const opts = options && typeof options === 'object' ? options : {};
+            let status = null;
+            try {
+                status = await this.checkFrontendUserLogin({ force: opts.force !== false });
+            } catch (_error) {
+                status = { isLogin: false, user: null };
+            }
+            if (status && status.isLogin) {
+                const roots = document.querySelectorAll('[data-w-header-account="1"]');
+                roots.forEach((root) => this.applyHeaderSignedIn(root, status.user || this.frontendUser));
+                return { ok: true, already: true, user: status.user || this.frontendUser };
+            }
+
+            const scopeRoot = opts.root instanceof Element ? opts.root : document;
+            let host = scopeRoot.querySelector('[data-weline-mount="customer/login-panel"]');
+            if (!host) {
+                host = document.createElement('div');
+                host.setAttribute('data-weline-mount', 'customer/login-panel');
+                host.setAttribute('data-weline-mount-load', 'account,customerLoginPanel');
+                host.setAttribute('data-testid', 'account-ensure-login-panel');
+                document.body.appendChild(host);
+            }
+
+            if (window.Weline && window.Weline.mount) {
+                try {
+                    if (typeof window.Weline.mount.scan === 'function') {
+                        await window.Weline.mount.scan({ root: host.parentElement || document, force: true });
+                    }
+                    if (typeof window.Weline.mount.waitFor === 'function') {
+                        await window.Weline.mount.waitFor('customer/login-panel', {
+                            root: document,
+                            timeoutMs: 10000,
+                            force: true,
+                        });
+                    }
+                } catch (_mount) { /* panel may still open asynchronously */ }
+            }
+
+            return { ok: false, prompted: true, host };
+        }
     }
 
     const accountManager = new AccountManager(getAccountConfig());
@@ -1563,6 +1603,7 @@
         frontendUserLogout: () => accountManager.frontendUserLogout(),
         handleAuthRefreshSignal: () => accountManager.handleAuthRefreshSignal(),
         syncHeaderAccountChrome: (options) => accountManager.syncHeaderAccountChrome(options || {}),
+        ensureLogin: (options) => accountManager.ensureLogin(options || {}),
         maybeStartSocialQuickPrompt: (...args) => accountManager.maybeStartSocialQuickPrompt(...args),
         scanMounts: (...args) => accountManager.scanMounts(...args),
         refreshAccountMenuSignals: () => accountManager.refreshAccountMenuSignals(),
@@ -1654,24 +1695,13 @@
         boot();
     })();
 
-    // Header account widget declares data-weline-load="api,account": when this module
-    // arrives, reconcile header shell from session cache (network only near renew / miss).
+    // Header account: silent paint from localStorage; network only for editor / w_auth / auth pages.
     (function bootstrapHeaderAuthRefresh() {
         const run = () => {
             if (!document.querySelector('[data-w-header-account="1"]')) {
                 return;
             }
-            // Theme visual editor / preview canvas: force network reconcile so header
-            // account chrome matches current storefront session (guest or signed-in).
-            const editorPreview = /(?:[?&]editor_mode=1|[?&]shell=theme-editor\b)/.test(
-                String(location.search || '')
-            ) || document.documentElement.dataset.wEditorPreview === 'true'
-                || document.documentElement.dataset.wEditorInteraction === 'edit'
-                || document.documentElement.dataset.wEditorInteraction === 'preview';
-            Promise.resolve(accountManager.syncHeaderAccountChrome({
-                force: editorPreview,
-                fromAuthSignal: true,
-            })).catch(() => {});
+            Promise.resolve(accountManager.handleAuthRefreshSignal()).catch(() => {});
         };
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', run, { once: true });
@@ -1684,7 +1714,6 @@
     window.addEventListener('weline:account:frontend:login', (event) => {
         const user = event && event.detail ? event.detail.user : null;
         try { window.__welineSocialQuickBooted = true; } catch (_e) { /* ignore */ }
-        // Replace any previous account chrome — do not keep old name/avatar/signals.
         accountManager.clearAccountMenuSignals();
         document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
             accountManager.applyHeaderSignedIn(root, user || accountManager.frontendUser);
@@ -1694,41 +1723,11 @@
             user: user || accountManager.frontendUser,
         });
         accountManager.markAuthPending();
-        accountManager.startOnlineKeepalive();
         accountManager.refreshAccountMenuSignals().catch(() => {});
     });
     window.addEventListener('weline:account:frontend:logout', () => {
         try { window.__welineSocialQuickBooted = false; } catch (_e) { /* ignore */ }
         accountManager.clearAuthPending();
         accountManager.beginAuthBoundary('logout');
-        accountManager.maybeStartSocialQuickPrompt();
     });
-
-    // Keep storefront Session TTL sliding while the browser stays online.
-    (function bootstrapOnlineKeepalive() {
-        const startFromSignedInShell = () => {
-            document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
-                if (root.getAttribute('data-auth-state') !== 'signed-in') {
-                    return;
-                }
-                if (accountManager.headerMenuAuthMismatch(root, 'signed-in')) {
-                    accountManager.applyHeaderMenuAuth(root, 'signed-in');
-                }
-            });
-            if (document.querySelector('[data-w-header-account="1"][data-auth-state="signed-in"]')) {
-                accountManager.startOnlineKeepalive();
-            }
-        };
-        window.addEventListener('weline:account:frontend:login', () => {
-            accountManager.startOnlineKeepalive();
-        });
-        window.addEventListener('weline:account:frontend:logout', () => {
-            accountManager.stopOnlineKeepalive();
-        });
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', startFromSignedInShell, { once: true });
-        } else {
-            startFromSignedInShell();
-        }
-    })();
 })(window);

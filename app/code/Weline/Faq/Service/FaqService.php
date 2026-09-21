@@ -195,6 +195,11 @@ final class FaqService implements FaqSeoFactsInterface
 
         $row = $this->mapRow($model->getData());
         $this->dispatchIndexEvent('save', $row);
+        try {
+            ObjectManager::getInstance(FaqResourceChangePublisher::class)->publish($row, 'save');
+        } catch (\Throwable) {
+            // 索引事件已派发；失效加速失败不回滚 FAQ 写入。
+        }
 
         return $row;
     }
@@ -214,6 +219,10 @@ final class FaqService implements FaqSeoFactsInterface
         $row = $this->mapRow($model->getData());
         $model->delete();
         $this->dispatchIndexEvent('delete', $row);
+        try {
+            ObjectManager::getInstance(FaqResourceChangePublisher::class)->publish($row, 'delete');
+        } catch (\Throwable) {
+        }
     }
 
     public function get(int $faqId): ?array

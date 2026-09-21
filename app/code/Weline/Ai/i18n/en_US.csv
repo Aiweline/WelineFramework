@@ -1180,6 +1180,7 @@ AI翻译繁忙：本地模型正被其他任务占用，请稍后重试。,AI翻
 "模型不存在: %{code}","Model does not exist: %{code}"
 "模型 %{code} 缺少API密钥配置","Model %{code} is missing API key configuration"
 "模型 %{code} 缺少API基础URL配置","Model %{code} is missing API base URL configuration"
+消息不能为空,消息不能为空
 "模型 ""%{1}"" 的供应商未实现图片生成接口","The vendor of model ""%{1}"" does not implement the image generation interface"
 "指定的模型 ""%{1}"" 不存在","The specified model ""%{1}"" does not exist"
 "指定的模型 ""%{1}"" 未激活","The specified model ""%{1}"" is not activated"

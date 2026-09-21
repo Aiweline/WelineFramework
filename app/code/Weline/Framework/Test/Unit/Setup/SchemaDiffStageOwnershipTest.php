@@ -115,13 +115,16 @@ final class SchemaDiffStageOwnershipTest extends TestCase
         $this->expectExceptionMessage('w_schema_owner_shared');
         // The assertion is about Schema conflict detection; preserve the real
         // formatter while preventing unrelated dictionary I/O during this error.
-        $loading = new \ReflectionProperty(\Weline\Framework\Phrase\Parser::class, 'isLoadingWords');
-        $previous = $loading->getValue();
-        $loading->setValue(null, true);
+        $stateMethod = new \ReflectionMethod(\Weline\Framework\Phrase\Parser::class, 'requestState');
+        $stateMethod->setAccessible(true);
+        /** @var \Weline\Framework\Phrase\ParserRequestState $phraseState */
+        $phraseState = $stateMethod->invoke(null);
+        $previous = $phraseState->isLoadingWords;
+        $phraseState->isLoadingWords = true;
         try {
             $this->prepare(['Test_A', 'Test_B'], [], [], true);
         } finally {
-            $loading->setValue(null, $previous);
+            $phraseState->isLoadingWords = $previous;
         }
     }
 
@@ -196,13 +199,16 @@ final class SchemaDiffStageOwnershipTest extends TestCase
             new ShardSchemaFamilyProviderRegistry(manualFamilyProviders: [], scanExtends: false),
         );
         // 只验证 Schema 声明选择；异常格式化不触发无关词典数据库读取。
-        $loading = new \ReflectionProperty(\Weline\Framework\Phrase\Parser::class, 'isLoadingWords');
-        $previousLoading = $loading->getValue();
-        $loading->setValue(null, true);
+        $stateMethod = new \ReflectionMethod(\Weline\Framework\Phrase\Parser::class, 'requestState');
+        $stateMethod->setAccessible(true);
+        /** @var \Weline\Framework\Phrase\ParserRequestState $phraseState */
+        $phraseState = $stateMethod->invoke(null);
+        $previousLoading = $phraseState->isLoadingWords;
+        $phraseState->isLoadingWords = true;
         try {
             $stage->prepare();
         } finally {
-            $loading->setValue(null, $previousLoading);
+            $phraseState->isLoadingWords = $previousLoading;
         }
         return $stage;
     }

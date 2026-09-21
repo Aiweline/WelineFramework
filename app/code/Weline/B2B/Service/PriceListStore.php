@@ -11,6 +11,7 @@ use Weline\B2B\Model\PriceListRecord;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /** Durable immutable price-list revisions with an explicit memory test seam. */
 final class PriceListStore
@@ -183,44 +184,63 @@ final class PriceListStore
             return false;
         }
 
+        $cacheKey = 'b2b.sku_active_tiers.' . $websiteId . '|' . strtolower($sku);
+        if (RequestContext::isInitialized()) {
+            $cached = RequestContext::get($cacheKey);
+            if (is_bool($cached)) {
+                return $cached;
+            }
+        }
+
+        $active = false;
         try {
             $items = $this->newItemRecord()->clear()
                 ->where(PriceListItemRecord::schema_fields_SKU, $sku)
                 ->select()
                 ->fetchArray();
-            if ($items === []) {
-                return false;
-            }
-            $seen = [];
-            foreach ($items as $item) {
-                $listId = trim((string)($item[PriceListItemRecord::schema_fields_LIST_ID] ?? ''));
-                $version = (int)($item[PriceListItemRecord::schema_fields_LIST_VERSION] ?? 0);
-                if ($listId === '' || $version < 1) {
-                    continue;
+            if ($items !== []) {
+                $listIds = [];
+                foreach ($items as $item) {
+                    $listId = trim((string)($item[PriceListItemRecord::schema_fields_LIST_ID] ?? ''));
+                    if ($listId !== '') {
+                        $listIds[$listId] = $listId;
+                    }
                 }
-                $key = $listId . '@' . $version;
-                if (isset($seen[$key])) {
-                    continue;
+                if ($listIds !== []) {
+                    $headers = $this->newListRecord()->clear()
+                        ->where(PriceListRecord::schema_fields_LIST_ID, array_values($listIds), 'in')
+                        ->where(PriceListRecord::schema_fields_WEBSITE_ID, $websiteId)
+                        ->where(PriceListRecord::schema_fields_ACTIVE, 1)
+                        ->select()
+                        ->fetchArray();
+                    $activeKeys = [];
+                    foreach ($headers as $header) {
+                        $listId = trim((string)($header[PriceListRecord::schema_fields_LIST_ID] ?? ''));
+                        $version = (int)($header[PriceListRecord::schema_fields_VERSION] ?? 0);
+                        if ($listId !== '' && $version > 0) {
+                            $activeKeys[$listId . '@' . $version] = true;
+                        }
+                    }
+                    if ($activeKeys !== []) {
+                        foreach ($items as $item) {
+                            $listId = trim((string)($item[PriceListItemRecord::schema_fields_LIST_ID] ?? ''));
+                            $version = (int)($item[PriceListItemRecord::schema_fields_LIST_VERSION] ?? 0);
+                            if ($listId !== '' && isset($activeKeys[$listId . '@' . $version])) {
+                                $active = true;
+                                break;
+                            }
+                        }
+                    }
                 }
-                $seen[$key] = true;
-                $header = $this->findHeader($listId, $version);
-                if ($header === null) {
-                    continue;
-                }
-                if ((int)$header->getData(PriceListRecord::schema_fields_ACTIVE) !== 1) {
-                    continue;
-                }
-                if ((int)$header->getData(PriceListRecord::schema_fields_WEBSITE_ID) !== $websiteId) {
-                    continue;
-                }
-
-                return true;
             }
         } catch (Throwable) {
-            return false;
+            $active = false;
+        }
+        if (RequestContext::isInitialized()) {
+            RequestContext::set($cacheKey, $active);
         }
 
-        return false;
+        return $active;
     }
 
     private function putDurable(PriceList $list): null

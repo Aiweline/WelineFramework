@@ -719,7 +719,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
             $requestedNamespaces,
         );
         // Build cache_ops with the pre-bump version vector + namespace fingerprint, then
-        // schedule local-only cleanup; Framework CacheImpactObserver deletes after commit.
+        // schedule local-only cleanup; Changed KeyDeleteCapability deletes after commit.
         $cacheOps = $invalidation->buildCacheOps(
             $module,
             $area,

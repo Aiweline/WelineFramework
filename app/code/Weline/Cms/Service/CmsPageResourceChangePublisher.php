@@ -39,7 +39,10 @@ final class CmsPageResourceChangePublisher
             after: $after,
             changedFields: $this->changedFields($beforeSnapshot, $after),
             impact: [
-                'namespaces' => [$this->namespacePath->website($websiteCode, ['cms', (string)$pageId])],
+                'namespaces' => array_values(array_unique([
+                    $this->namespacePath->website($websiteCode, ['cms']),
+                    $this->namespacePath->website($websiteCode, ['cms', (string)$pageId]),
+                ])),
                 'urls' => $url !== '' ? [$url] : [],
                 'previous_urls' => $previousUrl !== '' && $previousUrl !== $url ? [$previousUrl] : [],
             ],

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>promo-banner 文字边框/背景验收</title>
+  <style>
+    :root {
+      --weline-theme-primary-text-emphasis: #9b1c1c;
+      --weline-theme-primary-surface: color-mix(in srgb, #9b1c1c 14%, #fff8f0);
+      --weline-theme-border-width: 1px;
+      --weline-theme-border-style: solid;
+      --weline-theme-border: color-mix(in srgb, #9b1c1c 35%, transparent);
+      --weline-radius-round: 999px;
+      --weline-space-1: 0.25rem;
+      --weline-space-2: 0.5rem;
+      --weline-space-3: 0.75rem;
+      --weline-space-4: 1rem;
+      --weline-font-size-base: 1rem;
+      --weline-font-size-sm: 0.875rem;
+      --weline-font-size-xs: 0.75rem;
+      --weline-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      --spacing-0_5: 0.125rem;
+      --spacing-sm: 0.5rem;
+      --spacing-lg: 1.5rem;
+      --spacing-3xl: 3rem;
+    }
+    body {
+      margin: 0;
+      font-family: "Source Han Serif SC", "Noto Serif SC", serif;
+      background: #f3efe6;
+      color: #3a2f28;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.15rem; margin: 0 0 1rem; }
+    .case { margin-bottom: 1.25rem; }
+    .case label {
+      display: block;
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-bottom: 0.35rem;
+    }
+    .wc-theme_widget_promo_banner {
+      --wc-promo-bg: #f7f1e6;
+      --wc-promo-text: var(--weline-theme-primary-text-emphasis);
+      --wc-promo-text-bg: var(--weline-theme-primary-surface);
+      --wc-promo-text-border: var(--weline-theme-primary-text-emphasis);
+      --wc-promo-countdown-border: var(--weline-theme-primary-text-emphasis);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: var(--spacing-sm) 0;
+      background:
+        radial-gradient(120% 180% at 85% 40%, rgba(196, 72, 54, 0.12), transparent 55%),
+        linear-gradient(90deg, #f7f1e6, #efe4d4);
+      color: var(--wc-promo-text);
+      border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    }
+    .wc-theme_widget_promo_banner .promo-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--weline-space-4);
+      flex-wrap: wrap;
+      padding-inline: var(--spacing-lg);
+    }
+    .wc-theme_widget_promo_banner .promo-text {
+      font-size: var(--weline-font-size-base);
+      font-weight: 600;
+      border-radius: var(--weline-radius-round);
+      border: 0 solid transparent;
+      background: transparent;
+    }
+    .wc-theme_widget_promo_banner .promo-text.has-bg,
+    .wc-theme_widget_promo_banner .promo-text.has-border,
+    .wc-theme_widget_promo_banner .promo-text.has-shadow {
+      padding: var(--weline-space-1) var(--weline-space-3);
+    }
+    .wc-theme_widget_promo_banner .promo-text.has-bg { background: var(--wc-promo-text-bg); }
+    .wc-theme_widget_promo_banner .promo-text.has-border {
+      border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--wc-promo-text-border);
+    }
+    .wc-theme_widget_promo_banner .promo-text.has-shadow {
+      box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, #3a2f28 18%, transparent);
+    }
+    .wc-theme_widget_promo_banner .promo-countdown {
+      display: flex;
+      align-items: center;
+      gap: var(--weline-space-2);
+      border-radius: var(--weline-radius-round);
+      border: 0 solid transparent;
+      background: transparent;
+    }
+    .wc-theme_widget_promo_banner .promo-countdown.has-bg,
+    .wc-theme_widget_promo_banner .promo-countdown.has-border,
+    .wc-theme_widget_promo_banner .promo-countdown.has-shadow {
+      padding: var(--weline-space-1) var(--weline-space-3);
+    }
+    .wc-theme_widget_promo_banner .promo-countdown.has-bg {
+      background: var(--wc-promo-countdown-bg, color-mix(in srgb, var(--wc-promo-text) 12%, transparent));
+    }
+    .wc-theme_widget_promo_banner .promo-countdown.has-border {
+      border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--wc-promo-countdown-border);
+    }
+    .wc-theme_widget_promo_banner .promo-countdown.has-shadow {
+      box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, #3a2f28 18%, transparent);
+    }
+    .wc-theme_widget_promo_banner .countdown-label { font-size: var(--weline-font-size-sm); }
+    .wc-theme_widget_promo_banner .countdown-timer { display: flex; gap: var(--weline-space-1); }
+    .wc-theme_widget_promo_banner .time-part { display: flex; align-items: baseline; gap: var(--spacing-0_5); }
+    .wc-theme_widget_promo_banner .time-value { font-weight: 700; font-family: var(--weline-font-mono); }
+    .wc-theme_widget_promo_banner .time-label { font-size: var(--weline-font-size-xs); }
+  </style>
+</head>
+<body>
+  <h1>promo-banner 文字芯片：背景 / 边框开关</h1>
+
+  <div class="case">
+    <label>默认（与现网截图一致：文字裸排 · 倒计时半透明底）</label>
+    <section class="wc-theme_widget_promo_banner" data-case="default">
+      <div class="promo-content">
+        <span class="promo-text">满额包邮 · 精选上新</span>
+        <span class="promo-countdown has-bg">
+          <span class="countdown-label">剩余:</span>
+          <span class="countdown-timer">
+            <span class="time-part"><span class="time-value">00</span><span class="time-label">天</span></span>
+            <span class="time-part"><span class="time-value">15</span><span class="time-label">时</span></span>
+            <span class="time-part"><span class="time-value">59</span><span class="time-label">分</span></span>
+            <span class="time-part"><span class="time-value">32</span><span class="time-label">秒</span></span>
+          </span>
+        </span>
+      </div>
+    </section>
+  </div>
+
+  <div class="case">
+    <label>促销文字：背景 + 边框 + 阴影；倒计时：背景 + 阴影</label>
+    <section class="wc-theme_widget_promo_banner" data-case="text-both">
+      <div class="promo-content">
+        <span class="promo-text has-bg has-border has-shadow">满额包邮 · 精选上新</span>
+        <span class="promo-countdown has-bg has-shadow">
+          <span class="countdown-label">剩余:</span>
+          <span class="countdown-timer">
+            <span class="time-part"><span class="time-value">00</span><span class="time-label">天</span></span>
+            <span class="time-part"><span class="time-value">15</span><span class="time-label">时</span></span>
+          </span>
+        </span>
+      </div>
+    </section>
+  </div>
+
+  <div class="case">
+    <label>倒计时：无背景 + 有边框；文字：仅边框</label>
+    <section class="wc-theme_widget_promo_banner" data-case="countdown-border">
+      <div class="promo-content">
+        <span class="promo-text has-border">满额包邮 · 精选上新</span>
+        <span class="promo-countdown has-border">
+          <span class="countdown-label">剩余:</span>
+          <span class="countdown-timer">
+            <span class="time-part"><span class="time-value">00</span><span class="time-label">天</span></span>
+            <span class="time-part"><span class="time-value">08</span><span class="time-label">时</span></span>
+          </span>
+        </span>
+      </div>
+    </section>
+  </div>
+
+  <div class="case">
+    <label>全部关闭（纯文字）</label>
+    <section class="wc-theme_widget_promo_banner" data-case="plain">
+      <div class="promo-content">
+        <span class="promo-text">满额包邮 · 精选上新</span>
+        <span class="promo-countdown">
+          <span class="countdown-label">剩余:</span>
+          <span class="countdown-timer">
+            <span class="time-part"><span class="time-value">00</span><span class="time-label">天</span></span>
+            <span class="time-part"><span class="time-value">03</span><span class="time-label">时</span></span>
+          </span>
+        </span>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

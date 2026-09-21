@@ -111,6 +111,18 @@ class EmailAdapter implements ChannelAdapterInterface
         ];
     }
 
+    public function test(array $config): bool
+    {
+        $testNotification = [
+            'topic_code' => 'system_info',
+            'type' => 'info',
+            'title' => __('邮件渠道测试'),
+            'content' => __('这是一条测试消息，如果您收到此邮件，说明邮件渠道配置正确。'),
+        ];
+
+        return $this->send($testNotification, $config);
+    }
+
     public function getConfigFields(): array
     {
         $fields = [

@@ -14,13 +14,22 @@
     let activeDropCandidate = null;
     /** Parent-selected slot id (recommendation filter); preferred when under the pointer. */
     let activePreferredSlotId = '';
-    /** 最近一次已渲染 / 已上报的 drop-candidate 身份；同插入位跳过 DOM 与消息。 */
+    /** 最近一次已画进 DOM 的插入位；同身份跳过清建。跨帧上报不靠这份状态。 */
     let lastRenderedDropCandidateKey = '';
-    let lastPublishedDropCandidateKey = '';
-    /** 跨帧 postMessage 短合并（毫秒）：悬浮指示本地立即更新，父页同步略延迟防抖。 */
-    const DROP_CANDIDATE_PUBLISH_MS = 8;
-    let pendingPublishDropCandidate = null;
-    let dropCandidatePublishTimer = 0;
+    /**
+     * 预览帧邮箱。冷事件立即 postMessage；热事件只保留最新快照，每帧最多投递一条。
+     * 父页同源直调传 notifyParent:false，不进邮箱——返回值就是权威。
+     */
+    const PREVIEW_FRAME_HOT_TYPES = {
+        'drop-candidate': true,
+        'drop-candidate-clear': true,
+        'slot-hover-sync': true,
+    };
+    const previewFrameBus = {
+        pending: null,
+        rafId: 0,
+        lastKey: '',
+    };
 
     function normalizeInteractionMode(mode) {
         return mode === 'preview' ? 'preview' : 'edit';
@@ -200,7 +209,7 @@
             return;
         }
         document.body._nolinkClickGuardBound = true;
-        // 捕获阶段拦截，避免父页链接桥接把点击转成预览跳转。
+        // 捕获阶段只拦 a 的默认跳转；禁止 stopPropagation，否则父级选不中部件。
         document.addEventListener('click', function(e) {
             if (!isEditInteractionMode() || !isLinkBlockEnabled()) {
                 return;
@@ -213,13 +222,159 @@
                 return;
             }
             e.preventDefault();
-            e.stopPropagation();
         }, true);
     }
 
     function applyLinkBlock(enabled) {
         linkBlockEnabled = normalizeLinkBlockEnabled(enabled);
         document.documentElement.dataset.wEditorLinkBlock = linkBlockEnabled ? '1' : '0';
+    }
+
+    /**
+     * 部件配置里的静态 href（如 promo-banner link）不经 Url::getFrontendUrl，
+     * 在画布 iframe 最终展示/跳转前把当前请求的主题身份 query 补上。
+     */
+    const EDITOR_IDENTITY_CARRY_KEYS = [
+        'theme_id',
+        'frontend_theme_id',
+        'editor_mode',
+        'shell',
+        'editor_context',
+        'status',
+        'version_id',
+        'editor_area',
+        'preview_area',
+        'interaction_mode',
+    ];
+
+    function readEditorIdentityCarryParams() {
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const carry = {};
+            EDITOR_IDENTITY_CARRY_KEYS.forEach(function(key) {
+                if (!params.has(key)) {
+                    return;
+                }
+                const value = String(params.get(key) || '').trim();
+                if (value !== '') {
+                    carry[key] = value;
+                }
+            });
+            if (!carry.theme_id && !carry.frontend_theme_id) {
+                return null;
+            }
+            if (!carry.editor_mode) {
+                carry.editor_mode = '1';
+            }
+            if (!carry.shell) {
+                carry.shell = 'theme-editor';
+            }
+            if (!carry.frontend_theme_id && carry.theme_id) {
+                carry.frontend_theme_id = carry.theme_id;
+            }
+            return carry;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function isEditorIdentityCarryHref(href) {
+        const raw = String(href || '').trim();
+        if (raw === '' || raw === '#') {
+            return false;
+        }
+        const lower = raw.toLowerCase();
+        if (
+            lower.startsWith('#')
+            || lower.startsWith('mailto:')
+            || lower.startsWith('tel:')
+            || lower.startsWith('javascript:')
+            || lower.startsWith('data:')
+        ) {
+            return false;
+        }
+        try {
+            const url = new URL(raw, window.location.href);
+            if (url.origin !== window.location.origin) {
+                return false;
+            }
+            return true;
+        } catch (error) {
+            return raw.startsWith('/') && !raw.startsWith('//');
+        }
+    }
+
+    function appendEditorIdentityToHref(href, carry) {
+        if (!carry || !isEditorIdentityCarryHref(href)) {
+            return href;
+        }
+        try {
+            const url = new URL(String(href), window.location.href);
+            Object.keys(carry).forEach(function(key) {
+                const existing = String(url.searchParams.get(key) || '').trim();
+                if (existing !== '' && existing !== '0') {
+                    return;
+                }
+                url.searchParams.set(key, String(carry[key]));
+            });
+            // 相对原链：同站绝对 path+query+hash，避免硬写 host 改变状态栏观感。
+            return url.pathname + url.search + url.hash;
+        } catch (error) {
+            return href;
+        }
+    }
+
+    function rewriteAnchorEditorIdentity(anchor) {
+        if (!(anchor instanceof Element) || !anchor.getAttribute) {
+            return;
+        }
+        if (anchor.getAttribute('data-w-editor-identity-carried') === '1') {
+            return;
+        }
+        const carry = readEditorIdentityCarryParams();
+        if (!carry) {
+            return;
+        }
+        const href = anchor.getAttribute('href');
+        const next = appendEditorIdentityToHref(href, carry);
+        if (next && next !== href) {
+            anchor.setAttribute('href', next);
+        }
+        anchor.setAttribute('data-w-editor-identity-carried', '1');
+    }
+
+    function rewriteStorefrontAnchors(root) {
+        const carry = readEditorIdentityCarryParams();
+        if (!carry) {
+            return;
+        }
+        const scope = root && root.querySelectorAll ? root : document;
+        if (scope.matches && scope.matches('a[href]')) {
+            rewriteAnchorEditorIdentity(scope);
+        }
+        if (!scope.querySelectorAll) {
+            return;
+        }
+        scope.querySelectorAll('a[href]').forEach(rewriteAnchorEditorIdentity);
+    }
+
+    function bindEditorIdentityHrefCarry() {
+        if (document.body._editorIdentityHrefCarryBound) {
+            return;
+        }
+        document.body._editorIdentityHrefCarryBound = true;
+        // 点击兜底：动态插入、未改写到的静态配置链在跳转前补参。
+        document.addEventListener('click', function(e) {
+            if (isLinkBlockEnabled()) {
+                return;
+            }
+            const link = e.target && e.target.closest && e.target.closest('a[href]');
+            if (!link || isShopperRuntimeEventTarget(link) || link.closest('.slot-toolbar, .widget-hover-actions')) {
+                return;
+            }
+            rewriteAnchorEditorIdentity(link);
+        }, true);
+        rewriteStorefrontAnchors(document);
     }
 
     function applyInteractionMode(mode) {
@@ -413,6 +568,22 @@
         });
     }
 
+    function isShopperFlyoutPointerTarget(target) {
+        if (!target || typeof target.closest !== 'function') {
+            return false;
+        }
+        return !!target.closest([
+            '[data-w-header-account]',
+            '.account-logged-in',
+            '.account-dropdown',
+            '[data-w-popover-panel]',
+            '.header-category-panel',
+            '[data-w-mega-menu]',
+            '.category-item--mega',
+            '.category-item.has-children',
+        ].join(', '));
+    }
+
     function bindSlotHoverTargetEvents() {
         if (document.body._slotHoverTargetBound) {
             return;
@@ -421,6 +592,13 @@
 
         document.body.addEventListener('mousemove', function(e) {
             if (!isEditInteractionMode() || isWidgetSelectionTarget()) {
+                return;
+            }
+            // 店面悬停层（个人中心、分类大菜单）展开时收起插槽工具条。
+            // 工具条 fixed 在 header 右上角，会盖住下拉并打断 :hover，导致菜单点不中。
+            if (isShopperFlyoutPointerTarget(e.target)) {
+                clearSlotHoverClearTimer();
+                clearSlotHoverTargets();
                 return;
             }
             // 类似 tooltip：移到工具条/选择树/信息卡时保持，可点击操作。
@@ -516,13 +694,66 @@
         toolbar.appendChild(downBtn);
     }
 
-    function postPreviewMessage(type, detail) {
+    function previewFrameMessageKey(type, detail) {
+        if (type === 'drop-candidate') {
+            return 'drop\0' + dropCandidateIdentityKey(detail);
+        }
+        if (type === 'drop-candidate-clear') {
+            return 'clear\0' + String((detail && detail.session_id) || '');
+        }
+        if (type === 'slot-hover-sync') {
+            return 'hover\0' + String((detail && detail.slot_id) || '');
+        }
+        return String(type || '');
+    }
+
+    function deliverPreviewFrameMessage(type, detail) {
         if (window.parent === window) return;
         window.parent.postMessage({
             source: 'weline-theme-preview',
             type: type,
+            lane: PREVIEW_FRAME_HOT_TYPES[type] ? 'hot' : 'cold',
             ...(detail || {})
         }, EDITOR_ORIGIN);
+    }
+
+    function flushPreviewFrameBus() {
+        previewFrameBus.rafId = 0;
+        const pending = previewFrameBus.pending;
+        previewFrameBus.pending = null;
+        if (!pending) {
+            return;
+        }
+        deliverPreviewFrameMessage(pending.type, pending.detail);
+    }
+
+    function cancelPreviewFrameBus() {
+        if (previewFrameBus.rafId) {
+            cancelAnimationFrame(previewFrameBus.rafId);
+            previewFrameBus.rafId = 0;
+        }
+        previewFrameBus.pending = null;
+        previewFrameBus.lastKey = '';
+    }
+
+    /**
+     * 跨帧唯一出口。热路径 latest-wins + 每帧一条；冷路径立即投递。
+     */
+    function postPreviewMessage(type, detail) {
+        if (!PREVIEW_FRAME_HOT_TYPES[type]) {
+            deliverPreviewFrameMessage(type, detail);
+            return;
+        }
+        const key = previewFrameMessageKey(type, detail);
+        if (!key || key === previewFrameBus.lastKey) {
+            return;
+        }
+        previewFrameBus.lastKey = key;
+        previewFrameBus.pending = { type: type, detail: detail || {} };
+        if (previewFrameBus.rafId) {
+            return;
+        }
+        previewFrameBus.rafId = requestAnimationFrame(flushPreviewFrameBus);
     }
 
     /**
@@ -626,8 +857,7 @@
             activeDragWidget = data.widget;
             activePreferredSlotId = String(data.selected_slot_id || data.preferred_slot_id || '').trim();
             lastRenderedDropCandidateKey = '';
-            lastPublishedDropCandidateKey = '';
-            clearDropCandidatePublishSchedule();
+            cancelPreviewFrameBus();
             return;
         }
 
@@ -639,8 +869,7 @@
         activeDropCandidate = null;
         activePreferredSlotId = '';
         lastRenderedDropCandidateKey = '';
-        lastPublishedDropCandidateKey = '';
-        clearDropCandidatePublishSchedule();
+        cancelPreviewFrameBus();
     });
 
     /**
@@ -1425,45 +1654,12 @@
         ].join('\0');
     }
 
-    function clearDropCandidatePublishSchedule() {
-        if (dropCandidatePublishTimer) {
-            clearTimeout(dropCandidatePublishTimer);
-            dropCandidatePublishTimer = 0;
-        }
-        pendingPublishDropCandidate = null;
-    }
-
-    function flushPublishDropCandidate() {
-        dropCandidatePublishTimer = 0;
-        const candidate = pendingPublishDropCandidate;
-        pendingPublishDropCandidate = null;
-        if (!candidate) {
-            return false;
-        }
-        const key = dropCandidateIdentityKey(candidate);
-        if (!key || key === lastPublishedDropCandidateKey) {
-            return false;
-        }
-        lastPublishedDropCandidateKey = key;
+    function publishDropCandidate(candidate) {
         postPreviewMessage('drop-candidate', candidate);
         return true;
     }
 
-    function publishDropCandidate(candidate) {
-        const key = dropCandidateIdentityKey(candidate);
-        if (!key || key === lastPublishedDropCandidateKey) {
-            return false;
-        }
-        pendingPublishDropCandidate = candidate;
-        if (dropCandidatePublishTimer) {
-            return true;
-        }
-        // 8ms 短 debounce：边界附近 before/after 抖动时合并消息，又不拖慢悬浮跟手。
-        dropCandidatePublishTimer = setTimeout(flushPublishDropCandidate, DROP_CANDIDATE_PUBLISH_MS);
-        return true;
-    }
-
-    function showIframeDropFeedback(slot, mouseY, widgetData) {
+    function showIframeDropFeedback(slot, mouseY, widgetData, options) {
         const candidate = buildIframeDropCandidate(slot, mouseY, widgetData);
         if (!candidate) return null;
 
@@ -1515,13 +1711,15 @@
                 : '插入到 ' + targetName + ' 后');
         }
 
-        publishDropCandidate(candidate);
+        if (!options || options.notifyParent !== false) {
+            publishDropCandidate(candidate);
+        }
         return candidate;
     }
 
     /**
-     * 父页 drop-bridge / dragend 兜底：用 iframe 内坐标命中插槽并回传 drop-candidate。
-     * 解决 Chromium/Electron 跨 iframe HTML5 DataTransfer 丢失导致无法 dragover/drop 的问题。
+     * 父页 drop-bridge / dragend 的同源入口。
+     * 返回值就是插入位；调用方传 notifyParent:false 时不进跨帧邮箱。
      * 命中策略：自 elementFromPoint 向上收集 [data-wslot]，优先最深且 accept/容量通过的插槽，
      * 避免外层 header 等容器吞掉本可落入内层/同点其它插槽的放置。
      */
@@ -1678,7 +1876,7 @@
         return { hit: collected.hit, slot: null, invalidSlot: invalidSlot, reason: invalidReason };
     }
 
-    function resolveDropAtPoint(clientX, clientY, widgetData) {
+    function resolveDropAtPoint(clientX, clientY, widgetData, options) {
         if (!isEditInteractionMode()) {
             return null;
         }
@@ -1722,7 +1920,7 @@
             return null;
         }
 
-        return showIframeDropFeedback(found.slot, y, data);
+        return showIframeDropFeedback(found.slot, y, data, options);
     }
 
     /**
@@ -1756,8 +1954,7 @@
             activeDropSlot = null;
             activeDropCandidate = null;
             lastRenderedDropCandidateKey = '';
-            lastPublishedDropCandidateKey = '';
-            clearDropCandidatePublishSchedule();
+            cancelPreviewFrameBus();
             if (notifyParent && hadCandidate && clearedSessionId) {
                 postPreviewMessage('drop-candidate-clear', {
                     session_id: clearedSessionId
@@ -1826,16 +2023,16 @@
         // 添加选择按钮
         addSelectButton(slot);
 
-        // 插槽内链接：阻止导航跳转，但不阻止其他交互
+        // 禁链开启时只拦插槽内 a 跳转；不 stopPropagation，点击仍可冒泡选中部件。
         slot.addEventListener('click', function(e) {
-            const link = e.target.closest('a[href]');
-            if (link && !isShopperRuntimeEventTarget(link) && !link.closest('.slot-toolbar')) {
-                e.preventDefault(); // 仅阻止导航，不调用 selectSlot
-                if (isLinkBlockEnabled()) {
-                    e.stopPropagation();
-                }
+            if (!isLinkBlockEnabled()) {
+                return;
             }
-            // 不拦截其他元素的点击 — 选择由工具栏"选择"按钮负责
+            const link = e.target.closest && e.target.closest('a[href]');
+            if (!link || isShopperRuntimeEventTarget(link) || link.closest('.slot-toolbar, .widget-hover-actions')) {
+                return;
+            }
+            e.preventDefault();
         });
 
         // 拖放事件 — 带插入位置指示器
@@ -2013,6 +2210,7 @@
         initBackendStructuralSlots();
         bindSlotHoverTargetEvents();
         bindNolinkClickGuard();
+        bindEditorIdentityHrefCarry();
         document.querySelectorAll('[data-wslot]').forEach(initSingleSlot);
 
         // 初始化不在插槽内的独立占位符
@@ -2337,6 +2535,7 @@
 
     // Dense widget childList: disconnect + trailing idle (never double-rAF reobserve).
     const pendingSlots = new Set();
+    const pendingWidgets = new Set();
     const slotObserveOptions = { childList: true, subtree: true };
     if (document.body) {
         const coalesce = (typeof window.Weline !== 'undefined'
@@ -2421,9 +2620,15 @@
                         if (node.hasAttribute && node.hasAttribute('data-wslot')) {
                             pendingSlots.add(node);
                         }
+                        if (node.matches && node.matches('[data-layout-id], [data-node-uid], [data-weline-template-widget="1"]')) {
+                            pendingWidgets.add(node);
+                        }
                         if (node.querySelectorAll) {
                             node.querySelectorAll('[data-wslot]').forEach(function(el) {
                                 pendingSlots.add(el);
+                            });
+                            node.querySelectorAll('[data-layout-id], [data-node-uid], [data-weline-template-widget="1"]').forEach(function(el) {
+                                pendingWidgets.add(el);
                             });
                         }
                     });
@@ -2431,9 +2636,23 @@
             },
             onFlush: function() {
                 const batch = Array.from(pendingSlots);
+                const widgetCount = pendingWidgets.size;
                 pendingSlots.clear();
+                pendingWidgets.clear();
                 // Only newly added slots — never full-body querySelectorAll rescan (feeds delivery_storm).
                 batch.forEach(initSingleSlot);
+                if (batch.length || widgetCount) {
+                    postPreviewMessage('preview-structure-changed', {
+                        slots: batch.length,
+                        widgets: widgetCount,
+                    });
+                    batch.forEach(function(slot) {
+                        rewriteStorefrontAnchors(slot);
+                    });
+                    if (widgetCount) {
+                        rewriteStorefrontAnchors(document);
+                    }
+                }
             },
         });
     }

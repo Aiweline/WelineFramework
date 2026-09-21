@@ -361,22 +361,105 @@
         var preview = q(wrap, '[data-w-file-preview]');
         if (!preview) return;
         var node = parseFileImageNode(input.value);
-        if (!node) return;
-        if (q(preview, '[data-w-file-item]')) return;
         var url = sanitizeLegacyImagePreviewUrl(String(
             explicitPreviewUrl
             || input.getAttribute('data-preview-url')
             || input.dataset.previewUrl
+            || (!node ? String(input.value || '').trim() : '')
             || ''
         ).trim());
-        if (!url) return;
-        var assetId = node.usage && node.usage.asset_id ? String(node.usage.asset_id) : '';
+        var assetId = node && node.usage && node.usage.asset_id
+            ? String(node.usage.asset_id)
+            : (url.split('/').pop() || 'image');
+        var existing = q(preview, '[data-w-file-item]');
+        if (!url) {
+            // Typed file-image without preview URL yet: keep a pending shell so
+            // ThemeEditor hydrate / syncTarget can resolve without clearing value.
+            if (!node) return;
+            if (existing) {
+                existing.dataset.fileImageNode = JSON.stringify(node);
+                existing.dataset.path = assetId;
+                existing.dataset.kind = 'image';
+                existing.dataset.pendingPreview = '1';
+                existing.setAttribute('data-pending-preview', '1');
+                return;
+            }
+            var pendingItem = doc.createElement('div');
+            pendingItem.className = 'w-file-preview__item';
+            pendingItem.setAttribute('data-w-file-item', '');
+            pendingItem.dataset.path = assetId;
+            pendingItem.dataset.kind = 'image';
+            pendingItem.dataset.pendingPreview = '1';
+            pendingItem.setAttribute('data-pending-preview', '1');
+            pendingItem.dataset.fileImageNode = JSON.stringify(node);
+            pendingItem.draggable = true;
+            var pendingMedia = doc.createElement('div');
+            pendingMedia.className = 'w-file-preview__media';
+            var pendingThumb = doc.createElement('button');
+            pendingThumb.type = 'button';
+            pendingThumb.className = 'w-file-preview__thumbnail';
+            pendingThumb.setAttribute('data-w-file-open', '');
+            pendingThumb.setAttribute('aria-label', assetId || 'image');
+            var glyph = doc.createElement('span');
+            glyph.className = 'w-file-preview__glyph';
+            glyph.dataset.kind = 'image';
+            glyph.setAttribute('aria-hidden', 'true');
+            glyph.textContent = '\uD83D\uDDBC';
+            pendingThumb.appendChild(glyph);
+            pendingMedia.appendChild(pendingThumb);
+            var pendingName = doc.createElement('span');
+            pendingName.className = 'w-file-preview__name';
+            pendingName.title = assetId;
+            pendingName.textContent = assetId || 'image';
+            var pendingActions = doc.createElement('span');
+            pendingActions.className = 'w-file-preview__actions';
+            var pendingRemove = doc.createElement('button');
+            pendingRemove.type = 'button';
+            pendingRemove.className = 'w-button';
+            pendingRemove.dataset.tone = 'danger';
+            pendingRemove.dataset.size = 'sm';
+            pendingRemove.setAttribute('data-w-file-remove', '');
+            pendingRemove.setAttribute('aria-label', 'Remove');
+            pendingRemove.textContent = '\u00d7';
+            pendingActions.appendChild(pendingRemove);
+            pendingItem.appendChild(pendingMedia);
+            pendingItem.appendChild(pendingName);
+            pendingItem.appendChild(pendingActions);
+            preview.appendChild(pendingItem);
+            preview.hidden = false;
+            preview.removeAttribute('hidden');
+            return;
+        }
+        if (existing) {
+            if (node) existing.dataset.fileImageNode = JSON.stringify(node);
+            existing.dataset.path = assetId;
+            existing.dataset.kind = 'image';
+            delete existing.dataset.pendingPreview;
+            existing.removeAttribute('data-pending-preview');
+            var existingImg = q(existing, 'img');
+            if (existingImg) {
+                existingImg.src = url;
+                existingImg.alt = assetId || 'preview';
+            } else {
+                var thumbBtn = q(existing, '.w-file-preview__thumbnail') || existing;
+                var oldGlyph = q(thumbBtn, '.w-file-preview__glyph');
+                if (oldGlyph) oldGlyph.remove();
+                var created = doc.createElement('img');
+                created.src = url;
+                created.alt = assetId || 'preview';
+                created.draggable = false;
+                thumbBtn.appendChild(created);
+            }
+            preview.hidden = false;
+            preview.removeAttribute('hidden');
+            return;
+        }
         var item = doc.createElement('div');
         item.className = 'w-file-preview__item';
         item.setAttribute('data-w-file-item', '');
         item.dataset.path = assetId;
         item.dataset.kind = 'image';
-        item.dataset.fileImageNode = JSON.stringify(node);
+        if (node) item.dataset.fileImageNode = JSON.stringify(node);
         item.draggable = true;
         var media = doc.createElement('div');
         media.className = 'w-file-preview__media';
@@ -589,13 +672,28 @@
         } else {
             html += '<div id="' + escAttr(fieldId) + '-preview" class="w-file-preview" data-w-file-preview'
                 + ' style="--w-file-preview-width: 96px; --w-file-preview-height: 96px;">';
-            if (node && previewUrl) {
-                var assetId = node.usage && node.usage.asset_id ? String(node.usage.asset_id) : 'image';
+            if (previewUrl && (node || storedValue)) {
+                var assetId = node && node.usage && node.usage.asset_id
+                    ? String(node.usage.asset_id)
+                    : (storedValue.split('/').pop() || 'image');
+                var fileImageAttr = node
+                    ? ' data-file-image-node="' + escAttr(JSON.stringify(node)) + '"'
+                    : '';
                 html += '<div class="w-file-preview__item" data-w-file-item data-path="' + escAttr(assetId)
-                    + '" data-kind="image" data-file-image-node="' + escAttr(JSON.stringify(node)) + '" draggable="true">'
+                    + '" data-kind="image"' + fileImageAttr + ' draggable="true">'
                     + '<div class="w-file-preview__media"><button type="button" class="w-file-preview__thumbnail" data-w-file-open'
                     + ' aria-label="' + escAttr(assetId) + '"><img src="' + escAttr(previewUrl) + '" alt="' + escAttr(assetId) + '" draggable="false"></button></div>'
                     + '<span class="w-file-preview__name" title="' + escAttr(assetId) + '">' + escAttr(assetId) + '</span>'
+                    + '<span class="w-file-preview__actions"><button type="button" class="w-button" data-w-file-remove data-tone="danger" data-size="sm" aria-label="Remove">×</button></span>'
+                    + '</div>';
+            } else if (node) {
+                var pendingId = node.usage && node.usage.asset_id ? String(node.usage.asset_id) : 'image';
+                html += '<div class="w-file-preview__item" data-w-file-item data-pending-preview="1" data-path="'
+                    + escAttr(pendingId) + '" data-kind="image" data-file-image-node="'
+                    + escAttr(JSON.stringify(node)) + '" draggable="true">'
+                    + '<div class="w-file-preview__media"><button type="button" class="w-file-preview__thumbnail" data-w-file-open'
+                    + ' aria-label="' + escAttr(pendingId) + '"><span class="w-file-preview__glyph" data-kind="image" aria-hidden="true">🖼</span></button></div>'
+                    + '<span class="w-file-preview__name" title="' + escAttr(pendingId) + '">' + escAttr(pendingId) + '</span>'
                     + '<span class="w-file-preview__actions"><button type="button" class="w-button" data-w-file-remove data-tone="danger" data-size="sm" aria-label="Remove">×</button></span>'
                     + '</div>';
             }
@@ -722,16 +820,19 @@
         if (btn && btn.getAttribute) {
             locale = btn.getAttribute('data-locale-code') || btn.dataset.localeCode || '';
         }
-        try { if (!locale) locale = new URLSearchParams(window.location.search).get('locale') || ''; } catch (error) {}
         if (!locale && themeEl) {
             locale = themeEl.getAttribute('data-config-locale')
                 || themeEl.getAttribute('data-locale-code')
                 || '';
         }
         // "default / 全语言" is a layout identity, not a FileAsset locale.
-        // Stamp images with the site default locale so preview hydration matches.
+        // Stamp images with the site default locale so draft validation matches.
+        // Preview toolbar ?locale= must not override that stamp on structure layouts.
         if (!locale || locale === 'default') {
             locale = (themeEl && themeEl.getAttribute('data-default-locale')) || '';
+        }
+        if (!locale || locale === 'default') {
+            try { locale = new URLSearchParams(window.location.search).get('locale') || ''; } catch (error) {}
         }
         if (!locale || locale === 'default') {
             locale = document.documentElement.lang || 'zh_Hans_CN';
@@ -2520,9 +2621,9 @@
                 initMediaImagePicker(root || doc);
                 mountParamComponents(root || doc);
             },
-            updateMediaPreview: function (input) {
+            updateMediaPreview: function (input, explicitPreviewUrl) {
                 updateMediaImagePreview(input);
-                seedFilePickerPreviewFromInput(input);
+                seedFilePickerPreviewFromInput(input, explicitPreviewUrl);
             },
             emitValueChange: emitParamValueChange,
             renderMediaLibraryPickerHtml: buildMediaLibraryPickerHtml,

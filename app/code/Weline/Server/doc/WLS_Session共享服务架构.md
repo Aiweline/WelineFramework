@@ -163,10 +163,11 @@ Windows 冷创建也必须遵守同一并发边界。`SharedStateServiceManager`
         'gc_interval' => 300,
         'wls_server' => ['host' => '127.0.0.1', 'port' => 19970],
     ],
-    'memory_service' => [
-        'enabled' => true,
-        // host / port / token_file_name 可按实例配置
-    ],
+        'memory_service' => [
+            'enabled' => true,
+            // host / port / token_file_name 可按实例配置
+            // max_sessions / memory_*_watermark_* / gc_interval 在 role=memory_server 时覆盖 session 同名项
+        ],
     'shared_service' => [
         'empty_token_exit_grace_sec' => 30,
         'empty_token_check_interval_sec' => 120.0,

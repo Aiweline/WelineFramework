@@ -49,7 +49,7 @@ function saveContext(file, { rejectTitle = '', holdOwnership = null } = {}) {
         state: { pendingScopedMutation: Promise.resolve(), scopedWorkspaces: {} },
         config: { apiScopedWorkspace: '/scope' },
         document: { querySelectorAll: () => [] },
-        translateUiText: (value) => value,
+        window: {__: (value) => value},
         getWidgetConfigSaveUrl: () => '/save-widget-config',
         scopedWorkspaceKey: (resource, options) => `${resource}:${options.locale || 'default'}`,
         buildTypedEditorContext: (resource, options) => ({ resource_type: resource, locale: options.locale || 'default' }),

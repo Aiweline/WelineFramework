@@ -1,88 +1,44 @@
-# 可视化编辑器架构文档
+# 可视化编辑器
 
-> 版本: 2.1.0
-> 更新时间: 2026-01-28
+> 更新：2026-09-19  
+> 旧 PageBuilder 壳（`GuoLaiRen\PageBuilder`、`/backend/visual/api/*`、`visual-editor.phtml`）已下线。不要再按那套接口开发。
 
-## 概述
+后台入口是 `theme/backend/theme-editor`。画布打开**真实店面 path**，身份以 query + `editor_context` 为准。不要用 `theme-preview/content` 冒充画布，也不要调用 `start-preview`。
 
-可视化编辑器是一个用于构建和编辑页面的可视化工具，支持组件拖拽、嵌套放置、实时预览等功能。
+三态对照：[`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)。
 
-### 预览身份（本壳）
+## 运行时结构
 
-画布 / iframe 预览属于**可视化编辑预览**：身份以 **query + typed `editor_context` 参数**为准，打开**真实店面 path**（`buildCanvasStorefrontPreviewUrl`），**不要**调用 `start-preview`，也**不要**用 `theme-preview/content` 冒充画布。
+| 角色 | 权威源 | 浏览器加载的产物 |
+|------|--------|------------------|
+| 父页编辑器 | `view/statics/js/theme-editor.js` | `view/statics/ui/pages/weline-theme-editor.js` |
+| iframe 编辑模式 | `view/statics/js/editor-mode.js` | `view/statics/ui/pages/weline-theme-preview.js` |
 
-与「版本真实预览」（Token 反解析）、「正式店面」（RequestContext）的对照与正确用法见权威文档：
+产物由 `php bin/w resource:compile welineUi` 生成。只改权威源，再编译。
 
-→ [`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)  
-→ MCP 技能 `weline-theme-development`
+## 放置规则
 
-## 核心设计
+插槽用 `data-wslot*` 声明接受、拒绝、容量。父页与 iframe 共用同一套判断，服务端登记在 `Weline\Theme\Service\ThemePlaceableRegistry`。
 
-### 1. 区域系统
+属性说明：[`../widget-slot-attributes.md`](../widget-slot-attributes.md)。
 
-页面分为三个顶级区域：
+选中插槽后，部件库按该插槽过滤（`setWidgetSlotFilter`），不是旧的 `/backend/visual/api/component/compatible`。
 
-| 区域 | 说明 | 组件限制 | 嵌套支持 |
-|------|------|----------|----------|
-| `header` | 页面头部 | 仅接受 `header` 类别 | 支持 slot 嵌套 |
-| `content` | 页面内容 | 接受 `content`、`widget` 类别 | 支持多组件、支持 slot 嵌套 |
-| `footer` | 页面底部 | 仅接受 `footer` 类别 | 支持 slot 嵌套 |
+## 跨帧协议
 
-### 2. 组件分类
+父页与 iframe 的消息走预览帧邮箱，不按事件打补丁。见 [`preview-frame-bus.md`](./preview-frame-bus.md)。
 
-每个组件都有一个 `category` 属性，决定它可以被放置的区域：
+## 局部更新
 
-- `header`: 头部组件
-- `content`: 内容组件
-- `footer`: 底部组件
-- `widget`: 小部件（可放入 content 区域）
-
-### 3. Slot 嵌套系统
-
-组件可以定义 `slots`，允许其他组件嵌入：
-
-```json
-{
-  "slots": {
-    "items": {
-      "name": "项目",
-      "accepts": ["content", "widget"],
-      "slot_type": "faq-item",
-      "max": 30
-    }
-  }
-}
-```
-
-关键规则：
-- slot 的 `accepts` 必须是父组件所在区域接受的类别的子集
-- 嵌套组件跟随父组件移动
-- slot 可以设置 `max` 限制最大数量
+拖入、移动、删除部件后，父页改 iframe 里对应插槽的 DOM。已有部件改配置不得整页重载预览。找不到插槽时才 `loadCanvas()`。
 
 ## 相关文档
 
-- [Theme Editor → Weline UI 2.0 能力保留矩阵](./weline-ui-2-capability-matrix.md)
-- [Theme Editor 网站/店铺作用域切换](./scope-switching.md)
-- [区域隔离规则](./region-isolation.md)
-- [Slot 嵌套规则](./slot-nesting-rules.md)
-- [局部刷新机制](./partial-refresh.md)
-- [组件库筛选](./component-library-filtering.md)
-- [component.json 规范](./component-library-filtering.md)
-- [Anchored Float 贴边智能定位（部件操作条）](../widgets/anchored-float.md)
-
-## 相关服务
-
-| 服务 | 路径 | 说明 |
-|------|------|------|
-| `SlotValidator` | `GuoLaiRen\PageBuilder\Service\Component\SlotValidator` | 组件放置验证 |
-| `ComponentRenderer` | `GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer` | 单组件渲染（局部刷新） |
-| `ComponentResolver` | `GuoLaiRen\PageBuilder\Service\Component\ComponentResolver` | 组件解析 |
-
-## API 端点
-
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/backend/visual/api/component/validate` | POST | 验证组件是否可放置 |
-| `/backend/visual/api/component/compatible` | GET | 获取兼容组件列表 |
-| `/backend/visual/api/component/slots` | GET | 获取组件的 slots 定义 |
-| `/backend/visual/api/component/add` | POST | 添加组件（支持局部刷新） |
+- [预览帧邮箱](./preview-frame-bus.md)
+- [作用域切换](./scope-switching.md)
+- [Weline UI 2.0 能力矩阵](./weline-ui-2-capability-matrix.md)
+- [区域与接受规则](./region-isolation.md)
+- [Slot](./slot-nesting-rules.md)
+- [部件库筛选](./component-library-filtering.md)
+- [局部更新](./partial-refresh.md)
+- [契约测试](./testing.md)

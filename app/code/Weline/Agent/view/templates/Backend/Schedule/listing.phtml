@@ -1,0 +1,99 @@
+<?php
+/**
+ * Schedule listing — humanized Weline UI 2.0.
+ * @var \Weline\Framework\View\Template $this
+ */
+$schedules = is_array($schedules ?? null) ? $schedules : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            return $item->getData($key) ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="clock" size="sm" /> <?= $escape(__('调度管理')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('让智能体按时间自动执行任务，适合巡检、汇总和定期清理。')) ?></p>
+        </div>
+        <a href="@backend-url{'*/backend/schedule/add'}" class="w-button">
+            <w:icon name="plus" size="sm" /> <?= $escape(__('新建调度')) ?>
+        </a>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <article class="w-card">
+        <div class="w-card__body">
+            <?php if (!empty($schedules)): ?>
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('任务')) ?></th>
+                        <th><?= $escape(__('角色')) ?></th>
+                        <th><?= $escape(__('触发')) ?></th>
+                        <th><?= $escape(__('状态')) ?></th>
+                        <th><?= $escape(__('下次运行')) ?></th>
+                        <th><?= $escape(__('操作')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($schedules as $schedule): ?>
+                        <?php
+                        $id = (int)$get($schedule, 'schedule_id', 0);
+                        $isEnabled = (string)$get($schedule, 'status', '') === 'enabled';
+                        ?>
+                        <tr>
+                            <td><strong><?= $escape((string)$get($schedule, 'name', '')) ?></strong></td>
+                            <td>#<?= (int)$get($schedule, 'role_id', 0) ?></td>
+                            <td><span class="w-agent-code"><?= $escape((string)$get($schedule, 'trigger_expr', '')) ?></span></td>
+                            <td><span class="w-agent-chip"><?= $escape((string)$get($schedule, 'status', '')) ?></span></td>
+                            <td><?= $escape((string)$get($schedule, 'next_run_at', '')) ?></td>
+                            <td>
+                                <div class="w-cluster" data-gap="xs">
+                                    <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"
+                                       href="@backend-url{'*/backend/schedule/edit'|['id' => $id]}"><?= $escape(__('编辑')) ?></a>
+                                    <button type="button" class="w-button" data-size="sm" data-variant="outline"
+                                            data-agent-op="toggleSchedule" data-agent-id="<?= $id ?>">
+                                        <?= $isEnabled ? $escape(__('停用')) : $escape(__('启用')) ?>
+                                    </button>
+                                    <button type="button" class="w-button" data-size="sm" data-variant="outline"
+                                            data-agent-op="runSchedule" data-agent-id="<?= $id ?>">
+                                        <?= $escape(__('立即执行')) ?>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <var>pagination</var>
+            <?php else: ?>
+            <div class="w-agent-empty">
+                <span class="w-agent-empty__icon"><w:icon name="clock" size="sm" /></span>
+                <h3><?= $escape(__('还没有定时任务')) ?></h3>
+                <p><?= $escape(__('先准备好角色，再创建第一条调度。例如：每天早上生成一份运营摘要。')) ?></p>
+                <a href="@backend-url{'*/backend/schedule/add'}" class="w-button">
+                    <w:icon name="plus" size="sm" /> <?= $escape(__('创建第一条调度')) ?>
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
+    </article>
+</section>

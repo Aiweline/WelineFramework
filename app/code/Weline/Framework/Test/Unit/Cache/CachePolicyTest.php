@@ -180,7 +180,39 @@ final class CachePolicyTest extends TestCase
         $dimensions = KeyBuilder::policyDimensions($policy, $a);
         self::assertSame('request-fence', $dimensions['scope_state']);
         self::assertArrayNotHasKey('website', $dimensions);
-        self::assertNotSame(KeyBuilder::policyKey($policy, 'root', '', $a), KeyBuilder::policyKey($policy, 'root', '', $b));
+        self::assertArrayNotHasKey('request_fence', $dimensions);
+        self::assertFalse(KeyBuilder::policyAllowsSharedCache($policy, $a));
+        // Fence markers are stable and must not embed per-request fingerprints.
+        self::assertSame(KeyBuilder::policyKey($policy, 'root', '', $a), KeyBuilder::policyKey($policy, 'root', '', $b));
+    }
+
+    public function testFenceRememberPolicyUsesRequestMemoWithoutSharedWrites(): void
+    {
+        $adapter = new PolicyMemoryAdapter();
+        $pool = new CachePool('policy_test', $adapter);
+        $cache = new StorefrontScopeHotCache(new PolicyCacheManager($pool), new PolicyGenerations(), new PolicySingleFlight());
+        $policy = new CachePolicy('category.tree', 'policy_test', 'website', [], ['catalog'], 60, 300);
+
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]));
+        RequestContext::setId('fence-request-one');
+        StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(null, 'en_US', 'USD', null, str_repeat('a', 64), false));
+        $calls = 0;
+        $builder = static function () use (&$calls): int { return ++$calls; };
+        self::assertSame(1, $cache->rememberPolicy($policy, 'root', $builder));
+        self::assertSame(1, $cache->rememberPolicy($policy, 'root', $builder));
+        self::assertSame(1, $calls);
+        self::assertSame(0, $adapter->setCount);
+        self::assertSame([], (new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCache'))->getValue());
+        RequestContext::cleanup();
+        Context::leave();
+
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]));
+        RequestContext::setId('fence-request-two');
+        StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(null, 'en_US', 'USD', null, str_repeat('b', 64), false));
+        self::assertSame(2, $cache->rememberPolicy($policy, 'root', $builder));
+        self::assertSame(2, $calls);
+        self::assertSame(0, $adapter->setCount);
+        self::assertSame([], (new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCache'))->getValue());
     }
 
     public function testWebsitePolicySharesAfterWebsiteResolutionBeforeChannelFreeze(): void
@@ -364,8 +396,14 @@ final class PolicyCacheManager extends CacheManager
 final class PolicyMemoryAdapter implements CacheAdapterInterface
 {
     private array $values = [];
+    public int $setCount = 0;
     public function get(string $key): mixed { return $this->values[$key] ?? null; }
-    public function set(string $key, mixed $value, int $ttl = 0): bool { $this->values[$key] = $value; return true; }
+    public function set(string $key, mixed $value, int $ttl = 0): bool
+    {
+        $this->setCount++;
+        $this->values[$key] = $value;
+        return true;
+    }
     public function delete(string $key): bool { unset($this->values[$key]); return true; }
     public function clear(): bool { $this->values = []; return true; }
     public function has(string $key): bool { return array_key_exists($key, $this->values); }

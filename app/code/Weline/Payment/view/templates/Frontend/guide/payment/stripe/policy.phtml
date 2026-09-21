@@ -1,0 +1,39 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entry = (array) ($this->getData('payment_guide_entry') ?? []);
+?>
+
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-policy-stripe">
+    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge"><lang>政策</lang></p>
+        <h1 class="amazon-payment-guide-article__title"><lang>Stripe 支付政策</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>本政策说明通过 Stripe 完成支付时的退款、争议与安全责任边界。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.policy.stripe.confirm">
+        <h2><lang>支付确认</lang></h2>
+        <p><lang>您在 Stripe 支付页确认的金额为最终授权金额。支付完成后，本站将依据 Stripe 回调或查询结果更新订单状态。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.policy.stripe.refund">
+        <h2><lang>退款规则</lang></h2>
+        <p><lang>符合条件的订单可申请原路退款。部分退款、手续费与到账时间以 Stripe、发卡机构及本站售后政策为准。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.policy.stripe.dispute">
+        <h2><lang>争议与拒付</lang></h2>
+        <p><lang>若对交易存在异议，可通过发卡行拒付流程或联系本站客服处理。请保留订单号与支付凭证。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.policy.stripe.security">
+        <h2><lang>安全提示</lang></h2>
+        <p><lang>请仅在本站结账流程或 Stripe 官方域名完成付款与验证，勿向他人泄露卡号、验证码或一次性密码。</lang></p>
+    </section>
+</article>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

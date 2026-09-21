@@ -6,6 +6,7 @@
 "Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty.","Modules claim layout_path / entity_slug from the request path during FetchFileBefore when layoutType is empty."
 字体子集预热收集,"Font subset warm-up collection"
 "系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。","Triggered before system upgrade warm-up. Each module view/fonts is automatically scanned by default; additional paths or languages ​​can be appended to fonts / languages. Existing language subsets will skip rebuilding."
+"Theme 资源变更缓存刷新未全部成功","Theme resource change cache refresh was not successful"
 "Theme 查询器不支持的操作：%{1}","Operations not supported by Theme queryer: %{1}"
 当前没有可用于预览的前台主题。,"There are currently no frontend themes available for preview."
 生成预览凭据需要有效的后台用户上下文。,"Generating preview credentials requires a valid backend user context."
@@ -599,8 +600,6 @@
 "开始发布前台 404 静态页（website×locale，Fiber 协作）…","开始发布前台 404 静态页（website×locale，Fiber 协作）…"
 "前台 404 静态页发布完成：共 %{count} 个快照","前台 404 静态页发布完成：共 %{count} 个快照"
 "前台 404 静态页发布失败：%{msg}","前台 404 静态页发布失败：%{msg}"
-"Theme ResourceChange Observer 只接受 v1 契约","Theme ResourceChange Observer only accepts v1 contracts"
-"Theme 资源变更缓存刷新未全部成功","Theme resource change cache refresh was not successful"
 生产静态资源发布（含压缩）开始…,"Production static resource publishing (including compression) begins..."
 生产静态资源发布异常：%{msg},"Production static resource publishing exception: %{msg}"
 主题整盘合编开始…,"Thematic compilation begins..."
@@ -673,17 +672,6 @@
 预览模式,"Preview Mode"
 发布并退出,"Publish & Exit"
 退出预览,"Exit Preview"
-FAQ/常见问题,FAQ
-指南,指南
-支付方式指南,支付方式指南
-政策页面,"Policy Page"
-服务异常,服务异常
-站点地图,站点地图
-购物车,Cart
-账户中心,Account
-订单尚未完成,订单尚未完成
-结账成功,结账成功
-页面,页面
 "缺少预览 Token","Missing Preview Token"
 "预览 Token 无效或已过期","预览 Token 无效或已过期"
 "预览 Token 无法写入 Cookie","预览 Token 无法写入 Cookie"
@@ -691,8 +679,8 @@ FAQ/常见问题,FAQ
 主题预览需要有效的后台登录状态。,"Theme preview requires an authenticated backend session."
 "Failed to exit preview","Failed to exit preview"
 "Preview exited","Preview exited"
-"No available frontend theme. Please activate or select one first.","No available frontend theme. Please activate or select one first."
-"Selected backend theme is unavailable, fallback to the active backend theme.","Selected backend theme is unavailable, fallback to the active backend theme."
+"Missing theme ID","Missing theme ID"
+"Theme does not exist.","Theme does not exist."
 Default,Default
 有未发布改动，请新建版本后发布,"There are unpublished changes. Create a new version to publish."
 发布时自动创建,"Auto-create when publishing"
@@ -761,7 +749,6 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 "已校验 %{locale} 语言的 Scope 草稿","The scope draft for locale %{locale} has been validated."
 "Scope 草稿已保存","Scope 草稿已保存"
 保存失败：%{error},"Save failed: %{error}"
-"Missing theme ID","Missing theme ID"
 "Theme not found","Theme not found"
 "主题预览缺少冻结的 ScopeIdentity。","Theme preview requires a frozen ScopeIdentity."
 主题预览缺少可用的布局语言。,"Theme preview is missing available layout languages."
@@ -825,6 +812,7 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 布局选项,"layout options"
 请在主题编辑器中选择有效的布局。,"Please select a valid layout in the theme editor."
 "Weline UI 资源路径无效","Weline UI resource path is invalid"
+已继承到当前主题草稿,已继承到当前主题草稿
 "已保存为 %{name}","Saved as %{name}"
 已切换到选定版本,"Switched to selected version"
 切换版本失败,"Switch Version Failed"
@@ -1014,7 +1002,9 @@ CSS变量配置无效,"Invalid CSS variable configuration"
 产品页,"Product Page"
 产品列表页,"Product List Page"
 CMS页面,"CMS Page"
+购物车,Cart
 结算页,Checkout
+账户中心,Account
 Dashboard,Dashboard
 搜索页,"Search Page"
 博客详情,博客详情
@@ -1022,6 +1012,7 @@ Dashboard,Dashboard
 活动页,"Event Page"
 结算成功页,"Payment Success Page"
 结算失败页,"Payment failure page"
+FAQ/常见问题,FAQ
 支付指南,支付指南
 指南页,指南页
 问答页,问答页
@@ -1029,6 +1020,7 @@ Dashboard,Dashboard
 政策页,政策页
 "404 页面","404 页面"
 服务异常页,服务异常页
+站点地图,站点地图
 默认布局,"Default Layout"
 头部区域,"Header Area"
 横幅区域,"Banner Area"
@@ -1049,24 +1041,57 @@ Dashboard,Dashboard
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,返回上一页
+推荐产品,"Recommended product"
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
 加入收藏,"Add to Favorites"
 加入对比,"Add to Compare"
 快速查看,"Quick View"
-面包屑,"bread crumbs"
-"寻衣 · 形制 · 织绣","寻衣 · 形制 · 织绣"
-"东方衣冠 · 全球配送","东方衣冠 · 全球配送"
-帮助中心,"Help Center"
-订单跟踪,"Order Tracking"
-打开菜单,"Open menu"
-长,长
-寻衣,寻衣
-收藏,Favorite
-登录,"Log in"
-衣囊,衣囊
-主导航,"Main navigation"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+分类,Classification
+汉服分类展示图,"Hanfu category showcase image"
+查看全部,"View all"
+件商品,"items of goods"
+查看全部新品,"View all new products"
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
+商品,Products
+查看规格图,查看规格图
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
+正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+关闭通知,"Close notification"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
+面包屑,"bread crumbs"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1083,9 +1108,6 @@ Dashboard,Dashboard
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1103,13 +1125,7 @@ NEW,NEW
 表单操作,"Form operations"
 栅格内容,"Raster content"
 末页,"Last page"
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,返回上一页
-推荐产品,"Recommended product"
+指南,指南
 问答,问答
 7×24,24/7
 服务暂时不可用,服务暂时不可用
@@ -1137,16 +1153,12 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-分类,Classification
-汉服分类展示图,"Hanfu category showcase image"
-查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1156,12 +1168,8 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
-购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1234,20 +1242,16 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday & Work"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
 客户服务,"Customer Service"
+主导航,"Main navigation"
 分类菜单,"Category menu"
 快捷导航,"Quick navigation"
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1264,7 +1268,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看全部新品,"View all new products"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 距离结束,"Ends in"
 精选轮播,"Featured Carousel"
@@ -1277,6 +1280,7 @@ Weline,Weline
 产品列表、文章、自定义内容,"Product list, articles, custom content"
 购物车、最近浏览、订阅,"Shopping cart, recently viewed items, subscriptions"
 客户评价、品牌Logo、FAQ等,"Customer reviews, brand logo, FAQs, etc."
+打开菜单,"Open menu"
 Logo,Logo
 搜索框,"Search box"
 用户区域,"User area"
@@ -1290,23 +1294,10 @@ Logo,Logo
 面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
-商品,Products
-查看规格图,查看规格图
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-继续购物,"Continue shopping"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-关闭通知,"Close notification"
 全球配送，售后无忧,全球配送，售后无忧
+帮助中心,"Help Center"
+订单跟踪,"Order Tracking"
+收藏,Favorite
 热门分类,"Popular Categories"
 热卖精选,热卖精选
 特色推荐,"Featured Recommendations"
@@ -1317,10 +1308,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1367,62 +1354,6 @@ CSS变量配置,"CSS variable configuration"
 未知错误,"Unknown error"
 提示,Tip
 应用失败,"Application Failed"
-未选择主题,"No theme selected"
-主题可视化编辑器,"Theme visual editor"
-前端,Frontend
-后端,Backend
-配置当前主题色盘,"Configure the current theme color palette"
-色盘,"color wheel"
-Desktop,Desktop
-Tablet,Tablet
-Mobile,Mobile
-主题模式,"Theme mode"
-跟随系统,"Follow system"
-明亮模式,"Light Mode"
-暗黑模式,"Dark Mode"
-"Simplified Chinese","Simplified Chinese"
-"Traditional Chinese","Traditional Chinese"
-"Select language","Select language"
-Exit,Exit
-"Discard preview","Discard preview"
-"Publish to formal","Publish to formal"
-结构视图,"Structure view"
-收起,Minimize
-页面布局,"Page layout"
-搜索布局...,"Search Layout..."
-页面结构,"Page structure"
-Header,Header
-"Left Sidebar","Left Sidebar"
-Body,Body
-"Right Sidebar","Right Sidebar"
-Footer,Footer
-全局设置,"Global Settings"
-全局配色,"Global Color Scheme"
-全局变量,"Global Variable"
-预览,Preview
-Properties,Properties
-Collapse,Collapse
-"Please select a region on the left to configure it","Please select a region on the left to configure it"
-"Apply changes","Apply changes"
-Loading...,Loading...
-"Saved successfully","Saved successfully"
-"Save failed","Save failed"
-Publishing...,Publishing...
-"Discard failed","Discard failed"
-Discarding...,Discarding...
-"Discard current preview configuration changes?","Discard current preview configuration changes?"
-"Reset to default","Reset to default"
-"Reset failed","Reset failed"
-"Reset error","Reset error"
-Saving...,Saving...
-"Select layout","Select layout"
-"Please select a layout before saving parameters","Please select a layout before saving parameters"
-"Recent colors","Recent colors"
-Copied,Copied
-"Copy color value","Copy color value"
-"No color settings available","No color settings available"
-"Switching language...","Switching language..."
-"Initialization failed","Initialization failed"
 目录路径,"Directory path"
 当前配置的目录路径,"Directory path of the current configuration"
 选择布局,"Select Layout"
@@ -1516,6 +1447,8 @@ Copied,Copied
 主题,Theme
 Scope,Scope
 加载,Loading
+前端,Frontend
+后端,Backend
 暂无可用色盘,"No color palettes available"
 暂无可用变量文件,"No variable files available"
 展开/收缩预览,"Expand/Collapse preview"
@@ -1545,6 +1478,7 @@ Scope,Scope
 从图库选择,从图库选择
 清除图片,"Clear Image"
 选择,Select
+预览,Preview
 JSON格式数组,"JSON format array"
 请使用JSON格式输入,"Please use JSON format"
 请选择一个主题,"Select a theme"
@@ -1552,10 +1486,8 @@ JSON格式数组,"JSON format array"
 主题编辑器,"Theme Editor"
 作用范围,Scope
 基础信息,"Brand basics"
-发布当前版本到前台,"Publish current version to frontend"
 展开顶栏,"Expand toolbar"
 返回主题列表,"Back to theme list"
-"当前作用范围的网站基础信息（Favicon / Logo）","Website brand assets for the current Scope (Favicon / Logo)"
 编辑区域,"Edit area"
 前端/后端主题,"Frontend/Backend Theme"
 继承上一级,"Inherit from previous level"
@@ -1568,23 +1500,20 @@ JSON格式数组,"JSON format array"
 关闭版本面板,"Close version panel"
 保存新版本,"Save new version"
 "点击""切换""可恢复到历史版本继续编辑","Click ""Switch"" to revert to a historical version and continue editing"
-后台预览,"Backend Preview"
-在真实前端页面中预览，可查看完整效果,"Preview in a real frontend page to see the full effect."
 前端预览,"Frontend Preview"
-保存当前布局为新版本,"Save current layout as new version"
 保存版本,"Save version"
-主题级颜色与变量盘,"Theme-level colors and variable disks"
 全局外观,"global appearance"
 重试缓存,重试缓存
-固定顶栏展开,"Keep toolbar expanded"
-固定顶栏,"Pin toolbar"
+顶栏,顶栏
 固定,Pin
-向上收起顶栏,"Collapse toolbar"
+固定顶栏,"Pin toolbar"
+收起,Minimize
 收起顶栏,"Collapse toolbar"
 当前旧作用域只能兼容读取，不能产生新写入。请先完成作用域迁移：,"This legacy Scope is available for compatibility reads only and cannot accept new writes. Migrate it first:"
 "当前 Scope 与上级发布版本存在结构冲突","The current Scope conflicts structurally with its parent release"
 前台继续使用最后一个有效版本。请重置、本级重新基线化或重新定位冲突节点后再发布。,"The storefront continues using the last valid release. Reset, rebaseline, or reposition the conflicting node before publishing again."
 实时预览,"Real-Time Preview"
+结构视图,"Structure view"
 交互模式,"Interaction Mode"
 真预览：不显示插槽标记，并关闭编辑面板,"Real Preview: Hides slot markers and closes the editing panel"
 编辑：恢复插槽标记与配置面板,"Edit: Restores slot markers and opens the configuration panel"
@@ -1597,11 +1526,9 @@ JSON格式数组,"JSON format array"
 插槽,Slot
 部件：优先选中部件,"Widget: prefer widgets"
 链接拦截,"Link blocking"
-"禁链：阻止 a 标签跳转，便于点选链接区域","Block links: stop <a> navigation so linked areas stay selectable"
+"禁链：阻止 a 标签跳转（不拦截点击冒泡，仍可点选部件）","Block links: prevent <a> navigation only; clicks still bubble so widgets stay selectable"
 禁链,"Block links"
-恢复到主题模板原始布局（自动创建备份）,"Restore theme template to original layout (auto-create backup)"
 恢复原始布局,"Restore Original Layout"
-"清理 Theme 运行时与预览缓存（不改布局）","Clear Theme runtime and preview caches (layout unchanged)"
 "清理 Theme 缓存","Clear Theme Cache"
 刷新预览,"Refresh Preview"
 全屏预览,"Fullscreen Preview"
@@ -1613,9 +1540,11 @@ JSON格式数组,"JSON format array"
 点击预览区域中的部件进行配置,"Click widget in preview area to configure"
 页面插槽,"Page slot"
 收起插槽面板,"Collapse the slot panel"
+Header,Header
 "拖入 Header 容器部件可整段替换默认页头","Drag and drop a Header container component to replace the default header"
 Content,Content
 拖入任意部件或容器,"Drag into any widget or container"
+Footer,Footer
 "拖入 Footer 容器部件可整段替换默认页脚","Drag and drop a Footer container component to replace the default footer"
 "AI 生成 Widget","AI 生成 Widget"
 "AI 生成","AI 生成"
@@ -1683,11 +1612,11 @@ Favicon,Favicon
 保存当前我的盘,"Save current my disk"
 点击配置此部件,"Click to configure this widget"
 无模板,"No template"
+选择前台与后台各自激活的主题。,"Select the themes to be activated in the foreground and backend respectively."
 前台主题,"Frontend Theme"
 后台主题,"Backend Theme"
 已选,Selected
 "前端 %{1} 个，后端 %{2} 个","Frontend: %{1}, Backend: %{2}"
-选择前台与后台各自激活的主题。,"Select the themes to be activated in the foreground and backend respectively."
 暂无主题,"No Theme"
 系统中还没有安装任何主题,"No themes are installed in the system."
 请使用命令行安装主题：,"Please install the theme using the command line:"
@@ -1722,6 +1651,7 @@ AI创建虚拟主题,"AI creates virtual themes"
 正在生成预览图，请稍候...,"Generating preview image, please wait..."
 后台任务启动响应无效。,"The background task startup response is invalid."
 用户明确取消,"User explicitly cancels"
+预览图生成超时，已停止查询,预览图生成超时，已停止查询
 虚拟主题任务已断开,"Virtual theme task has been disconnected"
 虚拟主题任务失败,"Virtual theme task failed"
 暂无可选技能,"No optional skills yet"
@@ -1737,6 +1667,7 @@ AI目录加载失败,"AI directory loading failed"
 打开可视化编辑,"Open visual editing"
 虚拟主题创建失败,"Virtual topic creation failed"
 预览图已更新,"Preview image updated"
+预览图已刷新,"Preview image refreshed"
 正在生成,Generating
 未找到预览图任务结果,"No preview image task results found"
 预览图生成已取消,"Preview generation has been canceled"
@@ -1760,7 +1691,6 @@ AI目录加载失败,"AI directory loading failed"
 生成,Generate
 预览图,"Preview image"
 中...,middle...
-预览图已刷新,"Preview image refreshed"
 刷新失败,"Refresh Failed"
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
@@ -1773,6 +1703,7 @@ AI目录加载失败,"AI directory loading failed"
 "Theme 布局节点不存在。","The Theme layout node does not exist."
 "Theme 布局节点不属于当前编辑上下文。","The Theme layout node does not belong to the current editor context."
 "Theme 布局写入必须位于写意图事务内。","Theme layout writes must run inside a write-intent transaction."
+政策页面,"Policy Page"
 测试页,"Test Page"
 "-- 选择主题 --","-- Select Theme --"
 （已启用）,(enabled)
@@ -1978,7 +1909,6 @@ AI目录加载失败,"AI directory loading failed"
 "Failed to start screenshot process.","Failed to start screenshot process."
 启动失败：%{1},"Start failed: %{1}"
 "Process was terminated.","Process was terminated."
-主题预览地址不可用：%{1},"Theme preview address is unavailable: %{1}"
 "✓ %{1} [%{2}] 生成成功","✓ %{1} [%{2}] generated successfully"
 进程退出码：%{1},"Process exit code: %{1}"
 "✗ %{1} [%{2}] 生成失败","✗ %{1} [%{2}] generation failed"
@@ -2400,6 +2330,86 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
+支付方式指南,支付方式指南
+服务异常,服务异常
+订单尚未完成,订单尚未完成
+结账成功,结账成功
+页面,页面
+"Theme ResourceChange Observer 只接受 v1 契约","Theme ResourceChange Observer only accepts v1 contracts"
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
+搜索筛选,"Search and filter"
+个人中心,"Personal center"
+发布当前版本到前台,"Publish current version to frontend"
+"当前作用范围的网站基础信息（Favicon / Logo）","Website brand assets for the current Scope (Favicon / Logo)"
+后台预览,"Backend Preview"
+在真实前端页面中预览，可查看完整效果,"Preview in a real frontend page to see the full effect."
+保存当前布局为新版本,"Save current layout as new version"
+主题级颜色与变量盘,"Theme-level colors and variable disks"
+固定顶栏展开,"Keep toolbar expanded"
+向上收起顶栏,"Collapse toolbar"
+恢复到主题模板原始布局（自动创建备份）,"Restore theme template to original layout (auto-create backup)"
+"清理 Theme 运行时与预览缓存（不改布局）","Clear Theme runtime and preview caches (layout unchanged)"
+"寻衣 · 形制 · 织绣","寻衣 · 形制 · 织绣"
+"东方衣冠 · 全球配送","东方衣冠 · 全球配送"
+寻衣,寻衣
+"No available frontend theme. Please activate or select one first.","No available frontend theme. Please activate or select one first."
+"Selected backend theme is unavailable, fallback to the active backend theme.","Selected backend theme is unavailable, fallback to the active backend theme."
+主题预览地址不可用：%{1},"Theme preview address is unavailable: %{1}"
+长,长
+登录,"Log in"
+衣囊,衣囊
+未选择主题,"No theme selected"
+主题可视化编辑器,"Theme visual editor"
+配置当前主题色盘,"Configure the current theme color palette"
+色盘,"color wheel"
+Desktop,Desktop
+Tablet,Tablet
+Mobile,Mobile
+主题模式,"Theme mode"
+跟随系统,"Follow system"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
+"Simplified Chinese","Simplified Chinese"
+"Traditional Chinese","Traditional Chinese"
+"Select language","Select language"
+Exit,Exit
+"Discard preview","Discard preview"
+"Publish to formal","Publish to formal"
+页面布局,"Page layout"
+搜索布局...,"Search Layout..."
+页面结构,"Page structure"
+"Left Sidebar","Left Sidebar"
+Body,Body
+"Right Sidebar","Right Sidebar"
+全局设置,"Global Settings"
+全局配色,"Global Color Scheme"
+全局变量,"Global Variable"
+Properties,Properties
+Collapse,Collapse
+"Please select a region on the left to configure it","Please select a region on the left to configure it"
+"Apply changes","Apply changes"
+Loading...,Loading...
+"Saved successfully","Saved successfully"
+"Save failed","Save failed"
+Publishing...,Publishing...
+"Discard failed","Discard failed"
+Discarding...,Discarding...
+"Discard current preview configuration changes?","Discard current preview configuration changes?"
+"Reset to default","Reset to default"
+"Reset failed","Reset failed"
+"Reset error","Reset error"
+Saving...,Saving...
+"Select layout","Select layout"
+"Please select a layout before saving parameters","Please select a layout before saving parameters"
+"Recent colors","Recent colors"
+Copied,Copied
+"Copy color value","Copy color value"
+"No color settings available","No color settings available"
+"Switching language...","Switching language..."
+"Initialization failed","Initialization failed"
 "Layout preview sample","Layout preview sample"
 "缺少 layout_path","缺少 layout_path"
 预览取样,预览取样
@@ -2491,10 +2501,6 @@ Category,Category
 "分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
 筛选条件,"Screening criteria"
 关闭筛选,"Close filter"
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
 "Scheduled category layout","Scheduled category layout"
 "分类导航 slot，可由分类模块或导航部件接管。","Classification navigation slot can be taken over by classification module or navigation component."
 "筛选 slot，可由筛选模块或筛选部件接管。","Filter slot, which can be taken over by a filter module or filter component."
@@ -2525,7 +2531,6 @@ Product,Product
 请检查您的网络连接是否正常,"Please check if your network connection is normal"
 请确认您的支付信息是否正确,"Please confirm that your payment information is correct"
 如问题持续存在，请联系客服寻求帮助,"If the issue persists, please contact customer support for assistance."
-搜索筛选,"Search and filter"
 结算结果,结算结果
 本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。,本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。
 查看帮助中心,查看帮助中心
@@ -2534,7 +2539,6 @@ Product,Product
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
 "分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
 您的购物车是空的,"Your shopping cart is empty"
-个人中心,"Personal center"
 登录页工具,"Login page tools"
 两步验证,两步验证
 两步验证页工具,两步验证页工具
@@ -3948,3 +3952,17 @@ Chiffon,Chiffon
 无障碍声明,"Accessibility statement"
 配送政策,"Shipping policy"
 部件库加载失败，请稍后重试,"Widget library failed to load. Please try again."
+发货工作台,"Shipping desk"
+浏览我们的商品分类,"Browse our categories"
+"满额包邮 · 精选上新","Free shipping over the threshold · New picks"
+登录并保存订单,"Sign in and save your order"
+立即订阅,"Subscribe now"
+获取最新的优惠信息和新品资讯,"Get the latest offers and new arrivals"
+表单,Form
+订阅我们的邮件,"Subscribe to our emails"
+订阅我们的邮件，立即获得10%折扣码！,"Subscribe to our emails and get a 10% discount code now!"
+订阅获取优惠,"Subscribe for offers"
+请输入您的邮箱地址,"Enter your email address"
+搜索语言或代码,"Search language or code"
+搜索语言或代码...,"Search language or code..."
+没有匹配的语言,"No matching language"

@@ -68,15 +68,26 @@ final class WidgetI18nRequestMemoTest extends TestCase
         self::assertSame('Color translated (red)', WidgetI18n::label('Color', '', ['red']));
         self::assertSame(1, $this->resolver->translateCalls);
     }
+
+    public function testRejectsModuleCodeAsTranslatedLabel(): void
+    {
+        $this->resolver->forceTranslation = 'Weline_Theme';
+        self::assertSame('关于我们', WidgetI18n::label('关于我们'));
+    }
 }
 
 final class WidgetI18nCountingResolver implements TranslationResolverInterface
 {
     public int $translateCalls = 0;
 
+    public ?string $forceTranslation = null;
+
     public function translate(string $source, string $localeCode, array $preferredModules = []): string
     {
         $this->translateCalls++;
+        if ($this->forceTranslation !== null) {
+            return $this->forceTranslation;
+        }
         return $source . ' translated (%{1})';
     }
 

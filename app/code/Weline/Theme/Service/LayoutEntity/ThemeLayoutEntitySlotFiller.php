@@ -122,8 +122,8 @@ final class ThemeLayoutEntitySlotFiller
 
         $html = $this->spliceSolidifiedSlots($html, $rendered);
         // Nested empty placeholders inside container widgets can survive splice when the
-        // page-level slot was empty/incomplete. Re-run required overlay on the shell when
-        // any required target has a slot boundary but still lacks its widget markers.
+        // page-level slot was empty/incomplete. Exception path only: re-run overlay when
+        // inventory destinations still lack widgets after splice (not default discovery).
         if (!$this->shellMissingRequiredInjections($html, $pageType)) {
             return $html;
         }
@@ -190,6 +190,10 @@ final class ThemeLayoutEntitySlotFiller
         return false;
     }
 
+    /**
+     * True when the slot exists in the shell but no region yet contains the widget
+     * (duplicate slot-id empty siblings do not count as "missing" if one region already has it).
+     */
     private function anySlotRegionMissingWidget(
         string $html,
         string $slotId,
@@ -199,6 +203,7 @@ final class ThemeLayoutEntitySlotFiller
         $regions = $this->boundaryScanner->enumerateRegions($html, $slotId);
         if ($regions !== []) {
             $sawRegion = false;
+            $anyHas = false;
             foreach ($regions as $region) {
                 if (!\is_array($region)) {
                     continue;
@@ -210,12 +215,13 @@ final class ThemeLayoutEntitySlotFiller
                 }
                 $sawRegion = true;
                 $inner = \substr($html, $innerStart, $innerEnd - $innerStart);
-                if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
-                    return true;
+                if (RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
+                    $anyHas = true;
+                    break;
                 }
             }
             if ($sawRegion) {
-                return false;
+                return !$anyHas;
             }
         }
 

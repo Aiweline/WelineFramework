@@ -31,50 +31,73 @@ final class FrameworkCompiler
         $outputLockAcquiredHere = $publisher->acquireDirectoryLock($outputDirectory, \LOCK_EX);
         $previousProviderRegistry = null;
         $providerRegistryInstalled = false;
+        $lastDelta = [];
         try {
-            $hooksFile = \dirname($outputDirectory) . DS . 'hooks.php';
-            $sourceBefore = $this->compileManifest->capture($modulesRoot, $hooksFile);
-            $modules = $this->moduleRegistryCompiler->compile(
-                $modulesRoot,
-                $outputDirectory . DS . 'modules.php',
-            );
-            $previousProviderRegistry = ObjectManager::replaceServiceProviderRegistry(
-                new ServiceProviderRegistry($outputDirectory . DS . 'modules.php'),
-            );
-            $providerRegistryInstalled = true;
-            $compiled = [
-                'modules' => $modules,
-                'container' => $this->containerCompiler->compile(
-                    $outputDirectory . DS . 'container.php',
-                ),
-                'query_providers' => $this->queryProviderCompiler->compile(
-                    $outputDirectory . DS . 'query_providers.php',
-                ),
-                'runtime_policy_providers' => $this->runtimePolicyProviderCompiler->compile(
-                    $modules,
-                    $outputDirectory . DS . 'runtime_policy_providers.php',
-                ),
-                'template_cache_policies' => $this->templateCachePolicyCompiler->compile(
-                    $modules,
-                    $outputDirectory . DS . 'template_cache_policies.php',
+            // Editor/agent saves during a cold compile are common on developer
+            // machines. Retry a bounded number of times before fail-closing.
+            $maxAttempts = 3;
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                if ($providerRegistryInstalled) {
+                    ObjectManager::replaceServiceProviderRegistry($previousProviderRegistry);
+                    $providerRegistryInstalled = false;
+                    $previousProviderRegistry = null;
+                }
+
+                $hooksFile = \dirname($outputDirectory) . DS . 'hooks.php';
+                $sourceBefore = $this->compileManifest->capture($modulesRoot, $hooksFile);
+                $modules = $this->moduleRegistryCompiler->compile(
+                    $modulesRoot,
+                    $outputDirectory . DS . 'modules.php',
+                );
+                $previousProviderRegistry = ObjectManager::replaceServiceProviderRegistry(
+                    new ServiceProviderRegistry($outputDirectory . DS . 'modules.php'),
+                );
+                $providerRegistryInstalled = true;
+                $compiled = [
+                    'modules' => $modules,
+                    'container' => $this->containerCompiler->compile(
+                        $outputDirectory . DS . 'container.php',
+                    ),
+                    'query_providers' => $this->queryProviderCompiler->compile(
+                        $outputDirectory . DS . 'query_providers.php',
+                    ),
+                    'runtime_policy_providers' => $this->runtimePolicyProviderCompiler->compile(
+                        $modules,
+                        $outputDirectory . DS . 'runtime_policy_providers.php',
+                    ),
+                    'template_cache_policies' => $this->templateCachePolicyCompiler->compile(
+                        $modules,
+                        $outputDirectory . DS . 'template_cache_policies.php',
+                        $hooksFile,
+                    ),
+                ];
+
+                $sourceAfter = $this->compileManifest->capture(
+                    $modulesRoot,
                     $hooksFile,
-                ),
-            ];
+                    (array)($sourceBefore['sources'] ?? []),
+                );
+                if ($this->compileManifest->sameSourceState($sourceBefore, $sourceAfter)) {
+                    $compiled['compile_manifest'] = $this->compileManifest->write(
+                        $sourceAfter,
+                        $outputDirectory,
+                    );
 
-            $sourceAfter = $this->compileManifest->capture(
-                $modulesRoot,
-                $hooksFile,
-                (array)($sourceBefore['sources'] ?? []),
-            );
-            if (!$this->compileManifest->sameSourceState($sourceBefore, $sourceAfter)) {
-                throw new \RuntimeException('Framework compiler inputs changed during compilation.');
+                    return $compiled;
+                }
+
+                $lastDelta = $this->compileManifest->describeSourceDelta($sourceBefore, $sourceAfter);
+                if ($attempt < $maxAttempts) {
+                    continue;
+                }
             }
-            $compiled['compile_manifest'] = $this->compileManifest->write(
-                $sourceAfter,
-                $outputDirectory,
-            );
 
-            return $compiled;
+            $detail = $lastDelta === [] ? '' : (' Changed: ' . \implode(', ', $lastDelta));
+            throw new \RuntimeException(
+                'Framework compiler inputs changed during compilation.'
+                . $detail
+                . ' Stop concurrent PHP edits under app/code/Weline and retry.',
+            );
         } finally {
             if ($providerRegistryInstalled) {
                 ObjectManager::replaceServiceProviderRegistry($previousProviderRegistry);

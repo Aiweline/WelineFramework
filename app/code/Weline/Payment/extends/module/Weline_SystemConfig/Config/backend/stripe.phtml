@@ -50,12 +50,12 @@
     <w:config:field
         key="payment/method/stripe/environment"
         label="运行环境"
-        description="sandbox 使用测试密钥；live 使用正式密钥。"
+        description="与支付方式列表「运行环境」是同一个开关：关闭为沙箱，开启为正式。按当前 Scope 保存，两套密钥同时保留。"
         type="select"
         value-type="string"
         default="sandbox"
         scope="global,website,store"
-        options="sandbox:Sandbox,live:Live"
+        options="sandbox:沙盒,live:正式"
         validation="in_options" />
 
     <w:config:field

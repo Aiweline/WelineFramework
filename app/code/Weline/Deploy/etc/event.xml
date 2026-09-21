@@ -9,5 +9,10 @@
                   disabled="false"
                   shared="true"
                   sort="100"/>
+        <observer name="Weline_Deploy::release_after_env_map"
+                  instance="Weline\Deploy\Observer\DeployEnvMapReleaseAfter"
+                  disabled="false"
+                  shared="true"
+                  sort="200"/>
     </event>
 </config>

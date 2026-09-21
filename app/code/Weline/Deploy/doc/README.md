@@ -4,6 +4,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| [deploy-env-map.md](deploy-env-map.md) | **部署期环境档位映射**：根目录可选 `deploy.env-map.php`（不入库），有则在发布后按 dev/staging/prod 扭转 SystemConfig |
 | [backend-config.md](backend-config.md) | **主配置指南**：后台部署、Nginx + WLS、触发模式、发布命令 |
 | [webhook-secret.md](webhook-secret.md) | **Webhook 访问密码**：`webhook_secret` 配置与 `deploy:webhook:setup` 轮换命令 |
 | [wls-panel-project-webhook.md](wls-panel-project-webhook.md) | **WLS Panel 项目级 Webhook**：项目上下文、Profile 覆盖与 `deploy_root` 执行目录 |

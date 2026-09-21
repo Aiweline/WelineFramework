@@ -67,6 +67,18 @@ skillCheck(
     'clarify skill body mentions EARS or 澄清'
 );
 
+$team = McpSkillCatalog::get('weline-engineering-team', true);
+skillCheck(is_array($team), 'get by host alias weline-engineering-team');
+skillCheck(($team['skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM, 'team alias maps to engineering_team');
+skillCheck(
+    is_string($team['content'] ?? null)
+    && str_contains((string) $team['content'], '停工')
+    && str_contains((string) $team['content'], '项目经理')
+    && str_contains((string) $team['content'], '全专席双轨')
+    && str_contains((string) $team['content'], 'acceptance-ui.md'),
+    'team skill body mentions 停工, 项目经理, dual track, acceptance-ui'
+);
+
 $taglib = McpSkillCatalog::get(GuidanceWorkflowCatalog::SURFACE_TAGLIB_UI_CONTROL, true);
 skillCheck(is_array($taglib), 'get by canonical surface id');
 skillCheck(in_array('weline-taglib-first', $taglib['aliases'] ?? [], true), 'taglib skill exposes host alias');
@@ -96,6 +108,41 @@ skillCheck(($featureBundle['clarify_skill_id'] ?? '') === GuidanceWorkflowCatalo
 skillCheck(($featureBundle['required_when'] ?? '') === 'ui_skill_decision=participate', 'feature bundle gated by ui_skill_decision');
 skillCheck(($featureBundle['also_require_acceptance_type'] ?? '') === 'shentu', 'feature bundle requires shentu acceptance');
 skillCheck(is_array($featureBundle['required'] ?? null) && count($featureBundle['required']) === 2, 'feature bundle lists prototype+UI');
+
+$teamBundle = $policy['engineering_team_bundle'] ?? [];
+skillCheck(($teamBundle['rule_id'] ?? '') === 'engineering_team_for_new_requirements', 'policy exposes engineering_team_bundle');
+skillCheck(($teamBundle['skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM, 'engineering team bundle links skill');
+skillCheck(($teamBundle['command_path'] ?? '') === 'dev/ai-command/ai/工程团队.md', 'engineering team bundle points at command');
+skillCheck(in_array('plan_complexity=simple', is_array($teamBundle['exempt'] ?? null) ? $teamBundle['exempt'] : [], true), 'engineering team bundle exempts simple skip');
+skillCheck(in_array('content_ops_skills_skip_mcp', is_array($teamBundle['exempt'] ?? null) ? $teamBundle['exempt'] : [], true), 'engineering team bundle exempts content ops');
+skillCheck(($teamBundle['utterance']['example'] ?? '') === 'Team:架构师:', 'engineering team utterance example is Team:架构师:');
+skillCheck(($teamBundle['utterance']['simple'] ?? '') === '监工:', 'engineering team simple utterance is 监工:');
+skillCheck(($teamBundle['dual_track'] ?? false) === true, 'engineering team bundle dual_track true');
+skillCheck(($teamBundle['review_lanes'] ?? '') === 'per_triggered_seat', 'engineering team review_lanes per_triggered_seat');
+skillCheck(in_array('framework_first', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle framework_first');
+skillCheck(in_array('team_flow_on_contracts', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle team_flow_on_contracts');
+skillCheck(in_array('contracts.md', is_array($teamBundle['minutes_extra'] ?? null) ? $teamBundle['minutes_extra'] : [], true), 'engineering team minutes_extra contracts.md');
+skillCheck(in_array('deps.md', is_array($teamBundle['minutes_extra'] ?? null) ? $teamBundle['minutes_extra'] : [], true), 'engineering team minutes_extra deps.md');
+skillCheck(in_array('扩展点', is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [], true), 'engineering team framework seat 扩展点');
+skillCheck(in_array('事件', is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [], true), 'engineering team framework seat 事件');
+skillCheck(in_array('UI', is_array($teamBundle['core_roster'] ?? null) ? $teamBundle['core_roster'] : [], true), 'engineering team core roster includes UI');
+skillCheck(in_array('原型', is_array($teamBundle['acceptance_signoff'] ?? null) ? $teamBundle['acceptance_signoff'] : [], true), 'engineering team acceptance_signoff includes 原型');
+skillCheck(in_array('meetings/acceptance-ui.md', is_array($teamBundle['minutes_extra'] ?? null) ? $teamBundle['minutes_extra'] : [], true), 'engineering team minutes_extra acceptance-ui');
+skillCheck(in_array('surfaces.md', is_array($teamBundle['minutes_extra'] ?? null) ? $teamBundle['minutes_extra'] : [], true), 'engineering team minutes_extra surfaces.md');
+
+$teamCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/工程团队.md';
+if (!is_file($teamCmdPath)) {
+    $teamCmdPath = dirname(__DIR__, 5) . '/dev/ai-command/ai/工程团队.md';
+}
+$teamCmd = is_file($teamCmdPath) ? (string) file_get_contents($teamCmdPath) : '';
+skillCheck($teamCmd !== '', 'engineering team command file readable');
+skillCheck(str_contains($teamCmd, 'dual_track_all') || str_contains($teamCmd, '全专席双轨'), 'engineering team command mentions dual track');
+skillCheck(str_contains($teamCmd, 'team_flow_on_contracts') || str_contains($teamCmd, '对齐冻结'), 'engineering team command mentions flow/align-freeze');
+skillCheck(str_contains($teamCmd, 'contracts.md'), 'engineering team command mentions contracts.md');
+skillCheck(str_contains($teamCmd, 'acceptance-ui.md'), 'engineering team command mentions acceptance-ui.md');
+skillCheck(str_contains($teamCmd, 'component-negotiate.md'), 'engineering team command mentions component-negotiate.md');
+skillCheck(str_contains($teamCmd, '框架优先'), 'engineering team command mentions 框架优先');
+skillCheck(str_contains($teamCmd, '事件'), 'engineering team command mentions 事件 seat');
 
 $shentuBundle = $policy['image_attachment_shentu_bundle'] ?? [];
 skillCheck(($shentuBundle['rule_id'] ?? '') === 'user_image_attachment_triggers_shentu', 'policy exposes image_attachment_shentu_bundle');

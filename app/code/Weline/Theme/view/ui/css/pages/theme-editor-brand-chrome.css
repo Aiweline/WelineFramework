@@ -10,8 +10,10 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.35rem 0.75rem;
-    background: var(--w-color-surface-raised, #111827);
-    border-bottom: 1px solid var(--w-color-border, rgba(255, 255, 255, 0.08));
+    background: var(--w-theme-editor-bg-card);
+    border-bottom: 1px solid var(--w-theme-editor-border);
+    box-shadow: var(--w-theme-editor-shadow-sm);
+    color: var(--w-theme-editor-text-primary);
     min-height: 2.5rem;
 }
 
@@ -30,12 +32,12 @@
 .editor-chrome-strip__title {
     font-weight: 600;
     font-size: 0.875rem;
-    color: var(--w-color-text, #f8fafc);
+    color: var(--w-theme-editor-text-primary);
 }
 
 .editor-chrome-strip__scope {
     font-size: 0.8125rem;
-    color: var(--w-color-text-muted, #94a3b8);
+    color: var(--w-theme-editor-text-secondary);
     max-inline-size: 18rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -59,6 +61,13 @@
     font-size: 0.72rem;
     line-height: 1.2;
     border-radius: var(--w-theme-editor-radius-sm, 4px);
+}
+
+.theme-editor-container .toolbar-left > .toolbar-brand-basics-btn[data-icon-only="true"] {
+    padding-inline: 0;
+    inline-size: 1.75rem;
+    min-inline-size: 1.75rem;
+    justify-content: center;
 }
 
 .theme-editor-container .toolbar-left > .toolbar-brand-basics-btn .w-icon {

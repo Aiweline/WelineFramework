@@ -41,7 +41,11 @@ PayPal,PayPal
 本地测试支付指南,"Local Test Payment Guide"
 本地测试支付政策,"Local Test Payment Policy"
 本地测试支付用户协议,"Local Test Payment User Agreement"
-"了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。","了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。"
+"了解如何使用银行卡或本地支付方式通过 Stripe 完成支付，以及退款与争议处理规则。","Learn how to pay with cards or local payment methods via Stripe, and how refunds and disputes are handled."
+"Stripe 支付指南","Stripe Payment Guide"
+"Stripe 支付政策","Stripe Payment Policy"
+"Stripe 用户协议","Stripe User Agreement"
+"了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。","Learn how to pay with a PayPal account or card, and how refunds and disputes are handled."
 "PayPal 支付指南","PayPal Payment Guide"
 "PayPal 支付政策","PayPal Payment Policy"
 "PayPal 用户协议","PayPal User Agreement"
@@ -150,9 +154,13 @@ settings,settings
 支付成功,"Payment successful"
 支付待处理,"Payment Pending"
 支付处理中,"Payment Processing"
+或使用下方结账,"Or continue below"
+"使用 %{1} 快捷支付","Pay with %{1}"
+快捷支付已关闭。,快捷支付已关闭。
+该商品仅支持询价，暂无快捷支付。,该商品仅支持询价，暂无快捷支付。
 使用支付商账户直接付款，地址可由支付商带回,"Pay with your payment account; address can be returned by the provider"
 更多支付说明,"More payment details"
-"使用 %{1} 快捷支付","Pay with %{1}"
+快捷支付暂不可用，请使用上方加入购物车或立即结账。,快捷支付暂不可用，请使用上方加入购物车或立即结账。
 "DevRelay 中继","DevRelay 中继"
 "左：SSE 日志 · 右：发送","左：SSE 日志 · 右：发送"
 "SSE 实时详情","SSE 实时详情"
@@ -227,6 +235,28 @@ settings,settings
 第三方条款,"Third-party terms"
 "除本协议外，您还须遵守 PayPal 用户协议、隐私声明及当地适用法律。若条款冲突，涉及 PayPal 账户与资金清算的部分以 PayPal 规则为准。","In addition to this agreement, you must follow PayPal's user agreement, privacy statement, and applicable local law. If terms conflict, PayPal rules prevail for PayPal account and fund settlement matters."
 全部支付方式,"All payment methods"
+"使用银行卡或 Stripe 支持的本地支付方式完成结账，并在安全支付页确认订单金额。","Complete checkout with a card or a Stripe-supported local payment method, and confirm the order amount on the secure payment page."
+"准备可用的银行卡，或本站已启用的 Stripe 本地支付方式。","Prepare a usable card, or a Stripe local payment method enabled on this site."
+"确保浏览器允许加载 Stripe 安全支付组件或跳转到 Stripe 结账页。","Ensure your browser allows loading Stripe's secure payment components or redirecting to the Stripe checkout page."
+"在结账页选择 Stripe。","Select Stripe on the checkout page."
+在支付表单中填写银行卡信息，或选择可用的本地支付方式并按提示完成验证。,"Enter your card details in the payment form, or choose an available local payment method and complete verification as prompted."
+"确认支付后返回本站，订单状态将依据 Stripe 回调结果同步更新。","After confirming payment and returning to this site, the order status will sync based on Stripe callback results."
+支付被银行拒绝？,"Payment declined by the bank?"
+请核对卡号、有效期与安全码，或联系发卡行确认是否允许网购；也可更换其他支付方式。,"Check the card number, expiry date, and security code, or contact your card issuer to confirm online purchases are allowed; you may also switch to another payment method."
+"提示需要 3D Secure / 额外验证？","Prompted for 3D Secure / extra verification?"
+"请按银行或 Stripe 页面提示完成身份验证，验证通过后支付才会完成。","Follow the bank or Stripe page prompts to complete identity verification. Payment completes only after verification succeeds."
+"查看 Stripe 支付政策","View Stripe Payment Policy"
+"本政策说明通过 Stripe 完成支付时的退款、争议与安全责任边界。","This policy explains refunds, disputes, and security responsibility boundaries when paying through Stripe."
+"您在 Stripe 支付页确认的金额为最终授权金额。支付完成后，本站将依据 Stripe 回调或查询结果更新订单状态。","The amount you confirm on the Stripe payment page is the final authorized amount. After payment, this site updates the order status based on Stripe callbacks or query results."
+"符合条件的订单可申请原路退款。部分退款、手续费与到账时间以 Stripe、发卡机构及本站售后政策为准。","Eligible orders may request a refund to the original payment method. Partial refunds, fees, and settlement timing follow Stripe, the card issuer, and this site’s after-sales policy."
+若对交易存在异议，可通过发卡行拒付流程或联系本站客服处理。请保留订单号与支付凭证。,"If you dispute a transaction, you may use your card issuer’s chargeback process or contact this site’s support. Please keep your order number and payment proof."
+"请仅在本站结账流程或 Stripe 官方域名完成付款与验证，勿向他人泄露卡号、验证码或一次性密码。","Complete payment and verification only in this site’s checkout flow or on official Stripe domains. Do not share card numbers, verification codes, or one-time passwords with others."
+"本协议说明您在本站选择 Stripe 完成支付或授权连接时，与本站之间的权利与义务。使用 Stripe 即表示您同意本协议及 Stripe 自身的服务条款。","This agreement explains your rights and obligations with this site when you choose Stripe for payment or authorized connection. By using Stripe, you agree to this agreement and Stripe's own terms of service."
+"本协议适用于本站结账选择 Stripe、商户账户连接，以及因此产生的订单支付、退款与争议协同处理。","This agreement applies to selecting Stripe at checkout on this site, merchant account connection, and the related order payment, refund, and dispute coordination."
+"若您通过授权连接 Stripe，即授权本站在您同意的范围内获取完成收款所需的商户凭据与交易状态，并仅用于本站订单履约与售后。","If you connect Stripe via authorization, you authorize this site to obtain, within the agreed scope, the merchant credentials and transaction status needed to collect payment, solely for order fulfillment and after-sales on this site."
+"最终扣款金额、币种与支付工具以您在 Stripe 支付页确认的内容为准。您应确保支付工具可用且有权使用。","The final charge amount, currency, and payment instrument are those you confirm on the Stripe payment page. You must ensure the payment instrument is available and that you are authorized to use it."
+"银行卡安全、银行验证与 Stripe 侧拒付/风控由发卡机构及 Stripe 按其规则处理；本站负责订单履约、退款申请受理及与支付结果相关的订单状态更新。","Card security, bank verification, and Stripe-side chargebacks/risk controls are handled by the card issuer and Stripe under their rules; this site handles order fulfillment, refund request intake, and order status updates related to payment results."
+"除本协议外，您还须遵守 Stripe 服务条款、隐私声明及当地适用法律。若条款冲突，涉及支付清算与账户安全的部分以 Stripe 及发卡机构规则为准。","In addition to this agreement, you must comply with Stripe's terms of service, privacy policy, and applicable local laws. If terms conflict, rules from Stripe and the card issuer prevail for payment clearing and account security."
 待处理,Pending
 处理中,Processing
 已支付,Paid
@@ -296,11 +326,12 @@ settings,settings
 "I agree to the payment terms.","I agree to the payment terms."
 支付状态,"Payment Status"
 More,More
+"使用 PayPal 账户或卡完成支付。支持 Google Pay / Apple Pay（可在后台关闭）。","使用 PayPal 账户或卡完成支付。支持 Google Pay / Apple Pay（可在后台关闭）。"
+"若设备支持，将显示 Google Pay / Apple Pay。也可继续使用下方 PayPal 跳转。","若设备支持，将显示 Google Pay / Apple Pay。也可继续使用下方 PayPal 跳转。"
 "Continue to PayPal","Continue to PayPal"
 "PayPal checkout will open after you confirm payment.","PayPal checkout will open after you confirm payment."
 "【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","[DEV] This is the unified payment browser return endpoint and it is ready. Real checkout or OAuth will append parameters; opening this page alone does not complete a payment. In production, empty visits redirect to the homepage."
 返回首页,"Back to Home"
-或使用下方结账,"Or continue below"
 失败率,"Failure Rate"
 "优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径","Prefer attempt metrics; use transaction records when attempt data is unavailable"
 未完成支付,"Incomplete Payments"
@@ -478,6 +509,7 @@ More,More
 支付方式名称,"Payment Method Name"
 支付提供商,"Payment Provider"
 是否启用,"Is Active"
+运行环境,运行环境
 排序,"Sort Order"
 暂无支付方式,"No payment methods"
 拖拽排序,"Drag to reorder"
@@ -490,7 +522,8 @@ More,More
 支付方式配置入口,"Payment Method Configuration Entry"
 "支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。","SystemConfig owns ordinary payment method configuration, scope selection, inherited source display, save, validation, and cache invalidation."
 "配置 scope","Configure scope"
-环境,environment
+正式,Live
+沙箱,沙箱
 "Provider 元数据","Provider Metadata"
 模块,Module
 结账模板代码,"Checkout Template Code"
@@ -562,7 +595,6 @@ More,More
 "无法写入 DevRelay 配置文件。","无法写入 DevRelay 配置文件。"
 "暂时无法连接 PayPal %{1}，请稍后重试。若问题持续，请联系站点管理员。","Unable to connect to PayPal %{1} right now. Please try again later or contact your site administrator."
 正式环境,正式环境
-沙箱,沙箱
 "暂时无法连接 PayPal 正式环境，请稍后重试。若问题持续，请联系站点管理员。","Unable to connect to PayPal Live right now. Please try again later or contact your site administrator."
 "PayPal 授权状态无效或已过期，请重新发起授权。","PayPal authorization state is invalid or expired. Please authorize again."
 "PayPal 授权回调缺少授权码。","PayPal authorization callback is missing authorization code."
@@ -696,6 +728,8 @@ More,More
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,仅检查平台沙箱凭据是否已就绪
+"共 %{1} 个支付供应商","%{1} payment provider(s)"
+环境,environment
 """Payment Webhook Inbox 已接收""","Payment Webhook Inbox 已接收"
 当前已启用,当前已启用
 "使用 PayPal 快捷支付","Pay with PayPal"
@@ -703,7 +737,6 @@ More,More
 从批发信用余额扣减（与订单同币）。,从批发信用余额扣减（与订单同币）。
 按站点基准货币换算后从批发信用扣减；与营销券无关。,按站点基准货币换算后从批发信用扣减；与营销券无关。
 "批发信用钱包余额为 0。","批发信用钱包余额为 0。"
-"共 %{1} 个支付供应商","%{1} payment provider(s)"
 "缺少 method_code 或 shell_token","缺少 method_code 或 shell_token"
 "【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / method_code / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / method_code / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。"
 "PayPal 一键授权","PayPal 一键授权"
@@ -724,7 +757,6 @@ login,login
 操作授权条件不满足,"Operation authorization conditions are not met"
 打开系统配置中心,"Open SystemConfig"
 "PayPal %{1} 授权成功，凭据已保存，可开始沙箱测试。","PayPal %{1} authorization succeeded. Credentials saved and ready for sandbox testing."
-正式,Live
 支付授权成功,支付授权成功
 "此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开本页不会完成支付。","This is the unified payment browser return endpoint and it is ready. Real checkout or OAuth will append parameters; opening this page alone does not complete a payment."
 支付回跳缺少授权码或交易令牌。,支付回跳缺少授权码或交易令牌。
@@ -792,3 +824,4 @@ login,login
 您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。,"You cancelled this payment. The order is not paid yet. You can return to checkout and try again."
 快捷支付,"Express checkout"
 货到付款手续费,"Cash on delivery fee"
+用户协议导航,"User agreement navigation"

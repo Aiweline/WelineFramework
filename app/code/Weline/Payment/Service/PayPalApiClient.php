@@ -410,7 +410,65 @@ final class PayPalApiClient
     }
 
     /**
-     * PayPal Add Tracking — POST /v1/shipping/trackers-batch
+     * Orders v2 package tracking — POST /v2/checkout/orders/{order_id}/track
+     * Preferred for Checkout Orders integrations (no Dashboard "Shipping" feature toggle).
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $tracker capture_id + tracking_number + carrier (+ optional notify_payer/items)
+     * @return array<string, mixed>
+     * @see https://developer.paypal.com/docs/tracking/orders-api/integrate/
+     */
+    public function addOrderTracking(array $config, string $checkoutOrderId, array $tracker): array
+    {
+        $checkoutOrderId = trim($checkoutOrderId);
+        $captureId = trim((string) ($tracker['capture_id'] ?? $tracker['transaction_id'] ?? ''));
+        $trackingNumber = trim((string) ($tracker['tracking_number'] ?? ''));
+        if ($checkoutOrderId === '' || $captureId === '' || $trackingNumber === '') {
+            throw new \InvalidArgumentException('PayPal order tracking requires checkout order id, capture_id and tracking_number.');
+        }
+
+        $body = [
+            'capture_id' => $captureId,
+            'tracking_number' => $trackingNumber,
+            'notify_payer' => !empty($tracker['notify_payer']) || !empty($tracker['notify_buyer']),
+        ];
+        $carrier = trim((string) ($tracker['carrier'] ?? ''));
+        if ($carrier !== '') {
+            $body['carrier'] = $carrier;
+        }
+        $carrierOther = trim((string) ($tracker['carrier_name_other'] ?? ''));
+        if ($carrierOther !== '') {
+            $body['carrier_name_other'] = $carrierOther;
+        }
+        if (\is_array($tracker['items'] ?? null) && $tracker['items'] !== []) {
+            $body['items'] = $tracker['items'];
+        }
+
+        $token = $this->fetchAccessToken($config);
+        $response = $this->request(
+            $config,
+            'POST',
+            '/v2/checkout/orders/' . rawurlencode($checkoutOrderId) . '/track',
+            [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json',
+            ],
+            json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+        );
+
+        // Idempotent same capture+tracking may return 200; create returns 201.
+        if ($response['status'] < 200 || $response['status'] >= 300) {
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
+        }
+
+        $decoded = json_decode($response['body'], true);
+
+        return \is_array($decoded) ? $decoded : ['http_status' => $response['status']];
+    }
+
+    /**
+     * Legacy Add Tracking — POST /v1/shipping/trackers-batch
+     * Restricted scope; often absent from new App Features UI. Prefer addOrderTracking for Orders v2.
      *
      * @param array<string, mixed> $config
      * @param list<array<string, mixed>> $trackers
@@ -474,6 +532,67 @@ final class PayPalApiClient
         $decoded = json_decode($response['body'], true);
 
         return \is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Verify webhook authenticity via POST /v1/notifications/verify-webhook-signature.
+     *
+     * @param array<string, mixed> $config must include webhook_id + client credentials
+     * @param array<string, string> $transmissionHeaders PayPal-Transmission-* (+ Auth-Algo, Cert-Url)
+     * @see https://developer.paypal.com/docs/api/webhooks/v1/#verify-webhook-signature_post
+     */
+    public function verifyWebhookSignature(
+        array $config,
+        string $rawBody,
+        array $transmissionHeaders,
+    ): bool {
+        $webhookId = trim((string) ($config['webhook_id'] ?? ''));
+        if ($webhookId === '' || $rawBody === '') {
+            return false;
+        }
+
+        $authAlgo = trim((string) ($transmissionHeaders['auth_algo'] ?? ''));
+        $certUrl = trim((string) ($transmissionHeaders['cert_url'] ?? ''));
+        $transmissionId = trim((string) ($transmissionHeaders['transmission_id'] ?? ''));
+        $transmissionSig = trim((string) ($transmissionHeaders['transmission_sig'] ?? ''));
+        $transmissionTime = trim((string) ($transmissionHeaders['transmission_time'] ?? ''));
+        if ($authAlgo === '' || $certUrl === '' || $transmissionId === '' || $transmissionSig === '' || $transmissionTime === '') {
+            return false;
+        }
+
+        $webhookEvent = json_decode($rawBody, true);
+        if (!\is_array($webhookEvent)) {
+            return false;
+        }
+
+        $token = $this->fetchAccessToken($config);
+        $response = $this->request(
+            $config,
+            'POST',
+            '/v1/notifications/verify-webhook-signature',
+            [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json',
+            ],
+            json_encode([
+                'auth_algo' => $authAlgo,
+                'cert_url' => $certUrl,
+                'transmission_id' => $transmissionId,
+                'transmission_sig' => $transmissionSig,
+                'transmission_time' => $transmissionTime,
+                'webhook_id' => $webhookId,
+                'webhook_event' => $webhookEvent,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+        );
+
+        if ($response['status'] < 200 || $response['status'] >= 300) {
+            return false;
+        }
+
+        $decoded = json_decode($response['body'], true);
+
+        return \is_array($decoded)
+            && strtoupper(trim((string) ($decoded['verification_status'] ?? ''))) === 'SUCCESS';
     }
 
     /**
@@ -629,7 +748,7 @@ final class PayPalApiClient
 
         $base = $message !== '' ? $message : ($detailText !== '' ? $detailText : 'PayPal request failed.');
         if ($httpStatus === 403 && (stripos($base, 'NOT_AUTHORIZED') !== false || stripos($base, 'insufficient permissions') !== false)) {
-            return $base . '（请在 PayPal Developer Dashboard 的 Sandbox REST App 中开启 Shipping / Track shipments 权限后重试）';
+            return $base . '（若走旧接口 /v1/shipping/trackers-batch：该权限通常不在 App Features 勾选页，需 PayPal 支持加 scope。本站 Checkout 应优先用 Orders v2 /v2/checkout/orders/{id}/track，见后台 PayPal「发货物流回传」与 doc/payment-methods/paypal/paypal.md）';
         }
 
         return $base;

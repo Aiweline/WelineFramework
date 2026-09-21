@@ -11,8 +11,10 @@ use Weline\Framework\Runtime\RequestContext;
 
 final class FileImageRenderer
 {
-    public function __construct(private readonly FileAssetManagerInterface $assets)
-    {
+    public function __construct(
+        private readonly FileAssetManagerInterface $assets,
+        private readonly FileImageReferenceNormalizer $normalizer,
+    ) {
     }
 
     public function renderFromMixed(
@@ -27,46 +29,44 @@ final class FileImageRenderer
         mixed $height = null,
         string $aspectRatio = '',
     ): string {
-        if (is_string($usage) && trim($usage) !== '') {
-            try {
-                $usage = json_decode($usage, true, 64, JSON_THROW_ON_ERROR);
-            } catch (\JsonException $exception) {
-                throw new \InvalidArgumentException((string)__('图片 usage JSON 无效。'), 0, $exception);
-            }
-        }
         $requestLocale = FileAssetManager::normalizeLocale(RequestContext::getWelineUserLang());
         $locale = trim($locale) !== '' ? FileAssetManager::normalizeLocale($locale) : $requestLocale;
         if (!hash_equals($requestLocale, $locale)) {
             throw new \RuntimeException((string)__('文件图片语言必须与当前请求语言一致。'));
         }
-        [$layoutWidth, $layoutHeight] = ImageUsage::layoutPairFromMixed($width, $height, $aspectRatio);
-        if (is_array($usage)) {
-            $imageUsage = ImageUsage::fromArray($usage);
-            if (!hash_equals($locale, $imageUsage->localeCode)) {
-                throw new \RuntimeException((string)__('图片语境语言与当前请求语言不一致。'));
-            }
-            if ($layoutWidth !== null && $layoutHeight !== null) {
-                $imageUsage = ImageUsage::fromArray(array_merge($imageUsage->toArray(), [
-                    'layout_width' => $layoutWidth,
-                    'layout_height' => $layoutHeight,
-                ]));
-            }
-        } else {
-            $imageUsage = new ImageUsage(
-                trim($assetId),
-                $locale,
-                $decorative ? '' : trim($alt),
-                ImageUsage::ALT_CONFIRMED,
-                $decorative,
-                complement: $complement ?? true,
-                layoutWidth: $layoutWidth,
-                layoutHeight: $layoutHeight,
-            );
+        [$layoutWidth, $layoutHeight] = ImageUsage::layoutPairFromMixed(
+            $width,
+            $height,
+            $aspectRatio,
+        );
+
+        $imageUsage = $this->normalizer->normalizeToUsage(
+            $usage,
+            $assetId,
+            $alt,
+            $decorative,
+            $locale,
+            $complement,
+            $layoutWidth,
+            $layoutHeight,
+        );
+        if ($imageUsage === null) {
+            return '';
         }
+        if (!hash_equals($locale, $imageUsage->localeCode)) {
+            throw new \RuntimeException((string)__('图片语境语言与当前请求语言不一致。'));
+        }
+
         $scope = RequestContext::scopeIdentity();
         if ($scope === null) {
             throw new \RuntimeException((string)__('文件图片渲染缺少显式 ScopeIdentity。'));
         }
-        return $this->assets->renderImage($imageUsage, new FileAccessContext($scope, $locale), $class);
+
+        try {
+            return $this->assets->renderImage($imageUsage, new FileAccessContext($scope, $locale), $class);
+        } catch (\Throwable) {
+            // Missing / inaccessible asset must not break the page.
+            return '';
+        }
     }
 }

@@ -55,7 +55,16 @@ try {
 }
 
 $siteName = trim((string)$contact['site_name']);
-$title = WidgetI18n::label(trim((string)($meta['title'] ?? '')) !== '' ? (string)$meta['title'] : '关于我们');
+$candidate = trim((string)($meta['title'] ?? ''));
+if ($candidate === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isModulePlaceholder($candidate)) {
+    $title = WidgetI18n::label('关于我们');
+} else {
+    $title = WidgetI18n::label($candidate);
+}
+if ($title === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isModulePlaceholder($title)) {
+    $title = '关于我们';
+}
+$this->setData('title', $title);
 $subtitle = trim((string)($meta['subtitle'] ?? ''));
 if ($subtitle === '' || $subtitle === '官方商城帮助与客户服务') {
     $subtitle = trim((string)($contact['site_description'] ?? ''));
@@ -509,7 +518,11 @@ $milestones = [
                             <div class="amazon-about__hero-inner">
                                 <div>
                                     <p class="amazon-about__eyebrow"><?= $escape($siteName) ?></p>
-                                    <h1 id="about-layout-title"><?= $escape($title) ?></h1>
+                                    <h1 id="about-layout-title"><?= $escape(
+                                        ($title === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isModulePlaceholder((string)$title))
+                                            ? WidgetI18n::label('关于我们')
+                                            : (string)$title
+                                    ) ?></h1>
                                     <p class="amazon-about__hero-lead"><?= $escape($subtitle) ?></p>
                                     <p class="amazon-about__hero-mission"><?= $escape($mission) ?></p>
                                     <div class="amazon-about__hero-actions">

@@ -1,0 +1,164 @@
+<?php
+/**
+ * Agent chat console — selectable roles + BinQuery send/history.
+ * @var \Weline\Framework\View\Template $this
+ */
+$roles = is_array($roles ?? null) ? $roles : [];
+$recentSessions = is_array($recent_sessions ?? null) ? $recent_sessions : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            return $item->getData($key) ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+
+$defaultRoleCode = '';
+foreach ($roles as $role) {
+    if ((int)$get($role, 'is_default', 0) === 1) {
+        $defaultRoleCode = (string)$get($role, 'code', '');
+        break;
+    }
+}
+if ($defaultRoleCode === '' && !empty($roles)) {
+    $defaultRoleCode = (string)$get($roles[0], 'code', '');
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-chat.js)"></script>
+
+<section class="w-agent-admin" id="agentChatConsole"
+         data-default-role="<?= $escape($defaultRoleCode) ?>"
+         data-session-view-base="@backend-url{'*/backend/session/view'}">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="robot" size="sm" /> <?= $escape(__('聊天控制台')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('选一个已启用角色，开始对话或验证技能是否可用。')) ?></p>
+        </div>
+        <div class="w-cluster" data-gap="sm">
+            <a class="w-button" data-tone="neutral" data-variant="outline" href="@backend-url{'*/backend/session/listing'}">
+                <?= $escape(__('历史会话')) ?>
+            </a>
+            <a class="w-button" data-tone="neutral" data-variant="outline" href="@backend-url{'*/backend/role/listing'}">
+                <w:icon name="plus" size="sm" /> <?= $escape(__('管理角色')) ?>
+            </a>
+        </div>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <div class="w-agent-chat-layout">
+        <aside class="w-stack" data-gap="md">
+            <article class="w-card">
+                <div class="w-card__header">
+                    <h2 class="w-card__title"><?= $escape(__('可用角色')) ?></h2>
+                </div>
+                <div class="w-card__body w-stack" data-gap="sm" id="agentChatRoleList">
+                    <?php if (!empty($roles)): ?>
+                        <?php foreach ($roles as $role): ?>
+                            <?php
+                            $code = (string)$get($role, 'code', '');
+                            $name = (string)$get($role, 'name', $code);
+                            $description = (string)$get($role, 'description', '');
+                            $roleId = (int)$get($role, 'role_id', 0);
+                            ?>
+                            <button type="button"
+                                    class="w-agent-tile w-agent-tile--selectable"
+                                    data-agent-role-code="<?= $escape($code) ?>"
+                                    data-agent-role-id="<?= $roleId ?>"
+                                    data-agent-role-name="<?= $escape($name) ?>"
+                                    aria-pressed="false">
+                                <h3><?= $escape($name) ?></h3>
+                                <span class="w-agent-code"><?= $escape($code) ?></span>
+                                <?php if ($description !== ''): ?>
+                                    <p><?= $escape($description) ?></p>
+                                <?php endif; ?>
+                            </button>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="w-agent-empty">
+                            <span class="w-agent-empty__icon"><w:icon name="robot" size="sm" /></span>
+                            <h3><?= $escape(__('没有可用角色')) ?></h3>
+                            <p><?= $escape(__('请先创建并启用至少一个角色，再回来聊天。')) ?></p>
+                            <a class="w-button" href="@backend-url{'*/backend/role/listing'}"><?= $escape(__('去创建角色')) ?></a>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </article>
+
+            <article class="w-card">
+                <div class="w-card__header">
+                    <h2 class="w-card__title"><?= $escape(__('最近会话')) ?></h2>
+                </div>
+                <div class="w-card__body w-stack" data-gap="sm" id="agentChatRecentSessions">
+                    <?php if (!empty($recentSessions)): ?>
+                        <?php foreach ($recentSessions as $session): ?>
+                            <?php
+                            $sid = (int)$get($session, 'session_id', 0);
+                            $title = (string)$get($session, 'title', '');
+                            $roleId = (int)$get($session, 'role_id', 0);
+                            ?>
+                            <a class="w-agent-tile w-agent-tile--link"
+                               href="@backend-url{'*/backend/session/view'|['id' => $sid]}"
+                               data-agent-session-id="<?= $sid ?>"
+                               data-agent-session-role-id="<?= $roleId ?>">
+                                <strong><?= $escape($title !== '' ? $title : __('未命名会话')) ?></strong>
+                                <span class="w-agent-code">#<?= $sid ?></span>
+                            </a>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="w-text" data-tone="muted"><?= $escape(__('还没有会话。选角色说一句就会出现在这里。')) ?></p>
+                    <?php endif; ?>
+                </div>
+            </article>
+
+            <hook>Weline_Agent::backend::partials::chat-sidebar::content</hook>
+        </aside>
+
+        <article class="w-card w-agent-chat-panel">
+            <div class="w-card__header w-cluster" data-align="center" data-justify="between">
+                <h2 class="w-card__title"><?= $escape(__('对话区')) ?></h2>
+                <div class="w-cluster" data-gap="sm">
+                    <span class="w-agent-chip" id="agentChatRoleChip" data-tone="info"><?= $escape(__('未选择角色')) ?></span>
+                    <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"
+                       id="agentChatOpenSession" hidden href="#"><?= $escape(__('查看会话')) ?></a>
+                </div>
+            </div>
+            <div class="w-card__body w-agent-chat-panel__body">
+                <div class="w-agent-msg-timeline" id="agentChatTimeline" aria-live="polite">
+                    <div class="w-agent-empty" id="agentChatEmpty">
+                        <span class="w-agent-empty__icon"><w:icon name="bolt" size="sm" /></span>
+                        <h3><?= $escape(__('先选左侧角色，再开始对话')) ?></h3>
+                        <p><?= $escape(__('发送后会在此显示你的消息与智能体回复。工具调用结果会出现在时间线里。')) ?></p>
+                    </div>
+                </div>
+                <hook>Weline_Agent::backend::partials::chat-message-tools::content</hook>
+                <form class="w-agent-chat-composer" id="agentChatForm" autocomplete="off">
+                    <label class="w-field__label" for="agentChatInput"><?= $escape(__('消息')) ?></label>
+                    <textarea id="agentChatInput" class="w-textarea" rows="3"
+                              placeholder="<?= $escape(__('输入要问智能体的话…')) ?>"
+                              disabled></textarea>
+                    <div class="w-agent-actions">
+                        <button type="submit" class="w-button" id="agentChatSend" disabled>
+                            <?= $escape(__('发送')) ?>
+                        </button>
+                        <button type="button" class="w-button" data-variant="outline" data-tone="neutral" id="agentChatNewSession" disabled>
+                            <?= $escape(__('新会话')) ?>
+                        </button>
+                        <span class="w-text" data-tone="muted" id="agentChatStatus"></span>
+                    </div>
+                </form>
+            </div>
+        </article>
+    </div>
+</section>

@@ -442,10 +442,10 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertInstanceOf(StorefrontCacheKeyContext::class, $failed);
         self::assertFalse($failed->cacheable);
         self::assertSame('storefront_namespace_unavailable', $failed->failureCode);
-        self::assertStringContainsString(
-            'cache_version=' . $failed->cacheKeyFingerprint,
-            KeyBuilder::applyDimensionFlags('fenced', true, false, false, false),
-        );
+        $fencedKey = KeyBuilder::applyDimensionFlags('fenced', true, false, false, false);
+        self::assertStringContainsString('scope_state=request-fence', $fencedKey);
+        self::assertStringNotContainsString('cache_version=', $fencedKey);
+        self::assertStringNotContainsString($failed->cacheKeyFingerprint, $fencedKey);
     }
 
     public function testAllFpcKeySurfacesChangeTogetherAcrossFrozenScopes(): void

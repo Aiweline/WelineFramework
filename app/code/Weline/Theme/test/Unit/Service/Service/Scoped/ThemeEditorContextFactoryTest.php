@@ -10,6 +10,7 @@ use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
+use Weline\Theme\Api\TargetTypeProviderInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
 use Weline\Theme\Service\ThemeContextService;
@@ -17,7 +18,7 @@ use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
 final class ThemeEditorContextFactoryTest extends TestCase
 {
-    public function testDownstreamThemeMustMatchTheScopeDraftBinding(): void
+    public function testEditorContextAllowsThemeBesidesDraftBinding(): void
     {
         $identity = ScopeIdentity::global();
         $scopes = $this->createMock(ScopeHierarchyInterface::class);
@@ -54,19 +55,25 @@ final class ThemeEditorContextFactoryTest extends TestCase
             'draft_payload' => ['theme_id' => 11],
         ]);
 
+        $targetTypes = $this->getMockBuilder(ThemeTargetTypeRegistry::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['get', 'isValidTarget'])
+            ->getMock();
+        $provider = $this->createMock(TargetTypeProviderInterface::class);
+        $provider->method('canUseLayoutType')->willReturn(true);
+        $targetTypes->method('get')->willReturn($provider);
+        $targetTypes->method('isValidTarget')->willReturn(true);
+
         $factory = new ThemeEditorContextFactory(
             $scopes,
             $catalog,
             $themes,
             $themeContext,
-            $this->getMockBuilder(ThemeTargetTypeRegistry::class)->disableOriginalConstructor()->getMock(),
+            $targetTypes,
             $workspaces,
         );
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('theme_editor_context_theme_scope_mismatch');
-
-        $factory->fromInput([
+        $context = $factory->fromInput([
             'editor_context' => [
                 'scope' => ['identity' => $identity->toArray()],
                 'area' => 'frontend',
@@ -79,5 +86,7 @@ final class ThemeEditorContextFactoryTest extends TestCase
                 'target_id' => 0,
             ],
         ]);
+
+        self::assertSame(10, $context->themeId);
     }
 }

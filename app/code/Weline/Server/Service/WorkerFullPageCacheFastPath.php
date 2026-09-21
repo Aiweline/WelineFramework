@@ -7,6 +7,7 @@ namespace Weline\Server\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Context;
 use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\WlsRuntime;
@@ -21,28 +22,6 @@ use Weline\Server\Security\WorkerPolicyDecision;
  */
 final class WorkerFullPageCacheFastPath
 {
-    /**
-     * Raw request markers that are authoritative before WlsRequest hydrates
-     * their HTTP_* / WLS_* server-variable equivalents.
-     *
-     * @var list<string>
-     */
-    private const BYPASS_HEADERS = [
-        'x-wls-fpc-bypass',
-        'x-wls-internal-fpc-bypass',
-        'x-wls-dynamic-warmup',
-        'x-wls-internal-dynamic-warmup',
-        'x-wls-dynamic-benchmark',
-        'x-wls-fpc-prime',
-        // Defensive aliases for control planes that serialize the canonical
-        // server-variable marker back onto an internal HTTP request.
-        'wls-fpc-bypass',
-        'wls-internal-dynamic-warmup',
-        'http-x-wls-fpc-bypass',
-        'http-x-wls-dynamic-warmup',
-        'http-x-wls-dynamic-benchmark',
-    ];
-
     /** @var list<string> */
     private const BYPASS_INTERNAL_REQUEST_LABELS = [
         'dynamic-first-render',
@@ -75,7 +54,7 @@ final class WorkerFullPageCacheFastPath
 
         $headers = $decision->headers;
         $host = \trim((string)($headers['host'] ?? ''));
-        if ($host === '' || $this->isProtocolUpgrade($headers) || $this->mustBypass($headers)) {
+        if ($host === '' || $this->isProtocolUpgrade($headers)) {
             return null;
         }
 
@@ -103,6 +82,10 @@ final class WorkerFullPageCacheFastPath
             $requestUri .= '?' . (string)$targetParts['query'];
         }
         $fullUri = $scheme . '://' . $host . $requestUri;
+
+        if ($this->mustBypass($headers, $requestUri)) {
+            return null;
+        }
 
         if (TransactionContext::activeTransactionConnectionCount() > 0) {
             return null;
@@ -220,21 +203,16 @@ final class WorkerFullPageCacheFastPath
         return \stripos((string)($headers['accept'] ?? ''), 'text/event-stream') !== false;
     }
 
-    /** @param array<string, string> $headers */
-    private function mustBypass(array $headers): bool
+    /**
+     * Serve-policy（Authorization / internal label / no-store）仍归早路径；
+     * 身份/显式参数旁路一律走 Framework Evaluator + 侧车。
+     *
+     * @param array<string, string> $headers
+     */
+    private function mustBypass(array $headers, string $requestUri = ''): bool
     {
-        if (trim((string)($headers['authorization'] ?? '')) !== '') {
+        if (\trim((string)($headers['authorization'] ?? '')) !== '') {
             return true;
-        }
-
-        if ($this->hasPreviewTokenCookie((string)($headers['cookie'] ?? ''))) {
-            return true;
-        }
-
-        foreach (self::BYPASS_HEADERS as $name) {
-            if ($this->truthy((string)($headers[$name] ?? ''))) {
-                return true;
-            }
         }
 
         $internalLabel = \strtolower(\trim((string)($headers['x-wls-internal-request'] ?? '')));
@@ -244,45 +222,28 @@ final class WorkerFullPageCacheFastPath
 
         foreach (\explode(',', \strtolower((string)($headers['cache-control'] ?? ''))) as $directive) {
             $directive = \trim($directive);
-            if ($directive === 'no-cache'
-                || \str_starts_with($directive, 'no-cache=')
-                || $directive === 'no-store'
-                || \str_starts_with($directive, 'no-store=')
-                || \preg_match('/^max-age\s*=\s*0+$/', $directive) === 1
-            ) {
+            if ($directive === 'no-store' || \str_starts_with($directive, 'no-store=')) {
                 return true;
             }
         }
 
-        foreach (\explode(',', \strtolower((string)($headers['pragma'] ?? ''))) as $directive) {
-            if (\trim($directive) === 'no-cache') {
-                return true;
-            }
+        $query = [];
+        $qPos = \strpos($requestUri, '?');
+        if ($qPos !== false) {
+            \parse_str(\substr($requestUri, $qPos + 1), $query);
         }
 
-        return false;
-    }
-
-    private function hasPreviewTokenCookie(string $cookieHeader): bool
-    {
-        $cookieHeader = \trim($cookieHeader);
-        if ($cookieHeader === '') {
-            return false;
+        $normalizedHeaders = [];
+        foreach ($headers as $name => $value) {
+            $normalizedHeaders[\strtolower((string)$name)] = (string)$value;
         }
 
-        // Match logical and website-scoped wire names (weline_preview_token_w0=…).
-        return \preg_match('/(?:^|;\s*)weline_preview_token(?:_w\d+)?=/i', $cookieHeader) === 1;
-    }
-
-    private function truthy(string $value): bool
-    {
-        foreach (\explode(',', \strtolower($value)) as $candidate) {
-            if (\in_array(\trim($candidate), ['1', 'true', 'yes', 'on'], true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return FpcBypassEvaluator::shouldBypass([
+            'query' => $query,
+            'cookie_header' => (string)($headers['cookie'] ?? ''),
+            'headers' => $normalizedHeaders,
+            'env' => [],
+        ]);
     }
 
     /** @param array<string, mixed> $targetParts */

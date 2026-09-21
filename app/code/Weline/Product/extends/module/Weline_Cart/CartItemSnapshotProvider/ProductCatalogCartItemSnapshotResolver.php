@@ -421,9 +421,16 @@ final class ProductCatalogCartItemSnapshotResolver
         if ($attributeRows === []) {
             $attributeRows = null;
         }
+        $attributeLocales = $this->attributeRowLocales();
         $attributeRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
             'product.catalog.snapshot.attributes',
-            fn() => $this->attributes->listExplicitRows($websiteId, 'product', $productIds, $storeIds),
+            fn() => $this->attributes->listExplicitRows(
+                $websiteId,
+                'product',
+                $productIds,
+                $storeIds,
+                $attributeLocales,
+            ),
         );
         foreach ($attributeRows as $attributeRow) {
             $productId = (int)($attributeRow['entity_id'] ?? 0);
@@ -863,6 +870,24 @@ final class ProductCatalogCartItemSnapshotResolver
             ? RequestContext::getWelineUserLang()
             : ($this->localeResolver)();
         return trim((string)$locale);
+    }
+
+    /**
+     * Locales for catalog attribute listExplicitRows (request lang + storefront-like fallbacks).
+     *
+     * @return list<string>
+     */
+    private function attributeRowLocales(): array
+    {
+        $locales = [];
+        foreach ([$this->locale(), 'zh_Hans_CN', 'en_US', ''] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if (!\in_array($candidate, $locales, true)) {
+                $locales[] = $candidate;
+            }
+        }
+
+        return $locales;
     }
 
     /**

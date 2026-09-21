@@ -1,0 +1,137 @@
+<?php
+$avatar = (string)($profile_avatar ?? '');
+$username = trim((string)($profile_shell_username ?? ''));
+$safeUser = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $username) ?: 'user';
+$identityScope = 'default.default.default';
+$identityCode = 'backend_profile_avatar/' . $safeUser;
+$identityPath = '';
+try {
+    $identity = \Weline\FileManager\Service\MediaReference\ConfigMediaReferenceTemplates::config(
+        $identityScope,
+        $identityCode,
+        [
+            'kind' => 'media',
+            'field' => 'avatar',
+            'component' => 'backend',
+            'ns' => 'backend',
+        ]
+    );
+    $identityPath = $identity->path;
+} catch (\Throwable) {
+    $identityPath = '';
+}
+$mediaPickerHtml = '';
+if (\class_exists(\Weline\MediaManager\Block\WelineMedia::class) && \function_exists('framework_view_process_block')) {
+    $mediaPickerHtml = (string)framework_view_process_block([
+        'class' => \Weline\MediaManager\Block\WelineMedia::class,
+        'target' => 'profile-avatar',
+        'picker_title' => (string)__('选择头像'),
+        'path' => 'backend/avatar/',
+        'value' => $avatar,
+        'preview' => '1',
+        'multi' => '0',
+        'ext' => 'jpg,jpeg,png,gif,webp',
+        'size' => 2097152,
+        'width' => 120,
+        'height' => 120,
+        'identity' => $identityPath,
+        'identity_root' => 'config',
+        'identity_code' => $identityCode,
+        'identity_scope' => $identityScope,
+        'identity_kind' => 'media',
+        'identity_field' => 'avatar',
+        'identity_component' => 'backend',
+        'ref_mode' => 'single',
+        'strong_ref' => '1',
+        'owner_type' => 'config',
+        'owner_id' => $identityCode,
+    ]);
+}
+?>
+<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<css>Weline_Backend::css/backend-account-shell.css</css>
+<div class="w-backend-account">
+    <?php echo $this->fetch('Weline_Backend::templates/Backend/Profile/partials/sidebar.phtml'); ?>
+    <section class="w-backend-account__main">
+        <div class="w-backend-account__panel">
+            <p class="w-backend-account__panel-desc"><lang>从媒体库选择图片；选图后侧栏会即时预览。点「保存头像」后顶栏也会更新。</lang></p>
+            <form method="post" action="@backend-url('system/backend/profile/avatar')" class="w-stack" data-align="start" style="--w-gap:var(--weline-space-5);">
+                <div class="w-field" style="--w-mb:0; --w-max-inline-size:100%;">
+                    <label class="w-field__label" for="profile-avatar"><lang>头像图片</lang></label>
+                    <input type="hidden" id="profile-avatar" name="avatar" value="<?= htmlspecialchars($avatar, ENT_QUOTES, 'UTF-8') ?>">
+                    <?php if ($mediaPickerHtml !== ''): ?>
+                        <?= $mediaPickerHtml ?>
+                    <?php else: ?>
+                        <p class="w-text" data-tone="danger"><lang>媒体选图组件不可用，请检查 MediaManager 模块。</lang></p>
+                    <?php endif; ?>
+                </div>
+                <button type="submit" class="w-button" data-tone="primary" data-size="sm"><lang>保存头像</lang></button>
+            </form>
+        </div>
+    </section>
+</div>
+<script>
+(function () {
+    var input = document.getElementById('profile-avatar');
+    var host = document.querySelector('[data-backend-account-avatar]');
+    if (!input || !host) {
+        return;
+    }
+    var initial = <?= json_encode((string)($profile_shell_initial ?? '?'), JSON_UNESCAPED_UNICODE) ?>;
+
+    function toPreviewUrl(raw) {
+        var source = String(raw || '').trim().replace(/\\/g, '/');
+        if (!source) {
+            return '';
+        }
+        if (/^(?:https?:|\/|data:|blob:)/i.test(source)) {
+            return source;
+        }
+        source = source
+            .replace(/^\/pub\/media\//, '')
+            .replace(/^pub\/media\//, '')
+            .replace(/^\/media\/image\//, '')
+            .replace(/^media\/image\//, '')
+            .replace(/^\/+/, '');
+        return source ? ('/pub/media/' + source) : '';
+    }
+
+    function syncSidebar() {
+        var url = toPreviewUrl(input.value);
+        var img = host.querySelector('[data-backend-account-avatar-img]');
+        var fallback = host.querySelector('[data-backend-account-avatar-fallback]');
+        if (url) {
+            if (!img) {
+                if (fallback) {
+                    fallback.remove();
+                }
+                img = document.createElement('img');
+                img.className = 'w-backend-account__avatar-img';
+                img.setAttribute('data-backend-account-avatar-img', '');
+                img.alt = '';
+                img.width = 64;
+                img.height = 64;
+                host.appendChild(img);
+            }
+            img.src = url;
+            return;
+        }
+        if (img) {
+            img.remove();
+        }
+        if (!fallback) {
+            fallback = document.createElement('span');
+            fallback.className = 'w-backend-account__avatar-fallback';
+            fallback.setAttribute('data-backend-account-avatar-fallback', '');
+            fallback.textContent = initial || '?';
+            host.appendChild(fallback);
+        }
+    }
+
+    input.addEventListener('change', syncSidebar);
+    input.addEventListener('input', syncSidebar);
+    var observer = new MutationObserver(syncSidebar);
+    observer.observe(input, { attributes: true, attributeFilter: ['value'] });
+    syncSidebar();
+})();
+</script>

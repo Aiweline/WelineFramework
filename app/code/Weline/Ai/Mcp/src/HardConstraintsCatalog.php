@@ -61,41 +61,23 @@ final class HardConstraintsCatalog
     {
         return 'MCP ROLE (knowledge plane + mandatory hard-rule gate): Weline MCP indexes skills, code maps, and domain hard rules. '
             . 'Coding/editing uses host-native tools (Read/Write/ApplyPatch/Shell)—MCP does not provide repository write tools. '
-            . 'CALL SCOPE: For engineering/coding when MCP is attached/attachable: '
-            . 'MANDATORY ensure (if needed) → prepare_project → READ and OBEY agent_guidance.hard_constraints BEFORE edits; '
-            . 'then optionally resolve_task_context / search_project_knowledge / resolve_skill / get_skill. '
+            . 'CALL SCOPE: engineering/coding when MCP attachable → ensure(if needed) → prepare_project → READ/OBEY '
+            . 'agent_guidance.hard_constraints BEFORE edits; then optionally resolve_task_context / resolve_skill / get_skill. '
             . 'Skip MCP for chat/content-ops (content_ops_skills_skip_mcp)—Read ai-command+doc/ai/skills; no prepare. '
-            . 'Obey hard-constraints.v1 (Theme/Taglib/i18n/e2e/…) '
-            . 'from agent_guidance.hard_constraints or ' . self::AUTHORITATIVE_DOC . '. '
-            . 'If MCP cannot attach after ensure: fall back to host Read of ' . self::AUTHORITATIVE_DOC . '; do not invent rules. '
-            . 'Understand requirements; scrutinize against framework info (requirement_framework_scrutiny); '
-            . 'map at architecture layer with decoupled designs only (architecture_first_for_requirements + framework_decoupled_only); '
-            . 'prefer resolve_task_context.framework_candidates for extension points. '
-            . 'If coupling is found, report 「耦合提示」; if scrutiny adjusts the ask, report 「需求纠偏」. '
+            . 'Obey hard-constraints.v1 from agent_guidance or ' . self::AUTHORITATIVE_DOC . '. '
+            . 'If MCP cannot attach: host Read ' . self::AUTHORITATIVE_DOC . '; do not invent rules. '
+            . 'Scrutinize+architecture-first+decoupled only; prefer framework_candidates; report 耦合提示/需求纠偏. '
             . 'preserve_dirty_workspace: never git checkout/restore/clean/stash to wipe dirty work. '
-            . 'LOCAL-FIRST (runtime_status_query_local_first): cron/queue/translation-progress default LOCAL; '
-            . 'production SSH only when user explicitly says 线上/生产/ssh weline/aiweline.com. '
-            . '翻译=all default-website locales (user_mentions_translation_all_default_website_locales). '
-            . 'After implement: Agent MUST self-verify (agent_self_verify_before_done)—UT/RT/WB by surface; '
-            . 'feature MUST Playwright e2e PASS (chapter+plan-suite; ui_feature_requires_e2e/plan_full_pathway_e2e_suite) '
-            . 'unless simple+WB-OP (browser_operator_self_test/requirement_acceptance_always); '
-            . 'never ask the user to test (forbid_user_manual_test_handoff); '
-            . 'e2e headless+formal runner only (e2e_playwright_headless_default/e2e_playwright_formal_runner_only: '
-            . 'e2e:run|npx playwright test; forbid node -e launch). '
-            . 'At requirement start classify work_kind (requirement_feature_kind_gate); analyze FE/BE scope '
-            . '(requirement_fe_be_scope_analysis); run clarify+use-case spec when not simple-skip '
-            . '(requirement_clarify_use_case_spec → doc/开发/spec/{slug}.md with EARS + UC); analyze implicit requirements; '
-            . 'THEN enable host Plan Mode for architecture/plan UNLESS simple plan_skip '
-            . '(host_plan_mode_for_planning—Cursor SwitchMode target_mode_id=plan) '
-            . 'with plan body ONLY 背景+方案+细节 (plan_content_focus_only—no topic drift) '
-            . 'before business code; decide ui_skill_decision=participate|skip (ui_skill_surface_signal_gate); '
-            . 'layout/humanization/complaint/审图 force prototype+frontend-design adjustments; when participate include '
-            . 'prototype+frontend-design+weline-theme-development and 审图 (acceptance_phase_requires_shentu). '
-            . 'EVERY coding ask MUST have real acceptance evidence before done (requirement_acceptance_always)—'
-            . 'no e2e still needs local Browser WB-OP visual+logic for any Web touch. '
-            . 'Before done write 汇审 (closeout_requires_huishen). Prefer TDD red→green with real test runs. '
-            . 'Reconcile module docs; Web/UI needs Browser evidence and delivery URLs. '
-            . 'After actual MCP use, prefix reports with Weline：; content[0] is the call receipt.';
+            . 'LOCAL-FIRST runtime queries; production SSH only when user says 线上/生产/ssh weline/aiweline.com. '
+            . 'i18n: source=简中; module CSV zh+en only; active locale shows target lang; 用户提翻译→默认站全语种进词典. '
+            . 'Self-verify UT/RT/WB; feature e2e chapter+suite (formal headless runner); never ask user to test/credentials. '
+            . 'Requirement start: work_kind + fe_be_scope + clarify/UC (EARS) → Plan Mode (背景+方案+细节) unless simple skip. '
+            . 'Mode: simple→监工:; complex→Team:{席位}: + team_flow_on_contracts (对齐冻结 UC+contracts+deps→依赖唤醒; '
+            . '禁开发完才补主路径用例). Load engineering_team / 工程团队.md. Content-ops exempt prefixes. '
+            . 'Team: framework_first + dual_track_all + component_reuse_or_negotiate + UI/原型签收. '
+            . 'ui_skill_decision; 审图参与时 prototype+frontend-design+weline-theme-development. '
+            . 'requirement_acceptance_always; closeout 汇审; TDD; delivery URLs. '
+            . 'After MCP use prefix Weline：; content[0] is the call receipt.';
     }
 
     /**
@@ -160,6 +142,16 @@ final class HardConstraintsCatalog
                 'id' => 'host_plan_mode_for_planning',
                 'summary' => 'DEFAULT MANDATORY during planning (after clarify when applicable, BEFORE business code): enable host Plan Mode—Cursor SwitchMode target_mode_id=plan—through architecture_design + chapter plan until the user approves implement, then SwitchMode to agent. Forbid production PHP/phtml/CSS while still planning. SIMPLE SKIP allowed when plan_complexity=simple AND plan_skip_rationale≥24 chars AND all of: single owning module, no new extension-point invention, no multi-chapter plan, scope ≤~2h / one clear surface, no ambiguous FE+BE architecture choices. Simple skip still REQUIRES requirement_acceptance_always + FE/BE scope analysis; it does NOT skip acceptance or Browser WB-OP when Web is touched. If host has no Plan Mode: plan read-only and record host_plan_mode=unavailable + rationale≥24 (or use simple skip when eligible). Plan body MUST obey plan_content_focus_only. Complements requirement_clarify_use_case_spec, requirement_acceptance_always, architecture_first_for_requirements.',
                 'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
+            ],
+            [
+                'id' => 'engineering_team_for_new_requirements',
+                'summary' => 'MANDATORY mode pick by the parent session itself—do not wait for the user to say 工程团队 (engineering_team_for_new_requirements). SIMPLE (plan_complexity=simple, plan_skip rationale≥24): 监工模式 only—one supervisor, no roster, no meeting; every user-facing line MUST start with 监工: and MUST NOT contain Team:. COMPLEX (engineering ask that is not simple): the parent itself chooses team mode and which seats to call this wave; every user-facing line MUST start with Team:{席位}: using the Chinese roster name and ASCII colons with no spaces, e.g. Team:架构师: / Team:项目经理:. FORBID plain paragraphs, fullwidth colons, or [架构师] in team mode. Content-ops (content_ops_skills_skip_mcp: 产品优化/详情优化/翻译优化/主图优化/新建文章/规格修复) MUST NOT use either prefix and keep their own squads. Load dev/ai-command/ai/工程团队.md or get_skill(engineering_team|weline-engineering-team). FRAMEWORK FIRST: requirements/design/build/review map to framework mechanisms/components before business patches. DUAL TRACK ALL specialty seats: each triggered seat has 施工 + 合规复审; fail → rework, never enter acceptance dirty. FLOW (team_flow_on_contracts): after 立项会, run 对齐冻结会 (测试主持) to freeze executable UC + contracts.md + deps.md BEFORE tech-scheme finalization and construction—FORBID designing main-path use cases only after development finishes; acceptance wave EXECUTES frozen UC only (gaps → back to align-freeze). Construction is wake-on-deps concurrency: start only seats whose deps are satisfied; FORBID whole-team idle waiting at the finish line. Core roster: 项目经理(parent)+需求分析+领域探查+架构师+后端+前端+主题+UI+原型+测试+安全+文档; framework seats by trigger matrix (扩展点/事件/查询/Taglib/Hook/Provider/i18n/ACL/Setup/合规)—seats join by wave. UI in_scope MUST staff 原型+前端+主题+UI; freeze components.md; insufficient components → 原型∥UI (±主题) negotiate into component-negotiate.md before inventing. Persist surfaces.md + contracts.md + deps.md + meetings/align-freeze.md + doc/开发/team/{slug}/. Concurrency only when files/extension points do not overlap AND contracts+UC are frozen. Escalation: result=escalate then 专题会; if nobody can decide OR a major architecture contradiction, 停工汇报 and FORBID PHP/phtml/CSS until the user confirms. ACCEPTANCE SIGN-OFF (UI in_scope): e2e green does NOT waive—UI writes acceptance-ui.md and 原型 writes acceptance-prototype.md with substantive live-page verdicts; either fail forbids 汇审/delivery. Subagent closed is not delivery. LOCAL DEV TEST ACCOUNTS (hard, see local_dev_test_accounts_self_serve): backend default admin/admin; frontend self-create—NEVER ask the user for credentials. Complements requirement_clarify_use_case_spec, host_plan_mode_for_planning, closeout_requires_huishen, forbid_user_manual_test_handoff.',
+                'doc' => 'dev/ai-command/ai/工程团队.md',
+            ],
+            [
+                'id' => 'local_dev_test_accounts_self_serve',
+                'summary' => 'MANDATORY for local/dev acceptance (UT/RT/WB-OP/Playwright e2e) on this repo: Agent/engineering team MUST NOT ask the user for login credentials or “please log in and verify”. Backend DEFAULT username/password = admin / admin (same as tests/e2e loginAsAdmin and PLAYWRIGHT_ADMIN_* fallbacks). Frontend: create a customer yourself (register UI or CLI); recommended e2e.customer@weline.local / E2eTest!234—create if missing. Env vars override when set; when unset MUST use these defaults. Production/线上 is out of scope (backup/auth rules apply). Failed default login → self-heal (reset password / fix captcha bootstrap / check WLS) or report 「验收未完成」with technical evidence—still never solicit passwords from the user. Complements forbid_user_manual_test_handoff, engineering_team_for_new_requirements, agent_self_verify_before_done.',
+                'doc' => 'dev/ai-command/ai/工程团队.md',
             ],
             [
                 'id' => 'plan_content_focus_only',
@@ -343,7 +335,7 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'agent_self_verify_before_done',
-                'summary' => 'MANDATORY self-verify after implement on every coding/engineering ask (prefer TDD red→green first)—obey requirement_acceptance_always: the Agent MUST personally execute verification matching 开发标准验收层级 BEFORE claiming done—(1) pure logic: focused unit/contract tests actually run to PASS; (2) command/API/persist/runtime: real command or API result plus tests; (3) work_kind=feature that is NOT simple: Playwright e2e via `php bin/w e2e:run` MUST PASS for EACH chapter full pathway AND finally the plan-level suite (ui_feature_requires_e2e / plan_full_pathway_e2e_suite); simple feature may skip Playwright only with plan_complexity=simple + rationale≥24 BUT MUST still PASS local Browser WB-OP visual+logic; (4) ANY page/UI/.phtml/CSS touch needs host-available real Browser WB-OP for visual AND operator logic (unit/curl MUST NOT substitute; obey browser_operator_self_test)—even when e2e is skipped. Do not stop after code edits. acceptance status passed|skipped|na REQUIRES non-empty evidence; required e2e/WB only status=passed with strong evidence. If verification incomplete, report only 「代码已改，验收未完成」/「代码已改，e2e 未通过」—never claim feature done and never hand testing to the user.',
+                'summary' => 'MANDATORY self-verify after implement on every coding/engineering ask (prefer TDD red→green first)—obey requirement_acceptance_always + acceptance_real_business_pathway: the Agent MUST personally execute verification matching 开发标准验收层级 BEFORE claiming done—(1) pure logic: focused unit/contract tests actually run to PASS; (2) command/API/persist/runtime: real command or API result plus tests; (3) work_kind=feature that is NOT simple: Playwright e2e via `php bin/w e2e:run` MUST PASS for EACH chapter FULL business pathway (not shell/CTA-only smoke) AND finally the plan-level suite (ui_feature_requires_e2e / plan_full_pathway_e2e_suite / acceptance_real_business_pathway)—closeout MUST name durable artifacts (order_uuid/…); (4) ANY page/UI/.phtml/CSS touch needs host-available real Browser WB-OP for visual AND operator logic (unit/curl MUST NOT substitute; obey browser_operator_self_test)—even when e2e is skipped. Do not stop after code edits. acceptance status passed|skipped|na REQUIRES non-empty evidence; required e2e/WB only status=passed with strong evidence. If verification incomplete, report only 「代码已改，验收未完成」/「代码已改，e2e 未通过」/「代码已改，真实通路验收未完成」—never claim feature done and never hand testing to the user.',
                 'doc' => 'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
             ],
             [
@@ -358,12 +350,17 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'plan_full_pathway_e2e_suite',
-                'summary' => 'MANDATORY for every non-simple engineering feature: (1) EVERY chapter/dev_task hard-binds its own type=e2e that covers that chapter’s FULL functional pathway—Agent writes and auto-runs Playwright before marking the chapter done; (2) AFTER all chapter e2e PASSes, run UNIFIED e2e-plan-suite. Simple features with recorded e2e_skip_rationale obey requirement_acceptance_always via Browser WB-OP instead. Forbid reporting “done” after partial chapters, skipping all verification, or asking humans to manually close test cases. Complements chapter_ut_rt_wb_dl, ui_feature_requires_e2e, plan_todo_evidence_closeout.',
+                'summary' => 'MANDATORY for every non-simple engineering feature: (1) EVERY chapter/dev_task hard-binds its own type=e2e that covers that chapter’s FULL functional pathway—Agent writes and auto-runs Playwright before marking the chapter done; (2) AFTER all chapter e2e PASSes, run UNIFIED e2e-plan-suite. Simple features with recorded e2e_skip_rationale obey requirement_acceptance_always via Browser WB-OP instead. Forbid reporting “done” after partial chapters, skipping all verification, or asking humans to manually close test cases. Complements chapter_ut_rt_wb_dl, ui_feature_requires_e2e, plan_todo_evidence_closeout, acceptance_real_business_pathway.',
+                'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
+            ],
+            [
+                'id' => 'acceptance_real_business_pathway',
+                'summary' => 'MANDATORY for work_kind=feature (engineering team / 监工 alike): claiming done REQUIRES ≥1 REAL business-pathway acceptance that creates or mutates durable domain evidence—e.g. a real order_uuid / display number, paid/unpaid status flip, persisted row, or equivalent artifact the user can look up—NOT shell-only / CTA-copy / empty-query smoke. FORBIDDEN as sole closeout evidence: (a) opening `/checkout/success?outcome=cancel` without order_uuid and only asserting button text; (b) opening `#orders` and only asserting “no fatal”; (c) template-string UT alone for a payment/order UX feature; (d) e2e that never exercises the frozen main UC steps (submit→cancel/fail→continue-pay→resume, etc.). Shell/smoke specs MAY exist as supplements but MUST NOT replace the real pathway. Closeout report MUST name the concrete artifact ids (order_uuid / transaction_no / …). Incomplete real pathway → only 「代码已改，真实通路验收未完成」—never claim feature done. Complements plan_full_pathway_e2e_suite, agent_self_verify_before_done, requirement_acceptance_always, forbid_user_manual_test_handoff, engineering_team_for_new_requirements.',
                 'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
             ],
             [
                 'id' => 'forbid_user_manual_test_handoff',
-                'summary' => 'MANDATORY: Agent MUST NOT ask the user to test, verify, refresh-and-retry, or click through acceptance for any coding/engineering feature. Forbidden handoff phrases include 请你测试/请刷新后再试/请自行验证/帮我点一下确认/you can verify. The Agent runs UT/RT, required Playwright e2e when not simple-exempt, AND always required Browser WB-OP for Web touches, records evidence, then delivers. Incomplete acceptance → only report 「代码已改，验收未完成」/「代码已改，e2e 未通过」—never claim done and never hand the test-case loop to humans. Obeys requirement_acceptance_always + ui_feature_requires_e2e + plan_full_pathway_e2e_suite + agent_self_verify_before_done.',
+                'summary' => 'MANDATORY: Agent MUST NOT ask the user to test, verify, refresh-and-retry, click through acceptance, OR supply local/dev login credentials for any coding/engineering feature. Forbidden handoff phrases include 请你测试/请刷新后再试/请自行验证/帮我点一下确认/请提供测试账号/请给密码/you can verify/please log in. Local backend defaults to admin/admin; frontend accounts are self-created (local_dev_test_accounts_self_serve). The Agent runs UT/RT, required Playwright e2e when not simple-exempt, AND always required Browser WB-OP for Web touches, records evidence, then delivers. Incomplete acceptance → only report 「代码已改，验收未完成」/「代码已改，e2e 未通过」—never claim done and never hand the test-case loop or credential ask to humans. Obeys requirement_acceptance_always + ui_feature_requires_e2e + plan_full_pathway_e2e_suite + acceptance_real_business_pathway + agent_self_verify_before_done + local_dev_test_accounts_self_serve.',
                 'doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
             ],
             [
@@ -438,12 +435,22 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'module_i18n_csv_collect',
-                'summary' => 'Every module keeps zh_Hans_CN.csv and en_US.csv with aligned source keys; en_US translate column MUST be real English (never empty and never leave Chinese source as the en value). After CSV/string changes run php bin/w i18n:collect — claim translation done only after collect + locale spot-check.',
+                'summary' => 'Every module keeps zh_Hans_CN.csv and en_US.csv with aligned source keys; en_US translate column MUST be real English (never empty and never leave Chinese source as the en value). After CSV/string changes run php bin/w i18n:collect — claim translation done only after collect + locale spot-check. Ties to active_locale_must_show_target_language: placeholder Chinese in the en_US translate column is a hard delivery failure when the active locale is English.',
+                'doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
+            ],
+            [
+                'id' => 'module_i18n_chinese_source_default',
+                'summary' => 'MANDATORY for ALL modules (admin + storefront): user-visible source phrases MUST be Simplified Chinese by default — templates (<lang>/@lang), PHP __(), menu.xml title, ACL labels, and other i18n sources. Chinese-in-source is CORRECT and expected. FORBIDDEN: English (or other non-Chinese) as the default source string in templates/menus (that causes zh locale to show English and mixes CSV columns). Bilingual support = Chinese source in code + zh_Hans_CN identity + en_US real English translate column (see module_i18n_csv_collect). Display language is separate — when the active/default locale is not Chinese, obey active_locale_must_show_target_language (do NOT “fix” Chinese source by rewriting templates to English). Proper nouns/tech tokens (ID, HTTP, Cron, SQL) may stay as-is when they are not prose UI copy. When fixing a module that used English sources, convert code sources to Chinese and rewrite CSV keys to Chinese — do not only patch zh CSV with English→Chinese while leaving English in templates.',
+                'doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
+            ],
+            [
+                'id' => 'active_locale_must_show_target_language',
+                'summary' => 'MANDATORY (rule-level, pairs with module_i18n_chinese_source_default): Source phrases in code/templates remain Simplified Chinese. The rendered UI MUST follow the ACTIVE request locale and/or website DEFAULT language — NOT the source language. If the website default language is en_US (or the visitor is on en_US / any non-Chinese locale), user-visible copy MUST be that locale’s translation (module en_US.csv translate column and/or system dictionary for other locales). FORBIDDEN: leaving Chinese on screen because en_US (or other target locale) still uses Chinese source as the translate placeholder; treating “template is Chinese” as a reason to show Chinese under a non-Chinese locale; rewriting template sources to English to “fix” display. Fix path: keep Chinese sources → write real target-language translations → php bin/w i18n:collect → spot-check the active/default locale page. Applies to storefront and admin whenever locale ≠ zh_Hans_CN.',
                 'doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
             ],
             [
                 'id' => 'user_mentions_translation_all_default_website_locales',
-                'summary' => 'MANDATORY when the user mentions 翻译 / translate / translation as a work request (including a screenshot of leftover source-language chrome): resolve target locales from the DEFAULT website selected languages — WebsiteLanguage::getWebsiteLanguageCodes(Website::ID_DEFAULT) on the LOCAL database (website_id=0; keep zh_Hans_CN+en_US baseline). Translate the asked surface (and any attached untranslated UI copy) into EVERY selected locale: fill each module i18n/{locale}.csv translate column with real target-language copy; never leave Chinese source as the translation; never stop at en_US only. Then php bin/w i18n:collect. The user may explicitly narrow locales. Do not start Ollama unless the user asked; agent-written CSV is the default path. Query locales locally first (runtime_status_query_local_first).',
+                'summary' => 'MANDATORY when the user mentions 翻译 / translate / translation as a work request (including a screenshot of leftover source-language chrome): resolve target locales from the DEFAULT website selected languages — WebsiteLanguage::getWebsiteLanguageCodes(Website::ID_DEFAULT) on the LOCAL database (website_id=0; keep zh_Hans_CN+en_US baseline). Translate the asked surface (and any attached untranslated UI copy) into EVERY selected locale with real target-language copy; never leave Chinese source as the translation; never stop at en_US only. Module i18n CSV may ONLY store zh_Hans_CN.csv and en_US.csv — never create or write other locale CSV files. Non-baseline locales MUST land in the system dictionary (LocaleDictionary / ai:import-csv / AI translate + publishLocale), not module CSV. After zh/en CSV changes run php bin/w i18n:collect. The user may explicitly narrow locales. Do not start Ollama unless the user asked. Query locales locally first (runtime_status_query_local_first).',
                 'doc' => 'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
             ],
             [
@@ -543,8 +550,11 @@ final class HardConstraintsCatalog
         $rules[] = 'Analyze FE/BE scope at requirement start (requirement_fe_be_scope_analysis): record fe_be_scope=frontend|backend|both|na with concrete bullets; do not ship one side when both are needed.';
         $rules[] = 'When entity/field change signals fire (e.g. 给订单增加类型), plan.impact_surfaces is mandatory with cross-layer inventory (schema_model/service_api/admin_ui/storefront_ui/i18n/tests_e2e); reject empty-only implicit_requirements; align in_scope layers to dev_tasks (requirement_cross_layer_impact_gate). Prefer framework_candidates.impact_candidates.';
         $rules[] = 'During planning (after clarify when applicable, before business code): enable host Plan Mode (host_plan_mode_for_planning)—on Cursor SwitchMode target_mode_id=plan—UNLESS plan_complexity=simple with plan_skip_rationale≥24 (single module, ≤~2h, no new extension invention); simple skip does NOT waive acceptance. Stay in Plan Mode until user approves implement then switch to agent; if host lacks Plan Mode, plan read-only and record unavailable + rationale≥24; forbid production PHP/phtml/CSS edits while still planning.';
+        $rules[] = 'Parent picks the mode (engineering_team_for_new_requirements): simple plan_skip → 监工 and every user-facing line starts with 监工: (no Team:); complex → parent itself chooses team mode and seats, every user-facing line starts with Team:{席位}: e.g. Team:架构师:. Content-ops (产品优化/新建文章) use neither prefix. Team: framework_first; dual_track_all triggered seats (施工+合规复审; fail→rework); component_reuse_or_negotiate (原型∥UI ±主题 → component-negotiate.md); team_flow_on_contracts—对齐冻结会 (测试主持) freezes executable UC+contracts.md+deps.md before build; wake-on-deps concurrency; forbid post-dev main-path use-case design; acceptance executes frozen UC only; surfaces.md+components.md+contracts.md+deps.md; acceptance UI+原型 substantive signoff (acceptance-ui.md / acceptance-prototype.md)—e2e green does not waive; parallel only on non-overlapping frozen tracks; 停工 and wait on architecture contradictions; persist doc/开发/team/{slug}/. Subagent closed is not delivery. Local/dev: NEVER ask user for credentials—backend admin/admin, frontend self-create (local_dev_test_accounts_self_serve).';
+        $rules[] = 'Local/dev acceptance accounts (local_dev_test_accounts_self_serve): backend default admin/admin; frontend create e2e.customer@weline.local / E2eTest!234 if missing. FORBID asking the user for passwords or “please log in”. Production out of scope.';
         $rules[] = 'Plan body focus only (plan_content_focus_only): write 背景 (why/gap) + 方案 (what/approach) + 细节 (how/tasks/acceptance)—forbid unrelated essays, workflow dumps, parallel pitches, or decorative overviews that drift the topic.';
         $rules[] = 'EVERY coding/engineering ask MUST have real acceptance evidence before done (requirement_acceptance_always). Skipping Playwright e2e under simple classification still REQUIRES local Browser WB-OP for visual AND operator logic on any Web/UI touch (browser_operator_self_test)—curl/CDP alone are insufficient.';
+        $rules[] = 'Feature closeout REQUIRES a real business pathway with durable artifacts (acceptance_real_business_pathway)—e.g. real order_uuid after continue-pay—NOT shell-only CTA/smoke pages without the frozen main UC. Incomplete → only 「代码已改，真实通路验收未完成」.';
         $rules[] = 'At requirement start analyze current-environment implicit/hidden requirements into plan.implicit_requirements, set ui_skill_decision=participate|skip from that analysis, and classify work_kind=feature|non_feature (requirement_implicit_analysis_skill_decision + requirement_feature_kind_gate)—force participate on page/layout/CSS/theme/.phtml OR humanization/吐槽/审图 signals (ui_skill_surface_signal_gate); never wrongly skip visual work; never force prototype on pure backend.';
         $rules[] = 'When ui_skill_decision=participate or 审图/布局调整/不够人性化/被吐槽: skill_participation MUST include prototype + frontend-design + weline-theme-development and they MUST adjust UI/IA (not critique-only; theme tokens win; no invented palettes).';
         $rules[] = 'When ui_skill_decision=participate (or adding features onto an existing Web UI), screenshot/审图 the CURRENT page before designing placement; if the current UI is messy, redesign that surface with the feature (feature_add_requires_current_ui_review).';

@@ -6,7 +6,11 @@ namespace Weline\Shipping\Controller\Frontend\Guide;
 
 use Weline\Framework\App\Controller\FrontendController;
 
-/** Storefront returns / exchange policy page (footer help link target). */
+/**
+ * 退换政策（店面指南）。
+ *
+ * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/guide/returns
+ */
 final class Returns extends FrontendController
 {
     public function index(): string

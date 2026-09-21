@@ -1,0 +1,74 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$active = (string)($profile_nav_active ?? 'profile');
+$username = (string)($profile_shell_username ?? '');
+$email = (string)($profile_shell_email ?? '');
+$initial = (string)($profile_shell_initial ?? '?');
+$is = static function (string $key) use ($active): bool {
+    return $active === $key;
+};
+?>
+<aside class="w-backend-account__sidebar" aria-label="<?= htmlspecialchars((string)__('个人中心导航'), ENT_QUOTES, 'UTF-8') ?>">
+    <header class="w-backend-account__identity">
+        <div class="w-backend-account__avatar" aria-hidden="true" data-backend-account-avatar>
+            <?php
+            $avatarPath = (string)($profile_shell_avatar ?? '');
+            $avatarUrl = $avatarPath !== ''
+                ? \Weline\FileManager\Api\Image::pathToMediaUrl($avatarPath, 64, 64)
+                : '';
+            ?>
+            <?php if ($avatarUrl !== ''): ?>
+                <img class="w-backend-account__avatar-img"
+                     data-backend-account-avatar-img
+                     src="<?= htmlspecialchars($avatarUrl, ENT_QUOTES, 'UTF-8') ?>"
+                     alt=""
+                     width="64"
+                     height="64">
+            <?php else: ?>
+                <span class="w-backend-account__avatar-fallback" data-backend-account-avatar-fallback><?= htmlspecialchars($initial, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+        </div>
+        <div class="w-backend-account__identity-text">
+            <div class="w-backend-account__name"><?= htmlspecialchars($username, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php if ($email !== ''): ?>
+                <div class="w-backend-account__email"><?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
+        </div>
+    </header>
+
+    <nav class="w-backend-account__nav">
+        <a class="w-backend-account__nav-link<?= $is('profile') ? ' is-active' : '' ?>"
+           href="@backend-url('system/backend/profile')"
+           <?= $is('profile') ? 'aria-current="page"' : '' ?>>
+            <w:icon name="user" size="sm" />
+            <span><lang>基本资料</lang></span>
+        </a>
+        <a class="w-backend-account__nav-link<?= $is('avatar') ? ' is-active' : '' ?>"
+           href="@backend-url('system/backend/profile/avatar')"
+           <?= $is('avatar') ? 'aria-current="page"' : '' ?>>
+            <w:icon name="image" size="sm" />
+            <span><lang>头像设置</lang></span>
+        </a>
+        <a class="w-backend-account__nav-link<?= $is('language') ? ' is-active' : '' ?>"
+           href="@backend-url('system/backend/profile/language')"
+           <?= $is('language') ? 'aria-current="page"' : '' ?>>
+            <w:icon name="language" size="sm" />
+            <span><lang>个人语言</lang></span>
+        </a>
+        <a class="w-backend-account__nav-link<?= $is('password') ? ' is-active' : '' ?>"
+           href="@backend-url('system/backend/profile/password')"
+           <?= $is('password') ? 'aria-current="page"' : '' ?>>
+            <w:icon name="lock" size="sm" />
+            <span><lang>修改密码</lang></span>
+        </a>
+        <div class="w-backend-account__nav-divider" role="presentation"></div>
+        <a class="w-backend-account__nav-link" href="@backend-url('system/backend/notificationsubscription')">
+            <w:icon name="bell" size="sm" />
+            <span><lang>我的订阅</lang></span>
+        </a>
+        <a class="w-backend-account__nav-link" href="@backend-url('system/backend/usercontact')">
+            <w:icon name="mail" size="sm" />
+            <span><lang>我的联系人</lang></span>
+        </a>
+    </nav>
+</aside>

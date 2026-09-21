@@ -131,6 +131,7 @@ const lazyComponentSources = new Map([
     ['reorder-list', './weline-ui-advanced.js'],
     ['icon-picker', './weline-ui-advanced.js'],
     ['dependent-field', './weline-ui-advanced.js'],
+    ['choice-filter', './components/weline-choice-selector.js'],
     ['language-select', './components/weline-language-select.js'],
     ['ai-model-select', './components/weline-ai-model-select.js'],
     ['currency-select', './components/weline-currency-select.js'],
@@ -147,6 +148,7 @@ const lazyComponentSources = new Map([
     ['account-challenge', './pages/weline-customer-account-challenge.js'],
 ]);
 const lazyComponentStyles = new Map([
+    ['choice-filter', './components/weline-choice-selector.css'],
     ['language-select', './components/weline-language-select.css'],
     ['ai-model-select', './components/weline-ai-model-select.css'],
     ['currency-select', './components/weline-currency-select.css'],
@@ -3030,12 +3032,12 @@ function registerAnchoredFloat() {
             : null;
         visibilityObserver?.observe(element, {
             attributes: true,
-            attributeFilter: ['class', 'style', 'hidden', 'data-state'],
+            attributeFilter: ['class', 'hidden', 'data-state'],
         });
         if (mutationRoot && mutationRoot !== element) {
             visibilityObserver?.observe(mutationRoot, {
                 attributes: true,
-                attributeFilter: ['class', 'style', 'hidden', 'data-state'],
+                attributeFilter: ['class', 'hidden', 'data-state'],
             });
         }
 

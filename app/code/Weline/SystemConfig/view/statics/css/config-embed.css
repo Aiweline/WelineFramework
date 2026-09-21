@@ -50,6 +50,96 @@
   min-inline-size: 0;
 }
 
+/* 沙盒/生产写在开关底色里，不排到轨道外 */
+.w-config-embed .w-env-switch.w-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 0 0 auto;
+  inline-size: auto;
+  block-size: 1.75rem;
+  vertical-align: middle;
+}
+
+.w-config-embed .w-env-switch.w-switch > input.w-env-switch__input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.w-config-embed .w-env-switch.w-switch > input.w-env-switch__input::before {
+  content: none;
+  display: none;
+}
+
+.w-env-switch__track {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-sizing: border-box;
+  min-inline-size: 4.75rem;
+  block-size: 1.75rem;
+  padding: 0.15rem 0.55rem 0.15rem 0.18rem;
+  overflow: hidden;
+  border: 1px solid var(--weline-theme-border-strong, var(--backend-color-border-default, transparent));
+  border-radius: var(--weline-radius-round, 999px);
+  background: var(--weline-theme-surface-muted, var(--backend-color-surface-muted, transparent));
+  color: var(--weline-theme-text, var(--backend-theme-text, inherit));
+}
+
+.w-env-switch__knob {
+  flex: 0 0 auto;
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  border-radius: 50%;
+  background: var(--weline-theme-text-muted, var(--backend-theme-text-muted, currentColor));
+}
+
+.w-env-switch__text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: var(--weline-font-weight-semibold, 600);
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.w-env-switch__text.is-on {
+  display: none;
+}
+
+.w-config-embed .w-env-switch.w-switch > input:checked ~ .w-env-switch__track {
+  flex-direction: row-reverse;
+  padding: 0.15rem 0.18rem 0.15rem 0.55rem;
+  border-color: var(--weline-theme-primary, var(--backend-color-primary, transparent));
+  background: var(--weline-theme-primary, var(--backend-color-primary, transparent));
+  color: var(--weline-theme-on-primary, var(--backend-color-on-primary, inherit));
+}
+
+.w-config-embed .w-env-switch.w-switch > input:checked ~ .w-env-switch__track .w-env-switch__knob {
+  background: var(--weline-theme-on-primary, var(--backend-color-on-primary, currentColor));
+}
+
+.w-config-embed .w-env-switch.w-switch > input:checked ~ .w-env-switch__track .is-off {
+  display: none;
+}
+
+.w-config-embed .w-env-switch.w-switch > input:checked ~ .w-env-switch__track .is-on {
+  display: inline;
+}
+
 .w-config-embed__field {
   display: grid;
   gap: var(--weline-space-3, 0.75rem);

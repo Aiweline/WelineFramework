@@ -34,8 +34,8 @@ final class PixelGa4DebugModeContractTest extends TestCase
             self::assertStringNotContainsString('debug_mode: runtime.debugMode', $src);
         }
 
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.18-pageview-dedupe1'", $pixel);
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260918-pageview-dedupe1'", $bootstrap);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.19-sticky-bus1'", $pixel);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260919-sticky-bus1'", $bootstrap);
         self::assertStringContainsString('内部流量', $tracking);
         self::assertStringContainsString('DebugView', $tracking);
     }

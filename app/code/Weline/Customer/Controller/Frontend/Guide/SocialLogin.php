@@ -7,7 +7,11 @@ namespace Weline\Customer\Controller\Frontend\Guide;
 use Weline\Customer\Service\SocialLogin\SocialLoginGuideRegistry;
 use Weline\Framework\App\Controller\FrontendController;
 
-/** Storefront social-login guide hub and provider guide/policy pages. */
+/**
+ * 社媒登录指南（店面；非账户会话页）。
+ *
+ * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/guide/social-login,/guide/social-login/**
+ */
 final class SocialLogin extends FrontendController
 {
     public function __construct(

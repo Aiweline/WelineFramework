@@ -81,25 +81,7 @@
         <observer name="Weline_Framework_Log::resolve_runtime_default" instance="Weline\Framework\Log\Observer\ResolveRuntimeDefaultObserver" disabled="false" shared="true" sort="100"/>
     </event>
 
-    <event name="Weline_Framework::resource_changed"
-           schema_version="1"
-           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
-           data_contract="resource_change.v1">
-        <observer name="cache_namespace"
-                  instance="Weline\Framework\Event\ResourceChange\Observer\CacheNamespaceObserver"
-                  delivery="sync"
-                  failure="critical"
-                  disabled="false"
-                  shared="true"
-                  sort="10"/>
-        <observer name="cache_impact"
-                  instance="Weline\Framework\Event\ResourceChange\Observer\CacheImpactObserver"
-                  delivery="sync"
-                  failure="critical"
-                  disabled="false"
-                  shared="true"
-                  sort="20"/>
-    </event>
+    <!-- 缓存向 Observer 已硬切至 Changed Extends Capability；Seo 等模块仍各自注册 resource_changed -->
 
     <!-- 路由收集完成后收集 @Cdn/@Attack 中立注解规则 -->
     <event name="Weline_Framework_Setup::after_route_collection">
@@ -108,6 +90,16 @@
                   disabled="false"
                   shared="true"
                   sort="120"/>
+        <observer name="Weline_Framework_Router::collect_controller_extra"
+                  instance="Weline\Framework\Observer\CollectControllerExtra"
+                  disabled="false"
+                  shared="true"
+                  sort="130"/>
+        <observer name="Weline_Framework_Router::collect_fpc_bypass_rules"
+                  instance="Weline\Framework\Observer\CollectFpcBypassRules"
+                  disabled="false"
+                  shared="true"
+                  sort="140"/>
     </event>
 
 </config>

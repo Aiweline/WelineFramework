@@ -19,6 +19,11 @@ use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Service\ProductLayoutCacheBustService;
 use Weline\Theme\Service\ProductLayoutResolveService;
 
+/**
+ * 商品详情（店面）。
+ *
+ * @Extra type=fpc enabled=true ttl=600 namespaces=website/default/catalog public_path_patterns=/product/*,/catalog/product/*
+ */
 final class Detail extends FrontendController
 {
     public function __construct(
@@ -404,7 +409,11 @@ final class Detail extends FrontendController
                 }
                 $label = trim((string)($option['label'] ?? ''));
                 $resolvedLabel = trim($variantLabels->resolve($axisCode, $value));
-                if ($resolvedLabel !== '' && ($label === '' || $label === $value)) {
+                // Prefer EAV Option LocalDescription when resolve yields a real local
+                // name (differs from the identity token). Do not clobber an existing
+                // label with a bare identity fallback.
+                $resolvedIsLocal = $resolvedLabel !== '' && strcasecmp($resolvedLabel, $value) !== 0;
+                if ($resolvedLabel !== '' && ($label === '' || $label === $value || $resolvedIsLocal)) {
                     $option['label'] = $resolvedLabel;
                 }
                 if (trim((string)($option['code'] ?? '')) === '') {

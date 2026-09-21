@@ -62,7 +62,8 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         $widget = $this->readProjectFile('view/theme/frontend/widgets/category/category-grid/default.phtml');
 
         self::assertStringContainsString('$translateDefaultCopy = static function', $widget);
-        self::assertStringContainsString(
+        self::assertStringContainsString('categoryDisplayNamesByCode()', $widget);
+        self::assertStringNotContainsString(
             '\'name\' => $translateDefaultCopy($category[\'name_zh\'], $category[\'name_en\'])',
             $widget
         );

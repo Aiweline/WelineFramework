@@ -66,6 +66,8 @@ php bin/w deploy:build
 | `php bin/w deploy:build -b develop` | 指定分支拉取 |
 | `php bin/w deploy:build --force` | 强制拉取（丢弃本地修改） |
 | `php bin/w deploy:release` | 完整发布：Git + 后置命令 + 版本戳 + reload |
+| `php bin/w deploy:env-map:apply` | 按根目录 `deploy.env-map.php` 扭转 SystemConfig（无文件跳过；文件不入库） |
+| `php bin/w deploy:env-map:apply --dry-run` | 只报告将写入的变更 |
 | `php bin/w deploy:release -r refs/tags/v1.0.0` | Tag 发布 |
 | `php bin/w deploy:release:status` | 查看当前部署版本 |
 | `php bin/w deploy:release:wait --expect=v1.0.0` | CI 门禁：等待版本生效 |

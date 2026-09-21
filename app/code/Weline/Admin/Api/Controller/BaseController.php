@@ -14,6 +14,7 @@ use Weline\Framework\Cache\Contract\SharedCacheStateFactoryInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\RuntimeCachePolicy;
+use Weline\Framework\Http\ResponseObservabilityPolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -429,6 +430,10 @@ class BaseController extends BackendController
 
     private function setPerfHeader(string $name, string $value): void
     {
+        if (!ResponseObservabilityPolicy::performanceBreakdownEnabled()
+            && !ResponseObservabilityPolicy::dynamicObservabilityEnabled()) {
+            return;
+        }
         try {
             $this->request->getResponse()->setHeader($name, $value);
         } catch (\Throwable) {

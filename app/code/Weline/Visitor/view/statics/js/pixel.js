@@ -2647,7 +2647,7 @@
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.09.18-pageview-dedupe1';
+    var PIXEL_SCRIPT_VERSION = '2026.09.19-sticky-bus1';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -3039,6 +3039,55 @@
         }, typeof delayMs === 'number' ? delayMs : 120);
     }
 
+    function __collectStickyRewriteRoots(records, bucket) {
+        if (!records || !records.length) {
+            return;
+        }
+        for (var i = 0; i < records.length; i++) {
+            var mutation = records[i];
+            if (!mutation || mutation.type !== 'childList' || !mutation.addedNodes) {
+                continue;
+            }
+            for (var n = 0; n < mutation.addedNodes.length; n++) {
+                var node = mutation.addedNodes[n];
+                if (node && node.nodeType === 1) {
+                    bucket.push(node);
+                }
+            }
+        }
+    }
+
+    function __rewriteStickyAnchorNodes(nodes) {
+        if (!nodes || !nodes.length || !__stickyLinkerEnabled()) {
+            return;
+        }
+        var pack = __getStickyUtmPack();
+        if (!pack) {
+            return;
+        }
+        for (var i = 0; i < nodes.length; i++) {
+            var node = nodes[i];
+            if (!node || node.nodeType !== 1) {
+                continue;
+            }
+            if (node.tagName === 'A') {
+                __rewriteAnchorHref(node, pack);
+            }
+            if (!node.querySelectorAll) {
+                continue;
+            }
+            var nested;
+            try {
+                nested = node.querySelectorAll('a[href]');
+            } catch (e) {
+                continue;
+            }
+            for (var j = 0; j < nested.length; j++) {
+                __rewriteAnchorHref(nested[j], pack);
+            }
+        }
+    }
+
     function __initStickyUtmLinker() {
         if (window.__WelineStickyUtmLinkerLoaded) {
             return;
@@ -3051,36 +3100,53 @@
         if (typeof MutationObserver !== 'function' || !document.documentElement) {
             return;
         }
+        var pending = [];
+        var observeOptions = { childList: true, subtree: true };
+        var spec = {
+            target: document.documentElement,
+            options: observeOptions,
+            idleTimeoutMs: 100,
+            label: 'visitor-pixel:sticky-utm',
+            onRecords: function (records) {
+                __collectStickyRewriteRoots(records, pending);
+            },
+            onFlush: function () {
+                var batch = pending;
+                pending = [];
+                __rewriteStickyAnchorNodes(batch);
+            }
+        };
+        var observeApi = (window.Weline && window.Weline.dom && typeof window.Weline.dom.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : (window.Weline && typeof window.Weline.observeMutationsCoalesced === 'function'
+                ? window.Weline.observeMutationsCoalesced
+                : null);
+        if (observeApi) {
+            try {
+                __stickyLinkerObserver = observeApi(spec);
+            } catch (e) {
+            }
+            return;
+        }
+        /* ARCH_MO_FALLBACK_START */
         try {
-            __stickyLinkerObserver = new MutationObserver(function (mutations) {
-                if (!__stickyLinkerEnabled()) {
-                    return;
-                }
-                for (var i = 0; i < mutations.length; i++) {
-                    var mutation = mutations[i];
-                    if (mutation.type === 'attributes' && mutation.attributeName === 'href' && mutation.target && mutation.target.tagName === 'A') {
-                        // Ignore our own writes: only reschedule when base attr missing or external change
-                        if (!mutation.target.hasAttribute(__stickyLinkerAttr)
-                            || mutation.oldValue === mutation.target.getAttribute(__stickyLinkerAttr)) {
-                            __scheduleStickyAnchorRewrite(120);
-                            return;
-                        }
+            var mo = new MutationObserver(function (records) {
+                try { mo.disconnect(); } catch (err) {}
+                __collectStickyRewriteRoots(records, pending);
+                window.setTimeout(function () {
+                    var batch = pending;
+                    pending = [];
+                    __rewriteStickyAnchorNodes(batch);
+                    if (document.documentElement) {
+                        try { mo.observe(document.documentElement, observeOptions); } catch (err2) {}
                     }
-                    if (mutation.type === 'childList' && ((mutation.addedNodes && mutation.addedNodes.length) || (mutation.removedNodes && mutation.removedNodes.length))) {
-                        __scheduleStickyAnchorRewrite(120);
-                        return;
-                    }
-                }
+                }, 100);
             });
-            __stickyLinkerObserver.observe(document.documentElement, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['href'],
-                attributeOldValue: true
-            });
+            mo.observe(document.documentElement, observeOptions);
+            __stickyLinkerObserver = mo;
         } catch (e) {
         }
+        /* ARCH_MO_FALLBACK_END */
     }
 
 

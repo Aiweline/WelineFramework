@@ -31,8 +31,33 @@ use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
+$scope = WidgetUiScope::forWidget('product-express-payment');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$titleSource = trim((string) ($this->getData('title') ?? '')) ?: '快捷支付';
+$title = WidgetI18n::label($titleSource, '快捷支付');
+$configMethod = strtolower(trim((string) ($this->getData('method_code') ?? 'paypal'))) ?: 'paypal';
+
+$renderEmptyShell = static function (string $hint) use ($esc, $wc, $scope, $title, $configMethod): void {
+    ?>
+    <section class="w-payment-express w-payment-express--empty <?= $esc($wc) ?>"
+             weline-code="<?= $esc($scope->code) ?>"
+             data-uid="<?= $esc($scope->uid) ?>"
+             data-testid="product-express-payment"
+             data-payment-express
+             data-express-empty="1"
+             data-method-code="<?= $esc($configMethod) ?>">
+        <header class="w-payment-express__header">
+            <h2 class="w-payment-express__title"><?= $esc($title) ?></h2>
+        </header>
+        <p class="w-payment-express__empty-hint"><?= $esc($hint) ?></p>
+    </section>
+    <?php
+};
+
 $enabled = filter_var($this->getData('enabled') ?? true, FILTER_VALIDATE_BOOLEAN);
 if (!$enabled) {
+    $renderEmptyShell((string) __('快捷支付已关闭。'));
     return;
 }
 
@@ -46,18 +71,13 @@ try {
 }
 $quoteOnly = !empty($offer['quote_only']);
 if ($quoteOnly) {
+    $renderEmptyShell((string) __('该商品仅支持询价，暂无快捷支付。'));
     return;
 }
 $sellable = !empty($offer['sellable']) || $isPreviewMode;
 $offerUuid = trim((string) ($offer['global_offer_uuid'] ?? ''));
 $productId = max(0, (int) ($offer['product_id'] ?? $this->getData('card_product_id') ?? 0));
 
-$scope = WidgetUiScope::forWidget('product-express-payment');
-$wc = $scope->cssClass;
-$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-$titleSource = trim((string) ($this->getData('title') ?? '')) ?: '快捷支付';
-$title = WidgetI18n::label($titleSource, '快捷支付');
-$configMethod = strtolower(trim((string) ($this->getData('method_code') ?? 'paypal'))) ?: 'paypal';
 $hint = (string) __('使用支付商账户直接付款，地址可由支付商带回');
 $moreLabel = (string) __('更多支付说明');
 $defaultLogoRef = 'Weline_Payment::img/payment/paypal-express.svg';
@@ -75,7 +95,10 @@ try {
 } catch (\Throwable) {
     $expressMethods = [];
 }
+// Keep a visible slot shell when required injection is present but no method is ready.
+// Empty early-return made the whole express region vanish (looked like widget loss).
 if ($expressMethods === []) {
+    $renderEmptyShell((string) __('快捷支付暂不可用，请使用上方加入购物车或立即结账。'));
     return;
 }
 
@@ -164,13 +187,13 @@ if ($logoFileHtml === '' && $logoRaw === '') {
 </section>
 <style>
 .w-payment-express--pdp {
-    --express-gap: var(--weline-space-2, var(--space-2, 0.5rem));
+    --express-gap: var(--weline-space-3, var(--space-3, 0.75rem));
     --express-paypal-bg: #ffc439;
     --express-paypal-bg-hover: #f2bb36;
     --express-text: var(--color-text-primary, #0f1111);
     --express-btn-min: 148px;
     --express-btn-max: 200px;
-    margin-block: var(--express-gap);
+    margin-block: var(--express-gap) 0;
     padding: var(--express-gap) 0 0;
     border: 0;
     border-radius: 0;

@@ -25,15 +25,19 @@ use Weline\Payment\Api\Data\PaymentOperationRequest;
 use Weline\Payment\Interface\ProviderConnectInterface;
 use Weline\Payment\Interface\ProviderConnectPrepareInterface;
 use Weline\Payment\Interface\ProviderInterface;
+use Weline\Payment\Interface\ProviderShipmentTrackingInterface;
 use Weline\Payment\Service\PayPalApiClient;
 use Weline\Payment\Service\PayPalPlatformCredentialService;
+use Weline\Payment\Service\PayPalShipmentTrackingSyncService;
 use Weline\Payment\Service\PaymentConfigValidationService;
 use Weline\Payment\Service\PaymentRedirectUriCatalog;
 use Weline\Payment\Service\PayPalOAuthService;
 use Weline\Payment\Service\PayPalWebhookTransitionMapper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Model\Order;
+use Weline\Order\Model\OrderShipment;
 
-final class PayPalProvider implements ProviderInterface, ProviderConnectInterface, ProviderConnectPrepareInterface
+final class PayPalProvider implements ProviderInterface, ProviderConnectInterface, ProviderConnectPrepareInterface, ProviderShipmentTrackingInterface
 {
     private ?PayPalApiClient $apiClient = null;
 
@@ -331,6 +335,7 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'message' => (string) __('Redirecting to PayPal checkout.'),
                 'payload' => [
                     'redirect_url' => $order['approve_url'],
+                    'order_id' => $order['order_id'],
                     'environment' => (string) ($config['environment'] ?? 'sandbox'),
                     'presentment_currency' => $request->getCurrencyCode(),
                     'paypal_currency' => $paypalCurrency,
@@ -653,11 +658,82 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             ]);
         }
 
+        $headers = $request->getHeaders();
+        $transmission = $this->extractPayPalTransmissionHeaders($headers);
+        $context = $request->getData('context');
+        $config = [];
+        if (\is_array($context)) {
+            $config = \is_array($context['config'] ?? null) ? $context['config'] : [];
+            if ($config === [] && \is_array($context['runtime_config'] ?? null)) {
+                $config = $context['runtime_config'];
+            }
+        }
+        $webhookId = trim((string) (
+            $config['webhook_id']
+            ?? $request->getData('verification_secret')
+            ?? ''
+        ));
+        if ($webhookId !== '') {
+            $config['webhook_id'] = $webhookId;
+        }
+        if (!isset($config['environment'])) {
+            $config['environment'] = \is_array($context)
+                ? (string) ($context['environment'] ?? 'sandbox')
+                : 'sandbox';
+        }
+
+        // Latest PayPal guidance: verify via /v1/notifications/verify-webhook-signature when webhook_id is configured.
+        if ($webhookId !== '') {
+            if (!$this->getApiClient()->verifyWebhookSignature($config, $rawBody, $transmission)) {
+                return CallbackResult::fromArray([
+                    'verified' => false,
+                    'message' => 'paypal webhook signature verification failed',
+                    'provider_event_id' => $eventId,
+                    'event_type' => (string) ($payload['event_type'] ?? 'paypal.webhook.received'),
+                ]);
+            }
+        } elseif ($transmission['transmission_sig'] !== '') {
+            // Headers present but webhook_id not configured → reject (do not soft-accept signed traffic).
+            return CallbackResult::fromArray([
+                'verified' => false,
+                'message' => 'paypal webhook_id missing for signature verification',
+                'provider_event_id' => $eventId,
+            ]);
+        }
+        // No webhook_id and no transmission headers (e.g. local inject): accept by event id only.
+
         return CallbackResult::fromArray([
             'verified' => true,
             'event_type' => (string) ($payload['event_type'] ?? 'paypal.webhook.received'),
             'provider_event_id' => $eventId,
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $headers
+     * @return array{auth_algo:string,cert_url:string,transmission_id:string,transmission_sig:string,transmission_time:string}
+     */
+    private function extractPayPalTransmissionHeaders(array $headers): array
+    {
+        $pick = static function (array $headers, array $names): string {
+            foreach ($names as $name) {
+                foreach ($headers as $key => $value) {
+                    if (strcasecmp((string) $key, $name) === 0) {
+                        return trim(\is_array($value) ? (string) ($value[0] ?? '') : (string) $value);
+                    }
+                }
+            }
+
+            return '';
+        };
+
+        return [
+            'auth_algo' => $pick($headers, ['PAYPAL-AUTH-ALGO', 'Paypal-Auth-Algo', 'HTTP_PAYPAL_AUTH_ALGO']),
+            'cert_url' => $pick($headers, ['PAYPAL-CERT-URL', 'Paypal-Cert-Url', 'HTTP_PAYPAL_CERT_URL']),
+            'transmission_id' => $pick($headers, ['PAYPAL-TRANSMISSION-ID', 'Paypal-Transmission-Id', 'HTTP_PAYPAL_TRANSMISSION_ID']),
+            'transmission_sig' => $pick($headers, ['PAYPAL-TRANSMISSION-SIG', 'Paypal-Transmission-Sig', 'HTTP_PAYPAL_TRANSMISSION_SIG']),
+            'transmission_time' => $pick($headers, ['PAYPAL-TRANSMISSION-TIME', 'Paypal-Transmission-Time', 'HTTP_PAYPAL_TRANSMISSION_TIME']),
+        ];
     }
 
     public function parseCallback(CallbackRequest $request): CallbackResult
@@ -746,7 +822,7 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
         return $this->resolveEnvironmentConfig(
             $config,
             $context,
-            (string) ($context['environment'] ?? $config['environment'] ?? 'sandbox'),
+            (string) ($config['environment'] ?? $context['environment'] ?? 'sandbox'),
         );
     }
 
@@ -792,6 +868,48 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
         $fromConfig = trim((string) ($config[$contextField] ?? ''));
 
         return $fromConfig !== '' ? $fromConfig : null;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array{ok:bool,message:string,capture_id?:string,tracking_number?:string,payload?:array<string,mixed>}
+     */
+    public function syncShipmentTracking(array $context): array
+    {
+        /** @var PayPalShipmentTrackingSyncService $sync */
+        $sync = ObjectManager::getInstance(PayPalShipmentTrackingSyncService::class);
+
+        $tracking = trim((string) ($context['tracking_number'] ?? ''));
+        $carrier = trim((string) ($context['carrier'] ?? ''));
+        $status = strtoupper(trim((string) ($context['tracking_status'] ?? 'SHIPPED'))) ?: 'SHIPPED';
+        $orderUuid = trim((string) ($context['order_uuid'] ?? ''));
+
+        $shipment = $context['shipment'] ?? null;
+        if ($shipment instanceof OrderShipment) {
+            if ($tracking === '') {
+                $tracking = trim((string) $shipment->getData(OrderShipment::schema_fields_TRACKING_NUMBER));
+            }
+            if ($carrier === '') {
+                $carrier = trim((string) $shipment->getData(OrderShipment::schema_fields_CARRIER));
+            }
+        }
+
+        $order = $context['order'] ?? null;
+        if ($orderUuid === '' && $order instanceof Order) {
+            $orderUuid = trim((string) $order->getData(Order::schema_fields_ORDER_UUID));
+        }
+
+        if ($orderUuid !== '' && $tracking !== '') {
+            return $sync->syncForOrder($orderUuid, $tracking, $carrier, $status);
+        }
+
+        return $sync->syncFromOrderShippedEvent([
+            'order' => $order,
+            'order_id' => (int) ($context['order_id'] ?? 0),
+            'shipment' => $shipment,
+            'tracking_number' => $tracking,
+            'carrier' => $carrier,
+        ]);
     }
 
     /**

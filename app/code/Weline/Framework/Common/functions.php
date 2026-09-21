@@ -507,6 +507,18 @@ if (!function_exists('w_changed')) {
     function w_changed(
         \Weline\Framework\Event\ResourceChange\ResourceChange $change
     ): \Weline\Framework\Event\ResourceChange\ResourceChange {
+        // Extends Capability 管线（Enricher→Recipe→Effect）；再 dispatch 给 Seo 等暂留听众
+        try {
+            $pipeline = ObjectManager::getInstance(\Weline\Framework\Event\Changed\ChangedPipeline::class);
+            if ($pipeline instanceof \Weline\Framework\Event\Changed\ChangedPipeline) {
+                $change = $pipeline->process($change);
+            }
+        } catch (\LogicException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new \LogicException(__('Changed 管线执行失败：%{msg}', ['msg' => $e->getMessage()]), 0, $e);
+        }
+
         $payload = $change;
         ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
             ->dispatch(\Weline\Framework\Event\ResourceChange\ResourceChange::EVENT_NAME, $payload);

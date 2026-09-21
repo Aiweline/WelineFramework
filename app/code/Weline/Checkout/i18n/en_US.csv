@@ -274,7 +274,7 @@ SKU,SKU
 取消订单失败，请稍后重试,"Failed to cancel order, please try again later"
 优惠,Discount
 该支付此前已取消，无需再次操作。,"This payment was already cancelled. No further action is needed."
-本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。,"This payment was not completed and the order is unpaid. Return to checkout to choose another payment method."
+本次支付未完成，订单尚未付款。可继续支付或稍后再试。,"This payment was not completed and the order is unpaid. You can continue to pay or try again later."
 该笔订单已完成扣款，无需再次付款。,"This order has already been charged. No further payment is needed."
 感谢您的订购！,"Thank you for your order!"
 您的订单已支付成功，我们正在为您准备发货。,"Your order has been successfully paid for, and we are preparing for shipment."
@@ -285,7 +285,8 @@ SKU,SKU
 配送方式,"Shipping Method"
 "预计 2–5 个工作日内发货","预计 2–5 个工作日内发货"
 订单操作,"Order actions"
-返回结账,"Return to checkout"
+继续支付,"Continue payment"
+返回购物车,"Back to cart"
 继续购物,"continue shopping"
 正在加载结账信息...,"Loading checkout information..."
 正在更新配送方式...,正在更新配送方式...
@@ -296,7 +297,6 @@ SKU,SKU
 订单已创建，支付仍在处理中。,"Your order was created and payment is still processing."
 订单已创建，但支付未完成。您可以重试支付，不会重复下单。,"Your order was created, but payment was not completed. You can retry without creating another order."
 重试支付,"Retry payment"
-继续支付,"Continue payment"
 正在重试支付...,"Retrying payment..."
 订单编号,"Order reference"
 "Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api is not ready yet, please refresh the page and try again."
@@ -304,7 +304,6 @@ SKU,SKU
 查看规格图,"View option image"
 关闭,Close
 安全结账,"Secure checkout"
-返回购物车,"Return to cart"
 暂时无法结账,"Unable to checkout at the moment"
 购物车是空的,"Shopping cart is empty"
 先选择需要采购的商品，再回来完成配送与支付。,"First select the products you want to purchase, then come back to complete delivery and payment."
@@ -332,6 +331,7 @@ SKU,SKU
 请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
 错误代码,错误代码
 重试结算,重试结算
+返回结账,"Return to checkout"
 查看帮助中心,查看帮助中心
 该笔快捷支付已完成扣款,该笔快捷支付已完成扣款
 尚未扣款，确认后向支付商收款,尚未扣款，确认后向支付商收款
@@ -346,9 +346,6 @@ SKU,SKU
 该地区暂不支持配送,该地区暂不支持配送
 应付,应付
 取消,取消
-正在前往结账...,"Proceeding to checkout..."
-结账准备失败,"Checkout preparation failed"
-立即结账,"Proceed to checkout"
 China,China
 国家/地区,Country/Region
 搜索国家/地区,"Search country/region"
@@ -370,6 +367,9 @@ China,China
 定位完成，但当前未启用地址添加模块。,"Location completed"
 定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
 自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
+正在前往结账...,"Proceeding to checkout..."
+结账准备失败,"Checkout preparation failed"
+立即结账,"Proceed to checkout"
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -537,6 +537,7 @@ China,China
 收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。,收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。
 当前收货国家：%{1}。,当前收货国家：%{1}。
 系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。
+本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。,"This payment was not completed and the order is unpaid. Return to checkout to choose another payment method."
 结算结果,结算结果
 订单提交失败,订单提交失败
 很抱歉，您的订单提交失败，请稍后重试。,很抱歉，您的订单提交失败，请稍后重试。

@@ -16,13 +16,10 @@
  * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-selling-mode", "area":"content", "sort_order":0, "required":true, "reason":"商品详情价格旁默认展示 ToC/ToB 售卖模式切换", "config":{} }]}
  */
 
-use Weline\B2B\Service\CommerceTypeMembershipChecker;
 use Weline\B2B\Service\MembershipStatusProjection;
 use Weline\B2B\Service\SellingModePolicy;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Session\SessionFactory;
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
@@ -33,19 +30,43 @@ $tocEnabled = true;
 $tobEnabled = true;
 $moq = SellingModePolicy::DEFAULT_MOQ;
 $qtyStep = SellingModePolicy::DEFAULT_QTY_STEP;
-$productFlags = null;
 $offerForFlags = [];
 try {
     if (class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
         $offerForFlags = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
     }
+} catch (\Throwable) {
+    $offerForFlags = [];
+}
+$skuForGate = trim((string)($offerForFlags['sku'] ?? ''));
+
+// No active price-list tier: omit the widget. Do not hydrate EAV or selling-mode
+// config on this path — those queries only matter when wholesale UI can render.
+try {
+    /** @var \Weline\B2B\Service\ProductWholesaleEligibility $eligibility */
+    $eligibility = ObjectManager::getInstance(\Weline\B2B\Service\ProductWholesaleEligibility::class);
+    if (!$eligibility->allowsWholesaleDisplay($websiteId, $storeId, null, $skuForGate)) {
+        $tobEnabled = false;
+    }
+} catch (\Throwable) {
+    $tobEnabled = false;
+}
+
+if (!$tobEnabled) {
+    if (RequestContext::isInitialized()) {
+        RequestContext::set('b2b.pdp_wholesale_display', false);
+    }
+    return;
+}
+
+$productFlags = null;
+try {
     $productFlags = \Weline\B2B\Service\ProductSellingModeFlags::fromOffer(
         is_array($offerForFlags) ? $offerForFlags : []
     );
 } catch (\Throwable) {
     $productFlags = null;
 }
-$skuForGate = trim((string)($offerForFlags['sku'] ?? ''));
 try {
     /** @var SellingModePolicy $policy */
     $policy = ObjectManager::getInstance(SellingModePolicy::class);
@@ -56,128 +77,33 @@ try {
 } catch (\Throwable) {
 }
 
-// Product wholesale UI only when tob allowed AND SKU has configured price tiers.
-// Without tiers, treat as a normal product: omit this widget entirely so we do not
-// rewrite the global selling_mode cookie via bindRoot setMode(toc).
-try {
-    /** @var \Weline\B2B\Service\ProductWholesaleEligibility $eligibility */
-    $eligibility = ObjectManager::getInstance(\Weline\B2B\Service\ProductWholesaleEligibility::class);
-    if (!$eligibility->allowsWholesaleDisplay($websiteId, $storeId, $productFlags, $skuForGate)) {
-        $tobEnabled = false;
-    }
-} catch (\Throwable) {
-    $tobEnabled = false;
-}
-
 if (!$tobEnabled) {
+    if (RequestContext::isInitialized()) {
+        RequestContext::set('b2b.pdp_wholesale_display', false);
+    }
     return;
 }
 
 $customerId = 0;
 $loggedIn = false;
-$assignedLoggedIn = $this->getData('b2b_customer_logged_in');
-$assignedMembership = $this->getData('b2b_has_membership');
-$assignedCustomerId = $this->getData('b2b_customer_id');
-$assignedWebsiteId = $this->getData('b2b_website_id');
-if ($assignedWebsiteId !== null && $assignedWebsiteId !== '') {
-    $websiteId = max(0, (int)$assignedWebsiteId);
-}
-try {
-    $session = ObjectManager::getInstance(SessionFactory::class)->createFrontendSession();
-    $loggedIn = (bool)$session->isLoggedIn();
-    $customerId = (int)($session->getUserId() ?? 0);
-} catch (\Throwable) {
-}
-if ($assignedLoggedIn !== null) {
-    $loggedIn = filter_var($assignedLoggedIn, FILTER_VALIDATE_BOOLEAN);
-}
-if ($assignedCustomerId !== null && $assignedCustomerId !== '') {
-    $customerId = max(0, (int)$assignedCustomerId);
-    if ($customerId > 0) {
-        $loggedIn = true;
-    }
-}
-
 $hasMembership = false;
 $uiState = MembershipStatusProjection::UI_NEED_LOGIN;
 $appStatus = '';
 $shouldPoll = false;
-$canSubmit = false;
+$canSubmit = true;
 $application = null;
 $applicationId = '';
-if ($assignedMembership !== null) {
-    $hasMembership = filter_var($assignedMembership, FILTER_VALIDATE_BOOLEAN);
-    $uiState = $hasMembership
-        ? MembershipStatusProjection::UI_ACTIVE
-        : ($loggedIn ? MembershipStatusProjection::UI_CAN_APPLY : MembershipStatusProjection::UI_NEED_LOGIN);
-} elseif ($loggedIn && $customerId > 0) {
-    try {
-        /** @var MembershipStatusProjection $projection */
-        $projection = ObjectManager::getInstance(MembershipStatusProjection::class);
-        $snap = $projection->snapshot((string)$customerId, $websiteId);
-        $uiState = (string)($snap['ui_state'] ?? MembershipStatusProjection::UI_CAN_APPLY);
-        $hasMembership = !empty($snap['membership_active']);
-        $appStatus = (string)($snap['application_status'] ?? '');
-        $shouldPoll = !empty($snap['should_poll']);
-        $canSubmit = !empty($snap['can_submit']);
-        $applicationId = trim((string)($snap['application_id'] ?? ''));
-    } catch (\Throwable) {
-        try {
-            /** @var CommerceTypeMembershipChecker $checker */
-            $checker = ObjectManager::getInstance(CommerceTypeMembershipChecker::class);
-            $hasMembership = $checker->hasMembership('tob', $customerId, $websiteId);
-            $uiState = $hasMembership
-                ? MembershipStatusProjection::UI_ACTIVE
-                : MembershipStatusProjection::UI_CAN_APPLY;
-        } catch (\Throwable) {
-            $hasMembership = false;
-            $uiState = MembershipStatusProjection::UI_CAN_APPLY;
-        }
-    }
-    try {
-        /** @var \Weline\B2B\Service\MembershipApplicationService $apps */
-        $apps = ObjectManager::getInstance(\Weline\B2B\Service\MembershipApplicationService::class);
-        $application = $apps->latestForCustomer((string)$customerId, $websiteId);
-        if ($applicationId === '' && is_array($application)) {
-            $applicationId = trim((string)($application['application_id'] ?? ''));
-        }
-    } catch (\Throwable) {
-        $application = null;
-    }
-} elseif (!$loggedIn) {
-    $uiState = MembershipStatusProjection::UI_NEED_LOGIN;
-}
+// Guest-safe SSR: identity/membership hydrated by selling-mode.js on interaction.
+$sellingMode = 'toc';
 
-$cookiePref = strtolower(trim((string)Cookie::get('weline_selling_mode')));
-$sellingMode = ($cookiePref === 'tob' || $cookiePref === 'toc') ? $cookiePref : 'toc';
-if ($sellingMode === 'tob' && !$tobEnabled) {
-    $sellingMode = 'toc';
-}
-if ($sellingMode === 'toc' && !$tocEnabled && $tobEnabled) {
-    $sellingMode = 'tob';
-}
-
-$isResubmit = $applicationId !== ''
-    && in_array($uiState, [
-        MembershipStatusProjection::UI_REJECTED,
-        MembershipStatusProjection::UI_INACTIVE,
-    ], true);
-$ctaPending = $uiState === MembershipStatusProjection::UI_PENDING;
+$isResubmit = false;
+$ctaPending = false;
 $ctaHidden = !($sellingMode === 'tob' && $uiState !== MembershipStatusProjection::UI_ACTIVE);
-$ctaLabel = match ($uiState) {
-    MembershipStatusProjection::UI_PENDING => (string)__('等待申请通过'),
-    MembershipStatusProjection::UI_REJECTED,
-    MembershipStatusProjection::UI_INACTIVE => (string)__('修改后重新提交'),
-    default => (string)__('申请批发身份'),
-};
-$submitLabel = $isResubmit ? (string)__('修改后重新提交申请') : (string)__('提交申请');
-$drawerHint = match ($uiState) {
-    MembershipStatusProjection::UI_REJECTED => (string)__('上次申请已驳回，请修改资料后重新提交当前申请。'),
-    MembershipStatusProjection::UI_INACTIVE => (string)__('批发资格当前不可用，请修改资料后重新提交当前申请。'),
-    default => '',
-};
+$ctaLabel = (string)__('申请批发身份');
+$submitLabel = (string)__('提交申请');
+$drawerHint = '';
 
-$drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-' . (string)$customerId), 0, 10);
+$drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-guest'), 0, 10);
 ?>
 <link rel="stylesheet" href="/Weline/B2B/view/statics/css/b2b-storefront.css?v=20260914-no-cart-chooser" data-no-extract="true">
 <div class="b2b-selling-mode product-native-detail__variant-axis"

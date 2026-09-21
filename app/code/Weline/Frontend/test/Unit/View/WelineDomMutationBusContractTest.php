@@ -93,6 +93,8 @@ final class WelineDomMutationBusContractTest extends TestCase
             $root . '/Product/view/statics/js/widgets/product-sticky-purchase.js',
             $root . '/Theme/view/statics/js/widgets/site-blocks.js',
             $root . '/Theme/view/statics/js/widgets/mini-cart-icon.js',
+            $root . '/Visitor/view/statics/js/pixel.js',
+            $root . '/Framework/View/Form/FormRenderer.php',
         ];
     }
 

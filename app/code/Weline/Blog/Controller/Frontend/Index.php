@@ -12,7 +12,11 @@ use Weline\Blog\Service\BlogSeoFactsBuilder;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Theme\Helper\WidgetI18n;
 
-/** Blog listing: /blog — Theme layout blog_category (Amazon-style card grid). */
+/**
+ * 博客列表（店面）。
+ *
+ * @Extra type=fpc enabled=true ttl=600 namespaces=global/storefront/blog public_path_patterns=/blog
+ */
 final class Index extends FrontendController
 {
     public function __construct(

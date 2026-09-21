@@ -15,7 +15,11 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Helper\WidgetI18n;
 
-/** Blog detail: /blog/{slug} — Theme layout blog (Amazon-style article). */
+/**
+ * 博客详情（店面）。
+ *
+ * @Extra type=fpc enabled=true ttl=600 namespaces=global/storefront/blog public_path_patterns=/blog/*
+ */
 final class View extends FrontendController
 {
     public function __construct(

@@ -405,11 +405,14 @@ final class StorefrontProductDetailProjector
                 // Variant axis option lists are identity values (often Han source codes),
                 // not translated copy. Skipping Han here drops the axis on en_US and
                 // leaves character chips without media-backed swatch_image.
+                // Always bind the empty/source locale row: locale overlays that rewrote
+                // value_json into translated labels create a second chip beside the
+                // offer combination_key identity (e.g. "red Jiuwei full set" + 「红色九尾全套」).
                 $value = $this->resolvePresentableAttribute(
-                    $rows,
+                    $this->identityAttributeRows($rows),
                     $storeId,
-                    $locale,
-                    $localeFallbacks,
+                    '',
+                    [''],
                     true,
                 );
                 if ($value->isExplicit()) {
@@ -686,11 +689,14 @@ final class StorefrontProductDetailProjector
             // Variant axis option lists are identity values (often Han source codes),
             // not translated copy. Skipping Han here drops the axis on en_US and
             // leaves character chips without media-backed swatch_image.
+            // Always bind the empty/source locale row: locale overlays that rewrote
+            // value_json into translated labels create a second chip beside the
+            // offer combination_key identity (e.g. "red Jiuwei full set" + 「红色九尾全套」).
             $value = $this->resolvePresentableAttribute(
-                $rows,
+                $this->identityAttributeRows($rows),
                 $storeId,
-                $locale,
-                $localeFallbacks,
+                '',
+                [''],
                 true,
             );
             if ($value->isExplicit()) {
@@ -1045,6 +1051,29 @@ final class StorefrontProductDetailProjector
     private function allowsHanContentFallback(string $code): bool
     {
         return strtolower(trim($code)) === 'description';
+    }
+
+    /**
+     * Keep only empty/source locale rows for variant-axis identity resolution.
+     * Translated locale overlays of option tokens are display copy and must not
+     * become additional axis values next to offer combination identities.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function identityAttributeRows(array $rows): array
+    {
+        $identity = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (trim((string)($row['locale'] ?? '')) === '') {
+                $identity[] = $row;
+            }
+        }
+
+        return $identity !== [] ? $identity : $rows;
     }
 
     /**

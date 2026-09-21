@@ -20,6 +20,19 @@ final class I18nCsvCodec
 {
     public const UTF8_BOM = "\xEF\xBB\xBF";
 
+    /** 模块仓库允许落盘的 locale CSV（其它语种只进系统词典）。 */
+    public const MODULE_CSV_LOCALES = ['zh_Hans_CN', 'en_US'];
+
+    /**
+     * 是否允许写入模块 `i18n/{locale}.csv`（仅中英基线）。
+     */
+    public static function isModuleCsvLocale(string $localeCode): bool
+    {
+        $normalized = trim(str_replace('-', '_', $localeCode));
+
+        return in_array($normalized, self::MODULE_CSV_LOCALES, true);
+    }
+
     /**
      * True when the raw cell is unsafe to persist (BOM pollution or replacement chars).
      */

@@ -95,13 +95,12 @@ class Topbar extends \Weline\Framework\View\Block
     public function getAvatar()
     {
         $user = $this->getUser();
-        $avatar = $user->getAvatar();
+        $avatar = trim((string)$user->getAvatar());
 
-        // 1. 用户自己上传了头像，直接返回
-        if (!empty($avatar)) {
-            return $avatar;
+        // 选图器存相对媒体路径（如 backend/avatar/x.png），展示须转成可访问 URL。
+        if ($avatar !== '') {
+            return \Weline\FileManager\Api\Image::pathToMediaUrl($avatar, 30, 30);
         }
-
 
         // 未上传头像时使用同源静态资源，保持严格 CSP（不依赖 data URI）。
         // 旧版本曾在读取路径把不存在的 logo.jpg 写入配置；只读兼容该历史值，

@@ -95,7 +95,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringNotContainsString('Existing widget ${layoutId} not found, triggering full refresh', $editor);
         self::assertStringContainsString('async function translateI18nValues(', $editor);
         self::assertStringContainsString('TE-CAP-020: template widgets may have empty layout_id', $editor);
-        self::assertStringContainsString("showToast(translateUiText('无法定位多语言字段'), 'warning');", $editor);
+        self::assertStringContainsString("showToast(window.__('无法定位多语言字段'), 'warning');", $editor);
         self::assertStringNotContainsString('if (panel && fieldKey && layoutId) {\n                        await translateI18nValues', $editor);
 
         $editorCss = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
@@ -321,7 +321,33 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString("data.type === 'selection-target'", $engine);
         self::assertStringContainsString("data.type === 'link-block'", $engine);
         self::assertStringContainsString('bindNolinkClickGuard', $engine);
+        self::assertStringContainsString('bindEditorIdentityHrefCarry', $engine);
+        self::assertStringContainsString('appendEditorIdentityToHref', $engine);
+        self::assertStringContainsString('rewriteStorefrontAnchors', $engine);
+        self::assertStringContainsString('data-w-editor-identity-carried', $engine);
         self::assertStringContainsString('isLinkBlockEnabled', $engine);
+        self::assertStringContainsString('function isShopperFlyoutPointerTarget(', $engine);
+        self::assertStringContainsString('function isSameDocumentFragmentLink(', $editor);
+        self::assertStringContainsString('禁链：只拦 a 默认跳转；不 stopPropagation，iframe 内点选部件仍可冒泡。', $editor);
+        self::assertStringContainsString('捕获阶段只拦 a 的默认跳转；禁止 stopPropagation，否则父级选不中部件。', $engine);
+        self::assertStringContainsString('e.preventDefault();', $engine);
+        // 禁链守卫不得 stopPropagation（否则点 a 无法选中部件）
+        $nolinkGuard = preg_match(
+            '/function bindNolinkClickGuard\(\)\s*\{.*?\n\s{4}\}/s',
+            $engine,
+            $guardMatch
+        ) === 1 ? ($guardMatch[0] ?? '') : '';
+        self::assertNotSame('', $nolinkGuard, 'bindNolinkClickGuard must exist');
+        self::assertStringContainsString('e.preventDefault();', $nolinkGuard);
+        self::assertStringNotContainsString('e.stopPropagation();', $nolinkGuard);
+        $previewAdapter = $this->read('app/code/Weline/Theme/view/ui/js/pages/theme-preview.js');
+        $previewBundle = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-preview.js');
+        foreach ([$previewAdapter, $previewBundle] as $preview) {
+            self::assertStringContainsString("document.documentElement.dataset.wEditorLinkBlock !== '1'", $preview);
+            self::assertStringContainsString('只拦 a 默认跳转；不 stopPropagation', $preview);
+        }
+        self::assertStringContainsString('function isNativeStorefrontActivationTarget(', $editor);
+        self::assertStringContainsString('Header account / dropdown anchors are real page links', $editor);
 
         self::assertStringContainsString('data-w-editor-selection-target="slot"', $styles);
         self::assertStringContainsString('data-w-editor-selection-target="widget"', $styles);
@@ -500,6 +526,17 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('同步立刻发请求', $editor);
         self::assertStringContainsString('showWidgetConfigLoadingState', $editor);
         self::assertStringContainsString('正在加载配置', $editor);
+        self::assertStringContainsString('widgetParamsIndex', $editor);
+        self::assertStringContainsString('rememberWidgetParamsMeta', $editor);
+        self::assertStringContainsString('lookupWidgetParamsMeta', $editor);
+        self::assertStringContainsString('paintedOptimistic', $editor);
+        self::assertStringContainsString('with_preview', $editor);
+        self::assertStringContainsString('withPreview: true', $editor);
+        self::assertStringContainsString('布局配置优先入队', $editor);
+        self::assertStringContainsString('layoutConfigCache', $editor);
+        self::assertStringContainsString('paintCachedLayoutConfig', $editor);
+        self::assertStringContainsString('优先前端渲染', $editor);
+        self::assertStringContainsString('当前是插槽模式', $editor);
         self::assertStringNotContainsString('uiMountScheduled', $ui);
         self::assertStringNotContainsString('queueMicrotask(flush)', $ui);
         self::assertStringNotContainsString('requestAnimationFrame(() => requestAnimationFrame(flush)', $ui);
@@ -569,7 +606,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             self::assertStringContainsString("el.textContent = loading ? '…' : String(counts[tab] || 0);", $js);
             self::assertStringContainsString('updateWidgetLibraryTabCounts();', $js);
             self::assertStringContainsString('const widgetsLoading = state.widgetLibraryRenderMode !== \'applications\'', $js);
-            self::assertStringContainsString("translateUiText('部件库加载失败，请稍后重试')", $js);
+            self::assertStringContainsString("window.__('部件库加载失败，请稍后重试')", $js);
         }
         self::assertStringContainsString('.widget-library-tab-count.is-loading', $css);
         self::assertStringContainsString('-webkit-line-clamp: 2', $css);
@@ -626,9 +663,12 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'function clearIframeDropFeedback(',
             'function dropCandidateIdentityKey(',
             'function publishDropCandidate(',
-            'DROP_CANDIDATE_PUBLISH_MS',
+            'function flushPreviewFrameBus(',
+            'PREVIEW_FRAME_HOT_TYPES',
+            'options.notifyParent !== false',
+            'preview-structure-changed',
+            'pendingWidgets',
             'lastRenderedDropCandidateKey',
-            'lastPublishedDropCandidateKey',
             'data-w-drop-position',
             "postPreviewMessage('widget-dropped'",
             "window.addEventListener('message'",
@@ -659,7 +699,11 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
 
         $editorSource = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
         self::assertStringContainsString('resolvePreviewDropViaBridge(e.clientX, e.clientY)', $editorSource);
-        self::assertStringContainsString("data.type !== 'drop-candidate'", $editorSource);
+        self::assertStringContainsString('notifyParent: false', $editorSource);
+        self::assertStringContainsString("data.lane !== 'hot'", $editorSource);
+        self::assertStringContainsString("case 'preview-structure-changed':", $editorSource);
+        self::assertStringNotContainsString('setTimeout(() => initWidgetHoverActions(), 100)', $editorSource);
+        self::assertStringNotContainsString("data.type !== 'drop-candidate'", $editorSource);
         self::assertStringNotContainsString('previewDropBridgeRaf', $editorSource);
     }
 
@@ -747,8 +791,12 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('resolveEditorWebsiteId(', $controller);
         self::assertStringContainsString('getInstalledLocalesPayload($scopeIdentityForLocales)', $controller);
         self::assertStringNotContainsString('ThemeEditorScopeCatalogService::class', $controller);
-        self::assertStringContainsString('$requestedFrontendThemeId = 0;', $controller);
-        self::assertStringContainsString('$requestedBackendThemeId = 0;', $controller);
+        self::assertStringNotContainsString('$requestedFrontendThemeId = 0;', $controller);
+        self::assertStringNotContainsString('$requestedBackendThemeId = 0;', $controller);
+        self::assertStringNotContainsString('resolveExplicitEditorNavigationThemeId(', $controller);
+        self::assertStringNotContainsString('Explicit editor navigation selects the theme being edited', $controller);
+        self::assertStringNotContainsString('canvasFrontendThemeId', $editor);
+        self::assertStringNotContainsString("currentUrl.searchParams.get('frontend_theme_id')", $editor);
         self::assertStringNotContainsString('if ($requestedFrontendThemeId <= 0)', $controller);
         self::assertStringNotContainsString('if ($requestedBackendThemeId <= 0)', $controller);
         self::assertStringNotContainsString("'scope_options_html'", $controller);
@@ -870,8 +918,8 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'function sourceScopeForScopedPath(',
             'workspace?.inherited_source_rules',
             'function canRestoreScopedPath(',
-            "translateUiText('本级修改')",
-            "translateUiText('恢复继承')",
+            "window.__('本级修改')",
+            "window.__('恢复继承')",
         ] as $ownershipContract) {
             self::assertStringContainsString($ownershipContract, $editor, $ownershipContract);
         }
@@ -1143,6 +1191,80 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         $service = $this->read('app/code/Weline/Theme/Service/WidgetDefaultInjectionService.php');
         self::assertStringContainsString('function resolveAppliedLayoutNode(', $service);
         self::assertStringContainsString("'removable'] = true", $service);
+    }
+
+    public function testEditingThemeVersionsLocksAndStorefrontStayOnSeparatePaths(): void
+    {
+        $controller = $this->read('app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
+        $versions = $this->read('app/code/Weline/Theme/Service/ThemeLayoutVersionService.php');
+        $lock = $this->read('app/code/Weline/Theme/Service/EditorLockService.php');
+        $context = $this->read('app/code/Weline/Theme/Service/ThemeContextService.php');
+        $observer = $this->read('app/code/Weline/Theme/Observer/ControllerFetchFileBefore.php');
+        $partials = $this->read('app/code/Weline/Theme/Block/Partials.php');
+        $provider = $this->read('app/code/Weline/Theme/extends/module/Weline_Framework/Query/ThemeQueryProvider.php');
+        $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        $legacyEditor = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+
+        $payloadStart = strpos($controller, 'public function getVersionsPayload');
+        $payloadEnd = strpos($controller, 'public function saveVersionPayload');
+        $listStart = strpos($controller, 'public function getVersions()');
+        $listEnd = strpos($controller, 'public function postInheritVersion');
+        self::assertNotFalse($payloadStart);
+        self::assertNotFalse($payloadEnd);
+        self::assertNotFalse($listStart);
+        self::assertNotFalse($listEnd);
+        self::assertStringNotContainsString(
+            'initializeVersionIfNeeded',
+            substr($controller, $payloadStart, $payloadEnd - $payloadStart),
+        );
+        self::assertStringNotContainsString(
+            'initializeVersionIfNeeded',
+            substr($controller, $listStart, $listEnd - $listStart),
+        );
+
+        $getVersionStart = strpos($versions, 'public function getVersion(');
+        $getVersionEnd = strpos($versions, 'public function getVersionSnapshot(');
+        self::assertNotFalse($getVersionStart);
+        self::assertNotFalse($getVersionEnd);
+        $getVersion = substr($versions, $getVersionStart, $getVersionEnd - $getVersionStart);
+        self::assertStringContainsString('schema_fields_THEME_ID, $themeId', $getVersion);
+        self::assertStringNotContainsString('->load($versionId)', $getVersion);
+
+        $inheritStart = strpos($controller, 'public function postInheritVersion');
+        $inheritEnd = strpos($controller, 'public function postSaveVersion');
+        self::assertNotFalse($inheritStart);
+        self::assertNotFalse($inheritEnd);
+        $inherit = substr($controller, $inheritStart, $inheritEnd - $inheritStart);
+        self::assertStringContainsString('getVersion(', $inherit);
+        self::assertStringContainsString('replaceEffectivePayload(', $inherit);
+        self::assertStringContainsString("'theme_id' => \$target->themeId", $inherit);
+        self::assertStringNotContainsString('RESOURCE_THEME_BINDING', $inherit);
+        self::assertStringNotContainsString('setIsCurrent', $inherit);
+        self::assertStringNotContainsString('setIsPublished', $inherit);
+        self::assertStringContainsString("'/theme/backend/theme-editor/inherit-version'", $provider);
+        self::assertSame(1, substr_count($provider, 'postInheritVersion()'));
+        self::assertStringContainsString('data-version-action="inherit"', $editor);
+        self::assertStringContainsString('data-version-action="inherit"', $legacyEditor);
+        self::assertStringContainsString('draft_revision_id: currentLayoutDraftRevisionId()', $editor);
+        self::assertStringContainsString('draft_revision_id: currentLayoutDraftRevisionId()', $legacyEditor);
+
+        self::assertStringContainsString('return self::CACHE_PREFIX . $identityHash;', $lock);
+        self::assertStringNotContainsString('CACHE_PREFIX . $themeId', $lock);
+        self::assertStringContainsString('if ($themeId < 1 || $identityHash === \'\')', $lock);
+
+        $resolveStart = strpos($context, 'public function resolveTheme(');
+        $resolveEnd = strpos($context, 'public function resolveThemeForScope(');
+        self::assertNotFalse($resolveStart);
+        self::assertNotFalse($resolveEnd);
+        $resolve = substr($context, $resolveStart, $resolveEnd - $resolveStart);
+        self::assertStringContainsString('isEditorThemeRequest()', $resolve);
+        self::assertStringContainsString('resolvePreviewTheme(', $resolve);
+        self::assertStringContainsString('loadEditingRequestTheme()', $context);
+        self::assertStringContainsString('resolvePublishedScopedTheme(', $resolve);
+        self::assertStringContainsString('loadEditorRequestTheme()', $observer);
+        self::assertStringContainsString("return \$area . '|published';", $observer);
+        self::assertStringContainsString('function resolvePartialsTheme(', $partials);
+        self::assertStringContainsString('resolveTheme($area, null, false)', $partials);
     }
 
     private function assertEditorBundleVersionedLinksMatch(string $template): void

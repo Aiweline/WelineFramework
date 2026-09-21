@@ -84,17 +84,11 @@ $copy = [
                 <w:slot id="checkout-shipping-address"
                         name="<?= __('结账收货地址') ?>"
                         accept="checkout-shipping-address,shipping-address,delivery-address,address"
+                        exclusive="true"
                         multiple="false"
                         position="content"
                         class="weline-checkout__shipping-address-slot"
                         weline-code="checkout.checkout.shipping_address_slot">
-                    <?php
-                    // Soft fallback when Theme placement/bake lags; Shipping owns the template.
-                    // SlotRenderer replaces this when Weline_Shipping::checkout-shipping-address is injected.
-                    if (is_file(BP . '/app/code/Weline/Shipping/view/templates/frontend/widgets/checkout-shipping-address.phtml')) {
-                        echo $this->fetch('Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml');
-                    }
-                    ?>
                 </w:slot>
             </section>
 
@@ -105,17 +99,11 @@ $copy = [
                 <w:slot id="checkout-tax-identity"
                         name="<?= __('结账税号') ?>"
                         accept="checkout-tax-identity,tax-identity,buyer-tax,tax"
+                        exclusive="true"
                         multiple="false"
                         position="content"
                         class="weline-checkout__tax-identity-slot"
                         weline-code="checkout.checkout.tax_identity_slot">
-                    <?php
-                    // Soft fallback when Theme placement lags; Tax owns the template.
-                    // SlotRenderer replaces this when Weline_Tax::checkout-tax-identity is injected.
-                    if (is_file(BP . '/app/code/Weline/Tax/view/templates/frontend/widgets/checkout-tax-identity.phtml')) {
-                        echo $this->fetch('Weline_Tax::templates/frontend/widgets/checkout-tax-identity.phtml');
-                    }
-                    ?>
                 </w:slot>
             </section>
 
@@ -163,6 +151,7 @@ $copy = [
                 <w:slot id="checkout-summary-discount"
                         name="<?= __('结账优惠券') ?>"
                         accept="checkout-summary-discount,checkout-coupon,marketing"
+                        exclusive="true"
                         multiple="false"
                         position="content"
                         class="weline-checkout__coupon-slot"
@@ -172,6 +161,7 @@ $copy = [
                 <w:slot id="checkout-summary-note"
                         name="<?= __('结账订单留言') ?>"
                         accept="checkout-summary-note,order-notice,order"
+                        exclusive="true"
                         multiple="false"
                         position="content"
                         class="weline-checkout__note-slot"
@@ -180,6 +170,7 @@ $copy = [
                 <w:slot id="checkout-summary-credit"
                         name="<?= __('结账批发信用') ?>"
                         accept="checkout-summary-credit,b2b-checkout-credit,b2b-deposit-note,b2b"
+                        exclusive="true"
                         multiple="false"
                         position="content"
                         class="weline-checkout__credit-slot"

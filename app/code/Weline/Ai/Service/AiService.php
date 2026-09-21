@@ -372,6 +372,76 @@ class AiService
         return $safeBase . '.task.' . $hash;
     }
 
+    /**
+     * Chat/tool-loop response used by AgentEngine.
+     * Prompt may be empty when the transcript is in $params['messages'].
+     *
+     * @param array<string, mixed> $params
+     * @return array{content: string, tool_calls: list<mixed>, model: string}
+     */
+    public function generateStructured(
+        string $prompt,
+        ?string $modelCode = null,
+        ?string $scenarioCode = null,
+        array $params = []
+    ): array {
+        $text = trim($prompt);
+        if ($text === '') {
+            $messages = is_array($params['messages'] ?? null) ? $params['messages'] : [];
+            $parts = [];
+            foreach ($messages as $message) {
+                if (!is_array($message)) {
+                    continue;
+                }
+                $role = trim((string)($message['role'] ?? 'user'));
+                $content = trim((string)($message['content'] ?? ''));
+                if ($content === '') {
+                    continue;
+                }
+                $parts[] = ($role !== '' ? $role : 'user') . ":\n" . $content;
+            }
+            $text = implode("\n\n", $parts);
+        }
+        if ($text === '') {
+            throw new Exception((string)__('消息不能为空'));
+        }
+
+        $isBackend = (bool)($params['is_backend'] ?? true);
+        try {
+            $content = $this->generate(
+                $text,
+                $modelCode,
+                $scenarioCode,
+                null,
+                $params,
+                null,
+                $isBackend
+            );
+        } catch (Exception $exception) {
+            // Agent roles default scenario "agent" is applied inside AgentEngine already.
+            // If the AI scanner has no matching adapter, still complete the chat turn.
+            if ($scenarioCode && str_contains($exception->getMessage(), '场景适配器不存在')) {
+                $content = $this->generate(
+                    $text,
+                    $modelCode,
+                    null,
+                    null,
+                    $params,
+                    null,
+                    $isBackend
+                );
+            } else {
+                throw $exception;
+            }
+        }
+
+        return [
+            'content' => $content,
+            'tool_calls' => [],
+            'model' => (string)($modelCode ?? ''),
+        ];
+    }
+
     public function generate(
         string $prompt, 
         ?string $modelCode = null, 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\B2B\Service;
 
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\SystemConfig\Api\ConfigReader;
 use Weline\SystemConfig\Api\ConfigStore;
 
@@ -83,11 +84,23 @@ final class SellingModePolicy
             return false;
         }
 
-        if (!$this->configEnabled($mode, $websiteId, $storeId)) {
-            return false;
+        $cacheKey = null;
+        if ($this->testingByScope === null && RequestContext::isInitialized()) {
+            $flagHash = $productFlags === null ? '-' : md5((string)json_encode($productFlags));
+            $cacheKey = 'b2b.mode_enabled.' . $mode . '|' . $websiteId . '|' . $storeId . '|' . $flagHash;
+            $cached = RequestContext::get($cacheKey);
+            if (is_bool($cached)) {
+                return $cached;
+            }
         }
 
-        return $this->productFlagAllows($mode, $productFlags);
+        $enabled = $this->configEnabled($mode, $websiteId, $storeId)
+            && $this->productFlagAllows($mode, $productFlags);
+        if ($cacheKey !== null) {
+            RequestContext::set($cacheKey, $enabled);
+        }
+
+        return $enabled;
     }
 
     public function defaultMoq(): int

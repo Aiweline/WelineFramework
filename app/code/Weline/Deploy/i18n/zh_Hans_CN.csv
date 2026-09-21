@@ -496,6 +496,18 @@ pending,等待中
 "【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。","【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。"
 无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
 无法写入部署版本文件,无法写入部署版本文件
+部署环境映射文件必须返回数组。,部署环境映射文件必须返回数组。
+"部署环境映射 schema 必须为 %{1}。","部署环境映射 schema 必须为 %{1}。"
+"部署环境映射 rules 必须为数组。","部署环境映射 rules 必须为数组。"
+"规则 #%{1} 不是数组。","规则 #%{1} 不是数组。"
+"规则 #%{1} 缺少 module/key/scopes/values_by_level。","规则 #%{1} 缺少 module/key/scopes/values_by_level。"
+"规则 #%{1} area 无效。","规则 #%{1} area 无效。"
+"规则 #%{1} 档位 %{2} 的值必须是标量。","规则 #%{1} 档位 %{2} 的值必须是标量。"
+"规则 #%{1} 含非字符串 scope。","规则 #%{1} 含非字符串 scope。"
+"写入 %{1} @ %{2} 失败：%{3}","写入 %{1} @ %{2} 失败：%{3}"
+"写入 %{1} @ %{2} 返回失败。","写入 %{1} @ %{2} 返回失败。"
+"deploy-env-map 不支持 scopes=*，请显式列出 storage scope。","deploy-env-map 不支持 scopes=*，请显式列出 storage scope。"
+"非法 scope：%{1}（需 global 或三段 storage scope）。","非法 scope：%{1}（需 global 或三段 storage scope）。"
 分支名称无效。,分支名称无效。
 "Git restore commit cannot be empty.","Git 恢复提交不能为空。"
 "Git working directory does not exist: %{1}","Git 工作目录不存在：%{1}"
@@ -817,6 +829,11 @@ tag：%{1},标签：%{1}
 "第 %{1} 次检测：当前 %{2}，期望 %{3}","第 %{1} 次检测：当前 %{2}，期望 %{3}"
 "超时：版本 %{1} 未在 %{2} 秒内生效","超时：版本 %{1} 未在 %{2} 秒内生效"
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
+"按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）","按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）"
+状态：%{1}（%{2}）,状态：%{1}（%{2}）
+档位：%{1},档位：%{1}
+映射文件：%{1},映射文件：%{1}
+未找到映射文件，已跳过。,未找到映射文件，已跳过。
 生成不执行发布的机器可读部署计划,生成不执行发布的机器可读部署计划
 "mdi mdi-rocket-launch-outline","MDI MDI 火箭发射大纲"
 "mdi mdi-update","MDI MDI 更新"

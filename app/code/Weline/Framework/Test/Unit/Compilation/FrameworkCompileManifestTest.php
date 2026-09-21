@@ -42,4 +42,39 @@ final class FrameworkCompileManifestTest extends TestCase
             @unlink($hooks);
         }
     }
+
+    public function testDescribeSourceDeltaReportsAddedRemovedAndChangedFiles(): void
+    {
+        $root = sys_get_temp_dir() . '/weline-compile-delta-' . bin2hex(random_bytes(6));
+        $hooks = $root . '-hooks.php';
+        mkdir($root . '/Example', 0777, true);
+        file_put_contents($root . '/Example/Keep.php', "<?php return 'keep';\n");
+        file_put_contents($root . '/Example/Gone.php', "<?php return 'gone';\n");
+        file_put_contents($root . '/Example/Change.php', "<?php return 'v1-long';\n");
+        file_put_contents($hooks, "<?php return [];\n");
+
+        try {
+            $manifest = new FrameworkCompileManifest();
+            $before = $manifest->capture($root, $hooks);
+            unlink($root . '/Example/Gone.php');
+            file_put_contents($root . '/Example/New.php', "<?php return 'new';\n");
+            // Different byte length so same-second mtime reuse cannot hide the edit.
+            file_put_contents($root . '/Example/Change.php', "<?php return 'v2';\n");
+            $after = $manifest->capture($root, $hooks, $before['sources']);
+
+            $delta = $manifest->describeSourceDelta($before, $after);
+            self::assertContains('-Example/Gone.php', $delta);
+            self::assertContains('+Example/New.php', $delta);
+            self::assertContains('~Example/Change.php', $delta);
+            self::assertFalse($manifest->sameSourceState($before, $after));
+        } finally {
+            @unlink($root . '/Example/Keep.php');
+            @unlink($root . '/Example/New.php');
+            @unlink($root . '/Example/Change.php');
+            @unlink($root . '/Example/Gone.php');
+            @rmdir($root . '/Example');
+            @rmdir($root);
+            @unlink($hooks);
+        }
+    }
 }

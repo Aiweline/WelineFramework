@@ -23,12 +23,34 @@ final class PayPalConfigTemplateContractTest extends TestCase
         self::assertStringContainsString('快捷支付 Logo', $template);
         self::assertStringContainsString('payment/method/paypal/express_enabled', $template);
         self::assertStringContainsString('启用 PayPal 快捷支付', $template);
+        self::assertStringContainsString('payment/method/paypal/google_pay_enabled', $template);
+        self::assertStringContainsString('payment/method/paypal/apple_pay_enabled', $template);
+        self::assertStringContainsString('启用 Google Pay（PayPal）', $template);
+        self::assertStringContainsString('启用 Apple Pay（PayPal）', $template);
+        self::assertMatchesRegularExpression(
+            '/key="payment\/method\/paypal\/google_pay_enabled"[\s\S]*?default="1"/',
+            $template
+        );
+        self::assertMatchesRegularExpression(
+            '/key="payment\/method\/paypal\/apple_pay_enabled"[\s\S]*?default="1"/',
+            $template
+        );
+        self::assertMatchesRegularExpression(
+            '/key="payment\/method\/paypal\/google_pay_enabled"[\s\S]*?scope="global,website,store"/',
+            $template
+        );
         self::assertStringContainsString('无需去 PayPal Developer 手动创建 App', $template);
         self::assertStringContainsString('payment/backend/connect/authorize?method_code=paypal&environment=sandbox', $template);
         self::assertStringContainsString('沙箱一键授权', $template);
         self::assertStringContainsString('action-label-connected="重新授权"', $template);
         self::assertStringContainsString('connected-key="payment/method/paypal/sandbox_oauth_connected_at"', $template);
         self::assertStringContainsString('connected-key="payment/method/paypal/live_oauth_connected_at"', $template);
+        self::assertStringContainsString('发货物流回传（Add Tracking）', $template);
+        self::assertStringContainsString('默认启用', $template);
+        self::assertStringContainsString('无需在 PayPal App Features 勾选', $template);
+        self::assertStringContainsString('/v2/checkout/orders/{order_id}/track', $template);
+        self::assertStringContainsString('payment:paypal:sync-tracking', $template);
+        self::assertStringNotContainsString('须在 PayPal Developer 的 REST App 打开 Shipping', $template);
         self::assertStringContainsString("return 'paypal';", $provider);
         self::assertStringContainsString("'checkout_template_code' => 'paypal'", $provider);
         self::assertStringContainsString('ProviderConnectInterface', $provider);

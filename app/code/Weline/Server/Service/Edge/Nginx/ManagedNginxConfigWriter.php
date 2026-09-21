@@ -151,6 +151,7 @@ NGINX;
 
         $cacheHttpBlock = '';
         $cacheLocationBlock = '';
+        $staticCacheLocationBlock = '';
         $gzipBlock = '';
         if ($gzipOn) {
             $gzipBlock = <<<NGINX
@@ -167,7 +168,8 @@ NGINX;
         if ($edgeCache) {
             $cacheHttpBlock = <<<NGINX
 
-    # 匿名 GET/HEAD 边缘微缓存；Cookie、Authorization 或 Upgrade 请求一律回源。
+    # HTML/API 边缘微缓存：有 Cookie、Authorization 或 Upgrade 时回源。
+    # 浏览器会给同域 CSS/JS 自动带 Cookie；静态扩展名使用独立 location，不套用该 bypass。
     proxy_cache_path {$cacheDir} levels=1:2 keys_zone=wls_edge:{$keysZoneMb}m max_size={$cacheMaxMb}m inactive=30m use_temp_path=off;
     map "\$http_cookie|\$http_authorization|\$http_upgrade" \$wls_edge_bypass {
         default 1;
@@ -230,7 +232,17 @@ NGINX;
 NGINX;
             $serverProtocolHeaders = "\n        add_header Alt-Svc \$wls_alt_svc always;";
         }
-        $locationProtocolHeaders = "\n            add_header X-Wls-Nginx-Config {$configGeneration} always;";
+        $emitNginxConfigHeader = false;
+        try {
+            $emitNginxConfigHeader = \Weline\Framework\Http\ResponseObservabilityPolicy::identityHeadersEnabled();
+        } catch (\Throwable) {
+        }
+        $locationProtocolHeaders = $emitNginxConfigHeader
+            ? "\n            add_header X-Wls-Nginx-Config {$configGeneration} always;"
+            : '';
+        $serverNginxConfigHeader = $emitNginxConfigHeader
+            ? "        add_header X-Wls-Nginx-Config {$configGeneration} always;\n"
+            : '';
         if ($http3Configured) {
             $locationProtocolHeaders .= "\n            add_header Alt-Svc \$wls_alt_svc always;";
         }
@@ -239,6 +251,44 @@ NGINX;
         $httpRedirectLocation = $ssl !== null
             ? "\n            if (\$scheme = http) { return 308 https://\$host{$httpsPortSuffix}\$request_uri; }"
             : '';
+
+        if ($edgeCache) {
+            // Keep in sync with WorkerPolicyKernel::PATH_SCAN_STATIC_EXTENSIONS.
+            $staticExt = 'avif|css|eot|gif|ico|jpe?g|js|map|mjs|m4a|aac|mp3|mp4|ogg|otf|png|svg|ttf|wasm|wav|webm|webp|woff2?';
+            $staticCacheLocationBlock = <<<NGINX
+
+        # Public static assets: browsers always attach same-origin Cookie; do not
+        # treat Cookie/Authorization as edge bypass (unlike HTML/API below).
+        location ~* \.(?:{$staticExt})$ {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+{$httpRedirectLocation}
+            proxy_set_header Upgrade \$wls_business_upstream_upgrade;
+            proxy_set_header Connection \$wls_business_upstream_connection;
+            proxy_set_header Host \$wls_upstream_authority;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_buffering on;
+            proxy_buffer_size 64k;
+            proxy_buffers 32 64k;
+            proxy_busy_buffers_size 128k;
+            proxy_max_temp_file_size 0;
+            proxy_cache wls_edge;
+            proxy_cache_key "\$scheme\$request_method\$host\$request_uri";
+            proxy_cache_methods GET HEAD;
+            proxy_cache_valid 200 {$ttl}s;
+            proxy_cache_valid 301 302 {$ttl}s;
+            proxy_cache_lock on;
+            proxy_cache_lock_timeout 5s;
+            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_background_update on;
+            proxy_cache_revalidate on;
+            add_header X-Wls-Edge-Cache \$upstream_cache_status always;
+        }
+NGINX;
+        }
 
         $workerProcesses = $isWindows ? '1' : 'auto';
         // Windows nginx ignores/limits high rlimit; keep a conservative value.
@@ -291,8 +341,7 @@ http {
         listen {$ports['http']}{$tcpReuse};
 {$sslBlock}
         server_name {$nameList};
-        add_header X-Wls-Nginx-Config {$configGeneration} always;
-
+{$serverNginxConfigHeader}
 {$serverProtocolHeaders}
         location = /_wls/nginx/tls-session-probe {
             allow 127.0.0.1;
@@ -316,12 +365,15 @@ http {
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
 
-        # 内部探测不走边缘缓存
+        # 内部探测不走边缘缓存。
+        # X-Wls-Nginx-Config is a publication/probe contract for ManagedNginxService
+        # gates (/_wls/health); always emit here — independent of wls.debug.identity_headers.
         location ^~ /_wls/ {
             proxy_pass http://wls_backend;
             allow 127.0.0.1;
             allow ::1;
             deny all;
+            add_header X-Wls-Nginx-Config {$configGeneration} always;
             proxy_http_version 1.1;
             proxy_set_header Connection \$wls_probe_upstream_connection;
             proxy_set_header Host \$wls_upstream_authority;
@@ -351,7 +403,7 @@ http {
             proxy_read_timeout 300s;
             proxy_send_timeout 300s;
         }
-
+{$staticCacheLocationBlock}
         location / {
             proxy_pass http://wls_backend;
             proxy_http_version 1.1;
@@ -582,8 +634,11 @@ NGINX;
             $contents,
             $matches,
         );
-        $oldGenerations = \array_values(\array_unique($matches[1]));
-        if ($markerCount !== 3 || \count($oldGenerations) !== 1) {
+        $oldGenerations = \array_values(\array_unique($matches[1] ?? []));
+        // Publication contract: every X-Wls-Nginx-Config marker shares one
+        // generation. Location count is not fixed (static edge location, identity
+        // headers, probe paths), so replace all occurrences of that generation.
+        if ($markerCount < 1 || \count($oldGenerations) !== 1) {
             throw new \RuntimeException('Managed nginx.conf lacks one consistent WLS config generation.');
         }
         $candidateContents = \str_replace(
@@ -592,7 +647,7 @@ NGINX;
             $contents,
             $count,
         );
-        if ($count !== 3) {
+        if ($count !== $markerCount) {
             throw new \RuntimeException('Managed nginx.conf generation replacement was incomplete.');
         }
         $candidate = $this->publication->stageCandidate($candidateContents);

@@ -37,6 +37,9 @@ class MenuRenderService
 {
     private const FREQUENT_MENU_CACHE_TTL = 30.0;
     private const RENDER_MENU_CACHE_TTL = 60.0;
+    /** WLS 进程内菜单 HTML 缓存上限（含 URL 激活态指纹键） */
+    private const RENDERED_MENU_CACHE_MAX = 16;
+    private const FREQUENT_MENU_CACHE_MAX = 32;
 
     /**
      * @var MenuAccessLog
@@ -55,6 +58,9 @@ class MenuRenderService
      * @var list<string>|null
      */
     private ?array $activeLocaleCodes = null;
+
+    /** 本实例是否已对菜单标题做过跨 locale 词条预取 */
+    private bool $crossLocaleWordsPrefetched = false;
 
     /**
      * @var array<string, array{expires: float, data: array}>
@@ -183,7 +189,11 @@ class MenuRenderService
         $cacheKey = (int)$user->getId() . '|' . $limit . '|' . $days;
         $now = microtime(true);
         if (isset(self::$frequentMenusCache[$cacheKey]) && self::$frequentMenusCache[$cacheKey]['expires'] >= $now) {
-            return self::$frequentMenusCache[$cacheKey]['data'];
+            $hit = self::$frequentMenusCache[$cacheKey];
+            unset(self::$frequentMenusCache[$cacheKey]);
+            self::$frequentMenusCache[$cacheKey] = $hit;
+
+            return $hit['data'];
         }
 
         $recentMenus = $this->menuAccessLogModel->getRecentMenus($user->getId(), $limit, $days);
@@ -194,8 +204,17 @@ class MenuRenderService
             'frequentMenus' => $frequentMenus,
             'hasFrequentMenus' => !empty($recentMenus) || !empty($frequentMenus)
         ];
-        self::$frequentMenusCache[$cacheKey] = ['expires' => $now + self::FREQUENT_MENU_CACHE_TTL, 'data' => $data];
+        $this->rememberFrequentMenus($cacheKey, $data, $now);
         return $data;
+    }
+
+    /**
+     * 清理 WLS 进程内菜单 HTML / 常用菜单统计缓存（供 compaction 与显式清缓存）。
+     */
+    public static function clearProcessCache(): void
+    {
+        self::$renderedMenuCache = [];
+        self::$frequentMenusCache = [];
     }
 
     /**
@@ -511,32 +530,132 @@ class MenuRenderService
         $this->menuNodeActiveCache = [];
 
         $user = $this->getCurrentUser();
-        $currentUrl = $this->getCurrentUrl();
+        // 激活态烘焙进 HTML：键用「激活叶指纹」代替 raw currentUrl，降低深链/别名路径基数。
+        $activeFingerprint = $this->buildActiveMenuFingerprint($menus);
         $cacheKey = implode('|', [
             (string)(($user && $user->getId()) ? (int)$user->getId() : 0),
             State::getLangLocal(),
             implode(',', $this->getActiveLocaleCodes()),
             $this->cachedBackendUrlPrefix,
             $this->cachedFrontendUrlPrefix,
-            $currentUrl,
+            $activeFingerprint,
             md5(json_encode($menus, JSON_INVALID_UTF8_SUBSTITUTE) ?: ''),
         ]);
         $now = microtime(true);
         if (isset(self::$renderedMenuCache[$cacheKey]) && self::$renderedMenuCache[$cacheKey]['expires'] >= $now) {
-            return self::$renderedMenuCache[$cacheKey]['html'];
+            $hit = self::$renderedMenuCache[$cacheKey];
+            unset(self::$renderedMenuCache[$cacheKey]);
+            self::$renderedMenuCache[$cacheKey] = $hit;
+
+            return $hit['html'];
         }
 
-        Parser::prefetchWords($this->collectMenuTitles($menus));
-        
+        $this->prefetchCrossLocaleMenuWords($this->collectMenuTitles($menus));
+
         foreach ($menus as $menu) {
             if (!$this->isMenuEnabled($menu)) {
                 continue;
             }
             $html .= $this->renderMenuNode($menu, true);
         }
-        
-        self::$renderedMenuCache[$cacheKey] = ['expires' => $now + self::RENDER_MENU_CACHE_TTL, 'html' => $html];
+
+        $this->rememberRenderedMenu($cacheKey, $html, $now);
         return $html;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $menus
+     */
+    private function buildActiveMenuFingerprint(array $menus): string
+    {
+        $activeIds = [];
+        foreach ($menus as $menu) {
+            if (($menu['type'] ?? '') !== 'menus') {
+                continue;
+            }
+            $this->collectActiveMenuSourceIds($menu, $activeIds);
+        }
+        if ($activeIds === []) {
+            return 'none';
+        }
+        $activeIds = array_values(array_unique($activeIds));
+        sort($activeIds, SORT_STRING);
+
+        return md5(implode('|', $activeIds));
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @param list<string> $activeIds
+     */
+    private function collectActiveMenuSourceIds(array $node, array &$activeIds): void
+    {
+        if (!$this->isMenuNodeActive($node)) {
+            return;
+        }
+        $sourceId = trim((string)($node['source_id'] ?? ''));
+        if ($sourceId !== '') {
+            $activeIds[] = $sourceId;
+        }
+        foreach ($node['nodes'] ?? [] as $child) {
+            if (($child['type'] ?? '') !== 'menus') {
+                continue;
+            }
+            $this->collectActiveMenuSourceIds($child, $activeIds);
+        }
+    }
+
+    private function rememberRenderedMenu(string $cacheKey, string $html, float $now): void
+    {
+        $this->pruneExpiredCacheEntries(self::$renderedMenuCache, $now);
+        if (isset(self::$renderedMenuCache[$cacheKey])) {
+            unset(self::$renderedMenuCache[$cacheKey]);
+        }
+        while (count(self::$renderedMenuCache) >= self::RENDERED_MENU_CACHE_MAX) {
+            $oldestKey = array_key_first(self::$renderedMenuCache);
+            if ($oldestKey === null) {
+                break;
+            }
+            unset(self::$renderedMenuCache[$oldestKey]);
+        }
+        self::$renderedMenuCache[$cacheKey] = [
+            'expires' => $now + self::RENDER_MENU_CACHE_TTL,
+            'html' => $html,
+        ];
+    }
+
+    /**
+     * @param array{recentMenus: array, frequentMenus: array, hasFrequentMenus: bool} $data
+     */
+    private function rememberFrequentMenus(string $cacheKey, array $data, float $now): void
+    {
+        $this->pruneExpiredCacheEntries(self::$frequentMenusCache, $now);
+        if (isset(self::$frequentMenusCache[$cacheKey])) {
+            unset(self::$frequentMenusCache[$cacheKey]);
+        }
+        while (count(self::$frequentMenusCache) >= self::FREQUENT_MENU_CACHE_MAX) {
+            $oldestKey = array_key_first(self::$frequentMenusCache);
+            if ($oldestKey === null) {
+                break;
+            }
+            unset(self::$frequentMenusCache[$oldestKey]);
+        }
+        self::$frequentMenusCache[$cacheKey] = [
+            'expires' => $now + self::FREQUENT_MENU_CACHE_TTL,
+            'data' => $data,
+        ];
+    }
+
+    /**
+     * @param array<string, array{expires: float}> $cache
+     */
+    private function pruneExpiredCacheEntries(array &$cache, float $now): void
+    {
+        foreach ($cache as $key => $entry) {
+            if (($entry['expires'] ?? 0.0) < $now) {
+                unset($cache[$key]);
+            }
+        }
     }
 
     /**
@@ -740,6 +859,7 @@ class MenuRenderService
         $menus ??= $this->getMenuTree();
         $this->cachedBackendUrlPrefix = $this->getBackendUrlPrefix();
         $this->cachedFrontendUrlPrefix = $this->getFrontendUrlPrefix();
+        $this->prefetchCrossLocaleMenuWords($this->collectMenuTitles($menus));
 
         $items = [];
         $this->walkNavigableMenuSearchItems($menus, $items);
@@ -811,6 +931,7 @@ class MenuRenderService
 
     /**
      * 指定 locale 下的菜单标题；无译文时回退 source 原文。
+     * 词典只走模块 CSV + Phrase 词条预取缓存，禁止 include 整本 generated/language。
      */
     public function resolveMenuTitleRaw(string $title, string $sourceId, string $localeCode): string
     {
@@ -828,13 +949,52 @@ class MenuRenderService
             }
         }
 
-        $generatedWords = $this->getGeneratedLocaleWords($localeCode);
-        $generatedTranslate = trim((string)($generatedWords[$title] ?? ''));
-        if ($generatedTranslate !== '') {
-            return $generatedTranslate;
+        $prefetched = trim((string)(Parser::getPrefetchedGlobalWord($localeCode, $title) ?? ''));
+        if ($prefetched !== '') {
+            return $prefetched;
         }
 
         return $title;
+    }
+
+    /**
+     * 对全部已启用 locale 批量预取菜单标题词条（Phrase Worker/Shared），只执行一次。
+     *
+     * @param list<string> $titles
+     */
+    private function prefetchCrossLocaleMenuWords(array $titles): void
+    {
+        if ($this->crossLocaleWordsPrefetched) {
+            return;
+        }
+        $this->crossLocaleWordsPrefetched = true;
+
+        $words = \array_values(\array_unique(\array_filter(
+            \array_map(static fn(mixed $word): string => \trim((string)$word), $titles),
+            static fn(string $word): bool => $word !== '',
+        )));
+        if ($words === []) {
+            return;
+        }
+
+        $locales = $this->getActiveLocaleCodes();
+        if ($locales === []) {
+            Parser::prefetchWords($words);
+
+            return;
+        }
+
+        foreach ($locales as $localeCode) {
+            $localeCode = \trim((string)$localeCode);
+            if ($localeCode === '') {
+                continue;
+            }
+            try {
+                Parser::prefetchWords($words, $localeCode);
+            } catch (\Throwable) {
+                // 单 locale 预取失败不阻断菜单渲染；resolve 时回退 source。
+            }
+        }
     }
 
     private function extractModuleNameFromSource(string $sourceId): string
@@ -884,47 +1044,6 @@ class MenuRenderService
         fclose($handle);
 
         return $this->moduleLocaleWords[$cacheKey];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function getGeneratedLocaleWords(string $localeCode): array
-    {
-        $cacheKey = 'generated|' . $localeCode;
-        if (isset($this->moduleLocaleWords[$cacheKey])) {
-            return $this->moduleLocaleWords[$cacheKey];
-        }
-
-        $this->moduleLocaleWords[$cacheKey] = [];
-        $localeFile = BP . DS . 'generated' . DS . 'language' . DS . $localeCode . '.php';
-        if (!is_file($localeFile)) {
-            return [];
-        }
-
-        $words = include $localeFile;
-        if (is_array($words)) {
-            $this->flattenLocaleWords($words, $this->moduleLocaleWords[$cacheKey]);
-        }
-
-        return $this->moduleLocaleWords[$cacheKey];
-    }
-
-    /**
-     * @param array<mixed> $words
-     * @param array<string, string> $result
-     */
-    private function flattenLocaleWords(array $words, array &$result): void
-    {
-        foreach ($words as $word => $translate) {
-            if (is_array($translate)) {
-                $this->flattenLocaleWords($translate, $result);
-                continue;
-            }
-            if (is_string($word) && is_string($translate) && $word !== '' && $translate !== '') {
-                $result[$word] = $translate;
-            }
-        }
     }
 
     /**

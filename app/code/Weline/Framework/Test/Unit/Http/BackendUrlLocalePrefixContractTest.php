@@ -82,6 +82,23 @@ final class BackendUrlLocalePrefixContractTest extends TestCase
         self::assertStringContainsString('/admin/index', $path);
     }
 
+    public function testBackendDefaultLanguageIsIndependentOfWebsiteLanguage(): void
+    {
+        WelineEnv::set('website.language', 'en_US', 'backend url locale contract');
+        WelineEnv::set('website.currency', 'CNY', 'backend url locale contract');
+        WelineEnv::set('user.currency', 'CNY', 'backend url locale contract');
+        WelineEnv::set('user.lang', 'en_US', 'backend url locale contract');
+        WelineEnv::set('url_parsed', true, 'backend url locale contract');
+        WelineEnv::set('area', 'backend', 'backend url locale contract');
+        WelineEnv::set('backend_default_language', 'zh_Hans_CN', 'backend url locale contract');
+
+        self::assertSame('zh_Hans_CN', State::resolveBackendDefaultLanguage());
+
+        $prefix = new \ReflectionMethod(Url::class, 'getBackendLocalePrefix');
+        $prefix->setAccessible(true);
+        self::assertSame('/en_US', $prefix->invoke(null));
+    }
+
     /** @return array<string, mixed> */
     private function parsePath(string $path): array
     {

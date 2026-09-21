@@ -1,19 +1,8 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
+// Guest-safe SSR: account CTA is always the visitor shell; chrome is client-side.
 $isLoggedIn = false;
 $displayName = '';
-try {
-    $frontendSession = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession();
-    $isLoggedIn = $frontendSession->isLoggedIn();
-    $user = $frontendSession->getUser();
-    if (is_object($user) && method_exists($user, 'getUsername')) {
-        $displayName = (string)($user->getUsername() ?? '');
-    }
-    if ($displayName === '' && is_object($user) && method_exists($user, 'getEmail')) {
-        $displayName = (string)$user->getEmail();
-    }
-} catch (\Throwable) {
-}
 
 $escape = static fn(string $text): string => htmlspecialchars((string)__($text), ENT_QUOTES, 'UTF-8');
 $escapeRaw = static fn(string $text): string => htmlspecialchars($text, ENT_QUOTES, 'UTF-8');

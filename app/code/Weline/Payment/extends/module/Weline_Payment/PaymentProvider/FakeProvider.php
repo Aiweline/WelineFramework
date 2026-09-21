@@ -109,7 +109,7 @@ final class FakeProvider implements ProviderInterface
                 'required' => true,
                 'label' => 'Environment',
                 'default' => 'sandbox',
-                'options' => ['sandbox' => 'Sandbox'],
+                'options' => ['sandbox' => '沙盒', 'live' => '正式'],
             ],
             'supported_currencies' => [
                 'type' => 'multiselect',

@@ -1,0 +1,157 @@
+<?php
+/**
+ * Memory listing — humanized Weline UI 2.0.
+ * @var \Weline\Framework\View\Template $this
+ */
+$memoryNodes = is_array($memory_nodes ?? null) ? $memory_nodes : [];
+$memoryEdges = is_array($memory_edges ?? null) ? $memory_edges : [];
+$nodeTypes = is_array($node_types ?? null) ? $node_types : [];
+$nodeStatuses = is_array($node_statuses ?? null) ? $node_statuses : [];
+$currentType = trim((string)($current_type ?? ''));
+$currentStatus = trim((string)($current_status ?? ''));
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            return $item->getData($key) ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="info" size="sm" /> <?= $escape(__('记忆管理')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('智能体从对话里记住的事实、偏好与事件。不需要的可以归档。')) ?></p>
+        </div>
+    </header>
+
+    <div class="w-agent-admin__stats">
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="list" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= count($memoryNodes) ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('记忆节点')) ?></span>
+            </span>
+        </div>
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="bolt" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= count($memoryEdges) ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('近期关系')) ?></span>
+            </span>
+        </div>
+    </div>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <article class="w-card">
+        <div class="w-card__body w-stack" data-gap="md">
+            <form class="w-agent-filters" method="get" action="@backend-url{'*/backend/memory/listing'}">
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-memory-type"><?= $escape(__('类型')) ?></label>
+                    <select class="w-select" id="agent-memory-type" name="type">
+                        <option value=""><?= $escape(__('全部类型')) ?></option>
+                        <?php foreach ($nodeTypes as $type): ?>
+                            <option value="<?= $escape((string)$type) ?>" <?= $currentType === (string)$type ? 'selected' : '' ?>>
+                                <?= $escape((string)$type) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-memory-status"><?= $escape(__('状态')) ?></label>
+                    <select class="w-select" id="agent-memory-status" name="status">
+                        <option value=""><?= $escape(__('全部状态')) ?></option>
+                        <?php foreach ($nodeStatuses as $status): ?>
+                            <option value="<?= $escape((string)$status) ?>" <?= $currentStatus === (string)$status ? 'selected' : '' ?>>
+                                <?= $escape((string)$status) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button type="submit" class="w-button"><?= $escape(__('筛选')) ?></button>
+            </form>
+
+            <?php if (!empty($memoryNodes)): ?>
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('内容')) ?></th>
+                        <th><?= $escape(__('类型')) ?></th>
+                        <th><?= $escape(__('状态')) ?></th>
+                        <th><?= $escape(__('重要度')) ?></th>
+                        <th><?= $escape(__('更新')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($memoryNodes as $node): ?>
+                        <tr>
+                            <td>
+                                <div class="w-stack" data-gap="xs">
+                                    <strong><?= $escape((string)$get($node, 'node_key', '')) ?></strong>
+                                    <span class="w-text" data-tone="muted"><?= $escape((string)$get($node, 'node_value', '')) ?></span>
+                                </div>
+                            </td>
+                            <td><span class="w-agent-chip"><?= $escape((string)$get($node, 'node_type', '')) ?></span></td>
+                            <td><span class="w-agent-chip"><?= $escape((string)$get($node, 'status', '')) ?></span></td>
+                            <td><?= $escape((string)$get($node, 'importance', '')) ?></td>
+                            <td><?= $escape((string)$get($node, 'updated_at', '')) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <var>pagination</var>
+            <?php else: ?>
+            <div class="w-agent-empty">
+                <span class="w-agent-empty__icon"><w:icon name="info" size="sm" /></span>
+                <h3><?= $escape(__('还没有可展示的记忆')) ?></h3>
+                <p><?= $escape(__('多聊几轮有价值的信息后，智能体会自动提炼记忆节点。')) ?></p>
+                <a class="w-button" href="@backend-url{'*/backend/chat/index'}"><?= $escape(__('去聊天产生记忆')) ?></a>
+            </div>
+            <?php endif; ?>
+        </div>
+    </article>
+
+    <?php if (!empty($memoryEdges)): ?>
+    <article class="w-card">
+        <div class="w-card__header">
+            <h2 class="w-card__title"><?= $escape(__('近期关系')) ?></h2>
+        </div>
+        <div class="w-card__body">
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('起点')) ?></th>
+                        <th><?= $escape(__('关系')) ?></th>
+                        <th><?= $escape(__('终点')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($memoryEdges as $edge): ?>
+                        <tr>
+                            <td>#<?= (int)$get($edge, 'source_node_id', 0) ?></td>
+                            <td><span class="w-agent-code"><?= $escape((string)$get($edge, 'relation_type', '')) ?></span></td>
+                            <td>#<?= (int)$get($edge, 'target_node_id', 0) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </article>
+    <?php endif; ?>
+</section>

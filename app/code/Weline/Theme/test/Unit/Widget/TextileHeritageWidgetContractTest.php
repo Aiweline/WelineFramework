@@ -6,6 +6,7 @@ namespace Weline\Theme\Test\Unit\Widget;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\TextileHeritageCatalog;
+use Weline\Theme\Service\TextileHeritageLabels;
 
 final class TextileHeritageWidgetContractTest extends TestCase
 {
@@ -66,7 +67,7 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertStringNotContainsString('<script', $template);
         self::assertStringContainsString('Catalog owns article deep links', $template);
         self::assertStringContainsString("\$catalogLink !== '' ? \$catalogLink", $template);
-        self::assertStringContainsString('@url{$linkPath}', $template);
+        self::assertStringContainsString('ObjectManager::getInstance(\\Weline\\Framework\\Http\\Url::class)', $template);
         self::assertStringNotContainsString('href="<?= $esc($link) ?>"', $template);
         self::assertStringContainsString('data-testid="textile-heritage"', $template);
         self::assertStringContainsString('repeat(6, minmax(0, 1fr))', $css);
@@ -74,6 +75,8 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertStringContainsString('repeat(2, minmax(0, 1fr))', $css);
         self::assertStringContainsString('white-space: nowrap', $css);
         self::assertStringContainsString('text-overflow: ellipsis', $css);
+        self::assertStringContainsString('TextileHeritageLabels::articleTitle', $template);
+        self::assertStringContainsString('-webkit-line-clamp: 3', $css);
         self::assertStringContainsString('<w:widget type="content" name="textile-heritage"', $homepage);
         self::assertStringContainsString('id="homepage-brands"', $homepage);
         self::assertStringContainsString('Theme textile-heritage default_injections', $homepage);
@@ -96,5 +99,13 @@ final class TextileHeritageWidgetContractTest extends TestCase
             $heroPosition < $heritagePosition && $heritagePosition < $featuredPosition,
             '织艺谱系应紧跟首页 Hero 出现，不应被商品列表埋到页尾。'
         );
+    }
+
+    public function testBlogSlugComesFromArticlePathNotCaption(): void
+    {
+        self::assertSame('textile-yunjin', TextileHeritageLabels::blogSlugFromLink('blog/textile-yunjin'));
+        self::assertSame('textile-yunjin', TextileHeritageLabels::blogSlugFromLink('/en_US/USD/blog/textile-yunjin'));
+        self::assertSame('textile-songjin', TextileHeritageLabels::blogSlugFromLink('https://shop.test/blog/textile-songjin?ref=home'));
+        self::assertSame('', TextileHeritageLabels::blogSlugFromLink('/search?q=yunjin'));
     }
 }

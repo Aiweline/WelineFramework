@@ -247,10 +247,13 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $payContext = [
                     'country_code' => (string)($params['country_code'] ?? ''),
                     'locale' => (string)($params['locale'] ?? ''),
-                    'environment' => (string)($params['environment'] ?? 'sandbox'),
                     'quote_token' => $quoteToken,
                     'checkout_token' => $quoteToken,
                 ];
+                $explicitEnvironment = strtolower(trim((string)($params['environment'] ?? '')));
+                if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+                    $payContext['environment'] = $explicitEnvironment;
+                }
                 if (!empty($params['express_checkout'])) {
                     $payContext['express_checkout'] = true;
                     $payContext['metadata'] = ['express_checkout' => true];
@@ -421,17 +424,21 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'error_code' => 'checkout_payment_retry_claim_failed',
                     ];
             }
+            $retryContext = [
+                'country_code' => (string)($params['country_code'] ?? ''),
+                'locale' => (string)($params['locale'] ?? ''),
+                'quote_token' => $quoteToken,
+                'checkout_token' => $quoteToken,
+            ];
+            $explicitEnvironment = strtolower(trim((string)($params['environment'] ?? '')));
+            if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+                $retryContext['environment'] = $explicitEnvironment;
+            }
             $payment = $this->payCreatedOrders(
                 $result->orderUuids,
                 (string)($params['payment_method'] ?? ''),
                 $paymentIdempotencyKey,
-                [
-                    'country_code' => (string)($params['country_code'] ?? ''),
-                    'locale' => (string)($params['locale'] ?? ''),
-                    'environment' => (string)($params['environment'] ?? 'sandbox'),
-                    'quote_token' => $quoteToken,
-                    'checkout_token' => $quoteToken,
-                ],
+                $retryContext,
             );
             $payment = $this->recordPaymentState($quoteToken, $idempotencyKey, $payment);
 

@@ -410,7 +410,8 @@ class PaymentMethodManager
 
         return $this->narrowCapabilitiesByConfig(
             \is_array($metadata['capabilities'] ?? null) ? $metadata['capabilities'] : [],
-            $config
+            $config,
+            (string) ($metadata['method_code'] ?? $paymentMethod->getData(PaymentMethod::schema_fields_CODE) ?? '')
         );
     }
 
@@ -573,7 +574,7 @@ class PaymentMethodManager
      * @param array<string, mixed> $config
      * @return array<string, mixed>
      */
-    private function narrowCapabilitiesByConfig(array $capabilities, array $config): array
+    private function narrowCapabilitiesByConfig(array $capabilities, array $config, string $methodCode = ''): array
     {
         foreach (['supported_currencies', 'currencies'] as $key) {
             if (\is_array($config[$key] ?? null)) {
@@ -592,7 +593,24 @@ class PaymentMethodManager
             unset($capabilities['express_checkout']);
         }
 
+        if ($this->normalizeCode($methodCode) === 'paypal') {
+            $capabilities['google_pay_enabled'] = $this->configFlagEnabled($config['google_pay_enabled'] ?? true);
+            $capabilities['apple_pay_enabled'] = $this->configFlagEnabled($config['apple_pay_enabled'] ?? true);
+        }
+
         return $capabilities;
+    }
+
+    private function configFlagEnabled(mixed $value): bool
+    {
+        if ($value === false || $value === 0 || $value === '0' || $value === '' || $value === null) {
+            return false;
+        }
+        if (\is_string($value) && strtolower(trim($value)) === 'false') {
+            return false;
+        }
+
+        return true;
     }
 
     /**

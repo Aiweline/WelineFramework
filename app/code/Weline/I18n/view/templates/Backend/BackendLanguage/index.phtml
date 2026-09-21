@@ -1,0 +1,25 @@
+<div class="w-container">
+    <header class="w-backend-page__heading">
+        <div>
+            <h1><lang>后台系统默认语言</lang></h1>
+            <p class="w-text" data-tone="muted"><lang>未登录或管理员未设置个人语言时，后台使用这里的语言。每位管理员请到「个人中心 → 我的资料」设置自己的语言。网站前台默认语言仍在各自网站里设置。</lang></p>
+        </div>
+    </header>
+    <div class="w-card">
+        <div class="w-card__body">
+            <form method="post" action="@backend-url('i18n/backend/backend-language')">
+                <div class="w-field">
+                    <label class="w-field__label" for="backend-default-language"><lang>后台系统默认语言</lang></label>
+                    <w:i18n:language:select
+                        id="backend-default-language"
+                        name="backend_default_language"
+                        value="backend_default_language"
+                        required="true"
+                        data-w-width="full"
+                    />
+                </div>
+                <button type="submit" class="w-button" data-tone="primary"><lang>保存</lang></button>
+            </form>
+        </div>
+    </div>
+</div>

@@ -42,6 +42,7 @@ use Weline\Framework\Setup\Stage\SchemaDiffStage;
 use Weline\Framework\Php\FiberTaskBatch;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Phrase\DatabaseFreeTranslator;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
@@ -613,6 +614,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return;
         }
 
+        // setup:upgrade 全程跳过全局 DB 词典整表 hydrate（__() 进度文案仍可用源串/文件层）
+        Parser::setSetupUpgradeLightDictionary(true);
+        try {
+            return $this->executeUpgradeWithLocks($args, $data);
+        } finally {
+            Parser::setSetupUpgradeLightDictionary(false);
+        }
+    }
+
+    /**
+     * 持锁执行升级主流程（由 execute() 在轻词典 flag 保护下调用）。
+     *
+     * @param array<string, mixed> $args
+     * @param array<string, mixed> $data
+     */
+    private function executeUpgradeWithLocks(array $args, array $data)
+    {
         $lockFile = '';
         $lockHandle = null;
         $maintenanceEnabled = false;
@@ -2792,10 +2810,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $modules,
                 static function (string $module_name, array $module) use ($moduleHelper, $oldModules): array {
                     $moduleObj = new Module($module);
+                    $fromSetup = (string)($module['setup_version']
+                        ?? $oldModules[$moduleObj->getName()]['setup_version']
+                        ?? $oldModules[$moduleObj->getName()]['version']
+                        ?? '0.0.0');
                     $setupContext = ObjectManager::make(SetupContext::class, [
                         'module_name' => $moduleObj->getName(),
                         'module_version' => $moduleObj->getVersion(),
-                        'module_description' => $moduleObj->getDescription()
+                        'module_description' => $moduleObj->getDescription(),
+                        'from_setup_version' => $fromSetup !== '' ? $fromSetup : '0.0.0',
                     ], '__construct');
 
                     $tasks = [];
@@ -3195,10 +3218,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     }
                     
                     $moduleObj = new Module($module);
+                    $fromSetup = (string)($module['setup_version'] ?? '0.0.0');
                     $setupContext = ObjectManager::make(SetupContext::class, [
                         'module_name' => $moduleObj->getName(),
                         'module_version' => $moduleObj->getVersion(),
-                        'module_description' => $moduleObj->getDescription()
+                        'module_description' => $moduleObj->getDescription(),
+                        'from_setup_version' => $fromSetup !== '' ? $fromSetup : '0.0.0',
                     ], '__construct');
                     
                     // 检查该模块是否已有数据库任务

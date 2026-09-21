@@ -1,0 +1,62 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entry = (array) ($this->getData('payment_guide_entry') ?? []);
+$policyRoute = (string) ($entry['policy_route'] ?? '');
+?>
+
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-guide-stripe">
+    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge">Stripe</p>
+        <h1 class="amazon-payment-guide-article__title"><lang>Stripe 支付指南</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>使用银行卡或 Stripe 支持的本地支付方式完成结账，并在安全支付页确认订单金额。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.stripe.prepare">
+        <h2><lang>支付前准备</lang></h2>
+        <ul>
+            <li><lang>确认订单金额、币种与收货国家/地区。</lang></li>
+            <li><lang>准备可用的银行卡，或本站已启用的 Stripe 本地支付方式。</lang></li>
+            <li><lang>确保浏览器允许加载 Stripe 安全支付组件或跳转到 Stripe 结账页。</lang></li>
+        </ul>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.stripe.steps">
+        <h2><lang>支付步骤</lang></h2>
+        <ol>
+            <li><lang>在结账页选择 Stripe。</lang></li>
+            <li><lang>在支付表单中填写银行卡信息，或选择可用的本地支付方式并按提示完成验证。</lang></li>
+            <li><lang>确认支付后返回本站，订单状态将依据 Stripe 回调结果同步更新。</lang></li>
+        </ol>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.stripe.faq">
+        <h2><lang>常见问题</lang></h2>
+        <ul class="amazon-payment-guide-article__faq">
+            <li>
+                <strong><lang>支付被银行拒绝？</lang></strong>
+                <p><lang>请核对卡号、有效期与安全码，或联系发卡行确认是否允许网购；也可更换其他支付方式。</lang></p>
+            </li>
+            <li>
+                <strong><lang>提示需要 3D Secure / 额外验证？</lang></strong>
+                <p><lang>请按银行或 Stripe 页面提示完成身份验证，验证通过后支付才会完成。</lang></p>
+            </li>
+            <li>
+                <strong><lang>支付后页面没有返回？</lang></strong>
+                <p><lang>请手动返回本站订单页查看状态，或联系客服并提供订单号。</lang></p>
+            </li>
+        </ul>
+    </section>
+
+    <?php if ($policyRoute !== ''): ?>
+        <footer class="amazon-payment-guide-article__footer">
+            <a href="@url{$policyRoute}"><lang>查看 Stripe 支付政策</lang></a>
+        </footer>
+    <?php endif; ?>
+</article>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

@@ -71,6 +71,8 @@ AllMenuTreeRegistry::publish($menuTree);
    aria-label="<?= $esc(WidgetI18n::label('打开所有类别菜单')) ?>"
    aria-expanded="false"
    aria-controls="categories-sidebar"
+   data-widget-code="all-menu"
+   data-testid="all-menu"
    data-all-menu-widget="1"
    data-menu-count="<?= count($menuTree) ?>">
     <svg class="hamburger-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

@@ -17,7 +17,29 @@ final class ThemePreviewGeneratorUrlTest extends TestCase
         self::assertStringContainsString('theme/frontend/theme-preview/gateway', $url);
         self::assertStringContainsString('preview_theme=10', $url);
         self::assertStringContainsString('preview_area=frontend', $url);
+        self::assertStringContainsString('preview_gen=1', $url);
+        self::assertStringContainsString('preview_exp=', $url);
+        self::assertStringContainsString('preview_sig=', $url);
         self::assertStringNotContainsString('index/index', $url);
+    }
+
+    public function testScreenshotCommandBoundsHeadlessWait(): void
+    {
+        $source = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/ThemePreviewGenerator.php');
+
+        self::assertStringContainsString('capture-screenshot.mjs', $source);
+        self::assertStringContainsString('SCREENSHOT_CHROME_TIMEOUT_MS = 24000', $source);
+    }
+
+    public function testCaptureSignatureRejectsAnotherThemeAndAnExpiredWindow(): void
+    {
+        $exp = time() + 60;
+        $signature = ThemePreviewGenerator::signCapture(10, 'frontend', $exp);
+
+        self::assertTrue(ThemePreviewGenerator::isValidCaptureSignature(10, 'frontend', $exp, $signature));
+        self::assertFalse(ThemePreviewGenerator::isValidCaptureSignature(11, 'frontend', $exp, $signature));
+        self::assertFalse(ThemePreviewGenerator::isValidCaptureSignature(10, 'backend', $exp, $signature));
+        self::assertFalse(ThemePreviewGenerator::isValidCaptureSignature(10, 'frontend', time() - 30, $signature));
     }
 
     public function testAbsoluteThemePathsSupportAreaDetection(): void

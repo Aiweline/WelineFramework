@@ -5,6 +5,7 @@ namespace Weline\Framework\Test\Unit\Phrase;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionProperty;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -94,10 +95,14 @@ final class TemplateTranslationPrefetchTest extends TestCase
     {
         $word = 'Warmup';
         Parser::parse($word);
-        $layers = (new ReflectionProperty(Parser::class, 'currentRequestLayeredWords'))->getValue();
+        $stateMethod = new ReflectionMethod(Parser::class, 'requestState');
+        $stateMethod->setAccessible(true);
+        $state = $stateMethod->invoke(null);
+        $layers = $state->layeredWords;
+        self::assertIsArray($layers);
         $layers['modules'] = ['Weline_PrefetchFixture'];
         $layers['module_words'] = ['Weline_PrefetchFixture' => ['Runtime word' => 'Module translated']];
-        (new ReflectionProperty(Parser::class, 'currentRequestLayeredWords'))->setValue(null, $layers);
+        $state->layeredWords = $layers;
         $this->provider->wordCalls = [];
         $this->provider->batchCalls = [];
         $compiled = $this->compile("<?= __('Runtime word') ?>");
@@ -111,8 +116,9 @@ final class TemplateTranslationPrefetchTest extends TestCase
         $compiled = $this->compile("<?= __(\$dynamic) ?>|@lang(\$dynamic)|<?= __('prefix ' . \$dynamic) ?>");
         self::assertSame([], $this->provider->wordCalls);
         self::assertSame([], $this->provider->batchCalls);
-        self::assertSame('Dynamic translated|Dynamic translated|prefix Dynamic word', $this->render($compiled, 'Dynamic word'));
-        self::assertNotEmpty($this->provider->wordCalls);
+        // 动态词不会进编译期 prefetch；运行时 __() 缺词原样返回，不打全局词典 DB。
+        self::assertSame('Dynamic word|Dynamic word|prefix Dynamic word', $this->render($compiled, 'Dynamic word'));
+        self::assertSame([], $this->provider->wordCalls);
         self::assertSame([], $this->provider->batchCalls);
     }
 

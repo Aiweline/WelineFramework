@@ -2478,18 +2478,67 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     /**
      * Default/all-language editor contexts still stamp file-image usage with the
      * site default locale. File layout validation needs that concrete locale.
+     * Do not fall back to Env::default_LANGUAGE_CODE alone — storefront sites
+     * such as Chang Hanfu use en_US while the framework default stays zh_Hans_CN.
      */
     private function resolveFileAssetLocale(ThemeEditorContext $context): string
     {
         $localeCode = trim($context->locale === 'default' ? '' : $context->locale);
         if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
-            $localeCode = trim((string)Env::default_LANGUAGE_CODE);
+            $localeCode = $this->resolveWebsiteDefaultLocale($context->scope->identity);
         }
         if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
             throw new \InvalidArgumentException('theme_scope_file_locale_unresolved');
         }
 
         return $localeCode;
+    }
+
+    /**
+     * website_id=0 is the system default site, not "unset".
+     */
+    private function resolveWebsiteDefaultLocale(ScopeIdentity $identity): string
+    {
+        $kind = strtolower(trim($identity->scopeKind));
+        // website_id=0 is the system default site, not "unset".
+        $hasWebsiteScope = $kind !== '' && $kind !== ScopeIdentity::KIND_GLOBAL;
+        $websiteId = $hasWebsiteScope ? max(0, (int)($identity->websiteId ?? 0)) : 0;
+        try {
+            if ($hasWebsiteScope && class_exists(\Weline\Websites\Model\Website::class)) {
+                /** @var \Weline\Websites\Model\Website $website */
+                $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                $website->clearData()->load($websiteId);
+                $fromWebsite = trim(str_replace('-', '_', (string)($website->getDefaultLanguage() ?? '')));
+                if ($fromWebsite !== '') {
+                    return $fromWebsite;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $fromCurrent = trim(str_replace(
+                    '-',
+                    '_',
+                    (string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? '')
+                ));
+                if ($fromCurrent !== '') {
+                    return $fromCurrent;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            $fromState = trim(str_replace('-', '_', (string)\Weline\Framework\App\State::resolveWebsiteDefaultLanguage()));
+            if ($fromState !== '') {
+                return $fromState;
+            }
+        } catch (\Throwable) {
+        }
+
+        return trim((string)Env::default_LANGUAGE_CODE);
     }
 
     private function numericBackendActorId(string $actorId): ?int

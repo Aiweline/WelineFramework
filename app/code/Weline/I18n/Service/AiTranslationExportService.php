@@ -16,17 +16,26 @@ class AiTranslationExportService
 
     /**
      * Incrementally appends AI translations to each source module's target locale CSV.
-     *
-     * @return array<string, mixed>
-     */
-    /**
-     * Incrementally appends AI translations to each source module's target locale CSV.
+     * Non-baseline locales are skipped (system dictionary only).
      *
      * @return array<string, mixed>
      */
     public function exportAiTranslationsToModules(string $localeCode): array
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
+        if (!I18nCsvCodec::isModuleCsvLocale($localeCode)) {
+            return [
+                'success' => true,
+                'exported' => 0,
+                'skipped' => 0,
+                'modules' => [],
+                'errors' => [],
+                'message' => (string)__(
+                    'locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。',
+                    [$localeCode],
+                ),
+            ];
+        }
         $exported = 0;
         $skipped = 0;
         $modules = [];
@@ -196,6 +205,20 @@ class AiTranslationExportService
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
         $moduleName = trim($moduleName);
+        if (!I18nCsvCodec::isModuleCsvLocale($localeCode)) {
+            return [
+                'success' => true,
+                'exported' => 0,
+                'skipped' => 0,
+                'module' => $moduleName,
+                'csv_file' => '',
+                'errors' => [],
+                'message' => (string)__(
+                    'locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。',
+                    [$localeCode],
+                ),
+            ];
+        }
         if ($moduleName === '') {
             return [
                 'success' => false,
@@ -351,6 +374,16 @@ class AiTranslationExportService
         if ($moduleName === '') {
             $empty['errors'][] = (string)__('模块名不能为空');
             $empty['message'] = $empty['errors'][0];
+
+            return $empty;
+        }
+        if (!I18nCsvCodec::isModuleCsvLocale($localeCode)) {
+            $empty['success'] = true;
+            $empty['module'] = $moduleName;
+            $empty['message'] = (string)__(
+                'locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。',
+                [$localeCode],
+            );
 
             return $empty;
         }

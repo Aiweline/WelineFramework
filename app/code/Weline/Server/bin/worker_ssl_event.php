@@ -1697,6 +1697,9 @@ function wlsEventResponseRequestsClose(string $response): bool
 
 function wlsEventInjectProcessTimeHeader(string $response, float $durationMs): string
 {
+    if (!\Weline\Framework\Http\ResponseObservabilityPolicy::processTimingHeadersEnabled()) {
+        return $response;
+    }
     $pos = \strpos($response, "\r\n\r\n");
     if ($pos === false) {
         return $response;
@@ -1831,6 +1834,11 @@ function wlsEventHandleRequest(
     }
 
     wlsEventRequestContextEnter($connectionId);
+    \Weline\Server\Log\Error\ErrorBootstrap::updateRequestContext(
+        (string)$uri,
+        (string)$method,
+        (string)$policyDecision->clientIp
+    );
     try {
         $request = \Weline\Framework\Http\WlsRequest::fromEnvelope($policyDecision->requestEnvelope(), $policyServerInfo + [
             'WLS_INSTANCE' => $instanceName,
@@ -1913,6 +1921,7 @@ function wlsEventHandleRequest(
         return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: "
             . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
     } finally {
+        \Weline\Server\Log\Error\ErrorBootstrap::clearRequestContext();
         wlsEventRequestContextLeave();
     }
 }

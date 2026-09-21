@@ -31,6 +31,7 @@ use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
 use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SharedStateServiceManager;
+use Weline\Server\Service\DarwinWinModeLogWindow;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Provider\GatewayFallbackProvider;
 use Weline\Server\Service\Provider\GatewayJoinBackendProvider;
@@ -538,6 +539,15 @@ class Stop extends CommandAbstract
         if ($nameLower === 'cli' || $nameLower === 'cli-server') {
             $this->stopCliServer($force);
             return;
+        }
+
+        // 先回收本实例 --win 观察窗口，再杀进程，避免 Terminal 残留。
+        $closedWindows = DarwinWinModeLogWindow::closeAllForInstance($name);
+        if ($closedWindows > 0) {
+            $this->printer->note(__(
+                'macOS --win: 已关闭本实例 %{1} 个观察窗口',
+                [$closedWindows]
+            ));
         }
 
         // 通过 ServerInstanceManager 获取实例信息（统一入口）

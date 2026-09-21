@@ -32,12 +32,17 @@ final class PaymentCaptureReaderBridgeContractTest extends TestCase
         self::assertStringContainsString('PaymentCaptureReaderEnsureService', $service);
     }
 
-    public function testBackendRecordsEnsureThenFallbackToTransaction(): void
+    public function testBackendRecordsEnsureThenMergeAttemptAndTransaction(): void
     {
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/BackendOrderPaymentRecordsService.php'
         );
         self::assertStringContainsString('ensureFromPayable', $src);
+        self::assertStringContainsString('mergeAttemptAndTransactionRows', $src);
         self::assertStringContainsString('weline_payment_transaction', $src);
+        self::assertStringNotContainsString(
+            "if (\$rows !== []) {\n            return \$rows;\n        }",
+            $src
+        );
     }
 }

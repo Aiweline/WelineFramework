@@ -16,6 +16,7 @@ use Weline\Payment\Api\Webhook\WebhookEndpointRecord;
 use Weline\Payment\Api\Webhook\WebhookReceiveResult;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Model\PaymentWebhookInbox;
+use Weline\Payment\Service\DevRelayDispatcher;
 
 /**
  * Phase-A webhook receiver：endpoint → verify → pure parse → immutable inbox → 2xx（MOD-P2F-003）。
@@ -327,72 +328,57 @@ final class PaymentCallbackReceiver
         }
 
         $inboxCode = 'wi_' . bin2hex(random_bytes(16));
-        $model = $this->newModel(PaymentWebhookInbox::class);
         try {
-            return $this->transactionRunner()->run(
-                $model->getConnection(),
-                function () use (
+            // 不在显式事务里写 inbox：框架在 Model::save 路径可能顺带探测其它模块表，
+            // 任一缺失表会把 PostgreSQL 事务标成仅回滚，导致本行也无法提交（对外 retry）。
+            // 幂等仍靠 provider_event_id 唯一键 + 下方 catch 再读 winner。
+            $raced = $this->loadInboxByEvent($record->endpointCode, $eventId);
+            if ($raced instanceof PaymentWebhookInbox) {
+                return $this->existingPersistentResult(
+                    $raced,
                     $record,
-                    $eventId,
                     $schemaVersion,
                     $payloadHash,
-                    $rawBody,
-                    $headers,
-                    $signature,
-                    $secretVersion,
-                    $parsed,
-                    $receivedAt,
-                    $inboxCode,
-                ): WebhookReceiveResult {
-                    $raced = $this->loadInboxByEvent($record->endpointCode, $eventId);
-                    if ($raced instanceof PaymentWebhookInbox) {
-                        return $this->existingPersistentResult(
-                            $raced,
-                            $record,
-                            $schemaVersion,
-                            $payloadHash,
-                        );
-                    }
-                    if ($this->memory['fail_before_commit']) {
-                        throw new \RuntimeException(self::ERROR_INBOX_COMMIT_FAILED);
-                    }
+                );
+            }
+            if ($this->memory['fail_before_commit']) {
+                throw new \RuntimeException(self::ERROR_INBOX_COMMIT_FAILED);
+            }
 
-                    $inbox = $this->newModel(PaymentWebhookInbox::class);
-                    $inbox->setData([
-                        PaymentWebhookInbox::schema_fields_INBOX_CODE => $inboxCode,
-                        PaymentWebhookInbox::schema_fields_ENDPOINT_CODE => $record->endpointCode,
-                        PaymentWebhookInbox::schema_fields_PROVIDER_EVENT_ID => $eventId,
-                        PaymentWebhookInbox::schema_fields_PROVIDER_CODE => $record->providerCode,
-                        PaymentWebhookInbox::schema_fields_MERCHANT_ACCOUNT => $record->merchantAccount,
-                        PaymentWebhookInbox::schema_fields_ENVIRONMENT => $record->environment,
-                        PaymentWebhookInbox::schema_fields_SCHEMA_VERSION => $schemaVersion,
-                        PaymentWebhookInbox::schema_fields_VERIFICATION_SECRET_VERSION => $secretVersion,
-                        PaymentWebhookInbox::schema_fields_PAYLOAD_HASH => $payloadHash,
-                        PaymentWebhookInbox::schema_fields_ENCRYPTED_RAW_PAYLOAD => $this->encrypt($rawBody),
-                        PaymentWebhookInbox::schema_fields_ENCRYPTED_HEADERS => $this->encrypt(
-                            json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
-                        ),
-                        PaymentWebhookInbox::schema_fields_ENCRYPTED_SIGNATURE => $this->encrypt($signature),
-                        PaymentWebhookInbox::schema_fields_STATUS => PaymentWebhookInbox::STATUS_RECEIVED,
-                        PaymentWebhookInbox::schema_fields_INTENT_CODE => $parsed->getIntentCode(),
-                        PaymentWebhookInbox::schema_fields_ATTEMPT_CODE => $parsed->getData('attempt_code'),
-                        PaymentWebhookInbox::schema_fields_EVENT_TYPE => $parsed->getEventType(),
-                        PaymentWebhookInbox::schema_fields_STATUS_TRANSITION => (string) (
-                            $parsed->getData(CallbackResult::FIELD_STATUS_TRANSITION) ?? ''
-                        ),
-                        PaymentWebhookInbox::schema_fields_RECEIVED_AT => $this->dateTime($receivedAt),
-                    ])->save();
-                    $this->audit('received', $record->endpointCode, null, $inboxCode);
-                    $this->dispatchInboxReceived($inboxCode);
+            $inbox = $this->newModel(PaymentWebhookInbox::class);
+            $inbox->setData([
+                PaymentWebhookInbox::schema_fields_INBOX_CODE => $inboxCode,
+                PaymentWebhookInbox::schema_fields_ENDPOINT_CODE => $record->endpointCode,
+                PaymentWebhookInbox::schema_fields_PROVIDER_EVENT_ID => $eventId,
+                PaymentWebhookInbox::schema_fields_PROVIDER_CODE => $record->providerCode,
+                PaymentWebhookInbox::schema_fields_MERCHANT_ACCOUNT => $record->merchantAccount,
+                PaymentWebhookInbox::schema_fields_ENVIRONMENT => $record->environment,
+                PaymentWebhookInbox::schema_fields_SCHEMA_VERSION => $schemaVersion,
+                PaymentWebhookInbox::schema_fields_VERIFICATION_SECRET_VERSION => $secretVersion,
+                PaymentWebhookInbox::schema_fields_PAYLOAD_HASH => $payloadHash,
+                PaymentWebhookInbox::schema_fields_ENCRYPTED_RAW_PAYLOAD => $this->encrypt($rawBody),
+                PaymentWebhookInbox::schema_fields_ENCRYPTED_HEADERS => $this->encrypt(
+                    json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+                ),
+                PaymentWebhookInbox::schema_fields_ENCRYPTED_SIGNATURE => $this->encrypt($signature),
+                PaymentWebhookInbox::schema_fields_STATUS => PaymentWebhookInbox::STATUS_RECEIVED,
+                PaymentWebhookInbox::schema_fields_INTENT_CODE => $parsed->getIntentCode(),
+                PaymentWebhookInbox::schema_fields_ATTEMPT_CODE => $parsed->getData('attempt_code'),
+                PaymentWebhookInbox::schema_fields_EVENT_TYPE => $parsed->getEventType(),
+                PaymentWebhookInbox::schema_fields_STATUS_TRANSITION => (string) (
+                    $parsed->getData(CallbackResult::FIELD_STATUS_TRANSITION) ?? ''
+                ),
+                PaymentWebhookInbox::schema_fields_RECEIVED_AT => $this->dateTime($receivedAt),
+            ])->save();
+            $this->audit('received', $record->endpointCode, null, $inboxCode);
+            $this->dispatchInboxReceived($inboxCode);
 
-                    return new WebhookReceiveResult(
-                        httpStatus: WebhookReceiveResult::HTTP_OK,
-                        body: 'ok',
-                        inboxCode: $inboxCode,
-                        inboxWritten: true,
-                        replayed: false,
-                    );
-                },
+            return new WebhookReceiveResult(
+                httpStatus: WebhookReceiveResult::HTTP_OK,
+                body: 'ok',
+                inboxCode: $inboxCode,
+                inboxWritten: true,
+                replayed: false,
             );
         } catch (\Throwable $throwable) {
             // A unique-key race rolls back first; only then re-read the winner.
@@ -792,13 +778,22 @@ final class PaymentCallbackReceiver
         }
 
         try {
+            // 直接派发：WLS HTTP worker 上 EventsManager 偶发不触发观察者，导致入箱成功但中继事件缺失。
+            $this->objectManager->getInstance(DevRelayDispatcher::class)->handleEvent(
+                new Event(['inbox_code' => $inboxCode]),
+            );
+        } catch (\Throwable) {
+            // Relay must never break webhook receipt.
+        }
+
+        try {
             $events = $this->objectManager->getInstance(EventsManager::class);
             $event = new Event([
                 'inbox_code' => $inboxCode,
             ]);
             $events->dispatch(DevRelayDispatcher::EVENT_INBOX_RECEIVED, $event);
         } catch (\Throwable) {
-            // Relay must never break webhook receipt.
+            // Other observers must never break webhook receipt.
         }
     }
 }

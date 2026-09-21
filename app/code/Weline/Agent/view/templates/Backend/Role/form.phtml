@@ -1,0 +1,564 @@
+<?php
+/**
+ * Role add/edit form — Weline UI 2.0 humanized shell.
+ * Preserves field IDs / names for existing guide JS.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$role = $role ?? null;
+$roleData = is_array($role_data ?? null) ? $role_data : ($role ? $role->getData() : []);
+$skills = is_array($skills ?? null) ? $skills : [];
+$models = is_array($models ?? null) ? $models : [];
+$adapters = is_array($adapters ?? null) ? $adapters : [];
+$roleTemplates = is_array($role_templates ?? null) ? $role_templates : [];
+$selectedSkills = is_array($selected_skills ?? null) ? $selected_skills : [];
+$selectedPermissions = is_array($selected_permissions ?? null) ? $selected_permissions : [];
+$selectedModelConfig = is_array($selected_model_config ?? null) ? $selected_model_config : [];
+$guideConfig = is_array($guide_config ?? null) ? $guide_config : [];
+$guideProfiles = is_array($guide_profiles ?? null) ? $guide_profiles : [];
+$initialGuide = is_array($initial_guide ?? null) ? $initial_guide : [];
+$maxProjectCount = max(1, (int)($max_project_count ?? ($guideConfig['max_project_count'] ?? 200)));
+
+$guideEnabled = (bool)($guideConfig['enabled'] ?? true);
+$guideSteps = is_array($guideConfig['steps'] ?? null) ? $guideConfig['steps'] : [];
+$defaultTemplateCode = (string)($initialGuide['template_code'] ?? ($guideConfig['default_template'] ?? 'general_assistant'));
+$defaultBrief = (string)($initialGuide['brief'] ?? '');
+$defaultProjectCount = max(1, min($maxProjectCount, (int)($initialGuide['project_count'] ?? 1)));
+$defaultWorkflowStyle = (string)($initialGuide['workflow_style'] ?? 'balanced');
+$defaultRiskLevel = (string)($initialGuide['risk_level'] ?? 'safe');
+$defaultTargetOutcome = (string)($initialGuide['target_outcome'] ?? '');
+$defaultAgentProfile = (string)($initialGuide['agent_profile'] ?? ($guideConfig['default_profile'] ?? 'multi_project'));
+
+$status = (string)($roleData['status'] ?? 'enabled');
+$selectedModelId = (int)($roleData['model_id'] ?? 0);
+$selectedAdapterCode = (string)($roleData['scenario_adapter_code'] ?? '');
+
+$permissionsText = implode("\n", array_map(static fn($value) => trim((string)$value), $selectedPermissions));
+$modelConfigText = '';
+if (!empty($selectedModelConfig)) {
+    $encodedModelConfig = json_encode($selectedModelConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $modelConfigText = is_string($encodedModelConfig) ? $encodedModelConfig : '';
+}
+
+$skillsByCategory = [];
+foreach ($skills as $skill) {
+    $category = trim((string)($skill['category'] ?? 'other'));
+    if ($category === '') {
+        $category = 'other';
+    }
+    $skillsByCategory[$category][] = $skill;
+}
+ksort($skillsByCategory);
+
+$suggestPath = '*/backend/role/suggest';
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$isEdit = !empty($roleData['role_id']);
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="robot" size="sm" /> <?= $escape($isEdit ? __('编辑角色') : __('创建角色')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('先选模板与场景，再用 AI 建议补齐；高级权限可稍后展开。')) ?></p>
+        </div>
+        <a href="@backend-url{'*/backend/role/listing'}" class="w-button" data-tone="neutral" data-variant="outline">
+            <w:icon name="arrow-left" size="sm" /> <?= $escape(__('返回列表')) ?>
+        </a>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <form id="agentRoleForm" action="#" method="post" data-listing-url="@backend-url{'*/backend/role/listing'}">
+        <csrf/>
+        <?php if (!empty($roleData['role_id'])): ?>
+            <input type="hidden" name="id" value="<?= (int)$roleData['role_id'] ?>">
+        <?php endif; ?>
+
+        <div class="w-agent-form-layout">
+            <div class="w-stack" data-gap="md">
+                <article class="w-card">
+                    <div class="w-card__header">
+                        <div class="w-stack" data-gap="xs">
+                            <h2 class="w-card__title"><?= $escape(__('引导配置')) ?></h2>
+                            <p class="w-text" data-tone="muted"><?= $escape(__('告诉智能体你在做什么，它会帮你填好人设与技能边界。')) ?></p>
+                        </div>
+                        <span class="w-agent-chip" data-tone="<?= $guideEnabled ? 'success' : 'warning' ?>">
+                            <?= $guideEnabled ? $escape(__('推荐流程')) : $escape(__('引导关闭')) ?>
+                        </span>
+                    </div>
+                    <div class="w-card__body w-stack" data-gap="md">
+                        <div class="w-field">
+                            <label class="w-field__label" for="template_code"><?= $escape(__('角色模板')) ?></label>
+                            <select id="template_code" class="w-select" name="template_code">
+                                <?php foreach ($roleTemplates as $template): ?>
+                                    <?php $templateCode = (string)($template['code'] ?? ''); ?>
+                                    <option value="<?= $escape($templateCode) ?>" <?= $templateCode === $defaultTemplateCode ? 'selected' : '' ?>>
+                                        <?= $escape((string)($template['name'] ?? $templateCode)) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <span class="w-text" data-tone="muted"><?= $escape(__('可先应用模板基线，再点「生成 AI 建议」细化。')) ?></span>
+                        </div>
+
+                        <div class="w-agent-filters">
+                            <div class="w-field">
+                                <label class="w-field__label" for="agent_profile"><?= $escape(__('工作规模')) ?></label>
+                                <select id="agent_profile" class="w-select">
+                                    <?php foreach ($guideProfiles as $profile): ?>
+                                        <?php $profileCode = (string)($profile['code'] ?? ''); ?>
+                                        <option value="<?= $escape($profileCode) ?>" <?= $profileCode === $defaultAgentProfile ? 'selected' : '' ?>>
+                                            <?= $escape((string)__((string)($profile['name'] ?? $profileCode))) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small id="botProfileHint" class="w-text" data-tone="muted"></small>
+                            </div>
+                            <div class="w-field">
+                                <label class="w-field__label" for="target_outcome"><?= $escape(__('期望输出')) ?></label>
+                                <input id="target_outcome" type="text" class="w-input"
+                                       value="<?= $escape($defaultTargetOutcome) ?>"
+                                       placeholder="<?= $escape(__('示例：带优先级的每日任务看板')) ?>">
+                            </div>
+                        </div>
+
+                        <div class="w-field">
+                            <label class="w-field__label" for="guide_brief"><?= $escape(__('业务场景 / 目标')) ?></label>
+                            <textarea id="guide_brief" class="w-textarea" rows="4"
+                                      placeholder="<?= $escape(__('示例：管理 6 个项目，每日汇总并按优先级分发。')) ?>"><?= $escape($defaultBrief) ?></textarea>
+                        </div>
+
+                        <div class="w-agent-filters">
+                            <div class="w-field">
+                                <label class="w-field__label" for="project_count"><?= $escape(__('项目数量')) ?></label>
+                                <input id="project_count" type="number" min="1" max="<?= $maxProjectCount ?>" class="w-input" value="<?= $defaultProjectCount ?>">
+                            </div>
+                            <div class="w-field">
+                                <label class="w-field__label" for="workflow_style"><?= $escape(__('工作流风格')) ?></label>
+                                <select id="workflow_style" class="w-select">
+                                    <option value="balanced" <?= $defaultWorkflowStyle === 'balanced' ? 'selected' : '' ?>><?= $escape(__('均衡')) ?></option>
+                                    <option value="fast" <?= $defaultWorkflowStyle === 'fast' ? 'selected' : '' ?>><?= $escape(__('速度优先')) ?></option>
+                                    <option value="careful" <?= $defaultWorkflowStyle === 'careful' ? 'selected' : '' ?>><?= $escape(__('安全优先')) ?></option>
+                                </select>
+                            </div>
+                            <div class="w-field">
+                                <label class="w-field__label" for="risk_level"><?= $escape(__('风险等级')) ?></label>
+                                <select id="risk_level" class="w-select">
+                                    <option value="safe" <?= $defaultRiskLevel === 'safe' ? 'selected' : '' ?>><?= $escape(__('安全')) ?></option>
+                                    <option value="normal" <?= $defaultRiskLevel === 'normal' ? 'selected' : '' ?>><?= $escape(__('标准')) ?></option>
+                                    <option value="aggressive" <?= $defaultRiskLevel === 'aggressive' ? 'selected' : '' ?>><?= $escape(__('激进')) ?></option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="w-agent-actions">
+                            <button type="button" class="w-button" data-variant="outline" id="applyTemplateBaselineBtn">
+                                <w:icon name="bolt" size="sm" /> <?= $escape(__('应用模板基线')) ?>
+                            </button>
+                            <button type="button" class="w-button" id="generateSuggestionBtn">
+                                <w:icon name="robot" size="sm" /> <?= $escape(__('生成 AI 建议')) ?>
+                            </button>
+                            <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="toggleAdvancedBtn">
+                                <w:icon name="settings" size="sm" /> <?= $escape(__('显示高级设置')) ?>
+                            </button>
+                            <span id="suggestionSource" class="w-agent-chip" hidden></span>
+                        </div>
+
+                        <div id="suggestionWarnings" class="w-alert" data-tone="warning" hidden></div>
+
+                        <?php if (!empty($guideSteps)): ?>
+                        <div class="w-stack" data-gap="xs">
+                            <strong><?= $escape(__('建议步骤')) ?></strong>
+                            <ol class="w-text" data-tone="muted" style="margin:0;padding-inline-start:1.25rem;">
+                                <?php foreach ($guideSteps as $step): ?>
+                                    <li><?= $escape((string)__((string)$step)) ?></li>
+                                <?php endforeach; ?>
+                            </ol>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </article>
+
+                <article class="w-card" id="advancedConfigCard">
+                    <div class="w-card__header">
+                        <h2 class="w-card__title"><?= $escape(__('高级配置')) ?></h2>
+                    </div>
+                    <div class="w-card__body w-stack" data-gap="md" id="advancedFields" <?= $guideEnabled ? 'style="display:none;"' : '' ?>>
+                        <div class="w-agent-filters">
+                            <div class="w-field">
+                                <label class="w-field__label" for="model_id"><?= $escape(__('AI 模型')) ?></label>
+                                <select id="model_id" class="w-select" name="model_id">
+                                    <option value="0"><?= $escape(__('使用默认模型')) ?></option>
+                                    <?php foreach ($models as $model): ?>
+                                        <?php
+                                        $mid = (int)($model['id'] ?? 0);
+                                        $label = (string)($model['name'] ?? ($model['model_code'] ?? ''));
+                                        $modelCode = (string)($model['model_code'] ?? '');
+                                        $provider = (string)($model['provider'] ?? '');
+                                        ?>
+                                        <option value="<?= $mid ?>" <?= $selectedModelId === $mid ? 'selected' : '' ?>>
+                                            <?= $escape($label) ?>
+                                            <?= $modelCode !== '' ? ' [' . $escape($modelCode) . ']' : '' ?>
+                                            <?= $provider !== '' ? ' - ' . $escape($provider) : '' ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="w-field">
+                                <label class="w-field__label" for="scenario_adapter_code"><?= $escape(__('场景适配器')) ?></label>
+                                <select id="scenario_adapter_code" class="w-select" name="scenario_adapter_code">
+                                    <option value=""><?= $escape(__('使用默认适配器')) ?></option>
+                                    <?php foreach ($adapters as $adapter): ?>
+                                        <?php $adapterCode = (string)($adapter['code'] ?? ''); ?>
+                                        <option value="<?= $escape($adapterCode) ?>" <?= $selectedAdapterCode === $adapterCode ? 'selected' : '' ?>>
+                                            <?= $escape((string)($adapter['name'] ?? $adapterCode)) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="w-stack" data-gap="sm">
+                            <strong><?= $escape(__('可用技能')) ?></strong>
+                            <p class="w-text" data-tone="muted"><?= $escape(__('勾选后，角色才能调用对应工具。危险技能请搭配更严权限。')) ?></p>
+                            <div class="w-agent-skill-grid">
+                                <?php foreach ($skillsByCategory as $category => $items): ?>
+                                    <div class="w-agent-skill-group">
+                                        <h3 class="w-agent-skill-group__title"><?= $escape($category) ?></h3>
+                                        <div class="w-agent-skill-items">
+                                            <?php foreach ($items as $skill): ?>
+                                                <?php
+                                                $skillCode = (string)($skill['code'] ?? '');
+                                                $skillName = (string)($skill['name'] ?? $skillCode);
+                                                $skillDesc = (string)($skill['description'] ?? '');
+                                                $dangerous = (int)($skill['is_dangerous'] ?? 0) === 1;
+                                                $needConfirm = (int)($skill['requires_confirmation'] ?? 0) === 1;
+                                                $skillId = 'skill_' . str_replace('.', '_', $skillCode);
+                                                ?>
+                                                <label class="w-agent-skill-item" for="<?= $escape($skillId) ?>">
+                                                    <input class="role-skill-checkbox" type="checkbox"
+                                                           name="skills[]"
+                                                           id="<?= $escape($skillId) ?>"
+                                                           value="<?= $escape($skillCode) ?>"
+                                                        <?= in_array($skillCode, $selectedSkills, true) ? 'checked' : '' ?>>
+                                                    <span class="w-stack" data-gap="xs">
+                                                        <strong><?= $escape($skillName) ?></strong>
+                                                        <span class="w-agent-code"><?= $escape($skillCode) ?></span>
+                                                        <?php if ($skillDesc !== ''): ?>
+                                                            <span class="w-text" data-tone="muted"><?= $escape($skillDesc) ?></span>
+                                                        <?php endif; ?>
+                                                        <span class="w-agent-tile__tags">
+                                                            <?php if ($dangerous): ?><span class="w-agent-chip" data-tone="warning"><?= $escape(__('需谨慎')) ?></span><?php endif; ?>
+                                                            <?php if ($needConfirm): ?><span class="w-agent-chip" data-tone="info"><?= $escape(__('需确认')) ?></span><?php endif; ?>
+                                                        </span>
+                                                    </span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+
+                        <div class="w-field">
+                            <label class="w-field__label" for="permissions_text"><?= $escape(__('权限（每行一条）')) ?></label>
+                            <textarea class="w-textarea" id="permissions_text" name="permissions_text" rows="5"
+                                      placeholder="<?= $escape(__('示例：fs.read:/app/*')) ?>"><?= $escape($permissionsText) ?></textarea>
+                        </div>
+
+                        <div class="w-field">
+                            <label class="w-field__label" for="model_config_text"><?= $escape(__('模型配置 JSON')) ?></label>
+                            <textarea class="w-textarea" id="model_config_text" name="model_config_text" rows="6"
+                                      placeholder='{"temperature":0.4,"max_tokens":4096}'><?= $escape($modelConfigText) ?></textarea>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <aside class="w-stack" data-gap="md">
+                <article class="w-card">
+                    <div class="w-card__header">
+                        <h2 class="w-card__title"><?= $escape(__('基本信息')) ?></h2>
+                    </div>
+                    <div class="w-card__body w-stack" data-gap="md">
+                        <div class="w-field">
+                            <label class="w-field__label" for="code"><?= $escape(__('角色代码')) ?> *</label>
+                            <input type="text" class="w-input" id="code" name="code"
+                                   value="<?= $escape((string)($roleData['code'] ?? '')) ?>" required>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="name"><?= $escape(__('角色名称')) ?> *</label>
+                            <input type="text" class="w-input" id="name" name="name"
+                                   value="<?= $escape((string)($roleData['name'] ?? '')) ?>" required>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="status"><?= $escape(__('状态')) ?></label>
+                            <select class="w-select" id="status" name="status">
+                                <option value="enabled" <?= $status === 'enabled' ? 'selected' : '' ?>><?= $escape(__('启用')) ?></option>
+                                <option value="disabled" <?= $status === 'disabled' ? 'selected' : '' ?>><?= $escape(__('禁用')) ?></option>
+                            </select>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="icon"><?= $escape(__('图标')) ?></label>
+                            <input type="text" class="w-input" id="icon" name="icon"
+                                   value="<?= $escape((string)($roleData['icon'] ?? 'mdi-robot')) ?>">
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="description"><?= $escape(__('描述')) ?></label>
+                            <textarea class="w-textarea" id="description" name="description" rows="4"><?= $escape((string)($roleData['description'] ?? '')) ?></textarea>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="w-card">
+                    <div class="w-card__header">
+                        <h2 class="w-card__title"><?= $escape(__('系统提示词')) ?></h2>
+                    </div>
+                    <div class="w-card__body">
+                        <div class="w-field">
+                            <label class="w-field__label" for="system_prompt"><?= $escape(__('人设与行为边界')) ?></label>
+                            <textarea class="w-textarea" id="system_prompt" name="system_prompt" rows="12"><?= $escape((string)($roleData['system_prompt'] ?? '')) ?></textarea>
+                        </div>
+                    </div>
+                </article>
+
+                <div class="w-agent-actions">
+                    <button type="submit" class="w-button" style="flex:1;">
+                        <w:icon name="save" size="sm" /> <?= $escape(__('保存角色')) ?>
+                    </button>
+                    <a href="@backend-url{'*/backend/role/listing'}" class="w-button" data-tone="neutral" data-variant="outline">
+                        <?= $escape(__('取消')) ?>
+                    </a>
+                </div>
+            </aside>
+        </div>
+    </form>
+</section>
+
+<script>
+(function () {
+    'use strict';
+
+    var roleTemplates = <?= json_encode($roleTemplates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var guideProfiles = <?= json_encode($guideProfiles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var form = document.getElementById('agentRoleForm');
+    var listingUrl = form ? (form.getAttribute('data-listing-url') || '') : '';
+    var generateBtn = document.getElementById('generateSuggestionBtn');
+    var applyTemplateBaselineBtn = document.getElementById('applyTemplateBaselineBtn');
+    var toggleAdvancedBtn = document.getElementById('toggleAdvancedBtn');
+    var advancedFields = document.getElementById('advancedFields');
+    var warningBox = document.getElementById('suggestionWarnings');
+    var sourceBadge = document.getElementById('suggestionSource');
+    var agentProfileSelect = document.getElementById('agent_profile');
+    var botProfileHint = document.getElementById('botProfileHint');
+    var admin = window.WelineAgentAdmin || null;
+
+    function toast(type, message) {
+        if (admin && typeof admin.toast === 'function') {
+            admin.toast(type, message);
+            return;
+        }
+        console.log('[role-form][' + type + ']', message);
+    }
+
+    function setWarnings(messages) {
+        if (!Array.isArray(messages) || messages.length === 0) {
+            warningBox.hidden = true;
+            warningBox.innerHTML = '';
+            return;
+        }
+        warningBox.hidden = false;
+        warningBox.innerHTML = messages.map(function (item) {
+            return '<div>' + String(item) + '</div>';
+        }).join('');
+    }
+
+    function setSuggestionSource(source, templateName) {
+        if (!source) {
+            sourceBadge.hidden = true;
+            sourceBadge.innerText = '';
+            return;
+        }
+        sourceBadge.hidden = false;
+        if (source === 'ai') {
+            sourceBadge.setAttribute('data-tone', 'success');
+            sourceBadge.innerText = <?= json_encode((string)__('来源：AI 建议'), JSON_UNESCAPED_UNICODE) ?> + (templateName ? (' / ' + templateName) : '');
+            return;
+        }
+        sourceBadge.setAttribute('data-tone', 'info');
+        sourceBadge.innerText = <?= json_encode((string)__('来源：模板基线'), JSON_UNESCAPED_UNICODE) ?> + (templateName ? (' / ' + templateName) : '');
+    }
+
+    function slugify(value) {
+        return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    }
+
+    function collectGuidePayload() {
+        var modelId = parseInt((document.getElementById('model_id') || {}).value || '0', 10);
+        if (!Number.isFinite(modelId)) modelId = 0;
+        return {
+            template_code: (document.getElementById('template_code') || {}).value || 'general_assistant',
+            brief: (document.getElementById('guide_brief') || {}).value || '',
+            project_count: parseInt((document.getElementById('project_count') || {}).value || '1', 10) || 1,
+            target_outcome: (document.getElementById('target_outcome') || {}).value || '',
+            workflow_style: (document.getElementById('workflow_style') || {}).value || 'balanced',
+            risk_level: (document.getElementById('risk_level') || {}).value || 'safe',
+            agent_profile: (document.getElementById('agent_profile') || {}).value || 'multi_project',
+            role_name: (document.getElementById('name') || {}).value || '',
+            role_code: (document.getElementById('code') || {}).value || '',
+            model_id: modelId,
+            icon: (document.getElementById('icon') || {}).value || 'mdi-robot'
+        };
+    }
+
+    function collectSavePayload() {
+        var skills = [];
+        if (form) {
+            form.querySelectorAll('.role-skill-checkbox:checked').forEach(function (el) { skills.push(el.value); });
+        }
+        var idInput = form ? form.querySelector('input[name="id"]') : null;
+        return {
+            id: idInput ? parseInt(idInput.value || '0', 10) || 0 : 0,
+            code: (document.getElementById('code') || {}).value || '',
+            name: (document.getElementById('name') || {}).value || '',
+            system_prompt: (document.getElementById('system_prompt') || {}).value || '',
+            model_id: parseInt((document.getElementById('model_id') || {}).value || '0', 10) || 0,
+            scenario_adapter_code: (document.getElementById('scenario_adapter_code') || {}).value || '',
+            status: (document.getElementById('status') || {}).value || 'enabled',
+            description: (document.getElementById('description') || {}).value || '',
+            icon: (document.getElementById('icon') || {}).value || 'mdi-robot',
+            permissions_text: (document.getElementById('permissions_text') || {}).value || '',
+            skills: skills,
+            model_config_text: (document.getElementById('model_config_text') || {}).value || ''
+        };
+    }
+
+    function findTemplateByCode(templateCode) {
+        if (!Array.isArray(roleTemplates)) return null;
+        for (var i = 0; i < roleTemplates.length; i += 1) {
+            if (String((roleTemplates[i] || {}).code || '') === String(templateCode || '')) return roleTemplates[i];
+        }
+        return null;
+    }
+
+    function applyDraft(draft) {
+        if (!draft || typeof draft !== 'object') return;
+        var map = {
+            code: 'code', name: 'name', description: 'description', system_prompt: 'system_prompt',
+            status: 'status', icon: 'icon', model_id: 'model_id', scenario_adapter_code: 'scenario_adapter_code'
+        };
+        Object.keys(map).forEach(function (key) {
+            var el = document.getElementById(map[key]);
+            if (!el || typeof draft[key] === 'undefined' || draft[key] === null || draft[key] === '') return;
+            el.value = key === 'code' ? slugify(draft[key]) : String(draft[key]);
+        });
+        var permissionsInput = document.getElementById('permissions_text');
+        var modelConfigInput = document.getElementById('model_config_text');
+        if (permissionsInput && Array.isArray(draft.permissions)) permissionsInput.value = draft.permissions.join('\n');
+        if (modelConfigInput && draft.model_config && typeof draft.model_config === 'object') {
+            modelConfigInput.value = JSON.stringify(draft.model_config, null, 2);
+        }
+        if (Array.isArray(draft.skills) && form) {
+            form.querySelectorAll('.role-skill-checkbox').forEach(function (checkbox) {
+                checkbox.checked = draft.skills.indexOf(checkbox.value) >= 0;
+            });
+        }
+    }
+
+    function applyTemplateBaseline() {
+        var template = findTemplateByCode((document.getElementById('template_code') || {}).value || '');
+        if (!template) {
+            toast('error', <?= json_encode((string)__('未找到模板'), JSON_UNESCAPED_UNICODE) ?>);
+            return;
+        }
+        var draft = Object.assign({}, template);
+        var codeInput = document.getElementById('code');
+        var nameInput = document.getElementById('name');
+        if (codeInput && String(codeInput.value || '').trim() !== '') draft.code = codeInput.value;
+        if (nameInput && String(nameInput.value || '').trim() !== '') draft.name = nameInput.value;
+        applyDraft(draft);
+        setSuggestionSource('template', String(template.name || template.code || ''));
+        setWarnings([]);
+        toast('success', <?= json_encode((string)__('已应用模板基线'), JSON_UNESCAPED_UNICODE) ?>);
+        if (advancedFields) advancedFields.style.display = '';
+    }
+
+    function updateAgentProfileHint() {
+        if (!botProfileHint || !agentProfileSelect || !Array.isArray(guideProfiles)) return;
+        var selected = String(agentProfileSelect.value || '');
+        var matched = null;
+        for (var i = 0; i < guideProfiles.length; i += 1) {
+            if (String((guideProfiles[i] || {}).code || '') === selected) { matched = guideProfiles[i]; break; }
+        }
+        botProfileHint.innerText = matched && matched.description
+            ? String(matched.description)
+            : <?= json_encode((string)__('选择配置以获取项目规模默认值。'), JSON_UNESCAPED_UNICODE) ?>;
+    }
+
+    function requestSuggestion() {
+        if (!admin || typeof admin.call !== 'function') {
+            toast('error', <?= json_encode((string)__('Weline.Api 不可用，无法生成建议'), JSON_UNESCAPED_UNICODE) ?>);
+            return;
+        }
+        generateBtn.disabled = true;
+        generateBtn.textContent = <?= json_encode((string)__('正在生成…'), JSON_UNESCAPED_UNICODE) ?>;
+        setWarnings([]);
+        admin.call('suggestRole', collectGuidePayload()).then(function (raw) {
+            var data = admin.unwrap ? admin.unwrap(raw) : raw;
+            if (!data || !data.success) throw new Error((data && data.msg) || <?= json_encode((string)__('建议生成失败'), JSON_UNESCAPED_UNICODE) ?>);
+            var result = data.data || {};
+            applyDraft(result.draft || {});
+            setWarnings(result.warnings || []);
+            setSuggestionSource(result.source || '', ((result.template || {}).name || ''));
+            if (advancedFields) advancedFields.style.display = '';
+            toast('success', data.msg || <?= json_encode((string)__('建议已生成'), JSON_UNESCAPED_UNICODE) ?>);
+        }).catch(function (error) {
+            setSuggestionSource('', '');
+            toast('error', error && error.message ? error.message : <?= json_encode((string)__('建议生成失败'), JSON_UNESCAPED_UNICODE) ?>);
+        }).finally(function () {
+            generateBtn.disabled = false;
+            generateBtn.textContent = <?= json_encode((string)__('生成 AI 建议'), JSON_UNESCAPED_UNICODE) ?>;
+        });
+    }
+
+    function saveRole(event) {
+        if (event) event.preventDefault();
+        if (!admin || typeof admin.call !== 'function') {
+            toast('error', <?= json_encode((string)__('Weline.Api 不可用，无法保存'), JSON_UNESCAPED_UNICODE) ?>);
+            return false;
+        }
+        var submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+        if (submitBtn) submitBtn.disabled = true;
+        admin.call('saveRole', collectSavePayload()).then(function (raw) {
+            var data = admin.unwrap ? admin.unwrap(raw) : raw;
+            if (!data || !data.success) throw new Error((data && data.msg) || <?= json_encode((string)__('保存失败'), JSON_UNESCAPED_UNICODE) ?>);
+            toast('success', data.msg || <?= json_encode((string)__('保存成功'), JSON_UNESCAPED_UNICODE) ?>);
+            if (listingUrl) window.location.href = listingUrl;
+        }).catch(function (error) {
+            toast('error', error && error.message ? error.message : <?= json_encode((string)__('保存失败'), JSON_UNESCAPED_UNICODE) ?>);
+            if (submitBtn) submitBtn.disabled = false;
+        });
+        return false;
+    }
+
+    if (form) form.addEventListener('submit', saveRole);
+    if (generateBtn) generateBtn.addEventListener('click', requestSuggestion);
+    if (applyTemplateBaselineBtn) applyTemplateBaselineBtn.addEventListener('click', applyTemplateBaseline);
+    if (agentProfileSelect) {
+        agentProfileSelect.addEventListener('change', updateAgentProfileHint);
+        updateAgentProfileHint();
+    }
+    if (toggleAdvancedBtn && advancedFields) {
+        toggleAdvancedBtn.addEventListener('click', function () {
+            if (advancedFields.style.display === 'none') {
+                advancedFields.style.display = '';
+                toggleAdvancedBtn.textContent = <?= json_encode((string)__('隐藏高级设置'), JSON_UNESCAPED_UNICODE) ?>;
+                return;
+            }
+            advancedFields.style.display = 'none';
+            toggleAdvancedBtn.textContent = <?= json_encode((string)__('显示高级设置'), JSON_UNESCAPED_UNICODE) ?>;
+        });
+    }
+})();
+</script>

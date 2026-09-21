@@ -45,10 +45,12 @@ final class FormRendererTest extends TestCase
     public function testRuntimeBootstrapCoalescesMutationObserver(): void
     {
         $js = FormRenderer::runtimeBootstrap();
-        self::assertStringContainsString('new MutationObserver', $js);
-        self::assertStringContainsString('mo.disconnect()', $js);
-        self::assertStringContainsString('requestAnimationFrame', $js);
-        self::assertStringContainsString('flushMo', $js);
-        self::assertStringNotContainsString('records.forEach', $js);
+        self::assertStringContainsString('Weline.dom.observe', $js);
+        self::assertStringContainsString('weline-form:mount', $js);
+        self::assertStringContainsString('ARCH_MO_FALLBACK_START', $js);
+        self::assertStringContainsString('mountAll(d);', $js);
+        self::assertStringNotContainsString('requestAnimationFrame', $js);
+        self::assertStringNotContainsString('flushMo', $js);
+        self::assertStringNotContainsString('onFlush:flushForms,mountAll', $js);
     }
 }

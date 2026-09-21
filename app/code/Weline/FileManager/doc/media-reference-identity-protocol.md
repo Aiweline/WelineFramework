@@ -41,10 +41,15 @@ product:sku:HF-HANFU-188:scope:default.default.default:kind:media:role:main
 | sc.catalog.category | `catalog:category:{path}:scope:{ss}:field:…` |
 | sc.blog.cover | `blog:post:{slug}:scope:{ss}:field:cover` |
 | sc.config.media | `config:key:{key}:scope:{ss}:ns:…` |
+| sc.backend.profile_avatar | `config:key:backend_profile_avatar/{username}:scope:{ss}:kind:media:field:avatar:component:backend:ns:backend`（个人中心头像；PHP `ConfigMediaReferenceTemplates::config` + 页首 `w-scope.js`） |
 | sc.smtp.bg | `smtp:mail:{code}:scope:{ss}:…` |
 | sc.eav.swatch | `eav:attribute:{attr_code}:scope:{ss}:kind:swatch:field:{option_code}` |
 | sc.product_brand.logo | `product_brand:brand:{code}:scope:{ss}:kind:logo:field:logo` |
 | sc.product_supplier.image | `product_supplier:supplier:{code}:scope:{ss}:kind:image:field:image` |
+
+### 前端强引用开选
+
+`file-picker.js`：`strong_ref` 时若无显式 `data-w-identity`，会用 `identity_*` + `window.w_scope` 自建；`w_scope` 未挂载 → toast「强引用选图缺少媒体身份」。业务页须 **页首同步挂 `w-scope.js`**，并**优先 PHP 预计算 `identity` path**（见 [file-manager-选图与file-image出图.md](file-manager-选图与file-image出图.md) 强引用清单）。
 
 ## 生命周期
 

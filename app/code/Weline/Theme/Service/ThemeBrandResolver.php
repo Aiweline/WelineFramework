@@ -281,14 +281,11 @@ final class ThemeBrandResolver
     {
         $normalized = $area === 'backend' ? 'backend' : 'frontend';
         try {
-            $identity = RequestContext::scopeIdentity();
-            if ($identity instanceof ScopeIdentity) {
-                /** @var ThemeContextService $themeContext */
-                $themeContext = ObjectManager::getInstance(ThemeContextService::class);
-                $scoped = $themeContext->resolveThemeForScope($normalized, $identity);
-                if ($scoped && (int)$scoped->getId() > 0) {
-                    return (int)$scoped->getId();
-                }
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $requested = $themeContext->resolveTheme($normalized, null, true);
+            if ($requested && (int)$requested->getId() > 0) {
+                return (int)$requested->getId();
             }
         } catch (\Throwable) {
         }

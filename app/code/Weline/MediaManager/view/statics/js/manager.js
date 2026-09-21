@@ -5347,7 +5347,9 @@
                         var usage = {
                             version: 1,
                             asset_id: String(file.asset_id),
-                            locale_code: String(file.locale_code),
+                            // Prefer picker CONFIG locale (Theme Editor site-default stamp)
+                            // over the asset-row locale so draft validation matches.
+                            locale_code: String(CONFIG.localeCode || file.locale_code),
                             alt: alt,
                             alt_state: 'confirmed',
                             decorative: decorative,

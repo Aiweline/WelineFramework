@@ -643,22 +643,27 @@ readonly class ThemeLayoutVersionService
             return null;
         }
 
-        $version = $this->versionModel->reset()->load($versionId);
-        if (!$version->getVersionId()) {
+        $version = $this->versionModel->reset()
+            ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayoutVersion::schema_fields_ID, $versionId);
+        $version = $this->applyVersionIdentityFilters($version, $identity)
+            ->select()
+            ->fetchArray();
+        if (!\is_array($version) || $version === []) {
+            return null;
+        }
+        $row = \is_array($version[0] ?? null) ? $version[0] : $version;
+        $loaded = clone $this->versionModel;
+        $loaded->setData($row);
+        if (!$loaded->getVersionId()
+            || (int)$loaded->getThemeId() !== $themeId
+            || (string)$loaded->getPageType() !== $pageType
+        ) {
             return null;
         }
 
-        if ((int)$version->getThemeId() !== $themeId
-            || (string)$version->getPageType() !== $pageType
-            || $version->getLayoutOption() !== $identity['layout_option']
-            || $version->getScope() !== $identity['scope']
-            || $version->getLocaleCode() !== $identity['locale_code']
-            || $version->getTargetType() !== $identity['target_type']
-            || $version->getTargetId() !== $identity['target_id']) {
-            return null;
-        }
-
-        return $version;
+        return $loaded;
     }
 
     public function getVersionSnapshot(int $themeId, string $pageType, int $versionId, array $identity = []): ?array

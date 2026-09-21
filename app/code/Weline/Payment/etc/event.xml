@@ -34,8 +34,8 @@
                   sort="20"/>
     </event>
     <event name="Weline_Order::order_shipped">
-        <observer name="Weline_Payment::paypal_order_shipped_tracking"
-                  instance="Weline\Payment\Observer\PayPalOrderShippedTrackingObserver"
+        <observer name="Weline_Payment::order_shipped_shipment_tracking"
+                  instance="Weline\Payment\Observer\OrderShippedShipmentTrackingObserver"
                   disabled="false"
                   shared="true"
                   sort="20"/>

@@ -202,6 +202,22 @@
         return '';
     }
 
+    function promptEnsureLogin() {
+        try {
+            if (window.Weline && window.Weline.Account && typeof window.Weline.Account.ensureLogin === 'function') {
+                return Promise.resolve(window.Weline.Account.ensureLogin({ force: true })).catch(function () {
+                    return null;
+                });
+            }
+            if (window.WelineAccountModule && typeof window.WelineAccountModule.ensureLogin === 'function') {
+                return Promise.resolve(window.WelineAccountModule.ensureLogin({ force: true })).catch(function () {
+                    return null;
+                });
+            }
+        } catch (_e) { /* ignore */ }
+        return Promise.resolve(null);
+    }
+
     function currentGuestTokenForCache() {
         if (window.WelineCart && typeof window.WelineCart.getGuestSession === 'function') {
             var session = window.WelineCart.getGuestSession();
@@ -1106,6 +1122,9 @@
         var eventName = open ? 'weshop:mini-cart:open' : 'weshop:mini-cart:close';
         window.dispatchEvent(new CustomEvent(eventName));
         if (open) {
+            if (String(root.getAttribute('data-cart-gate') || '') === 'login') {
+                promptEnsureLogin();
+            }
             loadDrawer(root, { forceNetwork: false });
             return;
         }
@@ -1260,6 +1279,9 @@
                         gate_reason: gateReasonFromPayload(payload),
                         message: payload && payload.message ? payload.message : '',
                     }));
+                    if (gateReasonFromPayload(payload) === 'login') {
+                        promptEnsureLogin();
+                    }
                 }
                 if (options.forceNetwork && window.WelineCart
                     && typeof window.WelineCart.consumeNeedsOriginRefresh === 'function') {

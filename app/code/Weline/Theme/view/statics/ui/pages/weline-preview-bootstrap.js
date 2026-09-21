@@ -38,6 +38,15 @@ function clearClientToken() {
     }
 }
 
+function isPreviewCaptureDocument() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('weline_preview_capture') === '1' || params.get('preview_gen') === '1';
+    } catch (error) {
+        return false;
+    }
+}
+
 function stripTokenFromUrl() {
     try {
         const url = new URL(window.location.href);
@@ -95,25 +104,27 @@ async function persistPreviewToken(token) {
 }
 
 async function bootstrapLivePreview() {
+    // Persist only from an explicit URL token. sessionStorage must never alone
+    // re-seed the HttpOnly cookie after exit (formal storefront would look "dirty").
     const urlToken = readUrlToken();
-    const storedToken = readStoredToken();
-    const token = urlToken || storedToken;
-    if (!token) {
+    if (!urlToken) {
+        if (readStoredToken()) {
+            clearClientToken();
+        }
         return;
     }
 
-    const persisted = await persistPreviewToken(token);
+    const persisted = await persistPreviewToken(urlToken);
     if (!persisted) {
-        // URL / sessionStorage 任一来源失效都清掉客户端态，避免退出后被 bootstrap 重新种回 Cookie
         clearClientToken();
         return;
     }
 
-    if (urlToken) {
-        stripTokenFromUrl();
-        if (!document.getElementById('weline-preview-exit-float')) {
-            window.location.replace(window.location.pathname + window.location.search + window.location.hash);
-        }
+    stripTokenFromUrl();
+    // Capture must stay on the already painted document. A second navigation
+    // keeps headless Chrome waiting for load, so the preview file never appears.
+    if (!isPreviewCaptureDocument() && !document.getElementById('weline-preview-exit-float')) {
+        window.location.replace(window.location.pathname + window.location.search + window.location.hash);
     }
 }
 

@@ -11095,6 +11095,7 @@ function handleRequest(
     if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
         WlsLogger::info_("准备进入框架处理: {$method} {$uri}");
     }
+    ErrorBootstrap::updateRequestContext((string)$uri, (string)$method, (string)$clientIp);
     try {
         // 创建 WLS 请求对象（框架会自动处理维护模式）
         // Create the framework request. Same-port cleartext admission
@@ -11360,6 +11361,7 @@ function handleRequest(
         
         return $response->toHttpString(false);
     } finally {
+        ErrorBootstrap::clearRequestContext();
         wlsResetLongRunningExecutionLimit();
     }
 }

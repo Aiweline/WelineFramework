@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\B2B\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Product-level wholesale display / qty-gate eligibility.
@@ -41,19 +42,43 @@ final class ProductWholesaleEligibility
         if ($sku === '') {
             return false;
         }
+        $cacheKey = 'b2b.wholesale_display.' . $websiteId . '|' . $storeId . '|' . strtolower($sku);
+        if ($productFlags !== null) {
+            $cacheKey .= '|' . md5((string)json_encode($productFlags));
+        }
+        if (RequestContext::isInitialized()) {
+            $cached = RequestContext::get($cacheKey);
+            if (is_bool($cached)) {
+                return $cached;
+            }
+        }
+        $allowed = $this->resolveWholesaleDisplay($websiteId, $storeId, $productFlags, $sku);
+        if (RequestContext::isInitialized()) {
+            RequestContext::set($cacheKey, $allowed);
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * @param array<string,mixed>|null $productFlags
+     */
+    private function resolveWholesaleDisplay(
+        int $websiteId,
+        int $storeId,
+        ?array $productFlags,
+        string $sku,
+    ): bool {
+        $lists = $this->lists();
+        if ($lists === null || !$lists->skuHasActiveTiers($sku, $websiteId)) {
+            return false;
+        }
         $policy = $this->policy();
         if ($policy === null) {
             return false;
         }
-        if (!$policy->isModeEnabled(SellingModePolicy::MODE_TOB, $websiteId, $storeId, $productFlags)) {
-            return false;
-        }
-        $lists = $this->lists();
-        if ($lists === null) {
-            return false;
-        }
 
-        return $lists->skuHasActiveTiers($sku, $websiteId);
+        return $policy->isModeEnabled(SellingModePolicy::MODE_TOB, $websiteId, $storeId, $productFlags);
     }
 
     /**

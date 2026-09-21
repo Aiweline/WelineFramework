@@ -393,6 +393,23 @@ final class StorefrontProductMediaUrlResolver
     }
 
     /**
+     * True when any img lacks a non-empty alt. Avoids DOMDocument when alts are already filled.
+     */
+    private static function descriptionImageNeedsAlt(string $html): bool
+    {
+        if (preg_match_all('/<img\b[^>]*>/i', $html, $tags) < 1) {
+            return false;
+        }
+        foreach ($tags[0] as $tag) {
+            if (preg_match('/\balt\s*=\s*(["\'])([^"\']+)\1/i', (string)$tag) !== 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Fill empty/missing img alt on already-rendered description HTML with product-name fallbacks.
      * Content photos must not ship as decorative empty alt.
      */
@@ -401,6 +418,9 @@ final class StorefrontProductMediaUrlResolver
         $html = trim($html);
         $productName = trim($productName);
         if ($html === '' || $productName === '' || !str_contains(strtolower($html), '<img')) {
+            return $html;
+        }
+        if (!self::descriptionImageNeedsAlt($html)) {
             return $html;
         }
 
@@ -689,6 +709,10 @@ final class StorefrontProductMediaUrlResolver
         $html = trim($html);
         if ($html === '') {
             return '';
+        }
+        // Feature layouts are already storefront HTML. Skip DOMDocument on the PDP hot path.
+        if (str_contains($html, 'weline-detail-feature')) {
+            return $html;
         }
 
         $document = new \DOMDocument('1.0', 'UTF-8');

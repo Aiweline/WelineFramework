@@ -8,28 +8,30 @@ use PHPUnit\Framework\TestCase;
 
 final class AiTranslationDbOnlyCandidatesContractTest extends TestCase
 {
-    public function testCandidateWordsComeFromDictionaryOnlyAndSkipFileTranslationGates(): void
+    public function testAiTranslationDoesNotScanOrCollectWords(): void
     {
         $source = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/AiTranslationService.php',
         );
 
-        $collectStart = strpos($source, 'private function collectCandidateWords');
-        $collectEnd = strpos($source, 'private function appendDictionaryWords');
-        self::assertNotFalse($collectStart);
-        self::assertNotFalse($collectEnd);
-        $collectBody = substr($source, $collectStart, $collectEnd - $collectStart);
-        self::assertStringContainsString('appendDictionaryWords', $collectBody);
-        self::assertStringNotContainsString('appendBackendMenuWords', $collectBody);
-        self::assertStringNotContainsString('appendModuleCsvWords', $collectBody);
+        foreach ([
+            'function collectCandidateWords',
+            'function appendDictionaryWords',
+            'function appendModuleCsvWords',
+            'function appendBackendMenuWords',
+            'function getActiveModuleBasePaths',
+            'function readCsvWords',
+            'function getCsvTranslatedWordIndex',
+            'function getGeneratedTranslatedWordIndex',
+            'function hasGeneratedTranslation',
+            'function hasCsvTranslation',
+        ] as $forbidden) {
+            self::assertStringNotContainsString($forbidden, $source);
+        }
 
-        $shouldStart = strpos($source, 'private function shouldTranslateWord');
-        $shouldEnd = strpos($source, 'private function hasTranslatableText');
-        self::assertNotFalse($shouldStart);
-        self::assertNotFalse($shouldEnd);
-        $shouldBody = substr($source, $shouldStart, $shouldEnd - $shouldStart);
-        self::assertStringContainsString('translationExists', $shouldBody);
-        self::assertStringNotContainsString('hasGeneratedTranslation', $shouldBody);
-        self::assertStringNotContainsString('hasCsvTranslation', $shouldBody);
+        self::assertStringContainsString('NOT EXISTS', $source);
+        self::assertStringContainsString('PENDING_READ_PAGE_SIZE = 100', $source);
+        self::assertStringContainsString('self::PENDING_READ_PAGE_SIZE', $source);
+        self::assertStringNotContainsString('SELECT COUNT(*) AS pending_count FROM', $source);
     }
 }

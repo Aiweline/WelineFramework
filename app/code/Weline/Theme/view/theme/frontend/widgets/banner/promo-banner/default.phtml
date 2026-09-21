@@ -17,9 +17,19 @@
  * @param background_color {default="var(--weline-theme-primary-subtle)",type="color",label="背景颜色"}
  * @param text {default="满额包邮 · 精选上新",type="string",label="促销文字"}
  * @param text_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="文字颜色"}
+ * @param text_show_background {default=false,type="bool",label="促销文字显示背景"}
+ * @param text_background_color {default="var(--weline-theme-primary-surface)",type="color",label="促销文字背景色"}
+ * @param text_show_border {default=false,type="bool",label="促销文字显示边框"}
+ * @param text_border_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="促销文字边框色"}
+ * @param text_show_shadow {default=false,type="bool",label="促销文字显示阴影"}
  * @param link {default="",type="string",label="链接地址"}
  * @param closeable {default=true,type="bool",label="允许关闭"}
  * @param countdown_end {default="",type="string",label="倒计时结束时间",description="格式：2026-12-31 23:59:59"}
+ * @param countdown_show_background {default=true,type="bool",label="倒计时显示背景"}
+ * @param countdown_background_color {default="",type="color",label="倒计时背景色",description="空则跟随文字色半透明"}
+ * @param countdown_show_border {default=false,type="bool",label="倒计时显示边框"}
+ * @param countdown_border_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="倒计时边框色"}
+ * @param countdown_show_shadow {default=false,type="bool",label="倒计时显示阴影"}
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
@@ -45,12 +55,49 @@ $textColor = ThemeUiColor::sanitize(
     $this->getData('text_color') ?? '',
     'var(--weline-theme-primary-text-emphasis)'
 );
+$textShowBackground = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('text_show_background'), false);
+$textShowBorder = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('text_show_border'), false);
+$textBackgroundColor = ThemeUiColor::sanitize(
+    $this->getData('text_background_color') ?? '',
+    'var(--weline-theme-primary-surface)'
+);
+$textBorderColor = ThemeUiColor::sanitize(
+    $this->getData('text_border_color') ?? '',
+    'var(--weline-theme-primary-text-emphasis)'
+);
+$textShowShadow = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('text_show_shadow'), false);
 $link = \Weline\Theme\Helper\SiteBlockConfig::link($this->getData('link') ?? '');
 $closeable = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('closeable'), true);
 $countdownEnd = trim((string)($this->getData('countdown_end') ?? ''));
 $hasCountdown = $countdownEnd !== '';
+$countdownShowBackground = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('countdown_show_background'), true);
+$countdownShowBorder = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('countdown_show_border'), false);
+$countdownBackgroundRaw = trim((string)($this->getData('countdown_background_color') ?? ''));
+$countdownBackgroundColor = $countdownBackgroundRaw !== ''
+    ? ThemeUiColor::sanitize($countdownBackgroundRaw, '')
+    : '';
+$countdownBorderColor = ThemeUiColor::sanitize(
+    $this->getData('countdown_border_color') ?? '',
+    'var(--weline-theme-primary-text-emphasis)'
+);
+$countdownShowShadow = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('countdown_show_shadow'), false);
+
+$textChipClass = 'promo-text'
+    . ($textShowBackground ? ' has-bg' : '')
+    . ($textShowBorder ? ' has-border' : '')
+    . ($textShowShadow ? ' has-shadow' : '');
+$countdownChipClass = 'promo-countdown'
+    . ($countdownShowBackground ? ' has-bg' : '')
+    . ($countdownShowBorder ? ' has-border' : '')
+    . ($countdownShowShadow ? ' has-shadow' : '');
 
 $rootStyle = '--wc-promo-bg:' . $backgroundColor . ';--wc-promo-text:' . $textColor . ';';
+$rootStyle .= '--wc-promo-text-bg:' . $textBackgroundColor . ';';
+$rootStyle .= '--wc-promo-text-border:' . $textBorderColor . ';';
+$rootStyle .= '--wc-promo-countdown-border:' . $countdownBorderColor . ';';
+if ($countdownBackgroundColor !== '') {
+    $rootStyle .= '--wc-promo-countdown-bg:' . $countdownBackgroundColor . ';';
+}
 if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     $rootStyle .= 'background-image:url("' . $esc($backgroundImage) . '");';
 }
@@ -71,10 +118,10 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
             <a href="<?= $esc($link) ?>" class="promo-link">
         <?php endif; ?>
 
-        <span class="promo-text"><?= $esc((string)$text) ?></span>
+        <span class="<?= $esc($textChipClass) ?>"><?= $esc((string)$text) ?></span>
 
         <?php if ($hasCountdown): ?>
-            <span class="promo-countdown" data-end="<?= $esc($countdownEnd) ?>">
+            <span class="<?= $esc($countdownChipClass) ?>" data-end="<?= $esc($countdownEnd) ?>">
                 <span class="countdown-label"><?= __('剩余') ?>:</span>
                 <span class="countdown-timer">
                     <span class="time-part" data-unit="days"><span class="time-value">00</span><span class="time-label"><?= __('天') ?></span></span>
@@ -157,6 +204,27 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
 .<?= $wc ?> .promo-text {
     font-size: var(--weline-font-size-base);
     font-weight: 600;
+    border-radius: var(--weline-radius-round);
+    border: 0 solid transparent;
+    background: transparent;
+}
+
+.<?= $wc ?> .promo-text.has-bg,
+.<?= $wc ?> .promo-text.has-border,
+.<?= $wc ?> .promo-text.has-shadow {
+    padding: var(--weline-space-1) var(--weline-space-3);
+}
+
+.<?= $wc ?> .promo-text.has-bg {
+    background: var(--wc-promo-text-bg);
+}
+
+.<?= $wc ?> .promo-text.has-border {
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--wc-promo-text-border);
+}
+
+.<?= $wc ?> .promo-text.has-shadow {
+    box-shadow: var(--weline-theme-shadow-sm);
 }
 
 .<?= $wc ?> .promo-arrow {
@@ -168,9 +236,27 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     display: flex;
     align-items: center;
     gap: var(--weline-space-2);
-    padding: var(--weline-space-1) var(--weline-space-3);
-    background: color-mix(in srgb, var(--wc-promo-text) 12%, transparent);
     border-radius: var(--weline-radius-round);
+    border: 0 solid transparent;
+    background: transparent;
+}
+
+.<?= $wc ?> .promo-countdown.has-bg,
+.<?= $wc ?> .promo-countdown.has-border,
+.<?= $wc ?> .promo-countdown.has-shadow {
+    padding: var(--weline-space-1) var(--weline-space-3);
+}
+
+.<?= $wc ?> .promo-countdown.has-bg {
+    background: var(--wc-promo-countdown-bg, color-mix(in srgb, var(--wc-promo-text) 12%, transparent));
+}
+
+.<?= $wc ?> .promo-countdown.has-border {
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--wc-promo-countdown-border);
+}
+
+.<?= $wc ?> .promo-countdown.has-shadow {
+    box-shadow: var(--weline-theme-shadow-sm);
 }
 
 .<?= $wc ?> .countdown-label {

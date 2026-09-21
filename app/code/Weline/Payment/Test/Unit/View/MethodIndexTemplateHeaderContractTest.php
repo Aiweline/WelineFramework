@@ -39,8 +39,20 @@ final class MethodIndexTemplateHeaderContractTest extends TestCase
         self::assertStringContainsString('w:config:embed', $html);
         self::assertStringContainsString('module="embedModule"', $html);
         self::assertStringContainsString('field="embedField"', $html);
+        self::assertStringContainsString('field="environmentField"', $html);
         self::assertStringContainsString('payment/method/', $html);
         self::assertStringContainsString('/enabled', $html);
+        self::assertStringContainsString('/environment', $html);
+
+        $embedField = dirname(__DIR__, 4) . '/SystemConfig/view/templates/taglib/config-embed-field.phtml';
+        self::assertFileExists($embedField);
+        $embedHtml = (string)file_get_contents($embedField);
+        self::assertStringContainsString('data-on-value="live"', $embedHtml);
+        self::assertStringContainsString('data-off-value="sandbox"', $embedHtml);
+        self::assertStringContainsString('config-embed-env-toggle', $embedHtml);
+        self::assertStringContainsString('w-env-switch__track', $embedHtml);
+        self::assertStringContainsString('沙盒', $embedHtml);
+        self::assertStringContainsString('生产', $embedHtml);
         self::assertStringContainsString('layout="inline"', $html);
         self::assertStringNotContainsString('payment-method-enabled-toggle', $html);
         self::assertStringNotContainsString("api.resource('system_config').setScopedConfig", $html);

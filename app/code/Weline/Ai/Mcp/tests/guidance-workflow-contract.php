@@ -70,6 +70,10 @@ $activeClarifyIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('需求澄�
 $clarifySurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE] ?? null)
     ? $surfaces[GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE]
     : [];
+$activeTeamIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('工程团队 停工汇报 子智能体');
+$teamSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM]
+    : [];
 
 $hasSectionIdentityNorm = false;
 foreach ($norms as $norm) {
@@ -311,7 +315,18 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'forbid_user_manual_test_handoff'
-            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT ask the user to test')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT ask the user to test')
+            && str_contains((string) ($rule['summary'] ?? ''), 'login credentials')
+            && str_contains((string) ($rule['summary'] ?? ''), 'admin/admin')),
+        false,
+    ),
+    'hard_constraints include acceptance_real_business_pathway' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'acceptance_real_business_pathway'
+            && str_contains((string) ($rule['summary'] ?? ''), 'REAL business-pathway')
+            && str_contains((string) ($rule['summary'] ?? ''), 'order_uuid')
+            && str_contains((string) ($rule['summary'] ?? ''), 'shell-only')),
         false,
     ),
     'hard_constraints include e2e_playwright_headless_default' => array_reduce(
@@ -469,6 +484,7 @@ $checks = [
         'requirement_fe_be_scope_analyzed',
         'requirement_clarify_use_case_spec',
         'host_plan_mode_enabled_or_simple_skip',
+        'engineering_team_staffed_or_exempt',
         'feature_prototype_and_ui_participation_when_feature',
         'requirement_framework_scrutiny',
         'requirement_cross_layer_impact_gate',
@@ -544,6 +560,74 @@ $checks = [
         is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
         true,
     ),
+    'mandatory_before_code includes engineering_team_staffed_or_exempt' => in_array(
+        'engineering_team_staffed_or_exempt',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'hard_constraints include engineering_team_for_new_requirements' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'engineering_team_for_new_requirements'
+            && str_contains((string) ($rule['summary'] ?? ''), '停工')
+            && str_contains((string) ($rule['summary'] ?? ''), 'simple')
+            && str_contains((string) ($rule['summary'] ?? ''), '产品优化')
+            && str_contains((string) ($rule['summary'] ?? ''), 'doc/开发/team/')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:架构师:')
+            && str_contains((string) ($rule['summary'] ?? ''), '监工')
+            && str_contains((string) ($rule['summary'] ?? ''), 'admin/admin')
+            && str_contains((string) ($rule['summary'] ?? ''), 'DUAL TRACK')
+            && str_contains((string) ($rule['summary'] ?? ''), 'acceptance-ui.md')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FRAMEWORK FIRST')
+            && str_contains((string) ($rule['summary'] ?? ''), '扩展点')
+            && str_contains((string) ($rule['summary'] ?? ''), 'component-negotiate.md')),
+        false,
+    ),
+    'engineering team surface norms include dual track and acceptance signoff' => count(array_intersect(
+        [
+            'framework_first',
+            'dual_track_all_specialty_seats',
+            'component_reuse_or_negotiate',
+            'surfaces_md_required',
+            'acceptance_ui_and_prototype_signoff',
+        ],
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($teamSurface['norms'] ?? null) ? $teamSurface['norms'] : [],
+        ))),
+    )) === 5,
+    'hard_constraints include local_dev_test_accounts_self_serve' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'local_dev_test_accounts_self_serve'
+            && str_contains((string) ($rule['summary'] ?? ''), 'admin')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT ask the user')
+            && str_contains((string) ($rule['summary'] ?? ''), 'e2e.customer@weline.local')),
+        false,
+    ),
+    'surfaces include engineering_team' => ($teamSurface['id'] ?? '')
+        === GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM
+        && ($teamSurface['authoritative_doc'] ?? '') === 'dev/ai-command/ai/工程团队.md',
+    'pinned includes engineering team command doc' => in_array(
+        'dev/ai-command/ai/工程团队.md',
+        $pinned,
+        true,
+    ),
+    'resolveActiveSurfaceIds matches engineering team task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM,
+        $activeTeamIds,
+        true,
+    ),
+    'engineering team phase sits before implement' => array_reduce(
+        is_array($contract['phases'] ?? null) ? $contract['phases'] : [],
+        static fn (bool $ok, mixed $phase): bool => $ok || (is_array($phase)
+            && ($phase['id'] ?? '') === 'engineering_team'
+            && str_contains((string) ($phase['label'] ?? ''), '停工')),
+        false,
+    ),
+    'mcp instructions mention engineering team' => str_contains(ToolService::instructions(), 'engineering_team_for_new_requirements')
+        && str_contains(ToolService::instructions(), 'Team:架构师:')
+        && str_contains(ToolService::instructions(), '监工'),
     'mandatory_before_closeout includes requirement_acceptance_always_satisfied' => in_array(
         'requirement_acceptance_always_satisfied',
         is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
@@ -944,12 +1028,54 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'user_mentions_translation_all_default_website_locales'
             && str_contains((string) ($rule['summary'] ?? ''), 'Website::ID_DEFAULT')
-            && str_contains((string) ($rule['summary'] ?? ''), 'never stop at en_US')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'never stop at en_US')
+            && str_contains((string) ($rule['summary'] ?? ''), 'system dictionary')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ONLY store zh_Hans_CN.csv and en_US.csv')),
         false,
+    ),
+    'hard_constraints include module_i18n_chinese_source_default' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'module_i18n_chinese_source_default'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Simplified Chinese')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
+            && str_contains((string) ($rule['summary'] ?? ''), 'English')
+            && str_contains((string) ($rule['summary'] ?? ''), 'CORRECT')),
+        false,
+    ),
+    'hard_constraints include active_locale_must_show_target_language' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'active_locale_must_show_target_language'
+            && str_contains((string) ($rule['summary'] ?? ''), 'ACTIVE')
+            && str_contains((string) ($rule['summary'] ?? ''), 'DEFAULT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Chinese source')),
+        false,
+    ),
+    'mcp instructions mention chinese source default' => str_contains(
+        ToolService::instructions(),
+        'module_i18n_chinese_source_default',
+    ),
+    'mcp instructions mention active locale target language' => str_contains(
+        ToolService::instructions(),
+        'active_locale_must_show_target_language',
     ),
     'mcp instructions mention default-website translation' => str_contains(
         ToolService::instructions(),
         'user_mentions_translation_all_default_website_locales',
+    ),
+    'module_i18n_csv surface requires chinese source default' => array_reduce(
+        is_array($moduleI18nCsvSurface['norms'] ?? null) ? $moduleI18nCsvSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'chinese_source_default'),
+        false,
+    ),
+    'module_i18n_csv surface requires active locale target language' => array_reduce(
+        is_array($moduleI18nCsvSurface['norms'] ?? null) ? $moduleI18nCsvSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'active_locale_must_show_target_language'),
+        false,
     ),
     'module_i18n_csv surface requires default website locales' => array_reduce(
         is_array($moduleI18nCsvSurface['norms'] ?? null) ? $moduleI18nCsvSurface['norms'] : [],

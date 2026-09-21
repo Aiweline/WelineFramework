@@ -60,7 +60,7 @@ namespace {
     foreach (['StoreCatalogInterface.php', 'WebsiteCatalogInterface.php', 'Data/StoreSummary.php', 'Data/WebsiteSummary.php'] as $file) {
         require BP . 'app/code/Weline/Websites/Api/Catalog/' . $file;
     }
-    foreach (['Api/AdapterInterface.php', 'Model/Domain.php', 'Adapter/Cloudflare.php', 'Service/AccountManager.php', 'Service/UrlSiteResolver.php', 'Service/CachePurger.php', 'Observer/CdnRequest.php', 'Observer/ScopeChanged.php', 'Observer/ResourceChanged.php'] as $file) {
+    foreach (['Api/AdapterInterface.php', 'Model/Domain.php', 'Adapter/Cloudflare.php', 'Service/AccountManager.php', 'Service/UrlSiteResolver.php', 'Service/CachePurger.php', 'Observer/CdnRequest.php', 'Observer/ScopeChanged.php', 'extends/module/Weline_Framework/Changed/Capability/CdnCapability.php'] as $file) {
         require dirname(__DIR__, 2) . '/' . $file;
     }
     function check(bool $ok, string $message): void { if (!$ok) { throw new \RuntimeException($message); } }

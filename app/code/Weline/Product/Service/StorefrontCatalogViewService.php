@@ -1158,13 +1158,20 @@ final class StorefrontCatalogViewService
      */
     private function requestAttributeRows(int $websiteId, array $productIds, array $storeIds): array
     {
-        $key = $this->attributeRowsRequestKey($websiteId, $productIds, $storeIds);
+        $locales = $this->explicitRowLocales(\trim((string)RequestContext::getWelineUserLang()));
+        $key = $this->attributeRowsRequestKey($websiteId, $productIds, $storeIds, $locales);
         if (Context::hasCurrent() && RequestContext::has($key)) {
             $rows = RequestContext::get($key);
             return is_array($rows) ? $rows : [];
         }
 
-        $rows = $this->attributeValues->listExplicitRows($websiteId, 'product', $productIds, $storeIds);
+        $rows = $this->attributeValues->listExplicitRows(
+            $websiteId,
+            'product',
+            $productIds,
+            $storeIds,
+            $locales,
+        );
         if (Context::hasCurrent()) {
             RequestContext::set($key, $rows);
         }
@@ -1172,19 +1179,59 @@ final class StorefrontCatalogViewService
         return $rows;
     }
 
-    /** @param list<int> $productIds @param list<int> $storeIds */
-    private function attributeRowsRequestKey(int $websiteId, array $productIds, array $storeIds): string
-    {
+    /**
+     * @param list<int> $productIds
+     * @param list<int> $storeIds
+     * @param list<string> $locales
+     */
+    private function attributeRowsRequestKey(
+        int $websiteId,
+        array $productIds,
+        array $storeIds,
+        array $locales,
+    ): string {
         $productIds = array_values(array_unique(array_map('intval', $productIds)));
         $storeIds = array_values(array_unique(array_map('intval', $storeIds)));
+        $locales = array_values(array_unique(array_map(
+            static fn(mixed $locale): string => \is_string($locale) || \is_int($locale) || \is_float($locale)
+                ? \trim((string)$locale)
+                : '',
+            $locales,
+        )));
         sort($productIds);
         sort($storeIds);
+        sort($locales);
 
         return self::REQUEST_ATTRIBUTE_ROWS_PREFIX . '.' . hash('sha256', serialize([
             max(0, $websiteId),
             $productIds,
             $storeIds,
+            $locales,
         ]));
+    }
+
+    /**
+     * Locales for listExplicitRows: request lang + storefront fallbacks (always includes '').
+     *
+     * @return list<string>
+     */
+    private function explicitRowLocales(string $locale): array
+    {
+        $locale = \trim($locale);
+        $locales = [];
+        if ($locale !== '') {
+            $locales[] = $locale;
+        }
+        foreach ($this->localeFallbacks($locale) as $fallback) {
+            if (!\in_array($fallback, $locales, true)) {
+                $locales[] = $fallback;
+            }
+        }
+        if (!\in_array('', $locales, true)) {
+            $locales[] = '';
+        }
+
+        return $locales;
     }
 
     /** @return list<string> */
@@ -1376,6 +1423,7 @@ final class StorefrontCatalogViewService
                 'product',
                 [$productId],
                 $storeIds,
+                $this->explicitRowLocales($locale),
             ),
             $this->media->listByProductIds($websiteId, [$productId]),
             $storeId,

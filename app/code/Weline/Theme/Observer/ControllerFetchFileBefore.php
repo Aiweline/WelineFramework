@@ -27,6 +27,7 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemeModeResolver;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeMetaIdentityService;
 use Weline\Theme\Service\ThemePageTypeResolver;
@@ -174,6 +175,15 @@ class ControllerFetchFileBefore implements ObserverInterface
             $meta['showFooter'] = (($meta['showHeader'] ?? true) !== false);
         }
         $template->setData('meta', $meta);
+
+        // Match the regular layout context so nested Partials retain the selected theme.
+        $template->setData('theme', [
+            'area' => 'frontend',
+            'colorMode' => $this->themeModeResolver->resolve('frontend'),
+            'layoutType' => $layoutTypePath,
+            'layoutOption' => $layoutOption,
+            'theme' => $this->resolveThemeForLayout('frontend'),
+        ]);
     }
 
     private function resolveFastAccountChallengeLayout(DataObject $eventData, Template $template, string $contentTemplateFileName): void
@@ -439,7 +449,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                     }
                 }
                 $layoutTargets = $this->resolveVirtualLayoutTargets($request);
-                $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
+                // L1 request + process layout_params keys must include lang so
+                // localized widget labels do not bleed across locales.
+                // Prefer path-aware storefront locale (same as WidgetI18n) — State::getLang()
+                // can lag behind REQUEST_URI under concurrent WLS Fibers.
+                $lang = \Weline\Theme\Helper\WidgetI18n::storefrontLocale();
+                if ($lang === '') {
+                    $lang = class_exists(Cookie::class) ? State::getLang() : 'zh_Hans_CN';
+                }
+                $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}|lang:{$lang}";
                 if (!empty($layoutTargets)) {
                     $paramsCacheKey .= '|targets:' . $this->buildTargetCacheSuffix($layoutTargets);
                 }
@@ -448,7 +466,6 @@ class ControllerFetchFileBefore implements ObserverInterface
                 }
                 // 优化：编译文件存在且源文件未修改则不再做重负载（不重复 performanceLoad/colors/meta）
                 $sourcePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
-                $lang = class_exists(Cookie::class) ? State::getLang() : 'zh_Hans_CN';
                 $compiledPath = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.compiled_path', fn() => LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang));
                 $compiledLayoutFresh = $sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
                     && filemtime($sourcePath) <= filemtime($compiledPath);
@@ -485,6 +502,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                         $existingMeta = [];
                     }
                     $existingMeta = $this->preserveAssignedTitleInMeta($existingMeta, $template, $request);
+                    $existingMeta = $this->sanitizeRuntimeLayoutParams($existingMeta);
                     $template->setData('meta', array_merge(
                         $cachedLayoutParams,
                         $existingMeta
@@ -500,6 +518,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                     if ($this->shouldUseMetaTitle($template, $request) && !empty($cachedLayoutParams['title'])) {
                         $template->assign('title', $cachedLayoutParams['title']);
                     }
+                    $this->publishLayoutSeoFallback($template->getData('meta') ?: $cachedLayoutParams);
+                    $this->publishPageTitleToSeoBag($template, is_array($template->getData('meta')) ? (array)$template->getData('meta') : $cachedLayoutParams, $request);
                     $this->logThemeLayoutResolved($eventData, (string)$fileName, (string)$resolvedLayoutPath, (string)$fileName, $controller);
                     return;
                 }
@@ -616,6 +636,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
                 $template->setData('meta', $metaData);
                 $this->publishLayoutSeoFallback($metaData);
+                $this->publishPageTitleToSeoBag($template, $metaData, $request);
                 $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $layoutStaticMeta;
                 if ($runtimeCacheAllowed && $runtimeParamsCacheKey !== null) {
                     self::runtimeCacheSet($runtimeParamsCacheKey, $layoutStaticMeta);
@@ -1002,6 +1023,19 @@ class ControllerFetchFileBefore implements ObserverInterface
             unset($params[$key]);
         }
 
+        $params = \Weline\Framework\View\Helper\EmbeddedPageTitle::sanitizePublicSlots($params);
+        // Empty public slots must not overwrite layout @param defaults on merge.
+        foreach (['title', 'meta_title', 'controller_title', 'name'] as $titleKey) {
+            if (!\array_key_exists($titleKey, $params)) {
+                continue;
+            }
+            if (\trim((string)$params[$titleKey]) === ''
+                || \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier((string)$params[$titleKey])
+            ) {
+                unset($params[$titleKey]);
+            }
+        }
+
         return $params;
     }
 
@@ -1036,6 +1070,10 @@ class ControllerFetchFileBefore implements ObserverInterface
 
     private function isModuleDefaultTitle(string $title, ?Request $request): bool
     {
+        $title = trim($title);
+        if ($title === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isModulePlaceholder($title)) {
+            return true;
+        }
         $moduleTitle = trim((string)($request?->getModuleName() ?? ''));
         return $moduleTitle !== '' && $title === $moduleTitle;
     }
@@ -1046,7 +1084,11 @@ class ControllerFetchFileBefore implements ObserverInterface
     private function hasMetaTitle(array $meta): bool
     {
         foreach (['title', 'meta_title'] as $key) {
-            if (array_key_exists($key, $meta) && trim((string)$meta[$key]) !== '') {
+            if (!array_key_exists($key, $meta)) {
+                continue;
+            }
+            $value = trim((string)$meta[$key]);
+            if ($value !== '' && !\Weline\Framework\View\Helper\EmbeddedPageTitle::isModulePlaceholder($value)) {
                 return true;
             }
         }
@@ -1069,6 +1111,43 @@ class ControllerFetchFileBefore implements ObserverInterface
             \Weline\Seo\Service\Head\SeoPageProfileBag::setLayoutFallback($fallback);
         } catch (\Throwable) {
             // SEO module optional at runtime; layout still renders without fallback bridge.
+        }
+    }
+
+    /**
+     * Publish the visible page title into SeoPageProfileBag so Partials head still
+     * has it after Theme unsetData(). Without this, PageSeoContextResolver fell back
+     * to humanized URL segments (contact→Contact) and caused title×locale bleed.
+     *
+     * @param array<string, mixed> $metaData
+     */
+    private function publishPageTitleToSeoBag(Template $template, array $metaData, ?Request $request): void
+    {
+        if (!class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
+            return;
+        }
+        try {
+            $title = trim((string)$template->getData('title'));
+            if ($title === '' || $this->isModuleDefaultTitle($title, $request)) {
+                foreach (['controller_title', 'title', 'meta_title'] as $key) {
+                    $candidate = trim((string)($metaData[$key] ?? ''));
+                    if ($candidate !== ''
+                        && !$this->isModuleDefaultTitle($candidate, $request)
+                        && !\Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($candidate)
+                    ) {
+                        $title = $candidate;
+                        break;
+                    }
+                }
+            }
+            if ($title === ''
+                || $this->isModuleDefaultTitle($title, $request)
+                || \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($title)
+            ) {
+                return;
+            }
+            \Weline\Seo\Service\Head\SeoPageProfileBag::publish(['title' => $title]);
+        } catch (\Throwable) {
         }
     }
 
@@ -1236,11 +1315,19 @@ class ControllerFetchFileBefore implements ObserverInterface
         if (isset($requestCache->themeByAreaCache[$cacheKey])) {
             return $requestCache->themeByAreaCache[$cacheKey];
         }
-        $theme = $this->themeContext->resolveTheme($area, null, $allowPreview);
-        if ($theme === null || !$theme->getId()) {
+        if ($this->isEditorLayoutRequest()) {
+            $theme = $this->loadEditorRequestTheme();
+        } else {
+            $theme = $this->themeContext->resolveTheme($area, null, $this->tokenPreviewSelectsTheme());
+        }
+        if (($theme === null || !$theme->getId()) && !$this->isEditorLayoutRequest()) {
             $theme = clone $this->welineTheme;
             $theme->clearData()->clearQuery();
             $theme->getActiveTheme($area);
+        }
+        if ($theme === null) {
+            $theme = clone $this->welineTheme;
+            $theme->clearData()->clearQuery();
         }
         $requestCache->themeByAreaCache[$cacheKey] = $theme;
         return $theme;
@@ -1258,30 +1345,68 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
 
         if (!$request) {
-            return $area . '|default';
+            return $area . '|published';
+        }
+        if ($this->isEditorLayoutRequest()) {
+            return \implode('|', [
+                $area,
+                'editor',
+                'theme_id:' . (int)$request->getParam('theme_id', 0),
+            ]);
+        }
+        if ($this->tokenPreviewSelectsTheme()) {
+            $preview = ObjectManager::getInstance(PreviewContextService::class);
+
+            return \implode('|', [
+                $area,
+                'token',
+                'frontend:' . $preview->getThemeIdForArea(PreviewContextService::AREA_FRONTEND),
+                'backend:' . $preview->getThemeIdForArea(PreviewContextService::AREA_BACKEND),
+            ]);
         }
 
-        $frontendThemeId = (int)$request->getParam('frontend_theme_id', 0);
-        $backendThemeId = (int)$request->getParam('backend_theme_id', 0);
-        $legacyThemeId = (int)$request->getParam('preview_theme', 0);
-        $requestThemeId = (int)$request->getParam('theme_id', 0);
-        $requestArea = strtolower(trim((string)($request->getParam('preview_area', $request->getParam('editor_area', $area)) ?: $area)));
-        $requestArea = $requestArea === 'backend' ? 'backend' : 'frontend';
-        $previewThemeId = $area === 'backend'
-            ? ($backendThemeId > 0 ? $backendThemeId : $legacyThemeId)
-            : ($frontendThemeId > 0 ? $frontendThemeId : $legacyThemeId);
-        if ($previewThemeId <= 0 && $requestThemeId > 0 && $requestArea === $area) {
-            $previewThemeId = $requestThemeId;
-        }
-        $previewToken = (string)$request->getParam('weline_preview_token', '');
+        return $area . '|published';
+    }
 
-        return implode('|', [
-            $area,
-            'editor_area:' . strtolower((string)$request->getParam('editor_area', '')),
-            'theme_id:' . $requestThemeId,
-            'preview_theme:' . $previewThemeId,
-            'preview_token:' . substr($previewToken, 0, 24),
-        ]);
+    private function isEditorLayoutRequest(): bool
+    {
+        try {
+            return ObjectManager::getInstance(PreviewContextService::class)->isEditorThemeRequest();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function loadEditorRequestTheme(): ?WelineTheme
+    {
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            $themeId = (int)$request->getParam('theme_id', 0);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($themeId <= 0) {
+            return null;
+        }
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery()->load($themeId);
+
+        return $theme->getId() ? $theme : null;
+    }
+
+    private function tokenPreviewSelectsTheme(): bool
+    {
+        try {
+            $preview = ObjectManager::getInstance(PreviewContextService::class);
+            if (!$preview->hasAuthoritativePreviewContext()) {
+                return false;
+            }
+
+            return $preview->getThemeIdForArea(PreviewContextService::AREA_FRONTEND) > 0
+                || $preview->getThemeIdForArea(PreviewContextService::AREA_BACKEND) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function isRuntimeCacheAllowed(?Request $request, bool $isBackendRequest): bool

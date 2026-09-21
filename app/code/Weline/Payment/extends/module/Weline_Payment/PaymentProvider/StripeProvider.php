@@ -619,7 +619,7 @@ final class StripeProvider implements ProviderInterface
         return $this->resolveEnvironmentConfig(
             $config,
             $context,
-            (string) ($context['environment'] ?? $config['environment'] ?? 'sandbox'),
+            (string) ($config['environment'] ?? $context['environment'] ?? 'sandbox'),
         );
     }
 
