@@ -78,7 +78,9 @@ final class SharedChromeInheritContractTest extends TestCase
         $path = dirname(__DIR__, 2) . '/Setup/Upgrade.php';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("VERSION = '2.2.362'", $src);
+        self::assertStringContainsString("VERSION = '2.2.480'", $src);
+        self::assertStringContainsString('getFromSetupVersion()', $src);
+        self::assertStringContainsString("version_compare(\$from, self::VERSION, '>=')", $src);
         self::assertStringContainsString('ScopeIdentity::global()', $src);
         self::assertStringContainsString('migrateThemeLayoutEntitiesCutover', $src);
         self::assertStringContainsString('ScopeHierarchyInterface', $src);
@@ -142,11 +144,13 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('function handleSharedChromeAction(', $js);
         self::assertStringContainsString('ensureSharedChromePanel(', $js);
         self::assertStringContainsString('SHARED_CHROME_CARRIER_PAGE_TYPE', $js);
-        self::assertStringContainsString("translateUiText('恢复全局继承')", $js);
-        self::assertStringContainsString("translateUiText('清空其它布局本地 chrome')", $js);
-        self::assertStringContainsString("translateUiText('恢复全部布局继承')", $js);
+        self::assertStringContainsString("window.__('恢复全局继承')", $js);
+        self::assertStringContainsString("window.__('清空其它布局本地 chrome')", $js);
+        self::assertStringContainsString("window.__('恢复全部布局继承')", $js);
         self::assertStringContainsString('all_non_carrier', $js);
-        self::assertStringNotContainsString("translateUiText('改为本布局独立')", $js);
+        self::assertStringNotContainsString("window.__('改为本布局独立')", $js);
+        self::assertStringNotContainsString('translateUiText', $js);
+        self::assertStringNotContainsString('translateUiText', $legacy);
         self::assertStringContainsString('@static(Weline_Theme::ui/pages/weline-theme-editor.js)', $tpl);
         self::assertStringNotContainsString('@static(Weline_Theme::js/theme-editor.js)', $tpl);
         // Authority source remains js/theme-editor.js (compiled into the UI bundle).

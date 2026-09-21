@@ -515,8 +515,9 @@ class App
     }
 
     /**
-     * Path-first: strip website-default language/currency segments from the
-     * visitor-facing storefront URL (301). Non-default segments stay.
+     * Path-first: strip website-default language/currency segments and
+     * Website-disallowed path languages from the visitor-facing storefront
+     * URL (301). Non-default enabled segments stay; backend area prefixes stay.
      */
     private function redirectDefaultLocalizationPrefixIfNeeded(string $rawRequestUri, array $parse = []): void
     {
@@ -531,6 +532,8 @@ class App
         // Authoritative site defaults only. Never preferredLanguageCodes /
         // resolveWebsiteDefaultLanguage() — those can surface en_US and strip
         // a legitimate non-default /en_US/ prefix.
+        // Empty defaults still allow canonicalize to 301-strip unenabled path
+        // languages (valid shape, not Website-allowed).
         $website = \is_array($parse['website'] ?? null) ? $parse['website'] : [];
         $parseServer = \is_array($parse['server'] ?? null) ? $parse['server'] : [];
         $defaultLanguage = \trim((string)(
@@ -545,9 +548,6 @@ class App
             ?: ($parseServer['WELINE_WEBSITE_CURRENCY'] ?? '')
             ?: ($website['default_currency'] ?? '')
         ));
-        if ($defaultLanguage === '' && $defaultCurrency === '') {
-            return;
-        }
 
         $path = (string)(\parse_url($rawRequestUri, \PHP_URL_PATH) ?: '/');
         $query = (string)(\parse_url($rawRequestUri, \PHP_URL_QUERY) ?: '');
@@ -613,9 +613,32 @@ class App
         $pathLocalization = State::resolveLocalizationFromPathSegments($segments);
 
         $pathCurrency = \strtoupper(\trim((string)($pathLocalization['currency'] ?? '')));
+        $area = (string)(
+            ($parse['area'] ?? '')
+            ?: ($parse['server']['WELINE_AREA'] ?? '')
+            ?: WelineEnv::get('area', '')
+        );
+        $isBackendArea = $area === 'backend' || $area === 'rest_backend';
+
         $pathLanguage = \str_replace('-', '_', \trim((string)($pathLocalization['language'] ?? '')));
-        if ($pathLanguage !== '' && !State::isAllowedLanguageCode($pathLanguage)) {
-            $pathLanguage = '';
+        $pathLanguageRejected = false;
+        if ($pathLanguage !== '') {
+            $pathLanguageAllowed = $isBackendArea
+                ? State::isLanguageCodeShape($pathLanguage)
+                : State::isAllowedLanguageCode($pathLanguage);
+            if (!$pathLanguageAllowed) {
+                $pathLanguageRejected = true;
+                $pathLanguage = '';
+            }
+        }
+        if ($pathLanguageRejected) {
+            // Rejected path locale must not linger as PATH_LANG memory (fake prefix).
+            unset($parse['server']['WELINE_URL_PATH_LANG']);
+            try {
+                WelineEnv::removeServer('WELINE_URL_PATH_LANG');
+            } catch (\Throwable) {
+            }
+            State::resetRequestPathLocalizationCache();
         }
 
         $parsedCurrency = \strtoupper(\trim((string)(
@@ -642,13 +665,21 @@ class App
         }
         if ($pathLanguage !== '') {
             $effectiveLanguage = $pathLanguage;
+        } elseif ($isBackendArea) {
+            // Unprefixed backend URLs: personal language > global backend default.
+            // Independent of the website storefront default.
+            $effectiveLanguage = State::resolveBackendEffectiveDefaultLanguage();
         } else {
             // Unprefixed storefront URLs are the website default language.
             // Cookie/en residual must not render a non-default locale into an
             // unprefixed path (FPC keys the same entry as default language).
             $effectiveLanguage = State::resolveWebsiteDefaultLanguage();
         }
-        if ($effectiveLanguage === '' || !State::isAllowedLanguageCode($effectiveLanguage)) {
+        if ($isBackendArea) {
+            if ($effectiveLanguage === '' || !State::isLanguageCodeShape($effectiveLanguage)) {
+                $effectiveLanguage = State::resolveBackendEffectiveDefaultLanguage();
+            }
+        } elseif ($effectiveLanguage === '' || !State::isAllowedLanguageCode($effectiveLanguage)) {
             $effectiveLanguage = State::resolveWebsiteDefaultLanguage();
         }
 

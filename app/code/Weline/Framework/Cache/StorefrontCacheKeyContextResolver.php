@@ -184,7 +184,7 @@ final class StorefrontCacheKeyContextResolver
         $channelCode = (string)$identity->channelCode;
         $storeMode = (string)$identity->storeMode;
 
-        return [
+        $paths = [
             ...$this->namespacePaths($websiteCode, $translationLocales),
             $this->namespacePath->website($websiteCode, ['theme', 'store', $storeCode, $storeMode]),
             $this->namespacePath->website(
@@ -192,6 +192,40 @@ final class StorefrontCacheKeyContextResolver
                 ['theme', 'store', $storeCode, $storeMode, 'channel', $channelCode],
             ),
         ];
+
+        // 读路径 Extra.namespaces ∪ 全局 Storefront 向量（写失效仍以 Enricher 为准）
+        foreach ($this->extraNamespacesForCurrentRequest() as $extraNs) {
+            $paths[] = $extraNs;
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    /** @return list<string> */
+    private function extraNamespacesForCurrentRequest(): array
+    {
+        try {
+            if (!class_exists(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class)) {
+                return [];
+            }
+            $path = '';
+            if (Context::hasCurrent()) {
+                $uri = (string)(RequestContext::get('request.uri')
+                    ?? $_SERVER['REQUEST_URI']
+                    ?? '');
+                $path = parse_url($uri, PHP_URL_PATH) ?: $uri;
+            }
+            if ($path === '') {
+                return [];
+            }
+            /** @var \Weline\Framework\Controller\Extra\ExtraPolicyResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Controller\Extra\ExtraPolicyResolver::class
+            );
+            return $resolver->namespacesForPath((string)$path, 'fpc');
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function requestFence(

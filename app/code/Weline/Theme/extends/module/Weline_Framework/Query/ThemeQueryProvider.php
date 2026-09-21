@@ -928,6 +928,7 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/check-takeover-request' => ($themeEditor ??= $this->createDirectThemeEditor())->getCheckTakeoverRequest(),
                 '/theme/backend/theme-editor/force-takeover' => ($themeEditor ??= $this->createDirectThemeEditor())->postForceTakeover(),
                 '/theme/backend/theme-editor/versions' => ($themeEditor ??= $this->createDirectThemeEditor())->getVersionsPayload(),
+                '/theme/backend/theme-editor/inherit-version' => ($themeEditor ??= $this->createDirectThemeEditor())->postInheritVersion(),
                 '/theme/backend/theme-editor/save-version' => ($themeEditor ??= $this->createDirectThemeEditor())->saveVersionPayload(),
                 '/theme/backend/theme-editor/switch-version' => ($themeEditor ??= $this->createDirectThemeEditor())->switchVersionPayload(),
                 '/theme/backend/theme-editor/restore-original' => ($themeEditor ??= $this->createDirectThemeEditor())->restoreOriginalPayload(),

@@ -2968,6 +2968,8 @@ while (true) {
             );
         }
     );
+
+    wlsResumeOrphanEditorCanvasFibers($fiberScheduler, $activeFibers);
     
     wlsProcessActiveFibersAfterTick(
         $fiberScheduler,
@@ -3503,6 +3505,74 @@ function wlsProcessActiveFibersAfterTick(
         if ($af->isSuspended()) {
             $activeFibers[$afConnId] = $afData;
         }
+    }
+}
+
+/**
+ * 编辑器画布 Fiber 挂起后若没有定时器也没有 I/O 等待者，事件循环不会再叫醒它。
+ * 页面会一直白到网关 45 秒取消。这里把这种孤儿画布请求拉起来，并记下挂起栈。
+ *
+ * @param array<int, array<string, mixed>> $activeFibers
+ */
+function wlsResumeOrphanEditorCanvasFibers(
+    \Weline\Server\Scheduler\FiberScheduler $fiberScheduler,
+    array &$activeFibers
+): void {
+    foreach ($activeFibers as $connId => $afData) {
+        $fiber = $afData['fiber'] ?? null;
+        if (!$fiber instanceof \Fiber || !$fiber->isSuspended()) {
+            continue;
+        }
+        $raw = (string) ($afData['rawRequest'] ?? '');
+        if (!\str_contains($raw, 'shell=theme-editor')) {
+            continue;
+        }
+        if ($fiberScheduler->hasWaker($fiber)) {
+            unset($activeFibers[$connId]['orphan_since']);
+            continue;
+        }
+        $now = \microtime(true);
+        $since = (float) ($afData['orphan_since'] ?? 0.0);
+        if ($since <= 0.0) {
+            $activeFibers[$connId]['orphan_since'] = $now;
+            continue;
+        }
+        if (($now - $since) < 0.2) {
+            continue;
+        }
+
+        $site = \Weline\Framework\Runtime\SchedulerSystem::editorCanvasSuspendSite($fiber);
+        $payload = \json_encode([
+            'event' => 'orphan_resume',
+            'conn' => $connId,
+            'waited_ms' => \round(($now - $since) * 1000, 1),
+            'site' => $site,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        if (\defined('BP')) {
+            @\file_put_contents(BP . '/var/log/canvas-shell-probe.log', $payload . "\n", \FILE_APPEND);
+        }
+        WlsLogger::warning_('Editor canvas fiber had no waker; resuming. ' . $payload);
+        unset($activeFibers[$connId]['orphan_since']);
+        $fiberScheduler->resumeOrphan(
+            $fiber,
+            function (\Fiber $target) use (&$activeFibers): void {
+                \Weline\Server\Runtime\WorkerFiberContextTracker::restore($activeFibers, $target);
+            },
+            function (\Fiber $target) use (&$activeFibers): void {
+                $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
+                    $activeFibers,
+                    $target,
+                    static fn (\Fiber $captured) => \Weline\Framework\Runtime\WlsFiberContext::captureForFiber($captured)
+                );
+                wlsResetLongRunningExecutionLimit();
+            },
+            static function (\Fiber $target, \Throwable $failure): void {
+                WlsLogger::error_(
+                    'Orphan canvas fiber resume failed: ' . $failure->getMessage()
+                    . ' fiber=' . \spl_object_id($target)
+                );
+            }
+        );
     }
 }
 
@@ -5744,6 +5814,8 @@ function handleRequest(
     if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
         WlsLogger::info_("准备进入框架处理: {$method} {$uri}");
     }
+    // Fatal / uncaught 日志需带上当前请求 URI（ErrorBootstrap Layer3）
+    ErrorBootstrap::updateRequestContext((string)$uri, (string)$method, (string)$clientIp);
     try {
         // 创建 WLS 请求对象（框架会自动处理维护模式）
         try {
@@ -5932,20 +6004,23 @@ function handleRequest(
         $sni = \Weline\Server\Service\RouteHintService::extractSniFromHeaders($policyDecision->headers);
         \Weline\Server\Service\RouteHintService::addHintToFrameworkResponse($response, $sni);
         
-        // 添加 WLS 调试响应头（供开发工具面板使用）
-        $response->setHeader('X-WLS-Worker-Id', (string) $workerId);
-        $response->setHeader('X-WLS-Worker-Port', (string) $port);
-        $response->setHeader('X-WLS-Worker-PID', (string) \getmypid());
-        $response->setHeader('X-WLS-Instance', $instanceName);
-        $response->setHeader('X-WLS-Request-Count', (string) $requestCount);
-        $response->setHeader('X-WLS-Memory', (string) \round(\memory_get_usage(true) / 1024 / 1024, 2));
-        $response->setHeader(
-            'X-WLS-Uptime',
-            (string)\max(0, (int)\floor(wlsWorkerMonotonicNow() - $startTime)),
-        );
-        
-        // 添加性能数据到响应头（便于在浏览器开发者工具中查看）
-        if ($handleDuration >= 500 || \Weline\Server\Log\LogConfig::isVerboseWlsLog()) {
+        // Worker 身份/资源观测头：生产默认关闭，开发或显式配置才放出
+        if (\Weline\Framework\Http\ResponseObservabilityPolicy::identityHeadersEnabled()) {
+            $response->setHeader('X-WLS-Worker-Id', (string) $workerId);
+            $response->setHeader('X-WLS-Worker-Port', (string) $port);
+            $response->setHeader('X-WLS-Worker-PID', (string) \getmypid());
+            $response->setHeader('X-WLS-Instance', $instanceName);
+            $response->setHeader('X-WLS-Request-Count', (string) $requestCount);
+            $response->setHeader('X-WLS-Memory', (string) \round(\memory_get_usage(true) / 1024 / 1024, 2));
+            $response->setHeader(
+                'X-WLS-Uptime',
+                (string)\max(0, (int)\floor(wlsWorkerMonotonicNow() - $startTime)),
+            );
+        }
+
+        // 慢请求/verbose 性能摘要头：随 performanceBreakdown 闸门
+        if (\Weline\Framework\Http\ResponseObservabilityPolicy::performanceBreakdownEnabled()
+            && ($handleDuration >= 500 || \Weline\Server\Log\LogConfig::isVerboseWlsLog())) {
             $response->setHeader('X-WLS-Performance-Total', (string) \round($handleDuration, 2));
             $response->setHeader('X-WLS-Performance-Warning', $handleDuration >= 1000 ? 'SLOW' : 'OK');
         }
@@ -6066,6 +6141,7 @@ function handleRequest(
         
         return $response->toHttpString(false);
     } finally {
+        ErrorBootstrap::clearRequestContext();
         wlsResetLongRunningExecutionLimit();
     }
 }

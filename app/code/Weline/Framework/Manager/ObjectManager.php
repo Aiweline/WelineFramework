@@ -12,6 +12,7 @@ namespace Weline\Framework\Manager;
 use ReflectionClass;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Cache\Contract\MemoryPressureAwareInterface;
 use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Adapter\FileAdapter;
@@ -1074,16 +1075,22 @@ class ObjectManager implements ManagerInterface
      *
      * 不移除业务对象实例，避免影响正在运行的请求。
      *
-     * @return array{memory_store_clears:int, metadata_entries_cleared:int}
+     * Soft ($aggressive=false): prefer MemoryPressureAwareInterface::relievePressure
+     * or MemoryStoreInterface::evict(half). Hard: clearMemory / aggressive relieve.
+     *
+     * @return array{memory_store_clears:int, memory_store_evictions:int, metadata_entries_cleared:int}
      */
     public static function relieveMemoryPressure(bool $aggressive = false): array
     {
         $seenObjects = [];
         $memoryStoreClears = 0;
+        $memoryStoreEvictions = 0;
 
         foreach (self::getAllScopedInstanceBuckets() as $bucket) {
             foreach ($bucket as $instance) {
-                if (!$instance instanceof MemoryStoreInterface) {
+                if (!$instance instanceof MemoryStoreInterface
+                    && !$instance instanceof MemoryPressureAwareInterface
+                ) {
                     continue;
                 }
 
@@ -1093,8 +1100,31 @@ class ObjectManager implements ManagerInterface
                 }
                 $seenObjects[$objectId] = true;
 
-                $instance->clearMemory();
-                $memoryStoreClears++;
+                if ($instance instanceof MemoryPressureAwareInterface) {
+                    $freed = $instance->relievePressure($aggressive);
+                    if ($aggressive) {
+                        $memoryStoreClears++;
+                    } else {
+                        $memoryStoreEvictions += \max(0, $freed);
+                    }
+                    continue;
+                }
+
+                if (!$instance instanceof MemoryStoreInterface) {
+                    continue;
+                }
+
+                if ($aggressive) {
+                    $instance->clearMemory();
+                    $memoryStoreClears++;
+                    continue;
+                }
+
+                $count = $instance->getMemoryItemCount();
+                if ($count <= 0) {
+                    continue;
+                }
+                $memoryStoreEvictions += $instance->evict(\max(1, (int)\ceil($count / 2)));
             }
         }
 
@@ -1130,6 +1160,7 @@ class ObjectManager implements ManagerInterface
 
         return [
             'memory_store_clears' => $memoryStoreClears,
+            'memory_store_evictions' => $memoryStoreEvictions,
             'metadata_entries_cleared' => $metadataEntries,
         ];
     }

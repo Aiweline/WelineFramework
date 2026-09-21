@@ -25,18 +25,27 @@ class Context
 
     protected string $module_description;
 
+    /** 升级前 setup_version（from）；缺失时为 0.0.0 */
+    protected string $from_setup_version;
+
     /**
      * Context 初始函数...
      *
      * @param string $module_name
      * @param string $module_version
      * @param string $module_description
+     * @param string $from_setup_version 升级前 setup_version；Install 或缺省时用 0.0.0
      */
-    public function __construct(string $module_name, string $module_version, string $module_description = '')
-    {
+    public function __construct(
+        string $module_name,
+        string $module_version,
+        string $module_description = '',
+        string $from_setup_version = '0.0.0',
+    ) {
         $this->module_name        = $module_name;
         $this->module_version     = $module_version;
         $this->module_description = $module_description;
+        $this->from_setup_version = $from_setup_version !== '' ? $from_setup_version : '0.0.0';
         $this->modules            = Env::getInstance()->getModuleList();
         $this->printer            = new Printing();
     }
@@ -66,6 +75,14 @@ class Context
     public function getVersion(): mixed
     {
         return isset($this->modules[$this->module_name]['version']) ? $this->modules[$this->module_name]['version'] : false;
+    }
+
+    /**
+     * 升级前 setup_version（真正的 from）。新增迁移门禁应使用本 API，勿用 getVersion()。
+     */
+    public function getFromSetupVersion(): string
+    {
+        return $this->from_setup_version;
     }
 
     /**

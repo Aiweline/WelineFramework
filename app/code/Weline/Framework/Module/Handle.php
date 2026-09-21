@@ -360,7 +360,8 @@ class Handle implements HandleInterface, RegisterInterface
         $setup_context = ObjectManager::make(SetupContext::class, [
             'module_name' => $module->getName(),
             'module_version' => $module->getVersion(),
-            'module_description' => $module->getDescription()
+            'module_description' => $module->getDescription(),
+            'from_setup_version' => $this->resolveFromSetupVersion($module),
         ], '__construct');
         // 已经存在模块则更新
         if ($this->helper->isInstalled($this->old_modules, $module->getName())) {
@@ -414,7 +415,8 @@ class Handle implements HandleInterface, RegisterInterface
         $setup_context = ObjectManager::make(SetupContext::class, [
             'module_name' => $module->getName(),
             'module_version' => $module->getVersion(),
-            'module_description' => $module->getDescription()
+            'module_description' => $module->getDescription(),
+            'from_setup_version' => $this->resolveFromSetupVersion($module),
         ], '__construct');
         $setup_dir = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
         $setup_namespace = $module->getNamespacePath() . '\\' . ucfirst(\Weline\Framework\Setup\Data\DataInterface::dir) . '\\';
@@ -521,16 +523,14 @@ class Handle implements HandleInterface, RegisterInterface
 
     // setupUpgrade
     public function setupUpgrade(Module $module): Module{
+        $this->modules = Env::getInstance()->getModuleList();
+        $from_setup = $this->resolveFromSetupVersion($module);
         $setup_context = ObjectManager::make(SetupContext::class, [
             'module_name' => $module->getName(),
             'module_version' => $module->getVersion(),
-            'module_description' => $module->getDescription()
+            'module_description' => $module->getDescription(),
+            'from_setup_version' => $from_setup,
         ], '__construct');
-        $this->modules = Env::getInstance()->getModuleList();
-        $from_setup = (string)($this->modules[$module->getName()]['setup_version']
-            ?? $this->old_modules[$module->getName()]['setup_version']
-            ?? $this->old_modules[$module->getName()]['version']
-            ?? '1.0.0');
         $setup_dir = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
         $setup_namespace = $module->getNamespacePath() . '\\' . ucfirst(\Weline\Framework\Setup\Data\DataInterface::dir) . '\\';
         if (is_dir($setup_dir) && DEV) {
@@ -633,5 +633,19 @@ class Handle implements HandleInterface, RegisterInterface
     public function getModules(): array
     {
         return $this->modules;
+    }
+
+    /**
+     * 升级前 setup_version（from）。优先当前 modules 行，再 old_modules，缺省 0.0.0。
+     */
+    private function resolveFromSetupVersion(Module $module): string
+    {
+        $name = $module->getName();
+        $from = (string)($this->modules[$name]['setup_version']
+            ?? $this->old_modules[$name]['setup_version']
+            ?? $this->old_modules[$name]['version']
+            ?? '0.0.0');
+
+        return $from !== '' ? $from : '0.0.0';
     }
 }

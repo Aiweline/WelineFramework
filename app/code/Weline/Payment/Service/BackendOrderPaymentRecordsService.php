@@ -88,27 +88,74 @@ final class BackendOrderPaymentRecordsService
         }
 
         $rows = [];
-        $seen = [];
+        $attemptRows = [];
         foreach (PaymentCaptureReaderEnsureService::payableTypeAliases($payableType) as $type) {
             foreach ($this->attemptsForPayable($type, $payableId) as $row) {
-                $key = (string)($row['transaction_id'] ?? '') . '|' . (string)($row['status'] ?? '');
-                if (isset($seen[$key])) {
-                    continue;
-                }
-                $seen[$key] = true;
-                $rows[] = $this->withMethodChrome($row);
+                $attemptRows[] = $row;
             }
         }
-        if ($rows !== []) {
-            return $rows;
+        $transactionRows = $this->transactionsForPayable($payableId);
+        foreach (self::mergeAttemptAndTransactionRows($attemptRows, $transactionRows) as $row) {
+            $rows[] = $this->withMethodChrome($row);
         }
 
-        $fallback = [];
-        foreach ($this->transactionsForPayable($payableId) as $row) {
-            $fallback[] = $this->withMethodChrome($row);
+        return $rows;
+    }
+
+    /**
+     * Attempt ∪ Transaction: prefer Attempt on matching transaction_id;
+     * unmatched Transaction rows (including failed) are retained.
+     * Sorted paid_at DESC, then transaction_id DESC (stable newest-first).
+     *
+     * @param list<array<string, mixed>> $attemptRows
+     * @param list<array<string, mixed>> $transactionRows
+     * @return list<array<string, mixed>>
+     */
+    public static function mergeAttemptAndTransactionRows(
+        array $attemptRows,
+        array $transactionRows,
+    ): array {
+        $merged = [];
+        $seenTxnIds = [];
+
+        foreach ($attemptRows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $txnId = trim((string)($row['transaction_id'] ?? ''));
+            if ($txnId !== '') {
+                if (isset($seenTxnIds[$txnId])) {
+                    continue;
+                }
+                $seenTxnIds[$txnId] = true;
+            }
+            $merged[] = $row;
         }
 
-        return $fallback;
+        foreach ($transactionRows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $txnId = trim((string)($row['transaction_id'] ?? ''));
+            if ($txnId !== '' && isset($seenTxnIds[$txnId])) {
+                continue;
+            }
+            if ($txnId !== '') {
+                $seenTxnIds[$txnId] = true;
+            }
+            $merged[] = $row;
+        }
+
+        usort($merged, static function (array $a, array $b): int {
+            $paidAtCmp = ((string)($b['paid_at'] ?? '')) <=> ((string)($a['paid_at'] ?? ''));
+            if ($paidAtCmp !== 0) {
+                return $paidAtCmp;
+            }
+
+            return ((string)($b['transaction_id'] ?? '')) <=> ((string)($a['transaction_id'] ?? ''));
+        });
+
+        return array_values($merged);
     }
 
     /**

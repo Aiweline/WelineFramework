@@ -63,16 +63,12 @@ body {
 
 body:has(.theme-editor-container) .page-content,
 body:has(.theme-editor-container) .backend-main-content,
-body:has(.theme-editor-container) .page-content > .container-fluid {
+body:has(.theme-editor-container) .page-content > .container-fluid,
+body:has(.theme-editor-container) .w-backend-main {
     width: 100%;
     max-width: none;
     margin: 0;
     padding: 0;
-}
-
-body:has(.theme-editor-container) [data-backend-layout-page-header],
-body:has(.theme-editor-container) .footer {
-    display: none;
 }
 
 .theme-editor-container {
@@ -1569,17 +1565,18 @@ body:has(.theme-editor-container) .footer {
     overflow: hidden;
 }
 
-.preview-toolbar-main .preview-interaction-mode {
+.preview-toolbar-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-2);
     margin-inline-start: auto;
-    margin-inline-end: 4px;
+    min-width: 0;
 }
 
-.preview-toolbar-main .preview-selection-target {
-    margin-inline-end: 4px;
-}
-
+.preview-toolbar-main .preview-interaction-mode,
+.preview-toolbar-main .preview-selection-target,
 .preview-toolbar-main .preview-link-block {
-    margin-inline-end: 8px;
+    margin: 0;
 }
 
 .preview-tabs {
@@ -1630,18 +1627,21 @@ body:has(.theme-editor-container) .footer {
 }
 
 .preview-interaction-tab.active {
-    background: var(--w-theme-editor-gradient-accent);
-    color: var(--w-theme-editor-on-accent);
+    background: var(--w-theme-editor-bg-card);
+    color: var(--w-theme-editor-text-primary);
     box-shadow: var(--w-theme-editor-shadow-sm);
 }
 
 .preview-interaction-tab.preview-interaction-reset {
-    color: var(--w-theme-editor-warning, #d97706);
+    color: var(--w-theme-editor-warning);
+    border: 1px solid color-mix(in srgb, var(--w-theme-editor-warning) 55%, transparent);
+    background: transparent;
+    border-radius: var(--w-theme-editor-radius-sm);
 }
 
 .preview-interaction-tab.preview-interaction-reset:hover {
-    color: var(--w-theme-editor-text-primary);
-    background: rgba(217, 119, 6, 0.12);
+    color: var(--w-theme-editor-warning);
+    background: var(--w-theme-editor-warning-light);
 }
 
 .w-theme-editor-reset-draft__hint,
@@ -1737,8 +1737,8 @@ body:has(.theme-editor-container) .footer {
 }
 
 .preview-tab.active {
-    background: var(--w-theme-editor-gradient-accent);
-    color: var(--w-theme-editor-on-accent);
+    background: var(--w-theme-editor-bg-card);
+    color: var(--w-theme-editor-text-primary);
     box-shadow: var(--w-theme-editor-shadow-sm);
 }
 
@@ -3766,6 +3766,38 @@ body:has(.theme-editor-container) .footer {
     color: var(--w-theme-editor-danger);
 }
 
+/* File picker remove chip: bright danger × on raised surface (outline/on-danger speck was invisible). */
+.theme-editor-container .w-file-picker .w-file-preview__actions .w-button[data-w-file-remove],
+.theme-editor-container .w-file-picker .w-file-preview__actions .w-button[data-w-file-remove][data-size="sm"],
+.theme-editor-container .w-file-preview__actions .w-button[data-tone="danger"],
+.theme-editor-container .w-file-preview__actions .w-button[data-tone="danger"][data-size="sm"],
+.theme-editor-container .w-file-preview__actions .w-button[data-tone="danger"][data-variant="outline"],
+.theme-editor-container .w-file-preview__actions .w-button[data-tone="danger"][data-variant="outline"][data-size="sm"] {
+    color: var(--weline-theme-danger, var(--w-theme-editor-danger));
+    background: var(--weline-theme-surface-raised, var(--weline-theme-surface));
+    border-color: var(--weline-theme-danger, var(--w-theme-editor-danger));
+    font-size: var(--weline-font-size-md, 1rem);
+    font-weight: 700;
+    line-height: 1;
+    min-inline-size: 1.75rem;
+    min-block-size: 1.75rem;
+    padding-inline: 0;
+}
+
+.theme-editor-container .w-file-picker .w-file-preview__actions .w-button[data-w-file-remove]:hover,
+.theme-editor-container .w-file-preview__actions .w-button[data-tone="danger"]:hover,
+.theme-editor-container .w-file-preview__actions .w-button[data-tone="danger"][data-variant="outline"]:hover {
+    color: var(--weline-theme-text, var(--w-theme-editor-text-primary));
+    background: color-mix(in srgb, var(--weline-theme-danger, var(--w-theme-editor-danger)) 28%, var(--weline-theme-surface-raised, #111827));
+    border-color: var(--weline-theme-danger, var(--w-theme-editor-danger));
+}
+
+.theme-editor-container .w-file-preview__actions .w-button[data-w-file-remove] .w-icon,
+.theme-editor-container .w-file-preview__actions .w-button[data-tone="danger"] .w-icon {
+    color: inherit;
+    font-size: inherit;
+}
+
 /* 滚动条样式 */
 .theme-editor-container ::-webkit-scrollbar {
     width: 6px;
@@ -4671,14 +4703,35 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
 }
 
 .theme-editor-container .toolbar-right .w-button,
-.theme-editor-container .toolbar-right .w-theme-editor-version-toggle {
-    padding: 2px 7px;
-    min-height: 24px;
-    height: 24px;
-    font-size: 11px;
-    gap: 3px;
-    border-radius: 4px;
+.theme-editor-container .toolbar-right .w-theme-editor-version-toggle,
+.theme-editor-container .toolbar-brand-basics-btn {
+    padding-block: 0;
+    padding-inline: var(--weline-space-2);
+    min-block-size: 1.75rem;
+    block-size: auto;
+    height: auto;
+    font-size: var(--weline-font-size-xs);
+    gap: var(--weline-space-1);
+    border-radius: var(--w-theme-editor-radius-sm);
     line-height: 1.2;
+}
+
+.theme-editor-container .toolbar-brand-basics-btn,
+.theme-editor-container #btnPublish {
+    flex: 0 0 auto;
+}
+
+.theme-editor-container .toolbar-chrome-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    margin-inline-start: var(--weline-space-2);
+    padding-inline-start: var(--weline-space-2);
+    border-inline-start: 1px solid var(--w-theme-editor-border);
+}
+
+.theme-editor-container #btnPublish {
+    margin-inline-start: var(--weline-space-2);
 }
 
 .theme-editor-container .toolbar-right .w-button i,
@@ -4696,28 +4749,10 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
     flex: 0 0 auto;
 }
 
-/* 右侧动作默认仅 icon；「发布」保留文案；溢出菜单内仍显示文案 */
-.theme-editor-container .toolbar-right > .w-toolbar-overflow__items .w-theme-editor-toolbar-button-text,
-.theme-editor-container .toolbar-right > .w-toolbar-overflow__more .w-theme-editor-toolbar-button-text {
-    display: none;
-}
-
-@media (max-width: 1480px) {
-    /* 文案由溢出「更多」收纳；工具栏动作仍保持 icon-only */
-    .editor-toolbar .w-theme-editor-toolbar-button-text {
-        display: inline;
-    }
-
-    .theme-editor-container .toolbar-right > .w-toolbar-overflow__items .w-theme-editor-toolbar-button-text,
-    .theme-editor-container .toolbar-right > .w-toolbar-overflow__more .w-theme-editor-toolbar-button-text {
-        display: none;
-    }
-
-    .theme-editor-container .toolbar-right .w-button,
-    .theme-editor-container .toolbar-right .w-theme-editor-version-toggle {
-        padding: 2px 6px;
-        min-width: 24px;
-    }
+/* 右侧动作短文案位：实际显隐由文末 unlayered 规则控制（避免落入过大 @layer page 时 CSSOM 丢规则） */
+.theme-editor-container .toolbar-right .w-theme-editor-toolbar-button-text,
+.theme-editor-container .toolbar-brand-basics-btn .w-theme-editor-toolbar-button-text {
+    /* placeholder kept for older greps; display set unlayered below */
 }
 
 @media (max-width: 1100px) {
@@ -5860,10 +5895,10 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
 /* Scope is the Theme Editor's primary context; keep it ahead of Theme and outside overflow. */
 .theme-editor-container .toolbar-select-field-scope {
     position: relative;
-    flex: 0 1 9rem;
-    inline-size: 9rem;
-    min-inline-size: 6.5rem;
-    max-inline-size: 9rem;
+    flex: 1 1 16rem;
+    inline-size: auto;
+    min-inline-size: 12rem;
+    max-inline-size: min(22rem, 36vw);
     padding: 0.18rem 0.28rem 0.18rem 0.42rem;
     border: 1px solid var(--w-theme-editor-border-light);
     border-radius: var(--w-theme-editor-radius-sm);
@@ -6056,7 +6091,7 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
 }
 
 .theme-editor-container .toolbar-select-field-scope > .toolbar-select-label {
-    color: var(--w-theme-editor-accent);
+    color: var(--w-theme-editor-text-secondary);
     font-weight: 700;
 }
 
@@ -6180,8 +6215,10 @@ body:has(.theme-editor-container) .w-scope-select-dropdown .w-tree-select-node-c
 
 @media (max-width: 1280px) {
     .theme-editor-container .toolbar-select-field-scope {
-        flex-basis: clamp(11rem, 21vw, 15rem);
-        inline-size: clamp(11rem, 21vw, 15rem);
+        flex: 1 1 12rem;
+        inline-size: auto;
+        min-inline-size: 10rem;
+        max-inline-size: min(18rem, 42vw);
     }
 }
 
@@ -6245,6 +6282,36 @@ body:has(.theme-editor-container) .w-scope-select-dropdown .w-tree-select-node-c
     }
 }
 
+/* Unlayered: must beat @layer layout .w-backend-page { gap }. Grid items with display:none still occupy a track. */
+body:has(.theme-editor-container) #main-content.w-backend-page,
+body:has(.theme-editor-container) main.w-backend-page {
+    gap: 0;
+    min-height: 0;
+    height: 100%;
+}
+
+/* Unlayered: 顶栏/预览动作仅图标；Cover=tooltip / title；溢出菜单内恢复文案 */
+.theme-editor-container .toolbar-right .w-theme-editor-toolbar-button-text,
+.theme-editor-container .toolbar-brand-basics-btn .w-theme-editor-toolbar-button-text,
+.theme-editor-container .editor-chrome-strip .w-theme-editor-toolbar-button-text,
+.theme-editor-container .preview-actions .w-theme-editor-preview-action-text {
+    display: none !important;
+}
+
+.w-toolbar-overflow__menu .w-theme-editor-toolbar-button-text,
+.w-toolbar-overflow__menu .w-theme-editor-preview-action-text {
+    display: inline !important;
+}
+
+body:has(.theme-editor-container) .w-backend-page__heading,
+body:has(.theme-editor-container) [data-backend-layout-page-header],
+body:has(.theme-editor-container) [data-backend-system-messages],
+body:has(.theme-editor-container) .w-backend-footer,
+body:has(.theme-editor-container) .footer {
+    display: none;
+    position: absolute;
+}
+
 /* Weline UI source: css/pages/theme-editor-brand-chrome.css */
 /* Theme editor chrome collapse + brand basics drawer */
 
@@ -6258,8 +6325,10 @@ body:has(.theme-editor-container) .w-scope-select-dropdown .w-tree-select-node-c
     align-items: center;
     gap: 0.5rem;
     padding: 0.35rem 0.75rem;
-    background: var(--w-color-surface-raised, #111827);
-    border-bottom: 1px solid var(--w-color-border, rgba(255, 255, 255, 0.08));
+    background: var(--w-theme-editor-bg-card);
+    border-bottom: 1px solid var(--w-theme-editor-border);
+    box-shadow: var(--w-theme-editor-shadow-sm);
+    color: var(--w-theme-editor-text-primary);
     min-height: 2.5rem;
 }
 
@@ -6278,12 +6347,12 @@ body:has(.theme-editor-container) .w-scope-select-dropdown .w-tree-select-node-c
 .editor-chrome-strip__title {
     font-weight: 600;
     font-size: 0.875rem;
-    color: var(--w-color-text, #f8fafc);
+    color: var(--w-theme-editor-text-primary);
 }
 
 .editor-chrome-strip__scope {
     font-size: 0.8125rem;
-    color: var(--w-color-text-muted, #94a3b8);
+    color: var(--w-theme-editor-text-secondary);
     max-inline-size: 18rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -6307,6 +6376,13 @@ body:has(.theme-editor-container) .w-scope-select-dropdown .w-tree-select-node-c
     font-size: 0.72rem;
     line-height: 1.2;
     border-radius: var(--w-theme-editor-radius-sm, 4px);
+}
+
+.theme-editor-container .toolbar-left > .toolbar-brand-basics-btn[data-icon-only="true"] {
+    padding-inline: 0;
+    inline-size: 1.75rem;
+    min-inline-size: 1.75rem;
+    justify-content: center;
 }
 
 .theme-editor-container .toolbar-left > .toolbar-brand-basics-btn .w-icon {

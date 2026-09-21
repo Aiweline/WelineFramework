@@ -13,6 +13,11 @@ use Weline\Faq\Service\FaqSeoFactsBuilder;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Model\ThemeLayout;
 
+/**
+ * FAQ 聚合页（店面）。
+ *
+ * @Extra type=fpc enabled=true ttl=900 namespaces=website/default/cms,website/default/theme public_path_patterns=/faq
+ */
 final class Index extends FrontendController
 {
     private ?FaqPageProviderRegistry $pageProviderRegistry = null;

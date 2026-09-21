@@ -15,10 +15,20 @@
 (function (window, document) {
     'use strict';
 
-    // 防止重复初始化
+    // 防止重复初始化。已初始化时保持现有 window.__，不要清掉。
     if (window.WelineI18n && window.WelineI18n.__initialized) {
         return;
     }
+
+    // 核心 __ 立刻挂上。后台 runtime.js 可能更早写成 Runtime.translate，这里必须改回本函数。
+    // 字典未就绪前回退原文；initI18nObject() 完成后，同一个函数走 i18nObj.translate。
+    let coreTranslate = null;
+    window.__ = function (key, params) {
+        if (typeof coreTranslate === 'function') {
+            return coreTranslate(key, params);
+        }
+        return key;
+    };
 
     function readCookieValue(key) {
         if (!key) {
@@ -957,8 +967,9 @@
         return i18nObj;
     }
 
-    // 初始化 i18n 对象
+    // 初始化 i18n 对象；此后 window.__ 走现有 translate（含 %{key}），不另写词典算法。
     const i18nObj = initI18nObject();
+    coreTranslate = i18nObj.translate;
 
     /**
      * Install / refresh window.Weline.i18n facade（框架模组，不写进 weline.js）。

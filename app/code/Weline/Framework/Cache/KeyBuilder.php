@@ -215,9 +215,9 @@ class KeyBuilder
             && !$context->hasCompleteFrozenScope()
             && !$websiteScopeAvailable
         ) {
-            // Preserve request isolation; an incomplete scope is never a default tenant.
+            // Incomplete scope: mark fence only. Never embed request-id fingerprints
+            // into publishable keys — HotCache must refuse L1/L2 for this state.
             $dimensions['scope_state'] = 'request-fence';
-            $dimensions['request_fence'] = $context->cacheKeyFingerprint;
         } else {
             $dimensions['scope_state'] = $policy->scope === 'global'
                 ? 'global'
@@ -247,6 +247,19 @@ class KeyBuilder
             $dimensions['translation_locales'] = $context->translationLocales ?? [];
         }
         return $dimensions;
+    }
+
+    /**
+     * True when this policy may use process/shared HotCache under the context.
+     * Request-fence states are request-context only (no L1/L2 publish).
+     */
+    public static function policyAllowsSharedCache(
+        CachePolicy $policy,
+        ?StorefrontCacheKeyContext $context = null,
+    ): bool {
+        $dimensions = self::policyDimensions($policy, $context);
+
+        return ($dimensions['scope_state'] ?? '') !== 'request-fence';
     }
 
     public static function policyKey(
@@ -331,13 +344,25 @@ class KeyBuilder
         }
         if ($website) {
             $parts[] = 'scope_state=' . $dims['scope_state'];
-            $parts[] = 'scope_kind=' . $dims['scope_kind'];
-            $parts[] = 'website=' . $dims['website'];
-            $parts[] = 'store=' . $dims['store'];
-            $parts[] = 'channel=' . $dims['channel'];
-            $parts[] = 'store_mode=' . $dims['store_mode'];
-            $parts[] = 'context_version=' . $dims['context_version'];
-            $parts[] = 'cache_version=' . $dims['cache_key_fingerprint'];
+            if (($dims['scope_state'] ?? '') === 'request-fence') {
+                // Fence: never invent default tenants and never embed request-unique versions.
+                if (($dims['scope_kind'] ?? 'unresolved') !== 'unresolved') {
+                    $parts[] = 'scope_kind=' . $dims['scope_kind'];
+                    $parts[] = 'website=' . $dims['website'];
+                    $parts[] = 'store=' . $dims['store'];
+                    $parts[] = 'channel=' . $dims['channel'];
+                    $parts[] = 'store_mode=' . $dims['store_mode'];
+                    $parts[] = 'context_version=' . $dims['context_version'];
+                }
+            } else {
+                $parts[] = 'scope_kind=' . $dims['scope_kind'];
+                $parts[] = 'website=' . $dims['website'];
+                $parts[] = 'store=' . $dims['store'];
+                $parts[] = 'channel=' . $dims['channel'];
+                $parts[] = 'store_mode=' . $dims['store_mode'];
+                $parts[] = 'context_version=' . $dims['context_version'];
+                $parts[] = 'cache_version=' . $dims['cache_key_fingerprint'];
+            }
         }
         if ($lang) {
             $parts[] = 'lang=' . $dims['lang'];
@@ -391,9 +416,12 @@ class KeyBuilder
                 'channel',
                 'store_mode',
                 'context_version',
-                'cache_key_fingerprint',
             ] as $field) {
                 $environment[$field] = $storefront[$field];
+            }
+            // Request-fence fingerprints embed request id + nonce; never publish them.
+            if (($storefront['scope_state'] ?? '') !== 'request-fence') {
+                $environment['cache_key_fingerprint'] = $storefront['cache_key_fingerprint'];
             }
         }
         if (!empty($dimensions['website_url'])) {

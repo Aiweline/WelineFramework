@@ -293,32 +293,30 @@ final class OrderTradeAdminCommandService
         $shipment->save();
 
         $mailSent = false;
-        // #24: only notify when newly writing a non-empty tracking and explicitly requested
-        if ($notifyCustomer && !$hadTracking) {
-            $orderId = (int)$shipment->getData(\Weline\Order\Model\OrderShipment::schema_fields_ORDER_ID);
-            $order = $this->newModel(Order::class)->load($orderId);
-            if ($order instanceof Order && $order->getId()) {
-                $email = trim((string)$order->getData(Order::schema_fields_CUSTOMER_EMAIL));
-                if ($email !== '') {
-                    try {
-                        $events = $this->manager()->getInstance(
-                            \Weline\Framework\Event\EventsManager::class,
-                        );
-                        $events->dispatch('Weline_Order::order_shipped', [
-                            'order' => $order,
-                            'order_id' => $orderId,
-                            'shipment' => $shipment,
-                            'notify_customer' => true,
-                            'tracking_number' => $trackingNumber,
-                            'carrier' => (string)$shipment->getData(
-                                \Weline\Order\Model\OrderShipment::schema_fields_CARRIER,
-                            ),
-                        ]);
-                        $mailSent = true;
-                    } catch (\Throwable) {
-                        $mailSent = false;
-                    }
-                }
+        $orderId = (int)$shipment->getData(\Weline\Order\Model\OrderShipment::schema_fields_ORDER_ID);
+        $order = $this->newModel(Order::class)->load($orderId);
+        if ($order instanceof Order && $order->getId()) {
+            $email = trim((string)$order->getData(Order::schema_fields_CUSTOMER_EMAIL));
+            // Mail only when newly writing tracking and explicitly requested; payment sync always gets the event.
+            $notifyForMail = $notifyCustomer && !$hadTracking && $email !== '';
+            try {
+                $events = $this->manager()->getInstance(
+                    \Weline\Framework\Event\EventsManager::class,
+                );
+                $shippedEvent = [
+                    'order' => $order,
+                    'order_id' => $orderId,
+                    'shipment' => $shipment,
+                    'notify_customer' => $notifyForMail,
+                    'tracking_number' => $trackingNumber,
+                    'carrier' => (string)$shipment->getData(
+                        \Weline\Order\Model\OrderShipment::schema_fields_CARRIER,
+                    ),
+                ];
+                $events->dispatch('Weline_Order::order_shipped', $shippedEvent);
+                $mailSent = $notifyForMail;
+            } catch (\Throwable) {
+                $mailSent = false;
             }
         }
 
@@ -886,14 +884,15 @@ final class OrderTradeAdminCommandService
             $events = $this->manager()->getInstance(
                 \Weline\Framework\Event\EventsManager::class,
             );
-            $events->dispatch('Weline_Order::order_shipped', [
+            $shippedEvent = [
                 'order' => $order,
                 'order_id' => $orderId,
                 'shipment' => $shipment,
                 'notify_customer' => $notifyCustomer,
                 'tracking_number' => $trackingNumber,
                 'carrier' => $carrier,
-            ]);
+            ];
+            $events->dispatch('Weline_Order::order_shipped', $shippedEvent);
             $mailSent = $notifyCustomer;
         } catch (\Throwable) {
             $mailSent = false;

@@ -89,6 +89,15 @@ final class LockedCacheFrontendWorkerStateStore implements FrontendWorkerStateSt
             }
 
             $existing = $this->adapter->get(self::STATE_KEY);
+            // A cooldown miss returns null — must not materialize an empty
+            // credential snapshot and wipe the shared Worker session store.
+            if ($this->adapter instanceof CacheAdapterHealthInterface && !$this->adapter->isAvailable()) {
+                throw new FrontendQueryException(
+                    'worker_store_unavailable',
+                    'Shared worker session cache is unavailable.',
+                    503,
+                );
+            }
             if ($existing !== null && !\is_array($existing)) {
                 throw new FrontendQueryException(
                     'worker_store_unavailable',

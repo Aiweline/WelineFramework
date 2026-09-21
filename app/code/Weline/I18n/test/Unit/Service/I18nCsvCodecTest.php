@@ -9,6 +9,17 @@ use Weline\I18n\Service\I18nCsvCodec;
 
 final class I18nCsvCodecTest extends TestCase
 {
+    public function testIsModuleCsvLocaleOnlyBaselineZhEn(): void
+    {
+        self::assertTrue(I18nCsvCodec::isModuleCsvLocale('zh_Hans_CN'));
+        self::assertTrue(I18nCsvCodec::isModuleCsvLocale('en_US'));
+        self::assertTrue(I18nCsvCodec::isModuleCsvLocale('en-US'));
+        self::assertFalse(I18nCsvCodec::isModuleCsvLocale('ja_JP'));
+        self::assertFalse(I18nCsvCodec::isModuleCsvLocale('hi_IN'));
+        self::assertFalse(I18nCsvCodec::isModuleCsvLocale('zh_Hant_TW'));
+        self::assertSame(['zh_Hans_CN', 'en_US'], I18nCsvCodec::MODULE_CSV_LOCALES);
+    }
+
     public function testIsGarbledTextDetectsBomAndReplacementChar(): void
     {
         self::assertTrue(I18nCsvCodec::isGarbledText(I18nCsvCodec::UTF8_BOM . '无权限访问重定向前'));

@@ -115,10 +115,39 @@ final class PreviewExitFloatNavigateContractTest extends TestCase
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('if (!persisted) {', $source);
         self::assertStringContainsString('clearClientToken();', $source);
+        self::assertStringContainsString('isPreviewCaptureDocument()', $source);
+        self::assertStringContainsString("params.get('weline_preview_capture') === '1'", $source);
         self::assertStringNotContainsString(
             "if (!persisted) {\n        if (urlToken) {\n            clearClientToken();\n        }",
             $source
         );
+        // Storage alone must never re-seed Cookie after exit (formal storefront isolation).
+        self::assertStringNotContainsString('urlToken || storedToken', $source);
+        self::assertStringNotContainsString('const token = urlToken', $source);
+        self::assertStringContainsString('const urlToken = readUrlToken();', $source);
+        self::assertStringContainsString('if (!urlToken) {', $source);
+        self::assertStringContainsString('if (readStoredToken()) {', $source);
+        self::assertStringContainsString('persistPreviewToken(urlToken)', $source);
+
+        $statics = dirname(__DIR__, 2) . '/view/statics/ui/pages/weline-preview-bootstrap.js';
+        self::assertFileExists($statics);
+        $staticsSource = (string)file_get_contents($statics);
+        self::assertStringNotContainsString('urlToken || storedToken', $staticsSource);
+        self::assertStringContainsString('persistPreviewToken(urlToken)', $staticsSource);
+    }
+
+    public function testThemePreviewExitClearsLivePreviewStorage(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/ui/js/pages/theme-preview.js';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        $start = strpos($source, 'function clearPreviewClientState()');
+        self::assertNotFalse($start);
+        $end = strpos($source, 'function stripPreviewTokenFromUrl()', $start);
+        self::assertNotFalse($end);
+        $fn = substr($source, $start, $end - $start);
+        self::assertStringContainsString("sessionStorage.removeItem('weline_live_preview_token')", $fn);
+        self::assertStringContainsString('WelineThemePreviewBootstrap.clearClientToken', $fn);
     }
 
     public function testBareGatewayWithoutLoginRedirectsHomeForBrowser(): void

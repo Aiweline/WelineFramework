@@ -6,7 +6,7 @@ const {test, expect} = require('@playwright/test');
 test.describe('checkout delivery purpose tags', () => {
   test('shipping editor exposes dual-purpose checkbox default on', async ({page}) => {
     await page.goto('/checkout', {waitUntil: 'domcontentloaded'});
-    const root = page.locator('[data-testid="shipping-checkout-address"], [data-shipping-checkout-address]').first();
+    const root = page.locator('[data-testid="checkout-shipping-address"], [data-shipping-checkout-address]').first();
     await expect(root).toBeVisible({timeout: 30000});
 
     const checkbox = root.locator('[data-also-use-receiving]');

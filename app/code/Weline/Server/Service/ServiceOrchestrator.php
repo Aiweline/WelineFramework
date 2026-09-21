@@ -7286,6 +7286,46 @@ class ServiceOrchestrator
         return (bool) ($context->getConfig('wls.orchestrator.frontend_non_worker_unix', false) ?? false);
     }
 
+    /**
+     * macOS --win：子进程就绪后弹 Terminal 跟随其进程日志（shared_fd 下不能整进程迁入控制台）。
+     */
+    private function openDarwinWinModeLogWindowIfNeeded(ServiceInstance $instance): void
+    {
+        if ($this->context === null || !$this->context->windowMode) {
+            return;
+        }
+        if (!DarwinWinModeLogWindow::isSupported()) {
+            return;
+        }
+        if ((bool)($instance->getMeta('darwin_win_log_window_opened') ?? false)) {
+            return;
+        }
+
+        $processName = \trim((string)($instance->getMeta('process_name') ?? ''));
+        if ($processName === '') {
+            return;
+        }
+
+        $title = $processName;
+        $roleLabel = \trim((string)$instance->role);
+        if ($roleLabel !== '') {
+            $title = $roleLabel . '#' . $instance->instanceId . ' ' . $processName;
+        }
+
+        $opened = DarwinWinModeLogWindow::openForProcess(
+            $title,
+            $processName,
+            $this->context->instanceName
+        );
+        $instance->setMeta('darwin_win_log_window_opened', $opened);
+        if ($opened && $this->context->windowMode) {
+            echo "\033[36m  macOS --win: Terminal 日志窗口已打开 → {$title}\033[0m\n";
+            if (\function_exists('flush')) {
+                @\flush();
+            }
+        }
+    }
+
     protected function isWindowsRuntime(): bool
     {
         return \defined('IS_WIN')
@@ -17906,6 +17946,7 @@ class ServiceOrchestrator
                 @\flush();
             }
         }
+        $this->openDarwinWinModeLogWindowIfNeeded($instance);
 
         if ($instance->role === ControlMessage::ROLE_MAINTENANCE
             && $this->maintenanceMode

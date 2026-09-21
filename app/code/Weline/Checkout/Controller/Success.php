@@ -23,6 +23,7 @@ class Success extends FrontendController
         private readonly OrderFacadeInterface $orders,
         private readonly CheckoutSessionAccessService $checkoutAccess,
         private readonly CheckoutSuccessPresentationService $successPresentation,
+        private readonly ?\Weline\Checkout\Service\ContinuePaymentRecoveryUrlBuilder $continuePayUrlBuilder = null,
     ) {
     }
 
@@ -50,6 +51,8 @@ class Success extends FrontendController
             && \Weline\Payment\Service\PaymentBrowserCallbackRoutes::isCancelAlready($params);
         $this->assign('checkout_payment_cancelled', $isCancel);
         $this->assign('checkout_cancel_already', $cancelAlready);
+        $this->assign('continue_pay_url', '');
+        $this->assign('continue_pay_available', false);
 
         $orderUuid = trim((string)$this->request->getParam('order_uuid'));
         if ($orderUuid !== '') {
@@ -173,8 +176,57 @@ class Success extends FrontendController
                 number_format(((int)($order->money['grand_total_minor'] ?? 0)) / 100, 2, '.', ','),
             ),
         );
+        $this->assignContinuePayForCancel($orderUuid, $checkoutToken, (string)($order->status ?? ''), $isCancel, $cancelAlready);
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
+    }
+
+    private function assignContinuePayForCancel(
+        string $orderUuid,
+        string $checkoutToken,
+        string $orderStatus,
+        bool $isCancel,
+        bool $cancelAlready,
+    ): void {
+        $this->assign('continue_pay_url', '');
+        $this->assign('continue_pay_available', false);
+        if (!$isCancel || $cancelAlready || $orderUuid === '') {
+            return;
+        }
+        $status = strtolower(trim($orderStatus));
+        if (in_array($status, ['paid', 'fulfilled', 'completed', 'cancelled', 'canceled', 'refunded'], true)) {
+            return;
+        }
+        $token = $checkoutToken;
+        if ($token === '') {
+            try {
+                $sessions = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Checkout\Api\CheckoutSessionStoreInterface::class
+                );
+                if ($sessions instanceof \Weline\Checkout\Api\CheckoutSessionStoreInterface) {
+                    $token = trim((string)($sessions->findSubmittedTokenByOrderUuid($orderUuid) ?? ''));
+                }
+            } catch (\Throwable) {
+                $token = '';
+            }
+        }
+        if ($token === '') {
+            return;
+        }
+        $builder = $this->continuePayUrlBuilder
+            ?? \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Checkout\Service\ContinuePaymentRecoveryUrlBuilder::class
+            );
+        if (!is_object($builder) || !method_exists($builder, 'build')) {
+            return;
+        }
+        $built = $builder->build($token, $orderUuid, null);
+        $url = trim((string)($built['continue_pay_url'] ?? ''));
+        if ($url === '' || empty($built['reachable'])) {
+            return;
+        }
+        $this->assign('continue_pay_url', $url);
+        $this->assign('continue_pay_available', true);
     }
 
     /**

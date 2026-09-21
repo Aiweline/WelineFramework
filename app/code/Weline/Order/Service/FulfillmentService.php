@@ -180,15 +180,16 @@ class FulfillmentService
             // 如果状态转换失败，不影响发货记录
         }
         
-        // 触发订单发货事件
-        $this->eventsManager->dispatch('Weline_Order::order_shipped', [
+        // 触发订单发货事件（第二参须为可引用变量，PHP 8.4+）
+        $shippedEvent = [
             'order' => $order,
             'order_id' => $orderId,
             'shipment' => $shipment,
             'notify_customer' => ($shipmentData['notify_customer'] ?? true) !== false,
             'tracking_number' => (string) ($shipmentData['tracking_number'] ?? ''),
             'carrier' => (string) ($shipmentData['carrier'] ?? ''),
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Order::order_shipped', $shippedEvent);
         
         return $shipment;
     }
@@ -208,9 +209,24 @@ class FulfillmentService
         if (!$shipment->getId()) {
             throw new \Exception(\__('发货记录不存在'));
         }
-        
+
+        $trackingNumber = trim($trackingNumber);
         $shipment->setData(OrderShipment::schema_fields_TRACKING_NUMBER, $trackingNumber);
         $shipment->save();
+
+        $orderId = (int) $shipment->getData(OrderShipment::schema_fields_ORDER_ID);
+        $order = $this->orderService->getOrder($orderId);
+        if ($order instanceof Order && $order->getId() && $trackingNumber !== '') {
+            $shippedEvent = [
+                'order' => $order,
+                'order_id' => $orderId,
+                'shipment' => $shipment,
+                'notify_customer' => false,
+                'tracking_number' => $trackingNumber,
+                'carrier' => (string) $shipment->getData(OrderShipment::schema_fields_CARRIER),
+            ];
+            $this->eventsManager->dispatch('Weline_Order::order_shipped', $shippedEvent);
+        }
         
         return $shipment;
     }

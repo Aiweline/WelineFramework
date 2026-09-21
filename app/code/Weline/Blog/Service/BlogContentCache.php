@@ -54,7 +54,10 @@ final class BlogContentCache
     public static function changedPaths(int $websiteId, int $previousWebsiteId): array
     {
         $path = new \Weline\Framework\Cache\Namespace\NamespacePath();
-        $paths = [];
+        $paths = [
+            // Extra /blog* 挂父级；单站 leaf 仍保留细粒度。
+            $path->global('storefront', ['blog']),
+        ];
         foreach (array_unique([max(0, $websiteId), max(0, $previousWebsiteId)]) as $id) {
             $paths[] = $path->global('storefront', ['blog', 'content', 'website', (string)$id]);
         }

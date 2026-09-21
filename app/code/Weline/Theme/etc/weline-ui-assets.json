@@ -229,6 +229,30 @@
       "source_root": "app/code/Weline/Ai/view/statics",
       "sources": ["css/default-model.css"]
     },
+    "agent-admin-css": {
+      "type": "css",
+      "output": "pages/weline-agent-admin.css",
+      "source_root": "app/code/Weline/Agent/view/statics",
+      "sources": ["css/agent-admin.css"]
+    },
+    "agent-admin-prototype-js": {
+      "type": "js",
+      "output": "pages/weline-agent-admin-prototype.js",
+      "source_root": "app/code/Weline/Agent/view/statics",
+      "sources": ["js/agent-admin-prototype.js"]
+    },
+    "agent-admin-api-js": {
+      "type": "js",
+      "output": "pages/weline-agent-admin-api.js",
+      "source_root": "app/code/Weline/Agent/view/statics",
+      "sources": ["js/agent-admin-api.js"]
+    },
+    "agent-admin-chat-js": {
+      "type": "js",
+      "output": "pages/weline-agent-admin-chat.js",
+      "source_root": "app/code/Weline/Agent/view/statics",
+      "sources": ["js/agent-admin-chat.js"]
+    },
     "ai-default-model-js": {
       "type": "js",
       "output": "pages/weline-ai-default-model.js",
@@ -481,6 +505,7 @@
     "ui-advanced": ["combobox", "tree", "transfer-list", "reorder-list", "icon-picker"],
     "datatable-js": ["data-table"],
     "datatable-form-js": ["data-table-form"],
+    "choice-selector-js": ["choice-filter"],
     "language-select-js": ["language-select"],
     "currency-select-js": ["currency-select"],
     "ai-model-select-js": ["ai-model-select"],

@@ -24,6 +24,12 @@ final class PaymentGuideTemplateContractTest extends TestCase
                 'agreement' => $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/agreement.phtml',
                 'guide_class' => $moduleRoot . '/extends/module/Weline_Payment/PaymentCustomerGuide/PayPalCustomerGuide.php',
             ],
+            'stripe' => [
+                'guide' => $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/guide.phtml',
+                'policy' => $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/policy.phtml',
+                'agreement' => $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/agreement.phtml',
+                'guide_class' => $moduleRoot . '/extends/module/Weline_Payment/PaymentCustomerGuide/StripeCustomerGuide.php',
+            ],
         ];
 
         self::assertFileExists($moduleRoot . '/view/templates/Frontend/guide/payment/index.phtml');
@@ -71,6 +77,9 @@ final class PaymentGuideTemplateContractTest extends TestCase
             'paypal/guide.phtml',
             'paypal/policy.phtml',
             'paypal/agreement.phtml',
+            'stripe/guide.phtml',
+            'stripe/policy.phtml',
+            'stripe/agreement.phtml',
             'fake_card/guide.phtml',
             'fake_card/policy.phtml',
             'fake_card/agreement.phtml',
@@ -90,6 +99,9 @@ final class PaymentGuideTemplateContractTest extends TestCase
             $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/guide.phtml',
             $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/policy.phtml',
             $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/agreement.phtml',
+            $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/guide.phtml',
+            $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/policy.phtml',
+            $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/agreement.phtml',
             $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/guide.phtml',
             $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/policy.phtml',
             $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/agreement.phtml',
@@ -123,6 +135,9 @@ final class PaymentGuideTemplateContractTest extends TestCase
             'paypal/guide.phtml',
             'paypal/policy.phtml',
             'paypal/agreement.phtml',
+            'stripe/guide.phtml',
+            'stripe/policy.phtml',
+            'stripe/agreement.phtml',
             'fake_card/guide.phtml',
             'fake_card/policy.phtml',
             'fake_card/agreement.phtml',
@@ -138,17 +153,75 @@ final class PaymentGuideTemplateContractTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/href="\/guide\/payment/', $breadcrumb);
     }
 
+    public function testGuidePhraseEnUsTranslationsAreNotChinesePlaceholders(): void
+    {
+        $moduleRoot = dirname(__DIR__, 3);
+        $enPath = $moduleRoot . '/i18n/en_US.csv';
+        self::assertFileExists($enPath);
+
+        $translations = [];
+        $fp = fopen($enPath, 'r');
+        self::assertNotFalse($fp);
+        while (($row = fgetcsv($fp, 0, ',', '"', '\\')) !== false) {
+            if (count($row) >= 2) {
+                $translations[$row[0]] = $row[1];
+            }
+        }
+        fclose($fp);
+
+        $files = array_unique(array_merge(
+            glob($moduleRoot . '/view/templates/Frontend/guide/payment/**/*.phtml') ?: [],
+            glob($moduleRoot . '/view/templates/Frontend/guide/payment/*.phtml') ?: [],
+            glob($moduleRoot . '/view/templates/Frontend/guide/payment/partials/*.phtml') ?: [],
+            glob($moduleRoot . '/extends/module/Weline_Payment/PaymentCustomerGuide/*.php') ?: [],
+        ));
+
+        $phrases = [];
+        foreach ($files as $file) {
+            $content = (string) file_get_contents($file);
+            if (preg_match_all('/<lang(?:\s[^>]*)?>(.*?)<\/lang>/su', $content, $m)) {
+                foreach ($m[1] as $phrase) {
+                    $phrases[$phrase] = true;
+                }
+            }
+            if (preg_match_all('/@lang[\({]["\']?([^"\')\}]+)["\']?[\)}]/u', $content, $m2)) {
+                foreach ($m2[1] as $phrase) {
+                    $phrases[$phrase] = true;
+                }
+            }
+            if (preg_match_all('/__\([\'"](.+?)[\'"]\)/u', $content, $m3)) {
+                foreach ($m3[1] as $phrase) {
+                    $phrases[$phrase] = true;
+                }
+            }
+        }
+
+        $bad = [];
+        foreach (array_keys($phrases) as $phrase) {
+            // Brand / Latin-only sources may keep identical en_US values.
+            if (!preg_match('/\p{Han}/u', $phrase)) {
+                continue;
+            }
+            $trans = $translations[$phrase] ?? null;
+            if ($trans === null || preg_match('/\p{Han}/u', $trans)) {
+                $bad[] = $phrase;
+            }
+        }
+
+        self::assertSame([], $bad, 'Guide phrases still have Chinese placeholders in en_US.csv');
+    }
+
     public function testAmazonStyleAssetsAndPartialsExist(): void
     {
         $moduleRoot = dirname(__DIR__, 3);
         $themeRoot = dirname($moduleRoot) . '/Theme';
 
         self::assertFileExists($themeRoot . '/view/statics/css/widgets/amazon-payment-guide.css');
-        self::assertFileExists($themeRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
+        self::assertFileExists($moduleRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
         self::assertFileExists($moduleRoot . '/view/templates/Frontend/guide/payment/partials/amazon-sidebar.phtml');
         self::assertFileExists($moduleRoot . '/view/templates/Frontend/guide/payment/partials/amazon-shell-open.phtml');
 
-        $layout = (string) file_get_contents($themeRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
+        $layout = (string) file_get_contents($moduleRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
         self::assertStringContainsString('amazon-payment-guide.css', $layout);
         self::assertStringContainsString('{{meta.content}}', $layout);
         self::assertStringContainsString('Weline_Theme::frontend::layouts::payment_guide::head-after', $layout);

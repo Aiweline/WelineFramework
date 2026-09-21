@@ -10,6 +10,7 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Context;
+use Weline\Framework\Http\ResponseObservabilityPolicy;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -200,6 +201,11 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         self::assertTrue($mustBypass->invoke($fastPath, ['authorization' => 'Bearer private-token']));
         self::assertFalse($mustBypass->invoke($fastPath, ['authorization' => '']));
         self::assertFalse($mustBypass->invoke($fastPath, []));
+        self::assertTrue($mustBypass->invoke($fastPath, ['x-wls-fpc-bypass' => '1'], '/'));
+        self::assertTrue($mustBypass->invoke($fastPath, ['cookie' => 'weline_preview_token=abc'], '/'));
+        self::assertTrue($mustBypass->invoke($fastPath, [], '/?editor_mode=1'));
+        self::assertFalse($mustBypass->invoke($fastPath, ['cache-control' => 'no-cache'], '/'));
+        self::assertTrue($mustBypass->invoke($fastPath, ['cache-control' => 'no-store'], '/'));
     }
 
     public function testLocalizedHomepageUsesOnlyItsExactUnifiedProcessReceipt(): void
@@ -259,7 +265,10 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             self::assertStringContainsString('localized-process-receipt', \gzdecode(
                 \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
             ));
-            self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $hit['response']);
+            self::assertStringContainsString("X-Weline-Fpc: HIT\r\n", $hit['response']);
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $hit['response']);
+            }
             self::assertSame(0, $pool->getCalls, 'An exact localized receipt must remain Process-L1-only.');
 
             self::assertNull($fastPath->lookup($decision('/zh_Hans_CN/CNY/'), 'https'));
@@ -333,7 +342,10 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             self::assertStringContainsString('localized-process-receipt', \gzdecode(
                 \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
             ));
-            self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $hit['response']);
+            self::assertStringContainsString("X-Weline-Fpc: HIT\r\n", $hit['response']);
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $hit['response']);
+            }
             self::assertSame(0, $pool->getCalls, 'An exact localized receipt must remain Process-L1-only.');
 
             self::assertNull($fastPath->lookup($decision('/zh_Hans_CN/CNY/'), 'https'));
@@ -409,7 +421,12 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             self::assertStringContainsString('root-port-alias-formatted', \gzdecode(
                 \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
             ));
-            self::assertMatchesRegularExpression('/X-Wls-Performance-Fpc-Source:\\s*process-formatted/i', $hit['response']);
+            self::assertStringContainsString("X-Weline-Fpc: HIT\r\n", $hit['response']);
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                self::assertMatchesRegularExpression('/X-Wls-Performance-Fpc-Source:\\s*process-formatted/i', $hit['response']);
+            } else {
+                self::assertSame('process-formatted', $hit['source']);
+            }
         } finally {
             FullPageCacheCoordinator::clearProcessCache();
         }
@@ -479,8 +496,11 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
 
             self::assertIsArray($result);
             self::assertSame('process-formatted', $result['source']);
-            self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $result['response']);
-            self::assertStringContainsString("X-Wls-Performance-Urlparserapply: 0\r\n", $result['response']);
+            self::assertStringContainsString("X-Weline-Fpc: HIT\r\n", $result['response']);
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $result['response']);
+                self::assertStringContainsString("X-Wls-Performance-Urlparserapply: 0\r\n", $result['response']);
+            }
             self::assertStringContainsString("Content-Encoding: gzip\r\n", $result['response']);
             self::assertStringContainsString("Connection: keep-alive\r\n", $result['response']);
 

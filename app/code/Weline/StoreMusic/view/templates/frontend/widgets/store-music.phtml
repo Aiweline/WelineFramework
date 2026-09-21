@@ -31,10 +31,20 @@ use Weline\StoreMusic\Service\StoreMusicSettings;
 /** @var StoreMusicSettings $settings */
 $settings = ObjectManager::getInstance(StoreMusicSettings::class);
 $widgetConfig = StoreMusicSettings::widgetConfigFromTemplate($this);
+$presenceStub = static function (string $reason): void {
+    $escReason = htmlspecialchars($reason, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    echo '<span hidden'
+        . ' data-widget-code="store-music"'
+        . ' data-testid="store-music"'
+        . ' data-store-music-skipped="' . $escReason . '"'
+        . ' aria-hidden="true"></span>';
+};
 if (!$settings->isWidgetActive($widgetConfig)) {
+    $presenceStub('inactive');
     return;
 }
 if (!StoreMusicRenderGate::claim()) {
+    $presenceStub('already-rendered');
     return;
 }
 
@@ -134,6 +144,7 @@ $faceUrl = $esc($faceUrl);
 <aside id="weline-store-music"
        class="w-store-music w-store-music--simple"
        data-store-music
+       data-widget-code="store-music"
        data-weline-load="storeMusic"
        data-store-music-config="<?= $configJson ?>"
        data-website-id="<?= $esc($websiteId) ?>"

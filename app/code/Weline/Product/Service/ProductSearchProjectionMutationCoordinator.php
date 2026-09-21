@@ -114,21 +114,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                     siteId: $websiteId,
                 );
                 \w_changed($change);
-                $this->transactions->afterCommit(
-                    $connection,
-                    'product_storefront_fpc_' . $websiteId . '_' . $targetId . '_' . $eventSeq,
-                    function () use ($websiteId, $targetId, $targetType, $currentUrls, $previousUrls): void {
-                        ObjectManager::getInstance(StorefrontCatalogCacheCoordinator::class)
-                            ->notifyCatalogChanged($websiteId, 'product_search_projection', [
-                                'product_id' => $targetId,
-                                'target_type' => $targetType,
-                                'urls' => array_column($currentUrls, 'loc'),
-                                'previous_urls' => array_column($previousUrls, 'loc'),
-                            ]);
-                        ObjectManager::getInstance(ProductStorefrontCacheInvalidator::class)
-                            ->clearForCatalogChange('product_search_projection:' . $websiteId . ':' . $targetId);
-                    },
-                );
+                // FPC/CDN 失效由 Changed Extends Capability 承接；禁止业务旁路整池清
 
                 return $result;
             } finally {

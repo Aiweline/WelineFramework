@@ -38,6 +38,7 @@ use Weline\Server\Service\SharedSidecarInspector;
 use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\SharedStateServiceManager;
+use Weline\Server\Service\DarwinWinModeLogWindow;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
 use Weline\Server\Log\LogConfig;
@@ -2050,6 +2051,9 @@ class Start extends CommandAbstract
             $sharedStateRuntime,
             LogConfig::isVerboseWlsLog(),
         );
+        if ($windowMode) {
+            $this->openDarwinWinModeWindowsForSharedRuntime($instanceName, $sharedStateRuntime);
+        }
 
         // Worker 端口计算移至端口冲突检测之后，避免重复计算
         // Public TLS and HTTP redirects terminate at Nginx.
@@ -4902,11 +4906,14 @@ class Start extends CommandAbstract
                     $managerConfig['memory_server_port']
                 ));
 
+            if ($windowMode) {
+                $managerConfig['shared_service_frontend'] = true;
+            }
             $ensuredRuntime = $this->createSharedStateServiceManager()->ensureRuntime(
                 $instanceName,
                 $managerConfig,
                 $envConfig,
-                SharedStateServiceManager::resolveEnsureFrontendFlag($managerConfig),
+                SharedStateServiceManager::resolveEnsureFrontendFlag($managerConfig) || $windowMode,
                 $forceRestart
             );
             if (\is_array($ensuredRuntime['session'] ?? null) && \is_array($ensuredRuntime['memory'] ?? null)) {
@@ -10130,6 +10137,8 @@ class Start extends CommandAbstract
             $workerPort
         );
         $this->restartHandoffCaptured = true;
+        // -r/-f 停旧代前先关本实例 --win 窗口（Stop 内也会关；此处保证启动链路不漏）。
+        DarwinWinModeLogWindow::closeAllForInstance($instanceName);
         $mainStop = ObjectManager::getInstance(MainStop::class);
         $mainStop->execute(
             $this->buildStopExistingServerArgs($instanceName, $fastLocal, $restartCleanup, $force),
@@ -11834,6 +11843,48 @@ class Start extends CommandAbstract
             'frontend_non_worker_windows' => true,
         ];
     }
+
+    /**
+     * macOS --win：为共享 Session/Memory 侧车打开 Terminal 日志跟随窗口。
+     *
+     * @param array<string, mixed> $sharedStateRuntime
+     */
+    protected function openDarwinWinModeWindowsForSharedRuntime(string $instanceName, array $sharedStateRuntime): void
+    {
+        if (!DarwinWinModeLogWindow::isSupported()) {
+            return;
+        }
+
+        foreach (['session', 'memory'] as $roleKey) {
+            $runtime = $sharedStateRuntime[$roleKey] ?? null;
+            if (!\is_array($runtime)) {
+                continue;
+            }
+            $processName = \trim((string)($runtime['process_name'] ?? ''));
+            if ($processName === '') {
+                continue;
+            }
+            // 共享侧车真实日志在 service_instance_name 目录下，不能跟 requester 的 default/ 空文件。
+            $logInstanceName = \trim((string)($runtime['service_instance_name'] ?? ''));
+            if ($logInstanceName === '') {
+                $logInstanceName = \trim((string)($runtime['instance_name'] ?? ''));
+            }
+            if ($logInstanceName === '') {
+                $logInstanceName = $instanceName;
+            }
+            $title = $roleKey . ' ' . $processName;
+            $realLog = WlsLogService::getProcessLogFile($processName, $logInstanceName);
+            if (DarwinWinModeLogWindow::openForProcess(
+                $title,
+                $processName,
+                $instanceName,
+                $logInstanceName,
+                $realLog
+            )) {
+                $this->printer->note(__('macOS --win: Terminal 日志窗口已打开 → %{1}', [$title]));
+            }
+        }
+    }
     
     /**
      * 将实际的 host 同步到 env.php 的 wls 配置
@@ -12858,7 +12909,7 @@ PHP;
                 '--host <host>' => __('公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听'),
                 '-p, --port <port>' => __('gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口'),
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
-                '--win' => __('Windows 子进程使用可见控制台窗口'),
+                '--win' => __('窗口模式：Windows 为各 WLS PHP 子进程打开可见控制台；macOS 为各进程打开 Terminal 跟随日志窗口（Direct/shared_fd 不能整进程迁入）'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
                 '-r, --restart' => __('滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）'),
                 '-f' => __('与 -r 同用时强制完整重启（停 Master，跳过排水等待）'),

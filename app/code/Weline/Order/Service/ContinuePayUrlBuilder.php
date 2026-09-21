@@ -5,18 +5,20 @@ declare(strict_types=1);
 namespace Weline\Order\Service;
 
 use Weline\Checkout\Api\CheckoutSessionStoreInterface;
+use Weline\Checkout\Service\ContinuePaymentRecoveryUrlBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Website;
 
 /**
  * Builds capability-gated continue-pay URLs for unpaid order signals.
- * Marketing only embeds the returned URL; it must not invent auth.
+ * Prefer checkout #payment-recovery (resumePaymentV2); Marketing must not invent auth.
  */
 final class ContinuePayUrlBuilder
 {
     public function __construct(
         private readonly ?CheckoutSessionStoreInterface $sessions = null,
         private readonly ?string $storefrontBaseOverride = null,
+        private readonly ?ContinuePaymentRecoveryUrlBuilder $recoveryUrlBuilder = null,
     ) {
     }
 
@@ -49,17 +51,29 @@ final class ContinuePayUrlBuilder
         }
 
         $base = $this->storefrontBase($websiteId);
-        if ($token !== '' && $base !== '') {
-            $url = rtrim($base, '/') . '/checkout/success?' . http_build_query([
-                'order_uuid' => $orderUuid,
-                'checkout_token' => $token,
-            ], '', '&', PHP_QUERY_RFC3986);
+        if ($token !== '') {
+            $recovery = $this->recoveryBuilder()->build($token, $orderUuid, $websiteId);
+            if (!empty($recovery['reachable']) && trim((string)($recovery['continue_pay_url'] ?? '')) !== '') {
+                return [
+                    'continue_pay_url' => (string)$recovery['continue_pay_url'],
+                    'reachable' => true,
+                    'checkout_token' => $token,
+                ];
+            }
+            if ($base !== '') {
+                // Capability success URL still lets the buyer open the unpaid order shell.
+                $url = rtrim($base, '/') . '/checkout/success?' . http_build_query([
+                    'order_uuid' => $orderUuid,
+                    'checkout_token' => $token,
+                    'outcome' => 'cancel',
+                ], '', '&', PHP_QUERY_RFC3986);
 
-            return [
-                'continue_pay_url' => $url,
-                'reachable' => true,
-                'checkout_token' => $token,
-            ];
+                return [
+                    'continue_pay_url' => $url,
+                    'reachable' => true,
+                    'checkout_token' => $token,
+                ];
+            }
         }
 
         // Logged-in buyers can open account orders without capability token.
@@ -78,6 +92,15 @@ final class ContinuePayUrlBuilder
             'reachable' => false,
             'checkout_token' => $token,
         ];
+    }
+
+    private function recoveryBuilder(): ContinuePaymentRecoveryUrlBuilder
+    {
+        if ($this->recoveryUrlBuilder instanceof ContinuePaymentRecoveryUrlBuilder) {
+            return $this->recoveryUrlBuilder;
+        }
+
+        return new ContinuePaymentRecoveryUrlBuilder($this->sessions, $this->storefrontBaseOverride);
     }
 
     private function storefrontBase(?int $websiteId): string

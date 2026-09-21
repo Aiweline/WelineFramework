@@ -58,6 +58,8 @@ Provider 必须实现 `Weline\Payment\Interface\ProviderInterface`。接口函�
 
 需要 OAuth / 一键授权时，额外实现 `Weline\Payment\Interface\ProviderConnectInterface`（`startConnect` / `completeConnect` / `ownsOAuthState` / `suggestedRedirectUris` 等）。壳入口：
 
+需要向支付网关回传发货运单号时，额外实现 `Weline\Payment\Interface\ProviderShipmentTrackingInterface::syncShipmentTracking`。壳监听 `Weline_Order::order_shipped`，按订单 `payment_method` / 成功交易 `method_code` 调度；未实现则跳过。PayPal 默认走 Orders v2 `POST /v2/checkout/orders/{id}/track`（无需 App Features 勾选 Shipping），禁止再挂网关专用 Observer。
+
 - 授权：`payment/backend/connect/authorize?method_code={code}&environment=sandbox|live`
 - 测连 / 撤销：`payment/backend/connect/test|revoke?method_code=...`
 - 浏览器回跳：唯一 `payment/frontend/callback/{method_code}`（`outcome=cancel` 走取消）
@@ -133,6 +135,14 @@ extends/module/Weline_SystemConfig/Config/backend/your_pay.phtml
 
 普通配置字段必须使用 `payment/method/{method_code}/{field}` 前缀。scope 选择、继承来源、普通 key/value 保存、校验、审计和缓存失效由 `Weline_SystemConfig` 管理；支付模块不写保存 controller。
 
+网关 Provider 的 config phtml **必须**包含方式级、按 Scope 存储的运行环境，否则不算接完：
+
+- 键：`payment/method/{method_code}/environment`
+- `scope="global,website,store"`
+- 选项只有沙箱、正式，默认沙箱
+- 与支付方式列表「运行环境」是同一个键；换 Scope 后各存各的
+- 资产账户（credit / points / wcoin）不是网关，不要加这个字段
+
 ```phtml
 <?php
 /**
@@ -160,6 +170,17 @@ extends/module/Weline_SystemConfig/Config/backend/your_pay.phtml
         value-type="encrypted"
         required="true"
         scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/your_pay/environment"
+        label="运行环境"
+        description="与支付方式列表「运行环境」是同一个开关，按当前 Scope 保存。"
+        type="select"
+        value-type="string"
+        default="sandbox"
+        scope="global,website,store"
+        options="sandbox:沙盒,live:正式"
+        validation="in_options" />
 
     <w:config:field
         key="payment/method/your_pay/default_currency"

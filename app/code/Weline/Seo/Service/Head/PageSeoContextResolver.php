@@ -548,20 +548,12 @@ class PageSeoContextResolver
 
     private function routeTitle($template): string
     {
-        $path = $this->requestPath($template);
-        if ($path === '') {
-            return '';
-        }
-
-        $path = (string) (parse_url($path, PHP_URL_PATH) ?: $path);
-        $segments = array_values(array_filter(explode('/', trim($path, '/')), static function (string $segment): bool {
-            return $segment !== '' && !is_numeric($segment);
-        }));
-        if ($segments === []) {
-            return '';
-        }
-
-        return $this->humanizeRouteSegment((string) end($segments));
+        // Humanized URL segments (contact → "Contact", guide → "Guide") are English
+        // chrome labels, not locale-aware page titles. When Theme clears Template
+        // title before Partials head renders, this fallback caused title×locale
+        // bleed under concurrency (zh H1 correct, <title> English). Prefer
+        // SeoPageProfileBag / controller title / siteName instead.
+        return '';
     }
 
     private function requestPath($template): string

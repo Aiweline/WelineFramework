@@ -1,9 +1,10 @@
 /**
  * 后台菜单多语言交叉搜索 — 计划收口套件
  *
+ * 登录态须与章通路 e2e 同一传输面（默认 Playwright 代理）；禁止 useProxy:false / transport direct，
+ * 否则 loginAsAdmin 写在代理域的会话到不了直连源，会停在登录页。
+ *
  * @weline-e2e-spec { module: Weline_Admin, type: plan-suite, layer: backend, feature: backend-menu-cross-locale-search }
- * @weline-e2e-runtime wls
- * @weline-e2e-transport direct
  */
 const {
   test,
@@ -16,7 +17,8 @@ const {
 } = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Admin';
-const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
+// 勿用裸 Uncaught：后台通知/活动流可能展示历史前端 Uncaught，会误伤已登录壳层。
+const FATAL = /WLS Runtime Error|ParseError|Fatal error:|Call to undefined method|Class ['"][^'"]+['"] not found/i;
 
 moduleDescribe(test, MODULE, '后台菜单多语言交叉搜索计划套件', () => {
   test.setTimeout(120000);
@@ -27,7 +29,7 @@ moduleDescribe(test, MODULE, '后台菜单多语言交叉搜索计划套件', ()
     '侧栏 data-search-text 交叉过滤 + 顶栏 API backend_menu 交叉命中',
     async ({ page }) => {
       await loginAsAdmin(page, { allowPasswordFallback: true, timeout: 90000 });
-      await gotoBackend(page, 'admin', { timeout: 90000, settleMs: 800, useProxy: false });
+      await gotoBackend(page, 'admin', { timeout: 90000, settleMs: 800 });
       await waitForBackendShellReady(page);
       await expect(page.locator('body')).not.toContainText(FATAL);
 

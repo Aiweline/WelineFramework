@@ -1585,6 +1585,9 @@
         if (!config.backendBootstrapId) {
             return Promise.resolve(null);
         }
+        if (this.backendWarmupComplete) {
+            return Promise.resolve(null);
+        }
         if (!this.backendWarmupPromise) {
             this.backendWarmupPromise = this.sendToWorker({
                 type: 'backend-bootstrap',
@@ -1593,7 +1596,9 @@
                 this.backendWarmupComplete = true;
                 return result;
             }.bind(this)).finally(function () {
-                this.backendWarmupPromise = null;
+                if (!this.backendWarmupComplete) {
+                    this.backendWarmupPromise = null;
+                }
             }.bind(this));
         }
         return this.backendWarmupPromise;

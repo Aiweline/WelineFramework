@@ -183,6 +183,9 @@ final class PreviewContextService
     public function ensureThemeIds(array $context, bool $fallbackFrontend = true, bool $fallbackBackend = true): array
     {
         $context = $this->normalizeContext($context);
+        if ($this->editorContextHasPositiveThemeId($context)) {
+            return $context;
+        }
 
         if ($fallbackFrontend && (int)$context['frontend_theme_id'] <= 0) {
             $context['frontend_theme_id'] = $this->getActiveThemeId(self::AREA_FRONTEND);
@@ -196,6 +199,82 @@ final class PreviewContextService
         }
 
         return $this->normalizeContext($context);
+    }
+
+    public function isEditorThemeRequest(): bool
+    {
+        return $this->isThemeEditorLiveCanvasRequest();
+    }
+
+    /**
+     * 画布态 URL 生成是否应携带主题身份（态 1）。
+     * 无画布标记、无正主题 ID、或带预览 Token（态 2）时禁止注入。
+     */
+    public function shouldCarryEditorIdentityOnGeneratedUrls(): bool
+    {
+        if (!$this->isEditorThemeRequest()) {
+            return false;
+        }
+
+        $token = $this->previewTokenService->getTokenFromRequest();
+        if ($token !== null && $token !== '') {
+            return false;
+        }
+
+        return $this->resolveEditorCarryThemeId() > 0;
+    }
+
+    /**
+     * 注入到生成 URL 的最小画布身份 query（及已有 editor_context 透传）。
+     *
+     * @return array<string, scalar>
+     */
+    public function getEditorIdentityCarryQueryParams(): array
+    {
+        $themeId = $this->resolveEditorCarryThemeId();
+        if ($themeId <= 0) {
+            return [];
+        }
+
+        $params = [
+            'theme_id' => $themeId,
+            'frontend_theme_id' => $themeId,
+            'editor_mode' => '1',
+            'shell' => self::SHELL_THEME_EDITOR,
+        ];
+
+        $editorContext = $this->request->getParam('editor_context', null);
+        if (\is_string($editorContext) && \trim($editorContext) !== '') {
+            $params['editor_context'] = \trim($editorContext);
+        } elseif (\is_array($editorContext) && $editorContext !== []) {
+            $encoded = \json_encode($editorContext, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            if (\is_string($encoded) && $encoded !== '') {
+                $params['editor_context'] = $encoded;
+            }
+        }
+
+        return $params;
+    }
+
+    private function resolveEditorCarryThemeId(): int
+    {
+        $themeId = \max(0, (int)$this->request->getParam('theme_id', 0));
+        if ($themeId > 0) {
+            return $themeId;
+        }
+
+        return \max(0, (int)$this->request->getParam('frontend_theme_id', 0));
+    }
+
+    /** @param array<string, mixed> $context */
+    private function editorContextHasPositiveThemeId(array $context): bool
+    {
+        if ((string)($context['shell'] ?? '') !== self::SHELL_THEME_EDITOR) {
+            return false;
+        }
+
+        return (int)($context['frontend_theme_id'] ?? 0) > 0
+            || (int)($context['backend_theme_id'] ?? 0) > 0;
     }
 
     public function getThemeIdForArea(string $area, ?array $context = null, bool $resolveFallback = false): int

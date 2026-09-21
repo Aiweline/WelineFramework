@@ -1,0 +1,119 @@
+<?php
+/**
+ * Session listing — humanized Weline UI 2.0.
+ * @var \Weline\Framework\View\Template $this
+ */
+$sessions = is_array($sessions ?? null) ? $sessions : [];
+$currentStatus = trim((string)($current_status ?? ''));
+$currentChannel = trim((string)($current_channel ?? ''));
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            return $item->getData($key) ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="list" size="sm" /> <?= $escape(__('会话管理')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('查看人与智能体的对话记录，便于回放和排查。')) ?></p>
+        </div>
+        <a class="w-button" data-tone="neutral" data-variant="outline" href="@backend-url{'*/backend/chat/index'}">
+            <w:icon name="robot" size="sm" /> <?= $escape(__('打开聊天台')) ?>
+        </a>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <article class="w-card">
+        <div class="w-card__body w-stack" data-gap="md">
+            <form class="w-agent-filters" method="get" action="@backend-url{'*/backend/session/listing'}">
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-session-status"><?= $escape(__('状态')) ?></label>
+                    <input class="w-input" id="agent-session-status" type="text" name="status"
+                           value="<?= $escape($currentStatus) ?>" placeholder="active / archived">
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-session-channel"><?= $escape(__('渠道')) ?></label>
+                    <input class="w-input" id="agent-session-channel" type="text" name="channel"
+                           value="<?= $escape($currentChannel) ?>" placeholder="web / dingtalk">
+                </div>
+                <button type="submit" class="w-button"><?= $escape(__('筛选')) ?></button>
+            </form>
+
+            <?php if (!empty($sessions)): ?>
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('标题')) ?></th>
+                        <th><?= $escape(__('角色')) ?></th>
+                        <th><?= $escape(__('渠道')) ?></th>
+                        <th><?= $escape(__('状态')) ?></th>
+                        <th><?= $escape(__('消息数')) ?></th>
+                        <th><?= $escape(__('更新')) ?></th>
+                        <th><?= $escape(__('操作')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($sessions as $session): ?>
+                        <?php
+                        $id = (int)$get($session, 'session_id', 0);
+                        $status = (string)$get($session, 'status', '');
+                        ?>
+                        <tr>
+                            <td><strong><?= $escape((string)$get($session, 'title', __('未命名会话'))) ?></strong></td>
+                            <td>#<?= (int)$get($session, 'role_id', 0) ?></td>
+                            <td><span class="w-agent-chip"><?= $escape((string)$get($session, 'channel', '')) ?></span></td>
+                            <td><span class="w-agent-chip"><?= $escape($status) ?></span></td>
+                            <td><?= (int)$get($session, 'message_count', 0) ?></td>
+                            <td><?= $escape((string)$get($session, 'updated_at', '')) ?></td>
+                            <td>
+                                <div class="w-cluster" data-gap="xs">
+                                    <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"
+                                       href="@backend-url{'*/backend/session/view'|['id' => $id]}"><?= $escape(__('查看')) ?></a>
+                                    <?php if ($status !== 'archived'): ?>
+                                    <button type="button" class="w-button" data-size="sm" data-variant="outline"
+                                            data-agent-op="archiveSession" data-agent-id="<?= $id ?>">
+                                        <?= $escape(__('归档')) ?>
+                                    </button>
+                                    <?php endif; ?>
+                                    <button type="button" class="w-button" data-size="sm" data-variant="outline" data-tone="danger"
+                                            data-agent-op="deleteSession" data-agent-id="<?= $id ?>">
+                                        <?= $escape(__('删除')) ?>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <var>pagination</var>
+            <?php else: ?>
+            <div class="w-agent-empty">
+                <span class="w-agent-empty__icon"><w:icon name="list" size="sm" /></span>
+                <h3><?= $escape(__('还没有会话')) ?></h3>
+                <p><?= $escape(__('去聊天控制台跟角色说几句，这里就会出现对话记录。')) ?></p>
+                <a class="w-button" href="@backend-url{'*/backend/chat/index'}">
+                    <?= $escape(__('去聊天')) ?>
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
+    </article>
+</section>

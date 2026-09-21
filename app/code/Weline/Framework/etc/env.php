@@ -11,7 +11,7 @@ return [
     ],
     'cache' => [
         'namespace' => [
-            'publisher_enabled' => false,
+            'publisher_enabled' => true,
             'legacy_full_clear_fallback' => true,
         ],
     ],

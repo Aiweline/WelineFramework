@@ -104,6 +104,13 @@ final class WorkerHostPressureApplier
         }
         $registry = new MemoryReclaimableRegistry();
         $registry->register(new FullPageCacheReclaimableAdapter());
+        if (\class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, false)
+            || \class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, true)
+        ) {
+            $registry->register(
+                \Weline\Framework\Phrase\DictionaryCacheNamespace::processMemoryReclaimable()
+            );
+        }
         self::$registry = $registry;
 
         return self::$registry;

@@ -2,7 +2,7 @@
 /**
  * 支付方式管理页面（内容模板）
  * 页头标题与面包屑由后台布局 + PageHeaderResolver 负责，本模板只渲染列表主体。
- * 「是否启用」用统一配置嵌入标签，不手写开关。
+ * 「是否启用」和「运行环境」都用统一配置嵌入标签，不手写开关。运行环境是该方式自己的 payment/method/{code}/environment。
  * 「排序」按当前 target_scope 拖拽，写入 payment/method/{code}/sort_order。
  */
 $listTargetScope = (string)($target_scope ?? 'default.default.default');
@@ -14,7 +14,7 @@ $listScopeContext = \is_array($list_scope_context ?? null)
         'scope' => $listTargetScope === 'global' ? 'default.default.default' : $listTargetScope,
         'environment' => 'sandbox',
     ];
-$colspan = $canReorder ? 8 : 7;
+$colspan = $canReorder ? 9 : 8;
 ?>
 <div class="w-grid" data-testid="payment-method-management" data-target-scope="<?= htmlspecialchars($listTargetScope, ENT_QUOTES) ?>">
     <div style="--w-span:12;">
@@ -47,6 +47,7 @@ $colspan = $canReorder ? 8 : 7;
                                 <th><?= __('支付方式名称') ?></th>
                                 <th><?= __('支付提供商') ?></th>
                                 <th><?= __('是否启用') ?></th>
+                                <th><?= __('运行环境') ?></th>
                                 <th><?= __('排序') ?></th>
                                 <th><?= __('操作') ?></th>
                             </tr>
@@ -89,6 +90,7 @@ $colspan = $canReorder ? 8 : 7;
                                     $iconUrl = (string)($display['icon_url'] ?? '');
                                     $scopedSort = $methodManager->getScopedSortOrder($method, $listScopeContext);
                                     $enabledField = 'payment/method/' . $methodCode . '/enabled';
+                                    $environmentField = 'payment/method/' . $methodCode . '/environment';
                                     $embedModule = $providerModule;
                                     $embedField = $enabledField;
                                     ?>
@@ -126,6 +128,16 @@ $colspan = $canReorder ? 8 : 7;
                                                 field="embedField"
                                                 area="backend"
                                                 layout="inline"
+                                                target_scope="listTargetScope"
+                                            />
+                                        </td>
+                                        <td>
+                                            <w:config:embed
+                                                module="embedModule"
+                                                field="environmentField"
+                                                area="backend"
+                                                layout="inline"
+                                                target_scope="listTargetScope"
                                             />
                                         </td>
                                         <td class="payment-method-sort-value"

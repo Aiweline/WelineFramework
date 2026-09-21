@@ -2,13 +2,16 @@
 
 namespace Weline\Framework\Http;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
+use Weline\Framework\View\Helper\TitleLocaleProbe;
 
 /**
  * Unified framework response model.
@@ -26,6 +29,8 @@ class Response implements ResponseInterface
     private string $body = '';
 
     private bool $telemetryPrepared = false;
+
+    private bool $titleLocaleProbeApplied = false;
 
     public function __construct(bool $detached = false)
     {
@@ -278,6 +283,7 @@ class Response implements ResponseInterface
     {
         $this->body = $body;
         $this->telemetryPrepared = false;
+        $this->titleLocaleProbeApplied = false;
         return $this;
     }
 
@@ -345,7 +351,8 @@ class Response implements ResponseInterface
             $response .= 'Server: ' . self::SERVER_SIGNATURE . "\r\n";
         }
 
-        if ($this->getHeader('X-Powered-By') === null) {
+        if ($this->getHeader('X-Powered-By') === null
+            && ResponseObservabilityPolicy::poweredByHeaderEnabled()) {
             $response .= 'X-Powered-By: WLS/' . self::SERVER_VERSION . ' PHP/' . \PHP_VERSION . "\r\n";
         }
 
@@ -488,6 +495,10 @@ class Response implements ResponseInterface
 
     private function prepareForEmission(): void
     {
+        // Title×locale probe is independent of telemetry prep — FPC HIT marks
+        // telemetryPrepared early and must still emit observability headers.
+        $this->applyTitleLocaleProbeIfNeeded();
+
         if ($this->telemetryPrepared) {
             return;
         }
@@ -510,6 +521,89 @@ class Response implements ResponseInterface
         } finally {
             $this->telemetryPrepared = true;
         }
+    }
+
+    /**
+     * Title × request-locale cross-talk probe (observability only).
+     * Regex analysis runs only when TitleLocaleProbe::shouldEmit() is true.
+     */
+    private function applyTitleLocaleProbeIfNeeded(): void
+    {
+        if ($this->titleLocaleProbeApplied) {
+            return;
+        }
+        try {
+            if (!TitleLocaleProbe::shouldEmit()) {
+                return;
+            }
+            if ($this->body === '' || \strncmp($this->body, 'WQB1', 4) === 0) {
+                return;
+            }
+            // Cheap gate: look for <title in the document head region first.
+            $headSample = \substr($this->body, 0, 16384);
+            if (\stripos($headSample, '<title') === false
+                && \stripos($this->body, '<title') === false
+            ) {
+                return;
+            }
+
+            $locale = $this->resolveRequestLocaleForTitleProbe();
+            $uri = TitleLocaleProbe::armedRequestUri();
+            if ($uri === '') {
+                try {
+                    $uri = (string)(WelineEnv::server('REQUEST_URI', '') ?? '');
+                    if ($uri === '') {
+                        $uri = (string)(WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '') ?? '');
+                    }
+                } catch (\Throwable) {
+                }
+            }
+            if ($uri === '') {
+                $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            }
+            $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
+            $analysis = TitleLocaleProbe::analyze($this->body, $locale, $path);
+            TitleLocaleProbe::applyToResponse($this, $analysis);
+            $this->titleLocaleProbeApplied = true;
+        } catch (\Throwable) {
+            // Probe must never block emission.
+        }
+    }
+
+    private function resolveRequestLocaleForTitleProbe(): string
+    {
+        // Prefer path locale from armed request URI — emission may run after State/Context reset.
+        $armedUri = TitleLocaleProbe::armedRequestUri();
+        if ($armedUri !== '') {
+            $fromArmed = TitleLocaleProbe::localeFromRequestUri($armedUri);
+            if ($fromArmed !== '') {
+                return $fromArmed;
+            }
+        }
+
+        try {
+            $lang = \trim((string)State::getLang());
+            if ($lang !== '') {
+                return $lang;
+            }
+        } catch (\Throwable) {
+        }
+
+        $uri = $armedUri;
+        if ($uri === '') {
+            try {
+                $uri = (string)(WelineEnv::server('REQUEST_URI', '') ?? '');
+                if ($uri === '') {
+                    $uri = (string)(WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '') ?? '');
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if ($uri === '') {
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        }
+
+        return TitleLocaleProbe::localeFromRequestUri($uri);
     }
 
     /**

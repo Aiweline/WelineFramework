@@ -194,7 +194,9 @@ trait TraitTemplate
     public function fetchTagSourceFile(string $type, string $source)
     {
         $source = trim($source);
-        $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source-file');
+        $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source-file', [
+            'area_route' => false,
+        ]);
         $data = '';
         switch ($type) {
             case DataInterface::dir_type_TEMPLATE:
@@ -273,7 +275,12 @@ trait TraitTemplate
     {
         $source = trim($source);
         $source = trim($source, DS);
-        $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source');
+        // Do not shard compile/fetch mappings by product area_route. Same-locale
+        // PDP crawls otherwise multiply processViewFileCache entries for identical
+        // chrome/templates; request-varying HTML must resolve at render time.
+        $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source', [
+            'area_route' => false,
+        ]);
         $dataIsUrl = false;
         $cachedTemplatePath = null;
         switch ($type) {
@@ -843,7 +850,7 @@ trait TraitTemplate
         return $suffix === '' ? $baseKey : ($baseKey . '|' . $suffix);
     }
 
-    private function viewEnvironmentCacheSuffix(string $scope): string
+    private function viewEnvironmentCacheSuffix(string $scope, array $dimensions = []): string
     {
         $runtimeRoot = defined('BP') ? (string)BP : (string)(getcwd() ?: '');
 
@@ -857,7 +864,7 @@ trait TraitTemplate
             // generated/hooks.php changes, fetch/tpl mappings must miss so chrome
             // (e.g. header account dropdown) re-bakes instead of serving stale menus.
             'hooks_registry' => self::hooksRegistryCompileDigest(),
-        ]);
+        ], $dimensions);
     }
 
     /**

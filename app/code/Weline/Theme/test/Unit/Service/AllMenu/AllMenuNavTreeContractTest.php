@@ -7,6 +7,7 @@ namespace Weline\Theme\Test\Unit\Service\AllMenu;
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\AllMenu\MenuTreeNormalizer;
 use Weline\Theme\Service\AllMenu\PageCandidateService;
+use Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract;
 
 final class AllMenuNavTreeContractTest extends TestCase
 {
@@ -263,6 +264,13 @@ final class AllMenuNavTreeContractTest extends TestCase
         self::assertStringContainsString('show_all_products', $widgetSrc);
         self::assertStringContainsString('all_products_label', $widgetSrc);
         self::assertStringContainsString('js-header-drawer-trigger', $widgetSrc);
+        self::assertStringContainsString('data-widget-code="all-menu"', $widgetSrc);
+        self::assertStringContainsString('data-testid="all-menu"', $widgetSrc);
+        self::assertTrue(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
+            '<button data-widget-code="all-menu" data-testid="all-menu"></button>',
+            'Weline_Theme',
+            'all-menu',
+        ));
 
         $schemaDef = include $schema;
         self::assertSame('nav_tree', $schemaDef['base_type'] ?? null);

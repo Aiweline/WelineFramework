@@ -55,7 +55,7 @@ description: >-
 ## Agent 必做
 
 1. Read 本文件 + `dev/ai-command/product/产品图优化.md` + 图管线全文。  
-2. 读台账 `last_product_id`；从积压按 **DESC** 取本波（默认 12，或用户点名）。  
+2. 读台账 `last_product_id`；从积压按 **DESC** 取本波（**每波 50 个商品**；用户另点名时以点名为准）。  
 3. **必须并行**启动恰好 **2** 个子智能体，prompt 粘贴技能路径：  
    - ① `ecommerce-product-image/SKILL.md` + `weline-image-pipeline.md`  
    - ② 详情实拍：同管线 §7；版式若坏再开 `ecommerce-detail-suite` + `详情优化.md`  

@@ -108,11 +108,17 @@
 }
 
 .weline-textile-heritage .heritage-name {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
     color: var(--weline-theme-text);
     font-family: var(--weline-layout-font-family-display);
     font-size: var(--weline-font-size-base);
     font-weight: var(--font-weight-semibold);
     line-height: var(--weline-layout-line-height-tight);
+    text-align: center;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
 }
 
 .weline-textile-heritage .heritage-caption,

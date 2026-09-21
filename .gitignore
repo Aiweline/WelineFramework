@@ -45,7 +45,12 @@ GEMINI.md
 
 # ????????
 weline.env
-!/weline.env.sample 
+!/weline.env.sample
+
+# 部署期环境档位映射（机制在 Weline_Deploy；本文件仅落目标机，不入库）
+/deploy.env-map.php
+!/deploy.env-map.php.example
+
 
 # ??????
 /vendor/*
@@ -174,3 +179,6 @@ tests/e2e/.smoke-publish-last.log
 /parent/
 /tests/e2e/tmp-*.mjs
 /joinModel*
+
+# local private notes / secrets (never commit)
+.local/

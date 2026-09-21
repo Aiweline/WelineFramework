@@ -38,6 +38,10 @@ if ($effectiveValue === '' && (is_scalar($value) || $value === null)) {
 $switchChecked = in_array(strtolower($effectiveValue), ['1', 'true', 'on', 'yes'], true)
     || $value === true
     || $value === 1;
+$isSandboxLiveToggle = $type === 'select'
+    && \count($options) === 2
+    && isset($options['sandbox'], $options['live']);
+$envLiveChecked = strtolower(trim($effectiveValue)) === 'live';
 $rowClass = 'w-config-embed__field';
 if ($isUndeclared) {
     $rowClass .= ' is-undeclared';
@@ -85,6 +89,35 @@ $cacheNamespaces = trim((string)($field['cache-namespaces'] ?? $field['cache_nam
         <div class="w-field__control">
             <?php if ($isUndeclared): ?>
                 <input class="w-input" type="text" value="" disabled data-size="sm">
+            <?php elseif ($isSandboxLiveToggle): ?>
+                <?php
+                $sandboxFace = (string)__('沙盒');
+                $liveFace = (string)__('生产');
+                $envTitle = $title !== ''
+                    ? $title
+                    : (string)__('关闭为%{1}，开启为%{2}', [$sandboxFace, $liveFace]);
+                ?>
+                <label
+                    class="w-switch w-env-switch"
+                    data-testid="config-embed-env-toggle"
+                    title="<?= htmlspecialchars($envTitle, ENT_QUOTES, 'UTF-8') ?>"
+                >
+                    <input
+                        class="w-env-switch__input"
+                        type="checkbox"
+                        data-w-config-embed-control
+                        data-on-value="live"
+                        data-off-value="sandbox"
+                        value="live"
+                        <?= $envLiveChecked ? ' checked' : '' ?>
+                        <?= $disabled ? ' disabled' : '' ?>
+                    >
+                    <span class="w-env-switch__track" aria-hidden="true">
+                        <span class="w-env-switch__knob"></span>
+                        <span class="w-env-switch__text is-off"><?= htmlspecialchars($sandboxFace, ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="w-env-switch__text is-on"><?= htmlspecialchars($liveFace, ENT_QUOTES, 'UTF-8') ?></span>
+                    </span>
+                </label>
             <?php elseif ($type === 'select' && $options !== []): ?>
                 <?php
                 $embedSsId = 'wsc-embed-ss-' . substr(hash('sha256', $key), 0, 12);

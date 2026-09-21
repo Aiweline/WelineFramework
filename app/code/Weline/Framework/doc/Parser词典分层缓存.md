@@ -30,6 +30,8 @@ Root 已通过 43 tests / 171 assertions 有效回归，并统一编译、滚动
 
 `fingerprint($locales)`、`cacheKey($key, $locales)`、`localCache($cache, $maxEntries, $locales)` 与 `scopedPool($pool, $locales)` 复用同一规则。指纹按依赖集合挂在框架 RequestContext，事务读取继续禁止发布公共 L1；无请求 ID 的 CLI 继续使用进程指纹。没有新增独立版本存储。
 
+进程袋底层委托 `ProcessMemoryStore`（语言维 `bucket=locale`）：重语种驻留默认 ≤4（可 `phrase_heavy_locale_resident_max`），超限踢最冷 locale 桶；可挂 `ProcessMemoryReclaimableAdapter`（经 `PhraseProcessMemoryReclaimable`）参与压力回收；`Parser::clearWorkerCaches()` 同步清空 Store。Store **不**实现 `MemoryStoreInterface`，也不经 CachePool `processStore`。
+
 - 原子词条、确认缺失词、单语言模块词表及完成标记只依赖本语言叶子。其他语言写入不会重建它们。
 - 外层模块组合、物化结果及最终译文依赖实际完整回退链。目标、neutral 与网站默认语言的有序链同时进入请求签名、Worker 键和已发布层 metadata；代次集合排序不改变翻译优先级。后续切换默认语言不会改变已有层的逐词回退。
 - 网站默认语言的唯一读取入口为 `LocaleFallbackChain::websiteDefaultLocale()`：依次读取已加载的 `website.language`、`locale`、`lang`，最后使用框架默认常量。非中文链为目标语言、`en_US`、网站默认语言并去重；中文目标不追加 neutral 或默认语言。

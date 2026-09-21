@@ -270,6 +270,23 @@ if ($role === 'memory_server') {
     $sessionConfig['tls_session_cache'] = \is_array($sslConfig['session_cache'] ?? null)
         ? $sslConfig['session_cache']
         : [];
+    // Memory sidecar 与 Session 共用 SessionStore，但淘汰水位/容量应以 wls.memory_service 为准，
+    // 避免低配机只能改 session 段、或 memory_service 写了却不生效。
+    $memoryServiceConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['memory_service'] ?? null))
+        ? $envConfig['wls']['memory_service']
+        : [];
+    foreach ([
+        'max_sessions',
+        'gc_interval',
+        'memory_high_watermark_ratio',
+        'memory_low_watermark_ratio',
+        'memory_high_watermark_bytes',
+        'memory_low_watermark_bytes',
+    ] as $memoryStoreKey) {
+        if (\array_key_exists($memoryStoreKey, $memoryServiceConfig)) {
+            $sessionConfig[$memoryStoreKey] = $memoryServiceConfig[$memoryStoreKey];
+        }
+    }
 }
 $tokenFileName = \trim($tokenFileName);
 if ($tokenFileName === '') {

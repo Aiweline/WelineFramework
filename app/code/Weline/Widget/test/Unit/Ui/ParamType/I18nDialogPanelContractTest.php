@@ -66,5 +66,8 @@ final class I18nDialogPanelContractTest extends TestCore
         self::assertStringContainsString('w-dialog__surface', $html);
         self::assertStringContainsString('w-param-btn-i18n', $html);
         self::assertStringContainsString('data-close-i18n', $html);
+        self::assertStringContainsString('data-i18n-locale-search', $html);
+        self::assertStringContainsString('w-param-i18n-toolbar', $html);
+        self::assertStringContainsString('搜索语言或代码', $html);
     }
 }

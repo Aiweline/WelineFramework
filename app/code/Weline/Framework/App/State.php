@@ -119,43 +119,139 @@ class State extends DataObject
 
     /**
      * 获取当前语言
-     * 优先级：路径段 / PATH_LANG > 请求覆盖 > query(locale|locale_code|lang) > 网站默认 > zh_Hans_CN
+     * 优先级：路径段 / PATH_LANG > 请求覆盖 > query(locale|locale_code|lang) > 区域默认
      *
+     * 前台区域默认是网站默认语言。后台区域默认是 backend_default_language，与网站无关。
      * 不读语言偏好 Cookie。非默认语种主 UX 走 /{locale}/...；query 仅作路径缺失时的兼容入口。
      *
      * @return string
      */
     public static function getLang(): string
     {
-        // 路由已确定的语言直接随上下文复用；显式预览覆盖仍走原有优先级。
-        $resolved = StorefrontCacheKeyContext::current();
-        if ($resolved?->hasCompleteFrozenScope() && self::getRequestLanguageOverride() === '') {
-            return $resolved->lang;
-        }
-        // URL 解析完成后 route.language / user.lang 已是本请求权威结果，勿再拆路径。
-        if (self::getRequestLanguageOverride() === '') {
-            $routeLang = self::resolvedRouteLanguage();
-            if ($routeLang !== '') {
-                return $routeLang;
-            }
-        }
-        $pathLang = self::detectLanguageFromRequestPath();
-        if ($pathLang !== '' && self::isAllowedLanguageCode($pathLang)) {
-            return self::normalizeLanguageSegment($pathLang);
-        }
-
         // Theme preview / controlled shells may force a locale for this request only.
         $forced = self::getRequestLanguageOverride();
         if ($forced !== '' && self::isLanguageSegmentCandidate($forced)) {
             return self::normalizeLanguageSegment($forced);
         }
 
+        // Path / PATH_LANG must beat frozen StorefrontCacheKeyContext. Under WLS,
+        // early controller __() for document title can otherwise lock onto a peer
+        // Fiber's frozen lang while later H1 __() already sees the correct path
+        // (title×locale: Contact/Guide on zh_Hans_CN). Align with WidgetI18n.
+        $pathLang = self::detectLanguageFromRequestPath();
+        if ($pathLang !== '' && self::languageCodeAllowedForCurrentArea($pathLang)) {
+            return self::normalizeLanguageSegment($pathLang);
+        }
+
+        $resolved = StorefrontCacheKeyContext::current();
+        if ($resolved?->hasCompleteFrozenScope()) {
+            return $resolved->lang;
+        }
+        $routeLang = self::resolvedRouteLanguage();
+        if ($routeLang !== '') {
+            return $routeLang;
+        }
+
         $queryLang = self::detectLanguageFromRequestQuery();
-        if ($queryLang !== '' && self::isAllowedLanguageCode($queryLang)) {
+        if ($queryLang !== '' && self::languageCodeAllowedForCurrentArea($queryLang)) {
             return self::normalizeLanguageSegment($queryLang);
         }
 
+        return self::resolveAreaDefaultLanguage();
+    }
+
+    /**
+     * 当前区域的默认语言。后台不读网站默认语言。
+     */
+    public static function resolveAreaDefaultLanguage(): string
+    {
+        if (self::currentAreaIsBackend()) {
+            return self::resolveBackendEffectiveDefaultLanguage();
+        }
+
         return self::resolveWebsiteDefaultLanguage();
+    }
+
+    /**
+     * 后台有效默认语言：当前管理员个人语言 > 全局 backend_default_language > zh_Hans_CN。
+     */
+    public static function resolveBackendEffectiveDefaultLanguage(): string
+    {
+        if (\class_exists(\Weline\Backend\Service\BackendPersonalLanguage::class)) {
+            try {
+                $personal = \Weline\Backend\Service\BackendPersonalLanguage::runtimeOverride();
+                if ($personal === '') {
+                    $personal = \Weline\Backend\Service\BackendPersonalLanguage::resolveForCurrentUser();
+                }
+                if ($personal !== '') {
+                    return $personal;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return self::resolveBackendDefaultLanguage();
+    }
+
+    private static function currentAreaIsBackend(): bool
+    {
+        $area = '';
+        try {
+            $area = (string)\w_env('area', '');
+        } catch (\Throwable) {
+        }
+
+        return $area === 'backend' || $area === 'rest_backend' || self::isBackend();
+    }
+
+    /**
+     * 后台路径/查询语言只校验形态，不套网站语种白名单。
+     */
+    private static function languageCodeAllowedForCurrentArea(string $code): bool
+    {
+        return self::currentAreaIsBackend()
+            ? self::isLanguageCodeShape($code)
+            : self::isAllowedLanguageCode($code);
+    }
+
+    /**
+     * 后台默认语言：运行时覆盖 > env.php backend_default_language > 框架 zh_Hans_CN。
+     * 不读取网站 default_language。
+     */
+    public static function resolveBackendDefaultLanguage(): string
+    {
+        $candidates = [];
+        try {
+            $fromRuntime = \trim((string)\Weline\Framework\Env\WelineEnv::get('backend_default_language', ''));
+            if ($fromRuntime !== '') {
+                $candidates[] = $fromRuntime;
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $fromConfig = \trim((string)Env::get('backend_default_language', ''));
+            if ($fromConfig !== '') {
+                $candidates[] = $fromConfig;
+            }
+        } catch (\Throwable) {
+        }
+        $candidates[] = Env::default_LANGUAGE_CODE;
+
+        foreach ($candidates as $candidate) {
+            $code = self::normalizeLanguageSegment((string)$candidate);
+            if (self::isLanguageSegmentCandidate($code) && !Env::isAreaRoutePathSegment($code)) {
+                return $code;
+            }
+        }
+
+        return Env::default_LANGUAGE_CODE;
+    }
+
+    public static function isLanguageCodeShape(string $code): bool
+    {
+        $code = self::normalizeLanguageSegment($code);
+
+        return self::isLanguageSegmentCandidate($code) && !Env::isAreaRoutePathSegment($code);
     }
 
     /**
@@ -360,11 +456,14 @@ class State extends DataObject
     }
 
     /**
-     * Rebuild a storefront path that omits website-default language/currency segments.
+     * Rebuild a storefront path that omits website-default language/currency segments
+     * and disallowed (not Website-enabled) language prefixes.
      *
-     * Path-first contract: default locale/currency must not appear in visitor URLs.
+     * Path-first contract: default locale/currency must not appear in visitor URLs;
+     * locale codes with valid shape that are not in the Website allow-list are also
+     * stripped (301) so they cannot render under a fake prefix.
      * Returns null when the path is already canonical or is not a storefront
-     * localization prefix (e.g. backend area key as first segment).
+     * localization prefix (e.g. backend area key as first segment — keep /ja_JP/admin/…).
      */
     public static function canonicalizeStorefrontLocalizationPath(
         string $path,
@@ -395,6 +494,14 @@ class State extends DataObject
         $omitCurrency = $currency !== '' && $defaultCurrency !== '' && $currency === $defaultCurrency;
         $omitLanguage = $language !== '' && $defaultLanguage !== ''
             && \strcasecmp($language, $defaultLanguage) === 0;
+        // Unenabled path language (valid shape, not Website-allowed): strip like default.
+        if (!$omitLanguage
+            && $language !== ''
+            && self::isLanguageCodeShape($language)
+            && !self::isAllowedLanguageCode($language)
+        ) {
+            $omitLanguage = true;
+        }
         if (!$omitCurrency && !$omitLanguage) {
             return null;
         }

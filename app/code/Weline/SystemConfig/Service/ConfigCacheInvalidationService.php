@@ -139,7 +139,7 @@ final class ConfigCacheInvalidationService
      *
      * Keys are computed with the current scope version vector; callers must publish
      * them before bumping generation. Shared-pool delete is performed by Framework
-     * CacheImpactObserver afterCommit — not here.
+     * Shared-pool deletes moved to impact.cache_ops → Changed KeyDeleteCapability.
      *
      * When $namespacePaths is non-empty, also emit pre-bump fingerprinted physical keys
      * so afterCommit can delete namespaced entries (bump advances fingerprint afterward).
@@ -302,7 +302,7 @@ final class ConfigCacheInvalidationService
         $impact = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class);
         /** @var SystemConfig $configModel */
         $configModel = ObjectManager::getInstance(SystemConfig::class);
-        // Shared-pool deletes moved to impact.cache_ops → Framework CacheImpactObserver.
+        // Shared-pool deletes moved to impact.cache_ops → Changed KeyDeleteCapability.
         // Keep request-local cleanup + scope generation bump here.
         $plan = $impact->planImpact($module, $area, $scope, $locale, $keys, $configModel);
 

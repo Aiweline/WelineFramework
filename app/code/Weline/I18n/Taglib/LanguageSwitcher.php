@@ -300,10 +300,20 @@ class LanguageSwitcher implements TaglibInterface
                 . '|mount=' . $websiteMount
                 . '|inst=' . $switcherId;
             $now = \microtime(true);
-            if (isset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]) && DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]['expires'] >= $now) {
+            // Frontend switcher HTML embeds currentPath language links; process L1
+            // keyed by path copies one blob per PDP URL. Keep process cache for
+            // backend only; storefront rebuilds per request.
+            $useProcessHtmlCache = $isBackendArea;
+            if (
+                $useProcessHtmlCache
+                && isset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey])
+                && DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]['expires'] >= $now
+            ) {
                 return DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]['html'];
             }
-            unset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]);
+            if ($useProcessHtmlCache) {
+                unset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]);
+            }
 
             $safeSwitcherId = htmlspecialchars($switcherId, ENT_QUOTES, 'UTF-8');
             $safeToggleId = htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8');
@@ -455,10 +465,12 @@ class LanguageSwitcher implements TaglibInterface
             }
             $html[] = '</div>';
             $output = \implode("\n", $html);
-            DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey] = [
-                'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
-                'html' => $output,
-            ];
+            if ($useProcessHtmlCache) {
+                DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey] = [
+                    'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
+                    'html' => $output,
+                ];
+            }
 
             return $output;
         });

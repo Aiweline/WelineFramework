@@ -1,0 +1,359 @@
+<?php
+/**
+ * Role listing — UI prototype host (?variant=A|B|C).
+ * Question: What should Agent role onboarding look like?
+ * A 紧凑列表 | B 工作台磁贴(default) | C 分栏步骤
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$roles = is_array($roles ?? null) ? $roles : [];
+$roleTemplates = is_array($role_templates ?? null) ? $role_templates : [];
+$guideConfig = is_array($guide_config ?? null) ? $guide_config : [];
+$guideProfiles = is_array($guide_profiles ?? null) ? $guide_profiles : [];
+$initialGuide = is_array($initial_guide ?? null) ? $initial_guide : [];
+
+$guideEnabled = (bool)($guide_enabled ?? ($guideConfig['enabled'] ?? true));
+$defaultTemplateCode = (string)($initialGuide['template_code'] ?? ($guideConfig['default_template'] ?? 'general_assistant'));
+$defaultAgentProfile = (string)($initialGuide['agent_profile'] ?? ($guideConfig['default_profile'] ?? 'multi_project'));
+$defaultProjectCount = max(1, (int)($initialGuide['project_count'] ?? 1));
+$maxProjectCount = max(1, (int)($max_project_count ?? ($guideConfig['max_project_count'] ?? 200)));
+
+$addRolePath = '*/backend/role/add';
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$buildAddParams = static function (array $params): array {
+    $filtered = [];
+    foreach ($params as $key => $value) {
+        $str = trim((string)$value);
+        if ($str !== '') {
+            $filtered[$key] = $str;
+        }
+    }
+    return $filtered;
+};
+
+$profileProjectDefaults = [
+    'single_project' => 1,
+    'multi_project' => min(12, $maxProjectCount),
+    'enterprise' => min(30, $maxProjectCount),
+];
+
+$profileIcons = [
+    'single_project' => 'folder',
+    'multi_project' => 'list',
+    'enterprise' => 'settings',
+];
+
+$templateIcons = [
+    'general_assistant' => 'robot',
+    'coding_agent' => 'code',
+    'it_ops' => 'server',
+    'seo' => 'search',
+];
+
+$variant = strtoupper(trim((string)($_GET['variant'] ?? 'B')));
+if (!in_array($variant, ['A', 'B', 'C'], true)) {
+    $variant = 'B';
+}
+
+$enabledCount = 0;
+foreach ($roles as $role) {
+    if ((string)($role['status'] ?? '') === 'enabled') {
+        $enabledCount++;
+    }
+}
+$totalRoles = count($roles);
+$templateCount = count($roleTemplates);
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+
+<section class="w-agent-admin" data-agent-role-listing data-variant="<?= $escape($variant) ?>">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="robot" size="sm" /> <?= $escape(__('角色管理')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('选一个场景起步，再按需要细调权限与技能。')) ?></p>
+        </div>
+        <div class="w-cluster" data-gap="sm">
+            <span class="w-agent-chip" data-tone="<?= $guideEnabled ? 'success' : 'warning' ?>">
+                <?= $guideEnabled ? $escape(__('引导已开启')) : $escape(__('引导已关闭')) ?>
+            </span>
+            <a class="w-button"
+               href="@backend-url{$addRolePath|$buildAddParams([
+                   'template_code' => $defaultTemplateCode,
+                   'agent_profile' => $defaultAgentProfile,
+                   'project_count' => $defaultProjectCount,
+               ])}">
+                <w:icon name="plus" size="sm" /> <?= $escape(__('创建角色')) ?>
+            </a>
+        </div>
+    </header>
+
+    <div class="w-agent-admin__stats">
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="robot" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= (int)$totalRoles ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('已有角色')) ?></span>
+            </span>
+        </div>
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="play" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= (int)$enabledCount ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('已启用')) ?></span>
+            </span>
+        </div>
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="puzzle" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= (int)$templateCount ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('可用模板')) ?></span>
+            </span>
+        </div>
+    </div>
+
+    <template>Weline_Component::message.phtml</template>
+
+<?php if ($variant === 'C'): ?>
+    <div class="w-agent-split">
+        <nav class="w-agent-split__rail" aria-label="<?= $escape(__('创建步骤')) ?>">
+            <a class="w-agent-split__step" data-active="true" href="#agent-step-profile">
+                <strong><?= $escape(__('1. 选配置')) ?></strong>
+                <small><?= $escape(__('单项目 / 多项目 / 企业')) ?></small>
+            </a>
+            <a class="w-agent-split__step" href="#agent-step-template">
+                <strong><?= $escape(__('2. 选模板')) ?></strong>
+                <small><?= $escape(__('通用、编码、运维、SEO')) ?></small>
+            </a>
+            <a class="w-agent-split__step" href="#agent-step-roles">
+                <strong><?= $escape(__('3. 管理角色')) ?></strong>
+                <small><?= $escape(__('编辑已有智能体')) ?></small>
+            </a>
+        </nav>
+        <div class="w-stack" data-gap="lg">
+<?php endif; ?>
+
+<?php if ($variant === 'A'): ?>
+    <article class="w-card">
+        <div class="w-card__header">
+            <h2 class="w-card__title"><?= $escape(__('快速开始')) ?></h2>
+        </div>
+        <div class="w-card__body w-agent-list-dense">
+            <?php foreach ($guideProfiles as $profile): ?>
+                <?php
+                $profileCode = (string)($profile['code'] ?? '');
+                $profileName = (string)($profile['name'] ?? $profileCode);
+                $profileDesc = (string)($profile['description'] ?? '');
+                $profileProjects = (int)($profileProjectDefaults[$profileCode] ?? $defaultProjectCount);
+                ?>
+                <div class="w-agent-list-dense__row">
+                    <div class="w-stack" data-gap="xs">
+                        <strong><?= $escape(__($profileName)) ?></strong>
+                        <span class="w-text" data-tone="muted"><?= $escape(__($profileDesc)) ?></span>
+                    </div>
+                    <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"
+                       href="@backend-url{$addRolePath|$buildAddParams([
+                           'template_code' => $defaultTemplateCode,
+                           'agent_profile' => $profileCode,
+                           'project_count' => min($profileProjects, $maxProjectCount),
+                       ])}"><?= $escape(__('使用')) ?></a>
+                </div>
+            <?php endforeach; ?>
+            <?php foreach ($roleTemplates as $template): ?>
+                <?php
+                $templateCode = (string)($template['code'] ?? '');
+                $templateName = (string)($template['name'] ?? $templateCode);
+                $templateDesc = (string)($template['description'] ?? '');
+                ?>
+                <div class="w-agent-list-dense__row">
+                    <div class="w-stack" data-gap="xs">
+                        <strong><?= $escape(__($templateName)) ?></strong>
+                        <span class="w-text" data-tone="muted"><?= $escape(__($templateDesc)) ?></span>
+                    </div>
+                    <a class="w-button" data-size="sm"
+                       href="@backend-url{$addRolePath|$buildAddParams([
+                           'template_code' => $templateCode,
+                           'agent_profile' => $defaultAgentProfile,
+                           'project_count' => $defaultProjectCount,
+                       ])}"><?= $escape(__('使用模板')) ?></a>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </article>
+<?php else: ?>
+    <article class="w-card" id="agent-step-profile">
+        <div class="w-card__header">
+            <div class="w-stack" data-gap="xs">
+                <h2 class="w-card__title"><?= $escape(__('先选工作方式')) ?></h2>
+                <p class="w-text" data-tone="muted"><?= $escape(__('告诉智能体你同时在管多少项目，权限建议会跟着变。')) ?></p>
+            </div>
+        </div>
+        <div class="w-card__body">
+            <?php if (!empty($guideProfiles)): ?>
+            <div class="w-agent-tile-grid">
+                <?php foreach ($guideProfiles as $profile): ?>
+                <?php
+                $profileCode = (string)($profile['code'] ?? '');
+                $profileName = (string)($profile['name'] ?? $profileCode);
+                $profileDesc = (string)($profile['description'] ?? '');
+                $profileProjects = (int)($profileProjectDefaults[$profileCode] ?? $defaultProjectCount);
+                $icon = $profileIcons[$profileCode] ?? 'settings';
+                ?>
+                <div class="w-agent-tile">
+                    <span class="w-agent-tile__icon"><w:icon name="<?= $escape($icon) ?>" size="sm" /></span>
+                    <h3><?= $escape(__($profileName)) ?></h3>
+                    <p><?= $escape(__($profileDesc)) ?></p>
+                    <div>
+                        <a class="w-button" data-size="sm"
+                           href="@backend-url{$addRolePath|$buildAddParams([
+                               'template_code' => $defaultTemplateCode,
+                               'agent_profile' => $profileCode,
+                               'project_count' => min($profileProjects, $maxProjectCount),
+                           ])}">
+                            <?= $escape(__('用此配置创建')) ?>
+                        </a>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div class="w-agent-empty">
+                <span class="w-agent-empty__icon"><w:icon name="info" size="sm" /></span>
+                <h3><?= $escape(__('暂无配置预设')) ?></h3>
+                <p><?= $escape(__('可以直接新建角色，稍后再补齐引导配置。')) ?></p>
+            </div>
+            <?php endif; ?>
+        </div>
+    </article>
+
+    <?php if (!empty($roleTemplates)): ?>
+    <article class="w-card" id="agent-step-template">
+        <div class="w-card__header">
+            <div class="w-stack" data-gap="xs">
+                <h2 class="w-card__title"><?= $escape(__('或从模板开始')) ?></h2>
+                <p class="w-text" data-tone="muted"><?= $escape(__('模板会预填人设、技能与安全边界，创建后仍可改。')) ?></p>
+            </div>
+        </div>
+        <div class="w-card__body">
+            <div class="w-agent-tile-grid">
+                <?php foreach ($roleTemplates as $template): ?>
+                <?php
+                $templateCode = (string)($template['code'] ?? '');
+                $templateName = (string)($template['name'] ?? $templateCode);
+                $templateDesc = (string)($template['description'] ?? '');
+                $bestFor = (array)($template['best_for'] ?? []);
+                $icon = $templateIcons[$templateCode] ?? 'puzzle';
+                ?>
+                <div class="w-agent-tile">
+                    <span class="w-agent-tile__icon"><w:icon name="<?= $escape($icon) ?>" size="sm" /></span>
+                    <h3><?= $escape(__($templateName)) ?></h3>
+                    <p><?= $escape(__($templateDesc)) ?></p>
+                    <?php if (!empty($bestFor)): ?>
+                    <div class="w-agent-tile__tags">
+                        <?php foreach ($bestFor as $tag): ?>
+                        <span class="w-agent-chip"><?= $escape(__((string)$tag)) ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                    <div>
+                        <a class="w-button" data-size="sm" data-variant="outline"
+                           href="@backend-url{$addRolePath|$buildAddParams([
+                               'template_code' => $templateCode,
+                               'agent_profile' => $defaultAgentProfile,
+                               'project_count' => $defaultProjectCount,
+                           ])}">
+                            <?= $escape(__('使用模板')) ?>
+                        </a>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </article>
+    <?php endif; ?>
+<?php endif; ?>
+
+    <article class="w-card" id="agent-step-roles">
+        <div class="w-card__header">
+            <h2 class="w-card__title"><?= $escape(__('已有角色')) ?></h2>
+            <a href="@backend-url{$addRolePath}" class="w-button" data-size="sm" data-tone="neutral" data-variant="outline">
+                <w:icon name="plus" size="sm" /> <?= $escape(__('空白新建')) ?>
+            </a>
+        </div>
+        <div class="w-card__body">
+            <?php if (!empty($roles)): ?>
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('名称')) ?></th>
+                        <th><?= $escape(__('代码')) ?></th>
+                        <th><?= $escape(__('状态')) ?></th>
+                        <th><?= $escape(__('默认')) ?></th>
+                        <th><?= $escape(__('更新')) ?></th>
+                        <th><?= $escape(__('操作')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($roles as $role): ?>
+                        <?php
+                        $roleId = (int)($role['role_id'] ?? 0);
+                        $isEnabled = (string)($role['status'] ?? '') === 'enabled';
+                        $isDefault = (int)($role['is_default'] ?? 0) === 1;
+                        ?>
+                        <tr>
+                            <td><strong><?= $escape((string)($role['name'] ?? '')) ?></strong></td>
+                            <td><span class="w-agent-code"><?= $escape((string)($role['code'] ?? '')) ?></span></td>
+                            <td>
+                                <span class="w-agent-chip" data-tone="<?= $isEnabled ? 'success' : 'warning' ?>">
+                                    <?= $isEnabled ? $escape(__('启用')) : $escape(__('停用')) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?= $isDefault ? '<span class="w-agent-chip" data-tone="info">' . $escape(__('默认')) . '</span>' : '—' ?>
+                            </td>
+                            <td><?= $escape((string)($role['updated_at'] ?? '')) ?></td>
+                            <td>
+                                <div class="w-cluster" data-gap="xs">
+                                    <a href="@backend-url{'*/backend/role/edit'|['id' => $roleId]}"
+                                       class="w-button" data-size="sm" data-variant="outline" data-tone="neutral">
+                                        <?= $escape(__('编辑')) ?>
+                                    </a>
+                                    <button type="button" class="w-button" data-size="sm" data-variant="outline"
+                                            data-agent-op="toggleRole" data-agent-id="<?= $roleId ?>">
+                                        <?= $isEnabled ? $escape(__('停用')) : $escape(__('启用')) ?>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <var>pagination</var>
+            <?php else: ?>
+            <div class="w-agent-empty">
+                <span class="w-agent-empty__icon"><w:icon name="robot" size="sm" /></span>
+                <h3><?= $escape(__('还没有角色')) ?></h3>
+                <p><?= $escape(__('先选上方配置或模板创建第一个智能体，之后就能聊天、调度和记记忆。')) ?></p>
+                <a class="w-button"
+                   href="@backend-url{$addRolePath|$buildAddParams([
+                       'template_code' => $defaultTemplateCode,
+                       'agent_profile' => $defaultAgentProfile,
+                       'project_count' => $defaultProjectCount,
+                   ])}">
+                    <w:icon name="plus" size="sm" /> <?= $escape(__('创建第一个角色')) ?>
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
+    </article>
+
+<?php if ($variant === 'C'): ?>
+        </div>
+    </div>
+<?php endif; ?>
+</section>
+
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-agent-admin-prototype.js)"></script>

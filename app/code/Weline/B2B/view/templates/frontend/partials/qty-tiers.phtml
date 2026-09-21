@@ -5,20 +5,21 @@
  * @var \Weline\Framework\View\Template $this
  */
 
-use Weline\B2B\Api\B2BPriceCandidateInterface;
 use Weline\B2B\Service\SellingModePolicy;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Session\SessionFactory;
 use Weline\Product\Helper\StorefrontOfferResolver;
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
+if (RequestContext::isInitialized() && RequestContext::get('b2b.pdp_wholesale_display') === false) {
+    return;
+}
+
 // Always emit DOM: retail SSR used to early-return, so selling-mode.js could not
 // unhide tiers when switching toc→tob without a full reload.
-$mode = strtolower(trim((string)Cookie::get('weline_selling_mode')));
-$tiersHidden = $mode !== 'tob';
+// Guest-safe SSR: start hidden (toc); wholesale amounts filled after ToB interaction.
+$tiersHidden = true;
 
 $offer = StorefrontOfferResolver::resolve($this);
 $sku = trim((string)($offer['sku'] ?? ''));
@@ -73,58 +74,13 @@ try {
 } catch (\Throwable) {
 }
 
-$customerId = '';
-try {
-    $session = ObjectManager::getInstance(SessionFactory::class)->createFrontendSession();
-    if ($session->isLoggedIn()) {
-        $customerId = (string)(int)($session->getUserId() ?? 0);
-    }
-} catch (\Throwable) {
-}
-
-$qtyPoints = array_values(array_unique(array_filter([
-    $moq,
-    $moq + $step,
-    $moq + ($step * 2),
-    $moq + ($step * 5),
-], static fn(int $q): bool => $q >= $moq)));
-sort($qtyPoints, SORT_NUMERIC);
-
+// Never resolve customer-specific tier amounts during public SSR.
 $tiers = [];
-if ($customerId !== '' && $customerId !== '0') {
-    try {
-        /** @var B2BPriceCandidateInterface $engine */
-        $engine = ObjectManager::getInstance(B2BPriceCandidateInterface::class);
-        foreach ($qtyPoints as $qty) {
-            $result = $engine->resolve([
-                'customer_id' => $customerId,
-                'website_id' => $websiteId,
-                'sku' => $sku,
-                'qty' => $qty,
-                'retail_amount_minor' => $catalogMinor,
-                'product_flags' => $productFlags,
-                'selling_mode_tob' => true,
-            ]);
-            if (($result['ok'] ?? false) !== true) {
-                continue;
-            }
-            $amount = (int)($result['amount_minor'] ?? -1);
-            if ($amount < 0) {
-                continue;
-            }
-            $tiers[] = [
-                'qty' => $qty,
-                'amount_minor' => $amount,
-            ];
-        }
-    } catch (\Throwable) {
-        $tiers = [];
-    }
-}
 ?>
 <div class="b2b-qty-tiers"
      data-testid="b2b-qty-tiers"
      data-b2b-qty-tiers="1"
+     data-b2b-qty-ladder="0"
      role="region"
      aria-label="<?= $escape(__('批发起订与阶梯价')) ?>"
      <?= $tiersHidden ? 'hidden' : '' ?>>

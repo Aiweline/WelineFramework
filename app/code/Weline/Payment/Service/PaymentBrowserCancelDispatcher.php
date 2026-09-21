@@ -120,11 +120,13 @@ final class PaymentBrowserCancelDispatcher
 
             // Express defer-capture: release unpaid order / inventory reservation on cancel.
             $requestData = $transaction->getRequestData();
-            if (
-                ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData)
+            if (!is_array($requestData)) {
+                $requestData = [];
+            }
+            $isExpress = ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData)
                 || !empty($requestData['express_checkout'])
-                || !empty(($requestData['metadata']['express_checkout'] ?? null))
-            ) {
+                || !empty(($requestData['metadata']['express_checkout'] ?? null));
+            if ($isExpress) {
                 try {
                     $flow = $this->objectManager->getInstance(\Weline\Checkout\Service\ExpressCheckoutFlowService::class);
                     if (is_object($flow) && method_exists($flow, 'abandon')) {
@@ -135,6 +137,9 @@ final class PaymentBrowserCancelDispatcher
                     }
                 } catch (\Throwable) {
                 }
+            } else {
+                // Ordinary unpaid cancel: flip checkout recovery pending→failed so continue-pay works.
+                $this->markCheckoutRecoveryFailed($requestData, $transaction);
             }
         }
 
@@ -146,5 +151,43 @@ final class PaymentBrowserCancelDispatcher
             $transaction !== null && $transaction->getId() ? $transaction : null,
             $cancelState,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $requestData
+     */
+    private function markCheckoutRecoveryFailed(array $requestData, PaymentTransaction $transaction): void
+    {
+        $quoteToken = trim((string)($requestData['checkout_token'] ?? $requestData['quote_token'] ?? ''));
+        if ($quoteToken === '') {
+            $landingParams = is_array($requestData['browser_landing_params'] ?? null)
+                ? $requestData['browser_landing_params']
+                : [];
+            $quoteToken = trim((string)($landingParams['checkout_token'] ?? $landingParams['quote_token'] ?? ''));
+        }
+        if ($quoteToken === '') {
+            return;
+        }
+
+        try {
+            $recovery = $this->objectManager->getInstance(
+                \Weline\Checkout\Service\CheckoutPaymentRecoveryStateService::class
+            );
+            if (!is_object($recovery) || !method_exists($recovery, 'markBrowserCancel')) {
+                return;
+            }
+            $methodCode = trim((string)$transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
+            $recovery->markBrowserCancel($quoteToken, null, [
+                'payment_method' => $methodCode,
+                'method_code' => $methodCode,
+                'transactions' => [[
+                    'order_uuid' => trim((string)$transaction->getData(PaymentTransaction::schema_fields_ORDER_ID)),
+                    'transaction_no' => trim((string)$transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO)),
+                    'method_code' => $methodCode,
+                    'status' => PaymentTransaction::STATUS_FAILED,
+                ]],
+            ]);
+        } catch (\Throwable) {
+        }
     }
 }

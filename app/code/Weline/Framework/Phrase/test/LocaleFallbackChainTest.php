@@ -53,11 +53,11 @@ final class LocaleFallbackChainTest extends TestCore
     public function testParserModuleLocaleChainUsesTargetLocaleCsvNotNeutralEnglish(): void
     {
         $method = new \ReflectionMethod(Parser::class, 'loadModuleWordsForLocaleChain');
-        $words = $method->invoke(null, 'Weline_Theme', 'ar_SA');
+        $words = $method->invoke(null, 'Weline_Theme', 'en_US');
 
-        // Theme 有 ar_SA.csv：热层应是阿语，不得回落成 en_US「About Us」。
-        self::assertSame('من نحن', $words['关于我们'] ?? null);
-        self::assertNotSame('About Us', $words['关于我们'] ?? null);
+        // 本机 Theme 仅有 zh/en CSV：热层应是英文，不得回落成中文原文。
+        self::assertSame('About Us', $words['关于我们'] ?? null);
+        self::assertNotSame('关于我们', $words['关于我们'] ?? null);
     }
 
     public function testParserStillFallsBackToNeutralEnglishViaLocaleChainCandidates(): void
@@ -67,7 +67,15 @@ final class LocaleFallbackChainTest extends TestCore
             LocaleFallbackChain::candidates('hi_IN', 'zh_Hans_CN'),
         );
         $source = (string)file_get_contents(dirname(__DIR__) . '/Parser.php');
-        self::assertStringContainsString('loadGlobalDictionaryWord', $source);
         self::assertStringContainsString('禁止把 en_US 等回退 locale 的模块 CSV 提前合并', $source);
+        self::assertStringContainsString('只读已装入的文件层', $source);
+        // 热路径 translate 不得再查全局词典 DB；可只读已 prefetch 的缓存。
+        $start = strpos($source, 'private static function doTranslateWordFromLayers(');
+        $end = strpos($source, 'private static function translationFromLoadedLayers(', $start === false ? 0 : $start);
+        self::assertNotFalse($start);
+        self::assertNotFalse($end);
+        $method = substr($source, (int)$start, (int)$end - (int)$start);
+        self::assertStringNotContainsString('loadGlobalDictionaryWord(', $method);
+        self::assertStringContainsString('getPrefetchedGlobalWord(', $method);
     }
 }

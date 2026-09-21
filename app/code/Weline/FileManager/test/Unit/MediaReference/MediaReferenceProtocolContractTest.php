@@ -178,5 +178,14 @@ final class MediaReferenceProtocolContractTest extends TestCase
         );
         self::assertStringContainsString("'identity_root' => 'config'", $systemConfig);
         self::assertStringContainsString("'identity_scope' => \$wscIdentityScope", $systemConfig);
+
+        $backendAvatar = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Backend/view/templates/Backend/Profile/avatar.phtml'
+        );
+        self::assertStringContainsString('Weline_FileManager::js/w-scope.js', $backendAvatar);
+        self::assertStringContainsString("'identity' => \$identityPath", $backendAvatar);
+        self::assertStringContainsString("'identity_root' => 'config'", $backendAvatar);
+        self::assertStringContainsString("'strong_ref' => '1'", $backendAvatar);
+        self::assertStringContainsString('ConfigMediaReferenceTemplates::config', $backendAvatar);
     }
 }

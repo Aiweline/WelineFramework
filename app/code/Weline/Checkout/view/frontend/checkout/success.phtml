@@ -22,6 +22,8 @@ $requestOutcome = strtolower(trim((string)$this->request->getParam('outcome')));
 $paymentCancelled = !empty($this->getData('checkout_payment_cancelled'))
     || $requestOutcome === 'cancel';
 $paidAck = !empty($this->getData('checkout_paid_ack'));
+$continuePayUrl = trim((string)($this->getData('continue_pay_url') ?? ''));
+$continuePayAvailable = !empty($this->getData('continue_pay_available')) && $continuePayUrl !== '';
 $escape = static fn(mixed $value): string => htmlspecialchars(
     (string)$value,
     ENT_QUOTES | ENT_SUBSTITUTE,
@@ -215,7 +217,7 @@ foreach ($orderItems as $pixelItemRow) {
                         <p><?= $escape(__('该支付此前已取消，无需再次操作。')) ?></p>
                     <?php else: ?>
                         <h1><?= $escape(__('支付已取消')) ?></h1>
-                        <p><?= $escape(__('本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。')) ?></p>
+                        <p><?= $escape(__('本次支付未完成，订单尚未付款。可继续支付或稍后再试。')) ?></p>
                     <?php endif; ?>
                 <?php elseif ($paidAck): ?>
                     <h1><?= $escape(__('订单已支付')) ?></h1>
@@ -446,11 +448,22 @@ foreach ($orderItems as $pixelItemRow) {
 
     <nav class="amz-order-confirm__actions order-actions" aria-label="<?= $escape(__('订单操作')) ?>">
         <?php if ($paymentCancelled): ?>
-        <a href="@url{'checkout'}"
+        <?php if ($continuePayAvailable): ?>
+        <a href="<?= $escape($continuePayUrl) ?>"
            class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button"
-           data-tone="primary">
-            <?= $escape(__('返回结账')) ?>
+           data-tone="primary"
+           data-testid="checkout-continue-pay"
+           data-continue-pay="1">
+            <?= $escape(__('继续支付')) ?>
         </a>
+        <?php else: ?>
+        <a href="@url{'cart'}"
+           class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button"
+           data-tone="primary"
+           data-testid="checkout-cancel-back-cart">
+            <?= $escape(__('返回购物车')) ?>
+        </a>
+        <?php endif; ?>
         <a href="@url{'products'}"
            class="amz-order-confirm__btn amz-order-confirm__btn--secondary w-button weline-pixel::continue_shopping"
            data-tone="neutral">

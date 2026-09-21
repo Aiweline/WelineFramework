@@ -360,20 +360,40 @@ var expose=function(){w.Weline=w.Weline||{};w.Weline.Form=api;};
 w.WelineFormRuntime=api;
 expose();
 mountAll(d);
-var mo=null,moBusy=0,moNeed=0;
-var flushMo=function(){
-moBusy=0;
-if(moNeed){moNeed=0;expose();mountAll(d);}
-if(mo){try{mo.observe(d.documentElement,{childList:true,subtree:true});}catch(e){}}
+var pendingForms=[];
+var collectForms=function(records){
+if(!records){return;}
+for(var i=0;i<records.length;i++){
+var rec=records[i];
+if(!rec||!rec.addedNodes){continue;}
+for(var n=0;n<rec.addedNodes.length;n++){
+var node=rec.addedNodes[n];
+if(!node||node.nodeType!==1){continue;}
+if(node.matches&&node.matches("form[data-weline-form]")){pendingForms.push(node);}
+if(node.querySelectorAll){node.querySelectorAll("form[data-weline-form]").forEach(function(form){pendingForms.push(form);});}
+}
+}
 };
-mo=new MutationObserver(function(){
+var flushForms=function(){
+var batch=pendingForms;pendingForms=[];
+batch.forEach(mount);
+};
+var observeApi=(w.Weline&&w.Weline.dom&&typeof w.Weline.dom.observe==="function")?w.Weline.dom.observe.bind(w.Weline.dom):(typeof w.Weline.observeMutationsCoalesced==="function"?w.Weline.observeMutationsCoalesced:null);
+if(observeApi){
+observeApi({target:d.documentElement,options:{childList:true,subtree:true},idleTimeoutMs:100,label:"weline-form:mount",onRecords:collectForms,onFlush:flushForms});
+}else{
+/* ARCH_MO_FALLBACK_START */
+var mo=new MutationObserver(function(records){
 try{mo.disconnect();}catch(e){}
-moNeed=1;
-if(moBusy){return;}
-moBusy=1;
-if(w.requestAnimationFrame){w.requestAnimationFrame(function(){w.requestAnimationFrame(flushMo);});}else{w.setTimeout(flushMo,0);}
+collectForms(records);
+w.setTimeout(function(){
+flushForms();
+try{mo.observe(d.documentElement,{childList:true,subtree:true});}catch(e2){}
+},100);
 });
 mo.observe(d.documentElement,{childList:true,subtree:true});
+/* ARCH_MO_FALLBACK_END */
+}
 d.addEventListener("DOMContentLoaded",expose);
 w.addEventListener("load",expose);
 }

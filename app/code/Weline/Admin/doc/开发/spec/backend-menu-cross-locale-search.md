@@ -3,7 +3,7 @@ status: validated
 work_kind: feature
 feature_slug: backend-menu-cross-locale-search
 module: Weline_Admin
-updated: 2026-03-24
+updated: 2026-09-20
 ---
 
 # 后台菜单多语言交叉搜索
@@ -88,7 +88,7 @@ updated: 2026-03-24
 | BE | `Weline_Admin` `MenuRenderService`：渲染写入多语言 `data-search-text` | 是 |
 | BE | `Weline_Admin`（或既有菜单 Search Provider）：顶栏 backend area 索引含全 locale 可搜词 | 是（若无 Provider 则新增） |
 | FE | `Theme` `nav-filter`：已支持 `data-search-text`，匹配算法一般不变 | 否（除非缺契约测试） |
-| i18n | 复用模块 CSV / generated locale；启用 locale 列表 | 读 |
+| i18n | 模块 CSV + Phrase 词条预取（禁整本 generated locale） | 读 |
 
 ## UI 技能决策
 
@@ -99,4 +99,11 @@ updated: 2026-03-24
 1. **共享**：抽出「菜单标题 → 全启用 locale 可搜词（缺译回退 source）」构建逻辑，供侧栏 HTML 与顶栏 Provider 复用。
 2. **侧栏**：`renderMenuNode` 给每个 `w-backend-nav__entry` 写 `data-search-text`（去重、小写友好、含当前语+其它语+source）。
 3. **顶栏**：确保 backend Menu Searcher 的 `search_text` / 索引字段含同一套多语言词；命中 title 仍为当前 locale。
-4. **验收**：UT 契约 + 本机 Browser 侧栏/顶栏交叉搜；feature e2e 章通路。
+4. **词典（硬）**：跨语词条只走模块 `i18n/{locale}.csv` + `Parser::prefetchWords` / `Parser::getPrefetchedGlobalWord`（词条级 Worker/Shared）。**禁止** `include generated/language/{locale}.php` 整本词典。
+5. **验收**：UT 契约 + 本机 Browser 侧栏/顶栏交叉搜；feature e2e 章通路。
+
+## i18n 读路径
+
+- 启用 locale 列表：`ActiveLocaleCodeProvider::getInstalledActiveCodes()`。
+- 渲染前对菜单标题集合按各 active locale **一次** `Parser::prefetchWords($titles, $locale)`。
+- `resolveMenuTitleRaw`：模块 CSV → Phrase 预取词条 → 回退 source。

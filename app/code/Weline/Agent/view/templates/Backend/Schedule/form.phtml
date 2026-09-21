@@ -1,0 +1,149 @@
+<?php
+/**
+ * Schedule form — humanized Weline UI 2.0 + BinQuery save.
+ * @var \Weline\Framework\View\Template $this
+ */
+$schedule = $schedule ?? null;
+$scheduleData = is_array($schedule) ? $schedule : ($schedule && method_exists($schedule, 'getData') ? $schedule->getData() : []);
+$roles = is_array($roles ?? null) ? $roles : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$isEdit = !empty($scheduleData['schedule_id']);
+
+$contextText = '';
+$contextRaw = $scheduleData['context'] ?? [];
+if (is_string($contextRaw)) {
+    $contextText = $contextRaw;
+} elseif (is_array($contextRaw)) {
+    $encoded = json_encode($contextRaw, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $contextText = is_string($encoded) ? $encoded : '';
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="clock" size="sm" /> <?= $escape($isEdit ? __('编辑调度') : __('新建调度')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('写清楚要做什么、何时做、用哪个角色执行。')) ?></p>
+        </div>
+        <a href="@backend-url{'*/backend/schedule/listing'}" class="w-button" data-tone="neutral" data-variant="outline">
+            <w:icon name="arrow-left" size="sm" /> <?= $escape(__('返回列表')) ?>
+        </a>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <form id="agentScheduleForm" class="w-card" action="#" method="post"
+          data-listing-url="@backend-url{'*/backend/schedule/listing'}">
+        <csrf/>
+        <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= (int)$scheduleData['schedule_id'] ?>">
+        <?php endif; ?>
+        <div class="w-card__body w-stack" data-gap="md">
+            <div class="w-agent-filters">
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-schedule-name"><?= $escape(__('任务名称')) ?> *</label>
+                    <input id="agent-schedule-name" class="w-input" type="text" name="name" required
+                           value="<?= $escape((string)($scheduleData['name'] ?? '')) ?>"
+                           placeholder="<?= $escape(__('例如：每日运营摘要')) ?>">
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-schedule-role"><?= $escape(__('执行角色')) ?></label>
+                    <select id="agent-schedule-role" class="w-select" name="role_id">
+                        <option value="0"><?= $escape(__('先不指定')) ?></option>
+                        <?php foreach ($roles as $role): ?>
+                            <?php
+                            $roleId = is_array($role) ? (int)($role['role_id'] ?? 0) : (int)($role->getData('role_id') ?? 0);
+                            $roleName = is_array($role) ? (string)($role['name'] ?? '') : (string)($role->getData('name') ?? '');
+                            ?>
+                            <option value="<?= $roleId ?>" <?= (int)($scheduleData['role_id'] ?? 0) === $roleId ? 'selected' : '' ?>>
+                                <?= $escape($roleName) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-schedule-cron"><?= $escape(__('何时执行（Cron）')) ?></label>
+                    <input id="agent-schedule-cron" class="w-input" type="text" name="trigger_expr"
+                           value="<?= $escape((string)($scheduleData['trigger_expr'] ?? '0 * * * *')) ?>">
+                    <span class="w-text" data-tone="muted"><?= $escape(__('例：0 9 * * * 表示每天 9:00')) ?></span>
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-schedule-status"><?= $escape(__('状态')) ?></label>
+                    <select id="agent-schedule-status" class="w-select" name="status">
+                        <option value="enabled" <?= (($scheduleData['status'] ?? 'enabled') === 'enabled') ? 'selected' : '' ?>><?= $escape(__('启用')) ?></option>
+                        <option value="disabled" <?= (($scheduleData['status'] ?? '') === 'disabled') ? 'selected' : '' ?>><?= $escape(__('禁用')) ?></option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="w-field">
+                <label class="w-field__label" for="agent-schedule-desc"><?= $escape(__('说明（可选）')) ?></label>
+                <textarea id="agent-schedule-desc" class="w-textarea" name="description" rows="3"><?= $escape((string)($scheduleData['description'] ?? '')) ?></textarea>
+            </div>
+
+            <div class="w-field">
+                <label class="w-field__label" for="agent-schedule-prompt"><?= $escape(__('要智能体做什么')) ?> *</label>
+                <textarea id="agent-schedule-prompt" class="w-textarea" name="prompt" rows="6" required><?= $escape((string)($scheduleData['prompt'] ?? '')) ?></textarea>
+            </div>
+
+            <div class="w-field">
+                <label class="w-field__label" for="agent-schedule-context"><?= $escape(__('附加上下文（JSON，可选）')) ?></label>
+                <textarea id="agent-schedule-context" class="w-textarea" name="context" rows="5"
+                          placeholder='{"scope":"daily"}'><?= $escape($contextText) ?></textarea>
+            </div>
+
+            <div class="w-cluster" data-justify="end">
+                <button type="submit" class="w-button">
+                    <w:icon name="save" size="sm" /> <?= $escape(__('保存调度')) ?>
+                </button>
+            </div>
+        </div>
+    </form>
+</section>
+
+<script>
+(function () {
+    'use strict';
+    var form = document.getElementById('agentScheduleForm');
+    if (!form) return;
+    var listingUrl = form.getAttribute('data-listing-url') || '';
+    var admin = window.WelineAgentAdmin || null;
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!admin || typeof admin.call !== 'function') {
+            if (admin && admin.toast) {
+                admin.toast('error', <?= json_encode((string)__('Weline.Api 不可用，无法保存'), JSON_UNESCAPED_UNICODE) ?>);
+            }
+            return false;
+        }
+        var idInput = form.querySelector('input[name="id"]');
+        var payload = {
+            id: idInput ? parseInt(idInput.value || '0', 10) || 0 : 0,
+            name: (document.getElementById('agent-schedule-name') || {}).value || '',
+            role_id: parseInt((document.getElementById('agent-schedule-role') || {}).value || '0', 10) || 0,
+            trigger_expr: (document.getElementById('agent-schedule-cron') || {}).value || '',
+            status: (document.getElementById('agent-schedule-status') || {}).value || 'enabled',
+            description: (document.getElementById('agent-schedule-desc') || {}).value || '',
+            prompt: (document.getElementById('agent-schedule-prompt') || {}).value || '',
+            context: (document.getElementById('agent-schedule-context') || {}).value || ''
+        };
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        admin.call('saveSchedule', payload).then(function (raw) {
+            var data = admin.unwrap ? admin.unwrap(raw) : raw;
+            if (!data || !data.success) {
+                throw new Error((data && data.msg) || <?= json_encode((string)__('保存失败'), JSON_UNESCAPED_UNICODE) ?>);
+            }
+            admin.toast('success', data.msg || <?= json_encode((string)__('保存成功'), JSON_UNESCAPED_UNICODE) ?>);
+            if (listingUrl) window.location.href = listingUrl;
+        }).catch(function (error) {
+            admin.toast('error', error && error.message ? error.message : <?= json_encode((string)__('保存失败'), JSON_UNESCAPED_UNICODE) ?>);
+            if (btn) btn.disabled = false;
+        });
+        return false;
+    });
+})();
+</script>

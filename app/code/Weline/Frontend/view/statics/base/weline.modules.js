@@ -168,6 +168,13 @@
             load: "lazy",
             description: "PDP 快捷智能支付：加车后 startExpressCheckout 并打开支付商窗体"
         },
+        paypalWalletButtons: {
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/paypal-wallet-buttons.js?v=20260920-gpay-apay1"],
+            paths: ["/Weline/Payment/view/statics/js/paypal-wallet-buttons.js?v=20260920-gpay-apay1"],
+            globalVar: "WelineModules",
+            load: "lazy",
+            description: "PayPal JS SDK：Google Pay / Apple Pay funding 按钮容器"
+        },
         orderNotice: {
             origin_paths: ["app/code/Weline/Order/view/statics/js/widgets/order-notice.js"],
             paths: ["/Weline/Order/view/statics/js/widgets/order-notice.js"],
@@ -351,6 +358,7 @@
         switcher: "welineSwitcher",
         payment: "paymentLifecycle",
         productExpressPay: "productExpressPay",
+        paypalWalletButtons: "paypalWalletButtons",
         geolocation: "location",
         checkout: "checkoutLifecycle",
         checkoutExpressReview: "checkoutExpressReview"

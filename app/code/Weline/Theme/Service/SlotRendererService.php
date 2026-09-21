@@ -4345,6 +4345,8 @@ HTML;
         }
 
         try {
+            // Chrome widget HTML must share across same-locale PDPs. Request::getBaseUrl()
+            // and pathInfo embed the product URI and would shard process L1 per URL.
             $context = [
                 'identity' => $identity,
                 'layout_id' => (string)($widget['layout_id'] ?? ''),
@@ -4352,11 +4354,13 @@ HTML;
                 'type' => (string)($widget['widget_type'] ?? ''),
                 'area' => $this->renderArea === 'backend' ? 'backend' : 'frontend',
                 'config' => $config,
+                'cache_version' => '20260921-widget-origin-base',
                 'environment' => KeyBuilder::environmentContext([
                     'scope' => 'theme-widget-output',
+                ], [
+                    'area_route' => false,
+                    'base_url' => true,
                 ]),
-                'base_url' => (string)$this->template->getRequest()->getBaseUrl(),
-                'path' => (string)$this->template->getRequest()->getPathInfo(),
             ];
         } catch (\Throwable) {
             return null;

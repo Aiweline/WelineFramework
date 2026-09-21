@@ -146,7 +146,8 @@ if ($navItems === [] && $editorPreviewLight) {
      weline-code="<?= $esc($scope->code) ?>"
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>"
-     data-testid="header-category-menu-widget">
+     data-widget-code="category-menu"
+     data-testid="category-menu">
     <?= $this->fetch('Weline_Theme::theme/frontend/partials/header/categories-horizontal-nav.phtml', [
         'items' => $navItems,
         'show_banner_with_children' => $showBannerWithChildren,

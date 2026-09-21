@@ -8,7 +8,6 @@ use Weline\Eav\Service\AttributeFilterService;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Repository\CategoryLinkRepository;
@@ -193,20 +192,9 @@ final class StorefrontFilterPanelService
         // facet chrome to the current request locale before Phrase prefetch.
         $panel = $this->localizePanelLabels($panel);
 
-        // A shared panel can be warm while this Worker's phrase cache is cold.
-        // Prefetch the final dynamic labels after either cache/build path; the
-        // template's __() calls still apply request/module/global precedence.
-        $words = [];
-        foreach ($panel['price'] ?? [] as $option) {
-            $words[] = (string)($option['label'] ?? '');
-        }
-        foreach ($panel['attributes'] ?? [] as $group) {
-            $words[] = (string)($group['name'] ?? '');
-            foreach ($group['options'] ?? [] as $option) {
-                $words[] = (string)($option['label'] ?? '');
-            }
-        }
-        Parser::prefetchWords($words);
+        // Dynamic facet labels are localized via EAV / facetTranslator below.
+        // Prefetching every option into Phrase worker L1 permanently parks
+        // unique (often missing) strings across PDP/list crawls — skip it.
 
         return $panel;
     }

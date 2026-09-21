@@ -221,7 +221,7 @@ final class StorefrontCacheKeyContextTest extends TestCase
         self::assertSame('site_a', $context->scopeIdentity?->websiteCode);
     }
 
-    public function testFingerprintFailureUsesDifferentRequestFencesAndNeverShortensKey(): void
+    public function testFingerprintFailureKeepsFenceMarkerWithoutRequestUniqueCacheVersion(): void
     {
         $authority = new TestNamespaceGenerationAuthority();
         $authority->failFingerprint = true;
@@ -233,13 +233,16 @@ final class StorefrontCacheKeyContextTest extends TestCase
         self::assertFalse($first->cacheable);
         self::assertSame('storefront_namespace_unavailable', $first->failureCode);
         self::assertStringContainsString('scope_state=request-fence', $firstKey);
-        self::assertStringContainsString('cache_version=' . $first->cacheKeyFingerprint, $firstKey);
+        self::assertStringNotContainsString('cache_version=', $firstKey);
+        self::assertStringNotContainsString($first->cacheKeyFingerprint, $firstKey);
+        self::assertStringNotContainsString('website=default', $firstKey);
 
         $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
         $second = $resolver->freezeCurrent();
         $secondKey = KeyBuilder::applyDimensionFlags('page', true, false, false, false);
         self::assertNotSame($first->cacheKeyFingerprint, $second->cacheKeyFingerprint);
-        self::assertNotSame($firstKey, $secondKey);
+        // Publishable dimension keys stay stable; request fingerprints stay out of keys.
+        self::assertSame($firstKey, $secondKey);
     }
 
     public function testCustomFullEscapeDoesNotReadOrRequireStorefrontContext(): void

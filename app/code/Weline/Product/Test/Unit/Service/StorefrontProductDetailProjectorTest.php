@@ -517,6 +517,136 @@ final class StorefrontProductDetailProjectorTest extends TestCase
         self::assertSame('/media/zhugeliang.jpg', $byValue['诸葛亮']['swatch_image'] ?? null);
     }
 
+    public function testVariantAxisIgnoresTranslatedLocaleValueJsonOverlays(): void
+    {
+        $labels = $this->passthroughLabels();
+        $option = static fn(
+            int $id,
+            string $code,
+            string $label,
+        ): \Weline\Eav\Api\Metadata\AttributeOptionMetadata => new \Weline\Eav\Api\Metadata\AttributeOptionMetadata(
+            id: $id,
+            value: $label,
+            code: $code,
+            label: $label,
+            sortOrder: $id,
+        );
+        $attribute = static fn(
+            int $id,
+            string $code,
+            string $name,
+            \Weline\Eav\Api\Metadata\AttributeOptionMetadata $attributeOption,
+        ): \Weline\Eav\Api\Metadata\AttributeMetadata => new \Weline\Eav\Api\Metadata\AttributeMetadata(
+            id: $id,
+            entityId: 1,
+            code: $code,
+            name: $name,
+            typeCode: 'varchar',
+            fieldType: 'multiselect',
+            element: 'select',
+            setId: 1,
+            groupId: 1,
+            required: false,
+            multiple: true,
+            enabled: true,
+            hasOption: true,
+            sortOrder: $id,
+            options: [$attributeOption],
+        );
+        $set = new \Weline\Eav\Api\Metadata\AttributeSetMetadata(
+            id: 1,
+            entityId: 1,
+            code: 'costume',
+            name: 'Costume',
+            sortOrder: 1,
+            groups: [
+                new \Weline\Eav\Api\Metadata\AttributeGroupMetadata(
+                    id: 1,
+                    entityId: 1,
+                    setId: 1,
+                    code: 'variants',
+                    name: 'Variants',
+                    sortOrder: 1,
+                    attributes: [
+                        $attribute(1, 'style_type', 'Type', $option(1, 'hong-se-jiu', '红色九尾全套')),
+                        $attribute(2, 'size', 'Size', $option(2, 'S', 'S')),
+                    ],
+                ),
+            ],
+        );
+        $metadata = new class([$set]) implements \Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface {
+            public function __construct(private readonly array $sets)
+            {
+            }
+
+            public function catalog(\Weline\Eav\Api\Entity\EntityDefinitionInterface $entity): array
+            {
+                return $this->sets;
+            }
+
+            public function catalogForProduct(
+                \Weline\Eav\Api\Entity\EntityDefinitionInterface $entity,
+                int $productId,
+                string $freeSetCode = '__product_free',
+            ): array {
+                return $this->sets;
+            }
+
+            public function attributeIndexByEntityCode(string $entityCode): array
+            {
+                return [];
+            }
+        };
+        $entity = (new \ReflectionClass(\Weline\Product\Model\ProductCatalogAttributeEntity::class))
+            ->newInstanceWithoutConstructor();
+        $variantAxes = new \Weline\Product\Service\StorefrontVariantAxisResolver(
+            $metadata,
+            $entity,
+            $labels,
+        );
+        $projector = new StorefrontProductDetailProjector(
+            new CatalogOverlayResolver(),
+            $labels,
+            $variantAxes,
+        );
+
+        $detail = $projector->project(
+            [
+                'product_id' => 170,
+                'name' => 'Nine-Tails set',
+                'image' => '',
+                'combination' => ['style_type' => '红色九尾全套', 'size' => 'S'],
+                'combination_key' => 'size=S|style_type=%E7%BA%A2%E8%89%B2%E4%B9%9D%E5%B0%BE%E5%85%A8%E5%A5%97',
+            ],
+            [
+                $this->attribute(0, 'name', 'en_US', 'Nine-Tails set'),
+                $this->attribute(0, 'style_type', '', ['红色九尾全套'], false, 'multiselect'),
+                // Poisoned product-optimize overlay: translated identity must not become a second chip.
+                $this->attribute(0, 'style_type', 'en_US', ['red Jiuwei full set'], false, 'multiselect'),
+                $this->attribute(0, 'size', '', ['S'], false, 'multiselect'),
+            ],
+            [],
+            0,
+            'en_US',
+            ['zh_Hans_CN', ''],
+        );
+
+        $styleAxis = null;
+        foreach ($detail['variant_axes'] as $axis) {
+            if (($axis['code'] ?? '') === 'style_type') {
+                $styleAxis = $axis;
+                break;
+            }
+        }
+        self::assertNotNull($styleAxis);
+        $values = array_map(
+            static fn(array $row): string => (string)($row['value'] ?? ''),
+            $styleAxis['options'] ?? [],
+        );
+        self::assertSame(['红色九尾全套'], $values);
+        self::assertNotContains('red Jiuwei full set', $values);
+    }
+
     public function testTranslatedHanSpecificationFactsSurviveListingAndBulkProjection(): void
     {
         $metadata = new class implements \Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface {

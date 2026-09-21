@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Adapter;
 
+use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
+use Weline\Framework\Cache\Contract\MemoryPressureAwareInterface;
 use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Server\Service\MemoryStateFacade;
 
-class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, StatsInterface
+class WlsMemoryAdapter implements CacheAdapterInterface, CacheAdapterHealthInterface, MemoryStoreInterface, MemoryPressureAwareInterface, StatsInterface
 {
     /**
      * @var array<string, array{hits:int, misses:int}>
@@ -352,6 +354,22 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         $this->localCache = [];
     }
 
+    public function relievePressure(bool $aggressive): int
+    {
+        if ($this->localCache === []) {
+            return 0;
+        }
+
+        if ($aggressive) {
+            $n = \count($this->localCache);
+            $this->clearMemory();
+
+            return $n;
+        }
+
+        return $this->evict(\max(1, (int)\ceil(\count($this->localCache) / 2)));
+    }
+
     public function warmUp(int $limit = 1000): int
     {
         return 0;
@@ -682,23 +700,42 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     }
 
     /**
-     * Execute one remote operation and turn a slow response into the same
-     * short cooldown used for hard failures. Cache reads can return null on a
-     * socket timeout, so relying on exceptions alone leaves every pool paying
-     * the timeout repeatedly.
+     * Whether the shared Memory Service is currently accepting traffic.
+     *
+     * Worker session stores must fail closed (503) instead of treating a
+     * cooldown miss as an empty credential snapshot.
+     */
+    public function isAvailable(): bool
+    {
+        return !$this->isRemoteUnavailable();
+    }
+
+    /**
+     * Clear a short remote cooldown so callers (Worker session CAS retries)
+     * can probe Memory Service again after a blip.
+     */
+    public function recoverRemoteProbe(): void
+    {
+        self::$remoteGloballyUnavailableUntil = 0.0;
+        unset(self::$remoteUnavailableUntil[$this->identity]);
+    }
+
+    /**
+     * Execute one remote operation. Only a slow *null* response opens the
+     * short cooldown (socket timeouts often return null without throwing).
+     * A slow but successful non-null payload must NOT cooldown — otherwise
+     * Worker session handshake CAS (>75ms) marks the pool unavailable and the
+     * next validate treats get() null as "Invalid worker session token".
      */
     private function remoteCall(callable $operation): mixed
     {
         $started = \hrtime(true);
-        try {
-            $result = $operation();
-        } finally {
-            $elapsedMs = (\hrtime(true) - $started) / 1_000_000;
-            if ($elapsedMs >= $this->remoteSlowThresholdMs()) {
-                $this->markRemoteSlow();
-            } else {
-                $this->markRemoteAvailable();
-            }
+        $result = $operation();
+        $elapsedMs = (\hrtime(true) - $started) / 1_000_000;
+        if ($result === null && $elapsedMs >= $this->remoteSlowThresholdMs()) {
+            $this->markRemoteSlow();
+        } else {
+            $this->markRemoteAvailable();
         }
 
         return $result;

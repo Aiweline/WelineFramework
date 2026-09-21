@@ -937,7 +937,19 @@ class ThemeData
                 }
 
                 self::metaConfigRepository()->upsert(new MetaConfigWrite($identity, $value));
-                self::clearCache();
+                try {
+                    self::patchLoadedThemeConfig(
+                        $area,
+                        $namespace,
+                        $configKey,
+                        $value,
+                        $effectiveScope,
+                        $locale,
+                        (string)$themeId,
+                    );
+                } catch (\Throwable) {
+                    // 行已写入。修补失败不得把成功 upsert 报成失败，也不得因此清池。
+                }
                 return true;
             } catch (\Throwable) {
                 return false;
@@ -1519,6 +1531,124 @@ class ThemeData
     }
     
     /**
+     * 已装入的快照。键与 performanceLoad 的 sha256 一致。
+     * setCurrentTheme 清空 performanceKey 后，进程 L1 的 performance:{sha256} 仍算命中。
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function loadedSnapshotMap(
+        ThemeDataRequestState $state,
+        string $namespace,
+        string $effectiveScope,
+        string $locale,
+    ): ?array {
+        $themeId = null;
+        if ($state->currentTheme && $state->currentTheme->getId()) {
+            $themeId = (string)$state->currentTheme->getId();
+        }
+        $snapshotKey = self::performanceSnapshotKey(
+            $namespace,
+            $effectiveScope,
+            $locale,
+            $themeId ?? 'null',
+        );
+
+        if (isset($state->performanceCache[$snapshotKey]) && is_array($state->performanceCache[$snapshotKey])) {
+            return $state->performanceCache[$snapshotKey];
+        }
+
+        [$runtimeHit, $runtimeThemeConfigs] = self::getRuntimeCache('performance:' . $snapshotKey);
+        if ($runtimeHit && is_array($runtimeThemeConfigs)) {
+            $state->performanceCache[$snapshotKey] = $runtimeThemeConfigs;
+            $state->performanceKey = $snapshotKey;
+            $state->performanceNamespace = $namespace;
+            $state->performanceScope = self::resolveEffectiveScope($effectiveScope, $state->currentArea);
+            $state->performanceLocale = $locale;
+            return $runtimeThemeConfigs;
+        }
+
+        return null;
+    }
+
+    private static function performanceSnapshotKey(
+        string $namespace,
+        string $scope,
+        string $locale,
+        string $themeId,
+    ): string {
+        $state = self::state();
+        $resolvedScope = self::resolveEffectiveScope($scope, $state->currentArea);
+        $resolvedLocale = self::currentConfigLocale($locale);
+
+        return hash('sha256', implode("\0", [
+            $namespace,
+            $namespace . '.*',
+            $resolvedScope,
+            $resolvedLocale,
+            $themeId,
+        ]));
+    }
+
+    /**
+     * 单条写入后只替换已装入桶里的对应键。桶不在则跳过，不去 search。
+     */
+    private static function patchLoadedThemeConfig(
+        string $area,
+        string $namespace,
+        string $configKey,
+        string $value,
+        string $effectiveScope,
+        ?string $locale,
+        string $themeId,
+    ): void {
+        $resolvedLocale = self::currentConfigLocale($locale);
+        $snapshotKey = self::performanceSnapshotKey($namespace, $effectiveScope, $resolvedLocale, $themeId);
+        self::replaceLoadedMapKey($snapshotKey, $configKey, $value, true);
+        self::replaceLoadedMapKey('performance:' . $snapshotKey, $configKey, $value, false);
+
+        $separator = strpos($configKey, '.');
+        if ($separator === false || $separator < 1) {
+            return;
+        }
+
+        $type = substr($configKey, 0, $separator);
+        $filtered = self::filterThemeConfigsByType([$configKey => $value], $type);
+        if ($filtered === []) {
+            return;
+        }
+        $bucketScope = self::resolveEffectiveScope($effectiveScope, self::state()->currentArea);
+        foreach (array_unique([$effectiveScope, $bucketScope]) as $listScope) {
+            $listKey = "config_list_{$area}_{$type}_{$listScope}_{$themeId}_{$resolvedLocale}";
+            foreach ($filtered as $sliceKey => $sliceValue) {
+                self::replaceLoadedMapKey($listKey, (string)$sliceKey, $sliceValue, true);
+                self::replaceLoadedMapKey($listKey, (string)$sliceKey, $sliceValue, false);
+            }
+        }
+    }
+
+    private static function replaceLoadedMapKey(string $cacheKey, string $mapKey, mixed $mapValue, bool $requestState): void
+    {
+        if ($requestState) {
+            $state = self::state();
+            if (!isset($state->performanceCache[$cacheKey]) || !is_array($state->performanceCache[$cacheKey])) {
+                return;
+            }
+            $state->performanceCache[$cacheKey][$mapKey] = $mapValue;
+            return;
+        }
+
+        $entry = self::$runtimeCache[$cacheKey] ?? null;
+        if (!is_array($entry) || !is_array($entry['value'] ?? null)) {
+            return;
+        }
+        if ((float)($entry['expires_at'] ?? 0.0) < microtime(true)) {
+            return;
+        }
+        $entry['value'][$mapKey] = $mapValue;
+        self::$runtimeCache[$cacheKey] = $entry;
+    }
+
+    /**
      * 清除缓存
      */
     public static function clearCache(): void
@@ -1986,13 +2116,10 @@ class ThemeData
             return $runtimeValue;
         }
 
-        if ($state->performanceKey
-            && $state->performanceNamespace === "theme.{$area}"
-            && $state->performanceScope === $effectiveScope
-            && $state->performanceLocale === $locale
-            && isset($state->performanceCache[$state->performanceKey])
-            && is_array($state->performanceCache[$state->performanceKey])) {
-            $result = self::filterThemeConfigsByType($state->performanceCache[$state->performanceKey], $type);
+        $namespace = "theme.{$area}";
+        $snapshot = self::loadedSnapshotMap($state, $namespace, $effectiveScope, $locale);
+        if ($snapshot !== null) {
+            $result = self::filterThemeConfigsByType($snapshot, $type);
             $state->performanceCache[$cacheKey] = $result;
             self::setRuntimeCache($cacheKey, $result);
             return $result;
@@ -2002,28 +2129,22 @@ class ThemeData
             $state->performanceCache[$cacheKey] = [];
             return [];
         }
-        
-        try {
-            $namespace = "theme.{$area}";
-            $configMap = [];
-            foreach (array_reverse(self::scopeReadChain($effectiveScope, $area)) as $candidateScope) {
-                $records = self::metaConfigRepository()->search(new MetaConfigSearch(
-                    namespace: $namespace,
-                    scope: $candidateScope,
-                    configKeyPrefix: $type . '.',
-                    allLocales: true,
-                    identifyId: (string)$themeId,
-                ));
-                $configMap = array_replace($configMap, self::resolveConfigMap($records, $locale));
-            }
-            $result = self::filterThemeConfigsByType($configMap, $type);
-            
+
+        // performanceLoad 用 performanceLoading 挡住 ensureInitialized 重入。
+        // 这里再挡一次，避免装入过程中回到 getConfigList 时互相调用。
+        if (!$state->performanceLoading) {
+            self::performanceLoad($namespace, null, $effectiveScope, $locale);
+        }
+
+        $snapshot = self::loadedSnapshotMap($state, $namespace, $effectiveScope, $locale);
+        if ($snapshot !== null) {
+            $result = self::filterThemeConfigsByType($snapshot, $type);
             $state->performanceCache[$cacheKey] = $result;
             self::setRuntimeCache($cacheKey, $result);
             return $result;
-        } catch (\Throwable) {
-            return [];
         }
+
+        return [];
     }
 
     /**

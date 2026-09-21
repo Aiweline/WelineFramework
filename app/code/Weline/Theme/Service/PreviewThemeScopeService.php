@@ -228,13 +228,10 @@ final class PreviewThemeScopeService
 
     private function ensureScopeInitialized(int $themeId, string $area, string $baseScope, string $previewScope): void
     {
-        if ($this->isScopeInitialized($previewScope, $area, $baseScope)) {
-            return;
-        }
-
-        $this->cloneConfigRows($themeId, $area, $baseScope, $previewScope);
-        $this->cloneTranslations($area, $baseScope, $previewScope);
-        $this->markScopeInitialized($previewScope, $area, $baseScope);
+        // Do not clone config or dictionary rows on read. Historical preview
+        // copies made `@meta::theme.{area}.` about a million rows; listing that
+        // prefix on every new editor session was the canvas multi-second stall.
+        // Unpublished edits stay in the preview scope; reads fall back to default.
     }
 
     private function cloneConfigRows(int $themeId, string $area, string $baseScope, string $previewScope): void
@@ -350,7 +347,16 @@ final class PreviewThemeScopeService
             return 'version|' . $versionId . '|' . $status . '|' . $themeId . '|' . $baseScope;
         }
 
-        $sessionId = $this->ensureSessionId();
+        // 读路径只认已经存在的会话号，禁止 session->start()。
+        // 编辑器页正在占着同一把会话时，画布再 start 会卡在进路由之前，直到请求被取消，iframe 一直是白的。
+        $sessionId = $this->session->getId();
+        if ($sessionId === '') {
+            $sessionId = \Weline\Framework\Session\SessionCookieNameResolver::readRequestSessionId();
+        }
+        if ($sessionId === '') {
+            return 'theme|' . $themeId . '|' . $baseScope;
+        }
+
         return 'session|' . $sessionId . '|' . $themeId . '|' . $baseScope;
     }
 

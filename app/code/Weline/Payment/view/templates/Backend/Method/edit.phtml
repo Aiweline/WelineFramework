@@ -12,6 +12,10 @@ $methodCode = (string)$method->getData('code');
 $providerModule = (string)$method->getData('provider_module');
 $configModule = $providerModule !== '' ? $providerModule : 'Weline_Payment';
 $storageScope = (string)($scope['scope'] ?? 'default.default.default');
+$methodEnvironment = strtolower(trim((string)($runtimeConfig['environment'] ?? 'sandbox')));
+if ($methodEnvironment !== 'live') {
+    $methodEnvironment = 'sandbox';
+}
 $configUrl = \Weline\Framework\Manager\ObjectManager::getInstance(
     \Weline\Payment\Service\PaymentMethodConfigDeepLinkBuilder::class
 )->build($methodCode, $storageScope, ['module' => $configModule]);
@@ -62,8 +66,8 @@ $json = static function (mixed $value): string {
                     </div>
                     <div style="--w-span-md:6;">
                         <div class="rounded-2" data-w-border="border" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
-                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('环境') ?></div>
-                            <div class="w-text" data-weight="strong"><?= $h(strtoupper((string)($scope['environment'] ?? 'sandbox'))) ?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('运行环境') ?></div>
+                            <div class="w-text" data-weight="strong"><?= $h($methodEnvironment === 'live' ? (string)__('正式') : (string)__('沙箱')) ?></div>
                         </div>
                     </div>
                 </div>

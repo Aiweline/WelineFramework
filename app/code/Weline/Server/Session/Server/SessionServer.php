@@ -607,6 +607,8 @@ final class SessionServer
             'hello_completed' => false,
             'shutdown_requested' => false,
             'last_lease_refresh_monotonic' => 0.0,
+            // 仅当 AUTH/PING 显式 purpose=protocol_probe 时置位；默认空=业务/池化连接。
+            'connection_purpose' => '',
         ];
 
         $this->logDebug("Client connected: {$peerName} (id={$clientId})");
@@ -818,6 +820,7 @@ final class SessionServer
                 break;
 
             case SessionProtocol::CMD_PING:
+                $this->markClientProtocolProbeIfDeclared($clientId, $msg);
                 $response = SessionProtocol::encodeSuccess('pong');
                 break;
             
@@ -1041,6 +1044,7 @@ final class SessionServer
 
         $addr = $this->clients[$clientId]['addr'] ?? 'unknown';
         $consumerCode = (string) ($this->clients[$clientId]['consumer_code'] ?? '');
+        $purpose = (string) ($this->clients[$clientId]['connection_purpose'] ?? '');
         $socket = $this->clients[$clientId]['socket'] ?? null;
         if (\is_resource($socket)) {
             @\fclose($socket);
@@ -1049,6 +1053,21 @@ final class SessionServer
 
         if ($consumerCode !== '') {
             $this->syncIdleShutdownWindow();
+        }
+
+        // 探活短连接：INFO 显式「[探活]」前缀，与业务「Client disconnected」区分，避免误判故障。
+        // 业务/池化连接仍走 INFO「Client disconnected」（无前缀）。
+        if (SessionProtocol::isProtocolProbePurpose($purpose)) {
+            $this->log(
+                '[探活] Client disconnected: '
+                . $addr
+                . ' (id='
+                . $clientId
+                . ', purpose='
+                . SessionProtocol::PURPOSE_PROTOCOL_PROBE
+                . ')'
+            );
+            return;
         }
 
         $this->log("Client disconnected: {$addr} (id={$clientId})");
@@ -1426,6 +1445,7 @@ final class SessionServer
         if ($this->authToken === null) {
             $this->clients[$clientId]['authenticated'] = true;
             $this->clients[$clientId]['tls_cache_channel'] = $tlsCacheChannel;
+            $this->markClientProtocolProbeIfDeclared($clientId, $msg);
             if ($tlsCacheChannel) {
                 $this->tuneTlsSessionCacheTransport($clientId);
             }
@@ -1436,11 +1456,24 @@ final class SessionServer
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
             $this->clients[$clientId]['tls_cache_channel'] = $tlsCacheChannel;
+            $this->markClientProtocolProbeIfDeclared($clientId, $msg);
             if ($tlsCacheChannel) {
                 $this->tuneTlsSessionCacheTransport($clientId);
             }
             $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
-            $this->logDebug("Client authenticated: {$addr} (id={$clientId})");
+            if (SessionProtocol::isProtocolProbePurpose($this->clients[$clientId]['connection_purpose'] ?? '')) {
+                $this->logDebug(
+                    '[探活] Client authenticated: '
+                    . $addr
+                    . ' (id='
+                    . $clientId
+                    . ', purpose='
+                    . SessionProtocol::PURPOSE_PROTOCOL_PROBE
+                    . ')'
+                );
+            } else {
+                $this->logDebug("Client authenticated: {$addr} (id={$clientId})");
+            }
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Authenticated'));
         } else {
             $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
@@ -1448,6 +1481,22 @@ final class SessionServer
             $this->sendToClient($clientId, SessionProtocol::encodeError('Invalid token', 'AUTH_FAILED'));
             $this->disconnectClient($clientId);
         }
+    }
+
+    /**
+     * 仅接受显式 purpose=protocol_probe；其它字符串一律忽略，防止误标业务连接。
+     *
+     * @param array<string, mixed> $msg
+     */
+    private function markClientProtocolProbeIfDeclared(int $clientId, array $msg): void
+    {
+        if (!isset($this->clients[$clientId])) {
+            return;
+        }
+        if (!SessionProtocol::isProtocolProbePurpose($msg['purpose'] ?? null)) {
+            return;
+        }
+        $this->clients[$clientId]['connection_purpose'] = SessionProtocol::PURPOSE_PROTOCOL_PROBE;
     }
 
     private function tuneTlsSessionCacheTransport(int $clientId): void

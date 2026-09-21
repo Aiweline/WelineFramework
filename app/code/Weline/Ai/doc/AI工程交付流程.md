@@ -25,9 +25,10 @@
 1c 宿主计划模式    默认 Plan Mode；**简单可 skip**（仍须验收）
 2 扩展点选型       扩展点选型.md → 文档索引 / doc/event / Query / Hook
 3 计划拆解         plan.md + task.md（或任务笔记；仍在 Plan Mode）
+3b 工程团队        非简单：框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；验收 UI+原型实质签收；停工等确认
 4 实现             用户批准后切回 Agent；宿主原生编辑 + TDD
-5 三维复审         架构 / 缺陷 / 安全
-6 分层测试         单测 → 运行时 → WebUI（按变更表面）
+5 复审             架构/缺陷/安全 + 每触发专席合规复审（fail→返工）
+6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型签收后才可交出
 7 收口             文档对齐（README/需求/开发日志）+ 门禁表 + 交付证据
 ```
 
@@ -70,7 +71,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 - **宿主计划模式（硬门槛，`host_plan_mode_for_planning`）**：进入本阶段（澄清规格 `ready-for-plan` 之后、扩展点选型/架构映射/分章计划期间）**默认必须启用宿主 Plan Mode**。Cursor：立即 `SwitchMode` → `target_mode_id=plan`，在 Plan Mode 内完成 `architecture_design`、扩展点、章节/`dev_tasks`、`acceptance`；**禁止**在仍处于计划阶段时改业务 PHP/phtml/CSS。用户明确批准实现后，再 `SwitchMode` → `agent` 进入 §4。
 - **计划正文聚焦（硬门槛，`plan_content_focus_only`）**：计划正文（Plan Mode / `doc/开发/plan.md` / 会话计划笔记）**只写三块**——**(1) 背景**（本题为何、现状缺口）；**(2) 方案**（要做什么、选定做法，mechanism/owning_module/reuse/not_to_do 用短子弹）；**(3) 细节**（怎么做：步骤、章节/`dev_tasks`、路径、验收怎么验）。**禁止**把主题带偏：流程目录散文、无关模块巡礼、愿景/价值主张、整套 MCP 工作流复述、旁支功能推销、不影响构建的装饰性总览。必填结构化字段仍要有，但压成上述三节下的短子弹，不要另开无关章节。
-- **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。
+- **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。同一条件走**监工**，不叫团队。对外每句以 `监工:` 开头。
 - **前后端范围（硬，`requirement_fe_be_scope_analysis`）**：每条需求须分析并记录 `fe_be_scope=frontend|backend|both|na` 及各侧要点；禁止只做一侧却漏该做的另一侧。
 - **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 Browser **WB-OP**：视觉（可截图则 WB-VIS）+ 真机点选逻辑；curl/CDP 不能替代。
 - **布局/人性化/吐槽/审图**：命中时 `ui_skill_decision=participate`，**原型 + frontend-design 必须参与并调整**（禁止只点评）。
@@ -80,17 +81,33 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - 写码：宿主原生编辑；动手前明确 goal、requirements、known_paths、known_symbols。
 - 原子任务：单次变更宜 2–4 小时可验收；过大则拆 child_requests。
 
+### 3b. 工程团队（复杂才自己选 team）
+
+- **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口。简单走监工，每句 `监工:`。复杂自己进入 team，并自选本波席位；面向用户的每一句必须是 `Team:{席位}:`，例如 `Team:架构师:`。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
+- **框架优先**：需求 / 设计 / 施工 / 复审先映射框架机制与组件，再谈业务补丁。
+- **全专席双轨**：凡触发专席（扩展点 / 事件 / Taglib / UI / i18n…）= 施工轨 + 合规复审轨；复审 fail → 返工，禁止带病进验收。
+- **流水线流动（`team_flow_on_contracts`）**：立项会后开 **对齐冻结会**（测试主持）——先钉可执行 UC + `contracts.md` + `deps.md`，再技术方案定稿与施工。施工按依赖**唤醒并发**；验收只执行已冻用例。禁止「开发完才补主路径用例」或全员空等终点。
+- **组件协商（UI in_scope）**：优先复用 `w-*` / Taglib / Widget；不足须 **原型 ∥ UI**（±主题）协商写入 `component-negotiate.md` 后再扩展。
+- **验收实质签收（UI in_scope）**：测试 e2e 全绿不能代替；**UI** 写 `acceptance-ui.md`、**原型** 写 `acceptance-prototype.md` 亲自对照活页签收；任一 fail 禁止交出。
+- **免除**：内容运营（产品优化 / 详情优化 / 翻译优化 / 主图优化 / 新建文章 / 规格修复）两种前缀都不用。
+- **本机测试账号（`local_dev_test_accounts_self_serve`）**：开发环境后台默认 **admin / admin**；前台自建测试顾客。禁止向用户索要账号密码或「请你登录验证」。
+- **并发**：仅 team 模式，且文件或扩展点不重叠、**contracts + UC 已冻结**、本席依赖已满足，才多个子智能体。
+- **上报与停工**：跨轨或硬规则问题必须上报并开会。无人能拍板或重大架构矛盾 → 停工汇报，确认前禁止改 PHP / 模板 / CSS。停工句也要带 `Team:项目经理:`。
+- **纪要**：仅 team 模式写入 `doc/开发/team/{slug}/`（含 `surfaces.md` / `components.md` / `contracts.md` / `deps.md` / `{席位}-review.md`）。子智能体回报完成不是交付。
+
 ### 4. 实现
 
 - 先有需求拆解与架构映射，再宿主原生编辑。
 - 只改任务授权范围；保留用户无关工作区改动。
 
-### 5. 三维复审
+### 5. 复审（始终三维 + 每触发专席合规复审）
 
 - 架构：模块边界、扩展点是否正确。
 - 缺陷：边界条件、错误路径。
 - 安全：凭据、ACL、输入校验、跨站边界。
-
+- **专席合规复审**：事件 / 扩展点 / Taglib / Hook / Provider / UI / i18n / ACL / Setup / 合规等凡 roster 触发，必须各自 pass；产物 `meetings/{席位}-review.md`（可合并为分节）。任一 fail → 点名返工，不得进入验收。
+- **UI 复审**（UI in_scope）：功能在页面上完整可用 + 审美过审图 / 原型标准。
+- **i18n 复审**（文案 in_scope）：`@lang` / `__()` / Taglib 用法、源串简中、CSV、`i18n:collect`。
 ### 6. 分层测试与验收
 
 **自行验证（硬门槛，`agent_self_verify_before_done` + `acceptance_phase_requires_shentu`）**：动手前完成需求拆解与架构映射；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则不可宣称完成。未完成只能报告「代码已改，TDD/测试未跑通」。
@@ -100,13 +117,13 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 | 纯函数 / Service 局部 | 聚焦单测 |
 | 命令 / API / 持久化 | 真实命令或 API 结果 + 必要单测 |
 | Model / Controller / 注册表 | bump `etc/module.php` version + `setup:upgrade` 或 `--route` 成功（见 [模块版本与升级门禁](../Framework/doc/3-开发/模块版本与升级门禁.md)） |
-| i18n CSV / 新增可翻译文案 | `zh_Hans_CN.csv` + `en_US.csv` 对齐；**用户提到翻译时还须覆盖默认网站已选全部语言** + `php bin/w i18n:collect`（见 [模块翻译CSV规范](../I18n/doc/模块翻译CSV规范.md)；MCP `user_mentions_translation_all_default_website_locales`） |
+| i18n CSV / 新增可翻译文案 | **源串默认简体中文**（禁止模板英文源串）+ `zh_Hans_CN.csv` + `en_US.csv` 对齐（**禁止其它 locale CSV**）；**用户提到翻译时还须覆盖默认网站已选全部语言（非中英语种进系统词典）** + 中英改动后 `php bin/w i18n:collect`（见 [模块翻译CSV规范](../I18n/doc/模块翻译CSV规范.md)；MCP `module_i18n_chinese_source_default` / `user_mentions_translation_all_default_website_locales`） |
 | 页面 / 交互 / SSE | 真实 WLS + **当前宿主可用的真实 Browser** 操作员路径（**WB-OP**）；**须截图 + 对照模块 `doc/原型设计.md` 视觉清单（WB-VIS）**；多断点 375 / ≈768 / ≥1024 |
 | 文档 / 规则 | Diff、链接、渲染检查；**与实现对照无漂移** |
 
-**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**Playwright 仅正式 runner（硬，`e2e_playwright_formal_runner_only`）**：`php bin/w e2e:run` 或 `npx playwright test`（仓库 `tests/e2e` 配置）；禁止 `node -e` / 临时 `chromium.launch` 探活（易残留无头浏览器）。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
+**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**真实业务通路（硬，`acceptance_real_business_pathway`）**：收口 e2e/WB 必须跑冻结主路径并留下可回查业务证据（如真实 `order_uuid`）；**禁止**仅用空 query 取消页 CTA 文案、账户页不 fatal、模板字符串 UT 冒充功能完成。**Playwright 仅正式 runner（硬，`e2e_playwright_formal_runner_only`）**：`php bin/w e2e:run` 或 `npx playwright test`（仓库 `tests/e2e` 配置）；禁止 `node -e` / 临时 `chromium.launch` 探活（易残留无头浏览器）。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
 
-未完成对应层级时，只能报告「代码已改，测试未完成」或「WebUI 验收未完成」。
+未完成对应层级时，只能报告「代码已改，测试未完成」「WebUI 验收未完成」或「真实通路验收未完成」。
 
 **验收阶段审图（硬门槛，`acceptance_phase_requires_shentu`）**：`ui_skill_decision=participate` 或含视觉 Browser/UI 验收时，verify 阶段必须对验收截图执行 [审图](../../../../../dev/ai-command/theme/审图.md)（线稿→原型→UI→主题），`acceptance` 须含 `type=shentu` 且 passed evidence 含审图/线稿/checklist 信号；弱证据则 `不可宣称完成`。非功能且无 UI 可省略或 `na` 并写明原因。
 
@@ -175,7 +192,8 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 |------|----------|
 | 0 | **必须** `prepare_project`（工程任务；刷新 hard_constraints） |
 | 1–2 | 按需 `resolve_task_context`、`search_project_knowledge`、`get_indexed_document` |
-| 3 | 工程计划自检（需求/架构/验收项记录于任务笔记或模块文档） |
+| 3 | 工程计划自检（需求/架构/验收项记录于任务笔记或模块文档）；非简单需求按 [工程团队](../../../../../dev/ai-command/ai/工程团队.md) 编制 |
+| 3b | `get_skill(engineering_team)`；纪要 `doc/开发/team/{slug}/`；停工则等用户确认 |
 | 3–4 | **宿主原生编辑**（按需 MCP 只读检索） |
 | 部署计划 | 宿主直接调用 `Weline_Deploy` CLI / 运维文档（MCP 不再提供 deploy 工具） |
 | MCP 未挂载 | 宿主 Read `AI硬规则索引.md` 与原生编辑；不得假装已遵守 MCP |

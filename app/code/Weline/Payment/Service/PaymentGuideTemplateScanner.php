@@ -233,7 +233,7 @@ class PaymentGuideTemplateScanner
             return true;
         }
 
-        if (preg_match('/^(PayPal|Visa|Mastercard|AMEX|CNY|USD|EUR|¥|\$|€)$/iu', $text)) {
+        if (preg_match('/^(PayPal|Stripe|Visa|Mastercard|AMEX|CNY|USD|EUR|¥|\$|€)$/iu', $text)) {
             return true;
         }
 

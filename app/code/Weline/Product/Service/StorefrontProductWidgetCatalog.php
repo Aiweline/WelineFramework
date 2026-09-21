@@ -359,8 +359,9 @@ final class StorefrontProductWidgetCatalog
         $excludeProductId = max(0, $excludeProductId);
         $cards = [];
         $seenProductIds = [];
+        $companions = $this->sameCategoryCompanionOffers($excludeProductId, max($limit * 3, 12));
 
-        foreach ($this->sameCategoryCompanionOffers($excludeProductId, max($limit * 3, 12)) as $offer) {
+        foreach ($companions as $offer) {
             if (!$this->isHanfuOffer($offer)) {
                 continue;
             }
@@ -378,7 +379,7 @@ final class StorefrontProductWidgetCatalog
             }
         }
 
-        foreach ($this->sameCategoryCompanionOffers($excludeProductId, max($limit * 3, 12)) as $offer) {
+        foreach ($companions as $offer) {
             $productId = max(0, (int)($offer['product_id'] ?? 0));
             if ($productId <= 0 || isset($seenProductIds[$productId])) {
                 continue;

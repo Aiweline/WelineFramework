@@ -48,6 +48,17 @@
         validation="max:1024" />
 
     <w:config:field
+        key="payment/method/fake_card/environment"
+        label="运行环境"
+        description="与支付方式列表「运行环境」是同一个开关：关闭为沙箱，开启为正式。按当前 Scope 保存，沙箱与正式凭据同时保留。"
+        type="select"
+        value-type="string"
+        default="sandbox"
+        scope="global,website,store"
+        options="sandbox:沙盒,live:正式"
+        validation="in_options" />
+
+    <w:config:field
         key="payment/method/fake_card/default_currency"
         label="默认支付货币"
         description="可支付对象没有指定目标支付货币时使用的默认货币。"

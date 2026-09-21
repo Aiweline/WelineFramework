@@ -50,6 +50,31 @@ final class PaymentObjectScopeServiceTest extends TestCase
         self::assertSame('web', $channel->channelCode);
     }
 
+    public function testSystemConfigWebsiteSentinelIsWebsiteNotStore(): void
+    {
+        $scope = $this->service->fromExplicitTarget([
+            'target_scope' => 'default.__website__.default',
+        ]);
+
+        self::assertSame(ScopeIdentity::KIND_WEBSITE, $scope->scopeKind);
+        self::assertSame(0, $scope->websiteId);
+        self::assertSame('default', $scope->websiteCode);
+        self::assertNull($scope->storeCode);
+    }
+
+    public function testSystemConfigStoreAndChannelSentinelsKeepKind(): void
+    {
+        $store = $this->service->fromPersistedScope('shop.__store__.default');
+        $channel = $this->service->fromPersistedScope('shop.main.__channel__');
+
+        self::assertSame(ScopeIdentity::KIND_STORE, $store->scopeKind);
+        self::assertSame(17, $store->websiteId);
+        self::assertSame('default', $store->storeCode);
+        self::assertSame(ScopeIdentity::KIND_CHANNEL, $channel->scopeKind);
+        self::assertSame('main', $channel->storeCode);
+        self::assertSame('default', $channel->channelCode);
+    }
+
     public function testAdminTargetCannotFallBackToImplicitDefault(): void
     {
         $this->expectException(\InvalidArgumentException::class);

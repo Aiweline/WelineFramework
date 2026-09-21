@@ -68,7 +68,7 @@ test('patchWidgetConfigFields writes field set for current theme draft only', { 
             },
         },
         document: { querySelectorAll: () => [] },
-        translateUiText: (value) => value,
+        window: {__: (value) => value},
         scopedWorkspaceKey: (resource, options) => `${resource}:${options.locale || 'default'}`,
         getScopedWorkspaceState(resource, options) {
             return context.state.scopedWorkspaces[context.scopedWorkspaceKey(resource, options)];
@@ -137,7 +137,7 @@ test('patchWidgetConfigFields inherits blank locale media instead of setting emp
             },
         },
         document: { querySelectorAll: () => [] },
-        translateUiText: (value) => value,
+        window: {__: (value) => value},
         scopedWorkspaceKey: (resource, options) => `${resource}:${options.locale || 'default'}`,
         getScopedWorkspaceState(resource, options) {
             return context.state.scopedWorkspaces[context.scopedWorkspaceKey(resource, options)];
@@ -184,7 +184,7 @@ test('patchWidgetConfigFields inherits blank locale media instead of setting emp
 test('assertCurrentThemeDraftScope blocks cross-theme writes', { skip: !incrementalAutosaveReady && 'pending re-port to js/theme-editor.js' }, () => {
     const context = loadFunctions(['assertCurrentThemeDraftScope'], {
         state: { themeId: 7 },
-        translateUiText: (value) => value,
+        window: {__: (value) => value},
     });
     assert.throws(
         () => context.assertCurrentThemeDraftScope({

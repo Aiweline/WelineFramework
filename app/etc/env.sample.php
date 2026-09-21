@@ -242,8 +242,8 @@ return [
         'performance' => [
             // 慢请求阈值（毫秒）
             'slow_request_threshold_ms' => 500,
-            // 是否输出 X-WLS-Performance-* 头
-            'response_headers_enabled' => true,
+            // 是否输出详细 X-WLS-Performance-* 与 Server-Timing/Process-Time（生产建议 false）
+            'response_headers_enabled' => false,
             // 是否写入 var/log/wls/timing.log
             'file_log_enabled' => true,
             // 是否写 debug 级性能摘要/明细日志
@@ -308,6 +308,8 @@ return [
             'homepage_warmup_peer_wait_ms' => 3000,
             'homepage_keep_warm_enabled' => true,
             'homepage_keep_warm_interval_sec' => 300,
+            // First-Render/Warmup/Controller-Cache 等动态观测头；缺省仅 deploy=dev，生产建议 false
+            'dynamic_observability_headers_enabled' => false,
         ],
         'worker_count' => 'auto',
         // Worker/维护 Worker 子进程 PHP memory_limit。纯数字按 MB 处理；支持 512M、1G、-1。
@@ -523,6 +525,11 @@ return [
             'port' => 19971,
             // 默认 token 文件名由运行域自动生成，避免共享目录下 macOS/Linux/容器互相覆盖。
             // 仅在明确承担隔离责任时才设置 token_file_name；显式名称不会自动追加运行域。
+            // 下列键在 role=memory_server 时覆盖 session 段同名项，驱动 SessionStore 自我 LRU。
+            'max_sessions' => 15000,
+            'gc_interval' => 60,
+            'memory_high_watermark_ratio' => 0.70,
+            'memory_low_watermark_ratio' => 0.55,
         ],
         // Session/Memory 共享服务：实例停机只卸载本实例令牌；令牌为空后由共享服务自治退出。
         'shared_service' => [
@@ -612,6 +619,10 @@ return [
             'hot_path_logs' => false,
             // 仅诊断 Worker READY 门禁各阶段，默认关闭；开启后写入 var/log/wls-ready-gate-stage.log。
             'worker_startup_trace' => false,
+            // Worker-Id/Port/PID/Memory/Uptime 与边缘 X-Wls-Nginx-Config；缺省仅 deploy=dev
+            'identity_headers' => false,
+            // X-Powered-By 栈版本暴露；缺省仅 deploy=dev
+            'powered_by_header' => false,
         ],
     ],
     

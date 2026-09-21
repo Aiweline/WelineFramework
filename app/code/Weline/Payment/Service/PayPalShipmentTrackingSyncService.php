@@ -87,25 +87,37 @@ final class PayPalShipmentTrackingSyncService
             return ['ok' => false, 'message' => 'paypal_capture_id_missing'];
         }
 
+        $checkoutOrderId = $this->resolveCheckoutOrderId($transaction);
+        if ($checkoutOrderId === '') {
+            return ['ok' => false, 'message' => 'paypal_checkout_order_id_missing'];
+        }
+
         $config = $this->resolvePayPalConfig($transaction);
         if ($config === null) {
             return ['ok' => false, 'message' => 'paypal_config_missing'];
         }
 
+        $carrierFields = $this->mapCarrierFields($carrier);
         $tracker = [
+            'capture_id' => $captureId,
             'transaction_id' => $captureId,
             'tracking_number' => $trackingNumber,
             'status' => strtoupper(trim($trackingStatus) ?: 'SHIPPED'),
-        ] + $this->mapCarrierFields($carrier);
+            'notify_payer' => false,
+            'checkout_order_id' => $checkoutOrderId,
+            'api' => 'orders_v2_track',
+        ] + $carrierFields;
 
         try {
-            $response = $this->apiClient->addTrackingBatch($config, [$tracker]);
+            // Official path for Orders v2 checkout: POST /v2/checkout/orders/{id}/track
+            $response = $this->apiClient->addOrderTracking($config, $checkoutOrderId, $tracker);
             $this->appendTrackingSyncAudit($transaction, $tracker, $response);
 
             return [
                 'ok' => true,
                 'message' => 'tracking_synced',
                 'capture_id' => $captureId,
+                'checkout_order_id' => $checkoutOrderId,
                 'tracking_number' => $trackingNumber,
                 'payload' => $response,
             ];
@@ -118,6 +130,7 @@ final class PayPalShipmentTrackingSyncService
                 'ok' => false,
                 'message' => $throwable->getMessage(),
                 'capture_id' => $captureId,
+                'checkout_order_id' => $checkoutOrderId,
                 'tracking_number' => $trackingNumber,
             ];
         }
@@ -138,6 +151,44 @@ final class PayPalShipmentTrackingSyncService
         return $model->getId() ? $model : null;
     }
 
+    private function resolveCheckoutOrderId(PaymentTransaction $transaction): string
+    {
+        $response = $transaction->getResponseData();
+        $payload = \is_array($response['payload'] ?? null) ? $response['payload'] : [];
+
+        foreach ([
+            $payload['order_id'] ?? null,
+            $payload['paypal_order_id'] ?? null,
+            $response['provider_reference'] ?? null,
+            $transaction->getData('provider_reference') ?? null,
+        ] as $candidate) {
+            $id = trim((string) $candidate);
+            if ($id !== '' && !str_starts_with(strtoupper($id), 'CAPTURE') && !str_starts_with(strtoupper($id), 'PAY')) {
+                return $id;
+            }
+        }
+
+        $capture = \is_array($payload['capture'] ?? null) ? $payload['capture'] : [];
+        // Stored "capture" payload is often the full Checkout Order object.
+        $orderId = trim((string) ($capture['id'] ?? ''));
+        if ($orderId !== '' && isset($capture['purchase_units'])) {
+            return $orderId;
+        }
+
+        $links = \is_array($capture['links'] ?? null) ? $capture['links'] : [];
+        foreach ($links as $link) {
+            if (!\is_array($link)) {
+                continue;
+            }
+            $href = (string) ($link['href'] ?? '');
+            if (preg_match('#/v2/checkout/orders/([^/?]+)#', $href, $m) === 1) {
+                return rawurldecode($m[1]);
+            }
+        }
+
+        return '';
+    }
+
     private function resolveCaptureId(PaymentTransaction $transaction): string
     {
         $transactionNo = trim((string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO));
@@ -154,6 +205,12 @@ final class PayPalShipmentTrackingSyncService
 
         $capture = \is_array($payload['capture'] ?? null) ? $payload['capture'] : [];
         if ($capture !== []) {
+            // Nested captures on checkout order object
+            $nested = $capture['purchase_units'][0]['payments']['captures'][0]['id'] ?? null;
+            if (is_string($nested) && trim($nested) !== '') {
+                return trim($nested);
+            }
+
             return $this->apiClient->extractCaptureId($capture);
         }
 
@@ -198,22 +255,27 @@ final class PayPalShipmentTrackingSyncService
             return ['carrier' => 'OTHER', 'carrier_name_other' => 'Logistics'];
         }
 
+        // Orders v2 /track carrier enum is stricter than legacy trackers-batch (e.g. SF_EXPRESS invalid).
         $known = [
-            'SF' => 'SF_EXPRESS',
-            'SFEXPRESS' => 'SF_EXPRESS',
-            '顺丰' => 'SF_EXPRESS',
             'DHL' => 'DHL',
             'FEDEX' => 'FEDEX',
             'UPS' => 'UPS',
             'USPS' => 'USPS',
             'EMS' => 'EMS',
             'CHINAPOST' => 'CHINA_POST',
+            'CHINA_POST' => 'CHINA_POST',
         ];
         if (isset($known[$carrier])) {
             return ['carrier' => $known[$carrier]];
         }
 
-        return ['carrier' => 'OTHER', 'carrier_name_other' => $carrier];
+        // SF / 顺丰等：用 OTHER + 可读名称，避免 INVALID_PARAMETER_VALUE。
+        $otherName = match ($carrier) {
+            'SF', 'SFEXPRESS', 'SF_EXPRESS', '顺丰' => 'SF Express',
+            default => $carrier,
+        };
+
+        return ['carrier' => 'OTHER', 'carrier_name_other' => $otherName];
     }
 
     /**

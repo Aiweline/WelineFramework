@@ -80,6 +80,9 @@ warning,警告
 前往统一配置中心修改,前往统一配置中心修改
 可搜索多选标签；保存为逗号分隔值,可搜索多选标签；保存为逗号分隔值
 素材目录,素材目录
+沙盒,沙盒
+生产,生产
+关闭为%{1}，开启为%{2},关闭为%{1}，开启为%{2}
 请选择或搜索...,请选择或搜索...
 搜索并多选...,搜索并多选...
 选择图片,选择图片
@@ -208,6 +211,8 @@ Global（全部网站、店铺和渠道）,Global（全部网站、店铺和渠�
 "应用默认 CSP（不可覆盖）","应用默认 CSP（不可覆盖）"
 "用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","常用：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
 "MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B 配置范围迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）"
+正式,正式
+沙箱,沙箱
 所有模块,所有模块
 "Set one scoped config value and create a version batch.",设置一个范围配置值并创建一批版本。
 配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}

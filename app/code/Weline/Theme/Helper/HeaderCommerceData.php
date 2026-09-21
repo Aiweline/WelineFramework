@@ -88,6 +88,45 @@ final class HeaderCommerceData
     }
 
     /**
+     * Storefront category names already resolved from category locale rows.
+     * Callers must not run these labels through WidgetI18n / __().
+     *
+     * @return array<string, string> path code (women, sets, …) => display name
+     */
+    public static function categoryDisplayNamesByCode(): array
+    {
+        $names = [];
+        $walk = static function (array $items) use (&$walk, &$names): void {
+            foreach ($items as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $url = (string)($item['url'] ?? '');
+                $path = \parse_url($url, \PHP_URL_PATH);
+                $path = \is_string($path) && $path !== '' ? $path : $url;
+                if (\preg_match('#(?:^|/)category/([^/?#]+)/?$#', $path, $matches) === 1) {
+                    $code = \rawurldecode((string)$matches[1]);
+                    $text = \trim((string)($item['text'] ?? $item['name'] ?? ''));
+                    if ($code !== '' && $text !== '') {
+                        $names[$code] = $text;
+                    }
+                }
+                $children = $item['children'] ?? [];
+                if (\is_array($children) && $children !== []) {
+                    $walk($children);
+                }
+            }
+        };
+        $resolved = self::resolveCategoryNavItems(['include_all_products' => false]);
+        $items = $resolved['items'] ?? [];
+        if (\is_array($items)) {
+            $walk($items);
+        }
+
+        return $names;
+    }
+
+    /**
      * @param list<array<string,mixed>> $items
      * @return list<array<string,mixed>>
      */

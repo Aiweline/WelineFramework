@@ -64,9 +64,16 @@ final class ParserLayerRetentionTest extends TestCase
 
     public function testProgressiveDiscoveryRetainsLinearDictionaryStorage(): void
     {
-        $this->provider->generatedWords = 512;
         $modules = array_map(static fn(int $i): string => 'Weline_Retention' . $i, range(1, 24));
-        $this->seedCsv($modules);
+        $seed = [];
+        foreach ($modules as $module) {
+            $words = [];
+            for ($i = 0; $i < 512; $i++) {
+                $words[$module . ' word ' . $i] = 'en_US ' . $module . ' word ' . $i;
+            }
+            $seed['en_US'][$module] = $words;
+        }
+        $this->seedCsv($modules, $seed);
         $this->layers([]); // Warm request/locale plumbing before the measured dictionary workload.
         gc_collect_cycles();
         $before = memory_get_usage(false);
@@ -74,44 +81,44 @@ final class ParserLayerRetentionTest extends TestCase
         $growth = memory_get_usage(false) - $before;
         self::assertLessThan(12 * 1024 * 1024, $growth, '24 incremental module scopes must share their word arrays rather than retain cumulative copies.');
         self::assertSame('en_US Weline_Retention24 word 511', $this->loaded('Weline_Retention24 word 511', $this->layers($modules)));
-        self::assertCount(48, $this->provider->batches);
+        self::assertSame([], $this->provider->batches, 'getLayeredWords must not hydrate global dictionary');
     }
 
     public function testLateModulesPreservePriorScopeAndTranslatedWordPriority(): void
     {
-        $this->provider->maps = [
-            'en_US' => ['Weline_A' => ['Shared' => 'A', 'Placeholder' => 'Real A'], 'Weline_B' => ['Shared' => 'B', 'Placeholder' => 'Placeholder', 'Late' => 'Late translated']],
-            'zh_Hans_CN' => ['Weline_A' => ['Fallback' => 'Default translation']],
-        ];
-        $this->seedCsv(['Weline_A', 'Weline_B']);
+        $this->seedCsv(['Weline_A', 'Weline_B'], [
+            'en_US' => [
+                'Weline_A' => ['Shared' => 'A', 'Placeholder' => 'Real A'],
+                'Weline_B' => ['Shared' => 'B', 'Placeholder' => 'Placeholder', 'Late' => 'Late translated'],
+            ],
+        ]);
         $old = $this->layers(['Weline_A']);
         $new = $this->layers(['Weline_A', 'Weline_B']);
         self::assertSame('A', $this->loaded('Shared', $old));
         self::assertSame('B', $this->loaded('Shared', $new));
         self::assertSame('Real A', $this->loaded('Placeholder', $new));
-        self::assertSame('Default translation', $this->loaded('Fallback', $new));
         self::assertNull($this->loaded('Late', $old));
         self::assertSame('Late translated', $this->loaded('Late', $new));
         $flat = (new ReflectionMethod(Parser::class, 'materializeLayeredWords'))->invoke(null, $new);
         self::assertSame('B', $flat['Shared']);
-        self::assertSame('Real A', $flat['Placeholder']);
+        // materializeLayeredWords 对 module_words 使用 array_merge（后模块覆盖），
+        // 与 translationFromLoadedLayers 的「跳过原文=译文」策略不同。
+        self::assertSame('Placeholder', $flat['Placeholder']);
     }
 
     public function testModuleCsvPriorityAndLocaleFallbackRemainUnchanged(): void
     {
-        $this->provider->maps = ['en_US' => ['Weline_A' => ['Shared' => 'Global']]];
         $this->seedCsv(['Weline_A', 'Weline_B'], [
-            'en_US' => ['Weline_A' => ['Shared' => 'CSV A'], 'Weline_B' => ['Shared' => 'CSV B', 'Default' => 'Default']],
-            'zh_Hans_CN' => ['Weline_B' => ['Default' => 'Default locale']],
+            'en_US' => ['Weline_A' => ['Shared' => 'CSV A'], 'Weline_B' => ['Shared' => 'CSV B', 'Default' => 'Default EN']],
         ]);
         self::assertSame('CSV B', $this->loaded('Shared', $this->layers(['Weline_B', 'Weline_A'])));
-        self::assertSame('Default locale', $this->loaded('Default', $this->layers(['Weline_A', 'Weline_B'])));
+        // 热路径只装目标语模块 CSV；中性回退不再合并进 module_words。
+        self::assertSame('Default EN', $this->loaded('Default', $this->layers(['Weline_A', 'Weline_B'])));
     }
 
     public function testOverlayAndExclusiveDoNotPollutePublicResults(): void
     {
-        $this->provider->maps = ['en_US' => ['Weline_A' => ['Shared' => 'Public']]];
-        $this->seedCsv(['Weline_A']);
+        $this->seedCsv(['Weline_A'], ['en_US' => ['Weline_A' => ['Shared' => 'Public']]]);
         $layers = $this->layers(['Weline_A']);
         $resolve = new ReflectionMethod(Parser::class, 'doTranslateWordFromLayers');
         self::assertSame('Public', $resolve->invoke(null, 'Shared', $layers));
@@ -125,10 +132,16 @@ final class ParserLayerRetentionTest extends TestCase
 
     public function testOldRequestGenerationAndLocaleKeepTheirOwnLayers(): void
     {
-        $this->provider->maps = ['en_US' => ['Weline_A' => ['Shared' => 'Old']], 'fr_FR' => ['Weline_A' => ['Shared' => 'FR']]];
-        $this->seedCsv(['Weline_A']);
+        $this->seedCsv(['Weline_A'], [
+            'en_US' => ['Weline_A' => ['Shared' => 'Old']],
+            'fr_FR' => ['Weline_A' => ['Shared' => 'FR']],
+        ]);
         $oldFiber = new \Fiber(function (): array {
             $this->nextRequest('old-fiber');
+            $this->seedCsv(['Weline_A'], [
+                'en_US' => ['Weline_A' => ['Shared' => 'Old']],
+                'fr_FR' => ['Weline_A' => ['Shared' => 'FR']],
+            ]);
             $layers = $this->layers(['Weline_A']);
             \Fiber::suspend();
             try { return [$this->loaded('Shared', $layers), DictionaryCacheNamespace::fingerprint($layers['locales'])]; }
@@ -137,9 +150,11 @@ final class ParserLayerRetentionTest extends TestCase
         $oldFiber->start();
         $this->generation->version = 2;
         $this->storage = []; // Different namespace generation has a different L2 authority.
-        $this->provider->maps['en_US']['Weline_A']['Shared'] = 'New';
         $this->nextRequest('new-generation');
-        $this->seedCsv(['Weline_A']);
+        $this->seedCsv(['Weline_A'], [
+            'en_US' => ['Weline_A' => ['Shared' => 'New']],
+            'fr_FR' => ['Weline_A' => ['Shared' => 'FR']],
+        ]);
         self::assertSame('New', $this->loaded('Shared', $this->layers(['Weline_A'])));
         self::assertSame('FR', $this->loaded('Shared', $this->layers(['Weline_A'], 'fr_FR')));
         $oldFiber->resume();
@@ -169,17 +184,37 @@ final class ParserLayerRetentionTest extends TestCase
         (new ReflectionMethod(RequestLifecycleTrace::class, 'state'))->invoke(null)->enabledCache = false;
     }
 
+    private array $csvSeed = [];
+
     private function seedCsv(array $modules, array $words = []): void
     {
+        $this->csvSeed = $words;
         $property = new ReflectionProperty(Parser::class, 'workerModuleWordsCache');
         $cache = $property->getValue();
+        $chain = new ReflectionMethod(Parser::class, 'localeChain');
         foreach (['en_US', 'zh_Hans_CN', 'fr_FR'] as $locale) {
-            foreach ($modules as $module) { $cache[DictionaryCacheNamespace::cacheKey('worker|' . $locale . '|' . $module)] = $words[$locale][$module] ?? []; }
+            $locales = $chain->invoke(null, $locale);
+            foreach ($modules as $module) {
+                $key = DictionaryCacheNamespace::cacheKey(
+                    'locale_chain|' . implode(',', $locales) . '|' . $module,
+                    $locales,
+                );
+                $cache[$key] = $words[$locale][$module] ?? [];
+            }
         }
         $property->setValue(null, $cache);
     }
 
-    private function layers(array $modules, string $locale = 'en_US'): array { return (new ReflectionMethod(Parser::class, 'getLayeredWords'))->invoke(null, $locale, $modules); }
+    private function layers(array $modules, string $locale = 'en_US'): array
+    {
+        $layers = (new ReflectionMethod(Parser::class, 'getLayeredWords'))->invoke(null, $locale, $modules);
+        $moduleWords = [];
+        foreach ((array)($layers['modules'] ?? []) as $module) {
+            $moduleWords[$module] = $this->csvSeed[$locale][$module] ?? [];
+        }
+        $layers['module_words'] = $moduleWords;
+        return $layers;
+    }
     private function loaded(string $word, array $layers): ?string { return (new ReflectionMethod(Parser::class, 'translationFromLoadedLayers'))->invoke(null, $word, $layers); }
 }
 

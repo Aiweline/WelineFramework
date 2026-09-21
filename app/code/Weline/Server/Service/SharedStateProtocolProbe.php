@@ -213,7 +213,8 @@ final class SharedStateProtocolProbe
         }
         $buffer = '';
         try {
-            if (@\fwrite($socket, SessionProtocol::buildPing()) === false) {
+            // 显式标记 protocol_probe：Session/Memory 断连日志不得与业务连接混淆。
+            if (@\fwrite($socket, SessionProtocol::buildProtocolProbePing()) === false) {
                 return false;
             }
             $msg = self::readNextMessage($socket, $buffer, self::READ_TIMEOUT_SEC);
@@ -234,7 +235,8 @@ final class SharedStateProtocolProbe
         }
         $buffer = '';
         try {
-            if (@\fwrite($socket, SessionProtocol::buildAuth($secret)) === false) {
+            // 仅探活路径带 purpose=protocol_probe；shutdown / 池化 AUTH 不得使用。
+            if (@\fwrite($socket, SessionProtocol::buildProtocolProbeAuth($secret)) === false) {
                 return false;
             }
             $msg = self::readNextMessage($socket, $buffer, self::READ_TIMEOUT_SEC);
@@ -242,7 +244,7 @@ final class SharedStateProtocolProbe
                 return false;
             }
             $buffer = '';
-            if (@\fwrite($socket, SessionProtocol::buildPing()) === false) {
+            if (@\fwrite($socket, SessionProtocol::buildProtocolProbePing()) === false) {
                 return false;
             }
             $msg = self::readNextMessage($socket, $buffer, self::READ_TIMEOUT_SEC);

@@ -28,6 +28,25 @@ class ResourceTreeService implements ResourceTreeServiceInterface
     private const MENU_SOURCES_CONTEXT_KEY = 'acl.enabled_menu_sources.v1';
 
     /**
+     * Columns required to build backend menu trees. Full ACL rows carry
+     * resource_metadata (often MB-scale JSON) that must never enter process/shared menu caches.
+     *
+     * @var list<string>
+     */
+    private const MENU_SOURCE_CACHE_FIELDS = [
+        Acl::schema_fields_SOURCE_ID,
+        Acl::schema_fields_SOURCE_NAME,
+        Acl::schema_fields_TYPE,
+        Acl::schema_fields_ICON,
+        Acl::schema_fields_ROUTE,
+        Acl::schema_fields_MODULE,
+        Acl::schema_fields_ORDER,
+        Acl::schema_fields_IS_ENABLE,
+        Acl::schema_fields_IS_BACKEND,
+        Acl::schema_fields_PARENT_SOURCE,
+    ];
+
+    /**
      * @var array<string, array{expires: float, data: array}>
      */
     private static array $backendMenuTreeCache = [];
@@ -92,7 +111,12 @@ class ResourceTreeService implements ResourceTreeServiceInterface
                 && ($cached['generation'] ?? null) === self::$localMenuTreeGeneration
                 && \is_array($cached['data'] ?? null)
             ) {
-                return $cached['data'];
+                $rows = self::projectMenuSourceRows($cached['data']);
+                if (self::menuSourceRowsNeedSlimRewrite($cached['data'])) {
+                    RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $rows]);
+                }
+
+                return $rows;
             }
         }
 
@@ -101,7 +125,9 @@ class ResourceTreeService implements ResourceTreeServiceInterface
         if (self::$enabledMenuSourcesCache !== null
             && self::$enabledMenuSourcesCache['expires'] >= $now
         ) {
-            $rows = self::$enabledMenuSourcesCache['data'];
+            $rows = self::projectMenuSourceRows(self::$enabledMenuSourcesCache['data']);
+            // Heal fat process entries written before the slim projection.
+            self::$enabledMenuSourcesCache['data'] = $rows;
             RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $rows]);
 
             return $rows;
@@ -111,13 +137,22 @@ class ResourceTreeService implements ResourceTreeServiceInterface
         try {
             $shared = w_cache('acl')->get($sharedKey);
             if (\is_array($shared)) {
+                $needsRewrite = self::menuSourceRowsNeedSlimRewrite($shared);
+                $rows = self::projectMenuSourceRows($shared);
                 self::$enabledMenuSourcesCache = [
                     'expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL,
-                    'data' => $shared,
+                    'data' => $rows,
                 ];
-                RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $shared]);
+                // Rewrite shared entry if a prior generation stored full ACL rows.
+                if ($needsRewrite) {
+                    try {
+                        w_cache('acl')->set($sharedKey, $rows, (int)self::BACKEND_MENU_TREE_CACHE_TTL);
+                    } catch (\Throwable) {
+                    }
+                }
+                RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $rows]);
 
-                return $shared;
+                return $rows;
             }
         } catch (\Throwable) {
         }
@@ -129,7 +164,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             ->order(Acl::schema_fields_ORDER, 'ASC')
             ->select()
             ->fetchArray();
-        $rows = \is_array($menuSources) ? \array_values($menuSources) : [];
+        $rows = self::projectMenuSourceRows(\is_array($menuSources) ? \array_values($menuSources) : []);
         self::$enabledMenuSourcesCache = [
             'expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL,
             'data' => $rows,
@@ -141,6 +176,53 @@ class ResourceTreeService implements ResourceTreeServiceInterface
         RequestContext::set($contextKey, ['generation' => self::$localMenuTreeGeneration, 'data' => $rows]);
 
         return $rows;
+    }
+
+    /**
+     * Keep only menu-tree fields so Worker process/shared caches stay small.
+     *
+     * @param list<array<string, mixed>>|array<int|string, mixed> $rows
+     * @return list<array<string, mixed>>
+     */
+    private static function projectMenuSourceRows(array $rows): array
+    {
+        $projected = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $slim = [];
+            foreach (self::MENU_SOURCE_CACHE_FIELDS as $field) {
+                $slim[$field] = $row[$field] ?? ($field === Acl::schema_fields_ORDER
+                    || $field === Acl::schema_fields_IS_ENABLE
+                    || $field === Acl::schema_fields_IS_BACKEND
+                    ? 0
+                    : '');
+            }
+            $projected[] = $slim;
+        }
+
+        return $projected;
+    }
+
+    /**
+     * @param list<array<string, mixed>>|array<int|string, mixed> $rows
+     */
+    private static function menuSourceRowsNeedSlimRewrite(array $rows): bool
+    {
+        $allowed = \array_fill_keys(self::MENU_SOURCE_CACHE_FIELDS, true);
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                return true;
+            }
+            foreach ($row as $key => $_) {
+                if (!isset($allowed[$key])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     protected function newAclModel(): Acl

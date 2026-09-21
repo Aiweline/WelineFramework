@@ -2,6 +2,36 @@
 
 > **硬规则**：任何模块交付用户可见文案时，必须维护齐全的基础中英文 CSV，并在每次改动后执行 `i18n:collect`。只改 CSV 不 collect，运行时**不会生效**。
 
+## 源串默认简体中文（硬，全模块）
+
+MCP 规则 id：`module_i18n_chinese_source_default`。
+
+**所有模块**（后台 Admin + 前台店面）开发时：
+
+1. **模板 / 菜单 / ACL / PHP `__()` / JS `__()` 的用户可见源串默认写简体中文**  
+   - 正确：`<lang>角色管理</lang>`、`__('角色管理')`、`menu.xml` `title="角色管理"`  
+   - **禁止**：模板或菜单里用英文当默认源串（如 `__('Role Management')` / `title="Role Management"`）——中文站会直接露出英文，CSV 也会中英串列
+2. **中英双语支持方式**（固定）：  
+   - 代码里：中文 source  
+   - `zh_Hans_CN.csv`：中文 → 中文（通常同字）  
+   - `en_US.csv`：同一中文 source → **真实英文译文**
+3. 专有名词 / 技术符号（`ID`、`HTTP`、`Cron`、`SQL` 等）可保留原样；**叙述性 UI 文案不得用英文当源串**。
+4. 若发现某模块模板仍是英文源串：必须**改代码源串为中文并重写 CSV 键**，禁止只在 `zh_Hans_CN` 里给英文键填中文却留下英文模板。
+
+## 活跃 / 默认语言必须显示对应译文（硬，规则级）
+
+MCP 规则 id：`active_locale_must_show_target_language`（与 `module_i18n_chinese_source_default` 成对）。
+
+**源串是中文是正确的；展示语言跟活跃 locale / 网站默认语言走，不跟源串语言走。**
+
+1. 网站**默认语言**是 `en_US`（或访客当前 locale 是 `en_US` / 其它非中文语种）时：用户可见文案必须是该语种译文。  
+2. **禁止**因为模板/`__()` 源串是中文，就在英文（或其它非中文）环境下继续显示中文。  
+3. **禁止**把 `en_US.csv`（或其它目标 locale 词典）第二列写成与中文 source 相同的占位，然后宣称「英文环境正常」。  
+4. **禁止**为了「英文站好看」把模板源串改成英文——应保持中文源串，补真实译文并 `i18n:collect`。  
+5. 验收：以**当前活跃 locale / 网站默认语言**打开页面抽检；默认英文站打开无前缀路径也不得露出中文正文（专有名词除外）。
+
+根因对照：源串中文 ≠ 英文环境应显示中文；英文环境漏译 = `en_US` 第二列仍是中文占位（或其它 locale 词典缺真实译文）。
+
 ## 适用范围
 
 - 所有 `app/code/{Vendor}/{Module}/` 业务模块
@@ -13,14 +43,14 @@
 
 ```
 app/code/Weline/YourModule/i18n/
-├── zh_Hans_CN.csv   # 简体中文（source 通常为中文）
+├── zh_Hans_CN.csv   # 简体中文（source 为中文）
 └── en_US.csv        # 英文（source 列与 zh 对齐，translate 列为英文译文）
 ```
 
 | 文件 | 第一列（source / word） | 第二列（translate） |
 |------|-------------------------|---------------------|
-| `zh_Hans_CN.csv` | 源串（中文） | 简体中文展示（通常与 source 相同） |
-| `en_US.csv` | **与 zh 文件相同的 source** | **英文译文**（不得留空、不得把中文 source 原样当作英文） |
+| `zh_Hans_CN.csv` | **中文源串**（与代码一致） | 简体中文展示（通常与 source 相同） |
+| `en_US.csv` | **与 zh 文件相同的中文 source** | **英文译文**（不得留空、不得把中文 source 原样当作英文） |
 
 ## 前后台对齐
 
@@ -98,10 +128,12 @@ MCP 规则 id：`user_mentions_translation_all_default_website_locales`。
 1. **在本机**解析默认网站已选语言（`runtime_status_query_local_first`；禁止为此去生产）：
    - `WebsiteLanguage::getWebsiteLanguageCodes(Website::ID_DEFAULT)`（`website_id = 0`）
    - 始终保留基线 `zh_Hans_CN` + `en_US`
-2. 对**每一个**已选 locale 写入归属模块 `i18n/{locale}.csv` 的真实目标语译文（第二列不得把中文 source 原样留下）。
+2. 对**每一个**已选 locale 写入**真实目标语译文**（不得把中文 source 原样留下）：
+   - **模块 CSV 仅允许** `i18n/zh_Hans_CN.csv` 与 `i18n/en_US.csv`（`I18nCsvCodec::MODULE_CSV_LOCALES`）
+   - **其它语种禁止新建/写回模块 CSV**；译文只进**系统收集词典**（`LocaleDictionary` / `ai:import-csv` / AI 翻译落库 + `publishLocale`）
 3. **禁止**只译 `en_US` 就宣称完成。用户可在本回合显式收窄语种。
-4. 默认由 Agent **直接写 CSV**；**未要求时禁止启动 Ollama**。
-5. 写完后必须 `php bin/w i18n:collect {Module}`，再抽检目标 locale 店面。
+4. 默认由 Agent **直接写译文**（中英写 CSV，其它写词典）；**未要求时禁止启动 Ollama**。
+5. 改完中英 CSV 后必须 `php bin/w i18n:collect {Module}`；其它语种以词典/发布为准，再抽检目标 locale 店面。
 
 解析示例（本机）：
 
@@ -112,20 +144,24 @@ MCP 规则 id：`user_mentions_translation_all_default_website_locales`。
 
 ## 禁止
 
+- **模板 / 菜单 / ACL / `__()` 用英文当默认用户可见源串**（违反 `module_i18n_chinese_source_default`）
 - 交付模块只有 `zh_Hans_CN.csv` 没有 `en_US.csv`（或 en 列大量仍为中文）
-- 用户说「翻译」却只补 `en_US`、不覆盖默认网站已选语言
+- 在模块 `i18n/` 下新增或维护非中英 locale CSV（如 `ja_JP.csv`、`hi_IN.csv`）
+- 用户说「翻译」却只补 `en_US`、不覆盖默认网站已选语言（其它语种须进系统词典）
 - 前台加了词、后台 CSV 不补
 - 改完 CSV 宣称「已翻译」但未执行 `i18n:collect`
 - 用 `cache:clear` 代替 `i18n:collect`（collect 内含扫描 + 缓存失效，二者不等价）
 
 ## 验收清单
 
+- [ ] 模板 / 菜单 / ACL / `__()` 用户可见源串为**简体中文**（非英文源串）
 - [ ] `i18n/zh_Hans_CN.csv` 与 `i18n/en_US.csv` 存在
-- [ ] 本次新增/修改的 source 在两文件中均有行
+- [ ] 本次新增/修改的 source 在两文件中均有行，且 source 为中文
 - [ ] `en_US.csv` 译文为英文（非空、非中文占位）
-- [ ] 用户提到「翻译」时：默认网站已选语言的 `i18n/{locale}.csv` 均已写真实译文（抽检非中文 locale 第二列 ≠ 中文 source）
-- [ ] 已执行 `php bin/w i18n:collect Weline_YourModule` 且无报错
-- [ ] 开发日志记录 collect 命令与 locale 抽检结果
+- [ ] 模块 `i18n/` 下**没有**非中英 locale CSV
+- [ ] 用户提到「翻译」时：默认网站已选非中英语种已写入系统词典并抽检店面（第二列/展示 ≠ 中文 source）
+- [ ] 已执行 `php bin/w i18n:collect Weline_YourModule` 且无报错（中英 CSV 有改动时）
+- [ ] 开发日志记录 collect/词典导入与 locale 抽检结果
 
 ## 相关文档
 
