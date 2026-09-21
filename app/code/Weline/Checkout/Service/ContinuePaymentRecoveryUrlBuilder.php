@@ -174,7 +174,7 @@ final class ContinuePaymentRecoveryUrlBuilder
     private function storefrontBase(?int $websiteId): string
     {
         if ($this->storefrontBaseOverride !== null && $this->storefrontBaseOverride !== '') {
-            return rtrim($this->storefrontBaseOverride, '/');
+            return $this->appendDevPortIfNeeded(rtrim($this->storefrontBaseOverride, '/'));
         }
         $websiteId = $websiteId !== null && $websiteId > 0 ? $websiteId : 0;
         try {
@@ -192,7 +192,7 @@ final class ContinuePaymentRecoveryUrlBuilder
                         $url = 'https://' . ltrim($url, '/');
                     }
 
-                    return rtrim($url, '/');
+                    return $this->appendDevPortIfNeeded(rtrim($url, '/'));
                 }
             }
         } catch (\Throwable) {
@@ -206,11 +206,48 @@ final class ContinuePaymentRecoveryUrlBuilder
                     $envHost = 'https://' . $envHost;
                 }
 
-                return rtrim($envHost, '/');
+                return $this->appendDevPortIfNeeded(rtrim($envHost, '/'));
             }
         } catch (\Throwable) {
         }
 
         return '';
+    }
+
+    /**
+     * WLS local hosts often omit :9555 in Website::getUrl(); without it, continue-pay
+     * absolute links hit :443 and ERR_CONNECTION_CLOSED.
+     */
+    private function appendDevPortIfNeeded(string $url): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || !empty($parts['port'])) {
+            return $url;
+        }
+        $host = strtolower((string)($parts['host'] ?? ''));
+        if ($host === '' || (!str_ends_with($host, '.test.weline.com') && !str_ends_with($host, '.weline.test'))) {
+            return $url;
+        }
+        $port = 0;
+        $reqHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        if ($reqHost !== '' && str_contains($reqHost, ':')) {
+            $port = (int)explode(':', $reqHost, 2)[1];
+        }
+        if ($port <= 0) {
+            try {
+                $raw = Env::get('wls.edge.nginx.listen_https', null);
+                if (is_numeric($raw)) {
+                    $port = (int)$raw;
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if ($port <= 0 || $port === 80 || $port === 443) {
+            return $url;
+        }
+        $scheme = (string)($parts['scheme'] ?? 'https');
+        $path = (string)($parts['path'] ?? '');
+
+        return $scheme . '://' . $host . ':' . $port . $path;
     }
 }

@@ -256,7 +256,11 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('data-checkout-items-hook', $src);
         self::assertStringContainsString('Weline.Api.resource', $src);
         self::assertStringNotContainsString('function renderItems', $src);
-        self::assertStringNotContainsString('createElement(', $src);
+        // Type switcher may use createElement; cart items / payment options stay server HTML.
+        self::assertDoesNotMatchRegularExpression(
+            '/paymentBox\.innerHTML\s*=\s*[\'"]<label[^>]*weline-checkout__method/',
+            $src
+        );
         self::assertStringNotContainsString('window.fetch', $src);
         self::assertStringNotContainsString("fetch('/", $src);
         self::assertStringNotContainsString('fetch("/', $src);
@@ -283,6 +287,29 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringNotContainsString("'/guide/payment/' . rawurlencode", $providerSrc);
         self::assertStringContainsString('getCheckoutPaymentMethods', $providerSrc);
         self::assertStringContainsString('requires_billing', $providerSrc);
+        self::assertStringContainsString('function findMethod', $providerSrc);
+        self::assertStringContainsString('function ensureMethodPresent', $providerSrc);
+        self::assertStringContainsString('本地测试支付', $providerSrc);
+        self::assertStringContainsString('staticMethodChrome($code)', $providerSrc);
+    }
+
+    public function testCheckoutQueryProviderEnsuresBoundPaymentMethodForContinuePay(): void
+    {
+        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php';
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('ensurePaymentMethodListed', $src);
+        self::assertStringContainsString("if (\$selectedPayment !== '')", $src);
+        self::assertStringNotContainsString(
+            "if (\$selectedPayment !== '' && !\$checkoutBlocked)",
+            $src
+        );
+        self::assertStringContainsString("'selected_code' => \$selectedPayment", $src);
+        self::assertStringContainsString("params['payment_method']", $src);
+        // Frontend worker must declare payment_method or getData loops with Unknown param toast.
+        self::assertMatchesRegularExpression(
+            "/'name'\\s*=>\\s*'getData'[\\s\\S]*?'payment_method'\\s*=>\\s*\\[/",
+            $src
+        );
     }
 
     public function testRendererBuildsStorefrontHrefsViaUrlHelper(): void

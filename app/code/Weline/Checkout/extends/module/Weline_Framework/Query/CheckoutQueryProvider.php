@@ -86,6 +86,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'freezeQuote' => $this->freezeQuote($params),
             'submitV2' => $this->submitV2($params),
             'resumePaymentV2' => $this->resumePaymentV2($params),
+            'adoptContinuePaySession' => $this->adoptContinuePaySession($params),
+            'releaseContinuePaySession' => $this->releaseContinuePaySession($params),
+            'amendUnpaidCheckoutAddress' => $this->amendUnpaidCheckoutAddress($params),
+            'listCheckoutSessionBuckets' => $this->listCheckoutSessionBuckets($params),
             'startExpressCheckout' => $this->startExpressCheckout($params),
             'getExpressReview' => $this->getExpressReview($params),
             'confirmExpressCheckout' => $this->confirmExpressCheckout($params),
@@ -364,6 +368,119 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ]);
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * Adopt unpaid order checkout session as continue-pay binding (not a CheckoutType).
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function adoptContinuePaySession(array $params): array
+    {
+        /** @var \Weline\Checkout\Service\ContinuePayBindingService $binding */
+        $binding = ObjectManager::getInstance(\Weline\Checkout\Service\ContinuePayBindingService::class);
+        $prior = trim((string)($params['prior_quote_token'] ?? ''));
+        if ($prior === '') {
+            $prior = trim((string)Cookie::get('weline_checkout_session'));
+        }
+        $params['prior_quote_token'] = $prior;
+
+        return $binding->adopt($params, $this->currentCustomerId());
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function releaseContinuePaySession(array $params): array
+    {
+        /** @var \Weline\Checkout\Service\ContinuePayBindingService $binding */
+        $binding = ObjectManager::getInstance(\Weline\Checkout\Service\ContinuePayBindingService::class);
+        $bucketId = trim((string)($params['bucket_id'] ?? ''));
+
+        return $binding->release($bucketId !== '' ? $bucketId : null);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function listCheckoutSessionBuckets(array $params): array
+    {
+        /** @var \Weline\Checkout\Service\ContinuePayBindingService $binding */
+        $binding = ObjectManager::getInstance(\Weline\Checkout\Service\ContinuePayBindingService::class);
+        $buckets = $binding->listBuckets();
+
+        return [
+            'success' => true,
+            'buckets' => $buckets,
+            'active_bucket_id' => $binding->getActiveBucketId(),
+            'switcher_visible' => count($buckets) >= 2,
+        ];
+    }
+
+    /**
+     * Write-back shipping address on an unpaid order before resumePaymentV2.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function amendUnpaidCheckoutAddress(array $params): array
+    {
+        $orderUuid = trim((string)($params['order_uuid'] ?? ''));
+        $quoteToken = trim((string)($params['quote_token'] ?? ''));
+        if ($orderUuid === '' || $quoteToken === '') {
+            return [
+                'success' => false,
+                'message' => (string)__('改址参数不完整'),
+                'error_code' => 'amend_params_incomplete',
+            ];
+        }
+        /** @var \Weline\Checkout\Service\CheckoutSessionAccessService $access */
+        $access = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutSessionAccessService::class);
+        if (!$access->canAccess($quoteToken, $orderUuid, $this->currentCustomerId())) {
+            return [
+                'success' => false,
+                'message' => (string)__('无权修改该订单地址'),
+                'error_code' => 'amend_access_denied',
+            ];
+        }
+        /** @var \Weline\Order\Model\Order $order */
+        $order = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+        $order->clear()->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $orderUuid)->find()->fetch();
+        if (!(int)$order->getData(\Weline\Order\Model\Order::schema_fields_ID)) {
+            return [
+                'success' => false,
+                'message' => (string)__('订单不存在'),
+                'error_code' => 'amend_order_missing',
+            ];
+        }
+        $address = \is_array($params['address'] ?? null) ? $params['address'] : [];
+        $options = [
+            'service_code' => trim((string)($params['service_code'] ?? $params['shipping_method'] ?? '')),
+            'currency' => trim((string)($params['currency'] ?? '')),
+        ];
+        if (\is_array($params['tax_identity'] ?? null)) {
+            $options['tax_identity'] = $params['tax_identity'];
+        }
+        /** @var \Weline\Checkout\Service\ExpressUnpaidOrderAmend $amend */
+        $amend = ObjectManager::getInstance(\Weline\Checkout\Service\ExpressUnpaidOrderAmend::class);
+        $result = $amend->amend($order, $address, $options);
+        if (!($result['ok'] ?? false)) {
+            return [
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('改址失败')),
+                'error_code' => 'amend_failed',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'address' => $result['address'] ?? $address,
+            'totals' => $result['totals'] ?? [],
+            'shipping_amount_minor' => $result['shipping_amount_minor'] ?? 0,
+        ];
     }
 
     /**
@@ -695,6 +812,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'currency' => $currency,
             'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
         ]);
+        $selectedPayment = strtolower(trim((string)($params['payment_method'] ?? '')));
+        // Continue-pay / resume: empty cart may set checkout_blocked, but the bound
+        // method must still render with name+icon (never bare code).
+        if ($selectedPayment !== '') {
+            $paymentMethods = $this->ensurePaymentMethodListed(
+                $paymentMethods,
+                $selectedPayment,
+                $params + [
+                    'currency' => $currency,
+                    'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
+                ],
+            );
+        }
         $html = $this->htmlRenderer();
         $quoteToken = $this->syncBrowseSession(
             $params,
@@ -763,6 +893,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $checkoutBlocked
                     ? $blockingMessage
                     : (string)__('暂无可用支付方式。'),
+                $selectedPayment !== '' ? ['selected_code' => $selectedPayment] : [],
             ),
             'checkout_blocked' => $checkoutBlocked,
             'blocking_message' => $blockingMessage,
@@ -1667,6 +1798,25 @@ class CheckoutQueryProvider implements QueryProviderInterface
     }
 
     /**
+     * 续付等场景：空车时目录可能为空，仍须展示绑定支付方式的名称+图标。
+     *
+     * @param list<array<string, mixed>> $methods
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function ensurePaymentMethodListed(array $methods, string $code, array $params): array
+    {
+        try {
+            /** @var \Weline\Checkout\Service\CheckoutPaymentMethodsProvider $provider */
+            $provider = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPaymentMethodsProvider::class);
+
+            return $provider->ensureMethodPresent($methods, $code, $params);
+        } catch (\Throwable) {
+            return $methods;
+        }
+    }
+
+    /**
      * @param array<string, mixed> $shippingAddress
      * @param list<array<string, mixed>> $cartItems
      */
@@ -1971,6 +2121,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'selling_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'coupon_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        // Continue-pay: bind method so empty-cart getData still returns name+icon chrome.
+                        'payment_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load checkout cart, shipping and payment options',
@@ -2191,6 +2343,70 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Retry payment for the same already-submitted Checkout V2 order group',
+                ],
+                [
+                    'name' => 'adoptContinuePaySession',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        'quote_token' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'order_uuid' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'idempotency_key' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'payment_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'prior_quote_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Adopt unpaid order session as continue-pay binding on order Type (not a CheckoutType)',
+                ],
+                [
+                    'name' => 'releaseContinuePaySession',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        'bucket_id' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Release continue-pay binding and restore remaining session buckets',
+                ],
+                [
+                    'name' => 'amendUnpaidCheckoutAddress',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        'quote_token' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'order_uuid' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'address' => ['type' => 'array', 'required' => true],
+                        'shipping_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'service_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'currency' => ['type' => 'string', 'required' => false, 'max_length' => 8],
+                        'tax_identity' => ['type' => 'array', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Write-back shipping address on unpaid order before resumePaymentV2',
+                ],
+                [
+                    'name' => 'listCheckoutSessionBuckets',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'List checkout session buckets for type switcher (visible when count >= 2)',
                 ],
                 [
                     'name' => 'startExpressCheckout',

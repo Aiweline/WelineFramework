@@ -9,6 +9,28 @@
     return String(v == null ? '' : v).trim();
   }
 
+  function translatePhrase(key) {
+    var source = text(key);
+    if (!source) {
+      return '';
+    }
+    try {
+      if (global.Weline && global.Weline.i18n && typeof global.Weline.i18n.translate === 'function') {
+        var viaI18n = text(global.Weline.i18n.translate(source));
+        if (viaI18n) {
+          return viaI18n;
+        }
+      }
+      if (typeof global.__ === 'function') {
+        var viaGlobal = text(global.__(source));
+        if (viaGlobal) {
+          return viaGlobal;
+        }
+      }
+    } catch (e) {}
+    return source;
+  }
+
   function trackPixel(name, payload, element) {
     try {
       if (global.WelinePixel && typeof global.WelinePixel.track === 'function') {
@@ -361,10 +383,14 @@
           shipBlock.hidden = false;
           var emptyMsg = text(data.shipping_empty_message)
             || (data.missing_weight
-              ? '购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助后再结账。'
+              ? translatePhrase(
+                  '购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助后再结账。'
+                )
               : '')
             || text(data.embargo_message)
-            || '系统暂未返回可用的配送方案。请确认收货地址，或联系客服了解具体原因。';
+            || translatePhrase(
+                '系统暂未返回可用的配送方案。请确认收货地址，或联系客服了解具体原因。'
+              );
           if (shipEmpty) {
             shipEmpty.hidden = false;
             shipEmpty.textContent = emptyMsg;
