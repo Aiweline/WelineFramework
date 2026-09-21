@@ -38,6 +38,45 @@ final class ContinuePaymentRecoveryUrlBuilderTest extends TestCase
         self::assertStringContainsString('recoverable=1', $result['continue_pay_url']);
     }
 
+    public function testAppendsWlsHttpsPortForLocalTestHostWithoutOverride(): void
+    {
+        $store = new InMemoryCheckoutSessionStore();
+        $store->put('qt_port', [
+            'state' => CheckoutSession::STATE_SUBMITTED,
+            'idempotency_key' => 'idem-port',
+            'submitted_result' => [
+                'order_uuids' => ['ord-port'],
+                'checkout_group_uuid' => 'grp-port',
+            ],
+            'payment_result' => [
+                'outcome' => 'failed',
+                'transactions' => [['method_code' => 'paypal']],
+            ],
+        ]);
+
+        $prevHost = $_SERVER['HTTP_HOST'] ?? null;
+        $_SERVER['HTTP_HOST'] = 'p05113ef3.test.weline.com:9555';
+        try {
+            $builder = new ContinuePaymentRecoveryUrlBuilder(
+                $store,
+                'https://p05113ef3.test.weline.com'
+            );
+            $result = $builder->build('qt_port', 'ord-port');
+        } finally {
+            if ($prevHost === null) {
+                unset($_SERVER['HTTP_HOST']);
+            } else {
+                $_SERVER['HTTP_HOST'] = $prevHost;
+            }
+        }
+
+        self::assertTrue($result['reachable']);
+        self::assertStringContainsString(
+            'https://p05113ef3.test.weline.com:9555/checkout#payment-recovery?',
+            $result['continue_pay_url']
+        );
+    }
+
     public function testPaidOutcomeIsNotReachable(): void
     {
         $store = new InMemoryCheckoutSessionStore();

@@ -442,8 +442,10 @@ foreach ($orderItems as $pixelItemRow) {
             exclusive="true"
             position="content"
             class="amz-order-confirm__guest-account-slot">
-        <?php // 槽默认内容：Theme 账本未应用 default_injections 时仍渲染 Customer 应用部件；主题编辑器可覆盖。 ?>
-        <w:widget type="content" name="checkout-success-guest-convert" />
+        <?php
+        // Empty slot: Customer checkout-success-guest-convert required default_injection.
+        // Do not nest <w:widget> here — stacks with RequiredDefaultInjection overlay.
+        ?>
     </w:slot>
 
     <nav class="amz-order-confirm__actions order-actions" aria-label="<?= $escape(__('订单操作')) ?>">

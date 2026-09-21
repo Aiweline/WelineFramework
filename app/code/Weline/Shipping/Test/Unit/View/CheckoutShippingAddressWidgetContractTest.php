@@ -48,13 +48,13 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('name="address1"', $template);
         self::assertStringContainsString('name="postal_code"', $template);
         self::assertStringContainsString('data-weline-load="shippingCheckoutAddress"', $template);
-        self::assertStringContainsString('checkout-shipping-address.js?v=20260916-phone-intl1', $modules);
+        self::assertStringContainsString('checkout-shipping-address.js?v=20260921-cpay-addr1', $modules);
         self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
         self::assertStringContainsString('data-field-error-for="phone"', $template);
         self::assertStringContainsString("'err_name'", $template);
         self::assertStringContainsString("'err_phone_invalid'", $template);
         self::assertStringContainsString('data-phone-field', $template);
-        self::assertStringContainsString('checkout-shipping-address.css)?v=20260916-phone-intl1', $template);
+        self::assertStringContainsString('checkout-shipping-address.css)?v=20260921-cpay-addr1', $template);
         self::assertStringContainsString('id="checkout-shipping-address-editor"', $template);
         self::assertStringContainsString('LazyCaptchaClientRuntime::onceScriptHtml', $template);
         self::assertStringNotContainsString('name="country_code" type="text"', $template);
@@ -138,6 +138,7 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('refreshGuestCaptchaOnOpen', $js);
         self::assertStringContainsString('openAddressPicker', $js);
         self::assertStringContainsString('collapseAddressList', $js);
+        self::assertStringContainsString('presentOrderAddress', $js);
         self::assertStringContainsString('list_all_addresses', $js);
         self::assertStringContainsString('upsertLocalSavedAddress', $js);
         self::assertStringContainsString('collectAddressesFromCards', $js);

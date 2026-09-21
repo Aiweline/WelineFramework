@@ -104,8 +104,14 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString("params.get('purpose')", $template);
         self::assertStringContainsString("params.get('order_uuid')", $template);
         self::assertStringContainsString('const cartIsEmpty = Boolean(checkoutState.cart.is_empty);', $template);
-        self::assertStringContainsString('form.hidden = cartIsEmpty || hangPurpose;', $template);
-        self::assertStringContainsString("emptyState.hidden = hangPurpose ? true : !cartIsEmpty;", $template);
+        self::assertStringContainsString(
+            'form.hidden = isContinuePayMode() ? false : (cartIsEmpty || hangPurpose);',
+            $template
+        );
+        self::assertStringContainsString(
+            'emptyState.hidden = hangPurpose || isContinuePayMode() ? true : !cartIsEmpty;',
+            $template
+        );
         self::assertStringContainsString('--checkout-text: var(--color-text-primary);', $template);
         self::assertStringContainsString('--checkout-link: var(--color-link);', $template);
         self::assertStringContainsString('--checkout-cta-bg: var(--color-primary);', $template);
@@ -229,7 +235,10 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('class="weline-checkout__express-slot"', $template);
         self::assertStringContainsString('weline:checkout:express-pay', $template);
         self::assertStringContainsString('submitCheckoutPayment', $template);
-        self::assertStringContainsString('expressHost.hidden = cartIsEmpty || hangPurpose || checkoutBlocked;', $template);
+        self::assertStringContainsString(
+            'expressHost.hidden = isContinuePayMode()',
+            $template
+        );
         self::assertStringContainsString('function checkoutCartType()', $template);
         self::assertStringContainsString('cart_type: checkoutCartType()', $template);
         self::assertStringNotContainsString('Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml', $template);
@@ -290,7 +299,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString("__('确认信息将发送至')", $template);
         self::assertStringContainsString('<w:slot id="checkout-success-guest-account"', $template);
         self::assertStringContainsString('weline-code="checkout.success.guest_account"', $template);
-        self::assertStringContainsString('name="checkout-success-guest-convert"', $template);
+        self::assertStringNotContainsString('name="checkout-success-guest-convert"', $template);
         self::assertStringNotContainsString('GuestCheckoutConvertService', $template);
         self::assertStringContainsString(
             'width: min(100%, var(--weline-layout-content-max-width));',
@@ -441,7 +450,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString("Prior bug: validateShippingFields is async", $template);
         self::assertStringContainsString("result.reason !== 'shipping_fields'", $template);
         self::assertStringContainsString('Validate shipping/embargo BEFORE flipping the button', $template);
-        self::assertStringContainsString('await validateCheckoutShippingFields(formAddress(), { skipRequired: false })', $template);
+        self::assertStringContainsString('skipRequired: isContinuePayMode()', $template);
     }
 
     public function testCheckoutEmitsOrderCreatedAndPaymentBridgeOnRecovery(): void

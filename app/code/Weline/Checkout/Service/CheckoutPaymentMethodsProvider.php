@@ -122,6 +122,202 @@ final class CheckoutPaymentMethodsProvider
     }
 
     /**
+     * 按 code 取结账展示用支付方式（含名称/图标）；列表未命中时回落 Provider 元数据。
+     *
+     * @param array<string, mixed> $params
+     * @return array{
+     *   code:string,
+     *   label:string,
+     *   title:string,
+     *   description:string,
+     *   icon_url:string,
+     *   guide_url:string,
+     *   has_guide:bool,
+     *   requires_billing:bool,
+     *   capabilities:array<string,mixed>,
+     *   checkout_template_code:string,
+     *   paypal_wallet:?array,
+     *   cod_fee_amount_minor:int,
+     *   source:string,
+     *   sort_order:int
+     * }|null
+     */
+    public function findMethod(string $code, array $params = []): ?array
+    {
+        $code = strtolower(trim($code));
+        if ($code === '') {
+            return null;
+        }
+        // Known storefront chrome (fake_card/paypal/…)：跳过 getCheckoutPaymentMethods 全量列表，
+        // 续付空车 adopt 不能被慢查询拖成裸 code 兜底。
+        if ($this->staticMethodChrome($code) !== null) {
+            return $this->buildFallbackMethod($code, $params);
+        }
+        foreach ($this->listMethods($params) as $row) {
+            if (($row['code'] ?? '') === $code) {
+                return $row;
+            }
+        }
+
+        return $this->buildFallbackMethod($code, $params);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $methods
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    public function ensureMethodPresent(array $methods, string $code, array $params = []): array
+    {
+        $code = strtolower(trim($code));
+        if ($code === '') {
+            return $methods;
+        }
+        foreach ($methods as $row) {
+            if (is_array($row) && strtolower(trim((string)($row['code'] ?? ''))) === $code) {
+                return $methods;
+            }
+        }
+        $found = $this->findMethod($code, $params);
+        if ($found === null) {
+            return $methods;
+        }
+        array_unshift($methods, $found);
+
+        return $methods;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array{
+     *   code:string,
+     *   label:string,
+     *   title:string,
+     *   description:string,
+     *   icon_url:string,
+     *   guide_url:string,
+     *   has_guide:bool,
+     *   requires_billing:bool,
+     *   capabilities:array<string,mixed>,
+     *   checkout_template_code:string,
+     *   paypal_wallet:?array,
+     *   cod_fee_amount_minor:int,
+     *   source:string,
+     *   sort_order:int
+     * }|null
+     */
+    private function buildFallbackMethod(string $code, array $params = []): ?array
+    {
+        $label = $code;
+        $description = '';
+        $iconUrl = '';
+        $tpl = $code;
+        $caps = [];
+
+        try {
+            if (class_exists(\Weline\Payment\Service\PaymentMethodManager::class)) {
+                /** @var \Weline\Payment\Service\PaymentMethodManager $manager */
+                $manager = ObjectManager::getInstance(\Weline\Payment\Service\PaymentMethodManager::class);
+                $model = $manager->getMethodByCode($code);
+                if ($model !== null) {
+                    $provider = $manager->getProviderInstance($model);
+                    if ($provider !== null) {
+                        $display = $provider->getDisplayMetadata();
+                        $label = trim((string)($display['title'] ?? $display['label'] ?? $label)) ?: $label;
+                        $description = (string)($display['description'] ?? '');
+                        $tpl = strtolower(trim((string)($display['checkout_template_code'] ?? $code))) ?: $code;
+                        $caps = $provider->getCapabilities();
+                        if (!is_array($caps)) {
+                            $caps = [];
+                        }
+                        if (class_exists(\Weline\Payment\Service\PaymentMethodIconResolver::class)) {
+                            /** @var \Weline\Payment\Service\PaymentMethodIconResolver $icons */
+                            $icons = ObjectManager::getInstance(\Weline\Payment\Service\PaymentMethodIconResolver::class);
+                            $iconUrl = $icons->toPublicUrl(
+                                (string)($display['icon_url'] ?? $display['icon'] ?? '')
+                            );
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // fall through to static chrome
+        }
+
+        if ($label === $code || $iconUrl === '') {
+            $static = $this->staticMethodChrome($code);
+            if ($static !== null) {
+                if ($label === $code) {
+                    $label = $static['label'];
+                }
+                if ($description === '') {
+                    $description = $static['description'];
+                }
+                if ($iconUrl === '' && $static['icon_raw'] !== '') {
+                    try {
+                        /** @var \Weline\Payment\Service\PaymentMethodIconResolver $icons */
+                        $icons = ObjectManager::getInstance(\Weline\Payment\Service\PaymentMethodIconResolver::class);
+                        $iconUrl = $icons->toPublicUrl($static['icon_raw']);
+                    } catch (\Throwable) {
+                        $iconUrl = '';
+                    }
+                }
+            } elseif ($label === $code && $iconUrl === '') {
+                // Unknown code with no provider — still return a selectable stub (label=code).
+            }
+        }
+
+        $guideUrl = $this->storefrontUrl('guide/payment/' . rawurlencode($code));
+
+        return [
+            'code' => $code,
+            'label' => $label !== '' ? $label : $code,
+            'title' => $label !== '' ? $label : $code,
+            'description' => $description,
+            'icon_url' => $iconUrl,
+            'guide_url' => $guideUrl,
+            'has_guide' => true,
+            'requires_billing' => $this->methodRequiresBilling($code, $caps, $tpl),
+            'capabilities' => $caps,
+            'checkout_template_code' => $tpl,
+            'paypal_wallet' => null,
+            'cod_fee_amount_minor' => 0,
+            'source' => 'Weline_Payment',
+            'sort_order' => 0,
+        ];
+    }
+
+    /**
+     * @return array{label:string,description:string,icon_raw:string}|null
+     */
+    private function staticMethodChrome(string $code): ?array
+    {
+        return match ($code) {
+            'fake_card' => [
+                'label' => (string)__('本地测试支付'),
+                'description' => (string)__('仅用于本地开发验证，不会产生真实扣款。'),
+                'icon_raw' => 'Weline_Payment::img/payment/fake-card.svg',
+            ],
+            'paypal' => [
+                'label' => 'PayPal',
+                'description' => '',
+                'icon_raw' => 'Weline_Payment::img/payment/paypal.svg',
+            ],
+            'stripe' => [
+                'label' => 'Stripe',
+                'description' => '',
+                'icon_raw' => 'Weline_Payment::img/payment/stripe.svg',
+            ],
+            'cash_on_delivery', 'cod' => [
+                'label' => (string)__('货到付款'),
+                'description' => '',
+                'icon_raw' => '',
+            ],
+            default => null,
+        };
+    }
+
+    /**
      * @param array<string, mixed> $capabilities
      */
     public function methodRequiresBilling(string $code, array $capabilities = [], string $checkoutTemplateCode = ''): bool

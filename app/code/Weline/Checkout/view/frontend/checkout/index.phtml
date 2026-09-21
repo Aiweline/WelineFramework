@@ -17,6 +17,10 @@ $copy = [
     'payment_failed' => (string)__('订单已创建，但支付未完成。您可以重试支付，不会重复下单。'),
     'retry_payment' => (string)__('重试支付'),
     'continue_payment' => (string)__('继续支付'),
+    'continue_pay_chrome' => (string)__('正在继续支付未完成订单'),
+    'continue_pay_detail' => (string)__('正在继续支付未完成订单。'),
+    'continue_pay_address_incomplete' => (string)__('请补全收货信息后再支付。'),
+    'continue_pay_submitting' => (string)__('正在继续支付...'),
     'retrying_payment' => (string)__('正在重试支付...'),
     'order_reference' => (string)__('订单编号'),
     'required' => (string)__('请补全收货信息并选择配送和支付方式。'),
@@ -24,19 +28,38 @@ $copy = [
     'guest_session_failed' => (string)__('无法恢复购物车会话，请刷新页面后重试。'),
     'swatch_preview' => (string)__('查看规格图'),
     'swatch_preview_close' => (string)__('关闭'),
+    'switch_checkout_type' => (string)__('切换结账'),
 ];
 ?>
 <section class="weline-checkout" data-weline-checkout data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle" data-testid="checkout-form-page" weline-code="checkout.checkout.index.section_1">
     <header class="weline-checkout__header">
-        <div>
+        <div class="weline-checkout__header-title">
             <p class="weline-checkout__eyebrow"><?= __('安全结账') ?></p>
             <h1><?= __('结账') ?></h1>
             <?php if ($checkoutPageSubtitle !== ''): ?>
                 <p><?= htmlspecialchars($checkoutPageSubtitle, ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
         </div>
-        <a class="weline-checkout__back" href="@url{'cart'}"><?= __('返回购物车') ?></a>
+        <div class="weline-checkout__header-actions">
+            <div class="weline-checkout__type-switch" data-checkout-type-switch hidden data-testid="checkout-type-switch">
+                <button type="button" class="weline-checkout__type-switch-trigger" data-checkout-type-trigger aria-haspopup="listbox" aria-expanded="false">
+                    <span data-checkout-type-current><?= __('零售') ?></span>
+                    <span class="weline-checkout__type-switch-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="weline-checkout__type-switch-menu" data-checkout-type-menu hidden role="listbox"></ul>
+            </div>
+            <a class="weline-checkout__back" href="@url{'cart'}"><?= __('返回购物车') ?></a>
+        </div>
     </header>
+
+    <div class="weline-checkout__continue-chrome" data-checkout-continue-chrome hidden data-testid="checkout-continue-pay-chrome" role="status">
+        <strong data-continue-chrome-title><?= htmlspecialchars($copy['continue_pay_chrome'], ENT_QUOTES, 'UTF-8') ?></strong>
+        <span data-continue-chrome-detail></span>
+        <span class="weline-checkout__continue-chrome-ref">
+            <?= htmlspecialchars($copy['order_reference'], ENT_QUOTES, 'UTF-8') ?>:
+            <strong data-continue-chrome-order></strong>
+        </span>
+    </div>
 
     <div class="weline-checkout__notice" data-checkout-message aria-live="polite"><?= htmlspecialchars($copy['loading'], ENT_QUOTES, 'UTF-8') ?></div>
 
@@ -266,6 +289,18 @@ $copy = [
         gap: 16px;
         margin-bottom: 20px;
     }
+    .weline-checkout__header-title {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .weline-checkout__header-actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 8px;
+        flex: 0 0 auto;
+    }
     .weline-checkout__eyebrow {
         margin: 0 0 6px;
         color: var(--checkout-link);
@@ -334,11 +369,79 @@ $copy = [
     }
     .weline-checkout__empty-state[hidden],
     .weline-checkout__payment-recovery[hidden],
+    .weline-checkout__continue-chrome[hidden],
+    .weline-checkout__type-switch[hidden],
     .weline-checkout__grid[hidden],
     .weline-checkout__notice[hidden],
     .weline-checkout__express-host[hidden] {
         display: none;
     }
+    .weline-checkout__continue-chrome {
+        margin: 0 0 16px;
+        padding: 14px 16px;
+        border: 1px solid var(--checkout-border);
+        border-radius: 8px;
+        background: var(--checkout-surface-muted);
+        color: var(--checkout-text);
+        display: grid;
+        gap: 4px;
+    }
+    .weline-checkout[data-address-incomplete="1"] .weline-checkout__continue-chrome {
+        border-color: var(--checkout-error-border);
+        background: var(--checkout-error-bg);
+        color: var(--checkout-error-text);
+    }
+    .weline-checkout__continue-chrome strong { font-size: 1.05rem; }
+    .weline-checkout__continue-chrome-ref {
+        font-size: 0.9rem;
+        color: var(--checkout-text-secondary, #666);
+    }
+    .weline-checkout__type-switch {
+        position: relative;
+        margin: 0;
+        display: inline-block;
+    }
+    .weline-checkout__type-switch-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--checkout-border, #ddd);
+        border-radius: 8px;
+        background: var(--checkout-surface, #fff);
+        color: var(--checkout-link);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .weline-checkout__type-switch-menu {
+        position: absolute;
+        z-index: 20;
+        top: calc(100% + 4px);
+        right: 0;
+        left: auto;
+        min-width: max(100%, 10rem);
+        margin: 0;
+        padding: 6px 0;
+        list-style: none;
+        border: 1px solid var(--checkout-border, #ddd);
+        border-radius: 8px;
+        background: var(--checkout-surface, #fff);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    .weline-checkout__type-switch-menu button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 8px 12px;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        cursor: pointer;
+    }
+    .weline-checkout__type-switch-menu button[aria-current="true"] { font-weight: 700; }
     .weline-checkout__express-host {
         margin: 0 0 16px;
         width: 100%;
@@ -1002,6 +1105,17 @@ $copy = [
     const paymentRecovery = root.querySelector('[data-checkout-payment-recovery]');
     const paymentRecoveryTitle = root.querySelector('[data-payment-recovery-title]');
     const paymentRecoveryDetail = root.querySelector('[data-payment-recovery-detail]');
+    const continueChrome = root.querySelector('[data-checkout-continue-chrome]');
+    const continueChromeTitle = root.querySelector('[data-continue-chrome-title]');
+    const continueChromeDetail = root.querySelector('[data-continue-chrome-detail]');
+    const continueChromeOrder = root.querySelector('[data-continue-chrome-order]');
+    const typeSwitch = root.querySelector('[data-checkout-type-switch]');
+    const typeSwitchTrigger = root.querySelector('[data-checkout-type-trigger]');
+    const typeSwitchCurrent = root.querySelector('[data-checkout-type-current]');
+    const typeSwitchMenu = root.querySelector('[data-checkout-type-menu]');
+    let continuePayBinding = null;
+    let sessionBuckets = [];
+
     const paymentOrderReference = root.querySelector('[data-payment-order-reference]');
     const paymentRetryButton = root.querySelector('[data-payment-retry]');
     const submitButton = root.querySelector('[data-submit]');
@@ -1462,6 +1576,322 @@ $copy = [
         announceCheckoutOrderCreated(state, pending ? 'pending' : 'failed');
     }
 
+
+    function isContinuePayMode() {
+        return !!(continuePayBinding && continuePayBinding.order_uuid && continuePayBinding.quote_token);
+    }
+
+    function syncContinuePayChrome() {
+        if (!continueChrome) {
+            return;
+        }
+        if (!isContinuePayMode()) {
+            continueChrome.hidden = true;
+            root.removeAttribute('data-checkout-payment-mode');
+            root.removeAttribute('data-address-incomplete');
+            return;
+        }
+        continueChrome.hidden = false;
+        root.setAttribute('data-checkout-payment-mode', 'continue_pay');
+        const incomplete = isContinuePayAddressIncomplete();
+        if (incomplete) {
+            root.setAttribute('data-address-incomplete', '1');
+        } else {
+            root.removeAttribute('data-address-incomplete');
+        }
+        if (continueChromeTitle) {
+            setText(continueChromeTitle, (continuePayBinding.chrome && continuePayBinding.chrome.title) || copy.continue_pay_chrome || copy.continue_payment);
+        }
+        if (continueChromeDetail) {
+            const detail = (continuePayBinding.chrome && continuePayBinding.chrome.detail)
+                || (incomplete ? copy.continue_pay_address_incomplete : copy.continue_pay_detail)
+                || copy.continue_pay_chrome
+                || '';
+            setText(continueChromeDetail, detail);
+        }
+        if (continueChromeOrder) {
+            setText(continueChromeOrder, continuePayBinding.order_uuid || '');
+        }
+        if (paymentRecovery) {
+            paymentRecovery.hidden = true;
+        }
+        if (form) {
+            form.hidden = false;
+        }
+        if (emptyState) {
+            emptyState.hidden = true;
+        }
+        if (submitButton) {
+            setText(submitButton, (continuePayBinding.chrome && continuePayBinding.chrome.cta_label) || copy.continue_payment);
+        }
+        // Chrome 已承载续付状态，避免与下方 notice 同文案叠显。
+        if (message) {
+            message.hidden = true;
+            setMessage('', '');
+        }
+    }
+
+    function isContinuePayAddressIncomplete() {
+        if (!isContinuePayMode()) {
+            return false;
+        }
+        const chrome = continuePayBinding && continuePayBinding.chrome
+            ? continuePayBinding.chrome
+            : null;
+        if (chrome && typeof chrome.expand_address === 'boolean') {
+            return chrome.expand_address;
+        }
+        if (chrome && typeof chrome.address_complete === 'boolean') {
+            return !chrome.address_complete;
+        }
+        if (continuePayBinding && typeof continuePayBinding.address_complete === 'boolean') {
+            return !continuePayBinding.address_complete;
+        }
+        const order = continuePayBinding && continuePayBinding.order
+            ? continuePayBinding.order
+            : null;
+        if (order && typeof order.address_complete === 'boolean') {
+            return !order.address_complete;
+        }
+        return !isShippingAddressPayloadComplete(order && order.shipping_address);
+    }
+
+    function isShippingAddressPayloadComplete(ship) {
+        if (!ship || typeof ship !== 'object') {
+            return false;
+        }
+        const name = text(ship.name || ship.contact_name).trim();
+        const phone = text(ship.phone || ship.contact_phone).trim();
+        const line = text(ship.address1 || ship.street).trim();
+        const country = text(ship.country_code || ship.country).trim();
+        return !!(name && phone && line && country);
+    }
+
+    function syncContinuePayAddressPanel() {
+        if (!isContinuePayMode()) {
+            return;
+        }
+        const order = continuePayBinding && continuePayBinding.order
+            ? continuePayBinding.order
+            : null;
+        const ship = order && order.shipping_address && typeof order.shipping_address === 'object'
+            ? order.shipping_address
+            : {};
+        const widget = window.WelineShippingCheckoutAddress;
+        if (widget && typeof widget.presentOrderAddress === 'function') {
+            widget.presentOrderAddress(ship, {
+                expand: isContinuePayAddressIncomplete(),
+            });
+            return;
+        }
+        // Fallback：仅回填字段，不全时保持默认展开。
+        if (form && ship) {
+            const map = {
+                name: ship.name || ship.contact_name,
+                phone: ship.phone || ship.contact_phone,
+                email: ship.email,
+                country_code: ship.country_code || ship.country,
+                province: ship.province,
+                city: ship.city,
+                address1: ship.address1 || ship.street,
+                postal_code: ship.postal_code,
+            };
+            Object.keys(map).forEach(function (key) {
+                const el = form.querySelector('[name="' + key + '"]');
+                if (el && map[key]) {
+                    el.value = String(map[key]);
+                }
+            });
+        }
+    }
+
+    function renderTypeSwitcher() {
+        if (!typeSwitch || !typeSwitchMenu || !typeSwitchCurrent) {
+            return;
+        }
+        const buckets = Array.isArray(sessionBuckets) ? sessionBuckets : [];
+        const visible = buckets.length >= 2;
+        typeSwitch.hidden = !visible;
+        if (!visible) {
+            typeSwitchMenu.hidden = true;
+            if (typeSwitchTrigger) {
+                typeSwitchTrigger.setAttribute('aria-expanded', 'false');
+            }
+            return;
+        }
+        const activeId = continuePayBinding && continuePayBinding.bucket_id
+            ? continuePayBinding.bucket_id
+            : (buckets[0] && buckets[0].bucket_id) || '';
+        const active = buckets.find(function (b) { return b && b.bucket_id === activeId; }) || buckets[0];
+        setText(typeSwitchCurrent, (active && (active.label || active.type_label)) || copy.switch_checkout_type || '');
+        typeSwitchMenu.innerHTML = '';
+        buckets.forEach(function (bucket) {
+            if (!bucket || !bucket.bucket_id) {
+                return;
+            }
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('role', 'option');
+            btn.dataset.bucketId = bucket.bucket_id;
+            setText(btn, bucket.label || bucket.type_label || bucket.type_code || bucket.bucket_id);
+            if (bucket.bucket_id === activeId) {
+                btn.setAttribute('aria-current', 'true');
+            }
+            btn.addEventListener('click', function () {
+                switchSessionBucket(bucket);
+                typeSwitchMenu.hidden = true;
+                if (typeSwitchTrigger) {
+                    typeSwitchTrigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+            li.appendChild(btn);
+            typeSwitchMenu.appendChild(li);
+        });
+    }
+
+    function switchSessionBucket(bucket) {
+        if (!bucket || !bucket.bucket_id) {
+            return;
+        }
+        if (bucket.payment_mode === 'continue_pay') {
+            continuePayBinding = Object.assign({}, continuePayBinding || {}, bucket, {
+                chrome: continuePayBinding && continuePayBinding.chrome ? continuePayBinding.chrome : {
+                    title: copy.continue_pay_chrome || copy.continue_payment,
+                    cta_label: copy.continue_payment,
+                    submit_mode: 'resumePaymentV2',
+                },
+            });
+            if (bucket.quote_token) {
+                persistQuoteToken(bucket.quote_token);
+            }
+            syncContinuePayChrome();
+            renderTypeSwitcher();
+            loadCheckoutWithRetry().catch(function (error) {
+                setMessage(error.message || copy.load_failed, 'error');
+            });
+            return;
+        }
+        continuePayBinding = null;
+        syncContinuePayChrome();
+        if (bucket.quote_token) {
+            persistQuoteToken(bucket.quote_token);
+        }
+        if (bucket.cart_type === 'tob' || bucket.type_code === 'tob') {
+            try {
+                document.cookie = 'weline_selling_mode=tob; path=/; max-age=31536000';
+            } catch (eCookie) {}
+        } else {
+            try {
+                document.cookie = 'weline_selling_mode=toc; path=/; max-age=31536000';
+            } catch (eCookie2) {}
+        }
+        renderTypeSwitcher();
+        loadCheckoutWithRetry().catch(function (error) {
+            setMessage(error.message || copy.load_failed, 'error');
+        });
+    }
+
+    function hydrateContinuePayOrderSummary(data) {
+        const order = continuePayBinding && continuePayBinding.order
+            ? continuePayBinding.order
+            : null;
+        if (!order) {
+            return;
+        }
+        const lines = Array.isArray(order.lines) ? order.lines : [];
+        if (itemsBox && lines.length) {
+            const html = lines.map(function (line) {
+                const name = text(line.name || line.product_name || line.sku || 'Item');
+                const qty = text(line.qty || line.quantity || 1);
+                return '<div class="weline-checkout__item"><strong>' + name + '</strong> × ' + qty + '</div>';
+            }).join('');
+            itemsBox.innerHTML = html;
+        } else if (itemsBox && (!data || !data.items_html)) {
+            itemsBox.innerHTML = '<div class="weline-checkout__item"><strong>'
+                + text(order.order_uuid || '')
+                + '</strong></div>';
+        }
+        if (order.grand_total != null && checkoutState.cart) {
+            checkoutState.cart.is_empty = false;
+            checkoutState.cart.summary = checkoutState.cart.summary || {};
+            checkoutState.cart.summary.grand_total = order.grand_total;
+            checkoutState.cart.summary.currency = order.currency || checkoutState.currency;
+        }
+        // Ensure binding payment method shows name+icon even when cart getData is empty/blocked.
+        // Prefer adopt/getData server HTML; never invent a bare code <span> label.
+        const method = text(continuePayBinding.payment_method).trim();
+        if (!method || !paymentBox) {
+            return;
+        }
+        const bindingHtml = text(continuePayBinding.payment_methods_html || '').trim();
+        const dataHtml = text(data && data.payment_methods_html || '').trim();
+        const currentHasRadio = !!paymentBox.querySelector('input[name="payment_method"]');
+        const currentHasLogo = !!paymentBox.querySelector('.weline-checkout__payment-logo, img.weline-checkout__payment-logo');
+        const currentLooksBare = currentHasRadio && !currentHasLogo
+            && (paymentBox.innerText || '').indexOf(method) !== -1
+            && !(paymentBox.querySelector('.weline-checkout__payment-title-row strong'));
+        const preferHtml = (bindingHtml.indexOf('name="payment_method"') !== -1 && bindingHtml.indexOf('payment-logo') !== -1)
+            ? bindingHtml
+            : ((dataHtml.indexOf('name="payment_method"') !== -1) ? dataHtml : bindingHtml);
+        if (preferHtml !== '' && preferHtml.indexOf('name="payment_method"') !== -1
+            && (!currentHasRadio || currentLooksBare || (preferHtml.indexOf('payment-logo') !== -1 && !currentHasLogo))) {
+            applyServerHtml(paymentBox, preferHtml);
+        }
+        const methods = Array.isArray(continuePayBinding.payment_methods) && continuePayBinding.payment_methods.length
+            ? continuePayBinding.payment_methods
+            : (Array.isArray(data && data.payment_methods) ? data.payment_methods : []);
+        if (methods.length) {
+            checkoutState.paymentMethods = methods;
+        }
+    }
+
+    async function adoptContinuePayFromRecovery(state) {
+        const api = await getApi();
+        const prior = text(typeof readStoredQuoteToken === 'function' ? readStoredQuoteToken() : '').trim();
+        const adopted = await api.adoptContinuePaySession({
+            quote_token: state.quote_token,
+            order_uuid: state.order_uuid,
+            idempotency_key: state.idempotency_key,
+            payment_method: state.payment_method,
+            prior_quote_token: prior && prior !== state.quote_token ? prior : '',
+        });
+        if (!adopted || adopted.success === false) {
+            throw new Error(text(adopted && adopted.message) || copy.load_failed);
+        }
+        persistQuoteToken(state.quote_token);
+        continuePayBinding = Object.assign({}, adopted.bucket || {}, {
+            order_uuid: state.order_uuid,
+            quote_token: state.quote_token,
+            idempotency_key: state.idempotency_key,
+            payment_method: state.payment_method,
+            country_code: state.country_code,
+            order: adopted.order || null,
+            address_complete: adopted.address_complete,
+            payment_methods: Array.isArray(adopted.payment_methods) ? adopted.payment_methods : [],
+            payment_methods_html: text(adopted.payment_methods_html || ''),
+            chrome: adopted.chrome || {
+                title: copy.continue_pay_chrome || copy.continue_payment,
+                detail: copy.continue_pay_detail || copy.continue_pay_chrome,
+                cta_label: copy.continue_payment,
+                submit_mode: 'resumePaymentV2',
+                address_complete: !!(adopted.order && adopted.order.address_complete),
+                expand_address: !(adopted.order && adopted.order.address_complete),
+            },
+        });
+        sessionBuckets = Array.isArray(adopted.buckets) ? adopted.buckets : [];
+        activePaymentRecovery = state;
+        syncContinuePayChrome();
+        renderTypeSwitcher();
+        syncContinuePayAddressPanel();
+        await loadCheckoutWithRetry();
+        syncContinuePayChrome();
+        syncContinuePayAddressPanel();
+        if (emptyState) {
+            emptyState.hidden = true;
+        }
+    }
+
     function announceCheckoutOrderCreated(state, paymentOutcome) {
         const cart = checkoutState.cart && typeof checkoutState.cart === 'object' ? checkoutState.cart : {};
         const summary = cart.summary && typeof cart.summary === 'object' ? cart.summary : {};
@@ -1536,6 +1966,20 @@ $copy = [
     }
 
     function navigateToSuccess(state) {
+        if (isContinuePayMode()) {
+            try {
+                getApi().then(function (api) {
+                    if (api && typeof api.releaseContinuePaySession === 'function') {
+                        api.releaseContinuePaySession({
+                            bucket_id: continuePayBinding && continuePayBinding.bucket_id
+                                ? continuePayBinding.bucket_id
+                                : '',
+                        }).catch(function () {});
+                    }
+                }).catch(function () {});
+            } catch (eRelease) {}
+            continuePayBinding = null;
+        }
         if (window.WelineCart && typeof window.WelineCart.invalidateAfterCheckout === 'function') {
             try {
                 window.WelineCart.invalidateAfterCheckout({ reason: 'checkout-navigate-success' });
@@ -1987,16 +2431,24 @@ $copy = [
             || ''
         ).trim();
         if (form) {
-            form.hidden = cartIsEmpty || hangPurpose;
+            form.hidden = isContinuePayMode() ? false : (cartIsEmpty || hangPurpose);
         }
         if (expressHost) {
-            expressHost.hidden = cartIsEmpty || hangPurpose || checkoutBlocked;
+            expressHost.hidden = isContinuePayMode()
+                ? true
+                : (cartIsEmpty || hangPurpose || checkoutBlocked);
         }
         if (emptyState) {
-            emptyState.hidden = hangPurpose ? true : !cartIsEmpty;
+            emptyState.hidden = hangPurpose || isContinuePayMode() ? true : !cartIsEmpty;
         }
+        if (isContinuePayMode() && form) {
+            form.hidden = false;
+        }
+        syncContinuePayChrome();
+        renderTypeSwitcher();
         if (message) {
-            message.hidden = hangPurpose ? true : cartIsEmpty;
+            // Continue-pay：状态由 chrome 承载，notice 默认隐藏，避免双条同文案。
+            message.hidden = hangPurpose ? true : (isContinuePayMode() ? true : cartIsEmpty);
         }
         const emailInput = form ? form.querySelector('input[name="email"]') : null;
         if (emailInput) {
@@ -2005,18 +2457,50 @@ $copy = [
         applyServerHtml(itemsBox, data.items_html);
         applyServerHtml(shippingBox, data.shipping_methods_html);
         applyServerHtml(paymentBox, data.payment_methods_html);
+        if (isContinuePayMode()) {
+            hydrateContinuePayOrderSummary(data);
+            // After getData injects rich payment HTML, keep binding cache in sync.
+            if (data.payment_methods_html && paymentBox
+                && paymentBox.querySelector('input[name="payment_method"]')
+                && paymentBox.querySelector('.weline-checkout__payment-logo, img')) {
+                continuePayBinding.payment_methods_html = data.payment_methods_html;
+            }
+            if (Array.isArray(data.payment_methods) && data.payment_methods.length) {
+                const first = data.payment_methods[0] || {};
+                const rich = text(first.label || first.title || '').trim()
+                    && text(first.label || first.title || '').trim() !== text(first.code || '').trim();
+                if (rich || text(first.icon_url || '').trim()) {
+                    continuePayBinding.payment_methods = data.payment_methods;
+                }
+            }
+            syncContinuePayAddressPanel();
+        }
         setShippingMethodsBusy(false);
         syncMethodBlockPanels();
         renderTotals();
         if (submitButton) {
-            submitButton.disabled = hangPurpose
-                || cartIsEmpty
-                || checkoutBlocked
-                || !checkoutState.shippingMethods.length
-                || !checkoutState.paymentMethods.length;
+            if (isContinuePayMode()) {
+                // Resume uses binding payment_method; do not gate on empty-cart method lists.
+                const hasResumeMethod = Boolean(
+                    text(continuePayBinding && continuePayBinding.payment_method).trim()
+                    || selectedValue('payment_method')
+                );
+                submitButton.disabled = hangPurpose || !hasResumeMethod;
+            } else {
+                submitButton.disabled = hangPurpose
+                    || cartIsEmpty
+                    || checkoutBlocked
+                    || !checkoutState.shippingMethods.length
+                    || !checkoutState.paymentMethods.length;
+            }
         }
         if (hangPurpose) {
             setMessage('', 'success');
+        } else if (isContinuePayMode()) {
+            setMessage('', '');
+            if (message) {
+                message.hidden = true;
+            }
         } else if (cartIsEmpty) {
             setMessage(copy.empty_cart, 'error');
         } else if (checkoutBlocked) {
@@ -2094,10 +2578,28 @@ $copy = [
             selling_mode: sellingMode,
             quote_token: readStoredQuoteToken(),
         };
+        if (isContinuePayMode()) {
+            const boundMethod = text(continuePayBinding && continuePayBinding.payment_method).trim();
+            if (boundMethod) {
+                getDataParams.payment_method = boundMethod;
+            }
+        }
         if (pendingCouponCode) {
             getDataParams.coupon_code = pendingCouponCode;
         }
-        const data = await api.getData(getDataParams);
+        let data;
+        try {
+            data = await api.getData(getDataParams);
+        } catch (error) {
+            const msg = text(error && error.message).trim();
+            // Stale worker index: strip undeclared payment_method and retry once (stops reload toast loops).
+            if (getDataParams.payment_method && /Unknown frontend worker param:\s*payment_method/i.test(msg)) {
+                delete getDataParams.payment_method;
+                data = await api.getData(getDataParams);
+            } else {
+                throw error;
+            }
+        }
         persistQuoteToken(text(data && (data.quote_token || (data.data && data.data.quote_token))));
         if (root && data && data.cart && data.cart.cart_type) {
             root.setAttribute('data-cart-type', String(data.cart.cart_type).toLowerCase());
@@ -2253,7 +2755,12 @@ $copy = [
             }).catch(function (error) {
                 cartReloadFailures += 1;
                 setShippingMethodsBusy(false);
-                setMessage(error.message || copy.load_failed, 'error');
+                const errMsg = text(error && error.message).trim() || copy.load_failed;
+                setMessage(errMsg, 'error');
+                // Never hard-reload on frontend worker param validation — that loops forever.
+                if (/Unknown frontend worker param/i.test(errMsg)) {
+                    return;
+                }
                 // Mini-cart already mutated the cart; soft getData failure would leave
                 // checkout summary mismatched — fall back to a full page refresh.
                 if (hardOnFailure && cartReloadFailures >= 1) {
@@ -2314,6 +2821,57 @@ $copy = [
         if (requireFormValidity && !form.reportValidity()) {
             throw new Error(copy.required);
         }
+
+        // Continue-pay binding: amend unpaid order address then resumePaymentV2 (never submitV2).
+        if (isContinuePayMode()) {
+            const apiCp = await getApi();
+            let shippingMethodCp = selectedValue('shipping_method');
+            if (!shippingMethodCp && checkoutState.shippingMethods && checkoutState.shippingMethods.length) {
+                const firstCp = checkoutState.shippingMethods.find(function (entry) {
+                    return entry && entry.code;
+                });
+                shippingMethodCp = firstCp ? text(firstCp.code) : '';
+            }
+            const methodCp = paymentMethod || continuePayBinding.payment_method || selectedValue('payment_method');
+            if (!methodCp) {
+                throw new Error(copy.required);
+            }
+            const amended = await apiCp.amendUnpaidCheckoutAddress({
+                quote_token: continuePayBinding.quote_token,
+                order_uuid: continuePayBinding.order_uuid,
+                address: address,
+                shipping_method: shippingMethodCp,
+                service_code: shippingMethodCp,
+                currency: checkoutState.currency || '',
+            });
+            if (!amended || amended.success === false) {
+                throw new Error(text(amended && amended.message) || copy.load_failed);
+            }
+            const resumeState = {
+                quote_token: continuePayBinding.quote_token,
+                idempotency_key: continuePayBinding.idempotency_key,
+                payment_method: methodCp,
+                country_code: address.country_code || continuePayBinding.country_code || '',
+                order_uuid: continuePayBinding.order_uuid,
+                checkout_group_uuid: continuePayBinding.checkout_group_uuid || '',
+                outcome: '',
+                redirect_url: '',
+                recoverable: true,
+            };
+            const resultCp = await apiCp.resumePaymentV2({
+                quote_token: resumeState.quote_token,
+                idempotency_key: resumeState.idempotency_key,
+                payment_idempotency_key: newIdempotencyKey('checkout_payment_retry_'),
+                payment_method: methodCp,
+                country_code: resumeState.country_code,
+            });
+            if (!resultCp || resultCp.success === false) {
+                throw new Error(text(resultCp && resultCp.message) || copy.load_failed);
+            }
+            handlePaymentResult(resultCp, resumeState);
+            return { continued: true };
+        }
+
         let shippingMethod = selectedValue('shipping_method');
         if (!shippingMethod && checkoutState.shippingMethods.length) {
             const first = checkoutState.shippingMethods.find(function (entry) {
@@ -2437,20 +2995,32 @@ $copy = [
         form.addEventListener('submit', async function (event) {
             event.preventDefault();
             const shippingMethod = selectedValue('shipping_method');
-            const paymentMethod = selectedValue('payment_method');
-            if (!shippingMethod || !paymentMethod) {
+            const paymentMethod = selectedValue('payment_method')
+                || text(continuePayBinding && continuePayBinding.payment_method).trim();
+            if (isContinuePayMode()) {
+                if (!paymentMethod) {
+                    setMessage(copy.required, 'error');
+                    return;
+                }
+            } else if (!shippingMethod || !paymentMethod) {
                 setMessage(copy.required, 'error');
                 return;
             }
             // Validate shipping/embargo BEFORE flipping the button to "submitting".
-            if (!(await validateCheckoutShippingFields(formAddress(), { skipRequired: false }))) {
+            if (!(await validateCheckoutShippingFields(formAddress(), {
+                skipRequired: isContinuePayMode(),
+            }))) {
                 return;
             }
             if (submitButton) {
                 submitButton.disabled = true;
-                setText(submitButton, copy.submitting);
+                setText(submitButton, isContinuePayMode()
+                    ? (copy.continue_pay_submitting || copy.retrying_payment || copy.submitting)
+                    : copy.submitting);
             }
-            setMessage(copy.submitting, '');
+            setMessage(isContinuePayMode()
+                ? (copy.continue_pay_submitting || copy.submitting)
+                : copy.submitting, '');
             try {
                 const result = await submitCheckoutPayment(paymentMethod, {
                     require_form_validity: true,
@@ -2459,7 +3029,9 @@ $copy = [
                 if (result && result.cancelled) {
                     if (submitButton) {
                         submitButton.disabled = false;
-                        setText(submitButton, copy.submit);
+                        setText(submitButton, isContinuePayMode()
+                            ? (copy.continue_payment || copy.submit)
+                            : copy.submit);
                     }
                     // Keep shipping/embargo validation messages visible.
                     if (result.reason !== 'shipping_fields') {
@@ -2471,7 +3043,9 @@ $copy = [
                 setMessage(error.message || copy.load_failed, 'error');
                 if (submitButton) {
                     submitButton.disabled = false;
-                    setText(submitButton, copy.submit);
+                    setText(submitButton, isContinuePayMode()
+                        ? (copy.continue_payment || copy.submit)
+                        : copy.submit);
                 }
             }
         });
@@ -2663,9 +3237,35 @@ $copy = [
         }));
     }
 
+    if (typeSwitchTrigger && typeSwitchMenu) {
+        typeSwitchTrigger.addEventListener('click', function () {
+            const open = typeSwitchMenu.hidden;
+            typeSwitchMenu.hidden = !open;
+            typeSwitchTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
+
     const initialPaymentRecovery = paymentRecoveryFromLocation();
     if (initialPaymentRecovery) {
-        showPaymentRecovery(initialPaymentRecovery);
+        // Continue-pay entry: full checkout + binding (not recovery island).
+        adoptContinuePayFromRecovery(initialPaymentRecovery).catch(function (error) {
+            setMessage(error.message || copy.load_failed, 'error');
+            // Fallback: keep form usable rather than isolated recovery dual-card.
+            persistQuoteToken(initialPaymentRecovery.quote_token);
+            continuePayBinding = Object.assign({}, initialPaymentRecovery, {
+                chrome: {
+                    title: copy.continue_pay_chrome || copy.continue_payment,
+                    detail: copy.continue_pay_detail || copy.continue_pay_chrome,
+                    cta_label: copy.continue_payment,
+                    submit_mode: 'resumePaymentV2',
+                    address_complete: false,
+                    expand_address: true,
+                },
+            });
+            syncContinuePayChrome();
+            syncContinuePayAddressPanel();
+            loadCheckoutWithRetry().catch(function () {});
+        });
     } else {
         loadCheckoutWithRetry().then(function () {
             maybeAutoStartExpressPay();

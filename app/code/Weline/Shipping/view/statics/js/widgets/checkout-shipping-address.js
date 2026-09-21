@@ -137,6 +137,68 @@
         setMode('collapsed');
     }
 
+    function isAddressPayloadComplete(address) {
+        if (!address || typeof address !== 'object') {
+            return false;
+        }
+        var name = text(address.name || address.contact_name).trim();
+        var phone = text(address.phone || address.contact_phone).trim();
+        var line = text(address.address1 || address.street).trim();
+        var country = text(address.country_code || address.country).trim();
+        return name !== '' && phone !== '' && line !== '' && country !== '';
+    }
+
+    /**
+     * 续付：订单地址齐全则收起为地址卡；不全才展开编辑器。
+     * @param {object} address
+     * @param {{expand?: boolean}} opts
+     */
+    function presentOrderAddress(address, opts) {
+        var forceExpand = !!(opts && opts.expand);
+        var payload = address && typeof address === 'object' ? address : {};
+        var complete = isAddressPayloadComplete(payload);
+        var localId = text(payload.id || payload.address_id || '').trim() || 'cpay-order';
+        var localPayload = {
+            id: localId,
+            name: text(payload.name || payload.contact_name).trim(),
+            phone: text(payload.phone || payload.contact_phone).trim(),
+            email: text(payload.email).trim(),
+            country_code: text(payload.country_code || payload.country).trim(),
+            country: text(payload.country || payload.country_name || payload.country_code).trim(),
+            province: text(payload.province).trim(),
+            city: text(payload.city).trim(),
+            district: text(payload.district).trim(),
+            street: text(payload.address1 || payload.street).trim(),
+            address1: text(payload.address1 || payload.street).trim(),
+            postal_code: text(payload.postal_code).trim(),
+            display_label: text(payload.display_label || payload.full_address).trim(),
+            is_selected: true,
+        };
+        if (!localPayload.display_label) {
+            localPayload.display_label = [localPayload.name, localPayload.phone, localPayload.address1]
+                .filter(function (p) { return p !== ''; })
+                .join(' · ');
+        }
+        fillShipping(localPayload);
+        if (forceExpand || !complete) {
+            ensureSavedShell();
+            setMode(text(root.getAttribute('data-selected-id')) !== '' ? 'edit' : 'new');
+            setShippingRequired(true);
+            root.setAttribute('data-has-saved', root.getAttribute('data-has-saved') === '1' ? '1' : '0');
+            return { complete: false, mode: mode() };
+        }
+        ensureSavedShell();
+        upsertLocalSavedAddress(localPayload);
+        if (savedBox) {
+            savedBox.hidden = false;
+        }
+        setMode('collapsed');
+        setShippingRequired(false);
+        root.setAttribute('data-has-saved', '1');
+        syncChangeAddressLabel('collapsed');
+        return { complete: true, mode: 'collapsed' };
+    }
+
     function collectAddressesFromCards() {
         var out = [];
         root.querySelectorAll('[data-address-card]').forEach(function (card) {
@@ -2204,9 +2266,9 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20260916-phone-intl1');
+    root.setAttribute('data-shipping-js-rev', '20260921-cpay-addr1');
     var api = {
-        rev: '20260916-phone-intl1',
+        rev: '20260921-cpay-addr1',
         root: root,
         mount: mount,
         applyFieldErrors: applyFieldErrors,
@@ -2216,6 +2278,7 @@
         buildRequiredFieldErrors: buildRequiredFieldErrors,
         openAddressPicker: openAddressPicker,
         collapseAddressList: collapseAddressList,
+        presentOrderAddress: presentOrderAddress,
         resolveQuoteAddress: resolveQuoteAddress,
         syncFormFromSelectedCard: syncFormFromSelectedCard,
         syncChangeAddressLabel: syncChangeAddressLabel,
@@ -2225,7 +2288,7 @@
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20260916-phone-intl1',
+        rev: '20260921-cpay-addr1',
         root: null,
         mount: mount,
         applyFieldErrors: function () {},
@@ -2235,6 +2298,7 @@
         buildRequiredFieldErrors: function () { return {}; },
         openAddressPicker: function () {},
         collapseAddressList: function () {},
+        presentOrderAddress: function () { return { complete: false, mode: 'new' }; },
         resolveQuoteAddress: function () { return null; },
         syncFormFromSelectedCard: function () { return false; },
         syncChangeAddressLabel: function () {},
