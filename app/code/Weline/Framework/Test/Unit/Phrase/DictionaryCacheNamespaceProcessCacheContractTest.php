@@ -82,4 +82,11 @@ final class DictionaryCacheNamespaceProcessCacheContractTest extends TestCase
         self::assertArrayNotHasKey('word', $second);
         self::assertSame(['keep' => 1], $cache);
     }
+
+    public function testProcessMemoryStoreIsNotMemoryStoreInterface(): void
+    {
+        $store = DictionaryCacheNamespace::processMemoryStore();
+        self::assertInstanceOf(\Weline\Framework\Cache\Contract\ProcessMemoryStoreInterface::class, $store);
+        self::assertNotInstanceOf(\Weline\Framework\Cache\Contract\MemoryStoreInterface::class, $store);
+    }
 }

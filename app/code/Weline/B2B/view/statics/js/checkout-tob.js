@@ -51,7 +51,7 @@
             return;
         }
         root.querySelectorAll(
-            '.w-marketing-checkout-coupon, [data-testid="marketing-checkout-coupon"], [data-marketing-checkout-coupon]'
+            '.w-marketing-checkout-coupon, [data-testid="checkout-coupon"], [data-testid="marketing-checkout-coupon"], [data-marketing-checkout-coupon]'
         ).forEach(function (coupon) {
             coupon.hidden = false;
             coupon.removeAttribute('hidden');

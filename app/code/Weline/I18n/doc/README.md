@@ -4,7 +4,7 @@
 
 Weline I18n 是系统的国际化翻译模块，提供了完整的多语言支持功能。该模块支持语言包管理、自动翻译、本地化模型、国家地区管理等功能，为系统提供企业级的国际化解决方案。
 
-**跨模块硬规则**：各业务模块须维护齐全 `i18n/zh_Hans_CN.csv` 与 `en_US.csv`，改词或改 CSV 后必须 `php bin/w i18n:collect` 才生效。**用户提到「翻译」作为任务时**，须覆盖默认网站已选全部语言（`Website::ID_DEFAULT` / `website_id=0`），禁止只译英文。CSV 统一 UTF-8（文件头最多一个 BOM，键内禁止 BOM），详见 [模块翻译 CSV 规范](./模块翻译CSV规范.md)。
+**跨模块硬规则**：各业务模块须维护齐全 `i18n/zh_Hans_CN.csv` 与 `en_US.csv`（**禁止其它 locale CSV**），改词或改 CSV 后必须 `php bin/w i18n:collect` 才生效。**用户提到「翻译」作为任务时**，须覆盖默认网站已选全部语言（`Website::ID_DEFAULT` / `website_id=0`）：中英写模块 CSV，其它语种进系统词典，禁止只译英文。CSV 统一 UTF-8（文件头最多一个 BOM，键内禁止 BOM），详见 [模块翻译 CSV 规范](./模块翻译CSV规范.md)。
 
 ## 跨模块公共契约
 

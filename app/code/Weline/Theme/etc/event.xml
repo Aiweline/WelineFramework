@@ -234,25 +234,21 @@
                   sort="0"/>
     </event>
 
-    <event name="Weline_Framework::resource_changed"
-           schema_version="1"
-           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
-           data_contract="resource_change.v1">
-        <observer name="theme_resource_changed"
-                  instance="Weline\Theme\Observer\ResourceChanged"
-                  delivery="async"
-                  retry="standard"
-                  coalesce="latest"
-                  timeout="60"
-                  disabled="false"
-                  shared="true"
-                  sort="100"/>
-    </event>
+    <!-- theme resource_changed 已硬切至 ThemeRuntimeCapability + FpcCapability -->
 
     <!-- all-menu：页面候选（壳页 + CMS） -->
     <event name="Weline_Theme::all_menu_page_candidates">
         <observer name="Weline_Theme::all_menu_page_candidates"
                   instance="Weline\Theme\Observer\AllMenuPageCandidates"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
+    <!-- 画布态：挂 url_generate_params（始终派发），禁止挂 rewrite，以免干扰 Seo / 漏覆盖 -->
+    <event name="Weline_Framework_Url::url_generate_params">
+        <observer name="Weline_Theme::url_generate_params_carry_editor_theme_id"
+                  instance="Weline\Theme\Observer\UrlGenerateParamsCarryEditorThemeId"
                   disabled="false"
                   shared="true"
                   sort="10"/>

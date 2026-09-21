@@ -91,7 +91,7 @@ class PaymentConfigValidationServiceTest extends TestCase
         ]);
 
         self::assertSame('site_01.demo.default', $scope['scope']);
-        self::assertSame('live', $scope['environment']);
+        self::assertSame('sandbox', $scope['environment']);
         self::assertSame('site_01.demo.default', $scope['scope_key']);
     }
 }

@@ -122,6 +122,12 @@ final class SessionProtocol
     
     /** 认证命令 */
     public const CMD_AUTH = 'auth';
+
+    /**
+     * AUTH/PING 可选 purpose：共享侧车协议探活（短连接 auth+ping，不经连接池）。
+     * 仅显式声明；池化业务连接与 shutdown 不得带此值，避免断连日志误标。
+     */
+    public const PURPOSE_PROTOCOL_PROBE = 'protocol_probe';
     
     /** 原子递增 */
     public const CMD_INCREMENT = 'incr';
@@ -624,18 +630,53 @@ final class SessionProtocol
 
     /**
      * 构建 PING 请求
+     *
+     * @param array<string, mixed> $params 可选附加字段（如 purpose=protocol_probe）
      */
-    public static function buildPing(): string
+    public static function buildPing(array $params = []): string
     {
-        return self::encodeRequest(self::CMD_PING);
+        return self::encodeRequest(self::CMD_PING, $params);
+    }
+
+    /**
+     * 构建共享侧车协议探活 PING（无 token / 鉴权关闭时的短探活）。
+     */
+    public static function buildProtocolProbePing(): string
+    {
+        return self::buildPing(['purpose' => self::PURPOSE_PROTOCOL_PROBE]);
     }
     
     /**
      * 构建 AUTH 请求
+     *
+     * @param array<string, mixed> $params 可选附加字段（如 purpose=protocol_probe）；不得把池化业务 AUTH 标成探活
      */
-    public static function buildAuth(string $token): string
+    public static function buildAuth(string $token, array $params = []): string
     {
-        return self::encodeRequest(self::CMD_AUTH, ['token' => $token]);
+        $payload = ['token' => $token];
+        foreach ($params as $key => $value) {
+            if ($key === 'token') {
+                continue;
+            }
+            $payload[$key] = $value;
+        }
+
+        return self::encodeRequest(self::CMD_AUTH, $payload);
+    }
+
+    /**
+     * 构建共享侧车协议探活 AUTH（ensureRuntime / 健康探测短连接专用）。
+     */
+    public static function buildProtocolProbeAuth(string $token): string
+    {
+        return self::buildAuth($token, ['purpose' => self::PURPOSE_PROTOCOL_PROBE]);
+    }
+
+    public static function isProtocolProbePurpose(mixed $purpose): bool
+    {
+        // 严格相等：禁止 trim/模糊匹配，避免业务自定义 purpose 被误当成探活。
+        return \is_string($purpose)
+            && \hash_equals(self::PURPOSE_PROTOCOL_PROBE, $purpose);
     }
     
     /**

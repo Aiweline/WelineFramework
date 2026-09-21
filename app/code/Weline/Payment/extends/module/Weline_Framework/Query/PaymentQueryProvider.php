@@ -265,12 +265,16 @@ class PaymentQueryProvider implements QueryProviderInterface
             $storageScope = PaymentScopeConfigService::DEFAULT_SCOPE;
         }
 
+        $reorderContext = [
+            'scope' => $storageScope,
+        ];
+        $explicitEnvironment = strtolower(trim((string)($params['environment'] ?? '')));
+        if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+            $reorderContext['environment'] = $explicitEnvironment;
+        }
         $result = $this->methodManager->reorderMethodsForScope(
             array_values($ordered),
-            [
-                'scope' => $storageScope,
-                'environment' => (string)($params['environment'] ?? PaymentScopeConfigService::DEFAULT_ENVIRONMENT),
-            ],
+            $reorderContext,
         );
         $result['source'] = 'Weline_Payment';
         $result['target_scope'] = $target->isGlobal() ? 'global' : $storageScope;
@@ -399,9 +403,33 @@ class PaymentQueryProvider implements QueryProviderInterface
             'disabled_reason_code' => (string)($availability->getDisabledReasonCode() ?? ''),
             'disabled_reason' => (string)($availability->getDisabledReasonText() ?? ''),
             'dynamic_form_schema' => $availability->getDynamicFormSchema(),
-            'capabilities' => \is_array($metadata['capabilities'] ?? null) ? $metadata['capabilities'] : [],
+            'capabilities' => $this->methodManager->getRuntimeCapabilities($method, $context, $metadata),
             'display_metadata' => $display,
             'runtime_config' => $runtimeConfig,
+            'paypal_wallet' => $this->paypalWalletPayload($code, $runtimeConfig, $context),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $runtimeConfig
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>|null
+     */
+    private function paypalWalletPayload(string $methodCode, array $runtimeConfig, array $context): ?array
+    {
+        if (strtolower(trim($methodCode)) !== 'paypal') {
+            return null;
+        }
+        $builder = new \Weline\Payment\Service\PayPalJsSdkUrlBuilder();
+        $meta = $builder->walletMeta($runtimeConfig, [
+            'currency' => $this->currencyCode($context, $runtimeConfig, []),
+        ]);
+        // 不下发 secret；client_id 对 JS SDK 为公开字段
+        return [
+            'google_pay_enabled' => (bool) $meta['google_pay_enabled'],
+            'apple_pay_enabled' => (bool) $meta['apple_pay_enabled'],
+            'js_sdk_src' => (string) $meta['js_sdk_src'],
+            'client_id' => (string) $meta['client_id'],
         ];
     }
 

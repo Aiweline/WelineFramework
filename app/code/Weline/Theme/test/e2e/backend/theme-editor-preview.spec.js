@@ -91,6 +91,69 @@ test.describe('Theme editor iframe preview integration', () => {
     expect(themeAssets.some((url) => url.includes(`frontend_theme_id=${activeTheme.id}`))).toBeTruthy();
   });
 
+  test('link-block prevents a navigation but still selects the widget', async ({ page }) => {
+    const activeTheme = getActiveTheme('frontend');
+    test.skip(!activeTheme, 'No active frontend theme found in runtime info.');
+
+    await loginAsAdmin(page, {
+      timeout: 60000,
+      settleMs: 1000,
+    });
+
+    await gotoBackend(page, `theme/backend/theme-editor/index?theme_id=${activeTheme.id}&page_type=homepage`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+      settleMs: 2000,
+    });
+
+    const previewFrame = page.locator('#previewFrame');
+    await expect(previewFrame).toHaveAttribute('src', /[?&]editor_mode=1/, { timeout: 60000 });
+
+    const frame = page.frameLocator('#previewFrame');
+    await frame.locator('body.editor-mode').first().waitFor({ state: 'attached', timeout: 60000 });
+
+    // 开启禁链（独立开关，可与默认选中目标叠加）
+    const linkBlockBtn = page.locator('[data-theme-editor-action="toggle-link-block"]');
+    await expect(linkBlockBtn).toBeVisible({ timeout: 30000 });
+    if ((await linkBlockBtn.getAttribute('aria-pressed')) !== 'true') {
+      await linkBlockBtn.click();
+    }
+    await expect(linkBlockBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(frame.locator('html')).toHaveAttribute('data-w-editor-link-block', '1', { timeout: 15000 });
+
+    // 找包裹在部件内的店面 a[href]（排除编辑器工具条）
+    const linkedWidget = frame.locator(
+      '.widget-wrapper:has(a[href]:not([data-editor-interactive])):not(.slot-toolbar a):not(.widget-hover-actions a)'
+    ).first();
+    await expect(linkedWidget).toBeVisible({ timeout: 60000 });
+
+    const report = await linkedWidget.evaluate((widgetEl) => {
+      const link = widgetEl.querySelector('a[href]:not([data-editor-interactive])');
+      if (!link) {
+        return { ok: false, reason: 'no-link' };
+      }
+      const hrefBefore = String(link.getAttribute('href') || '');
+      const locBefore = String(window.location.href || '');
+      link.click();
+      return {
+        ok: true,
+        hrefBefore,
+        locBefore,
+        locAfter: String(window.location.href || ''),
+        widgetSelected: widgetEl.classList.contains('selected'),
+        linkBlock: String(document.documentElement.dataset.wEditorLinkBlock || ''),
+      };
+    });
+
+    expect(report.ok, JSON.stringify(report)).toBeTruthy();
+    expect(report.linkBlock).toBe('1');
+    expect(report.locAfter).toBe(report.locBefore);
+    // 禁链只拦跳转；点击须能冒泡到部件选中（selected class 或父页已收到选中态）
+    const selectedInFrame = await frame.locator('.widget-wrapper.selected').count();
+    const selectedInParent = await page.locator('.preview-widget-item.selected').count();
+    expect(report.widgetSelected || selectedInFrame > 0 || selectedInParent > 0).toBeTruthy();
+  });
+
   test('homepage preview keeps storefront hover chrome (account dropdown + category mega)', async ({ page }) => {
     const activeTheme = getActiveTheme('frontend');
     test.skip(!activeTheme, 'No active frontend theme found in runtime info.');

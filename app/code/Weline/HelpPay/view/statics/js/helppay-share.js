@@ -6,7 +6,7 @@
   'use strict';
 
   function ensureShareCss() {
-    var href = '/Weline/HelpPay/view/statics/css/helppay-share.css?v=20260917-buybox-flow-auto1';
+    var href = '/Weline/HelpPay/view/statics/css/helppay-share.css?v=20260920-pdp-buybox-breathe3';
     var existing = d.querySelector('link[data-helppay-share-css]');
     if (existing) {
       if (existing.getAttribute('href') !== href) {

@@ -12,9 +12,14 @@ use Weline\Framework\Runtime\ScopeIdentity;
  *
  * 已存在交易只能传入持久化 scope；管理类读取/写入必须传入显式 target_scope/scope。
  * `default.default.default` 表示 website_id=0 的系统默认站，不表示 Global。
+ * 配置中心存储哨兵（`__website__` / `__store__` / `__channel__`）按 SystemConfig 语义还原，
+ * 禁止把哨兵段交给 ScopeIdentity 当 store_code / channel_code。
  */
 class PaymentObjectScopeService
 {
+    private const WEBSITE_SENTINEL = '__website__';
+    private const STORE_SENTINEL = '__store__';
+    private const CHANNEL_SENTINEL = '__channel__';
     private readonly ?\Closure $websiteIdResolver;
 
     public function __construct(?callable $websiteIdResolver = null)
@@ -51,11 +56,42 @@ class PaymentObjectScopeService
 
         [$website, $store, $channel] = \explode('.', $scope, 3);
         $websiteId = $this->resolveWebsiteId($website);
+        if ($store === self::WEBSITE_SENTINEL && $channel === 'default') {
+            return ScopeIdentity::website($websiteId, $website);
+        }
+        if ($store === self::STORE_SENTINEL && $channel === 'default') {
+            return ScopeIdentity::store(
+                $websiteId,
+                $website,
+                'default',
+                ScopeIdentity::MODE_NORMAL,
+            );
+        }
+        if ($store === self::STORE_SENTINEL && $channel === self::CHANNEL_SENTINEL) {
+            return ScopeIdentity::channel(
+                $websiteId,
+                $website,
+                'default',
+                'default',
+                ScopeIdentity::MODE_NORMAL,
+            );
+        }
+        if ($channel === self::CHANNEL_SENTINEL && $store !== 'default' && $store !== self::WEBSITE_SENTINEL) {
+            return ScopeIdentity::channel(
+                $websiteId,
+                $website,
+                $store,
+                'default',
+                ScopeIdentity::MODE_NORMAL,
+            );
+        }
         if ($store === 'default' && $channel === 'default') {
             return ScopeIdentity::website($websiteId, $website);
         }
-        if ($store === 'default') {
-            throw new \InvalidArgumentException('payment_channel_requires_store');
+        if ($store === 'default' || \str_starts_with($store, '__') || \str_starts_with($channel, '__')) {
+            throw new \InvalidArgumentException(
+                $store === 'default' ? 'payment_channel_requires_store' : 'payment_scope_identity_invalid',
+            );
         }
         if ($channel === 'default') {
             return ScopeIdentity::store(

@@ -32,6 +32,14 @@ class ThemeDiskHeadService
             return '';
         }
 
+        $cacheKey = 'theme.disk_head_href.' . $area . '|' . $scope . '|' . (int)$theme->getId();
+        if (\Weline\Framework\Runtime\RequestContext::isInitialized()) {
+            $cached = \Weline\Framework\Runtime\RequestContext::get($cacheKey);
+            if (is_string($cached)) {
+                return $cached;
+            }
+        }
+
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
         // Only drop process L1 — never clearNamespace(weline_site_runtime) on the
@@ -55,7 +63,7 @@ class ThemeDiskHeadService
         );
         $hash = (string)($bundleMap[$scope] ?? $bundleMap['default'] ?? '');
         if ($hash === '') {
-            return '';
+            return $this->rememberHeadHref($cacheKey, '');
         }
 
         $filePath = RequestLifecycleTrace::measurePhase(
@@ -64,7 +72,7 @@ class ThemeDiskHeadService
             ['area' => $area, 'scope' => $scope],
         );
         if ($filePath === '') {
-            return '';
+            return $this->rememberHeadHref($cacheKey, '');
         }
 
         $params = [
@@ -79,20 +87,24 @@ class ThemeDiskHeadService
             ? $this->backendRoutePath('theme/backend/disk/override')
             : '/theme/frontend/disk/override';
 
-        return $urlPath . '?' . http_build_query($params);
+        return $this->rememberHeadHref($cacheKey, $urlPath . '?' . http_build_query($params));
+    }
+
+    private function rememberHeadHref(string $cacheKey, string $href): string
+    {
+        if ($cacheKey !== '' && \Weline\Framework\Runtime\RequestContext::isInitialized() && !$this->shouldRefreshProcessCache('frontend')) {
+            \Weline\Framework\Runtime\RequestContext::set($cacheKey, $href);
+        }
+
+        return $href;
     }
 
     /**
-     * Frontend workers retain ThemeData's process L1 between requests. An
-     * explicit preview/editor request still opts into a refresh so draft disk
-     * changes remain visible without making every storefront request cold.
+     * 进程 L1 只在 query 显式 theme_disk_refresh=1|true 时清空。
+     * 其它画布参数和后台区域都不刷新。
      */
     private function shouldRefreshProcessCache(string $area): bool
     {
-        if ($area === 'backend') {
-            return true;
-        }
-
         $query = (string)($_SERVER['QUERY_STRING'] ?? '');
         if ($query === '' && function_exists('w_env_request_uri')) {
             $requestUri = (string)w_env_request_uri();
@@ -104,14 +116,9 @@ class ThemeDiskHeadService
 
         $params = [];
         parse_str($query, $params);
-        foreach (['editor_mode', 'preview', 'visual_editor', 'theme_disk_refresh'] as $key) {
-            $value = strtolower(trim((string)($params[$key] ?? '')));
-            if ($value === '1' || $value === 'true') {
-                return true;
-            }
-        }
+        $value = strtolower(trim((string)($params['theme_disk_refresh'] ?? '')));
 
-        return false;
+        return $value === '1' || $value === 'true';
     }
 
     public function buildOverrideLinkHtml(string $area, ?WelineTheme $theme = null, string $scope = 'default'): string

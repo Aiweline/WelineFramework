@@ -26,4 +26,25 @@ final class BackendBinQueryWorkerReuseContractTest extends TestCase
             $source
         );
     }
+
+    public function testBackendWarmupSkipsAfterOneTimeProofConsumed(): void
+    {
+        $source = (string)\file_get_contents(
+            BP . 'app/code/Weline/Backend/view/statics/js/weline-api.js'
+        );
+
+        self::assertMatchesRegularExpression(
+            '/BackendQueryBinClient\.prototype\.warmup\s*=\s*function[\s\S]*?'
+            . 'if\s*\(this\.backendWarmupComplete\)\s*\{\s*'
+            . 'return Promise\.resolve\(null\);/',
+            $source
+        );
+        self::assertMatchesRegularExpression(
+            '/BackendQueryBinClient\.prototype\.warmup\s*=\s*function[\s\S]*?'
+            . '\.finally\(function\s*\(\)\s*\{\s*'
+            . 'if\s*\(!this\.backendWarmupComplete\)\s*\{\s*'
+            . 'this\.backendWarmupPromise\s*=\s*null;/',
+            $source
+        );
+    }
 }

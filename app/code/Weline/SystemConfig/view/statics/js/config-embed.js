@@ -20,11 +20,28 @@
         }
     }
 
+    function dualValuePair(control) {
+        if (!control || typeof control.getAttribute !== 'function') {
+            return null;
+        }
+        var onValue = control.getAttribute('data-on-value');
+        var offValue = control.getAttribute('data-off-value');
+        if (onValue == null || offValue == null || onValue === '' || offValue === '') {
+            return null;
+        }
+
+        return { on: String(onValue), off: String(offValue) };
+    }
+
     function readControlValue(control) {
         if (!control) {
             return '';
         }
         if (control.type === 'checkbox') {
+            var pair = dualValuePair(control);
+            if (pair) {
+                return control.checked ? pair.on : pair.off;
+            }
             return control.checked ? '1' : '0';
         }
         return String(control.value == null ? '' : control.value);
@@ -35,6 +52,11 @@
             return;
         }
         if (control.type === 'checkbox') {
+            var pair = dualValuePair(control);
+            if (pair) {
+                control.checked = String(value) === pair.on;
+                return;
+            }
             control.checked = ['1', 'true', 'on', 'yes'].indexOf(String(value).toLowerCase()) !== -1;
             return;
         }

@@ -136,6 +136,11 @@ class SeoUrlGenerateRewrite implements ObserverInterface
 
     public function execute(Event &$event): void
     {
+        // Framework 始终派发 url_generate_rewrite；SEO path 重写仅 seo=on 时执行。
+        if (!Env::get('seo')) {
+            return;
+        }
+
         $url = (string)$event->getData('data');
         if ($url === '') {
             return;

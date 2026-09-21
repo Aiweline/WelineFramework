@@ -147,27 +147,100 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('->append($html,', $src);
     }
 
-    public function testOverlayZeroToleranceThrowsOnRenderFailureAndFillsAllRegions(): void
+    public function testOverlayUsesPlanPipelineAndDedupsRegions(): void
     {
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionStorefrontOverlay.php'
         );
-        self::assertStringContainsString('有部件必入声明槽', $src);
-        self::assertStringContainsString('Multi-pass', $src);
-        self::assertStringContainsString('listSlotRegions', $src);
+        self::assertStringContainsString('SlotInventory', $src);
+        self::assertStringContainsString('InjectionPlanner', $src);
+        self::assertStringContainsString('One execute wave per depth', $src);
+        self::assertStringContainsString('anyRegionHasWidget', $src);
+        self::assertStringContainsString('pageHasWidgetBoundToSlot', $src);
         self::assertStringContainsString('required_default_injection_render_failed', $src);
-        self::assertStringContainsString('required_default_injection_ensure_failed', $src);
+        self::assertStringContainsString('data-required-injection-presence', $src);
         self::assertStringContainsString('required_default_injection_unfilled', $src);
-        self::assertStringContainsString('requiredInjections', $src);
-        // Destination absent: continue (no ghost); never append open markers at end.
-        self::assertStringContainsString('Destination not in tree yet', $src);
+        self::assertStringContainsString('uninstalledInjectionsForVersion', $src);
+        self::assertStringContainsString('REQ-THEME-0036', $src);
+        self::assertStringContainsString('有部件必入声明槽', $src);
+        self::assertStringContainsString('user_deleted@{versionId}', $src);
+        self::assertStringNotContainsString('$html . $inner', $src);
         self::assertStringNotContainsString(
             "\$rendered .= SlotBoundaryMarkers::open(\$slotId)",
             $src,
         );
         self::assertStringNotContainsString("error_log('[RequiredDefaultInjection]", $src);
+        self::assertStringNotContainsString('while ($pass < 16)', $src);
         self::assertStringNotContainsString('有槽才注', $src);
         self::assertStringNotContainsString('有槽必注', $src);
+    }
+
+    /**
+     * 盯死：required 注入唯一合法省略是本版本人工卸载；空槽/缺 bake 不得静默放过。
+     */
+    public function testRequiredInjectionOmissionIsOnlyVersionedHumanUninstall(): void
+    {
+        $contract = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionContract.php'
+        );
+        self::assertStringContainsString('有部件必入声明槽', $contract);
+        self::assertStringContainsString('user_deleted@{versionId}', $contract);
+        self::assertStringContainsString(
+            'Missing published entities, param-only page-config, or stale',
+            $contract,
+        );
+        self::assertStringContainsString('are not valid omission reasons', $contract);
+
+        $planner = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionPlanner.php'
+        );
+        self::assertStringContainsString('isUninstalled($omissions', $planner);
+
+        $service = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/WidgetDefaultInjectionService.php'
+        );
+        self::assertStringContainsString('function uninstalledInjectionsForVersion', $service);
+        self::assertStringContainsString('userDeletedSource($versionId)', $service);
+        self::assertStringContainsString(
+            'A plain `user_deleted` row without a version is not an uninstall of this version',
+            $service,
+        );
+
+        // Empty omissions → must merge; only omission list suppresses.
+        $with = RequiredDefaultInjectionContract::merge([], 'checkout', [[
+            'module' => 'Weline_Shipping',
+            'type' => 'content',
+            'code' => 'checkout-shipping-address',
+            'default_injections' => [[
+                'layout_type' => 'checkout',
+                'layout_option' => 'default',
+                'slot' => 'checkout-shipping-address',
+                'area' => 'content',
+                'sort_order' => 10,
+                'required' => true,
+            ]],
+        ]], []);
+        self::assertArrayHasKey('checkout-shipping-address', $with);
+        self::assertSame('checkout-shipping-address', $with['checkout-shipping-address'][0]['widget_code']);
+
+        $uninstalled = RequiredDefaultInjectionContract::merge([], 'checkout', [[
+            'module' => 'Weline_Shipping',
+            'type' => 'content',
+            'code' => 'checkout-shipping-address',
+            'default_injections' => [[
+                'layout_type' => 'checkout',
+                'layout_option' => 'default',
+                'slot' => 'checkout-shipping-address',
+                'area' => 'content',
+                'sort_order' => 10,
+                'required' => true,
+            ]],
+        ]], [[
+            'slot_id' => 'checkout-shipping-address',
+            'widget_module' => 'Weline_Shipping',
+            'widget_code' => 'checkout-shipping-address',
+        ]]);
+        self::assertSame([], $uninstalled);
     }
 
     public function testStorefrontFillerLoadsSolidifiedPhtmlNotRequestInjection(): void

@@ -14,7 +14,8 @@ const {
 } = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Admin';
-const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
+// 勿用裸 Uncaught：后台通知/活动流可能展示历史前端 Uncaught，会误伤已登录壳层。
+const FATAL = /WLS Runtime Error|ParseError|Fatal error:|Call to undefined method|Class ['"][^'"]+['"] not found/i;
 
 moduleDescribe(test, MODULE, '后台菜单多语言交叉搜索', () => {
   moduleCase(

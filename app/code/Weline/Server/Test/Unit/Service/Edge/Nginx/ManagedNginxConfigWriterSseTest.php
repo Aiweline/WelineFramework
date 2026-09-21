@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service\Edge\Nginx;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Http\ResponseObservabilityPolicy;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxConfigWriter;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 
@@ -75,6 +76,46 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
         self::assertStringContainsString('proxy_buffering on;', $genericBlock);
         self::assertStringNotContainsString('proxy_read_timeout 300s;', $genericBlock);
         self::assertStringNotContainsString('proxy_send_timeout 300s;', $genericBlock);
+    }
+
+    public function testWlsProbeLocationAlwaysEmitsConfigGenerationHeader(): void
+    {
+        ResponseObservabilityPolicy::clearCache();
+        self::assertFalse(
+            ResponseObservabilityPolicy::identityHeadersEnabled(),
+            'Fixture assumes lean identity headers so /_wls/ must not rely on that gate.',
+        );
+
+        $paths = new ManagedNginxPaths($this->root, [
+            'runtime_root' => 'runtime-probe',
+            'install_root' => 'install-probe',
+            'listen_http' => 18082,
+            'listen_https' => 18445,
+            'edge_cache' => true,
+            'gzip' => true,
+        ]);
+        $paths->ensureRuntimeDirectories();
+        $result = (new ManagedNginxConfigWriter($paths))->write(
+            19002,
+            '127.0.0.1',
+            ['_'],
+        );
+        $config = \file_get_contents($result['conf']);
+        self::assertIsString($config);
+        self::assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/D', (string)$result['config_generation']);
+
+        $wlsStart = \strpos($config, 'location ^~ /_wls/ {');
+        $sseStart = \strpos($config, 'location = /api/framework/stream {');
+        self::assertIsInt($wlsStart);
+        self::assertIsInt($sseStart);
+        self::assertLessThan($sseStart, $wlsStart);
+
+        $wlsBlock = \substr($config, $wlsStart, $sseStart - $wlsStart);
+        self::assertStringContainsString(
+            'add_header X-Wls-Nginx-Config ' . $result['config_generation'] . ' always;',
+            $wlsBlock,
+            'Publication/probe gates require X-Wls-Nginx-Config on /_wls/ even when identity_headers=false.',
+        );
     }
 
     public function testRefreshCandidateReadsActiveConfigThroughBoundedFilesystemContract(): void

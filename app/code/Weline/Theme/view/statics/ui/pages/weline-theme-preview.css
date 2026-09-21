@@ -922,9 +922,9 @@ html[data-w-editor-selection-target="widget"] body.editor-mode [data-w-slot-hove
     display: none !important;
 }
 
+/* 禁链只改光标；点击仍可命中，由 JS preventDefault 拦跳转、不拦冒泡选中 */
 html[data-w-editor-link-block="1"] body.editor-mode a[href]:not([data-editor-interactive]):not(.slot-toolbar a):not(.widget-hover-actions a) {
     cursor: default;
-}
 }
 
 

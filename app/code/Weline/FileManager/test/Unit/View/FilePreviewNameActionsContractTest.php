@@ -27,6 +27,9 @@ final class FilePreviewNameActionsContractTest extends TestCase
         self::assertStringContainsString('.w-file-preview__item[data-kind="audio"]', $css);
         self::assertStringContainsString('flex-direction: row', $css);
         self::assertStringContainsString('position: static', $css);
+        self::assertStringContainsString('.w-file-picker__actions', $css);
+        self::assertStringContainsString('data-w-file-picker-open', $css);
+        self::assertStringContainsString('inline-size: auto', $css);
     }
 
     public function testJsCreatesNameAndMediaWrap(): void
@@ -42,6 +45,24 @@ final class FilePreviewNameActionsContractTest extends TestCase
         self::assertStringContainsString('nameEl.after(actions)', $js);
     }
 
+    public function testJsResolvesImageKindWithoutDemotingUuidPaths(): void
+    {
+        $js = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/file-picker.js'
+        );
+        self::assertStringContainsString('function resolveItemPreviewKind', $js);
+        self::assertStringContainsString('function fileFormatBadge', $js);
+        self::assertStringContainsString('function fileKindGlyphText', $js);
+        self::assertStringContainsString('resolveItemPreviewKind(item, path)', $js);
+        // Mount upgrade must not prefer extensionless UUID over declared image / file-image node.
+        self::assertStringNotContainsString(
+            'const kind = previewKindFromPath(path) || item.dataset.kind || \'file\'',
+            $js
+        );
+        self::assertStringContainsString("glyph.dataset.kind = 'image'", $js);
+        self::assertStringContainsString('fileFormatBadge(path', $js);
+    }
+
     public function testMediaManagerBlockRendersNameInsideCard(): void
     {
         $tpl = (string)file_get_contents(
@@ -52,6 +73,9 @@ final class FilePreviewNameActionsContractTest extends TestCase
         self::assertStringContainsString('title="{{v.name}}"', $tpl);
         self::assertStringContainsString('>{{v.name}}</span>', $tpl);
         self::assertStringContainsString('w-file-preview__actions', $tpl);
+        self::assertStringContainsString('w-file-picker__actions', $tpl);
+        self::assertStringContainsString('data-align="start"', $tpl);
+        self::assertStringContainsString('data-w-file-picker-open', $tpl);
         self::assertStringNotContainsString('pathInfo.name', $tpl);
         // Actions must be siblings of media+name (not nested inside media overlay).
         self::assertMatchesRegularExpression(

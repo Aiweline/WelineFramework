@@ -514,6 +514,34 @@ class FiberScheduler
         }
     }
 
+    public function hasWaker(\Fiber $fiber): bool
+    {
+        foreach ($this->timers as $timer) {
+            if ($timer['fiber'] === $fiber) {
+                return true;
+            }
+        }
+        foreach ($this->ioWaiters as $waiter) {
+            if ($waiter['fiber'] === $fiber) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resume a suspended Fiber that lost its timer or I/O waiter.
+     *
+     * @param callable|null $beforeResume
+     * @param callable|null $afterResume
+     * @param callable|null $onResumeFailure
+     */
+    public function resumeOrphan(\Fiber $fiber, ?callable $beforeResume, ?callable $afterResume, ?callable $onResumeFailure): void
+    {
+        $this->resumeFiber($fiber, null, $beforeResume, $afterResume, $onResumeFailure);
+    }
+
     public function cancelTimersForFiber(\Fiber $fiber): void
     {
         foreach ($this->timers as $id => $timer) {

@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Database\Transaction\Exception\UnsupportedAsyncTransactionConnectionException;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Database\TransactionContext;
@@ -16,29 +15,15 @@ class AiTranslationService
     private const DEFAULT_SCAN_PAGE_SIZE = 500;
 
     /**
-     * @var array<string, array<string, string>>
+     * One SQL page. Loop until this translation batch is full or the page comes back short.
+     * Never load the whole pending set into PHP.
      */
-    private array $csvWordCache = [];
-
-    /**
-     * @var array<string, string>|null
-     */
-    private ?array $activeModuleBasePaths = null;
-
-    /**
-     * @var array<string, array<string, true>>
-     */
-    private array $csvTranslatedWordIndex = [];
+    private const PENDING_READ_PAGE_SIZE = 100;
 
     /**
      * @var array<string, array<string, true>>
      */
     private array $localeTranslatedWordIndex = [];
-
-    /**
-     * @var array<string, array<string, true>>
-     */
-    private array $generatedTranslatedWordIndex = [];
 
     /**
      * @var array<string, string>
@@ -384,11 +369,6 @@ class AiTranslationService
         );
     }
 
-    private function isReservedForModuleScopedTranslation(string $word): bool
-    {
-        return str_starts_with($word, '@meta::');
-    }
-
     /**
      * @param array{
      *     word_filter?: list<string>,
@@ -483,23 +463,43 @@ class AiTranslationService
     {
         $targetLocale = $this->normalizeLocaleCode($targetLocale);
         $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
+        if ($targetLocale === '' || ($targetLocale === $sourceLocale && !$allowKeyOnlyWords)) {
+            return [];
+        }
+
         $limit = max(1, min(AiTranslationConfig::MAX_BATCH_SIZE, $limit));
         $wordPrefix = trim($wordPrefix);
+        $this->candidateSourceModules = [];
         $words = [];
+        $offset = 0;
+        $pageSize = self::PENDING_READ_PAGE_SIZE;
+        // Skip-store can hide the first rows of a page. Bound the walk; do not scan the table.
+        $maxPages = (int)ceil(($limit + AiTranslationWordSkipStore::MAX_ENTRIES_PER_LOCALE) / $pageSize) + 1;
 
-        foreach ($this->collectCandidateWords($targetLocale, $sourceLocale) as $word) {
-            $word = (string)$word;
-            if ($wordPrefix !== '' && !str_starts_with($word, $wordPrefix)) {
-                continue;
+        for ($page = 0; $page < $maxPages && count($words) < $limit; $page++) {
+            $rows = $this->queryPendingDictionaryRows(
+                $targetLocale,
+                $wordPrefix,
+                $allowKeyOnlyWords,
+                $pageSize,
+                $offset,
+            );
+            if ($rows === []) {
+                break;
             }
-            if ($wordPrefix === '' && $this->isReservedForModuleScopedTranslation($word)) {
-                continue;
+            $offset += count($rows);
+            foreach ($rows as $row) {
+                $word = trim((string)($row['word'] ?? ''));
+                if ($word === '' || $this->wordSkipStore->shouldSkip($targetLocale, $word)) {
+                    continue;
+                }
+                $this->candidateSourceModules[$word] = trim((string)($row['module'] ?? ''));
+                $words[] = $word;
+                if (count($words) >= $limit) {
+                    break;
+                }
             }
-            if (!$this->shouldTranslateWord($word, $targetLocale, $allowKeyOnlyWords)) {
-                continue;
-            }
-            $words[] = $word;
-            if (count($words) >= $limit) {
+            if (count($rows) < $pageSize) {
                 break;
             }
         }
@@ -516,216 +516,124 @@ class AiTranslationService
     {
         $targetLocale = $this->normalizeLocaleCode($targetLocale);
         $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
-        if ($targetLocale === '' || $targetLocale === $sourceLocale) {
+        if ($targetLocale === '' || ($targetLocale === $sourceLocale && !$allowKeyOnlyWords)) {
             return 0;
         }
 
-        $wordPrefix = trim($wordPrefix);
-        $missing = 0;
+        $pageSize = self::PENDING_READ_PAGE_SIZE;
+        $total = 0;
+        $offset = 0;
+        $maxOffset = $pageSize * 2000;
 
-        foreach ($this->collectCandidateWords($targetLocale, $sourceLocale) as $word) {
-            $word = (string)$word;
-            if ($wordPrefix !== '' && !str_starts_with($word, $wordPrefix)) {
-                continue;
-            }
-            if ($wordPrefix === '' && $this->isReservedForModuleScopedTranslation($word)) {
-                continue;
-            }
-            if ($this->shouldTranslateWord($word, $targetLocale, $allowKeyOnlyWords)) {
-                $missing++;
-            }
-        }
-
-        return $missing;
-    }
-
-
-    /**
-     * @return list<string>
-     */
-    private function collectCandidateWords(string $targetLocale, string $sourceLocale): array
-    {
-        // AI 批次候选只来自 DB 公共词典；不从 CSV/menu/generated 自找词。
-        $candidates = [];
-        $this->appendDictionaryWords($candidates);
-
-        return array_values(array_map('strval', array_keys($candidates)));
-    }
-
-    /**
-     * @param array<string, string> $candidates
-     */
-    private function appendDictionaryWords(array &$candidates): void
-    {
-        $page = 1;
-        while (true) {
-            // Service-layer scans must use limit/offset. Model::pagination() also
-            // renders jump-form HTML and crashes CLI/queue when base host is empty.
-            $offset = ($page - 1) * self::DEFAULT_SCAN_PAGE_SIZE;
-            $rows = $this->dictionary->clear()->reset()
-                ->limit(self::DEFAULT_SCAN_PAGE_SIZE, $offset)
-                ->select()
-                ->fetchArray();
-
-            if (empty($rows)) {
+        while ($offset <= $maxOffset) {
+            $rows = $this->queryPendingDictionaryRows(
+                $targetLocale,
+                trim($wordPrefix),
+                $allowKeyOnlyWords,
+                $pageSize,
+                $offset,
+            );
+            $count = count($rows);
+            $total += $count;
+            if ($count < $pageSize) {
                 break;
             }
-
-            foreach ($rows as $row) {
-                $word = trim((string)($row[Dictionary::schema_fields_WORD] ?? ''));
-                if ($word !== '') {
-                    $module = trim((string)($row[Dictionary::schema_fields_MODULE] ?? ''));
-                    $this->addCandidate($candidates, $word, $module);
-                }
-            }
-
-            if (count($rows) < self::DEFAULT_SCAN_PAGE_SIZE) {
-                break;
-            }
-            $page++;
+            $offset += $count;
         }
+
+        return $total;
     }
 
     /**
-     * @param array<string, string> $candidates
+     * Next untranslated dictionary rows only. Word collection belongs to i18n:collect.
+     *
+     * @return list<array{word:string,module:string}>
      */
-    private function appendModuleCsvWords(array &$candidates, string $targetLocale, string $sourceLocale): void
-    {
-        foreach ($this->getActiveModuleBasePaths() as $basePath => $moduleName) {
-            $sourceWords = $this->readCsvWords($basePath . DS . 'i18n' . DS . $sourceLocale . '.csv');
-            $targetWords = $this->readCsvWords($basePath . DS . 'i18n' . DS . $targetLocale . '.csv');
+    private function queryPendingDictionaryRows(
+        string $targetLocale,
+        string $wordPrefix,
+        bool $allowKeyOnlyWords,
+        int $limit,
+        int $offset,
+    ): array {
+        $limit = max(1, $limit);
+        $offset = max(0, $offset);
+        $sql = 'SELECT d.word AS word, d.module AS module FROM '
+            . $this->dictionary->getTable()
+            . ' d WHERE '
+            . $this->pendingDictionaryWhereSql($targetLocale, $wordPrefix, $allowKeyOnlyWords)
+            . ' ORDER BY d.word LIMIT ' . $limit . ' OFFSET ' . $offset;
 
-            foreach (array_keys($sourceWords + $targetWords) as $word) {
-                $target = trim((string)($targetWords[$word] ?? ''));
-                if ($target === '' || $target === $word) {
-                    $this->addCandidate($candidates, (string)$word, $moduleName);
-                }
-            }
+        $rows = [];
+        foreach ($this->fetchSqlRows($sql) as $row) {
+            $rows[] = [
+                'word' => (string)($row['word'] ?? $row['WORD'] ?? ''),
+                'module' => (string)($row['module'] ?? $row['MODULE'] ?? ''),
+            ];
         }
+
+        return $rows;
+    }
+
+    private function pendingDictionaryWhereSql(
+        string $targetLocale,
+        string $wordPrefix,
+        bool $allowKeyOnlyWords,
+    ): string {
+        $locale = $this->sqlQuote($targetLocale);
+        $where = 'NOT EXISTS (SELECT 1 FROM '
+            . $this->localeDictionary->getTable()
+            . ' l WHERE l.locale_code = ' . $locale
+            . ' AND l.word = d.word AND TRIM(l.translate) <> \'\' AND l.translate <> d.word)';
+
+        if ($wordPrefix !== '') {
+            $where .= ' AND d.word LIKE ' . $this->sqlQuote($this->escapeLike($wordPrefix) . '%');
+        } else {
+            $where .= ' AND d.word NOT LIKE ' . $this->sqlQuote('@meta::%');
+        }
+
+        $han = "d.word ~ '[" . "\u{4e00}" . "-" . "\u{9fff}" . "]'";
+        if ($allowKeyOnlyWords) {
+            $where .= ' AND (' . $han . ' OR d.word LIKE ' . $this->sqlQuote('google_taxonomy.%') . ')';
+        } else {
+            $where .= ' AND ' . $han;
+        }
+
+        return $where;
     }
 
     /**
-     * @param array<string, string> $candidates
+     * @return list<array<string, mixed>>
      */
-    private function appendBackendMenuWords(array &$candidates, string $targetLocale): void
+    private function fetchSqlRows(string $sql): array
     {
-        foreach ($this->getActiveModuleBasePaths() as $basePath => $moduleName) {
-            $menuFile = $basePath . DS . 'etc' . DS . 'backend' . DS . 'menu.xml';
-            if (!is_file($menuFile)) {
-                continue;
-            }
-
-            $targetWords = $this->readCsvWords($basePath . DS . 'i18n' . DS . $targetLocale . '.csv');
-            try {
-                $xml = simplexml_load_file($menuFile);
-            } catch (\Throwable) {
-                $xml = false;
-            }
-            if (!$xml) {
-                continue;
-            }
-
-            foreach ((array)$xml->xpath('//menu[@title]') as $menuNode) {
-                $attributes = $menuNode->attributes();
-                $word = trim((string)($attributes['title'] ?? ''));
-                $target = trim((string)($targetWords[$word] ?? ''));
-                if ($word !== '' && ($target === '' || $target === $word)) {
-                    $this->addCandidate($candidates, $word, $moduleName);
-                }
-            }
+        $statement = $this->dictionary->getConnection()->getConnector()->getLink()->query($sql);
+        if ($statement === false) {
+            return [];
         }
+        $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
+
+        return is_array($rows) ? $rows : [];
     }
 
-    /**
-     * @param array<string, string> $candidates
-     */
-    private function addCandidate(array &$candidates, string $word, string $moduleName = ''): void
+    private function sqlQuote(string $value): string
     {
-        $word = trim($word);
-        if ($word === '') {
-            return;
+        $quoted = $this->dictionary->getConnection()->getConnector()->getLink()->quote($value);
+        if (!is_string($quoted) || $quoted === '') {
+            throw new \RuntimeException('Failed to quote SQL value');
         }
 
-        if (!isset($candidates[$word])) {
-            $candidates[$word] = $moduleName;
-        } elseif ($candidates[$word] === '' && $moduleName !== '') {
-            $candidates[$word] = $moduleName;
-        }
+        return $quoted;
+    }
 
-        if (!isset($this->candidateSourceModules[$word]) || $this->candidateSourceModules[$word] === '') {
-            $this->candidateSourceModules[$word] = $moduleName;
-        }
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 
     private function getCandidateSourceModule(string $word): string
     {
         return (string)($this->candidateSourceModules[$word] ?? '');
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function getActiveModuleBasePaths(): array
-    {
-        if ($this->activeModuleBasePaths !== null) {
-            return $this->activeModuleBasePaths;
-        }
-
-        $paths = [];
-        foreach (Env::getInstance()->getActiveModules() as $moduleKey => $module) {
-            $basePath = is_array($module) ? (string)($module['base_path'] ?? '') : '';
-            if ($basePath !== '' && is_dir($basePath)) {
-                $moduleName = is_array($module) ? (string)($module['name'] ?? $moduleKey) : (string)$moduleKey;
-                $paths[rtrim($basePath, "\\/")] = $moduleName;
-            }
-        }
-        $this->activeModuleBasePaths = $paths;
-
-        return $paths;
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function readCsvWords(string $csvFile): array
-    {
-        $cacheKey = str_replace('\\', '/', $csvFile);
-        if (isset($this->csvWordCache[$cacheKey])) {
-            return $this->csvWordCache[$cacheKey];
-        }
-
-        $this->csvWordCache[$cacheKey] = \Weline\I18n\Service\I18nCsvCodec::readWords($csvFile);
-
-        return $this->csvWordCache[$cacheKey];
-    }
-
-    private function hasCsvTranslation(string $word, string $localeCode): bool
-    {
-        $index = $this->getCsvTranslatedWordIndex($localeCode);
-
-        return isset($index[$word]);
-    }
-
-    /**
-     * @return array<string, true>
-     */
-    private function getCsvTranslatedWordIndex(string $localeCode): array
-    {
-        if (isset($this->csvTranslatedWordIndex[$localeCode])) {
-            return $this->csvTranslatedWordIndex[$localeCode];
-        }
-
-        $this->csvTranslatedWordIndex[$localeCode] = [];
-        foreach ($this->getActiveModuleBasePaths() as $basePath => $moduleName) {
-            $words = $this->readCsvWords($basePath . DS . 'i18n' . DS . $localeCode . '.csv');
-            foreach ($words as $word => $translate) {
-                if ($translate !== '' && $translate !== $word) {
-                    $this->csvTranslatedWordIndex[$localeCode][$word] = true;
-                }
-            }
-        }
-
-        return $this->csvTranslatedWordIndex[$localeCode];
     }
 
     /**
@@ -912,62 +820,6 @@ class AiTranslationService
         }
 
         return $this->localeTranslatedWordIndex[$localeCode];
-    }
-
-
-    private function hasGeneratedTranslation(string $word, string $localeCode): bool
-    {
-        $index = $this->getGeneratedTranslatedWordIndex($localeCode);
-
-        return isset($index[$word]);
-    }
-
-    /**
-     * @return array<string, true>
-     */
-    private function getGeneratedTranslatedWordIndex(string $localeCode): array
-    {
-        if (isset($this->generatedTranslatedWordIndex[$localeCode])) {
-            return $this->generatedTranslatedWordIndex[$localeCode];
-        }
-
-        $this->generatedTranslatedWordIndex[$localeCode] = [];
-        $localeFile = BP . DS . 'generated' . DS . 'language' . DS . $localeCode . '.php';
-        if (!is_file($localeFile)) {
-            return [];
-        }
-
-        $words = include $localeFile;
-        if (!is_array($words)) {
-            return [];
-        }
-
-        $this->flattenGeneratedTranslations($words, $this->generatedTranslatedWordIndex[$localeCode]);
-
-        return $this->generatedTranslatedWordIndex[$localeCode];
-    }
-
-    /**
-     * @param array<mixed> $words
-     * @param array<string, true> $index
-     */
-    private function flattenGeneratedTranslations(array $words, array &$index): void
-    {
-        foreach ($words as $word => $translation) {
-            if (is_array($translation)) {
-                $this->flattenGeneratedTranslations($translation, $index);
-                continue;
-            }
-            if (
-                is_string($word)
-                && is_string($translation)
-                && $word !== ''
-                && $translation !== ''
-                && $translation !== $word
-            ) {
-                $index[$word] = true;
-            }
-        }
     }
 
     private function saveTranslation(

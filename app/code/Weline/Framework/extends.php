@@ -120,6 +120,128 @@ return [
                 ],
             ],
         ],
+        // Changed：Capability / Type（Enricher+Recipe）自动收集
+        'Changed/Capability' => [
+            'path' => 'extends/module/Weline_Framework/Changed/Capability',
+            'type' => ['module'],
+            'description' => '资源变更失效 Capability（FPC/CDN/cache_ops 等 Effect 执行器）',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Event\Changed\ChangedCapabilityInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Framework/Changed/Capability/{Name}.php',
+                    'description' => 'Changed Capability 实现',
+                    'example' => 'app/code/Weline/Framework/Extends/module/Weline_Framework/Changed/Capability/FpcCapability.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Framework\Event\Changed\ChangedCapabilityInterface',
+                    'description' => '执行 InvalidationEffect',
+                    'required_methods' => [
+                        'code' => 'Capability 代码',
+                        'supportedEffects' => '支持的 Effect 名列表',
+                        'execute' => '执行 Effect',
+                    ],
+                ],
+            ],
+        ],
+        'Changed/Type' => [
+            'path' => 'extends/module/Weline_Framework/Changed/Type',
+            'type' => ['module'],
+            'description' => '资源变更类型合同（Enricher + Recipe）',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Event\Changed\ChangedTypeInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Framework/Changed/Type/{Name}.php',
+                    'description' => 'ChangedType 实现',
+                    'example' => 'app/code/Weline/Product/extends/module/Weline_Framework/Changed/Type/ProductSearchProjectionChangedType.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Framework\Event\Changed\ChangedTypeInterface',
+                    'description' => '类型合同 + enrich + recipe',
+                    'required_methods' => [
+                        'code' => '资源 type 代码',
+                        'enrich' => '信封 → impact 材料',
+                        'recipe' => 'impact → Effects',
+                    ],
+                ],
+            ],
+        ],
+        // Extra 类型注册（如 fpc）
+        'Extra/Type' => [
+            'path' => 'extends/module/Weline_Framework/Extra/Type',
+            'type' => ['module'],
+            'description' => '控制器 @Extra type 提供者（读路径策略）',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Controller\Extra\ExtraTypeProviderInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Framework/Extra/Type/{Name}.php',
+                    'description' => 'Extra type 提供者',
+                    'example' => 'app/code/Weline/Framework/Extends/module/Weline_Framework/Extra/Type/FpcExtraType.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Framework\Controller\Extra\ExtraTypeProviderInterface',
+                    'description' => '注册并规范化 Extra type',
+                    'required_methods' => [
+                        'type' => 'type 名（如 fpc）',
+                        'normalize' => '校验并规范化声明字段',
+                    ],
+                ],
+            ],
+        ],
+        // FPC 旁路规则（Theme 等声明编辑器/预览参数）
+        'Fpc/Bypass' => [
+            'path' => 'extends/module/Weline_Framework/Fpc/Bypass',
+            'type' => ['module'],
+            'description' => 'FPC bypass 规则提供者（请求身份/显式参数）',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Http\Fpc\FpcBypassRuleProviderInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Framework/Fpc/Bypass/{Name}.php',
+                    'description' => 'Bypass 规则提供者',
+                    'example' => 'app/code/Weline/Theme/extends/module/Weline_Framework/Fpc/Bypass/ThemeEditorFpcBypassProvider.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Framework\Http\Fpc\FpcBypassRuleProviderInterface',
+                    'description' => '返回 bypass 规则列表',
+                    'required_methods' => [
+                        'rules' => '规则列表',
+                    ],
+                ],
+            ],
+        ],
+        // FPC 存储适配器（WLS 默认）
+        'Fpc/Store' => [
+            'path' => 'extends/module/Weline_Framework/Fpc/Store',
+            'type' => ['module'],
+            'description' => 'FPC 存储适配器（process/shared 等）',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Http\Fpc\FpcStoreAdapterInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Framework/Fpc/Store/{Name}.php',
+                    'description' => 'FPC Store 适配器',
+                    'example' => 'app/code/Weline/Server/extends/module/Weline_Framework/Fpc/Store/WlsFpcStoreAdapter.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Framework\Http\Fpc\FpcStoreAdapterInterface',
+                    'description' => 'FPC 仓读写失效',
+                    'required_methods' => [
+                        'code' => '适配器代码',
+                        'purgeUrls' => '按 URL 删',
+                        'purgeAll' => '整池清',
+                        'clearProcessCache' => '清进程仓',
+                    ],
+                ],
+            ],
+        ],
         // Session 驱动扩展点
         'Session' => [
             'path' => 'extends/module/Weline_Framework/Session',

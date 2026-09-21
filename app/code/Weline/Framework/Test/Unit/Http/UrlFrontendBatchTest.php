@@ -102,7 +102,7 @@ final class UrlFrontendBatchTest extends TestCase
             'https://fixture.test/shop/en_US/men-fashion?existing=1&from=nav&sort=name&zero=0',
             $expected['category'],
         );
-        self::assertCount(count($paths), $this->events->calls);
+        self::assertCount(count($paths) * 2, $this->events->calls);
         $this->events->calls = [];
 
         $actual = $this->url->getFrontendUrls($paths, $params, true);
@@ -118,15 +118,23 @@ final class UrlFrontendBatchTest extends TestCase
             'wildcard' => 'https://fixture.test/shop/en_US/catalog/view',
             'current' => 'https://fixture.test/shop/en_US/current?existing=1',
         ], $this->events->calls[0]['data']);
-        self::assertSame([
-            UrlFrontendBatchEventsSpy::PREFETCH,
-            ...array_fill(0, count($paths), UrlFrontendBatchEventsSpy::REWRITE),
-        ], array_column($this->events->calls, 'name'));
+        $names = array_column($this->events->calls, 'name');
+        self::assertSame(UrlFrontendBatchEventsSpy::PREFETCH, $names[0]);
+        $perUrl = array_slice($names, 1);
+        self::assertSame(
+            array_merge(
+                ...array_fill(0, count($paths), [
+                    UrlFrontendBatchEventsSpy::REWRITE,
+                    UrlFrontendBatchEventsSpy::PARAMS,
+                ])
+            ),
+            $perUrl
+        );
         self::assertStringContainsString('/category/men?', $this->events->calls[1]['data']);
         self::assertStringContainsString('/men-fashion?', $actual['category']);
     }
 
-    public function testSeoDisabledKeepsSingleUrlSemanticsWithoutAnyPrefetchOrRewrite(): void
+    public function testSeoDisabledSkipsRewriteButAlwaysDispatchesParams(): void
     {
         Env::getInstance()->applyRuntimeConfig(['seo' => false]);
         $paths = ['first' => 'category/men?from=nav', 'same' => 'category/men?from=nav'];
@@ -138,7 +146,15 @@ final class UrlFrontendBatchTest extends TestCase
 
         self::assertSame($expected, $this->url->getFrontendUrls($paths, $params, false));
         self::assertSame('https://fixture.test/shop/en_US/category/men?from=nav&page=2', $expected['first']);
-        self::assertSame([], $this->events->calls);
+        // seo=off：无 prefetch / rewrite；params 在最终输出前始终派发。
+        self::assertSame([
+            UrlFrontendBatchEventsSpy::PARAMS,
+            UrlFrontendBatchEventsSpy::PARAMS,
+            UrlFrontendBatchEventsSpy::PARAMS,
+            UrlFrontendBatchEventsSpy::PARAMS,
+        ], array_column($this->events->calls, 'name'));
+        self::assertStringContainsString('/category/men?', $expected['first']);
+        self::assertStringNotContainsString('/men-fashion?', $expected['first']);
     }
 
     public function testEmptyBatchDoesNotDispatchEvents(): void
@@ -152,6 +168,7 @@ final class UrlFrontendBatchEventsSpy extends EventsManager
 {
     public const PREFETCH = 'Weline_Framework_Url::url_generate_rewrite_prefetch';
     public const REWRITE = 'Weline_Framework_Url::url_generate_rewrite';
+    public const PARAMS = 'Weline_Framework_Url::url_generate_params';
     /** @var list<array{name:string,data:mixed}> */
     public array $calls = [];
 
@@ -162,8 +179,7 @@ final class UrlFrontendBatchEventsSpy extends EventsManager
     public function dispatch(string $eventName, mixed &$data = []): static
     {
         $this->calls[] = ['name' => $eventName, 'data' => $data];
-        if ($eventName === self::REWRITE) {
-            // 每条既有事件仍可改写最终 URL，预取事件只负责批量加载资料。
+        if ($eventName === self::REWRITE && Env::get('seo')) {
             $data = str_replace('/category/men', '/men-fashion', (string)$data);
         }
         return $this;

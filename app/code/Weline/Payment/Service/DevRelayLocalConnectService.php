@@ -16,6 +16,11 @@ final class DevRelayLocalConnectService
     private const CRED_FILE = 'var/payment-dev-relay-worker.cred.json';
     /** 本机持久凭证（关闭 worker 后仍保留，供面板一键探测）。 */
     private const SECRET_FILE = 'var/payment-dev-relay-local.secret.json';
+    /**
+     * Cloudflare / 边缘会拦默认 PHP-curl User-Agent（含 "curl" 字样 → Forbidden）。
+     * 与 nginx 白名单旁注的 Weline-HealthCheck 同族，勿改成 curl/*。
+     */
+    private const HTTP_USER_AGENT = 'Weline-DevRelay/1.0';
 
     public function __construct(
         private readonly DevRelayGateService $gate,
@@ -202,10 +207,12 @@ final class DevRelayLocalConnectService
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_USERAGENT => self::HTTP_USER_AGENT,
             CURLOPT_HTTPHEADER => [
                 'Authorization: Bearer ' . $token,
                 'Content-Type: application/json',
                 'Accept: application/json',
+                'User-Agent: ' . self::HTTP_USER_AGENT,
             ],
             CURLOPT_POSTFIELDS => json_encode(['marker' => $marker], JSON_UNESCAPED_SLASHES) ?: '{}',
         ]);
@@ -581,10 +588,12 @@ final class DevRelayLocalConnectService
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_TCP_KEEPALIVE => 1,
+            CURLOPT_USERAGENT => self::HTTP_USER_AGENT,
             CURLOPT_HTTPHEADER => [
                 'Accept: text/event-stream',
                 'Cache-Control: no-cache',
                 'Connection: keep-alive',
+                'User-Agent: ' . self::HTTP_USER_AGENT,
             ],
             CURLOPT_TIMEOUT => 0,
             CURLOPT_WRITEFUNCTION => function ($ch, string $chunk) use (
@@ -784,6 +793,22 @@ final class DevRelayLocalConnectService
 
     /**
      * @param list<string> $headers
+     * @return list<string>
+     */
+    private function withUserAgentHeader(array $headers): array
+    {
+        foreach ($headers as $line) {
+            if (stripos($line, 'User-Agent:') === 0) {
+                return $headers;
+            }
+        }
+        $headers[] = 'User-Agent: ' . self::HTTP_USER_AGENT;
+
+        return $headers;
+    }
+
+    /**
+     * @param list<string> $headers
      * @return array{status:int,body:string}
      */
     private function httpRaw(string $method, string $url, array $headers, string $body = '', int $timeout = 60): array
@@ -792,10 +817,12 @@ final class DevRelayLocalConnectService
         if ($ch === false) {
             throw new \RuntimeException('curl_init failed');
         }
+        $headers = $this->withUserAgentHeader($headers);
         $opts = [
             CURLOPT_CUSTOMREQUEST => strtoupper($method),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_USERAGENT => self::HTTP_USER_AGENT,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => max(5, $timeout),
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,

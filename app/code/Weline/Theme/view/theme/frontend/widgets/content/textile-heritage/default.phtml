@@ -23,6 +23,7 @@ use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 use Weline\Theme\Service\TextileHeritageCatalog;
+use Weline\Theme\Service\TextileHeritageLabels;
 
 $scope = WidgetUiScope::forWidget('textile-heritage');
 $wc = $scope->cssClass;
@@ -47,7 +48,7 @@ if (!in_array($layout, ['grid', 'carousel'], true)) {
     $layout = 'grid';
 }
 
-$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$currentLocale = WidgetI18n::storefrontLocale();
 $normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
 $isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
 $translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
@@ -90,20 +91,26 @@ if ($brands === []) {
                     continue;
                 }
                 $name = trim((string)($brand['name'] ?? ''));
+                $sourceName = $name;
                 $canonical = $catalogByName[$name] ?? [];
                 $caption = trim((string)($brand['caption'] ?? ($canonical['caption'] ?? '')));
-                $captionEnglish = trim((string)($brand['caption_en'] ?? ($canonical['caption_en'] ?? $caption)));
-                if ($name !== '') {
-                    $name = $translateDefaultCopy($name, $captionEnglish !== '' ? $captionEnglish : $name);
-                }
-                if ($caption !== '') {
-                    $caption = $translateDefaultCopy($caption, $captionEnglish !== '' ? $captionEnglish : $caption);
+                $catalogLink = trim((string)($canonical['link'] ?? ''));
+                $rawLink = trim((string)($catalogLink !== '' ? $catalogLink : ($brand['link'] ?? '')));
+                $articleTitle = TextileHeritageLabels::articleTitle($rawLink, $currentLocale);
+                if ($articleTitle !== '') {
+                    $name = $articleTitle;
+                    $caption = '';
+                } else {
+                    if ($name !== '') {
+                        $name = trim(WidgetI18n::label($name));
+                    }
+                    if ($caption !== '' && $caption !== $name) {
+                        $caption = trim(WidgetI18n::label($caption));
+                    }
                 }
                 $image = LegacyMediaUrl::sanitize($brand['image'] ?? ($canonical['image'] ?? ''));
                 $imageHtml = trim((string)($brand['image_file_html'] ?? ''));
                 // Catalog owns article deep links; persisted brand lists may still carry legacy /search?q= or /blog/... URLs.
-                $catalogLink = trim((string)($canonical['link'] ?? ''));
-                $rawLink = trim((string)($catalogLink !== '' ? $catalogLink : ($brand['link'] ?? '')));
                 $linkIsAbsolute = false;
                 $linkPath = '';
                 $linkHref = '';
@@ -145,7 +152,7 @@ if ($brands === []) {
                 }
                 ?>
                 <article class="heritage-card"
-                         data-technique="<?= $esc($name) ?>"
+                         data-technique="<?= $esc($sourceName !== '' ? $sourceName : $name) ?>"
                          data-source-url="<?= $esc($sourceUrl) ?>"
                          data-license="<?= $esc($license) ?>">
                     <?php if ($linkIsAbsolute && $linkHref !== ''): ?>

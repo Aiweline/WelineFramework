@@ -33,7 +33,10 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         $successTpl = $this->read('app/code/Weline/Checkout/view/frontend/checkout/success.phtml');
         self::assertStringContainsString('paymentCancelled', $successTpl);
         self::assertStringContainsString('支付已取消', $successTpl);
-        self::assertStringContainsString('本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。', $successTpl);
+        self::assertStringContainsString('本次支付未完成，订单尚未付款。可继续支付或稍后再试。', $successTpl);
+        self::assertStringContainsString('data-testid="checkout-continue-pay"', $successTpl);
+        self::assertStringContainsString('继续支付', $successTpl);
+        self::assertStringNotContainsString("href=\"@url{'checkout'}\"", $successTpl);
         self::assertStringNotContainsString('已取消成功', $successTpl);
         self::assertStringContainsString('data-payment-outcome="cancel"', $successTpl);
         self::assertStringContainsString('cancel_state', $successTpl);

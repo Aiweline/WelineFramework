@@ -25,6 +25,7 @@ use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\LogConfig;
+use Weline\Server\Log\LogLevel;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Protocol\Http3\NativeTransportLibrary;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -212,7 +213,19 @@ class MasterProcess
         $this->log(__('  实例名称: %{1}', [$instanceName]));
         $this->log(__('  运行拓扑: %{1}', [$runtimeSelection->effectiveTopology->value]));
         $this->log(__('  守护进程: %{1}', [(bool) ($config['daemon'] ?? true) ? __('是') : __('否')]));
-        $this->log(__('  Windows 窗口模式: %{1}', [$windowMode ? __('是') : __('否')]));
+        $this->log(__('  窗口模式 (--win): %{1}', [$windowMode ? __('是') : __('否')]));
+        // 先落盘再弹窗，避免 Terminal 跟到空文件像「没主控」。
+        if ($windowMode && DarwinWinModeLogWindow::isSupported()) {
+            $masterName = self::getMasterProcessName($instanceName);
+            $opened = DarwinWinModeLogWindow::openForProcess(
+                self::getMasterProcessDisplayName($instanceName, true),
+                $masterName,
+                $instanceName
+            );
+            $this->log($opened
+                ? __('  macOS --win: 已打开 Master Terminal 日志窗口（标题含 master-…-win）')
+                : __('  macOS --win: Master Terminal 日志窗口打开失败（可稍后查看进程日志文件）'));
+        }
 
         $port = (int) ($config['port'] ?? 80);
         $this->mainPort = $port;
@@ -549,6 +562,10 @@ class MasterProcess
     {
         if ($this->instanceName === '') {
             return;
+        }
+
+        if ($this->windowMode) {
+            DarwinWinModeLogWindow::closeAllForInstance($this->instanceName);
         }
 
         $manager = new ServerInstanceManager();
@@ -1936,10 +1953,49 @@ class MasterProcess
                 WlsLogger::info_($formatted);
         }
 
+        // macOS --win：Master 默认不写 Processer 进程日志，Terminal 会跟到空文件。
+        // 窗口模式下把 Master 日志同步落到可跟随的进程日志（带级别 ANSI 色）。
+        $this->appendDarwinWinModeProcessLog($message, $level);
+
         // 阻塞前台 Master：WlsLogger 已输出到控制台，无需再通过 printer 重复输出
         if ($this->isDaemonModeConfigured() && $this->printer !== null) {
             $this->printer->note($formatted);
         }
+    }
+
+    /**
+     * macOS --win 时把 Master 日志写入进程日志文件，供 Terminal tail -F 观察。
+     */
+    protected function appendDarwinWinModeProcessLog(string $message, string $level = 'info'): void
+    {
+        if (!$this->windowMode || $this->instanceName === '') {
+            return;
+        }
+        if (\PHP_OS_FAMILY !== 'Darwin') {
+            return;
+        }
+
+        $logFile = WlsLogService::ensureProcessLogFile(
+            self::getMasterProcessName($this->instanceName),
+            $this->instanceName
+        );
+        $tag = 'Master@' . $this->instanceName;
+        $normalizedLevel = match (\strtolower($level)) {
+            'error' => LogLevel::ERROR,
+            'warning' => LogLevel::WARNING,
+            'debug' => LogLevel::DEBUG,
+            'notice' => LogLevel::NOTICE,
+            default => LogLevel::INFO,
+        };
+        $plain = \sprintf(
+            '[%s] [%s] [%s] %s',
+            \date('Y-m-d H:i:s'),
+            $tag,
+            $normalizedLevel,
+            $message
+        );
+        $colored = LogLevel::colorLine($plain, $normalizedLevel, $tag);
+        @\file_put_contents($logFile, $colored . \PHP_EOL, \FILE_APPEND | \LOCK_EX);
     }
 
     // ========== 向后兼容的方法（新架构中由 Orchestrator 管理，这些方法仅保留接口兼容）==========

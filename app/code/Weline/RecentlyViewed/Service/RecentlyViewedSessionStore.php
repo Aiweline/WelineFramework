@@ -72,13 +72,23 @@ class RecentlyViewedSessionStore
 
             return;
         }
+        $encoded = json_encode($normalized, JSON_UNESCAPED_UNICODE);
+        if (!is_string($encoded) || $encoded === '') {
+            return;
+        }
+        // Skip no-op rewrites: identical Set-Cookie still blocks FPC publish.
+        if ($encoded === $this->readRawCookieValue()) {
+            return;
+        }
+        // httponly=false: PDP FPC HIT never runs SSR observers; client JS
+        // updates the MRU from data-product-id without a document Set-Cookie.
         Cookie::set(
             self::COOKIE_NAME,
-            json_encode($normalized, JSON_UNESCAPED_UNICODE),
+            $encoded,
             60 * 60 * 24 * 180,
             [
                 'path' => '/',
-                'httponly' => true,
+                'httponly' => false,
                 'samesite' => 'Lax',
             ],
         );

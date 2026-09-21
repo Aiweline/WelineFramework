@@ -295,12 +295,17 @@ class NotificationAdapterTest extends TestCase
             FeishuAdapter::class,
             DingtalkAdapter::class,
             WebhookAdapter::class,
+            \Weline\Backend\Adapter\Notification\TelegramAdapter::class,
         ];
         
         $channelCodes = [];
         foreach ($adapterClasses as $class) {
             $adapter = ObjectManager::getInstance($class);
             $this->assertInstanceOf(ChannelAdapterInterface::class, $adapter);
+            $this->assertTrue(
+                \method_exists($adapter, 'test'),
+                $class . ' must implement test()'
+            );
             $channelCodes[] = $adapter->getChannelCode();
         }
         
@@ -308,5 +313,6 @@ class NotificationAdapterTest extends TestCase
         $this->assertContains('feishu', $channelCodes);
         $this->assertContains('dingtalk', $channelCodes);
         $this->assertContains('webhook', $channelCodes);
+        $this->assertContains('telegram', $channelCodes);
     }
 }

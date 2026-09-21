@@ -277,7 +277,28 @@ final class WorkerResponseMemoryGuard
             $compactions['cleared_process_caches']++;
         }
 
-        if (\class_exists(\Weline\Framework\Phrase\Parser::class, false)) {
+        // Phrase: soft = locale-bucket reclaim; hard/aggressive = full worker bag clear.
+        if (\class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, false)
+            || \class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, true)
+        ) {
+            if ($aggressive) {
+                if (\class_exists(\Weline\Framework\Phrase\Parser::class, false)
+                    || \class_exists(\Weline\Framework\Phrase\Parser::class, true)
+                ) {
+                    \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+                    $compactions['cleared_process_caches']++;
+                }
+            } else {
+                $phraseReclaim = \Weline\Framework\Phrase\DictionaryCacheNamespace::processMemoryReclaimable()
+                    ->compact();
+                if (empty($phraseReclaim['skipped'])) {
+                    $compactions['cleared_process_caches']++;
+                    $compactions['phrase_freed_bytes'] = (int)($phraseReclaim['freed_bytes'] ?? 0);
+                }
+            }
+        } elseif (\class_exists(\Weline\Framework\Phrase\Parser::class, false)
+            || \class_exists(\Weline\Framework\Phrase\Parser::class, true)
+        ) {
             \Weline\Framework\Phrase\Parser::clearWorkerCaches();
             $compactions['cleared_process_caches']++;
         }

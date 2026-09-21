@@ -102,11 +102,52 @@ class WlsMemoryAdapterTest extends TestCase
 
         $adapter->get('first');
         self::assertSame(1, $facade->cacheReads);
+        self::assertFalse($adapter->isAvailable());
 
         // A different key must skip the remote service while the short
         // process-wide cooldown is active, even when another pool asks next.
         $adapter->get('second');
         self::assertSame(1, $facade->cacheReads);
+    }
+
+    public function testSlowSuccessfulRemotePayloadDoesNotOpenCooldown(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $adapter = new WlsMemoryAdapter('unit_wls_memory_slow_success', [
+            'local_cache_size' => 10,
+            'local_cache_memory_pressure_threshold' => 0.99,
+            'remote_slow_threshold_ms' => 25,
+        ]);
+        $facade = new SlowSuccessfulRemoteMemoryFacade();
+        $property = (new ReflectionClass($adapter))->getProperty('memoryFacade');
+        $property->setValue($adapter, $facade);
+
+        self::assertSame('payload', $adapter->get('worker_state.v1'));
+        self::assertTrue($adapter->isAvailable());
+        self::assertSame(1, $facade->cacheReads);
+
+        // A follow-up miss must still reach Memory Service — successful slow
+        // CAS/handshake must not poison Worker session validation.
+        self::assertNull($adapter->get('missing'));
+        self::assertSame(2, $facade->cacheReads);
+    }
+
+    public function testRecoverRemoteProbeClearsCooldown(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $adapter = new WlsMemoryAdapter('unit_wls_memory_recover_probe', [
+            'local_cache_size' => 10,
+            'local_cache_memory_pressure_threshold' => 0.99,
+            'remote_slow_threshold_ms' => 25,
+        ]);
+        $facade = new SlowRemoteMemoryFacade();
+        $property = (new ReflectionClass($adapter))->getProperty('memoryFacade');
+        $property->setValue($adapter, $facade);
+
+        $adapter->get('first');
+        self::assertFalse($adapter->isAvailable());
+        $adapter->recoverRemoteProbe();
+        self::assertTrue($adapter->isAvailable());
     }
 
     public function testEmptyLocalCacheSkipsEpochProbeBeforeFirstRemoteRead(): void
@@ -173,6 +214,36 @@ final class SlowRemoteMemoryFacade extends MemoryStateFacade
     {
         ++$this->cacheReads;
         usleep(50_000);
+
+        return null;
+    }
+
+    public function disconnect(): void
+    {
+    }
+}
+
+final class SlowSuccessfulRemoteMemoryFacade extends MemoryStateFacade
+{
+    public int $cacheReads = 0;
+
+    public function __construct()
+    {
+    }
+
+    public function get(string $namespace, string $key): mixed
+    {
+        return 0;
+    }
+
+    public function getCache(string $poolIdentity, string $key): mixed
+    {
+        ++$this->cacheReads;
+        if ($key === 'worker_state.v1') {
+            usleep(50_000);
+
+            return 'payload';
+        }
 
         return null;
     }

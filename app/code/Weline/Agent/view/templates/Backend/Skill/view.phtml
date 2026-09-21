@@ -1,0 +1,116 @@
+<?php
+/**
+ * Skill detail — humanized Weline UI 2.0.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$skill = $skill ?? null;
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            $value = $item->getData($key);
+            return $value ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+
+$skillId = (int)$get($skill, 'skill_id', 0);
+$name = (string)$get($skill, 'name', '');
+$code = (string)$get($skill, 'code', '');
+$category = (string)$get($skill, 'category', '');
+$className = (string)$get($skill, 'class_name', '');
+$filePath = (string)$get($skill, 'file_path', '');
+$description = (string)$get($skill, 'description', '');
+$parameters = (string)$get($skill, 'parameters', '');
+$permission = (string)$get($skill, 'permission_required', '');
+$dangerous = (int)$get($skill, 'is_dangerous', 0) === 1;
+$needsConfirm = (int)$get($skill, 'requires_confirmation', 0) === 1;
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="puzzle" size="sm" /> <?= $escape(__('技能详情')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('查看技能能力边界、参数约定与权限要求，便于配置角色时心里有数。')) ?></p>
+        </div>
+        <a href="@backend-url{'*/backend/skill/listing'}" class="w-button" data-tone="neutral" data-variant="outline">
+            <w:icon name="arrow-left" size="sm" /> <?= $escape(__('返回列表')) ?>
+        </a>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <article class="w-card">
+        <div class="w-card__body w-stack" data-gap="md">
+            <div class="w-stack" data-gap="xs">
+                <h2 class="w-card__title"><?= $escape($name !== '' ? $name : __('未命名技能')) ?></h2>
+                <div class="w-cluster" data-gap="sm" data-align="center">
+                    <?php if ($code !== ''): ?>
+                        <span class="w-agent-code"><?= $escape($code) ?></span>
+                    <?php endif; ?>
+                    <?php if ($category !== ''): ?>
+                        <span class="w-agent-chip"><?= $escape($category) ?></span>
+                    <?php endif; ?>
+                    <span class="w-agent-chip" data-tone="<?= $dangerous ? 'warning' : 'success' ?>">
+                        <?= $dangerous ? $escape(__('需谨慎')) : $escape(__('常规')) ?>
+                    </span>
+                    <span class="w-agent-chip" data-tone="<?= $needsConfirm ? 'info' : 'success' ?>">
+                        <?= $needsConfirm ? $escape(__('执行前确认')) : $escape(__('可直接执行')) ?>
+                    </span>
+                </div>
+            </div>
+
+            <div class="w-agent-filters">
+                <div class="w-field">
+                    <span class="w-field__label"><?= $escape(__('技能 ID')) ?></span>
+                    <span class="w-text">#<?= $skillId ?></span>
+                </div>
+                <div class="w-field">
+                    <span class="w-field__label"><?= $escape(__('实现类')) ?></span>
+                    <span class="w-agent-code"><?= $escape($className !== '' ? $className : '—') ?></span>
+                </div>
+                <div class="w-field">
+                    <span class="w-field__label"><?= $escape(__('文件路径')) ?></span>
+                    <span class="w-agent-code"><?= $escape($filePath !== '' ? $filePath : '—') ?></span>
+                </div>
+            </div>
+
+            <div class="w-stack" data-gap="xs">
+                <span class="w-field__label"><?= $escape(__('描述')) ?></span>
+                <?php if ($description !== ''): ?>
+                    <p class="w-text"><?= nl2br($escape($description)) ?></p>
+                <?php else: ?>
+                    <p class="w-text" data-tone="muted"><?= $escape(__('暂无描述。')) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="w-stack" data-gap="xs">
+                <span class="w-field__label"><?= $escape(__('参数')) ?></span>
+                <?php if ($parameters !== ''): ?>
+                    <pre class="w-agent-code"><?= $escape($parameters) ?></pre>
+                <?php else: ?>
+                    <p class="w-text" data-tone="muted"><?= $escape(__('未声明参数。')) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="w-stack" data-gap="xs">
+                <span class="w-field__label"><?= $escape(__('所需权限')) ?></span>
+                <?php if ($permission !== ''): ?>
+                    <pre class="w-agent-code"><?= $escape($permission) ?></pre>
+                <?php else: ?>
+                    <p class="w-text" data-tone="muted"><?= $escape(__('无额外权限要求。')) ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </article>
+</section>

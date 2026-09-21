@@ -14,6 +14,7 @@ final class ThemeEditorImageI18nPanelContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/statics/ui/pages/weline-theme-editor.js',
             dirname(__DIR__, 3) . '/view/statics/js/theme-editor.js',
             dirname(__DIR__, 3) . '/view/statics/ui/pages/weline-theme-editor-widget-param.js',
+            dirname(__DIR__, 4) . '/Widget/view/statics/js/widget-param-types.js',
         ];
         foreach ($files as $file) {
             self::assertFileExists($file);
@@ -23,6 +24,21 @@ final class ThemeEditorImageI18nPanelContractTest extends TestCase
                 self::assertStringContainsString('resolvePickerLocale(themeEl, btn)', $src);
                 self::assertStringContainsString('node.usage.locale_code = pickerLocale', $src);
                 self::assertStringContainsString('updateMediaPreview', $src);
+                self::assertStringContainsString('data-pending-preview', $src);
+                self::assertStringContainsString('keep a pending shell', $src);
+                self::assertStringNotContainsString("if (!url) return;", $src);
+                $picker = self::functionBody($src, 'function resolvePickerLocale');
+                $button = strpos($picker, 'data-locale-code');
+                $config = strpos($picker, 'data-config-locale');
+                $siteDefault = strpos($picker, 'data-default-locale');
+                $urlLocale = strpos($picker, "get('locale')");
+                self::assertNotFalse($button);
+                self::assertNotFalse($config);
+                self::assertNotFalse($siteDefault);
+                self::assertNotFalse($urlLocale);
+                self::assertLessThan($config, $button, 'i18n row locale must win over layout locale');
+                self::assertLessThan($siteDefault, $config, 'concrete layout locale must win over site default');
+                self::assertLessThan($urlLocale, $siteDefault, 'preview ?locale= must not override the site-default stamp');
                 continue;
             }
             self::assertStringContainsString('IMAGE_UI_TYPES', $src);
@@ -35,6 +51,10 @@ final class ThemeEditorImageI18nPanelContractTest extends TestCase
             self::assertStringContainsString('applyI18nMediaInputValue', $src);
             self::assertStringContainsString('resolveI18nMediaPreviewUrlAsync', $src);
             self::assertStringContainsString('resolve-file-image-previews', $src);
+            self::assertStringContainsString('filePickerPreviewHasUsableThumb', $src);
+            self::assertStringContainsString('hydrateFileImagePickerPreviews', $src);
+            self::assertStringContainsString('void hydrateFileImagePickerPreviews(panel)', $src);
+            self::assertStringContainsString('updateMediaPreview(input, previewUrl)', $src);
             self::assertStringContainsString('formatI18nTextInputValue', $src);
             self::assertStringContainsString('i18n-row--media', $src);
             self::assertStringContainsString('i18n-row--compact', $src);
@@ -62,5 +82,15 @@ final class ThemeEditorImageI18nPanelContractTest extends TestCase
         self::assertStringContainsString('.w-param-i18n-media--compact .w-file-preview__item', $css);
         self::assertStringContainsString('max-inline-size: 3rem', $css);
         self::assertStringContainsString(':is(.w-param-form, .w-param-i18n-dialog, .w-param-i18n-panel)', $css);
+    }
+
+    private static function functionBody(string $source, string $signature): string
+    {
+        $start = strpos($source, $signature);
+        self::assertNotFalse($start);
+        $next = strpos($source, "\n    function ", $start + strlen($signature));
+        self::assertNotFalse($next);
+
+        return substr($source, $start, $next - $start);
     }
 }

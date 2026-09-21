@@ -14,15 +14,19 @@ use Weline\Theme\Service\ThemePublishedVersionRuntimeResolver;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
 
 /**
- * Published storefront overlay: required default injections render even when the
- * baked page file omitted them, unless this theme layout version uninstalled them.
- * Does not write layouts. Draft/editor fill must not call this.
+ * Published storefront overlay: required default injections by plan.
  *
- * Zero-tolerance (有部件必入声明槽): subject is the widget. When a required widget
- * exists (Catalog declaration) and is not version-uninstalled, it MUST land in its
- * declared slot. The slot is destination only — never create ghost slots. Missing
- * destination after multi-pass is "cannot land" (no ghost), not "no obligation";
- * when the destination is present, empty/missing widget throws.
+ * Pipeline (P0): SlotInventory (Catalog closure) → InjectionPlanner (topo by depth)
+ * → execute one pass per depth layer → assert. Does not write layouts.
+ * HTML multi-pass discovery is not the default algorithm.
+ *
+ * Hard rule (REQ-THEME-0036 / 有部件必入声明槽): if a widget declares
+ * required=true default_injections and this published ThemeLayoutVersion has
+ * NO human uninstall (`user_deleted@{versionId}`), the widget MUST appear in
+ * its declared slot. Missing bake/entity/snapshot/param-only config is NOT a
+ * valid omission reason. Plain `user_deleted` without version is NOT this
+ * version's uninstall. Injection owns the destination region (replace, never
+ * `$html.$inner` prepend) so presence failures cannot stack duplicates.
  */
 final class RequiredDefaultInjectionStorefrontOverlay
 {
@@ -48,92 +52,116 @@ final class RequiredDefaultInjectionStorefrontOverlay
             return $rendered;
         }
 
-        $items = $this->loadRequiredItems($themeId, $pageType);
-        if ($items === []) {
+        [$declarations, $plan] = $this->loadPlan($themeId, $pageType);
+        unset($declarations);
+        if ($plan === []) {
             return $rendered;
         }
 
-        // Multi-pass: parent container widgets may introduce nested destinations
-        // (e.g. product-info → product-purchase-actions). Declaration order alone
-        // must not leave a required widget skipped forever.
-        $pass = 0;
-        while ($pass < 16) {
-            ++$pass;
-            $changed = false;
-            foreach ($items as $item) {
-                $slotId = (string)$item['slot_id'];
-                $module = (string)$item['widget_module'];
-                $code = (string)$item['widget_code'];
-                if ($this->listSlotRegions($rendered, $slotId) === []) {
-                    // Destination not in tree yet — do not create ghost slots.
-                    // Obligation remains; a later pass may land after a parent injects.
+        $maxDepth = 0;
+        foreach ($plan as $item) {
+            $maxDepth = \max($maxDepth, (int)($item['depth'] ?? 0));
+        }
+
+        // One execute wave per depth (parent containers before nested destinations).
+        for ($depth = 0; $depth <= $maxDepth; ++$depth) {
+            foreach ($plan as $item) {
+                if ((int)($item['depth'] ?? 0) !== $depth) {
                     continue;
                 }
-                $guard = 0;
-                $missing = true;
-                while ($missing !== null && $guard < 32) {
-                    ++$guard;
-                    $missing = null;
-                    foreach ($this->sortRegionsDeepestFirst($this->listSlotRegions($rendered, $slotId)) as $region) {
-                        $inner = (string)($region['inner'] ?? '');
-                        if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
-                            $missing = $region;
-                            break;
-                        }
-                    }
-                    if ($missing === null) {
-                        break;
-                    }
-                    $inner = (string)($missing['inner'] ?? '');
-                    $html = $this->renderNode($item['node'], $themeId, $scopeKey, $versionKey);
-                    if ($html === '' || \str_starts_with(\trim($html), '<!--')) {
-                        throw new \RuntimeException(
-                            'required_default_injection_render_failed: '
-                            . $module . '|' . $code . ' slot=' . $slotId
-                        );
-                    }
-                    $rendered = $this->replaceRegionInner($rendered, $missing, $html . $inner);
-                    $changed = true;
-                }
-                if ($missing !== null) {
-                    throw new \RuntimeException(
-                        'required_default_injection_region_loop: '
-                        . $module . '|' . $code . ' slot=' . $slotId
-                    );
-                }
-            }
-            if (!$changed) {
-                break;
+                $rendered = $this->executeOne($rendered, $item, $themeId, $scopeKey, $versionKey);
             }
         }
 
-        // Final: destination present ⇒ widget must be present (widget-subject zero-tolerance).
-        foreach ($items as $item) {
-            $slotId = (string)$item['slot_id'];
-            $module = (string)$item['widget_module'];
-            $code = (string)$item['widget_code'];
-            $regions = $this->listSlotRegions($rendered, $slotId);
-            if ($regions === []) {
-                continue;
-            }
-            foreach ($regions as $region) {
-                $inner = (string)($region['inner'] ?? '');
-                if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
-                    throw new \RuntimeException(
-                        'required_default_injection_unfilled: '
-                        . $module . '|' . $code . ' slot=' . $slotId
-                    );
-                }
-            }
+        foreach ($plan as $item) {
+            $this->assertFilled($rendered, $item);
         }
 
         return $rendered;
     }
 
     /**
-     * @return list<array{slot_id:string,widget_module:string,widget_code:string,node:array<string,mixed>}>
+     * @param array{slot_id:string,widget_module:string,widget_code:string,depth:int,node:array<string,mixed>} $item
      */
-    private function loadRequiredItems(int $themeId, string $pageType): array
+    private function executeOne(
+        string $rendered,
+        array $item,
+        int $themeId,
+        string $scopeKey,
+        string $versionKey,
+    ): string {
+        $slotId = (string)$item['slot_id'];
+        $module = (string)$item['widget_module'];
+        $code = (string)$item['widget_code'];
+        $regions = $this->listSlotRegions($rendered, $slotId);
+        if ($regions === []) {
+            // Destination not in HTML yet (parent layer should have introduced it).
+            // Do not create ghost slots; assertFilled handles residual misses.
+            return $rendered;
+        }
+        if ($this->anyRegionHasWidget($regions, $module, $code)
+            || $this->pageHasWidgetBoundToSlot($rendered, $slotId, $module, $code)
+        ) {
+            return $rendered;
+        }
+        $target = null;
+        foreach ($this->sortRegionsDeepestFirst($regions) as $region) {
+            $inner = (string)($region['inner'] ?? '');
+            if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
+                $target = $region;
+                break;
+            }
+        }
+        if ($target === null) {
+            return $rendered;
+        }
+        $html = $this->renderNode($item['node'], $themeId, $scopeKey, $versionKey);
+        if ($html === '' || \str_starts_with(\trim($html), '<!--')) {
+            throw new \RuntimeException(
+                'required_default_injection_render_failed: '
+                . $module . '|' . $code . ' slot=' . $slotId
+            );
+        }
+        if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($html, $module, $code)) {
+            $safe = \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            $html = '<div data-widget-code="' . $safe . '" data-testid="' . $safe
+                . '" data-required-injection-presence="1">' . $html . '</div>';
+        }
+
+        // Required injection owns the destination region: replace inner, never
+        // prepend onto existing bake/soft/hook body ($html.$inner caused duplicate widgets).
+        return $this->replaceRegionInner($rendered, $target, $html);
+    }
+
+    /**
+     * @param array{slot_id:string,widget_module:string,widget_code:string,node?:array<string,mixed>} $item
+     */
+    private function assertFilled(string $rendered, array $item): void
+    {
+        $slotId = (string)$item['slot_id'];
+        $module = (string)$item['widget_module'];
+        $code = (string)$item['widget_code'];
+        $regions = $this->listSlotRegions($rendered, $slotId);
+        if ($regions === []) {
+            // Destination absent in this HTML tree (conditional section / parent not on page).
+            // P0: do not ghost-create; P1 may hard-fail non-conditional inventory slots.
+            return;
+        }
+        if ($this->anyRegionHasWidget($regions, $module, $code)
+            || $this->pageHasWidgetBoundToSlot($rendered, $slotId, $module, $code)
+        ) {
+            return;
+        }
+        throw new \RuntimeException(
+            'required_default_injection_unfilled: '
+            . $module . '|' . $code . ' slot=' . $slotId
+        );
+    }
+
+    /**
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     */
+    private function loadPlan(int $themeId, string $pageType): array
     {
         try {
             /** @var ThemeComponentCatalog $catalog */
@@ -143,11 +171,16 @@ final class RequiredDefaultInjectionStorefrontOverlay
                 if (!\is_object($definition)) {
                     continue;
                 }
+                $slots = [];
+                if (isset($definition->slots) && \is_array($definition->slots)) {
+                    $slots = $definition->slots;
+                }
                 $declarations[] = [
                     'module' => (string)($definition->module ?? ''),
                     'type' => (string)($definition->type ?? ''),
                     'code' => (string)($definition->code ?? ''),
                     'default_injections' => $definition->defaultInjections ?? [],
+                    'slots' => $slots,
                 ];
             }
 
@@ -159,20 +192,10 @@ final class RequiredDefaultInjectionStorefrontOverlay
             $injections = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
             $omissions = $injections->uninstalledInjectionsForVersion($themeId, $pageType, $versionId);
 
-            $items = [];
-            foreach (RequiredDefaultInjectionContract::requiredInjections($declarations, $pageType) as $item) {
-                if (RequiredDefaultInjectionContract::isUninstalled(
-                    $omissions,
-                    $item['slot_id'],
-                    $item['widget_module'],
-                    $item['widget_code'],
-                )) {
-                    continue;
-                }
-                $items[] = $item;
-            }
+            $inventory = RequiredDefaultInjectionSlotInventory::build($declarations, $pageType);
+            $plan = RequiredDefaultInjectionPlanner::plan($declarations, $pageType, $omissions, $inventory);
 
-            return $items;
+            return [$declarations, $plan];
         } catch (\Throwable $e) {
             if ($e instanceof \RuntimeException && \str_starts_with($e->getMessage(), 'required_default_injection_')) {
                 throw $e;
@@ -186,7 +209,51 @@ final class RequiredDefaultInjectionStorefrontOverlay
     }
 
     /**
-     * @return list<array{inner:string,region_start:int,inner_start:int,inner_end:int,depth:int,via:string}>
+     * @param list<array<string, mixed>> $regions
+     */
+    private function anyRegionHasWidget(array $regions, string $module, string $code): bool
+    {
+        foreach ($regions as $region) {
+            $inner = (string)($region['inner'] ?? '');
+            if (RequiredDefaultInjectionContract::slotInnerHasWidgetCode($inner, $module, $code)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function pageHasWidgetBoundToSlot(
+        string $html,
+        string $slotId,
+        string $module,
+        string $code,
+    ): bool {
+        unset($module);
+        $code = \strtolower(\trim($code));
+        $slotId = \strtolower(\trim($slotId));
+        if ($code === '' || $slotId === '' || $html === '') {
+            return false;
+        }
+        if (\preg_match_all('/<div class="widget-wrapper"\s+([^>]+)>/', $html, $matches) < 1) {
+            return false;
+        }
+        foreach ($matches[1] as $attrs) {
+            $attrs = \strtolower((string)$attrs);
+            $hasCode = \str_contains($attrs, 'data-widget-code="' . $code . '"')
+                || \str_contains($attrs, "data-widget-code='" . $code . "'");
+            $hasSlot = \str_contains($attrs, 'data-slot-id="' . $slotId . '"')
+                || \str_contains($attrs, "data-slot-id='" . $slotId . "'");
+            if ($hasCode && $hasSlot) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<array{inner:string,region_start:int,inner_start:int,inner_end:int,depth:int,via:string,raw:?array}>
      */
     private function listSlotRegions(string $html, string $slotId): array
     {

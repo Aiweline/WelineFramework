@@ -76,7 +76,7 @@ const {
 - `gotoFrontend(page, path)`
 - `gotoBackend(page, route)`
 - `gotoApi(page, route)`
-- `loginAsAdmin(page)`
+- `loginAsAdmin(page)`：后台登录。默认用户名/密码均为 **`admin` / `admin`**（可用 `PLAYWRIGHT_ADMIN_USERNAME` / `PLAYWRIGHT_ADMIN_PASSWORD` 覆盖）。开发环境 Agent **禁止向用户索要账号**；见 `dev/ai-command/ai/工程团队.md`「本机开发环境测试账号」。
 - `getActiveTheme('frontend' | 'backend')`
 - `gotoThemePreview(page, { themeId?, pageType?, previewMode?, status? })`
 

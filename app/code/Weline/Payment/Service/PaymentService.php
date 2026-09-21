@@ -49,6 +49,10 @@ class PaymentService
         $amountMinor = (int) ($orderData['amount_minor'] ?? round($amount * 100));
         $scope = (new PaymentScopeConfigService())->resolveScope($orderData);
         $runtimeConfig = $this->methodManager->getRuntimeConfig($paymentMethod, $scope);
+        $scope['environment'] = (new PaymentScopeConfigService())->selectMethodEnvironment(
+            (string) ($scope['environment'] ?? ''),
+            $runtimeConfig,
+        );
         $runtimeCapabilities = $this->methodManager->getRuntimeCapabilities($paymentMethod, $scope);
         $actor = $this->buildActor($orderData);
         $payableSnapshot = $this->buildPayableSnapshot($orderData, $amountMinor, $currency);

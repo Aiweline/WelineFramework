@@ -117,22 +117,15 @@ final class ParserEventScopeCacheTest extends TestCase
         self::assertSame('Public title', Parser::getWords()['Scoped title']);
     }
 
-    public function testDictionaryCollectionCanResolveTheCurrentRequestModules(): void
+    public function testRequestOverlayCanBeInstalledWithoutCollectEvent(): void
     {
         EventDictionary::refresh();
-        $this->events->layers = [[
-            'owner' => 'Weline_Test',
-            'name' => 'page',
-            'scope_key' => 'website:one/store:main/channel:web',
-            'mode' => EventDictionary::MODE_OVERLAY,
-            'priority' => 20,
-            'hash' => 'page-v1',
-            'words' => ['Scoped title' => 'Collected page title'],
-            'keyed_words' => [],
-        ]];
+        $this->setDictionary('website:one/store:main/channel:web', [
+            'Scoped title' => 'Collected page title',
+        ]);
 
         self::assertSame('Collected page title', EventDictionary::translate('Scoped title', 'en_US'));
-        self::assertSame(['Weline_Test'], $this->events->collectedModules);
+        self::assertTrue(EventDictionary::isActive('en_US'));
     }
 
     public function testRefreshingAnOverlayInTheSameRequestUpdatesThePublicParseResult(): void
@@ -189,24 +182,17 @@ final class ParserEventScopeCacheTest extends TestCase
 
 final class PhraseScopeEventsFixture extends EventsManager
 {
-    public array $layers = [];
-    public array $collectedModules = [];
-
     public function __construct()
     {
     }
 
     public function hasObservers(string $eventName): bool
     {
-        return $eventName === EventDictionary::EVENT_DICTIONARY_COLLECT;
+        return false;
     }
 
     public function dispatch(string $eventName, mixed &$data = []): static
     {
-        if ($eventName === EventDictionary::EVENT_DICTIONARY_COLLECT) {
-            $this->collectedModules = $data['modules'];
-            $data['layers'] = $this->layers;
-        }
         return $this;
     }
 }

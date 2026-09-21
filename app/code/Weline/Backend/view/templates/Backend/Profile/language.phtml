@@ -1,0 +1,22 @@
+<css>Weline_Backend::css/backend-account-shell.css</css>
+<div class="w-backend-account">
+    <?php echo $this->fetch('Weline_Backend::templates/Backend/Profile/partials/sidebar.phtml'); ?>
+    <section class="w-backend-account__main">
+        <div class="w-backend-account__panel">
+            <p class="w-backend-account__panel-desc"><lang>只影响你自己的后台界面。网站前台默认语言、其他管理员互不影响。地址里写了语言时，以地址为准。</lang></p>
+            <form method="post" action="@backend-url('system/backend/profile/language')" class="w-stack" data-align="start" style="--w-gap:var(--weline-space-4);">
+                <div class="w-field">
+                    <label class="w-field__label" for="personal-language"><lang>个人语言</lang></label>
+                    <w:i18n:language:select
+                        id="personal-language"
+                        name="personal_language"
+                        value="personal_language"
+                        required="true"
+                        data-w-width="full"
+                    />
+                </div>
+                <button type="submit" class="w-button" data-tone="primary" data-size="sm"><lang>保存语言</lang></button>
+            </form>
+        </div>
+    </section>
+</div>

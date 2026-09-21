@@ -55,8 +55,11 @@ class Method extends BackendController
         $storageScope = $this->publicTargetScope($target);
         $listContext = [
             'scope' => $storageScope === 'global' ? 'default.default.default' : $storageScope,
-            'environment' => 'sandbox',
         ];
+        $explicitEnvironment = strtolower(trim((string)$this->request->getParam('environment', '')));
+        if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+            $listContext['environment'] = $explicitEnvironment;
+        }
         $methods = $this->methodManager->listMethodsForAdmin($listContext);
 
         $this->assign('methods', $methods);
@@ -91,10 +94,14 @@ class Method extends BackendController
             return $exception->getMessage();
         }
         $storageScope = $this->publicTargetScope($target);
-        $scope = $this->scopeConfigService->resolveScope([
+        $scopeContext = [
             'scope' => $storageScope === 'global' ? 'default.default.default' : $storageScope,
-            'environment' => (string)$this->request->getParam('environment', 'sandbox'),
-        ]);
+        ];
+        $explicitEnvironment = strtolower(trim((string)$this->request->getParam('environment', '')));
+        if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+            $scopeContext['environment'] = $explicitEnvironment;
+        }
+        $scope = $this->scopeConfigService->resolveScope($scopeContext);
         
         if (!$code) {
             $this->getMessageManager()->addError(__('缺少支付方式代码'));
@@ -171,6 +178,13 @@ class Method extends BackendController
 
     private function publicTargetScope(\Weline\Framework\Runtime\ScopeIdentity $target): string
     {
+        $raw = \strtolower(\trim((string)$this->request->getParam(
+            'target_scope',
+            $this->request->getParam('scope', ''),
+        )));
+        if ($raw === 'global' || $this->isUsablePaymentTargetScope($raw)) {
+            return $raw;
+        }
         if ($target->isGlobal()) {
             return 'global';
         }

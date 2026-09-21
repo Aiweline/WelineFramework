@@ -65,7 +65,7 @@
         var roots = node.querySelectorAll(
             '[data-mini-cart-tab-label], [data-b2b-checkout-credit], [data-marketing-checkout-coupon],'
             + ' [data-order-notice-surface], [data-helppay-placement], [data-testid="order-notice-widget"],'
-            + ' [data-testid="marketing-checkout-coupon"], [data-testid="checkout-summary-help-pay"],'
+            + ' [data-testid="checkout-coupon"], [data-testid="marketing-checkout-coupon"], [data-testid="checkout-summary-help-pay"],'
             + ' [data-testid="cart-summary-help-pay"]'
         );
         if (roots.length) {

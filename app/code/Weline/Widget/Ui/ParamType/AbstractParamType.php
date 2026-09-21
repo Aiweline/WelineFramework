@@ -621,8 +621,19 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         $html .= '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n data-field="' . htmlspecialchars($key) . '" aria-label="' . htmlspecialchars((string)__('关闭多语言配置'), ENT_QUOTES, 'UTF-8') . '"><w-icon name="close" size="sm"></w-icon></button>';
         $html .= '</div>';
         $html .= '</header>';
+        $searchId = $panelId . '_locale_search';
+        $html .= '<div class="' . $p . 'i18n-toolbar">';
+        $html .= '<label class="w-visually-hidden" for="' . htmlspecialchars($searchId) . '">'
+            . htmlspecialchars((string)__('搜索语言或代码'), ENT_QUOTES, 'UTF-8') . '</label>';
+        $html .= '<input type="search" class="w-input ' . $p . 'i18n-locale-search" id="'
+            . htmlspecialchars($searchId) . '" data-i18n-locale-search'
+            . ' placeholder="' . htmlspecialchars((string)__('搜索语言或代码...'), ENT_QUOTES, 'UTF-8') . '"'
+            . ' autocomplete="off" spellcheck="false"'
+            . ' aria-controls="' . htmlspecialchars($panelId) . '_body">';
+        $html .= '</div>';
         // 空 body，由前端 fetchInstalledLocales() 后动态填充
-        $html .= '<div class="w-dialog__body ' . $p . 'i18n-body"></div>';
+        $html .= '<div class="w-dialog__body ' . $p . 'i18n-body" id="'
+            . htmlspecialchars($panelId) . '_body"></div>';
         $html .= '<footer class="w-dialog__footer ' . $p . 'i18n-footer">';
         $html .= '<button type="button" class="w-button" data-tone="primary" data-size="sm" data-save-i18n ' . $dataAttrs . '>' . __('保存多语言') . '</button>';
         $html .= '</footer></div></dialog>';

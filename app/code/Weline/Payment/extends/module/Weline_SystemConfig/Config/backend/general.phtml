@@ -19,17 +19,6 @@
         scope="global,website,store" />
 
     <w:config:field
-        key="payment/general/default_environment"
-        label="默认支付环境"
-        description="可支付对象未显式指定沙箱或正式环境时使用的默认环境。"
-        type="select"
-        value-type="string"
-        default="sandbox"
-        scope="global,website,store"
-        options="sandbox:沙箱,live:正式"
-        validation="required|in_options" />
-
-    <w:config:field
         key="payment/general/require_terms_agreement"
         label="要求同意支付条款"
         description="用户开始支付尝试前必须同意当前支付条款。"

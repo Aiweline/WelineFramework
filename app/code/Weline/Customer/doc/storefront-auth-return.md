@@ -9,8 +9,9 @@
 - 登录和注册表单都必须携带已规范化的 `redirect_url`，因此 `Weline.Api.resource('account')` 与原生表单回退路径使用同一目标。
 - `account.login`、`account.register` 和 `account.completeChallenge` 成功后才消费并删除 Session 目标；失败或页面切换不得提前清除。
 - 没有合法目标时回到 `/customer/account`。
-- **认证成功最终跳转**必须走 `formatAuthSuccessRedirect()`（或等价地 `formatRedirect()` + `withAuthRefreshSignal(..., '1')`），在目标 URL 上追加一次性查询参数 `w_auth=1`。主题 `theme.js` Header 初始化经 `Weline.Account.handleAuthRefreshSignal()`（Account 模块 `weline-api-account.js`）调用一次 `account.current`，把 FPC 游客壳刷新为登录态，再用 `history.replaceState` 去掉标记。无 `w_auth` 但页头仍是 `data-auth-state=guest` 时，同一入口也会软对账一次（覆盖 Cookie 名分裂导致的游客 SSR）。禁止在 `body-end` 另挂独立 header-account 脚本。
-- **登出 / 登录失效最终跳转**必须走 `formatAuthInvalidRedirect()`（追加 `w_auth=0`）。同一套 `Weline.Account.handleAuthRefreshSignal()` 识别后再次查状态，把仍显示已登录的 chrome 切回游客壳。登出目标可以是登录页（认证路由），因此内部用 `formatInternalNavigation` 而不是会拦截认证路由的 `formatRedirect`。
+- **认证成功最终跳转**必须走 `formatAuthSuccessRedirect()`（或等价地 `formatRedirect()` + `withAuthRefreshSignal(..., '1')`），在目标 URL 上追加一次性查询参数 `w_auth=1`。主题 `theme.js` Header 初始化经 `Weline.Account.handleAuthRefreshSignal()`（Customer `account-session.js`）：**仅**在 `w_auth` / 认证页 / Theme 编辑器预览时网络对账 `account.current`；普通公共页静默只读 `localStorage` 画顶栏（可陈旧），不自动打网。禁止在 `body-end` 另挂独立 header-account 脚本。
+- **交互才鉴权**：加购 / 个人中心 / 批发申请等用户操作才走 BinQuery；需登录调用 `Weline.Account.ensureLogin()` 打开 `customer/login-panel`。取消静默 keepalive。
+- **登出 / 登录失效最终跳转**必须走 `formatAuthInvalidRedirect()`（追加 `w_auth=0`）。同一套 `handleAuthRefreshSignal()` 识别后对账，把仍显示已登录的 chrome 切回游客壳。登出目标可以是登录页（认证路由），因此内部用 `formatInternalNavigation` 而不是会拦截认证路由的 `formatRedirect`。
 
 ## 安全边界
 

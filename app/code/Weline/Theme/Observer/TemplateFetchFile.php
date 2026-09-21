@@ -178,12 +178,11 @@ class TemplateFetchFile implements ObserverInterface
         } catch (\Throwable) {
             return null;
         }
-        if (!$request instanceof Request || !$this->shouldHonorExplicitThemeRequest($request)) {
+        if (!$request instanceof Request || !$this->isEditorThemeRequest($request)) {
             return null;
         }
 
-        $requestArea = $this->resolveRequestArea($request, $area);
-        $themeId = $this->resolveAreaThemeId($request, $area, $requestArea);
+        $themeId = $this->readRequestInt($request, ['theme_id']);
         if ($themeId <= 0) {
             return null;
         }
@@ -196,6 +195,17 @@ class TemplateFetchFile implements ObserverInterface
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function isEditorThemeRequest(Request $request): bool
+    {
+        $editorMode = \strtolower(\trim((string)$this->readRequestValue($request, 'editor_mode')));
+        if ($editorMode === '1' || $editorMode === 'true') {
+            return true;
+        }
+        $shell = \strtolower(\trim((string)$this->readRequestValue($request, 'shell')));
+
+        return $shell === 'theme-editor';
     }
 
     private function resolveAreaThemeId(Request $request, string $area, string $requestArea): int

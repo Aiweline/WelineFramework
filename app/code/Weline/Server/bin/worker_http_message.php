@@ -623,12 +623,15 @@ function getCookieValue(string $cookieHeader, string $name): ?string
 }
 
 /**
- * 注入 WLS 处理耗时响应头。
- * 仅添加 header，不修改 body / Content-Length，避免 Content-Length mismatch 导致浏览器 loading 挂死。
- * 前端通过 Server-Timing API 读取：performance.getEntriesByType('navigation')[0].serverTiming
+ * 注入 WLS 处理耗时响应头（X-WLS-Process-Time / Server-Timing）。
+ * 受 ResponseObservabilityPolicy::processTimingHeadersEnabled() 闸门；
+ * 开启后仍仅在慢请求或 verbose 时写出，避免 Content-Length mismatch。
  */
 function injectWlsProcessTimeHeader(string $response, float $durationMs): string
 {
+    if (!\Weline\Framework\Http\ResponseObservabilityPolicy::processTimingHeadersEnabled()) {
+        return $response;
+    }
     if ($durationMs < 500 && !\Weline\Server\Log\LogConfig::isVerboseWlsLog()) {
         return $response;
     }

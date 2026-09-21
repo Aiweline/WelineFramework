@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Model\ThemeScopeVersion;
 
 /**
@@ -105,6 +106,7 @@ final class ThemeScopeVersionService
             ->fetch();
 
         $version->setIsPublished(true)->save();
+        $this->forgetFlagged($themeId, $scope);
 
         try {
             /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPointerResolver $pointers */
@@ -140,6 +142,7 @@ final class ThemeScopeVersionService
             ->setChromePayload($normalized)
             ->setStructureKey($this->hashStructure($normalized))
             ->save();
+        $this->forgetFlagged($version->getThemeId(), $this->normalizeScope((string)$version->getScope()));
     }
 
     public function createRevisionFrom(
@@ -182,6 +185,14 @@ final class ThemeScopeVersionService
 
     private function loadFlagged(int $themeId, string $scope, string $flagField): ?ThemeScopeVersion
     {
+        $cacheKey = $this->flaggedCacheKey($themeId, $scope, $flagField);
+        $cached = RequestContext::get($cacheKey);
+        if (\is_array($cached) && \array_key_exists('version', $cached)) {
+            $version = $cached['version'];
+
+            return $version instanceof ThemeScopeVersion ? $version : null;
+        }
+
         $result = $this->versionModel->reset()
             ->where(ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
             ->where(ThemeScopeVersion::schema_fields_SCOPE, $scope)
@@ -192,14 +203,33 @@ final class ThemeScopeVersionService
             ->fetchArray();
 
         if (!\is_array($result) || $result === []) {
+            RequestContext::set($cacheKey, ['version' => null]);
+
             return null;
         }
 
         $row = \is_array($result[0] ?? null) ? $result[0] : $result;
         $version = clone $this->versionModel;
         $version->setData($row);
+        $resolved = $version->getVersionId() > 0 ? $version : null;
+        RequestContext::set($cacheKey, ['version' => $resolved]);
 
-        return $version->getVersionId() > 0 ? $version : null;
+        return $resolved;
+    }
+
+    private function flaggedCacheKey(int $themeId, string $scope, string $flagField): string
+    {
+        return 'theme.scope_version.flag.' . $themeId . '|' . $scope . '|' . $flagField;
+    }
+
+    private function forgetFlagged(int $themeId, string $scope): void
+    {
+        foreach ([
+            ThemeScopeVersion::schema_fields_IS_CURRENT,
+            ThemeScopeVersion::schema_fields_IS_PUBLISHED,
+        ] as $flagField) {
+            RequestContext::set($this->flaggedCacheKey($themeId, $scope, $flagField), null);
+        }
     }
 
     private function nextVersionNumber(int $themeId, string $scope): int
@@ -229,6 +259,7 @@ final class ThemeScopeVersionService
             ->where(ThemeScopeVersion::schema_fields_IS_CURRENT, 1)
             ->update([ThemeScopeVersion::schema_fields_IS_CURRENT => 0])
             ->fetch();
+        $this->forgetFlagged($themeId, $scope);
     }
 
     private function normalizeScope(string $scope): string

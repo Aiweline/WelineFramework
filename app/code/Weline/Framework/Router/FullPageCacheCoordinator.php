@@ -22,7 +22,10 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\ContentEncodingNegotiator;
+use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
+use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseObservabilityPolicy;
 use Weline\Framework\Http\Security\SecurityHeaderPolicyService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -425,7 +428,9 @@ final class FullPageCacheCoordinator
         $variant = null;
         if ($this->isFrontendResponseCacheAllowed($method)) {
             $variant = $this->buildCurrentFpcVariant();
-            $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
+            }
             $this->ensureVaryHeader($response, 'Cookie');
         }
 
@@ -462,8 +467,18 @@ final class FullPageCacheCoordinator
             ]);
             return;
         }
-        if (!$this->storefrontProductCardCssIntegrityOk($body)) {
-            $this->logFpcWarning('skip publish missing product-card css', [
+        $healedBody = \Weline\Framework\View\Helper\HtmlCacheAdmission::healStorefrontProductCardCss($body);
+        if ($healedBody !== $body) {
+            $body = $healedBody;
+            $response->setBody($body);
+            $this->logFpcWarning('healed product-card css before publish', [
+                'cache_key_full_uri' => $fullUri,
+                'raw_full_uri' => $this->getRawFullUri(),
+                'method' => $method,
+            ]);
+        }
+        if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+            $this->logFpcWarning('skip publish html cache admission rejected', [
                 'cache_key_full_uri' => $fullUri,
                 'raw_full_uri' => $this->getRawFullUri(),
                 'method' => $method,
@@ -473,7 +488,9 @@ final class FullPageCacheCoordinator
 
         if ($variant === null) {
             $variant = $this->buildCurrentFpcVariant();
-            $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
+            if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+                $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
+            }
             $this->ensureVaryHeader($response, 'Cookie');
         }
 
@@ -610,6 +627,10 @@ final class FullPageCacheCoordinator
 
     public function canServeCachedResponse(string $method = 'GET'): bool
     {
+        if (!$this->hasActiveFpcStoreAdapter()) {
+            return false;
+        }
+
         $warmupMode = $this->internalFpcWarmupMode();
         if (($this->shouldBypassForDynamicFirstRender()
                 && $warmupMode !== 'prime')
@@ -631,6 +652,10 @@ final class FullPageCacheCoordinator
 
     public function canBuildCachedResponse(string $method = 'GET'): bool
     {
+        if (!$this->hasActiveFpcStoreAdapter()) {
+            return false;
+        }
+
         if (($this->shouldBypassForDynamicFirstRender() && $this->internalFpcWarmupMode() !== 'prime')
             || $this->shouldSkipCacheBuildForClientCacheControl()
         ) {
@@ -880,8 +905,8 @@ final class FullPageCacheCoordinator
         if ($body === '') {
             return null;
         }
-        if (!$this->storefrontProductCardCssIntegrityOk($body)) {
-            $this->logFpcWarning('invalidate stale hit missing product-card css', [
+        if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+            $this->logFpcWarning('invalidate stale hit html cache admission rejected', [
                 'cache_key' => $staleCacheKey,
                 'cache_source' => $cacheSource,
             ]);
@@ -916,12 +941,12 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'STALE');
-        $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
-        $response->setHeader('X-Wls-Performance-Fpc-Stale', '1');
-        $response->setHeader('X-Wls-Performance-Fpc-Source', $cacheSource);
-        $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($this->buildCurrentFpcVariant()));
-        $response->setHeader('X-Wls-Performance-Urlparser', '0');
-        $response->setHeader('X-Wls-Performance-Urlparserapply', '0');
+        $this->applyFpcHitPerformanceHeaders(
+            $response,
+            $cacheSource,
+            $this->buildCurrentFpcVariant(),
+            true
+        );
         $this->ensureVaryHeader($response, 'Cookie');
         RequestContext::set('wls.fpc.hit_source', $cacheSource);
         RequestContext::set('wls.fpc.stale', true);
@@ -1106,11 +1131,7 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
-        $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
-        $response->setHeader('X-Wls-Performance-Fpc-Source', 'process');
-        $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
-        $response->setHeader('X-Wls-Performance-Urlparser', '0');
-        $response->setHeader('X-Wls-Performance-Urlparserapply', '0');
+        $this->applyFpcHitPerformanceHeaders($response, 'process', $variant);
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
 
@@ -1674,14 +1695,7 @@ final class FullPageCacheCoordinator
         }
         $isStale = \str_starts_with($source, 'stale-');
         $response->setHeader('X-Weline-FPC', $isStale ? 'STALE' : 'HIT');
-        $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
-        if ($isStale) {
-            $response->setHeader('X-Wls-Performance-Fpc-Stale', '1');
-        }
-        $response->setHeader('X-Wls-Performance-Fpc-Source', $source);
-        $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
-        $response->setHeader('X-Wls-Performance-Urlparser', '0');
-        $response->setHeader('X-Wls-Performance-Urlparserapply', '0');
+        $this->applyFpcHitPerformanceHeaders($response, $source, $variant, $isStale);
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
 
@@ -1777,63 +1791,56 @@ final class FullPageCacheCoordinator
 
     private function isEditorOrPreviewRequest(string $fullUri): bool
     {
-        if (\in_array((string)WelineEnv::get('editor_mode', ''), ['1', 'true'], true)) {
-            return true;
+        $query = [];
+        $queryString = (string)(\parse_url($fullUri, \PHP_URL_QUERY) ?: '');
+        if ($queryString === '') {
+            $queryString = (string)WelineEnv::server('QUERY_STRING', '');
         }
-
-        if ($this->hasPreviewTokenCookieHeader()) {
-            return true;
+        if ($queryString !== '') {
+            \parse_str($queryString, $query);
         }
-
-        $bypassKeys = ['preview', 'visual_editor', 'editor_mode', 'workspace_preview', 'debug_hooks', 'no_cache', 'nocache', 'weline_preview_token'];
-
         $getParams = WelineEnv::getGet(null, []);
-        if (\is_array($getParams)) {
-            foreach ($bypassKeys as $key) {
-                if (isset($getParams[$key]) && (string)$getParams[$key] !== '' && (string)$getParams[$key] !== '0') {
-                    return true;
-                }
+        if (\is_array($getParams) && $getParams !== []) {
+            $query = \array_merge($query, $getParams);
+        }
+
+        $headers = [];
+        foreach ([
+            'HTTP_X_WLS_FPC_BYPASS' => 'x-wls-fpc-bypass',
+            'HTTP_X_WLS_INTERNAL_FPC_BYPASS' => 'x-wls-internal-fpc-bypass',
+            'HTTP_X_WLS_DYNAMIC_WARMUP' => 'x-wls-dynamic-warmup',
+            'HTTP_X_WLS_DYNAMIC_BENCHMARK' => 'x-wls-dynamic-benchmark',
+        ] as $serverKey => $headerName) {
+            $value = (string)WelineEnv::server($serverKey, '');
+            if ($value !== '') {
+                $headers[$headerName] = $value;
             }
         }
 
-        $query = (string)(\parse_url($fullUri, \PHP_URL_QUERY) ?: '');
-        if ($query === '') {
-            $query = (string)WelineEnv::server('QUERY_STRING', '');
-        }
-        if ($query !== '') {
-            \parse_str($query, $params);
-            foreach ($bypassKeys as $key) {
-                if (isset($params[$key]) && (string)$params[$key] !== '' && (string)$params[$key] !== '0') {
-                    return true;
-                }
-            }
-        }
-
-        // WLS 部分请求在到达 FPC 时请求参数尚未填充，但 QUERY_STRING 已含 nocache 等参数
-        $rawQuery = (string)WelineEnv::server('QUERY_STRING', '');
-        if ($rawQuery !== '') {
-            foreach ($bypassKeys as $key) {
-                if (\preg_match('/(?:^|[&;])' . \preg_quote($key, '/') . '(?:=|&|;|$)/i', $rawQuery) === 1) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return FpcBypassEvaluator::shouldBypass([
+            'query' => $query,
+            'cookie_header' => (string)(WelineEnv::server('HTTP_COOKIE', '') ?: WelineEnv::get('server.http_cookie', '')),
+            'headers' => $headers,
+            'env' => [
+                'editor_mode' => (string)WelineEnv::get('editor_mode', ''),
+            ],
+        ]);
     }
 
     /**
-     * Live storefront preview keeps an HttpOnly cookie after URL token strip.
-     * Website cookie isolation may wire it as weline_preview_token_wN.
+     * 无活跃 StoreAdapter 时 FPC 关闭（只动态渲染）。
+     * 单测/无 Server 扩展时 Extends 为空 → false。
      */
-    private function hasPreviewTokenCookieHeader(): bool
+    private function hasActiveFpcStoreAdapter(): bool
     {
-        $cookie = (string)(WelineEnv::server('HTTP_COOKIE', '') ?: WelineEnv::get('server.http_cookie', ''));
-        if ($cookie === '') {
+        try {
+            /** @var FpcStoreAdapterRegistry $registry */
+            $registry = ObjectManager::getInstance(FpcStoreAdapterRegistry::class);
+
+            return $registry->active() !== null;
+        } catch (\Throwable) {
             return false;
         }
-
-        return \preg_match('/(?:^|;\s*)weline_preview_token(?:_w\d+)?=/i', $cookie) === 1;
     }
 
     private function isExcludedFrontendPath(string $fullUri): bool
@@ -2254,8 +2261,8 @@ final class FullPageCacheCoordinator
             RequestContext::set('wls.fpc.hit_source', 'invalid');
             return null;
         }
-        if (!$this->storefrontProductCardCssIntegrityOk($body)) {
-            $this->logFpcWarning('invalidate hit missing product-card css', [
+        if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+            $this->logFpcWarning('invalidate hit html cache admission rejected', [
                 'cache_key' => $cacheKey,
                 'cache_source' => $cacheSource,
             ]);
@@ -2304,11 +2311,11 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
-        $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
-        $response->setHeader('X-Wls-Performance-Fpc-Source', $cacheSource);
-        $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($this->buildCurrentFpcVariant()));
-        $response->setHeader('X-Wls-Performance-Urlparser', '0');
-        $response->setHeader('X-Wls-Performance-Urlparserapply', '0');
+        $this->applyFpcHitPerformanceHeaders(
+            $response,
+            $cacheSource,
+            $this->buildCurrentFpcVariant()
+        );
         $this->ensureVaryHeader($response, 'Cookie');
         RequestContext::set('wls.fpc.hit_source', $cacheSource);
         RequestContext::set('wls.fpc.process_items', \count(self::$processFpcPayloadCache));
@@ -2840,14 +2847,10 @@ final class FullPageCacheCoordinator
         $response->setHeader('Content-Length', (string)\strlen($encodedBody));
         $this->ensureVaryAcceptEncoding($response);
         $response->setHeader('X-Weline-FPC', 'HIT');
-        $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
-        $response->setHeader('X-Wls-Performance-Fpc-Source', $source);
         $variant = \is_array($cached[self::VARIANT_PAYLOAD_KEY] ?? null)
             ? $cached[self::VARIANT_PAYLOAD_KEY]
             : [];
-        $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
-        $response->setHeader('X-Wls-Performance-Urlparser', '0');
-        $response->setHeader('X-Wls-Performance-Urlparserapply', '0');
+        $this->applyFpcHitPerformanceHeaders($response, $source, $variant);
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
 
@@ -3066,6 +3069,31 @@ final class FullPageCacheCoordinator
         }
 
         return false;
+    }
+
+    /**
+     * FPC HIT/STALE 路径上的 X-Wls-Performance-* 调试头；生产默认关闭。
+     *
+     * @param array<string, mixed> $variant
+     */
+    private function applyFpcHitPerformanceHeaders(
+        Response $response,
+        string $source,
+        array $variant = [],
+        bool $stale = false
+    ): void {
+        if (!ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
+            return;
+        }
+
+        $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
+        if ($stale) {
+            $response->setHeader('X-Wls-Performance-Fpc-Stale', '1');
+        }
+        $response->setHeader('X-Wls-Performance-Fpc-Source', $source);
+        $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
+        $response->setHeader('X-Wls-Performance-Urlparser', '0');
+        $response->setHeader('X-Wls-Performance-Urlparserapply', '0');
     }
 
     /**
@@ -4115,21 +4143,6 @@ final class FullPageCacheCoordinator
         }
 
         return false;
-    }
-
-    /**
-     * Storefront pages that render canonical product cards must carry the inline
-     * product-card CSS marker. Poisoned FPC entries without it serve unstyled cards.
-     */
-    private function storefrontProductCardCssIntegrityOk(string $body): bool
-    {
-        $hasCard = \str_contains($body, 'data-testid="weline-product-card"')
-            || \str_contains($body, "data-testid='weline-product-card'");
-        if (!$hasCard) {
-            return true;
-        }
-
-        return \str_contains($body, 'data-weline-product-card-css');
     }
 
     private function bodyContainsRawIgnorableRequestQuery(string $body): bool

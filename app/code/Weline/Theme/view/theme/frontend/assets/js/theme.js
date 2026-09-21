@@ -2411,6 +2411,13 @@
                 }
                 return { handled: false, reason: 'unsupported' };
             },
+            ensureLogin: async (options) => {
+                const AccountModule = await moduleLoader.loadModule('account');
+                if (AccountModule && typeof AccountModule.ensureLogin === 'function') {
+                    return AccountModule.ensureLogin(options || {});
+                }
+                return { ok: false, prompted: false, reason: 'unsupported' };
+            },
             getFrontendUser: () => {
                 const globalVarName = moduleLoader.getGlobalVarName('account');
                 if (window[globalVarName] && window[globalVarName]._instance) {

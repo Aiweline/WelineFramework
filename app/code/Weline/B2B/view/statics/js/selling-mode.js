@@ -75,6 +75,14 @@
 
     function isCustomerLoggedIn(root) {
         try {
+            if (global.WelineAccountModule && typeof global.WelineAccountModule.readFrontendSessionCache === 'function') {
+                var snap = global.WelineAccountModule.readFrontendSessionCache();
+                if (snap && snap.isLogin) {
+                    return true;
+                }
+            }
+        } catch (eAccount) {}
+        try {
             var site = global.site || {};
             if (Number(site.user_id || site.userId || 0) > 0) {
                 return true;
@@ -703,9 +711,19 @@
         // Apply drawer is always ToB context — do not hide guest gate via preferredMode=toc.
         syncApplyPanels(root, 'tob');
         openDrawer(root.querySelector('[data-b2b-apply-drawer]'));
-        var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1';
+        var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1'
+            || isCustomerLoggedIn(root);
         if (!loggedIn) {
-            // Host declares data-weline-mount; Weline.mount loads provider + fills.
+            if (global.Weline && global.Weline.Account && typeof global.Weline.Account.ensureLogin === 'function') {
+                Promise.resolve(global.Weline.Account.ensureLogin({ force: true, root: root }))
+                    .then(function () {
+                        requestFrameworkMountScan(root);
+                    })
+                    .catch(function () {
+                        requestFrameworkMountScan(root);
+                    });
+                return;
+            }
             requestFrameworkMountScan(root);
         }
     }
@@ -889,6 +907,20 @@
         if (!root) {
             return;
         }
+        // Prefer Account localStorage snapshot (silent, no network).
+        try {
+            if (global.WelineAccountModule && typeof global.WelineAccountModule.readFrontendSessionCache === 'function') {
+                var snap = global.WelineAccountModule.readFrontendSessionCache();
+                if (snap && snap.isLogin) {
+                    root.setAttribute('data-customer-logged-in', '1');
+                    var user = snap.user || {};
+                    var cid = String(user.customer_id || user.id || user.user_id || '').trim();
+                    if (cid !== '' && cid !== '0') {
+                        root.setAttribute('data-customer-id', cid);
+                    }
+                }
+            }
+        } catch (eSnap) {}
         var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1';
         var membership = String(root.getAttribute('data-has-membership') || '0') === '1';
         if (loggedIn && membership) {
@@ -1094,7 +1126,7 @@
         ensureMiniCartExtrasVisible(root, mode);
         root.querySelectorAll(
             '.w-marketing-checkout-coupon--mini-cart, [data-testid="marketing-mini-cart-coupon"],'
-            + ' .w-marketing-checkout-coupon, [data-testid="marketing-checkout-coupon"]'
+            + ' .w-marketing-checkout-coupon, [data-testid="checkout-coupon"], [data-testid="marketing-checkout-coupon"]'
         ).forEach(function (coupon) {
             coupon.hidden = false;
             coupon.removeAttribute('hidden');
@@ -1414,15 +1446,7 @@
             readCookie: readCookie,
             writeCookie: writeCookie
         };
-        enhanceMiniCarts({ refresh: true });
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState !== 'visible') {
-                return;
-            }
-            document.querySelectorAll('[data-b2b-selling-mode="1"], [data-b2b-account-identity="1"]').forEach(function (root) {
-                fetchMembershipStatus(root);
-            });
-        });
+        enhanceMiniCarts({ refresh: false });
         global.addEventListener('weline:selling-mode-changed', function (event) {
             var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
             // Ignore self-echo from enhanceMiniCarts to avoid chrome/DOM churn loops.

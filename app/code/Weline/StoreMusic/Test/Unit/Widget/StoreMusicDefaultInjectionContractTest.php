@@ -83,6 +83,16 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('default.__website__.default', $src);
     }
 
+    public function testInactiveAndDuplicateRendersEmitPresenceStub(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/store-music.phtml';
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('data-widget-code="store-music"', $src);
+        self::assertStringContainsString('data-store-music-skipped', $src);
+        self::assertStringContainsString("\$presenceStub('inactive')", $src);
+        self::assertStringContainsString("\$presenceStub('already-rendered')", $src);
+    }
+
     public function testRenderGateClaimsOnce(): void
     {
         $gate = dirname(__DIR__, 3) . '/Service/StoreMusicRenderGate.php';

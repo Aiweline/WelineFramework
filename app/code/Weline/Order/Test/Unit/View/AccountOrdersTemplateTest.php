@@ -55,6 +55,62 @@ final class AccountOrdersTemplateTest extends TestCase
         self::assertStringContainsString("['order_uuid' => \$primaryOrderUuid]", (string) file_get_contents($template));
         self::assertStringContainsString('#orders', $html);
         self::assertStringContainsString('查看详情', $html);
+        self::assertStringNotContainsString('data-continue-pay="true"', $html);
+    }
+
+    public function testPendingOrderRendersContinuePayCta(): void
+    {
+        $template = dirname(__DIR__, 3) . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
+        $source = (string) file_get_contents($template);
+        self::assertStringContainsString('data-testid="account-order-continue-pay"', $source);
+        self::assertStringContainsString('data-continue-pay="true"', $source);
+        self::assertStringContainsString("\$view['continue_pay_reachable']", $source);
+        self::assertStringContainsString('继续支付', $source);
+
+        $view = new class {
+            /** @param array<string, scalar> $params */
+            public function getUrl(string $path, array $params = []): string
+            {
+                $query = $params === [] ? '' : '?' . http_build_query($params);
+                return '/USD/' . ltrim($path, '/') . $query;
+            }
+
+            /** @param array<string, mixed> $data */
+            public function render(string $template, array $data): string
+            {
+                extract($data, EXTR_SKIP);
+                ob_start();
+                include $template;
+                return (string)ob_get_clean();
+            }
+        };
+
+        $html = $view->render($template, [
+            'accountCheckoutGroups' => [[
+                'group_uuid' => 'pending-group-1',
+                'display_number' => 'G-pending1',
+                'status' => 'pending',
+                'grand_total_minor' => 54000,
+                'currency' => 'CNY',
+                'continue_pay_url' => '/checkout#payment-recovery?quote_token=qt1&idempotency_key=idem1&payment_method=paypal&order_uuid=ord-pending-1&recoverable=1',
+                'continue_pay_reachable' => true,
+                'orders' => [[
+                    'order_uuid' => 'ord-pending-1',
+                    'display_number' => 'pending-1',
+                    'status' => 'pending',
+                    'amount_minor' => 54000,
+                    'refund_status' => 'none',
+                    'invoice_status' => 'none',
+                    'fulfillment_status' => 'none',
+                    'order_type' => 'toc',
+                ]],
+            ]],
+        ]);
+
+        self::assertStringContainsString('data-continue-pay="true"', $html);
+        self::assertStringContainsString('data-testid="account-order-continue-pay"', $html);
+        self::assertStringContainsString('#payment-recovery?', $html);
+        self::assertStringContainsString('继续支付', $html);
     }
 
     public function testOrdersTemplateDeclaresOrderTypeBadgeMarkup(): void

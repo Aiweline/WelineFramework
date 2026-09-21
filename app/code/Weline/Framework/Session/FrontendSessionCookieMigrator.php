@@ -29,6 +29,15 @@ final class FrontendSessionCookieMigrator
         self::$attempted = true;
 
         try {
+            // Anonymous storefront GETs must stay Set-Cookie-free so Full Page
+            // Cache can publish. Starting an empty guest Session here would
+            // allocate WELINE_CUSTOMER_SESSID and permanently MISS FPC.
+            $hasCustomerCookie = SessionCookieNameResolver::hasRequestCookie('frontend');
+            $legacyId = SessionCookieNameResolver::readRequestSessionId(null, 'backend');
+            if (!$hasCustomerCookie && $legacyId === '') {
+                return;
+            }
+
             if (!$customerSession->isStarted()) {
                 $customerSession->start();
             }
@@ -38,7 +47,6 @@ final class FrontendSessionCookieMigrator
                 return;
             }
 
-            $legacyId = SessionCookieNameResolver::readRequestSessionId(null, 'backend');
             if ($legacyId === '') {
                 return;
             }

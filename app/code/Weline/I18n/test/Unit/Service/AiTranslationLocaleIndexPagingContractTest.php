@@ -23,19 +23,17 @@ final class AiTranslationLocaleIndexPagingContractTest extends TestCase
             $source);
         self::assertStringContainsString('->limit(self::DEFAULT_SCAN_PAGE_SIZE, $offset)', $source);
         self::assertStringNotContainsString(
-            "->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)\n            ->select()\n            ->fetchArray();",
+            "->where(LocaleDictionary::schema_fields_LOCALE_CODE, \$localeCode)\n            ->select()\n            ->fetchArray();",
             $source,
         );
     }
 
-    public function testAppendDictionaryWordsUsesLimitOffsetNotUiPagination(): void
+    public function testPendingWordsUseSqlLimitNotFullTableScan(): void
     {
         $source = $this->read('app/code/Weline/I18n/Service/AiTranslationService.php');
-        $methodStart = strpos($source, 'private function appendDictionaryWords(array &$candidates): void');
-        self::assertNotFalse($methodStart);
-        $method = substr($source, (int)$methodStart, 900);
-        self::assertStringContainsString('->limit(self::DEFAULT_SCAN_PAGE_SIZE, $offset)', $method);
-        self::assertStringNotContainsString('->pagination($page, self::DEFAULT_SCAN_PAGE_SIZE)', $method);
+        self::assertStringNotContainsString('function appendDictionaryWords', $source);
+        self::assertStringNotContainsString('->pagination(', $source);
+        self::assertStringContainsString('ORDER BY d.word LIMIT ', $source);
     }
 
     public function testCountUntranslatedWordsSkipsSourceLocale(): void
@@ -43,7 +41,10 @@ final class AiTranslationLocaleIndexPagingContractTest extends TestCase
         $service = $this->read('app/code/Weline/I18n/Service/AiTranslationService.php');
         $controller = $this->read('app/code/Weline/I18n/Controller/Backend/AiTranslation.php');
 
-        self::assertStringContainsString('if ($targetLocale === \'\' || $targetLocale === $sourceLocale)', $service);
+        self::assertStringContainsString(
+            'if ($targetLocale === \'\' || ($targetLocale === $sourceLocale && !$allowKeyOnlyWords))',
+            $service,
+        );
         self::assertStringContainsString('$pending = $isSource', $controller);
     }
 

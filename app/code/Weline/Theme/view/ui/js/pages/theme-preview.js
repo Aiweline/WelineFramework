@@ -81,6 +81,19 @@ function clearPreviewClientState() {
     } catch (error) {
         // Ignore storage failures.
     }
+    try {
+        sessionStorage.removeItem('weline_live_preview_token');
+    } catch (error) {
+        // Ignore storage failures.
+    }
+    try {
+        if (window.WelineThemePreviewBootstrap
+            && typeof window.WelineThemePreviewBootstrap.clearClientToken === 'function') {
+            window.WelineThemePreviewBootstrap.clearClientToken();
+        }
+    } catch (error) {
+        // Ignore bootstrap availability failures.
+    }
 }
 
 function stripPreviewTokenFromUrl() {
@@ -271,15 +284,18 @@ function initialize() {
     }
 
     document.addEventListener('click', (event) => {
+        // 禁链：只拦 a 默认跳转；不 stopPropagation，父页/部件选中仍能收到点击。
+        if (document.documentElement.dataset.wEditorLinkBlock !== '1') return;
         const target = event.target instanceof Element ? event.target : null;
         if (!target || target.closest('[data-editor-interactive], [data-w-preview-slot-action]')) return;
-        const navigation = target.closest('a[href], button[type="submit"], input[type="submit"]');
-        if (!navigation) return;
+        const navigation = target.closest('a[href]');
+        if (!navigation || navigation.closest('.slot-toolbar, .widget-hover-actions')) return;
         event.preventDefault();
         notify('navigation-blocked');
     }, true);
 
     document.addEventListener('submit', (event) => {
+        if (document.documentElement.dataset.wEditorLinkBlock !== '1') return;
         if (!(event.target instanceof HTMLFormElement) || event.target.closest('[data-editor-interactive]')) return;
         event.preventDefault();
         notify('navigation-blocked');

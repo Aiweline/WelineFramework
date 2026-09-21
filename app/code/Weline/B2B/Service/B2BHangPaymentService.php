@@ -425,10 +425,13 @@ final class B2BHangPaymentService
             'balance_amount_minor' => $hang->balanceAmountMinor,
             'country_code' => (string)($context['country_code'] ?? ''),
             'locale' => (string)($context['locale'] ?? ''),
-            'environment' => (string)($context['environment'] ?? 'sandbox'),
             'quote_token' => (string)($context['quote_token'] ?? ''),
             'checkout_token' => (string)($context['checkout_token'] ?? $context['quote_token'] ?? ''),
         ];
+        $explicitEnvironment = strtolower(trim((string)($context['environment'] ?? '')));
+        if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+            $payContext['environment'] = $explicitEnvironment;
+        }
         // Prefer order type_payload cash deposit; do not force full hang deposit.
         if ($purpose === B2BHangOrderService::PURPOSE_DEPOSIT) {
             try {

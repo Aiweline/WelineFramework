@@ -51,26 +51,31 @@ final class LayoutContentValidator implements LayoutContentValidatorInterface
             // layout publishable.
             $purpose = FileAccessContext::PURPOSE_PUBLIC_PUBLISH;
         }
-        $accessContext = new FileAccessContext(
-            $scope,
-            $localeCode,
-            isset($context['actor_id']) ? (int)$context['actor_id'] : null,
-            is_array($context['roles'] ?? null) ? array_values($context['roles']) : [],
-            $purpose,
-            max(1, (int)($context['policy_revision'] ?? 1)),
-        );
         $references = [];
         foreach ($usages as $item) {
             $imageUsage = $item['usage'];
+            // Draft reference indexing validates the stamped usage locale itself.
+            // Default/all-language layouts remap the layout identity to the website
+            // default for publish, but the picker may still carry an asset-row locale
+            // until the Theme Editor restamps — fail-closed only on publish.
+            $accessLocale = $referenceOnly ? $imageUsage->localeCode : $localeCode;
+            $itemAccess = new FileAccessContext(
+                $scope,
+                $accessLocale,
+                isset($context['actor_id']) ? (int)$context['actor_id'] : null,
+                is_array($context['roles'] ?? null) ? array_values($context['roles']) : [],
+                $purpose,
+                max(1, (int)($context['policy_revision'] ?? 1)),
+            );
             if ($referenceOnly) {
-                $this->assets->validateImageReference($imageUsage, $accessContext);
+                $this->assets->validateImageReference($imageUsage, $itemAccess);
             } else {
-                $this->assets->validateImageUsage($imageUsage, $accessContext);
+                $this->assets->validateImageUsage($imageUsage, $itemAccess);
             }
             $references[] = [
                 'asset_id' => $imageUsage->assetId,
-                'scope_key' => $accessContext->scope->canonicalKey(),
-                'locale_code' => $accessContext->localeCode,
+                'scope_key' => $itemAccess->scope->canonicalKey(),
+                'locale_code' => $itemAccess->localeCode,
                 'field_path' => $item['field_path'],
             ];
         }

@@ -149,8 +149,20 @@ if ($layout_editor_locked) {
     }
 }
 $initialPreviewToken = trim((string)($this->getData('initial_preview_token') ?: ''));
-// Always start blank: JS loads the real storefront path (path=layout) with editor markers.
-$initialPreviewUrl = 'about:blank';
+// 首屏就指向店面画布，避免 iframe 停在 about:blank，等 JS 再发请求时被排到 45 秒后取消。
+$canvasArea = $editor_area === 'backend' ? 'backend' : 'frontend';
+$canvasPath = ($page_type === '' || $page_type === 'homepage') ? '/' : '/' . rawurlencode((string)$page_type);
+$initialPreviewUrl = $canvasPath . '?' . http_build_query([
+    'theme_id' => $theme_id,
+    'frontend_theme_id' => $theme_id,
+    'editor_mode' => '1',
+    'shell' => 'theme-editor',
+    'preview_mode' => 'live',
+    'interaction_mode' => 'edit',
+    'status' => $preview_status !== '' ? $preview_status : 'draft',
+    'editor_area' => $canvasArea,
+    'preview_area' => $canvasArea,
+], '', '&', PHP_QUERY_RFC3986);
 $initialPreviewUrlSafe = htmlspecialchars($initialPreviewUrl, ENT_QUOTES, 'UTF-8');
 
 // Theme 动态图片必须由 MediaManager 返回 file-image/ImageUsage。
@@ -306,27 +318,60 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
     <div class="editor-chrome-strip" id="themeEditorChromeStrip" hidden>
         <span class="editor-chrome-strip__title">@lang{主题编辑器}</span>
         <span class="editor-chrome-strip__scope" id="themeChromeStripScope" data-chrome-scope-label>@lang{作用范围}</span>
-        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnThemeBrandBasicsStrip" aria-controls="themeBrandBasicsDrawer">
+        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" id="btnThemeBrandBasicsStrip" data-w-component="tooltip" data-w-tooltip="@lang{基础信息}" data-w-placement="bottom" title="@lang{基础信息}" aria-label="@lang{基础信息}" aria-controls="themeBrandBasicsDrawer">
             <w:icon name="image" size="sm"></w:icon>
-            <span>@lang{基础信息}</span>
+            <span class="w-theme-editor-toolbar-button-text">@lang{基础信息}</span>
         </button>
         <span class="editor-chrome-strip__spacer" aria-hidden="true"></span>
-        <button type="button" class="w-button" data-tone="primary" data-size="sm" id="btnPublishStrip" title="@lang{发布当前版本到前台}">
+        <button type="button" class="w-button" data-tone="primary" data-size="sm" data-icon-only="true" id="btnPublishStrip" data-w-component="tooltip" data-w-tooltip="@lang{发布}" data-w-placement="bottom" title="@lang{发布}" aria-label="@lang{发布}">
             <w:icon name="upload" size="sm"></w:icon>
-            <span>@lang{发布}</span>
+            <span class="w-theme-editor-toolbar-button-text">@lang{发布}</span>
         </button>
-        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnThemeChromeExpand" title="@lang{展开顶栏}" aria-label="@lang{展开顶栏}">
+        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" id="btnThemeChromeExpand" data-w-component="tooltip" data-w-tooltip="@lang{展开}" data-w-placement="bottom" title="@lang{展开顶栏}" aria-label="@lang{展开顶栏}">
             <w:icon name="chevron-down" size="sm"></w:icon>
-            <span>@lang{展开}</span>
+            <span class="w-theme-editor-toolbar-button-text">@lang{展开}</span>
         </button>
     </div>
     <!-- 顶部工具栏 -->
     <div class="editor-toolbar">
         <div class="toolbar-left">
-            <a href="@backend-url{'theme/backend/index'}" class="toolbar-back-link" title="@lang{返回主题列表}">
+            <a href="@backend-url{'theme/backend/index'}"
+               class="toolbar-back-link"
+               id="themeEditorBackLink"
+               data-w-theme-editor-back="1"
+               title="@lang{返回主题列表}">
                 <w:icon name="chevron-left" size="sm"></w:icon>
                 <span class="toolbar-back-text">@lang{返回}</span>
             </a>
+            <script>
+            (function () {
+                var link = document.getElementById('themeEditorBackLink');
+                if (!link) {
+                    return;
+                }
+                try {
+                    if (document.referrer) {
+                        var ref = new URL(document.referrer);
+                        if (ref.origin === window.location.origin) {
+                            link.setAttribute(
+                                'data-return-href',
+                                ref.pathname + ref.search + ref.hash
+                            );
+                        }
+                    }
+                } catch (e) {}
+                link.addEventListener('click', function (event) {
+                    var target = link.getAttribute('data-return-href')
+                        || link.getAttribute('href')
+                        || '';
+                    if (!target) {
+                        return;
+                    }
+                    event.preventDefault();
+                    window.location.assign(target);
+                });
+            })();
+            </script>
             <h1 class="editor-title">
                 <w:icon name="palette" size="sm"></w:icon>
                 @lang{主题编辑器}
@@ -352,7 +397,11 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                     id="btnThemeBrandBasics"
                     data-tone="neutral"
                     data-variant="outline"
-                    title="@lang{当前作用范围的网站基础信息（Favicon / Logo）}"
+                    data-icon-only="true"
+                    data-w-component="tooltip"
+                    data-w-tooltip="@lang{基础信息}"
+                    data-w-placement="bottom"
+                    title="@lang{基础信息}"
                     aria-label="@lang{基础信息}"
                     aria-haspopup="dialog"
                     aria-controls="themeBrandBasicsDrawer">
@@ -400,7 +449,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                 </label>
                 </div>
                 <div class="w-toolbar-overflow__more" data-w-toolbar-overflow-more hidden>
-                    <button type="button" class="w-button" id="themeEditorSelectsMore" data-tone="neutral" data-variant="outline" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorSelectsOverflowMenu" aria-expanded="false" title="@lang{更多}">
+                    <button type="button" class="w-button" id="themeEditorSelectsMore" data-tone="neutral" data-variant="outline" data-icon-only="true" data-w-toolbar-overflow-toggle data-w-component="tooltip" data-w-tooltip="@lang{更多}" data-w-placement="bottom" aria-haspopup="true" aria-controls="themeEditorSelectsOverflowMenu" aria-expanded="false" title="@lang{更多}" aria-label="@lang{更多}">
                         <w:icon name="more-horizontal" size="sm"></w:icon>
                         <span class="w-theme-editor-toolbar-button-text">@lang{更多}</span>
                     </button>
@@ -449,16 +498,16 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             </div>
 
             <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
-                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="btnPreview" title="@lang{后台预览}" aria-label="@lang{预览}">
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-icon-only="true" id="btnPreview" data-w-component="tooltip" data-w-tooltip="@lang{预览}" data-w-placement="bottom" title="@lang{预览}" aria-label="@lang{预览}">
                     <w:icon name="eye" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{预览}</span>
                 </button>
-                <button type="button" class="w-button" data-tone="info" data-variant="outline" id="btnFrontendPreview" title="@lang{在真实前端页面中预览，可查看完整效果}" aria-label="@lang{前端预览}">
+                <button type="button" class="w-button" data-tone="info" data-variant="outline" data-icon-only="true" id="btnFrontendPreview" data-w-component="tooltip" data-w-tooltip="@lang{前端预览}" data-w-placement="bottom" title="@lang{前端预览}" aria-label="@lang{前端预览}">
                     <w:icon name="external-link" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{前端预览}</span>
                 </button>
-                <button type="button" class="w-button" data-tone="primary" data-variant="outline" id="btnSave" title="@lang{保存当前布局为新版本}" aria-label="@lang{保存版本}">
+                <button type="button" class="w-button" data-tone="primary" data-variant="outline" data-icon-only="true" id="btnSave" data-w-component="tooltip" data-w-tooltip="@lang{保存版本}" data-w-placement="bottom" title="@lang{保存版本}" aria-label="@lang{保存版本}">
                     <w:icon name="save" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{保存版本}</span>
                 </button>
-                <button type="button" class="w-button" data-tone="warning" id="btnThemeDiskAppearance" title="@lang{主题级颜色与变量盘}" aria-label="@lang{全局外观}">
+                <button type="button" class="w-button" data-tone="warning" data-variant="outline" data-icon-only="true" id="btnThemeDiskAppearance" data-w-component="tooltip" data-w-tooltip="@lang{全局外观}" data-w-placement="bottom" title="@lang{全局外观}" aria-label="@lang{全局外观}">
                     <w:icon name="palette" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{全局外观}</span>
                 </button>
             </div>
@@ -477,16 +526,21 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         data-release-batch-cache-retry
                         hidden>@lang{重试缓存}</button>
             </span>
-            <button type="button" class="w-button" data-tone="primary" id="btnPublish" data-w-toolbar-overflow-pin title="@lang{发布当前版本到前台}">
+            <button type="button" class="w-button" data-tone="primary" data-icon-only="true" id="btnPublish" data-w-toolbar-overflow-pin data-w-component="tooltip" data-w-tooltip="@lang{发布}" data-w-placement="bottom" title="@lang{发布}" aria-label="@lang{发布}">
                 <w:icon name="upload" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{发布}</span>
             </button>
+            <div class="toolbar-chrome-tools" role="group" aria-label="@lang{顶栏}">
             <button type="button"
                     class="w-button"
                     id="btnThemeChromePin"
                     data-tone="neutral"
                     data-variant="outline"
+                    data-icon-only="true"
                     data-w-toolbar-overflow-pin
-                    title="@lang{固定顶栏展开}"
+                    data-w-component="tooltip"
+                    data-w-tooltip="@lang{固定}"
+                    data-w-placement="bottom"
+                    title="@lang{固定}"
                     aria-label="@lang{固定顶栏}"
                     aria-pressed="false">
                 <w:icon name="pin" size="sm"></w:icon>
@@ -497,14 +551,19 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                     id="btnThemeChromeCollapse"
                     data-tone="neutral"
                     data-variant="outline"
+                    data-icon-only="true"
                     data-w-toolbar-overflow-pin
-                    title="@lang{向上收起顶栏}"
+                    data-w-component="tooltip"
+                    data-w-tooltip="@lang{收起}"
+                    data-w-placement="bottom"
+                    title="@lang{收起}"
                     aria-label="@lang{收起顶栏}">
                 <w:icon name="chevron-up" size="sm"></w:icon>
                 <span class="w-theme-editor-toolbar-button-text">@lang{收起}</span>
             </button>
+            </div>
             <div class="w-toolbar-overflow__more" data-w-toolbar-overflow-more hidden>
-                <button type="button" class="w-button" id="themeEditorToolbarMore" data-tone="neutral" data-variant="outline" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorToolbarOverflowMenu" aria-expanded="false" title="@lang{更多}" aria-label="@lang{更多}">
+                <button type="button" class="w-button" id="themeEditorToolbarMore" data-tone="neutral" data-variant="outline" data-icon-only="true" data-w-toolbar-overflow-toggle data-w-component="tooltip" data-w-tooltip="@lang{更多}" data-w-placement="bottom" aria-haspopup="true" aria-controls="themeEditorToolbarOverflowMenu" aria-expanded="false" title="@lang{更多}" aria-label="@lang{更多}">
                     <w:icon name="more-horizontal" size="sm"></w:icon>
                     <span class="w-theme-editor-toolbar-button-text">@lang{更多}</span>
                 </button>
@@ -534,6 +593,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                 <button type="button" class="preview-tab active" data-view="preview">@lang{实时预览}</button>
                 <button type="button" class="preview-tab" data-view="structure">@lang{结构视图}</button>
             </div>
+            <div class="preview-toolbar-controls">
             <div class="preview-interaction-mode" role="group" aria-label="@lang{交互模式}">
                 <button type="button"
                         class="preview-interaction-tab"
@@ -547,12 +607,12 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         data-interaction-mode="edit"
                         aria-pressed="true"
                         title="@lang{编辑：恢复插槽标记与配置面板}">@lang{编辑}</button>
-                <button type="button"
-                        class="preview-interaction-tab preview-interaction-reset"
-                        id="btnResetDraftResources"
-                        data-theme-editor-action="open-reset-draft-modal"
-                        title="@lang{重置当前编辑版本的选中草稿配置（不删除版本历史）}">@lang{重置}</button>
             </div>
+            <button type="button"
+                    class="preview-interaction-tab preview-interaction-reset"
+                    id="btnResetDraftResources"
+                    data-theme-editor-action="open-reset-draft-modal"
+                    title="@lang{重置当前编辑版本的选中草稿配置（不删除版本历史）}">@lang{重置}</button>
             <div class="preview-selection-target" role="group" aria-label="@lang{选中目标}">
                 <button type="button"
                         class="preview-interaction-tab active"
@@ -579,25 +639,26 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         id="btnLinkBlock"
                         data-theme-editor-action="toggle-link-block"
                         aria-pressed="false"
-                        title="@lang{禁链：阻止 a 标签跳转，便于点选链接区域}">@lang{禁链}</button>
+                        title="@lang{禁链：阻止 a 标签跳转（不拦截点击冒泡，仍可点选部件）}">@lang{禁链}</button>
+            </div>
             </div>
             <div class="preview-actions w-toolbar-overflow" data-w-component="toolbar-overflow" data-w-placement="bottom-end" data-state="closed">
                 <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
-                    <button type="button" class="w-button" data-tone="warning" data-variant="outline" data-size="sm" id="btnRestoreLayout" title="@lang{恢复到主题模板原始布局（自动创建备份）}">
+                    <button type="button" class="w-button" data-tone="warning" data-variant="outline" data-size="sm" data-icon-only="true" id="btnRestoreLayout" data-w-component="tooltip" data-w-tooltip="@lang{恢复原始布局}" data-w-placement="bottom" title="@lang{恢复原始布局}" aria-label="@lang{恢复原始布局}">
                         <w:icon name="history" size="sm"></w:icon><span class="w-theme-editor-preview-action-text">@lang{恢复原始布局}</span>
                     </button>
-                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnClearThemeCache" title="@lang{清理 Theme 运行时与预览缓存（不改布局）}">
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" id="btnClearThemeCache" data-w-component="tooltip" data-w-tooltip="@lang{清理 Theme 缓存}" data-w-placement="bottom" title="@lang{清理 Theme 缓存}" aria-label="@lang{清理 Theme 缓存}">
                         <w:icon name="server" size="sm"></w:icon><span class="w-theme-editor-preview-action-text">@lang{清理 Theme 缓存}</span>
                     </button>
-                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnRefreshPreview" title="@lang{刷新预览}">
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" id="btnRefreshPreview" data-w-component="tooltip" data-w-tooltip="@lang{刷新}" data-w-placement="bottom" title="@lang{刷新预览}" aria-label="@lang{刷新预览}">
                         <w:icon name="refresh" size="sm"></w:icon><span class="w-theme-editor-preview-action-text">@lang{刷新}</span>
                     </button>
-                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnFullscreenPreview" title="@lang{全屏预览}">
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" id="btnFullscreenPreview" data-w-component="tooltip" data-w-tooltip="@lang{全屏}" data-w-placement="bottom" title="@lang{全屏预览}" aria-label="@lang{全屏预览}">
                         <w:icon name="monitor" size="sm"></w:icon><span class="w-theme-editor-preview-action-text">@lang{全屏}</span>
                     </button>
                 </div>
                 <div class="w-toolbar-overflow__more" data-w-toolbar-overflow-more hidden>
-                    <button type="button" class="w-button" id="themeEditorPreviewMore" data-tone="neutral" data-variant="outline" data-size="sm" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorPreviewOverflowMenu" aria-expanded="false" title="@lang{更多}">
+                    <button type="button" class="w-button" id="themeEditorPreviewMore" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" data-w-toolbar-overflow-toggle data-w-component="tooltip" data-w-tooltip="@lang{更多}" data-w-placement="bottom" aria-haspopup="true" aria-controls="themeEditorPreviewOverflowMenu" aria-expanded="false" title="@lang{更多}" aria-label="@lang{更多}">
                         <w:icon name="more-horizontal" size="sm"></w:icon>
                         <span class="w-theme-editor-preview-action-text">@lang{更多}</span>
                     </button>
@@ -1126,4 +1187,5 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 </aside>
 
 <!-- Editor shell first: execute before async widget-param; modulepreload already warmed the fetch. -->
+<script src="@static(Weline_Framework::js/i18n.js)"></script>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)"></script>

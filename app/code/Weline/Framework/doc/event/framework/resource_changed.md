@@ -95,15 +95,20 @@ w_changed($change);
 
 `ResourceChangePayloadMapper` 再次验证 DTO、Context 与 Canonical JSON；payload 上限 49,152 bytes、深度 16，`payload_sha256` 基于关联键递归排序后的规范 JSON。
 
-## 当前 Observer
+## 当前听众（硬切后）
 
-| 模块 | Observer | 策略 | 作用 |
+`w_changed()` 先跑 **Changed Extends 管线**（ChangedType Enricher → Recipe → Capability），再 `dispatch` 事件。
+
+| 通道 | 实现 | 策略 | 作用 |
 |---|---|---|---|
-| Framework | `cache_namespace` | sync + critical, sort 10 | 对 current/previous namespace 执行 DB `bumpMany()`（送达） |
-| Framework | `cache_impact` | sync + critical, sort 20 | 解析 `impact.cache_ops`，afterCommit 对声明池删键（加速） |
-| SEO | `seo_resource_changed` | sync + critical, sort 20 | 在主库事务中登记 SEO 目标 |
-| CDN | `cdn_resource_changed` | async + standard + latest, timeout 30 | 在 Delivery Worker 中消费 URL 影响 |
-`event.async.producer_enabled` 默认 false，因此 CDN async 声明不等于默认会产生 Outbox。critical sync Observer 仍照常执行。
+| Extends Capability | `NamespaceBumpCapability` | sync | `impact.namespaces` bump（送达） |
+| Extends Capability | `KeyDeleteCapability` | after_commit | `impact.cache_ops` 删键（加速） |
+| Extends Capability | `FpcCapability` / `CdnCapability` / `ThemeRuntimeCapability` | 按 Effect phase | FPC/CDN/主题运行时失效（MVP ChangedType） |
+| SEO | `seo_resource_changed` 事件 Observer | sync + critical | 登记 SEO 目标（本需求不迁 Capability） |
+
+已硬删：`CacheNamespaceObserver`、`CacheImpactObserver`、`Cdn\Observer\ResourceChanged`、`Theme\Observer\ResourceChanged`。
+
+`event.async.producer_enabled` 默认 false。critical sync Capability 在管线内执行。
 
 ## Outbox、Delivery 和 coalesce
 

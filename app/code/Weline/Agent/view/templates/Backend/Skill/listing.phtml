@@ -1,0 +1,153 @@
+<?php
+/**
+ * Skill listing — humanized Weline UI 2.0.
+ * @var \Weline\Framework\View\Template $this
+ */
+$skills = is_array($skills ?? null) ? $skills : [];
+$categories = is_array($categories ?? null) ? $categories : [];
+$currentCategory = trim((string)($current_category ?? ''));
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            return $item->getData($key) ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+
+$activeCount = 0;
+$dangerCount = 0;
+foreach ($skills as $skill) {
+    if ((int)$get($skill, 'is_active', 0) === 1) {
+        $activeCount++;
+    }
+    if ((int)$get($skill, 'is_dangerous', 0) === 1) {
+        $dangerCount++;
+    }
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
+<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+
+<section class="w-agent-admin">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-agent-admin__intro">
+            <h1><w:icon name="puzzle" size="sm" /> <?= $escape(__('技能管理')) ?></h1>
+            <p class="w-agent-admin__kicker"><?= $escape(__('技能是智能体能调用的工具。危险技能会要求更严的角色权限。')) ?></p>
+        </div>
+    </header>
+
+    <div class="w-agent-admin__stats">
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="puzzle" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= count($skills) ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('当前列表')) ?></span>
+            </span>
+        </div>
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="check" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= (int)$activeCount ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('已启用')) ?></span>
+            </span>
+        </div>
+        <div class="w-agent-stat">
+            <span class="w-agent-stat__icon"><w:icon name="bolt" size="sm" /></span>
+            <span>
+                <span class="w-agent-stat__value"><?= (int)$dangerCount ?></span>
+                <span class="w-agent-stat__label"><?= $escape(__('危险技能')) ?></span>
+            </span>
+        </div>
+    </div>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <article class="w-card">
+        <div class="w-card__body w-stack" data-gap="md">
+            <form class="w-agent-filters" method="get" action="@backend-url{'*/backend/skill/listing'}">
+                <div class="w-field">
+                    <label class="w-field__label" for="agent-skill-category"><?= $escape(__('按分类查看')) ?></label>
+                    <select class="w-select" id="agent-skill-category" name="category">
+                        <option value=""><?= $escape(__('全部技能')) ?></option>
+                        <?php foreach ($categories as $key => $label): ?>
+                            <option value="<?= $escape((string)$key) ?>" <?= $currentCategory === (string)$key ? 'selected' : '' ?>>
+                                <?= $escape((string)$label) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button type="submit" class="w-button"><?= $escape(__('筛选')) ?></button>
+            </form>
+
+            <?php if (!empty($skills)): ?>
+            <div class="w-agent-table-wrap">
+                <table class="w-agent-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escape(__('技能')) ?></th>
+                        <th><?= $escape(__('分类')) ?></th>
+                        <th><?= $escape(__('风险')) ?></th>
+                        <th><?= $escape(__('状态')) ?></th>
+                        <th><?= $escape(__('操作')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($skills as $skill): ?>
+                        <?php
+                        $id = (int)$get($skill, 'skill_id', 0);
+                        $dangerous = (int)$get($skill, 'is_dangerous', 0) === 1;
+                        $active = (int)$get($skill, 'is_active', 0) === 1;
+                        ?>
+                        <tr>
+                            <td>
+                                <div class="w-stack" data-gap="xs">
+                                    <strong><?= $escape((string)$get($skill, 'name', '')) ?></strong>
+                                    <span class="w-agent-code"><?= $escape((string)$get($skill, 'code', '')) ?></span>
+                                </div>
+                            </td>
+                            <td><?= $escape((string)$get($skill, 'category', '')) ?></td>
+                            <td>
+                                <span class="w-agent-chip" data-tone="<?= $dangerous ? 'warning' : 'success' ?>">
+                                    <?= $dangerous ? $escape(__('需谨慎')) : $escape(__('常规')) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="w-agent-chip" data-tone="<?= $active ? 'success' : 'warning' ?>">
+                                    <?= $active ? $escape(__('启用')) : $escape(__('停用')) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="w-cluster" data-gap="xs">
+                                    <a class="w-button" data-size="sm" data-variant="outline" data-tone="neutral"
+                                       href="@backend-url{'*/backend/skill/view'|['id' => $id]}"><?= $escape(__('查看')) ?></a>
+                                    <button type="button" class="w-button" data-size="sm" data-variant="outline"
+                                            data-agent-op="toggleSkill" data-agent-id="<?= $id ?>">
+                                        <?= $active ? $escape(__('停用')) : $escape(__('启用')) ?>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <var>pagination</var>
+            <?php else: ?>
+            <div class="w-agent-empty">
+                <span class="w-agent-empty__icon"><w:icon name="puzzle" size="sm" /></span>
+                <h3><?= $escape(__('这里还没有技能')) ?></h3>
+                <p><?= $escape(__('安装或启用内置技能后，角色才能真正“动手”读写文件、查库或发请求。')) ?></p>
+            </div>
+            <?php endif; ?>
+        </div>
+    </article>
+</section>

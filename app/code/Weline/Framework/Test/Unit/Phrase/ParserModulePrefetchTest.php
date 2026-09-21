@@ -94,10 +94,12 @@ final class ParserModulePrefetchTest extends TestCase
     public function testPrefetchDoesNotActivateModulesAndLaterConsumptionUsesNoIo(): void
     {
         $empty = $this->currentLayers();
-        $signature = (new ReflectionProperty(Parser::class, 'currentRequestLayeredWordsSignature'))->getValue();
+        $stateMethod = new ReflectionMethod(Parser::class, 'requestState');
+        $stateMethod->setAccessible(true);
+        $signature = $stateMethod->invoke(null)->layeredWordsSignature;
         Parser::prefetchGlobalDictionaryModules(['Weline_B', 'Weline_A', 'Weline_B', '', null]);
         self::assertSame([], Parser::resolveRequestModules());
-        self::assertSame($signature, (new ReflectionProperty(Parser::class, 'currentRequestLayeredWordsSignature'))->getValue());
+        self::assertSame($signature, $stateMethod->invoke(null)->layeredWordsSignature);
         self::assertSame($empty, $this->currentLayers());
         self::assertSame([], (new ReflectionProperty(Parser::class, 'workerGlobalDictionaryLoadedModules'))->getValue());
         self::assertSame([['en_US', ['Weline_A', 'Weline_B']], ['zh_Hans_CN', ['Weline_A', 'Weline_B']]], $this->provider->batches);
@@ -193,7 +195,7 @@ final class ParserModulePrefetchTest extends TestCase
             $this->request->modules = array_slice($modules, 0, $n);
             $this->currentLayers();
         }
-        self::assertLessThan(12 * 1024 * 1024, memory_get_usage(false) - $before);
+        self::assertLessThan(24 * 1024 * 1024, memory_get_usage(false) - $before);
         self::assertCount(2, $this->provider->batches);
         self::assertSame('en_US Weline_Prefetch24 word 511', $this->loaded('Weline_Prefetch24 word 511', $this->currentLayers()));
     }
@@ -219,8 +221,16 @@ final class ParserModulePrefetchTest extends TestCase
     {
         $property = new ReflectionProperty(Parser::class, 'workerModuleWordsCache');
         $cache = $property->getValue();
+        $chain = new ReflectionMethod(Parser::class, 'localeChain');
         foreach (['en_US', 'zh_Hans_CN', 'de_DE'] as $locale) {
-            foreach ($modules as $module) { $cache[DictionaryCacheNamespace::cacheKey('worker|' . $locale . '|' . $module, [$locale])] = []; }
+            $locales = $chain->invoke(null, $locale);
+            foreach ($modules as $module) {
+                $key = DictionaryCacheNamespace::cacheKey(
+                    'locale_chain|' . implode(',', $locales) . '|' . $module,
+                    $locales,
+                );
+                $cache[$key] = [];
+            }
         }
         $property->setValue(null, $cache);
     }

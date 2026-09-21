@@ -248,19 +248,24 @@ class B2BQueryProvider implements QueryProviderInterface
     private function hangStartPayment(array $params): array
     {
         try {
+            $context = [
+                'country_code' => (string)($params['country_code'] ?? ''),
+                'locale' => (string)($params['locale'] ?? ''),
+                'quote_token' => (string)($params['quote_token'] ?? ''),
+                'checkout_token' => (string)($params['checkout_token'] ?? ''),
+            ];
+            $explicitEnvironment = strtolower(trim((string)($params['environment'] ?? '')));
+            if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+                $context['environment'] = $explicitEnvironment;
+            }
+
             return $this->hangPayments()->startPayment(
                 (string)($params['order_uuid'] ?? ''),
                 (string)($params['purpose'] ?? ''),
                 (string)($params['payment_method'] ?? ''),
                 (string)($params['payment_idempotency_key'] ?? ''),
                 $this->currentCustomerId(),
-                [
-                    'country_code' => (string)($params['country_code'] ?? ''),
-                    'locale' => (string)($params['locale'] ?? ''),
-                    'environment' => (string)($params['environment'] ?? 'sandbox'),
-                    'quote_token' => (string)($params['quote_token'] ?? ''),
-                    'checkout_token' => (string)($params['checkout_token'] ?? ''),
-                ],
+                $context,
             );
         } catch (B2BConflictException $e) {
             return [

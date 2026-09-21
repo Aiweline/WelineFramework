@@ -1,7 +1,7 @@
 <?php
 /**
  * @meta.title {default="PayPal 支付方式",description="PayPal Provider 配置模板标题"}
- * @meta.description {default="配置 PayPal 沙箱与正式环境凭据及回调地址。"}
+ * @meta.description {default="配置 PayPal 沙箱与正式环境凭据、回调，以及发货物流回传（Add Tracking）说明。"}
  * @config.area {backend}
  * @config.sort {55}
  * @config.acl {Weline_Payment::payment_method}
@@ -57,6 +57,24 @@
         scope="global,website,store" />
 
     <w:config:field
+        key="payment/method/paypal/google_pay_enabled"
+        label="启用 Google Pay（PayPal）"
+        description="默认开启。关闭后 PayPal JS SDK 会对 googlepay 写入 disable-funding，结账不再展示 Google Pay 钱包按钮。需 PayPal 商户已具备 Google Pay 能力；本开关只控制本站呈现。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/paypal/apple_pay_enabled"
+        label="启用 Apple Pay（PayPal）"
+        description="默认开启。关闭后 PayPal JS SDK 会对 applepay 写入 disable-funding，结账不再展示 Apple Pay 钱包按钮。需 PayPal 商户已具备 Apple Pay 能力与域名登记；本开关只控制本站呈现。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+
+    <w:config:field
         key="payment/method/paypal/express_logo"
         label="快捷支付 Logo"
         description="结账页快捷支付按钮 logo。留空使用默认 PayPal 快捷支付 logo（paypal-express.svg）。部件级 logo 优先于本配置。"
@@ -65,6 +83,17 @@
         default=""
         scope="global,website,store"
         validation="max:1024" />
+
+    <w:config:field
+        key="payment/method/paypal/environment"
+        label="运行环境"
+        description="与支付方式列表「运行环境」是同一个开关：关闭为沙箱，开启为正式。按当前 Scope 保存，两套凭据同时保留。"
+        type="select"
+        value-type="string"
+        default="sandbox"
+        scope="global,website,store"
+        options="sandbox:沙盒,live:正式"
+        validation="in_options" />
 
     <w:config:field
         key="payment/method/paypal/default_currency"
@@ -268,4 +297,27 @@
         default=""
         scope="global,website,store"
         validation="max:255" />
+</w:config:group>
+
+<w:config:group
+    code="paypal_shipment_tracking"
+    label="发货物流回传（Add Tracking）"
+    description="默认启用：订单发货填运单号后自动回传 PayPal。无需在 PayPal App Features 勾选任何 Shipping 项；本站也无单独开关。"
+    sort="50">
+    <w:config:hint type="info">
+【结论先看】
+- 默认就支持。启用 PayPal + 沙箱/正式凭据可用即可；发货填运单号会自动回传。
+- 不要去 PayPal Developer → App Features 找「Shipping / Track shipments」——新版控制台本来就没有这一项，也不是本功能的前置条件。
+
+【本站怎么工作】
+- 接口：Orders v2「POST /v2/checkout/orders/{order_id}/track」（官方推荐，Checkout 默认路径）。
+- 触发：后台订单发货/后补运单号 → Weline_Order::order_shipped → 支付壳 → PayPalProvider。
+- 入口说明：本页（业务运营 → 支付管理 → 支付方式 → PayPal）。
+- 结果审计：支付交易 response_data.paypal_tracking_sync。
+- 手动补传：php bin/w payment:paypal:sync-tracking --order-uuid=… --tracking-number=… --carrier=SF
+
+【注意】
+- capture 须为 COMPLETED（已全额退款的 capture 不能再挂运单）。
+- 官方文档：https://developer.paypal.com/docs/tracking/ 与 https://developer.paypal.com/docs/tracking/orders-api/integrate/
+    </w:config:hint>
 </w:config:group>

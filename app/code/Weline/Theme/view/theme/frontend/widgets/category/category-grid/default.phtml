@@ -113,12 +113,21 @@ $categoryNames = [
         'alt_en' => 'Hanfu sets category image showing a complete coordinated outfit',
     ],
 ];
+$categoryDisplayNames = [];
+try {
+    $categoryDisplayNames = \Weline\Theme\Helper\HeaderCommerceData::categoryDisplayNamesByCode();
+} catch (\Throwable) {
+    $categoryDisplayNames = [];
+}
 $categories = [];
 foreach (array_slice($categoryNames, 0, $limit) as $category) {
     $code = (string)$category['code'];
+    $localizedName = trim((string)($categoryDisplayNames[$code] ?? ''));
     $categories[] = [
         'id' => (int)$category['id'],
-        'name' => $translateDefaultCopy($category['name_zh'], $category['name_en']),
+        'name' => $localizedName !== ''
+            ? $localizedName
+            : ($isChineseLocale ? (string)$category['name_zh'] : (string)$category['name_en']),
         'alt' => $translateDefaultCopy($category['alt_zh'], $category['alt_en']),
         'url' => '/category/' . $code,
         'image' => '/pub/media/catalog/hanfu/r2/categories/icons/' . $code . '.webp',

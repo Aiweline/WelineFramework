@@ -607,6 +607,10 @@ final class CartService
 
         $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
             ?? $this->newCart($scope, $guestToken, $customerId, '', $cartType);
+        // Keep logged-in carts durable: refresh store TTL on every successful read.
+        if ($customerId !== null && $customerId > 0 && ($cart['items'] ?? []) !== []) {
+            $this->store->touch($this->cartKey($scope, $guestToken, $customerId, $cartType));
+        }
         $summary = $this->summary($cart, true, '', [], $scope);
 
         return $this->attachSiblingCartsIfEmpty($summary, $scope, $guestToken, $customerId, $cartType);

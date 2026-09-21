@@ -1,6 +1,7 @@
 <?php
 /**
  * 主题管理列表页面（前后端分 Tab，各自选择激活）
+ * 页头标题与面包屑由后台布局 + PageHeaderResolver 负责，本模板只渲染列表主体。
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $themes
@@ -22,9 +23,7 @@ foreach ($themes as $themeItem) {
     }
 }
 $openAiThemeId = (int)($active_frontend_id ?: 0);
-$pageTitle = $h(__('主题管理'));
-$breadcrumbSystem = $h(__('系统'));
-$breadcrumbTheme = $h(__('主题管理'));
+$pageHint = $h(__('选择前台与后台各自激活的主题。'));
 $tabFrontendLabel = $h(__('前台主题'));
 $tabBackendLabel = $h(__('后台主题'));
 $selectedBadge = $h(__('已选'));
@@ -32,20 +31,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-theme-manage.css)">
 
-<main class="w-backend-page w-stack weline-theme-manage" data-theme-manage>
-    <header class="w-backend-page__heading">
-        <div class="w-stack">
-            <h1><w:icon name="palette" size="md"></w:icon><?= $pageTitle ?></h1>
-            <p class="w-text" data-tone="muted"><?= $h(__('选择前台与后台各自激活的主题。')) ?></p>
-        </div>
-        <nav class="w-breadcrumb" aria-label="<?= $h(__('面包屑')) ?>">
-            <span class="w-breadcrumb__item"><?= $breadcrumbSystem ?></span>
-            <span class="w-breadcrumb__item" aria-current="page"><?= $breadcrumbTheme ?></span>
-        </nav>
-    </header>
-
-    <?php include $this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, 'Weline_Component::message.phtml'); ?>
-
+<div class="w-stack weline-theme-manage" data-theme-manage data-testid="theme-manage">
     <?php if (empty($themes)): ?>
         <section class="w-card">
             <div class="w-card__body">
@@ -61,6 +47,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             </div>
         </section>
     <?php else: ?>
+        <p class="w-text weline-theme-manage__hint" data-tone="muted" data-size="sm"><?= $pageHint ?></p>
         <section class="w-card" data-w-component="tabs">
             <header class="w-card__header weline-theme-manage__tabbar">
                 <nav class="w-tabs__list weline-theme-manage__tabs" role="tablist" aria-label="<?= $h(__('主题区域')) ?>">
@@ -161,7 +148,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                             data-area="<?= $h($area) ?>"
                             data-has-preview="<?= $hasPreview ? '1' : '0' ?>"
                             data-needs-preview="<?= $hasPreview ? '0' : '1' ?>"
-                            data-edit-href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId]}"
+                            data-edit-href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId, 'editor_area' => $area, 'preview_area' => $area]}"
                             tabindex="0"
                             role="link"
                             aria-label="<?= $h(__('编辑主题')) ?>: <?= $themeNameAttr ?>"
@@ -224,7 +211,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                                 <a href="@backend-url{'theme/backend/index/preview'|['theme_id' => $themeId, 'area' => $area]}" class="w-button" target="_blank" rel="noopener" title="<?= $h(__('预览主题')) ?>" data-tone="primary" data-variant="outline" data-size="sm">
                                     <w:icon name="eye" size="sm"></w:icon> <?= $h(__('预览')) ?>
                                 </a>
-                                <a href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId]}" class="w-button theme-edit-link" title="<?= $h(__('可视化编辑')) ?>" data-tone="info" data-variant="outline" data-size="sm">
+                                <a href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId, 'editor_area' => $area, 'preview_area' => $area]}" class="w-button theme-edit-link" title="<?= $h(__('可视化编辑')) ?>" data-tone="info" data-variant="outline" data-size="sm">
                                     <w:icon name="palette" size="sm"></w:icon> <?= $h(__('编辑')) ?>
                                 </a>
                             </div>
@@ -250,7 +237,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             </div>
         </section>
     <?php endif; ?>
-</main>
+</div>
 
 <div class="w-dialog" id="aiVirtualThemeModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
     <div class="w-dialog__frame" data-size="lg">
@@ -361,14 +348,17 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                 <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
             <div class="w-dialog__body">
-                <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
-                    <div class="w-spinner w-text" role="status" style="display: none;" id="singleSpinner" data-tone="primary">
+                <div class="w-stack" id="singlePreviewMark" style="--w-gap:var(--weline-space-3);--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-2);">
+                    <div class="w-spinner" role="status" id="singleSpinner" data-tone="primary" data-self="center" hidden>
                         <span class="w-visually-hidden">Loading...</span>
                     </div>
-                    <w:icon name="camera" size="sm"></w:icon>
-                </div>
-                <div class="w-text" id="singleStatus" data-align="center" data-tone="muted" data-size="sm">
-                    <?= __('正在生成预览图，请稍候...') ?>
+                    <span data-self="center" id="singlePreviewCamera">
+                        <w:icon name="camera" size="sm"></w:icon>
+                    </span>
+                    <img id="singlePreviewImage" class="theme-preview-modal__shot" alt="<?= __('主题预览') ?>" hidden>
+                    <div class="w-text" id="singleStatus" data-align="center" data-tone="muted" data-size="sm">
+                        <?= __('正在生成预览图，请稍候...') ?>
+                    </div>
                 </div>
             </div>
             <div class="w-dialog__footer">
@@ -416,6 +406,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         expired: true,
         recovery_unsafe: true,
         event_backlog_limit: true,
+        recovering: true,
     };
     let activeBatchTaskId = null;
     let activeSingleTaskId = null;
@@ -589,8 +580,13 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
     async function pollRuntimeTask(api, task, handle, onUpdate, intervalMs) {
         const taskApi = api.resource('runtime_task');
         const wait = Number(intervalMs) > 0 ? Number(intervalMs) : 1000;
+        const startedAt = Date.now();
         let lastVersion = -1;
         while (!handle.stopped()) {
+            if (Date.now() - startedAt > 70000) {
+                activePreviewPolls.forEach(function(item) { item.close(); });
+                throw new Error('<?= addslashes(__('预览图生成超时，已停止查询')) ?>');
+            }
             try {
                 await taskApi.touch({
                     task_id: task.task_id,
@@ -994,6 +990,52 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         return url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
     }
 
+    function knownPreviewUrl(themeId, area) {
+        const id = Number(themeId);
+        const normalizedArea = area === 'backend' ? 'backend' : 'frontend';
+        if (!id) {
+            return '';
+        }
+        return '/theme_previews/theme_' + id + '_' + normalizedArea + '.png';
+    }
+
+    function showSinglePreviewImage(url) {
+        const image = document.getElementById('singlePreviewImage');
+        const camera = document.getElementById('singlePreviewCamera');
+        if (!image || !url) {
+            return Promise.resolve(false);
+        }
+        return new Promise(function(resolve) {
+            let settled = false;
+            const finish = function(ok) {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                image.hidden = !ok;
+                if (camera) {
+                    camera.hidden = !!ok;
+                }
+                resolve(ok);
+            };
+            image.onload = function() { finish(image.naturalWidth > 0); };
+            image.onerror = function() { finish(false); };
+            image.src = appendPreviewCacheBuster(url);
+        });
+    }
+
+    function revealKnownPreview(descriptor) {
+        if (!descriptor || !descriptor.theme_id) {
+            return Promise.resolve(false);
+        }
+        const url = knownPreviewUrl(descriptor.theme_id, descriptor.area);
+        if (!url) {
+            return Promise.resolve(false);
+        }
+        updateThemeCardPreview(findThemeCard(descriptor.theme_id, descriptor.area), url);
+        return showSinglePreviewImage(url);
+    }
+
     function updatePreviewActionButton(card, hasPreview) {
         if (!card) {
             return;
@@ -1127,7 +1169,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         const spinner = document.getElementById('singleSpinner');
         const status = document.getElementById('singleStatus');
         if (spinner) {
-            spinner.style.display = type === 'working' ? 'block' : 'none';
+            spinner.hidden = type !== 'working';
         }
         if (!status) {
             return;
@@ -1143,10 +1185,21 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
 
     function applySinglePreviewResult(descriptor, result) {
         const card = findThemeCard(descriptor.theme_id, descriptor.area);
-        const success = !!(result && result.success);
-        const message = success
+        const shot = document.getElementById('singlePreviewImage');
+        let success = !!(result && result.success);
+        let message = success
             ? (descriptor.success_message || '<?= __('预览图已更新') ?>')
             : String(result?.error || descriptor.error_message || '<?= __('生成失败') ?>');
+        if (!success && shot && !shot.hidden && shot.naturalWidth > 0) {
+            success = true;
+            message = descriptor.success_message || '<?= __('预览图已刷新') ?>';
+        }
+        if (success) {
+            const imageUrl = (result && result.image_url) || knownPreviewUrl(descriptor.theme_id, descriptor.area);
+            if (imageUrl) {
+                showSinglePreviewImage(imageUrl);
+            }
+        }
         if (card && success) {
             updateThemeCardPreview(card, result.image_url || '');
             setThemeCardStatus(card, 'success', message);
@@ -1161,7 +1214,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             if (success && singleGenerateModal) {
                 window.setTimeout(function() {
                     singleGenerateModal.hide();
-                }, 800);
+                }, 2200);
             }
         }
         return success;
@@ -1236,6 +1289,13 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                 });
                 return finish({ success: success });
             }
+            if (await revealKnownPreview(descriptor)) {
+                applySinglePreviewResult(descriptor, {
+                    success: true,
+                    image_url: knownPreviewUrl(descriptor.theme_id, descriptor.area),
+                });
+                return finish({ success: true });
+            }
             const message = taskFailureMessage(snap, status === 'cancelled'
                 ? '<?= __('预览图生成已取消') ?>'
                 : (status === 'expired'
@@ -1244,6 +1304,13 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             applySinglePreviewResult(descriptor, { success: false, error: message });
             return finish({ success: false, error: message });
         } catch (error) {
+            if (await revealKnownPreview(descriptor)) {
+                applySinglePreviewResult(descriptor, {
+                    success: true,
+                    image_url: knownPreviewUrl(descriptor.theme_id, descriptor.area),
+                });
+                return finish({ success: true });
+            }
             const message = error && error.message
                 ? String(error.message)
                 : '<?= __('预览图生成失败') ?>';
@@ -1273,6 +1340,11 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             document.getElementById('singleGenerateTitle').innerText = config.title || '<?= __('生成预览图') ?>';
             setSinglePreviewModalState('working', config.statusMessage || '<?= __('正在生成预览图，请稍候...') ?>');
             singleGenerateModal.show();
+            revealKnownPreview({
+                theme_id: normalizedThemeId,
+                area: area,
+                success_message: config.successMessage || '',
+            });
         }
         if (card) {
             setThemeCardGenerating(card, true);

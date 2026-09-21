@@ -13,12 +13,21 @@ class ThemePreviewGenerator
 {
     public const PREVIEW_DIR = 'theme_previews';
     private const SCREENSHOT_TIMEOUT_SECONDS = 60;
+
+    /** Storefront HTML can take ~16s. Capture must still exit after this budget. */
+    private const SCREENSHOT_CHROME_TIMEOUT_MS = 24000;
     private const PROCESS_POLL_INTERVAL_US = 100000;
 
     /**
      * 默认并发数量（建议 2-4，Windows 上不要太高）
      */
     public const DEFAULT_CONCURRENCY = 2;
+
+    /**
+     * Headless capture has no admin cookie. The signature lets the preview
+     * gateway enter the requested theme instead of bouncing to the live storefront.
+     */
+    public const CAPTURE_SIGNATURE_TTL = 180;
 
     public static function generatePreviewImage(
         WelineTheme $theme,
@@ -223,13 +232,6 @@ class ThemePreviewGenerator
         $timestamp = time();
         $fullUrl = $previewUrl . (str_contains($previewUrl, '?') ? '&' : '?') . 't=' . $timestamp;
 
-        try {
-            self::assertPreviewUrlReachable($fullUrl);
-        } catch (\Throwable $throwable) {
-            Env::log_error('theme_preview', __('主题预览地址不可用：%{1}', [$throwable->getMessage()]));
-            return null;
-        }
-
         $command = self::buildChromeCommand($chromePath, $previewPath, $fullUrl);
 
         $descriptorSpec = [
@@ -398,6 +400,8 @@ class ThemePreviewGenerator
         $query = $area === 'backend'
             ? [
                 'preview_theme' => $themeId,
+                'preview_area' => 'backend',
+                'editor_area' => 'backend',
                 'preview_gen' => '1',
             ]
             : [
@@ -407,6 +411,7 @@ class ThemePreviewGenerator
                 'page_type' => 'homepage',
                 'preview_gen' => '1',
             ];
+        $query = self::appendCaptureSignature($query, $themeId, $area);
 
         $base = self::normalizeCaptureBaseUrl($captureBaseUrl);
         if ($base !== null) {
@@ -452,6 +457,57 @@ class ThemePreviewGenerator
         return $scheme . '://' . $host . $port;
     }
 
+    /**
+     * @param array<string, int|string> $query
+     * @return array<string, int|string>
+     */
+    public static function appendCaptureSignature(array $query, int $themeId, string $area): array
+    {
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+        $exp = \time() + self::CAPTURE_SIGNATURE_TTL;
+        $query['preview_exp'] = $exp;
+        $query['preview_sig'] = self::signCapture($themeId, $area, $exp);
+
+        return $query;
+    }
+
+    public static function signCapture(int $themeId, string $area, int $exp): string
+    {
+        return \hash_hmac('sha256', self::capturePayload($themeId, $area, $exp), self::captureSigningKey());
+    }
+
+    public static function isValidCaptureSignature(int $themeId, string $area, int $exp, string $signature): bool
+    {
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+        $signature = \trim($signature);
+        if ($themeId < 1 || $exp < 1 || \preg_match('/^[a-f0-9]{64}$/D', $signature) !== 1) {
+            return false;
+        }
+
+        $now = \time();
+        if ($exp < $now - 5 || $exp > $now + self::CAPTURE_SIGNATURE_TTL + 5) {
+            return false;
+        }
+
+        return \hash_equals(self::signCapture($themeId, $area, $exp), $signature);
+    }
+
+    private static function capturePayload(int $themeId, string $area, int $exp): string
+    {
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+
+        return $themeId . '|' . $area . '|' . $exp;
+    }
+
+    private static function captureSigningKey(): string
+    {
+        $root = \defined('BP') ? (string)\BP : __DIR__;
+        $envFile = $root . 'app/etc/env.php';
+        $material = \is_file($envFile) ? (string)\hash_file('sha256', $envFile) : 'missing-env';
+
+        return \hash('sha256', $root . '|theme_preview_capture|' . $material);
+    }
+
     private static function themeSupportsArea(WelineTheme $theme, string $area): bool
     {
         $basePath = \rtrim($theme->getPath(), '/\\');
@@ -478,8 +534,6 @@ class ThemePreviewGenerator
 
         $timestamp = \time();
         $fullUrl = $url . (\str_contains($url, '?') ? '&' : '?') . 't=' . $timestamp;
-
-        self::assertPreviewUrlReachable($fullUrl);
 
         $result = self::runScreenshotCommand(
             $chromePath,
@@ -655,12 +709,43 @@ class ThemePreviewGenerator
 
     private static function buildChromeCommand(string $chromePath, string $savePath, string $url): string
     {
+        $quote = static fn(string $value): string => '"' . \str_replace('"', '\"', $value) . '"';
+        $node = self::nodeBinary();
+        $script = (\defined('BP') ? (string)\BP : '') . 'app/code/Weline/Theme/bin/capture-screenshot.mjs';
+        if ($node !== null && \is_file($script)) {
+            // --screenshot never exits on this storefront, so the runtime task stays
+            // "running" and the theme list polls query-bin forever.
+            return \sprintf(
+                '%s %s %s %s %s %d',
+                $quote($node),
+                $quote($script),
+                $quote($chromePath),
+                $quote($url),
+                $quote($savePath),
+                self::SCREENSHOT_CHROME_TIMEOUT_MS
+            );
+        }
+
         return \sprintf(
-            '"%s" --headless --disable-gpu --no-sandbox --ignore-certificate-errors --screenshot="%s" --window-size=1200,800 "%s"',
-            \str_replace('"', '\"', $chromePath),
-            \str_replace('"', '\"', $savePath),
-            \str_replace('"', '\"', $url)
+            '%s --headless=new --disable-gpu --no-sandbox --hide-scrollbars --ignore-certificate-errors --timeout=%d --screenshot=%s --window-size=1200,800 %s',
+            $quote($chromePath),
+            self::SCREENSHOT_CHROME_TIMEOUT_MS,
+            $quote($savePath),
+            $quote($url)
         );
+    }
+
+    private static function nodeBinary(): ?string
+    {
+        foreach (['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node'] as $path) {
+            if (\is_executable($path)) {
+                return $path;
+            }
+        }
+
+        $found = \trim((string)@\shell_exec('command -v node 2>/dev/null'));
+
+        return ($found !== '' && \is_executable($found)) ? $found : null;
     }
 
     private static function terminateProcessTree($process, int $pid): void
@@ -676,8 +761,10 @@ class ThemePreviewGenerator
             return;
         }
 
+        @\exec('pkill -P ' . $pid . ' >/dev/null 2>&1');
         @\exec('kill -TERM ' . $pid . ' >/dev/null 2>&1');
         \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(200);
+        @\exec('pkill -KILL -P ' . $pid . ' >/dev/null 2>&1');
         @\exec('kill -KILL ' . $pid . ' >/dev/null 2>&1');
     }
 

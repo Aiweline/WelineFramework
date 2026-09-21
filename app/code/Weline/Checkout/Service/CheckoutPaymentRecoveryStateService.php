@@ -50,6 +50,10 @@ final class CheckoutPaymentRecoveryStateService
         if ($purpose !== '' && !in_array($purpose, ['deposit', 'balance', 'full'], true)) {
             throw new \InvalidArgumentException('checkout_payment_recovery_purpose_invalid');
         }
+        $previous = $session['payment_result'] ?? null;
+        if (is_array($previous) && $previous !== []) {
+            $this->appendPaymentAttemptHistory($session, $previous);
+        }
         $entries = is_array($session['payment_recovery_entries'] ?? null)
             ? $session['payment_recovery_entries']
             : [];
@@ -59,6 +63,25 @@ final class CheckoutPaymentRecoveryStateService
         }
         $session['payment_result'] = $payment;
         $this->sessions->put(trim($quoteToken), $session);
+    }
+
+    /**
+     * Read-only audit trail of prior payment_result snapshots.
+     *
+     * @return list<array{outcome?: mixed, status?: mixed, transactions?: mixed, recorded_at?: mixed}>
+     */
+    public function history(string $quoteToken, string $orderIdempotencyKey): array
+    {
+        $session = $this->submittedSession($quoteToken, $orderIdempotencyKey);
+        if ($session === null) {
+            return [];
+        }
+        $history = $session['payment_attempt_history'] ?? null;
+        if (!is_array($history)) {
+            return [];
+        }
+
+        return array_values($history);
     }
 
     /** @return array<string, mixed>|null */
@@ -95,6 +118,50 @@ final class CheckoutPaymentRecoveryStateService
     }
 
     /**
+     * Browser cancel/failure: flip pending→failed so resumePaymentV2 canRetry works.
+     * Appends prior payment_result into payment_attempt_history via record().
+     *
+     * @param array<string, mixed> $extra
+     */
+    public function markBrowserCancel(string $quoteToken, ?string $orderIdempotencyKey = null, array $extra = []): bool
+    {
+        $quoteToken = trim($quoteToken);
+        if ($quoteToken === '') {
+            return false;
+        }
+        $session = $this->sessions->get($quoteToken);
+        if (!is_array($session)) {
+            return false;
+        }
+        $idempotencyKey = trim((string)($orderIdempotencyKey ?? ($session['idempotency_key'] ?? '')));
+        if ($idempotencyKey === '' || !$this->matchesSubmittedSession($session, $idempotencyKey)) {
+            return false;
+        }
+        $payment = is_array($session['payment_result'] ?? null) ? $session['payment_result'] : [];
+        $outcome = strtolower(trim((string)($payment['outcome'] ?? '')));
+        if (in_array($outcome, ['paid', 'partial'], true)) {
+            return false;
+        }
+
+        try {
+            $this->record($quoteToken, $idempotencyKey, array_replace([
+                'paid' => false,
+                'outcome' => 'failed',
+                'status' => 'cancelled',
+                'requires_action' => false,
+                'recoverable' => true,
+                'redirect_url' => null,
+                'transactions' => is_array($payment['transactions'] ?? null) ? $payment['transactions'] : [],
+                'cancel_source' => 'browser_cancel',
+            ], $extra));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Atomically convert a retryable failure into a non-retryable in-progress
      * claim before the external payment provider is called.
      */
@@ -120,6 +187,9 @@ final class CheckoutPaymentRecoveryStateService
                 || strtolower(trim((string)($payment['outcome'] ?? ''))) !== 'failed'
                 || !(bool)($payment['recoverable'] ?? true)) {
                 return false;
+            }
+            if ($payment !== []) {
+                $this->appendPaymentAttemptHistory($session, $payment);
             }
             $session['payment_result'] = [
                 'paid' => false,
@@ -171,5 +241,34 @@ final class CheckoutPaymentRecoveryStateService
         $storedKey = (string)($session['idempotency_key'] ?? '');
 
         return $storedKey !== '' && hash_equals($storedKey, $orderIdempotencyKey);
+    }
+
+    /**
+     * Append a compact snapshot of the previous payment_result (FIFO, max 50).
+     *
+     * @param array<string, mixed> $session
+     * @param array<string, mixed> $payment
+     */
+    private function appendPaymentAttemptHistory(array &$session, array $payment): void
+    {
+        $history = is_array($session['payment_attempt_history'] ?? null)
+            ? $session['payment_attempt_history']
+            : [];
+        $recordedAt = trim((string)($payment['recorded_at'] ?? ''));
+        if ($recordedAt === '') {
+            $recordedAt = gmdate('c');
+        }
+        $history[] = [
+            'outcome' => $payment['outcome'] ?? null,
+            'status' => $payment['status'] ?? null,
+            'transactions' => is_array($payment['transactions'] ?? null)
+                ? $payment['transactions']
+                : [],
+            'recorded_at' => $recordedAt,
+        ];
+        if (count($history) > 50) {
+            $history = array_slice($history, -50);
+        }
+        $session['payment_attempt_history'] = array_values($history);
     }
 }

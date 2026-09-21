@@ -27,6 +27,7 @@ final class McpSkillCatalog
         'local-browser-urls' => GuidanceWorkflowCatalog::SURFACE_WEBUI_BROWSER_CLOSEOUT,
         'weline-taglib-first' => GuidanceWorkflowCatalog::SURFACE_TAGLIB_UI_CONTROL,
         'weline-req-clarify' => GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
+        'weline-engineering-team' => GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM,
     ];
 
     /**
@@ -80,7 +81,7 @@ final class McpSkillCatalog
                 'Host shells (e.g. Cursor Agent Skills) may exist only as thin reminders to call MCP.',
                 'Full task docs still come from resolve_task_context; skills are procedural checklists.',
                 'Whenever the task mentions CSS or 主题/theme: load UI skill frontend-design, prototype skill prototype, and theme skill weline-theme-development (get_skill) before styling.',
-                'HARD: At requirement start classify work_kind + fe_be_scope (requirement_fe_be_scope_analysis), then run Spec Kit/Kiro-style clarify + use-case when needed (requirement_clarify_use_case_spec). Enable host Plan Mode (host_plan_mode_for_planning) UNLESS simple plan_skip with rationale≥24; plan body ONLY 背景+方案+细节 (plan_content_focus_only). EVERY ask MUST have real acceptance (requirement_acceptance_always)—Web touches need local Browser WB-OP visual+logic even without Playwright e2e. Layout/humanization/吐槽/审图 force prototype+frontend-design adjustments (ui_skill_surface_signal_gate). Then analyze implicit requirements; decide ui_skill_decision. When participate: prototype+frontend-design+weline-theme-development + type=shentu. Closeout MUST write huishen_notes 汇审 (closeout_requires_huishen).',
+                'HARD: At requirement start classify work_kind + fe_be_scope (requirement_fe_be_scope_analysis), then run Spec Kit/Kiro-style clarify + use-case when needed (requirement_clarify_use_case_spec). Enable host Plan Mode (host_plan_mode_for_planning) UNLESS simple plan_skip with rationale≥24; plan body ONLY 背景+方案+细节 (plan_content_focus_only). Non-simple/complex requirements: the parent itself chooses team mode (engineering_team_for_new_requirements) and seats; every user-facing line is Team:{席位}: e.g. Team:架构师:. Simple plan_skip uses 监工: and must not use Team:. Complex team MUST obey framework_first + dual_track_all specialty seats + component_reuse_or_negotiate + team_flow_on_contracts (对齐冻结会钉 UC+contracts+deps；依赖唤醒；禁止开发完才补主路径用例) + acceptance UI+原型 substantive signoff. Content-ops exempt. EVERY ask MUST have real acceptance (requirement_acceptance_always)—Web touches need local Browser WB-OP visual+logic even without Playwright e2e. Layout/humanization/吐槽/审图 force prototype+frontend-design adjustments (ui_skill_surface_signal_gate). Then analyze implicit requirements; decide ui_skill_decision. When participate: prototype+frontend-design+weline-theme-development + type=shentu. Closeout MUST write huishen_notes 汇审 (closeout_requires_huishen).',
                 'HARD: Any user message with an image/screenshot attachment (admin/CMS/error/storefront—not only retail/B2B) MUST run MCP command 审图 (dev/ai-command/theme/审图.md) immediately; do not wait for the word 审图. Classify error_shot vs ui_shot: non-error (ui_shot) defaults to UI modification required. Same-turn joint pipeline: extract wireframe/line sketch → prototype adjustments (prototype) → frontend-design humanization + aesthetic standards → weline-theme-development CSS/tokens; fix fails (do not critique-only). Shot-only/silent screenshot: UI+prototype audit—NOT confirming prior chat. If host skills frontend-design or prototype are missing: prompt visibly and self-install into Cursor Agent Store before E/F pass (image_attachment_shentu_bundle.missing_host_skills_gate).',
                 'HARD: 产品优化 (parent) MUST launch THREE parallel subagents—① image (ecommerce-product-image+weline-image-pipeline) ② 详情优化 (ecommerce-detail-suite) ③ 翻译优化 (ecommerce-product-i18n). Not synonyms with any single child. Bundle product_optimize_detail_suite_bundle. Bare /product/ share-link alone does not trigger.',
                 'HARD: Prototype/feature Web UI page groupings MUST default to TOP tabs (feature_ui_keep_simple_top_tabs): one job per pane; secondary blocks use click-to-expand cards (default collapsed); redesign non-compliant dense stacked pages to tabs in the same feature.',
@@ -101,6 +102,49 @@ final class McpSkillCatalog
                 'also_require_acceptance_type' => 'shentu',
                 'acceptance_rule_id' => 'acceptance_phase_requires_shentu',
                 'closeout_rule_id' => 'closeout_requires_huishen',
+            ],
+            'engineering_team_bundle' => [
+                'rule_id' => 'engineering_team_for_new_requirements',
+                'skill_id' => GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM,
+                'host_alias' => 'weline-engineering-team',
+                'command_path' => 'dev/ai-command/ai/工程团队.md',
+                'parent_role' => '项目经理',
+                'exempt' => ['plan_complexity=simple', 'content_ops_skills_skip_mcp'],
+                'minutes_dir' => 'doc/开发/team/{slug}/',
+                'minutes_extra' => [
+                    'surfaces.md',
+                    'components.md',
+                    'contracts.md',
+                    'deps.md',
+                    'meetings/align-freeze.md',
+                    'meetings/component-negotiate.md',
+                    'meetings/{seat}-review.md',
+                    'meetings/acceptance-ui.md',
+                    'meetings/acceptance-prototype.md',
+                ],
+                'stop_work' => '停工汇报',
+                'principles' => [
+                    'framework_first',
+                    'dual_track_all',
+                    'component_first',
+                    'acceptance_substantive_signoff',
+                    'team_flow_on_contracts',
+                ],
+                'dual_track' => true,
+                'review_lanes' => 'per_triggered_seat',
+                'core_roster' => [
+                    '项目经理', '需求分析', '领域探查', '架构师', '后端', '前端', '主题', 'UI', '原型', '测试', '安全', '文档',
+                ],
+                'framework_seats' => [
+                    '扩展点', '事件', '查询', 'Taglib', 'Hook', 'Provider', 'i18n', 'ACL', 'Setup', '合规',
+                ],
+                'acceptance_signoff' => ['UI', '原型'],
+                'component_negotiate' => ['原型', 'UI', '主题'],
+                'utterance' => [
+                    'simple' => '监工:',
+                    'team' => 'Team:{席位}:',
+                    'example' => 'Team:架构师:',
+                ],
             ],
             'css_or_theme_skill_bundle' => [
                 'rule_id' => 'css_or_theme_requires_ui_prototype_theme_skills',

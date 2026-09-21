@@ -7,7 +7,11 @@ namespace Weline\Payment\Controller\Frontend\Guide;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Payment\Service\PaymentCustomerGuideRegistry;
 
-/** Payment customer guide hub and provider-owned guide/policy pages. */
+/**
+ * 支付方式指南（店面）。
+ *
+ * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/guide/payment,/guide/payment/**
+ */
 final class Payment extends FrontendController
 {
     public function __construct(

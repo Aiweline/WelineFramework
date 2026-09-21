@@ -68,6 +68,8 @@
 多语言配置,"Multilingual Configuration"
 AI翻译,"AI Translate"
 关闭多语言配置,"Turn off multi-language configuration"
+搜索语言或代码,"Search language or code"
+搜索语言或代码...,"Search language or code..."
 保存多语言,"Save Multilingual"
 启用,Enable
 普通部件首次入库后,"After common parts are put into storage for the first time"
@@ -243,3 +245,4 @@ FAQ部件,"FAQ widget"
 拖拽排序,"Drag to sort"
 "mdi mdi-puzzle","mdi mdi-puzzle"
 "mdi mdi-pencil-box","mdi mdi-pencil-box"
+没有匹配的语言,"No matching language"

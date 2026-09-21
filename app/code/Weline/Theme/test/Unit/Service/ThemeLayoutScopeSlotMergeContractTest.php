@@ -53,10 +53,10 @@ final class ThemeLayoutScopeSlotMergeContractTest extends TestCase
         self::assertStringContainsString('dispatchScopedPublishResourceChange(', $workspace);
         self::assertStringContainsString('\\w_changed($change)', $workspace);
 
-        $observer = $this->read('app/code/Weline/Theme/Observer/ResourceChanged.php');
-        self::assertStringContainsString('clearAllThemeRelatedCaches(', $observer);
-        self::assertStringNotContainsString('clearScopedCaches($scope', $observer);
-        self::assertStringContainsString('affectsTheme(', $observer);
+        $capability = $this->read('app/code/Weline/Theme/extends/module/Weline_Framework/Changed/Capability/ThemeRuntimeCapability.php');
+        self::assertStringContainsString('clearAllThemeRelatedCaches(', $capability);
+        self::assertStringContainsString('CODE_THEME_RUNTIME_CLEAR', $capability);
+        self::assertStringContainsString('theme_runtime', $capability);
 
         $cleaner = $this->read('app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php');
         self::assertStringContainsString('function clearAllThemeRelatedCaches(', $cleaner);
@@ -66,6 +66,8 @@ final class ThemeLayoutScopeSlotMergeContractTest extends TestCase
 
         $request = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspaceRequestService.php');
         self::assertStringContainsString('clearAllThemeRelatedCaches(', $request);
+
+        self::assertFileDoesNotExist(BP . 'app/code/Weline/Theme/Observer/ResourceChanged.php');
     }
 
     private function read(string $relative): string

@@ -47,8 +47,9 @@
 ## ThemeData 运行时缓存
 
 - `ThemeData` 请求热路径只维护进程内 L1；不得 `weline_site_runtime` get/set。
-- 前台 head（`ThemeDiskHeadService`）刷新 disk_bundle 视图时只 `clearProcessMemoryCache()`，禁止请求内 `clearNamespace`。
-- 显式发布 / 配置写入仍可 `ThemeData::clearCache()`（含共享命名空间）。
+- 前台 head 不得在 `editor_mode` / `preview` / `visual_editor` 上 `clearProcessMemoryCache()`。进程 L1 只在显式 `theme_disk_refresh` 或发布 `clearCache()` 时清。
+- 显式发布 / 配置整池失效仍可 `ThemeData::clearCache()`（含共享命名空间）。单条 `ThemeData::set` 只改已装入桶里的对应键，不整池清空。
+- 编辑预览范围只保存改过的行。读链在预览范围之后回落 `default`。禁止在读路径按 `@meta::theme.{area}.` 前缀克隆词典。
 
 ## 前台已发布快照与请求描述符（2.2.262）
 

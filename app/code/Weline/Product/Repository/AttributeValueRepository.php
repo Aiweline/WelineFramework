@@ -338,11 +338,16 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         return array_values($ids);
     }
 
+    /** Hard cap on materialized explicit EAV rows per listExplicitRows call. */
+    public const LIST_EXPLICIT_ROWS_HARD_LIMIT = 100000;
+
     /**
      * Return explicit Website/Store rows without applying fallback.
      *
      * @param list<int> $entityIds
      * @param list<int> $storeIds
+     * @param list<string>|null $locales null = no locale filter; non-null always includes ''
+     * @param list<string>|null $attributeCodes null = no code filter; empty after normalize → []
      * @return list<array{
      *   store_id:int,entity_type:string,entity_id:int,attribute_code:string,
      *   locale:string,value:mixed,cleared:bool,is_required:bool
@@ -353,6 +358,8 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         string $entityType,
         array $entityIds,
         array $storeIds,
+        ?array $locales = null,
+        ?array $attributeCodes = null,
     ): array {
         $this->assertWebsite($websiteId);
         $entityType = trim($entityType);
@@ -367,23 +374,101 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         if ($entityType === '' || $entityIds === [] || $storeIds === []) {
             return [];
         }
-        $raw = $this->newModel($websiteId)
+
+        $localeFilter = null;
+        if ($locales !== null) {
+            $localeFilter = [];
+            foreach ($locales as $locale) {
+                if (!\is_string($locale) && !\is_int($locale) && !\is_float($locale)) {
+                    continue;
+                }
+                $locale = \trim((string)$locale);
+                if (!\in_array($locale, $localeFilter, true)) {
+                    $localeFilter[] = $locale;
+                }
+            }
+            if (!\in_array('', $localeFilter, true)) {
+                $localeFilter[] = '';
+            }
+        }
+
+        $codeFilter = null;
+        if ($attributeCodes !== null) {
+            $codeFilter = [];
+            foreach ($attributeCodes as $code) {
+                if (!\is_string($code) && !\is_int($code) && !\is_float($code)) {
+                    continue;
+                }
+                $code = \trim((string)$code);
+                if ($code === '' || \in_array($code, $codeFilter, true)) {
+                    continue;
+                }
+                $codeFilter[] = $code;
+            }
+            if ($codeFilter === []) {
+                return [];
+            }
+        }
+
+        $diagBefore = \memory_get_usage(false);
+        $query = $this->newModel($websiteId)
             ->clear()
             ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
             ->where(AttributeValue::schema_fields_ENTITY_ID, $entityIds, 'IN')
-            ->where(AttributeValue::schema_fields_STORE_ID, $storeIds, 'IN')
+            ->where(AttributeValue::schema_fields_STORE_ID, $storeIds, 'IN');
+        if ($localeFilter !== null) {
+            $query->where(AttributeValue::schema_fields_LOCALE, $localeFilter, 'IN');
+        }
+        if ($codeFilter !== null) {
+            $query->where(AttributeValue::schema_fields_ATTRIBUTE_CODE, $codeFilter, 'IN');
+        }
+        $raw = $query
+            ->order(AttributeValue::schema_fields_ENTITY_ID, 'ASC')
+            ->order(AttributeValue::schema_fields_STORE_ID, 'ASC')
+            ->order(AttributeValue::schema_fields_ATTRIBUTE_CODE, 'ASC')
+            ->order(AttributeValue::schema_fields_LOCALE, 'ASC')
             ->select()
             ->fetchIterator();
         $rows = [];
+        $rawCount = 0;
+        $distinctLocales = [];
         foreach ($raw as $item) {
+            ++$rawCount;
+            if ($rawCount > self::LIST_EXPLICIT_ROWS_HARD_LIMIT) {
+                $requestUri = self::resolveRequestUri();
+                if (\class_exists(\Weline\Framework\Runtime\MemDiag::class)) {
+                    \Weline\Framework\Runtime\MemDiag::event('eav_list_explicit_rows', [
+                        'website_id' => $websiteId,
+                        'entity_type' => $entityType,
+                        'entity_ids' => \count($entityIds),
+                        'store_ids' => $storeIds,
+                        'locales' => $localeFilter,
+                        'attribute_codes_n' => $codeFilter === null ? null : \count($codeFilter),
+                        'distinct_locale' => \count($distinctLocales),
+                        'request_uri' => $requestUri,
+                        'raw_rows' => $rawCount,
+                        'out_rows' => \count($rows),
+                        'hard_limit' => self::LIST_EXPLICIT_ROWS_HARD_LIMIT,
+                        'delta_before_materialize' => \memory_get_usage(false) - $diagBefore,
+                        'delta_after_materialize' => \memory_get_usage(false) - $diagBefore,
+                        'delta_before_sort' => \memory_get_usage(false) - $diagBefore,
+                        'delta_after_sort' => \memory_get_usage(false) - $diagBefore,
+                    ]);
+                }
+                throw new \Weline\Framework\App\Exception(
+                    'listExplicitRows materialize hard limit exceeded: ' . self::LIST_EXPLICIT_ROWS_HARD_LIMIT,
+                );
+            }
             $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
                 || (int)($item[AttributeValue::schema_fields_CLEARED] ?? 0) === 1;
+            $locale = (string)($item[AttributeValue::schema_fields_LOCALE] ?? '');
+            $distinctLocales[$locale] = true;
             $rows[] = [
                 'store_id' => (int)($item[AttributeValue::schema_fields_STORE_ID] ?? 0),
                 'entity_type' => (string)($item[AttributeValue::schema_fields_ENTITY_TYPE] ?? ''),
                 'entity_id' => (int)($item[AttributeValue::schema_fields_ENTITY_ID] ?? 0),
                 'attribute_code' => (string)($item[AttributeValue::schema_fields_ATTRIBUTE_CODE] ?? ''),
-                'locale' => (string)($item[AttributeValue::schema_fields_LOCALE] ?? ''),
+                'locale' => $locale,
                 'value_type' => (string)($item['value_type'] ?? 'string'),
                 'value' => $cleared ? null : $this->decodeTypedValue($item),
                 'scope_state' => $cleared ? 'cleared' : (string)($item['scope_state'] ?? 'explicit'),
@@ -391,21 +476,44 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
                 'is_required' => (int)($item[AttributeValue::schema_fields_IS_REQUIRED] ?? 0) === 1,
             ];
         }
-        usort(
-            $rows,
-            static fn(array $left, array $right): int => [
-                $left['entity_id'],
-                $left['store_id'],
-                $left['attribute_code'],
-                $left['locale'],
-            ] <=> [
-                $right['entity_id'],
-                $right['store_id'],
-                $right['attribute_code'],
-                $right['locale'],
-            ],
-        );
+        $afterMaterialize = \memory_get_usage(false);
+        $deltaMaterialize = $afterMaterialize - $diagBefore;
+        if (\class_exists(\Weline\Framework\Runtime\MemDiag::class)) {
+            \Weline\Framework\Runtime\MemDiag::event('eav_list_explicit_rows', [
+                'website_id' => $websiteId,
+                'entity_type' => $entityType,
+                'entity_ids' => \count($entityIds),
+                'store_ids' => $storeIds,
+                'locales' => $localeFilter,
+                'attribute_codes_n' => $codeFilter === null ? null : \count($codeFilter),
+                'distinct_locale' => \count($distinctLocales),
+                'request_uri' => self::resolveRequestUri(),
+                'raw_rows' => $rawCount,
+                'out_rows' => \count($rows),
+                'delta_before_materialize' => $deltaMaterialize,
+                'delta_after_materialize' => $deltaMaterialize,
+                // Legacy aliases: no PHP usort; both mean post-materialize usage delta.
+                'delta_before_sort' => $deltaMaterialize,
+                'delta_after_sort' => $deltaMaterialize,
+            ]);
+        }
         return $rows;
+    }
+
+    private static function resolveRequestUri(): string
+    {
+        if (\function_exists('w_env_request_uri')) {
+            try {
+                $uri = (string)\w_env_request_uri();
+                if ($uri !== '') {
+                    return $uri;
+                }
+            } catch (\Throwable) {
+                // Fall through to $_SERVER.
+            }
+        }
+
+        return (string)($_SERVER['REQUEST_URI'] ?? '');
     }
 
     /**

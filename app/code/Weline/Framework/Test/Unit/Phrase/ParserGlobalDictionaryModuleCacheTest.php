@@ -50,13 +50,15 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         ini_set('memory_limit', $this->memoryLimit);
     }
 
-    public function testEarlyRequestWithoutModulesUsesExactWordsAndLoadsModulesWhenDiscovered(): void
+    public function testTranslatePathDoesNotHitGlobalDictionaryExactWord(): void
     {
         $provider = new class implements GlobalDictionaryProviderInterface, ModuleGlobalDictionaryProviderInterface {
             public array $legacyCalls = [];
             public array $batchCalls = [];
+            public array $wordCalls = [];
             public function word(string $locale, string $word): ?string
             {
+                $this->wordCalls[] = [$locale, $word];
                 return $locale === 'en_US' && $word === 'Early source' ? 'Early exact translation' : null;
             }
             public function words(string $locale, array $modules = []): array
@@ -78,16 +80,18 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         RequestContext::setId('early-request-without-modules');
         $translate = new ReflectionMethod(Parser::class, 'translateWordFromLayers');
 
-        $earlyLayers = $this->load([], 'en_US', 'getLayeredWords');
-        self::assertSame('Early exact translation', $translate->invoke(null, 'Early source', $earlyLayers));
-        self::assertSame([], $provider->legacyCalls, 'Routing has not found a module; HTTP must not load the entire locale.');
-        self::assertSame([], $provider->batchCalls);
-        self::assertSame('Late source', $translate->invoke(null, 'Late source', $earlyLayers));
-
-        $moduleLayers = $this->load(['Weline_LateFixture'], 'en_US', 'getLayeredWords');
-        self::assertSame('Late module translation', $translate->invoke(null, 'Late source', $moduleLayers));
+        $earlyLayers = $this->loadLayers([], 'en_US');
+        self::assertSame('Early source', $translate->invoke(null, 'Early source', $earlyLayers));
+        self::assertSame([], $provider->wordCalls, '__()/translate must not call global dictionary word()');
         self::assertSame([], $provider->legacyCalls);
+        self::assertSame([], $provider->batchCalls);
+
+        $moduleMaps = $this->load(['Weline_LateFixture'], 'en_US', 'loadGlobalDictionaryScopeWords');
+        self::assertSame(['Late source' => 'Late module translation'], $moduleMaps);
         self::assertNotEmpty($provider->batchCalls);
+        $moduleLayers = $this->loadLayers(['Weline_LateFixture'], 'en_US');
+        $moduleLayers['locale_word_layers'] = [$moduleMaps];
+        self::assertSame('Late module translation', $translate->invoke(null, 'Late source', $moduleLayers));
     }
 
     public function testPeersReuseIndependentModuleMapsAcrossDifferentGrowthOrders(): void
@@ -125,9 +129,9 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         $provider = new ModuleDictionaryProviderFixture();
         $provider->failures = 1;
         $this->startWorker($provider);
-        self::assertSame([], $this->load(['Weline_A'], 'en_US', 'loadLocaleWords'));
+        self::assertSame([], $this->load(['Weline_A'], 'en_US', 'loadGlobalDictionaryScopeWords'));
         self::assertSame([], array_filter($this->storage, 'is_array'));
-        self::assertSame(['A word' => 'A translation'], $this->load(['Weline_A'], 'en_US', 'loadLocaleWords'));
+        self::assertSame(['A word' => 'A translation'], $this->load(['Weline_A'], 'en_US', 'loadGlobalDictionaryScopeWords'));
         self::assertCount(2, $provider->batchCalls);
     }
 
@@ -150,7 +154,7 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         self::assertSame([], $provider->batchCalls);
     }
 
-    public function testPublicParseRetriesAfterFailedBatchWithoutKeepingTheSourceWord(): void
+    public function testPublicParseDoesNotHydrateGlobalDictionaryOnMiss(): void
     {
         $originalInstances = ObjectManager::getInstances();
         $manager = new ReflectionProperty(ObjectManager::class, 'instance');
@@ -162,20 +166,14 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         };
         ObjectManager::setInstance(Request::class, $request);
         $provider = new ModuleDictionaryProviderFixture();
-        $provider->failures = 1;
         $this->startWorker($provider);
-        RequestContext::setId('module-dictionary-first');
+        RequestContext::setId('module-dictionary-readonly');
         State::setRequestLanguageOverride('en_US');
         try {
             $word = 'A word';
             self::assertSame('A word', Parser::parse($word));
-            StateManager::reset();
-            RequestContext::init();
-            RequestContext::setId('module-dictionary-second');
-            State::setRequestLanguageOverride('en_US');
-            ObjectManager::setInstance(Request::class, $request);
-            $word = 'A word';
-            self::assertSame('A translation', Parser::parse($word));
+            self::assertSame([], $provider->batchCalls);
+            self::assertSame([], $provider->legacyCalls);
         } finally {
             (new ReflectionProperty(ObjectManager::class, 'instances'))->setValue(null, $originalInstances);
             $manager->setValue(null, $originalManager);
@@ -225,7 +223,20 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
 
     private function load(array $modules, string $locale = 'en_US', string $method = 'loadGlobalDictionaryScopeWords'): array
     {
-        return (new ReflectionMethod(Parser::class, $method))->invoke(null, $locale, $modules);
+        $ref = new ReflectionMethod(Parser::class, $method);
+        if ($method === 'getLayeredWords') {
+            return $ref->invoke(null, $locale, $modules);
+        }
+        if ($method === 'loadLocaleWords') {
+            return $ref->invoke(null, $locale, $modules);
+        }
+
+        return $ref->invoke(null, $locale, $modules);
+    }
+
+    private function loadLayers(array $modules, string $locale = 'en_US'): array
+    {
+        return (new ReflectionMethod(Parser::class, 'getLayeredWords'))->invoke(null, $locale, $modules);
     }
 }
 

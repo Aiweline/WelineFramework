@@ -804,6 +804,7 @@
         apiVersions: '',
         apiSaveVersion: '',
         apiSwitchVersion: '',
+        apiInheritVersion: '',
         apiRestoreOriginal: '',
         apiClearThemeCache: '',
         apiResetDraftResources: '',
@@ -883,6 +884,14 @@
         fullscreenSidePanelsSnapshot: null,
         editorFullscreenFallback: false,
         configLocale: '',
+        // module::code → { params, name, description, module, code, type }
+        // 点选时先用本地 schema 画出表单，再等 GET widget-config 灌值（避免 query-bin 串行排队导致「点了没反馈」）。
+        widgetParamsIndex: Object.create(null),
+        widgetConfigLoadSeq: 0,
+        widgetConfigByNodeUid: Object.create(null),
+        // 布局配置表单 HTML：切回「布局」时先画缓存，再后台刷新。
+        layoutConfigCache: null,
+        layoutConfigLoadSeq: 0,
         widgetLibraryTab: 'general',
         libraryTypeFilters: { types: [], aiOnly: false },
         widgetLibraryRenderMode: 'widgets',
@@ -1888,7 +1897,7 @@
         }
 
         elements.btnFullscreenPreview.classList.toggle('active', active);
-        elements.btnFullscreenPreview.title = active ? translateUiText('退出全屏') : translateUiText('全屏预览');
+        elements.btnFullscreenPreview.title = active ? window.__('退出全屏') : window.__('全屏预览');
         elements.btnFullscreenPreview.setAttribute('aria-pressed', active ? 'true' : 'false');
 
         const icon = elements.btnFullscreenPreview.querySelector('.w-icon');
@@ -1896,7 +1905,7 @@
             icon.replaceWith(getEditorUi().icon.create(active ? 'fullscreen-exit' : 'fullscreen', { size: 'sm' }));
         }
 
-        const label = active ? translateUiText('退出全屏') : translateUiText('全屏');
+        const label = active ? window.__('退出全屏') : window.__('全屏');
         const text = elements.btnFullscreenPreview.querySelector('.w-theme-editor-preview-action-text');
         if (text) {
             text.textContent = label;
@@ -2421,6 +2430,13 @@
         return kind === 'store' || kind === 'channel' ? 'normal' : null;
     }
 
+    function currentLayoutDraftRevisionId() {
+        const workspace = typeof getScopedWorkspaceState === 'function'
+            ? getScopedWorkspaceState('layout')
+            : null;
+        return parseInt(workspace?.draft_revision_id || 0, 10) || 0;
+    }
+
     function buildLayoutVersionIdentityPayload(extra = {}) {
         const layoutType = getEffectiveLayoutType();
         const layoutOption = getEffectiveLayoutOption();
@@ -2441,6 +2457,8 @@
             store_mode: payloadStoreModeFromScopeIdentity(identityPayload),
             target_type: targetType,
             target_id: targetId,
+            version_id: parseInt(state.currentVersionId || 0, 10) || 0,
+            draft_revision_id: currentLayoutDraftRevisionId(),
             editor_context: editorContext,
         };
         if (targetType && targetType !== 'global') {
@@ -2501,7 +2519,9 @@
         const context = payload?.editor_context || {};
         const identity = context?.scope?.identity || {};
         return JSON.stringify([
-            parseInt(payload?.theme_id || context.theme_id || 0, 10) || 0,
+            parseInt(payload?.theme_id || context.theme_id || state.themeId || 0, 10) || 0,
+            parseInt(payload?.version_id || state.currentVersionId || 0, 10) || 0,
+            parseInt(payload?.draft_revision_id || currentLayoutDraftRevisionId() || 0, 10) || 0,
             String(payload?.page_type || context.layout_type || ''),
             String(context.area || ''),
             String(context.resource_type || 'layout'),
@@ -2524,7 +2544,7 @@
             throw new Error('Virtual layout draft endpoint is unavailable');
         }
         if (!(await ensureVirtualLayoutAssetAvailable())) {
-            throw new Error(translateUiText('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'));
+            throw new Error(window.__('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'));
         }
         const payload = buildLayoutLockVirtualIdentityPayload({
             use_ai: 0,
@@ -2648,11 +2668,11 @@
         window.WelineScopeSelect?.scopeSelect?.setDisabled(true);
         if (elements.btnSave) {
             elements.btnSave.disabled = false;
-            elements.btnSave.title = translateUiText('Save locked virtual layout draft');
+            elements.btnSave.title = window.__('Save locked virtual layout draft');
         }
         if (elements.btnPublish) {
             elements.btnPublish.disabled = false;
-            elements.btnPublish.title = translateUiText('Publish locked virtual layout version');
+            elements.btnPublish.title = window.__('Publish locked virtual layout version');
         }
     }
 
@@ -2724,7 +2744,7 @@
             renderOptions.push({
                 value: selected,
                 label: selected,
-                description: translateUiText('Virtual layout locked option'),
+                description: window.__('Virtual layout locked option'),
                 file: ''
             });
         }
@@ -2739,8 +2759,8 @@
         elements.layoutOptionSelect.disabled = isLayoutLocked();
         elements.layoutOptionSelect.dataset.singleOption = renderOptions.length <= 1 ? '1' : '0';
         elements.layoutOptionSelect.title = renderOptions.length <= 1
-            ? translateUiText('当前布局类型只有一个布局选项')
-            : translateUiText('选择布局选项');
+            ? window.__('当前布局类型只有一个布局选项')
+            : window.__('选择布局选项');
         enforceLayoutLock();
     }
 
@@ -2819,6 +2839,40 @@
         } catch (error) {
             return '';
         }
+    }
+
+    /**
+     * Build a Theme Editor action URL for BinQuery `theme.editorRequest`.
+     * Transport is always apiRequest → resource.editorRequest (BinQuery); never native fetch
+     * for business I/O. Action must live in pathname (`…/theme-editor/widget-config?…`),
+     * never concatenated as `${apiBase}/action`.
+     */
+    function buildThemeEditorActionUrl(action, extraParams = {}) {
+        const rawBase = String(config.apiBase || '/theme/backend/theme-editor').trim()
+            || '/theme/backend/theme-editor';
+        const actionPath = String(action || '').replace(/^\/+/, '');
+        let url;
+        try {
+            url = new URL(rawBase, window.location.origin);
+        } catch (_error) {
+            url = new URL('/theme/backend/theme-editor', window.location.origin);
+        }
+        const basePath = url.pathname.replace(/\/+$/, '') || '/theme/backend/theme-editor';
+        url.pathname = actionPath ? `${basePath}/${actionPath}` : basePath;
+        if (extraParams && typeof extraParams === 'object') {
+            Object.keys(extraParams).forEach((key) => {
+                const value = extraParams[key];
+                if (value === undefined || value === null || value === '') {
+                    return;
+                }
+                url.searchParams.set(key, String(value));
+            });
+        }
+        return url;
+    }
+
+    function themeEditorActionUrl(action, extraParams = {}) {
+        return buildThemeEditorActionUrl(action, extraParams).toString();
     }
 
     function hasValidTypedEditorContextParam(url) {
@@ -3050,19 +3104,19 @@
         }
         if (state.saveInProgress) {
             restoreScopeSelector(currentScope);
-            showToast(translateUiText('当前修改仍在保存，请稍后再切换 Scope'), 'warning');
+            showToast(window.__('当前修改仍在保存，请稍后再切换 Scope'), 'warning');
             return;
         }
         try {
             await flushPendingEditorMutations();
         } catch (error) {
             restoreScopeSelector(currentScope);
-            showToast(error?.message || translateUiText('Scope 修改保存失败，已停留在当前 Scope'), 'error');
+            showToast(error?.message || window.__('Scope 修改保存失败，已停留在当前 Scope'), 'error');
             return;
         }
         if (state.lockHeld && !(await releaseCurrentEditorLock())) {
             restoreScopeSelector(currentScope);
-            showToast(translateUiText('旧 Scope 编辑锁释放失败，已停留在当前 Scope'), 'error');
+            showToast(window.__('旧 Scope 编辑锁释放失败，已停留在当前 Scope'), 'error');
             return;
         }
         showCanvasLoadingImmediate();
@@ -3173,7 +3227,7 @@
             body: JSON.stringify(payload),
         });
         if (!result?.success) {
-            throw new Error(result?.message || translateUiText('加载页头页脚继承状态失败'));
+            throw new Error(result?.message || window.__('加载页头页脚继承状态失败'));
         }
         state.chromeModeCache = result.data || null;
         state.chromeModeFetchedAt = now;
@@ -3208,11 +3262,11 @@
         if (!chromeMode || chromeMode.is_carrier) {
             return `
                 <div class="shared-chrome-panel" data-chrome-mode="carrier">
-                    <div class="w-badge" data-tone="primary">${escapeHtml(translateUiText('全局页头/页脚'))}</div>
-                    <p class="w-text" data-tone="muted">${escapeHtml(translateUiText('当前在全局 chrome 载体编辑；修改后全站跟随。'))}</p>
+                    <div class="w-badge" data-tone="primary">${escapeHtml(window.__('全局页头/页脚'))}</div>
+                    <p class="w-text" data-tone="muted">${escapeHtml(window.__('当前在全局 chrome 载体编辑；修改后全站跟随。'))}</p>
                     <div class="shared-chrome-actions">
                         <button type="button" class="w-btn" data-tone="neutral" data-chrome-action="restore-all" data-chrome-area="">
-                            ${escapeHtml(translateUiText('清空其它布局本地 chrome'))}
+                            ${escapeHtml(window.__('清空其它布局本地 chrome'))}
                         </button>
                     </div>
                 </div>
@@ -3222,11 +3276,11 @@
         if (mode === 'inherit') {
             return `
                 <div class="shared-chrome-panel" data-chrome-mode="inherit">
-                    <div class="w-badge" data-tone="success">${escapeHtml(translateUiText('全局 · 跟随站点 chrome'))}</div>
-                    <p class="w-text" data-tone="muted">${escapeHtml(translateUiText('默认继承全局页头/页脚。在此编辑会写入全站 chrome（theme scope version），换布局类型不会切换头尾版本。'))}</p>
+                    <div class="w-badge" data-tone="success">${escapeHtml(window.__('全局 · 跟随站点 chrome'))}</div>
+                    <p class="w-text" data-tone="muted">${escapeHtml(window.__('默认继承全局页头/页脚。在此编辑会写入全站 chrome（theme scope version），换布局类型不会切换头尾版本。'))}</p>
                     <div class="shared-chrome-actions">
                         <button type="button" class="w-btn" data-tone="neutral" data-chrome-action="restore-all" data-chrome-area="">
-                            ${escapeHtml(translateUiText('清空其它布局本地 chrome'))}
+                            ${escapeHtml(window.__('清空其它布局本地 chrome'))}
                         </button>
                     </div>
                 </div>
@@ -3234,14 +3288,14 @@
         }
         return `
             <div class="shared-chrome-panel" data-chrome-mode="local">
-                <div class="w-badge" data-tone="warning">${escapeHtml(translateUiText('本布局独立 chrome'))}</div>
-                <p class="w-text" data-tone="muted">${escapeHtml(translateUiText('此布局已切断全局页头/页脚。恢复继承后将重新跟随站点 chrome。'))}</p>
+                <div class="w-badge" data-tone="warning">${escapeHtml(window.__('本布局独立 chrome'))}</div>
+                <p class="w-text" data-tone="muted">${escapeHtml(window.__('此布局已切断全局页头/页脚。恢复继承后将重新跟随站点 chrome。'))}</p>
                 <div class="shared-chrome-actions">
                     <button type="button" class="w-btn" data-tone="primary" data-chrome-action="restore" data-chrome-area="${escapeHtml(area)}">
-                        ${escapeHtml(translateUiText('恢复全局继承'))}
+                        ${escapeHtml(window.__('恢复全局继承'))}
                     </button>
                     <button type="button" class="w-btn" data-tone="neutral" data-chrome-action="restore-all" data-chrome-area="">
-                        ${escapeHtml(translateUiText('恢复全部布局继承'))}
+                        ${escapeHtml(window.__('恢复全部布局继承'))}
                     </button>
                 </div>
             </div>
@@ -3271,28 +3325,28 @@
                 });
             });
         } catch (error) {
-            panelHost.innerHTML = `<p class="w-text" data-tone="danger">${escapeHtml(error?.message || translateUiText('加载页头页脚继承状态失败'))}</p>`;
+            panelHost.innerHTML = `<p class="w-text" data-tone="danger">${escapeHtml(error?.message || window.__('加载页头页脚继承状态失败'))}</p>`;
         }
     }
 
     async function handleSharedChromeAction(action, area) {
         if (!state.themeId) {
-            showToast(translateUiText('请先选择主题'), 'warning');
+            showToast(window.__('请先选择主题'), 'warning');
             return;
         }
         const layoutType = getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage') || 'homepage';
         const restoreAll = action === 'restore-all';
         if (layoutType === SHARED_CHROME_CARRIER_PAGE_TYPE && !restoreAll) {
-            showToast(translateUiText('全局载体无需切换继承'), 'info');
+            showToast(window.__('全局载体无需切换继承'), 'info');
             return;
         }
         const areas = area ? [area] : SHARED_CHROME_AREAS;
         if (action === 'detach') {
-            showToast(translateUiText('shared_chrome_detach_removed'), 'warning');
+            showToast(window.__('shared_chrome_detach_removed'), 'warning');
             return;
         }
         if (restoreAll) {
-            const ok = window.confirm(translateUiText('确定清空其它布局上的本地页头/页脚，全部恢复跟随全局？显式独立的布局也会被恢复。'));
+            const ok = window.confirm(window.__('确定清空其它布局上的本地页头/页脚，全部恢复跟随全局？显式独立的布局也会被恢复。'));
             if (!ok) {
                 return;
             }
@@ -3317,10 +3371,10 @@
                 body: JSON.stringify(payload),
             });
             if (!result?.success) {
-                throw new Error(result?.message || translateUiText('操作失败'));
+                throw new Error(result?.message || window.__('操作失败'));
             }
             invalidateSharedChromeModeCache();
-            showToast(result.message || translateUiText('已更新页头页脚继承'), 'success');
+            showToast(result.message || window.__('已更新页头页脚继承'), 'success');
             try {
                 await syncLayoutWorkspaceAfterServerMutation(result);
             } catch (workspaceError) {
@@ -3331,7 +3385,7 @@
                 await renderSlotInfoPanel(state.selectedSlot);
             }
         } catch (error) {
-            showToast(error?.message || translateUiText('操作失败'), 'error');
+            showToast(error?.message || window.__('操作失败'), 'error');
         }
     }
 
@@ -3521,7 +3575,7 @@
                 retryButton.dataset.bound = '1';
                 retryButton.addEventListener('click', () => {
                     retryScopedReleaseBatchCache().catch((error) => {
-                        showToast(error?.message || translateUiText('缓存重试失败'), 'error');
+                        showToast(error?.message || window.__('缓存重试失败'), 'error');
                     });
                 });
             }
@@ -3544,8 +3598,8 @@
         renderScopedReleaseBatchStatus();
         showToast(
             result?.data?.cache_retryable
-                ? translateUiText('缓存仍处于降级状态，可再次重试')
-                : translateUiText('批次缓存刷新完成'),
+                ? window.__('缓存仍处于降级状态，可再次重试')
+                : window.__('批次缓存刷新完成'),
             result?.data?.cache_retryable ? 'warning' : 'success',
         );
         return result.data || null;
@@ -3629,7 +3683,7 @@
             renderScopedConflictPanel();
             if (result?.data?.cache_retryable) {
                 showToast(
-                    `${translateUiText('发布已提交，缓存刷新降级，可安全重试')} #${result.data.batch_id || ''}`.trim(),
+                    `${window.__('发布已提交，缓存刷新降级，可安全重试')} #${result.data.batch_id || ''}`.trim(),
                     'warning',
                 );
             }
@@ -3645,15 +3699,15 @@
         const workspace = getScopedWorkspaceState('theme_binding');
         const owned = Array.isArray(workspace?.owned_paths) && workspace.owned_paths.includes('/theme_id');
         badge.textContent = owned
-            ? translateUiText('本级修改')
-            : `${translateUiText('继承自')} ${formatScopeSource(sourceScopeForScopedPath(workspace, '/theme_id'))}`;
+            ? window.__('本级修改')
+            : `${window.__('继承自')} ${formatScopeSource(sourceScopeForScopedPath(workspace, '/theme_id'))}`;
         badge.dataset.owned = owned ? 'true' : 'false';
         if (inheritButton) inheritButton.hidden = !owned;
     }
 
     function formatScopeSource(storageScope) {
         const scope = String(storageScope || '').trim();
-        if (!scope || scope === 'theme-package-default') return translateUiText('主题包默认值');
+        if (!scope || scope === 'theme-package-default') return window.__('主题包默认值');
         if (scope === 'default.default.default') return 'Global';
         const segments = scope.split('.');
         if (segments.length !== 3) return scope;
@@ -3728,17 +3782,17 @@
             reset.className = 'w-button';
             reset.dataset.size = 'sm';
             reset.dataset.variant = 'outline';
-            reset.textContent = translateUiText('重置为继承');
+            reset.textContent = window.__('重置为继承');
             reset.addEventListener('click', async () => {
                 try {
                     await queueScopedChanges(resourceType, [{ op: 'inherit', path }], {
                         ...options,
                         summary: 'structural_conflict_reset',
                     });
-                    showToast(translateUiText('冲突路径已恢复继承'), 'success');
+                    showToast(window.__('冲突路径已恢复继承'), 'success');
                     loadCanvas();
                 } catch (error) {
-                    showToast(error?.message || translateUiText('冲突重置失败'), 'error');
+                    showToast(error?.message || window.__('冲突重置失败'), 'error');
                 }
             });
             actions.append(reset);
@@ -3754,7 +3808,7 @@
                 rebaseline.className = 'w-button';
                 rebaseline.dataset.size = 'sm';
                 rebaseline.dataset.tone = 'warning';
-                rebaseline.textContent = translateUiText('重新基线化');
+                rebaseline.textContent = window.__('重新基线化');
                 rebaseline.addEventListener('click', async () => {
                     try {
                         await queueScopedChanges(resourceType, [{
@@ -3766,10 +3820,10 @@
                             ...options,
                             summary: 'structural_conflict_rebaseline',
                         });
-                        showToast(translateUiText('节点已转为本级新增，请确认位置后发布'), 'success');
+                        showToast(window.__('节点已转为本级新增，请确认位置后发布'), 'success');
                         loadCanvas();
                     } catch (error) {
-                        showToast(error?.message || translateUiText('重新基线化失败'), 'error');
+                        showToast(error?.message || window.__('重新基线化失败'), 'error');
                     }
                 });
                 actions.append(rebaseline);
@@ -3780,7 +3834,7 @@
             if (nodeUid && ['move_anchor_missing', 'add_anchor_missing'].includes(code) && candidates.length) {
                 const anchor = document.createElement('select');
                 anchor.className = 'w-select theme-scope-conflict__anchor';
-                anchor.setAttribute('aria-label', translateUiText('选择新锚点'));
+                anchor.setAttribute('aria-label', window.__('选择新锚点'));
                 candidates.forEach(([uid, node]) => {
                     const option = document.createElement('option');
                     option.value = uid;
@@ -3792,7 +3846,7 @@
                 relocate.className = 'w-button';
                 relocate.dataset.size = 'sm';
                 relocate.dataset.tone = 'primary';
-                relocate.textContent = translateUiText('重新定位');
+                relocate.textContent = window.__('重新定位');
                 relocate.addEventListener('click', async () => {
                     const anchorUid = validNodeUid(anchor.value);
                     if (!anchorUid) return;
@@ -3810,10 +3864,10 @@
                             ...options,
                             summary: 'structural_conflict_relocate',
                         });
-                        showToast(translateUiText('冲突节点已重新定位'), 'success');
+                        showToast(window.__('冲突节点已重新定位'), 'success');
                         loadCanvas();
                     } catch (error) {
-                        showToast(error?.message || translateUiText('重新定位失败'), 'error');
+                        showToast(error?.message || window.__('重新定位失败'), 'error');
                     }
                 });
                 actions.append(anchor, relocate);
@@ -3923,8 +3977,8 @@
             badge.className = 'w-badge theme-config-ownership__badge';
             badge.dataset.owned = isOwned ? 'true' : 'false';
             badge.textContent = isOwned
-                ? translateUiText('本级修改')
-                : `${translateUiText('继承自')} ${formatScopeSource(sourceScopeForScopedPath(workspace, path))}`;
+                ? window.__('本级修改')
+                : `${window.__('继承自')} ${formatScopeSource(sourceScopeForScopedPath(workspace, path))}`;
             status.appendChild(badge);
             if (canRestore) {
                 const button = document.createElement('button');
@@ -3932,7 +3986,7 @@
                 button.className = 'w-button theme-config-ownership__inherit';
                 button.dataset.variant = 'link';
                 button.dataset.size = 'sm';
-                button.textContent = translateUiText('恢复继承');
+                button.textContent = window.__('恢复继承');
                 button.addEventListener('click', async () => {
                     try {
                         const resourceType = normalizedLocale ? 'i18n' : 'meta';
@@ -3953,9 +4007,9 @@
                             rememberLayoutConfigValues(form, { [key]: collectWidgetConfigData(form)[key] });
                         }
                         renderLayoutConfigOwnership(container, next, normalizedLocale);
-                        showToast(translateUiText('已恢复继承（发布后生效）'), 'success');
+                        showToast(window.__('已恢复继承（发布后生效）'), 'success');
                     } catch (error) {
-                        showToast(error?.message || translateUiText('恢复继承失败'), 'error');
+                        showToast(error?.message || window.__('恢复继承失败'), 'error');
                     }
                 });
                 status.appendChild(button);
@@ -3991,8 +4045,8 @@
             badge.className = 'w-badge theme-config-ownership__badge';
             badge.dataset.owned = isOwned ? 'true' : 'false';
             badge.textContent = isOwned
-                ? translateUiText('本级修改')
-                : `${translateUiText('继承自')} ${formatScopeSource(sourceScopeForScopedPath(workspace, path))}`;
+                ? window.__('本级修改')
+                : `${window.__('继承自')} ${formatScopeSource(sourceScopeForScopedPath(workspace, path))}`;
             status.appendChild(badge);
             if (canRestore) {
                 const button = document.createElement('button');
@@ -4000,7 +4054,7 @@
                 button.className = 'w-button theme-config-ownership__inherit';
                 button.dataset.variant = 'link';
                 button.dataset.size = 'sm';
-                button.textContent = translateUiText('恢复继承');
+                button.textContent = window.__('恢复继承');
                 button.addEventListener('click', async () => {
                     try {
                         const resourceType = normalizedLocale ? 'i18n' : 'layout';
@@ -4017,9 +4071,9 @@
                             });
                         }
                         renderWidgetConfigOwnership(container, nodeUid, next, normalizedLocale);
-                        showToast(translateUiText('已恢复继承（发布后生效）'), 'success');
+                        showToast(window.__('已恢复继承（发布后生效）'), 'success');
                     } catch (error) {
-                        showToast(error?.message || translateUiText('恢复继承失败'), 'error');
+                        showToast(error?.message || window.__('恢复继承失败'), 'error');
                     }
                 });
                 status.appendChild(button);
@@ -4125,7 +4179,7 @@
 
     async function queueAddedLayoutNode(payload, responseData) {
         const nodeUid = validNodeUid(responseData?.node_uid);
-        if (!nodeUid) throw new Error(translateUiText('布局节点缺少稳定 UID，未写入 Scope 草稿'));
+        if (!nodeUid) throw new Error(window.__('布局节点缺少稳定 UID，未写入 Scope 草稿'));
         const node = {
             node_uid: nodeUid,
             area: String(payload.area || 'content'),
@@ -4322,7 +4376,7 @@
         nodes.forEach((node) => {
             const nodeUid = validNodeUid(node?.node_uid);
             if (!nodeUid) {
-                throw new Error(translateUiText('布局节点缺少稳定 UID，未写入位置 Scope 草稿'));
+                throw new Error(window.__('布局节点缺少稳定 UID，未写入位置 Scope 草稿'));
             }
             ['area', 'sort_order'].forEach((field) => {
                 if (!Object.prototype.hasOwnProperty.call(node, field)) return;
@@ -4340,7 +4394,7 @@
 
     async function queueWidgetConfigOwnership(nodeUid, configValues, locale = '', withinMutation = false) {
         nodeUid = validNodeUid(nodeUid);
-        if (!nodeUid) throw new Error(translateUiText('布局节点缺少稳定 UID，未写入配置 Scope 草稿'));
+        if (!nodeUid) throw new Error(window.__('布局节点缺少稳定 UID，未写入配置 Scope 草稿'));
         const normalizedLocale = String(locale || '').trim();
         const resourceType = normalizedLocale ? 'i18n' : 'layout';
         const prefix = normalizedLocale
@@ -4392,7 +4446,7 @@
                     body: JSON.stringify(payload),
                 });
                 if (!result?.success) {
-                    const message = String(result?.message || translateUiText('保存失败'));
+                    const message = String(result?.message || window.__('保存失败'));
                     if (allowRetry && message.includes('theme_scope_revision_conflict')) {
                         await loadScopedWorkspace('layout', { skipReconcile: true });
                         return attempt(false);
@@ -4477,9 +4531,9 @@
             else target.appendChild(statusEl);
         }
         const labels = {
-            saving: translateUiText('保存中…'),
-            saved: translateUiText('已自动保存'),
-            error: message || translateUiText('自动保存失败'),
+            saving: window.__('保存中…'),
+            saved: window.__('已自动保存'),
+            error: message || window.__('自动保存失败'),
             idle: '',
         };
         statusEl.dataset.state = status;
@@ -4489,22 +4543,22 @@
 
     function assertCurrentThemeDraftScope(workspace) {
         if (!state.themeId) {
-            throw new Error(translateUiText('未选择主题，无法自动保存到当前版本'));
+            throw new Error(window.__('未选择主题，无法自动保存到当前版本'));
         }
         // revision 0 = empty workspace identity — first applyChanges creates the draft.
         if (!workspace || Number(workspace.revision || 0) < 0) {
-            throw new Error(translateUiText('当前主题草稿版本不可用，无法自动保存'));
+            throw new Error(window.__('当前主题草稿版本不可用，无法自动保存'));
         }
         const contextThemeId = parseInt(workspace?.context?.theme_id || 0, 10) || 0;
         if (contextThemeId > 0 && contextThemeId !== Number(state.themeId)) {
-            throw new Error(translateUiText('主题作用域不一致，已阻止跨主题写入'));
+            throw new Error(window.__('主题作用域不一致，已阻止跨主题写入'));
         }
     }
 
     async function patchWidgetConfigFields(nodeUid, fields, locale = '', options = {}) {
         nodeUid = validNodeUid(nodeUid);
         if (!nodeUid) {
-            throw new Error(translateUiText('布局节点缺少稳定 UID，未写入配置 Scope 草稿'));
+            throw new Error(window.__('布局节点缺少稳定 UID，未写入配置 Scope 草稿'));
         }
         const normalizedLocale = String(locale || '').trim();
         const resourceType = normalizedLocale ? 'i18n' : 'layout';
@@ -4551,7 +4605,7 @@
     async function refreshWidgetPreviewAfterAutosave(layoutId, locale = '') {
         if (!layoutId) return;
         try {
-            const result = await apiJson(buildSavedWidgetConfigUrl(layoutId, locale || ''));
+            const result = await apiJson(buildSavedWidgetConfigUrl(layoutId, locale || '', { withPreview: true }));
             const previewHtml = result?.data?.preview_html || result?.preview_html || '';
             if (previewHtml) {
                 updateWidgetPreviewInIframe(layoutId, previewHtml);
@@ -4590,12 +4644,12 @@
         const deferPreviewMs = Math.max(0, Number(options.deferPreviewMs) || 0);
         if (!(form instanceof HTMLElement)) return null;
         if (!state.themeId) {
-            if (!silent) showToast(translateUiText('未选择主题，无法自动保存到当前版本'), 'warning');
+            if (!silent) showToast(window.__('未选择主题，无法自动保存到当前版本'), 'warning');
             return null;
         }
         const dirty = collectWidgetConfigChanges(form);
         if (Object.keys(dirty).length === 0) {
-            if (!silent) showToast(translateUiText('配置已保存'), 'success');
+            if (!silent) showToast(window.__('配置已保存'), 'success');
             return null;
         }
         const locale = options.locale !== undefined
@@ -4608,7 +4662,7 @@
                 ...dirty,
             });
             if (!layoutId) {
-                throw new Error(translateUiText('无法定位部件，未自动保存'));
+                throw new Error(window.__('无法定位部件，未自动保存'));
             }
             const nodeUid = validNodeUid(layoutId);
             if (nodeUid) {
@@ -4616,18 +4670,6 @@
                     blankAsInherit: !!locale,
                     summary: locale ? 'widget_i18n_autosave' : 'widget_config_autosave',
                 });
-                if (refreshPreview) {
-                    // Prefer awaiting so “已自动保存” and canvas stay in sync.
-                    if (deferPreviewMs > 0) {
-                        scheduleEditorAutoSave(
-                            `widget-preview:${layoutId}:${locale || 'default'}`,
-                            () => refreshWidgetPreviewAfterAutosave(layoutId, locale),
-                            deferPreviewMs,
-                        );
-                    } else {
-                        await refreshWidgetPreviewAfterAutosave(layoutId, locale);
-                    }
-                }
             } else {
                 const result = await requestSaveWidgetConfig({
                     ...buildWidgetIdentityPayloadFields(layoutId),
@@ -4644,7 +4686,19 @@
             }
             rememberWidgetConfigValues(form, dirty);
             setWidgetConfigAutosaveStatus(statusHost, 'saved');
-            if (!silent) showToast(translateUiText('配置已保存'), 'success');
+            if (!silent) showToast(window.__('配置已保存'), 'success');
+            if (refreshPreview && nodeUid) {
+                const refresh = () => refreshWidgetPreviewAfterAutosave(layoutId, locale);
+                if (deferPreviewMs > 0) {
+                    scheduleEditorAutoSave(
+                        `widget-preview:${layoutId}:${locale || 'default'}`,
+                        refresh,
+                        deferPreviewMs,
+                    );
+                } else {
+                    await refresh();
+                }
+            }
             return dirty;
         } catch (error) {
             setWidgetConfigAutosaveStatus(statusHost, 'error', error?.message || '');
@@ -4655,7 +4709,7 @@
     async function autosaveWidgetI18nLocaleField(layoutId, fieldKey, locale, rawValue, panel) {
         if (!layoutId || !fieldKey || !locale) return null;
         if (!state.themeId) {
-            throw new Error(translateUiText('未选择主题，无法自动保存到当前版本'));
+            throw new Error(window.__('未选择主题，无法自动保存到当前版本'));
         }
         const isMedia = panel && typeof stampI18nMediaPanel === 'function' ? stampI18nMediaPanel(panel) : false;
         const parsedValue = isMedia && typeof parseI18nFieldValue === 'function'
@@ -4667,7 +4721,7 @@
         try {
             const nodeUid = validNodeUid(layoutId);
             if (!nodeUid) {
-                throw new Error(translateUiText('布局节点缺少稳定 UID，未写入配置 Scope 草稿'));
+                throw new Error(window.__('布局节点缺少稳定 UID，未写入配置 Scope 草稿'));
             }
             await patchWidgetConfigFields(nodeUid, { [fieldKey]: value }, locale, {
                 blankAsInherit: true,
@@ -4712,7 +4766,7 @@
                 saveBtn.dataset.variant = saveBtn.dataset.variant || 'outline';
             }
             if (/保存配置/.test(saveBtn.textContent || '')) {
-                saveBtn.textContent = translateUiText('立即保存');
+                saveBtn.textContent = window.__('立即保存');
             }
         }
         setWidgetConfigAutosaveStatus(form, 'idle');
@@ -4997,12 +5051,7 @@
         // Visual-editor canvas: storefront path (+ optional /{locale}/) + editor markers.
         // Visitor language is path-only — never ?locale= / ?lang=.
         url.searchParams.set('theme_id', String(themeId));
-        url.searchParams.set('frontend_theme_id', String(
-            overrides.frontend_theme_id
-            || currentUrl.searchParams.get('frontend_theme_id')
-            || themeId
-            || ''
-        ));
+        url.searchParams.set('frontend_theme_id', String(overrides.theme_id || state.themeId || themeId || ''));
         url.searchParams.set('editor_mode', '1');
         url.searchParams.set('shell', 'theme-editor');
         url.searchParams.set('preview_mode', String(overrides.preview_mode || 'live'));
@@ -5107,10 +5156,10 @@
             layout_option: layoutOption === 'default' ? null : layoutOption,
         });
 
-        const canvasUrl = buildCanvasUrlPreservingStorefrontPath(publicRoute, {
+        const canvasUrl = withNavigationFragment(buildCanvasUrlPreservingStorefrontPath(publicRoute, {
             layout_type: pageType,
             layout_option: layoutOption,
-        });
+        }), navigation);
         if (elements.previewFrame) {
             if (elements.previewLoading) {
                 elements.previewLoading.classList.remove('hidden');
@@ -5161,7 +5210,7 @@
         } catch (error) {
             if (navigationSequence === state.canvasNavigationSequence) {
                 elements.previewLoading?.classList.add('hidden');
-                showToast(error?.message || translateUiText('预览加载失败'), 'error');
+                showToast(error?.message || window.__('预览加载失败'), 'error');
             }
             console.error('[ThemeEditor] Canvas storefront preview error:', error);
             return '';
@@ -5171,7 +5220,7 @@
     function navigateSameOriginEditorUrl(targetUrl) {
         const resolvedUrl = resolveSameOriginEditorUrl(targetUrl);
         if (!resolvedUrl) {
-            throw new Error(translateUiText('编辑器导航目标无效'));
+            throw new Error(window.__('编辑器导航目标无效'));
         }
         if (state.lockHeld) {
             releaseCurrentEditorLock({keepalive: true});
@@ -5188,16 +5237,9 @@
         const editorArea = getEffectiveEditorArea();
         const layoutType = getEffectiveLayoutType();
         const locale = getScopedEditorLocale();
-        const frontendThemeId = parseInt(
-            currentUrl.searchParams.get('frontend_theme_id')
-                || (editorArea === 'frontend' ? String(state.themeId || 0) : '0'),
-            10
-        ) || 0;
-        const backendThemeId = parseInt(
-            currentUrl.searchParams.get('backend_theme_id')
-                || (editorArea === 'backend' ? String(state.themeId || 0) : '0'),
-            10
-        ) || 0;
+        const editingThemeId = parseInt(String(state.themeId || 0), 10) || 0;
+        const frontendThemeId = editingThemeId;
+        const backendThemeId = editingThemeId;
 
         return {
             frontend_theme_id: frontendThemeId,
@@ -5233,7 +5275,7 @@
             }),
         });
         if (!result?.success || !result?.data || typeof result.data !== 'object') {
-            throw new Error(result?.message || translateUiText('无法解析预览链接'));
+            throw new Error(result?.message || window.__('无法解析预览链接'));
         }
         return result.data;
     }
@@ -5243,9 +5285,12 @@
         if (applyResolvedEditorCanvasNavigation(navigation)) {
             return;
         }
-        const targetUrl = resolveSameOriginEditorUrl(navigation.target_url);
+        const targetUrl = withNavigationFragment(
+            resolveSameOriginEditorUrl(navigation.target_url),
+            navigation
+        );
         if (!targetUrl) {
-            throw new Error(translateUiText('服务端返回了无效的编辑器地址'));
+            throw new Error(window.__('服务端返回了无效的编辑器地址'));
         }
         navigateSameOriginEditorUrl(targetUrl);
     }
@@ -5307,6 +5352,7 @@
         config.apiVersions = container.dataset.apiVersions || `${config.apiBase}/versions`;
         config.apiSaveVersion = container.dataset.apiSaveVersion || `${config.apiBase}/save-version`;
         config.apiSwitchVersion = container.dataset.apiSwitchVersion || `${config.apiBase}/switch-version`;
+        config.apiInheritVersion = container.dataset.apiInheritVersion || `${config.apiBase}/inherit-version`;
         config.apiRestoreOriginal = container.dataset.apiRestoreOriginal || `${config.apiBase}/restore-original`;
         config.apiClearThemeCache = container.dataset.apiClearThemeCache || `${config.apiBase}/clear-theme-cache`;
         config.apiResetDraftResources = container.dataset.apiResetDraftResources || `${config.apiBase}/reset-draft-resources`;
@@ -5441,14 +5487,6 @@
             console.warn('[ThemeEditor] Legacy Scope is compatibility-read-only:', state.layoutIdentity?.scope || '');
             return;
         }
-        Promise.resolve(loadScopedWorkspace('theme_binding')).catch((error) => {
-            console.warn('[ThemeEditor] Scoped theme binding load failed:', error);
-        });
-        if (state.themeId) {
-            Promise.resolve(loadScopedWorkspace('layout')).catch((error) => {
-                console.warn('[ThemeEditor] Scoped layout load failed:', error);
-            });
-        }
         initEditorLanguageSwitcher();
         state.slots = {}; // 页面插槽信息
         state.missingSlotWarnings = [];
@@ -5456,8 +5494,19 @@
         // 绑定事件
         bindEvents();
         initCmsContextBridge();
-        // 编辑锁优先：赶在部件库/预览/版本等次要请求之前发起，避免 check-lock 排队拖慢确认
+        // 布局配置优先入队：左侧默认面板是用户第一眼，必须先于编辑锁/部件库进入签名串行链。
+        // 点部件仍走本地 schema，不依赖这次请求完成。
         updatePreviewStatusUI(state.previewStatus);
+        if (state.themeId) {
+            if (elements.configContent && !elements.configContent.querySelector('.layout-config-panel, .widget-config-panel')) {
+                elements.configContent.innerHTML = '<div class="widget-config-loading">'
+                    + escapeHtml(window.__('加载布局配置...')) + '</div>';
+            }
+            Promise.resolve(loadLayoutConfig({ silent: true })).catch((error) => {
+                console.warn('[ThemeEditor] loadLayoutConfig failed:', error);
+            });
+        }
+        // 编辑锁紧随布局配置入队，避免锁请求占住链首把表单拖住。
         initializeEditorLock();
         // 部件库与预览并行：优先发起部件列表请求，不再等待 iframe load
         deferWidgetLibraryLoad();
@@ -5477,16 +5526,34 @@
             scheduleFitWidgetPreviews();
         }, 200));
 
-        // 加载版本列表（初始化时获取当前版本显示）
+        // 版本/默认注入延后到空闲：它们与配置/部件库共用 query-bin 签名串行链，
+        // 首屏抢跑会把「点部件加载配置」堵在队列后面十几秒。
         if (state.themeId) {
-            loadVersions();
-        }
-        if (state.themeId) {
-            refreshDefaultInjectionApplications({ render: false, silent: true });
-        }
-        if (state.themeId) {
-            setConfigMode('layout');
-            loadLayoutConfig({ silent: true });
+            const deferSecondary = (fn) => {
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(() => { fn(); }, { timeout: 4000 });
+                } else {
+                    window.setTimeout(fn, 1200);
+                }
+            };
+            deferSecondary(() => {
+                Promise.resolve(loadVersions()).catch((error) => {
+                    console.warn('[ThemeEditor] deferred loadVersions failed:', error);
+                });
+            });
+            deferSecondary(() => {
+                refreshDefaultInjectionApplications({ render: false, silent: true });
+            });
+            deferSecondary(() => {
+                Promise.resolve(loadScopedWorkspace('theme_binding')).catch((error) => {
+                    console.warn('[ThemeEditor] Scoped theme binding load failed:', error);
+                });
+            });
+            deferSecondary(() => {
+                Promise.resolve(loadScopedWorkspace('layout')).catch((error) => {
+                    console.warn('[ThemeEditor] Scoped layout load failed:', error);
+                });
+            });
         }
 
         console.log('Theme Editor initialized', {
@@ -5550,6 +5617,7 @@
         const surface = document.createElement('div');
         surface.className = 'w-dialog__surface';
         const header = panel.querySelector('.w-param-i18n-header, .i18n-panel-header');
+        const toolbar = panel.querySelector('.w-param-i18n-toolbar');
         const body = panel.querySelector('.w-param-i18n-body, .i18n-panel-body');
         const footer = panel.querySelector('.w-param-i18n-footer, .i18n-panel-footer');
         if (header || body || footer) {
@@ -5568,6 +5636,9 @@
                 }
                 surface.appendChild(nextHeader);
                 header.remove();
+            }
+            if (toolbar) {
+                surface.appendChild(toolbar);
             }
             if (body) {
                 body.classList.add('w-dialog__body');
@@ -5774,7 +5845,7 @@
                 Promise.resolve(switchScope(this.value)).catch((error) => {
                     console.error('[ThemeEditor] Scope switch failed:', error);
                     restoreScopeSelector(state.layoutIdentity?.scope || storageScopeForIdentity(state.scopeIdentity));
-                    showToast(error?.message || translateUiText('Scope 切换失败'), 'error');
+                    showToast(error?.message || window.__('Scope 切换失败'), 'error');
                 });
             });
         }
@@ -5789,7 +5860,7 @@
                         await flushPendingEditorMutations();
                     } catch (error) {
                         this.value = String(previousThemeId || '');
-                        showToast(error?.message || translateUiText('当前修改保存失败，已停留在原主题'), 'error');
+                        showToast(error?.message || window.__('当前修改保存失败，已停留在原主题'), 'error');
                         return;
                     }
                     showCanvasLoadingImmediate();
@@ -5803,7 +5874,7 @@
                         console.error('[ThemeEditor] refresh layout options error:', error);
                         state.themeId = previousThemeId;
                         elements.themeSelect.value = String(previousThemeId || '');
-                        showToast(error?.message || translateUiText('主题草稿保存失败'), 'error');
+                        showToast(error?.message || window.__('主题草稿保存失败'), 'error');
                         return;
                     }
                     syncEditorUrlState({
@@ -5844,11 +5915,11 @@
                     loadLayoutConfig({ silent: true });
                     loadVersions();
                     reloadWidgetLibrary({ silent: true });
-                    showToast(translateUiText('主题已恢复继承（发布后生效）'), 'success');
+                    showToast(window.__('主题已恢复继承（发布后生效）'), 'success');
                 } catch (error) {
                     state.themeId = previousThemeId;
                     elements.themeSelect.value = String(previousThemeId || '');
-                    showToast(error?.message || translateUiText('恢复主题继承失败'), 'error');
+                    showToast(error?.message || window.__('恢复主题继承失败'), 'error');
                 }
             });
         }
@@ -5861,19 +5932,19 @@
                 if (!area || area === previousArea) return;
                 if (state.saveInProgress) {
                     this.value = previousArea;
-                    showToast(translateUiText('当前修改仍在保存，请稍后再切换编辑区域'), 'warning');
+                    showToast(window.__('当前修改仍在保存，请稍后再切换编辑区域'), 'warning');
                     return;
                 }
                 try {
                     await flushPendingEditorMutations();
                 } catch (error) {
                     this.value = previousArea;
-                    showToast(error?.message || translateUiText('当前修改保存失败，已停留在原编辑区域'), 'error');
+                    showToast(error?.message || window.__('当前修改保存失败，已停留在原编辑区域'), 'error');
                     return;
                 }
                 if (state.lockHeld && !(await releaseCurrentEditorLock())) {
                     this.value = previousArea;
-                    showToast(translateUiText('旧编辑区域锁释放失败，已停留在原编辑区域'), 'error');
+                    showToast(window.__('旧编辑区域锁释放失败，已停留在原编辑区域'), 'error');
                     return;
                 }
                 showCanvasLoadingImmediate();
@@ -5901,7 +5972,7 @@
                         await flushPendingEditorMutations();
                     } catch (error) {
                         this.value = previousPageType;
-                        showToast(error?.message || translateUiText('当前修改保存失败，已停留在原布局类型'), 'error');
+                        showToast(error?.message || window.__('当前修改保存失败，已停留在原布局类型'), 'error');
                         return;
                     }
                     showCanvasLoadingImmediate();
@@ -5913,7 +5984,7 @@
                         console.error('[ThemeEditor] refresh layout options error:', error);
                         setCurrentLayoutSelection(previousPageType, previousLayoutOption);
                         this.value = previousPageType;
-                        showToast(error?.message || translateUiText('布局类型切换失败，已恢复原布局'), 'error');
+                        showToast(error?.message || window.__('布局类型切换失败，已恢复原布局'), 'error');
                         return;
                     }
                     syncEditorUrlState({
@@ -5926,7 +5997,7 @@
                     loadLayoutConfig({ silent: true });
                     loadVersions();
                     reloadWidgetLibrary({ silent: true });
-                    showToast(__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
+                    showToast(window.__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
                 }
             });
         }
@@ -5934,7 +6005,7 @@
         if (elements.layoutOptionSelect) {
             elements.layoutOptionSelect.addEventListener('click', function() {
                 if (this.dataset.singleOption === '1') {
-                    showToast(translateUiText('当前布局类型只有一个布局选项'), 'info');
+                    showToast(window.__('当前布局类型只有一个布局选项'), 'info');
                 }
             });
 
@@ -5948,7 +6019,7 @@
                     await flushPendingEditorMutations();
                 } catch (error) {
                     this.value = previousLayoutOption;
-                    showToast(error?.message || translateUiText('当前修改保存失败，已停留在原布局选项'), 'error');
+                    showToast(error?.message || window.__('当前修改保存失败，已停留在原布局选项'), 'error');
                     return;
                 }
                 showCanvasLoadingImmediate();
@@ -5966,7 +6037,7 @@
                     console.error('[ThemeEditor] save layout option error:', error);
                     state.layoutOption = previousLayoutOption;
                     renderLayoutOptionSelect(state.layoutType, previousLayoutOption);
-                    showToast(error.message || translateUiText('布局选项切换失败，已恢复原布局'), 'error');
+                    showToast(error.message || window.__('布局选项切换失败，已恢复原布局'), 'error');
                     return;
                 }
                 loadCanvas();
@@ -6041,7 +6112,7 @@
 		            e.stopPropagation();
 		            const item = btn.closest('.widget-item[data-widget-code]');
                     if (!isWidgetLibraryItemActive(item)) {
-                        showToast(translateUiText('请先切换到对应部件分类'), 'warning');
+                        showToast(window.__('请先切换到对应部件分类'), 'warning');
                         return;
                     }
 		            addWidgetFromLibraryItem(item);
@@ -6081,6 +6152,8 @@
                     previewVersion(versionId);
                 } else if (action === 'switch') {
                     switchToVersion(versionId);
+                } else if (action === 'inherit') {
+                    inheritVersion(versionId);
                 } else if (action === 'delete') {
                     deleteVersion(versionId);
                 }
@@ -6268,7 +6341,7 @@
                     if (panel && fieldKey) {
                         await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
                     } else {
-                        showToast(translateUiText('无法定位多语言字段'), 'warning');
+                        showToast(window.__('无法定位多语言字段'), 'warning');
                     }
                     return;
                 }
@@ -6414,16 +6487,14 @@
                 // 设置 iframe 内链接拦截，使链接跳转到预览模式
                 setupIframeLinkInterception();
 
-                // 初始化部件 hover 操作按钮（多档延迟以兼容异步渲染的布局）
-                setTimeout(() => initWidgetHoverActions(), 100);
-                setTimeout(() => initWidgetHoverActions(), 400);
-                setTimeout(() => initWidgetHoverActions(), 1200);
-                setTimeout(() => setInteractionMode(state.interactionMode || 'edit', {
+                // 部件节点由预览帧结构消息补一次，不靠 100/400/1200 连打。
+                initWidgetHoverActions();
+                setInteractionMode(state.interactionMode || 'edit', {
                     force: true,
                     skipViewSwitch: true,
                     restorePanels: false,
                     syncUrl: false,
-                }), 50);
+                });
                 flushPendingPreviewFocus();
             });
 
@@ -6446,7 +6517,7 @@
             elements.btnClearThemeCache.addEventListener('click', () => {
                 handleClearThemeCache().catch((error) => {
                     console.error('[ThemeEditor] Clear theme cache error:', error);
-                    showToast(translateUiText('清理 Theme 缓存失败：') + (error?.message || ''), 'error');
+                    showToast(window.__('清理 Theme 缓存失败：') + (error?.message || ''), 'error');
                 });
             });
         }
@@ -6455,7 +6526,7 @@
             elements.btnResetDraftConfirm.addEventListener('click', () => {
                 executeResetDraftResources(false).catch((error) => {
                     console.error('[ThemeEditor] Reset draft error:', error);
-                    showToast(translateUiText('重置失败：') + (error?.message || ''), 'error');
+                    showToast(window.__('重置失败：') + (error?.message || ''), 'error');
                 });
             });
         }
@@ -6463,7 +6534,7 @@
             elements.btnResetDraftAllResources.addEventListener('click', () => {
                 executeResetDraftResources(true).catch((error) => {
                     console.error('[ThemeEditor] Reset all draft error:', error);
-                    showToast(translateUiText('重置失败：') + (error?.message || ''), 'error');
+                    showToast(window.__('重置失败：') + (error?.message || ''), 'error');
                 });
             });
         }
@@ -6475,7 +6546,7 @@
             btnFactoryResetConfirm.addEventListener('click', () => {
                 executeFactoryReset().catch((error) => {
                     console.error('[ThemeEditor] Factory reset error:', error);
-                    showToast(translateUiText('完全初始化失败：') + (error?.message || ''), 'error');
+                    showToast(window.__('完全初始化失败：') + (error?.message || ''), 'error');
                 });
             });
         }
@@ -6490,7 +6561,7 @@
             elements.btnFullscreenPreview.addEventListener('click', function() {
                 toggleEditorFullscreen().catch(function(error) {
                     console.warn('[ThemeEditor] fullscreen toggle failed:', error);
-                    showToast(translateUiText('无法进入全屏编辑'), 'warning');
+                    showToast(window.__('无法进入全屏编辑'), 'warning');
                 });
             });
         }
@@ -6507,8 +6578,12 @@
 
     function syncEditorUrlState(overrides = {}) {
         const url = getCurrentWindowUrl();
+        const editingThemeKey = (state.editorArea || 'frontend') === 'backend'
+            ? 'backend_theme_id'
+            : 'frontend_theme_id';
         const params = Object.assign({
             theme_id: state.themeId || 0,
+            [editingThemeKey]: state.themeId || 0,
             page_type: getCurrentPageType(),
             layout_option: state.layoutOption || 'default',
             editor_area: state.editorArea || 'frontend',
@@ -6659,48 +6734,48 @@
         const code = normalizeWidgetPreviewCode(widgetCode);
         const escName = escapeHtml(widgetName || widgetCode || '');
         const text = {
-            alertTitle: translateUiText('系统提示'),
-            alertBody: translateUiText('这是一条状态提示信息。'),
-            enabled: translateUiText('已启用'),
-            backend: translateUiText('后台'),
-            primary: translateUiText('主要操作'),
-            secondary: translateUiText('次要'),
-            cardTitle: translateUiText('数据卡片'),
-            cardSubtitle: translateUiText('用于组织内容'),
-            cardBody: translateUiText('这里展示核心信息、摘要或操作入口。'),
-            action: translateUiText('选择操作'),
-            detail: translateUiText('查看详情'),
-            copy: translateUiText('复制视图'),
-            metric: translateUiText('指标'),
-            status: translateUiText('状态'),
-            trend: translateUiText('趋势'),
-            order: translateUiText('订单'),
-            ok: translateUiText('正常'),
-            payment: translateUiText('支付'),
-            stable: translateUiText('稳定'),
-            label: translateUiText('字段名称'),
-            placeholder: translateUiText('请输入内容'),
-            username: translateUiText('管理员'),
-            syncing: translateUiText('正在同步数据'),
-            messageTitle: translateUiText('操作完成'),
-            messageBody: translateUiText('数据已保存，可以继续编辑。'),
-            modalTitle: translateUiText('确认发布'),
-            modalBody: translateUiText('公开后同站点后台用户可见。'),
-            cancel: translateUiText('取消'),
-            confirm: translateUiText('确认'),
-            previous: translateUiText('上一页'),
-            next: translateUiText('下一页'),
-            tabOverview: translateUiText('概览'),
-            tabSettings: translateUiText('设置'),
-            sectionTitle: translateUiText('精选区块'),
-            sectionSubtitle: translateUiText('Section'),
-            sectionBody: translateUiText('拖入卡片、文本、图片或表单组件'),
-            gridItem: translateUiText('栅格项'),
-            textTitle: translateUiText('清晰表达你的页面主张'),
-            textBody: translateUiText('用标题和段落快速搭建页面内容。'),
-            imageAlt: translateUiText('图片媒体'),
-            dividerLabel: translateUiText('内容分隔'),
-            spacerLabel: translateUiText('留白间距'),
+            alertTitle: window.__('系统提示'),
+            alertBody: window.__('这是一条状态提示信息。'),
+            enabled: window.__('已启用'),
+            backend: window.__('后台'),
+            primary: window.__('主要操作'),
+            secondary: window.__('次要'),
+            cardTitle: window.__('数据卡片'),
+            cardSubtitle: window.__('用于组织内容'),
+            cardBody: window.__('这里展示核心信息、摘要或操作入口。'),
+            action: window.__('选择操作'),
+            detail: window.__('查看详情'),
+            copy: window.__('复制视图'),
+            metric: window.__('指标'),
+            status: window.__('状态'),
+            trend: window.__('趋势'),
+            order: window.__('订单'),
+            ok: window.__('正常'),
+            payment: window.__('支付'),
+            stable: window.__('稳定'),
+            label: window.__('字段名称'),
+            placeholder: window.__('请输入内容'),
+            username: window.__('管理员'),
+            syncing: window.__('正在同步数据'),
+            messageTitle: window.__('操作完成'),
+            messageBody: window.__('数据已保存，可以继续编辑。'),
+            modalTitle: window.__('确认发布'),
+            modalBody: window.__('公开后同站点后台用户可见。'),
+            cancel: window.__('取消'),
+            confirm: window.__('确认'),
+            previous: window.__('上一页'),
+            next: window.__('下一页'),
+            tabOverview: window.__('概览'),
+            tabSettings: window.__('设置'),
+            sectionTitle: window.__('精选区块'),
+            sectionSubtitle: window.__('Section'),
+            sectionBody: window.__('拖入卡片、文本、图片或表单组件'),
+            gridItem: window.__('栅格项'),
+            textTitle: window.__('清晰表达你的页面主张'),
+            textBody: window.__('用标题和段落快速搭建页面内容。'),
+            imageAlt: window.__('图片媒体'),
+            dividerLabel: window.__('内容分隔'),
+            spacerLabel: window.__('留白间距'),
         };
 
         if (code === 'alert') {
@@ -7426,7 +7501,9 @@
             return null;
         }
 
-        const candidate = api.resolveDropAtPoint(mapped.x, mapped.y, state.draggingWidget);
+        const candidate = api.resolveDropAtPoint(mapped.x, mapped.y, state.draggingWidget, {
+            notifyParent: false,
+        });
         if (candidate) {
             rememberPreviewDropCandidate(candidate);
         }
@@ -7440,7 +7517,7 @@
 
         e.preventDefault();
         e.stopPropagation();
-        // 悬浮插入位要跟手：同步解析；跨帧消息风暴由 iframe 侧签名去重 + 短 debounce 消化。
+        // 同源直调，返回值即插入位。热路径不再 postMessage。
         const candidate = resolvePreviewDropViaBridge(e.clientX, e.clientY);
         e.dataTransfer.dropEffect = candidate ? 'copy' : 'none';
     }
@@ -7499,7 +7576,7 @@
             const fallback = await tryCommitToSelectedRecommendationSlot(state.draggingWidget).catch(() => null);
             if (!fallback) {
                 // 计划约定：松手在预览上不得静默丢弃；无合法插槽时必须提示。
-                showToast(translateUiText('无法放入当前位置，请拖到可接收的插槽'), 'warning');
+                showToast(window.__('无法放入当前位置，请拖到可接收的插槽'), 'warning');
             }
         }
         setPreviewDropBridgeActive(false);
@@ -7650,8 +7727,7 @@
             return;
         }
 
-        // drop-candidate / slot-hover-sync 为热路径，禁止每条 console.log，否则拖入时 DevTools 会卡死。
-        if (data.type !== 'drop-candidate' && data.type !== 'slot-hover-sync' && data.type !== 'drop-candidate-clear') {
+        if (data.lane !== 'hot') {
             console.log('收到 iframe 消息:', data);
         }
 
@@ -7672,7 +7748,7 @@
             }
             void initSlotDefaultsFromPreview(data).catch((error) => {
                 console.error('[ThemeEditor] Slot init defaults failed:', error);
-                showToast(error?.message || translateUiText('初始化失败'), 'error');
+                showToast(error?.message || window.__('初始化失败'), 'error');
             });
             return;
         }
@@ -7689,8 +7765,9 @@
 
         switch (data.type) {
             case 'widget-selected':
-                // 插槽模式不打开部件配置。
+                // 插槽模式不打开部件配置——给即时反馈，避免点选无响应。
                 if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+                    showToast(window.__('当前是插槽模式：请先点工具栏「部件」再点选部件配置'), 'info');
                     break;
                 }
                 // 预览页面中选中了部件
@@ -7753,7 +7830,7 @@
                             error: error?.message || String(error),
                         });
                         console.error('[ThemeEditor] Preview locale change failed:', error);
-                        showToast(error?.message || translateUiText('语言切换失败，已恢复原语言'), 'error');
+                        showToast(error?.message || window.__('语言切换失败，已恢复原语言'), 'error');
                     });
                 break;
             }
@@ -7777,6 +7854,9 @@
                 });
                 break;
             }
+            case 'preview-structure-changed':
+                initWidgetHoverActions();
+                break;
             case 'slot-hover-sync':
                 // 预览引擎切换 hover 目标后，父页再 sync 一次 anchored-float（对齐部件 show-actions）
                 syncActiveSlotToolbarFloat();
@@ -7787,7 +7867,7 @@
     async function initSlotDefaultsFromPreview(data) {
         const slotId = String(data?.slot_id || '').trim();
         if (!slotId) {
-            showToast(translateUiText('缺少插槽标识'), 'warning');
+            showToast(window.__('缺少插槽标识'), 'warning');
             return;
         }
 
@@ -7802,13 +7882,13 @@
             body: JSON.stringify(payload),
         });
         if (!result || !result.success) {
-            showToast(result?.message || translateUiText('初始化失败'), 'error');
+            showToast(result?.message || window.__('初始化失败'), 'error');
             return;
         }
 
         await loadScopedWorkspace('layout');
         loadCanvas();
-        showToast(result.message || translateUiText('已初始化插槽默认部件'), 'success');
+        showToast(result.message || window.__('已初始化插槽默认部件'), 'success');
         if (state.widgetLibraryTab === 'applications') {
             await refreshDefaultInjectionApplications({ render: true, silent: true });
         }
@@ -8102,7 +8182,7 @@
         const title = module ? `${module}::${code}` : code;
         const label = options.showLabel === false
             ? ''
-            : `<span class="widget-code-k">${escapeHtml(translateUiText('code'))}</span>`;
+            : `<span class="widget-code-k">${escapeHtml(window.__('code'))}</span>`;
         return `${label}<code class="widget-code" title="${escapeHtml(title)}">${escapeHtml(code)}</code>`;
     }
 
@@ -8317,47 +8397,102 @@
         return url.toString();
     }
 
+    function layoutConfigCacheKey(locale) {
+        return [
+            String(state.themeId || 0),
+            getEffectiveLayoutType(),
+            getEffectiveLayoutOption(),
+            getEffectiveEditorArea(),
+            String(locale || ''),
+        ].join('|');
+    }
+
+    function paintCachedLayoutConfig(key) {
+        const cached = state.layoutConfigCache;
+        if (!cached || cached.key !== key || !cached.html || !elements.configContent) {
+            return false;
+        }
+        elements.configContent.innerHTML = cached.html;
+        bindLayoutConfigEvents(elements.configContent);
+        return true;
+    }
+
+    let layoutConfigInflight = null;
+    let layoutConfigInflightKey = '';
+
     async function loadLayoutConfig(options = {}) {
         if (!elements.configContent || !state.themeId) {
             return;
         }
         setConfigMode('layout');
-        if (!options.silent) {
-            elements.configContent.innerHTML = '<div class="widget-config-loading">加载布局配置...</div>';
+        const locale = Object.prototype.hasOwnProperty.call(options, 'locale')
+            ? (options.locale || '')
+            : getActiveConfigLocale();
+        const cacheKey = layoutConfigCacheKey(locale);
+        if (layoutConfigInflight && layoutConfigInflightKey === cacheKey) {
+            paintCachedLayoutConfig(cacheKey);
+            return layoutConfigInflight;
         }
-        try {
-            const locale = Object.prototype.hasOwnProperty.call(options, 'locale')
-                ? (options.locale || '')
-                : getActiveConfigLocale();
-            const payload = await apiJson(buildLayoutConfigUrl(locale));
-            if (!payload.success) {
-                throw new Error(payload.message || 'Load layout config failed');
-            }
-            const data = payload.data || {};
-            elements.configContent.innerHTML = `
-                <div class="layout-config-panel" data-config-target="layout">
-                    ${data.form_html || '<div class="w-param-empty-state"><p>当前布局没有配置字段</p></div>'}
-                </div>
-            `;
-            bindLayoutConfigEvents(elements.configContent);
-            const resourceType = locale ? 'i18n' : 'meta';
-            const workspace = await loadScopedWorkspace(resourceType, { locale: locale || 'default' });
-            renderLayoutConfigOwnership(
-                elements.configContent.querySelector('.layout-config-panel'),
-                workspace,
-                locale,
-            );
-            return true;
-        } catch (error) {
-            console.error('[ThemeEditor] loadLayoutConfig error:', error);
-            if (!options.silent) {
-                elements.configContent.innerHTML = `<div class="w-param-empty-state"><p>${escapeHtml(error.message || '布局配置加载失败')}</p></div>`;
-            }
-            if (options.throwOnError === true) {
-                throw error;
-            }
-            return false;
+        const painted = paintCachedLayoutConfig(cacheKey);
+        if (!painted && !options.silent) {
+            elements.configContent.innerHTML = '<div class="widget-config-loading">'
+                + escapeHtml(window.__('加载布局配置...')) + '</div>';
         }
+        const loadSeq = (state.layoutConfigLoadSeq = (state.layoutConfigLoadSeq || 0) + 1);
+        layoutConfigInflightKey = cacheKey;
+        const flight = (async () => {
+            try {
+                const payload = await apiJson(buildLayoutConfigUrl(locale));
+                if (loadSeq !== state.layoutConfigLoadSeq) {
+                    return false;
+                }
+                if (!payload.success) {
+                    throw new Error(payload.message || 'Load layout config failed');
+                }
+                const data = payload.data || {};
+                const html = '<div class="layout-config-panel" data-config-target="layout">'
+                    + (data.form_html || '<div class="w-param-empty-state"><p>当前布局没有配置字段</p></div>')
+                    + '</div>';
+                state.layoutConfigCache = { key: cacheKey, html: html, ts: Date.now() };
+                if (loadSeq !== state.layoutConfigLoadSeq || state.configMode !== 'layout') {
+                    return true;
+                }
+                elements.configContent.innerHTML = html;
+                bindLayoutConfigEvents(elements.configContent);
+                const resourceType = locale ? 'i18n' : 'meta';
+                const workspace = await loadScopedWorkspace(resourceType, { locale: locale || 'default' });
+                if (loadSeq !== state.layoutConfigLoadSeq || state.configMode !== 'layout') {
+                    return true;
+                }
+                renderLayoutConfigOwnership(
+                    elements.configContent.querySelector('.layout-config-panel'),
+                    workspace,
+                    locale,
+                );
+                const panel = elements.configContent.querySelector('.layout-config-panel');
+                if (panel) {
+                    state.layoutConfigCache = { key: cacheKey, html: panel.outerHTML, ts: Date.now() };
+                }
+                return true;
+            } catch (error) {
+                console.error('[ThemeEditor] loadLayoutConfig error:', error);
+                const stillLoading = !!(elements.configContent && elements.configContent.querySelector('.widget-config-loading'));
+                if (loadSeq === state.layoutConfigLoadSeq && state.configMode === 'layout' && (!options.silent || stillLoading) && !painted) {
+                    elements.configContent.innerHTML = `<div class="w-param-empty-state"><p>${escapeHtml(error.message || '布局配置加载失败')}</p></div>`;
+                }
+                if (options.throwOnError === true) {
+                    throw error;
+                }
+                return false;
+            } finally {
+                if (layoutConfigInflightKey === cacheKey) {
+                    layoutConfigInflight = null;
+                    layoutConfigInflightKey = '';
+                }
+            }
+        })();
+        layoutConfigInflight = flight;
+        return flight;
     }
 
     function rememberLayoutConfigValues(form, values) {
@@ -8398,7 +8533,7 @@
                 );
             } catch (error) {
                 console.error('[ThemeEditor] layout config save error:', error);
-                showToast(error?.message || translateUiText('布局配置保存失败'), 'error');
+                showToast(error?.message || window.__('布局配置保存失败'), 'error');
             }
         });
 
@@ -8415,31 +8550,29 @@
             return false;
         }
 
-        function scheduleLayoutConfigAutoSave() {
+        function scheduleLayoutConfigAutoSave(target) {
             const locale = getActiveConfigLocale();
             scheduleEditorAutoSave('layout-config', async () => {
                 try {
                     await saveLayoutConfig(form, locale, { silent: true });
                 } catch (error) {
                     console.error('[ThemeEditor] layout config auto-save error:', error);
-                    showToast(error?.message || translateUiText('布局配置自动保存失败'), 'error');
+                    showToast(error?.message || window.__('布局配置自动保存失败'), 'error');
                     throw error;
                 }
-            });
+            }, resolveWidgetConfigAutoSaveDelay(target instanceof HTMLElement ? target : null));
         }
 
-        form.addEventListener('input', function(e) {
-            if (shouldIgnoreLayoutConfigAutoSave(e.target)) {
+        const onLayoutConfigValue = function(e) {
+            const target = e.detail?.carrier || e.target;
+            if (shouldIgnoreLayoutConfigAutoSave(target)) {
                 return;
             }
-            scheduleLayoutConfigAutoSave();
-        });
-        form.addEventListener('change', function(e) {
-            if (shouldIgnoreLayoutConfigAutoSave(e.target)) {
-                return;
-            }
-            scheduleLayoutConfigAutoSave();
-        });
+            scheduleLayoutConfigAutoSave(target);
+        };
+        form.addEventListener('input', onLayoutConfigValue);
+        form.addEventListener('change', onLayoutConfigValue);
+        form.addEventListener('weline:param:valuechange', onLayoutConfigValue);
     }
 
     async function saveLayoutConfig(form, locale, options = {}) {
@@ -8449,35 +8582,42 @@
             if (!silent) showToast('布局配置已保存', 'success');
             return;
         }
-        const editorArea = getEffectiveEditorArea();
-        const effectiveLocale = locale === undefined ? getActiveConfigLocale() : (locale || '');
-        const payload = {
-            theme_id: state.themeId || 0,
-            layout_type: getEffectiveLayoutType(),
-            layout_option: getEffectiveLayoutOption(),
-            editor_area: editorArea,
-            preview_area: editorArea,
-            scope: getCurrentWindowParam('scope') || 'default',
-            locale: effectiveLocale,
-            config: configData,
-            ...getLayoutLockVirtualPayload()
-        };
-        const result = await apiJson(config.apiSaveLayoutConfig, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (!result.success) {
-            throw new Error(result.message || 'Save layout config failed');
-        }
-        await queueLayoutConfigOwnership(configData, effectiveLocale);
-        rememberLayoutConfigValues(form, configData);
-        if (!silent) {
-            showToast(result.message || '布局配置已保存', 'success');
-        }
-        fetchLayoutSlots();
-        if (options.refreshPreview !== false) {
-            loadCanvas();
+        setWidgetConfigAutosaveStatus(form, 'saving');
+        try {
+            const editorArea = getEffectiveEditorArea();
+            const effectiveLocale = locale === undefined ? getActiveConfigLocale() : (locale || '');
+            const payload = {
+                theme_id: state.themeId || 0,
+                layout_type: getEffectiveLayoutType(),
+                layout_option: getEffectiveLayoutOption(),
+                editor_area: editorArea,
+                preview_area: editorArea,
+                scope: getCurrentWindowParam('scope') || 'default',
+                locale: effectiveLocale,
+                config: configData,
+                ...getLayoutLockVirtualPayload()
+            };
+            const result = await apiJson(config.apiSaveLayoutConfig, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!result.success) {
+                throw new Error(result.message || 'Save layout config failed');
+            }
+            await queueLayoutConfigOwnership(configData, effectiveLocale);
+            rememberLayoutConfigValues(form, configData);
+            setWidgetConfigAutosaveStatus(form, 'saved');
+            if (!silent) {
+                showToast(result.message || '布局配置已保存', 'success');
+            }
+            fetchLayoutSlots();
+            if (options.refreshPreview !== false) {
+                loadCanvas();
+            }
+        } catch (error) {
+            setWidgetConfigAutosaveStatus(form, 'error', error?.message || '');
+            throw error;
         }
     }
 
@@ -8620,7 +8760,7 @@
                 }
 
                 const formHtml = await generateWidgetConfigForm('', widgetMeta.params || {}, widgetConfig);
-                const searchPlaceholder = (typeof __ !== 'undefined' ? __('搜索配置项') : '搜索配置项');
+                const searchPlaceholder = window.__('搜索配置项');
                 configBody.innerHTML = `
                     <div class="w-param-search-wrap">
                         <input type="text" class="w-param-search w-input w-theme-editor-control-sm" placeholder="${searchPlaceholder}" autocomplete="off">
@@ -8647,6 +8787,7 @@
                 const widgetData = result.data;
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
+                primeMediaPreviewUrlCache(widgetData.media_preview_urls);
                 const paramKeys = params && typeof params === 'object' ? Object.keys(params) : [];
                 // 无 schema 为空态，不是加载失败（BinQuery 也不应再因 success=false 刷 ERR）
                 if (widgetData.has_params === false || paramKeys.length === 0) {
@@ -8659,7 +8800,7 @@
 
                 // 生成配置表单
                 const formHtml = await generateWidgetConfigForm(identityValue, params, widgetConfig);
-                const searchPlaceholder = (typeof __ !== 'undefined' ? __('搜索配置项') : '搜索配置项');
+                const searchPlaceholder = window.__('搜索配置项');
                 const searchWrap = '<div class="w-param-search-wrap"><input type="text" class="w-param-search w-input w-theme-editor-control-sm" placeholder="' + searchPlaceholder + '" autocomplete="off"></div>';
                 // Accordion header already shows code when it differs from the name — no second strip.
                 configBody.innerHTML = searchWrap + formHtml;
@@ -8701,9 +8842,31 @@
     }
 
     /**
-     * 生成部件配置表单 HTML
-     * 优先使用后端 API 渲染，失败时回退到前端渲染
+     * 生成部件配置表单 HTML。
+     * 含数组项时只走 paramrender/form；其它字段优先本地渲染。
      */
+    function paramsContainWidgetArray(params) {
+        if (!params || typeof params !== 'object') {
+            return false;
+        }
+        for (const param of Object.values(params)) {
+            if (!param || typeof param !== 'object' || Array.isArray(param)) {
+                continue;
+            }
+            const type = String(getParamUiType(param) || '');
+            const schemaType = String(param.schema_type || '');
+            if (type === 'nav_tree' || type === 'all_menu_tree' || schemaType === 'all_menu_tree') {
+                continue;
+            }
+            if (type === 'array' || type === 'list' || param.base_type === 'array'
+                || (param.item_schema && typeof param.item_schema === 'object')
+                || type.endsWith('_items') || schemaType.endsWith('_items')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     async function generateWidgetConfigForm(layoutId, params, formConfig) {
         if (!params || Object.keys(params).length === 0) {
             return `<div class="config-empty-state">
@@ -8712,7 +8875,37 @@
             </div>`;
         }
 
-        // 尝试使用后端 API 渲染
+        // 数组项外壳只走 Widget ArrayType。含数组时用已接通的 paramrender/form（getConfigForm）。
+        // 失败也不回退本地数组卡片。不含数组的表单仍走本地生成。
+        if (paramsContainWidgetArray(params)) {
+            try {
+                const html = await apiText(config.apiParamRenderForm || '/theme/backend/widget/paramrender/form', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        layoutId: layoutId,
+                        params: JSON.stringify(params),
+                        config: JSON.stringify(formConfig || {}),
+                    }),
+                });
+                if (html && !String(html).includes('alert-danger')) {
+                    return html;
+                }
+            } catch (err) {
+                console.debug?.('[ThemeEditor] Array form render failed:', err);
+            }
+            return `<div class="alert alert-danger">数组项配置加载失败，请重试</div>`;
+        }
+
+        // 非数组：优先前端渲染。再打 paramrender 是第二趟，常达数秒。
+        const localHtml = generateWidgetConfigFormFallback(layoutId, params, formConfig);
+        if (localHtml && !localHtml.includes('alert-danger')) {
+            return localHtml;
+        }
+
+        // 本地回退失败时再走后端渲染（复杂 schema / 旧路径）
         try {
             const html = await apiText(config.apiParamRenderForm || '/theme/backend/widget/paramrender/form', {
                 method: 'POST',
@@ -8733,8 +8926,7 @@
             console.debug?.('[ThemeEditor] Backend form render failed, using fallback:', err);
         }
 
-        // 回退到前端渲染
-        return generateWidgetConfigFormFallback(layoutId, params, formConfig);
+        return localHtml || generateWidgetConfigFormFallback(layoutId, params, formConfig);
     }
 
     /**
@@ -9039,7 +9231,9 @@
                     <input type="url" class="w-input" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="https://">
                 </div>`;
             } else if (['image', 'image_picker', 'media_image', 'file_image'].includes(type)) {
-                fieldHtml += renderTypedFileImageControl(fieldId, key, value, param);
+                fieldHtml += renderTypedFileImageControl(fieldId, key, value, param, {
+                    previewUrl: previewUrlForMediaValue(value),
+                });
             } else if (type === 'range' || type === 'slider') {
                 const min = param.min || 0;
                 const max = param.max || 100;
@@ -9135,7 +9329,11 @@
                             <h2 class="w-dialog__title" id="${panelDomId}_title">${iconSvg('global')} 多语言配置</h2>
                             <button type="button" class="w-button w-theme-editor-i18n-close" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n data-field="${safeKey}" aria-label="关闭多语言配置">${iconSvg('close')}</button>
                         </header>
-                        <div class="w-dialog__body w-param-i18n-body i18n-panel-body"></div>
+                        <div class="w-param-i18n-toolbar">
+                            <label class="w-visually-hidden" for="${panelDomId}_locale_search">${escapeHtml(window.__('搜索语言或代码'))}</label>
+                            <input type="search" class="w-input w-param-i18n-locale-search" id="${panelDomId}_locale_search" data-i18n-locale-search placeholder="${escapeHtml(window.__('搜索语言或代码...'))}" autocomplete="off" spellcheck="false" aria-controls="${panelDomId}_body">
+                        </div>
+                        <div class="w-dialog__body w-param-i18n-body i18n-panel-body" id="${panelDomId}_body"></div>
                         <footer class="w-dialog__footer w-param-i18n-footer i18n-panel-footer">
                             ${isMedia ? '' : `<button type="button" class="w-button w-theme-editor-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n data-field="${safeKey}"${identityAttrs}>
                                 AI翻译
@@ -9326,6 +9524,8 @@
         if (typeof Weline?.Widget?.Params?.mount === 'function') {
             Weline.Widget.Params.mount(container);
         }
+        // 已保存的 file-image 不含预览 URL；打开表单后解析并回填缩略图。
+        void hydrateFileImagePickerPreviews(container);
 
         // 统一多语言事件委托（覆盖顶级字段 + 后续动态添加的数组子字段）。
         // 模态框容器会重复填充，委托只能安装一次，避免一次点击开关两次。
@@ -9381,7 +9581,7 @@
                 if (panel && fieldKey) {
                     await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
                 } else {
-                    showToast(translateUiText('无法定位多语言字段'), 'warning');
+                    showToast(window.__('无法定位多语言字段'), 'warning');
                 }
                 return;
             }
@@ -10584,7 +10784,9 @@
 
     function handleIframeWidgetElementClick(target) {
         // 插槽模式只激活插槽，不点选/打开部件配置。
+        // 插槽模式只激活插槽，不点选/打开部件配置——但必须给反馈，避免「点了没反应」。
         if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+            showToast(window.__('当前是插槽模式：请先点工具栏「部件」再点选部件配置'), 'info');
             return false;
         }
         const widgetWrapper = target?.closest?.(
@@ -10658,16 +10860,16 @@
             widgetElement?.dataset?.widgetName
             || widgetElement?.getAttribute?.('data-widget-name')
             || code
-            || translateUiText('部件')
+            || window.__('部件')
         ).trim();
         elements.configContent.innerHTML = `
             <div class="widget-config-loading w-theme-editor-loading-state" data-widget-config-loading="1">
-                <span class="w-spinner" role="status"><span class="w-visually-hidden">${escapeHtml(translateUiText('加载中...'))}</span></span>
-                <p class="widget-list-loading-text">${escapeHtml(translateUiText('正在加载配置…'))}${code ? ' · ' + escapeHtml(name) : ''}</p>
+                <span class="w-spinner" role="status"><span class="w-visually-hidden">${escapeHtml(window.__('加载中...'))}</span></span>
+                <p class="widget-list-loading-text">${escapeHtml(window.__('正在加载配置…'))}${code ? ' · ' + escapeHtml(name) : ''}</p>
             </div>
         `;
         if (elements.configPanelTitle) {
-            elements.configPanelTitle.textContent = translateUiText('部件配置');
+            elements.configPanelTitle.textContent = window.__('部件配置');
         }
     }
 
@@ -10986,6 +11188,99 @@
         state.widgetsCatalogPrefetch = null;
     }
 
+    function widgetParamsIndexKey(module, code) {
+        return String(module || '').trim() + '::' + String(code || '').trim();
+    }
+
+    function rememberWidgetParamsMeta(widget) {
+        if (!widget || typeof widget !== 'object') {
+            return;
+        }
+        const module = String(widget.module || widget.widget_module || '').trim();
+        const code = String(widget.code || widget.widget_code || '').trim();
+        if (!module || !code) {
+            return;
+        }
+        const params = (widget.params && typeof widget.params === 'object')
+            ? widget.params
+            : ((widget.config_schema && typeof widget.config_schema === 'object') ? widget.config_schema : null);
+        if (!params || typeof params !== 'object' || Object.keys(params).length === 0) {
+            return;
+        }
+        if (!state.widgetParamsIndex) {
+            state.widgetParamsIndex = Object.create(null);
+        }
+        state.widgetParamsIndex[widgetParamsIndexKey(module, code)] = {
+            params,
+            name: widget.name || widget.widget_name || code,
+            description: widget.description || '',
+            module,
+            code,
+            type: widget.type || widget.widget_type || '',
+        };
+    }
+
+    function rememberWidgetsFromCatalogPayload(payload) {
+        if (!payload) {
+            return;
+        }
+        if (Array.isArray(payload)) {
+            payload.forEach(rememberWidgetParamsMeta);
+            return;
+        }
+        if (typeof payload !== 'object') {
+            return;
+        }
+        if (Array.isArray(payload.items)) {
+            payload.items.forEach(rememberWidgetParamsMeta);
+        }
+        if (payload.data && typeof payload.data === 'object') {
+            Object.keys(payload.data).forEach((type) => {
+                const group = payload.data[type];
+                const widgets = group && Array.isArray(group.widgets) ? group.widgets : [];
+                widgets.forEach(rememberWidgetParamsMeta);
+            });
+        }
+        Object.keys(payload).forEach((type) => {
+            const group = payload[type];
+            if (group && Array.isArray(group.widgets)) {
+                group.widgets.forEach(rememberWidgetParamsMeta);
+            }
+        });
+    }
+
+    function lookupWidgetParamsMeta(module, code) {
+        if (!state.widgetParamsIndex) {
+            return null;
+        }
+        const direct = state.widgetParamsIndex[widgetParamsIndexKey(module, code)];
+        if (direct) {
+            return direct;
+        }
+        // 部件库条目偶发缺 module 时，按 code 兜底命中。
+        const needle = '::' + String(code || '').trim();
+        if (needle === '::') {
+            return null;
+        }
+        const keys = Object.keys(state.widgetParamsIndex);
+        for (let i = 0; i < keys.length; i++) {
+            if (keys[i].endsWith(needle)) {
+                return state.widgetParamsIndex[keys[i]];
+            }
+        }
+        return null;
+    }
+
+    function readWidgetElementLocalConfig(widgetElement) {
+        try {
+            const raw = widgetElement?.dataset?.config || widgetElement?.getAttribute?.('data-config') || '{}';
+            const parsed = JSON.parse(raw);
+            return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
     /** 通过 Theme Editor 的 Weline.Api 业务接口获取当前主题、区域和插槽过滤后的部件列表。 */
     async function fetchWidgetsData() {
         if (state.widgetsCatalogCache) {
@@ -11004,6 +11299,7 @@
                     });
                     if (hasWidgets) {
                         state.widgetsCatalogCache = result;
+                        rememberWidgetsFromCatalogPayload(result);
                         return result;
                     }
                 }
@@ -11581,7 +11877,7 @@
             if (shouldRender) {
                 defaults.renderAfterLoad = true;
                 listEl.innerHTML = '<div class="widget-list-loading">'
-                    + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('应用建议加载中...')) + '</span></div>';
+                    + '<span class="widget-list-loading-text">' + escapeHtml(window.__('应用建议加载中...')) + '</span></div>';
             }
             return;
         }
@@ -11592,11 +11888,11 @@
         }
         if (shouldRender && options.silent !== true) {
             listEl.innerHTML = '<div class="widget-list-loading">'
-                + '<span class="w-spinner" role="status"><span class="w-visually-hidden">' + escapeHtml(translateUiText('加载中...')) + '</span></span>'
-                + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('应用建议加载中...')) + '</span></div>';
+                + '<span class="w-spinner" role="status"><span class="w-visually-hidden">' + escapeHtml(window.__('加载中...')) + '</span></span>'
+                + '<span class="widget-list-loading-text">' + escapeHtml(window.__('应用建议加载中...')) + '</span></div>';
         } else if (shouldRender) {
             listEl.innerHTML = '<div class="widget-list-loading">'
-                + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('应用建议加载中...')) + '</span></div>';
+                + '<span class="widget-list-loading-text">' + escapeHtml(window.__('应用建议加载中...')) + '</span></div>';
         }
 
         try {
@@ -11614,7 +11910,7 @@
             defaults.total = 0;
             if (shouldRender) {
                 listEl.innerHTML = '<div class="widget-list-loading"><span class="widget-list-loading-text">'
-                    + escapeHtml(translateUiText('应用建议加载失败')) + '</span></div>';
+                    + escapeHtml(window.__('应用建议加载失败')) + '</span></div>';
             }
             updateWidgetLibraryTabCounts();
         } finally {
@@ -11649,7 +11945,7 @@
         listEl.querySelector('.widget-load-more-hint')?.remove();
         if (!Array.isArray(items) || items.length === 0) {
             listEl.innerHTML = '<div class="widget-list-loading"><span class="widget-list-loading-text">'
-                + escapeHtml(translateUiText('当前布局没有声明默认应用部件')) + '</span></div>';
+                + escapeHtml(window.__('当前布局没有声明默认应用部件')) + '</span></div>';
             updateWidgetLibraryTabCounts();
             return;
         }
@@ -11662,7 +11958,7 @@
         applyAllBtn.className = 'w-button w-theme-editor-apply-required-defaults';
         applyAllBtn.dataset.tone = 'primary';
         applyAllBtn.dataset.size = 'sm';
-        applyAllBtn.innerHTML = iconSvg('cursor') + '<span>' + escapeHtml(translateUiText('一键安装默认项')) + '</span>';
+        applyAllBtn.innerHTML = iconSvg('cursor') + '<span>' + escapeHtml(window.__('一键安装默认项')) + '</span>';
         applyAllBtn.addEventListener('click', function() {
             applyRequiredDefaultsBatch(applyAllBtn);
         });
@@ -11783,15 +12079,15 @@
         };
         const phrase = known[message] || known[code] || '';
         if (phrase) {
-            return translateUiText(phrase);
+            return window.__(phrase);
         }
         if (message) {
-            return translateUiText(message);
+            return window.__(message);
         }
         if (code) {
-            return translateUiText(code);
+            return window.__(code);
         }
-        return translateUiText('安装失败');
+        return window.__('安装失败');
     }
 
     function buildDefaultInjectionBlockerDetailNode(item, blocker) {
@@ -11808,12 +12104,12 @@
         const wCode = String((item && item.code) || '');
         const wName = item ? resolveWidgetLibraryName(item.name, wCode) : '';
         const rows = [
-            [translateUiText('错误码'), String((blocker && blocker.code) || '-')],
-            [translateUiText('错误标识'), String((blocker && blocker.message) || '-')],
-            [translateUiText('部件'), wName ? (wName + (wCode ? ' (' + wCode + ')' : '')) : (wCode || '-')],
-            [translateUiText('Slot'), String((item && item.slot_id) || '-')],
-            [translateUiText('区域'), String((item && item.area) || '-')],
-            [translateUiText('页面类型'), String((item && (item.layout_type || item.page_type)) || '-')],
+            [window.__('错误码'), String((blocker && blocker.code) || '-')],
+            [window.__('错误标识'), String((blocker && blocker.message) || '-')],
+            [window.__('部件'), wName ? (wName + (wCode ? ' (' + wCode + ')' : '')) : (wCode || '-')],
+            [window.__('Slot'), String((item && item.slot_id) || '-')],
+            [window.__('区域'), String((item && item.area) || '-')],
+            [window.__('页面类型'), String((item && (item.layout_type || item.page_type)) || '-')],
         ];
         rows.forEach(function(pair) {
             const dt = document.createElement('dt');
@@ -11833,8 +12129,8 @@
             return Promise.resolve();
         }
         return ui.dialog.alert(buildDefaultInjectionBlockerDetailNode(item, blocker), {
-            title: translateUiText('安装失败详情'),
-            confirmLabel: translateUiText('知道了'),
+            title: window.__('安装失败详情'),
+            confirmLabel: window.__('知道了'),
             tone: 'warning',
             size: 'lg',
         });
@@ -11971,7 +12267,7 @@
 
     function locateDefaultInjectionInPreview(item) {
         if (!defaultInjectionCanLocate(item)) {
-            showToast(translateUiText('请先安装该应用部件'), 'info');
+            showToast(window.__('请先安装该应用部件'), 'info');
             return false;
         }
 
@@ -12009,7 +12305,7 @@
         }
 
         if (!located) {
-            showToast(translateUiText('预览中未找到该部件，请先刷新预览'), 'warning');
+            showToast(window.__('预览中未找到该部件，请先刷新预览'), 'warning');
         }
         return located;
     }
@@ -12030,7 +12326,7 @@
             return;
         }
         if (!defaultInjectionCanRemove(item)) {
-            showToast(translateUiText('该部件为模板内嵌，无法从此卸载'), 'info');
+            showToast(window.__('该部件为模板内嵌，无法从此卸载'), 'info');
             return;
         }
 
@@ -12102,8 +12398,8 @@
         if (applied) {
             canvas.setAttribute('role', 'button');
             canvas.setAttribute('tabindex', '0');
-            canvas.title = translateUiText('点击定位到预览中的部件');
-            canvas.setAttribute('aria-label', translateUiText('点击定位到预览中的部件'));
+            canvas.title = window.__('点击定位到预览中的部件');
+            canvas.setAttribute('aria-label', window.__('点击定位到预览中的部件'));
         }
         mountWidgetPreviewHtml(canvas, previewHtml);
 
@@ -12124,14 +12420,14 @@
             badges.insertAdjacentHTML(
                 'beforeend',
                 '<span class="widget-default-injection-badge is-applied">' + iconSvg('check')
-                + escapeHtml(translateUiText('已应用')) + '</span>'
+                + escapeHtml(window.__('已应用')) + '</span>'
             );
         }
         badges.insertAdjacentHTML(
             'beforeend',
             '<span class="widget-default-injection-badge is-mode-' + escapeHtml(installMode) + '">'
             + iconSvg(installMode === 'default' ? 'bolt' : 'info')
-            + escapeHtml(translateUiText(installMode === 'default' ? '默认安装' : '推荐'))
+            + escapeHtml(window.__(installMode === 'default' ? '默认安装' : '推荐'))
             + '</span>'
         );
         if (item.is_ai_generated || (item.widget && item.widget.is_ai_generated)) {
@@ -12154,8 +12450,8 @@
             applyBtn.dataset.iconOnly = 'true';
             applyBtn.dataset.applyScope = 'current';
             applyBtn.dataset.injectionKey = injectionKey;
-            applyBtn.title = translateUiText('应用当前身份');
-            applyBtn.setAttribute('aria-label', translateUiText('应用当前身份'));
+            applyBtn.title = window.__('应用当前身份');
+            applyBtn.setAttribute('aria-label', window.__('应用当前身份'));
             applyBtn.innerHTML = iconSvg('plus');
             actionGroup.appendChild(applyBtn);
         } else if (defaultInjectionCanRemove(item)) {
@@ -12166,8 +12462,8 @@
             removeBtn.dataset.size = 'sm';
             removeBtn.dataset.iconOnly = 'true';
             removeBtn.dataset.injectionKey = injectionKey;
-            removeBtn.title = translateUiText('卸载');
-            removeBtn.setAttribute('aria-label', translateUiText('卸载'));
+            removeBtn.title = window.__('卸载');
+            removeBtn.setAttribute('aria-label', window.__('卸载'));
             removeBtn.innerHTML = iconSvg('delete');
             actionGroup.appendChild(removeBtn);
         }
@@ -12179,8 +12475,8 @@
         descEl.className = 'widget-preview-desc';
         const targetParts = [
             item.layout_type || item.page_type || '',
-            item.slot_id ? (translateUiText('Slot') + ': ' + item.slot_id) : '',
-            item.area ? (translateUiText('区域') + ': ' + item.area) : '',
+            item.slot_id ? (window.__('Slot') + ': ' + item.slot_id) : '',
+            item.area ? (window.__('区域') + ': ' + item.area) : '',
         ].filter(Boolean);
         descEl.title = [wDesc, targetParts.join(' · ')].filter(Boolean).join(' | ');
         descEl.textContent = wDesc || targetParts.join(' · ');
@@ -12195,12 +12491,12 @@
             alert.dataset.tone = 'warning';
             alert.setAttribute('role', 'button');
             alert.setAttribute('tabindex', '0');
-            alert.setAttribute('aria-label', translateUiText('点击查看安装失败详情'));
-            alert.title = translateUiText('点击查看详情');
+            alert.setAttribute('aria-label', window.__('点击查看安装失败详情'));
+            alert.title = window.__('点击查看详情');
             alert.innerHTML = '<div class="widget-default-injection-blocker-body">'
-                + '<strong>' + escapeHtml(translateUiText('安装失败')) + '</strong>'
+                + '<strong>' + escapeHtml(window.__('安装失败')) + '</strong>'
                 + '<span class="widget-default-injection-blocker-summary">' + escapeHtml(summaryText) + '</span>'
-                + '<em class="widget-default-injection-blocker-hint">' + escapeHtml(translateUiText('点击查看详情')) + '</em>'
+                + '<em class="widget-default-injection-blocker-hint">' + escapeHtml(window.__('点击查看详情')) + '</em>'
                 + '</div>';
             const openDetail = function(e) {
                 if (e) {
@@ -12222,8 +12518,8 @@
             closeBtn.dataset.variant = 'ghost';
             closeBtn.dataset.size = 'sm';
             closeBtn.dataset.iconOnly = 'true';
-            closeBtn.title = translateUiText('关闭');
-            closeBtn.setAttribute('aria-label', translateUiText('关闭'));
+            closeBtn.title = window.__('关闭');
+            closeBtn.setAttribute('aria-label', window.__('关闭'));
             closeBtn.innerHTML = iconSvg('close');
             closeBtn.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -12343,7 +12639,7 @@
                 body: JSON.stringify(payload),
             });
             if (!result || !result.success) {
-                showToast(result?.message || translateUiText('一键安装失败'), 'error');
+                showToast(result?.message || window.__('一键安装失败'), 'error');
                 return;
             }
             const blockers = Array.isArray(result?.blockers) ? result.blockers : [];
@@ -12362,15 +12658,15 @@
                 loadCanvas();
             }
             if (applied > 0) {
-                showToast(translateUiText('已安装默认部件') + ' (' + applied + ')', 'success');
+                showToast(window.__('已安装默认部件') + ' (' + applied + ')', 'success');
             } else if (blockers.length > 0) {
-                showToast(translateUiText('部分默认部件无法安装，请查看应用卡片'), 'warning');
+                showToast(window.__('部分默认部件无法安装，请查看应用卡片'), 'warning');
             } else {
-                showToast(translateUiText('没有可安装的默认部件'), 'info');
+                showToast(window.__('没有可安装的默认部件'), 'info');
             }
         } catch (err) {
             console.warn('[ThemeEditor] apply required defaults failed:', err);
-            showToast(err?.message || translateUiText('一键安装失败'), 'error');
+            showToast(err?.message || window.__('一键安装失败'), 'error');
         } finally {
             defaults.applyingKey = '';
             if (buttonEl) {
@@ -12428,7 +12724,7 @@
                     }
                     item.install_blocker = {
                         code: 'apply_failed',
-                        message: result?.message || translateUiText('应用失败'),
+                        message: result?.message || window.__('应用失败'),
                     };
                 });
                 if (state.widgetLibraryTab === 'applications') {
@@ -12484,7 +12780,7 @@
                 }
                 item.install_blocker = {
                     code: 'apply_failed',
-                    message: err?.message || translateUiText('应用失败'),
+                    message: err?.message || window.__('应用失败'),
                 };
             });
             if (state.widgetLibraryTab === 'applications') {
@@ -12530,8 +12826,8 @@
             // slot 模式只打一枪；默认模式才继续无限滚动
             lib.hasMore = !lib.slot;
             listEl.innerHTML = '<div class="widget-list-loading" id="widgetListLoading">'
-                + '<span class="w-spinner" role="status"><span class="w-visually-hidden">' + escapeHtml(translateUiText('加载中...')) + '</span></span>'
-                + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('部件库加载中...')) + '</span></div>';
+                + '<span class="w-spinner" role="status"><span class="w-visually-hidden">' + escapeHtml(window.__('加载中...')) + '</span></span>'
+                + '<span class="widget-list-loading-text">' + escapeHtml(window.__('部件库加载中...')) + '</span></div>';
             updateWidgetLibraryTabCounts();
         } else if (!lib.hasMore || lib.slot) {
             return;
@@ -12546,6 +12842,7 @@
                 return;
             }
             const items = (result && Array.isArray(result.items)) ? result.items : [];
+            rememberWidgetsFromCatalogPayload(items);
             if (result && typeof result.total === 'number') {
                 lib.total = result.total;
             }
@@ -12565,8 +12862,8 @@
             }
             if (lib.offset === 0 && items.length === 0) {
                 const emptyText = lib.slot
-                    ? translateUiText('该插槽暂无可用部件')
-                    : translateUiText('当前主题暂无可用部件');
+                    ? window.__('该插槽暂无可用部件')
+                    : window.__('当前主题暂无可用部件');
                 listEl.innerHTML = '<div class="widget-list-loading"><span class="widget-list-loading-text">'
                     + escapeHtml(emptyText) + '</span></div>';
                 if (!options.silent) showToast(emptyText, 'info');
@@ -12589,7 +12886,7 @@
                 const loadingEl = document.getElementById('widgetListLoading');
                 if (loadingEl) {
                     loadingEl.innerHTML = '<span class="widget-list-loading-text">'
-                        + escapeHtml(translateUiText('部件库加载失败，请稍后重试')) + '</span>';
+                        + escapeHtml(window.__('部件库加载失败，请稍后重试')) + '</span>';
                 }
             }
         } finally {
@@ -12665,9 +12962,9 @@
             listEl.appendChild(hint);
         }
         if (lib.hasMore) {
-            hint.textContent = translateUiText('下滑加载更多...') + ' (' + lib.offset + '/' + lib.total + ')';
+            hint.textContent = window.__('下滑加载更多...') + ' (' + lib.offset + '/' + lib.total + ')';
         } else {
-            hint.textContent = translateUiText('已全部加载') + ' (' + lib.total + ')';
+            hint.textContent = window.__('已全部加载') + ' (' + lib.total + ')';
         }
     }
 
@@ -12722,11 +13019,12 @@
         if (!listEl || !Array.isArray(items) || items.length === 0) return;
         items.forEach(function (w) {
             if (!w || typeof w !== 'object') return;
+            rememberWidgetParamsMeta(w);
             const libraryTab = getDashboardWidgetLibraryTab(w);
             w.widget_library_tab = libraryTab;
             const originalType = (w.group_type ?? w.type ?? 'other').toString();
             const type = libraryTab === 'basic' ? 'builder-components' : originalType;
-            const label = libraryTab === 'basic' ? translateUiText('基础组件 / HTML 搭建') : (w.group_label ?? type).toString();
+            const label = libraryTab === 'basic' ? window.__('基础组件 / HTML 搭建') : (w.group_label ?? type).toString();
             const contentEl = ensureWidgetGroup(listEl, type, label, libraryTab);
             if (!contentEl) return;
             const itemEl = createWidgetLibraryItem(w);
@@ -12763,7 +13061,7 @@
             return text;
         }
 
-        return humanizeWidgetCode(code) || String(code || '').trim() || translateUiText('未命名部件');
+        return humanizeWidgetCode(code) || String(code || '').trim() || window.__('未命名部件');
     }
 
     function resolveWidgetLibraryDescription(description, code) {
@@ -12773,7 +13071,7 @@
         }
 
         return String(code || '').trim() !== ''
-            ? translateUiText('可拖拽到页面插槽的基础组件')
+            ? window.__('可拖拽到页面插槽的基础组件')
             : '';
     }
 
@@ -12858,11 +13156,11 @@
 	        previewBtn.dataset.variant = 'outline';
 	        previewBtn.dataset.size = 'sm';
 	        previewBtn.dataset.iconOnly = 'true';
-	        previewBtn.title = translateUiText('预览');
+	        previewBtn.title = window.__('预览');
         previewBtn.dataset.widgetModule = wModule;
         previewBtn.dataset.widgetCode = wCode;
 	        previewBtn.dataset.widgetName = wName;
-	        previewBtn.setAttribute('aria-label', translateUiText('预览'));
+	        previewBtn.setAttribute('aria-label', window.__('预览'));
 	        previewBtn.innerHTML = iconSvg('eye');
 
 	        const addBtn = document.createElement('button');
@@ -12871,8 +13169,8 @@
 	        addBtn.dataset.tone = 'primary';
 	        addBtn.dataset.size = 'sm';
 	        addBtn.dataset.iconOnly = 'true';
-	        addBtn.title = translateUiText('添加到当前插槽');
-	        addBtn.setAttribute('aria-label', translateUiText('添加到当前插槽'));
+	        addBtn.title = window.__('添加到当前插槽');
+	        addBtn.setAttribute('aria-label', window.__('添加到当前插槽'));
 	        addBtn.innerHTML = iconSvg('plus');
 
 	        const actionGroup = document.createElement('div');
@@ -12979,7 +13277,7 @@
         if (!lib.slot) {
             if (chip) chip.remove();
             if (elements.widgetSearch) {
-                elements.widgetSearch.placeholder = translateUiText('搜索部件...');
+                elements.widgetSearch.placeholder = window.__('搜索部件...');
             }
             return;
         }
@@ -12990,8 +13288,8 @@
             search.insertBefore(chip, search.firstChild);
         }
         chip.innerHTML = '<span class="widget-slot-chip-label">' + iconSvg('cursor') + ' '
-            + escapeHtml(translateUiText('插槽')) + '：' + escapeHtml(lib.slotLabel || lib.slot) + '</span>'
-            + '<button type="button" class="widget-slot-chip-clear" title="' + escapeHtml(translateUiText('移除插槽过滤')) + '">'
+            + escapeHtml(window.__('插槽')) + '：' + escapeHtml(lib.slotLabel || lib.slot) + '</span>'
+            + '<button type="button" class="widget-slot-chip-clear" title="' + escapeHtml(window.__('移除插槽过滤')) + '">'
             + iconSvg('close') + '</button>';
         const clearBtn = chip.querySelector('.widget-slot-chip-clear');
         if (clearBtn) {
@@ -13000,7 +13298,7 @@
             });
         }
         if (elements.widgetSearch) {
-            elements.widgetSearch.placeholder = translateUiText('在该插槽内搜索...');
+            elements.widgetSearch.placeholder = window.__('在该插槽内搜索...');
         }
     }
 
@@ -13318,7 +13616,7 @@
             // 注意：不再调用 refreshPreview()，已通过 preview_html 更新
         } catch (err) {
             // T015: 网络错误时保持当前预览，继续编辑
-            showToast(err?.message || translateUiText('保存失败，请检查网络连接'), 'error');
+            showToast(err?.message || window.__('保存失败，请检查网络连接'), 'error');
             // 不更新预览，不关闭模态框，允许用户重试
         }
     }
@@ -13552,21 +13850,6 @@
     }
 
     /**
-     * 防抖函数
-     */
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    /**
      * 切换预览视图
      */
     function switchPreviewView(viewType) {
@@ -13698,19 +13981,24 @@
      * @param {number} mouseY 鼠标 Y 坐标
      */
     function showInsertionIndicator(container, mouseY) {
-        // 先移除旧的指示器
-        removeInsertionIndicators(container);
-
         const items = container.querySelectorAll('.preview-widget-item');
         if (items.length === 0) {
-            // 空容器：显示整体高亮
-            container.classList.add('drag-insert-empty');
+            if (!container.classList.contains('drag-insert-empty')) {
+                removeInsertionIndicators(container);
+                container.classList.add('drag-insert-empty');
+            }
+            state.dragInsertIndex = 0;
             return;
         }
 
         const insertIndex = getInsertionIndex(container, mouseY);
+        const existing = container.querySelector(':scope > .drag-insert-indicator');
+        if (existing && state.dragInsertIndex === insertIndex) {
+            return;
+        }
 
-        // 创建指示器
+        removeInsertionIndicators(container);
+
         const indicator = document.createElement('div');
         indicator.className = 'drag-insert-indicator';
         indicator.innerHTML = '<span class="drag-insert-dot"></span><span class="drag-insert-line"></span><span class="drag-insert-dot"></span>';
@@ -13721,7 +14009,6 @@
             container.appendChild(indicator);
         }
 
-        // 保存插入索引
         state.dragInsertIndex = insertIndex;
     }
 
@@ -13744,7 +14031,12 @@
      * @param {string} type 'replace' | 'full'
      */
     function showSlotHint(slotEl, text, type) {
-        // 避免重复
+        const existing = slotEl.querySelector(':scope > .drag-slot-hint');
+        if (existing
+            && existing.textContent === text
+            && existing.classList.contains('drag-slot-hint-' + type)) {
+            return;
+        }
         slotEl.querySelectorAll('.drag-slot-hint').forEach(el => el.remove());
 
         const hint = document.createElement('div');
@@ -14100,11 +14392,11 @@
     function handleDragStart(e) {
         if (isPreviewInteractionMode()) {
             e.preventDefault();
-            showToast(translateUiText('当前为预览模式，请先切换到编辑'), 'info');
+            showToast(window.__('当前为预览模式，请先切换到编辑'), 'info');
             return;
         }
         if (!isWidgetLibraryItemActive(this)) {
-            showToast(translateUiText('请先切换到对应部件分类'), 'warning');
+            showToast(window.__('请先切换到对应部件分类'), 'warning');
             e.preventDefault();
             return;
         }
@@ -15394,7 +15686,7 @@
                 name: slotInfo.name || '',
             }).catch(function(error) {
                 console.error('[ThemeEditor] Slot init defaults failed:', error);
-                showToast(error?.message || translateUiText('初始化失败'), 'error');
+                showToast(error?.message || window.__('初始化失败'), 'error');
             });
         }, true);
 
@@ -15741,6 +16033,20 @@
                 clearNestHoverActions();
                 return;
             }
+            if (e.target && typeof e.target.closest === 'function' && e.target.closest([
+                '[data-w-header-account]',
+                '.account-logged-in',
+                '.account-dropdown',
+                '[data-w-popover-panel]',
+                '.header-category-panel',
+                '[data-w-mega-menu]',
+                '.category-item--mega',
+                '.category-item.has-children',
+            ].join(', '))) {
+                clearNestHoverClearTimer();
+                clearNestHoverActions();
+                return;
+            }
             state.lastHoverPoint = { x: e.clientX, y: e.clientY };
 
             if (keepNestHoverFromActionsBar(e.target)) {
@@ -15806,8 +16112,15 @@
             if (isPreviewInteractionMode()) {
                 return;
             }
-            // 插槽模式：部件本体与部件操作条都不触发部件配置。
+            // 禁链关闭时，链接/按钮/菜单保持店面自己的点击，不打开部件配置。
+            if (state.linkBlockEnabled !== true && isNativeStorefrontActivationTarget(e.target)) {
+                return;
+            }
+            // 插槽模式：部件本体与部件操作条都不触发部件配置——必须提示，否则像点了没反应。
             if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+                if (e.target.closest(`${WIDGET_WRAPPER_MATCH}, ${PREVIEW_OR_CODE_WIDGET_MATCH}, .widget-hover-actions`)) {
+                    showToast(window.__('当前是插槽模式：请先点工具栏「部件」再点选部件配置'), 'info');
+                }
                 return;
             }
             // 购物控件等标记了 data-editor-interactive / data-mini-cart-* 的区域保持原生交互。
@@ -15983,7 +16296,7 @@
         try {
             const catalog = await loadVirtualThemeAiCatalog(false);
             if (catalog && catalog.virtual_layout_asset_available === false) {
-                showToast(translateUiText('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'), 'warning');
+                showToast(window.__('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'), 'warning');
                 return false;
             }
         } catch (err) {
@@ -16811,16 +17124,18 @@
             e.stopPropagation();
             e.dataTransfer.dropEffect = 'move';
 
-            // 计算鼠标位置，决定插入到上方还是下方
             const rect = targetWidget.getBoundingClientRect();
-            const midY = rect.top + rect.height / 2;
-
-            targetWidget.classList.remove('drag-over-top', 'drag-over-bottom');
-            if (e.clientY < midY) {
-                targetWidget.classList.add('drag-over-top');
-            } else {
-                targetWidget.classList.add('drag-over-bottom');
+            const edge = e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom';
+            const edgeClass = edge === 'top' ? 'drag-over-top' : 'drag-over-bottom';
+            const otherClass = edge === 'top' ? 'drag-over-bottom' : 'drag-over-top';
+            if (targetWidget.classList.contains(edgeClass) && !targetWidget.classList.contains(otherClass)) {
+                return;
             }
+
+            iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+                el.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+            targetWidget.classList.add(edgeClass);
         });
 
         // —— dragleave ——
@@ -17078,13 +17393,13 @@
             el.innerHTML = '';
             const error = document.createElement('div');
             error.className = 'widget-preview-error';
-            error.textContent = message || (typeof __ !== 'undefined' ? __('加载失败') : '加载失败');
+            error.textContent = message || window.__('加载失败');
             el.appendChild(error);
         };
 
         if (!modal || !inners.length) return;
 
-        if (titleEl) titleEl.textContent = (widgetName || widgetCode || '') + ' - ' + (typeof __ !== 'undefined' ? __('组件预览') : '组件预览');
+        if (titleEl) titleEl.textContent = (widgetName || widgetCode || '') + ' - ' + window.__('组件预览');
         loadingEl?.classList.add('visible');
         inners.forEach(el => { el.innerHTML = ''; });
 
@@ -17132,8 +17447,8 @@
     /**
      * 加载部件配置（用于模态框）
      */
-    function buildSavedWidgetConfigUrl(layoutId, locale) {
-        const apiUrl = new URL(`${config.apiBase}/widget-config`, window.location.origin);
+    function buildSavedWidgetConfigUrl(layoutId, locale, options = {}) {
+        const apiUrl = buildThemeEditorActionUrl('widget-config');
         const nodeUid = validNodeUid(layoutId);
         if (nodeUid) {
             apiUrl.searchParams.set('node_uid', nodeUid);
@@ -17146,6 +17461,9 @@
         if (locale) {
             apiUrl.searchParams.set('locale', locale);
         }
+        if (options.withPreview === true) {
+            apiUrl.searchParams.set('with_preview', '1');
+        }
         return apiUrl.toString();
     }
 
@@ -17154,6 +17472,7 @@
         if (!result || !result.success || !result.data) {
             throw new Error((result && result.message) || 'Widget config load failed');
         }
+        primeMediaPreviewUrlCache(result.data.media_preview_urls);
         return result.data;
     }
 
@@ -17273,9 +17592,9 @@
                         const widgetName = escapeHtml(widgetMeta.name || widgetCode || '');
                         const widgetDesc = escapeHtml((widgetMeta.description || '') + '');
                         const headerHtml = `<div class="widget-config-panel"><div class="config-header"><div class="config-widget-info"><div class="widget-icon">${iconSvg(icon)}</div><div class="widget-meta">${buildWidgetConfigMetaInnerHtml(widgetMeta.name || widgetCode || '', widgetCode, widgetMeta.description || '', widgetModule)}</div></div></div>`;
-                        const searchPlaceholder = (typeof __ !== 'undefined' ? __('搜索配置项') : '搜索配置项');
+                        const searchPlaceholder = window.__('搜索配置项');
                         const searchWrap = '<div class="w-param-search-wrap"><input type="text" class="w-param-search w-input w-theme-editor-control-sm" placeholder="' + searchPlaceholder + '" autocomplete="off"></div>';
-                        modalBody.innerHTML = headerHtml + searchWrap + formHtml + '<div class="config-actions"><button type="button" class="w-button" data-w-action="dialog.close">' + (typeof __ !== 'undefined' ? __('关闭') : '关闭') + '</button></div></div>';
+                        modalBody.innerHTML = headerHtml + searchWrap + formHtml + '<div class="config-actions"><button type="button" class="w-button" data-w-action="dialog.close">' + window.__('关闭') + '</button></div></div>';
                         const form = modalBody.querySelector('.w-param-form');
                         if (form) {
                             form.id = 'widgetConfigFormModal';
@@ -17324,6 +17643,7 @@
         if (!widgetElement) {
             return;
         }
+        const loadSeq = ++state.widgetConfigLoadSeq;
         // 若点选路径尚未写入 loading，这里再兜底一次（兼容其它调用方）。
         if (!elements.configContent?.querySelector('[data-widget-config-loading="1"]')) {
             showWidgetConfigLoadingState(widgetElement);
@@ -17332,13 +17652,104 @@
         const widgetModule = widgetElement.dataset.widgetModule;
         const widgetCode = widgetElement.dataset.widgetCode;
         const widgetType = widgetElement.dataset.widgetType;
-        let widgetConfig = {};
+        const localConfig = readWidgetElementLocalConfig(widgetElement);
+        let paintedOptimistic = false;
+
+        const paintFromMeta = async (meta, configValues) => {
+            if (!meta || !meta.params || Object.keys(meta.params).length === 0) {
+                return false;
+            }
+            if (loadSeq !== state.widgetConfigLoadSeq) {
+                return false;
+            }
+            await renderConfigFormWithBackend({
+                layout_id: validNodeUid(layoutId) ? 0 : layoutId,
+                node_uid: validNodeUid(layoutId) || (widgetElement?.dataset?.nodeUid || ''),
+                widget_code: widgetCode,
+                widget_module: widgetModule,
+                widget_type: widgetType || meta.type,
+                config: configValues || {},
+                meta: {
+                    name: meta.name || widgetCode,
+                    description: meta.description || '',
+                    params: meta.params,
+                },
+            }, meta.params);
+            return loadSeq === state.widgetConfigLoadSeq;
+        };
+
+        // 1) 本地 schema 立刻出表单（params 来自部件库/目录索引），不等待 query-bin 串行队列。
+        let cachedMeta = lookupWidgetParamsMeta(widgetModule, widgetCode);
+        if (!cachedMeta) {
+            // 目录可能仍在飞：短等一下；已缓存则同步返回。
+            try {
+                const catalog = await Promise.race([
+                    fetchWidgetsData(),
+                    new Promise((resolve) => window.setTimeout(() => resolve(null), 350)),
+                ]);
+                if (catalog && catalog.success) {
+                    rememberWidgetsFromCatalogPayload(catalog);
+                    cachedMeta = lookupWidgetParamsMeta(widgetModule, widgetCode);
+                }
+            } catch (err) {
+                // ignore — 后面仍走 GET widget-config
+            }
+        }
+        if (cachedMeta && cachedMeta.params && Object.keys(cachedMeta.params).length > 0) {
+            const cachedNode = validNodeUid(layoutId)
+                ? (state.widgetConfigByNodeUid && state.widgetConfigByNodeUid[layoutId])
+                : null;
+            const paintConfig = (cachedNode && cachedNode.config && typeof cachedNode.config === 'object')
+                ? cachedNode.config
+                : localConfig;
+            const paintParams = (cachedNode && cachedNode.params && typeof cachedNode.params === 'object')
+                ? cachedNode.params
+                : cachedMeta.params;
+            paintedOptimistic = await paintFromMeta({
+                ...cachedMeta,
+                params: paintParams,
+            }, paintConfig);
+            if (loadSeq !== state.widgetConfigLoadSeq) {
+                return;
+            }
+        }
+
+        // 目录未命中时并行拉全量目录，以便尽快乐观出表（与 GET 抢跑）。
+        const catalogHydratePromise = cachedMeta
+            ? Promise.resolve()
+            : fetchWidgetsData().then(async (result) => {
+                if (loadSeq !== state.widgetConfigLoadSeq) {
+                    return;
+                }
+                rememberWidgetsFromCatalogPayload(result);
+                if (paintedOptimistic) {
+                    return;
+                }
+                const lateMeta = lookupWidgetParamsMeta(widgetModule, widgetCode);
+                if (lateMeta) {
+                    paintedOptimistic = await paintFromMeta(lateMeta, localConfig);
+                }
+            }).catch(() => {});
 
         if (layoutId) {
             try {
                 const savedData = await loadSavedWidgetConfig(layoutId);
+                if (loadSeq !== state.widgetConfigLoadSeq) {
+                    return;
+                }
                 const params = (savedData.params && typeof savedData.params === 'object') ? savedData.params : {};
                 const savedConfig = (savedData.config && typeof savedData.config === 'object') ? savedData.config : {};
+                rememberWidgetParamsMeta({
+                    module: savedData.widget_module || widgetModule,
+                    code: savedData.widget_code || widgetCode,
+                    type: savedData.widget_type || widgetType,
+                    name: savedData.widget_code || widgetCode,
+                    params,
+                });
+                if (!state.widgetConfigByNodeUid) {
+                    state.widgetConfigByNodeUid = Object.create(null);
+                }
+                state.widgetConfigByNodeUid[layoutId] = { params, config: savedConfig, ts: Date.now() };
                 const meta = getWidgetElementMeta(widgetElement, savedData.widget_code || widgetCode, params);
                 await renderConfigFormWithBackend({
                     layout_id: validNodeUid(layoutId) ? 0 : layoutId,
@@ -17352,20 +17763,29 @@
                 return;
             } catch (err) {
                 console.warn('[ThemeEditor] saved widget config endpoint failed, try widget library:', err);
+                if (paintedOptimistic && loadSeq === state.widgetConfigLoadSeq) {
+                    await catalogHydratePromise;
+                    return;
+                }
             }
         }
 
-        try {
-            widgetConfig = JSON.parse(widgetElement.dataset.config || '{}');
-        } catch (e) {
-            widgetConfig = {};
+        await catalogHydratePromise;
+        if (loadSeq !== state.widgetConfigLoadSeq) {
+            return;
+        }
+        if (paintedOptimistic) {
+            return;
         }
 
-        // 通过 Weline.Api 获取部件参数定义
         try {
             const result = await fetchWidgetsData();
+            if (loadSeq !== state.widgetConfigLoadSeq) {
+                return;
+            }
 
             if (result.success) {
+                rememberWidgetsFromCatalogPayload(result);
                 // 查找匹配的部件
                 let widgetMeta = null;
                 for (const type in result.data) {
@@ -17380,22 +17800,27 @@
                 }
 
                 if (widgetMeta) {
+                    rememberWidgetParamsMeta(widgetMeta);
                     await renderConfigFormWithBackend({
                         layout_id: validNodeUid(layoutId) ? 0 : layoutId,
                         node_uid: validNodeUid(layoutId) || (widgetElement?.dataset?.nodeUid || ''),
                         widget_code: widgetCode,
                         widget_module: widgetModule,
                         widget_type: widgetType,
-                        config: widgetConfig,
+                        config: localConfig,
                         meta: widgetMeta,
                     }, widgetMeta.params || {});
                 } else {
                     elements.configContent.innerHTML = '<p class="w-text" data-tone="muted">未找到部件配置信息</p>';
                 }
+            } else {
+                elements.configContent.innerHTML = '<p class="w-text" data-tone="danger">加载配置失败</p>';
             }
         } catch (err) {
             console.error('Load config error:', err);
-            elements.configContent.innerHTML = '<p class="w-text" data-tone="danger">加载配置失败</p>';
+            if (loadSeq === state.widgetConfigLoadSeq) {
+                elements.configContent.innerHTML = '<p class="w-text" data-tone="danger">加载配置失败</p>';
+            }
         }
     }
 
@@ -17554,7 +17979,7 @@
         const widgetDesc = widget.meta?.description || '';
         const layoutId = validNodeUid(widget.node_uid) || widget.layout_id || '';
         const formHtml = await generateWidgetConfigForm(layoutId, params, widget.config || {});
-        const searchPlaceholder = (typeof __ !== 'undefined' ? __('Search config') : 'Search config');
+        const searchPlaceholder = window.__('Search config');
 
         elements.configContent.innerHTML = `
             <div class="widget-config-panel">
@@ -17882,7 +18307,7 @@
     }
 
     function getWidgetConfigSaveUrl() {
-        return `${config.apiBase}/save-widget-config`;
+        return themeEditorActionUrl('save-widget-config');
     }
 
     function formatLocaleOptionLabel(locale) {
@@ -17980,7 +18405,7 @@
         } catch (error) {
             console.error('[ThemeEditor] config locale switch failed:', error);
             syncConfigLocaleSwitchers();
-            showToast(error?.message || translateUiText('语言切换失败，已恢复原语言'), 'error');
+            showToast(error?.message || window.__('语言切换失败，已恢复原语言'), 'error');
         } finally {
             if (state.configLocaleChangeInFlight === switchKey) {
                 state.configLocaleChangeInFlight = '';
@@ -18015,7 +18440,7 @@
             loadCanvas({ locale: nextLocale || getActiveConfigLocale() });
             if (options.toast !== false) {
                 showToast(
-                    nextLocale ? `${translateUiText('已切换到')} ${nextLocale}` : translateUiText('已切换到默认语言'),
+                    nextLocale ? `${window.__('已切换到')} ${nextLocale}` : window.__('已切换到默认语言'),
                     'success',
                 );
             }
@@ -18027,7 +18452,7 @@
         } catch (error) {
             state.configLocale = previousLocale;
             syncConfigLocaleSwitchers();
-            const saveError = new Error(translateUiText('当前修改保存失败，已停留在原语言'));
+            const saveError = new Error(window.__('当前修改保存失败，已停留在原语言'));
             saveError.cause = error;
             throw saveError;
         }
@@ -18053,7 +18478,7 @@
                 });
                 if (options.toast !== false) {
                     showToast(
-                        nextLocale ? `${translateUiText('已切换到')} ${nextLocale}` : translateUiText('已切换到默认语言'),
+                        nextLocale ? `${window.__('已切换到')} ${nextLocale}` : window.__('已切换到默认语言'),
                         'success',
                     );
                 }
@@ -18078,7 +18503,7 @@
             if (state.configMode === 'layout') {
                 await loadLayoutConfig({ locale: previousLocale, silent: true });
             }
-            const switchError = new Error(translateUiText('语言切换失败，已恢复原语言'));
+            const switchError = new Error(window.__('语言切换失败，已恢复原语言'));
             switchError.cause = error;
             throw switchError;
         }
@@ -18250,6 +18675,111 @@
         return sanitizeLegacyImagePreviewUrl(raw, '');
     }
 
+    /**
+     * 配置表单里的图库选择器在客户端拼 HTML，已存 file-image 没有预览地址（禁止写入配置）。
+     * 打开面板后向 resolve-file-image-previews 解析，再交给选图控件画出缩略图。
+     * getWidgetConfig 也可附带瞬时 media_preview_urls（按 asset_id）供初渲。
+     */
+    function primeMediaPreviewUrlCache(urlsMap) {
+        if (!urlsMap || typeof urlsMap !== 'object') return;
+        Object.keys(urlsMap).forEach((assetId) => {
+            const id = String(assetId || '').trim();
+            const url = normalizeResolvedPreviewUrl(urlsMap[assetId] || '');
+            if (!id || !url) return;
+            i18nMediaPreviewUrlCache.set(id, url);
+        });
+    }
+
+    function previewUrlForMediaValue(value) {
+        const node = normalizeThemeFileImageNode(
+            typeof value === 'string' ? value : (value && typeof value === 'object' ? value : null),
+        );
+        if (node) {
+            const assetId = String(node.usage?.asset_id || '').trim();
+            if (assetId && i18nMediaPreviewUrlCache.has(assetId)) {
+                return normalizeResolvedPreviewUrl(i18nMediaPreviewUrlCache.get(assetId) || '');
+            }
+            return '';
+        }
+        if (typeof value === 'string' || typeof value === 'number') {
+            return sanitizeLegacyImagePreviewUrl(String(value).trim(), '');
+        }
+        return '';
+    }
+
+    function filePickerPreviewHasUsableThumb(wrap) {
+        if (!(wrap instanceof HTMLElement)) return false;
+        const img = wrap.querySelector('[data-w-file-item] img');
+        if (!(img instanceof HTMLImageElement)) return false;
+        const src = String(img.currentSrc || img.getAttribute('src') || '').trim();
+        if (!src || src === 'about:blank') return false;
+        if (/^asset:\/\//i.test(src)) return false;
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(src)) {
+            return false;
+        }
+        return true;
+    }
+
+    async function hydrateFileImagePickerPreviews(container) {
+        if (!container || typeof container.querySelectorAll !== 'function') return;
+        const pending = [];
+        const pathSeeds = [];
+        container.querySelectorAll('.w-param-media-image[data-w-param-media="file-picker"] input[type="hidden"]').forEach((input) => {
+            if (!(input instanceof HTMLInputElement)) return;
+            if (input.dataset.wFilePreviewHydrating === '1') return;
+            const wrap = input.closest('.w-param-media-image');
+            if (!wrap) return;
+            if (filePickerPreviewHasUsableThumb(wrap) && input.dataset.wFilePreviewHydrated === '1') {
+                return;
+            }
+            if (filePickerPreviewHasUsableThumb(wrap)) {
+                input.dataset.wFilePreviewHydrated = '1';
+                return;
+            }
+            const node = normalizeThemeFileImageNode(input.value);
+            if (node) {
+                delete input.dataset.wFilePreviewHydrated;
+                input.dataset.wFilePreviewHydrating = '1';
+                pending.push({ input, node, wrap });
+                return;
+            }
+            // Legacy path / URL: seed thumbnail without typed file-image resolve.
+            const pathUrl = sanitizeLegacyImagePreviewUrl(String(input.value || '').trim(), '');
+            if (pathUrl) {
+                pathSeeds.push({ input, pathUrl });
+            }
+        });
+        for (const item of pathSeeds) {
+            item.input.dataset.previewUrl = item.pathUrl;
+            item.input.setAttribute('data-preview-url', item.pathUrl);
+            item.input.dataset.wFilePreviewHydrated = '1';
+            try {
+                window.Weline?.Widget?.Params?.updateMediaPreview?.(item.input);
+            } catch (_error) {}
+        }
+        if (pending.length === 0) return;
+        let urls = {};
+        try {
+            urls = await resolveI18nMediaPreviewUrls(pending.map((item) => item.node));
+        } catch (error) {
+            console.warn('[ThemeEditor] file-image preview hydrate failed', error);
+            urls = {};
+        }
+        for (const item of pending) {
+            delete item.input.dataset.wFilePreviewHydrating;
+            if (!item.input.isConnected) continue;
+            const assetId = String(item.node.usage?.asset_id || '').trim();
+            const previewUrl = String(urls[assetId] || '').trim();
+            if (!previewUrl) continue;
+            item.input.dataset.previewUrl = previewUrl;
+            item.input.setAttribute('data-preview-url', previewUrl);
+            item.input.dataset.wFilePreviewHydrated = '1';
+            try {
+                window.Weline?.Widget?.Params?.updateMediaPreview?.(item.input);
+            } catch (_error) {}
+        }
+    }
+
     async function resolveI18nMediaPreviewUrls(nodes) {
         const list = Array.isArray(nodes) ? nodes.filter(Boolean) : [];
         const missing = [];
@@ -18259,8 +18789,12 @@
             if (!assetId) continue;
             if (i18nMediaPreviewUrlCache.has(assetId)) {
                 const cached = normalizeResolvedPreviewUrl(i18nMediaPreviewUrlCache.get(assetId) || '');
-                if (cached) resolved[assetId] = cached;
-                continue;
+                if (cached) {
+                    resolved[assetId] = cached;
+                    continue;
+                }
+                // Empty cache entry must not block retries (previous resolve failure).
+                i18nMediaPreviewUrlCache.delete(assetId);
             }
             missing.push(node);
         }
@@ -18280,15 +18814,13 @@
                 const assetId = String(node?.usage?.asset_id || '').trim();
                 if (!assetId) continue;
                 const url = normalizeResolvedPreviewUrl(urlsBag[assetId] || '');
-                i18nMediaPreviewUrlCache.set(assetId, url);
-                if (url) resolved[assetId] = url;
+                if (url) {
+                    i18nMediaPreviewUrlCache.set(assetId, url);
+                    resolved[assetId] = url;
+                }
             }
         } catch (e) {
             console.warn('[ThemeEditor] resolve-file-image-previews failed', e);
-            for (const node of missing) {
-                const assetId = String(node?.usage?.asset_id || '').trim();
-                if (assetId) i18nMediaPreviewUrlCache.set(assetId, '');
-            }
         }
         return resolved;
     }
@@ -18328,7 +18860,7 @@
         } catch (_e) {}
         try {
             if (typeof window.Weline?.Widget?.Params?.updateMediaPreview === 'function') {
-                window.Weline.Widget.Params.updateMediaPreview(input);
+                window.Weline.Widget.Params.updateMediaPreview(input, previewUrl);
             } else {
                 window.Weline?.Widget?.Params?.mountMedia?.(input.closest('.w-param-i18n-media') || panel);
             }
@@ -18375,6 +18907,154 @@
         return String(value);
     }
 
+    function ensureI18nLocaleSearchToolbar(panel) {
+        if (!(panel instanceof HTMLElement)) return null;
+        let toolbar = panel.querySelector('.w-param-i18n-toolbar');
+        if (toolbar) {
+            return toolbar.querySelector('[data-i18n-locale-search]');
+        }
+        const surface = panel.querySelector(':scope > .w-dialog__surface') || panel;
+        const header = surface.querySelector('.w-param-i18n-header, .i18n-panel-header, .w-dialog__header');
+        const body = surface.querySelector('.w-param-i18n-body, .i18n-panel-body, .w-dialog__body');
+        if (!body) return null;
+        toolbar = document.createElement('div');
+        toolbar.className = 'w-param-i18n-toolbar';
+        const searchId = `${panel.id || 'i18n_panel'}_locale_search`;
+        const label = document.createElement('label');
+        label.className = 'w-visually-hidden';
+        label.setAttribute('for', searchId);
+        label.textContent = window.__('搜索语言或代码');
+        const input = document.createElement('input');
+        input.type = 'search';
+        input.className = 'w-input w-param-i18n-locale-search';
+        input.id = searchId;
+        input.setAttribute('data-i18n-locale-search', '');
+        input.placeholder = window.__('搜索语言或代码...');
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        if (body.id) {
+            input.setAttribute('aria-controls', body.id);
+        }
+        toolbar.appendChild(label);
+        toolbar.appendChild(input);
+        if (header && header.parentNode === surface) {
+            header.insertAdjacentElement('afterend', toolbar);
+        } else {
+            body.insertAdjacentElement('beforebegin', toolbar);
+        }
+        return input;
+    }
+
+    function stampI18nLocaleRowMeta(row) {
+        if (!(row instanceof HTMLElement)) return;
+        const input = row.querySelector('.i18n-input[data-locale], input[data-locale], textarea[data-locale]');
+        const localeCode = String(input?.dataset?.locale || row.dataset.localeCode || '').trim();
+        const nameEl = row.querySelector('.w-param-i18n-locale-name, .lang-code');
+        const badgeEl = row.querySelector('.lang-flag-badge, .lang-flag-svg');
+        const localeName = String(
+            row.dataset.localeName
+            || nameEl?.textContent
+            || row.querySelector('.w-param-i18n-label')?.getAttribute('title')
+            || ''
+        ).trim();
+        const badgeText = String(badgeEl?.textContent || '').trim();
+        if (localeCode) {
+            row.dataset.localeCode = localeCode;
+            row.setAttribute('data-locale-code', localeCode);
+        }
+        if (localeName) {
+            row.dataset.localeName = localeName;
+            row.setAttribute('data-locale-name', localeName);
+        }
+        if (badgeText) {
+            row.dataset.localeBadge = badgeText;
+            row.setAttribute('data-locale-badge', badgeText);
+        }
+        const haystack = [localeCode, localeName, badgeText, localeCode.replace(/_/g, ' '), localeCode.replace(/_/g, '-')]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        row.dataset.localeSearch = haystack;
+    }
+
+    function applyI18nLocaleSearch(panel, term, options = {}) {
+        if (!(panel instanceof HTMLElement)) return;
+        const body = panel.querySelector('.w-param-i18n-body, .i18n-panel-body');
+        if (!body) return;
+        const needle = String(term || '').trim().toLowerCase();
+        const locate = options.locate !== false;
+        let empty = body.querySelector('.w-param-i18n-locale-empty');
+        if (!empty) {
+            empty = document.createElement('p');
+            empty.className = 'w-param-i18n-locale-empty';
+            empty.hidden = true;
+            empty.textContent = window.__('没有匹配的语言');
+            body.appendChild(empty);
+        }
+        const rows = [...body.querySelectorAll('.w-param-i18n-row, .i18n-row')];
+        let firstMatch = null;
+        let visibleCount = 0;
+        rows.forEach((row) => {
+            stampI18nLocaleRowMeta(row);
+            const haystack = String(row.dataset.localeSearch || '');
+            const match = needle === '' || haystack.includes(needle);
+            row.hidden = !match;
+            row.classList.toggle('is-i18n-locale-hidden', !match);
+            row.removeAttribute('data-locate');
+            if (match) {
+                visibleCount += 1;
+                if (!firstMatch) firstMatch = row;
+            }
+        });
+        empty.hidden = !(needle !== '' && visibleCount === 0);
+        if (locate && firstMatch && needle !== '') {
+            firstMatch.setAttribute('data-locate', '1');
+            try {
+                firstMatch.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            } catch (_e) {
+                firstMatch.scrollIntoView(true);
+            }
+            window.clearTimeout(panel._i18nLocateTimer);
+            panel._i18nLocateTimer = window.setTimeout(() => {
+                firstMatch?.removeAttribute('data-locate');
+            }, 1600);
+        }
+    }
+
+    function bindI18nLocaleSearch(panel, options = {}) {
+        if (!(panel instanceof HTMLElement)) return;
+        const input = ensureI18nLocaleSearchToolbar(panel);
+        if (!(input instanceof HTMLInputElement)) return;
+        const body = panel.querySelector('.w-param-i18n-body, .i18n-panel-body');
+        body?.querySelectorAll('.w-param-i18n-row, .i18n-row').forEach((row) => stampI18nLocaleRowMeta(row));
+        if (options.reset) {
+            input.value = '';
+        }
+        if (panel.dataset.i18nLocaleSearchBound !== '1') {
+            panel.dataset.i18nLocaleSearchBound = '1';
+            const run = () => applyI18nLocaleSearch(panel, input.value, { locate: true });
+            input.addEventListener('input', run);
+            input.addEventListener('search', run);
+            input.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                applyI18nLocaleSearch(panel, input.value, { locate: true });
+                const first = panel.querySelector('.w-param-i18n-row:not([hidden]), .i18n-row:not([hidden])');
+                const focusTarget = first?.querySelector('input:not([type="hidden"]), textarea, button[data-w-file-picker-open], .w-param-media-image-select');
+                if (focusTarget instanceof HTMLElement) {
+                    focusTarget.focus();
+                }
+            });
+        }
+        applyI18nLocaleSearch(panel, input.value, { locate: !!String(input.value || '').trim() });
+        if (options.focus) {
+            try {
+                input.focus();
+                input.select();
+            } catch (_e) {}
+        }
+    }
+
     /**
      * 确保面板内已渲染语言行（动态填充空容器）
      */
@@ -18390,6 +19070,7 @@
         );
         // 旧高大预览 / 操作钮仍在预览内 → 强制重渲为紧凑横排
         if (body.children.length > 0 && !hasWrongTextRows && (!isMedia || (hasMediaRows && hasCompactMedia))) {
+            bindI18nLocaleSearch(panel);
             return;
         }
 
@@ -18403,7 +19084,7 @@
         if (media) {
             const hint = document.createElement('p');
             hint.className = `${p}i18n-hint`;
-            hint.textContent = translateUiText('未选图片的语言沿用主图');
+            hint.textContent = window.__('未选图片的语言沿用主图');
             fragment.appendChild(hint);
         }
 
@@ -18414,6 +19095,10 @@
             row.className = media
                 ? `${p}i18n-row ${p}i18n-row--media ${p}i18n-row--compact`
                 : `${p}i18n-row`;
+            row.dataset.localeCode = localeCode;
+            row.dataset.localeName = localeName;
+            row.setAttribute('data-locale-code', localeCode);
+            row.setAttribute('data-locale-name', localeName);
 
             if (media) {
                 const head = document.createElement('div');
@@ -18432,7 +19117,7 @@
                 const status = document.createElement('span');
                 status.className = `${p}i18n-media-status`;
                 status.dataset.state = 'inherit';
-                status.textContent = translateUiText('沿用主图');
+                status.textContent = window.__('沿用主图');
                 head.appendChild(status);
                 row.appendChild(head);
 
@@ -18456,7 +19141,7 @@
                 const openBtn = wrap.querySelector('[data-w-file-picker-open] span')
                     || wrap.querySelector('[data-w-file-picker-open]');
                 if (openBtn) {
-                    openBtn.textContent = translateUiText('选择图片');
+                    openBtn.textContent = window.__('选择图片');
                 }
                 const placeholder = wrap.querySelector('.w-param-image-placeholder');
                 if (placeholder) {
@@ -18498,6 +19183,7 @@
                 row.appendChild(input);
             }
 
+            stampI18nLocaleRowMeta(row);
             fragment.appendChild(row);
         }
         body.replaceChildren(fragment);
@@ -18519,12 +19205,13 @@
             }
             syncI18nMediaRowStatuses(panel);
         }
+        bindI18nLocaleSearch(panel);
     }
 
     function syncI18nMediaRowStatuses(panel) {
         if (!panel) return;
-        const inheritLabel = translateUiText('沿用主图');
-        const customLabel = translateUiText('已设置');
+        const inheritLabel = window.__('沿用主图');
+        const customLabel = window.__('已设置');
         panel.querySelectorAll('.w-param-i18n-row--compact').forEach((row) => {
             const input = row.querySelector('input.i18n-input');
             const status = row.querySelector('.w-param-i18n-media-status');
@@ -18625,6 +19312,7 @@
      */
     async function loadI18nValues(layoutId, fieldKey, panel) {
         await ensurePanelRendered(panel);
+        bindI18nLocaleSearch(panel, { reset: true, focus: true });
         const inputs = panel.querySelectorAll('.i18n-input');
         const locales = [...new Set([...inputs].map(inp => inp.dataset.locale))];
         const isMedia = stampI18nMediaPanel(panel);
@@ -18635,7 +19323,7 @@
                 if (isLayoutConfigPanel(panel)) {
                     baseResult = await apiJson(buildLayoutConfigUrl(''));
                 } else {
-                    baseResult = await apiJson(`${config.apiBase}/widget-config?${validNodeUid(layoutId) ? `node_uid=${encodeURIComponent(validNodeUid(layoutId))}` : `layout_id=${encodeURIComponent(layoutId)}`}`);
+                    baseResult = await apiJson(buildSavedWidgetConfigUrl(layoutId, ''));
                 }
                 const baseConfig = (baseResult.data && baseResult.data.config) || baseResult.config || {};
                 baseComparable = normalizeComparableI18nValue(getConfigValueByPath(baseConfig, fieldKey));
@@ -18651,7 +19339,7 @@
                 if (isLayoutConfigPanel(panel)) {
                     result = await apiJson(buildLayoutConfigUrl(locale));
                 } else {
-                    result = await apiJson(`${config.apiBase}/widget-config?${validNodeUid(layoutId) ? `node_uid=${encodeURIComponent(validNodeUid(layoutId))}` : `layout_id=${encodeURIComponent(layoutId)}`}&locale=${encodeURIComponent(locale)}`);
+                    result = await apiJson(buildSavedWidgetConfigUrl(layoutId, locale));
                 }
                 const data = result.data || {};
                 if (result.success && data.config) {
@@ -18696,14 +19384,11 @@
                 const hint = String(item.previewUrl || (assetId ? urls[assetId] : '') || '').trim();
                 await applyI18nMediaInputValue(item.input, item.value, fieldKey, panel, hint);
             }
+            void hydrateFileImagePickerPreviews(panel);
         }
         if (isMedia) {
             syncI18nMediaRowStatuses(panel);
         }
-    }
-
-    function translateUiText(text) {
-        return (typeof __ === 'function') ? __(text) : text;
     }
 
     function readI18nMainFieldValue(fieldKey, panel) {
@@ -18771,15 +19456,15 @@
             return;
         }
         if (loading) {
-            button.dataset.originalText = button.textContent || translateUiText('AI翻译');
+            button.dataset.originalText = button.textContent || window.__('AI翻译');
             button.disabled = true;
-            button.textContent = translateUiText('正在翻译...');
+            button.textContent = window.__('正在翻译...');
             button.setAttribute('aria-busy', 'true');
             return;
         }
 
         button.disabled = false;
-        button.textContent = button.dataset.originalText || translateUiText('AI翻译');
+        button.textContent = button.dataset.originalText || window.__('AI翻译');
         button.removeAttribute('aria-busy');
         delete button.dataset.originalText;
     }
@@ -18789,14 +19474,14 @@
         const inputs = Array.from(panel.querySelectorAll('.i18n-input'));
         const { sourceLocale, sourceText } = resolveI18nSourceValue(fieldKey, panel, inputs);
         if (String(sourceText).trim() === '') {
-            showToast(translateUiText('请先填写源文案'), 'warning');
+            showToast(window.__('请先填写源文案'), 'warning');
             return;
         }
 
         const targetInputs = inputs.filter(input => input.dataset.locale && input.dataset.locale !== sourceLocale);
         const targetLocales = [...new Set(targetInputs.map(input => input.dataset.locale).filter(Boolean))];
         if (targetLocales.length === 0) {
-            showToast(translateUiText('没有需要翻译的目标语言'), 'warning');
+            showToast(window.__('没有需要翻译的目标语言'), 'warning');
             return;
         }
 
@@ -18817,7 +19502,7 @@
                 })
             });
             if (!result.success) {
-                throw new Error(result.message || translateUiText('AI翻译失败'));
+                throw new Error(result.message || window.__('AI翻译失败'));
             }
 
             const translations = (result.data && result.data.translations) || result.translations || {};
@@ -18833,13 +19518,13 @@
             }
 
             if (filledCount > 0) {
-                showToast(result.message || translateUiText('AI翻译已回填'), 'success');
+                showToast(result.message || window.__('AI翻译已回填'), 'success');
             } else {
-                showToast(translateUiText('AI翻译未返回目标语言结果'), 'warning');
+                showToast(window.__('AI翻译未返回目标语言结果'), 'warning');
             }
         } catch (err) {
             console.error('AI i18n translate error:', err);
-            showToast(err.message || translateUiText('AI翻译失败'), 'error');
+            showToast(err.message || window.__('AI翻译失败'), 'error');
         } finally {
             setI18nAiButtonLoading(button, false);
         }
@@ -18913,7 +19598,7 @@
                 updateWidgetPreviewInIframe(layoutId, activePreviewHtml);
             }
         } else {
-            showToast(isMedia ? translateUiText('没有需要保存的语言图片（空行沿用主图）') : '保存失败', isMedia ? 'info' : 'error');
+            showToast(isMedia ? window.__('没有需要保存的语言图片（空行沿用主图）') : '保存失败', isMedia ? 'info' : 'error');
         }
     }
 
@@ -18991,11 +19676,13 @@
                 const widgetData = result.data;
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
+                primeMediaPreviewUrlCache(widgetData.media_preview_urls);
 
                 // 更新表单中的值
                 const form = document.getElementById('widgetConfigForm');
                 if (form) {
                     updateWidgetConfigFormValues(form, params, widgetConfig);
+                    void hydrateFileImagePickerPreviews(form);
                 }
 
                 const previewHtml = widgetData.preview_html || result.preview_html || '';
@@ -19010,12 +19697,12 @@
                 }
                 return true;
             } else {
-                throw new Error(result.message || translateUiText('加载配置失败'));
+                throw new Error(result.message || window.__('加载配置失败'));
             }
         } catch (err) {
             console.error('Reload config error:', err);
             if (options.toast !== false) {
-                showToast(err?.message || translateUiText('加载配置失败'), 'error');
+                showToast(err?.message || window.__('加载配置失败'), 'error');
             }
             throw err;
         }
@@ -19043,7 +19730,7 @@
             return true;
         } catch (err) {
             console.error('Save config error:', err);
-            showToast(err?.message || translateUiText('保存失败'), 'error');
+            showToast(err?.message || window.__('保存失败'), 'error');
             return false;
         }
     }
@@ -19169,7 +19856,7 @@
             }
         } catch (err) {
             console.error('Save config error:', err);
-            showToast(err?.message || translateUiText('保存配置失败'), 'error');
+            showToast(err?.message || window.__('保存配置失败'), 'error');
             throw err;
         }
     }
@@ -19194,7 +19881,7 @@
             }
         } catch (err) {
             console.error('Save config error:', err);
-            showToast(err?.message || translateUiText('保存配置失败'), 'error');
+            showToast(err?.message || window.__('保存配置失败'), 'error');
             throw err;
         }
     }
@@ -19393,14 +20080,14 @@
     
     async function publishEmbeddedLayout(options = {}) {
         if (!state.themeId) {
-            const message = translateUiText('请先选择主题');
+            const message = window.__('请先选择主题');
             showToast(message, 'warning');
             throw new Error(message);
         }
 
         try {
             if (options.silent !== true) {
-                showToast(translateUiText('正在发布布局...'), 'info');
+                showToast(window.__('正在发布布局...'), 'info');
             }
 
             const pending = await detectPendingScopedChanges();
@@ -19415,14 +20102,14 @@
                     versionName = String(options.version_name || '');
                 } else {
                     const name = await showPromptDialog(
-                        translateUiText('新建版本并发布'),
-                        translateUiText('有未发布改动，请输入版本名称（可选）后发布。'),
+                        window.__('新建版本并发布'),
+                        window.__('有未发布改动，请输入版本名称（可选）后发布。'),
                         await ensureSuggestedVersionName(),
-                        translateUiText('发布'),
-                        translateUiText('取消')
+                        window.__('发布'),
+                        window.__('取消')
                     );
                     if (name === null) {
-                        throw new Error(translateUiText('已取消发布'));
+                        throw new Error(window.__('已取消发布'));
                     }
                     createVersion = true;
                     versionName = String(name || '');
@@ -19435,14 +20122,14 @@
             });
             if (!result?.success && result?.code === 'theme_publish_requires_new_version' && options.silent !== true) {
                 const name = await showPromptDialog(
-                    translateUiText('新建版本并发布'),
-                    translateUiText('有未发布改动，请输入版本名称（可选）后发布。'),
+                    window.__('新建版本并发布'),
+                    window.__('有未发布改动，请输入版本名称（可选）后发布。'),
                     resolveSuggestedVersionName(result.data),
-                    translateUiText('发布'),
-                    translateUiText('取消')
+                    window.__('发布'),
+                    window.__('取消')
                 );
                 if (name === null) {
-                    throw new Error(translateUiText('已取消发布'));
+                    throw new Error(window.__('已取消发布'));
                 }
                 result = await requestStandardLayoutPublish({
                     create_version: true,
@@ -19451,12 +20138,12 @@
             }
 
             if (!result || result.success === false) {
-                throw new Error((result && result.message) || translateUiText('发布失败'));
+                throw new Error((result && result.message) || window.__('发布失败'));
             }
 
             state.hasChanges = false;
             if (options.silent !== true) {
-                showToast(result.message || translateUiText('布局已发布'), 'success');
+                showToast(result.message || window.__('布局已发布'), 'success');
             }
 
             notifyDashboardLayoutSaved(options.reason || 'embedded-layout-published', {
@@ -19469,7 +20156,7 @@
         } catch (error) {
             console.error('[ThemeEditor] Publish embedded layout error:', error);
             if (options.silent !== true) {
-                showToast(error.message || translateUiText('发布失败'), 'error');
+                showToast(error.message || window.__('发布失败'), 'error');
             }
             throw error;
         }
@@ -19512,13 +20199,13 @@
         }).then((result) => {
             postDashboardSaveCloseResult(requestId, {
                 success: true,
-                message: result && result.message ? result.message : translateUiText('布局已保存'),
+                message: result && result.message ? result.message : window.__('布局已保存'),
                 data: result && result.data ? result.data : null,
             });
         }).catch((error) => {
             postDashboardSaveCloseResult(requestId, {
                 success: false,
-                message: error && error.message ? error.message : translateUiText('保存失败'),
+                message: error && error.message ? error.message : window.__('保存失败'),
             });
         }).finally(() => {
             if (requestId) {
@@ -19544,11 +20231,11 @@
             let versionName = '';
             if (pending) {
                 const name = await showPromptDialog(
-                    translateUiText('新建版本并发布'),
-                    translateUiText('有未发布改动，请输入版本名称（可选）后发布。'),
+                    window.__('新建版本并发布'),
+                    window.__('有未发布改动，请输入版本名称（可选）后发布。'),
                     await ensureSuggestedVersionName(),
-                    translateUiText('发布'),
-                    translateUiText('取消')
+                    window.__('发布'),
+                    window.__('取消')
                 );
                 if (name === null) {
                     return;
@@ -19557,28 +20244,28 @@
                 versionName = String(name || '');
             } else {
                 const confirmed = await showCustomConfirm(
-                    translateUiText('确认发布主题？'),
-                    translateUiText('当前无未发布改动，将直接发布当前版本并刷新缓存。'),
-                    translateUiText('发布'),
-                    translateUiText('取消')
+                    window.__('确认发布主题？'),
+                    window.__('当前无未发布改动，将直接发布当前版本并刷新缓存。'),
+                    window.__('发布'),
+                    window.__('取消')
                 );
                 if (!confirmed) {
                     return;
                 }
             }
 
-            showToast(translateUiText('正在发布...'), 'info');
+            showToast(window.__('正在发布...'), 'info');
             let result = await requestStandardLayoutPublish({
                 create_version: createVersion,
                 version_name: versionName || undefined,
             });
             if (!result?.success && result?.code === 'theme_publish_requires_new_version') {
                 const name = await showPromptDialog(
-                    translateUiText('新建版本并发布'),
-                    translateUiText('有未发布改动，请输入版本名称（可选）后发布。'),
+                    window.__('新建版本并发布'),
+                    window.__('有未发布改动，请输入版本名称（可选）后发布。'),
                     resolveSuggestedVersionName(result.data),
-                    translateUiText('发布'),
-                    translateUiText('取消')
+                    window.__('发布'),
+                    window.__('取消')
                 );
                 if (name === null) {
                     return;
@@ -19590,7 +20277,7 @@
             }
 
             if (result?.success) {
-                showToast(result.message || translateUiText('发布成功'), 'success');
+                showToast(result.message || window.__('发布成功'), 'success');
                 state.hasChanges = false;
                 try {
                     await loadVersions();
@@ -19603,15 +20290,15 @@
                     });
                 }
             } else {
-                showToast(result?.message || translateUiText('发布失败'), 'error');
+                showToast(result?.message || window.__('发布失败'), 'error');
             }
         } catch (err) {
             console.error('[ThemeEditor] Publish error:', err);
             const message = String(err?.message || err || '');
             if (message.includes('theme_scope_revision_conflict')) {
-                showToast(translateUiText('草稿版本已更新，请再点一次发布'), 'warning');
+                showToast(window.__('草稿版本已更新，请再点一次发布'), 'warning');
             } else {
-                showToast(translateUiText('发布主题失败'), 'error');
+                showToast(window.__('发布主题失败'), 'error');
             }
         }
     }
@@ -19636,7 +20323,7 @@
 
     async function consumeStandardPublishSse(response, onProgress) {
         if (!response || !response.body || typeof response.body.getReader !== 'function') {
-            throw new Error(translateUiText('发布进度流不可用'));
+            throw new Error(window.__('发布进度流不可用'));
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -19673,7 +20360,7 @@
             if (eventName === 'error' || eventName === 'failed') {
                 streamError = data && typeof data === 'object'
                     ? data
-                    : { success: false, message: translateUiText('发布失败') };
+                    : { success: false, message: window.__('发布失败') };
                 return;
             }
             if (eventName === 'done' || eventName === 'complete') {
@@ -19700,7 +20387,7 @@
             return {
                 success: false,
                 code: streamError.code || 'theme_standard_publish_failed',
-                message: streamError.message || translateUiText('发布失败'),
+                message: streamError.message || window.__('发布失败'),
                 data: streamError.data || null,
             };
         }
@@ -19710,17 +20397,17 @@
             }
             return {
                 success: true,
-                message: finalResult.message || translateUiText('版本已发布'),
+                message: finalResult.message || window.__('版本已发布'),
                 code: finalResult.code || 'theme_standard_publish_ok',
                 data: finalResult.data || finalResult,
             };
         }
-        throw new Error(translateUiText('发布未完成'));
+        throw new Error(window.__('发布未完成'));
     }
 
     async function requestStandardLayoutPublish(extra = {}) {
         const payload = buildLayoutVersionIdentityPayload({
-            frontend_theme_id: getCurrentWindowParam('frontend_theme_id') || state.themeId,
+            frontend_theme_id: state.themeId || getCurrentWindowParam('frontend_theme_id') || '',
             backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
             editor_area: state.editorArea || 'frontend',
             status: state.previewStatus || 'draft',
@@ -19753,7 +20440,7 @@
         const contentType = String(response.headers.get('content-type') || '').toLowerCase();
         if (contentType.indexOf('text/event-stream') !== -1) {
             if (!response.ok) {
-                throw new Error(translateUiText('发布失败'));
+                throw new Error(window.__('发布失败'));
             }
             return consumeStandardPublishSse(response, onProgress);
         }
@@ -19783,7 +20470,7 @@
             }
         } catch (error) {
             previewWindow?.close();
-            showToast(error?.message || translateUiText('当前修改保存失败，无法打开预览'), 'error');
+            showToast(error?.message || window.__('当前修改保存失败，无法打开预览'), 'error');
         }
     }
 
@@ -19809,7 +20496,7 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(buildLayoutVersionIdentityPayload({
-                    frontend_theme_id: getCurrentWindowParam('frontend_theme_id') || state.themeId,
+                    frontend_theme_id: state.themeId || getCurrentWindowParam('frontend_theme_id') || '',
                     backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
                     page_type: getEffectiveLayoutType(),
                     layout_type: getEffectiveLayoutType(),
@@ -19820,7 +20507,7 @@
                     locale: getPreviewLocaleForRequest(),
                     editor_context: buildTypedEditorContext('layout', {
                         area: 'frontend',
-                        theme_id: parseInt(getCurrentWindowParam('frontend_theme_id') || String(state.themeId), 10) || state.themeId,
+                        theme_id: state.themeId || parseInt(getCurrentWindowParam('frontend_theme_id') || '0', 10) || 0,
                         layout_type: getEffectiveLayoutType(),
                         layout_option: getEffectiveLayoutOption(),
                         locale: getPreviewLocaleForRequest() || 'default',
@@ -19861,7 +20548,7 @@
             }
         } catch (error) {
             previewWindow?.close();
-            showToast(error?.message || translateUiText('已发布版本预览启动失败'), 'error');
+            showToast(error?.message || window.__('已发布版本预览启动失败'), 'error');
         }
     }
 
@@ -20339,16 +21026,18 @@
 
     function renderTypedFileImageControl(fieldId, fieldKey, value, fieldParam = {}, options = {}) {
         const api = window.Weline?.Widget?.Params;
+        const previewUrl = String(options.previewUrl || previewUrlForMediaValue(value) || '').trim();
         if (typeof api?.renderMediaLibraryPickerHtml === 'function') {
             const pickerHtml = api.renderMediaLibraryPickerHtml({
                 fieldId,
                 fieldKey,
                 value,
                 fieldParam,
+                previewUrl,
                 includeName: options.includeName,
                 arrayItem: options.arrayItem,
                 inputClass: options.inputClass,
-                openLabel: translateUiText('从图库选择'),
+                openLabel: window.__('从图库选择'),
                 defaultDir: fieldParam?.media_options?.default_directory
                     || fieldParam?.default_directory
                     || 'banner',
@@ -20370,7 +21059,7 @@
         const aspectRatio = resolveMediaAspectRatio(fieldParam);
         const placeholder = node
             ? String(node.usage.alt || node.usage.asset_id)
-            : translateUiText(hasValue ? '旧图片地址仅兼容显示，请从媒体库重新选择' : '从媒体库选择');
+            : window.__(hasValue ? '旧图片地址仅兼容显示，请从媒体库重新选择' : '从媒体库选择');
         const safeId = escapeHtml(fieldId);
         const safeKey = escapeHtml(fieldKey);
         const inputClass = options.arrayItem ? ' class="w-param-array-item-input"' : '';
@@ -20383,10 +21072,10 @@
         let html = '<div class="w-param-media-image">';
         html += `<div class="w-param-image-preview${hasValue ? ' w-param-has-image' : ''}" id="${safeId}_preview"${previewAspectAttr}${previewStyle}>`;
         if (aspectRatio) {
-            html += `<span class="w-param-image-aspect-badge">${escapeHtml(translateUiText('比例 %{1}', aspectRatio).replace('%{1}', aspectRatio))}</span>`;
+            html += `<span class="w-param-image-aspect-badge">${escapeHtml(window.__('比例 %{1}', aspectRatio).replace('%{1}', aspectRatio))}</span>`;
         }
         if (legacyPreviewUrl) {
-            html += `<img src="${escapeHtml(legacyPreviewUrl)}" alt="${escapeHtml(translateUiText('预览'))}">`;
+            html += `<img src="${escapeHtml(legacyPreviewUrl)}" alt="${escapeHtml(window.__('预览'))}">`;
         }
         html += `<div class="w-param-image-placeholder"${legacyPreviewUrl ? ' hidden' : ''}>${escapeHtml(placeholder)}</div>`;
         html += '<div class="w-param-image-actions">';
@@ -20394,12 +21083,12 @@
         if (recommendW) html += ` data-recommend-w="${escapeHtml(String(recommendW))}"`;
         if (recommendH) html += ` data-recommend-h="${escapeHtml(String(recommendH))}"`;
         if (aspectRatio) html += ` data-aspect-ratio="${escapeHtml(aspectRatio)}"`;
-        html += `>${escapeHtml(translateUiText('选择'))}</button>`;
+        html += `>${escapeHtml(window.__('选择'))}</button>`;
         if (hasValue) {
-            html += `<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="${safeId}" aria-label="${escapeHtml(translateUiText('清除图片'))}">×</button>`;
+            html += `<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="${safeId}" aria-label="${escapeHtml(window.__('清除图片'))}">×</button>`;
         }
         html += '</div></div>';
-        html += `<input type="hidden"${inputClass} id="${safeId}"${nameAttr} data-field="${safeKey}" value="${escapeHtml(storedValue)}" data-preview="${safeId}_preview" data-clear-label="${escapeHtml(translateUiText('清除图片'))}">`;
+        html += `<input type="hidden"${inputClass} id="${safeId}"${nameAttr} data-field="${safeKey}" value="${escapeHtml(storedValue)}" data-preview="${safeId}_preview" data-clear-label="${escapeHtml(window.__('清除图片'))}">`;
         html += '</div>';
         return html;
     }
@@ -20711,12 +21400,12 @@
      */
     async function handleClearThemeCache() {
         if (!state.themeId) {
-            showToast(translateUiText('缺少主题 ID'), 'warning');
+            showToast(window.__('缺少主题 ID'), 'warning');
             return;
         }
 
         try {
-            showToast(translateUiText('正在清理 Theme 缓存...'), 'info');
+            showToast(window.__('正在清理 Theme 缓存...'), 'info');
             const result = await apiJson(config.apiClearThemeCache || `${config.apiBase}/clear-theme-cache`, {
                 method: 'POST',
                 headers: {
@@ -20726,14 +21415,14 @@
             });
 
             if (!result?.success) {
-                throw new Error(result?.message || translateUiText('清理 Theme 缓存失败'));
+                throw new Error(result?.message || window.__('清理 Theme 缓存失败'));
             }
 
-            showToast(result.message || translateUiText('Theme 缓存已清理'), 'success');
+            showToast(result.message || window.__('Theme 缓存已清理'), 'success');
             refreshPreview();
         } catch (error) {
             console.error('[ThemeEditor] Clear theme cache failed:', error);
-            showToast(translateUiText('清理 Theme 缓存失败：') + (error?.message || ''), 'error');
+            showToast(window.__('清理 Theme 缓存失败：') + (error?.message || ''), 'error');
         }
     }
 
@@ -20857,21 +21546,21 @@
     async function executeResetDraftResources(selectAll = false) {
         const selection = collectResetDraftSelections(selectAll);
         if (!selection.resources.length) {
-            showToast(translateUiText('请至少选择一种资源类型'), 'warning');
+            showToast(window.__('请至少选择一种资源类型'), 'warning');
             return;
         }
 
         const confirmed = await showCustomConfirm(
-            translateUiText(selectAll ? '确认重置所有草稿资源？' : '确认重置选中草稿资源？'),
-            translateUiText('仅清理当前编辑草稿物化，不会删除版本历史或已发布内容。'),
-            translateUiText('确认重置'),
-            translateUiText('取消'),
+            window.__(selectAll ? '确认重置所有草稿资源？' : '确认重置选中草稿资源？'),
+            window.__('仅清理当前编辑草稿物化，不会删除版本历史或已发布内容。'),
+            window.__('确认重置'),
+            window.__('取消'),
         );
         if (!confirmed) {
             return;
         }
 
-        showToast(translateUiText('正在重置当前编辑草稿...'), 'info');
+        showToast(window.__('正在重置当前编辑草稿...'), 'info');
         const result = await apiJson(config.apiResetDraftResources, {
             method: 'POST',
             headers: {
@@ -20884,7 +21573,7 @@
         });
 
         if (!result?.success) {
-            showToast(result?.message || translateUiText('重置失败'), 'error');
+            showToast(result?.message || window.__('重置失败'), 'error');
             return;
         }
 
@@ -20906,7 +21595,7 @@
         deselectArea();
         deselectWidget();
         await fetchLayoutSlots();
-        showToast(result.message || translateUiText('当前编辑草稿已重置'), 'success');
+        showToast(result.message || window.__('当前编辑草稿已重置'), 'success');
         setTimeout(() => {
             refreshPreview();
         }, 300);
@@ -20916,32 +21605,32 @@
         const input = document.getElementById('themeEditorFactoryResetConfirm');
         const confirmation = String(input?.value || '').trim();
         if (confirmation !== 'RESET') {
-            showToast(translateUiText('请输入确认词 RESET'), 'warning');
+            showToast(window.__('请输入确认词 RESET'), 'warning');
             return;
         }
 
         const confirmed = await showCustomConfirm(
-            translateUiText('确认完全初始化 Theme？'),
-            translateUiText('将清空 Theme 全部表与 theme meta，并重装默认主题。此操作不可恢复。'),
-            translateUiText('完全初始化'),
-            translateUiText('取消'),
+            window.__('确认完全初始化 Theme？'),
+            window.__('将清空 Theme 全部表与 theme meta，并重装默认主题。此操作不可恢复。'),
+            window.__('完全初始化'),
+            window.__('取消'),
         );
         if (!confirmed) {
             return;
         }
 
-        showToast(translateUiText('正在完全初始化 Theme...'), 'info');
+        showToast(window.__('正在完全初始化 Theme...'), 'info');
         const result = await apiJson(config.apiFactoryReset, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ confirmation }),
         });
         if (!result?.success) {
-            showToast(result?.message || translateUiText('完全初始化失败'), 'error');
+            showToast(result?.message || window.__('完全初始化失败'), 'error');
             return;
         }
         closeResetDraftModal();
-        showToast(result.message || translateUiText('Theme 已完全初始化'), 'success');
+        showToast(result.message || window.__('Theme 已完全初始化'), 'success');
         window.location.reload();
     }
 
@@ -20989,18 +21678,82 @@
         elements.previewFrame.src = url.toString();
     }
 
+    function isSameDocumentFragmentLink(link, iframeDoc) {
+        if (!link || typeof link.getAttribute !== 'function' || !iframeDoc) {
+            return false;
+        }
+        const href = String(link.getAttribute('href') || '');
+        if (href === '' || href.startsWith('javascript:')) {
+            return false;
+        }
+        if (href.startsWith('#')) {
+            return true;
+        }
+        let target;
+        try {
+            target = new URL(href, iframeDoc.baseURI || iframeDoc.location?.href || window.location.href);
+        } catch (error) {
+            return false;
+        }
+        let current;
+        try {
+            current = new URL(iframeDoc.location?.href || iframeDoc.baseURI || window.location.href);
+        } catch (error) {
+            return false;
+        }
+        if (target.origin !== current.origin) {
+            return false;
+        }
+        const normalizePath = (path) => String(path || '/').replace(/\/+$/, '') || '/';
+        if (normalizePath(target.pathname) !== normalizePath(current.pathname)) {
+            return false;
+        }
+        return target.hash !== '' || link.hasAttribute('data-account-nav-link');
+    }
+
+    function withNavigationFragment(urlString, navigation) {
+        const fragment = String(navigation?.fragment || '');
+        if (!fragment.startsWith('#') || fragment.length < 2) {
+            return String(urlString || '');
+        }
+        try {
+            const next = new URL(urlString, window.location.origin);
+            next.hash = fragment;
+            return next.toString();
+        } catch (error) {
+            return String(urlString || '');
+        }
+    }
+
+    function isNativeStorefrontActivationTarget(target) {
+        if (!target || typeof target.closest !== 'function') {
+            return false;
+        }
+        return !!target.closest([
+            'a[href]',
+            'button',
+            'input',
+            'select',
+            'textarea',
+            'label',
+            'summary',
+            '[role="menuitem"]',
+            '[role="button"]',
+            '[role="link"]',
+            '[data-account-nav-link]',
+        ].join(', '));
+    }
+
     function isShopperRuntimeEventTarget(target) {
         // Realm-safe: iframe nodes fail `instanceof Element` from the parent window.
         if (!target || typeof target.closest !== 'function') {
             return false;
         }
         // Keep native shopper widgets working inside the visual editor.
+        // Header account / dropdown anchors are real page links — they must canvas-navigate.
         // Do NOT include "view cart" / checkout anchors — those still navigate preview layouts.
         return !!target.closest([
             '[data-editor-interactive]',
-            '[data-w-header-account]',
-            '.account-logged-in',
-            '.account-dropdown',
             '[data-mini-cart-trigger]',
             '[data-mini-cart-close]',
             '[data-mini-cart-overlay]',
@@ -21020,8 +21773,8 @@
     }
 
     /**
-     * 设置 iframe 内链接拦截
-     * 将内部链接转换为预览模式 URL，使点击后仍在编辑器内预览
+     * 设置 iframe 内链接拦截。
+     * 仅在「禁止链接」打开时阻止 a 跳转；关闭时不改写、不拦截，店面点击保持原样。
      */
     function setupIframeLinkInterception() {
         const iframe = elements.previewFrame;
@@ -21034,8 +21787,6 @@
                 return;
             }
 
-            // 获取当前站点的基础 URL
-            const currentOrigin = window.location.origin;
             // iframe 内区域点击事件处理，用于过滤部件面板
             iframeDoc.addEventListener('click', function(e) {
                 // Shopper runtime controls keep native behavior inside the editor iframe.
@@ -21061,87 +21812,19 @@
                 }
             });
 
-            // 拦截所有链接点击
-            iframeDoc.addEventListener('click', async function(e) {
-                // Shopper runtime controls keep native behavior inside the editor iframe.
+            // 禁链：只拦 a 默认跳转；不 stopPropagation，iframe 内点选部件仍可冒泡。
+            iframeDoc.addEventListener('click', function(e) {
+                if (state.linkBlockEnabled !== true) {
+                    return;
+                }
                 if (isShopperRuntimeEventTarget(e.target)) return;
 
-                const link = e.target.closest('a');
-                if (!link) return;
-
-                // 禁链开关：彻底阻止跳转，不切换预览页、不新开标签。
-                if (state.linkBlockEnabled === true) {
-                    if (link.closest('.slot-toolbar, .widget-hover-actions')) {
-                        return;
-                    }
-                    e.preventDefault();
-                    e.stopPropagation();
+                const link = e.target.closest('a[href]');
+                if (!link || link.closest('.slot-toolbar, .widget-hover-actions')) {
                     return;
                 }
-
-                const href = link.getAttribute('href');
-                if (!href) return;
-
-                // 跳过 JavaScript 链接和锚点
-                if (href.startsWith('#') || href.startsWith('javascript:')) {
-                    return;
-                }
-
-                // Broken markup hrefs (e.g. href="<div class=…") must never become canvas paths.
-                // Homepage `/` sanitizes to '' and remains safe.
-                let hrefPathProbe = String(href || '');
-                try {
-                    hrefPathProbe = new URL(href, iframeDoc.baseURI).pathname || hrefPathProbe;
-                } catch (_err) {
-                    // keep raw href for safety check
-                }
-                if (!isSafeStorefrontPublicRoute(hrefPathProbe)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    showToast(translateUiText('预览链接无效，已忽略'), 'warning');
-                    return;
-                }
-
                 e.preventDefault();
-                e.stopPropagation();
-
-                // 判断是否为内部链接
-                let targetUrl;
-                try {
-                    targetUrl = new URL(href, iframeDoc.baseURI);
-                } catch (err) {
-                    console.warn('[ThemeEditor] Invalid URL:', href);
-                    return;
-                }
-
-                // 外部链接 - 在新标签页打开
-                if (targetUrl.origin !== currentOrigin) {
-                    window.open(href, '_blank');
-                    showToast('外部链接已在新标签页打开', 'info');
-                    return;
-                }
-
-                try {
-                    await flushPendingEditorMutations();
-                    const navigation = await resolveEditorNavigationTarget(targetUrl);
-                    if (navigation.kind === 'external') {
-                        window.open(navigation.target_url || targetUrl.toString(), '_blank');
-                        showToast(translateUiText('外部链接已在新标签页打开'), 'info');
-                        return;
-                    }
-                    if (navigation.kind !== 'internal-editor') {
-                        throw new Error(translateUiText('服务端未返回编辑器导航目标'));
-                    }
-                    const pageType = String(navigation.page_type || navigation.target_value || 'cms_page');
-                    showToast(`${translateUiText('已切换到')} ${pageType} ${translateUiText('布局')}`, 'info');
-                    console.log('[ThemeEditor] Server navigation:', href, '->', pageType);
-                    navigateResolvedEditorShell(navigation);
-                } catch (error) {
-                    console.error('[ThemeEditor] Navigation resolve error:', error);
-                    showToast(error?.message || translateUiText('预览链接切换失败'), 'error');
-                }
-                return;
-            }, true); // 使用捕获阶段
+            }, true);
 
             // 同步交互模式（预览态不强制 editor-mode）
             notifyPreviewInteractionMode(state.interactionMode || 'edit');
@@ -22181,6 +22864,9 @@
                         ${!isCurrent && !isPublished ? `<button class="w-button" data-tone="danger" data-variant="outline" data-size="sm" type="button" data-version-action="delete" data-version-id="${escapeHtml(version.version_id)}">
                             ${iconSvg('trash')}
                         </button>` : ''}
+                        <button class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" type="button" data-version-action="inherit" data-version-id="${escapeHtml(version.version_id)}" title="Copy this snapshot into the theme being edited">
+                            继承
+                        </button>
                     </div>
                 </div>
             `;
@@ -22213,6 +22899,58 @@
         }
         await fetchLayoutSlots(previewOverrides);
         showToast(version ? `正在预览版本：${version.display_name}` : '正在预览版本', 'info');
+    }
+
+    /**
+     * Copy a listed layout snapshot into the theme being edited.
+     * Not called from open, theme switch, loadVersions, or index.
+     */
+    async function inheritVersion(versionId) {
+        const version = state.versions.find((item) => versionIdEquals(item.version_id, versionId));
+        if (!version) {
+            return;
+        }
+        const confirmed = await showCustomConfirm(
+            '继承版本',
+            '把这份布局快照写成当前正在编辑主题的一条新草稿。不会改已发布皮肤，也不会改来源版本的当前或发布标记。',
+            '确认继承',
+            '取消'
+        );
+        if (!confirmed) {
+            return;
+        }
+        const editorContext = buildTypedEditorContext('layout');
+        const workspace = getScopedWorkspaceState('layout') || {};
+        const source = {
+            scope: editorContext.scope || { storage_scope: version.scope || 'default' },
+            area: editorContext.area || getEffectiveEditorArea(),
+            theme_id: parseInt(version.theme_id || state.themeId || 0, 10) || 0,
+            resource_type: 'layout',
+            layout_type: version.page_type || editorContext.layout_type,
+            layout_option: version.layout_option || editorContext.layout_option || 'default',
+            locale: version.locale_code || editorContext.locale || 'default',
+            target_type: version.target_type || editorContext.target_type || 'global',
+            target_id: parseInt(version.target_id ?? editorContext.target_id ?? 0, 10) || 0,
+            version_id: versionId,
+            target_expected_revision: Number(workspace.revision || 0),
+        };
+        try {
+            const result = await apiJson(config.apiInheritVersion, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({ source })),
+            });
+            const resultThemeId = parseInt(result.theme_id || result.data?.theme_id || 0, 10) || 0;
+            if (!result.success || resultThemeId !== (parseInt(state.themeId || 0, 10) || 0)) {
+                showToast(result.message || '继承失败', 'error');
+                return;
+            }
+            await syncLayoutWorkspaceAfterServerMutation(result);
+            await loadVersions();
+            showToast(result.message || '已继承到当前主题草稿', 'success');
+        } catch (error) {
+            showToast('继承失败：' + (error && error.message ? error.message : error), 'error');
+        }
     }
 
     /**
@@ -22402,13 +23140,13 @@
         const failureReason = unavailable ? String(failureMessage || '').trim() : '';
         const userName = lockInfo && lockInfo.user_name ? lockInfo.user_name : '其他用户';
         const title = pending
-            ? translateUiText('正在准备编辑')
-            : (unavailable ? translateUiText('无法确认编辑权限') : translateUiText('当前页面正在被编辑'));
+            ? window.__('正在准备编辑')
+            : (unavailable ? window.__('无法确认编辑权限') : window.__('当前页面正在被编辑'));
         const message = pending
-            ? translateUiText('正在获取编辑锁…')
+            ? window.__('正在获取编辑锁…')
             : (unavailable
-                ? translateUiText('编辑锁服务暂时不可用，为避免覆盖其他管理员的修改，当前页面保持只读。工具栏仍可切换语言预览。')
-                : `${escapeHtml(userName)} ${escapeHtml(translateUiText('正在编辑当前主题页面。为了避免互相覆盖，当前会话已被锁定为只读等待状态。'))}`);
+                ? window.__('编辑锁服务暂时不可用，为避免覆盖其他管理员的修改，当前页面保持只读。工具栏仍可切换语言预览。')
+                : `${escapeHtml(userName)} ${escapeHtml(window.__('正在编辑当前主题页面。为了避免互相覆盖，当前会话已被锁定为只读等待状态。'))}`);
         overlay.className = pending
             ? 'w-theme-editor-lock w-theme-editor-lock--pending'
             : 'w-theme-editor-lock';
@@ -22418,7 +23156,7 @@
                 <h3 class="w-card__title">${escapeHtml(title)}</h3>
                 <p class="w-text">${mode === 'conflict' ? message : escapeHtml(message)}</p>
                 ${failureReason ? `<p class="w-text" data-theme-editor-lock-reason>${escapeHtml(failureReason)}</p>` : ''}
-                ${pending ? '' : `<p class="w-text" data-tone="muted">${escapeHtml(translateUiText('确认锁已释放或服务恢复后，刷新页面重试。'))}</p>`}
+                ${pending ? '' : `<p class="w-text" data-tone="muted">${escapeHtml(window.__('确认锁已释放或服务恢复后，刷新页面重试。'))}</p>`}
                 <div class="w-cluster" data-justify="end" ${pending ? 'hidden' : ''}>
                     <button type="button" id="themeEditorLockReload" class="w-button" data-tone="primary">刷新重试</button>
                 </div>
@@ -22556,7 +23294,7 @@
         if (!config.apiCheckLock || !payload || !(parseInt(payload.theme_id || 0, 10) > 0)) {
             return {
                 success: false,
-                message: translateUiText('编辑锁服务不可用'),
+                message: window.__('编辑锁服务不可用'),
             };
         }
 
@@ -22573,7 +23311,7 @@
             console.warn('[ThemeEditor] Failed to acquire editor lock:', error);
             return {
                 success: false,
-                message: error?.message || translateUiText('编辑锁服务暂时不可用'),
+                message: error?.message || window.__('编辑锁服务暂时不可用'),
                 unavailable: true,
             };
         }

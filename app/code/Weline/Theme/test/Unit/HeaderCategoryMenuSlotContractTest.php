@@ -57,20 +57,26 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
 
     public function testHeaderNavExtensionsCssPresent(): void
     {
-        $path = dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml';
-        $source = (string)file_get_contents($path);
-        self::assertStringContainsString('.header-nav-left-cluster {', $source);
-        self::assertStringContainsString('.header-nav-right-cluster {', $source);
-        self::assertStringContainsString('.header-nav-extensions {', $source);
-        self::assertStringContainsString('.header-nav-extensions:empty {', $source);
+        $cssPath = dirname(__DIR__, 2) . '/view/statics/css/partials/header-default.css';
+        $headerPath = dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml';
+        self::assertFileExists($cssPath);
+        self::assertFileExists($headerPath);
+        $css = (string)file_get_contents($cssPath);
+        $header = (string)file_get_contents($headerPath);
+
+        self::assertStringContainsString('.header-nav-left-cluster {', $css);
+        self::assertStringContainsString('.header-nav-right-cluster {', $css);
+        self::assertStringContainsString('.header-nav-extensions {', $css);
+        self::assertStringContainsString('.header-nav-extensions:empty {', $css);
         self::assertStringContainsString(
             '.header-nav-right-cluster > .header-nav-right-slot:has(#nav-links-list:empty)',
-            $source
+            $css
         );
-        self::assertStringContainsString('id="nav-more-wrapper"', $source);
+        self::assertStringContainsString('id="nav-more-wrapper"', $header);
         self::assertStringContainsString(
             '.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"]',
-            $source
+            $css
         );
+        self::assertStringContainsString('header-default.css', $header);
     }
 }

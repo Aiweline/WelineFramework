@@ -38,6 +38,8 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Cache\TemplateCachePolicyRegistry;
+use Weline\Framework\View\Helper\EmbeddedPageTitle;
+use Weline\Framework\View\Helper\HtmlCacheAdmission;
 
 class Template extends DataObject
 {
@@ -171,12 +173,28 @@ class Template extends DataObject
             if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
                 unset(self::$fiberInstances[$fiber]);
             }
+            // RequestContext already torn down: drop orphaned req:* buckets so they
+            // cannot accumulate across WLS requests when reset runs after cleanup.
+            self::purgeOrphanedRequestScopedInstances();
             return;
         }
 
         self::$instance = null;
         self::$fiberInstances = null;
         self::$scopedInstances = [];
+    }
+
+    /**
+     * Drop Template instances keyed by request id when the request context is gone.
+     * Connection-scoped (conn:*) buckets are left intact for interleaved fibers.
+     */
+    private static function purgeOrphanedRequestScopedInstances(): void
+    {
+        foreach (\array_keys(self::$scopedInstances) as $key) {
+            if (\is_string($key) && \str_starts_with($key, 'req:')) {
+                unset(self::$scopedInstances[$key]);
+            }
+        }
     }
 
     public static function clearStaticHookCaches(): void
@@ -213,6 +231,11 @@ class Template extends DataObject
     public static function processViewFileCacheItemCount(): int
     {
         return count(self::$processViewFileCache);
+    }
+
+    public static function processStaticHookOutputCacheItemCount(): int
+    {
+        return \count(self::$staticHookOutputCache);
     }
 
     /**
@@ -354,14 +377,14 @@ class Template extends DataObject
             // 请求级数据必须每次请求都重新绑定，避免单例状态泄漏。
             $modulePath = $this->request->getModulePath();
             $this->view_dir = $modulePath === '' ? '' : rtrim($modulePath, DS) . DS . DataInterface::dir . DS;
-            // 默认用模块名；若控制器已通过 assign('title') 同步到 meta.controller_title，则恢复，
-            // 避免 ob_file() 每次 init 覆盖掉页面标题（浏览器 <title> / 页头 fallback）。
-            $moduleTitle = (string)$this->request->getModuleName();
-            $this->setData('title', $moduleTitle);
+            // Never seed extract()'d $title with the module code (Weline_Theme etc.):
+            // under nested ob_file()/init() that placeholder leaks into H1/SEO.
+            // Restore only a real controller_title when present.
+            $this->setData('title', '');
             $meta = $this->getData('meta');
             if (is_array($meta)) {
                 $controllerTitle = trim((string)($meta['controller_title'] ?? ''));
-                if ($controllerTitle !== '' && $controllerTitle !== $moduleTitle) {
+                if ($controllerTitle !== '' && !EmbeddedPageTitle::isModulePlaceholder($controllerTitle)) {
                     $this->setData('title', $controllerTitle);
                 }
             }
@@ -538,14 +561,27 @@ class Template extends DataObject
 
     public function setData(string|array $key, mixed $value = null): static
     {
-        parent::setData($key, $value);
         if (is_array($key)) {
+            $key = EmbeddedPageTitle::sanitizePublicSlots($key);
+            parent::setData($key, $value);
             $this->publishAssignedSeoPageProfile($key);
-        } elseif ($key === 'seo' && is_array($value)) {
-            // Only explicit controller/page seo payloads may update the request SEO bag.
-            // Widget/card setData('product'|'storefront_offer'|...) must never redefine page SEO:
-            // ControllerFetchFileAfter renders content (product cards) before layout head.
-            $this->publishAssignedSeoPageProfile(['seo' => $value]);
+        } elseif (\is_string($key) && \in_array($key, ['title', 'meta_title', 'controller_title'], true)) {
+            $value = \trim((string)$value);
+            if ($value === '' || EmbeddedPageTitle::isInternalIdentifier($value)) {
+                $value = '';
+            }
+            parent::setData($key, $value);
+        } elseif ($key === 'meta' && is_array($value)) {
+            $value = EmbeddedPageTitle::sanitizePublicSlots($value);
+            parent::setData($key, $value);
+        } else {
+            parent::setData($key, $value);
+            if ($key === 'seo' && is_array($value)) {
+                // Only explicit controller/page seo payloads may update the request SEO bag.
+                // Widget/card setData('product'|'storefront_offer'|...) must never redefine page SEO:
+                // ControllerFetchFileAfter renders content (product cards) before layout head.
+                $this->publishAssignedSeoPageProfile(['seo' => $value]);
+            }
         }
 
         return $this;
@@ -593,11 +629,15 @@ class Template extends DataObject
     private function withAssignedTitleInMeta(array $meta, mixed $title = null): array
     {
         $title = trim((string)($title ?? $this->getData('title')));
-        if ($title !== '') {
-            $meta['controller_title'] = $meta['controller_title'] ?? $title;
-            if (!$this->hasHeadTitle($meta)) {
-                $meta['title'] = $title;
-            }
+        // Module codes (e.g. Weline_Customer) stay as internal title data only —
+        // never promote into meta.title / controller_title for H1/SEO.
+        if ($title === '' || EmbeddedPageTitle::isModulePlaceholder($title)) {
+            return $meta;
+        }
+
+        $meta['controller_title'] = $meta['controller_title'] ?? $title;
+        if (!$this->hasHeadTitle($meta)) {
+            $meta['title'] = $title;
         }
 
         return $meta;
@@ -606,7 +646,7 @@ class Template extends DataObject
     private function syncAssignedTitleToMeta(mixed $title): void
     {
         $title = trim((string)$title);
-        if ($title === '') {
+        if ($title === '' || EmbeddedPageTitle::isModulePlaceholder($title)) {
             return;
         }
 
@@ -625,7 +665,11 @@ class Template extends DataObject
     private function hasHeadTitle(array $meta): bool
     {
         foreach (['title', 'meta_title'] as $key) {
-            if (array_key_exists($key, $meta) && trim((string)$meta[$key]) !== '') {
+            if (!array_key_exists($key, $meta)) {
+                continue;
+            }
+            $value = trim((string)$meta[$key]);
+            if ($value !== '' && !EmbeddedPageTitle::isModulePlaceholder($value)) {
                 return true;
             }
         }
@@ -1208,19 +1252,20 @@ class Template extends DataObject
             return $this->ob_file($compiledFile);
         }
 
-        $baseUrl = '';
-        try {
-            $baseUrl = (string)$this->request->getBaseUrl();
-        } catch (\Throwable) {
-            $baseUrl = '';
-        }
-
         $ttl = $this->staticHookOutputCacheTtl();
-        $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . $compiledFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . KeyBuilder::environmentHash([
-            'cache_version' => '20260528-template-manifest-tempfile',
-            'base_url' => $baseUrl,
+        // Hook chrome must vary by lang/currency/website/auth — not by product
+        // area_route. Default environmentHash includes area_route and would copy
+        // one HTML blob per PDP URL into the worker process cache.
+        // Do not inject Request::getBaseUrl(): on PDPs it can include the product
+        // path and would shard keys even with area_route disabled.
+        // Do not key on absolute $compiledFile path: tag-source mappings used to
+        // shard by area_route and produced unique tempfile/path identities per URL.
+        $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . KeyBuilder::environmentHash([
+            'cache_version' => '20260921-hook-origin-base',
             'hook_context' => $cacheContext,
             'policy_digest' => $templateCachePolicies->digest(),
+        ], [
+            'area_route' => false,
         ]));
         $cached = $this->readStaticHookOutputCache($cacheKey, $ttl);
         if ($cached['status'] !== 'miss') {
@@ -1267,8 +1312,10 @@ class Template extends DataObject
             ]);
             return $html;
         }
-        $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
-        self::runtimeHookCacheSet($cacheKey, $html, $ttl);
+        if (HtmlCacheAdmission::admit($html)) {
+            $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
+            self::runtimeHookCacheSet($cacheKey, $html, $ttl);
+        }
         $this->markTemplateCacheRenderOnceComplete($renderOnceGroup);
 
         return $html;
@@ -1276,8 +1323,12 @@ class Template extends DataObject
 
     private function rememberStaticHookOutput(string $cacheKey, string $html, int $ttl, string $status = 'fresh'): void
     {
-        if (\count(self::$staticHookOutputCache) > 128) {
-            self::$staticHookOutputCache = [];
+        // Soft LRU: drop oldest half when over cap instead of wiping the whole map
+        // (full wipe caused thrash + re-allocation spikes under same-locale PDP crawls).
+        $cap = 64;
+        if (\count(self::$staticHookOutputCache) >= $cap && !isset(self::$staticHookOutputCache[$cacheKey])) {
+            $drop = (int)\max(1, (int)\floor($cap / 2));
+            self::$staticHookOutputCache = \array_slice(self::$staticHookOutputCache, $drop, null, true);
         }
 
         self::$staticHookOutputCache[$cacheKey] = $this->makeStaticSwrEntry($html, $ttl, $status);
@@ -1293,6 +1344,8 @@ class Template extends DataObject
             unset(self::$staticHookOutputCache[$cacheKey]);
             return ['status' => 'miss', 'html' => null];
         }
+        // Touch for soft LRU (newest at end; remember drops from the front).
+        unset(self::$staticHookOutputCache[$cacheKey]);
         self::$staticHookOutputCache[$cacheKey] = $entry;
 
         return $this->staticSwrEntryStatus($entry);
@@ -1314,6 +1367,9 @@ class Template extends DataObject
                     'cache_key' => $cacheKey,
                     'compiled_file' => $compiledFile,
                 ]);
+                return;
+            }
+            if (!HtmlCacheAdmission::admit($html)) {
                 return;
             }
             $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
@@ -1363,30 +1419,21 @@ class Template extends DataObject
         }
     }
 
+    /**
+     * Storefront public HTML is always guest-safe. Login chrome is client-side
+     * (Account.js); never shard static-hook / reusable-header caches by Session.
+     */
     private function frontendAuthStaticHookCacheContext(): ?string
     {
         $requestCacheKey = 'view.static_hook.frontend_auth_context';
         $cached = RequestContext::get($requestCacheKey);
-        if (\is_string($cached)) {
+        if (\is_string($cached) && $cached !== '') {
             return $cached;
         }
 
-        try {
-            $session = SessionFactory::getInstance()->createFrontendSession();
-            if (!$session->isLoggedIn()) {
-                RequestContext::set($requestCacheKey, 'frontend-auth:0');
-                return 'frontend-auth:0';
-            }
-
-            $userId = \method_exists($session, 'getUserId') ? (string)($session->getUserId() ?? '') : '';
-            $username = \method_exists($session, 'getUsername') ? (string)($session->getUsername() ?? '') : '';
-
-            $context = 'frontend-auth:1:' . \sha1($userId . '|' . $username);
-            RequestContext::set($requestCacheKey, $context);
-            return $context;
-        } catch (\Throwable) {
-            return null;
-        }
+        $context = 'frontend-auth:0';
+        RequestContext::set($requestCacheKey, $context);
+        return $context;
     }
 
     private function bodyEndStaticHookCacheContext(): ?string
@@ -1409,9 +1456,12 @@ class Template extends DataObject
                 return null;
             }
 
+            // Same-locale storefront pages share one body-end hook blob; do not
+            // shard by full request_path or by area_route (product URLs).
             return 'body-end:' . KeyBuilder::environmentHash([
                 'auth' => $authContext,
-                'request_path' => $requestPath,
+            ], [
+                'area_route' => false,
             ]);
         } catch (\Throwable) {
             return null;
@@ -1430,53 +1480,25 @@ class Template extends DataObject
         }
 
         try {
+            // Language switcher HTML embeds path-local hrefs. Process-caching it
+            // either (a) shards one blob per URL or (b) reuses wrong links.
+            // Frontend LanguageSwitcher already skips process htmlCache; skip here too.
+            if ($type === 'language') {
+                return null;
+            }
+
             $hash = KeyBuilder::environmentHash(
                 ['scope' => $eventName],
-                ['currency' => $type === 'currency']
+                [
+                    'currency' => $type === 'currency',
+                    'area_route' => false,
+                ]
             );
-            // Language switcher hrefs are path-local (`/{locale}/about` vs `/`).
-            // Without a route segment the aggregate cache reuses home links on
-            // every page after the first render in that language.
-            if ($type === 'language') {
-                $hash .= ':route:' . $this->resolveI18nLanguageHookRouteCacheKey();
-            }
 
             return $type . ':' . $hash;
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    private function resolveI18nLanguageHookRouteCacheKey(): string
-    {
-        $handle = '';
-        $pageId = '';
-        try {
-            $handle = \trim((string)WelineEnv::getGet('handle', ''));
-            $pageId = \trim((string)WelineEnv::getGet('page_id', ''));
-        } catch (\Throwable) {
-        }
-
-        $path = '';
-        try {
-            $path = \trim((string)(
-                WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
-                ?: WelineEnv::get('origin_request_uri', '')
-                ?: (\function_exists('w_env_request_uri') ? \w_env_request_uri() : '')
-            ));
-        } catch (\Throwable) {
-        }
-
-        $pathOnly = \parse_url($path, \PHP_URL_PATH);
-        if (\is_string($pathOnly) && $pathOnly !== '') {
-            $path = $pathOnly;
-        }
-        $path = \strtolower(\trim(\str_replace('\\', '/', (string)$path), '/'));
-        if (\str_starts_with($path, 'pagebuilder/frontend/page')) {
-            $path = '';
-        }
-
-        return \sha1('v2|' . $handle . '|' . $pageId . '|' . $path);
     }
 
     private function hasEventObservers(string $eventName): bool
@@ -1547,8 +1569,17 @@ class Template extends DataObject
             $block = $this;
             $this->setData('block', $this);
             # 将数组存储的变量散列到当前页内存中，使得变量可在页面中暴露出来（可直接使用）
-            if ($this->getData()) {
-                extract($this->getData(), EXTR_SKIP);
+            $extractData = $this->getData();
+            if (\is_array($extractData) && $extractData !== []) {
+                $extractData = EmbeddedPageTitle::sanitizePublicSlots($extractData);
+                // Keep Template bag aligned with what layouts extract (public slots only).
+                if (\array_key_exists('title', $extractData)) {
+                    parent::setData('title', $extractData['title']);
+                }
+                if (isset($extractData['meta']) && \is_array($extractData['meta'])) {
+                    parent::setData('meta', $extractData['meta']);
+                }
+                extract($extractData, EXTR_SKIP);
             }
             self::cooperativeTemplateYield();
             if ($traceAccountSidebar) {
@@ -1580,7 +1611,10 @@ class Template extends DataObject
         } finally {
             $this->popTemporaryTemplateData($temporaryTemplateData);
         }
-        if ($reusableTemplateCacheKey !== null && !$this->isEmptyCacheHtml($result)) {
+        if ($reusableTemplateCacheKey !== null
+            && !$this->isEmptyCacheHtml($result)
+            && HtmlCacheAdmission::admit($result)
+        ) {
             $this->rememberReusableTemplateOutput(
                 $reusableTemplateCacheKey,
                 $result,
@@ -1726,6 +1760,8 @@ class Template extends DataObject
             'auth' => $authContext,
             'dictionary' => $this->reusableHeaderDictionaryScopeHash($dictionary),
             'request_scope' => $this->reusableHeaderRequestScope(),
+        ], [
+            'area_route' => false,
         ]);
     }
 
@@ -1862,6 +1898,9 @@ class Template extends DataObject
 
     private function rememberReusableTemplateOutput(string $cacheKey, string $html, int $ttl, string $status = 'fresh'): void
     {
+        if (!HtmlCacheAdmission::admit($html)) {
+            return;
+        }
         if (\count(self::$reusableTemplateOutputCache) > self::REUSABLE_TEMPLATE_OUTPUT_CACHE_MAX_ITEMS) {
             self::$reusableTemplateOutputCache = [];
         }
@@ -2739,6 +2778,8 @@ class Template extends DataObject
                 'base_url' => $this->baseUrlCacheContext(),
                 'cache_version' => '20260528-hook-i18n-context',
                 'scope' => 'account-sidebar',
+            ], [
+                'area_route' => false,
             ]);
         } catch (\Throwable) {
             return null;
@@ -2751,6 +2792,8 @@ class Template extends DataObject
             return 'header-action:' . $name . ':' . KeyBuilder::environmentHash([
                 'base_url' => $this->baseUrlCacheContext(),
                 'hook' => $name,
+            ], [
+                'area_route' => false,
             ]);
         } catch (\Throwable) {
             return null;
@@ -2760,7 +2803,25 @@ class Template extends DataObject
     private function baseUrlCacheContext(): string
     {
         try {
-            return (string)$this->request->getBaseUrl();
+            // Origin only. Request::getBaseUrl() on PDPs may include the product
+            // path and would shard chrome hook / aggregate process caches.
+            $env = KeyBuilder::environmentContext([], [
+                'area' => false,
+                'area_route' => false,
+                'website' => false,
+                'website_url' => false,
+                'host' => true,
+                'base_url' => true,
+                'lang' => false,
+                'lang_local' => false,
+                'currency' => false,
+            ]);
+            $origin = \trim((string)($env['base_url'] ?? ''));
+            if ($origin !== '') {
+                return $origin;
+            }
+
+            return \trim((string)($env['host'] ?? ''));
         } catch (\Throwable) {
             return '';
         }
@@ -2769,7 +2830,9 @@ class Template extends DataObject
     private function hookLocaleCacheContext(): string
     {
         try {
-            return 'env:' . KeyBuilder::environmentHash(['scope' => 'hook-locale']);
+            return 'env:' . KeyBuilder::environmentHash(['scope' => 'hook-locale'], [
+                'area_route' => false,
+            ]);
         } catch (\Throwable) {
             return 'locale:unknown';
         }

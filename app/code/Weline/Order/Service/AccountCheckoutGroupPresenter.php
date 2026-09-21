@@ -84,6 +84,10 @@ final class AccountCheckoutGroupPresenter
             'order_type_label' => $orderType['label'],
             'order_type_tone' => $orderType['tone'],
             'hang' => $this->primaryHang($orders),
+            'continue_pay_url' => (string)($group['continue_pay_url'] ?? ''),
+            'continue_pay_reachable' => !empty($group['continue_pay_reachable'])
+                && trim((string)($group['continue_pay_url'] ?? '')) !== ''
+                && $status === 'pending',
             'orders' => $partial
                 ? array_map(fn (array $order): array => $this->mapOrder($order, $currency), $orders)
                 : [],

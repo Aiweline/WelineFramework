@@ -74,9 +74,10 @@ final class ParserRequestModuleCacheTest extends TestCase
         self::assertNotFalse($end);
         $method = substr($source, (int)$start, (int)$end - (int)$start);
 
-        self::assertStringContainsString('self::loadGlobalDictionaryScopeWords($lang, $modules)', $method);
-        self::assertStringContainsString('!self::shouldSkipHeavyLocaleDictionaryLoad()', $method);
-        self::assertStringContainsString("'i18n.phrase.global_dictionary_batch'", $method);
+        self::assertStringContainsString('shouldSkipHeavyLocaleDictionaryLoad()', $method);
+        self::assertStringNotContainsString('loadGlobalDictionaryScopeWords(', $method);
+        self::assertStringNotContainsString('loadGlobalDictionaryWords(', $method);
+        self::assertStringContainsString('path_TRANSLATE_FILES_PATH', $method);
     }
 
     public function testPersistentGlobalDictionaryBatchExtendsOnlyForNewModules(): void

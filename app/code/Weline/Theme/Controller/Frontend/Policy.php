@@ -16,6 +16,11 @@ namespace Weline\Theme\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
 
+/**
+ * 政策/法律壳（店面）。
+ *
+ * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/about,/sitemap,/guide,/qa,/activity,/policy,/policy/*,/terms,/theme/policy/*
+ */
 class Policy extends FrontendController
 {
     /**
@@ -252,31 +257,39 @@ class Policy extends FrontendController
         $this->assign('seo', $seo);
         // Keep visible/page chrome title; do not put it into the entity SEO bag.
         $this->assign('title', $title);
+        if ($title !== '' && class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
+            try {
+                \Weline\Seo\Service\Head\SeoPageProfileBag::publish(['title' => $title]);
+            } catch (\Throwable) {
+            }
+        }
     }
 
     private function defaultShellPageTitle(string $pageType): string
     {
         $titles = [
-            'about' => (string)__('关于我们'),
-            'contact' => (string)__('联系我们'),
-            'faq' => (string)__('FAQ/常见问题'),
-            'terms' => (string)__('服务条款'),
-            'guide' => (string)__('指南'),
-            'payment_guide' => (string)__('支付方式指南'),
-            'policy' => (string)__('政策页面'),
-            'privacy' => (string)__('隐私政策'),
-            'error' => (string)__('服务异常'),
-            'sitemap' => (string)__('站点地图'),
-            'cart' => (string)__('购物车'),
-            'account' => (string)__('账户中心'),
-            'checkout/failure' => (string)__('订单尚未完成'),
-            'checkout_failure' => (string)__('订单尚未完成'),
-            'checkout_failer' => (string)__('订单尚未完成'),
-            'checkout/success' => (string)__('结账成功'),
-            'checkout_success' => (string)__('结账成功'),
+            'about' => '关于我们',
+            'contact' => '联系我们',
+            'faq' => 'FAQ/常见问题',
+            'terms' => '服务条款',
+            'guide' => '指南',
+            'payment_guide' => '支付方式指南',
+            'policy' => '政策页面',
+            'privacy' => '隐私政策',
+            'error' => '服务异常',
+            'sitemap' => '站点地图',
+            'cart' => '购物车',
+            'account' => '账户中心',
+            'checkout/failure' => '订单尚未完成',
+            'checkout_failure' => '订单尚未完成',
+            'checkout_failer' => '订单尚未完成',
+            'checkout/success' => '结账成功',
+            'checkout_success' => '结账成功',
         ];
 
-        return $titles[$pageType] ?? (string)__('页面');
+        $source = $titles[$pageType] ?? '页面';
+
+        return \Weline\Theme\Helper\WidgetI18n::label($source);
     }
 
     private function publicLayoutExists(string $layoutType, string $layoutOption): bool

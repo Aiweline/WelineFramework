@@ -14,13 +14,35 @@ final class HeaderChoiceSelectorAssetsContractTest extends TestCase
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString('weline-choice-selector.css', $content);
-        self::assertStringContainsString('@static(Weline_Theme::ui/components/weline-choice-selector.js)', $content);
         self::assertStringContainsString('data-weline-load="i18n,currency"', $content);
+        self::assertStringNotContainsString('weline-choice-selector.css', $content);
+        self::assertStringNotContainsString('weline-choice-selector.js', $content);
+        self::assertStringNotContainsString('@static(Weline_Theme::ui/components/weline-choice-selector.js)', $content);
         self::assertStringNotContainsString('@static(Weline_Currency::js/currency.js)', $content);
         self::assertStringNotContainsString('@static(Weline_I18n::js/i18n.js)', $content);
         self::assertStringNotContainsString('WELINE_USER_LANG=', $content);
         self::assertStringNotContainsString('document.cookie', $content);
         self::assertStringNotContainsString('writeLanguagePreference', $content);
+    }
+
+    public function testChoiceFilterRegistersIdempotentlyAndExportsRegister(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/statics/js/header-choice-selector.js';
+        self::assertFileExists($path);
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('export function register(UI)', $content);
+        self::assertStringContainsString("UI.define('choice-filter'", $content);
+        self::assertStringContainsString('already (defined|registered)', $content);
+        self::assertStringNotContainsString('if (window.Weline?.UI) register', $content);
+    }
+
+    public function testCurrencySwitcherDedupesAssetsWithRequestGlobal(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString("\$GLOBALS[\$assetsFlagKey]", $content);
+        self::assertStringNotContainsString('$this->getData($assetsFlagKey)', $content);
     }
 }

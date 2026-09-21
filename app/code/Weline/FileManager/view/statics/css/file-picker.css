@@ -1,5 +1,19 @@
 @layer components {
-    .w-file-picker { display: grid; gap: var(--weline-space-3); min-inline-size: 0; }
+    .w-file-picker { display: grid; gap: var(--weline-space-3); min-inline-size: 0; justify-items: start; }
+    /* Open CTA is content-sized — never stretch to form/panel width (w-stack default is stretch). */
+    .w-file-picker__actions {
+        align-items: flex-start;
+        inline-size: auto;
+        max-inline-size: 100%;
+    }
+    .w-file-picker__actions > .w-button[data-w-file-picker-open],
+    .w-file-picker > .w-stack > .w-button[data-w-file-picker-open] {
+        inline-size: auto;
+        max-inline-size: 100%;
+        width: auto;
+        align-self: flex-start;
+        justify-self: start;
+    }
     .w-file-preview { display: flex; flex-wrap: wrap; gap: var(--weline-space-2); min-inline-size: 0; align-items: stretch; }
     .w-file-preview:empty { display: none; }
     .w-file-preview__item {
@@ -45,6 +59,16 @@
     .w-file-preview__glyph[data-kind="file"] {
         color: var(--weline-theme-text-muted);
         background: var(--weline-theme-surface-muted);
+        font-size: clamp(0.65rem, 28%, 0.85rem);
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding-inline: var(--weline-space-1);
+        text-align: center;
+        word-break: break-all;
+    }
+    .w-file-preview__glyph[data-kind="image"] {
+        font-size: clamp(1.1rem, 36%, 1.5rem);
     }
     .w-file-preview__name {
         display: -webkit-box;
@@ -76,12 +100,7 @@
         border-radius: var(--weline-radius-sm);
         background: transparent;
         box-shadow: none;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity var(--weline-motion-fast);
-    }
-    .w-file-preview__item:hover .w-file-preview__actions,
-    .w-file-preview__item:focus-within .w-file-preview__actions {
+        /* Remove/move always visible: hover-only + outline-danger on dark surface made × invisible. */
         opacity: 1;
         pointer-events: auto;
     }
@@ -92,10 +111,36 @@
         background: color-mix(in srgb, var(--weline-theme-surface) 92%, transparent);
         box-shadow: var(--weline-theme-shadow-sm);
     }
-    .w-file-preview__actions .w-button[data-w-file-remove],
-    .w-file-preview__actions .w-button[data-tone="danger"] {
-        min-inline-size: 1.5rem;
-        min-block-size: 1.5rem;
+    /* High-contrast remove chip: bright danger × on raised surface (on-danger on light danger was a 10px speck). */
+    .w-file-picker .w-file-preview__actions .w-button[data-w-file-remove],
+    .w-file-picker .w-file-preview__actions .w-button[data-w-file-remove][data-size="sm"],
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"],
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"][data-size="sm"],
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"][data-variant="outline"],
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"][data-variant="outline"][data-size="sm"] {
+        min-inline-size: 1.75rem;
+        min-block-size: 1.75rem;
+        padding-inline: 0;
+        font-size: var(--weline-font-size-md, 1rem);
+        font-weight: 700;
+        line-height: 1;
+        color: var(--weline-theme-danger);
+        background: var(--weline-theme-surface-raised, var(--weline-theme-surface));
+        border: 1px solid var(--weline-theme-danger);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+    .w-file-picker .w-file-preview__actions .w-button[data-w-file-remove] .w-icon,
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"] .w-icon,
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"][data-variant="outline"] .w-icon {
+        color: inherit;
+        font-size: inherit;
+    }
+    .w-file-picker .w-file-preview__actions .w-button[data-w-file-remove]:hover,
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"]:hover,
+    .w-file-picker .w-file-preview__actions .w-button[data-tone="danger"][data-variant="outline"]:hover {
+        color: var(--weline-theme-text);
+        background: color-mix(in srgb, var(--weline-theme-danger) 28%, var(--weline-theme-surface-raised, var(--weline-theme-surface)));
+        border-color: var(--weline-theme-danger);
     }
 
     /* Audio / file: Banner 式选曲条 — 必须关进父宽，禁止 min-width 撑破侧栏 */
@@ -192,6 +237,22 @@
         box-shadow: none;
         background: transparent;
         color: var(--weline-theme-text-muted);
+    }
+    .w-file-picker .w-file-preview__item[data-kind="audio"] .w-file-preview__actions .w-button[data-w-file-remove],
+    .w-file-picker .w-file-preview__item[data-kind="file"] .w-file-preview__actions .w-button[data-w-file-remove],
+    .w-file-picker .w-file-preview__item--audio .w-file-preview__actions .w-button[data-w-file-remove],
+    .w-file-picker .w-file-preview__item--file .w-file-preview__actions .w-button[data-w-file-remove],
+    .w-file-picker .w-file-preview__item[data-kind="audio"] .w-file-preview__actions .w-button[data-tone="danger"],
+    .w-file-picker .w-file-preview__item[data-kind="file"] .w-file-preview__actions .w-button[data-tone="danger"],
+    .w-file-picker .w-file-preview__item--audio .w-file-preview__actions .w-button[data-tone="danger"],
+    .w-file-picker .w-file-preview__item--file .w-file-preview__actions .w-button[data-tone="danger"] {
+        color: var(--weline-theme-danger);
+        background: var(--weline-theme-surface-raised, var(--weline-theme-surface));
+        border: 1px solid var(--weline-theme-danger);
+        font-size: var(--weline-font-size-md, 1rem);
+        font-weight: 700;
+        line-height: 1;
+        opacity: 1;
     }
     .w-file-preview__item[data-kind="audio"]:hover .w-file-preview__actions,
     .w-file-preview__item[data-kind="audio"]:focus-within .w-file-preview__actions,

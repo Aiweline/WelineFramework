@@ -48,9 +48,8 @@ final class RequiredDefaultInjectionGhostSlotTest extends TestCase
         );
         self::assertStringContainsString('listSlotRegions', $src);
         self::assertStringContainsString('required_default_injection_render_failed', $src);
-        self::assertStringContainsString('有部件必入声明槽', $src);
-        self::assertStringContainsString('Destination not in tree yet', $src);
-        // 无落点时 continue，不在文末新建 ghost slot。
+        self::assertStringContainsString('InjectionPlanner', $src);
+        self::assertStringContainsString('Do not create ghost slots', $src);
         self::assertStringNotContainsString(
             "\$rendered .= SlotBoundaryMarkers::open(\$slotId)",
             $src,

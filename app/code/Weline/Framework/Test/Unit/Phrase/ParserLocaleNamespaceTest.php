@@ -131,9 +131,11 @@ final class ParserLocaleNamespaceTest extends TestCase
     {
         $this->provider->maps = ['fr_FR' => ['Weline_A' => ['Target' => 'FR']], 'en_US' => ['Weline_A' => ['Neutral' => 'EN']], 'zh_Hans_CN' => ['Weline_A' => ['Default' => 'ZH']]];
         $this->seedCsv();
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
         $before = $this->layers();
         $this->authority->bump('global/i18n/de_DE');
         $this->nextRequest('unrelated');
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
         $same = $this->layers();
         self::assertSame($before['cache_key'], $same['cache_key']);
         self::assertCount(3, $this->provider->moduleReads);
@@ -141,6 +143,7 @@ final class ParserLocaleNamespaceTest extends TestCase
         $this->authority->bump('global/i18n/zh_Hans_CN');
         $this->nextRequest('fallback');
         $this->seedCsv();
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
         $next = $this->layers();
         self::assertNotSame($before['cache_key'], $next['cache_key']);
         self::assertSame('ZH new', $this->loaded('Default', $next));
@@ -149,6 +152,7 @@ final class ParserLocaleNamespaceTest extends TestCase
         $this->authority->bump('global/i18n');
         $this->nextRequest('root');
         $this->seedCsv();
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
         self::assertNotSame($next['cache_key'], $this->layers()['cache_key']);
         self::assertCount(7, $this->provider->moduleReads);
     }
@@ -158,8 +162,14 @@ final class ParserLocaleNamespaceTest extends TestCase
         $this->provider->maps = ['zh_Hans_CN' => ['Weline_A' => ['Default' => 'ZH']], 'de_DE' => ['Weline_A' => ['Default' => 'DE']]];
         $this->provider->exact = ['zh_Hans_CN' => ['Dynamic' => 'ZH dynamic'], 'de_DE' => ['Dynamic' => 'DE dynamic']];
         $this->seedCsv();
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
+        Parser::prefetchWords(['Dynamic'], 'fr_FR');
         $old = $this->currentLayers();
         $this->defaultLocale('de_DE');
+        $this->nextRequest('default-de');
+        $this->seedCsv();
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
+        Parser::prefetchWords(['Dynamic'], 'fr_FR');
         $next = $this->currentLayers();
         self::assertNotSame($old['cache_key'], $next['cache_key']);
         self::assertSame(['fr_FR', 'en_US', 'zh_Hans_CN'], $old['locales']);
@@ -179,7 +189,8 @@ final class ParserLocaleNamespaceTest extends TestCase
         $this->defaultLocale('de_DE');
         self::assertSame($old['cache_key'], $this->layers('zh_Hans_CN')['cache_key']);
         self::assertSame(['zh_Hans_CN'], $old['locales']);
-        self::assertCount(1, $this->provider->moduleReads);
+        // 热路径不再因 getLayeredWords 触发全局词典 hydrate。
+        self::assertSame([], $this->provider->moduleReads);
     }
 
     private function nextRequest(string $id): void
@@ -202,8 +213,17 @@ final class ParserLocaleNamespaceTest extends TestCase
     }
     private function seedCsv(): void
     {
-        $p = new ReflectionProperty(Parser::class, 'workerModuleWordsCache'); $cache = $p->getValue();
-        foreach (['fr_FR', 'en_US', 'zh_Hans_CN', 'de_DE'] as $locale) { $cache[DictionaryCacheNamespace::cacheKey('worker|' . $locale . '|Weline_A', [$locale])] = []; }
+        $p = new ReflectionProperty(Parser::class, 'workerModuleWordsCache');
+        $cache = $p->getValue();
+        $chain = new ReflectionMethod(Parser::class, 'localeChain');
+        foreach (['fr_FR', 'en_US', 'zh_Hans_CN', 'de_DE'] as $locale) {
+            $locales = $chain->invoke(null, $locale);
+            $key = DictionaryCacheNamespace::cacheKey(
+                'locale_chain|' . implode(',', $locales) . '|Weline_A',
+                $locales,
+            );
+            $cache[$key] = [];
+        }
         $p->setValue(null, $cache);
     }
     private function layers(string $locale = 'fr_FR'): array { return (new ReflectionMethod(Parser::class, 'getLayeredWords'))->invoke(null, $locale, ['Weline_A']); }

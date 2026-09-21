@@ -136,4 +136,31 @@ final class MenuRenderServiceCrossLocaleSearchContractTest extends TestCase
         self::assertStringContainsString('商品', $items[0]['search_text']);
         self::assertStringContainsString('Products', $items[0]['search_text']);
     }
+
+    public function testResolveMenuTitleRawUsesPrefetchedPhraseWordsWithoutGeneratedLocaleInclude(): void
+    {
+        $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
+        $localeProp = new \ReflectionProperty(MenuRenderService::class, 'activeLocaleCodes');
+        $localeProp->setAccessible(true);
+        $localeProp->setValue($service, ['en_US', 'zh_Hans_CN']);
+
+        $source = \file_get_contents((new \ReflectionClass(MenuRenderService::class))->getFileName() ?: '');
+        self::assertIsString($source);
+        self::assertStringNotContainsString('getGeneratedLocaleWords', $source);
+        self::assertStringNotContainsString('flattenLocaleWords', $source);
+        self::assertDoesNotMatchRegularExpression(
+            "/include\\s+\\\$localeFile|include\\s+BP\\s*\\.\\s*DS\\s*\\.\\s*'generated'/",
+            $source
+        );
+
+        $prefetch = new \ReflectionMethod(MenuRenderService::class, 'prefetchCrossLocaleMenuWords');
+        $prefetch->setAccessible(true);
+        $prefetch->invoke($service, ['Products']);
+
+        // 未注入模块 CSV、且未保证 DB 有词时，至少回退 source，且不炸内存路径。
+        self::assertSame(
+            'Products',
+            $service->resolveMenuTitleRaw('Products', 'Weline_Demo::x', 'en_US')
+        );
+    }
 }

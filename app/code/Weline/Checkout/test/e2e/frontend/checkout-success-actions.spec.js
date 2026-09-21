@@ -1,15 +1,19 @@
 /**
- * 结账完成页 CTA 层次：主继续购物 / 次订单详情 / 链订单列表（取消态：返回结账主）。
+ * 结账完成页 CTA：取消态主 CTA 为继续支付或返回购物车，禁止裸 /checkout。
  *
- * @weline-e2e-spec { module: Weline_Checkout, type: smoke, layer: frontend }
+ * @weline-e2e-spec { module: Weline_Checkout, type: smoke, layer: frontend, feature: payment-cancel-continue-pay }
  * @weline-e2e-runtime wls
- * @weline-e2e-transport direct
  */
 
-const { test, expect, moduleDescribe, moduleCase } = require('../../../../../../../tests/e2e/framework');
+const {
+  test,
+  expect,
+  gotoFrontend,
+  moduleDescribe,
+  moduleCase,
+} = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Checkout';
-const BASE = process.env.WELINE_E2E_BASE_URL || 'https://p05113ef3.test.weline.com:9555';
 
 moduleDescribe(test, MODULE, 'checkout success actions', () => {
   test.setTimeout(60000);
@@ -17,17 +21,17 @@ moduleDescribe(test, MODULE, 'checkout success actions', () => {
   moduleCase(
     test,
     { module: MODULE, id: 'CHECKOUT-SUCCESS-CTA-001' },
-    'cancel success shows ordered CTAs with primary return-to-checkout',
+    'cancel success without order shows cart primary CTA not bare checkout',
     async ({ page }) => {
-      await page.goto(`${BASE}/checkout/success?outcome=cancel`, {
-        waitUntil: 'domcontentloaded',
+      await gotoFrontend(page, '/checkout/success?outcome=cancel', {
         timeout: 45000,
+        settleMs: 400,
       });
       const nav = page.locator('[data-testid="checkout-success"] .amz-order-confirm__actions, .amz-order-confirm__actions').first();
       await expect(nav).toBeVisible({ timeout: 15000 });
       const texts = await nav.locator('a').allTextContents();
       const normalized = texts.map((t) => t.trim()).filter(Boolean);
-      expect(normalized[0]).toMatch(/返回结账|Return to checkout/i);
+      expect(normalized[0]).toMatch(/返回购物车|Back to cart|继续支付|Continue to pay|Continue payment/i);
       expect(normalized).toEqual(
         expect.arrayContaining([
           expect.stringMatching(/继续购物|Continue shopping/i),
@@ -36,6 +40,22 @@ moduleDescribe(test, MODULE, 'checkout success actions', () => {
       );
       await expect(nav.locator('.amz-order-confirm__btn--primary')).toHaveCount(1);
       await expect(nav.locator('.amz-order-confirm__btn--link')).toHaveCount(1);
+      const primaryHref = await nav.locator('.amz-order-confirm__btn--primary').getAttribute('href');
+      expect(primaryHref || '').not.toMatch(/\/checkout\/?$/);
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'CHECKOUT-SUCCESS-CTA-002' },
+    'cancel success template exposes cancel outcome shell',
+    async ({ page }) => {
+      await gotoFrontend(page, '/checkout/success?outcome=cancel&cancel_state=done', {
+        timeout: 45000,
+        settleMs: 400,
+      });
+      await expect(page.locator('[data-testid="checkout-success"]')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('[data-payment-outcome="cancel"]')).toBeVisible();
     }
   );
 });

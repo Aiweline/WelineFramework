@@ -11,7 +11,6 @@ use Weline\CustomerService\Service\WidgetTranslationService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\SessionFactory;
 use Weline\Theme\Helper\WidgetI18n;
 
 $requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
@@ -33,11 +32,10 @@ if (!$customerServiceSettings->isServiceEnabled()) {
     return;
 }
 
-$session = SessionFactory::getInstance()->createFrontendSession();
-$isLoggedIn = $session->isLoggedIn();
-$customerId = $isLoggedIn ? $session->getUserId() : null;
-
-$showGuestBindPrompt = !$isLoggedIn;
+// Guest-safe SSR: login state is applied client-side on chat open / Account hydrate.
+$isLoggedIn = false;
+$customerId = null;
+$showGuestBindPrompt = true;
 
 /** @var BindCaptchaGuard $bindCaptchaGuard */
 $bindCaptchaGuard = ObjectManager::getInstance(BindCaptchaGuard::class);

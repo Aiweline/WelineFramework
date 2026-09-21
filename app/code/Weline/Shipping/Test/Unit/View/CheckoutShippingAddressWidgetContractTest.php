@@ -36,7 +36,9 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         $modules = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js',
         );
-        self::assertStringContainsString('data-testid="shipping-checkout-address"', $template);
+        self::assertStringContainsString('data-testid="checkout-shipping-address"', $template);
+        self::assertStringContainsString('data-widget-code="checkout-shipping-address"', $template);
+        self::assertStringContainsString('data-shipping-checkout-address', $template);
         self::assertStringContainsString('@widget.default_injections', $template);
         self::assertStringContainsString('checkout-shipping-address', $template);
         self::assertStringContainsString('<w:theme:address', $template);

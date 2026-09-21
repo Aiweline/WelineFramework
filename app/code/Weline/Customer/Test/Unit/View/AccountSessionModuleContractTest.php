@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * 前台账户会话 JS 归属 Customer（account-session.js），禁止再放 Frontend。
+ * 静默浏览：仅 localStorage 画顶栏；交互才 ensureLogin / account.current。
  */
 final class AccountSessionModuleContractTest extends TestCase
 {
@@ -56,54 +57,32 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('suppressed_login_widget', $js);
     }
 
-    public function testFrontendSessionCacheSkipsPerPageForceCurrent(): void
+    public function testSilentBrowsePaintsFromCacheWithoutNetworkBootstrap(): void
     {
         $js = $this->accountJs();
         self::assertStringContainsString('frontendSessionUserKey', $js);
         self::assertStringContainsString('weline_frontend_session_user', $js);
-        self::assertStringContainsString('frontendAuthPendingKey', $js);
-        self::assertStringContainsString('weline_frontend_auth_pending', $js);
-        self::assertStringContainsString('markAuthPending', $js);
-        self::assertStringContainsString('skipGuestNegativeCache', $js);
-        self::assertStringContainsString('optimistic_keep_login_signal', $js);
-        self::assertStringContainsString('renewAt', $js);
-        self::assertStringContainsString('isFrontendSessionCacheFresh', $js);
-        self::assertStringContainsString('writeFrontendSessionCache', $js);
-        self::assertStringContainsString('fromCache: true', $js);
+        self::assertStringContainsString('paintOnly', $js);
+        self::assertStringContainsString("'paint_only'", $js);
+        self::assertStringContainsString('isThemeEditorPreview', $js);
+        self::assertStringContainsString('handleAuthRefreshSignal()', $js);
+        self::assertStringContainsString('ensureLogin', $js);
+        self::assertStringContainsString('customer/login-panel', $js);
+        // Bootstrap uses handleAuthRefreshSignal (paint-only unless editor/w_auth/auth page).
+        self::assertStringContainsString('accountManager.handleAuthRefreshSignal()', $js);
+        self::assertStringNotContainsString('bootstrapOnlineKeepalive', $js);
+        self::assertStringNotContainsString("reason: 'already_aligned'", $js);
+        // Silent keepalive disabled.
+        self::assertStringContainsString('Silent keepalive disabled', $js);
         self::assertStringContainsString('fromAuthSignal: true', $js);
         self::assertStringContainsString('isLogoutAuthSignal', $js);
-        // Bootstrap must not hardcode force:true on every page (editor preview may pass force).
-        self::assertStringContainsString('force: editorPreview', $js);
-        self::assertStringNotContainsString('syncHeaderAccountChrome({ force: true })', $js);
-        self::assertStringContainsString('sessionTtlMs', $js);
-        self::assertStringContainsString('guestRecheckMs', $js);
-        self::assertStringContainsString('checkFrontendUserLogin({', $js);
-        self::assertStringContainsString('force: true', $js);
-        // Force network after login uses skipGuestNegativeCache — still a force:true call.
         self::assertStringContainsString('skipGuestNegativeCache', $js);
-        self::assertStringContainsString('not signed in', $js);
-        self::assertStringContainsString('writeFrontendSessionCache(status)', $js);
-        self::assertStringContainsString('const hasSignal = loginSignal || logoutSignal', $js);
-        self::assertStringContainsString('skip account.current network only', $js);
-        // Signed-in must come from isLogin/logged_in — never result.success alone.
+        self::assertStringContainsString('optimistic_keep_login_signal', $js);
         self::assertStringContainsString(
             'const loggedIn = !!(result && (result.isLogin || result.logged_in));',
             $js
         );
         self::assertStringNotContainsString('result.isLogin || result.logged_in || result.success', $js);
-        self::assertMatchesRegularExpression(
-            '/Guest cache hit:[\s\S]{0,240}this\.maybeStartSocialQuickPrompt\(\)/',
-            $js
-        );
-        self::assertMatchesRegularExpression(
-            '/reason: \x27already_aligned\x27[\s\S]{0,80}|already_aligned[\s\S]{0,120}maybeStartSocialQuickPrompt/',
-            $js
-        );
-        self::assertStringContainsString("reason: 'already_aligned'", $js);
-        $alignedPos = strpos($js, "reason: 'already_aligned'");
-        self::assertNotFalse($alignedPos);
-        $alignedWindow = substr($js, max(0, $alignedPos - 160), 200);
-        self::assertStringContainsString('maybeStartSocialQuickPrompt()', $alignedWindow);
     }
 
     public function testAuthPagesForceNetworkAndLeaveWhenSignedIn(): void
@@ -116,19 +95,11 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('customer/account/register', $js);
         self::assertStringContainsString('onAuthPage', $js);
         self::assertStringContainsString('applyFrontendSessionSnapshot', $js);
-        // Storage sync snapshot must also leave auth pages when cache says signed-in.
         self::assertMatchesRegularExpression(
-            '/applyFrontendSessionSnapshot\([\s\S]*?leaveAuthPageIfSignedIn\(true\)/',
-            $js
-        );
-        self::assertMatchesRegularExpression(
-            '/needsNetwork\s*=\s*[^\n;]*onAuthPage/',
+            '/leaveAuthPageIfSignedIn\(true\)/',
             $js
         );
         self::assertStringContainsString('location.replace', $js);
-        self::assertStringContainsString('/customer/account', $js);
-        // Bootstrap must not hardcode force:true; auth pages force inside syncHeaderAccountChrome.
-        self::assertStringNotContainsString('syncHeaderAccountChrome({ force: true })', $js);
     }
 
     public function testLogoutAuthSignalClearsSessionCacheBeforeNetwork(): void

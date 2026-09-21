@@ -997,7 +997,7 @@ class Partials extends Block
         /** @var ThemeContextService $ctx */
         $ctx = ObjectManager::getInstance(ThemeContextService::class);
         $normalizedArea = $ctx->normalizeArea($area);
-        $theme = $ctx->resolveTheme($normalizedArea);
+        $theme = $this->resolvePartialsTheme($normalizedArea);
 
         // 如果没有活动主题，直接跳到默认主题回退逻辑
         if (!$theme || !$theme->getId()) {
@@ -1289,6 +1289,24 @@ class Partials extends Block
 
         return $ctx->resolveCurrentScope($ctx->normalizeArea($area));
     }
+
+    private function resolvePartialsTheme(string $area): ?WelineTheme
+    {
+        $preview = ObjectManager::getInstance(\Weline\Theme\Service\PreviewContextService::class);
+        if ($preview->isEditorThemeRequest()) {
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            $themeId = (int)$request->getParam('theme_id', 0);
+            if ($themeId <= 0) {
+                return null;
+            }
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            $theme->clearData()->clearQuery()->load($themeId);
+
+            return $theme->getId() ? $theme : null;
+        }
+
+        return ObjectManager::getInstance(ThemeContextService::class)->resolveTheme($area);
+    }
     
     /**
      * Overlay Scope-stored partials param.* values onto file defaults.
@@ -1304,9 +1322,8 @@ class Partials extends Block
         string $area,
     ): array {
         try {
-            $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme->clearData()->clearQuery()->getActiveTheme($area === 'backend' ? 'backend' : 'frontend');
-            $themeId = (string)($theme->getId() ?? '');
+            $theme = $this->resolvePartialsTheme($area === 'backend' ? 'backend' : 'frontend');
+            $themeId = (string)($theme?->getId() ?? '');
             if ($themeId === '' || $themeId === '0') {
                 return $partialsMeta;
             }

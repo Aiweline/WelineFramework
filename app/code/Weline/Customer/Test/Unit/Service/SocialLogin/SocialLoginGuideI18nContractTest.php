@@ -40,10 +40,57 @@ final class SocialLoginGuideI18nContractTest extends TestCase
         self::assertStringContainsString("'social_login_guide'", $i18nSrc);
 
         $enCsv = (string) file_get_contents($root . '/i18n/en_US.csv');
-        self::assertMatchesRegularExpression('/Google 登录指南,"?Google sign-in guide"?/', $enCsv);
-        self::assertMatchesRegularExpression('/开始前准备,"?Before you start"?/', $enCsv);
+        self::assertMatchesRegularExpression('/"?Google 登录指南"?,"?Google sign-in guide"?/', $enCsv);
+        self::assertMatchesRegularExpression('/"?开始前准备"?,"?Before you start"?/', $enCsv);
         self::assertStringNotContainsString('Google 登录指南,Google 登录指南', $enCsv);
         self::assertStringNotContainsString('"Google 登录指南","Google 登录指南"', $enCsv);
+        self::assertMatchesRegularExpression('/"?用户数据删除"?,"?User data deletion"?/', $enCsv);
+        self::assertStringNotContainsString('用户数据删除,用户数据删除', $enCsv);
+        self::assertStringNotContainsString('"用户数据删除","用户数据删除"', $enCsv);
+    }
+
+    public function testGuideTemplatePhrasesHaveNonChineseEnUsTranslations(): void
+    {
+        $moduleRoot = dirname(__DIR__, 4);
+        $enPath = $moduleRoot . '/i18n/en_US.csv';
+        $translations = [];
+        $fp = fopen($enPath, 'r');
+        self::assertNotFalse($fp);
+        while (($row = fgetcsv($fp, 0, ',', '"', '\\')) !== false) {
+            if (count($row) >= 2) {
+                $translations[$row[0]] = $row[1];
+            }
+        }
+        fclose($fp);
+
+        $files = [];
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($moduleRoot . '/view/templates/frontend/guide/social-login')
+        );
+        foreach ($it as $file) {
+            if ($file->isFile() && strtolower($file->getExtension()) === 'phtml') {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        $bad = [];
+        foreach ($files as $file) {
+            $content = (string) file_get_contents($file);
+            if (!preg_match_all('/<lang(?:\s[^>]*)?>(.*?)<\/lang>/su', $content, $m)) {
+                continue;
+            }
+            foreach ($m[1] as $phrase) {
+                if (!preg_match('/\p{Han}/u', $phrase)) {
+                    continue;
+                }
+                $trans = $translations[$phrase] ?? null;
+                if ($trans === null || preg_match('/\p{Han}/u', $trans)) {
+                    $bad[] = $phrase;
+                }
+            }
+        }
+
+        self::assertSame([], $bad, 'Social-login guide phrases still have Chinese placeholders in en_US.csv');
     }
 
     public function testGuideTemplatesUseLangTagsNotPhpTranslate(): void

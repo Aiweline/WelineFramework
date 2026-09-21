@@ -39,12 +39,14 @@
 - **禁止**在可视化预览里调用 `start-preview` 种 Cookie（会误进「版本真实预览」态）
 - 改预览身份：改参数 / 重建 `editor_context` / 换店面 path，不要假设 RequestContext 里已有店面 Scope
 - 调试时以 Network 里 iframe `src`（店面 path + query + `editor_context`）为准
+- 站内 URL 生成：画布请求下经 `Url` 最终输出钩子 `Weline_Framework_Url::url_generate_params` → Theme 追加 `theme_id`（无画布身份则早退；**后台 URL / 编辑器 chrome 如「返回」不注入**）。**禁止**挂 `url_generate_rewrite`。禁止靠 Session 粘主题。
 
 ### 禁止
 
 - 用自定义壳 URL（`theme-preview/content`、`layout-preview`）代替真实店面 path
 - 用店面 path/Scope 热缓存「猜」编辑器当前主题
 - 为安静画布 `editor_mode` early-return 丢掉 Hook/部件/浮层真实逻辑（违反 `preview_storefront_delivery_parity`）
+- 用 Session / Cookie 代替 URL `theme_id` 做态 1 主题隔离
 
 后台主题预览同样不开自定义壳：主题列表的后台预览进入真实后台首页 `weline_dashboard/backend/dashboard`，并带 `editor_mode` / `shell=theme-editor`。编辑器画布在前台区域始终是真实店面 path。
 
@@ -74,6 +76,18 @@
 - 换主题 / 换版本 / 换 Scope：必须**重新 start-preview** 发新 Token，禁止手改 URL 参数指望生效
 - 退出：清客户端 Token + gateway `exit` 路径；失效 Token 不得回种
 - 实现锚点（店面侧）：有效 Token 时安装 `LayoutIdentity`，并走 draft `processSlots`，禁止误入正式实体硬切
+
+### Cookie / bootstrap 边界（短）
+
+- 同标签续命靠 **HttpOnly Cookie**（有退出浮层）；首跳可带 URL `weline_preview_token`，随后可剥地址栏。
+- `preview-bootstrap` **仅**在 URL 显式带 token 时 POST 种 Cookie；**禁止**仅凭 `sessionStorage` 回种（退出后正式店不得被复活为预览）。
+- 退出以 gateway `exit` 清 Cookie 为准；客户端同时清 `weline_live_preview_token` storage。
+
+### FPC 旁路（严重）
+
+- 态 1（`editor_mode` / `shell=theme-editor` / `visual_editor` 等 query）与态 2（`weline_preview_token` query **或** Cookie）**必须 bypass 公共 FPC**（serve + publish），禁止把编辑器/预览 HTML 写入游客整页缓存。
+- 权威扩展：Theme `ThemeEditorFpcBypassProvider`（`extends/module/Weline_Framework/Fpc/Bypass`）→ 升级收集侧车 `generated/framework/fpc_bypass_rules.php`；热路径只读侧车（`FpcBypassEvaluator`），**禁止**每次编辑操作 `purgeAll` FPC。
+- WLS 传输显式头（`x-wls-fpc-bypass` 等）由 Server `WlsTransportFpcBypassProvider` 声明；登录态 / `Cache-Control: no-store` / 静态 path 等 **serve 策略**仍归 Framework `FullPageCacheCoordinator`，不进 BypassProvider。
 
 ### 与「画布里看版本」的区别
 
@@ -144,6 +158,8 @@
 
 ## 修订记录
 
+- 2026-09-21：态 2 bootstrap 禁止仅 sessionStorage 回种 Cookie；退出须清 `weline_live_preview_token`。
+- 2026-09-20：态 1 站内 URL 经 `url_generate_rewrite` 自动携带 `theme_id`；禁止 Session 冒充态 1 隔离。
 - 2026-09-18：删掉取样状态机、`getLayoutPreview` / `layout-preview` 路由，以及无人赋值的 `theme_preview_content` / `layout_preview_mode`。后台主题预览改为真实 Dashboard 地址。
 - 2026-09-18：可视化编辑预览改为**真实店面 path + 参数**；禁止 `theme-preview/content` / `layout-preview` 冒充前台画布；文档与 Config/Layout 入口对齐。
 - 2026-09-16：首版。明确可视化（参数）、版本真实预览（Token 反解析）、正式（上下文）三种权威。

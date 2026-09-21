@@ -99,9 +99,14 @@ final class StorefrontCatalogReadEfficiencyTest extends TestCase
         $pdo->exec('CREATE VIEW product_ws_0_product AS SELECT product_id, catalog_read_status(product_id,status) AS status, sku, created_at FROM product_read_source');
         $pdo->exec('CREATE TABLE product_ws_0_price (price_id INTEGER PRIMARY KEY, offer_id INTEGER, store_id INTEGER, currency TEXT, amount_minor INTEGER, scope_state TEXT, cleared INTEGER, version INTEGER)');
         $pdo->exec('CREATE TABLE product_ws_0_media (media_id INTEGER PRIMARY KEY, product_id INTEGER, store_id INTEGER, position INTEGER, path TEXT)');
+        $pdo->exec('CREATE TABLE product_ws_0_attribute_value (value_id INTEGER PRIMARY KEY, store_id INTEGER, entity_type TEXT, entity_id INTEGER, attribute_code TEXT, locale TEXT, value_type TEXT, value_text TEXT, value_string TEXT, value_number REAL, value_boolean INTEGER, value_date TEXT, value_json TEXT, scope_state TEXT, cleared INTEGER, is_required INTEGER)');
         $products = new ProductRepository($this->provisioner, fn(int $id): Product => $this->model(Product::class, $id));
         $offers = new OfferRepository($this->provisioner, fn(int $id): Offer => $this->model(Offer::class, $id));
-        $attributes = new AttributeValueRepository($this->provisioner, new CatalogOverlayResolver());
+        $attributes = new AttributeValueRepository(
+            $this->provisioner,
+            new CatalogOverlayResolver(),
+            fn(int $id): AttributeValue => $this->model(AttributeValue::class, $id),
+        );
         $prices = new PriceRepository($this->provisioner, modelFactory: fn(int $id): Price => $this->model(Price::class, $id));
         $media = new MediaRepository($this->provisioner, $this->connection,
             $this->createStub(\Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface::class),
@@ -534,10 +539,15 @@ public function testListingCandidatesDeferMediaUntilAfterWholeCatalogFiltersAndP
         $service = new ProductCategoryAttributeService($attributes);
         $urlCalls = [];
         $url = $this->createMock(Url::class);
-        $url->method('getFrontendUrl')->willReturnCallback(static function (string $path) use (&$urlCalls): string {
-            $urlCalls[] = $path;
-            return '/en_US/' . $path;
+        $url->method('getFrontendUrls')->willReturnCallback(static function (array $paths) use (&$urlCalls): array {
+            $mapped = [];
+            foreach ($paths as $key => $path) {
+                $urlCalls[] = $path;
+                $mapped[$key] = '/en_US/' . $path;
+            }
+            return $mapped;
         });
+        $url->expects(self::never())->method('getFrontendUrl');
         $index = (new \ReflectionClass(StorefrontCategoryTreeIndex::class))->newInstanceWithoutConstructor();
         (new \ReflectionProperty($index, 'categoryAttributes'))->setValue($index, $service);
         (new \ReflectionProperty($index, 'url'))->setValue($index, $url);

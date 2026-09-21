@@ -27,15 +27,15 @@
 购物车工作台,"Cart workspace"
 search,search
 "按 Scope / guest_token 检查真实 Cart 持久库","按 Scope / guest_token 检查真实 Cart 持久库"
-当前货币暂不可用,"This currency is temporarily unavailable"
+仅询价,"Quote only"
 加入购物车,"Add to Cart"
 暂不可售,"Currently unavailable"
 正在加入购物车...,"Adding to cart..."
 已加入购物车,"Added to cart"
 加入购物车失败,"Failed to add to cart"
-前往购物车,"Go to Cart"
-仅询价,"Quote only"
 已加入,"Added to cart"
+前往购物车,"Go to Cart"
+当前货币暂不可用,"This currency is temporarily unavailable"
 迷你购物车,"Mini cart"
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,Subtotal
