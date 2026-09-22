@@ -2,7 +2,7 @@
 
 | seat | agent_id | status |
 |------|----------|--------|
-| 项目经理(Wave-2) | 9d3032ed-1427-4b12-a976-9c347015f63e | running（Wave-2 排期派工） |
+| 项目经理(Wave-2) | 9d3032ed-1427-4b12-a976-9c347015f63e | closed（已派工，等施工回执） |
 | 电商顾问(Wave-2 brief) | [a7325406-45ba-4e44-89a1-0b71a7af50cb](a7325406-45ba-4e44-89a1-0b71a7af50cb) | **running** |
 | 翻译工程师+前端(P1-04) | [d75f6cb2-a042-4b45-a318-da1f0a3df6fe](d75f6cb2-a042-4b45-a318-da1f0a3df6fe) | **running** |
 | 主题+部件(P2-05) | [819bceea-a4e2-48e6-ae3c-26e6128c3ad8](819bceea-a4e2-48e6-ae3c-26e6128c3ad8) | **running** |
