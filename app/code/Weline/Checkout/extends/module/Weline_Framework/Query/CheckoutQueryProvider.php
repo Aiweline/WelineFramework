@@ -2532,9 +2532,11 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'service_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'currency' => ['type' => 'string', 'required' => false, 'max_length' => 8],
                         'tax_identity' => ['type' => 'array', 'required' => false],
+                        // 续付加/撤券写回未付订单（与 ExpressUnpaidOrderAmend 对齐）。
+                        'coupon_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Write-back shipping address on unpaid order before resumePaymentV2',
+                    'summary' => 'Write-back shipping address/coupon on unpaid order before resumePaymentV2',
                 ],
                 [
                     'name' => 'listCheckoutSessionBuckets',
