@@ -162,6 +162,11 @@ final class CheckoutContinuePayAdoptContractTest extends TestCase
         self::assertStringContainsString('\\Weline\\Marketing\\Api\\Quote\\DiscountQuoteServiceInterface', $amend);
         self::assertStringContainsString("array_key_exists('coupon_code', \$options)", $amend);
         self::assertStringContainsString("array_key_exists('coupon_code', \$params)", $provider);
+        // amendUnpaidCheckoutAddress 描述必须声明 coupon_code，否则加券 toast Unknown frontend worker param。
+        self::assertMatchesRegularExpression(
+            "/'name'\\s*=>\\s*'amendUnpaidCheckoutAddress'[\\s\\S]*?'coupon_code'\\s*=>\\s*\\[[\\s\\S]*?'type'\\s*=>\\s*'string'/s",
+            $provider
+        );
         self::assertStringContainsString('await amendContinuePayOrderMoney({})', $template);
         self::assertStringContainsString("source === 'continue-pay-amend'", $template);
         self::assertStringContainsString('paintCheckoutCouponTag', $template);
