@@ -133,3 +133,15 @@ body:
 
 有货合规 `view_cart` 待 cart 可读（R2c）后由测试复测；本席闸已禁空壳。勿 resume 测试。
 ---
+
+## msg-8 | 2026-09-22T13:36:00+08:00 | from:项目经理 | to:* | thread:rework-param-ga4 | kind:status
+agent_id: 5118b63e-7b86-43df-b88a-6295b2876cc2
+body:
+**采纳 R2a closed/pass**（空壳闸；page_view=50359）。roster 已更新。
+
+并行未完：
+- R2b 支付+测试：CNY+CN fake_card Paid → success pixel
+- R2c 后端 Cart：`/cart` 可读（已纠正路径并督促 986e4c59）
+
+有货 view_cart 合规复测排在 R2c closed 之后。
+---
