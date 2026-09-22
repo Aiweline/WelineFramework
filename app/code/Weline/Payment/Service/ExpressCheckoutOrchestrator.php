@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Api\PaymentExpressAddressSinkInterface;
 use Weline\Payment\Api\PaymentExpressFacadeInterface;
 use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Model\PaymentTransaction;
 use Weline\SystemConfig\Api\ConfigStore;
 
 /**
@@ -200,6 +201,71 @@ final class ExpressCheckoutOrchestrator implements PaymentExpressFacadeInterface
         }
 
         return ['applied' => $applied, 'sinks' => $sinks];
+    }
+
+    public function abandonExpressPayment(string $transactionNo, string $reason = 'abandoned'): array
+    {
+        $transactionNo = trim($transactionNo);
+        $out = [
+            'transaction_no' => $transactionNo,
+            'abandoned' => false,
+        ];
+        if ($transactionNo === '') {
+            $out['error'] = 'empty_transaction_no';
+
+            return $out;
+        }
+
+        try {
+            $om = $this->objectManager ?? ObjectManager::getInstance();
+            /** @var PaymentTransaction $txn */
+            $txn = $om->getInstance(PaymentTransaction::class);
+            $txn->clear()
+                ->where(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo)
+                ->find()
+                ->fetch();
+            if (!(int) $txn->getId()) {
+                $out['skipped'] = 'not_found';
+
+                return $out;
+            }
+
+            $orderUuid = trim((string) $txn->getData(PaymentTransaction::schema_fields_ORDER_ID));
+            if ($orderUuid !== '') {
+                $out['order_uuid'] = $orderUuid;
+            }
+
+            if ($txn->isSuccess()) {
+                $out['skipped'] = 'already_paid';
+                $out['status'] = (string) $txn->getData(PaymentTransaction::schema_fields_STATUS);
+
+                return $out;
+            }
+
+            $request = $txn->getRequestData();
+            if (!is_array($request)) {
+                $request = [];
+            }
+            $meta = is_array($request['metadata'] ?? null) ? $request['metadata'] : [];
+            $meta['express_abandoned'] = 1;
+            $meta['express_abandon_reason'] = $reason;
+            unset($meta[self::META_AWAITING_CONFIRM]);
+            $request['metadata'] = $meta;
+            unset($request[self::META_AWAITING_CONFIRM]);
+
+            $txn->setRequestData($request)
+                ->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
+                ->save();
+
+            $out['abandoned'] = true;
+            $out['status'] = PaymentTransaction::STATUS_FAILED;
+
+            return $out;
+        } catch (\Throwable $e) {
+            $out['error'] = $e->getMessage();
+
+            return $out;
+        }
     }
 
     private function methods(): PaymentMethodManager

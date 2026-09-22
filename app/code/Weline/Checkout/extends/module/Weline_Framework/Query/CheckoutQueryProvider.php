@@ -382,7 +382,11 @@ class CheckoutQueryProvider implements QueryProviderInterface
         $binding = ObjectManager::getInstance(\Weline\Checkout\Service\ContinuePayBindingService::class);
         $prior = trim((string)($params['prior_quote_token'] ?? ''));
         if ($prior === '') {
-            $prior = trim((string)Cookie::get('weline_checkout_session'));
+            $cookiePrior = trim((string)Cookie::get('weline_checkout_session'));
+            // 禁止把续付 token 当 browse prior。
+            if ($cookiePrior !== '' && !str_starts_with(strtolower($cookiePrior), 'qt_cpay_')) {
+                $prior = $cookiePrior;
+            }
         }
         $params['prior_quote_token'] = $prior;
 
@@ -461,6 +465,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'service_code' => trim((string)($params['service_code'] ?? $params['shipping_method'] ?? '')),
             'currency' => trim((string)($params['currency'] ?? '')),
         ];
+        if (\array_key_exists('coupon_code', $params)) {
+            $options['coupon_code'] = strtoupper(trim((string)$params['coupon_code']));
+        }
         if (\is_array($params['tax_identity'] ?? null)) {
             $options['tax_identity'] = $params['tax_identity'];
         }
@@ -812,10 +819,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'currency' => $currency,
             'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
         ]);
-        $selectedPayment = strtolower(trim((string)($params['payment_method'] ?? '')));
+        $continuePayRequest = !empty($params['continue_pay'])
+            || strtolower(trim((string)($params['payment_mode'] ?? ''))) === 'continue_pay';
+        // 硬隔离：传统 getData 忽略续付绑定的 payment/shipping，禁止 selected_code 偷选。
+        $selectedPayment = $continuePayRequest
+            ? strtolower(trim((string)($params['payment_method'] ?? '')))
+            : '';
+        $selectedShipping = $continuePayRequest
+            ? trim((string)($params['shipping_method'] ?? ''))
+            : '';
         // Continue-pay / resume: empty cart may set checkout_blocked, but the bound
         // method must still render with name+icon (never bare code).
-        if ($selectedPayment !== '') {
+        // ONLY when explicitly continue_pay — never inject into traditional getData.
+        if ($continuePayRequest && $selectedPayment !== '') {
             $paymentMethods = $this->ensurePaymentMethodListed(
                 $paymentMethods,
                 $selectedPayment,
@@ -825,17 +841,57 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 ],
             );
         }
+        // Continue-pay: empty/blocked cart skips live quote — show the order lane only
+        // (same as payment chrome). Do not append beside live Americas/etc., and never
+        // label it 「锁定」 (users think address/edit is blocked).
+        if ($continuePayRequest && $selectedShipping !== '') {
+            $shippingMethods = $this->ensureShippingMethodListed(
+                $shippingMethods,
+                $selectedShipping,
+                $currency,
+            );
+            if ($shippingMethods !== []) {
+                $shippingEmptyMessage = '';
+                $shippingEmptyTitle = '';
+                $shippingEmptyReason = '';
+                $shippingEmpty = [
+                    'title' => '',
+                    'message' => '',
+                    'reason_code' => '',
+                ];
+            }
+        }
+        if (!$continuePayRequest) {
+            // Strip any leftover continue-pay inject rows (stale client params / prior bugs).
+            $shippingMethods = array_values(array_filter(
+                $shippingMethods,
+                static function ($method): bool {
+                    return !\is_array($method)
+                        || trim((string)($method['source'] ?? '')) !== 'continue_pay_order';
+                }
+            ));
+            $paymentMethods = array_values(array_filter(
+                $paymentMethods,
+                static function ($method): bool {
+                    return !\is_array($method)
+                        || trim((string)($method['source'] ?? '')) !== 'continue_pay_order';
+                }
+            ));
+        }
         $html = $this->htmlRenderer();
-        $quoteToken = $this->syncBrowseSession(
-            $params,
-            $shippingAddress,
-            $items,
-            $quoteDiagnostics,
-            $shippingMethods,
-            $checkoutBlocked,
-            $shippingEmptyMessage,
-            $currency,
-        );
+        // 续付 getData 禁止写入 browse 会话（指纹/地址会污染传统结账 quote_token）。
+        $quoteToken = $continuePayRequest
+            ? trim((string)($params['quote_token'] ?? ''))
+            : $this->syncBrowseSession(
+                $params,
+                $shippingAddress,
+                $items,
+                $quoteDiagnostics,
+                $shippingMethods,
+                $checkoutBlocked,
+                $shippingEmptyMessage,
+                $currency,
+            );
 
         return $this->ok(
             $checkoutBlocked ? $blockingMessage : (string)__('结账信息已加载'),
@@ -1817,6 +1873,85 @@ class CheckoutQueryProvider implements QueryProviderInterface
     }
 
     /**
+     * 续付：空车无法重算运费时，只展示订单原配送线路（与支付 chrome 同策略）。
+     * 禁止追加到 live quote 旁、禁止「锁定」恐吓文案。
+     *
+     * @param list<array<string, mixed>> $methods
+     * @return list<array<string, mixed>>
+     */
+    private function ensureShippingMethodListed(array $methods, string $code, string $currency = 'CNY'): array
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return $methods;
+        }
+        foreach ($methods as $method) {
+            if (!\is_array($method)) {
+                continue;
+            }
+            if (trim((string)($method['code'] ?? '')) === $code) {
+                // Prefer the bound lane alone so radio #1 is the order method.
+                return [$method];
+            }
+        }
+
+        $bound = $this->buildBoundShippingMethodOption($code, $currency);
+
+        return $bound !== null ? [$bound] : $methods;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildBoundShippingMethodOption(string $code, string $currency = 'CNY'): ?array
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+        $label = $code;
+        $incoterm = 'ddu';
+        try {
+            /** @var \Weline\Shipping\Model\ShippingService $service */
+            $service = ObjectManager::getInstance(\Weline\Shipping\Model\ShippingService::class);
+            $service->clear()
+                ->where(\Weline\Shipping\Model\ShippingService::schema_fields_SERVICE_CODE, $code)
+                ->find()
+                ->fetch();
+            if ((int)$service->getId() > 0) {
+                $raw = trim((string)$service->getData(
+                    \Weline\Shipping\Model\ShippingService::schema_fields_SERVICE_NAME
+                ));
+                if ($raw !== '') {
+                    $label = (string)__($raw);
+                }
+                $inc = strtolower(trim((string)$service->getData('incoterm')));
+                if ($inc !== '') {
+                    $incoterm = $inc;
+                }
+            }
+        } catch (\Throwable) {
+            // keep defaults
+        }
+        $dutyNotice = \Weline\Shipping\Service\ShippingIncotermService::NOTICE_DDU;
+        $description = (string)__((new ShippingIncotermService())->labelForDutyNoticeCode($dutyNotice));
+
+        return [
+            'code' => $code,
+            'label' => $label,
+            'title' => $label,
+            'description' => $description,
+            'eta_label' => '',
+            'amount' => 0.0,
+            'fee' => 0.0,
+            'amount_minor' => 0,
+            'incoterm' => $incoterm,
+            'duty_notice' => $dutyNotice,
+            'source' => 'continue_pay_order',
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $shippingAddress
      * @param list<array<string, mixed>> $cartItems
      */
@@ -2123,6 +2258,11 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'coupon_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         // Continue-pay: bind method so empty-cart getData still returns name+icon chrome.
                         'payment_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        // Continue-pay: bind order-locked shipping lane when live quote is empty.
+                        'shipping_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        // Explicit continue-pay mode: gates inject + skips browse session sync.
+                        'continue_pay' => ['type' => 'boolean', 'required' => false],
+                        'payment_mode' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load checkout cart, shipping and payment options',

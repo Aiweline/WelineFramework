@@ -78,7 +78,7 @@ final class ProductCardContractTest extends TestCase
         self::assertStringContainsString('padding-inline: var(--weline-space-4', $css);
         self::assertStringContainsString('var(--color-link', $css);
         self::assertStringContainsString('.wpc-cta .btn-buy-now', $css);
-        self::assertStringContainsString('20260918-product-card-css-fpc-heal', (string)file_get_contents(
+        self::assertStringContainsString('20260921-product-card-css-emission-heal', (string)file_get_contents(
             $base . '/Service/ProductCardRenderer.php'
         ));
         $partial = (string)file_get_contents($base . '/view/templates/frontend/partials/product-card.phtml');
@@ -99,7 +99,7 @@ final class ProductCardContractTest extends TestCase
         // 宿主 + 卡 partial 均可 emit；禁止旧 cssLinkOnce / body <link>
         self::assertStringNotContainsString('cssLinkOnce', $src);
         self::assertStringNotContainsString('return self::cssLinkOnce()', $src);
-        self::assertStringContainsString('20260918-product-card-css-fpc-heal', $src);
+        self::assertStringContainsString('20260921-product-card-css-emission-heal', $src);
         self::assertStringContainsString('onCaptureDiscard', $src);
 
         ProductCardRenderer::resetProductCardCssEmission();

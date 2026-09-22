@@ -129,11 +129,40 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         self::assertStringContainsString('$usesCraftDirectory = $brands === [];', $widget);
         self::assertStringContainsString("'image' => \$item['image']", $widget);
         self::assertStringContainsString("'link' => \$item['link']", $widget);
-        self::assertStringContainsString('<w:widget type="content" name="textile-heritage"', $homepage);
-        self::assertStringContainsString('textile-heritage', $homepage);
-        self::assertStringContainsString('default_injections', $homepage);
-        self::assertStringNotContainsString('<w:widget type="content" name="brand-logos"', $homepage);
+        self::assertStringNotContainsString('<w:widget type="content" name="textile-heritage"', $homepage);
+        self::assertStringContainsString('<w:widget type="content" name="brand-logos"', $homepage);
+        self::assertStringContainsString('id="homepage-deals"', $homepage);
+        self::assertStringContainsString('<w:widget type="product" name="deals-of-day"', $homepage);
+        self::assertStringContainsString('id="homepage-testimonials"', $homepage);
+        self::assertStringContainsString('id="homepage-reviews"', $homepage);
+        self::assertStringContainsString('id="homepage-videos"', $homepage);
+        self::assertStringContainsString('<w:widget type="content" name="image-gallery"', $homepage);
+        self::assertStringContainsString('"variant":"looks"', $homepage);
+        self::assertStringContainsString('"title":"买家秀"', $homepage);
+        self::assertStringNotContainsString('穿后感言', $homepage);
+        self::assertStringContainsString('<w:widget type="testimonial" name="testimonials"', $homepage);
+        self::assertStringContainsString('"title":"买家评价"', $homepage);
+        self::assertStringContainsString('<w:widget type="video" name="video-carousel"', $homepage);
+        self::assertStringContainsString('accept="layout-homepage-videos,video,video-player,video-carousel,content"', $homepage);
+        self::assertStringNotContainsString('<w:widget type="video" name="video-player"', $homepage);
+        self::assertSame(1, substr_count($homepage, '<w:widget type="testimonial" name="testimonials"'));
+        self::assertStringNotContainsString('required default_injection', $homepage);
         self::assertStringContainsString('Weline_Theme::frontend::layouts::homepage::brands', $homepage);
+
+        $heroPosition = strpos($homepage, 'id="homepage-hero"');
+        $categoriesPosition = strpos($homepage, 'id="homepage-categories"');
+        $featuredPosition = strpos($homepage, 'id="homepage-featured"');
+        $brandsPosition = strpos($homepage, 'id="homepage-brands"');
+        self::assertIsInt($heroPosition);
+        self::assertIsInt($categoriesPosition);
+        self::assertIsInt($featuredPosition);
+        self::assertIsInt($brandsPosition);
+        self::assertTrue(
+            $heroPosition < $categoriesPosition
+            && $categoriesPosition < $featuredPosition
+            && $featuredPosition < $brandsPosition,
+            '默认主题首页应按电商节奏：品类/货架先于品牌区。'
+        );
     }
 
     public function testDefaultFooterLocalizesBrandAndCopyright(): void

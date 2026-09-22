@@ -50,6 +50,14 @@ final class ApiDocsSearchSplitContractTest extends TestCase
             self::assertStringContainsString("document.querySelector('[data-api-module-filter]')", $src, $path);
             self::assertStringContainsString('function matchesModule', $src, $path);
             self::assertStringContainsString('state.moduleFilter', $src, $path);
+            self::assertStringContainsString('function ensureAreaForCurrentFilters', $src, $path);
+            self::assertStringContainsString('function matchesAreaQuery', $src, $path);
+            self::assertStringContainsString('ensureAreaForCurrentFilters()', $src, $path);
+            self::assertStringContainsString('function readUrlDocsParams', $src, $path);
+            self::assertStringContainsString('function updateDocsUrl', $src, $path);
+            self::assertStringContainsString("searchParams.set('module'", $src, $path);
+            self::assertStringContainsString("searchParams.set('q'", $src, $path);
+            self::assertStringContainsString('syncFilterInputsFromState', $src, $path);
         }
     }
 

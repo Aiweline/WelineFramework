@@ -85,6 +85,17 @@ if ($products === [] && $isPreviewMode) {
     }
 }
 
+// 店面：新品窗口无命中时回退到同目录精选货架，避免首页货架空洞。
+if ($products === [] && !$isPreviewMode) {
+    try {
+        if (class_exists(StorefrontProductWidgetCatalog::class)) {
+            $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards($limit);
+        }
+    } catch (\Throwable) {
+        $products = [];
+    }
+}
+
 if ($products === []) {
     // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
     // HTML as a warning toast. Keep visually hidden so storefront still "hides".

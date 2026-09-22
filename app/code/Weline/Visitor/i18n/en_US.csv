@@ -1,847 +1,847 @@
-﻿访客像素标签,"Visitor pixel tag"
-"在渲染访客像素标签时触发，允许其他模块控制像素启停和名称。出于安全原因，不执行 pixel_code 自定义脚本。","Fires when a guest pixel tag is rendered, allowing other modules to control pixel start, stop, and name. For security reasons, the pixel_code custom script is not executed."
-事件链收集,事件链收集
-"组装前台 eventChains 时触发；业务模块向 chains 追加漏斗定义（id/steps/complete_event）。亦支持 Extends EventChainProvider。","组装前台 eventChains 时触发；业务模块向 chains 追加漏斗定义（id/steps/complete_event）。亦支持 Extends EventChainProvider。"
-"网站 ID","网站 ID"
-可追加的事件链列表,可追加的事件链列表
-"前端 JS 异常邮件","前端 JS 异常邮件"
-"未处理 Promise 邮件","未处理 Promise 邮件"
-接口技术失败邮件,接口技术失败邮件
-静态资源失败邮件,静态资源失败邮件
-客户端版本过期邮件,客户端版本过期邮件
-未分类技术错误邮件,未分类技术错误邮件
-库存不足邮件,库存不足邮件
-结账业务失败邮件,结账业务失败邮件
-支付失败邮件,支付失败邮件
-登录鉴权失败邮件,登录鉴权失败邮件
-其他业务拒绝邮件,其他业务拒绝邮件
-标题,标题
-正文,正文
+访客像素标签,Visitor pixel tag
+在渲染访客像素标签时触发，允许其他模块控制像素启停和名称。出于安全原因，不执行 pixel_code 自定义脚本。,"Fires when a guest pixel tag is rendered, allowing other modules to control pixel start, stop, and name. For security reasons, the pixel_code custom script is not executed."
+事件链收集,Event chain collect
+组装前台 eventChains 时触发；业务模块向 chains 追加漏斗定义（id/steps/complete_event）。亦支持 Extends EventChainProvider。,Fires when assembling storefront eventChains; business modules append funnel definitions to chains (id/steps/complete_event). Also supports Extends EventChainProvider.
+网站 ID,Website ID:
+可追加的事件链列表,Appendable event chain list
+前端 JS 异常邮件,Frontend JS exception email
+未处理 Promise 邮件,Unhandled Promise email
+接口技术失败邮件,API technical failure email
+静态资源失败邮件,Static asset failure email
+客户端版本过期邮件,Client version outdated email
+未分类技术错误邮件,Uncategorized technical error email
+库存不足邮件,Low stock email
+结账业务失败邮件,Checkout business failure email
+支付失败邮件,Payment failed email
+登录鉴权失败邮件,Login auth failure email
+其他业务拒绝邮件,Other business rejection email
+标题,Title
+正文,Body
 类型,type
-"站点错误监控主题 %{1} 的邮件渠道","站点错误监控主题 %{1} 的邮件渠道"
-"Visitor Query","Visitor Query"
-"Provides frontend visitor tracking operations through the worker channel.","Provides frontend visitor tracking operations through the worker channel."
-"Track storefront visitor pixel events.","Track storefront visitor pixel events."
-"Load visitor pixel hot buffer status.","Load visitor pixel hot buffer status."
-"Flush visitor pixel hot buffer.","Flush visitor pixel hot buffer."
-"One-click audit of pixel markers on published pages.","One-click audit of pixel markers on published pages."
-"Load latest pixel marker audit report.","Load latest pixel marker audit report."
-"Load Weline↔Google event dictionary.","Load Weline↔Google event dictionary."
-"Load GTM/GA4 channel and last audit status.","Load GTM/GA4 channel and last audit status."
-读取优化闭环的只读访客证据。,"Load read-only visitor evidence for the optimization loop."
-"Create visitor A/B test config.","Create visitor A/B test config."
-"Seed or clean auditable AI/SEO acceptance pixel events.","Seed or clean auditable AI/SEO acceptance pixel events."
-"Export visitor analytics data.","Export visitor analytics data."
-像素追踪,像素追踪
-像素追踪默认已开启（当前范围无覆盖关闭）。,像素追踪默认已开启（当前范围无覆盖关闭）。
-已继承上级范围开启访客像素追踪。,已继承上级范围开启访客像素追踪。
-已开启访客像素追踪。,已开启访客像素追踪。
-开启像素后才能在仪表盘看真实转化漏斗。,开启像素后才能在仪表盘看真实转化漏斗。
-增长,增长
-访客像素追踪,访客像素追踪
-站点错误监控,站点错误监控
-"前端 JS 异常","前端 JS 异常"
-"window.onerror / ErrorEvent 运行时错误","window.onerror / ErrorEvent 运行时错误"
-"未处理 Promise","未处理 Promise"
+站点错误监控主题 %{1} 的邮件渠道,Email channel for site error monitor subject %{1}
+Visitor Query,Visitor Query
+Provides frontend visitor tracking operations through the worker channel.,Provides frontend visitor tracking operations through the worker channel.
+Track storefront visitor pixel events.,Track storefront visitor pixel events.
+Load visitor pixel hot buffer status.,Load visitor pixel hot buffer status.
+Flush visitor pixel hot buffer.,Flush visitor pixel hot buffer.
+One-click audit of pixel markers on published pages.,One-click audit of pixel markers on published pages.
+Load latest pixel marker audit report.,Load latest pixel marker audit report.
+Load Weline↔Google event dictionary.,Load Weline↔Google event dictionary.
+Load GTM/GA4 channel and last audit status.,Load GTM/GA4 channel and last audit status.
+读取优化闭环的只读访客证据。,Load read-only visitor evidence for the optimization loop.
+Create visitor A/B test config.,Create visitor A/B test config.
+Seed or clean auditable AI/SEO acceptance pixel events.,Seed or clean auditable AI/SEO acceptance pixel events.
+Export visitor analytics data.,Export visitor analytics data.
+像素追踪,Pixel tracking
+像素追踪默认已开启（当前范围无覆盖关闭）。,Pixel tracking is on by default (no override-off in current scope).
+已继承上级范围开启访客像素追踪。,Inherited visitor pixel tracking from parent scope.
+已开启访客像素追踪。,Visitor pixel tracking enabled.
+开启像素后才能在仪表盘看真实转化漏斗。,Enable pixel to see real conversion funnel on dashboard.
+增长,Growth
+访客像素追踪,Visitor pixel tracking
+站点错误监控,Site error monitoring
+前端 JS 异常,Frontend JS exception
+window.onerror / ErrorEvent 运行时错误,window.onerror / ErrorEvent runtime errors
+未处理 Promise,Unhandled Promise
 unhandledrejection,unhandledrejection
-接口技术失败,接口技术失败
-网络中断、超时、5xx、协议失败,网络中断、超时、5xx、协议失败
-静态资源失败,静态资源失败
-"关键 script/css 加载失败","关键 script/css 加载失败"
-客户端版本过期,"Stale client version"
-缓存旧包与当前发布不一致,缓存旧包与当前发布不一致
-未分类技术错误,未分类技术错误
-未能归类的技术错误,未能归类的技术错误
-库存不足,"Out of stock"
-库存不足或不可售,库存不足或不可售
-结账业务失败,结账业务失败
-"结账 freeze/submit 等业务失败","结账 freeze/submit 等业务失败"
-支付失败,"Payment failed"
-支付或支付恢复失败,支付或支付恢复失败
-登录鉴权失败,登录鉴权失败
-登录或鉴权失败,登录或鉴权失败
-其他业务拒绝,其他业务拒绝
-优惠码、限购、风控等业务拒绝,优惠码、限购、风控等业务拒绝
-加载流量渠道列表失败：%{1},"Failed to load traffic channels: %{1}"
-流量渠道,"Traffic channels"
-新建投放渠道,"Create Campaign Channel"
-渠道创建成功：%{1}（%{2}）,"Channel created: %{1} (%{2})"
-渠道不存在,"Channel does not exist"
-编辑投放渠道,"Edit Campaign Channel"
-渠道已保存：%{1}（%{2}）,"Channel saved: %{1} (%{2})"
-热表总计暂不可用：%{1},"Heat meter total is temporarily unavailable: %{1}"
-事件轨迹暂不可用：%{1},"Event track is currently unavailable: %{1}"
-渠道漏斗暂不可用：%{1},"Channel funnel unavailable: %{1}"
-渠道详情,"Channel details"
-渠道已启用,"Channel enabled"
-渠道已停用,"Channel disabled"
+接口技术失败,API technical failure
+网络中断、超时、5xx、协议失败,"Network interrupt, timeout, 5xx, protocol failure"
+静态资源失败,Static asset failed
+关键 script/css 加载失败,Related script/css failed to load
+客户端版本过期,Stale client version
+缓存旧包与当前发布不一致,Cached old package differs from current publish
+未分类技术错误,Uncategorized technical error
+未能归类的技术错误,Unclassified technical error
+库存不足,Out of stock
+库存不足或不可售,Out of stock or unsellable
+结账业务失败,Checkout business failed
+结账 freeze/submit 等业务失败,Checkout freeze/submit and other business failures
+支付失败,Payment failed
+支付或支付恢复失败,Payment or payment resume failed
+登录鉴权失败,Login auth failed
+登录或鉴权失败,Login or auth failed
+其他业务拒绝,Other business rejected
+优惠码、限购、风控等业务拒绝,"Business rejection: promo codes, limits, risk control, etc."
+加载流量渠道列表失败：%{1},Failed to load traffic channels: %{1}
+流量渠道,Traffic channels
+新建投放渠道,Create Campaign Channel
+渠道创建成功：%{1}（%{2}）,Channel created: %{1} (%{2})
+渠道不存在,Channel does not exist
+编辑投放渠道,Edit Campaign Channel
+渠道已保存：%{1}（%{2}）,Channel saved: %{1} (%{2})
+热表总计暂不可用：%{1},Heat meter total is temporarily unavailable: %{1}
+事件轨迹暂不可用：%{1},Event track is currently unavailable: %{1}
+渠道漏斗暂不可用：%{1},Channel funnel unavailable: %{1}
+渠道详情,Channel details
+渠道已启用,Channel enabled
+渠道已停用,Channel disabled
 circle,circle
-像素流量渠道管理,"Pixel traffic channel management"
-查看流量渠道列表,"View traffic channel list"
+像素流量渠道管理,Pixel traffic channel management
+查看流量渠道列表,View traffic channel list
 list,list
-新建流量渠道,"Create Traffic Channel"
+新建流量渠道,Create Traffic Channel
 plus,plus
-提交新建流量渠道,"Submit Create Traffic Channel"
-提交新建投放渠道,"Submit Create Campaign Channel"
-编辑流量渠道,"Edit Traffic Channel"
+提交新建流量渠道,Submit Create Traffic Channel
+提交新建投放渠道,Submit Create Campaign Channel
+编辑流量渠道,Edit Traffic Channel
 edit,edit
-提交编辑流量渠道,"Submit Edit Traffic Channel"
-提交编辑投放渠道,"Submit Edit Campaign Channel"
-查看流量渠道详情总计,"View total traffic channel details"
+提交编辑流量渠道,Submit Edit Traffic Channel
+提交编辑投放渠道,Submit Edit Campaign Channel
+查看流量渠道详情总计,View total traffic channel details
 chart,chart
-查看投放渠道热表总计,"View the total distribution channel hot list"
-停用或启用流量渠道,"Disable or Enable Traffic Channel"
+查看投放渠道热表总计,View the total distribution channel hot list
+停用或启用流量渠道,Disable or Enable Traffic Channel
 switch,switch
-停用或启用投放渠道,"Disable or Enable Campaign Channel"
-加载错误监控失败：%{1},加载错误监控失败：%{1}
-错误监控,"Error Monitor"
-"缺少事故 ID","缺少事故 ID"
-事故不存在,事故不存在
-处置参数无效,处置参数无效
-已更新处置状态,已更新处置状态
+停用或启用投放渠道,Disable or Enable Campaign Channel
+加载错误监控失败：%{1},Load error monitoring failed: %{1}
+错误监控,Error Monitor
+缺少事故 ID,Missing incident ID
+事故不存在,Incident not found
+处置参数无效,Invalid handle params
+已更新处置状态,Handle status updated
 访客,Visitor
 warning,warning
-像素错误监控,像素错误监控
-查看错误监控列表,查看错误监控列表
-查看错误详情,查看错误详情
+像素错误监控,Pixel error monitoring
+查看错误监控列表,View error monitoring list
+查看错误详情,View error details
 eye,eye
-查看错误监控详情,查看错误监控详情
-处置错误事故,处置错误事故
+查看错误监控详情,View error monitoring details
+处置错误事故,Handle error incident
 check,check
-标记错误事故处置状态,标记错误事故处置状态
-同步模块供应商失败：%{1},同步模块供应商失败：%{1}
-"加载供应商失败（可能需 setup:upgrade）：%{1}","加载供应商失败（可能需 setup:upgrade）：%{1}"
-事件供应商,事件供应商
-"已同步 %{1} 个模块供应商（新建 %{2}，更新 %{3}）","已同步 %{1} 个模块供应商（新建 %{2}，更新 %{3}）"
-同步失败：%{1},同步失败：%{1}
-"已保存供应商 %{1}（配置版本 %{2}）","已保存供应商 %{1}（配置版本 %{2}）"
-保存失败：%{1},保存失败：%{1}
-自定义供应商,自定义供应商
-"已创建自定义供应商（配置版本 %{1}）","已创建自定义供应商（配置版本 %{1}）"
-创建失败：%{1},创建失败：%{1}
-自动发现事件不可删除，可编辑条件/映射或加入搭接。,自动发现事件不可删除，可编辑条件/映射或加入搭接。
-「%{1}」是系统字典事件，已可直接搭接；自定义池只收录非字典名。,「%{1}」是系统字典事件，已可直接搭接；自定义池只收录非字典名。
+标记错误事故处置状态,Mark error incident handle status
+同步模块供应商失败：%{1},Sync module providers failed: %{1}
+加载供应商失败（可能需 setup:upgrade）：%{1},Load suppliers failed (may need setup:upgrade): %{1}
+事件供应商,Event provider
+已同步 %{1} 个模块供应商（新建 %{2}，更新 %{3}）,"Synced %{1} module suppliers (created %{2}, updated %{3})"
+同步失败：%{1},Synchronization failed: %{1}
+已保存供应商 %{1}（配置版本 %{2}）,Supplier %{1} saved (config version %{2})
+保存失败：%{1},Save failed: %{1}
+自定义供应商,Custom vendor
+已创建自定义供应商（配置版本 %{1}）,Custom supplier created (config version %{1})
+创建失败：%{1},Creation failed: %{1}
+自动发现事件不可删除，可编辑条件/映射或加入搭接。,Auto-discovered events cannot be deleted; edit conditions/mapping or add to handoff.
+「%{1}」是系统字典事件，已可直接搭接；自定义池只收录非字典名。,"""%{1}"" is a system dictionary event and can hand off directly; custom pool only includes non-dictionary names."
 plug,plug
-像素第三方事件供应商管理,像素第三方事件供应商管理
-查看事件供应商,查看事件供应商
-查看事件供应商列表与配置,查看事件供应商列表与配置
-同步模块供应商,同步模块供应商
+像素第三方事件供应商管理,Pixel third-party event provider mgmt
+查看事件供应商,View event providers
+查看事件供应商列表与配置,View event provider list & config
+同步模块供应商,Sync module providers
 refresh,refresh
-扫描并同步模块事件供应商,扫描并同步模块事件供应商
-保存事件供应商,保存事件供应商
+扫描并同步模块事件供应商,Scan and sync module event providers
+保存事件供应商,Save event provider
 save,save
-保存事件供应商配置,保存事件供应商配置
-新建自定义供应商,新建自定义供应商
-新建自定义事件供应商,新建自定义事件供应商
-事件供应商（原型）,事件供应商（原型）
-事件供应商原型,事件供应商原型
-"像素事件供应商管理 UI 原型（非生产）","像素事件供应商管理 UI 原型（非生产）"
-查看事件供应商原型,查看事件供应商原型
-"查看事件供应商管理 UI 原型","查看事件供应商管理 UI 原型"
-加载像素统计失败：%{1},"Failed to load pixel statistics: %{1}"
-请选择站点后再查看详情报表,"Please select the site before viewing the detailed report"
-加载站点详情失败：%{1},"Failed to load site details: %{1}"
-电商漏斗暂不可用：%{1},"Ecommerce funnel unavailable: %{1}"
-购成收入暂不可用：%{1},"Purchase revenue unavailable: %{1}"
-商品表现暂不可用：%{1},"Item performance unavailable: %{1}"
-路径探索暂不可用：%{1},"Path exploration unavailable: %{1}"
-留存分析暂不可用：%{1},"Retention analysis unavailable: %{1}"
-事件列表暂不可用：%{1},"Event list is temporarily unavailable: %{1}"
-像素事件列表,"Pixel event list"
-冷归档列表不可用：%{1},"Cold archive list unavailable: %{1}"
-冷归档事件列表,"Cold archive event list"
-"请选择站点后再查询冷归档（website_id=0 为系统默认站）","Select a site before querying cold archive (website_id=0 is the system default site)"
-"冷归档查询时间范围不能超过 %{1} 天","Cold archive query window must not exceed %{1} days"
-获取实时数据成功,"Successfully got real-time data"
-获取实时数据失败：%{1},"Failed to get real-time data: %{1}"
-时间维度参数错误，支持：%{1},"Invalid time dimension parameter; supported: %{1}"
-获取商业价值分析成功,"Business value analysis retrieved successfully"
-获取商业价值分析失败：%{1},"Failed to retrieve business value analysis: %{1}"
-获取每日对比数据成功,"Successfully got daily comparison data"
-获取每日对比数据失败：%{1},"Failed to get daily comparison data: %{1}"
-获取事件统计成功,"Event statistics retrieved successfully"
-获取事件统计失败：%{1},"Failed to get event statistics: %{1}"
-导出数据失败：%{1},"Export data failed: %{1}"
-导出数据成功,"Export data succeeded"
-像素统计,"Pixel Statistics"
-查看像素统计,"View pixel statistics"
-查看站点详情,"View site details"
-查看像素事件列表,"View list of pixel events"
+保存事件供应商配置,Save event provider config
+新建自定义供应商,New custom supplier
+新建自定义事件供应商,New custom event provider
+事件供应商（原型）,Event provider (prototype)
+事件供应商原型,Event provider prototype
+像素事件供应商管理 UI 原型（非生产）,Pixel event provider admin UI prototype (non-prod)
+查看事件供应商原型,View event provider prototype
+查看事件供应商管理 UI 原型,View event provider admin UI prototype
+加载像素统计失败：%{1},Failed to load pixel statistics: %{1}
+请选择站点后再查看详情报表,Please select the site before viewing the detailed report
+加载站点详情失败：%{1},Failed to load site details: %{1}
+电商漏斗暂不可用：%{1},Ecommerce funnel unavailable: %{1}
+购成收入暂不可用：%{1},Purchase revenue unavailable: %{1}
+商品表现暂不可用：%{1},Item performance unavailable: %{1}
+路径探索暂不可用：%{1},Path exploration unavailable: %{1}
+留存分析暂不可用：%{1},Retention analysis unavailable: %{1}
+事件列表暂不可用：%{1},Event list is temporarily unavailable: %{1}
+像素事件列表,Pixel event list
+冷归档列表不可用：%{1},Cold archive list unavailable: %{1}
+冷归档事件列表,Cold archive event list
+请选择站点后再查询冷归档（website_id=0 为系统默认站）,Select a site before querying cold archive (website_id=0 is the system default site)
+冷归档查询时间范围不能超过 %{1} 天,Cold archive query window must not exceed %{1} days
+获取实时数据成功,Successfully got real-time data
+获取实时数据失败：%{1},Failed to get real-time data: %{1}
+时间维度参数错误，支持：%{1},Invalid time dimension parameter; supported: %{1}
+获取商业价值分析成功,Business value analysis retrieved successfully
+获取商业价值分析失败：%{1},Failed to retrieve business value analysis: %{1}
+获取每日对比数据成功,Successfully got daily comparison data
+获取每日对比数据失败：%{1},Failed to get daily comparison data: %{1}
+获取事件统计成功,Event statistics retrieved successfully
+获取事件统计失败：%{1},Failed to get event statistics: %{1}
+导出数据失败：%{1},Export data failed: %{1}
+导出数据成功,Export data succeeded
+像素统计,Pixel Statistics
+查看像素统计,View pixel statistics
+查看站点详情,View site details
+查看像素事件列表,View list of pixel events
 table,table
-查看像素事件明细列表,"View detailed list of pixel events"
-查看冷归档像素事件,"View cold archived pixel events"
-查看冷归档像素事件明细,"View Cold Archive Pixel Event Details"
-查看像素实时数据,"View real-time pixel data"
-查看像素商业价值,"View pixel business value"
-查看像素每日对比,"View Pixel Daily Comparison"
-查看像素事件统计,"View pixel event statistics"
-导出像素数据,"Export pixel data"
+查看像素事件明细列表,View detailed list of pixel events
+查看冷归档像素事件,View cold archived pixel events
+查看冷归档像素事件明细,View Cold Archive Pixel Event Details
+查看像素实时数据,View real-time pixel data
+查看像素商业价值,View pixel business value
+查看像素每日对比,View Pixel Daily Comparison
+查看像素事件统计,View pixel event statistics
+导出像素数据,Export pixel data
 download,download
-获取A/B测试数据失败：%{1},"Failed to get A/B test data: %{1}"
-系统级别事件,"System-Level Events"
-自定义事件,"Custom event"
-"最近 7 天像素趋势","Pixel Trend for the Last 7 Days"
+获取A/B测试数据失败：%{1},Failed to get A/B test data: %{1}
+系统级别事件,System-Level Events
+自定义事件,Custom event
+最近 7 天像素趋势,Pixel Trend for the Last 7 Days
 日期,Day
-事件数,"Number of Events"
+事件数,Number of Events
 价值,Value
-暂无像素趋势数据。,"No Pixel Trend Data."
-"热门事件 Top 5","Top 5 Trending Events"
-暂无事件统计数据。,"No Event Statistics Data."
-像素总记录数,"Total Pixel Records"
-包含所有站点的有效像素事件,"Include valid pixel events for all sites"
-已处理像素,"Processed pixels"
-处理占比,"Processing share"
-待处理像素,"Pending pixels"
-建议尽快排查并处理异常事件,"Suggestion: Investigate and handle abnormal events as soon as possible"
-"接入站点 / 累计价值","Connected sites / Cumulative value"
-"站点数量 / 像素累计价值","Number of Sites / Cumulative Pixel Value"
-投放渠道,"Campaign Channels"
-匹配规则,"Match Rules"
+暂无像素趋势数据。,No Pixel Trend Data.
+热门事件 Top 5,Top 5 Trending Events
+暂无事件统计数据。,No Event Statistics Data.
+像素总记录数,Total Pixel Records
+包含所有站点的有效像素事件,Include valid pixel events for all sites
+已处理像素,Processed pixels
+处理占比,Processing share
+待处理像素,Pending pixels
+建议尽快排查并处理异常事件,Suggestion: Investigate and handle abnormal events as soon as possible
+接入站点 / 累计价值,Connected sites / Cumulative value
+站点数量 / 像素累计价值,Number of Sites / Cumulative Pixel Value
+投放渠道,Campaign Channels
+匹配规则,Match Rules
 全部,all
-新建渠道,"New Channel"
-"渠道表尚未就绪或查询失败；完成 setup:upgrade 后刷新本页。","Channel table not ready or query failed; refresh after setup:upgrade."
+新建渠道,New Channel
+渠道表尚未就绪或查询失败；完成 setup:upgrade 后刷新本页。,Channel table not ready or query failed; refresh after setup:upgrade.
 名称,name
-渠道码,"Channel code"
-流量类型,"Traffic Type"
+渠道码,Channel code
+流量类型,Traffic Type
 站点,site
 启用,enable
 操作,operate
-暂无渠道。,"No channels yet."
+暂无渠道。,No channels yet.
 详情,Details
 编辑,edit
-复制链接,"Copy link"
-全局,"overall situation"
+复制链接,Copy link
+全局,overall situation
 是,yes
 否,no
 停用,deactivate
 已复制,Copied
-返回列表,"Return to list"
-渠道名称,"Channel name"
-渠道码创建后不可修改。,"Channel code cannot be changed after creation."
-"2-32 位，小写字母或数字开头，仅 a-z 0-9 _ -；创建后不可改。","2-32 chars, start with lowercase letter or digit, only a-z 0-9 _ -; immutable after create."
-选择系统默认站表示全局渠道（website_id=0）。,"Select the system default site to represent the global channel (website_id=0)."
+返回列表,Return to list
+渠道名称,Channel name
+渠道码创建后不可修改。,Channel code cannot be changed after creation.
+2-32 位，小写字母或数字开头，仅 a-z 0-9 _ -；创建后不可改。,"2-32 chars, start with lowercase letter or digit, only a-z 0-9 _ -; immutable after create."
+选择系统默认站表示全局渠道（website_id=0）。,Select the system default site to represent the global channel (website_id=0).
 描述,describe
-取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。,"Uncheck to disable; disabled channels still attribute old links but are hidden from the link helper."
-"自动 UTM 包","Auto UTM Package"
-"默认 utm_source=weline，utm_campaign/wch=渠道码，utm_medium 随流量类型；可覆盖 source/medium。","Default utm_source=weline, utm_campaign/wch=code, utm_medium by traffic type; source/medium can be overridden."
-投放链接,"Landing Link"
-落地路径,"Landing Path"
-"相对站点根路径，如 / 或 /promo；查询参数由 UTM 自动附加。","Path relative to site root, e.g. / or /promo; query params are appended from UTM."
-链接预览,"Link Preview"
-启用渠道并填写渠道码后可生成链接；全局渠道(website_id=0)使用系统默认基址。,"Enable the channel and set a code to generate the link; global channels (website_id=0) use the system base URL."
-"基址来自 Websites 站点 URL（查不到则回退系统基址）。","Base URL comes from the Websites site URL (falls back to system base URL)."
-已复制到剪贴板,"Copied to clipboard"
+取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。,Uncheck to disable; disabled channels still attribute old links but are hidden from the link helper.
+自动 UTM 包,Auto UTM Package
+默认 utm_source=weline，utm_campaign/wch=渠道码，utm_medium 随流量类型；可覆盖 source/medium。,"Default utm_source=weline, utm_campaign/wch=code, utm_medium by traffic type; source/medium can be overridden."
+投放链接,Landing Link
+落地路径,Landing Path
+相对站点根路径，如 / 或 /promo；查询参数由 UTM 自动附加。,"Path relative to site root, e.g. / or /promo; query params are appended from UTM."
+链接预览,Link Preview
+启用渠道并填写渠道码后可生成链接；全局渠道(website_id=0)使用系统默认基址。,Enable the channel and set a code to generate the link; global channels (website_id=0) use the system base URL.
+基址来自 Websites 站点 URL（查不到则回退系统基址）。,Base URL comes from the Websites site URL (falls back to system base URL).
+已复制到剪贴板,Copied to clipboard
 保存,save
 取消,Cancel
-例如：夏季促销投放,"e.g. Summer promo campaign"
-"热表总计暂不可用（扁平列未就绪或查询失败）。完成 setup:upgrade 后重试。","Hot table totals are temporarily unavailable (flattened columns not ready or query failed). Try again after completing setup:upgrade."
-营销简漏斗,"Marketing funnel"
-电商四步,"Ecommerce 4-step"
-"近 7 天","Last 7 days"
-"近 30 天","Last 30 days"
-渠道漏斗暂不可用（扁平列未就绪或查询失败）。,"Channel funnel unavailable (flat columns not ready or query failed)."
+例如：夏季促销投放,e.g. Summer promo campaign
+热表总计暂不可用（扁平列未就绪或查询失败）。完成 setup:upgrade 后重试。,Hot table totals are temporarily unavailable (flattened columns not ready or query failed). Try again after completing setup:upgrade.
+营销简漏斗,Marketing funnel
+电商四步,Ecommerce 4-step
+近 7 天,Last 7 days
+近 30 天,Last 30 days
+渠道漏斗暂不可用（扁平列未就绪或查询失败）。,Channel funnel unavailable (flat columns not ready or query failed).
 步骤,step
-会话数,"Number of sessions"
-相对上步流失,"Loss relative to previous step"
-占比条,"Proportion bar"
-事件轨迹,"Event track"
-事件轨迹暂不可用（扁平列未就绪或查询失败）。,"The event trace is temporarily unavailable (flattened column not ready or query failed)."
-该窗口暂无归因到此渠道的事件。,"There are no events attributed to this channel in this window."
+会话数,Number of sessions
+相对上步流失,Loss relative to previous step
+占比条,Proportion bar
+事件轨迹,Event track
+事件轨迹暂不可用（扁平列未就绪或查询失败）。,The event trace is temporarily unavailable (flattened column not ready or query failed).
+该窗口暂无归因到此渠道的事件。,There are no events attributed to this channel in this window.
 会话,Session
-"口径：热表明细按 channel_code 过滤；会话内事件按时间升序；漏斗按会话去重顺序步进。","Caliber: hot table details are filtered by channel_code; events within a session are sorted by time in ascending order; funnels are stepped by session deduplication order."
+口径：热表明细按 channel_code 过滤；会话内事件按时间升序；漏斗按会话去重顺序步进。,Caliber: hot table details are filtered by channel_code; events within a session are sorted by time in ascending order; funnels are stepped by session deduplication order.
 访客数,Visitors
-价值合计,"Total value"
+价值合计,Total value
 浏览,Browse
-互动点击,"Interactive click"
-加购,"Add to cart"
+互动点击,Interactive click
+加购,Add to cart
 转化,Convert
-"近 %{1} 天","Nearly %{1} days"
-"按会话去重 · 近 %{1} 天 · %{2}占比","Session-deduped · last %{1} days · share %{2}"
-"%{1} 个会话 / %{2} 条事件","%{1} sessions / %{2} events"
-"（无 session_id）","(no session_id)"
-"%{1} 事件","%{1} event"
-"错误表尚未就绪或查询失败；完成 setup:upgrade 后刷新。","错误表尚未就绪或查询失败；完成 setup:upgrade 后刷新。"
-站点ID,"Website ID"
-错误类型,错误类型
-全部类型,"All types"
-处置,处置
+近 %{1} 天,Nearly %{1} days
+按会话去重 · 近 %{1} 天 · %{2}占比,Session-deduped · last %{1} days · share %{2}
+%{1} 个会话 / %{2} 条事件,%{1} sessions / %{2} events
+（无 session_id）,(no session_id)
+%{1} 事件,%{1} event
+错误表尚未就绪或查询失败；完成 setup:upgrade 后刷新。,Error table not ready or query failed; refresh after setup:upgrade.
+站点ID,Website ID
+错误类型,Error type
+全部类型,All types
+处置,Handle
 待处理,Open
-不予理会(版本过期),"Ignore (stale)"
+不予理会(版本过期),Ignore (stale)
 已解决,Resolved
-全部处置,全部处置
+全部处置,Handle all
 Stale,Stale
-仅过期客户端,"Stale client only"
-非过期,非过期
-邮箱,邮箱
-有邮箱,有邮箱
-主题版本,主题版本
-主题版本为空,"Theme version empty"
-筛选,筛选
+仅过期客户端,Stale client only
+非过期,Not expired
+邮箱,Email
+有邮箱,Has email
+主题版本,Theme version
+主题版本为空,Theme version empty
+筛选,Filter
 时间,time
 重要程度,Severity
-消息,消息
-身份,身份
-框架版本,框架版本
-暂无错误事故。,"No error incidents."
+消息,Messages
+身份,Identity
+框架版本,Framework version
+暂无错误事故。,No error incidents.
 查看,View
-错误详情,"Error Detail"
+错误详情,Error Detail
 加载中…,Loading…
-标记不予理会(版本过期),"Mark ignored (stale)"
-标记已解决,"Mark resolved"
+标记不予理会(版本过期),Mark ignored (stale)
+标记已解决,Mark resolved
 重新打开,Reopen
 关闭,Close
-加载详情失败,"Failed to load detail"
-处置失败,"Dispose failed"
+加载详情失败,Failed to load detail
+处置失败,Dispose failed
 无,None
 谁,Who
 何时,When
 在哪,Where
-版本状态,"Version status"
-版本过期,"Stale client"
-版本正常,"Up to date"
-用户轨迹,"User trail"
-表单快照(脱敏),"Form snapshot (redacted)"
-堆栈摘要,"Stack summary"
-技术细节,"Technical details"
-错误码,错误码
-像素ID,像素ID
-客户端框架,客户端框架
-服务端框架,服务端框架
-主题发布版本,主题发布版本
-"Pixel 脚本","Pixel 脚本"
-原始类型,"Raw type"
-"模块注册 + 自定义 · 默认沙盒","模块注册 + 自定义 · 默认沙盒"
-新建自定义,新建自定义
-DEV：不上报,DEV：不上报
-"开发/本地外发硬拦 · 点击展开说明","开发/本地外发硬拦 · 点击展开说明"
-"开发环境 / 本地排除命中时，所有供应商外发（含 inject）硬拦；Pixel 仍可入库；沙盒仅 dry_run 本地预览。sandbox ≠ Google 正反馈，inject 且非 DEV 才是直播训练路径。","开发环境 / 本地排除命中时，所有供应商外发（含 inject）硬拦；Pixel 仍可入库；沙盒仅 dry_run 本地预览。sandbox ≠ Google 正反馈，inject 且非 DEV 才是直播训练路径。"
-"双 inject 硬拦","双 inject 硬拦"
-"变体 1 · 列表主视觉","变体 1 · 列表主视觉"
-代码,代码
+版本状态,Version status
+版本过期,Stale client
+版本正常,Up to date
+用户轨迹,User trail
+表单快照(脱敏),Form snapshot (redacted)
+堆栈摘要,Stack summary
+技术细节,Technical details
+错误码,Error code
+像素ID,Pixel ID
+客户端框架,Client framework
+服务端框架,Server framework
+主题发布版本,Theme release version
+Pixel 脚本,Pixel script
+原始类型,Raw type
+模块注册 + 自定义 · 默认沙盒,Module registry + custom · default sandbox
+新建自定义,New custom
+DEV：不上报,DEV: do not report
+开发/本地外发硬拦 · 点击展开说明,Dev/local outbound hard block · click to expand notes
+开发环境 / 本地排除命中时，所有供应商外发（含 inject）硬拦；Pixel 仍可入库；沙盒仅 dry_run 本地预览。sandbox ≠ Google 正反馈，inject 且非 DEV 才是直播训练路径。,"When DEV / local exclusion hits, all supplier outbound (incl. inject) is hard-blocked; Pixel can still persist; sandbox is dry_run local preview only. sandbox ≠ Google positive feedback; inject and non-DEV is the live training path."
+双 inject 硬拦,Double inject hard block
+变体 1 · 列表主视觉,Variant 1 · list hero visual
+代码,Code
 来源,source
-模式,模式
-凭证,凭证
-"变体 2 · 左列表右详情","变体 2 · 左列表右详情"
-"变体 3 · 详情三 Tab 为主","变体 3 · 详情三 Tab 为主"
-当前供应商,当前供应商
-基本配置,基本配置
-事件搭接,事件搭接
-脚本,脚本
-原型状态面（JSON）,原型状态面（JSON）
-冷归档明细,"Cold archive details"
-返回看板,"Return to Kanban"
-热表明细,"Hot table details"
+模式,Mode
+凭证,Voucher
+变体 2 · 左列表右详情,"Variant 2 · list left, detail right"
+变体 3 · 详情三 Tab 为主,Variant 3 · detail three-tab focused
+当前供应商,Current supplier
+基本配置,Basic settings
+事件搭接,Event handoff
+脚本,Script
+原型状态面（JSON）,Prototype status surface (JSON)
+冷归档明细,Cold archive details
+返回看板,Return to Kanban
+热表明细,Hot table details
 刷新,refresh
-"冷归档查询必须指定站点（website_id=0 为系统默认站），时间范围不超过","Cold archive queries require a site (website_id=0 is the system default) and a window of at most"
+冷归档查询必须指定站点（website_id=0 为系统默认站），时间范围不超过,Cold archive queries require a site (website_id=0 is the system default) and a window of at most
 天，且始终分页；不会静默扫描热表。,"days, always paginated; hot table is never scanned silently."
-站点（必填）,"Site (required)"
+站点（必填）,Site (required)
 事件,event
-"须与埋点/闭环事件名完全一致；单步加购多为 add_to_cart，闭环为 all_add_cart。","须与埋点/闭环事件名完全一致；单步加购多为 add_to_cart，闭环为 all_add_cart。"
-时间范围,"Time Range"
-开始日期,"start date"
-结束日期,"end date"
-每页条数,"Number of items per page"
-应用筛选,"Apply filters"
+须与埋点/闭环事件名完全一致；单步加购多为 add_to_cart，闭环为 all_add_cart。,Must match tracking/closure event names exactly; single-step ATC is often add_to_cart; closure is all_add_cart.
+时间范围,Time Range
+开始日期,start date
+结束日期,end date
+每页条数,Number of items per page
+应用筛选,Apply filters
 重置,reset
-高级归因（utm）,高级归因（utm）
-"冷归档查询被拒绝或暂不可用（无站 / 超窗 / 数据库异常）。","Cold archive query rejected or unavailable (missing site / oversize window / database error)."
+高级归因（utm）,Advanced attribution (utm)
+冷归档查询被拒绝或暂不可用（无站 / 超窗 / 数据库异常）。,Cold archive query rejected or unavailable (missing site / oversize window / database error).
 URL,URL
-归档时间,"Archived at"
-列表未就绪。,"The list is not ready."
-请修正筛选条件后重试。,"Fix the filters and try again."
-当前筛选条件下暂无冷归档事件。,"No cold archive events for the current filters."
-上一页,"Previous page"
-下一页,"Next page"
+归档时间,Archived at
+列表未就绪。,The list is not ready.
+请修正筛选条件后重试。,Fix the filters and try again.
+当前筛选条件下暂无冷归档事件。,No cold archive events for the current filters.
+上一页,Previous page
+下一页,Next page
 今天,Today
 昨天,Yesterday
 自定义,Customize
-"最多 %{1} 天","Up to %{1} days"
-"共 %{1} 条","Total %{1} items"
-"精确事件名，如 all_add_cart","精确事件名，如 all_add_cart"
-"第 %{1} / %{2} 页 · 每页 %{3} 条","Page %{1} / %{2} · %{3} items per page"
-多站点事件监听看板,"Multi-site Event Monitoring Dashboard"
+最多 %{1} 天,Up to %{1} days
+共 %{1} 条,Total %{1} items
+精确事件名，如 all_add_cart,"Exact event name, e.g. all_add_cart"
+第 %{1} / %{2} 页 · 每页 %{3} 条,Page %{1} / %{2} · %{3} items per page
+多站点事件监听看板,Multi-site Event Monitoring Dashboard
 按站点、事件和时间范围查看像素事件、实时趋势、来源与最近触发记录。,"View pixel events, real-time trends, sources, and recent triggers by site, event, and time range."
-事件列表,"event list"
-详情报表,"Detailed report"
-"导出 CSV","Export CSV"
-全部事件,"All events"
-事件总数,"Total Events"
-较上一周期,"vs previous period"
-活跃用户,"Active Users"
-人均事件,"Events per User"
-事件类型,"Event type"
-活跃站点,"active site"
-累计价值,"Total Value"
-价值事件占比,"Valued Event Share"
-事件趋势,"Event Trend"
-服务端统计,"Server-side Statistics"
-暂无趋势数据。,"No trend data."
-"最近 60 分钟","Last 60 minutes"
-"最近 60 分钟暂无事件。","No events in the last 60 minutes."
-处理完成率,"Processing Completion Rate"
-事件排行,"Event Ranking"
-事件名称,"event name"
+事件列表,event list
+详情报表,Detailed report
+导出 CSV,Export CSV
+全部事件,All events
+事件总数,Total Events
+较上一周期,vs previous period
+活跃用户,Active Users
+人均事件,Events per User
+事件类型,Event type
+活跃站点,active site
+累计价值,Total Value
+价值事件占比,Valued Event Share
+事件趋势,Event Trend
+服务端统计,Server-side Statistics
+暂无趋势数据。,No trend data.
+最近 60 分钟,Last 60 minutes
+最近 60 分钟暂无事件。,No events in the last 60 minutes.
+处理完成率,Processing Completion Rate
+事件排行,Event Ranking
+事件名称,event name
 次数,Count
 占比,Share
 用户,User
-最近触发,"Last Triggered"
-暂无事件排行数据。,"No event ranking data."
-站点对比,"Site Comparison"
-暂无站点对比数据。,"No site comparison data."
-下钻,"Drill down"
-"暂无流量渠道数据（需扁平列就绪且存在 channel_code）。","No traffic channel data yet (requires flat columns and channel_code)."
+最近触发,Last Triggered
+暂无事件排行数据。,No event ranking data.
+站点对比,Site Comparison
+暂无站点对比数据。,No site comparison data.
+下钻,Drill down
+暂无流量渠道数据（需扁平列就绪且存在 channel_code）。,No traffic channel data yet (requires flat columns and channel_code).
 渠道,Channel
-暂无来源数据。,"No source data."
-最近事件,"recent events"
+暂无来源数据。,No source data.
+最近事件,recent events
 IP,IP
-暂无最近事件。,"No recent events."
+暂无最近事件。,No recent events.
 今日,Today
 昨日,Yesterday
-"近 90 天","Last 90 days"
-"站点 %{1}","Site %{1}"
+近 90 天,Last 90 days
+站点 %{1},Site %{1}
 直接访问,Direct
-热表明细列表,"Detailed list of hot spots"
-"按当前筛选导出 CSV","Export CSV with current filters"
-事件列表查询失败（扁平列未就绪或数据库异常）。,"Event list query failed (flat column not ready or database exception)."
-当前筛选条件下暂无事件。,"There are no events under the current filter conditions."
-像素详情报表,"Pixel details report"
-"对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源","Alignment GA4: Session/Dwell/Bounce/Page/Device/Screen/Source"
-返回事件看板,"Return to event board"
-切换站点,"switch site"
+热表明细列表,Detailed list of hot spots
+按当前筛选导出 CSV,Export CSV with current filters
+事件列表查询失败（扁平列未就绪或数据库异常）。,Event list query failed (flat column not ready or database exception).
+当前筛选条件下暂无事件。,There are no events under the current filter conditions.
+像素详情报表,Pixel details report
+对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源,Alignment GA4: Session/Dwell/Bounce/Page/Device/Screen/Source
+返回事件看板,Return to event board
+切换站点,switch site
 Sessions,Sessions
-参与率,"participation rate"
-"Engaged sessions","Engaged sessions"
-跳出率,"Bounce rate"
-"Bounce rate","Bounce rate"
-平均停留,"average stay"
-"Avg session duration","Avg session duration"
+参与率,participation rate
+Engaged sessions,Engaged sessions
+跳出率,Bounce rate
+Bounce rate,Bounce rate
+平均停留,average stay
+Avg session duration,Avg session duration
 页/会话,page/session
-"Pages / session","Pages / session"
+Pages / session,Pages / session
 Events,Events
-页面表现,"Page performance"
-"暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。","There is no page data yet. After generating page_view / page_exit, the path and stay will appear."
+页面表现,Page performance
+暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。,"There is no page data yet. After generating page_view / page_exit, the path and stay will appear."
 路径,path
-暂无事件排行。,"There is no event ranking yet."
-电商漏斗,"Ecommerce funnel"
-"字典四步：view_item → add_to_cart → begin_checkout → checkout_success","Dictionary 4 steps: view_item → add_to_cart → begin_checkout → checkout_success"
-"已按热明细短窗（≤7 天）截取","Intercepted according to hot details short window (≤7 days)"
-查看全部事件,"View all events"
-电商漏斗暂不可用（扁平列未就绪或查询失败）。,"Ecommerce funnel unavailable (flat columns missing or query failed)."
-该窗口暂无浏览商品会话，无法计算步进占比。,"No view_item sessions in this window; step rates unavailable."
-相对浏览,"Vs view_item"
-"须按会话顺序命中；checkout_success 兼容 purchase。单渠道口径见流量渠道详情，可切换营销简漏斗 / 电商四步。","Sessions must hit steps in order; checkout_success accepts purchase. Per-channel view lives on traffic channel detail with a marketing / ecommerce toggle."
-购成与收入,"Purchases & revenue"
-"purchase_revenue 仅合计购买类事件（checkout_success / purchase）","purchase_revenue sums purchase-class events only (checkout_success / purchase)"
-购成收入暂不可用（扁平列未就绪或查询失败）。,"Purchase revenue unavailable (flat columns missing or query failed)."
+暂无事件排行。,There is no event ranking yet.
+电商漏斗,Ecommerce funnel
+字典四步：view_item → add_to_cart → begin_checkout → checkout_success,Dictionary 4 steps: view_item → add_to_cart → begin_checkout → checkout_success
+已按热明细短窗（≤7 天）截取,Intercepted according to hot details short window (≤7 days)
+查看全部事件,View all events
+电商漏斗暂不可用（扁平列未就绪或查询失败）。,Ecommerce funnel unavailable (flat columns missing or query failed).
+该窗口暂无浏览商品会话，无法计算步进占比。,No view_item sessions in this window; step rates unavailable.
+相对浏览,Vs view_item
+须按会话顺序命中；checkout_success 兼容 purchase。单渠道口径见流量渠道详情，可切换营销简漏斗 / 电商四步。,Sessions must hit steps in order; checkout_success accepts purchase. Per-channel view lives on traffic channel detail with a marketing / ecommerce toggle.
+购成与收入,Purchases & revenue
+purchase_revenue 仅合计购买类事件（checkout_success / purchase）,purchase_revenue sums purchase-class events only (checkout_success / purchase)
+购成收入暂不可用（扁平列未就绪或查询失败）。,Purchase revenue unavailable (flat columns missing or query failed).
 购买次数,Purchases
-购买收入,"Purchase revenue"
-客单价,"Avg order value"
-购成率,"Purchase rate"
-相对浏览商品会话,"Vs view_item sessions"
-按渠道收入,"Revenue by channel"
-暂无购买类事件。,"No purchase-class events yet."
+购买收入,Purchase revenue
+客单价,Avg order value
+购成率,Purchase rate
+相对浏览商品会话,Vs view_item sessions
+按渠道收入,Revenue by channel
+暂无购买类事件。,No purchase-class events yet.
 收入,Revenue
-按日收入,"Revenue by day"
-商品表现,"Item performance"
-"按 item_id 展开 items：曝光 / 加购 / 购买与收入","Expand items by item_id: views / add_to_cart / purchases & revenue"
-"商品表现暂不可用（扁平列或 items 未就绪）。","Item performance unavailable (flat columns or items missing)."
-"该窗口暂无带 items 的电商事件。","No ecommerce events with items in this window."
+按日收入,Revenue by day
+商品表现,Item performance
+按 item_id 展开 items：曝光 / 加购 / 购买与收入,Expand items by item_id: views / add_to_cart / purchases & revenue
+商品表现暂不可用（扁平列或 items 未就绪）。,Item performance unavailable (flat columns or items missing).
+该窗口暂无带 items 的电商事件。,No ecommerce events with items in this window.
 商品,Products
 曝光,Views
 结账,Checkout
 购买,Buy
-销量,"Qty sold"
-商品收入,"Item revenue"
-路径探索,"Path exploration"
-"落地页 → 次页（限深 %{1} 步，页面事件会话）","Landing → next page (max depth %{1}, page-event sessions)"
-路径探索暂不可用（扁平列未就绪或查询失败）。,"Path exploration unavailable (flat columns missing or query failed)."
-该窗口暂无页面事件会话，无法分析路径。,"No page-event sessions in this window; cannot analyze paths."
-单页离站,"Single-page exits"
-"Top 落地页 → 次页","Top landing → next page"
-落地页,"Landing page"
-主要次页,"Top next pages"
-无次页,"No next page"
-"Top 路径序列","Top path sequences"
-暂无路径序列。,"No path sequences yet."
-留存分析,"Retention analysis"
-"日队列留存（Day0–Day%{1}）：登录用户优先，匿名用 IP+UA 软指纹","Daily cohort retention (Day0–Day%{1}): prefer logged-in user; anonymous uses IP+UA soft fingerprint"
-留存分析暂不可用（扁平列未就绪或查询失败）。,"Retention analysis unavailable (flat columns missing or query failed)."
-该窗口暂无可识别访客，无法计算留存。,"No identifiable visitors in this window; cannot compute retention."
-回访访客,"Returning visitors"
-次日留存,"Day-1 retention"
-整体偏移留存,"Retention by day offset"
-暂无队列。,"No cohorts yet."
-队列日,"Cohort date"
-队列规模,"Cohort size"
-引擎报表,"engine report"
-"暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。","There are currently no mounted report Tabs (only 1 is mounted at a time starting from D07a)."
-"该 Tab 暂无聚合数据（需扁平列就绪且时间窗内有事件）。","This Tab currently has no aggregated data (needs flat columns ready and events within the time window)."
-维度值,"Dimension value"
+销量,Qty sold
+商品收入,Item revenue
+路径探索,Path exploration
+落地页 → 次页（限深 %{1} 步，页面事件会话）,"Landing → next page (max depth %{1}, page-event sessions)"
+路径探索暂不可用（扁平列未就绪或查询失败）。,Path exploration unavailable (flat columns missing or query failed).
+该窗口暂无页面事件会话，无法分析路径。,No page-event sessions in this window; cannot analyze paths.
+单页离站,Single-page exits
+Top 落地页 → 次页,Top landing → next page
+落地页,Landing page
+主要次页,Top next pages
+无次页,No next page
+Top 路径序列,Top path sequences
+暂无路径序列。,No path sequences yet.
+留存分析,Retention analysis
+日队列留存（Day0–Day%{1}）：登录用户优先，匿名用 IP+UA 软指纹,Daily cohort retention (Day0–Day%{1}): prefer logged-in user; anonymous uses IP+UA soft fingerprint
+留存分析暂不可用（扁平列未就绪或查询失败）。,Retention analysis unavailable (flat columns missing or query failed).
+该窗口暂无可识别访客，无法计算留存。,No identifiable visitors in this window; cannot compute retention.
+回访访客,Returning visitors
+次日留存,Day-1 retention
+整体偏移留存,Retention by day offset
+暂无队列。,No cohorts yet.
+队列日,Cohort date
+队列规模,Cohort size
+引擎报表,engine report
+暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。,There are currently no mounted report Tabs (only 1 is mounted at a time starting from D07a).
+该 Tab 暂无聚合数据（需扁平列就绪且时间窗内有事件）。,This Tab currently has no aggregated data (needs flat columns ready and events within the time window).
+维度值,Dimension value
 均值,mean
-有价事件,"valuable event"
-回退：统计服务渠道聚合,"Fallback: Statistics service channel aggregation"
+有价事件,valuable event
+回退：统计服务渠道聚合,Fallback: Statistics service channel aggregation
 设备,equipment
-屏幕分辨率,"screen resolution"
-流量来源,"traffic source"
+屏幕分辨率,screen resolution
+流量来源,traffic source
 浏览器,Browser
-暂无数据,"No data yet"
-最近事件明细,"Recent event details"
+暂无数据,No data yet
+最近事件明细,Recent event details
 停留,stay
 细节,detail
 趋势,trend
-暂无趋势。,"No trend yet."
-"开发/本地外发硬拦 · 展开说明","开发/本地外发硬拦 · 展开说明"
-"开发环境外发硬拦（含 inject）；Pixel 仍可入库；sandbox=隔离试发；inject 仅非 DEV 正反馈。","开发环境外发硬拦（含 inject）；Pixel 仍可入库；sandbox=隔离试发；inject 仅非 DEV 正反馈。"
-供应商,供应商
-暂无。请同步或新建。,暂无。请同步或新建。
-请选择左侧供应商。,请选择左侧供应商。
+暂无趋势。,No trend yet.
+开发/本地外发硬拦 · 展开说明,Dev/local outbound hard block · expand notes
+开发环境外发硬拦（含 inject）；Pixel 仍可入库；sandbox=隔离试发；inject 仅非 DEV 正反馈。,Dev outbound hard block (incl. inject); Pixel can still persist; sandbox=isolated trial; inject is non-DEV positive feedback only.
+供应商,Supplier
+暂无。请同步或新建。,None yet. Sync or create.
+请选择左侧供应商。,Please select a supplier on the left.
 范围,Scope
-启用此供应商,启用此供应商
-系统像素默认启用且不可关闭,"System Pixel is always on and cannot be disabled"
-默认模式,默认模式
-当前模式,当前模式
-"sandbox 试发 · inject 直播（非 DEV）· GA4/GTM 不可同时 inject","sandbox 试发 · inject 直播（非 DEV）· GA4/GTM 不可同时 inject"
-搭接,搭接
-"使用默认 map","使用默认 map"
-勾选后保存会恢复供应商默认搭接。编辑/添加自定义映射时会自动取消勾选，否则刷新同步会覆盖你的改动。,勾选后保存会恢复供应商默认搭接。编辑/添加自定义映射时会自动取消勾选，否则刷新同步会覆盖你的改动。
-"与统一配置中心同源；即时保存。范围跟随页顶配置范围。Pixel 运行时只读这里。","与统一配置中心同源；即时保存。范围跟随页顶配置范围。Pixel 运行时只读这里。"
-在统一配置中心打开,在统一配置中心打开
-"GTM 互斥（展开可改）","GTM 互斥（展开可改）"
-"开启 GTM 且填写 Container ID 后，GA4 直连会自动关闭，避免双计。","开启 GTM 且填写 Container ID 后，GA4 直连会自动关闭，避免双计。"
-"GA4 直连（展开可改）","GA4 直连（展开可改）"
-"GTM 开启时 GA4 直连会被运行时关闭；仅在未用 GTM 时启用下方 Measurement。","GTM 开启时 GA4 直连会被运行时关闭；仅在未用 GTM 时启用下方 Measurement。"
-供应商行内「凭证」仅作同步种子；请以上方统一配置为准。,供应商行内「凭证」仅作同步种子；请以上方统一配置为准。
-"暂无凭证字段；模块供应商同步后会出现 Measurement ID 等。","暂无凭证字段；模块供应商同步后会出现 Measurement ID 等。"
-新增凭证,新增凭证
-添加,添加
-配置范围,配置范围
-"配置范围是继承制度：渠道 ← 店铺 ← 网站（子级未覆盖则读上级）。页顶左上角切换范围；供应商行当前按网站存储，店/渠独立覆盖属后续阶段。","配置范围是继承制度：渠道 ← 店铺 ← 网站（子级未覆盖则读上级）。页顶左上角切换范围；供应商行当前按网站存储，店/渠独立覆盖属后续阶段。"
-回退链,回退链
-路径过滤,路径过滤
-"在当前配置范围内，限制此供应商在哪些 URL 路径与应用面生效；* 表示全部路径。路径过滤不是网站/店铺/渠道范围。","在当前配置范围内，限制此供应商在哪些 URL 路径与应用面生效；* 表示全部路径。路径过滤不是网站/店铺/渠道范围。"
-包含路径,"Include paths"
-"每行一条，如 /product* 或 *","One pattern per line"
-排除路径,"Exclude paths"
+启用此供应商,Enable this supplier
+系统像素默认启用且不可关闭,System Pixel is always on and cannot be disabled
+默认模式,Default mode
+当前模式,Current mode
+sandbox 试发 · inject 直播（非 DEV）· GA4/GTM 不可同时 inject,sandbox trial · inject live (non-DEV) · GA4/GTM cannot inject together
+搭接,Handoff
+使用默认 map,Use default map
+勾选后保存会恢复供应商默认搭接。编辑/添加自定义映射时会自动取消勾选，否则刷新同步会覆盖你的改动。,"When checked, save restores supplier default handoff. Editing/adding custom mappings auto-unchecks; otherwise refresh sync overwrites your changes."
+与统一配置中心同源；即时保存。范围跟随页顶配置范围。Pixel 运行时只读这里。,Same source as unified config center; saves immediately. Scope follows top config scope. Pixel runtime reads only here.
+在统一配置中心打开,Open in unified config center
+GTM 互斥（展开可改）,GTM mutually exclusive (expand to edit)
+开启 GTM 且填写 Container ID 后，GA4 直连会自动关闭，避免双计。,"When GTM is on with Container ID filled, GA4 direct auto-disables to avoid double counting."
+GA4 直连（展开可改）,GA4 direct (expand to edit)
+GTM 开启时 GA4 直连会被运行时关闭；仅在未用 GTM 时启用下方 Measurement。,"When GTM is on, GA4 direct is runtime-disabled; enable Measurement below only when not using GTM."
+供应商行内「凭证」仅作同步种子；请以上方统一配置为准。,"Inline ""Credentials"" on supplier rows are sync seeds only; prefer the unified config above."
+暂无凭证字段；模块供应商同步后会出现 Measurement ID 等。,No credential fields yet; Measurement ID etc. appear after module supplier sync.
+新增凭证,Add credential
+添加,Add
+配置范围,Config scope
+配置范围是继承制度：渠道 ← 店铺 ← 网站（子级未覆盖则读上级）。页顶左上角切换范围；供应商行当前按网站存储，店/渠独立覆盖属后续阶段。,Config scope is inheritance: channel ← store ← website (child reads parent when uncovered). Switch scope at top-left; supplier rows currently store per website; store/channel independent overrides are a later stage.
+回退链,Rollback chain
+路径过滤,Path filter
+在当前配置范围内，限制此供应商在哪些 URL 路径与应用面生效；* 表示全部路径。路径过滤不是网站/店铺/渠道范围。,"Within current config scope, limit which URL paths and app surfaces this supplier applies to; * means all paths. Path filter is not website/store/channel scope."
+包含路径,Include paths
+每行一条，如 /product* 或 *,One pattern per line
+排除路径,Exclude paths
 应用面,Areas
-"店面 frontend","Storefront (frontend)"
-"后台 backend","Admin (backend)"
-当前配置范围,当前配置范围
-自定义事件只进本范围；渠道/店铺请用页顶「配置范围」切换。换主题后请核对搭接。,自定义事件只进本范围；渠道/店铺请用页顶「配置范围」切换。换主题后请核对搭接。
-录入与拾取,录入与拾取
-本范围自定义事件,本范围自定义事件
-创建事件,创建事件
-搜索自定义事件,搜索自定义事件
-星标,星标
-有值,有值
-可搜索、编辑匹配条件、删除；也可加入搭接表。仅当前范围，不会一直累积。,可搜索、编辑匹配条件、删除；也可加入搭接表。仅当前范围，不会一直累积。
-把我方事件映射到三方事件名；保存供应商时一并写入。,把我方事件映射到三方事件名；保存供应商时一并写入。
-我方事件,我方事件
-三方事件,三方事件
-删,删
-添加一行,添加一行
-事件录入,事件录入
-"创建走 GA4 式弹窗（事件名 / URL 匹配条件）；也可从前台拾取。","创建走 GA4 式弹窗（事件名 / URL 匹配条件）；也可从前台拾取。"
-启动事件拾取,启动事件拾取
-后台事件列表,后台事件列表
-本会话沙盒,本会话沙盒
-清理,清理
-收起,收起
-短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝、去重丢弃黄；可清理后重新监听。无服务端长轮询。,短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝、去重丢弃黄；可清理后重新监听。无服务端长轮询。
-搜索事件名,搜索事件名
-系统命中,系统命中
-自定义命中,自定义命中
-数据流,数据流
-"沙盒 JS","沙盒 JS"
+店面 frontend,Storefront (frontend)
+后台 backend,Admin (backend)
+当前配置范围,Current configuration scope
+自定义事件只进本范围；渠道/店铺请用页顶「配置范围」切换。换主题后请核对搭接。,"Custom events stay in this scope; switch channel/store via top ""Config scope"". After theme change, verify handoff."
+录入与拾取,Entry & pickup
+本范围自定义事件,Scope custom events
+创建事件,Create event
+搜索自定义事件,Search custom events
+星标,Starred
+有值,Has value
+可搜索、编辑匹配条件、删除；也可加入搭接表。仅当前范围，不会一直累积。,"Search, edit match conditions, delete; or add to handoff table. Current scope only; won't keep accumulating."
+把我方事件映射到三方事件名；保存供应商时一并写入。,Map our events to third-party event names; written together when saving the provider.
+我方事件,Our event
+三方事件,Third-party event
+删,Delete
+添加一行,Add a row
+事件录入,Event entry
+创建走 GA4 式弹窗（事件名 / URL 匹配条件）；也可从前台拾取。,Create via GA4-style dialog (event name / URL match); or pick from storefront.
+启动事件拾取,Start event pickup
+后台事件列表,Admin event list
+本会话沙盒,This session sandbox
+清理,Clean up
+收起,Minimize
+短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝、去重丢弃黄；可清理后重新监听。无服务端长轮询。,"Short-interval read of storefront sandbox relay buffer (same assistant); system hits green, custom blue, dedupe-drop yellow; clear then re-listen. No server long-poll."
+搜索事件名,Search event name
+系统命中,System hit
+自定义命中,Custom hit
+数据流,Data stream
+沙盒 JS,Sandbox JS
 格式化,Format
-墨夜,"Ink Night"
+墨夜,Ink Night
 深渊,Abyss
-"注入 JS","注入 JS"
-创建,创建
-"对齐 GA4：自定义事件名 + 匹配条件（参数 / 运算符 / 值）。可先选「事件名」或「URL」预设，再增删条件。","对齐 GA4：自定义事件名 + 匹配条件（参数 / 运算符 / 值）。可先选「事件名」或「URL」预设，再增删条件。"
-自定义事件名称,自定义事件名称
-三方事件名,三方事件名
-匹配类型,匹配类型
-事件名匹配,事件名匹配
-"URL 匹配","URL 匹配"
-自定义条件,自定义条件
-"事件名匹配：当源事件名等于某值时生成。URL 匹配：page_view + 页面地址包含某路径（GA4 常见写法）。","事件名匹配：当源事件名等于某值时生成。URL 匹配：page_view + 页面地址包含某路径（GA4 常见写法）。"
-匹配条件,匹配条件
-添加条件,添加条件
-"参数可点选预设，也可手写；支持多级点路径（如 elementInfo.text、elementInfo.className）。","参数可点选预设，也可手写；支持多级点路径（如 elementInfo.text、elementInfo.className）。"
-参数,参数
-运算符,运算符
-值,值
-复制源事件中的参数,复制源事件中的参数
-勾选源参数,勾选源参数
-勾选后写入下方映射（产出名默认与源名相同）。也可自行添加组装规则。,勾选后写入下方映射（产出名默认与源名相同）。也可自行添加组装规则。
-"参数映射 / 组装","参数映射 / 组装"
-添加映射,添加映射
-产出参数名,产出参数名
-"源 / 组装","源 / 组装"
-"组装用 {源参数名}，例如 {text} 或 {className}:{text}。勾选「复制」时先带上全部可用标量，映射同名会覆盖。","组装用 {源参数名}，例如 {text} 或 {className}:{text}。勾选「复制」时先带上全部可用标量，映射同名会覆盖。"
-模块,模块
-已启用,已启用
-已停用,已停用
-"站点 GA4 转发（统一配置）","站点 GA4 转发（统一配置）"
-"站点 GTM（统一配置）","站点 GTM（统一配置）"
-"渠道 %{1}","渠道 %{1}"
-事件搭接分区,事件搭接分区
-"搜索事件名 / 匹配条件","搜索事件名 / 匹配条件"
-本会话沙盒数据流,本会话沙盒数据流
-清空本会话沙盒并重新监听,清空本会话沙盒并重新监听
-过滤本会话事件名…,过滤本会话事件名…
-暗色主题,"Dark theme"
-可选，默认同名,可选，默认同名
-源参数多选,源参数多选
-"继承：渠道 ← 店铺 ← 网站 · 自定义事件按范围隔离（换站/换主题后请在事件搭接核对）","继承：渠道 ← 店铺 ← 网站 · 自定义事件按范围隔离（换站/换主题后请在事件搭接核对）"
-自定义事件不随范围继承,自定义事件不随范围继承
-"事件供应商按网站隔离存储；自定义事件按配置范围隔离且不继承。Global 会落到默认网站。切换范围/主题后请核对搭接。","事件供应商按网站隔离存储；自定义事件按配置范围隔离且不继承。Global 会落到默认网站。切换范围/主题后请核对搭接。"
-"当前：%{1} · 链 %{2}","当前：%{1} · 链 %{2}"
-渠道价值,"channel value"
-已按热短窗截取,"Clamped to hot short window"
-当前范围暂无渠道价值数据,"There is no channel value data in the current scope."
+注入 JS,Inject JS
+创建,Create
+对齐 GA4：自定义事件名 + 匹配条件（参数 / 运算符 / 值）。可先选「事件名」或「URL」预设，再增删条件。,"Aligned with GA4: custom event name + match conditions (param / operator / value). Pick ""Event name"" or ""URL"" preset first, then add/remove conditions."
+自定义事件名称,Custom event name
+三方事件名,Third-party event name
+匹配类型,Match type
+事件名匹配,Event name match
+URL 匹配,URL match
+自定义条件,Custom conditions
+事件名匹配：当源事件名等于某值时生成。URL 匹配：page_view + 页面地址包含某路径（GA4 常见写法）。,Event-name match: fire when source event name equals a value. URL match: page_view + page URL contains a path (common GA4 style).
+匹配条件,Match conditions
+添加条件,Add condition
+参数可点选预设，也可手写；支持多级点路径（如 elementInfo.text、elementInfo.className）。,"Params can use presets or hand-typed multi-level dotted paths (e.g. elementInfo.text, elementInfo.className)."
+参数,Parameters
+运算符,Operator
+值,Value
+复制源事件中的参数,Copy params from source event
+勾选源参数,Check source params
+勾选后写入下方映射（产出名默认与源名相同）。也可自行添加组装规则。,"When checked, write mapping below (output name defaults to source name). Or add assemble rules yourself."
+参数映射 / 组装,Param mapping / assemble
+添加映射,Add mapping
+产出参数名,Output param name
+源 / 组装,Source / assemble
+组装用 {源参数名}，例如 {text} 或 {className}:{text}。勾选「复制」时先带上全部可用标量，映射同名会覆盖。,"Assemble with {sourceParamName}, e.g. {text} or {className}:{text}. With ""Copy"" checked, take all available scalars first; same-name mappings overwrite."
+模块,Module
+已启用,Enabled
+已停用,Deactivated
+站点 GA4 转发（统一配置）,Site GA4 forwarding (unified config)
+站点 GTM（统一配置）,Site GTM (unified config)
+渠道 %{1},Channel %{1}
+事件搭接分区,Event handoff section
+搜索事件名 / 匹配条件,Search event name / match conditions
+本会话沙盒数据流,This session sandbox data stream
+清空本会话沙盒并重新监听,Clear this session sandbox and re-listen
+过滤本会话事件名…,Filter this session event names…
+暗色主题,Dark theme
+可选，默认同名,"Optional, default same name"
+源参数多选,Source param multi-select
+继承：渠道 ← 店铺 ← 网站 · 自定义事件按范围隔离（换站/换主题后请在事件搭接核对）,"Inherit: channel ← store ← website · custom events isolated by scope (after site/theme change, verify event handoff)"
+自定义事件不随范围继承,Custom events do not inherit by scope
+事件供应商按网站隔离存储；自定义事件按配置范围隔离且不继承。Global 会落到默认网站。切换范围/主题后请核对搭接。,"Event providers stored per website; custom events isolated by config scope and do not inherit. Global falls to default website. After switching scope/theme, verify handoff."
+当前：%{1} · 链 %{2},Current: %{1} · chain %{2}
+渠道价值,channel value
+已按热短窗截取,Clamped to hot short window
+当前范围暂无渠道价值数据,There is no channel value data in the current scope.
 有价,valuable
-热门页面,"Popular pages"
-当前范围暂无页面浏览,"There are currently no pages to view in the current range"
-"停留 %{1}s","Stay %{1}s"
-热门像素事件,"Popular pixel events"
-查看列表,"View list"
-当前范围暂无事件,"There are no events in the current scope"
-"访客 %{1}","Visitor %{1}"
-当前范围暂无流量类型数据,"There is no traffic type data in the current scope."
-请选择站点后查看购成与收入,"Select a site to view purchases and revenue"
-当前范围暂无渠道数据,"There is currently no channel data in the current scope"
-请选择站点后查看商品表现,"Select a site to view item performance"
-当前范围暂无商品数据,"No item data in this range"
-社媒流量,"social media traffic"
-当前范围暂无社媒流量数据,"There is currently no social media traffic data in the current scope"
-付费广告,"paid advertising"
-当前范围暂无付费广告数据,"There is currently no paid advertising data in the current range"
+热门页面,Popular pages
+当前范围暂无页面浏览,There are currently no pages to view in the current range
+停留 %{1}s,Stay %{1}s
+热门像素事件,Popular pixel events
+查看列表,View list
+当前范围暂无事件,There are no events in the current scope
+访客 %{1},Visitor %{1}
+当前范围暂无流量类型数据,There is no traffic type data in the current scope.
+请选择站点后查看购成与收入,Select a site to view purchases and revenue
+当前范围暂无渠道数据,There is currently no channel data in the current scope
+请选择站点后查看商品表现,Select a site to view item performance
+当前范围暂无商品数据,No item data in this range
+社媒流量,social media traffic
+当前范围暂无社媒流量数据,There is currently no social media traffic data in the current scope
+付费广告,paid advertising
+当前范围暂无付费广告数据,There is currently no paid advertising data in the current range
 广告系列,campaign
-"站点 #%{1}","Site #%{1}"
-全部站点,"All sites"
-"按 IP 去重","Remove duplicates by IP"
-事件种类,"Event type"
-处理率,"Processing rate"
-"Cron 处理","Cron processing"
-像素概览,"Pixel overview"
-查看事件列表,"View event list"
-像素事件趋势,"Pixel event trends"
-当前范围暂无像素事件,"There are no pixel events in the current range"
-"事件 %{1}","Event %{1}"
-请选择站点后查看电商漏斗,"Select a site to view the ecommerce funnel"
-当前范围暂无浏览商品会话,"No view_item sessions in this range"
-像素实时动向,"Pixel real-time movement"
-事件触发,"event trigger"
-事件价值,"event value"
-当前范围暂无事件价值数据,"There is no event value data in the current scope."
-像素参与度,"Pixel Engagement"
-"页/会话 %{1}","Page/Session %{1}"
-查看细节,"View details"
-事件类型数,"Number of event types"
-平均价值,"average value"
-转化率,"conversion rate"
-总记录数,"Total Records"
-总价值,"total value"
-未处理记录,"Unprocessed records"
+站点 #%{1},Site #%{1}
+全部站点,All sites
+按 IP 去重,Remove duplicates by IP
+事件种类,Event type
+处理率,Processing rate
+Cron 处理,Cron processing
+像素概览,Pixel overview
+查看事件列表,View event list
+像素事件趋势,Pixel event trends
+当前范围暂无像素事件,There are no pixel events in the current range
+事件 %{1},Event %{1}
+请选择站点后查看电商漏斗,Select a site to view the ecommerce funnel
+当前范围暂无浏览商品会话,No view_item sessions in this range
+像素实时动向,Pixel real-time movement
+事件触发,event trigger
+事件价值,event value
+当前范围暂无事件价值数据,There is no event value data in the current scope.
+像素参与度,Pixel Engagement
+页/会话 %{1},Page/Session %{1}
+查看细节,View details
+事件类型数,Number of event types
+平均价值,average value
+转化率,conversion rate
+总记录数,Total Records
+总价值,total value
+未处理记录,Unprocessed records
 提示,Tip
-请输入测试ID,"Please enter the test ID"
+请输入测试ID,Please enter the test ID
 确定,Sure
-请求成功！,"Request successful!"
-获取统计信息成功,"Successfully fetched statistics"
-获取统计信息失败：%{1},"Failed to fetch statistics: %{1}"
-事件名称不能为空,"Event name cannot be empty"
-获取站点列表成功,"Successfully fetched site list"
-获取站点列表失败：%{1},"Failed to fetch site list: %{1}"
-获取大屏数据成功,"Successfully got dashboard data"
-获取大屏数据失败：%{1},"Failed to get dashboard data: %{1}"
-获取变化百分比成功,"Percentage change retrieved successfully"
-获取变化百分比失败：%{1},"Failed to retrieve percentage change: %{1}"
-获取热门事件成功,"Successfully got trending events"
-获取热门事件失败：%{1},"Failed to get trending events: %{1}"
-获取事件分布成功,"Successfully got event distribution"
-获取事件分布失败：%{1},"Failed to get event distribution: %{1}"
-开始日期和结束日期不能为空,"Start date and end date cannot be empty"
-获取时间范围统计成功,"Successfully got time range statistics"
-获取时间范围统计失败：%{1},"Failed to get time range statistics: %{1}"
-获取实时统计成功,"Successfully got real-time statistics"
-获取实时统计失败：%{1},"Failed to get real-time statistics: %{1}"
-获取版本号成功,"Successfully got version number"
-获取版本号失败：%{1},"Failed to get version number: %{1}"
-缺少数据参数,"Missing data parameter"
-加密成功,"Encryption succeeded"
-加密失败：%{1},"Encryption failed: %{1}"
+请求成功！,Request successful!
+获取统计信息成功,Successfully fetched statistics
+获取统计信息失败：%{1},Failed to fetch statistics: %{1}
+事件名称不能为空,Event name cannot be empty
+获取站点列表成功,Successfully fetched site list
+获取站点列表失败：%{1},Failed to fetch site list: %{1}
+获取大屏数据成功,Successfully got dashboard data
+获取大屏数据失败：%{1},Failed to get dashboard data: %{1}
+获取变化百分比成功,Percentage change retrieved successfully
+获取变化百分比失败：%{1},Failed to retrieve percentage change: %{1}
+获取热门事件成功,Successfully got trending events
+获取热门事件失败：%{1},Failed to get trending events: %{1}
+获取事件分布成功,Successfully got event distribution
+获取事件分布失败：%{1},Failed to get event distribution: %{1}
+开始日期和结束日期不能为空,Start date and end date cannot be empty
+获取时间范围统计成功,Successfully got time range statistics
+获取时间范围统计失败：%{1},Failed to get time range statistics: %{1}
+获取实时统计成功,Successfully got real-time statistics
+获取实时统计失败：%{1},Failed to get real-time statistics: %{1}
+获取版本号成功,Successfully got version number
+获取版本号失败：%{1},Failed to get version number: %{1}
+缺少数据参数,Missing data parameter
+加密成功,Encryption succeeded
+加密失败：%{1},Encryption failed: %{1}
 ok,ok
-获取每日对比分析成功,"Successfully got daily comparison analysis"
-获取每日对比分析失败：%{1},"Failed to get daily comparison analysis: %{1}"
-测试ID不能为空,"Test ID cannot be empty"
-获取A/B测试数据成功,"Successfully got A/B test data"
-测试名称不能为空,"Test Name cannot be empty"
-测试ID已存在,"Test ID already exists"
-创建A/B测试失败,"Create A/B Test Failed"
-创建A/B测试成功,"A/B test created successfully"
-创建A/B测试失败：%{1},"Failed to create A/B test: %{1}"
-获取A/B测试列表成功,"Successfully got A/B test list"
-获取A/B测试列表失败：%{1},"Failed to get A/B test list: %{1}"
-没有可导出的数据,"No data to export"
+获取每日对比分析成功,Successfully got daily comparison analysis
+获取每日对比分析失败：%{1},Failed to get daily comparison analysis: %{1}
+测试ID不能为空,Test ID cannot be empty
+获取A/B测试数据成功,Successfully got A/B test data
+测试名称不能为空,Test Name cannot be empty
+测试ID已存在,Test ID already exists
+创建A/B测试失败,Create A/B Test Failed
+创建A/B测试成功,A/B test created successfully
+创建A/B测试失败：%{1},Failed to create A/B test: %{1}
+获取A/B测试列表成功,Successfully got A/B test list
+获取A/B测试列表失败：%{1},Failed to get A/B test list: %{1}
+没有可导出的数据,No data to export
 数据量过大，已限制导出前%{1}条记录。请缩小时间范围或使用分页导出,"Data volume is too large, export limited to the first %{1} records. Please narrow the time range or use paginated export"
-获取报告成功,"Successfully got report"
-获取报告失败：%{1},"Failed to get report: %{1}"
-获取热缓冲状态成功,"Obtaining hot buffer status successfully"
-获取热缓冲状态失败：%{1},"Failed to get hot buffer status: %{1}"
-热缓冲刷写完成,"Hot buffer flashing completed"
-热缓冲刷写失败：%{1},"Hot buffer flash failed: %{1}"
-像素标记巡检完成,"Pixel mark inspection completed"
-像素标记巡检失败：%{1},"Pixel tag inspection failed: %{1}"
-获取巡检报告成功,"Obtaining inspection report successfully"
-获取巡检报告失败：%{1},"Failed to obtain inspection report: %{1}"
-获取通道状态成功,"Obtain channel status successfully"
-获取通道状态失败：%{1},"Failed to get channel status: %{1}"
-获取事件字典成功,"Obtain event dictionary successfully"
-获取事件字典失败：%{1},"Failed to get event dictionary: %{1}"
-"渠道码 %{1} 在该站点下已存在","Channel code %{1} already exists for this website"
-保存渠道失败：%{1},"Failed to save channel: %{1}"
-保存渠道失败：未获得主键,"Failed to save channel: missing primary key"
-事件统计,"Event statistics"
-浏览商品,"Browse products"
-开始结账,"Begin checkout"
+获取报告成功,Successfully got report
+获取报告失败：%{1},Failed to get report: %{1}
+获取热缓冲状态成功,Obtaining hot buffer status successfully
+获取热缓冲状态失败：%{1},Failed to get hot buffer status: %{1}
+热缓冲刷写完成,Hot buffer flashing completed
+热缓冲刷写失败：%{1},Hot buffer flash failed: %{1}
+像素标记巡检完成,Pixel mark inspection completed
+像素标记巡检失败：%{1},Pixel tag inspection failed: %{1}
+获取巡检报告成功,Obtaining inspection report successfully
+获取巡检报告失败：%{1},Failed to obtain inspection report: %{1}
+获取通道状态成功,Obtain channel status successfully
+获取通道状态失败：%{1},Failed to get channel status: %{1}
+获取事件字典成功,Obtain event dictionary successfully
+获取事件字典失败：%{1},Failed to get event dictionary: %{1}
+渠道码 %{1} 在该站点下已存在,Channel code %{1} already exists for this website
+保存渠道失败：%{1},Failed to save channel: %{1}
+保存渠道失败：未获得主键,Failed to save channel: missing primary key
+事件统计,Event statistics
+浏览商品,Browse products
+开始结账,Begin checkout
 购买成功,Purchase
-获取站点统计摘要失败：%{1},"Failed to fetch site statistics summary: %{1}"
-获取趋势数据失败：%{1},"Failed to fetch trend data: %{1}"
-获取商业价值数据失败：%{1},"Failed to retrieve business value data: %{1}"
-站点筛选参数无效,"Invalid site filter parameter"
-事件筛选参数过长,"Event filter parameter is too long"
-时间范围参数无效,"Invalid time range parameter"
-自定义时间范围需要开始日期和结束日期,"Custom time range requires a start date and an end date"
-开始日期不能晚于结束日期,"Start date cannot be later than end date"
-"时间范围不能超过 366 天","Time range cannot exceed 366 days"
-渠道码筛选参数过长,"Channel code filter is too long"
-流量类型筛选参数过长,"Traffic type filter is too long"
-流量类型筛选参数无效,"Invalid traffic type filter"
-"utm_source 筛选参数过长","utm_source filter is too long"
-"utm_medium 筛选参数过长","utm_medium filter is too long"
-"utm_campaign 筛选参数过长","utm_campaign filter is too long"
-"归因筛选需要扁平列，请先执行 setup:upgrade","Attribution filters require flat columns; run setup:upgrade first"
-"日期格式无效，请使用 YYYY-MM-DD","Invalid date format. Use YYYY-MM-DD"
+获取站点统计摘要失败：%{1},Failed to fetch site statistics summary: %{1}
+获取趋势数据失败：%{1},Failed to fetch trend data: %{1}
+获取商业价值数据失败：%{1},Failed to retrieve business value data: %{1}
+站点筛选参数无效,Invalid site filter parameter
+事件筛选参数过长,Event filter parameter is too long
+时间范围参数无效,Invalid time range parameter
+自定义时间范围需要开始日期和结束日期,Custom time range requires a start date and an end date
+开始日期不能晚于结束日期,Start date cannot be later than end date
+时间范围不能超过 366 天,Time range cannot exceed 366 days
+渠道码筛选参数过长,Channel code filter is too long
+流量类型筛选参数过长,Traffic type filter is too long
+流量类型筛选参数无效,Invalid traffic type filter
+utm_source 筛选参数过长,utm_source filter is too long
+utm_medium 筛选参数过长,utm_medium filter is too long
+utm_campaign 筛选参数过长,utm_campaign filter is too long
+归因筛选需要扁平列，请先执行 setup:upgrade,Attribution filters require flat columns; run setup:upgrade first
+日期格式无效，请使用 YYYY-MM-DD,Invalid date format. Use YYYY-MM-DD
 数量,Quantity
-解密后的数据格式错误,"Decrypted data format is wrong"
+解密后的数据格式错误,Decrypted data format is wrong
 未登记,Unregistered
-"步骤：浏览商品 → 加购 → 开始结账 → 购买成功；须顺序命中。与全站电商漏斗（F01）同口径。","Steps: view_item → add_to_cart → begin_checkout → checkout_success, hit in order. Same definition as the site-wide ecommerce funnel."
-"步骤：落地 → 互动 → 加购 → 转化；须顺序命中。本漏斗为营销简漏斗，非电商字典四步。","Steps: landing → interaction → additional purchase → conversion; must be hit sequentially. This funnel is a simplified marketing funnel, not a four-step e-commerce dictionary."
+步骤：浏览商品 → 加购 → 开始结账 → 购买成功；须顺序命中。与全站电商漏斗（F01）同口径。,"Steps: view_item → add_to_cart → begin_checkout → checkout_success, hit in order. Same definition as the site-wide ecommerce funnel."
+步骤：落地 → 互动 → 加购 → 转化；须顺序命中。本漏斗为营销简漏斗，非电商字典四步。,"Steps: landing → interaction → additional purchase → conversion; must be hit sequentially. This funnel is a simplified marketing funnel, not a four-step e-commerce dictionary."
 该窗口暂无落地会话，无法计算步进占比。,"There is currently no landing session in this window, and the step ratio cannot be calculated."
-相对落地,"Relatively grounded"
-供应商代码不能为空,供应商代码不能为空
-"供应商代码须为小写字母开头的 snake_case","供应商代码须为小写字母开头的 snake_case"
-模块供应商不可删除，只能停用,模块供应商不可删除，只能停用
-"双 inject 硬拦：ga4 与 gtm 不可同时 inject","双 inject 硬拦：ga4 与 gtm 不可同时 inject"
+相对落地,Relatively grounded
+供应商代码不能为空,Supplier code cannot be empty
+供应商代码须为小写字母开头的 snake_case,Supplier code must be snake_case starting with a lowercase letter
+模块供应商不可删除，只能停用,Module suppliers cannot be deleted; only disabled
+双 inject 硬拦：ga4 与 gtm 不可同时 inject,Double inject hard block: ga4 and gtm cannot inject at the same time
 落地,landing
 互动,interactive
-站点错误：%{1},站点错误：%{1}
-"页面 %{1} · %{2} · 身份 %{3} · 框架 %{4}%{5}","页面 %{1} · %{2} · 身份 %{3} · 框架 %{4}%{5}"
-"未找到版本号 %{1} 对应的加密token","Encryption token for version number %{1} not found"
-"版本号 %{1} 的加密token为空","Encryption token for version %{1} is empty"
-无效的加密数据格式,"Invalid Encrypted Data Format"
-解密失败：%{1},"Decryption failed: %{1}"
-"campaign 渠道码创建后不可修改","Campaign channel code cannot be changed after creation"
-渠道类型无效：%{1},"Invalid channel kind: %{1}"
-渠道名称必填,"Channel name is required"
-"渠道名称过长（最多 %{1} 字符）","Channel name too long (max %{1} characters)"
-渠道码必填,"Channel code is required"
-"渠道码格式无效：需 2-32 位，小写字母或数字开头，仅含 a-z 0-9 _ -","Invalid channel code: 2-32 chars, start with lowercase letter or digit, only a-z 0-9 _ -"
-"rule 渠道码无效：不含空白且最多 %{1} 字符","Invalid rule channel code: no whitespace, max %{1} characters"
-流量类型无效：%{1},"Invalid traffic type: %{1}"
-站点ID无效,"Invalid Site ID"
-"rule 匹配模式无效：%{1}","Invalid rule match mode: %{1}"
-"rule 匹配值必填","Rule match value is required"
-"campaign 渠道不接受匹配模式/匹配值","Campaign channels do not accept match mode/value"
-更多,更多
-选择作用范围,选择作用范围
-搜索作用范围,搜索作用范围
-折叠,折叠
-展开,展开
-未找到匹配作用范围,未找到匹配作用范围
-短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。,短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。
-"打洞实时读前台沙盒 emit（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。","打洞实时读前台沙盒 emit（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。"
-"可选：className,text,href,page_path（逗号分隔；空=复制全部可用参数）","可选：className,text,href,page_path（逗号分隔；空=复制全部可用参数）"
-"参数可点选预设，也可手写事件字段名（如 className、text、href）。","参数可点选预设，也可手写事件字段名（如 className、text、href）。"
-提取这些参数,提取这些参数
-命中自定义事件时，从源事件/点击上下文提取参数写入新事件。勾选「复制」且此处为空则带上全部可用标量参数；填写则只提取列出的键。,命中自定义事件时，从源事件/点击上下文提取参数写入新事件。勾选「复制」且此处为空则带上全部可用标量参数；填写则只提取列出的键。
-"已保存供应商 %{1}","已保存供应商 %{1}"
-已创建自定义供应商,已创建自定义供应商
-全量记入本会话（含参数）；系统命中绿、自定义命中蓝；数据流持续监控。,全量记入本会话（含参数）；系统命中绿、自定义命中蓝；数据流持续监控。
-本会话累计（右侧数据流）：前台操作后轮询出现；展开可看链接参数，便于判断渠道/UTM。,本会话累计（右侧数据流）：前台操作后轮询出现；展开可看链接参数，便于判断渠道/UTM。
-本会话累计：前台操作后轮询出现；展开可看链接参数，便于判断渠道/UTM。,本会话累计：前台操作后轮询出现；展开可看链接参数，便于判断渠道/UTM。
-可加入搭接；不用的请删除（仅当前范围，不会一直累积）。,可加入搭接；不用的请删除（仅当前范围，不会一直累积）。
-聚焦创建,聚焦创建
-"写入当前配置范围。可前台拾取，或像 GA4 一样填事件名创建（勿用系统字典名当自定义名）。","写入当前配置范围。可前台拾取，或像 GA4 一样填事件名创建（勿用系统字典名当自定义名）。"
-事件名,事件名
-创建到本范围,创建到本范围
-"拾取前台 DOM，或像 GA4 一样直接填事件名写入本范围。","拾取前台 DOM，或像 GA4 一样直接填事件名写入本范围。"
-录入到本范围,录入到本范围
-自定义事件随配置范围隔离,自定义事件随配置范围隔离
-"本列表只属于当前「配置范围」（网站/店铺/渠道）。不同范围主题 DOM 不同，自定义事件不能共用。切换网站、切换主题或主题发布后，请回到本页核对选择器与事件名是否仍正确。","本列表只属于当前「配置范围」（网站/店铺/渠道）。不同范围主题 DOM 不同，自定义事件不能共用。切换网站、切换主题或主题发布后，请回到本页核对选择器与事件名是否仍正确。"
-"我方事件选自系统字典（含登录/注册等）；自定义事件须在拾取中「输入名字并录入」或「高级事件链」仅录入/发布后进入「本范围自定义」（自动发现/observe 不进池；不是点击即记）。","我方事件选自系统字典（含登录/注册等）；自定义事件须在拾取中「输入名字并录入」或「高级事件链」仅录入/发布后进入「本范围自定义」（自动发现/observe 不进池；不是点击即记）。"
-可加入搭接；不用的请删除（仅当前范围，不会一直累积）。可标星、分类；带参数/金额的会标「有值」。,可加入搭接；不用的请删除（仅当前范围，不会一直累积）。可标星、分类；带参数/金额的会标「有值」。
-本会话累计,本会话累计
-运营在前台操作后，这里轮询展示最近事件；可一键加入搭接。,运营在前台操作后，这里轮询展示最近事件；可一键加入搭接。
-当前范围：%{1},当前范围：%{1}
-"继承：渠道 ← 店铺 ← 网站（子级未覆盖则用上级；Global 落默认站）","继承：渠道 ← 店铺 ← 网站（子级未覆盖则用上级；Global 落默认站）"
-自定义事件不随范围继承：每个网站/店铺/渠道各自一份。切换范围、换主题或主题发布后，请在「事件搭接」核对自定义事件是否仍匹配当前主题。,自定义事件不随范围继承：每个网站/店铺/渠道各自一份。切换范围、换主题或主题发布后，请在「事件搭接」核对自定义事件是否仍匹配当前主题。
-"我方事件选自系统字典（含登录/注册等）；自定义事件须由前台像素自动 track 成功后再拾取录入（不是点击即记；事件链内步骤除外），进入下方「本范围自定义」可加入搭接。","我方事件选自系统字典（含登录/注册等）；自定义事件须由前台像素自动 track 成功后再拾取录入（不是点击即记；事件链内步骤除外），进入下方「本范围自定义」可加入搭接。"
-我方事件选自系统字典（含登录/注册等）；自定义事件经前台拾取后进入下方「本范围自定义」，可加入搭接。,我方事件选自系统字典（含登录/注册等）；自定义事件经前台拾取后进入下方「本范围自定义」，可加入搭接。
-"我方事件选自系统字典（含登录/注册等）；自定义事件可经前台拾取或 JS track 后出现在下拉。","我方事件选自系统字典（含登录/注册等）；自定义事件可经前台拾取或 JS track 后出现在下拉。"
-"事件供应商按网站隔离存储；Global 会落到默认网站。请选择具体网站 / 店铺 / 渠道。","事件供应商按网站隔离存储；Global 会落到默认网站。请选择具体网站 / 店铺 / 渠道。"
-"本页供应商按网站隔离；用页顶「配置范围」切换网站 / 店铺 / 渠道。店、渠级独立供应商行属后续阶段。","本页供应商按网站隔离；用页顶「配置范围」切换网站 / 店铺 / 渠道。店、渠级独立供应商行属后续阶段。"
-"配置范围：网站 → 店铺 → 渠道。切换后加载该网站下的事件供应商。","配置范围：网站 → 店铺 → 渠道。切换后加载该网站下的事件供应商。"
-"事件供应商按网站隔离存储；Global 会落到默认网站。请切换网站 / 店铺 / 渠道查看对应范围。","事件供应商按网站隔离存储；Global 会落到默认网站。请切换网站 / 店铺 / 渠道查看对应范围。"
-当前：%{1},当前：%{1}
-"控制此供应商在哪些路径与应用面生效；* 表示全部路径。","Controls where this vendor applies; * matches all paths."
-默认停用，需手动开启,"Off by default — enable manually"
-暂无供应商。请先同步模块供应商或新建自定义。,暂无供应商。请先同步模块供应商或新建自定义。
-"模式说明（sandbox / inject）","模式说明（sandbox / inject）"
-"sandbox（默认）= 沙盒试发；inject = 站内直播（非 DEV 正反馈）。ga4 与 gtm 不可同时 inject。","sandbox（默认）= 沙盒试发；inject = 站内直播（非 DEV 正反馈）。ga4 与 gtm 不可同时 inject。"
-使用默认搭接,使用默认搭接
-"启用默认 map","启用默认 map"
-"Google Tag Manager","Google Tag Manager"
-"Container ID","Container ID"
-"Google Analytics 4","Google Analytics 4"
-"Measurement ID","Measurement ID"
-"万能像素壳 · 模块注册 + 人工自定义 · 默认沙盒 · 布局：左列表右详情","万能像素壳 · 模块注册 + 人工自定义 · 默认沙盒 · 布局：左列表右详情"
-"万能像素壳 · 模块注册 + 人工自定义 · 默认沙盒 · DEV 不上报","万能像素壳 · 模块注册 + 人工自定义 · 默认沙盒 · DEV 不上报"
-页面,页面
-步骤路径,"Step path"
-概要,概要
-版本,版本
-页面脚本异常,"Page script error"
-未处理的异步失败,"Unhandled async failure"
-网络/接口失败,"Network / API failure"
-资源加载失败,"Resource load failure"
-结账失败,"Checkout failed"
-登录/鉴权失败,"Auth failure"
-业务规则拦截,"Business rule blocked"
-未分类错误,"Unclassified error"
-已忽略（版本过期）,"Ignored (stale)"
+站点错误：%{1},Site error: %{1}
+页面 %{1} · %{2} · 身份 %{3} · 框架 %{4}%{5},Page %{1} · %{2} · identity %{3} · framework %{4}%{5}
+未找到版本号 %{1} 对应的加密token,Encryption token for version number %{1} not found
+版本号 %{1} 的加密token为空,Encryption token for version %{1} is empty
+无效的加密数据格式,Invalid Encrypted Data Format
+解密失败：%{1},Decryption failed: %{1}
+campaign 渠道码创建后不可修改,Campaign channel code cannot be changed after creation
+渠道类型无效：%{1},Invalid channel kind: %{1}
+渠道名称必填,Channel name is required
+渠道名称过长（最多 %{1} 字符）,Channel name too long (max %{1} characters)
+渠道码必填,Channel code is required
+渠道码格式无效：需 2-32 位，小写字母或数字开头，仅含 a-z 0-9 _ -,"Invalid channel code: 2-32 chars, start with lowercase letter or digit, only a-z 0-9 _ -"
+rule 渠道码无效：不含空白且最多 %{1} 字符,"Invalid rule channel code: no whitespace, max %{1} characters"
+流量类型无效：%{1},Invalid traffic type: %{1}
+站点ID无效,Invalid Site ID
+rule 匹配模式无效：%{1},Invalid rule match mode: %{1}
+rule 匹配值必填,Rule match value is required
+campaign 渠道不接受匹配模式/匹配值,Campaign channels do not accept match mode/value
+更多,More
+选择作用范围,Select scope
+搜索作用范围,Search scopes
+折叠,Collapse
+展开,Expand
+未找到匹配作用范围,No matching scopes found
+短间隔读取前台沙盒继电缓冲（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。无服务端长轮询。,"Short-interval read of storefront sandbox relay buffer (same assistant); system hits green, custom blue; clear then re-listen. No server long-poll."
+打洞实时读前台沙盒 emit（同助手）；系统命中绿、自定义命中蓝；可清理后重新监听。,"Punch-through live read of storefront sandbox emit (same assistant); system hits green, custom blue; clear then re-listen."
+"可选：className,text,href,page_path（逗号分隔；空=复制全部可用参数）","Optional: className,text,href,page_path (comma-separated; empty=copy all available params)"
+参数可点选预设，也可手写事件字段名（如 className、text、href）。,"Params can use presets or hand-typed event field names (e.g. className, text, href)."
+提取这些参数,Extract these params
+命中自定义事件时，从源事件/点击上下文提取参数写入新事件。勾选「复制」且此处为空则带上全部可用标量参数；填写则只提取列出的键。,"When a custom event hits, extract params from source event/click context into the new event. Check ""Copy"" with empty list to take all available scalars; fill keys to extract only those listed."
+已保存供应商 %{1},Supplier %{1} saved
+已创建自定义供应商,Custom supplier created
+全量记入本会话（含参数）；系统命中绿、自定义命中蓝；数据流持续监控。,"Fully record this session (incl. params); system hits green, custom hits blue; data stream keeps monitoring."
+本会话累计（右侧数据流）：前台操作后轮询出现；展开可看链接参数，便于判断渠道/UTM。,Session total (right data stream): appears after storefront ops poll; expand for link params / channel/UTM.
+本会话累计：前台操作后轮询出现；展开可看链接参数，便于判断渠道/UTM。,Session total: appears after storefront ops poll; expand to see link params for channel/UTM.
+可加入搭接；不用的请删除（仅当前范围，不会一直累积）。,Can join handoff; delete unused ones (current scope only; they won't keep accumulating).
+聚焦创建,Focus create
+写入当前配置范围。可前台拾取，或像 GA4 一样填事件名创建（勿用系统字典名当自定义名）。,"Writes to current config scope. Pick from storefront, or create by event name like GA4 (do not use system dictionary names as custom names)."
+事件名,Event name
+创建到本范围,Create in this scope
+拾取前台 DOM，或像 GA4 一样直接填事件名写入本范围。,"Pick storefront DOM, or fill event name directly into this scope like GA4."
+录入到本范围,Enter into this scope
+自定义事件随配置范围隔离,Custom events isolated by config scope
+本列表只属于当前「配置范围」（网站/店铺/渠道）。不同范围主题 DOM 不同，自定义事件不能共用。切换网站、切换主题或主题发布后，请回到本页核对选择器与事件名是否仍正确。,"This list belongs only to the current ""Config scope"" (website/store/channel). Different scopes have different theme DOM; custom events cannot be shared. After switching website/theme or theme publish, return here to verify selectors and event names still match."
+我方事件选自系统字典（含登录/注册等）；自定义事件须在拾取中「输入名字并录入」或「高级事件链」仅录入/发布后进入「本范围自定义」（自动发现/observe 不进池；不是点击即记）。,"Our events from system dictionary (incl. login/signup); custom events enter ""This scope custom"" only after pick ""enter name and record"" or ""advanced event chain"" record/publish (auto-discover/observe do not enter the pool; not click-to-record)."
+可加入搭接；不用的请删除（仅当前范围，不会一直累积）。可标星、分类；带参数/金额的会标「有值」。,"Can join handoff; delete unused (current scope only; won't keep accumulating). Star/categorize; ones with params/amount marked ""Has value""."
+本会话累计,Session total
+运营在前台操作后，这里轮询展示最近事件；可一键加入搭接。,"After ops act on storefront, recent events poll here; one-click add to handoff."
+当前范围：%{1},Current scope: %{1}
+继承：渠道 ← 店铺 ← 网站（子级未覆盖则用上级；Global 落默认站）,Inherit: channel ← store ← website (child uses parent when uncovered; Global falls to default site)
+自定义事件不随范围继承：每个网站/店铺/渠道各自一份。切换范围、换主题或主题发布后，请在「事件搭接」核对自定义事件是否仍匹配当前主题。,"Custom events do not inherit across scopes: each website/store/channel has its own set. After switching scope, changing theme or theme publish, verify custom events still match the current theme under ""Event handoff""."
+我方事件选自系统字典（含登录/注册等）；自定义事件须由前台像素自动 track 成功后再拾取录入（不是点击即记；事件链内步骤除外），进入下方「本范围自定义」可加入搭接。,"Our events from system dictionary (incl. login/signup); custom events must be successfully auto-tracked by storefront pixel before pick/entry (not click-to-record; except steps inside event chains), then enter ""This scope custom"" below to join handoff."
+我方事件选自系统字典（含登录/注册等）；自定义事件经前台拾取后进入下方「本范围自定义」，可加入搭接。,"Our events from system dictionary (incl. login/signup); custom events enter ""This scope custom"" below after storefront pick and can join handoff."
+我方事件选自系统字典（含登录/注册等）；自定义事件可经前台拾取或 JS track 后出现在下拉。,Our events come from the system dictionary (incl. login/signup); custom events appear in the dropdown after storefront pick or JS track.
+事件供应商按网站隔离存储；Global 会落到默认网站。请选择具体网站 / 店铺 / 渠道。,Event providers stored per website; Global falls to default website. Please select a concrete website / store / channel.
+本页供应商按网站隔离；用页顶「配置范围」切换网站 / 店铺 / 渠道。店、渠级独立供应商行属后续阶段。,"Suppliers on this page are website-isolated; switch website / store / channel via top ""Config scope"". Store/channel-level independent supplier rows are a later stage."
+配置范围：网站 → 店铺 → 渠道。切换后加载该网站下的事件供应商。,"Config scope: website → store → channel. After switch, load event providers under that website."
+事件供应商按网站隔离存储；Global 会落到默认网站。请切换网站 / 店铺 / 渠道查看对应范围。,Event providers stored per website; Global falls to default website. Switch website / store / channel to view the matching scope.
+当前：%{1},Current: %{1}
+控制此供应商在哪些路径与应用面生效；* 表示全部路径。,Controls where this vendor applies; * matches all paths.
+默认停用，需手动开启,Off by default — enable manually
+暂无供应商。请先同步模块供应商或新建自定义。,No suppliers yet. Sync module suppliers or create a custom one first.
+模式说明（sandbox / inject）,Mode notes (sandbox / inject)
+sandbox（默认）= 沙盒试发；inject = 站内直播（非 DEV 正反馈）。ga4 与 gtm 不可同时 inject。,sandbox (default) = sandbox trial; inject = on-site live (non-DEV positive feedback). ga4 and gtm cannot inject together.
+使用默认搭接,Use default handoff
+启用默认 map,Enable default map
+Google Tag Manager,Google Tag Manager
+Container ID,Container ID
+Google Analytics 4,Google Analytics 4
+Measurement ID,Measurement ID
+万能像素壳 · 模块注册 + 人工自定义 · 默认沙盒 · 布局：左列表右详情,"Universal pixel shell · module registry + manual custom · default sandbox · layout: list left, detail right"
+万能像素壳 · 模块注册 + 人工自定义 · 默认沙盒 · DEV 不上报,Universal pixel shell · module registry + manual custom · default sandbox · DEV no report
+页面,Page
+步骤路径,Step path
+概要,Summary
+版本,Version
+页面脚本异常,Page script error
+未处理的异步失败,Unhandled async failure
+网络/接口失败,Network / API failure
+资源加载失败,Resource load failure
+结账失败,Checkout failed
+登录/鉴权失败,Auth failure
+业务规则拦截,Business rule blocked
+未分类错误,Unclassified error
+已忽略（版本过期）,Ignored (stale)
 Worker,Worker
-无步骤记录,"No steps"
-无表单快照,"No form snapshot"
-加载失败,"Loading failed"
-请先选择测试,"Please select a test first"
-请填写测试ID和测试名称,"Fill in the test ID and test name."
-格式错误,"Format error"
-变体配置JSON格式错误,"Variant Configuration JSON Format Error"
+无步骤记录,No steps
+无表单快照,No form snapshot
+加载失败,Loading failed
+请先选择测试,Please select a test first
+请填写测试ID和测试名称,Fill in the test ID and test name.
+格式错误,Format error
+变体配置JSON格式错误,Variant Configuration JSON Format Error
 成功,success
-创建成功,"Created successfully"
-创建失败,"Creation failed"
-导出失败,"Pan-fried braised pork belly"
-"0 表示全局渠道。","0 means a global channel."
-"站点 ID（必填）","Site ID (required)"
-"站点 ID","Site ID"
-事件看板,"Event board"
-像素分析,"Pixel analysis"
-访问信息,"Visitor insights"
+创建成功,Created successfully
+创建失败,Creation failed
+导出失败,Pan-fried braised pork belly
+0 表示全局渠道。,0 means a global channel.
+站点 ID（必填）,Site ID (required)
+站点 ID,Site ID
+事件看板,Event board
+像素分析,Pixel analysis
+访问信息,Visitor insights
 信息,Info
 警告,Warning
 错误,Error
 紧急,Urgent
-系统像素,"System Pixel"
+系统像素,System Pixel
 暗色,Dark

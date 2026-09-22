@@ -25,10 +25,10 @@
 1c 宿主计划模式    默认 Plan Mode；**简单可 skip**（仍须验收）
 2 扩展点选型       扩展点选型.md → 文档索引 / doc/event / Query / Hook
 3 计划拆解         plan.md + task.md（或任务笔记；仍在 Plan Mode）
-3b 工程团队        非简单：一席一智能体；席间 channel+resume 互聊；框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；验收 UI+原型实质签收；停工等确认
+3b 工程团队        非简单：一席一智能体；席间 channel+resume 互聊；SESSION 总控+PM 计划生命周期；框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；UI+原型先审过签才测→测试→项目经理汇审才汇报；停工等确认
 4 实现             用户批准后切回 Agent；宿主原生编辑 + TDD
 5 复审             架构/缺陷/安全 + 每触发专席合规复审（fail→返工）
-6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型签收后才可交出
+6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型过签后测试执行，再经项目经理汇审才可交出
 7 收口             文档对齐（README/需求/开发日志）+ 门禁表 + 交付证据
 ```
 
@@ -77,23 +77,27 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **布局/人性化/吐槽/审图**：命中时 `ui_skill_decision=participate`，**原型 + frontend-design 必须参与并调整**（禁止只点评）。
 - 模块级：`doc/开发/plan.md`（阶段、范围、完成标准）+ `doc/开发/task.md`（可勾选任务）。
 - **工程计划（行为要求）**：用户每提出可执行需求即须记录工程计划（**`requirements`≥1**、`goal`、`extension_point`、**`requirement_scrutiny` 必填**（`requirement_framework_scrutiny`：合理写「合理」/「无调整」；不合理须写问题+更合理做法并改写 requirements）、**`scrutiny_basis` 必填**（checklist≥2 + doc_paths≥1；仅写「合理」不够）、**`architecture_design` 必填**（`architecture_design_structured`：mechanism/owning_module/reuse/invent/not_to_do/req_map；优先 `resolve_task_context.framework_candidates`）、**`architecture` 必填**（`architecture_first_for_requirements` + `framework_decoupled_only`：按框架/扩展点选型映射为解耦方案；≥40 字；可由 design 派生；含 `trivial`）、**`coupling_findings` 必填**（≥1；无则「无」/「无耦合」）、`dev_tasks`、≥1 条 `acceptance` 且**至少 1 条 `type=unit`**；可选 `scope_paths` / `forbidden` / `risk` / `workflow_phase`）。缺少有效审视/架构字段时须先完成需求分析与架构映射再动手（硬约束 `requirement_framework_scrutiny` / `architecture_first_for_requirements` / `architecture_design_structured` / `framework_decoupled_only`），工作流：需求分析→框架审视纠偏→框架解耦架构→…→TDD 红绿→实际跑测→审查→收口。实现须 **TDD**：先失败测试再最小实现至绿，再亲自执行测试命令；`unit` 的 `passed` evidence 须像真实跑测输出（含 phpunit/PASS 等），否则不可宣称完成。收口汇报须含「**需求纠偏**」（无调整/合理或逐条列出）与「**耦合提示**」（无耦合或逐条列出）。`risk=trivial` 仍须计划与上述必填字段与 unit，且 `scope_paths` ≤3。计划写在模块 `doc/开发/plan.md` / 会话笔记；编码用宿主原生编辑。
-- **计划合规自检（工程行为）**：工程计划记录 / 收口自检 须从以下维度判定计划是否合规——**(1) 架构层映射**、**(2) 解耦**、**(3) 电商合规**（触及站店渠/商品/结账/支付等时须写合规要点；非电商可 N/A）、**(4) 原型设计**（`ui_skill_decision`；participate→prototype+frontend-design+weline-theme-development+shentu；视觉信号强制 participate）、**(5) e2e 用例完整性**（feature→**每章独立完整功能通路 `type=e2e`** + **计划级 `e2e-plan-suite` 组套件**；Agent 自动跑测自行闭环，禁止甩人；收口前须组测整条功能链路 PASS）、**(6) 计划体量是否过大**（单次宜 2–4 小时；过大须拆章节/child）、**(7) 逻辑是否严谨闭环**。原则上 `dev_tasks` **须有章节细节**（id/title 含 `chN`/`章节`/`chapter`）；**每一章必须硬绑定 `acceptance_ids`** 到具体 acceptance（feature 章须含**互不共用**的通路 `type=e2e`；组套件单独一条）；多需求章节计划须 `covers_requirements` 覆盖全部 requirements；**仅当绑定验收全部 `passed`+evidence 后**才允许该章 `done` 并开下一章（至多一个 `in_progress`）；**全部章完成后统一跑计划组套件 e2e 才可 closeout**。收口自检 返回 `compliance_dimensions` + gaps。
+- **计划合规自检（工程行为）**：工程计划记录 / 收口自检 须从以下维度判定计划是否合规——**(1) 架构层映射**、**(2) 解耦**、**(3) 电商合规**（触及站店渠/商品/结账/支付等时须写合规要点，并由 **电商顾问** 参与讨论与政策检索；非电商可 N/A）、**(4) 原型设计**（`ui_skill_decision`；participate→prototype+frontend-design+weline-theme-development+shentu；视觉信号强制 participate）、**(5) e2e 用例完整性**（feature→**每章独立完整功能通路 `type=e2e`** + **计划级 `e2e-plan-suite` 组套件**；Agent 自动跑测自行闭环，禁止甩人；收口前须组测整条功能链路 PASS）、**(6) 计划体量是否过大**（单次宜 2–4 小时；过大须拆章节/child）、**(7) 逻辑是否严谨闭环**。原则上 `dev_tasks` **须有章节细节**（id/title 含 `chN`/`章节`/`chapter`）；**每一章必须硬绑定 `acceptance_ids`** 到具体 acceptance（feature 章须含**互不共用**的通路 `type=e2e`；组套件单独一条）；多需求章节计划须 `covers_requirements` 覆盖全部 requirements；**仅当绑定验收全部 `passed`+evidence 后**才允许该章 `done` 并开下一章（至多一个 `in_progress`）；**全部章完成后统一跑计划组套件 e2e 才可 closeout**。收口自检 返回 `compliance_dimensions` + gaps。
 - 写码：宿主原生编辑；动手前明确 goal、requirements、known_paths、known_symbols。
 - 原子任务：单次变更宜 2–4 小时可验收；过大则拆 child_requests。
 
 ### 3b. 工程团队（复杂才自己选 team）
 
-- **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口。简单走监工，每句 `监工:`。复杂自己进入 team；**父会话仅 `Team:项目经理:`**；其余席位必须是**真实子智能体**（`one_seat_one_agent`），禁止父会话换前缀扮演。席间经 `channel/{thread}.md` + resume **互聊**（`peer_talk_via_channel`）；项目经理只做交换机。转述子智能体结论时才出现 `Team:架构师:` 等前缀。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
+- **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口。简单走监工，每句 `监工:`。复杂自己进入 team；**父会话仅 `Team:项目经理:`**；其余席位必须是**真实子智能体**（`one_seat_one_agent`），禁止父会话换前缀扮演。席间经 `channel/{thread}.md` + resume **互聊**（`peer_talk_via_channel`）；项目经理 = **SESSION 记账 + 计划生命周期主人 + 交换机**（DoD 检查，不替代专席技术复审）。转述子智能体结论时才出现 `Team:架构师:` 等前缀。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
+- **需求会话总控（`requirement_session_dashboard`）**：立项即建归属模块 `doc/开发/session/{slug}.md`（与 spec 同 slug；模板 [requirement-session.md](../../../../../dev/ai-command/ai/templates/requirement-session.md)）。集中阶段、计划项进度、未完成清单、审查索引、交付通知日志；仅 PM/监工维护。无 SESSION 不得施工；未完成清单非「无」不得宣称完成。
+- **项目经理计划生命周期（`pm_plan_lifecycle`）**：审缺口→派人→监控→席位交付必 `notify_pm`→PM DoD 检查并更新 SESSION→按 deps 唤醒（已满足 deps 可并行）→等测试通知→PM 复检→关计划项；发现须开子 `plan_id` 跟到测试+复检闭环；返工记 SESSION 再拉人循环；全部 closed + 汇审通过才汇报。
+- **席位专项技能镜（`seat_skill_mirrors`）**：每席子智能体提示 = 通用骨架 + 该席增量；开工前必须 `get_skill` / Read 本席 MCP 技能与权威文档（如前端→`frontend_development`+Taglib/Theme；事件→`event_extension`；**数据分析→`visitor_data_analytics`+技能引用`frontend_development`+`taglib_ui_control`+像素指南（整模块 Visitor 含本模块 event.xml/像素桥接；≠通用事件席·禁产品混岗；GTM/GA4 互斥+去重+字典/链）**；**API→`api_sdk_development`+API接口开发规范+BinQuery Provider开发指南**；**支付→`payment_development`+payment-shell+provider-development（改完必拉测试席真浏览器过触及支付全流程）**；**性能检查→`performance_check`+统一缓存范围与性能优化（设计检查+开发后复审；框架约束内）**；**电商顾问→`ecommerce_advisor`+电商顾问.md（禁写码；联网政策；合并原合规）**；后端→模块开发指南+升版门禁）。禁止只发通用骨架。MCP：`engineering_team_bundle.seat_skill_mirrors`。框架专席含 **API**（只做 REST **或** BinQuery/QueryProvider；归属模块落盘；站内业务走 BinQuery，对外走 REST；见 `api_rest_in_owning_module`）、**支付开发工程师**（万能支付壳/对接/退款/Webhook；见 `payment_engineer_for_payment_work`；**`payment_browser_e2e_closed_loop`：改完拉 `Team:测试:` 真 Browser 过方法全流程才过手**；指令 [支付开发.md](../../../../../dev/ai-command/ai/支付开发.md)）、**数据分析**（`Weline_Visitor` 整模块/像素/报表；见 `analytics_engineer_for_visitor_work`；须前端技能引用）、**性能检查工程师**（热路径/缓存设计检查与开发后复审；见 `performance_engineer_for_design_and_review`；指令 [性能检查.md](../../../../../dev/ai-command/ai/性能检查.md)）与 **电商顾问**（见 `ecommerce_advisor_for_commerce`；指令 [电商顾问.md](../../../../../dev/ai-command/ai/电商顾问.md)）。
 - **框架优先**：需求 / 设计 / 施工 / 复审先映射框架机制与组件，再谈业务补丁。
-- **全专席双轨**：凡触发专席（扩展点 / 事件 / Taglib / UI / i18n…）= 施工轨 + 合规复审轨；复审 fail → 返工，禁止带病进验收。
+- **全专席双轨**：凡触发专席（扩展点 / 事件 / 数据分析 / Taglib / UI / i18n…）= 施工轨 + 合规复审轨；复审 fail → 返工，禁止带病进验收。
 - **流水线流动（`team_flow_on_contracts`）**：立项会后开 **对齐冻结会**（测试主持）——先钉可执行 UC + `contracts.md` + `deps.md`，再技术方案定稿与施工。施工按依赖**唤醒并发**；验收只执行已冻用例。禁止「开发完才补主路径用例」或全员空等终点。
 - **组件协商（UI in_scope）**：优先复用 `w-*` / Taglib / Widget；不足须 **原型 ∥ UI**（±主题）**真实子智能体通道互聊**写入 `component-negotiate.md` 后再扩展。
-- **验收实质签收（UI in_scope）**：测试 e2e 全绿不能代替；**UI** 写 `acceptance-ui.md`、**原型** 写 `acceptance-prototype.md` 亲自对照活页签收；任一 fail 禁止交出。
+- **验收实质签收 + 先审后测（UI in_scope · `ui_prototype_gate_before_test`）**：**UI** 写 `acceptance-ui.md`、**原型** 写 `acceptance-prototype.md` 亲自对照活页审查开发成果（有否决权）；fail → 项目经理 resume 开发子智能体再审；**两席都 pass 后**测试席才执行验收 e2e/WB；测试 pass → 项目经理汇审 → 才可向用户汇报。e2e 全绿不能代替 UI/原型门禁或项目经理汇审。
 - **免除**：内容运营（产品优化 / 详情优化 / 翻译优化 / 主图优化 / 新建文章 / 规格修复）两种前缀都不用。
 - **本机测试账号（`local_dev_test_accounts_self_serve`）**：开发环境后台默认 **admin / admin**；前台自建测试顾客。禁止向用户索要账号密码或「请你登录验证」。
 - **并发**：仅 team 模式，且文件或扩展点不重叠、**contracts + UC 已冻结**、本席依赖已满足，才多个子智能体。
 - **上报与停工**：跨轨或硬规则问题必须上报并开会（通道互聊）。无人能拍板或重大架构矛盾 → 停工汇报，确认前禁止改 PHP / 模板 / CSS。停工句也要带 `Team:项目经理:`。
-- **纪要**：仅 team 模式写入 `doc/开发/team/{slug}/`（含 `roster.md` / `channel/` / `surfaces.md` / `components.md` / `contracts.md` / `deps.md` / `{席位}-review.md`）。子智能体回报完成不是交付。
+- **发现问题拉起项目经理（`findings_wake_pm`）**：专席一找出问题立刻 escalate + `@项目经理：请立刻组队解决`；项目经理同回合组队解决并落 SESSION 计划项；**不用** Issue 任务列表。
+- **纪要**：仅 team 模式写入 `doc/开发/team/{slug}/`（含 `roster.md` / `channel/` / `surfaces.md` / `components.md` / `contracts.md` / `deps.md` / `{席位}-review.md`）。子智能体回报完成不是交付；进度以 SESSION 为准。
 
 ### 4. 实现
 
@@ -105,7 +109,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - 架构：模块边界、扩展点是否正确。
 - 缺陷：边界条件、错误路径。
 - 安全：凭据、ACL、输入校验、跨站边界。
-- **专席合规复审**：事件 / 扩展点 / Taglib / Hook / Provider / UI / i18n / ACL / Setup / 合规等凡 roster 触发，必须各自 pass；产物 `meetings/{席位}-review.md`（可合并为分节）。任一 fail → 点名返工，不得进入验收。
+- **专席合规复审**：事件 / 扩展点 / Taglib / Hook / Provider / UI / i18n / ACL / Setup / 电商顾问 / API 等凡 roster 触发，必须各自 pass；产物 `meetings/{席位}-review.md`（可合并为分节）。任一 fail → 点名返工，不得进入验收。
 - **UI 复审**（UI in_scope）：功能在页面上完整可用 + 审美过审图 / 原型标准。
 - **i18n 复审**（文案 in_scope）：`@lang` / `__()` / Taglib 用法、源串简中、CSV、`i18n:collect`。
 ### 6. 分层测试与验收
@@ -121,7 +125,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 | 页面 / 交互 / SSE | 真实 WLS + **当前宿主可用的真实 Browser** 操作员路径（**WB-OP**）；**须截图 + 对照模块 `doc/原型设计.md` 视觉清单（WB-VIS）**；多断点 375 / ≈768 / ≥1024 |
 | 文档 / 规则 | Diff、链接、渲染检查；**与实现对照无漂移** |
 
-**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**真实业务通路（硬，`acceptance_real_business_pathway`）**：收口 e2e/WB 必须跑冻结主路径并留下可回查业务证据（如真实 `order_uuid`）；**禁止**仅用空 query 取消页 CTA 文案、账户页不 fatal、模板字符串 UT 冒充功能完成。**Playwright 仅正式 runner（硬，`e2e_playwright_formal_runner_only`）**：`php bin/w e2e:run` 或 `npx playwright test`（仓库 `tests/e2e` 配置）；禁止 `node -e` / 临时 `chromium.launch` 探活（易残留无头浏览器）。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
+**分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**真实业务通路（硬，`acceptance_real_business_pathway`）**：收口 e2e/WB 必须跑冻结主路径并留下可回查业务证据（如真实 `order_uuid`）；**禁止**仅用空 query 取消页 CTA 文案、账户页不 fatal、模板字符串 UT 冒充功能完成。**测试必须真（硬，`tester_tests_must_be_real`）**：禁止「自造假数据/假响应→再断言假数据→宣称 pass」；证据须经真实业务栈产生且可独立回查，不得只存在于测试进程内存。**Playwright 仅正式 runner（硬，`e2e_playwright_formal_runner_only`）**：`php bin/w e2e:run` 或 `npx playwright test`（仓库 `tests/e2e` 配置）；禁止 `node -e` / 临时 `chromium.launch` 探活（易残留无头浏览器）。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
 
 未完成对应层级时，只能报告「代码已改，测试未完成」「WebUI 验收未完成」或「真实通路验收未完成」。
 
@@ -140,6 +144,8 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 编辑 `*.phtml`、Theme 部件、布局、partial 时，可选 `resolve_task_context` 的 `workflow_contract.v1` 会附带 **`frontend_development`（前端开发规范）**表面。这是一套 Theme/前端规范，**不是**名为 `weline-code` 的独立技能；section 身份属性只是其中一条硬约束。
 
+**【高压线 · 开发语言默认中文 + 中英 CSV】** 前端开发语言默认**简体中文**：模板 / 菜单 / ACL / `__()` / `@lang` / `<lang>` 用户可见源串必须写中文，禁止英文当默认源串。多语言靠模块 **`i18n/zh_Hans_CN.csv` + `en_US.csv`** 翻译（**不是 CSS**）；zh 第二列中文身份、en 第二列真实英文；改文案同回合写齐并 `php bin/w i18n:collect`，抽检当前 locale。未完成双语不得宣称 UI 交付。MCP：`module_i18n_chinese_source_default` / `frontend_ui_requires_zh_en_csv`；权威：`模块翻译CSV规范.md`、Theme 总指南 §4.1。工程团队前端席必须挂 `template_i18n` + `module_i18n_csv`。
+
 **【高压线 · 自研主题 UI】** 所有前台/后台可视化界面**必须**使用 Weline 自研主题体系（**Weline UI 2.0**）：组件类名（`w-field` / `w-input` / `w-button` / `w-select` 等）+ 主题 CSS 变量 Token（`--color-*` / `--weline-theme-*` / spacing·radius·shadow）。**禁止** Bootstrap / Element / Ant Design 等第三方 UI；**禁止**硬编码 `#hex` / `rgb()` / 随意 `px` 间距；地址/地区级联**必须**用 `<w:theme:address>`，禁止手写国家/省/市 input。权威：`Theme开发总指南.md`、`theme-css-variables-only.md`、`Taglib/场景映射表.md`。本条由 MCP `hard-constraints.v1`（`weline_ui_theme_first`）与 `frontend_development` surface 强制下发，不在宿主引导中复述。
 
 **【高压线 · 基础组件只用主题规范变量】** 开发/改主题时，基础组件（`w-button` / `w-input` / `w-select` / `w-textarea` / `w-field` / `w-badge` / `w-alert` / `w-text` / `w-menu` / `w-dialog` / `w-toast` / `w-table` 及 `foundation.css` 同级）**必须**只消费 `--weline-theme-*` / `--color-*` / `--backend-color-*`（及 spacing·radius·shadow）。**禁止**为基础组件私写 hex/rgb 或平行色变量。品牌主题只改 `colors/_*.css` 色盘叶子；默认语义合同继承自 `variables/_colors.css` + `colors/_default.css`。MCP 规则 id：`theme_base_components_token_only`。权威：`theme-semantic-color-matrix.md`。
@@ -152,13 +158,14 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 强制要点：
 
-0. **自研主题 UI 优先（高压线）**：Weline UI 2.0 组件 + 主题 CSS 变量；禁止第三方 UI / 硬编码视觉字面量 / 手写地址级联。提到 CSS/主题时必须齐读 `frontend-design` + `prototype` + MCP `get_skill(weline-theme-development)`，不得自造色距。
+0. **开发语言默认中文 + 中英 CSV（高压线）**：源串简中；双语靠 `zh_Hans_CN.csv`/`en_US.csv`（不是 CSS）；改后 `i18n:collect`；见 §「高压线 · 开发语言默认中文」。
+0b. **自研主题 UI 优先（高压线）**：Weline UI 2.0 组件 + 主题 CSS 变量；禁止第三方 UI / 硬编码视觉字面量 / 手写地址级联。提到 CSS/主题时必须齐读 `frontend-design` + `prototype` + MCP `get_skill(weline-theme-development)`，不得自造色距。
 1. 先判定改动层：layout / partial / component / widget；禁止直接改 `generated/`、`view/tpl`。
 2. **禁止**在 `w:*` / Taglib **标签属性**里写 `<?=`、`<?php`；动态文案用 `@lang`、Hook，或在 PHP 块赋值后再写到 **HTML 元素**属性（须 `htmlspecialchars`）。
 3. **禁止**在会经 `data-wslot` 注入的 **部件模板**里写含 `<?=` 的内联 `<script>`；脚本放 `view/statics/js/widgets/{code}.js`，模板用 `@static(...)` + `defer` + `data-no-extract="true"`。
 4. **禁止**在 Taglib `callback()` / `runtime_callback()` 返回的 HTML 里写裸 `@static(...)`（不会二次编译，浏览器会 404 `.../@static(Module::css/foo.css)`）；须用 `Template::fetchTagSource(DataInterface::dir_type_STATICS, ...)`，见 [如何自定义Tag.md](../../Taglib/doc/如何自定义Tag.md) §静态资源。
 5. **禁止**在布局 slot 的 `<else/>` 写业务/demo 占位 UI；空 slot + 部件 `default_injections` 负责开箱内容。
-6. **硬规则（部件放置 / `theme_layout_widget_owner`）**：（1）**同模块**：布局已用 `<w:widget>` / `fetch(.../widgets/...)` 内嵌某部件 → **禁止**再在该部件 JSON 写 `default_injections`（二选一，删 JSON）。（2）**跨模块**：布局/partial **禁止**互调别的模块部件；外国部件**只能**空 `<w:slot>` + 拥有模块的 JSON `default_injections`。Theme 布局仅可内嵌 `Weline_Theme`。改后跑 `php bin/w frontend:check-theme-layout-widgets`。
+6. **硬规则（部件放置 / `theme_layout_widget_owner`）**：（1）**同模块**：仅本模块 `layouts/`/`partials` 可用 `<w:widget>` / `fetch(.../widgets/...)` 内嵌本模块部件；已内嵌则 **禁止**再在该部件 JSON 写 `default_injections`（二选一，删 JSON；`placement=layout`）。走注入则布局只留空槽（`placement=injection`）。Customer/Product 等自有布局同理，可内嵌本模块部件。（2）**跨模块**：布局/partial **禁止**互调别的模块部件；外国部件**只能**空 `<w:slot>` + 拥有模块的 JSON `default_injections`。Theme 布局仅可内嵌 `Weline_Theme`。复杂 team 部件相关必须分配 **部件开发工程师**（`widget_development`）。改后跑 `php bin/w frontend:check-theme-layout-widgets`。
 7. **必须**为前台字面 `<section>` 与 `w:slot wrapper="section"` 配置非空语义 section 身份（属性名 `weline-code`；部件根节点用 `WidgetUiScope`）；改模板后跑 `php bin/w frontend:check-section-code`。
 8. 视觉值优先主题 CSS 变量；浏览器业务请求走 `Weline.Api.*`。
 9. **内容区宽度（高压线·统一版心，`frontend_unified_content_container`）**：必须遵守 `theme-layout-content-width.md`——**禁止自写一套页面/模块容器**。已包 `.w-container` 的页面只能 `width:100%` + `padding-inline:0`（禁止再写 `max-width`/`padding-inline`）；未包容器的 checkout/cart 等独立壳须用 `--weline-layout-content-max-width` 与 `--weline-layout-content-padding-inline`（或 `.w-theme-content-width`），禁止 `1440px`/`1200px` fallback 与双重 gutter。特质 Hero/CTA 色可在局部 scope 自定义，宽度无例外。
@@ -168,9 +175,10 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 7. 收口
 
+- **SESSION 闭环（硬门槛，`requirement_session_dashboard` + `pm_plan_lifecycle`）**：宣称完成前对照 `doc/开发/session/{slug}.md`——全部计划项 `closed`、未完成清单为「无」、交付通知日志含测试与 PM 复检、汇审通过；否则只能报「代码已改，SESSION/计划未闭环」。
 - **规划 + TDD（工程行为）**：先完成需求拆解与 ≥1 `unit` 验收项；红→绿→实际跑测 PASS evidence 才算完。
 - **自行验证（硬门槛，`agent_self_verify_before_done`）**：实现后须亲自跑 UT/RT/WB（按表面）；acceptance 无 evidence 不得标 passed，亦不得宣称完成。
-- **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md`（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
+- **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md` 与 SESSION（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
 - **汇审（硬门槛，`closeout_requires_huishen`）**：收口前写 `huishen_notes` 并在用户汇报含「汇审」小节；缺则不得宣称完成。
 - **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 - **交付后关闭 Browser（硬门槛，`browser_release_after_delivery`）**：面向用户写出「交付地址」小节之后，**立即关闭**本回合打开的全部验收 Browser 标签/webview（Cursor：`unlock` 后 `browser_tabs` close；其它宿主结束操作员会话）。禁止留下空转 Renderer。仅当用户明确要求保留时可例外并注明。从未打开过 Browser 记 `N/A`。

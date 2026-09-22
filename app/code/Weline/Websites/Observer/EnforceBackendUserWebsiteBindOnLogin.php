@@ -13,6 +13,7 @@ use Weline\Websites\Service\WebsiteAclGrantService;
 
 /**
  * 密码校验通过后：非超管用户只能登录其绑定 website_id 的后台会话。
+ * 超管（role_id=1，兼容 user_id=1）无站点级区分。
  * 通过 Admin 已有事件介入，避免 Admin/Acl 反向依赖 Websites。
  */
 final class EnforceBackendUserWebsiteBindOnLogin implements ObserverInterface
@@ -29,7 +30,7 @@ final class EnforceBackendUserWebsiteBindOnLogin implements ObserverInterface
         }
 
         $userId = (int)$user->getId();
-        if ($userId === 1) {
+        if ($userId === 1 || (int)$user->getRoleId() === 1) {
             return;
         }
 

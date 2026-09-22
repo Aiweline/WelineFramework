@@ -74,6 +74,14 @@
 
 ## 前端 Auth 文档地址对齐（2026-09-08）
 
-`ApiDocService::extractRoute` 为 `Weline\Api\Api\Rest\V1\Auth` 提供包含当前 `rest_frontend` 区域的注册地址，文档与登录共用该记录。当前 `api` 区域的登录路径为 `/api/api/api/rest/v1/auth/login`；本轮正常账号 HTTP 对照中，旧双 `api` 路径返回 404 HTML，正确路径返回 HTTP 200 / code 200。元数据规则仅用于已验证的前端 Auth 类，其他接口和后台路径保持现有契约。
+## 前端 / 后台 Auth 文档地址对齐
+
+`Url::parser` 已消费 `rest_frontend` / `rest_backend` 区域前缀后，路由匹配不得再把模块 router `api` 当作区域键二次剥离（见 `Router\Core::stripLeadingLocaleCurrencySegments`）。
+
+文档与登录共用注册路径：
+- 前端：`/api/api/rest/v1/auth/login`（区域 `api` + 模块 `api/rest/v1/auth/login`）
+- 后台：`/{rest_backend}/api/rest/v1/backend/auth/login`
+
+Backend Auth 动作用 `postLogin` / `postRefresh` / `postLogout` / `getMe` / `getTokenInfo` 注册 HTTP 方法。不在文档中记录用户名、密码或 Token。
 
 这是 HTTP 与定向代码验证，文档页面登录仍待浏览器重验；不在文档中记录用户名、密码或 Token。

@@ -15,7 +15,7 @@
  *
  * @param background_image {default="",type="media_image",label="背景图片",description="从媒体库选择背景图"}
  * @param background_color {default="var(--weline-theme-primary-subtle)",type="color",label="背景颜色"}
- * @param text {default="满额包邮 · 精选上新",type="string",label="促销文字"}
+ * @param text {default="满 $49 包邮 · 新品上架",type="string",label="促销文字"}
  * @param text_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="文字颜色"}
  * @param text_show_background {default=false,type="bool",label="促销文字显示背景"}
  * @param text_background_color {default="var(--weline-theme-primary-surface)",type="color",label="促销文字背景色"}
@@ -50,7 +50,7 @@ $backgroundColor = ThemeUiColor::sanitize(
     $this->getData('background_color') ?? '',
     'var(--weline-theme-primary-subtle)'
 );
-$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '满额包邮 · 精选上新');
+$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '满 $49 包邮 · 新品上架');
 $textColor = ThemeUiColor::sanitize(
     $this->getData('text_color') ?? '',
     'var(--weline-theme-primary-text-emphasis)'

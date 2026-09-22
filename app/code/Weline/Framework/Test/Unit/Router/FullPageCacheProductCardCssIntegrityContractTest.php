@@ -62,4 +62,14 @@ final class FullPageCacheProductCardCssIntegrityContractTest extends TestCase
         self::assertStringContainsString('healStorefrontProductCardCss', $src);
         self::assertStringContainsString('healed product-card css before publish', $src);
     }
+
+    public function testResponseEmissionHealsProductCardCssIndependentOfFpcPublish(): void
+    {
+        $src = (string)file_get_contents(
+            (new \ReflectionClass(\Weline\Framework\Http\Response::class))->getFileName()
+        );
+        self::assertStringContainsString('healStorefrontProductCardCssIfNeeded', $src);
+        self::assertStringContainsString('HtmlCacheAdmission::healStorefrontProductCardCss', $src);
+        self::assertStringContainsString('weline-product-card', $src);
+    }
 }

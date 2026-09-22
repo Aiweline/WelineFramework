@@ -37,5 +37,29 @@ final class RandomCouponCampaignProviderContractTest extends TestCase
         self::assertStringNotContainsString("'apply_to' => 'cart'", $svc);
         self::assertStringContainsString('CouponSourceAttribution', $svc);
         self::assertStringContainsString('schema_fields_SOURCE_TYPE', $svc);
+        self::assertStringContainsString('resolveIssueValidDays', $svc);
+        self::assertStringContainsString("86400 * \$validDays", $svc);
+        self::assertStringNotContainsString('86400 * 30', $svc);
+    }
+
+    public function testIssueValidDaysFromContextDefaultsToThirty(): void
+    {
+        $provider = new \Weline\Marketing\Service\RandomCouponCampaignProvider();
+        $method = new \ReflectionMethod($provider, 'resolveIssueValidDays');
+        $method->setAccessible(true);
+
+        self::assertSame(30, $method->invoke($provider, []));
+        self::assertSame(30, $method->invoke($provider, ['valid_days' => 0]));
+        self::assertSame(30, $method->invoke($provider, ['valid_days' => -1]));
+        self::assertSame(30, $method->invoke($provider, ['valid_days' => '14']));
+        self::assertSame(14, $method->invoke($provider, ['valid_days' => 14]));
+        self::assertSame(7, $method->invoke($provider, ['valid_days' => 7]));
+
+        $endWith14 = \gmdate('Y-m-d H:i:s', \time() + 86400 * 14);
+        $endDefault = \gmdate('Y-m-d H:i:s', \time() + 86400 * 30);
+        $approx14 = \gmdate('Y-m-d H:i:s', \time() + 86400 * (int)$method->invoke($provider, ['valid_days' => 14]));
+        $approx30 = \gmdate('Y-m-d H:i:s', \time() + 86400 * (int)$method->invoke($provider, []));
+        self::assertSame($endWith14, $approx14);
+        self::assertSame($endDefault, $approx30);
     }
 }

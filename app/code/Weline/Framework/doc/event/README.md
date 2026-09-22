@@ -42,8 +42,8 @@
 
 | 事件名（以文档为准） | 文档 |
 |----------------------|------|
-| `Weline_Admin::msg` | [framework/系统消息通知.md](./framework/系统消息通知.md) |
-| `Weline_Framework_Server::start_after` | [server/服务器启动后.md](./server/服务器启动后.md) |
+| `Weline_Framework_Message::system_notification`（旧名 `Weline_Admin::msg`） | [framework/系统消息通知.md](./framework/系统消息通知.md) |
+| `Weline_Server::start_after` | [Server lifecycle/服务器启动后.md](../../Server/doc/event/lifecycle/服务器启动后.md)（Framework 旧文 [server/服务器启动后.md](./server/服务器启动后.md) 仅迁移说明） |
 | `Weline_Framework_Server::stop_after` | [server/服务器停止后.md](./server/服务器停止后.md) |
 | `Weline_Framework_Http::error_page_render` | 见 Framework 需求与 http 域文档 |
 

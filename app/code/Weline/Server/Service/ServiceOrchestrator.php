@@ -18255,6 +18255,10 @@ class ServiceOrchestrator
         if ($this->context !== null) {
             $this->markStartupPhaseRunning($this->context, $totalServices);
         }
+
+        // Framework/Theme 订阅 Weline_Server::start_after（缓存预热等）；fail-open，不得回滚 READY
+        $this->dispatchServerStartAfterEvent($totalServices);
+
         $ctx = $this->context;
         $mainPort = $ctx?->mainPort ?? 0;
         $edgeAdapter = $ctx === null
@@ -18451,6 +18455,32 @@ class ServiceOrchestrator
             $this->serverReadyNotified = false;
             throw new \RuntimeException(
                 'Failed to atomically publish WLS running readiness.'
+            );
+        }
+    }
+
+    /**
+     * 主进程 READY 后派发一次应用层启动完成事件（缓存预热 / FPC warmer 等）。
+     */
+    private function dispatchServerStartAfterEvent(int $totalServices): void
+    {
+        try {
+            $ctx = $this->context;
+            $mainPort = (int)($ctx?->mainPort ?? 0);
+            $payload = [
+                'instance_name' => (string)($ctx?->instanceName ?? ''),
+                'pid' => \getmypid(),
+                'host' => (string)($ctx?->publicHost ?: ($ctx?->host ?? '127.0.0.1')),
+                'port' => $mainPort,
+                'service_count' => $totalServices,
+                'start_time' => \time(),
+            ];
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch('Weline_Server::start_after', $payload);
+        } catch (\Throwable $e) {
+            WlsLogger::warning_(
+                '[Server] Weline_Server::start_after dispatch failed (fail-open): ' . $e->getMessage()
             );
         }
     }
@@ -26100,6 +26130,26 @@ class ServiceOrchestrator
                 'last_status_report_monotonic',
                 self::monotonicSeconds(),
             );
+            if (\array_key_exists('homepage_fpc_hit', $msg)) {
+                $homepageFpc = [
+                    'hit' => ((int)($msg['homepage_fpc_hit'] ?? 0)) === 1,
+                    'fpc_status' => \strtoupper(\trim((string)($msg['homepage_fpc_status'] ?? ''))),
+                    'source' => \strtolower(\trim((string)($msg['homepage_fpc_source'] ?? ''))),
+                    'full_uri' => \trim((string)($msg['homepage_fpc_full_uri'] ?? '')),
+                    'reason' => \trim((string)($msg['homepage_fpc_reason'] ?? '')),
+                    'http_status' => (int)($msg['homepage_fpc_http_status'] ?? 0),
+                ];
+                $instance->setMeta('homepage_fpc', $homepageFpc);
+                $warmupState = \strtolower(\trim((string)($msg['warmup_state'] ?? '')));
+                if ($warmupState !== '') {
+                    $instance->setMeta('warmup_state', $warmupState);
+                } elseif ($homepageFpc['hit']
+                    && $homepageFpc['fpc_status'] === 'HIT'
+                    && \str_starts_with($homepageFpc['source'], 'process')
+                ) {
+                    $instance->setMeta('warmup_state', 'hot');
+                }
+            }
             $this->registry->updateInstance($instance);
         }
         if ($conn < 0 || $conn > 500_000) {

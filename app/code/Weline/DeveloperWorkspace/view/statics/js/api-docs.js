@@ -166,11 +166,26 @@ function flattenApis(source) {
 
 const apis = flattenApis(config.apis);
 const selectedFromConfig = apis.find((api) => String(api.id || '') === String(config.selectedApiId || ''));
+
+function readUrlDocsParams() {
+    const params = new URL(window.location.href).searchParams;
+    const area = String(params.get('area') || '').trim().toLocaleLowerCase();
+    return {
+        module: String(params.get('module') || params.get('module_filter') || '').trim(),
+        query: String(params.get('q') || params.get('search') || '').trim(),
+        apiId: String(params.get('api_id') || '').trim(),
+        area: (area === 'backend' || area === 'frontend') ? area : ''
+    };
+}
+
+const urlDocsParams = readUrlDocsParams();
 const state = {
-    area: selectedFromConfig?.route?.is_backend ? 'backend' : readStore(storageKeys.area, 'frontend'),
-    selectedId: String(config.selectedApiId || ''),
-    query: '',
-    moduleFilter: '',
+    area: selectedFromConfig?.route?.is_backend
+        ? 'backend'
+        : (urlDocsParams.area || readStore(storageKeys.area, 'frontend')),
+    selectedId: String(config.selectedApiId || urlDocsParams.apiId || ''),
+    query: urlDocsParams.query,
+    moduleFilter: urlDocsParams.module,
     locale: readStore(storageKeys.locale, String(config.currentLocale || 'zh_Hans_CN')),
     currency: readStore(storageKeys.currency, String(config.currentCurrency || 'CNY')),
     i18nMode: readStore(storageKeys.i18nMode, 'path'),
@@ -216,12 +231,31 @@ function matchesModule(api) {
     return haystack.includes(filter);
 }
 
-function matches(api) {
+function matchesAreaQuery(api, area) {
     const backend = Boolean(api.route?.is_backend);
-    if ((state.area === 'backend') !== backend) return false;
+    if ((area === 'backend') !== backend) return false;
     if (!matchesModule(api)) return false;
     const query = state.query.trim().toLocaleLowerCase();
     return !query || apiSearchText(api).includes(query);
+}
+
+function matches(api) {
+    return matchesAreaQuery(api, state.area);
+}
+
+/** 当前 Tab 无命中、另一 Tab 有命中时自动切换（后台 REST 常被默认「前端 API」挡住）。 */
+function ensureAreaForCurrentFilters() {
+    const hasFilters = Boolean(String(state.moduleFilter || '').trim() || String(state.query || '').trim());
+    if (!hasFilters) return false;
+    if (apis.some((api) => matchesAreaQuery(api, state.area))) return false;
+    const other = state.area === 'backend' ? 'frontend' : 'backend';
+    if (!apis.some((api) => matchesAreaQuery(api, other))) return false;
+    state.area = other;
+    writeStore(storageKeys.area, state.area);
+    updateAreaTabs();
+    updateLoginButton();
+    updateDocsUrl({replace: true});
+    return true;
 }
 
 function groupedApis(rows) {
@@ -243,6 +277,7 @@ function containsSelected(items) {
 
 function renderList() {
     if (!listRoot) return;
+    ensureAreaForCurrentFilters();
     const filtered = apis.filter(matches);
     if (!filtered.length) {
         const emptyKey = String(state.moduleFilter || '').trim() && !String(state.query || '').trim()
@@ -305,12 +340,59 @@ function updateAreaTabs() {
     });
 }
 
-function updateUrl(apiId, replace = false) {
+function updateDocsUrl(options = {}) {
     const url = new URL(window.location.href);
+    const apiId = options.apiId !== undefined ? String(options.apiId || '') : String(state.selectedId || '');
     if (apiId) url.searchParams.set('api_id', apiId);
     else url.searchParams.delete('api_id');
+
+    const module = String(state.moduleFilter || '').trim();
+    if (module) url.searchParams.set('module', module);
+    else url.searchParams.delete('module');
+    url.searchParams.delete('module_filter');
+
+    const query = String(state.query || '').trim();
+    if (query) url.searchParams.set('q', query);
+    else url.searchParams.delete('q');
+    url.searchParams.delete('search');
+
+    if (state.area === 'backend' || state.area === 'frontend') {
+        url.searchParams.set('area', state.area);
+    } else {
+        url.searchParams.delete('area');
+    }
+
+    const replace = options.replace !== false;
     const method = replace ? 'replaceState' : 'pushState';
-    window.history[method]({apiId}, '', url);
+    window.history[method]({
+        apiId,
+        module,
+        q: query,
+        area: state.area
+    }, '', url);
+}
+
+function updateUrl(apiId, replace = false) {
+    updateDocsUrl({apiId, replace});
+}
+
+function syncFilterInputsFromState() {
+    if (moduleFilterInput && moduleFilterInput.value !== state.moduleFilter) {
+        moduleFilterInput.value = state.moduleFilter;
+    }
+    if (searchInput && searchInput.value !== state.query) {
+        searchInput.value = state.query;
+    }
+}
+
+function applyDocsParamsFromUrl(options = {}) {
+    const params = readUrlDocsParams();
+    state.moduleFilter = params.module;
+    state.query = params.query;
+    if (params.area) state.area = params.area;
+    if (options.syncInputs !== false) syncFilterInputsFromState();
+    ensureAreaForCurrentFilters();
+    updateAreaTabs();
 }
 
 function selectApi(api, options = {}) {
@@ -2039,9 +2121,11 @@ document.querySelectorAll('[data-api-area]').forEach((tab) => {
         const current = selectedApi();
         if (current && Boolean(current.route?.is_backend) !== (state.area === 'backend')) {
             state.selectedId = '';
-            updateUrl('', false);
+            updateDocsUrl({apiId: '', replace: false});
             renderDetail(null);
             renderTest(null);
+        } else {
+            updateDocsUrl({replace: true});
         }
         updateAreaTabs();
         renderList();
@@ -2055,6 +2139,7 @@ searchInput?.addEventListener('input', () => {
     searchTimer = window.setTimeout(() => {
         state.query = searchInput.value;
         renderList();
+        updateDocsUrl({replace: true});
     }, 180);
 });
 
@@ -2064,6 +2149,7 @@ moduleFilterInput?.addEventListener('input', () => {
     moduleFilterTimer = window.setTimeout(() => {
         state.moduleFilter = moduleFilterInput.value;
         renderList();
+        updateDocsUrl({replace: true});
     }, 160);
 });
 
@@ -2094,6 +2180,7 @@ document.querySelectorAll('dialog[data-api-dialog]').forEach((dialog) => {
 
 window.addEventListener('popstate', () => {
     state.demoId = new URL(window.location.href).searchParams.get('demo') || '';
+    applyDocsParamsFromUrl();
     const apiId = new URL(window.location.href).searchParams.get('api_id') || '';
     const api = apis.find((item) => String(item.id || '') === apiId);
     if (api) selectApi(api, {history: false});
@@ -2102,6 +2189,7 @@ window.addEventListener('popstate', () => {
         renderList();
         renderDetail(null);
         renderTest(null);
+        updateLoginButton();
     }
 });
 
@@ -2115,8 +2203,10 @@ if (themeSelect) {
     themeSelect.value = document.documentElement.dataset.themePreference || readStore('weline-theme', 'system');
     applyTheme(themeSelect.value);
 }
+syncFilterInputsFromState();
 updateAreaTabs();
 renderList();
+updateDocsUrl({replace: true});
 updateLoginButton();
 if (selectedFromConfig) selectApi(selectedFromConfig, {history: false, replace: true});
 else if (config.error) {

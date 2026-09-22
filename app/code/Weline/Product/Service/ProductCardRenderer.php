@@ -20,7 +20,7 @@ final class ProductCardRenderer
     private const CSS_DISCARD_HOOK = 'product.product_card_css_discard';
     /** Kept for contracts / call sites; emission is now an inline <style> (body <link> is unreliable + ThemeEditor strips //link). */
     public const CSS_LINK_MARKER = 'data-weline-product-card-css';
-    private const CSS_VERSION = '20260918-product-card-css-fpc-heal';
+    private const CSS_VERSION = '20260921-product-card-css-emission-heal';
     /** Keep the first two desktop rows available without flooding the network. */
     private const INITIAL_VIEWPORT_IMAGE_COUNT = 8;
 

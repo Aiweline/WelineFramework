@@ -11,6 +11,8 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
@@ -24,23 +26,34 @@ use Weline\Theme\Model\WelineTheme;
  */
 class ThemePathResolver implements ThemePathResolverInterface
 {
+    /** Request-scoped memo resource; never a cross-worker shared pool key. */
+    public const REQUEST_MEMO_RESOURCE = 'theme.path.resolve';
+
     /**
      * @var ThemeChainResolverInterface
      */
     private ThemeChainResolverInterface $themeChainResolver;
+
+    private ?StorefrontScopeHotCache $hotCache;
 
     /**
      * 依赖注入：遵循依赖倒置原则 (DIP)
      * 
      * @param ThemeChainResolverInterface $themeChainResolver
      */
-    public function __construct(ThemeChainResolverInterface $themeChainResolver)
-    {
+    public function __construct(
+        ThemeChainResolverInterface $themeChainResolver,
+        ?StorefrontScopeHotCache $hotCache = null,
+    ) {
         $this->themeChainResolver = $themeChainResolver;
+        $this->hotCache = $hotCache;
     }
 
     /**
      * 解析主题文件路径（支持多级继承链）
+     *
+     * 同请求内：themeId + 规范化 modulePath → rememberForRequest（仅 RequestContext memo）。
+     * 无 Request Context / 无 themeId：直接走原解析，不升格为跨请求/进程袋。
      * 
      * @param string $modulePath 模块文件路径
      * @param WelineTheme $theme 当前主题
@@ -51,6 +64,31 @@ class ThemePathResolver implements ThemePathResolverInterface
         if ($this->isCoreRuntimeAsset($modulePath)) {
             return $modulePath;
         }
+
+        $themeId = $theme->getId();
+        if (!$themeId || !Context::hasCurrent()) {
+            return $this->resolveThemeFileUncached($modulePath, $theme);
+        }
+
+        $hotCache = $this->resolveHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return $this->resolveThemeFileUncached($modulePath, $theme);
+        }
+
+        $logicalKey = (string)$themeId . '|' . str_replace(['/', '\\'], DS, $modulePath);
+
+        return (string)$hotCache->rememberForRequest(
+            self::REQUEST_MEMO_RESOURCE,
+            $logicalKey,
+            fn(): string => $this->resolveThemeFileUncached($modulePath, $theme),
+        );
+    }
+
+    /**
+     * 原路径解析（DirectoryResolver → 继承链 is_file），不做请求内 memo。
+     */
+    private function resolveThemeFileUncached(string $modulePath, WelineTheme $theme): string
+    {
         try {
             /** @var \Weline\Theme\Service\ThemeDirectoryResolver $directoryResolver */
             $directoryResolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemeDirectoryResolver::class);
@@ -65,6 +103,19 @@ class ThemePathResolver implements ThemePathResolverInterface
 
         $visited = [];
         return $this->resolveThemeFileRecursive($modulePath, $theme, $visited);
+    }
+
+    private function resolveHotCache(): ?StorefrontScopeHotCache
+    {
+        if ($this->hotCache instanceof StorefrontScopeHotCache) {
+            return $this->hotCache;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            return $resolved instanceof StorefrontScopeHotCache ? $resolved : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

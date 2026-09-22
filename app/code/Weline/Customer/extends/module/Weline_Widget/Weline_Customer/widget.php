@@ -89,6 +89,8 @@ return [
             'layout-checkout-success-guest-account',
             'checkout-success-guest-convert',
         ],
+        // placement=injection：布局只留空槽；同身份禁止再在成功页 fetch。
+        'placement' => 'injection',
         'default_injections' => [[
             'layout_type' => 'checkout',
             'layout_option' => 'default',
@@ -164,6 +166,8 @@ return [
             'social-login',
             'account-social-login',
         ],
+        // placement=injection：登录页只留空槽；同身份禁止再旁路 fetch。
+        'placement' => 'injection',
         'default_injections' => [
             [
                 'layout_type' => 'account/login',

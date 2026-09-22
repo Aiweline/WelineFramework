@@ -15,6 +15,19 @@ final class StorefrontHrefContractTest extends TestCase
         self::assertSame('about/us', StorefrontHref::localize('about/us'));
     }
 
+    public function testFragmentHrefUsesFallbackPathWhenRequestPathMissing(): void
+    {
+        self::assertSame(
+            '/policy/shipping#shipping-s5',
+            StorefrontHref::fragmentHref('shipping-s5', '/policy/shipping')
+        );
+        self::assertSame(
+            '/policy/shipping#shipping-s1',
+            StorefrontHref::fragmentHref('#shipping-s1', '/policy/shipping')
+        );
+        self::assertSame('#', StorefrontHref::fragmentHref('', '/policy/shipping'));
+    }
+
     public function testExternalAbsoluteUrlsPassThrough(): void
     {
         self::assertSame(

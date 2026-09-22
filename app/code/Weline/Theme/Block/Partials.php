@@ -1110,6 +1110,32 @@ class Partials extends Block
             $colorsData = $template->getData('colors') ?? [];
             $contentTemplate = $template->getData('contentTemplate') ?? null;
 
+            // Breadcrumb chrome must see the page trail published by controllers / SEO bag.
+            // Block attributes alone do not inherit Template assigns unless vars= is used.
+            if (\strtolower($type) === 'breadcrumb') {
+                foreach (['storefront_product_breadcrumbs', 'storefront_category_breadcrumbs', 'breadcrumbs'] as $crumbKey) {
+                    if (empty($data[$crumbKey]) || !\is_array($data[$crumbKey])) {
+                        $fromTpl = $template->getData($crumbKey);
+                        if (\is_array($fromTpl) && $fromTpl !== []) {
+                            $data[$crumbKey] = $fromTpl;
+                        }
+                    }
+                }
+                $seoBag = $template->getData('seo');
+                if (\is_array($seoBag)) {
+                    if (empty($data['seo']) || !\is_array($data['seo'])) {
+                        $data['seo'] = $seoBag;
+                    }
+                    if (
+                        (empty($data['breadcrumbs']) || !\is_array($data['breadcrumbs']))
+                        && \is_array($seoBag['breadcrumbs'] ?? null)
+                        && $seoBag['breadcrumbs'] !== []
+                    ) {
+                        $data['breadcrumbs'] = $seoBag['breadcrumbs'];
+                    }
+                }
+            }
+
             $scope = $this->resolveScope($area);
             $metaIdentify = "partials.{$type}";
             if ($defaultOption && $defaultOption !== 'default') {

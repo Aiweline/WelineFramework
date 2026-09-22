@@ -14,6 +14,54 @@ use Weline\Theme\Service\AllMenu\MenuTreeNormalizer;
  */
 final class StorefrontHref
 {
+    /**
+     * In-page fragment that survives storefront &lt;base href="/"&gt;.
+     * Bare "#id" resolves against the base and jumps to the homepage instead of the current path.
+     */
+    public static function fragmentHref(string $id, string $fallbackPath): string
+    {
+        $id = ltrim(trim($id), '#');
+        if ($id === '') {
+            return '#';
+        }
+
+        return self::currentDocumentPath($fallbackPath) . '#' . $id;
+    }
+
+    /**
+     * Current storefront path for in-document anchors (locale prefix preserved when present).
+     */
+    public static function currentDocumentPath(string $fallbackPath): string
+    {
+        $fallback = trim($fallbackPath);
+        if ($fallback === '' || $fallback === '#') {
+            $fallback = '/';
+        }
+        if (!str_starts_with($fallback, '/')) {
+            $fallback = '/' . $fallback;
+        }
+        $fallbackOnly = parse_url($fallback, PHP_URL_PATH);
+        if (is_string($fallbackOnly) && $fallbackOnly !== '') {
+            $fallback = $fallbackOnly;
+        }
+
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $raw = (string)($request->getPathInfo() ?: '');
+            if ($raw === '' && \function_exists('w_env_request_uri')) {
+                $raw = (string)\w_env_request_uri();
+            }
+            $path = parse_url($raw, PHP_URL_PATH);
+            if (is_string($path) && $path !== '' && $path !== '/') {
+                return $path;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $fallback;
+    }
+
     public static function localize(string $url): string
     {
         $url = trim($url);

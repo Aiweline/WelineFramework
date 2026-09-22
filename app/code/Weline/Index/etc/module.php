@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Index',
-    "version" => '1.0.2',
+    "version" => '1.0.4',
     "requires" => [
     ],
     "optional" => [

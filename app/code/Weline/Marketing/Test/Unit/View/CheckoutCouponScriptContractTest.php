@@ -46,5 +46,7 @@ final class CheckoutCouponScriptContractTest extends TestCase
         self::assertStringContainsString("i18n('data-i18n-invalid-limit'", $source);
         self::assertStringContainsString("i18n('data-i18n-enter-code'", $source);
         self::assertStringContainsString("return '-' + code + ' ' + formatAmount(", $source);
+        self::assertStringContainsString('syncAppliedState(paintCode', $source);
+        self::assertStringContainsString('detail.refresh === false', $source);
     }
 }

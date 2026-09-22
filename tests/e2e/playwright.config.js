@@ -342,7 +342,7 @@ module.exports = defineConfig({
       ? false
       : process.env.PLAYWRIGHT_HEADLESS !== '0',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure'
+    screenshot: 'only-on-failure',
   },
   projects: [
     {
@@ -350,9 +350,14 @@ module.exports = defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         // 直连 WLS https://127.0.0.1 自签证书时，避免 Chromium 落到 chrome-error 页
+        // browser_strip_automation_flags：抹掉自动化检测标志，避免云端 reCAPTCHA 按机器人拦截
         launchOptions: {
           executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
-          args: ['--ignore-certificate-errors'],
+          ignoreDefaultArgs: ['--enable-automation'],
+          args: [
+            '--ignore-certificate-errors',
+            '--disable-blink-features=AutomationControlled',
+          ],
         },
       },
     },

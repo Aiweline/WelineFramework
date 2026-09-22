@@ -74,11 +74,26 @@
                 Number(this.config.guestRecheckMs) || DEFAULT_KEYS.guestRecheckMs
             );
             this._storageBound = false;
+            this._chromeClickBound = false;
+            this._chromeNavInFlight = null;
             this.bindFrontendSessionStorageSync();
+            this.bindAccountChromeInteraction();
             const cached = this.readFrontendSessionCache();
-            if (cached && this.isFrontendSessionCacheFresh(cached) && cached.isLogin) {
+            if (this.isTrustedSignedInCache(cached)) {
                 this.frontendUser = cached.user || null;
             }
+        }
+
+        /**
+         * Trusted signed-in snapshot: fresh TTL + real identity.
+         * Stale or identity-less cache must not paint「已登录」chrome
+         * (avatar gone / name ghost while session already dead).
+         */
+        isTrustedSignedInCache(cache) {
+            return !!(cache
+                && cache.isLogin
+                && this.isFrontendSessionCacheFresh(cache)
+                && this.resolveUserIdentity(cache.user));
         }
 
         computeFrontendSessionRenewAt(isLogin, verifiedAt) {
@@ -242,7 +257,9 @@
          */
         applyFrontendSessionSnapshot(cache) {
             const roots = document.querySelectorAll('[data-w-header-account="1"]');
-            if (!cache || !cache.isLogin) {
+            // Cross-tab sync may deliver signed-in snapshots; identity is required so
+            // empty-user ghosts cannot paint「已登录」with avatar already cleared.
+            if (!cache || !cache.isLogin || !this.resolveUserIdentity(cache.user)) {
                 this.frontendUser = null;
                 this.stopOnlineKeepalive();
                 this.clearAccountMenuSignals();
@@ -370,11 +387,20 @@
             const skipGuestNegativeCache = !!(options && options.skipGuestNegativeCache);
             if (!force) {
                 const cached = this.readFrontendSessionCache();
-                if (this.isFrontendSessionCacheFresh(cached)) {
-                    this.frontendUser = cached.isLogin ? (cached.user || null) : null;
+                if (this.isTrustedSignedInCache(cached)) {
+                    this.frontendUser = cached.user || null;
                     return {
-                        isLogin: !!cached.isLogin,
+                        isLogin: true,
                         user: this.frontendUser,
+                        fromCache: true,
+                        renewAt: cached.renewAt,
+                    };
+                }
+                if (cached && this.isFrontendSessionCacheFresh(cached) && !cached.isLogin) {
+                    this.frontendUser = null;
+                    return {
+                        isLogin: false,
+                        user: null,
                         fromCache: true,
                         renewAt: cached.renewAt,
                     };
@@ -384,10 +410,17 @@
                 const result = await this.call('current');
                 // Never treat transport success as signed-in — guest current uses success:false,
                 // but other account ops may return success:true with isLogin:false.
-                const loggedIn = !!(result && (result.isLogin || result.logged_in));
-                this.frontendUser = loggedIn ? (result.user || (result.data && result.data.user) || null) : null;
+                const rawUser = result && (result.user || (result.data && result.data.user)) || null;
+                const loggedIn = !!(result && (result.isLogin || result.logged_in)
+                    && this.resolveUserIdentity(rawUser));
+                this.frontendUser = loggedIn ? rawUser : null;
                 const status = { isLogin: loggedIn, user: this.frontendUser, fromCache: false };
                 this.writeFrontendSessionCache(status);
+                // Same-tab: storage event does not fire for this document — paint guest immediately
+                // so header cannot linger「已登录」after session death (avatar already cleared).
+                if (!loggedIn) {
+                    this.paintHeaderGuestChrome();
+                }
                 return status;
             } catch (error) {
                 console.warn('[WelineApi.Account] frontend session check failed:', error);
@@ -400,9 +433,19 @@
                     && (/not signed in|not logged in|unauthori[sz]ed|未登录|未登入/i.test(message)
                         || (error && (error.code === 401 || error.status === 401)))) {
                     this.writeFrontendSessionCache(status);
+                    this.paintHeaderGuestChrome();
                 }
                 return status;
             }
+        }
+
+        paintHeaderGuestChrome() {
+            this.frontendUser = null;
+            this.stopOnlineKeepalive();
+            this.clearAccountMenuSignals();
+            document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                this.applyHeaderGuest(root);
+            });
         }
 
         async frontendUserLogin(username, password, rememberDuration = 0) {
@@ -566,14 +609,17 @@
             this._keepaliveInFlight = true;
             try {
                 const result = await this.call('current');
-                const loggedIn = !!(result && (result.isLogin || result.logged_in));
+                const rawUser = result && (result.user || (result.data && result.data.user)) || null;
+                const loggedIn = !!(result && (result.isLogin || result.logged_in)
+                    && this.resolveUserIdentity(rawUser));
                 if (!loggedIn) {
                     this.frontendUser = null;
                     this.writeFrontendSessionCache({ isLogin: false, user: null });
+                    this.paintHeaderGuestChrome();
                     this.stopOnlineKeepalive();
                     return;
                 }
-                this.frontendUser = result.user || (result.data && result.data.user) || this.frontendUser;
+                this.frontendUser = rawUser || this.frontendUser;
                 this.writeFrontendSessionCache({ isLogin: true, user: this.frontendUser });
             } catch (error) {
                 const message = String((error && error.message) || error || '');
@@ -581,6 +627,7 @@
                     || (error && (error.code === 401 || error.status === 401))) {
                     this.frontendUser = null;
                     this.writeFrontendSessionCache({ isLogin: false, user: null });
+                    this.paintHeaderGuestChrome();
                     this.stopOnlineKeepalive();
                 } else {
                     // Transient network/API errors must not stop keepalive while the browser is online.
@@ -681,7 +728,9 @@
 
             if (!needsNetwork) {
                 if (cached) {
-                    const isLogin = !!cached.isLogin;
+                    // Only paint signed-in from a trusted snapshot. Stale / identity-less
+                    // localStorage must not claim login (session may already be dead).
+                    const isLogin = this.isTrustedSignedInCache(cached);
                     const user = isLogin ? (cached.user || null) : null;
                     this.frontendUser = user;
                     Array.from(roots).forEach((root) => {
@@ -718,7 +767,7 @@
                     synced: !!cached,
                     refreshed: false,
                     fromCache: !!cached,
-                    isLogin: !!(cached && cached.isLogin),
+                    isLogin: this.isTrustedSignedInCache(cached),
                     reason: paintOnly
                         ? 'paint_only'
                         : (needsMenuReconcile ? 'cache_menu_reconcile' : 'cache_or_guest_ssr'),
@@ -972,6 +1021,12 @@
 
         applyHeaderSignedIn(root, user) {
             if (!(root instanceof Element)) {
+                return;
+            }
+            // Never paint signed-in shell without a resolvable identity — otherwise
+            // header shows「已登录」while avatar/name are already empty (session ghost).
+            if (!this.resolveUserIdentity(user)) {
+                this.applyHeaderGuest(root);
                 return;
             }
             const guest = root.querySelector('[data-account-shell="guest"]');
@@ -1558,11 +1613,16 @@
             } catch (_error) {
                 status = { isLogin: false, user: null };
             }
-            if (status && status.isLogin) {
+            if (status && status.isLogin && this.resolveUserIdentity(status.user || this.frontendUser)) {
                 const roots = document.querySelectorAll('[data-w-header-account="1"]');
-                roots.forEach((root) => this.applyHeaderSignedIn(root, status.user || this.frontendUser));
-                return { ok: true, already: true, user: status.user || this.frontendUser };
+                const user = status.user || this.frontendUser;
+                roots.forEach((root) => this.applyHeaderSignedIn(root, user));
+                return { ok: true, already: true, user };
             }
+
+            // Session dead while local chrome still claimed signed-in: flip guest now
+            // (same-tab; do not wait for a later paint / redirect).
+            this.paintHeaderGuestChrome();
 
             const scopeRoot = opts.root instanceof Element ? opts.root : document;
             let host = scopeRoot.querySelector('[data-weline-mount="customer/login-panel"]');
@@ -1591,6 +1651,90 @@
 
             return { ok: false, prompted: true, host };
         }
+
+        /**
+         * Clicking header「个人中心」while local chrome says signed-in must reconcile
+         * with account.current before navigation — otherwise dead sessions keep
+         * showing logged-in until a server redirect feels like「自己掉线」.
+         */
+        bindAccountChromeInteraction() {
+            if (this._chromeClickBound) {
+                return;
+            }
+            this._chromeClickBound = true;
+            document.addEventListener('click', (event) => {
+                if (!(event instanceof MouseEvent) || event.defaultPrevented || event.button !== 0) {
+                    return;
+                }
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                    return;
+                }
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+                const root = target.closest('[data-w-header-account="1"]');
+                if (!(root instanceof Element) || root.getAttribute('data-auth-state') !== 'signed-in') {
+                    return;
+                }
+                const link = target.closest('a[data-account-home-link], a[data-account-nav-link], [data-account-menu] a[href]');
+                if (!(link instanceof HTMLAnchorElement) || !root.contains(link)) {
+                    return;
+                }
+                if (link.hasAttribute('data-account-logout-confirm')
+                    || link.classList.contains('logout-link')) {
+                    return;
+                }
+                const href = String(link.getAttribute('href') || '').trim();
+                if (!href || href === '#' || /^javascript:/i.test(href)) {
+                    return;
+                }
+                const isAccountHome = link.hasAttribute('data-account-home-link');
+                const isAccountPath = /customer\/account/i.test(href);
+                if (!isAccountHome && !isAccountPath) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                this.reconcileSignedInChromeNavigation(href);
+            }, true);
+        }
+
+        reconcileSignedInChromeNavigation(href) {
+            if (this._chromeNavInFlight) {
+                return this._chromeNavInFlight;
+            }
+            this._chromeNavInFlight = Promise.resolve()
+                .then(async () => {
+                    let status = null;
+                    try {
+                        status = await this.checkFrontendUserLogin({ force: true });
+                    } catch (_error) {
+                        status = { isLogin: false, user: null };
+                    }
+                    const user = status && (status.user || this.frontendUser);
+                    if (status && status.isLogin && this.resolveUserIdentity(user)) {
+                        document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                            this.applyHeaderSignedIn(root, user);
+                        });
+                        if (href) {
+                            window.location.assign(href);
+                        }
+                        return { ok: true, navigated: true };
+                    }
+                    this.paintHeaderGuestChrome();
+                    return this.ensureLogin({ force: false });
+                })
+                .catch((error) => {
+                    console.warn('[WelineApi.Account] account chrome reconcile failed:', error);
+                    this.paintHeaderGuestChrome();
+                    return this.ensureLogin({ force: false });
+                })
+                .finally(() => {
+                    this._chromeNavInFlight = null;
+                });
+            return this._chromeNavInFlight;
+        }
     }
 
     const accountManager = new AccountManager(getAccountConfig());
@@ -1604,6 +1748,9 @@
         handleAuthRefreshSignal: () => accountManager.handleAuthRefreshSignal(),
         syncHeaderAccountChrome: (options) => accountManager.syncHeaderAccountChrome(options || {}),
         ensureLogin: (options) => accountManager.ensureLogin(options || {}),
+        reconcileSignedInChromeNavigation: (href) => accountManager.reconcileSignedInChromeNavigation(href),
+        isTrustedSignedInCache: (cache) => accountManager.isTrustedSignedInCache(cache || null),
+        paintHeaderGuestChrome: () => accountManager.paintHeaderGuestChrome(),
         maybeStartSocialQuickPrompt: (...args) => accountManager.maybeStartSocialQuickPrompt(...args),
         scanMounts: (...args) => accountManager.scanMounts(...args),
         refreshAccountMenuSignals: () => accountManager.refreshAccountMenuSignals(),

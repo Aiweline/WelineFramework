@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Search\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Template;
 use Weline\Search\Service\HotWordsService;
@@ -75,6 +76,10 @@ final class Search implements TaglibInterface
             $placeholderRaw = trim((string)($attributes['placeholder'] ?? '输入关键词…'));
             if ($placeholderRaw === '') {
                 $placeholderRaw = '输入关键词…';
+            }
+            try {
+                Parser::prefetchWords([$placeholderRaw, '搜索', '输入关键词…']);
+            } catch (\Throwable) {
             }
             $placeholder = (string)__($placeholderRaw);
             $query = trim((string)($attributes['value'] ?? ''));

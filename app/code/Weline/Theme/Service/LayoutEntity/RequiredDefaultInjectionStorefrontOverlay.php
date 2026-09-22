@@ -6,6 +6,8 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Product\Service\ProductCardRenderer;
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Theme\Service\SlotBoundaryScanner;
@@ -20,13 +22,13 @@ use Weline\Theme\Service\WidgetDefaultInjectionService;
  * → execute one pass per depth layer → assert. Does not write layouts.
  * HTML multi-pass discovery is not the default algorithm.
  *
- * Hard rule (REQ-THEME-0036 / 有部件必入声明槽): if a widget declares
- * required=true default_injections and this published ThemeLayoutVersion has
- * NO human uninstall (`user_deleted@{versionId}`), the widget MUST appear in
- * its declared slot. Missing bake/entity/snapshot/param-only config is NOT a
- * valid omission reason. Plain `user_deleted` without version is NOT this
- * version's uninstall. Injection owns the destination region (replace, never
- * `$html.$inner` prepend) so presence failures cannot stack duplicates.
+ * Storefront default_injections (REQ-THEME-0036, 2026-09-21 user纠偏):
+ * Best-effort only — try declared JSON injections; unfilled must NOT 500.
+ * Identity XOR（同模块同部件）: layout 已内嵌该部件 → 禁止再留同部件的
+ * `default_injections` JSON（勿布局+JSON 各注一遍）。跨模块：禁止布局互调部件，
+ * 外国部件只能走拥有模块 JSON + 空槽。仅 `user_deleted@{versionId}` 从 plan 省略。
+ * Multiple 槽内多部件并存 OK（append）。Exclusive：整区替换防同码叠层。
+ * 页级 once / count>1 仅 soft-skip 日志。
  */
 final class RequiredDefaultInjectionStorefrontOverlay
 {
@@ -101,6 +103,7 @@ final class RequiredDefaultInjectionStorefrontOverlay
         }
         if ($this->anyRegionHasWidget($regions, $module, $code)
             || $this->pageHasWidgetBoundToSlot($rendered, $slotId, $module, $code)
+            || RequiredDefaultInjectionContract::pageHasWidgetPresent($rendered, $module, $code)
         ) {
             return $rendered;
         }
@@ -128,9 +131,24 @@ final class RequiredDefaultInjectionStorefrontOverlay
                 . '" data-required-injection-presence="1">' . $html . '</div>';
         }
 
-        // Required injection owns the destination region: replace inner, never
-        // prepend onto existing bake/soft/hook body ($html.$inner caused duplicate widgets).
-        return $this->replaceRegionInner($rendered, $target, $html);
+        $existingInner = (string)($target['inner'] ?? '');
+        // Exclusive / wrong-bake: replace. Multiple slot with sibling widgets: append.
+        // Homepage content nesting: never replace away homepage-* slot markers.
+        $preserveHomepageNest = $slotId === 'content'
+            && \str_contains($existingInner, '<!--@weline-slot:homepage-');
+        $allowMultipleAppend = !RequiredDefaultInjectionContract::slotInnerHasWidgetCode($existingInner, $module, $code)
+            && $this->slotAllowsMultiple($rendered, $slotId, $target);
+        if ($existingInner !== '' && ($preserveHomepageNest || $allowMultipleAppend)) {
+            $html = $existingInner . $html;
+        }
+
+        // Required injection owns the destination region for exclusive slots (replace,
+        // never `$html.$inner` prepend on mismatched bake — that caused duplicate widgets).
+        // Multiple slots append above when siblings already occupy the region.
+        $rendered = $this->replaceRegionInner($rendered, $target, $html);
+        $this->assertSlotHasAtMostOne($rendered, $slotId, $module, $code);
+
+        return $rendered;
     }
 
     /**
@@ -149,13 +167,90 @@ final class RequiredDefaultInjectionStorefrontOverlay
         }
         if ($this->anyRegionHasWidget($regions, $module, $code)
             || $this->pageHasWidgetBoundToSlot($rendered, $slotId, $module, $code)
+            || RequiredDefaultInjectionContract::pageHasWidgetPresent($rendered, $module, $code)
         ) {
+            $this->assertSlotHasAtMostOne($rendered, $slotId, $module, $code);
+
             return;
         }
-        throw new \RuntimeException(
-            'required_default_injection_unfilled: '
-            . $module . '|' . $code . ' slot=' . $slotId
-        );
+        // Soft: JSON default_injections are optional at render time — layout XOR is
+        // source hygiene (same widget must not be layout+JSON), not a hard storefront fill.
+        if (\function_exists('w_log_warning')) {
+            w_log_warning(sprintf(
+                '[RequiredDefaultInjection] unfilled soft-skip %s|%s slot=%s',
+                $module,
+                $code,
+                $slotId,
+            ));
+        }
+    }
+
+    /**
+     * Hard-fail when a required widget appears more than once in its declared slot.
+     * Only outermost regions are counted: nested same-id inners are subsets and must
+     * not be concatenated (false count=2 for one physical widget).
+     */
+    private function assertSlotHasAtMostOne(
+        string $rendered,
+        string $slotId,
+        string $module,
+        string $code,
+    ): void {
+        $combined = '';
+        foreach ($this->outermostSlotRegions($this->listSlotRegions($rendered, $slotId)) as $region) {
+            $combined .= (string)($region['inner'] ?? '');
+        }
+        $count = RequiredDefaultInjectionContract::countWidgetPresent($combined, $module, $code);
+        // Soft: duplicate is a source hygiene issue (delete layout copy XOR default_injections),
+        // not a storefront hard-fail. Prefer layout-owned Theme chrome widgets without injection JSON.
+        if ($count > 1 && \function_exists('w_log_warning')) {
+            w_log_warning(sprintf(
+                '[RequiredDefaultInjection] slot duplicate soft-skip %s|%s slot=%s count=%d',
+                $module,
+                $code,
+                $slotId,
+                $count,
+            ));
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $regions
+     * @return list<array<string, mixed>>
+     */
+    private function outermostSlotRegions(array $regions): array
+    {
+        if (\count($regions) <= 1) {
+            return $regions;
+        }
+        $outer = [];
+        foreach ($regions as $region) {
+            $start = (int)($region['inner_start'] ?? -1);
+            $end = (int)($region['inner_end'] ?? -1);
+            if ($start < 0 || $end < $start) {
+                continue;
+            }
+            $nested = false;
+            foreach ($regions as $other) {
+                if ($other === $region) {
+                    continue;
+                }
+                $oStart = (int)($other['inner_start'] ?? -1);
+                $oEnd = (int)($other['inner_end'] ?? -1);
+                if ($oStart < 0 || $oEnd < $oStart) {
+                    continue;
+                }
+                if ($start >= $oStart && $end <= $oEnd && ($start > $oStart || $end < $oEnd)) {
+                    $nested = true;
+                    break;
+                }
+            }
+            if (!$nested) {
+                $outer[] = $region;
+            }
+        }
+
+        return $outer !== [] ? $outer : $regions;
     }
 
     /**
@@ -206,6 +301,40 @@ final class RequiredDefaultInjectionStorefrontOverlay
                 $e,
             );
         }
+    }
+
+    /**
+     * Multiple destinations (e.g. header-nav-extensions) keep sibling required widgets.
+     * Exclusive wrong-bake still replaces (no data-wslot-multiple + single-code ownership).
+     *
+     * @param array<string, mixed> $target
+     */
+    private function slotAllowsMultiple(string $html, string $slotId, array $target): bool
+    {
+        $start = (int)($target['region_start'] ?? $target['inner_start'] ?? 0);
+        $probeFrom = \max(0, $start - 500);
+        $probe = \substr($html, $probeFrom, ($start - $probeFrom) + 80);
+        if (\preg_match('/\bdata-wslot-multiple\s*=\s*(["\']?)true\1/i', $probe) === 1) {
+            return true;
+        }
+        // Fallback: Theme chrome/footer extension slots are multiple by contract.
+        $slotId = \strtolower(\trim($slotId));
+        $multipleSlots = [
+            'header-nav-extensions',
+            'header-policy-links',
+            'footer-about-links',
+            'footer-partner-links',
+            'footer-payment-account-links',
+            'footer-help-links',
+        ];
+        if (\in_array($slotId, $multipleSlots, true)) {
+            return true;
+        }
+        if (\preg_match('/\bclass=(["\'])[^"\']*\bheader-nav-extensions\b[^"\']*\1/i', $probe) === 1) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -371,6 +500,10 @@ final class RequiredDefaultInjectionStorefrontOverlay
         $scopeKey = \trim($scopeKey) !== '' ? \trim($scopeKey) : 'default';
         $versionKey = \trim($versionKey) !== '' ? \trim($versionKey) : 'required';
         RequestContext::set('theme.layout_entity.node.' . $uid, $widget);
+        // Required injection may re-render after an earlier Fiber/slot pass already
+        // set once-per-request card CSS flags while that HTML was discarded/replaced.
+        ProductCardRenderer::resetProductCardCssEmission();
+        ProductCardAddToCartParams::resetPurchaseActionsAssetsEmission();
         try {
             /** @var ThemeLayoutEntityWidgetRenderer $renderer */
             $renderer = ObjectManager::getInstance(ThemeLayoutEntityWidgetRenderer::class);
@@ -383,6 +516,8 @@ final class RequiredDefaultInjectionStorefrontOverlay
         }
 
         try {
+            ProductCardRenderer::resetProductCardCssEmission();
+            ProductCardAddToCartParams::resetPurchaseActionsAssetsEmission();
             /** @var \Weline\Theme\Service\ThemePlaceableRegistry $registry */
             $registry = ObjectManager::getInstance(\Weline\Theme\Service\ThemePlaceableRegistry::class);
             /** @var \Weline\Theme\Service\ThemeComponentRenderer $componentRenderer */

@@ -10,6 +10,7 @@ use Weline\Theme\Service\SlotBoundaryScanner;
 
 /**
  * Behavioral closed loop for plan-based overlay execute (no Catalog I/O).
+ * Identity XOR is enforced at registry/static gate — not by runtime presence/count.
  */
 final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
 {
@@ -18,15 +19,6 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
         $overlay = new RequiredDefaultInjectionStorefrontOverlay(new SlotBoundaryScanner());
         $execute = new \ReflectionMethod($overlay, 'executeOne');
         $execute->setAccessible(true);
-
-        // Two regions same slot id: outer empty shell + nested empty (historical duplicate markers).
-        $html = '<!--@weline-slot:product-purchase-actions-->'
-            . '<div data-wslot="product-purchase-actions" class="outer">'
-            . '<!--@weline-slot:product-purchase-actions-->'
-            . '<div data-wslot="product-purchase-actions" class="inner"></div>'
-            . '<!--@/weline-slot:product-purchase-actions-->'
-            . '</div>'
-            . '<!--@/weline-slot:product-purchase-actions-->';
 
         $item = [
             'slot_id' => 'product-purchase-actions',
@@ -44,8 +36,6 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
             ],
         ];
 
-        // Stub renderNode via anonymous subclass is hard; call with a pre-wrapped presence
-        // by testing second execute after first manual inject.
         $manual = '<!--@weline-slot:product-purchase-actions-->'
             . '<div data-wslot="product-purchase-actions" class="outer">'
             . '<div data-widget-code="product-add-to-cart" data-testid="product-add-to-cart" data-slot-id="product-purchase-actions">CTA</div>'
@@ -55,11 +45,9 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
             . '</div>'
             . '<!--@/weline-slot:product-purchase-actions-->';
 
-        // Second execute must not fan-out into the empty nested sibling.
         $after = $execute->invoke($overlay, $manual, $item, 1, 'default', 'required');
         self::assertSame(1, substr_count($after, 'data-testid="product-add-to-cart"'));
         self::assertSame(1, substr_count($after, 'data-widget-code="product-add-to-cart"'));
-        // Empty nested region may remain empty — that is OK (整槽 once).
         self::assertStringContainsString('class="inner"', $after);
     }
 
@@ -84,19 +72,47 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    public function testAssertFilledThrowsWhenSlotPresentButWidgetMissing(): void
+    public function testAssertFilledSoftSkipsWhenSlotPresentButWidgetMissing(): void
     {
         $overlay = new RequiredDefaultInjectionStorefrontOverlay(new SlotBoundaryScanner());
         $assert = new \ReflectionMethod($overlay, 'assertFilled');
         $assert->setAccessible(true);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('required_default_injection_unfilled');
+        // Unfilled is soft: same-widget layout+JSON XOR is source hygiene, not a 500.
         $assert->invoke($overlay, '<!--@weline-slot:product-purchase-actions--><div></div><!--@/weline-slot:product-purchase-actions-->', [
             'slot_id' => 'product-purchase-actions',
             'widget_module' => 'Weline_Cart',
             'widget_code' => 'product-add-to-cart',
         ]);
+        $this->addToAssertionCount(1);
+    }
+
+    public function testExecuteOneAppendsSiblingsOnMultipleSlot(): void
+    {
+        $overlay = new RequiredDefaultInjectionStorefrontOverlay(new SlotBoundaryScanner());
+        $replace = new \ReflectionMethod($overlay, 'replaceRegionInner');
+        $replace->setAccessible(true);
+        $regionsMethod = new \ReflectionMethod($overlay, 'listSlotRegions');
+        $regionsMethod->setAccessible(true);
+
+        $html = '<!--@weline-slot:header-nav-extensions-->'
+            . '<div data-wslot="header-nav-extensions" data-wslot-multiple="true" class="header-nav-extensions">'
+            . '<a data-testid="header-deals-link" data-widget-code="header-deals-link">Deals</a>'
+            . '</div>'
+            . '<!--@/weline-slot:header-nav-extensions-->';
+
+        // Simulate compose path used by executeOne without full renderNode.
+        $regions = $regionsMethod->invoke($overlay, $html, 'header-nav-extensions');
+        self::assertNotSame([], $regions);
+        $existing = (string)($regions[0]['inner'] ?? '');
+        $blog = '<a data-testid="header-blog-link" data-widget-code="header-blog-link">Blog</a>';
+        $allows = new \ReflectionMethod($overlay, 'slotAllowsMultiple');
+        $allows->setAccessible(true);
+        self::assertTrue($allows->invoke($overlay, $html, 'header-nav-extensions', $regions[0]));
+        $composed = $existing . $blog;
+        $after = $replace->invoke($overlay, $html, $regions[0], $composed);
+        self::assertStringContainsString('header-deals-link', $after);
+        self::assertStringContainsString('header-blog-link', $after);
     }
 
     public function testExecuteOneReplacesMismatchedBakeInsteadOfPrepending(): void
@@ -110,6 +126,15 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
             $src,
         );
         self::assertStringContainsString('caused duplicate widgets', $src);
+        self::assertStringContainsString('pageHasWidgetPresent', $src);
+        self::assertStringContainsString('assertSlotHasAtMostOne', $src);
+        self::assertStringContainsString('outermostSlotRegions', $src);
+        self::assertStringContainsString('soft-skip', $src);
+        self::assertStringContainsString('slotAllowsMultiple', $src);
+        self::assertStringNotContainsString(
+            "throw new \\RuntimeException(\n                'required_default_injection_duplicate:",
+            $src,
+        );
 
         $base = new RequiredDefaultInjectionStorefrontOverlay(new SlotBoundaryScanner());
         $replace = new \ReflectionMethod($base, 'replaceRegionInner');

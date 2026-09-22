@@ -2,6 +2,20 @@
 
 > **硬规则**：任何模块交付用户可见文案时，必须维护齐全的基础中英文 CSV，并在每次改动后执行 `i18n:collect`。只改 CSV 不 collect，运行时**不会生效**。
 
+## 前端开发成员约定（硬，写在最前）
+
+**前端开发语言默认简体中文。** 模板 / 菜单 / ACL / `__()` / `@lang` / `<lang>` 的用户可见源串必须写中文；多语言靠 **中英 CSV**（`zh_Hans_CN.csv` + `en_US.csv`）翻译，**不是 CSS、也不是把模板改成英文**。
+
+| 约定 | 要求 |
+|------|------|
+| 开发语言 | 源串默认简体中文（正确且强制） |
+| 双语载体 | 模块 `i18n/zh_Hans_CN.csv` + `i18n/en_US.csv`（禁止其它 locale CSV） |
+| zh 第二列 | 中文身份译（通常与 source 同字；禁止塞英文） |
+| en 第二列 | **真实英文**（禁止留空、禁止把中文 source 原样当英文） |
+| 改后必做 | `php bin/w i18n:collect` + 抽检当前后台/前台 locale |
+
+MCP：`module_i18n_chinese_source_default` / `frontend_ui_requires_zh_en_csv` / `module_i18n_csv_collect`；表面 `frontend_development` + `template_i18n` + `module_i18n_csv`。工程团队前端席开工前必须 `get_skill` 上述技能并 Read 本文。
+
 ## 源串默认简体中文（硬，全模块）
 
 MCP 规则 id：`module_i18n_chinese_source_default`。

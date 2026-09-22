@@ -120,6 +120,9 @@ final class ThemeRuntimeCacheCleaner
         $this->runStep($result, 'storefront_chrome_hot_cache', static function (): void {
             self::purgeStorefrontChromeHotCachePool();
         });
+        $this->runStep($result, 'published_layout_structure_hot_cache', static function (): void {
+            self::purgePublishedLayoutStructureHotCachePool();
+        });
         foreach ($this->themeCacheServices() as $step => $serviceClass) {
             $this->runStep($result, $step, static function () use ($serviceClass): void {
                 $service = ObjectManager::getInstance($serviceClass);
@@ -272,6 +275,10 @@ final class ThemeRuntimeCacheCleaner
             self::purgeStorefrontChromeHotCachePool();
         });
 
+        $this->runStep($result, 'published_layout_structure_hot_cache', static function (): void {
+            self::purgePublishedLayoutStructureHotCachePool();
+        });
+
         $this->runStep($result, 'runtime_cache_broadcast', function (): void {
             $instanceName = $this->currentRuntimeInstanceName();
             $broadcaster = $this->runtimeProvider(RuntimeControlBroadcasterInterface::class);
@@ -302,6 +309,22 @@ final class ThemeRuntimeCacheCleaner
         try {
             ObjectManager::getInstance(CacheManager::class)
                 ->pool('weline_theme_storefront_chrome')
+                ->clear();
+        } catch (\Throwable) {
+        }
+    }
+
+    /** Drop published layout/Slot structure HotCache (CachePolicy pool). */
+    private static function purgePublishedLayoutStructureHotCachePool(): void
+    {
+        if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+            return;
+        }
+        // Policy process keys are hashed; reset L1 then clear the dedicated pool.
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        try {
+            ObjectManager::getInstance(CacheManager::class)
+                ->pool(StorefrontThemeCacheCoordinator::PUBLISHED_LAYOUT_STRUCTURE_POOL)
                 ->clear();
         } catch (\Throwable) {
         }

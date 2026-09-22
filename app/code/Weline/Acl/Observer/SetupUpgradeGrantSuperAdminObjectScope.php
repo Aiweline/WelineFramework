@@ -19,7 +19,7 @@ use Weline\Framework\Runtime\ScopeIdentity;
  */
 final class SetupUpgradeGrantSuperAdminObjectScope implements ObserverInterface
 {
-    private const SUPER_ADMIN_ROLE_ID = 1;
+    private const SUPER_ADMIN_ROLE_ID = \Weline\Acl\Model\Role::ID_SUPER_ADMIN;
     private const GRANT_VERSION = 1;
 
     public function __construct(

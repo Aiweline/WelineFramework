@@ -660,6 +660,20 @@ class PixelEventService
             ]);
         }
 
+        // R2a：字典 required_params 空壳禁入库（防御旧客户端仍上报）
+        $paramSkip = $this->skipReasonForIncompleteRequiredParams($eventName, $prepared['post']);
+        if ($paramSkip !== null) {
+            return $this->successResponse([
+                'pixel_id' => null,
+                'pixel_additional_id' => null,
+                'buffered' => false,
+                'skipped' => true,
+                'reason' => $paramSkip,
+                'event_id' => $prepared['event_id'],
+                'event' => $eventName,
+            ]);
+        }
+
         $buffer = $eventName === 'site_error' ? null : $this->hotBuffer()->buffer($prepared);
         if ($buffer) {
             $response = $this->successResponse([
@@ -686,6 +700,81 @@ class PixelEventService
         }
 
         return $response;
+    }
+
+    /**
+     * R2a 字典 required_params 空壳门闩（服务端防御）。
+     * view_cart / begin_checkout：禁 items=[]；search：禁无 search_term；
+     * begin_checkout + payment-recovery URL：禁发。
+     *
+     * @param array<string, mixed> $post
+     */
+    private function skipReasonForIncompleteRequiredParams(string $eventName, array $post): ?string
+    {
+        $event = \strtolower(\trim($eventName));
+        if ($event === '') {
+            return null;
+        }
+
+        $url = (string)($post['url'] ?? '');
+        if ($event === 'begin_checkout'
+            && (\str_contains($url, 'payment-recovery') || \str_contains($url, '#payment-recovery'))
+        ) {
+            return 'payment_recovery_begin_checkout_forbidden';
+        }
+
+        $items = $post['items'] ?? null;
+        if (!\is_array($items)
+            && isset($post['additionalInfo']['ecommerce']['items'])
+            && \is_array($post['additionalInfo']['ecommerce']['items'])
+        ) {
+            $items = $post['additionalInfo']['ecommerce']['items'];
+        }
+        if (!\is_array($items)
+            && isset($post['additionalInfo']['meta']['items'])
+            && \is_array($post['additionalInfo']['meta']['items'])
+        ) {
+            $items = $post['additionalInfo']['meta']['items'];
+        }
+        $items = \is_array($items) ? $items : [];
+
+        if ($event === 'view_cart' || $event === 'begin_checkout' || $event === 'remove_from_cart') {
+            if ($items === []) {
+                return 'missing_required_params_items';
+            }
+            $currency = \trim((string)($post['currency'] ?? ''));
+            if ($currency === '') {
+                return 'missing_required_params_currency';
+            }
+            $valueRaw = $post['value'] ?? $post['grand_total'] ?? $post['cart_total'] ?? null;
+            if ($valueRaw === null || $valueRaw === '') {
+                return 'missing_required_params_value';
+            }
+            if (!\is_numeric($valueRaw)) {
+                return 'missing_required_params_value';
+            }
+
+            return null;
+        }
+
+        if ($event === 'search') {
+            $term = \trim((string)($post['search_term'] ?? $post['query'] ?? ''));
+            if ($term === ''
+                && isset($post['additionalInfo']['meta']['search_term'])
+            ) {
+                $term = \trim((string)$post['additionalInfo']['meta']['search_term']);
+            }
+            if ($term === ''
+                && isset($post['additionalInfo']['meta']['query'])
+            ) {
+                $term = \trim((string)$post['additionalInfo']['meta']['query']);
+            }
+            if ($term === '') {
+                return 'missing_required_params_search_term';
+            }
+        }
+
+        return null;
     }
 
     /**

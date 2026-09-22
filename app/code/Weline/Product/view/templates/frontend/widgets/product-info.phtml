@@ -498,6 +498,11 @@ if ($productBreadcrumbs === []) {
          data-widget-code="product-info"
          data-uid="<?= $escape($scope->uid) ?>"
          weline-code="<?= $escape($scope->code) ?>">
+    <span class="weline-pixel::view_item"
+          data-pixel-event="view_item"
+          data-testid="pixel-view-item-marker"
+          hidden
+          aria-hidden="true"></span>
     <?php if (!$quickAdd && $productBreadcrumbs !== []): ?>
     <nav class="product-native-detail__crumb" aria-label="<?= $escape(__('面包屑')) ?>" data-testid="product-breadcrumb">
         <?php foreach ($productBreadcrumbs as $i => $crumb): ?>
@@ -1044,19 +1049,12 @@ if ($productBreadcrumbs === []) {
                                 <?= __('立即结账') ?>
                             </button>
                         <?php endif; ?>
-                    <?php elseif ($quickAdd): ?>
-                        <?php
-                        // Standalone panel has no layout slot injections — fetch purchase CTAs.
-                        $cartAddPath = BP . 'app/code/Weline/Cart/view/templates/frontend/widgets/product-add-to-cart.phtml';
-                        if (is_file($cartAddPath)) {
-                            echo $this->fetch('Weline_Cart::templates/frontend/widgets/product-add-to-cart.phtml');
-                        }
-                        $buyNowPath = BP . 'app/code/Weline/Checkout/view/templates/frontend/widgets/product-buy-now.phtml';
-                        if (is_file($buyNowPath)) {
-                            echo $this->fetch('Weline_Checkout::templates/frontend/widgets/product-buy-now.phtml');
-                        }
-                        ?>
                     <?php endif; ?>
+                    <?php
+                    // Empty slot for required default_injections (Cart/Checkout).
+                    // Do NOT fetch product-add-to-cart / product-buy-now here — that stacks
+                    // with RequiredDefaultInjectionStorefrontOverlay (forbidden dual-path).
+                    ?>
                 </w:slot>
                 <?php if (!$isPreviewMode && !$quoteOnly && !$currencyUnavailable): ?>
                     <?php

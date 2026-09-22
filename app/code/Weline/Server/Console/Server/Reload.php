@@ -137,8 +137,19 @@ class Reload extends CommandAbstract
         
         if ($waitMode) {
             $exitCode = $this->executeReloadAndWait($instanceName, $totalWorkers, $reloadType);
+            // Worker rolling reload alone does not rewrite managed nginx.conf.
+            // Edge policy (e.g. |fpc2 / FPC MISS → proxy_no_cache) only lands when
+            // ManagedNginxConfigWriter::write + nginx -s reload run after Workers are up.
+            if ($exitCode === 0) {
+                $this->refreshManagedNginxAfterWorkerReload();
+            }
         } else {
             $exitCode = $this->executeReloadAsync($instanceName, $reloadType, $forceMode);
+            if ($exitCode === 0) {
+                $this->printer->note(__(
+                    '异步重载未刷新托管 Nginx；若改了 Edge 配置请另执行：php bin/w server:nginx:reload'
+                ));
+            }
         }
         
         echo "\n";
@@ -295,6 +306,38 @@ class Reload extends CommandAbstract
         echo "\n";
         $this->printer->success(__('✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）', [$elapsedDisplay, $workerCount]));
         @\fclose($conn);
+    }
+
+    /**
+     * Rewrite + reload managed nginx so Edge conf changes (e.g. |fpc2) take effect.
+     * Fail-open: Worker reload already succeeded; nginx issues are reported, not fatal.
+     */
+    protected function refreshManagedNginxAfterWorkerReload(): void
+    {
+        try {
+            $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
+            $snapshot = $service->doctorSnapshot();
+            if (!(bool)($snapshot['running'] ?? false)) {
+                $this->printer->note(__('托管 Nginx 未运行，跳过 Edge 配置刷新'));
+                return;
+            }
+            $result = $service->reload();
+            if (!($result['ok'] ?? false)) {
+                $this->printer->warning(__(
+                    'Worker 已重载，但托管 Nginx 配置刷新失败：%{1}。请项目经理另批：php bin/w server:nginx:reload',
+                    [(string)($result['message'] ?? 'unknown')],
+                ));
+                return;
+            }
+            $this->printer->success(__(
+                '✓ 托管 Nginx 已重写并 reload（Edge 配置含当前源码代次）'
+            ));
+        } catch (\Throwable $e) {
+            $this->printer->warning(__(
+                'Worker 已重载，但托管 Nginx 刷新异常：%{1}。请项目经理另批：php bin/w server:nginx:reload',
+                [$e->getMessage()],
+            ));
+        }
     }
     
     /**

@@ -16,6 +16,7 @@ final class ThemeFeaturedProductsCatalogContractTest extends TestCase
         $content = (string) file_get_contents($path);
 
         self::assertStringContainsString('StorefrontProductWidgetCatalog::class', $content);
+        self::assertStringContainsString('homepageFeaturedCards', $content);
         self::assertStringContainsString('if ($products === [] && $isPreviewMode)', $content);
         self::assertStringContainsString('ThemeDemoCatalog::products', $content);
         self::assertStringContainsString('if ($products === []) {', $content);

@@ -1,0 +1,1 @@
+订阅礼遇 · 优惠券 {{var.coupon_code}}

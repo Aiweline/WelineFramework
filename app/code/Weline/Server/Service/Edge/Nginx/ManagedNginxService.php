@@ -890,18 +890,28 @@ final class ManagedNginxService
             $reloaded = $this->processManager->reload(
                 $this->activeLifecycleDeadlineMonotonic,
             );
-            if (!($reloaded['ok'] ?? false)
-                || !$this->probeConfigGeneration(
-                    (int)$refreshed['http'],
-                    (string)$refreshed['config_generation'],
-                )
-                || !$tlsConfigured
-                || !$this->probeTls13(
+            $configGenerationLive = $this->probeConfigGeneration(
+                (int)$refreshed['http'],
+                (string)$refreshed['config_generation'],
+            );
+            $tlsLive = $tlsConfigured
+                && $this->probeTls13(
                     (int)$refreshed['https'],
                     (array)($refreshed['server_names'] ?? []),
                     (string)$refreshed['config_generation'],
                     (string)($refreshed['ssl_certificate_sha256'] ?? ''),
-                )
+                );
+            $drainSoftFailed = !($reloaded['ok'] ?? false)
+                && $this->isReloadWorkerDrainSoftFailure(
+                    (string)($reloaded['message'] ?? ''),
+                );
+            // Live config/TLS proof outranks worker-table drain proof. Darwin
+            // double-snapshot often nulls mid-HUP; rolling back then permanently
+            // swallowed Edge conf (|fpc2) and left owner unmanaged.
+            if (((!($reloaded['ok'] ?? false) && !$drainSoftFailed)
+                    || !$configGenerationLive
+                    || !$tlsConfigured
+                    || !$tlsLive)
             ) {
                 $recovery = $this->restorePublishedConfig(
                     $rollback,
@@ -916,6 +926,9 @@ final class ManagedNginxService
                     'exit_code' => $reloaded['exit_code'] ?? 1,
                 ];
             }
+            $drainSoftWarning = $drainSoftFailed
+                ? '; worker drain proof soft-failed but live config/TLS generation was proven'
+                : '';
             if (!(bool)($refreshed['http2_enabled'] ?? false)
                 || !$this->verifyHttpRuntime(
                     '2',
@@ -1273,15 +1286,22 @@ final class ManagedNginxService
     private function resolveOwnerCertificateGeneration(array $owner): ?array
     {
         if (!\array_key_exists('certificate_generation_managed', $owner)) {
-            // Pre-WLS-2.0 owner files remain readable for one compatibility
-            // reload from app/etc/ssl. Once the field exists, mutable raw-source
-            // fallback is forbidden.
-            return null;
+            // Pre-WLS-2.0 owner: prefer rebinding to an active project generation
+            // when one exists for server_names; otherwise legacy app/etc/ssl.
+            return $this->resolveActiveCertificateGenerationForOwner($owner);
         }
         if ($owner['certificate_generation_managed'] !== true) {
-            throw new \RuntimeException(
-                'Managed Nginx owner is not bound to an immutable certificate generation.',
-            );
+            // Owner started on mutable app/etc/ssl (generation_managed=false).
+            // Refusing all reloads permanently blocked Edge-only conf bumps
+            // (|fpc2 / FPC MISS → proxy_no_cache) even when an immutable
+            // generation is already active for the public Host. Rebind when
+            // possible; otherwise allow one legacy ssl reload so conf can land.
+            $rebound = $this->resolveActiveCertificateGenerationForOwner($owner);
+            if ($rebound !== null) {
+                return $rebound;
+            }
+
+            return null;
         }
         $domain = \strtolower(\trim((string)($owner['certificate_domain'] ?? '')));
         $active = $domain !== ''
@@ -1315,6 +1335,76 @@ final class ManagedNginxService
             }
         }
         return $active;
+    }
+
+    /**
+     * Locate an active immutable certificate generation for the owner Host.
+     *
+     * @param array<string,mixed> $owner
+     * @return array<string,mixed>|null
+     */
+    private function resolveActiveCertificateGenerationForOwner(array $owner): ?array
+    {
+        $candidates = [];
+        $boundDomain = \strtolower(\trim((string)($owner['certificate_domain'] ?? '')));
+        if ($boundDomain !== '' && $boundDomain !== '_') {
+            $candidates[] = $boundDomain;
+        }
+        foreach ((array)($owner['server_names'] ?? []) as $name) {
+            $name = \strtolower(\trim((string)$name));
+            if ($name === '' || $name === '_' || $name === 'localhost'
+                || $name === '127.0.0.1' || $name === '::1'
+            ) {
+                continue;
+            }
+            $candidates[] = $name;
+        }
+        $candidates = \array_values(\array_unique($candidates));
+        if ($candidates === []) {
+            return null;
+        }
+
+        $store = new ProjectCertificateGenerationStore($this->paths->projectRoot());
+        foreach ($candidates as $domain) {
+            try {
+                $active = $store->active($domain);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!\is_array($active) || (int)($active['generation'] ?? 0) < 1) {
+                continue;
+            }
+            $activeDomain = \strtolower(\trim((string)($active['domain'] ?? $domain)));
+            if ($activeDomain === '') {
+                $activeDomain = $domain;
+            }
+            $complete = true;
+            foreach ([
+                'source_digest',
+                'cert_path',
+                'key_path',
+                'chain_path',
+                'leaf_fingerprint_sha256',
+                'cert_sha256',
+                'key_sha256',
+                'chain_sha256',
+            ] as $field) {
+                if (!\is_string($active[$field] ?? null)
+                    || \trim((string)$active[$field]) === ''
+                ) {
+                    $complete = false;
+                    break;
+                }
+            }
+            if (!$complete) {
+                continue;
+            }
+            $active['domain'] = $activeDomain;
+
+            return $active;
+        }
+
+        return null;
     }
 
     /**

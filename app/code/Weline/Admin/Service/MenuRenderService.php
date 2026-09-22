@@ -531,11 +531,11 @@ class MenuRenderService
 
         $user = $this->getCurrentUser();
         // 激活态烘焙进 HTML：键用「激活叶指纹」代替 raw currentUrl，降低深链/别名路径基数。
+        // 交叉语种可搜词已迁至 Search DB 索引，不再进入 HTML / 缓存键。
         $activeFingerprint = $this->buildActiveMenuFingerprint($menus);
         $cacheKey = implode('|', [
             (string)(($user && $user->getId()) ? (int)$user->getId() : 0),
             State::getLangLocal(),
-            implode(',', $this->getActiveLocaleCodes()),
             $this->cachedBackendUrlPrefix,
             $this->cachedFrontendUrlPrefix,
             $activeFingerprint,
@@ -550,7 +550,17 @@ class MenuRenderService
             return $hit['html'];
         }
 
-        $this->prefetchCrossLocaleMenuWords($this->collectMenuTitles($menus));
+        // 仅当前 UI locale 批量预取菜单标题。WLS 热路径不读模块非中英 CSV、也不 include 整本
+        // generated/language；缺预取时 resolveMenuTitleRaw / __() 会回退中文 source。
+        // 禁止在此恢复「全部启用 locale」热路径预取（曾导致侧栏 10–20s）。
+        $titles = $this->collectMenuTitles($menus);
+        if ($titles !== []) {
+            try {
+                Parser::prefetchWords($titles, State::getLangLocal());
+            } catch (\Throwable) {
+                // 预取失败不阻断渲染；resolve 时回退 source / __()。
+            }
+        }
 
         foreach ($menus as $menu) {
             if (!$this->isMenuEnabled($menu)) {
@@ -700,7 +710,6 @@ class MenuRenderService
         $rawSourceName = (string)($menu['source_name'] ?? '');
         $sourceId = htmlspecialchars($rawSourceId, ENT_QUOTES, 'UTF-8');
         $title = $this->translateMenuTitle($rawSourceName, $rawSourceId);
-        $searchAttr = $this->renderSearchTextAttribute($rawSourceName, $rawSourceId);
         $nodes = array_values(array_filter(
             is_array($menu['nodes'] ?? null) ? $menu['nodes'] : [],
             fn(array $node): bool => ($node['type'] ?? '') === 'menus' && $this->isMenuEnabled($node)
@@ -711,13 +720,13 @@ class MenuRenderService
 
         if ($route === '' && $topLevel) {
             if (!$hasNodes) {
-                $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '"' . $searchAttr . '>';
+                $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '">';
                 $html .= $icon . '<span>' . $title . '</span></li>';
                 return $html;
             }
             // Top-level group with children: keep one hoverable icon in collapsed rail.
             $open = $this->hasActiveChild($nodes);
-            $html = '<li class="w-backend-nav__entry w-backend-nav__entry--group" data-source="' . $sourceId . '"' . $searchAttr . '>';
+            $html = '<li class="w-backend-nav__entry w-backend-nav__entry--group" data-source="' . $sourceId . '">';
             $html .= '<details class="w-backend-nav__disclosure"' . ($open ? ' open' : '') . '>';
             $html .= '<summary class="w-backend-nav__item w-backend-nav__item--group">';
             $html .= $icon . '<span>' . $title . '</span>' . $this->renderIcon('chevron-down', 'sm');
@@ -731,16 +740,16 @@ class MenuRenderService
 
         if (!$hasNodes) {
             if ($route === '') {
-                return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"' . $searchAttr . '><span class="w-backend-nav__item" aria-disabled="true">'
+                return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><span class="w-backend-nav__item" aria-disabled="true">'
                     . $icon . '<span>' . $title . '</span></span></li>';
             }
             $url = htmlspecialchars($this->formatMenuUrlCached($menu), ENT_QUOTES, 'UTF-8');
-            return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"' . $searchAttr . '><a class="w-backend-nav__item" href="'
+            return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><a class="w-backend-nav__item" href="'
                 . $url . '"' . $current . '>' . $icon . '<span>' . $title . '</span></a></li>';
         }
 
         $open = $active || $hasActiveChild;
-        $html = '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"' . $searchAttr . '><details class="w-backend-nav__disclosure"'
+        $html = '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><details class="w-backend-nav__disclosure"'
             . ($open ? ' open' : '') . '><summary class="w-backend-nav__item"' . $current . '>';
         $html .= $icon . '<span>' . $title . '</span>' . $this->renderIcon('chevron-down', 'sm');
         $html .= '</summary><ul class="w-backend-nav__list">' . $this->renderSubMenu($nodes) . '</ul></details></li>';
@@ -749,12 +758,10 @@ class MenuRenderService
 
     private function renderSearchTextAttribute(string $sourceName, string $sourceId): string
     {
-        $searchText = $this->buildCrossLocaleSearchText($sourceName, $sourceId);
-        if ($searchText === '') {
-            return '';
-        }
+        // Cross-locale search moved to Search DB index; sidebar HTML no longer embeds all-locale text.
+        unset($sourceName, $sourceId);
 
-        return ' data-search-text="' . htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') . '"';
+        return '';
     }
 
     private function renderIcon(string $name, string $size = 'md'): string
@@ -849,16 +856,30 @@ class MenuRenderService
     }
 
     /**
-     * 顶栏万能搜索：可导航菜单项（含跨语言 search_text）。
+     * 顶栏万能搜索 / 索引构建：可导航菜单项（含跨语言 search_text）。
+     * 禁止在页面 HTML 渲染热路径调用。
      *
      * @param array<int, array<string, mixed>>|null $menus
-     * @return list<array{source_id:string,title:string,url:string,search_text:string}>
+     * @return list<array{source_id:string,title:string,url:string,search_text:string,route?:string,source_name?:string}>
      */
     public function collectNavigableMenuSearchItems(?array $menus = null): array
     {
         $menus ??= $this->getMenuTree();
+
+        return $this->buildIndexSearchItems($menus);
+    }
+
+    /**
+     * 离线索引构建：给定菜单树，产出可导航项 + 全启用 locale search_text。
+     *
+     * @param array<int, array<string, mixed>> $menus
+     * @return list<array{source_id:string,title:string,url:string,search_text:string,route:string,source_name:string}>
+     */
+    public function buildIndexSearchItems(array $menus): array
+    {
         $this->cachedBackendUrlPrefix = $this->getBackendUrlPrefix();
         $this->cachedFrontendUrlPrefix = $this->getFrontendUrlPrefix();
+        $this->crossLocaleWordsPrefetched = false;
         $this->prefetchCrossLocaleMenuWords($this->collectMenuTitles($menus));
 
         $items = [];
@@ -869,7 +890,7 @@ class MenuRenderService
 
     /**
      * @param array<int, array<string, mixed>> $menus
-     * @param list<array{source_id:string,title:string,url:string,search_text:string}> $items
+     * @param list<array{source_id:string,title:string,url:string,search_text:string,route:string,source_name:string}> $items
      */
     private function walkNavigableMenuSearchItems(array $menus, array &$items): void
     {
@@ -884,6 +905,8 @@ class MenuRenderService
             if ($route !== '' && $sourceId !== '') {
                 $items[] = [
                     'source_id' => $sourceId,
+                    'source_name' => $sourceName,
+                    'route' => $route,
                     'title' => $this->resolveDisplayTitle($sourceName, $sourceId),
                     'url' => $this->formatMenuUrlCached($menu),
                     'search_text' => $this->buildCrossLocaleSearchText($sourceName, $sourceId),

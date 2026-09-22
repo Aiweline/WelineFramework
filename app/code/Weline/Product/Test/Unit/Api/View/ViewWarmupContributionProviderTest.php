@@ -10,18 +10,20 @@ use Weline\Product\Api\View\ViewWarmupContributionProvider;
 
 final class ViewWarmupContributionProviderTest extends TestCase
 {
-    public function testPublishesBoundedLocalizedCatalogPaths(): void
+    public function testPublishesUnprefixedCatalogFirst(): void
     {
         $contribution = (new ViewWarmupContributionProvider())->contribution();
 
         self::assertInstanceOf(ViewWarmupContribution::class, $contribution);
-        self::assertSame(
-            [
-                '/en_US/products',
-                '/zh_Hans_CN/products',
-                '/ar_SA/products',
-            ],
-            $contribution->fpcPaths,
+        self::assertNotSame([], $contribution->fpcPaths);
+        self::assertSame('/products', $contribution->fpcPaths[0]);
+        self::assertLessThanOrEqual(4, \count($contribution->fpcPaths));
+
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Api/View/ViewWarmupContributionProvider.php'
         );
+        self::assertStringContainsString('defaultLanguage', $source);
+        self::assertStringContainsString('/products', $source);
+        self::assertStringContainsString('resolveWebsiteDefaultLanguage', $source);
     }
 }

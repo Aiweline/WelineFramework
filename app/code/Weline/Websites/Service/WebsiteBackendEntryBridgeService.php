@@ -40,11 +40,12 @@ final class WebsiteBackendEntryBridgeService
         if (!$this->grantService->isDefaultWebsite()) {
             throw new \RuntimeException((string)__('仅主站后台可发起子站直进'));
         }
-        if (!$this->grantService->hasAnyGrant($targetWebsiteId)) {
-            throw new \RuntimeException((string)__('该站尚未配置功能授权，无法直进后台'));
-        }
         if (!$this->isPlatformOperator($userId)) {
             throw new \RuntimeException((string)__('当前账号不能从主站直进子站后台'));
+        }
+        // 非超管：子站必须已有站级授权包；超管无站点级区分，空包也可直进。
+        if (!$this->isSuperAdminUser($userId) && !$this->grantService->hasAnyGrant($targetWebsiteId)) {
+            throw new \RuntimeException((string)__('该站尚未配置功能授权，无法直进后台'));
         }
         $website = ObjectManager::getInstance(Website::class, [], false)->load($targetWebsiteId);
         if ((int)$website->getId() !== $targetWebsiteId) {
@@ -134,24 +135,25 @@ final class WebsiteBackendEntryBridgeService
         if ($websiteId !== $currentWebsiteId) {
             throw new \RuntimeException((string)__('直进令牌与当前站点不匹配'));
         }
-        if (!$this->grantService->hasAnyGrant($websiteId)) {
-            throw new \RuntimeException((string)__('该站授权已收回，无法进入后台'));
-        }
 
         $account = $this->backendAuth->find($userId);
         if ($account === null) {
             throw new \RuntimeException((string)__('管理员不存在'));
         }
 
+        $isSuperAdmin = $userId === 1 || (int)$account->getRoleId() === 1;
+        if (!$isSuperAdmin && !$this->grantService->hasAnyGrant($websiteId)) {
+            throw new \RuntimeException((string)__('该站授权已收回，无法进入后台'));
+        }
+
         $session->start('');
         $this->backendAuth->installSessionIdentity($session, $account);
         $hasRole = $account->getRoleId() > 0;
-        $isSuperAdminById = $userId === 1;
-        if (!$hasRole && !$isSuperAdminById) {
+        if (!$hasRole && !$isSuperAdmin) {
             $session->logout();
             throw new \RuntimeException((string)__('您的账户尚未分配角色，无法登录后台'));
         }
-        $aclRoleId = $hasRole ? $account->getRoleId() : ($isSuperAdminById ? 1 : 0);
+        $aclRoleId = $hasRole ? $account->getRoleId() : ($isSuperAdmin ? 1 : 0);
         $session->getSession()->set('backend_acl_role_id', $aclRoleId);
         $session->getSession()->set('backend_acl_is_enabled', $account->getIsEnabled() ? 1 : 0);
         $this->backendAuth->completeLogin($userId, (string)$session->getId(), $clientIp);
@@ -173,7 +175,7 @@ final class WebsiteBackendEntryBridgeService
 
     private function isPlatformOperator(int $userId): bool
     {
-        if ($userId === 1) {
+        if ($this->isSuperAdminUser($userId)) {
             return true;
         }
         /** @var BackendUser $user */
@@ -183,6 +185,19 @@ final class WebsiteBackendEntryBridgeService
         }
 
         return $user->getWebsiteId() === Website::ID_DEFAULT;
+    }
+
+    private function isSuperAdminUser(int $userId): bool
+    {
+        if ($userId === 1) {
+            return true;
+        }
+        if ($userId <= 0) {
+            return false;
+        }
+        $account = $this->backendAuth->find($userId);
+
+        return $account !== null && (int)$account->getRoleId() === 1;
     }
 
     private function persistBackendSessionCookie(AuthenticatedSessionInterface $session): void

@@ -9075,12 +9075,48 @@
                 html += `<input type="url" class="w-input w-theme-editor-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="https://">`;
             } else if (['image', 'image_picker', 'media_image', 'file_image'].includes(type)) {
                 html += renderFallbackMediaImageField(inputId, fieldKey, value, fieldParam);
+            } else if (type === 'product_picker') {
+                html += renderFallbackProductPickerField(inputId, fieldKey, value);
             } else {
                 html += `<input type="text" class="w-input w-theme-editor-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}">`;
             }
 
             html += `</div>`;
             return html;
+        };
+
+        const renderFallbackProductPickerField = (inputId, fieldKey, value) => {
+            const commaIds = normalizeFallbackProductPickerIds(value);
+            const safeId = escapeHtml(inputId);
+            const safeField = escapeHtml(fieldKey);
+            const safeValue = escapeHtml(commaIds);
+            return `<div class="w-param-product-picker" data-w-component="product-admin-picker" data-array-fallback="1">`
+                + `<input type="hidden" id="${safeId}" value="${safeValue}" data-field="${safeField}" data-product-picker-sync>`
+                + `<div class="w-product-admin-picker" data-product-admin-picker data-sync-input="${safeId}" data-mode="multiple" data-limit="20">`
+                + `<div class="w-product-admin-picker__shell w-cluster" data-align="center" data-justify="start">`
+                + `<button type="button" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" data-product-admin-picker-open>选择商品</button>`
+                + `</div>`
+                + `<div class="w-product-admin-picker__selected" data-product-admin-picker-selected></div>`
+                + `</div></div>`;
+        };
+
+        const normalizeFallbackProductPickerIds = (value) => {
+            if (Array.isArray(value)) {
+                const ids = [];
+                value.forEach((item) => {
+                    const id = (item && typeof item === 'object')
+                        ? Number(item.product_id || item.id || 0)
+                        : Number(item);
+                    if (Number.isFinite(id) && id > 0) ids.push(id);
+                });
+                return [...new Set(ids)].join(',');
+            }
+            return String(value == null ? '' : value)
+                .split(/[\s,;]+/)
+                .map((part) => Number(String(part).trim()))
+                .filter((id) => Number.isFinite(id) && id > 0)
+                .filter((id, index, all) => all.indexOf(id) === index)
+                .join(',');
         };
 
         const renderFallbackArrayItem = (fieldId, key, item, itemIndex, itemSchema, sortable = true) => {

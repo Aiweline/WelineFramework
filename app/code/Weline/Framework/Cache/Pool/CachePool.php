@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Pool;
 
+use Weline\Framework\Cache\Contract\BatchCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\HotKeyAwareInterface;
@@ -305,38 +306,99 @@ class CachePool implements CachePoolInterface, RemembererInterface
 
     public function getMultiple(array $keys): array
     {
-        $result = [];
-        
-        foreach ($keys as $key) {
-            $result[$key] = $this->get($key);
+        if ($keys === []) {
+            return [];
         }
-        
+
+        if (!$this->enabled) {
+            $result = [];
+            foreach ($keys as $key) {
+                $this->misses++;
+                $result[$key] = null;
+            }
+
+            return $result;
+        }
+
+        if ($this->adapter instanceof BatchCacheAdapterInterface) {
+            $logicalKeys = [];
+            $physicalKeys = [];
+            foreach ($keys as $key) {
+                $logical = (string) $key;
+                $logicalKeys[] = $logical;
+                $physicalKeys[] = $this->buildKey($logical);
+            }
+
+            $physicalValues = $this->adapter->getMultiple($physicalKeys);
+            $result = [];
+            foreach ($logicalKeys as $index => $logical) {
+                $physical = $physicalKeys[$index];
+                $value = \array_key_exists($physical, $physicalValues)
+                    ? $physicalValues[$physical]
+                    : null;
+                if ($value === null) {
+                    $this->misses++;
+                } else {
+                    $this->hits++;
+                }
+                $result[$logical] = $value;
+            }
+
+            return $result;
+        }
+
+        $result = [];
+        foreach ($keys as $key) {
+            $result[$key] = $this->get((string) $key);
+        }
+
         return $result;
     }
 
     public function setMultiple(array $values, int $ttl = 0): bool
     {
+        if (!$this->enabled) {
+            return true;
+        }
+
+        if ($values === []) {
+            return true;
+        }
+
+        // One jitter for the whole batch — same semantics as historical batch path.
+        $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
+        $ttl = $this->applyJitter($ttl);
+
+        if ($this->adapter instanceof BatchCacheAdapterInterface) {
+            $payload = [];
+            foreach ($values as $key => $value) {
+                $payload[$this->buildKey((string) $key)] = $value;
+            }
+
+            return $this->adapter->setMultiple($payload, $ttl);
+        }
+
         $success = true;
-        
         foreach ($values as $key => $value) {
-            if (!$this->set((string) $key, $value, $ttl)) {
+            // setRaw(..., useJitter=false): TTL already jittered once above.
+            if (!$this->setRaw((string) $key, $value, $ttl, false)) {
                 $success = false;
             }
         }
-        
+
         return $success;
     }
 
     public function deleteMultiple(array $keys): bool
     {
         $success = true;
-        
+
         foreach ($keys as $key) {
-            if (!$this->delete($key)) {
+            if (!$this->delete((string) $key)) {
                 $success = false;
             }
         }
-        
+
         return $success;
     }
 

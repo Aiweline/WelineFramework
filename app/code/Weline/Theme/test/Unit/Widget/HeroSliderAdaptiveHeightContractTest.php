@@ -23,6 +23,13 @@ final class HeroSliderAdaptiveHeightContractTest extends TestCase
         self::assertStringContainsString('.slide.active', $source);
         self::assertStringContainsString('object-fit: unset', $source);
         self::assertStringContainsString('height: auto', $source);
+        // Copy overlays the media (absolute), not a relative block under the image.
+        self::assertStringContainsString('.slide-content {', $source);
+        self::assertMatchesRegularExpression(
+            '/\.slide-content\s*\{[^}]*position:\s*absolute/s',
+            $source,
+        );
+        self::assertStringContainsString('.slide-media figcaption', $source);
         self::assertStringNotContainsString('style="height: <?= $esc($height) ?>;"', $source);
         self::assertStringNotContainsString('object-position: 68% center', $source);
         self::assertStringNotContainsString('aspect-ratio: 3 / 4', $source);

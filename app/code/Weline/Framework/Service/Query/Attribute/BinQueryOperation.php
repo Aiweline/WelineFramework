@@ -10,12 +10,19 @@ final class BinQueryOperation
         public readonly string $name,
         public readonly string $description = '',
         public readonly string $mode = 'read',
-        public readonly bool $external = true,
-        public readonly bool $frontend = true,
+        /** Default deny: stand outside /bin/query only when explicitly true. */
+        public readonly bool $external = false,
+        /** Default deny: Worker/query-bin only when explicitly true. */
+        public readonly bool $frontend = false,
         public readonly bool $backend = false,
         public readonly bool $graph = false,
         public readonly int $cost = 1,
         public readonly string $summary = '',
+        /**
+         * Worker auth: any|guest|customer|backend.
+         * Empty = undeclared. Worker treats undeclared as open today — new ops MUST set
+         * explicitly (public → any; admin → backend + backend_acl in descriptor).
+         */
         public readonly string $auth = ''
     ) {
     }

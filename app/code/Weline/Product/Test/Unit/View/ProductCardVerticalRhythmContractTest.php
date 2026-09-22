@@ -50,6 +50,8 @@ final class ProductCardVerticalRhythmContractTest extends TestCase
         // 卡内 CTA 自包含：禁用态保持品牌色透明度，禁止灰底第二方言
         self::assertStringContainsString('.wpc-cta .btn-buy-now:disabled', $css);
         self::assertStringContainsString('opacity: 0.72', $css);
+        self::assertStringContainsString('appearance: none', $css);
+        self::assertStringContainsString('gap: var(--weline-space-2', $css);
         self::assertDoesNotMatchRegularExpression(
             '/\.wpc-cta [^\{]*:disabled[^\}]*surface-muted/s',
             $css

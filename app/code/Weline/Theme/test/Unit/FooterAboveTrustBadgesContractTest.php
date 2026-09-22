@@ -17,7 +17,7 @@ final class FooterAboveTrustBadgesContractTest extends TestCase
         $src = (string)file_get_contents($path);
 
         self::assertStringContainsString('<w:slot id="footer-above"', $src);
-        self::assertStringContainsString('accept="layout-footer-above,trust-badges', $src);
+        self::assertStringContainsString('accept="layout-footer-above,trust-badges,footer-newsletter,layout-footer-newsletter', $src);
         self::assertStringContainsString('class="weline-footer-above-slot"', $src);
         self::assertStringContainsString('Weline_Theme::frontend::partials::footer::above', $src);
         self::assertStringContainsString('<w:widget type="content" name="trust-badges" />', $src);
@@ -36,7 +36,25 @@ final class FooterAboveTrustBadgesContractTest extends TestCase
         self::assertStringContainsString('layout-footer-above', $src);
     }
 
-    public function testHomepageTrustSlotEmbedsTrustBadgesElseFallback(): void
+    public function testTrustBadgesDefaultPresetsUseInkSealIconsNotModernCircles(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/content/trust-badges/default.phtml';
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString("'icon' => 'coin'", $src);
+        self::assertStringContainsString("'icon' => 'box'", $src);
+        self::assertStringContainsString("'icon' => 'seal'", $src);
+        self::assertStringNotContainsString("'icon' => 'cash'", $src);
+        self::assertStringNotContainsString("'icon' => 'truck'", $src);
+        self::assertStringNotContainsString('border-radius: 50%', $src);
+        self::assertStringContainsString('border-radius: var(--weline-radius-sm', $src);
+        self::assertStringContainsString('weline-font-display', $src);
+
+        $icons = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/Ui/IconRegistry.php');
+        self::assertStringContainsString("'coin' =>", $icons);
+        self::assertStringContainsString("'seal' =>", $icons);
+    }
+
+    public function testHomepageTrustSlotDoesNotEmbedTrustBadgesElseFallback(): void
     {
         $homepage = (string)file_get_contents(
             dirname(__DIR__, 2) . '/view/theme/frontend/layouts/homepage/default.phtml'
@@ -47,10 +65,29 @@ final class FooterAboveTrustBadgesContractTest extends TestCase
             'layouts::homepage::trust',
             $homepage
         );
-        self::assertStringContainsString(
+        // 与 checkout-trust 一致：空槽可选注入；默认份只在 footer-above，避免双渲
+        self::assertStringNotContainsString(
+            'layouts::homepage::trust<else/>',
+            $homepage
+        );
+        self::assertStringNotContainsString(
             '<w:widget type="content" name="trust-badges" />',
             $homepage
         );
+
+        $hanfuHomepage = dirname(__DIR__, 4) . '/design/Weline/hanfu/frontend/layouts/homepage/default.phtml';
+        if (is_file($hanfuHomepage)) {
+            $hanfu = (string)file_get_contents($hanfuHomepage);
+            self::assertStringContainsString('id="homepage-trust"', $hanfu);
+            self::assertStringNotContainsString(
+                'layouts::homepage::trust<else/>',
+                $hanfu
+            );
+            self::assertStringNotContainsString(
+                '<w:widget type="content" name="trust-badges" />',
+                $hanfu
+            );
+        }
 
         $checkout = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Checkout/view/theme/frontend/layouts/checkout/default.phtml'

@@ -1,0 +1,747 @@
+<?php
+/**
+ * 视频轮播部件
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {video-carousel}
+ * @widget.name {视频轮播}
+ * @widget.description {多视频轮播：平台嵌入、作者简介，以及关联商品对话框}
+ * @widget.type {video}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @widget.supports {["layout-homepage-videos","layout-homepage-content","layout-cms-content","layout-default-content","video","video-carousel"]}
+ *
+ * @param items {default=[],type="video_carousel_items",label="视频列表",description="可排序的多视频项；含平台、地址、作者、简介与关联商品"}
+ * @param title {default="穿搭灵感 · 视频轮播",type="string",label="区标题"}
+ * @param subtitle {default="滑动浏览穿搭视频，查看关联商品",type="string",label="副标题"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
+use Weline\Product\Service\StorefrontProductWidgetCatalog;
+use Weline\Theme\Helper\LegacyMediaUrl;
+use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductCardUrl;
+use Weline\Theme\Helper\ProductLabelStyle;
+use Weline\Theme\Helper\VideoEmbedResolver;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('video-carousel');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$uid = preg_replace('/[^a-zA-Z0-9_\-]/', '', (string)$scope->uid) ?: 'vc';
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
+$cardShowWishlist = !empty($shopperActions['show_wishlist']);
+$cardShowCompare = !empty($shopperActions['show_compare']);
+$cardShowQuickview = !empty($shopperActions['show_quickview']);
+$showPrice = true;
+$showRating = true;
+$showAddToCart = true;
+
+$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
+$isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
+$translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
+    $translated = trim((string)WidgetI18n::label($source));
+    if ($translated !== '' && $translated !== $source) {
+        return $translated;
+    }
+
+    return $isChineseLocale ? $source : $english;
+};
+
+$sectionTitle = trim((string)($this->getData('title') ?? ''));
+$sectionSubtitle = trim((string)($this->getData('subtitle') ?? ''));
+if ($sectionTitle === '' || in_array($sectionTitle, ['穿搭灵感 · 视频轮播', 'Style inspiration · Video carousel'], true)) {
+    $sectionTitle = $translateDefaultCopy('穿搭灵感 · 视频轮播', 'Style inspiration · Video carousel');
+} else {
+    $sectionTitle = WidgetI18n::label($sectionTitle, $sectionTitle);
+}
+if ($sectionSubtitle === '' || in_array($sectionSubtitle, ['滑动浏览穿搭视频，查看关联商品', 'Browse outfit videos and related products'], true)) {
+    $sectionSubtitle = $translateDefaultCopy('滑动浏览穿搭视频，查看关联商品', 'Browse outfit videos and related products');
+} else {
+    $sectionSubtitle = WidgetI18n::label($sectionSubtitle, $sectionSubtitle);
+}
+
+$ctaLabel = $translateDefaultCopy('查看关联商品', 'View related products');
+$prevLabel = $translateDefaultCopy('上一项', 'Previous');
+$nextLabel = $translateDefaultCopy('下一项', 'Next');
+$closeLabel = $translateDefaultCopy('关闭', 'Close');
+
+$sanitizeEmbedCode = static function (mixed $html): string {
+    $html = trim((string)$html);
+    if ($html === '') {
+        return '';
+    }
+
+    $allowedTags = ['iframe' => true, 'video' => true, 'source' => true, 'embed' => true];
+    $allowedAttrs = [
+        'iframe' => ['src', 'width', 'height', 'title', 'allow', 'allowfullscreen', 'loading', 'referrerpolicy', 'class'],
+        'video' => ['src', 'poster', 'width', 'height', 'controls', 'autoplay', 'muted', 'loop', 'playsinline', 'preload', 'class'],
+        'source' => ['src', 'type', 'media'],
+        'embed' => ['src', 'type', 'width', 'height', 'class'],
+    ];
+    $trustedIframeHosts = VideoEmbedResolver::trustedEmbedHosts();
+
+    $previous = libxml_use_internal_errors(true);
+    try {
+        $wrapped = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>';
+        if (function_exists('mb_encode_numericentity')) {
+            $wrapped = mb_encode_numericentity($wrapped, [0x80, 0x10FFFF, 0, 0xFFFF], 'UTF-8');
+        }
+        $doc = new DOMDocument('1.0', 'UTF-8');
+        $doc->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $xpath = new DOMXPath($doc);
+
+        $nodes = [];
+        foreach ($xpath->query('//body//*') as $node) {
+            if ($node instanceof DOMElement) {
+                $nodes[] = $node;
+            }
+        }
+
+        foreach ($nodes as $node) {
+            if (!$node->parentNode) {
+                continue;
+            }
+            $tag = strtolower($node->tagName);
+            if (!isset($allowedTags[$tag])) {
+                if (!in_array($tag, ['script', 'style', 'object'], true)) {
+                    while ($node->firstChild) {
+                        $node->parentNode->insertBefore($node->firstChild, $node);
+                    }
+                }
+                $node->parentNode?->removeChild($node);
+                continue;
+            }
+
+            $toRemove = [];
+            foreach ($node->attributes as $attr) {
+                $name = strtolower($attr->name);
+                $value = (string)$attr->value;
+                if (str_starts_with($name, 'on') || $name === 'style' || $name === 'srcdoc' || !in_array($name, $allowedAttrs[$tag], true)) {
+                    $toRemove[] = $attr->name;
+                    continue;
+                }
+
+                if (in_array($name, ['src', 'poster'], true)) {
+                    $safeUrl = VideoEmbedResolver::safeHttpUrl($value);
+                    if ($safeUrl === '') {
+                        $toRemove[] = $attr->name;
+                        continue;
+                    }
+                    if ($tag === 'iframe') {
+                        $host = strtolower((string)parse_url($safeUrl, PHP_URL_HOST));
+                        if (!in_array($host, $trustedIframeHosts, true)) {
+                            $toRemove[] = $attr->name;
+                            continue;
+                        }
+                    }
+                    $node->setAttribute($attr->name, $safeUrl);
+                } elseif ($name === 'class') {
+                    $node->setAttribute($attr->name, trim((string)preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $value)));
+                } elseif (in_array($name, ['width', 'height'], true) && !preg_match('/^\d{1,4}(?:\.\d{1,2})?%?$/', $value)) {
+                    $toRemove[] = $attr->name;
+                } elseif ($name === 'allow') {
+                    $node->setAttribute($attr->name, preg_replace('/[^a-zA-Z0-9;,\-\s]/', '', $value) ?: '');
+                }
+            }
+            foreach ($toRemove as $name) {
+                $node->removeAttribute($name);
+            }
+
+            if (($tag === 'iframe' || $tag === 'embed') && !$node->hasAttribute('src')) {
+                $node->parentNode?->removeChild($node);
+                continue;
+            }
+            if ($tag === 'iframe') {
+                $node->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+                $node->setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                $node->setAttribute('loading', 'lazy');
+            }
+        }
+
+        $body = $doc->getElementsByTagName('body')->item(0);
+        $safeHtml = '';
+        if ($body) {
+            foreach ($body->childNodes as $child) {
+                $safeHtml .= $doc->saveHTML($child);
+            }
+        }
+        return $safeHtml;
+    } catch (Throwable) {
+        return '';
+    } finally {
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+    }
+};
+
+$parseProductIds = static function (mixed $raw): array {
+    if (is_array($raw)) {
+        $ids = [];
+        foreach ($raw as $part) {
+            $id = (int)$part;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        return array_values($ids);
+    }
+    $text = trim((string)$raw);
+    if ($text === '') {
+        return [];
+    }
+    $ids = [];
+    foreach (preg_split('/[\s,;]+/', $text) ?: [] as $part) {
+        $id = (int)$part;
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+    }
+    return array_values($ids);
+};
+
+$normalizeItem = static function (array $item) use ($parseProductIds, $sanitizeEmbedCode, $translateDefaultCopy): array {
+    $videoType = strtolower(trim((string)($item['video_type'] ?? 'youtube')));
+    if ($videoType === 'local') {
+        $videoType = 'self';
+    }
+    if (!in_array($videoType, ['youtube', 'vimeo', 'bilibili', 'self', 'embed'], true)) {
+        $videoType = 'youtube';
+    }
+
+    $videoUrlRaw = (string)($item['video_url'] ?? '');
+    $embedCodeRaw = trim((string)($item['embed_code'] ?? ''));
+    $videoUrl = VideoEmbedResolver::coalesceSourceUrl($videoUrlRaw, $embedCodeRaw);
+    $embedCode = $sanitizeEmbedCode($embedCodeRaw);
+    $parseBlob = trim($videoUrl . "\n" . $embedCodeRaw);
+
+    $videoId = '';
+    if ($videoType === 'youtube') {
+        $videoId = VideoEmbedResolver::resolveYoutubeId($parseBlob);
+    } elseif ($videoType === 'vimeo') {
+        $videoId = VideoEmbedResolver::resolveVimeoId($parseBlob);
+    } elseif ($videoType === 'bilibili') {
+        $videoId = VideoEmbedResolver::resolveBilibiliId($parseBlob);
+    }
+
+    if ($videoType === 'embed' && $embedCode === '' && $videoUrl !== '') {
+        $yt = VideoEmbedResolver::resolveYoutubeId($videoUrl);
+        $vm = $yt === '' ? VideoEmbedResolver::resolveVimeoId($videoUrl) : '';
+        $bl = ($yt === '' && $vm === '') ? VideoEmbedResolver::resolveBilibiliId($videoUrl) : '';
+        if ($yt !== '') {
+            $videoType = 'youtube';
+            $videoId = $yt;
+        } elseif ($vm !== '') {
+            $videoType = 'vimeo';
+            $videoId = $vm;
+        } elseif ($bl !== '') {
+            $videoType = 'bilibili';
+            $videoId = $bl;
+        }
+    }
+
+    $bilibiliSrc = $videoType === 'bilibili' && $videoId !== ''
+        ? VideoEmbedResolver::bilibiliEmbedUrl($videoId)
+        : '';
+
+    $hasPlayable = ($videoType === 'youtube' && $videoId !== '')
+        || ($videoType === 'vimeo' && $videoId !== '')
+        || ($videoType === 'bilibili' && $bilibiliSrc !== '')
+        || ($videoType === 'self' && $videoUrl !== '')
+        || ($videoType === 'embed' && $embedCode !== '');
+
+    $title = trim((string)($item['title'] ?? ''));
+    $author = trim((string)($item['author'] ?? ''));
+    $description = trim((string)($item['description'] ?? $item['summary'] ?? ''));
+    if ($title !== '') {
+        $title = WidgetI18n::label($title, $title);
+    }
+    if ($author !== '') {
+        $author = WidgetI18n::label($author, $author);
+    }
+    if ($description !== '') {
+        $description = WidgetI18n::label($description, $description);
+    }
+
+    $placeholderMessage = $translateDefaultCopy('请填写视频地址', 'Please provide a video URL');
+    if ($videoType === 'embed') {
+        $placeholderMessage = $translateDefaultCopy('请粘贴嵌入代码（iframe）或视频链接', 'Paste embed code (iframe) or a video link');
+    } elseif ($videoType === 'self') {
+        $placeholderMessage = $translateDefaultCopy('请填写自托管视频地址（mp4 等）', 'Provide a self-hosted video URL (mp4, etc.)');
+    } elseif (($videoUrlRaw !== '' || $embedCodeRaw !== '') && !$hasPlayable) {
+        $placeholderMessage = $translateDefaultCopy('无法识别该视频地址，请检查链接是否正确', 'Could not recognize this video URL');
+    }
+
+    return [
+        'video_type' => $videoType,
+        'video_url' => $videoUrl,
+        'video_id' => $videoId,
+        'bilibili_src' => $bilibiliSrc,
+        'embed_code' => $embedCode,
+        'poster' => LegacyMediaUrl::sanitize($item['poster'] ?? ''),
+        'title' => $title,
+        'author' => $author,
+        'description' => $description,
+        'product_ids' => $parseProductIds($item['product_ids'] ?? ''),
+        'has_playable' => $hasPlayable,
+        'placeholder' => $placeholderMessage,
+    ];
+};
+
+$rawItems = $this->getData('items') ?? [];
+if (is_string($rawItems)) {
+    $decoded = json_decode($rawItems, true);
+    $rawItems = is_array($decoded) ? $decoded : [];
+}
+if (!is_array($rawItems)) {
+    $rawItems = [];
+}
+
+$items = [];
+foreach ($rawItems as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    $items[] = $normalizeItem($row);
+    if (count($items) >= 12) {
+        break;
+    }
+}
+
+if ($items === []) {
+    // 店面空配置时的古风古装 YouTube 演示（oEmbed 可站外嵌入；作者/简介取自公开频道信息）
+    $demoRows = [
+        [
+            'video_type' => 'youtube',
+            'video_url' => 'https://www.youtube.com/watch?v=HxNb2cUg5Pg',
+            'title' => $translateDefaultCopy('齐胸襦裙穿法指南', 'How to Wear Qixiong Ruqun'),
+            'author' => 'Yumi King',
+            'description' => $translateDefaultCopy(
+                '一片式与两片式齐胸汉服的穿法演示，适合初学者快速上手日常造型。',
+                'Beginner-friendly guide to one- and two-piece chest-high Hanfu looks for everyday wear.'
+            ),
+            // 齐胸襦裙演示 → 唐制齐胸襦裙/诃子裙 SKU
+            'product_ids' => '234,227',
+        ],
+        [
+            'video_type' => 'youtube',
+            'video_url' => 'https://www.youtube.com/watch?v=s1BDvRuEgSM',
+            'title' => $translateDefaultCopy('汉制曲裾深衣穿法', 'How to Wear Quju Shenyi'),
+            'author' => 'Five Thousand Years',
+            'description' => $translateDefaultCopy(
+                '秦汉曲裾深衣逐步穿戴教程，讲解交领右衽、续衽钩边与大袖礼仪场合要点。',
+                'Step-by-step Quju Shenyi from the Qin–Han era: wrapping order, ritual sleeves, and historical notes.'
+            ),
+            // 曲裾/深衣系 → 战国直裾袍与魏晋交领广袖（店内最接近先秦–魏晋深衣形制）
+            'product_ids' => '237,232',
+        ],
+        [
+            'video_type' => 'youtube',
+            'video_url' => 'https://www.youtube.com/watch?v=iMwTyWg3_bU',
+            'title' => $translateDefaultCopy('马面裙的现代穿搭', 'Style Mamianqun with Modern Looks'),
+            'author' => 'Yugene Lee',
+            'description' => $translateDefaultCopy(
+                '明制马面裙与现代外套、唐制褙子等混搭思路，通勤与秋冬造型参考。',
+                'Ming-style mamianqun mixed with modern coats and Tang-inspired layers for commute and cold weather.'
+            ),
+            // 马面裙穿搭 → 明制短袄马面裙
+            'product_ids' => '245,241',
+        ],
+        [
+            'video_type' => 'youtube',
+            'video_url' => 'https://www.youtube.com/watch?v=ZRRQbkh0ryI',
+            'title' => $translateDefaultCopy('明代朝服穿戴演示', 'Ming Court Dress Demonstration'),
+            'author' => 'ZiQiao子翹Official Channel',
+            'description' => $translateDefaultCopy(
+                '明华堂「大明衣冠」系列：晚明朝服穿戴顺序与穿着效果演示（含中英字幕）。',
+                'MingHuaTang court-dress reconstruction: wearing order and finished look with bilingual captions.'
+            ),
+            // 明制朝服礼仪感 → 织金道袍 + 方领补服短袄
+            'product_ids' => '246,241',
+        ],
+    ];
+    foreach ($demoRows as $row) {
+        $items[] = $normalizeItem($row);
+    }
+}
+
+$catalog = null;
+try {
+    if (class_exists(StorefrontProductWidgetCatalog::class)) {
+        $catalog = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class);
+    }
+} catch (Throwable) {
+    $catalog = null;
+}
+
+$prepareCards = static function (array $productIds) use ($catalog): array {
+    if ($productIds === [] || !$catalog instanceof StorefrontProductWidgetCatalog) {
+        return [];
+    }
+    try {
+        $products = $catalog->cardsByIds($productIds, 12);
+    } catch (Throwable) {
+        $products = [];
+    }
+    foreach ($products as $index => &$product) {
+        $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+        $product['id'] = $productId;
+        $product['product_id'] = $productId;
+        $route = trim((string)($product['url'] ?? ''));
+        $productLink = ProductCardUrl::splitForTaglib($route);
+        $product['url'] = $productLink['url'];
+        $product['url_path'] = $productLink['url_path'];
+        $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+        $product['is_demo'] = !empty($labelFlags['is_demo']);
+        $product['is_new'] = !empty($labelFlags['is_new']);
+        $product['is_sale'] = !empty($labelFlags['is_sale']);
+    }
+    unset($product);
+
+    return $products;
+};
+
+foreach ($items as $index => &$slide) {
+    $slide['cards'] = $prepareCards($slide['product_ids']);
+    $slide['dialog_id'] = 'theme-video-carousel-products-' . $uid . '-' . $index;
+}
+unset($slide);
+
+$itemCount = count($items);
+$showControls = $itemCount >= 2;
+?>
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-site-block="video-carousel"
+         data-testid="video-carousel"
+         data-weline-load="videoCarousel"
+         data-carousel-count="<?= (int)$itemCount ?>">
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
+    <?php if ($sectionTitle !== '' || $sectionSubtitle !== ''): ?>
+        <header class="video-carousel__header">
+            <?php if ($sectionTitle !== ''): ?>
+                <h2 class="video-carousel__title"><?= $esc($sectionTitle) ?></h2>
+            <?php endif; ?>
+            <?php if ($sectionSubtitle !== ''): ?>
+                <p class="video-carousel__subtitle"><?= $esc($sectionSubtitle) ?></p>
+            <?php endif; ?>
+        </header>
+    <?php endif; ?>
+
+    <div class="video-carousel__stage">
+        <?php foreach ($items as $index => $slide): ?>
+            <?php
+            $isActive = $index === 0;
+            $mediaLabel = trim((string)($slide['title'] !== '' ? $slide['title'] : ($slide['author'] !== '' ? $slide['author'] : __('视频'))));
+            ?>
+            <article class="video-carousel__slide<?= $isActive ? ' is-active' : '' ?>"
+                     data-carousel-slide
+                     data-index="<?= (int)$index ?>"
+                     aria-hidden="<?= $isActive ? 'false' : 'true' ?>"
+                     <?= $isActive ? 'aria-current="true"' : '' ?>
+                     <?= $isActive ? '' : 'inert' ?>>
+                <div class="video-carousel__media" style="--wc-aspect-padding: 56.25%">
+                    <?php if ($slide['video_type'] === 'youtube' && $slide['video_id'] !== ''): ?>
+                        <iframe src="https://www.youtube.com/embed/<?= $esc($slide['video_id']) ?>"
+                                class="video-carousel__iframe"
+                                title="<?= $esc($mediaLabel) ?>"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                sandbox="allow-scripts allow-same-origin allow-presentation"
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                loading="<?= $isPreviewMode && $isActive ? 'eager' : 'lazy' ?>"
+                                allowfullscreen></iframe>
+                    <?php elseif ($slide['video_type'] === 'vimeo' && $slide['video_id'] !== ''): ?>
+                        <iframe src="https://player.vimeo.com/video/<?= $esc($slide['video_id']) ?>"
+                                class="video-carousel__iframe"
+                                title="<?= $esc($mediaLabel) ?>"
+                                frameborder="0"
+                                allow="autoplay; fullscreen; picture-in-picture"
+                                sandbox="allow-scripts allow-same-origin allow-presentation"
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                loading="<?= $isPreviewMode && $isActive ? 'eager' : 'lazy' ?>"
+                                allowfullscreen></iframe>
+                    <?php elseif ($slide['video_type'] === 'bilibili' && $slide['bilibili_src'] !== ''): ?>
+                        <iframe src="<?= $esc($slide['bilibili_src']) ?>"
+                                class="video-carousel__iframe"
+                                title="<?= $esc($mediaLabel) ?>"
+                                frameborder="0"
+                                allow="fullscreen; picture-in-picture"
+                                sandbox="allow-scripts allow-same-origin allow-presentation"
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                loading="<?= $isPreviewMode && $isActive ? 'eager' : 'lazy' ?>"
+                                allowfullscreen></iframe>
+                    <?php elseif ($slide['video_type'] === 'self' && $slide['video_url'] !== ''): ?>
+                        <video class="video-carousel__native"
+                               <?= $slide['poster'] !== '' ? 'poster="' . $esc($slide['poster']) . '"' : '' ?>
+                               controls
+                               playsinline>
+                            <source src="<?= $esc($slide['video_url']) ?>" type="video/mp4">
+                            <?= __('您的浏览器不支持视频标签。') ?>
+                        </video>
+                    <?php elseif ($slide['video_type'] === 'embed' && $slide['embed_code'] !== ''): ?>
+                        <?= $slide['embed_code'] ?>
+                    <?php else: ?>
+                        <div class="video-carousel__placeholder" role="status" data-carousel-empty-media>
+                            <w:icon name="play" size="sm"></w:icon>
+                            <p><?= $esc((string)$slide['placeholder']) ?></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="video-carousel__meta">
+                    <?php if ($slide['title'] !== ''): ?>
+                        <h3 class="video-carousel__item-title" data-carousel-field="title"><?= $esc($slide['title']) ?></h3>
+                    <?php endif; ?>
+                    <?php if ($slide['author'] !== ''): ?>
+                        <p class="video-carousel__author" data-carousel-field="author"><?= $esc($slide['author']) ?></p>
+                    <?php endif; ?>
+                    <?php if ($slide['description'] !== ''): ?>
+                        <p class="video-carousel__description" data-carousel-field="description"><?= $esc($slide['description']) ?></p>
+                    <?php endif; ?>
+
+                    <?php if ($slide['cards'] !== []): ?>
+                        <button type="button"
+                                class="w-button video-carousel__cta"
+                                data-variant="primary"
+                                data-size="sm"
+                                data-action="open-related-products"
+                                data-dialog-target="<?= $esc('#' . $slide['dialog_id']) ?>">
+                            <?= $esc($ctaLabel) ?>
+                        </button>
+                    <?php endif; ?>
+                </div>
+            </article>
+        <?php endforeach; ?>
+    </div>
+
+    <?php if ($showControls): ?>
+        <div class="video-carousel__controls" data-carousel-controls>
+            <button type="button"
+                    class="w-button video-carousel__prev"
+                    data-variant="ghost"
+                    data-size="sm"
+                    data-action="carousel-prev"
+                    aria-label="<?= $esc($prevLabel) ?>">
+                <w:icon name="arrow-left" size="sm"></w:icon>
+            </button>
+            <div class="video-carousel__dots" role="tablist" aria-label="<?= $esc($translateDefaultCopy('视频项', 'Video items')) ?>">
+                <?php foreach ($items as $index => $_slide): ?>
+                    <button type="button"
+                            class="video-carousel__dot<?= $index === 0 ? ' is-active' : '' ?>"
+                            data-action="carousel-dot"
+                            data-index="<?= (int)$index ?>"
+                            aria-label="<?= $esc($translateDefaultCopy('第', 'Item ') . ($index + 1) . $translateDefaultCopy('项', '')) ?>"
+                            aria-pressed="<?= $index === 0 ? 'true' : 'false' ?>"></button>
+                <?php endforeach; ?>
+            </div>
+            <button type="button"
+                    class="w-button video-carousel__next"
+                    data-variant="ghost"
+                    data-size="sm"
+                    data-action="carousel-next"
+                    aria-label="<?= $esc($nextLabel) ?>">
+                <w:icon name="arrow-right" size="sm"></w:icon>
+            </button>
+        </div>
+    <?php endif; ?>
+
+    <?php foreach ($items as $slide): ?>
+        <?php if ($slide['cards'] === []) {
+            continue;
+        } ?>
+        <dialog id="<?= $esc($slide['dialog_id']) ?>"
+                class="w-dialog video-carousel__dialog"
+                data-w-component="dialog"
+                data-state="closed"
+                data-size="lg"
+                data-w-closable="true"
+                data-w-backdrop="dismissible"
+                aria-labelledby="<?= $esc($slide['dialog_id']) ?>-title"
+                hidden>
+            <div class="w-dialog__surface">
+                <header class="w-dialog__header">
+                    <h2 id="<?= $esc($slide['dialog_id']) ?>-title" class="w-dialog__title"><?= $esc($ctaLabel) ?></h2>
+                    <button type="button"
+                            class="w-button"
+                            data-variant="ghost"
+                            data-size="sm"
+                            data-w-action="dialog.close"
+                            data-w-close
+                            aria-label="<?= $esc($closeLabel) ?>">×</button>
+                </header>
+                <div class="w-dialog__body video-carousel__dialog-body">
+                    <div class="video-carousel__products weline-product-card-shelf">
+                        <?php foreach ($slide['cards'] as $product): ?>
+                            <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="compact" wishlist-pixel="true" />
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </dialog>
+    <?php endforeach; ?>
+</section>
+
+<style>
+.<?= $wc ?> {
+    margin: var(--weline-space-5) 0;
+    color: var(--weline-theme-on-surface, var(--color-text));
+}
+
+.<?= $wc ?> .video-carousel__header {
+    margin-bottom: var(--weline-space-4);
+}
+
+.<?= $wc ?> .video-carousel__title {
+    margin: 0;
+    font-size: var(--weline-font-size-xl, 1.25rem);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.<?= $wc ?> .video-carousel__subtitle {
+    margin: var(--weline-space-2) 0 0;
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-on-surface-muted, var(--color-text-muted));
+}
+
+.<?= $wc ?> .video-carousel__stage {
+    position: relative;
+}
+
+.<?= $wc ?> .video-carousel__slide {
+    display: none;
+    gap: var(--weline-space-4);
+}
+
+.<?= $wc ?> .video-carousel__slide.is-active {
+    display: grid;
+}
+
+.<?= $wc ?> .video-carousel__media {
+    position: relative;
+    width: 100%;
+    padding-top: var(--wc-aspect-padding);
+    background: var(--weline-theme-overlay, var(--color-surface-muted));
+    border-radius: var(--weline-radius-lg);
+    overflow: hidden;
+}
+
+.<?= $wc ?> .video-carousel__iframe,
+.<?= $wc ?> .video-carousel__native,
+.<?= $wc ?> .video-carousel__media > iframe,
+.<?= $wc ?> .video-carousel__media > video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.<?= $wc ?> .video-carousel__placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-4);
+    text-align: center;
+    color: var(--weline-theme-on-primary, var(--color-on-primary));
+}
+
+.<?= $wc ?> .video-carousel__meta {
+    display: grid;
+    gap: var(--weline-space-2);
+}
+
+.<?= $wc ?> .video-carousel__item-title {
+    margin: 0;
+    font-size: var(--weline-font-size-lg, 1.125rem);
+    font-weight: 600;
+}
+
+.<?= $wc ?> .video-carousel__author {
+    margin: 0;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 600;
+    color: var(--weline-theme-primary, var(--color-primary));
+}
+
+.<?= $wc ?> .video-carousel__description {
+    margin: 0;
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.5;
+    color: var(--weline-theme-on-surface-muted, var(--color-text-muted));
+}
+
+.<?= $wc ?> .video-carousel__cta {
+    justify-self: start;
+    margin-top: var(--weline-space-2);
+}
+
+.<?= $wc ?> .video-carousel__controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-3);
+    margin-top: var(--weline-space-4);
+}
+
+.<?= $wc ?> .video-carousel__dots {
+    display: flex;
+    gap: var(--weline-space-2);
+}
+
+.<?= $wc ?> .video-carousel__dot {
+    width: var(--weline-space-3);
+    height: var(--weline-space-3);
+    border-radius: 999px;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    background: var(--weline-theme-border, var(--color-border));
+}
+
+.<?= $wc ?> .video-carousel__dot.is-active {
+    background: var(--weline-theme-primary, var(--color-primary));
+}
+
+.<?= $wc ?> .video-carousel__products {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--weline-space-3);
+}
+
+.<?= $wc ?> .video-carousel__dialog[hidden],
+.<?= $wc ?> .video-carousel__dialog[data-state="closed"] {
+    display: none;
+}
+
+.<?= $wc ?> .video-carousel__dialog[data-state="open"] {
+    display: flex;
+}
+
+@media (min-width: 768px) {
+    .<?= $wc ?> .video-carousel__slide.is-active {
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        align-items: start;
+    }
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    margin: var(--weline-space-3) 0;
+}
+</style>

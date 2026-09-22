@@ -1869,8 +1869,14 @@
             return;
         }
         var next = resolvePostalCode(group);
-        // Do not wipe postal-first / manual values when cascade nodes lack postal_code.
-        if (next) {
+        var current = text(postalField.value).trim();
+        var pending = text(group.pendingPostalCode || '').trim();
+        // Postal-lookup: keep the typed value (SW1A 1AA); catalog may only store outward SW1A.
+        if (pending) {
+            postalField.value = pending;
+            return;
+        }
+        if (next && !current) {
             postalField.value = next;
         }
     }
@@ -4203,6 +4209,7 @@
             return applyValues(code, values);
         }
         function applyHit(countryCode, postal, jobId) {
+            group.pendingPostalCode = postal;
             return postalLookup(countryCode, postal, 8).then(function (rows) {
                 if (jobId !== postalJobSeq) {
                     return null;
@@ -4249,6 +4256,7 @@
                     return null;
                 }
                 lastEnqueuedPostal = postal;
+                group.pendingPostalCode = postal;
                 var countryCode = text(metadataValue(group, 'country_code') || (group.fixed && group.fixed.country) || 'CN').toUpperCase() || 'CN';
                 return postalCountries(postal).then(function (countries) {
                     if (jobId !== postalJobSeq) {
@@ -4547,8 +4555,13 @@
                                 var postalFields = form.querySelectorAll('[data-postal-first], [data-shipping-field][name="postal_code"], [name="postal_code"]');
                                 Array.prototype.forEach.call(postalFields, function (postalField) {
                                     var current = text(postalField.value).trim();
-                                    // 用户已输入更新的邮编时，不要被旧 candidate 回写覆盖
-                                    if (current && current !== postalCode && (postalField.hasAttribute('data-postal-first') || postalField.hasAttribute('data-shipping-field'))) {
+                                    var pending = text(group.pendingPostalCode || '').trim();
+                                    // Never replace user input with catalog postal (lookup may match on outward prefix).
+                                    if (pending) {
+                                        postalField.value = pending;
+                                        return;
+                                    }
+                                    if (current) {
                                         return;
                                     }
                                     postalField.value = postalCode;

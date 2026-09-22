@@ -15,6 +15,7 @@
  *
  * @param video_type {default="youtube",type="select",label="视频类型",options={youtube:"YouTube",vimeo:"Vimeo",self:"自托管",embed:"嵌入代码"}}
  * @param video_url {default="",type="url",label="视频地址",placeholder="https://www.youtube.com/watch?v=…",description="YouTube / Vimeo 页面链接，或自托管 mp4 地址",i18n=false}
+ * @param title {default="",type="string",label="区标题",description="首页等场景可选显示在播放器上方"}
  * @param embed_code {default="",type="textarea",label="嵌入代码",placeholder="<iframe src=\"https://www.youtube.com/embed/…\"></iframe>",description="仅「嵌入代码」类型必填。若误把 YouTube 链接贴到这里，也会自动识别。",i18n=false}
  * @param poster {default="",type="media_image",label="封面图片",description="从媒体库选择封面图（自托管视频用）",i18n=false}
  * @param autoplay {default=false,type="bool",label="自动播放",description="与「静音播放」独立。开启后建议同时开启静音，否则多数浏览器会拦截带声自动播放"}
@@ -23,6 +24,7 @@
 
 use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\VideoEmbedResolver;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('video-player');
@@ -33,9 +35,37 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $videoType = strtolower(trim((string)($this->getData('video_type') ?? 'youtube')));
 $videoUrlRaw = (string)($this->getData('video_url') ?? '');
 $embedCodeRaw = trim((string)($this->getData('embed_code') ?? ''));
+$sectionTitleRaw = trim((string)($this->getData('title') ?? ''));
 // Hydrated file-image → src string; legacy URL rows still sanitize for render-only.
 $poster = LegacyMediaUrl::sanitize($this->getData('poster') ?? '');
 $aspectRatio = $this->getData('aspect_ratio') ?? '16:9';
+
+$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
+$isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
+$translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
+    $translated = trim((string)WidgetI18n::label($source));
+    if ($translated !== '' && $translated !== $source) {
+        return $translated;
+    }
+
+    return $isChineseLocale ? $source : $english;
+};
+
+// Default homepage demo: public, embeddable YouTube when unset.
+$defaultYoutubeUrl = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+if ($videoType === 'youtube'
+    && trim($videoUrlRaw) === ''
+    && $embedCodeRaw === ''
+) {
+    $videoUrlRaw = $defaultYoutubeUrl;
+}
+if ($sectionTitleRaw === '') {
+    $sectionTitleRaw = $translateDefaultCopy('穿搭灵感 · YouTube', 'Style inspiration · YouTube');
+} elseif (in_array($sectionTitleRaw, ['穿搭灵感 · YouTube', 'Style inspiration · YouTube'], true)) {
+    $sectionTitleRaw = $translateDefaultCopy('穿搭灵感 · YouTube', 'Style inspiration · YouTube');
+}
+$sectionTitle = $sectionTitleRaw;
 
 // Avoid (bool)"0" === true when config arrives as string.
 $videoBool = static function (mixed $value): bool {
@@ -79,13 +109,7 @@ $sanitizeEmbedCode = static function (mixed $html): string {
         'source' => ['src', 'type', 'media'],
         'embed' => ['src', 'type', 'width', 'height', 'class'],
     ];
-    $trustedIframeHosts = [
-        'youtube.com',
-        'www.youtube.com',
-        'youtube-nocookie.com',
-        'www.youtube-nocookie.com',
-        'player.vimeo.com',
-    ];
+    $trustedIframeHosts = VideoEmbedResolver::trustedEmbedHosts();
 
     $previous = libxml_use_internal_errors(true);
     try {
@@ -223,7 +247,13 @@ if ($videoType === 'embed') {
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>">
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-site-block="video-player">
+    <?php if ($sectionTitle !== ''): ?>
+        <header class="video-player-header">
+            <h2 class="video-player-title"><?= $esc($sectionTitle) ?></h2>
+        </header>
+    <?php endif; ?>
     <div class="video-container" style="--wc-aspect-padding: <?= $esc($paddingTop) ?>">
         <?php if ($videoType === 'youtube' && $videoId): ?>
             <iframe src="https://www.youtube.com/embed/<?= $esc($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $playbackMuted ? 'mute=1&' : '' ?><?= $loop ? 'loop=1&playlist=' . $esc($videoId) : '' ?>"
@@ -275,6 +305,17 @@ if ($videoType === 'embed') {
 <style>
 .<?= $wc ?> {
     margin: var(--weline-space-5) 0;
+}
+
+.<?= $wc ?> .video-player-header {
+    margin-bottom: var(--weline-space-4);
+}
+
+.<?= $wc ?> .video-player-title {
+    margin: 0;
+    font-size: var(--weline-font-size-xl, 1.25rem);
+    font-weight: 600;
+    line-height: 1.3;
 }
 
 .<?= $wc ?> .video-container {

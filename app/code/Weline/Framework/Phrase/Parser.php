@@ -768,26 +768,61 @@ class Parser
     /** Read only already materialized translation layers; never query a provider. */
     private static function translationFromLoadedLayers(string $word, array $layers): ?string
     {
+        $lang = (string)($layers['lang'] ?? '');
         $modules = (array)($layers['modules'] ?? []);
         $moduleWords = (array)($layers['module_words'] ?? []);
         for ($i = \count($modules) - 1; $i >= 0; $i--) {
             $translation = $moduleWords[$modules[$i]][$word] ?? null;
-            if (\is_string($translation) && $translation !== '' && $translation !== $word) {
+            if (!\is_string($translation) || $translation === '') {
+                continue;
+            }
+            if ($translation !== $word) {
                 return $translation;
             }
+            // Module CSV identity hit: resolve as source and STOP.
+            // Falling through would let fallback-locale (en_US) public/locale packs
+            // paint Chinese UI with English for keys that only exist as zh identity.
+            if (self::isChineseLocaleCode($lang) || !self::sourceContainsCjk($word)) {
+                return $word;
+            }
+            // CJK identity on a non-zh locale is an untranslated placeholder — keep looking.
         }
         $translation = $layers['locale_words'][$word] ?? null;
         if (\is_string($translation) && $translation !== '' && $translation !== $word) {
             return $translation;
         }
+        if (
+            \is_string($translation)
+            && $translation === $word
+            && $translation !== ''
+            && (self::isChineseLocaleCode($lang) || !self::sourceContainsCjk($word))
+        ) {
+            return $word;
+        }
         $localeLayers = (array)($layers['locale_word_layers'] ?? []);
         for ($i = \count($localeLayers) - 1; $i >= 0; $i--) {
             $translation = $localeLayers[$i][$word] ?? null;
-            if (\is_string($translation) && $translation !== '' && $translation !== $word) {
+            if (!\is_string($translation) || $translation === '') {
+                continue;
+            }
+            if ($translation !== $word) {
                 return $translation;
+            }
+            if (self::isChineseLocaleCode($lang) || !self::sourceContainsCjk($word)) {
+                return $word;
             }
         }
         return null;
+    }
+
+    private static function isChineseLocaleCode(string $localeCode): bool
+    {
+        return \str_starts_with(\strtolower(\str_replace('-', '_', \trim($localeCode))), 'zh');
+    }
+
+    private static function sourceContainsCjk(string $text): bool
+    {
+        return \preg_match('/[\x{4e00}-\x{9fff}]/u', $text) === 1;
     }
 
     /** Shared template entry: use the same request layers and exact-word L1/L2 as parse(). */
@@ -1055,9 +1090,11 @@ class Parser
         $words = [];
         $locales = LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale());
         foreach (\array_reverse($locales) as $candidateLocale) {
-            $words = self::mergePreferTranslatedWords(
+            // Higher-priority locales merge last and MUST overwrite — including zh identity.
+            // Preferring "already-translated" values would let en_US beat zh identity rows.
+            $words = \array_merge(
                 $words,
-                self::loadLocaleWords($candidateLocale, $modules),
+                self::loadLocaleWords((string)$candidateLocale, $modules),
             );
         }
 
@@ -1601,8 +1638,9 @@ class Parser
                 $provider = self::globalDictionaryProvider();
                 $moduleMaps = null;
                 if ($queryModules !== [] && $provider instanceof ModuleGlobalDictionaryProviderInterface) {
+                    $fetchModules = self::withNullSourceGlobalModule($queryModules);
                     if (Runtime::isPersistent()) {
-                        $moduleMaps = self::loadGlobalDictionaryModuleMaps($cachePool, $provider, $lang, $queryModules);
+                        $moduleMaps = self::loadGlobalDictionaryModuleMaps($cachePool, $provider, $lang, $fetchModules);
                         $words = $moduleMaps === null ? null : [];
                     } else {
                         $words = self::loadGlobalDictionaryModuleWords($cachePool, $provider, $lang, $queryModules);
@@ -1645,8 +1683,13 @@ class Parser
                     $snapshot = $latestSnapshot ?? [];
                     if ($moduleMaps !== null) {
                         // 预取只保存原子词表；实际用到模块时才按既有顺序挂载只读引用。
+                        // NULL source_module globals first; request modules override.
+                        $globalLayer = $moduleMaps[ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY] ?? [];
+                        if ($globalLayer !== []) {
+                            $snapshot[] = $globalLayer;
+                        }
                         foreach ($queryModules as $module) {
-                            if ($moduleMaps[$module] !== []) {
+                            if (($moduleMaps[$module] ?? []) !== []) {
                                 $snapshot[] = $moduleMaps[$module];
                             }
                         }
@@ -1750,7 +1793,12 @@ class Parser
                 try {
                     $pool = self::getSharedPhraseCachePool([$candidateLocale]);
                     if ($pool !== null) {
-                        self::loadGlobalDictionaryModuleMaps($pool, $provider, $candidateLocale, $modules);
+                        self::loadGlobalDictionaryModuleMaps(
+                            $pool,
+                            $provider,
+                            $candidateLocale,
+                            self::withNullSourceGlobalModule($modules),
+                        );
                     }
                 } catch (\Throwable) {
                     // 预取失败不标记模块已加载，正常解析仍能沿原路径重试。
@@ -1772,15 +1820,33 @@ class Parser
         string $lang,
         array $modules,
     ): ?array {
-        $maps = self::loadGlobalDictionaryModuleMaps($pool, $provider, $lang, $modules);
+        $fetchModules = self::withNullSourceGlobalModule($modules);
+        $maps = self::loadGlobalDictionaryModuleMaps($pool, $provider, $lang, $fetchModules);
         if ($maps === null) {
             return null;
         }
         $words = [];
+        $globalLayer = $maps[ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY] ?? [];
+        if ($globalLayer !== []) {
+            $words = self::mergePreferTranslatedWords($words, $globalLayer);
+        }
         foreach ($modules as $module) {
-            $words = self::mergePreferTranslatedWords($words, $maps[$module]);
+            $words = self::mergePreferTranslatedWords($words, $maps[$module] ?? []);
         }
         return $words;
+    }
+
+    /**
+     * Always fetch NULL/empty source_module globals once alongside request modules.
+     *
+     * @param list<string> $modules
+     * @return list<string>
+     */
+    private static function withNullSourceGlobalModule(array $modules): array
+    {
+        $modules[] = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;
+
+        return \array_values(\array_unique($modules));
     }
 
     /** 获取原子词表并复用进程缓存与共享池，不改变模块激活状态。 */

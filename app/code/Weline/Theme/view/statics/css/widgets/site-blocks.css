@@ -37,6 +37,10 @@
 .weline-site-block .sb-link:hover { text-decoration: underline; color: var(--color-link-hover); }
 .weline-site-block :is(a, button, summary, input):focus-visible { outline: var(--border-width-medium) solid var(--weline-theme-primary); outline-offset: var(--spacing-xs); }
 .weline-site-block .sb-media { display: block; aspect-ratio: var(--sb-ratio, 4 / 3); overflow: hidden; background: var(--weline-theme-surface-subtle); }
+.weline-site-block.is-looks .sb-media { --sb-ratio: 3 / 4; }
+.weline-site-block.is-looks .sb-looks-tile { overflow: hidden; padding: 0; }
+.weline-site-block.is-looks .sb-looks-tile .sb-body { padding: var(--spacing-sm) var(--spacing-md); }
+.weline-site-block.is-looks .sb-looks-cta { margin-block-start: var(--site-gap); }
 .weline-site-block .sb-media :is(picture, a, figure) { display: block; width: 100%; height: 100%; margin: 0; }
 .weline-site-block .sb-media img { display: block; width: 100%; height: 100%; object-fit: var(--sb-fit, cover); }
 .weline-site-block .sb-media.is-natural { aspect-ratio: auto; }

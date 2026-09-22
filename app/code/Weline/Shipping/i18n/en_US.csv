@@ -1,874 +1,915 @@
-﻿请先登录,"Please log in first"
-发货地址已保存,"Shipping address saved."
-发货地址ID不能为空,"Shipping address ID is required."
-发货地址已删除,"Shipping address removed."
-默认发货地址已更新,"Default shipping address updated."
-收货地址已保存,"Delivery address saved."
-收货地址ID不能为空,"Delivery address ID is required."
-收货地址已删除,"Delivery address removed."
-默认收货地址已更新,"Default delivery address updated."
-%{1}不能为空,"%{1} cannot be empty"
-收货地址已更新,"Delivery address updated."
-收货地址已加载,"Delivery address loaded."
-地址数据不能为空,"Address data cannot be empty."
-收货地址已同步,"Delivery address synced."
-国家代码不能为空,"Country code cannot be empty"
-配送信息已加载,"Shipping info loaded."
-运单已登记，等待承运商更新轨迹,运单已登记，等待承运商更新轨迹
-已检测到发货地址记录。,已检测到发货地址记录。
-"至少一条可用发货地址 + 承运商/费用模板，结账才能选配送。","至少一条可用发货地址 + 承运商/费用模板，结账才能选配送。"
-物流,物流
-发货地址与承运商,发货地址与承运商
-未指定配送方式,未指定配送方式
-"承运商 #%{1}","承运商 #%{1}"
-自动定位地址,"Auto Locate Address"
-地址不存在,"Address does not exist"
-更新成功,"Updated successfully"
-创建成功,"Created successfully"
-参数错误,"Invalid parameter"
-删除成功,"Deleted successfully"
-设置成功,"Set successfully"
-退换政策,"Returns & Exchanges"
-配送说明,"Shipping Information"
-配送服务ID不能为空,"Shipping service ID cannot be empty"
-"Suggest regions success","Suggest regions success"
-"Get country profile success","Get country profile success"
-"Format suggestion success","Format suggestion success"
-"Region not found","Region not found"
-"Embargo evaluate success","Embargo evaluate success"
-"Embargo countries success","Embargo countries success"
-"Embargo regions success","Embargo regions success"
-"Postal countries success","Postal countries success"
-"Postal lookup success","Postal lookup success"
-"Has streets success","Has streets success"
-"List streets success","List streets success"
-"Get regions success","Get regions success"
-获取配送信息成功,"Successfully fetched shipping information"
-物流单号不能为空,"Tracking number cannot be empty"
-快递公司ID不能为空,"Carrier ID cannot be empty"
-订单ID不能为空,"Order ID cannot be empty"
-功能待实现,"Feature not yet implemented"
-配送地址更新成功,"Shipping address updated successfully"
-暂无配送地址,"No shipping address"
-获取成功,"Successfully got"
-用户未登录,"User not logged in"
-同步成功,"Sync succeeded"
-启用成功,"Enabled successfully"
-禁用成功,"Disabled successfully"
-发货地址管理,"Shipping Address Management"
+请先登录,Please log in first
+发货地址已保存,Shipping address saved.
+发货地址ID不能为空,Shipping address ID is required.
+发货地址已删除,Shipping address removed.
+默认发货地址已更新,Default shipping address updated.
+收货地址已保存,Delivery address saved.
+收货地址ID不能为空,Delivery address ID is required.
+收货地址已删除,Delivery address removed.
+默认收货地址已更新,Default delivery address updated.
+%{1}不能为空,%{1} cannot be empty
+收货地址已更新,Delivery address updated.
+收货地址已加载,Delivery address loaded.
+地址数据不能为空,Address data cannot be empty.
+收货地址已同步,Delivery address synced.
+国家代码不能为空,Country code cannot be empty
+配送信息已加载,Shipping info loaded.
+运单已登记，等待承运商更新轨迹,Waybill registered; waiting for carrier tracking updates
+已检测到发货地址记录。,Ship-from address record detected.
+至少一条可用发货地址 + 承运商/费用模板，结账才能选配送。,At least one usable ship-from + carrier/fee template is required before checkout can offer shipping.
+物流,Logistics
+发货地址与承运商,Ship-from address & carrier
+未指定配送方式,Shipping method not specified
+承运商 #%{1},Carrier #%{1}
+自动定位地址,Auto Locate Address
+地址不存在,Address does not exist
+更新成功,Updated successfully
+创建成功,Created successfully
+参数错误,Invalid parameter
+删除成功,Deleted successfully
+设置成功,Set successfully
+退换政策,Returns & Exchanges
+配送说明,Shipping Information
+配送服务ID不能为空,Shipping service ID cannot be empty
+Suggest regions success,Suggest regions success
+Get country profile success,Get country profile success
+Format suggestion success,Format suggestion success
+Region not found,Region not found
+Embargo evaluate success,Embargo evaluate success
+Embargo countries success,Embargo countries success
+Embargo regions success,Embargo regions success
+Postal countries success,Postal countries success
+Postal lookup success,Postal lookup success
+Has streets success,Has streets success
+List streets success,List streets success
+Get regions success,Get regions success
+获取配送信息成功,Successfully fetched shipping information
+物流单号不能为空,Tracking number cannot be empty
+快递公司ID不能为空,Carrier ID cannot be empty
+订单ID不能为空,Order ID cannot be empty
+功能待实现,Feature not yet implemented
+配送地址更新成功,Shipping address updated successfully
+暂无配送地址,No shipping address
+获取成功,Successfully got
+用户未登录,User not logged in
+同步成功,Sync succeeded
+启用成功,Enabled successfully
+禁用成功,Disabled successfully
+发货地址管理,Shipping Address Management
 pin,pin
-查看发货地址,"View shipping address"
+查看发货地址,View shipping address
 list,list
-查看发货地址列表,"View a list of shipping addresses"
-编辑发货地址,"Edit Shipping Address"
+查看发货地址列表,View a list of shipping addresses
+编辑发货地址,Edit Shipping Address
 edit,edit
-保存发货地址,"Save shipping address"
+保存发货地址,Save shipping address
 save,save
-删除发货地址,"Delete shipping address"
+删除发货地址,Delete shipping address
 trash,trash
-设置默认发货地址,"Set default shipping address"
+设置默认发货地址,Set default shipping address
 star,star
-启用发货地址,"Enable shipping address"
+启用发货地址,Enable shipping address
 check,check
-禁用发货地址,"Disable shipping address"
+禁用发货地址,Disable shipping address
 close,close
-请先用地址选择器选择国家/地区,请先用地址选择器选择国家/地区
-该地区已在系统禁运中，无需重复新增：%{1},该地区已在系统禁运中，无需重复新增：%{1}
-已重新启用系统禁运：%{1},已重新启用系统禁运：%{1}
-已新增系统禁运：%{1},已新增系统禁运：%{1}
-已保存禁运原因：%{1},已保存禁运原因：%{1}
-"原因码须为小写字母开头，仅含 a-z、0-9、下划线","原因码须为小写字母开头，仅含 a-z、0-9、下划线"
-请填写原因名称,请填写原因名称
-已删除禁运原因,已删除禁运原因
-系统种子原因不可删除,系统种子原因不可删除
-已解禁（全站生效），条目仍保留,已解禁（全站生效），条目仍保留
-已恢复系统禁运（全站生效）,已恢复系统禁运（全站生效）
-已删除自建禁运条目,已删除自建禁运条目
-系统禁运,系统禁运
+请先用地址选择器选择国家/地区,Select country/region with address picker first
+该地区已在系统禁运中，无需重复新增：%{1},Region already under system embargo; no need to add again: %{1}
+已重新启用系统禁运：%{1},System embargo re-enabled: %{1}
+已新增系统禁运：%{1},System embargo added: %{1}
+已保存禁运原因：%{1},Embargo reason saved: %{1}
+原因码须为小写字母开头，仅含 a-z、0-9、下划线,"Reason code must start with lowercase letter; only a-z, 0-9, underscore"
+请填写原因名称,Please enter reason name
+已删除禁运原因,Embargo reason deleted
+系统种子原因不可删除,System seed reasons cannot be deleted
+已解禁（全站生效），条目仍保留,Lifted (sitewide); entry retained
+已恢复系统禁运（全站生效）,System embargo restored (sitewide)
+已删除自建禁运条目,Custom embargo entry deleted
+系统禁运,System Blacklist
 alert-triangle,alert-triangle
-系统默认禁运管理,系统默认禁运管理
-查看系统禁运,查看系统禁运
-查看系统默认禁运列表,查看系统默认禁运列表
-新增系统禁运,新增系统禁运
+系统默认禁运管理,System default embargo mgmt
+查看系统禁运,View system embargoes
+查看系统默认禁运列表,View system default embargo list
+新增系统禁运,Add system embargo
 plus,plus
-新增系统禁运国家或省份,新增系统禁运国家或省份
-保存禁运原因,保存禁运原因
-新增或更新禁运原因字典,新增或更新禁运原因字典
-删除禁运原因,删除禁运原因
-删除自建禁运原因（种子不可删）,删除自建禁运原因（种子不可删）
-解禁系统禁运,解禁系统禁运
+新增系统禁运国家或省份,Add system embargo country or province
+保存禁运原因,Save embargo reason
+新增或更新禁运原因字典,Add or update embargo reason dictionary
+删除禁运原因,Delete embargo reason
+删除自建禁运原因（种子不可删）,Delete custom embargo reason (seeds undeletable)
+解禁系统禁运,Lift system embargo
 unlock,unlock
-解禁系统禁运（全站生效）,解禁系统禁运（全站生效）
-恢复系统禁运,恢复系统禁运
+解禁系统禁运（全站生效）,Lift system embargo (sitewide)
+恢复系统禁运,Restore system embargo
 lock,lock
-再启用系统禁运,再启用系统禁运
-删除自建系统禁运,删除自建系统禁运
-删除后台自建的系统禁运行（种子不可删）,删除后台自建的系统禁运行（种子不可删）
-"仅允许 POST 请求。","Only POST requests are allowed."
-配送航线创建成功。,配送航线创建成功。
-贸易术语已更新。,贸易术语已更新。
-仓与发货地址已绑定。,仓与发货地址已绑定。
-"已复制 %{1} 条默认站航线到目标发货地址。","已复制 %{1} 条默认站航线到目标发货地址。"
-配送服务管理,"Delivery service management"
+再启用系统禁运,Re-enable system embargo
+删除自建系统禁运,Delete custom system embargo
+删除后台自建的系统禁运行（种子不可删）,Delete admin-created system embargo rows (seeds undeletable)
+仅允许 POST 请求。,Only POST requests are allowed.
+配送航线创建成功。,Shipping route created.
+贸易术语已更新。,Incoterms updated.
+仓与发货地址已绑定。,Warehouse and ship-from bound.
+已复制 %{1} 条默认站航线到目标发货地址。,Copied %{1} default-site routes to the target ship-from address.
+配送服务管理,Delivery service management
 truck,truck
-查看配送服务,"View delivery services"
-查看配送服务列表,"View a list of delivery services"
-保存配送服务,"Save delivery service"
-创建配送服务,"Create a shipping service"
-更新贸易术语,更新贸易术语
-"更新配送航线 Incoterm","更新配送航线 Incoterm"
-绑定仓发货地址,绑定仓发货地址
-绑定仓库与发货地址,绑定仓库与发货地址
-复制默认站航线,复制默认站航线
-复制默认站航线到发货锚点,复制默认站航线到发货锚点
-地区编辑功能暂未开放，请通过数据库或后续版本管理。,"Region editing is not yet available. Please manage via the database or a future version."
-排序提交格式无效。,排序提交格式无效。
-"已更新 %{1} 个国家的热门排序。","已更新 %{1} 个国家的热门排序。"
-"已新增 %{1} 个地区。","Added %{1} region(s)."
-地区创建成功。,"Region created successfully."
-地区管理,"Region Management"
-查看地区,"View area"
-查看地区列表,"View list of regions"
-编辑地区,"Edit region"
-保存地区,"save area"
-创建地区,"Create a region"
-快递公司不存在,"Courier company does not exist"
-快递公司代码不能为空,"Carrier code cannot be empty"
-快递公司名称不能为空,"Carrier name cannot be empty"
+查看配送服务,View delivery services
+查看配送服务列表,View a list of delivery services
+保存配送服务,Save delivery service
+创建配送服务,Create a shipping service
+更新贸易术语,Update Incoterms
+更新配送航线 Incoterm,Update shipping route Incoterm
+绑定仓发货地址,Bind warehouse ship-from address
+绑定仓库与发货地址,Bind warehouse and ship-from address
+复制默认站航线,Copy default-site routes
+复制默认站航线到发货锚点,Copy default-site routes to ship anchor
+地区编辑功能暂未开放，请通过数据库或后续版本管理。,Region editing is not yet available. Please manage via the database or a future version.
+排序提交格式无效。,Invalid sort submit format.
+已更新 %{1} 个国家的热门排序。,Updated popularity sort for %{1} countries.
+已新增 %{1} 个地区。,Added %{1} region(s).
+地区创建成功。,Region created successfully.
+地区管理,Region Management
+查看地区,View area
+查看地区列表,View list of regions
+编辑地区,Edit region
+保存地区,save area
+创建地区,Create a region
+快递公司不存在,Courier company does not exist
+快递公司代码不能为空,Carrier code cannot be empty
+快递公司名称不能为空,Carrier name cannot be empty
 物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"
-快递公司代码已存在,"Carrier code already exists"
-API配置JSON格式错误,"API configuration JSON format error"
-快递公司管理,"Express company management"
-查看快递公司,"View courier companies"
-查看快递公司列表,"View list of courier companies"
-编辑快递公司,"Edit Carrier"
-保存快递公司,"Save courier company"
-删除快递公司,"Delete courier company"
-切换快递公司状态,"Switch courier company status"
+快递公司代码已存在,Carrier code already exists
+API配置JSON格式错误,API configuration JSON format error
+快递公司管理,Express company management
+查看快递公司,View courier companies
+查看快递公司列表,View list of courier companies
+编辑快递公司,Edit Carrier
+保存快递公司,Save courier company
+删除快递公司,Delete courier company
+切换快递公司状态,Switch courier company status
 circle,circle
-切换快递公司启用/禁用状态,"Switch courier company enable/disable status"
-费用模板不存在或不在当前作用范围。,费用模板不存在或不在当前作用范围。
-费用模板已更新。,费用模板已更新。
-费用模板创建成功。,"The expense template is created successfully."
-费用模板已删除。,费用模板已删除。
-费用模板管理,"Expense template management"
-查看费用模板,"View fee template"
-查看费用模板列表,"View a list of fee templates"
-保存费用模板,"Save expense template"
-创建或更新费用模板,创建或更新费用模板
-删除自建费用模板,删除自建费用模板
-删除自建费用模板（系统种子不可删）,删除自建费用模板（系统种子不可删）
-物流跟踪管理,"Logistics tracking management"
+切换快递公司启用/禁用状态,Switch courier company enable/disable status
+费用模板不存在或不在当前作用范围。,Fee template not found or out of current scope.
+费用模板已更新。,Fee template updated.
+费用模板创建成功。,The expense template is created successfully.
+费用模板已删除。,Fee template deleted.
+费用模板管理,Expense template management
+查看费用模板,View fee template
+查看费用模板列表,View a list of fee templates
+保存费用模板,Save expense template
+创建或更新费用模板,Create or update fee template
+删除自建费用模板,Delete custom fee template
+删除自建费用模板（系统种子不可删）,Delete custom fee template (system seeds undeletable)
+物流跟踪管理,Logistics tracking management
 search,search
-查看物流跟踪,"View logistics tracking"
-查看物流跟踪记录,"View logistics tracking records"
-查询物流位置,查询物流位置
-按发货记录查询当前位置,按发货记录查询当前位置
-免邮规则创建成功。,"Free shipping rule created successfully."
-免邮规则已删除。,"Free shipping rule deleted."
-免邮规则已启用。,"Free shipping rule enabled."
-免邮规则已禁用。,"Free shipping rule disabled."
-免邮规则管理,"Free shipping rule management"
-查看免邮规则,"View free shipping rules"
-查看免邮规则列表,"View the list of free shipping rules"
-保存免邮规则,"Save free shipping rules"
-创建免邮规则,"Create a free shipping rule"
-启用免邮规则,启用免邮规则
-启用免邮规则（含系统种子）,启用免邮规则（含系统种子）
-禁用免邮规则,禁用免邮规则
+查看物流跟踪,View logistics tracking
+查看物流跟踪记录,View logistics tracking records
+查询物流位置,Track shipment location
+按发货记录查询当前位置,Query current location by shipment record
+免邮规则创建成功。,Free shipping rule created successfully.
+免邮规则已删除。,Free shipping rule deleted.
+免邮规则已启用。,Free shipping rule enabled.
+免邮规则已禁用。,Free shipping rule disabled.
+免邮规则管理,Free shipping rule management
+查看免邮规则,View free shipping rules
+查看免邮规则列表,View the list of free shipping rules
+保存免邮规则,Save free shipping rules
+创建免邮规则,Create a free shipping rule
+启用免邮规则,Enable free-shipping rule
+启用免邮规则（含系统种子）,Enable free-shipping rule (incl. system seeds)
+禁用免邮规则,Disable free-shipping rule
 ban,ban
-禁用免邮规则（含系统种子）,禁用免邮规则（含系统种子）
-删除自建免邮规则,删除自建免邮规则
-删除自建免邮规则（种子不可删）,删除自建免邮规则（种子不可删）
-配送系统,"Shipping System"
-配送系统管理聚合页,"Delivery system management aggregation page"
-查看配送系统,"View delivery system"
+禁用免邮规则（含系统种子）,Disable free-shipping rule (incl. system seeds)
+删除自建免邮规则,Delete custom free-shipping rule
+删除自建免邮规则（种子不可删）,Delete custom free-shipping rule (seeds undeletable)
+配送系统,Shipping System
+配送系统管理聚合页,Delivery system management aggregation page
+查看配送系统,View delivery system
 grid,grid
-查看配送系统聚合页,"View the delivery system aggregation page"
-客户ID不能为空,"Customer ID cannot be empty"
-运送地址管理,"Shipping address management"
-查看运送地址,"View shipping address"
-查看运送地址列表,"View a list of shipping addresses"
-编辑运送地址,"Edit Delivery Address"
-保存运送地址,"Save shipping address"
-删除运送地址,"Delete shipping address"
-设置默认运送地址,"Set default shipping address"
-启用运送地址,"Enable shipping address"
-禁用运送地址,"Disable shipping address"
+查看配送系统聚合页,View the delivery system aggregation page
+客户ID不能为空,Customer ID cannot be empty
+运送地址管理,Shipping address management
+查看运送地址,View shipping address
+查看运送地址列表,View a list of shipping addresses
+编辑运送地址,Edit Delivery Address
+保存运送地址,Save shipping address
+删除运送地址,Delete shipping address
+设置默认运送地址,Set default shipping address
+启用运送地址,Enable shipping address
+禁用运送地址,Disable shipping address
 待发货,Pending
-运输中,"In Transit"
+运输中,In Transit
 已送达,Delivered
 异常,Exception
-不支持追踪,"Not Supported"
+不支持追踪,Not Supported
 取件,Pickup
 到达,Arrival
 派送,Delivery
-快速添加地址,"Quick add address"
+快速添加地址,Quick add address
 收货人,Recipient
 电话,Phone
-详细地址,"Detailed address"
-同时用作结账地址,同时用作结账地址
-保存并使用,"Save and use"
-收货地址,"Delivery Address"
-发货地址,"Shipping Address"
-选择收货地址,"Select a shipping address"
+详细地址,Detailed address
+同时用作结账地址,Also use as checkout address
+保存并使用,Save and use
+收货地址,Delivery Address
+发货地址,Shipping Address
+选择收货地址,Select a shipping address
 China,China
 编辑,Edit
-使用新地址,"Use a new address"
+使用新地址,Use a new address
 取消,Cancel
-保存此地址,"Save this address"
-账单地址与收货地址相同,"Billing address same as shipping address"
-账单地址,"Billing address"
-选择账单地址,选择账单地址
-账单地址已保存。,账单地址已保存。
-更换地址,"Change address"
-收起地址列表,"Hide address list"
-地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
-该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
-同时用作收货地址,同时用作收货地址
-请填写收货人。,"Please enter the recipient name."
-请填写电话。,"Please enter a phone number."
-电话号码格式不正确,"Invalid phone number format"
-请填写详细地址。,"Please enter the street address."
-请输入收货人姓名,"Please enter the recipient's name"
-请输入联系电话,"Please enter contact phone"
+保存此地址,Save this address
+账单地址与收货地址相同,Billing address same as shipping address
+账单地址,Billing address
+选择账单地址,Select billing address
+账单地址已保存。,Billing address saved.
+更换地址,Change address
+收起地址列表,Hide address list
+地址列表加载失败，请稍后重试。,Failed to load addresses. Please try again.
+该地址所在地区暂不支持配送（禁运）。,This address is in an embargoed area and cannot be shipped to.
+同时用作收货地址,Also use as shipping address
+请填写收货人。,Please enter the recipient name.
+请填写电话。,Please enter a phone number.
+电话号码格式不正确,Invalid phone number format
+请填写详细地址。,Please enter the street address.
+请输入收货人姓名,Please enter the recipient's name
+请输入联系电话,Please enter contact phone
 邮箱,Email
-请输入邮箱地址,"Please enter email address"
-请输入邮政编码,"Please enter postal code"
-"门牌号 / 楼栋单元等","Building / unit number, etc."
-请先保存网站，再配置禁运区域。,请先保存网站，再配置禁运区域。
+请输入邮箱地址,Please enter email address
+请输入邮政编码,Please enter postal code
+门牌号 / 楼栋单元等,"Building / unit number, etc."
+请先保存网站，再配置禁运区域。,"Save the website first, then configure embargo zones."
 请先保存网站，再配置可售目的地。,"Save the website first, then configure sellable destinations."
-请先保存渠道，再配置禁运区域。,请先保存渠道，再配置禁运区域。
+请先保存渠道，再配置禁运区域。,"Save the channel first, then configure embargo zones."
 请先保存渠道，再配置可售目的地。,"Save the channel first, then configure sellable destinations."
-请先保存商店，再配置禁运区域。,请先保存商店，再配置禁运区域。
+请先保存商店，再配置禁运区域。,"Save the store first, then configure embargo zones."
 请先保存商店，再配置可售目的地。,"Save the store first, then configure sellable destinations."
 默认,Default
-邮编：,"Postal code:"
-设为默认,"Set as Default"
+邮编：,Postal code:
+设为默认,Set as Default
 删除,Delete
 新增,Add
-可先填写邮编自动定位省市区；保存后当前页面会刷新地址卡片，不会跳转。,可先填写邮编自动定位省市区；保存后当前页面会刷新地址卡片，不会跳转。
-地址名称,"Address Name"
-联系电话,"Contact Phone"
-设为默认地址,"Set as Default Address"
-保存地址,"Save Address"
-管理顶部「配送至」与订单收货时使用的地址。,"Manage addresses used by the header Deliver-to picker and for order receiving."
-新增收货地址,"Add Delivery Address"
-还没有收货地址,"No delivery address yet"
+可先填写邮编自动定位省市区；保存后当前页面会刷新地址卡片，不会跳转。,Optionally fill postal code to auto-locate region; after save this page refreshes the address card without navigating away.
+地址名称,Address Name
+联系电话,Contact Phone
+设为默认地址,Set as Default Address
+保存地址,Save Address
+管理顶部「配送至」与订单收货时使用的地址。,Manage addresses used by the header Deliver-to picker and for order receiving.
+新增收货地址,Add Delivery Address
+还没有收货地址,No delivery address yet
 点击“新增收货地址”，直接在当前页面维护。顶部「配送至」选择的地址也会出现在这里。,"Click ""Add Receiving Address"" to maintain it here. Addresses chosen in the header Deliver-to picker also appear here."
-管理店铺或账户发货时使用的寄出地址。,"Manage the shipping addresses used when shipping from the store or account."
-新增发货地址,"Add Shipping Address"
-还没有发货地址,"No shipping address yet"
+管理店铺或账户发货时使用的寄出地址。,Manage the shipping addresses used when shipping from the store or account.
+新增发货地址,Add Shipping Address
+还没有发货地址,No shipping address yet
 发货地址是店铺寄出地址，与顶部「配送至」不是同一套。,"Shipping addresses are outbound store addresses, not the same as the header Deliver-to picker."
-去收货地址查看顶部配送地址,"Go to receiving addresses for header Deliver-to"
-发货地址加载失败，请稍后重试,"Failed to load shipping addresses. Please try again later."
-收货地址加载失败，请稍后重试,"Failed to load delivery addresses. Please try again later."
+去收货地址查看顶部配送地址,Go to receiving addresses for header Deliver-to
+发货地址加载失败，请稍后重试,Failed to load shipping addresses. Please try again later.
+收货地址加载失败，请稍后重试,Failed to load delivery addresses. Please try again later.
 中国,China
 国家/地区,Country/Region
 省/州,State/Province
 城市,City
 区县,District
 关闭,Close
-"例如：华东仓 / 家","e.g., East China Warehouse / Home"
-请输入联系人,"Please enter the contact person"
+例如：华东仓 / 家,"e.g., East China Warehouse / Home"
+请输入联系人,Please enter the contact person
 联系人,Contact
-管理配送收货地址,"Manage delivery addresses"
-管理发货地址,"Manage shipping addresses"
-帮助中心,"Help Center"
-本页说明发货时效、配送范围、运费计算、物流跟踪、签收与异常处理。下单前请完整阅读；商品页若标注预售、定制或特殊物流规则，以商品页为准。,"This page explains dispatch times, delivery coverage, shipping charges, tracking, receipt of goods and delivery issues. Please read it before ordering. Any pre-order, made-to-order or special delivery terms on the product page take precedence."
+管理配送收货地址,Manage delivery addresses
+管理发货地址,Manage shipping addresses
+帮助中心,Help Center
+本站由中国大陆仓库发往海外。本页说明发货与参考送达时效、运费、跟踪、签收与异常处理。下单前请完整阅读；商品页预售/定制规则优先。,"We ship from mainland China warehouses overseas. This page covers ship/ETA references, freight, tracking, delivery checks, and exceptions. Read before ordering; product-page preorder/custom rules prevail."
 目录,Contents
-一、发货时效,"1. Dispatch times"
-"1.1 现货订单：付款成功后，我们将在 1–3 个工作日内完成拣货、质检并发出（法定节假日与物流高峰期可能顺延）。","1.1 In-stock orders: After successful payment, we pick, inspect and dispatch your order within 1–3 business days. Public holidays and peak shipping periods may extend this timeframe."
-"1.2 预售 / 定制 / 定金商品：发货时间以商品详情页或订单确认信息中的承诺时效为准。若因工艺、面料或尺码确认延迟，我们会通过站内消息或订单备注及时告知。","1.2 Pre-order, made-to-order and deposit items: Dispatch times follow the commitments on the product page or order confirmation. If craftsmanship, fabric availability or size confirmation causes a delay, we will notify you promptly through an on-site message or order note."
-"1.3 合并发货：同一收货地址、同一账户的多笔可合并订单，在不影响时效承诺的前提下可能合并为一包裹发出；不可合并的情况（不同仓库、不同承运要求、预售混现货等）将分别发货。","1.3 Combined shipments: Eligible orders placed from the same account to the same delivery address may be sent in one parcel, provided this does not affect the promised dispatch time. Orders that cannot be combined, such as those from different warehouses, with different carrier requirements, or mixing pre-order and in-stock items, will ship separately."
-"1.4 缺货与拆单：若部分商品暂时缺货，我们将优先发出有货商品，并就剩余商品给出补发时间或退款方案，不会无故取消整单。","1.4 Stock shortages and split shipments: If some items are temporarily unavailable, we will ship available items first and provide a dispatch date or refund option for the remaining items. We will not cancel the entire order without reason."
-二、配送范围,"2. Delivery coverage"
-"2.1 我们支持中国大陆多数省市自治区配送。港澳台及海外地区是否开通，以结账页可选配送方式及运费计算结果为准。","2.1 We deliver to most provinces, cities and autonomous regions in mainland China. Availability for Hong Kong, Macao, Taiwan and overseas destinations depends on the delivery methods and shipping quotes shown at checkout."
-"2.2 偏远地区、岛屿、牧区或需二次中转的地址，可能仅支持指定承运商，时效也可能长于常规区域。","2.2 Remote areas, islands, pastoral regions and addresses requiring onward transfers may be served only by designated carriers. Delivery may take longer than in standard service areas."
-"2.3 如收货地址无法派送，客服会与您确认更改地址或安排退款；因地址信息不完整导致的延误，需由买家配合更正。","2.3 If your address cannot be served, our support team will contact you to confirm an alternative address or arrange a refund. If incomplete address details cause a delay, you will need to help us correct them."
-三、运费与包邮,"3. Shipping charges and free shipping"
-"3.1 运费按收货地区、包裹重量/体积、所选配送服务在结账页实时计算，下单前可在结算页查看最终金额。","3.1 Shipping charges are calculated at checkout based on the destination, parcel weight or volume, and selected delivery service. You can review the final amount before placing your order."
-"3.2 满足活动门槛（如满额包邮、会员包邮、指定活动）时，结账页会自动减免运费；活动规则以活动页或结算提示为准。","3.2 Shipping discounts are applied automatically at checkout when you meet an offer's conditions, such as a minimum spend, member benefit or eligible promotion. The terms on the offer page or at checkout apply."
-"3.3 加急、保价、指定快递、到付等增值服务如有开通，将单独计费并在结算时明示。","3.3 Where available, additional services such as expedited shipping, declared-value protection, a specified carrier or freight-collect delivery are charged separately and clearly shown at checkout."
-"3.4 因买家原因（拒收、地址错误、长期无人签收）导致退回的，可能需要买家承担退回运费或补差价后重发。","3.4 If a parcel is returned because of refusal, an incorrect address or prolonged failure to receive it, you may need to pay the return shipping cost or the additional cost of reshipment."
-四、物流跟踪,"4. Tracking your order"
-"4.1 发货后，可在「我的订单」查看承运商、运单号与物流节点。部分承运商数据同步可能有 2–12 小时延迟。","4.1 After dispatch, you can find the carrier, tracking number and shipment updates in My Orders. Updates from some carriers may be delayed by 2–12 hours."
-"4.2 若运单长时间无更新：请先确认是否逢周末、法定节假日或极端天气；仍无进展时，可通过帮助中心「联系客服」并提供订单号协助查询。","4.2 If tracking has not updated for an extended period, first check for weekends, public holidays or severe weather. If there is still no progress, select Contact Support in the Help Center and provide your order number so we can investigate."
-"4.3 请保持下单手机畅通，以便快递员派送与驿站取件通知。需要改派自提点或代收点时，请按承运商短信/App 指引操作。","4.3 Keep the phone number used for your order available for delivery calls and collection notices. To redirect a parcel to a collection point, follow the carrier's text message or app instructions."
-五、签收与验收,"5. Receiving and checking your order"
-签收前请核对外包装是否完好；如有明显破损、浸水、变形，请当场与快递员共同开箱验货并拍照留证，必要时拒收。,"Before accepting delivery, check the outer packaging. If it is visibly damaged, wet or deformed, inspect the contents with the courier and take photographs as evidence. Refuse delivery if necessary."
-"签收后请尽快核对商品数量、尺码、颜色与配件是否与订单一致；发现问题请在签收后 48 小时内联系客服并保留外包装与吊牌。","After delivery, promptly check that the quantity, sizes, colors and accessories match your order. If you find a problem, contact support within 48 hours and retain the outer packaging and tags."
-代收、驿站、快递柜签收视为送达。若代收人签收后出现异常，请尽快联系客服，我们将协助向承运商核查。,"Delivery accepted by another person, a collection point or a parcel locker is treated as delivered. If a problem arises after someone accepts a parcel for you, contact support promptly so we can help investigate with the carrier."
-服装类商品建议在保持吊牌完整、未下水的前提下试穿确认尺码；定制件、剪裁件以商品页说明为准。,"For clothing, we recommend trying items on to check the fit while keeping all tags intact and without washing them. For made-to-order or altered items, refer to the product page."
-六、异常与赔付,"6. Delivery issues and compensation"
-"6.1 运输途中丢失、严重破损：请提供订单号、运单号、破损照片（含外包装与商品），我们将协调承运商查件并安排补发或退款。","6.1 Lost or seriously damaged in transit: Provide your order number, tracking number and photographs of the damage, including the packaging and items. We will coordinate an investigation with the carrier and arrange a replacement or refund."
-"6.2 物流显示已签收但未收到：请先向家人、门卫、邻居及附近驿站确认；仍无法找到时，在「签收」节点后 7 日内联系客服启动查询。","6.2 Marked as delivered but not received: First check with household members, building staff, neighbors and nearby collection points. If the parcel still cannot be found, contact support within 7 days of the delivered status to start an investigation."
-"6.3 不可抗力（地震、台风、疫情管制、交通管制等）导致的延误，我们将尽力协调并及时同步进度，但不属于服务质量违约。","6.3 Force majeure: For delays caused by events such as earthquakes, typhoons, epidemic restrictions or traffic controls, we will make every effort to coordinate delivery and share updates promptly. Such delays do not constitute a breach of our service-quality commitment."
-七、发票与配送凭证,"7. Invoices and proof of delivery"
+一、发货时效,1. Dispatch times
+1.1 工作日指中国大陆法定工作日。现货订单付款成功后，我们通常在 1–5 个工作日内拣货、质检并发出（中国法定节假日与物流高峰可能顺延）。,"1.1 Business days mean mainland China business days. In-stock orders usually pick, QC, and ship within 1–5 business days after payment (China holidays and peak logistics may delay)."
+1.2 国际送达参考：发货后约 7–25 个工作日（视航线、旺季、海关而定）。结算页预计送达仅为估算，不保证固定到货日；海关查验与干线空窗期不单独计为延误违约。,"1.2 International delivery reference: about 7–25 business days after shipment (lane, peak, customs). Checkout ETAs are estimates, not fixed dates; customs checks and trunk tracking gaps alone are not delivery breaches."
+1.3 预售 / 定制 / 定金：以商品页或订单确认信息为准。工艺、面料或尺码确认导致的延迟，我们会通过站内消息或订单备注告知。,"1.3 Preorder/custom/deposit: follow the product page or order confirmation. Delays from craft, fabric, or size confirmation are notified via site message or order notes."
+1.4 合并与拆单：同一地址可合并的订单可能并包发出；缺货时可能先发有货部分并告知补发或退款方案，不无故整单取消。,1.4 Merge/split: mergeable same-address orders may ship together; if partial OOS we may ship available items and advise restock/refund—no arbitrary full cancel.
+二、配送范围,2. Delivery coverage
+2.1 发货地为中国大陆。海外及跨境地址是否可配送、可选航线与运费，以结账页计算结果为准。,"2.1 Origin is mainland China. Overseas/cross-border availability, lanes, and freight follow checkout results."
+2.2 偏远岛屿、需多次中转或当地承运商覆盖弱的地址，可能仅支持指定渠道，时效长于常规航线。,"2.2 Remote islands, multi-transfer, or weak last-mile areas may allow only specified channels with longer ETAs."
+2.3 地址无法派送或不完整时，需您配合更正；因此产生的滞留、退回或改派费用可能由买家承担。,"2.3 If an address cannot be delivered or is incomplete, you must help correct it; hold/return/redirect fees may be buyer-paid."
+三、运费与包邮,3. Shipping charges and free shipping
+3.1 运费按目的地、重量/体积与国际航线在结账页计算，下单前请确认最终金额。,"3.1 Freight is calculated at checkout by destination, weight/volume, and international lane—confirm the final amount before ordering."
+3.2 满额包邮等活动一般只减免去程标准运费，不含关税、清关、回程或二次派送；规则以活动页与结算提示为准。,"3.2 Threshold free-shipping promos usually waive outbound standard freight only—not duties, clearance, returns, or redelivery; see promo/checkout notices."
+3.3 加急、保价等增值服务如有开通，将单独计费并在结算时明示。,"3.3 Rush, insurance, and similar add-ons, if offered, are priced separately and shown at checkout."
+3.4 因拒收、地址错误、长期无人签收、清关失败导致退回或销毁的，退回/滞留费用通常由买家承担，重发需补差价。,"3.4 Returns/destruction from refusal, wrong address, long no-show, or failed clearance usually make hold/return fees buyer-paid; reship requires paying the difference."
+四、物流跟踪,4. Tracking your order
+4.1 发货后可在「我的订单」查看运单号与节点。承运商同步可能延迟；国际干线连续数日无更新较常见，不等同于丢件。,"4.1 After shipment, view waybill and nodes in My Orders. Carrier sync may lag; multi-day international gaps are common and do not equal loss."
+4.2 若显著超过参考时效仍无进展：请先排除目的地节假日与清关中状态，再联系客服并提供订单号协助查询。,"4.2 If far past the reference ETA with no progress: first rule out destination holidays/clearance, then contact support with the order number."
+4.3 请保持收件电话/邮箱畅通，并留意海关或本地派送通知；需改派自提点时按当地承运商指引操作。,4.3 Keep recipient phone/email reachable and watch customs/local delivery notices; follow local carrier instructions for pickup redirects.
+五、签收与验收,5. Receiving and checking your order
+签收时请核对外包装；明显破损、浸水、变形时请拍照留证，并尽快联系客服（建议 48 小时内）。,"Check outer packaging on delivery; for obvious damage, water, or deformation, photograph evidence and contact support ASAP (ideally within 48 hours)."
+运输破损或短少：保留外包装与运单，便于我们协助向承运商查验；逾期申报可能影响承运商受理。,Transit damage/shortage: keep packaging and waybill so we can help with carrier claims; late reports may block carrier handling.
+质量、错发、尺码问题适用「退换政策」；跨境寄回中国仓库的运费与税费承担见退换政策与配送政策。,"Quality, wrong item, and size issues follow the Returns Policy; who pays for returns to China and taxes follows Returns + Shipping Policy."
+代收点/快递柜签收视为送达节点；代收后异常请尽快联系客服协助核查。,Pickup-point/locker receipt counts as delivered; contact support ASAP for post-pickup issues so we can help investigate.
+服装请保留吊牌、未下水试穿；定制/剪裁件以商品页为准。,For apparel keep tags and try on without washing; custom/altered pieces follow the product page.
+六、异常与赔付,6. Delivery issues and compensation
+6.1 运输丢失或严重破损：请提供订单号、运单号与照片。核实后我们协调承运商查件，并视情况补发或退款（可扣除已产生的不可回收费用）。,6.1 Lost or severely damaged in transit: provide order/waybill numbers and photos. After verification we coordinate carrier tracing and may reship or refund (non-recoverable fees may be deducted).
+6.2 显示已签收但未收到：请先向家人、门卫、邻居及代收点确认；仍无法找到时，在「签收」后 7 日内联系客服启动查询。,"6.2 Marked delivered but not received: first check family, guards, neighbors, and pickup points; if still missing, contact support within 7 days of the delivery scan."
+6.3 关税、清关与弃件以「配送政策」及结算页税费说明为准；默认税费到付、买家配合清关。,"6.3 Duties, clearance, and abandonment follow the Shipping Policy and checkout tax notices; duties are collect by default and buyers must cooperate with clearance."
+6.4 不可抗力及跨境固有风险（海关查验、口岸拥堵、航班调整、疫情管制等）导致的延误，我们协助同步进度，但不构成服务质量违约，亦不自动触发退款。,"6.4 Delays from force majeure and inherent cross-border risks (customs, port congestion, flight changes, epidemic controls, etc.) are updated with our help but are not service breaches and do not auto-trigger refunds."
+七、发票与配送凭证,7. Invoices and proof of delivery
 如需发票，请在下单时按结算页指引填写开票信息，或在订单完成后联系客服补开。物流面单与签收记录可作为收货凭证，请妥善保存电子运单信息。,"If you need an invoice, enter the invoice details as instructed at checkout, or contact support after your order is completed. Shipping labels and delivery records can serve as proof of receipt. Please keep your electronic tracking information."
-八、联系我们,"8. Contact us"
+八、联系我们,8. Contact us
 配送相关问题可通过帮助中心「联系客服」、联系我们页或订单详情页售后入口提交。请尽量提供订单号、运单号与问题截图，以便更快处理。,"For delivery questions, use Contact Support in the Help Center, the Contact Us page or the after-sales option in your order details. Include your order number, tracking number and screenshots where possible to help us respond more quickly."
-查看退换政策,"View returns policy"
-查看退款政策,"View refund policy"
-返回帮助中心,"Back to the Help Center"
-支付方式说明,"Payment methods guide"
-配送说明目录,"Shipping guide contents"
-本页说明退货、换货与退款的适用条件、办理流程、运费承担、到账时效与特殊品类规则。下单即表示您已阅读并理解本政策；法律法规另有强制性规定的，从其规定。,"This page explains eligibility, procedures, shipping costs, refund timing and special-category rules for returns, exchanges and refunds. By placing an order, you confirm that you have read and understood this policy. Any mandatory legal requirements take precedence."
-一、适用条件,"1. Eligibility"
-"1.1 一般情形：自签收之日起 7 日内，商品未经穿着使用（或仅试穿）、吊牌完整、不影响二次销售的，可申请退货或换货。","1.1 General eligibility: You may request a return or exchange within 7 days of delivery if the item has not been worn or used (other than being tried on), its tags are intact, and it remains in a condition suitable for resale."
-"1.2 质量问题：存在做工瑕疵、破损、污渍、尺码与标称明显不符、错发漏发等情形的，不受「未使用」限制，但仍需保留商品与凭证并尽快申报。","1.2 Quality issues: The unused condition does not apply to workmanship defects, damage, stains, significant differences from the stated size, or incorrect or missing items. Please still retain the goods and supporting evidence and report the issue promptly."
-"1.3 特殊品类：定制/来图定做、剪裁改衣、贴身内衣、已下水洗涤、已拆封的易耗配件、以及商品页明确标注「不支持无理由退换」的特价/清仓商品，适用商品页特别约定；无质量问题通常不支持无理由退换。","1.3 Special categories: Made-to-order or custom-design items, alterations, intimate apparel, washed items, unsealed consumable accessories, and sale or clearance items explicitly marked as ineligible for change-of-mind returns are subject to the specific terms on their product pages. These items generally cannot be returned or exchanged without a quality issue."
-"1.4 法规权利：依法适用七日无理由退货的品类，按其法定条件执行；本政策不得减损您依法享有的权利。","1.4 Statutory rights: Where a statutory seven-day change-of-mind return right applies, its legal conditions apply. This policy does not reduce your rights under applicable law."
-二、不予退换的情形,"2. When returns or exchanges are not accepted"
-超过约定或法定退换期限，且不存在质量或错发问题；,"The agreed or statutory return period has expired and there is no quality issue or incorrect shipment;"
+查看退换政策,View returns policy
+查看退款政策,View refund policy
+返回帮助中心,Back to the Help Center
+支付方式说明,Payment methods guide
+配送说明目录,Shipping guide contents
+本页说明退货/换货条件（跨境寄回中国仓库）。退款到账另见退款政策。下单即表示已阅读；仅在当地强制性法律另有规定时，从其规定。,This page covers return/exchange conditions (cross-border return to our China warehouse). Refund payout is in the Refund Policy. Ordering means you have read this; only mandatory local law overrides.
+一、适用条件,1. Eligibility
+1.1 一般情形：自签收之日起 7 日内，商品仅试穿未穿着使用、吊牌完整、不影响二次销售的，可申请退货或换货。跨境订单请尽早申请，以便安排寄回中国仓库。,"1.1 General: within 7 days of delivery, unused (try-on only), tags intact, resalable items may be returned/exchanged. Apply early on cross-border orders to arrange return to China."
+1.2 质量问题：做工瑕疵、破损、污渍、尺码与标称明显不符、错发漏发等，不受「未使用」限制，但仍须保留商品与凭证并尽快申报。,"1.2 Quality issues: workmanship defects, damage, stains, clear size mismatch, wrong/missing items are not limited by “unused,” but keep goods/proof and report ASAP."
+1.3 特殊品类：定制/来图定做、剪裁改衣、贴身内衣、已下水、已拆封易耗配件，以及商品页标注「不支持无理由退换」的特价/清仓商品，无质量问题通常不支持无理由退换。,"1.3 Special categories: custom/made-to-order, altered garments, intimate apparel, washed items, opened consumables, and sale/clearance marked non-returnable usually disallow no-reason returns without quality issues."
+1.4 法规权利：仅当您所在地强制性法律赋予更长冷静期或额外权利时，在该强制范围内从其规定；除此之外以本政策与商品页约定为准。,1.4 Legal rights: longer cooling-off or extra rights apply only within mandatory local law; otherwise this policy and product-page terms control.
+二、不予退换的情形,2. When returns or exchanges are not accepted
+超过约定或法定退换期限，且不存在质量或错发问题；,The agreed or statutory return period has expired and there is no quality issue or incorrect shipment;
 商品已穿着使用、洗涤、染色、裁剪、熨烫变形，或吊牌/防伪标缺失导致无法二次销售；,"The item has been worn, used, washed, dyed, cut or deformed by ironing, or missing tags or authenticity labels make it unsuitable for resale;"
 非本站出售商品、缺少配件/赠品、或凭证不全无法核对订单；,"The item was not purchased from this store, accessories or gifts are missing, or insufficient proof prevents us from verifying the order;"
 因个人喜好、选错颜色/尺码且已超过无理由期限（质量问题除外）；,"The request concerns personal preference or an incorrect color or size choice after the change-of-mind return period, unless there is a quality issue;"
 虚拟商品、电子兑换码、已履约的服务类商品（无质量问题）。,"Digital goods, electronic redemption codes or services that have already been provided, where there is no quality issue."
-三、办理流程,"3. How to request a return or exchange"
-"3.1 提交申请：登录账户进入「我的订单」，选择对应订单与商品，提交售后（退货/换货/仅退款），填写原因并上传清晰照片或视频。","3.1 Submit a request: Sign in and open My Orders, select the relevant order and item, then request a return, exchange or refund only. Explain the reason and upload clear photographs or videos."
-"3.2 审核：我们将在 1–3 个工作日内完成初审。审核通过后，系统或客服会告知退货地址、寄回要求与注意事项。","3.2 Review: We complete the initial review within 1–3 business days. Once approved, the system or our support team will provide the return address, shipping requirements and instructions."
-"3.3 寄回商品：请使用可追踪物流寄回，妥善包装并保留运单。建议在包裹内附上订单号与联系方式。","3.3 Send the item back: Use a trackable service, pack the goods securely and keep the shipping receipt. We recommend including your order number and contact details inside the parcel."
-"3.4 收货确认：我们收到退回商品后，将在 1–2 个工作日内完成质检核对。","3.4 Receipt and inspection: After receiving your return, we complete the quality and item checks within 1–2 business days."
-"3.5 完成处理：退货通过后办理退款；换货通过后安排重新发出。进度可在订单售后详情中查看。","3.5 Completion: Approved returns are refunded and approved exchanges are dispatched. You can follow progress in your order's after-sales details."
-四、运费说明,"4. Return shipping costs"
-"4.1 因商品质量问题、错发、漏发导致的退换：往返运费由我们承担（按实际产生且合理的标准运费核实报销或直免）。","4.1 For returns or exchanges caused by quality issues, incorrect items or missing items, we cover shipping in both directions. Reasonable standard shipping charges actually incurred are verified and reimbursed or waived directly."
-"4.2 因个人原因（尺码不合适、不喜欢、拍错）退换：寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定，结账或客服确认时会明示。","4.2 For returns or exchanges for personal reasons, such as fit, preference or ordering the wrong item, you pay the return shipping cost. Outbound shipping for an exchange depends on the offer and product policy and will be clearly stated at checkout or confirmed by support."
-"4.3 到付件：未经同意的到付包裹可能被拒收，因此产生的费用由寄件方承担。","4.3 Freight-collect parcels: Parcels sent with shipping payable by the recipient without prior agreement may be refused. Any resulting charges are the sender's responsibility."
-五、退款金额与到账,"5. Refund amounts and timing"
-"5.1 退款金额一般为商品实付金额。因质量问题退货的，符合条件的运费一并退还；个人原因退货可能扣除已产生的运费优惠或回程运费。","5.1 The refund normally equals the amount actually paid for the item. For quality-related returns, eligible shipping charges are also refunded. For returns for personal reasons, shipping discounts already applied or return shipping costs may be deducted."
-"5.2 优惠券、满减、积分、赠品：已使用的优惠是否退回以活动规则为准；赠品如已使用或损坏，可能需补差或从退款中扣除相应金额。","5.2 Coupons, spending discounts, points and gifts: Whether used benefits are restored depends on the offer's terms. If a gift has been used or damaged, an additional payment may be required or its value may be deducted from the refund."
-"5.3 到账时效：质检通过后 3–15 个工作日内原路退回，具体到账时间以支付渠道（银行卡、第三方支付等）为准。节假日可能顺延。","5.3 Refund timing: Refunds are returned to the original payment method within 3–15 business days after the quality inspection is passed. The exact time depends on the payment provider, such as your bank or third-party payment service. Public holidays may cause delays."
-六、换货规则,"6. Exchange rules"
-"6.1 换货适用于同款不同尺码/颜色且库存充足的情形；无同款库存时，可改为退货退款或协商其它方案。","6.1 Exchanges are available for a different size or color of the same style when stock is available. If the same style is unavailable, you may choose a return and refund or agree on another solution with us."
-"6.2 换货商品寄回要求与退货相同。换出商品发货后，物流与签收规则适用《配送说明》。","6.2 Items sent back for exchange must meet the same requirements as returns. Once the replacement is dispatched, the Shipping Information rules for tracking and receipt apply."
-"6.3 定制类商品原则上不支持换款，仅对确认的质量问题提供修补、重做或退款方案。","6.3 Made-to-order items generally cannot be exchanged for a different style. For confirmed quality issues, we offer repair, remaking or a refund."
-七、尺码与试穿建议,"7. Sizing and trying on Hanfu"
+三、办理流程,3. How to request a return or exchange
+3.1 提交申请：登录账户进入「我的订单」，选择对应订单与商品，提交售后（退货/换货/仅退款），填写原因并上传清晰照片或视频。,"3.1 Submit a request: Sign in and open My Orders, select the relevant order and item, then request a return, exchange or refund only. Explain the reason and upload clear photographs or videos."
+3.2 审核：我们将在 1–3 个工作日内完成初审。审核通过后，系统或客服会告知退货地址、寄回要求与注意事项。,"3.2 Review: We complete the initial review within 1–3 business days. Once approved, the system or our support team will provide the return address, shipping requirements and instructions."
+3.3 寄回商品：请使用可追踪物流寄回，妥善包装并保留运单。建议在包裹内附上订单号与联系方式。,"3.3 Send the item back: Use a trackable service, pack the goods securely and keep the shipping receipt. We recommend including your order number and contact details inside the parcel."
+3.4 收货确认：我们收到退回商品后，将在 1–2 个工作日内完成质检核对。,"3.4 Receipt and inspection: After receiving your return, we complete the quality and item checks within 1–2 business days."
+3.5 完成处理：退货通过后办理退款；换货通过后安排重新发出。进度可在订单售后详情中查看。,3.5 Completion: Approved returns are refunded and approved exchanges are dispatched. You can follow progress in your order's after-sales details.
+四、运费说明,4. Return shipping costs
+4.1 因质量问题、错发、漏发导致的退换：我们承担合理范围内寄回中国仓库的标准国际运费（按实际核实报销或直免）；加急/保价等增值费用除外。,4.1 Quality/wrong/missing returns: we cover reasonable standard international return freight to China (verified reimbursement or waiver); rush/insurance extras excluded.
+4.2 因个人原因（尺码不合适、不喜欢、拍错）退换：寄回中国仓库的国际运费、可能产生的出口/进口税费与清关费由买家承担；换货再发出的运费以客服确认为准。包邮不包含回程。,4.2 Personal-reason returns: buyer pays international return freight to China plus any export/import taxes and clearance fees; reship freight for exchanges follows support confirmation. Free shipping excludes returns.
+4.3 到付件：未经同意寄到付至我方仓库的包裹可能被拒收，费用由寄件方承担。,4.3 Collect shipments: unpaid collect parcels to our warehouse without consent may be refused; costs are the sender’s.
+4.4 跨境退货可能产生目的地出口手续或原进口税费不退等情况，除质量问题且我们书面同意承担外，相关成本由买家自行处理。,"4.4 Cross-border returns may involve destination export formalities or non-refundable original import taxes; unless a quality issue and we agree in writing to cover them, those costs are the buyer’s."
+五、退款金额与到账,5. Refund amounts and timing
+5.1 退款金额一般为商品实付金额。因质量问题退货的，符合条件的运费一并退还；个人原因退货可能扣除已产生的运费优惠或回程运费。,"5.1 The refund normally equals the amount actually paid for the item. For quality-related returns, eligible shipping charges are also refunded. For returns for personal reasons, shipping discounts already applied or return shipping costs may be deducted."
+5.2 优惠券、满减、积分、赠品：已使用的优惠是否退回以活动规则为准；赠品如已使用或损坏，可能需补差或从退款中扣除相应金额。,"5.2 Coupons, spending discounts, points and gifts: Whether used benefits are restored depends on the offer's terms. If a gift has been used or damaged, an additional payment may be required or its value may be deducted from the refund."
+5.3 到账时效：质检通过后 3–15 个工作日内原路退回，具体到账时间以支付渠道（银行卡、第三方支付等）为准。节假日可能顺延。,"5.3 Refund timing: Refunds are returned to the original payment method within 3–15 business days after the quality inspection is passed. The exact time depends on the payment provider, such as your bank or third-party payment service. Public holidays may cause delays."
+六、换货规则,6. Exchange rules
+6.1 换货适用于同款不同尺码/颜色且库存充足的情形；无同款库存时，可改为退货退款或协商其它方案。,"6.1 Exchanges are available for a different size or color of the same style when stock is available. If the same style is unavailable, you may choose a return and refund or agree on another solution with us."
+6.2 换货商品寄回要求与退货相同。换出商品发货后，物流与签收规则适用《配送说明》。,"6.2 Items sent back for exchange must meet the same requirements as returns. Once the replacement is dispatched, the Shipping Information rules for tracking and receipt apply."
+6.3 定制类商品原则上不支持换款，仅对确认的质量问题提供修补、重做或退款方案。,"6.3 Made-to-order items generally cannot be exchanged for a different style. For confirmed quality issues, we offer repair, remaking or a refund."
+七、尺码与试穿建议,7. Sizing and trying on Hanfu
 下单前请对照商品页尺码表与自身三围/身高体重；若介于两码之间，可先咨询客服。,"Before ordering, compare the product's size chart with your body measurements, height and weight. If you are between sizes, contact support for advice."
 试穿请在清洁环境进行，避免化妆沾染、香水、烟味；保留吊牌与原包装。,"Try items on in a clean environment, avoiding makeup stains, perfume and smoke odors. Keep the tags and original packaging."
 汉服形制、交领宽窄、袖型等观感因个人审美差异较大，非质量问题时请优先参考详情页实拍与尺寸，并在期限内申请退换。,"Preferences for Hanfu silhouettes, cross-collar widths and sleeve shapes vary. For non-quality-related concerns, refer to the actual product photographs and measurements, and request any return or exchange within the applicable period."
-八、争议与联系,"8. Questions and disputes"
+八、争议与联系,8. Questions and disputes
 如对审核结果有异议，可通过帮助中心「联系客服」或联系我们页提交补充材料。我们将在合理期限内复核。更完整的退款条款亦可参阅退款政策页。,"If you disagree with a review outcome, submit additional information through Contact Support in the Help Center or the Contact Us page. We will review it within a reasonable timeframe. For fuller refund terms, please also see the Refund Policy page."
-查看配送说明,"View shipping information"
-前往我的订单,"Go to My Orders"
-退换政策目录,"Returns policy contents"
-确认操作,"Confirm action"
+查看配送说明,View shipping information
+前往我的订单,Go to My Orders
+退换政策目录,Returns policy contents
+确认操作,Confirm action
 确定,Confirm
-操作失败,"Operation failed"
-确定要设置为默认地址吗？,"Are you sure you want to set this as the default address?"
-确定要删除此地址吗？,"Are you sure you want to delete this address?"
-新增地址,"Add Address"
-暂无地址，请添加发货地址,"No address. Please add a shipping address."
+操作失败,Operation failed
+确定要设置为默认地址吗？,Are you sure you want to set this as the default address?
+确定要删除此地址吗？,Are you sure you want to delete this address?
+新增地址,Add Address
+暂无地址，请添加发货地址,No address. Please add a shipping address.
 地址,Address
-邮编,"Postal Code"
-发货地址详情,"Shipping address details"
-返回列表,"Return to List"
-默认地址,"Default Address"
+邮编,Postal Code
+发货地址详情,Shipping address details
+返回列表,Return to List
+默认地址,Default Address
 国家,Country
 省份,Province
-街道地址,"Street Address"
-邮政编码,"Postal Code"
-完整地址,"Full Address"
-创建时间,"Created At"
-更新时间,"Update time"
+街道地址,Street Address
+邮政编码,Postal Code
+完整地址,Full Address
+创建时间,Created At
+更新时间,Update time
 例如：主仓库、分仓库等,"e.g., Main Repository, Sub-Repository, etc."
-联系人姓名,"Contact Name"
+联系人姓名,Contact Name
 保存,Save
-收货地址管理,"Delivery Address Management"
-暂无地址，请添加收货地址,"No address. Please add a delivery address."
-收货地址详情,"Shipping Address Details"
-编辑收货地址,"Edit shipping address"
+收货地址管理,Delivery Address Management
+暂无地址，请添加收货地址,No address. Please add a delivery address.
+收货地址详情,Shipping Address Details
+编辑收货地址,Edit shipping address
 例如：家、公司、学校等,"e.g., Home, Company, School, etc."
-收货人姓名,"Recipient Name"
-确定要删除这个地址吗？,"Are you sure you want to delete this address?"
+收货人姓名,Recipient Name
+确定要删除这个地址吗？,Are you sure you want to delete this address?
 系统,System
-运送地址列表,"Shipping address list"
-全部客户,"All Customers"
+运送地址列表,Shipping address list
+全部客户,All Customers
 搜索地址名称、联系人、电话或街道,"Search address name, contact, phone or street"
 搜索,Search
 重置,Reset
 ID,ID
-客户ID,"Customer ID"
+客户ID,Customer ID
 状态,Status
 操作,Actions
-暂无数据,"No data available"
+暂无数据,No data available
 是,Yes
 否,No
 启用,Enable
 禁用,Disable
-上一页,"Previous Page"
-下一页,"Next Page"
-新增运送地址,"Add Delivery Address"
+上一页,Previous Page
+下一页,Next Page
+新增运送地址,Add Delivery Address
 客户,Customer
-请选择客户,"Please select customer"
-请输入地址名称/标签,"Please enter address name/label"
-请输入国家,"Please enter country"
-请输入省份,"Please enter province"
-请输入城市,"Please enter city"
-请输入区县,"Please enter district"
-请输入街道地址,"Please enter street address"
+请选择客户,Please select customer
+请输入地址名称/标签,Please enter address name/label
+请输入国家,Please enter country
+请输入省份,Please enter province
+请输入城市,Please enter city
+请输入区县,Please enter district
+请输入街道地址,Please enter street address
 选项,Options
 返回,Back
-费用模板,"Rate Template"
-"设计说明 · 计费 vs 可达性 · 基础货币","设计说明 · 计费 vs 可达性 · 基础货币"
-"费用模板（本页）定义「怎么算钱」：固定 / 重量阶梯 / 金额阶梯（及兼容线性）。金额按站点基础货币；区域差价在「配送服务 / 航线」与 Profile。第1章：阶梯须从 0 连续并设 max_weight_kg。","费用模板（本页）定义「怎么算钱」：固定 / 重量阶梯 / 金额阶梯（及兼容线性）。金额按站点基础货币；区域差价在「配送服务 / 航线」与 Profile。第1章：阶梯须从 0 连续并设 max_weight_kg。"
-编辑费用模板,编辑费用模板
-新增费用模板,"Add expense template"
-取消编辑,取消编辑
-模板名称,"Template name"
-模板代码,"Template code"
-计算类型,"Calculation type"
-固定费用,"fixed fee"
-按重量阶梯,按重量阶梯
-按订单金额阶梯,按订单金额阶梯
-按重量（兼容）,按重量（兼容）
-按体积（兼容）,按体积（兼容）
-按件数（兼容）,按件数（兼容）
-混合（兼容）,混合（兼容）
-最大可寄重量(kg),最大可寄重量(kg)
-"阶梯 JSON","阶梯 JSON"
-基础费用,"Basic fee"
-基础货币,基础货币
-重量单价,重量单价
-体积单价,体积单价
-件数单价,件数单价
+费用模板,Rate Template
+设计说明 · 计费 vs 可达性 · 基础货币,Design notes · billing vs reachability · base currency
+费用模板（本页）定义「怎么算钱」：固定 / 重量阶梯 / 金额阶梯（及兼容线性）。金额按站点基础货币；区域差价在「配送服务 / 航线」与 Profile。第1章：阶梯须从 0 连续并设 max_weight_kg。,"Fee templates (this page) define ""how to price"": fixed / weight tiers / amount tiers (and compat linear). Amounts in site base currency; regional differentials under ""Shipping service / routes"" and Profile. Ch.1: tiers must be continuous from 0 with max_weight_kg set."
+编辑费用模板,Edit fee template
+新增费用模板,Add expense template
+取消编辑,Cancel edit
+模板名称,Template name
+模板代码,Template code
+计算类型,Calculation type
+固定费用,fixed fee
+按重量阶梯,By weight tiers
+按订单金额阶梯,By order amount tiers
+按重量（兼容）,By weight (compat)
+按体积（兼容）,By volume (compat)
+按件数（兼容）,By quantity (compat)
+混合（兼容）,Mixed (compat)
+最大可寄重量(kg),Max shippable weight (kg)
+阶梯 JSON,Tier JSON
+基础费用,Basic fee
+基础货币,Base currency
+重量单价,Unit price by weight
+体积单价,Unit price by volume
+件数单价,Unit price by qty
 创建,create
-费用模板列表,"Fee template list"
-当前暂无费用模板配置。,当前暂无费用模板配置。
+费用模板列表,Fee template list
+当前暂无费用模板配置。,No fee template config yet.
 货币,currency
-按重量,"by weight"
-按体积,"by volume"
-按件数,"By number of pieces"
-混合计费,混合计费
-确认删除该自建费用模板？删除后不可恢复。,确认删除该自建费用模板？删除后不可恢复。
-系统种子不可删除,系统种子不可删除
-配送管理,"Shipping Management"
-"各分区已改为整页主题界面（不再使用 iframe）。请点击上方 Tab，或使用左侧菜单进入对应功能。","各分区已改为整页主题界面（不再使用 iframe）。请点击上方 Tab，或使用左侧菜单进入对应功能。"
-打开当前分区,打开当前分区
-热门国家排序,热门国家排序
-数字越小越靠前。用于结账邮编多国待选与国家下拉，避免热门市场被冷门同码国家挤到后面。,数字越小越靠前。用于结账邮编多国待选与国家下拉，避免热门市场被冷门同码国家挤到后面。
-暂无可编辑国家，请先导入地址目录或执行升级种子。,暂无可编辑国家，请先导入地址目录或执行升级种子。
+按重量,by weight
+按体积,by volume
+按件数,By number of pieces
+混合计费,Mixed billing
+确认删除该自建费用模板？删除后不可恢复。,Confirm delete this custom fee template? Cannot be undone.
+系统种子不可删除,System seed cannot be deleted
+配送管理,Shipping Management
+各分区已改为整页主题界面（不再使用 iframe）。请点击上方 Tab，或使用左侧菜单进入对应功能。,"Sections are full-page theme UI (no iframe). Click Tabs above, or use the left menu to enter each function."
+打开当前分区,Open current section
+热门国家排序,Popular country sort
+数字越小越靠前。用于结账邮编多国待选与国家下拉，避免热门市场被冷门同码国家挤到后面。,Smaller numbers come first. Used for multi-country postal picks and country dropdowns so popular markets aren't pushed behind rare same-code countries.
+暂无可编辑国家，请先导入地址目录或执行升级种子。,No editable countries; import address directory or run upgrade seeds first.
 代码,Code
 排序,Sort
-默认可达,默认可达
-保存热门排序,保存热门排序
-地区列表,"Region List"
-新增地区,"Add new area"
-列表仅展示省份（浅层）。市/区请用上方筛选按需加载，避免整国地址树一次渲染过大。,列表仅展示省份（浅层）。市/区请用上方筛选按需加载，避免整国地址树一次渲染过大。
-地区名称,"Region Name"
-地区代码,"Region Code"
+默认可达,Default reachable
+保存热门排序,Save popularity sort
+地区列表,Region List
+新增地区,Add new area
+列表仅展示省份（浅层）。市/区请用上方筛选按需加载，避免整国地址树一次渲染过大。,List shows provinces only (shallow). Load cities/districts on demand via filters above to avoid rendering a whole-country tree.
+地区名称,Region Name
+地区代码,Region Code
 类型,Type
 选择国家后，填写要新增的省份（必填）与区县（可选）。已存在的地区代码不能重复添加。,"Select a country, then enter a new province (required) and optional district. Existing region codes cannot be added again."
-省份（必填）,"Province (required)"
-省份名称,"Province name"
-例如：加利福尼亚州,例如：加利福尼亚州
-省份代码,"Province code"
-例如：US-CA,例如：US-CA
-区县（可选）,"District (optional)"
-区县名称,"District name"
-例如：洛杉矶县,例如：洛杉矶县
-区县代码,"District code"
-例如：US-CA-LA,例如：US-CA-LA
-排序（数字越小越靠前）,排序（数字越小越靠前）
-影响结账热门位次,影响结账热门位次
-请先在上方筛选中选择国家。,请先在上方筛选中选择国家。
-正在加载地区…,正在加载地区…
-地区加载失败，请稍后重试。,地区加载失败，请稍后重试。
-"当前国家暂无地区数据，请先执行 shipping:addresscatalog:import 或手动添加。","No region data for the current country. Run shipping:addresscatalog:import or add manually."
-请先选择国家。,"Please select a country first."
-请填写要新增的省份名称与代码。,"Please enter the new province name and code."
-请填写要新增的区县代码。,"Please enter the new district code."
-请填写要新增的区县名称。,"Please enter the new district name."
-该地区代码已存在，不能重复添加。,"This region code already exists and cannot be added again."
-系统默认禁运（最高优先）,系统默认禁运（最高优先）
-可新增、可解禁/再启用。系统种子条目标记为「系统」且不可删除；后台自建条目可删除。解禁后全站放行该地区。店铺附加禁运不能豁免仍生效的系统行。,可新增、可解禁/再启用。系统种子条目标记为「系统」且不可删除；后台自建条目可删除。解禁后全站放行该地区。店铺附加禁运不能豁免仍生效的系统行。
-禁运原因,禁运原因
-新增原因,新增原因
-原因名称支持多语言（LocalModel）。列表「原因」列与新增下拉均读取此处配置。,原因名称支持多语言（LocalModel）。列表「原因」列与新增下拉均读取此处配置。
-来源,来源
-原因码,原因码
+省份（必填）,Province (required)
+省份名称,Province name
+例如：加利福尼亚州,e.g. California
+省份代码,Province code
+例如：US-CA,e.g. US-CA
+区县（可选）,District (optional)
+区县名称,District name
+例如：洛杉矶县,e.g. Los Angeles County
+区县代码,District code
+例如：US-CA-LA,e.g. US-CA-LA
+排序（数字越小越靠前）,Sort (smaller numbers first)
+影响结账热门位次,Affects checkout popular ranking
+请先在上方筛选中选择国家。,Please select a country in filters above.
+正在加载地区…,Loading regions…
+地区加载失败，请稍后重试。,"Region load failed, please retry later."
+当前国家暂无地区数据，请先执行 shipping:addresscatalog:import 或手动添加。,No region data for the current country. Run shipping:addresscatalog:import or add manually.
+请先选择国家。,Please select a country first.
+请填写要新增的省份名称与代码。,Please enter the new province name and code.
+请填写要新增的区县代码。,Please enter the new district code.
+请填写要新增的区县名称。,Please enter the new district name.
+该地区代码已存在，不能重复添加。,This region code already exists and cannot be added again.
+系统默认禁运（最高优先）,System default embargo (highest priority)
+可新增、可解禁/再启用。系统种子条目标记为「系统」且不可删除；后台自建条目可删除。解禁后全站放行该地区。店铺附加禁运不能豁免仍生效的系统行。,"Can add, lift/re-enable. System seed rows marked ""System"" and undeletable; admin-created rows can be deleted. After lift, region is allowed sitewide. Store-level extra embargo cannot exempt still-active system rows."
+禁运原因,Embargo reason
+新增原因,Add reason
+原因名称支持多语言（LocalModel）。列表「原因」列与新增下拉均读取此处配置。,"Reason names support i18n (LocalModel). List ""Reason"" column and add dropdowns both read this config."
+来源,Source
+原因码,Reason code
 名称,Name
-暂无原因（请运行模块升级种子）,暂无原因（请运行模块升级种子）
-自建,自建
-系统禁运列表,系统禁运列表
-新增禁运,新增禁运
-级别,级别
-地区,地区
-原因,原因
-暂无系统禁运条目（请运行模块升级种子）,暂无系统禁运条目（请运行模块升级种子）
-解禁,解禁
-再启用,再启用
-"搜索并选择国家，或继续选到省份；勿手填 ISO 码。只选国家=国家级禁运；选到省份=省级禁运。提交后全站生效。","搜索并选择国家，或继续选到省份；勿手填 ISO 码。只选国家=国家级禁运；选到省份=省级禁运。提交后全站生效。"
-新增或启用,新增或启用
-"小写字母开头，仅 a-z、0-9、下划线；保存后可用多语言按钮翻译名称。","小写字母开头，仅 a-z、0-9、下划线；保存后可用多语言按钮翻译名称。"
-确认删除该自建原因？,确认删除该自建原因？
-禁运中,禁运中
-已解禁,已解禁
-确认解禁？此操作全站生效，条目不会删除。,确认解禁？此操作全站生效，条目不会删除。
-确认恢复系统禁运？此操作全站生效。,确认恢复系统禁运？此操作全站生效。
-确认删除该自建禁运？删除后不可恢复。,确认删除该自建禁运？删除后不可恢复。
-无正常商业往来,"No normal commercial trade"
+暂无原因（请运行模块升级种子）,No reasons yet (run module upgrade seeds)
+自建,Custom
+系统禁运列表,System embargo list
+新增禁运,Add embargo
+级别,Level
+地区,Region
+原因,Reason
+暂无系统禁运条目（请运行模块升级种子）,No system embargo entries (run module upgrade seeds)
+解禁,Lift ban
+再启用,Re-enable
+搜索并选择国家，或继续选到省份；勿手填 ISO 码。只选国家=国家级禁运；选到省份=省级禁运。提交后全站生效。,"Search and select a country, or continue to province; do not hand-type ISO codes. Country only = country-level embargo; to province = province-level. Applies sitewide after submit."
+新增或启用,Add or enable
+小写字母开头，仅 a-z、0-9、下划线；保存后可用多语言按钮翻译名称。,"Start with lowercase letter; only a-z, 0-9, underscore; after save use i18n button to translate name."
+确认删除该自建原因？,Confirm delete this custom reason?
+禁运中,Under embargo
+已解禁,Unbanned
+确认解禁？此操作全站生效，条目不会删除。,Confirm lift ban? Applies sitewide; entry is not deleted.
+确认恢复系统禁运？此操作全站生效。,Confirm restore system embargo? Applies sitewide.
+确认删除该自建禁运？删除后不可恢复。,Confirm delete this custom embargo? Cannot be undone.
+无正常商业往来,No normal commercial trade
 物流跟踪,Tracking
-物流跟踪记录列表,"Tracking Record List"
-物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。,"Logistics tracking records are generated by the shipment and carrier inquiry process. This workbench is only used for audit viewing."
-当前暂无物流跟踪记录。,"There are currently no logistics tracking records."
-物流单号,"Tracking Number"
-快递公司ID,"Courier Company ID"
-当前位置,"Current location"
-最后查询时间,"Last query time"
-"配送服务 / 航线","配送服务 / 航线"
-配送服务,"Shipping Service"
-"航线报价 · 仓 → 航线 → 模板","航线报价 · 仓 → 航线 → 模板"
-多仓拆单：各仓按自身发货锚点匹配最具体航线后运费相加。费用模板只算钱；勿承诺按距离。新仓绑定发货地址后，可用下方「复制默认站航线」一键生成九档引用。,多仓拆单：各仓按自身发货锚点匹配最具体航线后运费相加。费用模板只算钱；勿承诺按距离。新仓绑定发货地址后，可用下方「复制默认站航线」一键生成九档引用。
-"仓 ↔ 发货地址绑定","仓 ↔ 发货地址绑定"
-"Website ID","Website ID"
-请选择,"Please select"
-绑定,绑定
-目标发货地址,目标发货地址
-一键复制默认站航线,一键复制默认站航线
-新增配送航线,新增配送航线
-服务名称,"Service name"
-服务代码,"Service code"
+物流跟踪记录列表,Tracking Record List
+物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。,Logistics tracking records are generated by the shipment and carrier inquiry process. This workbench is only used for audit viewing.
+当前暂无物流跟踪记录。,There are currently no logistics tracking records.
+物流单号,Tracking Number
+快递公司ID,Courier Company ID
+当前位置,Current location
+最后查询时间,Last query time
+配送服务 / 航线,Shipping service / route
+配送服务,Shipping Service
+航线报价 · 仓 → 航线 → 模板,Route quote · WH → route → template
+多仓拆单：各仓按自身发货锚点匹配最具体航线后运费相加。费用模板只算钱；勿承诺按距离。新仓绑定发货地址后，可用下方「复制默认站航线」一键生成九档引用。,"Multi-WH split: each WH matches the most specific route by its ship anchor then freights sum. Fee template only computes money; do not promise distance-based pricing. After binding ship-from on a new WH, use ""Copy default-site routes"" below to generate nine-tier references in one click."
+仓 ↔ 发货地址绑定,Warehouse ↔ ship-from binding
+Website ID,Website ID
+请选择,Please select
+绑定,Bind
+目标发货地址,Target shipping address
+一键复制默认站航线,One-click copy default-site routes
+新增配送航线,Add shipping route
+服务名称,Service name
+服务代码,Service code
 快递公司,Carrier
-暂不绑定,暂不绑定
-免邮规则,"Free Shipping Rule"
-无,无
-发货锚点（默认仓）,发货锚点（默认仓）
-不限仓,不限仓
-最少天,最少天
-最多天,最多天
-贸易术语,贸易术语
-目的地区域覆盖,目的地区域覆盖
-创建航线,创建航线
-航线列表,航线列表
-当前暂无配送航线。请配置发货仓、目的地区域与费用模板。,当前暂无配送航线。请配置发货仓、目的地区域与费用模板。
-服务,服务
-承运商,承运商
-模板,模板
-发货锚点,发货锚点
-目的地,目的地
-不限,不限
-通配（未配覆盖）,通配（未配覆盖）
-发货地址列表,"Shipping Address List"
-全部状态,"All Status"
-请输入联系人姓名,"Please enter contact name"
-规则列表,规则列表
-新增规则,新增规则
-条件类型,"Condition type"
-条件类型（多语言）,条件类型（多语言）
-"条件类型名称支持 LocalModel 多语言。列表「条件类型」列读取当前语言展示名；在此用 local 标签维护翻译。","条件类型名称支持 LocalModel 多语言。列表「条件类型」列读取当前语言展示名；在此用 local 标签维护翻译。"
-暂无条件类型（请运行模块升级种子）,暂无条件类型（请运行模块升级种子）
-条件码,条件码
-免邮条件,免邮条件
-系统提供国际通用满额种子（「系统」不可删）；默认仅启用标准档。规则列表、新增与条件类型多语言用顶部页签分开，避免一页堆叠。,系统提供国际通用满额种子（「系统」不可删）；默认仅启用标准档。规则列表、新增与条件类型多语言用顶部页签分开，避免一页堆叠。
-新增免邮规则,"Add free shipping rules"
-规则名称,"Rule Name"
-规则代码,"Rule Code"
-订单金额,"Order amount"
-目的地区域,目的地区域
-"金额 + 地区","金额 + 地区"
-最低金额,"Minimum amount"
+暂不绑定,Skip binding for now
+免邮规则,Free Shipping Rule
+无,None
+发货锚点（默认仓）,Shipping anchor (default WH)
+不限仓,Any warehouse
+最少天,Min days
+最多天,Max days
+贸易术语,Incoterms
+目的地区域覆盖,Destination region coverage
+创建航线,Create route
+航线列表,Route list
+当前暂无配送航线。请配置发货仓、目的地区域与费用模板。,"No shipping routes yet. Configure ship-from WH, destination regions and fee templates."
+服务,Services
+承运商,Carrier
+模板,Template
+发货锚点,Shipping anchor
+目的地,Destination
+不限,Unlimited.
+通配（未配覆盖）,Wildcard (no override)
+发货地址列表,Shipping Address List
+全部状态,All Status
+请输入联系人姓名,Please enter contact name
+规则列表,Rule list
+新增规则,Add rule
+条件类型,Condition type
+条件类型（多语言）,Condition type (multilingual)
+条件类型名称支持 LocalModel 多语言。列表「条件类型」列读取当前语言展示名；在此用 local 标签维护翻译。,"Condition type names support LocalModel i18n. List ""Condition type"" column shows current-language display name; maintain translations here with local tags."
+暂无条件类型（请运行模块升级种子）,No condition types yet (run module upgrade seeds)
+条件码,Condition code
+免邮条件,Free shipping rules
+系统提供国际通用满额种子（「系统」不可删）；默认仅启用标准档。规则列表、新增与条件类型多语言用顶部页签分开，避免一页堆叠。,"System provides international threshold seed templates (""System"" undeletable); only standard tier enabled by default. Rule list, create and condition-type i18n are separated by top tabs to avoid one-page clutter."
+新增免邮规则,Add free shipping rules
+规则名称,Rule Name
+规则代码,Rule Code
+订单金额,Order amount
+目的地区域,Destination region
+金额 + 地区,Amount + region
+最低金额,Minimum amount
 优先级,Priority
-适用目的地区域,适用目的地区域
-免邮规则列表,"Free Shipping Rule List"
-当前暂无免邮规则。,当前暂无免邮规则。
+适用目的地区域,Applicable destination regions
+免邮规则列表,Free Shipping Rule List
+当前暂无免邮规则。,No free-shipping rules yet.
 未说明,Unspecified
-确认禁用该免邮规则？,"Disable this free shipping rule?"
-确认启用该免邮规则？,"Enable this free shipping rule?"
-确认删除该自建免邮规则？删除后不可恢复。,"Delete this custom free shipping rule? This cannot be undone."
-确定要禁用这个快递公司吗？,"Are you sure you want to disable this carrier?"
-确定要启用这个快递公司吗？,"Are you sure you want to enable this carrier?"
-确定要删除这个快递公司吗？,"Are you sure you want to delete this carrier?"
-快递公司列表,"Courier Company List"
-新增快递公司,"Add Carrier"
-搜索快递公司代码或名称,"Search carrier code or name"
-当前暂无快递公司配置，请后续在此页面完善配置。,"There are currently no courier companies configured. Please complete the configuration on this page later."
-追踪支持,"Tracking Support"
+确认禁用该免邮规则？,Disable this free shipping rule?
+确认启用该免邮规则？,Enable this free shipping rule?
+确认删除该自建免邮规则？删除后不可恢复。,Delete this custom free shipping rule? This cannot be undone.
+确定要禁用这个快递公司吗？,Are you sure you want to disable this carrier?
+确定要启用这个快递公司吗？,Are you sure you want to enable this carrier?
+确定要删除这个快递公司吗？,Are you sure you want to delete this carrier?
+快递公司列表,Courier Company List
+新增快递公司,Add Carrier
+搜索快递公司代码或名称,Search carrier code or name
+当前暂无快递公司配置，请后续在此页面完善配置。,There are currently no courier companies configured. Please complete the configuration on this page later.
+追踪支持,Tracking Support
 API,API
 手动,Manual
 支持,Supported
-不支持,"Not supported"
-"共 %{1} 条记录，第 %{2} / %{3} 页","Total %{1} records, Page %{2} / %{3}"
-快递公司代码,"Carrier Code"
+不支持,Not supported
+共 %{1} 条记录，第 %{2} / %{3} 页,"Total %{1} records, Page %{2} / %{3}"
+快递公司代码,Carrier Code
 请输入快递公司代码，如：SF、ZTO等,"Enter courier company code, e.g., SF, ZTO, etc."
-代码必须唯一，编辑后不可修改,"Code must be unique and cannot be modified after editing"
-快递公司名称,"Carrier Name"
+代码必须唯一，编辑后不可修改,Code must be unique and cannot be modified after editing
+快递公司名称,Carrier Name
 请输入快递公司名称，如：顺丰速运,"Enter courier company name, e.g., SF Express"
 手动类型需要手动输入物流信息，API类型可通过接口自动获取,"Manual type requires manual input of logistics information, API type can automatically obtain through interface"
-物流跟踪URL模板,"Tracking URL Template"
-例如：https://www.sf-express.com/track/{tracking_number},"Example: https://www.sf-express.com/track/{tracking_number}"
-"使用 {tracking_number} 作为物流单号占位符","Use {tracking_number} as tracking number placeholder"
-追踪API端点,"Tracking API Endpoint"
-例如：https://api.example.com/track,"Example: https://api.example.com/track"
-API请求方法,"API Request Method"
-API配置,"API Configuration"
+物流跟踪URL模板,Tracking URL Template
+例如：https://www.sf-express.com/track/{tracking_number},Example: https://www.sf-express.com/track/{tracking_number}
+使用 {tracking_number} 作为物流单号占位符,Use {tracking_number} as tracking number placeholder
+追踪API端点,Tracking API Endpoint
+例如：https://api.example.com/track,Example: https://api.example.com/track
+API请求方法,API Request Method
+API配置,API Configuration
 "JSON格式，例如：{""api_key"":""your_key"",""api_secret"":""your_secret""}","JSON format, for example: {""api_key"":""your_key"",""api_secret"":""your_secret""}"
 API配置信息，JSON格式,"API configuration information, JSON format"
-追踪支持状态,"Tracking Support Status"
+追踪支持状态,Tracking Support Status
 数字越小越靠前，默认为0,"Smaller numbers appear first, default is 0"
 支持范围,Coverage
 已保存,Saved
-"Provider 默认","Provider defaults"
+Provider 默认,Provider defaults
 谨慎操作,Caution
-缩减可运地区后，结账将不再提供该承运商。保存前请确认与真实可运范围一致。,"Shrinking coverage removes this carrier at checkout for those destinations. Confirm it matches real shippable areas before saving."
-保存当前选择（推荐）,"Keep current selection (recommended)"
-"取消勾选 = 保存时改用 Provider 默认区域","Uncheck = use provider defaults on save"
-在下方选择可运国家或更细地区。费用模板只算运费金额，不含到达地区。,"Select shippable countries or finer regions below. Rate templates only price the shipment; they do not define destinations."
-说明与参考列表,"Notes & reference lists"
-"系统禁运 · 不可选","系统禁运 · 不可选"
-地址选择器中标为「不支持」的系统禁运区优先级最高，写入覆盖也不会在结账放行。,"System-embargoed areas marked Unsupported in the address picker always win; saving them as coverage will not allow checkout shipping."
-"Provider 默认区域","Provider defaults"
-当前已保存,"Currently saved"
-即将保存承运商支持范围。缩减地区会导致对应目的地无法使用该承运商配送，请确认仍与真实可运范围一致。是否继续保存？,"You are about to save carrier coverage. Shrinking regions removes this carrier for those destinations. Confirm it still matches real shippable areas. Continue saving?"
-运输禁运区域,运输禁运区域
-"配置本作用域不支持配送的国家/州省/区县（黑名单）。命中规则为 website ∪ store ∪ channel 并集。请搜索后多选添加。","配置本作用域不支持配送的国家/州省/区县（黑名单）。命中规则为 website ∪ store ∪ channel 并集。请搜索后多选添加。"
-请先保存主体，再配置禁运区域。,请先保存主体，再配置禁运区域。
+缩减可运地区后，结账将不再提供该承运商。保存前请确认与真实可运范围一致。,Shrinking coverage removes this carrier at checkout for those destinations. Confirm it matches real shippable areas before saving.
+保存当前选择（推荐）,Keep current selection (recommended)
+取消勾选 = 保存时改用 Provider 默认区域,Uncheck = use provider defaults on save
+在下方选择可运国家或更细地区。费用模板只算运费金额，不含到达地区。,Select shippable countries or finer regions below. Rate templates only price the shipment; they do not define destinations.
+说明与参考列表,Notes & reference lists
+系统禁运 · 不可选,System embargo · not selectable
+地址选择器中标为「不支持」的系统禁运区优先级最高，写入覆盖也不会在结账放行。,System-embargoed areas marked Unsupported in the address picker always win; saving them as coverage will not allow checkout shipping.
+Provider 默认区域,Provider defaults
+当前已保存,Currently saved
+即将保存承运商支持范围。缩减地区会导致对应目的地无法使用该承运商配送，请确认仍与真实可运范围一致。是否继续保存？,You are about to save carrier coverage. Shrinking regions removes this carrier for those destinations. Confirm it still matches real shippable areas. Continue saving?
+运输禁运区域,Shipping embargo zones
+配置本作用域不支持配送的国家/州省/区县（黑名单）。命中规则为 website ∪ store ∪ channel 并集。请搜索后多选添加。,Configure countries/states/districts this scope does not ship to (blacklist). Hit rule is website ∪ store ∪ channel union. Search then multi-select to add.
+请先保存主体，再配置禁运区域。,"Save the entity first, then configure embargo zones."
 街道,Street
-暂无可选地区,暂无可选地区
-请先选择国家/地区,"Please select a country/region first"
-请先选择省份,"Please select a province first"
+暂无可选地区,No regions available
+请先选择国家/地区,Please select a country/region first
+请先选择省份,Please select a province first
 加载中…,Loading...
-尚未选择禁运区域，请搜索后添加,尚未选择禁运区域，请搜索后添加
-搜索并添加国家/地区,搜索并添加国家/地区
-搜索并添加省份,搜索并添加省份
-搜索并添加城市,搜索并添加城市
-搜索并添加区县,搜索并添加区县
-搜索并添加街道,搜索并添加街道
-输入关键字筛选更多,输入关键字筛选更多
-"共 {n} 项可选，输入关键字筛选","共 {n} 项可选，输入关键字筛选"
-请先选择区县,请先选择区县
-配送管理分区,配送管理分区
-"配送配置没有独立的 Global 层：已使用默认网站配置。请选择具体网站 / 店铺 / 渠道以切换。","配送配置没有独立的 Global 层：已使用默认网站配置。请选择具体网站 / 店铺 / 渠道以切换。"
-"请选择具体网站 / 店铺 / 渠道。配送配置按范围隔离；Global 会落到默认网站（无独立 Global 配置层）。","请选择具体网站 / 店铺 / 渠道。配送配置按范围隔离；Global 会落到默认网站（无独立 Global 配置层）。"
-"当前：%{1} · id=%{2}","当前：%{1} · id=%{2}"
-作用范围,作用范围
-可售目的地,"Sellable destinations"
+尚未选择禁运区域，请搜索后添加,No embargo regions selected; search then add
+搜索并添加国家/地区,Search and add country/region
+搜索并添加省份,Search and add province
+搜索并添加城市,Search and add city
+搜索并添加区县,Search and add district
+搜索并添加街道,Search and add street
+输入关键字筛选更多,Enter keywords to filter more
+共 {n} 项可选，输入关键字筛选,{n} options available; type keywords to filter
+请先选择区县,Please select a district first
+配送管理分区,Shipping management section
+配送配置没有独立的 Global 层：已使用默认网站配置。请选择具体网站 / 店铺 / 渠道以切换。,Shipping config has no independent Global layer: using default website config. Select concrete website / store / channel to switch.
+请选择具体网站 / 店铺 / 渠道。配送配置按范围隔离；Global 会落到默认网站（无独立 Global 配置层）。,Please select a concrete website / store / channel. Shipping config is scope-isolated; Global falls to default website (no independent Global config layer).
+当前：%{1} · id=%{2},Current: %{1} · id=%{2}
+作用范围,Scope
+可售目的地,Sellable destinations
 配置本作用域可售国家/州省/区县（白名单）。为空时不限制，仅按承运商覆盖与禁运匹配；配置后须与承运商覆盖求交。,"Sellable destinations whitelist for this scope. Empty means unrestricted (carrier coverage + embargo only); when set, intersect with carrier coverage."
-请先保存主体，再配置可售目的地。,请先保存主体，再配置可售目的地。
-尚未选择，请搜索后添加,尚未选择，请搜索后添加
-已支付待发货,已支付待发货
-打开发货管理,打开发货管理
-只看待发货,只看待发货
-办理发货,办理发货
-暂无发货记录,暂无发货记录
-待补运单号,待补运单号
-通知,通知
-补充,补充
-发货时间,发货时间
-送达,送达
-物流进程记录,物流进程记录
-暂无物流进程,暂无物流进程
-承运方尚未回传轨迹节点,承运方尚未回传轨迹节点
-打开承运商轨迹页,打开承运商轨迹页
-店铺,店铺
-渠道,渠道
-网站,网站
-%{1}不支持该%{2},%{1}不支持该%{2}
-配送服务不存在,"Shipping service does not exist"
-合并运费,合并运费
-配送报价小计溢出,"Delivery quote subtotal overflow"
-免邮金额格式非法,"Free shipping amount format is illegal"
-免邮金额溢出,"Free shipping amount exceeds"
-已发货,已发货
-已取消,已取消
-发货失败,发货失败
-未知,未知
-美国,"United States"
-中国香港,"Hong Kong"
+请先保存主体，再配置可售目的地。,"Save the entity first, then configure sellable destinations."
+尚未选择，请搜索后添加,Nothing selected yet; search then add
+已支付待发货,"Paid, awaiting shipment"
+打开发货管理,Open shipping management
+只看待发货,Pending shipment only
+办理发货,Process shipment
+暂无发货记录,No Shipment Records
+待补运单号,Tracking pending
+通知,Notifications
+补充,Supplement
+发货时间,Ship time
+送达,Delivered
+物流进程记录,Logistics progress log
+暂无物流进程,No logistics progress
+承运方尚未回传轨迹节点,Carrier has not returned tracking nodes yet
+打开承运商轨迹页,Open carrier tracking page
+店铺,Store
+渠道,Channel
+网站,Website
+%{1}不支持该%{2},%{1} does not support this %{2}
+配送服务不存在,Shipping service does not exist
+合并运费,Merge shipping
+配送报价小计溢出,Delivery quote subtotal overflow
+免邮金额格式非法,Free shipping amount format is illegal
+免邮金额溢出,Free shipping amount exceeds
+已发货,Shipped
+已取消,Cancelled
+发货失败,Shipment failed
+未知,Unknown
+美国,United States
+中国香港,Hong Kong
 中国澳门,Macao
 中国台湾,Taiwan
 日本,Japan
-韩国,"South Korea"
+韩国,South Korea
 新加坡,Singapore
 澳大利亚,Australia
-英国,"United Kingdom"
+英国,United Kingdom
 加拿大,Canada
 德国,Germany
 法国,France
 运费配置版本已变更，请重新报价,"The freight configuration version has been changed, please re-quote."
-无可用配送模板（币种/区域）,"No shipping template available (currency/region)"
-"service_code 不能为空","service_code cannot be empty"
-配送服务不可用：%{1},"Shipping service unavailable: %{1}"
-配送服务不支持币种：%{1},"The delivery service does not support currency: %{1}"
-当前收货地址暂不可配送，请更换地址后再下单。,当前收货地址暂不可配送，请更换地址后再下单。
-配送配置服务不可用,"Shipping configuration service is unavailable"
-结账币种缺失,"Checkout currency missing"
-币种精度非法,"Currency precision is illegal"
-请填写要新增的省份或区县。,"Please enter a province or district to add."
-"国家代码必须是 2 位大写字母。","Country code must be 2 uppercase letters."
-地区代码格式无效。,"The region code format is invalid."
-"地区名称不能为空且不能超过 255 个字符。","Region name cannot be empty and cannot exceed 255 characters."
-地区类型无效。,"Invalid region type."
-请填写要新增的省份名称。,"Please enter the new province name."
-请填写要新增的省份代码。,"Please enter the new province code."
-请先在地址选择标签中选择国家/省份/区县。,请先在地址选择标签中选择国家/省份/区县。
-费用计算类型无效。,"Invalid charge calculation type."
-费用模板不存在。,费用模板不存在。
-仍有配送服务引用该费用模板，请先解除绑定后再删除。,仍有配送服务引用该费用模板，请先解除绑定后再删除。
-免邮条件类型无效。,"Free shipping condition type is invalid."
-免邮规则不存在。,"Free shipping rule not found."
-配送服务不存在。,配送服务不存在。
-配送服务必须与当前作用范围一致。,配送服务必须与当前作用范围一致。
-"%{1}名称不能为空且不能超过 255 个字符。","The %{1} name cannot be empty and cannot exceed 255 characters."
-%{1}代码格式无效。,"The %{1} code format is invalid."
-%{1}不存在。,"%{1} does not exist."
-%{1}必须与当前作用范围一致。,%{1}必须与当前作用范围一致。
-代码已存在。,"The code already exists."
-该配送方式暂不支持物流查询,该配送方式暂不支持物流查询
-物流查询失败，请稍后重试,物流查询失败，请稍后重试
-当前位置：%{loc},当前位置：%{loc}
-物流状态：%{status},物流状态：%{status}
-运单已登记：%{n},运单已登记：%{n}
-发货记录不存在,发货记录不存在
-尚未填写物流单号，无法查询位置,尚未填写物流单号，无法查询位置
-物流查询失败,物流查询失败
-启用承运商前必须配置支持范围。,"Carriers must have coverage configured before they can be enabled."
+无可用配送模板（币种/区域）,No shipping template available (currency/region)
+service_code 不能为空,service_code cannot be empty
+配送服务不可用：%{1},Shipping service unavailable: %{1}
+配送服务不支持币种：%{1},The delivery service does not support currency: %{1}
+当前收货地址暂不可配送，请更换地址后再下单。,This delivery address cannot be shipped to. Please choose another address before placing the order.
+配送配置服务不可用,Shipping configuration service is unavailable
+结账币种缺失,Checkout currency missing
+币种精度非法,Currency precision is illegal
+请填写要新增的省份或区县。,Please enter a province or district to add.
+国家代码必须是 2 位大写字母。,Country code must be 2 uppercase letters.
+地区代码格式无效。,The region code format is invalid.
+地区名称不能为空且不能超过 255 个字符。,Region name cannot be empty and cannot exceed 255 characters.
+地区类型无效。,Invalid region type.
+请填写要新增的省份名称。,Please enter the new province name.
+请填写要新增的省份代码。,Please enter the new province code.
+请先在地址选择标签中选择国家/省份/区县。,Please select country/province/district in the address selector first.
+费用计算类型无效。,Invalid charge calculation type.
+费用模板不存在。,Fee template not found.
+仍有配送服务引用该费用模板，请先解除绑定后再删除。,Shipping services still reference this fee template; unbind them before deleting.
+免邮条件类型无效。,Free shipping condition type is invalid.
+免邮规则不存在。,Free shipping rule not found.
+配送服务不存在。,Shipping service not found.
+配送服务必须与当前作用范围一致。,Shipping service must match current scope.
+%{1}名称不能为空且不能超过 255 个字符。,The %{1} name cannot be empty and cannot exceed 255 characters.
+%{1}代码格式无效。,The %{1} code format is invalid.
+%{1}不存在。,%{1} does not exist.
+%{1}必须与当前作用范围一致。,%{1} must match current scope.
+代码已存在。,The code already exists.
+该配送方式暂不支持物流查询,This shipping method does not support tracking
+物流查询失败，请稍后重试,"Logistics lookup failed, please retry later"
+当前位置：%{loc},Current location: %{loc}
+物流状态：%{status},Logistics status: %{status}
+运单已登记：%{n},Waybill registered: %{n}
+发货记录不存在,Shipment record does not exist
+尚未填写物流单号，无法查询位置,No tracking entered; cannot query location
+物流查询失败,Logistics lookup failed
+启用承运商前必须配置支持范围。,Carriers must have coverage configured before they can be enabled.
 全国,nationwide
-邮政编码格式不正确,"Invalid postal code format"
-无权操作此地址,"No permission to operate this address"
-地址名称不能为空,"Address name cannot be empty."
-"禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板，或留空由系统使用 17TRACK 默认","禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板，或留空由系统使用 17TRACK 默认"
-"禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板","禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板"
-查询失败：%{1},"Query failed: %{1}"
-费用模板不存在,"Rate template does not exist"
-费用模板未启用,"Fee template is not enabled"
-未知配送计费类型：%{1},"Unknown delivery billing type: %{1}"
-配送金额格式非法,"Shipping amount format is illegal"
-配送金额加法溢出,"Delivery amount addition overflows"
-配送金额乘法溢出,"Shipping amount multiplication overflows"
-请检查收货地址信息。,"Please check the shipping address."
-无可用配送方案（多仓拆单）,无可用配送方案（多仓拆单）
-方案家族不能为空,方案家族不能为空
-仓库未绑定发货地址，无法报价,仓库未绑定发货地址，无法报价
-未配置默认发货地址，无法报价,未配置默认发货地址，无法报价
-方案家族在该仓无可达航线：%{1},方案家族在该仓无可达航线：%{1}
-商品配送档案与仓航线无交集，无法报价,商品配送档案与仓航线无交集，无法报价
-方案家族无可报价服务：%{1},方案家族无可报价服务：%{1}
-无法完成多仓履约规划,无法完成多仓履约规划
-"Shipping 孤儿运单取消重试","Shipping 孤儿运单取消重试"
-"履约账本失败后的 cancelShipment 孤儿补偿队列","履约账本失败后的 cancelShipment 孤儿补偿队列"
-"孤儿运单处理：done=%{1} dead=%{2} processed=%{3}","孤儿运单处理：done=%{1} dead=%{2} processed=%{3}"
-请填写省份,"Enter province"
-请填写城市,"Enter city"
-请填写区县,"Enter district"
-送达时间,送达时间
-运费以结算页为准,"Shipping calculated at checkout"
-重货,重货
-本商品使用重货配送方案，运费以结算页为准,"This item uses heavy-goods shipping; fee calculated at checkout"
-选择作用范围,选择作用范围
-搜索作用范围,搜索作用范围
-折叠,折叠
-展开,展开
-未找到匹配作用范围,未找到匹配作用范围
-包邮,"Free shipping"
-本配送方案为服务级免邮，具体以结算页为准,"This delivery option includes free shipping; final charges are confirmed at checkout."
-"费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。金额一律按站点基础货币录入；结账或其他展示币种由汇率换算，勿为每个货币复制模板。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。多仓拆单时运费按仓分别计算后相加；勿承诺「按距离」计费。仓绑定发货地址后，可在配送服务中一键复制默认站航线到该发货锚点。","费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。金额一律按站点基础货币录入；结账或其他展示币种由汇率换算，勿为每个货币复制模板。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。多仓拆单时运费按仓分别计算后相加；勿承诺「按距离」计费。仓绑定发货地址后，可在配送服务中一键复制默认站航线到该发货锚点。"
-支持范围决定该承运商结账时能否运到客户地址。缩减或删错地区后，对应目的地将不再出现该承运商配送方式，可能导致无法下单。请仅保留真实可运区域，保存前务必核对。,"Coverage decides whether this carrier can reach the customer address at checkout. Shrinking or deleting regions removes that carrier’s shipping methods for those destinations and may block orders. Keep only truly shippable areas and double-check before saving."
-地址选择器中标为「不支持」的系统禁运国家/地区优先级最高，即使写入承运商覆盖也不会在结账放行。请勿把系统禁运区当作可运范围保存。,地址选择器中标为「不支持」的系统禁运国家/地区优先级最高，即使写入承运商覆盖也不会在结账放行。请勿把系统禁运区当作可运范围保存。
-"启用承运商前必须配置支持范围。可多选国家→州省→区县；默认保留当前选择，也可改用 Provider 默认区域。费用模板只算运费金额，不含到达地区。","Coverage is required to enable a carrier. Multi-select country → province → district. Current selection is kept by default; uncheck to use provider defaults. Rate templates only price the shipment; they do not define destinations."
-"保存时用当前选择覆盖 Provider 默认区域","Keep current selection on save (overrides provider defaults)"
-"默认勾选：保存页面上已选范围。取消勾选则改用下方 Provider 默认区域覆盖。","Checked by default: save the ranges selected on this page. Uncheck to replace with provider defaults below."
-"Provider 默认区域：","Provider defaults:"
-当前已保存：,"Currently saved:"
+邮政编码格式不正确,Invalid postal code format
+无权操作此地址,No permission to operate this address
+地址名称不能为空,Address name cannot be empty.
+禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板，或留空由系统使用 17TRACK 默认,"Do not use placeholder tracking URLs like example.com; fill a real carrier tracking template, or leave blank for system 17TRACK default"
+禁止使用 example.com 等占位轨迹地址，请填写真实承运商追踪模板,Do not use placeholder tracking URLs like example.com; fill a real carrier tracking template
+查询失败：%{1},Query failed: %{1}
+费用模板不存在,Rate template does not exist
+费用模板未启用,Fee template is not enabled
+未知配送计费类型：%{1},Unknown delivery billing type: %{1}
+配送金额格式非法,Shipping amount format is illegal
+配送金额加法溢出,Delivery amount addition overflows
+配送金额乘法溢出,Shipping amount multiplication overflows
+请检查收货地址信息。,Please check the shipping address.
+无可用配送方案（多仓拆单）,No shipping options (multi-WH split)
+方案家族不能为空,Plan family required
+仓库未绑定发货地址，无法报价,Warehouse has no ship-from; cannot quote
+未配置默认发货地址，无法报价,No default ship-from configured; cannot quote
+方案家族在该仓无可达航线：%{1},Plan family has no reachable routes at this WH: %{1}
+商品配送档案与仓航线无交集，无法报价,Product shipping profile has no overlap with WH routes; cannot quote
+方案家族无可报价服务：%{1},Plan family has no quotable services: %{1}
+无法完成多仓履约规划,Cannot complete multi-WH fulfillment plan
+Shipping 孤儿运单取消重试,Shipping orphan waybill cancel retry
+履约账本失败后的 cancelShipment 孤儿补偿队列,cancelShipment orphan compensation queue after fulfillment ledger failure
+孤儿运单处理：done=%{1} dead=%{2} processed=%{3},Orphan waybill handling: done=%{1} dead=%{2} processed=%{3}
+本页说明发货时效、配送范围、运费计算、物流跟踪、签收与异常处理。下单前请完整阅读；商品页若标注预售、定制或特殊物流规则，以商品页为准。,"This page explains dispatch times, delivery coverage, shipping charges, tracking, receipt of goods and delivery issues. Please read it before ordering. Any pre-order, made-to-order or special delivery terms on the product page take precedence."
+1.1 现货订单：付款成功后，我们将在 1–3 个工作日内完成拣货、质检并发出（法定节假日与物流高峰期可能顺延）。,"1.1 In-stock orders: After successful payment, we pick, inspect and dispatch your order within 1–3 business days. Public holidays and peak shipping periods may extend this timeframe."
+1.2 预售 / 定制 / 定金商品：发货时间以商品详情页或订单确认信息中的承诺时效为准。若因工艺、面料或尺码确认延迟，我们会通过站内消息或订单备注及时告知。,"1.2 Pre-order, made-to-order and deposit items: Dispatch times follow the commitments on the product page or order confirmation. If craftsmanship, fabric availability or size confirmation causes a delay, we will notify you promptly through an on-site message or order note."
+1.3 合并发货：同一收货地址、同一账户的多笔可合并订单，在不影响时效承诺的前提下可能合并为一包裹发出；不可合并的情况（不同仓库、不同承运要求、预售混现货等）将分别发货。,"1.3 Combined shipments: Eligible orders placed from the same account to the same delivery address may be sent in one parcel, provided this does not affect the promised dispatch time. Orders that cannot be combined, such as those from different warehouses, with different carrier requirements, or mixing pre-order and in-stock items, will ship separately."
+1.4 缺货与拆单：若部分商品暂时缺货，我们将优先发出有货商品，并就剩余商品给出补发时间或退款方案，不会无故取消整单。,"1.4 Stock shortages and split shipments: If some items are temporarily unavailable, we will ship available items first and provide a dispatch date or refund option for the remaining items. We will not cancel the entire order without reason."
+2.1 我们向结算页可选地址提供配送服务，覆盖中国大陆多数省市自治区；港澳台及海外地区是否开通，以结账页可选配送方式及运费计算结果为准。,2.1 We ship to checkout-selectable addresses across most mainland China provinces; Hong Kong/Macao/Taiwan and overseas availability follow checkout carrier options and fee results.
+2.2 偏远地区、岛屿、牧区或需二次中转的地址，可能仅支持指定承运商，时效也可能长于常规区域。,"2.2 Remote areas, islands, pastoral regions and addresses requiring onward transfers may be served only by designated carriers. Delivery may take longer than in standard service areas."
+2.3 如收货地址无法派送，客服会与您确认更改地址或安排退款；因地址信息不完整导致的延误，需由买家配合更正。,"2.3 If your address cannot be served, our support team will contact you to confirm an alternative address or arrange a refund. If incomplete address details cause a delay, you will need to help us correct them."
+3.1 运费按收货地区、包裹重量/体积、所选配送服务在结账页实时计算，下单前可在结算页查看最终金额。,"3.1 Shipping charges are calculated at checkout based on the destination, parcel weight or volume, and selected delivery service. You can review the final amount before placing your order."
+3.2 满足活动门槛（如满额包邮、会员包邮、指定活动）时，结账页会自动减免运费；活动规则以活动页或结算提示为准。,"3.2 Shipping discounts are applied automatically at checkout when you meet an offer's conditions, such as a minimum spend, member benefit or eligible promotion. The terms on the offer page or at checkout apply."
+3.3 加急、保价、指定快递、到付等增值服务如有开通，将单独计费并在结算时明示。,"3.3 Where available, additional services such as expedited shipping, declared-value protection, a specified carrier or freight-collect delivery are charged separately and clearly shown at checkout."
+3.4 因买家原因（拒收、地址错误、长期无人签收）导致退回的，可能需要买家承担退回运费或补差价后重发。,"3.4 If a parcel is returned because of refusal, an incorrect address or prolonged failure to receive it, you may need to pay the return shipping cost or the additional cost of reshipment."
+4.1 发货后，可在「我的订单」查看承运商、运单号与物流节点。部分承运商数据同步可能有 2–12 小时延迟。,"4.1 After dispatch, you can find the carrier, tracking number and shipment updates in My Orders. Updates from some carriers may be delayed by 2–12 hours."
+4.2 若运单长时间无更新：请先确认是否逢周末、法定节假日或极端天气；仍无进展时，可通过帮助中心「联系客服」并提供订单号协助查询。,"4.2 If tracking has not updated for an extended period, first check for weekends, public holidays or severe weather. If there is still no progress, select Contact Support in the Help Center and provide your order number so we can investigate."
+4.3 请保持下单手机畅通，以便快递员派送与驿站取件通知。需要改派自提点或代收点时，请按承运商短信/App 指引操作。,"4.3 Keep the phone number used for your order available for delivery calls and collection notices. To redirect a parcel to a collection point, follow the carrier's text message or app instructions."
+签收前请核对外包装是否完好；如有明显破损、浸水、变形，请当场与快递员共同开箱验货并拍照留证，必要时拒收。,"Before accepting delivery, check the outer packaging. If it is visibly damaged, wet or deformed, inspect the contents with the courier and take photographs as evidence. Refuse delivery if necessary."
+运输破损、短少或外包装异常：请尽快（建议签收后 48 小时内）联系客服并保留外包装与运单，以便我们协助向承运商查验与索赔。,"Transit damage, shortage, or outer-packaging issues: contact support ASAP (ideally within 48 hours of receipt) and keep packaging and the waybill so we can help the carrier investigate and claim."
+商品质量、错发、尺码等问题：售后期限适用「退换政策」与强制性法规，不以运输查验窗限制您的法定权利；请保留吊牌与凭证并尽快申报。,"Quality, wrong item, or sizing issues: after-sales windows follow the Returns Policy and mandatory law and are not limited by the carrier claim window; keep tags/evidence and report promptly."
+代收、驿站、快递柜签收视为承运商送达节点。若代收人签收后出现异常，请尽快联系客服，我们将协助向承运商核查。,"Collection by a proxy, pickup station, or locker counts as a carrier delivery event. If issues appear after proxy receipt, contact support quickly and we will help investigate with the carrier."
+服装类商品建议在保持吊牌完整、未下水的前提下试穿确认尺码；定制件、剪裁件以商品页说明为准。,"For clothing, we recommend trying items on to check the fit while keeping all tags intact and without washing them. For made-to-order or altered items, refer to the product page."
+6.1 运输途中丢失、严重破损：请提供订单号、运单号、破损照片（含外包装与商品），我们将协调承运商查件并安排补发或退款。,"6.1 Lost or seriously damaged in transit: Provide your order number, tracking number and photographs of the damage, including the packaging and items. We will coordinate an investigation with the carrier and arrange a replacement or refund."
+6.2 物流显示已签收但未收到：请先向家人、门卫、邻居及附近驿站确认；仍无法找到时，在「签收」节点后 7 日内联系客服启动查询。,"6.2 Marked as delivered but not received: First check with household members, building staff, neighbors and nearby collection points. If the parcel still cannot be found, contact support within 7 days of the delivered status to start an investigation."
+6.3 跨境订单的关税、清关与弃件规则以「配送政策」及结算页税费说明为准。,"6.3 For cross-border orders, duties, clearance, and abandonment rules follow the Shipping Policy and checkout tax notices."
+6.4 不可抗力（地震、台风、疫情管制、交通管制等）导致的延误，我们将尽力协调并及时同步进度，但不属于服务质量违约。,"6.4 Delays from force majeure (earthquake, typhoon, pandemic controls, traffic controls, etc.) will be coordinated and updated, but are not a service-quality breach."
+本页为退货、换货与退款适用条件的权威说明（期限、例外、运费承担）。退款到账路径与时效另见退款政策。下单即表示您已阅读并理解本政策；法律法规另有强制性规定的，从其规定。,"This page is the authoritative statement of return/exchange/refund eligibility (deadlines, exceptions, who pays shipping). Refund payment paths and timing are in the Refund Policy. Placing an order means you have read and understood this policy; mandatory law prevails where it conflicts."
+1.1 一般情形：自签收之日起 7 日内，商品未经穿着使用（或仅试穿）、吊牌完整、不影响二次销售的，可申请退货或换货。,"1.1 General eligibility: You may request a return or exchange within 7 days of delivery if the item has not been worn or used (other than being tried on), its tags are intact, and it remains in a condition suitable for resale."
+1.2 质量问题：存在做工瑕疵、破损、污渍、尺码与标称明显不符、错发漏发等情形的，不受「未使用」限制，但仍需保留商品与凭证并尽快申报。,"1.2 Quality issues: The unused condition does not apply to workmanship defects, damage, stains, significant differences from the stated size, or incorrect or missing items. Please still retain the goods and supporting evidence and report the issue promptly."
+1.3 特殊品类：定制/来图定做、剪裁改衣、贴身内衣、已下水洗涤、已拆封的易耗配件、以及商品页明确标注「不支持无理由退换」的特价/清仓商品，适用商品页特别约定；无质量问题通常不支持无理由退换。,"1.3 Special categories: Made-to-order or custom-design items, alterations, intimate apparel, washed items, unsealed consumable accessories, and sale or clearance items explicitly marked as ineligible for change-of-mind returns are subject to the specific terms on their product pages. These items generally cannot be returned or exchanged without a quality issue."
+1.4 法规权利：依法适用七日无理由退货的品类，按其法定条件执行；本政策不得减损您依法享有的权利。,"1.4 Statutory rights: Where a statutory seven-day change-of-mind return right applies, its legal conditions apply. This policy does not reduce your rights under applicable law."
+4.1 因商品质量问题、错发、漏发导致的退换：往返运费由我们承担（按实际产生且合理的标准运费核实报销或直免）。,"4.1 For returns or exchanges caused by quality issues, incorrect items or missing items, we cover shipping in both directions. Reasonable standard shipping charges actually incurred are verified and reimbursed or waived directly."
+4.2 因个人原因（尺码不合适、不喜欢、拍错）退换：寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定，结账或客服确认时会明示。,"4.2 For returns or exchanges for personal reasons, such as fit, preference or ordering the wrong item, you pay the return shipping cost. Outbound shipping for an exchange depends on the offer and product policy and will be clearly stated at checkout or confirmed by support."
+4.3 到付件：未经同意的到付包裹可能被拒收，因此产生的费用由寄件方承担。,4.3 Freight-collect parcels: Parcels sent with shipping payable by the recipient without prior agreement may be refused. Any resulting charges are the sender's responsibility.
+2.1 我们支持中国大陆多数省市自治区配送。港澳台及海外地区是否开通，以结账页可选配送方式及运费计算结果为准。,"2.1 We deliver to most provinces, cities and autonomous regions in mainland China. Availability for Hong Kong, Macao, Taiwan and overseas destinations depends on the delivery methods and shipping quotes shown at checkout."
+签收后请尽快核对商品数量、尺码、颜色与配件是否与订单一致；发现问题请在签收后 48 小时内联系客服并保留外包装与吊牌。,"After delivery, promptly check that the quantity, sizes, colors and accessories match your order. If you find a problem, contact support within 48 hours and retain the outer packaging and tags."
+代收、驿站、快递柜签收视为送达。若代收人签收后出现异常，请尽快联系客服，我们将协助向承运商核查。,"Delivery accepted by another person, a collection point or a parcel locker is treated as delivered. If a problem arises after someone accepts a parcel for you, contact support promptly so we can help investigate with the carrier."
+6.3 不可抗力（地震、台风、疫情管制、交通管制等）导致的延误，我们将尽力协调并及时同步进度，但不属于服务质量违约。,"6.3 Force majeure: For delays caused by events such as earthquakes, typhoons, epidemic restrictions or traffic controls, we will make every effort to coordinate delivery and share updates promptly. Such delays do not constitute a breach of our service-quality commitment."
+本页说明退货、换货与退款的适用条件、办理流程、运费承担、到账时效与特殊品类规则。下单即表示您已阅读并理解本政策；法律法规另有强制性规定的，从其规定。,"This page explains eligibility, procedures, shipping costs, refund timing and special-category rules for returns, exchanges and refunds. By placing an order, you confirm that you have read and understood this policy. Any mandatory legal requirements take precedence."
+请填写省份,Enter province
+请填写城市,Enter city
+请填写区县,Enter district
+送达时间,Delivered At
+运费以结算页为准,Shipping calculated at checkout
+重货,Heavy goods
+本商品使用重货配送方案，运费以结算页为准,This item uses heavy-goods shipping; fee calculated at checkout
+选择作用范围,Select scope
+搜索作用范围,Search scopes
+折叠,Collapse
+展开,Expand
+未找到匹配作用范围,No matching scopes found
+包邮,Free shipping
+本配送方案为服务级免邮，具体以结算页为准,This delivery option includes free shipping; final charges are confirmed at checkout.
+费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。金额一律按站点基础货币录入；结账或其他展示币种由汇率换算，勿为每个货币复制模板。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。多仓拆单时运费按仓分别计算后相加；勿承诺「按距离」计费。仓绑定发货地址后，可在配送服务中一键复制默认站航线到该发货锚点。,"Fee templates (this page) only define ""how to price"" (fixed / weight / volume / qty / mixed), not ""shipping scheme"". Amounts always entered in site base currency; checkout or other display currencies convert by FX—do not copy templates per currency. For regional price vs current position, configure destination coverage and ship anchors under ""Shipping service / routes""; do not put region matrices in templates. Multi-WH splits sum freight per WH; do not promise distance-based billing. After WH binds ship-from, one-click copy default-site routes to that ship anchor in shipping services."
+支持范围决定该承运商结账时能否运到客户地址。缩减或删错地区后，对应目的地将不再出现该承运商配送方式，可能导致无法下单。请仅保留真实可运区域，保存前务必核对。,Coverage decides whether this carrier can reach the customer address at checkout. Shrinking or deleting regions removes that carrier’s shipping methods for those destinations and may block orders. Keep only truly shippable areas and double-check before saving.
+地址选择器中标为「不支持」的系统禁运国家/地区优先级最高，即使写入承运商覆盖也不会在结账放行。请勿把系统禁运区当作可运范围保存。,"System embargo countries/regions marked ""Unsupported"" in address picker have highest priority; even carrier coverage writes won't allow them at checkout. Do not save system embargo zones as shippable coverage."
+启用承运商前必须配置支持范围。可多选国家→州省→区县；默认保留当前选择，也可改用 Provider 默认区域。费用模板只算运费金额，不含到达地区。,Coverage is required to enable a carrier. Multi-select country → province → district. Current selection is kept by default; uncheck to use provider defaults. Rate templates only price the shipment; they do not define destinations.
+保存时用当前选择覆盖 Provider 默认区域,Keep current selection on save (overrides provider defaults)
+默认勾选：保存页面上已选范围。取消勾选则改用下方 Provider 默认区域覆盖。,Checked by default: save the ranges selected on this page. Uncheck to replace with provider defaults below.
+Provider 默认区域：,Provider defaults:
+当前已保存：,Currently saved:
 该快递公司暂不支持在线追踪，请联系客服查询,"This carrier does not support online tracking, please contact customer service"
-客服电话：400-xxx-xxxx,"Customer Service: 400-xxx-xxxx"
-"费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。金额一律按站点基础货币录入；结账或其他展示币种由汇率换算，勿为每个货币复制模板。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。","费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。金额一律按站点基础货币录入；结账或其他展示币种由汇率换算，勿为每个货币复制模板。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。"
-"航线报价 · 相对发货地","航线报价 · 相对发货地"
-当前位置=收货地址。发货锚点选默认发货仓；目的地区域决定本航线可达范围。费用模板只算钱；不同目的地不同价请拆多条航线（各绑不同模板）。,当前位置=收货地址。发货锚点选默认发货仓；目的地区域决定本航线可达范围。费用模板只算钱；不同目的地不同价请拆多条航线（各绑不同模板）。
+客服电话：400-xxx-xxxx,Customer Service: 400-xxx-xxxx
+费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。金额一律按站点基础货币录入；结账或其他展示币种由汇率换算，勿为每个货币复制模板。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。,"Fee templates (this page) only define ""how to price"" (fixed / weight / volume / qty / mixed), not ""shipping scheme"". Amounts always entered in site base currency; checkout or other display currencies convert by FX—do not copy templates per currency. For regional price vs current position, configure destination coverage and ship anchors under ""Shipping service / routes""; do not put region matrices in templates."
+航线报价 · 相对发货地,Route quote · relative to ship-from
+当前位置=收货地址。发货锚点选默认发货仓；目的地区域决定本航线可达范围。费用模板只算钱；不同目的地不同价请拆多条航线（各绑不同模板）。,Current position = shipping address. Ship anchor picks default ship-from WH; destination region sets this route's reach. Fee template only computes money; different prices for different destinations need multiple routes (each with different templates).
 支持订单金额、目的地区域，或二者组合（mixed）。系统提供国际通用满额种子模板（标记为「系统」且不可删除）；默认仅启用标准档，可按需启停其它档，避免低门槛覆盖高门槛。,"Supports order amount, destination region, or mixed. System provides international free-shipping threshold seed templates (marked System and non-deletable). Only the standard tier is enabled by default; enable others as needed to avoid a lower threshold overriding a higher one."
-"设计说明 · 计费 vs 可达性","设计说明 · 计费 vs 可达性"
-"费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。","费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。"
-创建费用模板,"Create expense template"
-支持订单金额、目的地区域，或二者组合（mixed）。区域相对收货当前位置祖先命中；会员/券二期。,支持订单金额、目的地区域，或二者组合（mixed）。区域相对收货当前位置祖先命中；会员/券二期。
-配送服务创建成功。,"Delivery service created successfully."
-设计说明,"Design note"
-"费用模板只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），挂到配送服务上使用。它不按到达国家/州省设费率；能否运到某地由承运商「支持范围」与网站可售/禁运决定。若要对不同目的地不同价，请拆多条配送服务（各绑不同模板与承运商），而非在模板里配地区矩阵。","A rate template only defines how to price (fixed / weight / volume / quantity / mixed) and is attached to a shipping service. It is not a per-destination rate matrix. Reachability comes from carrier coverage plus site sellable/embargo rules. For different prices by destination, use multiple shipping services (each with its own template and carrier), not a region matrix inside the template."
-当前暂无费用模板配置，请后续在此页面完善配置。,"There are currently no fee templates configured. Please complete the configuration on this page later."
-新增配送服务,"New delivery service"
-最少天数,"Minimum number of days"
-最多天数,"Maximum number of days"
-配送服务列表,"Shipping service list"
-当前暂无配送服务配置，请后续在此页面完善配置。,"There are currently no delivery service configurations. Please complete the configuration on this page later."
-当前暂无免邮规则配置，请后续在此页面完善配置。,"There are currently no free shipping rules configured. Please complete the configuration on this page later."
+设计说明 · 计费 vs 可达性,Design notes · billing vs reachability
+费用模板（本页）只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），不是「配送方案」。区域相对当前位置差价请在「配送服务 / 航线」配置目的地覆盖与发货锚点，勿在模板里配地区矩阵。,"Fee templates (this page) only define ""how to price"" (fixed / weight / volume / qty / mixed), not ""shipping scheme"". For regional price vs current position, configure destination coverage and ship anchors under ""Shipping service / routes""; do not put region matrices in templates."
+创建费用模板,Create expense template
+支持订单金额、目的地区域，或二者组合（mixed）。区域相对收货当前位置祖先命中；会员/券二期。,"Supports order amount, destination region, or mixed. Region hits ancestors relative to current shipping position; membership/coupons phase 2."
+配送服务创建成功。,Delivery service created successfully.
+设计说明,Design note
+费用模板只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），挂到配送服务上使用。它不按到达国家/州省设费率；能否运到某地由承运商「支持范围」与网站可售/禁运决定。若要对不同目的地不同价，请拆多条配送服务（各绑不同模板与承运商），而非在模板里配地区矩阵。,"A rate template only defines how to price (fixed / weight / volume / quantity / mixed) and is attached to a shipping service. It is not a per-destination rate matrix. Reachability comes from carrier coverage plus site sellable/embargo rules. For different prices by destination, use multiple shipping services (each with its own template and carrier), not a region matrix inside the template."
+当前暂无费用模板配置，请后续在此页面完善配置。,There are currently no fee templates configured. Please complete the configuration on this page later.
+新增配送服务,New delivery service
+最少天数,Minimum number of days
+最多天数,Maximum number of days
+配送服务列表,Shipping service list
+当前暂无配送服务配置，请后续在此页面完善配置。,There are currently no delivery service configurations. Please complete the configuration on this page later.
+当前暂无免邮规则配置，请后续在此页面完善配置。,There are currently no free shipping rules configured. Please complete the configuration on this page later.
 保存后当前页面会自动刷新地址卡片，不会跳转页面。,"After saving, the current page will automatically refresh the address card without navigating away."
 可选,Optional
 街道、门牌号、仓库或收件说明,"Street, House Number, Warehouse, or Delivery Instructions"
-使用此地址,"Use this address"
-暂无国家，请先导入地址库,"No countries yet. Import the address catalog first."
-国家代码,"country code"
+使用此地址,Use this address
+暂无国家，请先导入地址库,No countries yet. Import the address catalog first.
+国家代码,country code
 同步完成，新增国家数量：%{1},"Sync completed, number of new countries: %{1}"
-同步失败：%{1},"Sync failed: %{1}"
-同步国家数据,"Synchronize country data"
+同步失败：%{1},Sync failed: %{1}
+同步国家数据,Synchronize country data
 globe,globe
-从i18n同步国家数据,"Sync country data from i18n"
-配送总览,"Shipping overview"
-确定要从i18n同步国家数据吗？,"Are you sure you want to sync country data from i18n?"
-从i18n同步国家,"Sync countries from i18n"
-"启用承运商前必须配置支持范围。可多选国家→州省→区县；也可一键应用 Provider 默认区域后修改。","Coverage is required to enable a carrier. Multi-select country → province → district. Current selection is kept by default; uncheck to use provider defaults."
-配送区域创建成功。,"The delivery area is created successfully."
-配送区域管理,"Delivery area management"
-查看配送区域,"View delivery area"
-查看配送区域列表,"View a list of delivery areas"
-保存配送区域,"Save shipping area"
-创建配送区域,"Create shipping area"
-配送区域,"Shipping Zone"
-新增配送区域,"Add new delivery area"
-区域名称,"Region Name"
-区域代码,"Region Code"
+从i18n同步国家数据,Sync country data from i18n
+配送总览,Shipping overview
+确定要从i18n同步国家数据吗？,Are you sure you want to sync country data from i18n?
+从i18n同步国家,Sync countries from i18n
+启用承运商前必须配置支持范围。可多选国家→州省→区县；也可一键应用 Provider 默认区域后修改。,Coverage is required to enable a carrier. Multi-select country → province → district. Current selection is kept by default; uncheck to use provider defaults.
+配送区域创建成功。,The delivery area is created successfully.
+配送区域管理,Delivery area management
+查看配送区域,View delivery area
+查看配送区域列表,View a list of delivery areas
+保存配送区域,Save shipping area
+创建配送区域,Create shipping area
+配送区域,Shipping Zone
+新增配送区域,Add new delivery area
+区域名称,Region Name
+区域代码,Region Code
 描述,describe
-配送区域列表,"Shipping area list"
-当前暂无配送区域，请后续在此页面完善配置。,"There are currently no delivery zones configured. Please complete the configuration on this page later."
-区域ID,"Region ID"
-"配置本作用域不支持配送的国家/州省/城市/区县/街道。此处为黑名单。命中规则为 website ∪ store ∪ channel 并集。","配置本作用域不支持配送的国家/州省/城市/区县/街道。此处为黑名单。命中规则为 website ∪ store ∪ channel 并集。"
-"地区 ID","地区 ID"
-"街道 ID","街道 ID"
-添加,添加
-地区ID,地区ID
-街道ID,街道ID
-"默认区域 JSON 参考：","默认区域 JSON 参考："
+配送区域列表,Shipping area list
+当前暂无配送区域，请后续在此页面完善配置。,There are currently no delivery zones configured. Please complete the configuration on this page later.
+区域ID,Region ID
+配置本作用域不支持配送的国家/州省/城市/区县/街道。此处为黑名单。命中规则为 website ∪ store ∪ channel 并集。,Configure countries/states/cities/districts/streets that this scope does not ship to. This is a blacklist. Hit rule is website ∪ store ∪ channel union.
+地区 ID,Region ID
+街道 ID,Street ID
+添加,Add
+地区ID,Region ID
+街道ID,Street ID
+默认区域 JSON 参考：,Default region JSON reference:
 邮政编码格式不正确，应为6位数字,"Invalid postal code format, should be 6 digits"
-管理配送和订单收货时使用的地址。,"Manage addresses used for delivery and order receiving."
+管理配送和订单收货时使用的地址。,Manage addresses used for delivery and order receiving.
 点击“新增收货地址”，直接在当前页面维护。,"Click ""Add Receiving Address"" to maintain it directly on the current page."
-选择已存地址,"Select a saved address"
+选择已存地址,Select a saved address
 了解发货时效、配送范围与签收注意事项。,"Learn about shipping times, coverage, and delivery tips."
-发货时效,"Shipping timeline"
-"订单支付成功后，我们将在 1–3 个工作日内完成拣货并发出（节假日顺延）。部分预售或定制商品以商品页标注为准。","After payment, we usually pick and ship within 1–3 business days (holidays excluded). Pre-order or custom items follow the product page."
-配送范围与运费,"Coverage and shipping fees"
+发货时效,Shipping timeline
+订单支付成功后，我们将在 1–3 个工作日内完成拣货并发出（节假日顺延）。部分预售或定制商品以商品页标注为准。,"After payment, we usually pick and ship within 1–3 business days (holidays excluded). Pre-order or custom items follow the product page."
+配送范围与运费,Coverage and shipping fees
 我们支持国内多数省市配送。运费按收货地址、重量与所选配送服务在结账页实时计算；满足活动门槛时可能享受包邮。,"We ship to most domestic regions. Fees are calculated at checkout by address, weight, and service; free shipping may apply for promotions."
-物流跟踪与签收,"Tracking and delivery"
+物流跟踪与签收,Tracking and delivery
 发货后可在「我的订单」查看物流单号与节点。请使用下单时填写的联系方式核验包裹；若长时间无物流更新，可先确认是否周末/节假日，或联系客服协助查询。,"Track shipments in My Orders. Use the contact details from checkout to verify packages; if tracking stalls, check holidays or contact support."
 了解退换货条件、办理流程与注意事项。,"Learn return eligibility, process, and tips."
 适用条件,Eligibility
-"自签收之日起 7 日内，未使用、不影响二次销售的商品可申请退换（法规另有规定的除外）。食品、贴身衣物、定制商品等特殊品类以商品页说明为准。","Unused items eligible for resale may be returned within 7 days of delivery unless otherwise required by law. Special categories follow the product page."
-办理流程,"How to return"
+自签收之日起 7 日内，未使用、不影响二次销售的商品可申请退换（法规另有规定的除外）。食品、贴身衣物、定制商品等特殊品类以商品页说明为准。,Unused items eligible for resale may be returned within 7 days of delivery unless otherwise required by law. Special categories follow the product page.
+办理流程,How to return
 登录「我的订单」选择对应订单提交售后申请，按提示填写原因并上传凭证。审核通过后按指引寄回商品；我们确认收货后将尽快完成退款或换货发货。,"Submit a return from My Orders, follow the instructions, and we will refund or reship after receiving the item."
-运费说明,"Shipping cost notes"
-因质量问题产生的退换，往返运费由我们承担。因个人原因退换，寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定。,"We cover return shipping for quality issues. Buyer-paid return shipping applies for change-of-mind; reship fees depend on policy."
-运送地址,"Shipping addresses"
-页脚配送说明链接,"Footer shipping info link"
-页脚退换政策链接,"Footer returns policy link"
-"页脚帮助中心扩展槽：配送说明入口；默认注入 footer-help-links。","Footer help extras: shipping guide; default inject footer-help-links."
-"页脚帮助中心扩展槽：退换货政策入口；默认注入 footer-help-links。","Footer help extras: returns policy; default inject footer-help-links."
-页脚帮助中心默认展示配送说明,"Footer help center defaults to shipping info"
-页脚帮助中心默认展示退换政策,"Footer help center defaults to returns policy"
-新增省份名称,"New province name"
-新增省份代码,"New province code"
-新增区县名称（可选）,"New district name (optional)"
-新增区县代码（可选）,"New district code (optional)"
-特殊领土（无常驻人口或特殊辖区）,"Special territory (uninhabited / special jurisdiction)"
-制裁或贸易限制,"Sanctions or trade restrictions"
+运费说明,Shipping cost notes
+因质量问题产生的退换，往返运费由我们承担。因个人原因退换，寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定。,We cover return shipping for quality issues. Buyer-paid return shipping applies for change-of-mind; reship fees depend on policy.
+运送地址,Shipping addresses
+页脚配送说明链接,Footer shipping info link
+页脚退换政策链接,Footer returns policy link
+页脚帮助中心扩展槽：配送说明入口；默认注入 footer-help-links。,Footer help extras: shipping guide; default inject footer-help-links.
+页脚帮助中心扩展槽：退换货政策入口；默认注入 footer-help-links。,Footer help extras: returns policy; default inject footer-help-links.
+页脚帮助中心默认展示配送说明,Footer help center defaults to shipping info
+页脚帮助中心默认展示退换政策,Footer help center defaults to returns policy
+新增省份名称,New province name
+新增省份代码,New province code
+新增区县名称（可选）,New district name (optional)
+新增区县代码（可选）,New district code (optional)
+特殊领土（无常驻人口或特殊辖区）,Special territory (uninhabited / special jurisdiction)
+制裁或贸易限制,Sanctions or trade restrictions
 美洲,Americas
-亚太,"Asia Pacific"
+亚太,Asia Pacific
 欧洲,Europe
 大洋洲,Oceania
-拉美,"Latin America"
-中东非洲,"Middle East & Africa"
-港澳台,"HK / Macau / Taiwan"
-其他可达市场,"Other reachable markets"
-国内标快,"Domestic Express"
-国内重货,"Domestic heavy freight"
-国际重货,"International heavy freight"
-免邮,"Free shipping"
-运费不含关税与税费,"Shipping excludes duties and taxes"
-运费已含卖家预估关税（可能另行列示）,"Shipping includes seller-estimated duties (may be shown separately)"
-送达时可能另收关税,"Duties may be collected on delivery"
+拉美,Latin America
+中东非洲,Middle East & Africa
+港澳台,HK / Macau / Taiwan
+其他可达市场,Other reachable markets
+国内标快,Domestic Express
+国内重货,Domestic heavy freight
+国际重货,International heavy freight
+免邮,Free shipping
+运费不含关税与税费,Shipping excludes duties and taxes
+运费已含卖家预估关税（可能另行列示）,Shipping includes seller-estimated duties (may be shown separately)
+送达时可能另收关税,Duties may be collected on delivery
+1.1 发货地为中国大陆仓库。我们向结算页可选的海外及跨境地址提供配送；偏远岛屿、战乱/制裁地区或承运商拒收地址可能无法下单或需加收费用。,"1.1 Origin is a mainland China warehouse. We ship to overseas/cross-border addresses available at checkout. Remote islands, conflict/sanctioned areas, or carrier-refused addresses may be unavailable or surchargeable."

@@ -12,6 +12,7 @@
  * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置政策正文内容"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param showBreadcrumb {default=true,name="显示面包屑",description="是否显示面包屑导航"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
  * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
@@ -47,11 +48,13 @@ $meta = $this->getData('meta') ?? [];
         </if>
 
         <!-- 政策页布局的面包屑导航区域 -->
+        <if condition="meta.showBreadcrumb">
         <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-before</w:hook>
         <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
         <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-after</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+        </if>
         
         <div class="weline-main-content">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
@@ -182,30 +185,17 @@ $meta = $this->getData('meta') ?? [];
                                 <section class="policy-section" weline-code="theme.policy.section_6">
                                     <h2 class="section-title"><?= $escape(WidgetI18n::label('五、退款政策')) ?></h2>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('5.1 在符合法律法规和本网站规定的情况下，您可以申请退款。')) ?>
+                                        <?= $escape(WidgetI18n::label('5.1 退货、换货条件与期限以「退换政策」为准；本段说明退款办理与到账。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('5.2 退款申请条件：')) ?>
+                                        <?= $escape(WidgetI18n::label('5.2 可申请退款的情形包括：符合退换或法定无理由条件且验收通过；质量问题、错发漏发；未收到或运输严重损坏；因缺货等取消订单；以及其他依法应退款的情形。')) ?>
                                     </p>
-                                    <ul class="policy-list">
-                                        <li><?= $escape(WidgetI18n::label('（1）商品存在质量问题或与描述不符；')) ?></li>
-                                        <li><?= $escape(WidgetI18n::label('（2）未收到商品或商品在运输过程中损坏；')) ?></li>
-                                        <li><?= $escape(WidgetI18n::label('（3）在规定的退货期限内提出申请；')) ?></li>
-                                        <li><?= $escape(WidgetI18n::label('（4）商品保持原状，未使用、未损坏；')) ?></li>
-                                        <li><?= $escape(WidgetI18n::label('（5）其他符合法律法规规定的情形。')) ?></li>
-                                    </ul>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('5.3 退款流程：您需要在订单管理页面提交退款申请，我们将在收到申请后7个工作日内完成审核。审核通过后，退款将在3-15个工作日内原路退回。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('5.4 以下情况不予退款：')) ?>
+                                        <?= $escape(WidgetI18n::label('5.4 在不减损法定权利的前提下，超过期限且无质量问题、已使用无法二次销售、定制/数字/明示不支持无理由的品类等，可能无法办理无理由退款。无理由期限内因尺码/颜色选错等个人原因退货，按退换政策办理。')) ?>
                                     </p>
-                                    <ul class="policy-list">
-                                        <li><?= $escape(WidgetI18n::label('（1）超过退货期限的商品；')) ?></li>
-                                        <li><?= $escape(WidgetI18n::label('（2）已使用、损坏或影响二次销售的商品；')) ?></li>
-                                        <li><?= $escape(WidgetI18n::label('（3）定制类商品或特殊商品；')) ?></li>
-                                        <li><?= $escape(WidgetI18n::label('（4）因用户原因导致的退款申请。')) ?></li>
-                                    </ul>
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_7">
@@ -253,10 +243,10 @@ $meta = $this->getData('meta') ?? [];
                                         <?= $escape(WidgetI18n::label('8.1 因本政策引起的或与本政策有关的任何争议，双方应友好协商解决。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('8.2 如协商不成，任何一方均可向本网站所在地有管辖权的人民法院提起诉讼。')) ?>
+                                        <?= $escape(WidgetI18n::label('8.2 如协商不成，任何一方均可向经营者住所地有管辖权的人民法院提起诉讼；法律法规另有规定的除外。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('8.3 本政策的解释权归本网站所有。')) ?>
+                                        <?= $escape(WidgetI18n::label('8.3 本政策的解释以有利于保护消费者合法权益且符合强制性法律的方式为准。')) ?>
                                     </p>
                                 </section>
                                 
@@ -269,7 +259,7 @@ $meta = $this->getData('meta') ?? [];
                                         <?= $escape(WidgetI18n::label('9.2 如本政策的任何条款被认定为无效或不可执行，不影响其他条款的效力。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('9.3 我们保留对本政策的最终解释权，并有权根据法律法规和业务发展需要对本政策进行修订。')) ?>
+                                        <?= $escape(WidgetI18n::label('9.3 我们有权根据法律法规和业务发展需要修订本政策；重大变更以本页更新为准。解释以有利于保护消费者合法权益且符合强制性法律的方式为准。')) ?>
                                     </p>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('9.4 如您对本政策有任何疑问，可通过本网站提供的联系方式与我们联系。')) ?>

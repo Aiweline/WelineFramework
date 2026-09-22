@@ -20,7 +20,12 @@ class Csrf extends Block
     }
     public function render(string $name = 'csrf'): string
     {
-        $token = Token::create($name,9,3600);
+        $token = Token::create($name, 9, 3600);
+        if ($token === '') {
+            // Guest storefront shell: omit Session CSRF so FPC can publish.
+            return '';
+        }
+
         return "<input type='hidden' name='$name' value='$token'/>";
     }
     public function __toString(): string

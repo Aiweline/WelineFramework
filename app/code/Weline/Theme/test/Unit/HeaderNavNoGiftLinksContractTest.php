@@ -75,7 +75,7 @@ final class HeaderNavNoGiftLinksContractTest extends TestCase
         self::assertStringContainsString("@url{'products'|['filter' => 'new']}", $src);
         self::assertStringContainsString("@url{'cart'}", $src);
         self::assertStringContainsString('@param logo_text {default=""', $src);
-        self::assertStringContainsString("__('全球配送，售后无忧')", $src);
+        self::assertStringContainsString("__('国际配送，售后有保障')", $src);
         self::assertStringNotContainsString("__('东方衣冠，全球配送')", $src);
         self::assertStringNotContainsString("@url{'search'|['q' => '明制汉服']}", $src);
         self::assertStringNotContainsString('href="#"', $src);

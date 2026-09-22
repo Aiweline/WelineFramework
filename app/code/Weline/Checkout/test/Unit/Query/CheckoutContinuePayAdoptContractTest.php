@@ -77,14 +77,104 @@ final class CheckoutContinuePayAdoptContractTest extends TestCase
         self::assertStringNotContainsString('可修改地址后再次支付', $template);
         self::assertStringNotContainsString('可修改地址后再次支付', $binding);
         self::assertStringContainsString('isShippingAddressComplete', $binding);
+        self::assertStringContainsString('enrichSnapshotAddressFromSession', $binding);
         self::assertStringContainsString('expand_address', $binding);
         self::assertStringContainsString('请补全收货信息后再支付。', $binding);
         self::assertStringContainsString('正在继续支付未完成订单。', $binding);
-        self::assertStringContainsString('resolvePaymentMethodChrome', $binding);
-        self::assertStringContainsString('payment_methods_html', $binding);
-        self::assertStringContainsString('payment_methods_html', $template);
+        self::assertStringContainsString('resolveOrderItemsChrome', $binding);
+        self::assertStringContainsString('items_html', $binding);
+        self::assertStringContainsString('items_html', $template);
+        self::assertStringContainsString('weline-checkout__item-title', $template);
         self::assertStringNotContainsString(
-            "+ '<span>' + method + '</span></label>'",
+            "return '<div class=\"weline-checkout__item\"><strong>'",
+            $template
+        );
+    }
+
+    public function testContinuePayDoesNotPolluteBrowseQuoteToken(): void
+    {
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/frontend/checkout/index.phtml'
+        );
+        $src = $this->providerSource();
+        self::assertStringContainsString('continuePayQuoteTokenStorageKey', $template);
+        self::assertStringContainsString('persistContinuePayQuoteToken', $template);
+        self::assertStringContainsString('getDataParams.continue_pay = true', $template);
+        self::assertStringContainsString("'continue_pay'", $src);
+        self::assertStringContainsString('$continuePayRequest', $src);
+        self::assertStringContainsString('continue_pay_order', $src);
+        self::assertStringContainsString('releaseContinuePayIsolation', $template);
+        self::assertStringContainsString('wipePollutedBrowseQuoteToken', $template);
+        self::assertStringContainsString('weline_checkout_cpay_isolate_v2_', $template);
+        // Traditional getData must ignore bound payment/shipping selection.
+        self::assertStringContainsString('硬隔离：传统 getData 忽略续付绑定的 payment/shipping', $src);
+        self::assertMatchesRegularExpression(
+            '/\$selectedPayment\s*=\s*\$continuePayRequest/s',
+            $src
+        );
+        self::assertMatchesRegularExpression(
+            '/\$selectedShipping\s*=\s*\$continuePayRequest/s',
+            $src
+        );
+        // adopt must not write recovery token into the normal browse slot.
+        self::assertMatchesRegularExpression(
+            '/adoptContinuePayFromRecovery[\s\S]*persistContinuePayQuoteToken\(state\.quote_token\)/',
+            $template
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/adoptContinuePayFromRecovery[\s\S]*persistQuoteToken\(state\.quote_token\)/',
+            $template
+        );
+    }
+
+    public function testContinuePayTotalsUseOrderMoneyAndAllowCouponAmend(): void
+    {
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/frontend/checkout/index.phtml'
+        );
+        $binding = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ContinuePayBindingService.php'
+        );
+        $amend = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ExpressUnpaidOrderAmend.php'
+        );
+        $provider = $this->providerSource();
+        self::assertStringContainsString('continuePayFrozenMoney', $template);
+        self::assertStringContainsString('applyContinuePayFrozenTotals', $template);
+        self::assertStringContainsString('amendContinuePayOrderMoney', $template);
+        self::assertStringContainsString('mergeContinuePayOrderTotals', $template);
+        self::assertStringContainsString('schema_fields_TAX_AMOUNT', $binding);
+        self::assertStringContainsString('schema_fields_DISCOUNT_AMOUNT', $binding);
+        self::assertStringContainsString("'tax_amount'", $binding);
+        self::assertStringContainsString("'discount_amount'", $binding);
+        self::assertStringContainsString("'coupon_code'", $binding);
+        // Shipping chrome must take order shipping_amount (not hard-coded 0).
+        self::assertMatchesRegularExpression(
+            '/resolveShippingMethodChrome\(\s*\(string\)\(\$orderSnapshot\[[\'"]shipping_method[\'"]\].*?\),\s*\(string\)\(\$orderSnapshot\[[\'"]currency[\'"]\].*?\),\s*\(float\)\(\$orderSnapshot\[[\'"]shipping_amount[\'"]\].*?\)\s*\)/s',
+            $binding
+        );
+        self::assertDoesNotMatchRegularExpression(
+            "/'amount'\\s*=>\\s*0\\.0,\\s*'fee'\\s*=>\\s*0\\.0,\\s*'source'\\s*=>\\s*'continue_pay_order'/",
+            $binding
+        );
+        // 续付=旧结账会话：券可写回未付订单。
+        self::assertStringContainsString('resolveMarketingSessionCouponCode', $amend);
+        self::assertStringContainsString('\\Weline\\Marketing\\Api\\Quote\\DiscountQuoteServiceInterface', $amend);
+        self::assertStringContainsString("array_key_exists('coupon_code', \$options)", $amend);
+        self::assertStringContainsString("array_key_exists('coupon_code', \$params)", $provider);
+        self::assertStringContainsString('await amendContinuePayOrderMoney({})', $template);
+        self::assertStringContainsString("source === 'continue-pay-amend'", $template);
+        self::assertStringContainsString('paintCheckoutCouponTag', $template);
+        self::assertStringContainsString('data-checkout-discount-label', $template);
+        self::assertStringContainsString('setDiscountRowLabel', $template);
+        // 小计/运费/优惠/应付同一 totals 块（券区在金额下方，账目不被打断）。
+        self::assertMatchesRegularExpression(
+            '/data-subtotal[\s\S]*data-shipping-amount[\s\S]*data-checkout-discount-row[\s\S]*data-grand-total[\s\S]*weline-checkout__extras/s',
+            $template
+        );
+        // 续付摘要禁止裸 browse preview 顶替订单 money（须经 amend）。
+        self::assertMatchesRegularExpression(
+            '/checkoutState\.cart\s*=\s*isContinuePayMode\(\)/',
             $template
         );
     }

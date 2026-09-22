@@ -515,12 +515,44 @@ class Core
             explode('/', $url),
             static fn(string $segment): bool => $segment !== ''
         ));
-        $localization = State::resolveLocalizationFromPathSegments($segments);
+        // Url::parser already removed rest_* area keys. Remaining "api" is the
+        // Weline_Api module router (same string as rest_frontend prefix) — do not
+        // strip it again or backend/frontend Auth routes 404.
+        $detectAreaPrefix = !$this->isAlreadyInRestApiArea();
+        $localization = State::resolveLocalizationFromPathSegments($segments, $detectAreaPrefix);
         $remaining = \is_array($localization['remaining'] ?? null)
             ? $localization['remaining']
             : $segments;
 
         return implode('/', $remaining);
+    }
+
+    private function isAlreadyInRestApiArea(): bool
+    {
+        if (isset($this->request_area)) {
+            $area = $this->request_area;
+            if (
+                $area === \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND
+                || $area === \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND
+            ) {
+                return true;
+            }
+        }
+        if (!isset($this->request)) {
+            return false;
+        }
+        try {
+            if (\method_exists($this->request, 'isApiBackend') && $this->request->isApiBackend()) {
+                return true;
+            }
+            if (\method_exists($this->request, 'isApiFrontend') && $this->request->isApiFrontend()) {
+                return true;
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
     
     /**

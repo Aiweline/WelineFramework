@@ -70,21 +70,41 @@ final class ExpressUnpaidOrderAmend
         $taxAmountMinor = (int) ($money['tax_amount_minor'] ?? round(((float) $order->getData(OrderModel::schema_fields_TAX_AMOUNT)) * 100));
         $discountAmountMinor = (int) ($money['discount_amount_minor'] ?? round(((float) $order->getData(OrderModel::schema_fields_DISCOUNT_AMOUNT)) * 100));
 
+        // 续付=旧结账会话回来：有未付订单仍可改券。
+        // - 显式 coupon_code='' → 清券
+        // - 显式/营销会话有码 → 按订单行重算
+        // - 都未传码 → 保留订单 money 已有券/折扣（禁止无码重算把已落库折扣冲成 0）
+        $couponExplicit = \array_key_exists('coupon_code', $options);
+        $couponCode = strtoupper(trim((string) ($options['coupon_code'] ?? '')));
+        if (!$couponExplicit) {
+            $couponCode = $this->resolveMarketingSessionCouponCode();
+            if ($couponCode === '') {
+                $couponCode = strtoupper(trim((string) ($money['coupon_code'] ?? '')));
+            }
+        }
+
         $scope = [
             'website_id' => (int) $order->getData(OrderModel::schema_fields_WEBSITE_ID),
             'store_id' => (int) $order->getData(OrderModel::schema_fields_STORE_ID),
             'channel_id' => (int) RequestContext::getWelineChannelId(),
         ];
         $taxAmountMinor = $this->quoteTaxMinor($items, $scope, $address, $currency, $taxAmountMinor);
-        $discountAmountMinor = $this->quoteDiscountMinor(
-            $items,
-            $scope,
-            $address,
-            $currency,
-            $shippingAmountMinor,
-            ($cid = (int) $order->getData(OrderModel::schema_fields_CUSTOMER_ID)) > 0 ? $cid : null,
-            $discountAmountMinor,
-        );
+        if ($couponExplicit && $couponCode === '') {
+            $discountAmountMinor = 0;
+            $couponCode = '';
+        } elseif ($couponCode !== '') {
+            $discountAmountMinor = $this->quoteDiscountMinor(
+                $items,
+                $scope,
+                $address,
+                $currency,
+                $shippingAmountMinor,
+                ($cid = (int) $order->getData(OrderModel::schema_fields_CUSTOMER_ID)) > 0 ? $cid : null,
+                $discountAmountMinor,
+                $couponCode,
+            );
+        }
+        // else: keep $discountAmountMinor already loaded from order money
 
         $grandTotalMinor = max(0, $subtotalMinor + $shippingAmountMinor + $taxAmountMinor - $discountAmountMinor);
         $toMajor = static fn (int $minor): float => round($minor / 100, 2);
@@ -101,6 +121,7 @@ final class ExpressUnpaidOrderAmend
             'tax_amount_minor' => $taxAmountMinor,
             'discount_amount_minor' => $discountAmountMinor,
             'grand_total_minor' => $grandTotalMinor,
+            'coupon_code' => $couponCode,
         ]);
 
         try {
@@ -140,6 +161,7 @@ final class ExpressUnpaidOrderAmend
                 'tax_amount' => $toMajor($taxAmountMinor),
                 'discount_amount' => $toMajor($discountAmountMinor),
                 'grand_total' => $toMajor($grandTotalMinor),
+                'coupon_code' => $couponCode,
                 'subtotal_minor' => $subtotalMinor,
                 'shipping_amount_minor' => $shippingAmountMinor,
                 'tax_amount_minor' => $taxAmountMinor,
@@ -147,6 +169,27 @@ final class ExpressUnpaidOrderAmend
                 'grand_total_minor' => $grandTotalMinor,
             ],
         ];
+    }
+
+    /**
+     * 续付改单时沿用营销结账会话已存券（旧 quote session 灌入）。
+     */
+    private function resolveMarketingSessionCouponCode(): string
+    {
+        try {
+            if (!class_exists(\Weline\Marketing\Service\MarketingCheckoutCouponSession::class)) {
+                return '';
+            }
+            /** @var \Weline\Marketing\Service\MarketingCheckoutCouponSession $session */
+            $session = ObjectManager::getInstance(\Weline\Marketing\Service\MarketingCheckoutCouponSession::class);
+            if (!is_object($session) || !method_exists($session, 'getCouponCode')) {
+                return '';
+            }
+
+            return strtoupper(trim((string) $session->getCouponCode('toc')));
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**
@@ -453,12 +496,13 @@ final class ExpressUnpaidOrderAmend
         int $shippingAmountMinor,
         ?int $customerId,
         int $fallback,
+        ?string $couponCode = null,
     ): int {
         try {
-            if (!interface_exists(\Weline\Marketing\Api\DiscountQuoteServiceInterface::class)) {
+            if (!interface_exists(\Weline\Marketing\Api\Quote\DiscountQuoteServiceInterface::class)) {
                 return $fallback;
             }
-            $svc = ObjectManager::getInstance(\Weline\Marketing\Api\DiscountQuoteServiceInterface::class);
+            $svc = ObjectManager::getInstance(\Weline\Marketing\Api\Quote\DiscountQuoteServiceInterface::class);
             if (!is_object($svc) || !method_exists($svc, 'quote')) {
                 return $fallback;
             }
@@ -466,6 +510,7 @@ final class ExpressUnpaidOrderAmend
                 return $fallback;
             }
             $lines = $this->linesForQuote($items);
+            $code = strtoupper(trim((string) ($couponCode ?? '')));
             $request = new \Weline\Marketing\Api\Quote\DiscountQuoteRequest(
                 scope: $scope,
                 address: $address,
@@ -475,7 +520,7 @@ final class ExpressUnpaidOrderAmend
                 currencyPrecision: 2,
                 customerId: $customerId,
                 shippingAmountMinor: $shippingAmountMinor,
-                couponCode: null,
+                couponCode: $code !== '' ? $code : null,
             );
             $quote = $svc->quote($request);
             if (is_object($quote) && method_exists($quote, 'toArray')) {
