@@ -167,9 +167,9 @@ final class CheckoutContinuePayAdoptContractTest extends TestCase
         self::assertStringContainsString('paintCheckoutCouponTag', $template);
         self::assertStringContainsString('data-checkout-discount-label', $template);
         self::assertStringContainsString('setDiscountRowLabel', $template);
-        // 小计/运费/优惠/应付同一 totals 块（券区在金额下方，账目不被打断）。
+        // 因果顺序：券区在小计之上；其后小计/运费/优惠/应付同一 totals 块连排。
         self::assertMatchesRegularExpression(
-            '/data-subtotal[\s\S]*data-shipping-amount[\s\S]*data-checkout-discount-row[\s\S]*data-grand-total[\s\S]*weline-checkout__extras/s',
+            '/weline-checkout__extras[\s\S]*data-subtotal[\s\S]*data-shipping-amount[\s\S]*data-checkout-discount-row[\s\S]*data-grand-total/s',
             $template
         );
         // 续付摘要禁止裸 browse preview 顶替订单 money（须经 amend）。
