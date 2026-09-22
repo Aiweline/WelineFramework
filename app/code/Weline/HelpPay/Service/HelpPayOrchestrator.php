@@ -393,32 +393,38 @@ final class HelpPayOrchestrator
         $description = $mode === 'quick_pay_self' ? (string) __('本人快捷购买') : (string) __('帮他人付款');
         $tags = $mode === 'quick_pay_self' ? ['helppay', 'quick_pay_self'] : ['helppay', 'help_pay'];
 
+        $createContext = [
+            'order_id' => $payableId,
+            'payable_type' => $payableType,
+            'payable_id' => $payableId,
+            'amount' => $amountMinor / 100.0,
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+            'currency_code' => $currency,
+            'subject' => $subject,
+            'description' => $description,
+            'shipping_locked' => true,
+            'billing_address' => $billing,
+            'idempotency_key' => $idempotency,
+            'business_tags' => $tags,
+            'country_code' => $countryCode,
+            'actor_type' => $actorType,
+            'actor_id' => $actorId,
+            'payer_type' => $actorType,
+            'payer_id' => $actorId,
+            'customer_id' => $customerId > 0 ? $customerId : null,
+            'metadata' => [
+                'helppay_token' => $token,
+                'mode' => $mode,
+            ],
+        ];
+        if ($method === 'fake_card') {
+            $createContext['dynamic_form_values'] = ['fake_result' => 'paid'];
+            $createContext['fake_result'] = 'paid';
+        }
+
         try {
-            $tx = $facade->tryCreatePayment($method, [
-                'order_id' => $payableId,
-                'payable_type' => $payableType,
-                'payable_id' => $payableId,
-                'amount' => $amountMinor / 100.0,
-                'amount_minor' => $amountMinor,
-                'currency' => $currency,
-                'currency_code' => $currency,
-                'subject' => $subject,
-                'description' => $description,
-                'shipping_locked' => true,
-                'billing_address' => $billing,
-                'idempotency_key' => $idempotency,
-                'business_tags' => $tags,
-                'country_code' => $countryCode,
-                'actor_type' => $actorType,
-                'actor_id' => $actorId,
-                'payer_type' => $actorType,
-                'payer_id' => $actorId,
-                'customer_id' => $customerId > 0 ? $customerId : null,
-                'metadata' => [
-                    'helppay_token' => $token,
-                    'mode' => $mode,
-                ],
-            ]);
+            $tx = $facade->tryCreatePayment($method, $createContext);
         } catch (\Throwable $e) {
             throw new \RuntimeException('helppay_payment_start_failed', 0, $e);
         }
@@ -431,17 +437,25 @@ final class HelpPayOrchestrator
         $status = strtolower(trim((string) $tx->status));
         $paidStatuses = ['paid', 'success', 'succeeded', 'completed', 'captured'];
         $paid = $redirect === '' && \in_array($status, $paidStatuses, true);
+        $transactionNo = trim((string) $tx->transactionNumber);
+        // Instant providers (fake_card) must land on Payment L1 so pixels/success UC can fire.
+        if ($paid && $transactionNo !== '') {
+            $redirect = '/payment/success?' . http_build_query([
+                'transaction_no' => $transactionNo,
+            ], '', '&', PHP_QUERY_RFC3986);
+        }
 
         return [
             'ok' => true,
             'success' => true,
             'token' => $token,
-            'transaction_no' => $tx->transactionNumber,
+            'transaction_no' => $transactionNo,
             'status' => $tx->status,
             'method_code' => $tx->methodCode,
             'redirect_url' => $redirect,
             'approve_url' => $redirect,
-            'requires_action' => $redirect !== '',
+            'success_url' => $paid ? $redirect : '',
+            'requires_action' => $redirect !== '' && !$paid,
             'paid' => $paid,
         ];
     }
@@ -517,6 +531,47 @@ final class HelpPayOrchestrator
         $country = trim((string) ($billing['country_code'] ?? $billing['country'] ?? ''));
 
         return $name !== '' && $phone !== '' && $line1 !== '' && $country !== '';
+    }
+
+    /**
+     * @param array<string,mixed> $ship
+     * @param array<string,mixed> $billing
+     * @return array<string,mixed>
+     */
+    private function billingFromShippingSnapshot(array $ship, array $billing): array
+    {
+        $merged = $billing;
+        $map = [
+            'name' => ['name', 'fullname_name', 'contact_name'],
+            'phone' => ['phone', 'telephone', 'mobile'],
+            'line1' => ['line1', 'address1', 'street', 'address'],
+            'line2' => ['line2', 'address2'],
+            'city' => ['city'],
+            'province' => ['province', 'state', 'region'],
+            'postal_code' => ['postal_code', 'postcode', 'zip'],
+            'country_code' => ['country_code', 'country'],
+            'country' => ['country', 'country_code'],
+        ];
+        foreach ($map as $target => $sources) {
+            if (trim((string) ($merged[$target] ?? '')) !== '') {
+                continue;
+            }
+            foreach ($sources as $source) {
+                $value = trim((string) ($ship[$source] ?? ''));
+                if ($value !== '') {
+                    $merged[$target] = $value;
+                    break;
+                }
+            }
+        }
+        if (trim((string) ($merged['name'] ?? '')) === '') {
+            $merged['name'] = (string) __('快捷购买买家');
+        }
+        if (trim((string) ($merged['phone'] ?? '')) === '') {
+            $merged['phone'] = '00000000000';
+        }
+
+        return $merged;
     }
 
     /**
