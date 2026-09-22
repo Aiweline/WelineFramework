@@ -212,7 +212,7 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         '热销产品',
         '最受欢迎的商品',
         '安全支付',
-        '无忧退款',
+        '退款有保障',
         '免费配送',
         '免运费',
         '全天候客服',
