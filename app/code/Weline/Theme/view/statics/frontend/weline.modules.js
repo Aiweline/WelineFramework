@@ -13,6 +13,14 @@ Object.assign(window.WelineModulesConfig.modules, {
         dependencies: [],
         async: true
     },
+    videoCarousel: {
+        paths: ["Weline_Theme::js/widgets/video-carousel.js"],
+        globalVar: "WelineVideoCarousel",
+        dependencies: [],
+        async: true,
+        description: "首页/店面视频轮播切换与关联商品 dialog"
+    },
+
     miniCartExtras: {
         paths: [
             "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"

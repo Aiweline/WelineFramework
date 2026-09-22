@@ -306,7 +306,7 @@ class Install extends AbstractConsole
                     $this->activateTheme($themeName);
                 } else {
                     $this->printing->note(__('提示：使用以下命令激活主题：'));
-                    $this->printing->printing("  php bin/w theme:activate {$themeName}\n");
+                    $this->printing->printing("  php bin/w theme:active {$themeName}\n");
                 }
             } else {
                 $this->printing->warning(__('主题安装可能未完成，请检查 register.php 文件'));

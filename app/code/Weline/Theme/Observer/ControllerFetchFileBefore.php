@@ -604,6 +604,9 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $existingMeta = [];
                 }
                 $existingMeta = $this->preserveAssignedTitleInMeta($existingMeta, $template, $request);
+                // WLS Template singleton can leak prior-request meta.content into the next
+                // layout. That suppresses homepage nested w:slot trees (homepage-hero etc.).
+                $existingMeta = $this->sanitizeRuntimeLayoutParams($existingMeta);
                 $layoutStaticMeta = array_merge($layoutMetaIdentity, $layoutParams);
                 // 关于主题的元数据传递给模板数据（performanceLoad 已在前面统一调用）
                 // 注意：必须使用 getMeta() 而不是 get()
@@ -1108,6 +1111,15 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
         try {
             $fallback = \Weline\Seo\Service\Head\SeoPageProfileBag::extractLayoutFallbackFromMeta($metaData);
+            // Layout @param defaults are Chinese sources; resolve like storefront chrome
+            // (WidgetI18n / TranslationResolver) so non-en locales do not leak source text.
+            foreach (['meta_title', 'meta_description', 'meta_keywords'] as $key) {
+                $raw = trim((string)($fallback[$key] ?? ''));
+                if ($raw === '') {
+                    continue;
+                }
+                $fallback[$key] = \Weline\Theme\Helper\WidgetI18n::label($raw);
+            }
             \Weline\Seo\Service\Head\SeoPageProfileBag::setLayoutFallback($fallback);
         } catch (\Throwable) {
             // SEO module optional at runtime; layout still renders without fallback bridge.

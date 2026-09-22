@@ -75,7 +75,9 @@ try {
     if ($isPreviewMode || (bool)($this->getData('editor_mode') ?? false)) {
         $products = ThemeDemoCatalog::products($limit, 10);
     } elseif (class_exists(StorefrontProductWidgetCatalog::class)) {
-        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards($limit);
+        // 首页三货架错开：热销走销量/热度池并与 Featured/Deals 互斥（WO-HP-P1-02）
+        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+            ->homepageHotCards($limit);
     }
 } catch (\Throwable) {
     $products = [];

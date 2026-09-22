@@ -43,12 +43,12 @@ if (!in_array($style, ['icon-text', 'icon-only', 'card'], true)) {
 }
 
 $presetConfig = [
-    'secure-payment' => ['icon' => 'credit-card', 'title' => '安全支付', 'description' => 'SSL加密保护'],
+    'secure-payment' => ['icon' => 'coin', 'title' => '安全支付', 'description' => 'SSL加密保护'],
     'money-back'     => ['icon' => 'shield', 'title' => '无忧退款', 'description' => '30天无理由退货'],
-    'free-shipping'  => ['icon' => 'truck', 'title' => '免费配送', 'description' => '满额包邮'],
+    'free-shipping'  => ['icon' => 'box', 'title' => '免费配送', 'description' => '满额包邮'],
     '24-7-support'   => ['icon' => 'message', 'title' => '全天候客服', 'description' => '7×24小时在线'],
     'ssl-secure'     => ['icon' => 'lock', 'title' => 'SSL安全', 'description' => '数据加密传输'],
-    'verified-seller'=> ['icon' => 'circle', 'title' => '认证商家', 'description' => '正品保证'],
+    'verified-seller'=> ['icon' => 'seal', 'title' => '认证商家', 'description' => '正品保证'],
 ];
 
 $allBadges = [];
@@ -116,10 +116,10 @@ unset($badge);
 <style>
 .<?= $wc ?> {
     width: 100%;
-    padding: var(--weline-space-6) 0;
-    color: var(--weline-theme-text);
-    background: var(--weline-theme-surface);
-    border-block: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    padding: var(--weline-space-5) 0;
+    color: var(--color-text, var(--weline-theme-text));
+    background: var(--color-bg-canvas, var(--weline-theme-canvas, var(--weline-theme-surface)));
+    border-block: var(--weline-theme-border-width, 1px) solid var(--color-border-default, var(--weline-theme-border));
     box-sizing: border-box;
 }
 
@@ -132,17 +132,19 @@ unset($badge);
 }
 
 .<?= $wc ?> .badges-heading {
+    font-family: var(--weline-font-display, var(--font-family-serif, serif));
     font-size: var(--weline-font-size-lg);
-    font-weight: 600;
+    font-weight: var(--font-weight-normal, 400);
+    letter-spacing: 0.08em;
     margin: 0 0 var(--weline-space-5);
     text-align: center;
-    color: var(--weline-theme-text);
+    color: var(--color-text, var(--weline-theme-text));
 }
 
 .<?= $wc ?> .badges-grid {
     display: grid;
-    gap: clamp(var(--weline-space-4), 3vw, var(--weline-space-6));
-    align-items: center;
+    gap: 0;
+    align-items: stretch;
 }
 
 .<?= $wc ?> .badges-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
@@ -157,12 +159,14 @@ unset($badge);
 .<?= $wc ?>.style-icon-only .badge-icon {
     width: var(--spacing-15);
     height: var(--spacing-15);
-    background: var(--weline-theme-surface-muted);
-    border-radius: 50%;
+    background: var(--color-bg-primary, var(--weline-theme-surface));
+    border: var(--weline-theme-border-width, 1px) solid var(--color-primary, var(--weline-theme-primary));
+    border-radius: var(--weline-radius-sm, 4px);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--weline-theme-primary);
+    color: var(--color-primary, var(--weline-theme-primary));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 28%, transparent);
 }
 
 .<?= $wc ?>.style-icon-text .badge-item {
@@ -171,26 +175,32 @@ unset($badge);
     justify-content: center;
     gap: var(--weline-space-3);
     min-height: var(--size-control-50);
-    padding: var(--weline-space-2) var(--weline-space-3);
-    border-radius: var(--weline-radius-lg);
+    padding: var(--weline-space-3) var(--weline-space-4);
+    border-radius: 0;
+    border-inline-end: var(--weline-theme-border-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border));
     transition: background-color var(--weline-theme-transition-base);
 }
 
+.<?= $wc ?>.style-icon-text .badge-item:last-child {
+    border-inline-end: none;
+}
+
 .<?= $wc ?>.style-icon-text .badge-item:hover {
-    background: var(--weline-theme-surface-muted);
+    background: var(--color-bg-secondary, var(--weline-theme-surface-muted));
 }
 
 .<?= $wc ?>.style-icon-text .badge-icon {
     width: var(--size-control-50);
     height: var(--size-control-50);
-    background: color-mix(in srgb, var(--weline-theme-primary) 14%, transparent);
-    border-radius: 50%;
+    background: var(--color-bg-primary, var(--weline-theme-surface));
+    border: var(--weline-theme-border-width, 1px) solid var(--color-primary, var(--weline-theme-primary));
+    border-radius: var(--weline-radius-sm, 4px);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: var(--weline-theme-primary);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary) 18%, transparent);
+    color: var(--color-primary, var(--weline-theme-primary));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 35%, transparent);
 }
 
 .<?= $wc ?>.style-icon-text .badge-content {
@@ -199,49 +209,57 @@ unset($badge);
 
 .<?= $wc ?>.style-icon-text .badge-title {
     margin: 0;
+    font-family: var(--weline-font-display, var(--font-family-serif, serif));
     font-size: var(--weline-font-size-sm);
-    font-weight: 600;
+    font-weight: var(--font-weight-normal, 400);
+    letter-spacing: 0.06em;
     line-height: 1.4;
-    color: var(--weline-theme-text);
+    color: var(--color-text, var(--weline-theme-text));
 }
 
 .<?= $wc ?>.style-card .badge-item {
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-xl);
+    background: var(--color-bg-primary, var(--weline-theme-surface-raised, var(--weline-theme-surface)));
+    border-radius: var(--weline-radius-sm, 4px);
     padding: var(--weline-space-6);
     text-align: center;
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    box-shadow: var(--weline-theme-shadow-sm);
-    transition: all var(--weline-theme-transition-base);
+    border: var(--weline-theme-border-width, 1px) solid var(--color-border-default, var(--weline-theme-border));
+    box-shadow: none;
+    transition: border-color var(--weline-theme-transition-base), background-color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>.style-card .badge-item:hover {
-    box-shadow: var(--weline-theme-shadow-md);
-    transform: translateY(var(--spacing-neg-1_5));
+    border-color: var(--color-primary, var(--weline-theme-primary));
+    background: var(--color-primary-bg-subtle, var(--weline-theme-primary-surface, var(--weline-theme-surface-muted)));
+    box-shadow: none;
+    transform: none;
 }
 
 .<?= $wc ?>.style-card .badge-icon {
     width: var(--layout-header-height);
     height: var(--layout-header-height);
-    background: var(--weline-theme-primary-surface);
-    border-radius: 50%;
+    background: var(--color-bg-primary, var(--weline-theme-surface));
+    border: var(--weline-theme-border-width, 1px) solid var(--color-primary, var(--weline-theme-primary));
+    border-radius: var(--weline-radius-sm, 4px);
     display: flex;
     align-items: center;
     justify-content: center;
     margin: 0 auto var(--weline-space-4);
-    color: var(--weline-theme-primary);
+    color: var(--color-primary, var(--weline-theme-primary));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 35%, transparent);
 }
 
 .<?= $wc ?>.style-card .badge-title {
     margin: 0 0 var(--weline-space-2);
+    font-family: var(--weline-font-display, var(--font-family-serif, serif));
     font-size: var(--weline-font-size-base);
-    font-weight: 600;
+    font-weight: var(--font-weight-normal, 400);
+    letter-spacing: 0.06em;
 }
 
 .<?= $wc ?>.style-card .badge-description {
     margin: 0;
     font-size: var(--weline-font-size-sm);
-    color: var(--weline-theme-text-muted);
+    color: var(--color-text-secondary, var(--weline-theme-text-muted));
 }
 
 .widget-preview-canvas .<?= $wc ?>,
@@ -252,11 +270,20 @@ unset($badge);
 @media (max-width: 768px) {
     .<?= $wc ?> .badges-grid {
         grid-template-columns: repeat(2, 1fr) !important;
-        gap: var(--weline-space-4);
+        gap: 0;
     }
 
     .<?= $wc ?>.style-icon-text .badge-item {
         justify-content: flex-start;
+        border-block-end: var(--weline-theme-border-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border));
+    }
+
+    .<?= $wc ?>.style-icon-text .badge-item:nth-child(2n) {
+        border-inline-end: none;
+    }
+
+    .<?= $wc ?>.style-icon-text .badge-item:nth-last-child(-n+2) {
+        border-block-end: none;
     }
 }
 
@@ -267,6 +294,15 @@ unset($badge);
 
     .<?= $wc ?> .badges-grid {
         grid-template-columns: 1fr !important;
+    }
+
+    .<?= $wc ?>.style-icon-text .badge-item {
+        border-inline-end: none;
+        border-block-end: var(--weline-theme-border-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border));
+    }
+
+    .<?= $wc ?>.style-icon-text .badge-item:last-child {
+        border-block-end: none;
     }
 }
 </style>

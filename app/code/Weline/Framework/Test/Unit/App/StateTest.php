@@ -346,6 +346,31 @@ class StateTest extends TestCore
         );
     }
 
+    public function testResolveLocalizationCanSkipAreaPrefixForRestModuleRouter(): void
+    {
+        $restFrontend = (string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api');
+        self::assertSame(
+            [
+                'currency' => '',
+                'language' => '',
+                'area_offset' => 0,
+                'consumed' => 0,
+                'remaining' => [$restFrontend, 'rest', 'v1', 'backend', 'auth', 'login'],
+                'canonical' => [$restFrontend, 'rest', 'v1', 'backend', 'auth', 'login'],
+            ],
+            State::resolveLocalizationFromPathSegments(
+                [$restFrontend, 'rest', 'v1', 'backend', 'auth', 'login'],
+                false
+            )
+        );
+        $withArea = State::resolveLocalizationFromPathSegments(
+            [$restFrontend, 'rest', 'v1', 'backend', 'auth', 'login'],
+            true
+        );
+        self::assertSame(1, (int)$withArea['area_offset']);
+        self::assertSame(['rest', 'v1', 'backend', 'auth', 'login'], $withArea['remaining']);
+    }
+
     public function testResolveLocalizationSupportsSingleAndEitherDoublePrefixOrder(): void
     {
         $hadContext = Context::getCurrent() !== null;

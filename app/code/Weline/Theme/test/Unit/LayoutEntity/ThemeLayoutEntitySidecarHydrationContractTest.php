@@ -24,6 +24,11 @@ final class ThemeLayoutEntitySidecarHydrationContractTest extends TestCase
         );
         self::assertStringContainsString('hydratePageNodeFromStructure', $src);
         self::assertStringContainsString('needsStructureHydration', $src);
+        self::assertStringContainsString('hydrateTypedLayoutValues', $src);
+        self::assertStringContainsString('LayoutValueHydrationRegistry', $src);
+        // Comment documents why: without typed hydrate, hero keeps file-image JSON
+        // but renders gradient-only (missing image_file_html companions).
+        self::assertStringContainsString('image_file_html', $src);
     }
 
     public function testSlotFillerRunsRequiredOverlayOnShellAfterSplice(): void

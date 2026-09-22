@@ -10,7 +10,7 @@ use Weline\Theme\Service\TextileHeritageLabels;
 
 final class TextileHeritageWidgetContractTest extends TestCase
 {
-    public function testThemeOwnsReusableWidgetAndHomepageDefaultInjection(): void
+    public function testThemeOwnsReusableWidgetWithoutHomepageDefaultInjection(): void
     {
         $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
         $widget = $widgets['textile-heritage'] ?? [];
@@ -18,11 +18,8 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertSame('textile-heritage', $widget['code'] ?? null);
         self::assertSame('Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml', $widget['template'] ?? null);
         self::assertSame(['homepage', 'cms_page'], $widget['page_layouts'] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('default', $injection['layout_option'] ?? null);
-        self::assertSame('homepage-brands', $injection['slot'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
+        self::assertSame('manual', $widget['placement'] ?? null);
+        self::assertArrayNotHasKey('default_injections', $widget);
     }
 
     public function testCatalogMapsExactlySixRealRasterAssetsWithProvenance(): void
@@ -77,28 +74,58 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertStringContainsString('text-overflow: ellipsis', $css);
         self::assertStringContainsString('TextileHeritageLabels::articleTitle', $template);
         self::assertStringContainsString('-webkit-line-clamp: 3', $css);
-        self::assertStringContainsString('<w:widget type="content" name="textile-heritage"', $homepage);
+        self::assertStringNotContainsString('<w:widget type="content" name="textile-heritage"', $homepage);
         self::assertStringContainsString('id="homepage-brands"', $homepage);
-        self::assertStringContainsString('Theme textile-heritage default_injections', $homepage);
+        self::assertStringContainsString('<w:widget type="content" name="brand-logos"', $homepage);
+        self::assertStringContainsString('Weline_Theme::frontend::layouts::homepage::brands', $homepage);
     }
 
-    public function testHomepageSurfacesTextileHeritageImmediatelyAfterHero(): void
+    public function testHomepageFollowsEcommerceShelfRhythmBeforeBrandsAndSocialProof(): void
     {
         $homepage = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/theme/frontend/layouts/homepage/default.phtml'
         );
 
         $heroPosition = strpos($homepage, 'id="homepage-hero"');
-        $heritagePosition = strpos($homepage, 'id="homepage-brands"');
+        $categoriesPosition = strpos($homepage, 'id="homepage-categories"');
         $featuredPosition = strpos($homepage, 'id="homepage-featured"');
+        $dealsPosition = strpos($homepage, 'id="homepage-deals"');
+        $promoPosition = strpos($homepage, 'id="homepage-promo"');
+        $newArrivalsPosition = strpos($homepage, 'id="homepage-new-arrivals"');
+        $bestsellersPosition = strpos($homepage, 'id="homepage-bestsellers"');
+        $brandsPosition = strpos($homepage, 'id="homepage-brands"');
+        $testimonialsPosition = strpos($homepage, 'id="homepage-testimonials"');
+        $reviewsPosition = strpos($homepage, 'id="homepage-reviews"');
+        $videosPosition = strpos($homepage, 'id="homepage-videos"');
 
         self::assertIsInt($heroPosition);
-        self::assertIsInt($heritagePosition);
+        self::assertIsInt($categoriesPosition);
         self::assertIsInt($featuredPosition);
+        self::assertIsInt($dealsPosition);
+        self::assertIsInt($promoPosition);
+        self::assertIsInt($newArrivalsPosition);
+        self::assertIsInt($bestsellersPosition);
+        self::assertIsInt($brandsPosition);
+        self::assertIsInt($testimonialsPosition);
+        self::assertIsInt($reviewsPosition);
+        self::assertIsInt($videosPosition);
         self::assertTrue(
-            $heroPosition < $heritagePosition && $heritagePosition < $featuredPosition,
-            '织艺谱系应紧跟首页 Hero 出现，不应被商品列表埋到页尾。'
+            $heroPosition < $categoriesPosition
+            && $categoriesPosition < $featuredPosition
+            && $featuredPosition < $dealsPosition
+            && $dealsPosition < $promoPosition
+            && $promoPosition < $newArrivalsPosition
+            && $newArrivalsPosition < $bestsellersPosition
+            && $bestsellersPosition < $brandsPosition,
+            '电商节奏：Hero → 品类 → 精选 → 特价 → 促销 → 新品 → 畅销 → 品牌；品牌不得插在货架之前。'
         );
+        self::assertTrue(
+            $brandsPosition < $testimonialsPosition
+            && $testimonialsPosition < $reviewsPosition
+            && $reviewsPosition < $videosPosition,
+            '品牌之后：买家秀图墙 → 买家评价 → YouTube 视频栏。'
+        );
+        self::assertStringContainsString('<w:widget type="product" name="deals-of-day"', $homepage);
     }
 
     public function testBlogSlugComesFromArticlePathNotCaption(): void

@@ -1,142 +1,143 @@
-﻿"官方平台应用商店，提供模块仓库、版本管理、许可证服务、开发者中心，供子站 AppStore 调用","官方平台应用商店，提供模块仓库、版本管理、许可证服务、开发者中心，供子站 AppStore 调用"
-API配置,API配置
-"mdi mdi-cog","mdi mdi-cog"
-"平台应用商店 API 配置说明","平台应用商店 API 配置说明"
-查看API配置,查看API配置
+官方平台应用商店，提供模块仓库、版本管理、许可证服务、开发者中心，供子站 AppStore 调用,"Official platform app store providing module repository, version management, license services, and developer center for child-site AppStore calls"
+API配置,API Configuration
+mdi mdi-cog,mdi mdi-cog
+平台应用商店 API 配置说明,Platform app store API config guide
+查看API配置,View API settings
 settings,settings
-"查看平台 API 配置说明","查看平台 API 配置说明"
-模块分类,模块分类
-"mdi mdi-folder-multiple","mdi mdi-folder-multiple"
-平台模块分类管理,平台模块分类管理
-查看分类,查看分类
+查看平台 API 配置说明,View platform API config guide
+模块分类,Module Classification
+mdi mdi-folder-multiple,mdi mdi-folder-multiple
+平台模块分类管理,Platform module category mgmt
+查看分类,View categories.
 list,list
-查看模块分类列表,查看模块分类列表
-订单管理,订单管理
-"mdi mdi-receipt","mdi mdi-receipt"
-平台订单管理,平台订单管理
-查看订单,查看订单
-查看平台订单列表,查看平台订单列表
-收益管理,收益管理
-"mdi mdi-cash-multiple","mdi mdi-cash-multiple"
-平台收益概览,平台收益概览
-查看收益,查看收益
-查看平台收益概览,查看平台收益概览
-开发者中心,开发者中心
-"mdi mdi-account-cog","mdi mdi-account-cog"
-平台开发者管理,平台开发者管理
-查看开发者,查看开发者
-查看平台开发者列表,查看平台开发者列表
-许可证管理,许可证管理
-"mdi mdi-key-variant","mdi mdi-key-variant"
-平台许可证管理,平台许可证管理
-查看许可证,查看许可证
-查看平台许可证列表,查看平台许可证列表
-模块管理,模块管理
-新建模块,新建模块
-模块草稿已创建。,模块草稿已创建。
-"mdi mdi-puzzle","mdi mdi-puzzle"
-平台应用商店模块管理,平台应用商店模块管理
-查看模块,查看模块
-查看平台模块列表,查看平台模块列表
-编辑模块,编辑模块
+查看模块分类列表,View module category list
+订单管理,Order Management
+mdi mdi-receipt,mdi mdi-receipt
+平台订单管理,Platform order management
+查看订单,View Orders
+查看平台订单列表,View platform order list
+收益管理,Revenue management
+mdi mdi-cash-multiple,mdi mdi-cash-multiple
+平台收益概览,Platform earnings overview
+查看收益,View earnings
+查看平台收益概览,View platform earnings overview
+开发者中心,Developer Center
+mdi mdi-account-cog,mdi mdi-account-cog
+平台开发者管理,Platform developer mgmt
+查看开发者,View developers
+查看平台开发者列表,View platform developer list
+许可证管理,License Management
+mdi mdi-key-variant,mdi mdi-key-variant
+平台许可证管理,Platform license mgmt
+查看许可证,View license
+查看平台许可证列表,View platform license list
+模块管理,Module Management
+新建模块,New module
+模块草稿已创建。,Module draft created.
+mdi mdi-puzzle,mdi mdi-puzzle
+平台应用商店模块管理,Platform app-store module mgmt
+查看模块,View module
+查看平台模块列表,View platform module list
+编辑模块,Edit module
 edit,edit
-新建或编辑平台模块草稿,新建或编辑平台模块草稿
-保存模块,保存模块
+新建或编辑平台模块草稿,Create or edit platform module draft
+保存模块,Save module
 save,save
-保存平台模块草稿,保存平台模块草稿
-缺少许可证密钥,缺少许可证密钥
-许可证激活成功,许可证激活成功
-激活失败：%{1},激活失败：%{1}
-许可证有效,许可证有效
-验证失败：%{1},验证失败：%{1}
-许可证不存在,许可证不存在
-获取成功,获取成功
-检查失败：%{1},检查失败：%{1}
-缺少客户ID,缺少客户ID
-获取列表失败：%{1},获取列表失败：%{1}
-续订成功,续订成功
-续订失败：%{1},续订失败：%{1}
-获取模块列表失败：%{1},获取模块列表失败：%{1}
-缺少模块ID或模块名,缺少模块ID或模块名
-模块不存在,模块不存在
-获取模块详情失败：%{1},获取模块详情失败：%{1}
-获取分类列表失败：%{1},获取分类列表失败：%{1}
-参数格式错误,参数格式错误
-检查完成,检查完成
-检查更新失败：%{1},检查更新失败：%{1}
-缺少模块ID,缺少模块ID
-许可证与模块不匹配,许可证与模块不匹配
-版本不存在,版本不存在
-模块文件不存在,模块文件不存在
-获取下载链接成功,获取下载链接成功
-下载失败：%{1},下载失败：%{1}
-"共 %{1} 条订单。","共 %{1} 条订单。"
-暂无订单。,暂无订单。
-订单号,订单号
-模块ID,模块ID
-金额,金额
-状态,状态
-"共 %{1} 位开发者。","共 %{1} 位开发者。"
-暂无开发者。,暂无开发者。
-名称,名称
-模块数,模块数
-"共 %{1} 条许可证。","共 %{1} 条许可证。"
-暂无许可证。,暂无许可证。
-"许可证 Key","许可证 Key"
-域名,域名
-"共 %{1} 条分类。","共 %{1} 条分类。"
-暂无分类。,暂无分类。
-排序,排序
-启用,启用
-是,是
-否,否
-"共 %{1} 个模块","共 %{1} 个模块"
-关键词,关键词
-"搜索模块名 / 显示名","搜索模块名 / 显示名"
-全部状态,全部状态
-草稿,草稿
-已发布,已发布
-已归档,已归档
-定价,定价
-全部定价,全部定价
-免费,免费
-一次性,一次性
-订阅,订阅
-筛选,筛选
-清空,清空
-暂无平台模块,暂无平台模块
-模块,模块
-版本,版本
-下载,下载
-创建草稿后可在列表中继续完善版本与定价。,创建草稿后可在列表中继续完善版本与定价。
-返回列表,返回列表
-模块名,模块名
-"例如 Weline_Demo","例如 Weline_Demo"
-"须为 Vendor_Module 格式。","须为 Vendor_Module 格式。"
-显示名称,显示名称
-用户可见标题,用户可见标题
-简介,简介
-可选,可选
-保存草稿,保存草稿
-取消,取消
-"子站 AppStore 调用的平台 API 入口说明。","子站 AppStore 调用的平台 API 入口说明。"
-"API 前缀","API 前缀"
-方法,方法
-路径,路径
-说明,说明
-按开发者汇总余额与累计收益。,按开发者汇总余额与累计收益。
-余额合计,余额合计
-累计收益,累计收益
-暂无收益数据。,暂无收益数据。
-开发者,开发者
-余额,余额
-许可证已被撤销,许可证已被撤销
-许可证已绑定到其他域名：,许可证已绑定到其他域名：
-许可证已过期,许可证已过期
-许可证尚未激活,许可证尚未激活
-域名不匹配，许可证绑定域名：,域名不匹配，许可证绑定域名：
-"平台应用仓库 · %{1} 个模块","平台应用仓库 · %{1} 个模块"
-"管理平台应用仓库中的模块发布状态与定价。共 %{1} 条。","管理平台应用仓库中的模块发布状态与定价。共 %{1} 条。"
-"模块名 / 显示名","模块名 / 显示名"
-仓库尚无模块记录。发布模块后将在此列出。,仓库尚无模块记录。发布模块后将在此列出。
-"""官方平台应用商店，提供模块仓库、版本管理、许可证服务、开发者中心，供子站 AppStore 调用""","官方平台应用商店，提供模块仓库、版本管理、许可证服务、开发者中心，供子站 AppStore 调用"
+保存平台模块草稿,Save platform module draft
+缺少许可证密钥,Missing license key
+许可证激活成功,License activated successfully
+激活失败：%{1},Activation failed: %{1}
+许可证有效,License valid.
+验证失败：%{1},Verification failed: %{1}
+许可证不存在,License not found.
+获取成功,Success
+检查失败：%{1},Check failed: %{1}
+缺少客户ID,Missing customer ID.
+获取列表失败：%{1},Failed to retrieve the list: %{1}
+续订成功,Renewal successful.
+续订失败：%{1},Subscription failed: %{1}
+获取模块列表失败：%{1},Failed to retrieve module list: %{1}
+缺少模块ID或模块名,Missing module ID or module name.
+模块不存在,Module does not exist
+获取模块详情失败：%{1},Failed to retrieve module details: %{1}
+获取分类列表失败：%{1},Failed to retrieve the category list: %{1}
+参数格式错误,Parameter format error.
+检查完成,Inspection complete.
+检查更新失败：%{1},Update check failed: %{1}
+缺少模块ID,Missing module ID.
+许可证与模块不匹配,The license does not match the module.
+版本不存在,Version does not exist.
+模块文件不存在,Module file does not exist
+获取下载链接成功,Download link obtained successfully.
+下载失败：%{1},Download failed: %{1}
+共 %{1} 条订单。,%{1} orders total.
+暂无订单。,No orders yet.
+订单号,Order number
+模块ID,Module ID
+金额,Amount
+状态,Status
+共 %{1} 位开发者。,%{1} developers total.
+暂无开发者。,No developers yet.
+名称,Name
+模块数,Module count
+共 %{1} 条许可证。,%{1} licenses total.
+暂无许可证。,No licenses yet.
+许可证 Key,License Key
+域名,Domain
+共 %{1} 条分类。,%{1} categories total.
+暂无分类。,No categories yet.
+排序,Sort
+启用,Enable
+是,Yes
+否,No
+共 %{1} 个模块,%{1} modules total
+关键词,Keywords
+搜索模块名 / 显示名,Search module name / display name
+全部状态,All Statuses
+草稿,Draft
+已发布,Published
+已归档,Archived
+定价,Pricing
+全部定价,Price all
+免费,Free
+一次性,One-time
+订阅,Subscription
+筛选,Filter
+清空,Clear all
+暂无平台模块,No platform modules
+模块,Module
+版本,Version
+下载,Download
+创建草稿后可在列表中继续完善版本与定价。,"After creating draft, continue refining version and pricing in the list."
+返回列表,Back to list
+模块名,Module name
+例如 Weline_Demo,e.g. Weline_Demo
+须为 Vendor_Module 格式。,Must be Vendor_Module format.
+显示名称,Display name
+用户可见标题,User-visible title
+简介,Intro
+可选,Optional
+保存草稿,Save draft.
+取消,Cancel
+子站 AppStore 调用的平台 API 入口说明。,Platform API entry docs called by child-site AppStore.
+API 前缀,API prefix
+方法,Method
+路径,Path
+说明,Description
+按开发者汇总余额与累计收益。,Summarize balance and earnings by developer.
+余额合计,Balance total
+累计收益,Cumulative earnings
+暂无收益数据。,No earnings data yet.
+开发者,Developers
+余额,Balance
+许可证已被撤销,The license has been revoked.
+许可证已绑定到其他域名：,The license is already bound to another domain.
+许可证已过期,License expired.
+许可证尚未激活,The license has not been activated.
+域名不匹配，许可证绑定域名：,Domain mismatch. License bound to domain:
+平台应用仓库 · %{1} 个模块,Platform app warehouse · %{1} modules
+管理平台应用仓库中的模块发布状态与定价。共 %{1} 条。,Manage module publish status and pricing in platform app warehouse. %{1} items total.
+模块名 / 显示名,Module name / display name
+仓库尚无模块记录。发布模块后将在此列出。,No module records for warehouse yet. Published modules will list here.
+"""官方平台应用商店，提供模块仓库、版本管理、许可证服务、开发者中心，供子站 AppStore 调用""","Official platform app store providing module repository, version management, license services, and developer center for child-site AppStore calls"
+平台应用商店,Platform App Store

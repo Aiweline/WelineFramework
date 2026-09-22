@@ -971,8 +971,15 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
             ));
             if ($release instanceof ThemeScopeRelease) {
+                // LAYOUT: sparse near-scope Releases must not wipe far-scope slots
+                // (e.g. Website chrome publish dropping Global homepage-hero).
+                // Compose parent_release_id chain with slot-near-priority.
+                $payload = $context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+                    ? $this->composeLayoutPayloadBySlotNearPriority($release)
+                    : $release->payload();
+
                 return [
-                    'payload' => $release->payload(),
+                    'payload' => $payload,
                     'release_id' => $release->getId(),
                     'source_scope' => (string)$release->getData(ThemeScopeRelease::schema_fields_SCOPE),
                     'release' => $release,
@@ -992,8 +999,12 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
                 ));
                 if ($release instanceof ThemeScopeRelease) {
+                    $payload = $context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+                        ? $this->composeLayoutPayloadBySlotNearPriority($release)
+                        : $release->payload();
+
                     return [
-                        'payload' => $release->payload(),
+                        'payload' => $payload,
                         'release_id' => $release->getId(),
                         'source_scope' => (string)$release->getData(ThemeScopeRelease::schema_fields_SCOPE),
                         'release' => $release,
@@ -1989,12 +2000,90 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         return $release->getId() > 0 ? $release : null;
     }
 
+    /**
+     * Slot-near-priority compose across parent_release_id chain (leaf → root).
+     *
+     * Sparse Website/Store Releases that only publish chrome must not erase
+     * Global homepage-* slots. First claimer of a slot_id (nearest Scope) wins
+     * for every node in that slot; unclaimed slots keep flowing from ancestors.
+     * A slot that only carries an explicit empty-placement marker still claims
+     * ownership so parents cannot refill it.
+     *
+     * @return array<string,mixed>
+     */
+    private function composeLayoutPayloadBySlotNearPriority(ThemeScopeRelease $leaf): array
+    {
+        $chain = [];
+        $cursor = $leaf;
+        $visited = [];
+        while ($cursor instanceof ThemeScopeRelease) {
+            $releaseId = $cursor->getId();
+            if ($releaseId <= 0 || isset($visited[$releaseId])) {
+                break;
+            }
+            $visited[$releaseId] = true;
+            $chain[] = $cursor;
+            $parentId = $this->nullablePositiveInt(
+                $cursor->getData(ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID),
+            );
+            $cursor = $parentId !== null ? $this->loadRelease($parentId) : null;
+        }
+
+        if ($chain === []) {
+            return $leaf->payload();
+        }
+
+        $claimedSlots = [];
+        $mergedNodes = [];
+        $basePayload = $leaf->payload();
+        $leafId = $leaf->getId();
+        foreach ($chain as $release) {
+            $payload = $release->payload();
+            $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : [];
+            $slotsInRelease = [];
+            foreach ($nodes as $uid => $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                $slotId = \trim((string)($node['slot_id'] ?? ''));
+                if ($slotId === '') {
+                    continue;
+                }
+                $slotsInRelease[$slotId] = true;
+            }
+            foreach ($slotsInRelease as $slotId => $_true) {
+                if (isset($claimedSlots[$slotId])) {
+                    continue;
+                }
+                $claimedSlots[$slotId] = true;
+                foreach ($nodes as $uid => $node) {
+                    if (!\is_array($node)) {
+                        continue;
+                    }
+                    if (\trim((string)($node['slot_id'] ?? '')) !== $slotId) {
+                        continue;
+                    }
+                    $mergedNodes[(string)$uid] = $node;
+                }
+            }
+            if ($release->getId() === $leafId) {
+                $basePayload = $payload;
+            }
+        }
+
+        $basePayload['nodes'] = $mergedNodes;
+
+        return $basePayload;
+    }
+
     /** @return array<string,mixed> */
     private function payloadForReleaseOrRootBase(?int $releaseId, ThemeEditorContext $context): array
     {
         $release = $releaseId !== null ? $this->loadRelease($releaseId) : null;
         if ($release instanceof ThemeScopeRelease) {
-            return $release->payload();
+            return $context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+                ? $this->composeLayoutPayloadBySlotNearPriority($release)
+                : $release->payload();
         }
         $root = $context;
         $cursor = $context->scope->identity;

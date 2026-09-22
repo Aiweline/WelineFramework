@@ -17,4 +17,14 @@ final class ThemeVideoEmbedCspContractTest extends TestCase
         self::assertContains('https://player.vimeo.com', $directives['frame-src'] ?? []);
         self::assertContains('https://i.ytimg.com', $directives['img-src'] ?? []);
     }
+
+    public function testContributionDeclaresBilibiliHosts(): void
+    {
+        $directives = (new ThemeVideoEmbedCsp())->contribution()->directives;
+        self::assertContains('https://player.bilibili.com', $directives['frame-src'] ?? []);
+        self::assertContains('https://player.bilibili.com', $directives['connect-src'] ?? []);
+        self::assertContains('https://i0.hdslb.com', $directives['img-src'] ?? []);
+        self::assertContains('https://i1.hdslb.com', $directives['img-src'] ?? []);
+        self::assertContains('https://i2.hdslb.com', $directives['img-src'] ?? []);
+    }
 }

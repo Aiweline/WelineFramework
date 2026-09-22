@@ -926,6 +926,16 @@ final class FrontendQueryGateway
             return (string)$value;
         }
 
+        // WQB1 保留 JS number：boolean 声明也接受 0/1（避免 Invalid param type 循环）。
+        if (($type === 'bool' || $type === 'boolean') && (\is_int($value) || \is_float($value))) {
+            if ((float)$value === 1.0) {
+                return true;
+            }
+            if ((float)$value === 0.0) {
+                return false;
+            }
+        }
+
         if (!\is_string($value)) {
             return $value;
         }

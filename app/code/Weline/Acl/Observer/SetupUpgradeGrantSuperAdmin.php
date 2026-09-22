@@ -12,22 +12,22 @@ declare(strict_types=1);
 namespace Weline\Acl\Observer;
 
 use Weline\Acl\Model\Acl;
+use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
 /**
- * 系统升级完成后，为超级管理员（role_id=1）授予当前 ACL 表中的全部权限。
+ * 系统升级完成后：确保超级管理员角色行存在，并授予当前 ACL 表中的全部权限。
  *
- * 场景：setup:upgrade 会清空并重新收集 ACL 表，但不会自动为 role_id 1 写入 role_access，
- * 导致“用户没有分配角色”或“没有任何权限”等提示。本观察者在 upgrade_after 时
- * 将当前所有 source_id 授权给 role_id 1，仅做增量插入（已存在的 role_id+source_id 不重复插入）。
+ * 场景：setup:upgrade 会清空并重新收集 ACL 表，但不会自动为 role_id 1 写入 role_access；
+ * 若超管角色行被异常删除，本观察者也会按固定 ID 补回。
+ * 授权仅做增量插入（已存在的 role_id+source_id 不重复插入）。
  */
 class SetupUpgradeGrantSuperAdmin implements ObserverInterface
 {
-    private const SUPER_ADMIN_ROLE_ID = 1;
+    private const SUPER_ADMIN_ROLE_ID = Role::ID_SUPER_ADMIN;
 
     public function __construct(
         private Acl $acl,
@@ -49,6 +49,10 @@ class SetupUpgradeGrantSuperAdmin implements ObserverInterface
         }
 
         try {
+            if (Role::ensureSuperAdminRoleExists()) {
+                $this->printing->success(__('已自愈补回超级管理员角色（role_id=%{1}）。', [self::SUPER_ADMIN_ROLE_ID]));
+            }
+
             $allSourceIds = $this->acl->reset()
                 ->fields(Acl::schema_fields_SOURCE_ID)
                 ->select()

@@ -76,4 +76,48 @@ final class TsvGzReader
 
         return $postal;
     }
+
+    /**
+     * Lookup candidates: exact norm first; letter postals may add GeoNames-prefix fallbacks.
+     * Pure numeric codes never fall back (CN/US/… catalogs store full codes).
+     *
+     * GB: SW1A1AA → SW1A (+ SW1 area when sector letter present)
+     * CA: M5V2T6 → M5V (FSA)
+     * IE/MT-style: A65F4E2 → A65 (routing-key / prefix)
+     *
+     * @return list<string>
+     */
+    public static function postalLookupNorms(string $postal): array
+    {
+        $norm = self::normalizePostal($postal);
+        if ($norm === '') {
+            return [];
+        }
+
+        $candidates = [$norm];
+        if (!preg_match('/[A-Z]/', $norm)) {
+            return $candidates;
+        }
+
+        // UK unit postcode → outward (+ district without sector letter).
+        if (preg_match('/^([A-Z]{1,2}\d[A-Z\d]?)(\d[A-Z]{2})$/', $norm, $m) === 1) {
+            $outward = $m[1];
+            $candidates[] = $outward;
+            if (preg_match('/^([A-Z]{1,2}\d+)/', $outward, $area) === 1 && $area[1] !== $outward) {
+                $candidates[] = $area[1];
+            }
+        }
+
+        // Canada FSA (first 3 of ANA NAN).
+        if (preg_match('/^([A-Z]\d[A-Z])\d[A-Z]\d$/', $norm, $m) === 1) {
+            $candidates[] = $m[1];
+        }
+
+        // Ireland / Malta style 3-char prefix + 4-char local (GeoNames reduced dumps).
+        if (preg_match('/^([A-Z]\d{2})[A-Z0-9]{4}$/', $norm, $m) === 1) {
+            $candidates[] = $m[1];
+        }
+
+        return array_values(array_unique($candidates));
+    }
 }

@@ -2,7 +2,7 @@
 /**
  * @widget.code {image-gallery}
  * @widget.name {图片相册}
- * @widget.description {真实图片相册，支持说明、链接与响应式列数}
+ * @widget.description {真实图片相册，支持说明、链接与响应式列数；looks 变体为买家秀 UGC 图墙}
  * @widget.type {content}
  * @widget.area {frontend}
  * @widget.position {["content","sidebar","footer"]}
@@ -11,10 +11,12 @@
  * @param title {default="图片相册",type="string",label="标题"}
  * @param subtitle {default="",type="textarea",label="副标题"}
  * @param columns {default="3",type="select",label="每行列数",options={1:"1列",2:"2列",3:"3列",4:"4列"}}
+ * @param variant {default="gallery",type="select",label="展示形态",options={gallery:"相册",looks:"买家秀图墙"}}
  * @param items {default=[],type="site_gallery_items",label="展示项目"}
  */
 
 use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Theme\Helper\WidgetUiScope;
 use Weline\Theme\Helper\WidgetI18n;
 
@@ -24,35 +26,98 @@ $t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::
 $title = Block::text($this->getData('title') ?? '图片相册');
 $subtitle = Block::text($this->getData('subtitle'));
 $columns = Block::choice($this->getData('columns'), ['1','2','3','4'], '3');
+$variant = Block::choice($this->getData('variant'), ['gallery', 'looks'], 'gallery');
 $items = Block::items($this->getData('items'));
+$isLooks = $variant === 'looks';
+$usingLooksPlaceholders = false;
+
+$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
+$isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
+$translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
+    $translated = trim((string)WidgetI18n::label($source));
+    if ($translated !== '' && $translated !== $source) {
+        return $translated;
+    }
+
+    return $isChineseLocale ? $source : $english;
+};
+
+if ($isLooks) {
+    if ($title === '' || $title === '图片相册') {
+        $title = '买家秀';
+    }
+    if ($subtitle === '') {
+        $subtitle = '晒出你的汉服穿搭';
+    }
+}
+
+// 买家秀空配置：6 格占位图墙（无星级、无证言短评，禁止回退成评价三卡）
+if ($items === [] && $isLooks) {
+    $usingLooksPlaceholders = true;
+    $placeholder = StorefrontImagePlaceholder::url();
+    $lookScenes = [
+        ['title' => '礼宴试穿', 'title_en' => 'Formal try-on'],
+        ['title' => '日常通勤', 'title_en' => 'Everyday commute'],
+        ['title' => '旅拍街景', 'title_en' => 'Travel street look'],
+        ['title' => '节日聚会', 'title_en' => 'Festival gathering'],
+        ['title' => '校园问候', 'title_en' => 'Campus greeting'],
+        ['title' => '雅集留影', 'title_en' => 'Gathering snapshot'],
+    ];
+    foreach ($lookScenes as $scene) {
+        $items[] = [
+            'image' => $placeholder,
+            'title' => $translateDefaultCopy($scene['title'], $scene['title_en']),
+            'text' => '',
+            'link' => '',
+        ];
+    }
+}
 ?>
 
 <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
-<section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block<?= $isLooks ? ' is-looks' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-site-block="image-gallery"
+         data-variant="<?= $esc($variant) ?>">
     <?php if ($title !== '' || $subtitle !== ''): ?>
         <header class="sb-header">
             <?php if ($title !== ''): ?><h2 class="sb-title"><?= $t($title) ?></h2><?php endif; ?>
             <?php if ($subtitle !== ''): ?><p class="sb-lead"><?= $t($subtitle) ?></p><?php endif; ?>
         </header>
     <?php endif; ?>
-    <div class="sb-grid columns-<?= $esc($columns) ?>">
+    <div class="sb-grid columns-<?= $esc($columns) ?><?= $isLooks ? ' sb-looks-wall' : '' ?>">
         <?php foreach ($items as $index => $item):
             $image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($item['image'] ?? '');
             $mediaHtml = Block::mediaHtml($item['image_file_html'] ?? '', $item['title'] ?? '');
             $url = Block::link($item['link'] ?? '');
+            $itemText = Block::text($item['text'] ?? '');
+            $itemTitle = Block::text($item['title'] ?? '');
         ?>
-            <article class="w-card sb-card">
+            <article class="w-card sb-card<?= $isLooks ? ' sb-looks-tile' : '' ?>">
                 <?php if ($mediaHtml !== '' || $image !== ''): ?>
                     <div class="sb-media">
-                        <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($item['title'] ?? '') ?>" loading="lazy" decoding="async"><?php endif; ?>
+                        <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($itemTitle) ?>" loading="lazy" decoding="async" width="400" height="533"><?php endif; ?>
                     </div>
                 <?php endif; ?>
-                <div class="sb-body">
-                    <?php if (!empty($item['text'])): ?><p class="sb-copy"><?= $t($item['text']) ?></p><?php endif; ?>
-                    <?php if ($url !== ''): ?><a class="sb-link" href="<?= $esc($url) ?>"><?= $t(Block::text($item['link_label'] ?? '') ?: '了解更多') ?></a><?php endif; ?>
-                </div>
+                <?php if ($itemText !== '' || $url !== '' || ($isLooks && $itemTitle !== '')): ?>
+                    <div class="sb-body">
+                        <?php if ($isLooks && $itemTitle !== '' && $itemText === ''): ?>
+                            <p class="sb-copy sb-muted"><?= $t($itemTitle) ?></p>
+                        <?php elseif ($itemText !== ''): ?>
+                            <p class="sb-copy"><?= $t($itemText) ?></p>
+                        <?php endif; ?>
+                        <?php if ($url !== ''): ?><a class="sb-link" href="<?= $esc($url) ?>"><?= $t(Block::text($item['link_label'] ?? '') ?: '了解更多') ?></a><?php endif; ?>
+                    </div>
+                <?php endif; ?>
             </article>
         <?php endforeach; ?>
     </div>
-    <?php if ($items === []): ?><p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p><?php endif; ?>
+    <?php if ($items === [] && !$isLooks): ?>
+        <p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p>
+    <?php elseif ($usingLooksPlaceholders): ?>
+        <p class="sb-empty sb-looks-cta"><lang>晒出你的汉服穿搭</lang></p>
+    <?php endif; ?>
 </section>

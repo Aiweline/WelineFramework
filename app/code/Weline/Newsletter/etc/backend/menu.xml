@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Newsletter::subscriber"
+          name="newsletter_subscriber"
+          title="邮件订阅名单"
+          action="newsletter/backend/subscriber/index"
+          parent="Weline_Backend::marketing_group"
+          icon="mdi-email-newsletter"
+          order="80"/>
+    <menu source="Weline_Newsletter::campaign_config"
+          name="newsletter_campaign_config"
+          title="邮件订阅有奖配置"
+          action="newsletter/backend/campaign/config"
+          parent="Weline_Backend::marketing_group"
+          icon="mdi-gift-outline"
+          order="81"/>
+</menus>

@@ -15,9 +15,9 @@
  * @widget.exclusive {true}
  * @widget.supports {["layout-account-auth-content","account-auth-content","account-auth","auth-form","account-login","login"]}
  *
- * @param background_image {default="",type="media_image",label="背景图",description="全宽舞台背景；留空则使用色块渐变"}
- * @param background_color {default="#1b2430",type="color",label="背景主色"}
- * @param accent_color {default="#e08a2a",type="color",label="背景点缀色",description="无背景图时与主色组成渐变"}
+ * @param background_image {default="",type="media_image",label="背景图",description="全宽舞台背景；留空则用水墨山水默认舞台"}
+ * @param background_color {default="#1f2124",type="color",label="背景主色"}
+ * @param accent_color {default="#b84a3c",type="color",label="背景点缀色",description="无背景图时与主色组成水墨渐隐"}
  * @param overlay_opacity {default="0.35",type="select",label="背景遮罩",options={0:"无遮罩",0.2:"20%",0.35:"35%",0.5:"50%",0.65:"65%"}}
  * @param promo_eyebrow {default="Weline Account",type="string",label="舞台眉题"}
  * @param promo_title {default="欢迎回来",type="string",label="舞台标题"}
@@ -40,14 +40,17 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
 
 $backgroundImage = LegacyMediaUrl::sanitize($this->getData('background_image') ?? '', true);
 $backgroundImageFileHtml = (string)($this->getData('background_image_file_html') ?? '');
-$backgroundColor = ThemeUiColor::sanitize(
-    $this->getData('background_color') ?? '',
-    '#1b2430'
-);
-$accentColor = ThemeUiColor::sanitize(
-    $this->getData('accent_color') ?? '',
-    '#e08a2a'
-);
+// 旧亚马逊舞台色 → 水墨玄墨/朱砂（古风商城默认）
+$rawBackgroundColor = trim((string)($this->getData('background_color') ?? ''));
+$rawAccentColor = trim((string)($this->getData('accent_color') ?? ''));
+if ($rawBackgroundColor === '' || strcasecmp($rawBackgroundColor, '#1b2430') === 0) {
+    $rawBackgroundColor = '#1f2124';
+}
+if ($rawAccentColor === '' || strcasecmp($rawAccentColor, '#e08a2a') === 0) {
+    $rawAccentColor = '#b84a3c';
+}
+$backgroundColor = ThemeUiColor::sanitize($rawBackgroundColor, '#1f2124');
+$accentColor = ThemeUiColor::sanitize($rawAccentColor, '#b84a3c');
 $overlayOpacity = (float)($this->getData('overlay_opacity') ?? 0.35);
 if ($overlayOpacity < 0) {
     $overlayOpacity = 0.0;

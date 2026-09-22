@@ -39,3 +39,5 @@ Theme、标量字段、布局选择和稳定 `node_uid` 路径分别记录本级
 frontend 预览不得直接加载携带草稿参数的业务 URL。编辑器先向预览启动 API 提交 typed context，取得短期不透明 Token，再导航 iframe；Scope 快速切换时只允许最后一次启动响应更新 iframe。backend area 可保留受后台会话保护的直接预览。
 
 迁移先运行 `php bin/w theme:scope:migrate preflight`，确认 Scope 碰撞、重复 `node_uid` 与歧义节点，再运行 `php bin/w theme:scope:migrate apply`。命令可幂等重跑；无法确定归属的旧 Scope 只记录兼容告警，不猜测覆盖，不删除旧表。回退代码时旧表仍可作为兼容投影读取，新表和 Release 不要求在当前版本清理。
+
+> **实现现状（2026-09-22 纠偏）**：上述 `theme:scope:migrate` CLI **当前未挂载**（`Console/Theme/Scope/` 为空；`php bin/w theme:scope:migrate` → No matching command）。未实现前：**禁止**自写 SQL 猜删 scope 表；迁移只走 Editor 规范 Scope 写入 + 发布路径。操作摘要以 `dev/ai-command/ai/主题开发.md`「Scope 迁移 CLI 现状」为准。

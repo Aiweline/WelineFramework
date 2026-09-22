@@ -39,6 +39,12 @@ final class CheckoutExpressPaymentWidgetContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-express-payment.phtml'
         );
         self::assertStringContainsString('data-testid="checkout-express-payment"', $template);
+        self::assertStringContainsString('data-widget-code="checkout-express-payment"', $template);
+        self::assertStringContainsString("document.querySelector('[data-payment-express]')", $template);
+        self::assertStringNotContainsString(
+            '[data-payment-express][data-testid="checkout-express-payment"]',
+            $template,
+        );
         self::assertStringContainsString('data-testid="checkout-express-', $template);
         self::assertStringContainsString('PaymentExpressFacadeInterface', $template);
         self::assertStringContainsString('listExpressMethods', $template);

@@ -34,7 +34,9 @@ final class ThemeShellLayoutDefaultWidgetsContractTest extends TestCase
     {
         $home = $this->layout('homepage/default.phtml');
         self::assertStringContainsString('layouts::homepage::trust', $home);
-        self::assertStringContainsString('<w:widget type="content" name="trust-badges" />', $home);
+        // trust-badges 默认只在 footer-above；homepage-trust 不内嵌，避免与页脚双渲
+        self::assertStringNotContainsString('<w:widget type="content" name="trust-badges" />', $home);
+        self::assertStringNotContainsString('layouts::homepage::trust<else/>', $home);
 
         $minimal = $this->layout('homepage/minimal.phtml');
         self::assertStringContainsString('<w:widget type="banner" name="hero-slider" />', $minimal);

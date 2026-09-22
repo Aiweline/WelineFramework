@@ -437,13 +437,6 @@ class PageSeoContextResolver
         return '';
     }
 
-    private function normalizeDescription(mixed $description): string
-    {
-        $text = trim(html_entity_decode(strip_tags((string) $description), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        $text = preg_replace('/\s+/u', ' ', $text) ?: $text;
-        return mb_substr($text, 0, 300);
-    }
-
     /**
      * @param array<string, mixed> $meta
      */
@@ -518,7 +511,44 @@ class PageSeoContextResolver
             $text = trim((string) $value);
         }
 
-        return $text === '' ? '' : (string) __($text);
+        if ($text === '') {
+            return '';
+        }
+
+        // Prefer storefront-locale TranslationResolver (via WidgetI18n) over __(),
+        // which can stay on website-default en_US and leave Chinese sources untranslated.
+        if (class_exists(\Weline\Theme\Helper\WidgetI18n::class)) {
+            try {
+                return \Weline\Theme\Helper\WidgetI18n::label($text);
+            } catch (\Throwable) {
+            }
+        }
+
+        return (string) __($text);
+    }
+
+    private function normalizeDescription(mixed $description): string
+    {
+        $text = trim(html_entity_decode(strip_tags((string) $description), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $text = preg_replace('/\s+/u', ' ', $text) ?: $text;
+        $text = mb_substr($text, 0, 300);
+        if ($text === '') {
+            return '';
+        }
+        // Layout fallback / template defaults are Chinese sources; translate like meta text.
+        if (class_exists(\Weline\Theme\Helper\WidgetI18n::class)
+            && preg_match('/[\x{4E00}-\x{9FFF}]/u', $text) === 1
+        ) {
+            try {
+                $translated = trim(\Weline\Theme\Helper\WidgetI18n::label($text));
+                if ($translated !== '') {
+                    $text = mb_substr($translated, 0, 300);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return $text;
     }
 
     private function combineTitleAndLayoutName(string $title, string $layoutName): string

@@ -185,10 +185,17 @@ foreach ($slides as $slideIndex => $slide) {
         continue;
     }
     $mediaHtml = trim((string)($slide['image_file_html'] ?? ''));
-    if ($mediaHtml === '') {
-        continue;
+    if ($mediaHtml !== '') {
+        $slides[$slideIndex]['image_file_html'] = $ensureHeroMediaDimensions($mediaHtml);
     }
-    $slides[$slideIndex]['image_file_html'] = $ensureHeroMediaDimensions($mediaHtml);
+    // 运营配置 slides 常烘焙中文源串；渲染时按当前 locale 解析（与默认汉服幻灯同路径）
+    foreach (['kicker', 'title', 'subtitle', 'button_text', 'alt'] as $copyKey) {
+        $rawCopy = trim((string)($slides[$slideIndex][$copyKey] ?? ''));
+        if ($rawCopy === '') {
+            continue;
+        }
+        $slides[$slideIndex][$copyKey] = $translateDefaultCopy($rawCopy, $rawCopy);
+    }
 }
 
 if (empty($slides)) {
@@ -398,6 +405,16 @@ if (empty($slides)) {
     width: 100%;
     height: auto;
     line-height: 0;
+    z-index: 1;
+}
+
+.<?= $wc ?> .slide-media figure {
+    margin: 0;
+}
+
+/* file-image 出图带 figcaption；Hero 文案已在 slide-text，避免图下再露一行英文 */
+.<?= $wc ?> .slide-media figcaption {
+    display: none;
 }
 
 .<?= $wc ?> .slide-media :is(picture, img) {
@@ -429,6 +446,7 @@ if (empty($slides)) {
 .<?= $wc ?> .slide-overlay {
     position: absolute;
     inset: 0;
+    z-index: 2;
     pointer-events: none;
     background: linear-gradient(
         to right,
@@ -449,14 +467,20 @@ if (empty($slides)) {
     );
 }
 
-/* 内容：全幅电影感，无厚卡片 */
+/* 内容：叠在 slide-media 之上（勿 relative 流式跟在图后，否则下半截只剩渐变红底） */
 .<?= $wc ?> .slide-content {
-    position: relative;
+    position: absolute;
+    inset: 0;
     z-index: 3;
-    height: 100%;
     display: flex;
     align-items: center;
     padding: 0 clamp(var(--weline-space-5), 8vw, 10%);
+    pointer-events: none;
+}
+
+.<?= $wc ?> .slide-content .slide-text,
+.<?= $wc ?> .slide-content .slide-button {
+    pointer-events: auto;
 }
 
 .<?= $wc ?> .slide-text {

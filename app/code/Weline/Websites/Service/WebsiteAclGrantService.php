@@ -136,13 +136,17 @@ final class WebsiteAclGrantService
     /**
      * 非默认站：裁剪角色 ACL 行；空包 → 空数组。
      * 默认站：原样返回。
-     * role_id=1 在非默认站：有效权限 = 授权包内全部已启用资源行（站能力硬顶）。
+     * role_id=1（超管）：无站点级区分，原样返回（不走站授权包硬顶）。
      *
      * @param list<array<string, mixed>> $entries
      * @return list<array<string, mixed>>
      */
     public function filterRoleAclEntries(array $entries, int $roleId, ?int $websiteId = null): array
     {
+        if ($roleId === 1) {
+            return $entries;
+        }
+
         $websiteId = $this->resolveWebsiteId($websiteId);
         if ($websiteId === Website::ID_DEFAULT) {
             return $entries;
@@ -153,10 +157,6 @@ final class WebsiteAclGrantService
             return [];
         }
         $grantSet = \array_fill_keys($granted, true);
-
-        if ($roleId === 1) {
-            return $this->loadAclRowsBySourceIds($granted);
-        }
 
         $filtered = [];
         foreach ($entries as $row) {
@@ -208,24 +208,5 @@ final class WebsiteAclGrantService
         }
 
         return $this->currentWebsiteId();
-    }
-
-    /**
-     * @param list<string> $sourceIds
-     * @return list<array<string, mixed>>
-     */
-    private function loadAclRowsBySourceIds(array $sourceIds): array
-    {
-        if ($sourceIds === []) {
-            return [];
-        }
-        /** @var Acl $acl */
-        $acl = ObjectManager::getInstance(Acl::class, [], false);
-
-        return $acl->reset()
-            ->where(Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-            ->where(Acl::schema_fields_IS_ENABLE, 1)
-            ->select()
-            ->fetchArray();
     }
 }

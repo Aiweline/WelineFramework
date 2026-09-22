@@ -192,6 +192,11 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         if (!$id) {
             $this->redirect(404);
         }
+        if ((int)$id === \Weline\Acl\Model\Role::ID_SUPER_ADMIN) {
+            $this->getMessageManager()->addError(__('不能删除超级管理员！'));
+            $this->redirect('*/backend/acl/role');
+            return;
+        }
         $role = $this->role->load($id);
         if (!$role->getId()) {
             $this->getMessageManager()->addWarning(__('角色已不存在！'));

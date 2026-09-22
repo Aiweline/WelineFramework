@@ -219,8 +219,8 @@
         key="payment/method/paypal/sandbox_client_secret"
         label="沙箱 Client Secret"
         description="当前 Scope 的 Sandbox Secret。留空则使用平台沙箱凭据。"
-        type="password"
-        value-type="string"
+        type="secret"
+        value-type="encrypted"
         default=""
         scope="global,website,store"
         validation="max:255" />
@@ -241,8 +241,8 @@
         key="payment/method/paypal/live_client_secret"
         label="正式 Client Secret"
         description="PayPal Developer Dashboard 中 Live REST App 的 Secret。"
-        type="password"
-        value-type="string"
+        type="secret"
+        value-type="encrypted"
         default=""
         scope="global,website,store"
         validation="max:255" />

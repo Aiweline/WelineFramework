@@ -22,6 +22,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[\Weline\Framework\Database\Schema\Attribute\Index(name: 'uk_website_role_name', columns: ['website_id', 'role_name'], type: 'UNIQUE', comment: '站内角色名唯一')]
 class Role extends Model implements RoleIdentityInterface
 {
+    /** 平台固定超管角色；不可删除；缺失时由 setup:upgrade 自愈补回 */
+    public const ID_SUPER_ADMIN = 1;
+
 #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '角色ID')]
     public const schema_fields_ID = 'role_id';
 #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '角色ID')]
@@ -71,10 +74,32 @@ class Role extends Model implements RoleIdentityInterface
 
     function delete_before()
     {
-        if ($this->getId() === 1) {
+        if ($this->getId() === self::ID_SUPER_ADMIN) {
             throw new Exception(__('不能删除超级管理员！'));
         }
         parent::delete_before();
+    }
+
+    /**
+     * 确保固定超管角色行存在（Install / setup:upgrade 自愈）。
+     * @return bool true=本轮新建，false=已存在
+     */
+    public static function ensureSuperAdminRoleExists(): bool
+    {
+        /** @var self $role */
+        $role = ObjectManager::getInstance(self::class, [], false);
+        $role->load(self::ID_SUPER_ADMIN);
+        if ((int)$role->getId() === self::ID_SUPER_ADMIN) {
+            return false;
+        }
+        $role->clearData()
+            ->setId(self::ID_SUPER_ADMIN)
+            ->setRoleName('超级管理员')
+            ->setRoleDescription('拥有所有权限的超管角色')
+            ->setWebsiteId(0)
+            ->save(true);
+
+        return true;
     }
 
     /**

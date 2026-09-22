@@ -114,6 +114,8 @@ final class IconRegistry
         'book' => '<path d="M4 4h6a4 4 0 0 1 4 4v12H8a4 4 0 0 0-4 2zM20 4h-6v16h2a4 4 0 0 1 4 2z"/>',
         'archive' => '<path d="M4 8h16v13H4zM3 3h18v5H3zM9 12h6"/>',
         'cash' => '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M7 9h.01M17 15h.01"/>',
+        'coin' => '<circle cx="12" cy="12" r="9"/><rect x="9.2" y="9.2" width="5.6" height="5.6" rx="0.4"/>',
+        'seal' => '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 9h8M8 12h8M8 15h5"/>',
         'beaker' => '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M8 15h8"/>',
         'sort' => '<path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/>',
         'fullscreen' => '<path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/>',

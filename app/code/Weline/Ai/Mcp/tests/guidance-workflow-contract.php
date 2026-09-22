@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use LearningMcp\GuidanceWorkflowCatalog;
 use LearningMcp\HardConstraintsCatalog;
+use LearningMcp\McpSkillCatalog;
 use LearningMcp\ToolService;
 
 require dirname(__DIR__) . '/src/bootstrap.php';
@@ -74,6 +75,42 @@ $activeTeamIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('工程团队 
 $teamSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM] ?? null)
     ? $surfaces[GuidanceWorkflowCatalog::SURFACE_ENGINEERING_TEAM]
     : [];
+$apiSdkSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_API_SDK_DEVELOPMENT] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_API_SDK_DEVELOPMENT]
+    : [];
+$widgetDevSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_WIDGET_DEVELOPMENT] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_WIDGET_DEVELOPMENT]
+    : [];
+$themeDevSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_THEME_DEVELOPMENT] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_THEME_DEVELOPMENT]
+    : [];
+$paymentDevSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_PAYMENT_DEVELOPMENT] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_PAYMENT_DEVELOPMENT]
+    : [];
+$ecommerceAdvisorSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_ECOMMERCE_ADVISOR] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_ECOMMERCE_ADVISOR]
+    : [];
+$performanceCheckSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_PERFORMANCE_CHECK] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_PERFORMANCE_CHECK]
+    : [];
+$promptOptimizationSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION]
+    : [];
+$translationEngineerSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER]
+    : [];
+$visitorAnalyticsSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS]
+    : [];
+$activeWidgetIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('部件开发工程师 default_injections placement');
+$activeThemeIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('主题开发工程师 Theme Token 预览三态 app/design');
+$activePaymentIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('支付开发工程师 万能支付 退款 Provider');
+$activeEcommerceAdvisorIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('电商顾问 结账合规 站店渠');
+$activePerformanceCheckIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('性能检查工程师 HotCache N+1 慢请求');
+$activePromptOptimizationIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('提示词优化工程师 技能压缩 seat_skill_mirrors');
+$activeTranslationEngineerIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('翻译工程师 漏译 i18n:collect');
+$activeVisitorAnalyticsIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('数据分析 像素事件 WelinePixel Visitor');
+$engineeringTeamBundle = McpSkillCatalog::policy()['engineering_team_bundle'] ?? [];
 
 $hasSectionIdentityNorm = false;
 foreach ($norms as $norm) {
@@ -161,6 +198,14 @@ $checks = [
             && ($rule['id'] ?? '') === 'ui_skill_requires_theme_skill'
             && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')
             && str_contains((string) ($rule['summary'] ?? ''), 'Forbid inventing')),
+        false,
+    ),
+    'hard_constraints include backend_admin_ui_requires_frontend_theme_skills' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'backend_admin_ui_requires_frontend_theme_skills'
+            && str_contains((string) ($rule['summary'] ?? ''), 'w-backend-page')
+            && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')),
         false,
     ),
     'hard_constraints include css_or_theme_requires_ui_prototype_theme_skills' => array_reduce(
@@ -327,6 +372,27 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'REAL business-pathway')
             && str_contains((string) ($rule['summary'] ?? ''), 'order_uuid')
             && str_contains((string) ($rule['summary'] ?? ''), 'shell-only')),
+        false,
+    ),
+    'hard_constraints include tester_tests_must_be_real' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'tester_tests_must_be_real'
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST be real')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'fake fixtures')
+                || str_contains((string) ($rule['summary'] ?? ''), 'invent'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'PASS')),
+        false,
+    ),
+    'hard_constraints include browser_strip_automation_flags' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'browser_strip_automation_flags'
+            && str_contains((string) ($rule['summary'] ?? ''), 'navigator.webdriver')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'AutomationControlled')
+                || str_contains((string) ($rule['summary'] ?? ''), 'enable-automation'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'reCAPTCHA')
+                || str_contains((string) ($rule['summary'] ?? ''), 'captcha'))),
         false,
     ),
     'hard_constraints include e2e_playwright_headless_default' => array_reduce(
@@ -583,7 +649,45 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'acceptance-ui.md')
             && str_contains((string) ($rule['summary'] ?? ''), 'FRAMEWORK FIRST')
             && str_contains((string) ($rule['summary'] ?? ''), '扩展点')
-            && str_contains((string) ($rule['summary'] ?? ''), 'component-negotiate.md')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'component-negotiate.md')
+            && str_contains((string) ($rule['summary'] ?? ''), 'SEAT_SKILL_MIRRORS')),
+        false,
+    ),
+    'hard_constraints include findings_wake_pm' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'findings_wake_pm'
+            && str_contains((string) ($rule['summary'] ?? ''), '项目经理')
+            && str_contains((string) ($rule['summary'] ?? ''), 'escalate')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'Issue') || str_contains((string) ($rule['summary'] ?? ''), 'task list'))),
+        false,
+    ),
+    'hard_constraints include requirement_session_dashboard' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_session_dashboard'
+            && str_contains((string) ($rule['summary'] ?? ''), 'session/')
+            && str_contains((string) ($rule['summary'] ?? ''), '项目经理')
+            && (str_contains((string) ($rule['summary'] ?? ''), '未完成') || str_contains((string) ($rule['summary'] ?? ''), 'gaps'))),
+        false,
+    ),
+    'hard_constraints include pm_plan_lifecycle' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'pm_plan_lifecycle'
+            && str_contains((string) ($rule['summary'] ?? ''), 'notify_pm')
+            && str_contains((string) ($rule['summary'] ?? ''), 'DoD')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'plan_id') || str_contains((string) ($rule['summary'] ?? ''), 'SESSION'))),
+        false,
+    ),
+    'hard_constraints include ui_prototype_gate_before_test' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'ui_prototype_gate_before_test'
+            && str_contains((string) ($rule['summary'] ?? ''), 'acceptance-ui.md')
+            && str_contains((string) ($rule['summary'] ?? ''), 'resume')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'Tester') || str_contains((string) ($rule['summary'] ?? ''), '测试'))
+            && str_contains((string) ($rule['summary'] ?? ''), '汇审')),
         false,
     ),
     'engineering team surface norms include dual track and acceptance signoff' => count(array_intersect(
@@ -593,14 +697,421 @@ $checks = [
             'component_reuse_or_negotiate',
             'surfaces_md_required',
             'acceptance_ui_and_prototype_signoff',
+            'ui_prototype_gate_before_test',
             'one_seat_one_agent',
             'peer_talk_via_channel',
+            'seat_skill_mirrors_required',
+            'api_rest_in_owning_module',
+            'widget_work_assigns_widget_engineer',
+            'theme_work_assigns_theme_engineer',
+            'visitor_work_assigns_data_analytics',
+            'findings_wake_pm',
+            'requirement_session_dashboard',
+            'pm_plan_lifecycle',
         ],
         array_values(array_filter(array_map(
             static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
             is_array($teamSurface['norms'] ?? null) ? $teamSurface['norms'] : [],
         ))),
-    )) === 7,
+    )) === 16,
+    'engineering team surface norms include seat_closed_reports_related_web_urls' => in_array(
+        'seat_closed_reports_related_web_urls',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($teamSurface['norms'] ?? null) ? $teamSurface['norms'] : [],
+        ))),
+        true,
+    ),
+    'hard_constraints include api_rest_in_owning_module' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'api_rest_in_owning_module'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Weline_Websites')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Weline_I18n')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:API:')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'SHARED QUERY CORE')
+                || str_contains((string) ($rule['summary'] ?? ''), 'w_query'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'PERMISSION MATRIX')
+                || str_contains((string) ($rule['summary'] ?? ''), 'backend_acl'))),
+        false,
+    ),
+    'api_sdk_development surface exists' => ($apiSdkSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_API_SDK_DEVELOPMENT
+        && str_contains((string) ($apiSdkSurface['authoritative_doc'] ?? ''), 'align-freeze'),
+    'api_sdk_development surface includes shared query core norms' => count(array_intersect(
+        ['api_shared_query_core', 'api_per_entry_permission_matrix'],
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($apiSdkSurface['norms'] ?? null) ? $apiSdkSurface['norms'] : [],
+        ))),
+    )) === 2,
+    'widget_development surface exists' => ($widgetDevSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_WIDGET_DEVELOPMENT
+        && str_contains((string) ($widgetDevSurface['authoritative_doc'] ?? ''), '部件开发指南'),
+    'theme_development surface exists' => ($themeDevSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_THEME_DEVELOPMENT
+        && str_contains((string) ($themeDevSurface['authoritative_doc'] ?? ''), 'Theme开发总指南')
+        && ($themeDevSurface['authoritative_skill'] ?? '') === 'weline-theme-development',
+    'theme_development norms include dual_workflow_work_mode_gate' => in_array(
+        'dual_workflow_work_mode_gate',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+        ))),
+        true,
+    )
+        && in_array(
+            'forbid_design_override_theme_css_js',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
+            'new_design_theme_lifecycle_checklist',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
+            'area_frontend_backend_and_four_layers',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
+            'public_component_library_dual_stack',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        ),
+    'theme_development command doc declares work_mode and theme:active' => (static function (): bool {
+        $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';
+        if (!is_file($themeCmdPath)) {
+            $themeCmdPath = dirname(__DIR__, 5) . '/dev/ai-command/ai/主题开发.md';
+        }
+        if (!is_file($themeCmdPath)) {
+            return false;
+        }
+        $body = (string) file_get_contents($themeCmdPath);
+
+        return str_contains($body, 'work_mode') && str_contains($body, 'theme:active');
+    })(),
+    'theme_development command doc covers four layers or public component library' => (static function (): bool {
+        $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';
+        if (!is_file($themeCmdPath)) {
+            $themeCmdPath = dirname(__DIR__, 5) . '/dev/ai-command/ai/主题开发.md';
+        }
+        if (!is_file($themeCmdPath)) {
+            return false;
+        }
+        $body = (string) file_get_contents($themeCmdPath);
+
+        return str_contains($body, '四层') || str_contains($body, '公共组件库');
+    })(),
+    'theme_development command doc covers binding cache semantic weline-code' => (static function (): bool {
+        $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';
+        if (!is_file($themeCmdPath)) {
+            $themeCmdPath = dirname(__DIR__, 5) . '/dev/ai-command/ai/主题开发.md';
+        }
+        if (!is_file($themeCmdPath)) {
+            return false;
+        }
+        $body = (string) file_get_contents($themeCmdPath);
+
+        return str_contains($body, 'theme_binding')
+            && str_contains($body, 'theme:disk:compile')
+            && str_contains($body, 'weline-code')
+            && str_contains($body, '语义色')
+            && str_contains($body, 'theme:scope:migrate')
+            && str_contains($body, 'Weline.Api')
+            && str_contains($body, 'preview_storefront_delivery_parity')
+            && str_contains($body, 'theme:scan-variables')
+            && str_contains($body, 'Factory Reset')
+            && str_contains($body, '破坏性操作高压线');
+    })(),
+    'theme_development surface norms include binding and compile matrix' => in_array(
+        'theme_binding_scoped_publish',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+        ))),
+        true,
+    )
+        && in_array(
+            'compile_matrix_modules_ui_disk',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
+            'frontend_section_weline_code',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
+            'scope_migrate_cli_unimplemented',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
+            'editor_dual_preview_parity',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        ),
+    'payment_development surface exists' => ($paymentDevSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_PAYMENT_DEVELOPMENT
+        && str_contains((string) ($paymentDevSurface['authoritative_doc'] ?? ''), 'payment-shell'),
+    'ecommerce_advisor surface exists' => ($ecommerceAdvisorSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_ECOMMERCE_ADVISOR
+        && str_contains((string) ($ecommerceAdvisorSurface['authoritative_doc'] ?? ''), '电商顾问')
+        && str_contains((string) ($ecommerceAdvisorSurface['label'] ?? ''), '运营策划'),
+    'ecommerce_advisor has domain_decide_wake_pm norm' => in_array(
+        'advisor_domain_decide_wake_pm',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($ecommerceAdvisorSurface['norms'] ?? null) ? $ecommerceAdvisorSurface['norms'] : [],
+        ))),
+        true,
+    ),
+    'visitor_data_analytics surface exists' => ($visitorAnalyticsSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS
+        && str_contains((string) ($visitorAnalyticsSurface['authoritative_doc'] ?? ''), '像素拓展使用指南'),
+    'visitor_data_analytics requires frontend skill refs' => in_array(
+        'frontend_skill_refs_required',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($visitorAnalyticsSurface['norms'] ?? null) ? $visitorAnalyticsSurface['norms'] : [],
+        ))),
+        true,
+    ),
+    'visitor_data_analytics requires gtm_ga4_mutex norm' => in_array(
+        'gtm_ga4_mutex_dual_channel',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($visitorAnalyticsSurface['norms'] ?? null) ? $visitorAnalyticsSurface['norms'] : [],
+        ))),
+        true,
+    ),
+    'visitor_data_analytics requires event_dictionary_and_chain norm' => in_array(
+        'event_dictionary_and_chain',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($visitorAnalyticsSurface['norms'] ?? null) ? $visitorAnalyticsSurface['norms'] : [],
+        ))),
+        true,
+    ),
+    'resolveActiveSurfaceIds matches widget development task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_WIDGET_DEVELOPMENT,
+        $activeWidgetIds,
+        true,
+    ),
+    'resolveActiveSurfaceIds matches theme development task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_THEME_DEVELOPMENT,
+        $activeThemeIds,
+        true,
+    ),
+    'resolveActiveSurfaceIds matches payment development task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_PAYMENT_DEVELOPMENT,
+        $activePaymentIds,
+        true,
+    ),
+    'resolveActiveSurfaceIds matches ecommerce advisor task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_ECOMMERCE_ADVISOR,
+        $activeEcommerceAdvisorIds,
+        true,
+    ),
+    'resolveActiveSurfaceIds matches performance check task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_PERFORMANCE_CHECK,
+        $activePerformanceCheckIds,
+        true,
+    ),
+    'resolveActiveSurfaceIds matches prompt optimization task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION,
+        $activePromptOptimizationIds,
+        true,
+    ),
+    'prompt_optimization surface exists' => ($promptOptimizationSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION
+        && str_contains((string) ($promptOptimizationSurface['authoritative_doc'] ?? ''), '提示词优化'),
+    'resolveActiveSurfaceIds matches translation engineer task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER,
+        $activeTranslationEngineerIds,
+        true,
+    ),
+    'translation_engineer surface exists' => ($translationEngineerSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER
+        && str_contains((string) ($translationEngineerSurface['authoritative_doc'] ?? ''), '翻译工程师'),
+    'resolveActiveSurfaceIds matches visitor analytics task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS,
+        $activeVisitorAnalyticsIds,
+        true,
+    ),
+    'engineering_team_bundle includes 部件开发工程师 seat' => in_array(
+        '部件开发工程师',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['部件开发工程师']),
+    'engineering_team_bundle includes 主题开发工程师 seat' => in_array(
+        '主题开发工程师',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['主题开发工程师'])
+        && !isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['主题'])
+        && !in_array('主题', is_array($engineeringTeamBundle['core_roster'] ?? null) ? $engineeringTeamBundle['core_roster'] : [], true),
+    'engineering_team_bundle includes 支付开发工程师 seat' => in_array(
+        '支付开发工程师',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['支付开发工程师']),
+    'engineering_team_bundle includes 数据分析 seat' => in_array(
+        '数据分析',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['数据分析']),
+    'engineering_team_bundle includes 电商顾问 seat' => in_array(
+        '电商顾问',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['电商顾问'])
+        && !isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['合规']),
+    'engineering_team_bundle includes 性能检查工程师 seat' => in_array(
+        '性能检查工程师',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['性能检查工程师']),
+    'engineering_team_bundle includes 提示词优化工程师 seat' => in_array(
+        '提示词优化工程师',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['提示词优化工程师']),
+    'engineering_team_bundle includes 翻译工程师 seat' => in_array(
+        '翻译工程师',
+        is_array($engineeringTeamBundle['framework_seats'] ?? null)
+            ? $engineeringTeamBundle['framework_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['翻译工程师'])
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['i18n']),
+    'hard_constraints include payment_engineer_for_payment_work' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'payment_engineer_for_payment_work'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:支付开发工程师:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'payment_development')),
+        false,
+    ),
+    'hard_constraints include theme_engineer_for_theme_work' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_engineer_for_theme_work'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:主题开发工程师:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'theme_development')
+            && str_contains((string) ($rule['summary'] ?? ''), 'work_mode')),
+        false,
+    ),
+    'hard_constraints include theme_design_must_not_override_core_runtime_assets' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_design_must_not_override_core_runtime_assets'
+            && str_contains((string) ($rule['summary'] ?? ''), 'theme.css')
+            && str_contains((string) ($rule['summary'] ?? ''), 'theme.js')),
+        false,
+    ),
+    'hard_constraints include analytics_engineer_for_visitor_work' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'analytics_engineer_for_visitor_work'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:数据分析:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'visitor_data_analytics')
+            && str_contains((string) ($rule['summary'] ?? ''), 'frontend_development')
+            && str_contains((string) ($rule['summary'] ?? ''), 'taglib_ui_control')),
+        false,
+    ),
+    'hard_constraints include ecommerce_advisor_for_commerce' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'ecommerce_advisor_for_commerce'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:电商顾问:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'supported countries')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'OPS PLANNER')
+                || str_contains((string) ($rule['summary'] ?? ''), '要开发什么')
+                || str_contains((string) ($rule['summary'] ?? ''), '运营策划'))),
+        false,
+    ),
+    'hard_constraints include performance_engineer_for_design_and_review' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'performance_engineer_for_design_and_review'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:性能检查工程师:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'performance_check')),
+        false,
+    ),
+    'hard_constraints include prompt_engineer_for_skill_prompt_work' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'prompt_engineer_for_skill_prompt_work'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:提示词优化工程师:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'prompt_optimization')),
+        false,
+    ),
+    'hard_constraints include translation_engineer_for_i18n_work' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'translation_engineer_for_i18n_work'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:翻译工程师:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'translation_engineer')
+            && !str_contains((string) ($rule['summary'] ?? ''), 'default skip')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'system dictionary')
+                || str_contains((string) ($rule['summary'] ?? ''), 'FORMAT BOUNDARY'))),
+        false,
+    ),
+    'translation_engineer surface forbids skip-other-locales wording' => !str_contains((string) ($translationEngineerSurface['description'] ?? ''), '默认先不做')
+        && array_reduce(
+            is_array($translationEngineerSurface['norms'] ?? null) ? $translationEngineerSurface['norms'] : [],
+            static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+                && ($norm['id'] ?? '') === 'i18n_default_website_all_locales_on_copy_change'),
+            false,
+        ),
+    'ecommerce_advisor surface includes FAQ/translator wake norm' => array_reduce(
+        is_array($ecommerceAdvisorSurface['norms'] ?? null) ? $ecommerceAdvisorSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'advisor_storefront_compliance_copy_surfaces'
+            && str_contains((string) ($norm['summary'] ?? ''), '翻译工程师')),
+        false,
+    ),
     'hard_constraints include local_dev_test_accounts_self_serve' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -707,6 +1218,7 @@ $checks = [
     'closeout reminder requires browser cache disabled on open' => ($closeoutReminder['browser_cache_disabled_on_open_required'] ?? false) === true
         && is_array($closeoutReminder['browser_open_order'] ?? null)
         && in_array('disable_http_cache_for_session', $closeoutReminder['browser_open_order'], true)
+        && in_array('strip_automation_detection_flags', $closeoutReminder['browser_open_order'], true)
         && in_array('navigate_or_reload_ignore_cache', $closeoutReminder['browser_open_order'], true)
         && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '缓存'),
     'webui surface requires browser_cache_disabled_on_open norm' => array_reduce(
@@ -748,6 +1260,14 @@ $checks = [
             && (($norm['authoritative_skill'] ?? '') === 'weline-theme-development')),
         false,
     ),
+    'frontend norms include backend_admin_ui_requires_frontend_theme_skills' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'backend_admin_ui_requires_frontend_theme_skills'
+            && str_contains((string) ($norm['summary'] ?? ''), 'w-backend-page')
+            && (($norm['authoritative_skill'] ?? '') === 'weline-theme-development')),
+        false,
+    ),
     'frontend norms include css_or_theme_requires_ui_prototype_theme_skills' => array_reduce(
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
@@ -785,6 +1305,51 @@ $checks = [
         && in_array('frontend-design', $frontend['required_companion_skills'], true)
         && in_array('prototype', $frontend['required_companion_skills'], true)
         && in_array('weline-theme-development', $frontend['required_companion_skills'], true),
+    'frontend surface requires i18n companion skills' => is_array($frontend['required_companion_skills'] ?? null)
+        && in_array('template_i18n', $frontend['required_companion_skills'], true)
+        && in_array('module_i18n_csv', $frontend['required_companion_skills'], true),
+    'frontend description mandates chinese default + zh/en csv' => is_string($frontend['description'] ?? null)
+        && str_contains((string) $frontend['description'], '开发语言')
+        && str_contains((string) $frontend['description'], '简体中文')
+        && str_contains((string) $frontend['description'], 'zh_Hans_CN.csv')
+        && str_contains((string) $frontend['description'], 'en_US.csv')
+        && str_contains((string) $frontend['description'], '不是 CSS'),
+    'frontend norms include frontend_dev_language_chinese_default' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'frontend_dev_language_chinese_default'
+            && str_contains((string) ($norm['summary'] ?? ''), '简体中文')),
+        false,
+    ),
+    'frontend norms include frontend_ui_requires_zh_en_csv' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'frontend_ui_requires_zh_en_csv'
+            && str_contains((string) ($norm['summary'] ?? ''), 'zh_Hans_CN.csv')
+            && str_contains((string) ($norm['summary'] ?? ''), 'en_US.csv')),
+        false,
+    ),
+    'frontend authoritative_docs include 模块翻译CSV规范' => in_array(
+        'app/code/Weline/I18n/doc/模块翻译CSV规范.md',
+        is_array($frontend['authoritative_docs'] ?? null) ? $frontend['authoritative_docs'] : [],
+        true,
+    ),
+    'frontend template_surface_rules require chinese + csv' => is_array($frontend['template_surface_rules']['required'] ?? null)
+        && array_reduce(
+            $frontend['template_surface_rules']['required'],
+            static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule)
+                && str_contains($rule, 'Simplified Chinese')
+                && str_contains($rule, 'zh_Hans_CN.csv')),
+            false,
+        ),
+    'frontend template_surface_rules forbid english source' => is_array($frontend['template_surface_rules']['forbidden'] ?? null)
+        && array_reduce(
+            $frontend['template_surface_rules']['forbidden'],
+            static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule)
+                && str_contains($rule, 'English')
+                && str_contains($rule, 'Simplified Chinese')),
+            false,
+        ),
     'frontend triggers include css' => in_array('css', $frontend['triggers'] ?? [], true)
         || in_array('CSS', $frontend['triggers'] ?? [], true),
     'frontend surface authoritative_skill is weline-theme-development' => (($frontend['authoritative_skill'] ?? '') === 'weline-theme-development'),

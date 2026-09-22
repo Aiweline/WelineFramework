@@ -1,0 +1,266 @@
+<?php
+/**
+ * 页脚邮件订阅部件（Weline_Newsletter 拥有）
+ * Variant A：全宽条带 + 版心两列（文案 | 表单），高对比主题色，禁止依赖父级 primary 底。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {footer-newsletter}
+ * @widget.name {页脚订阅}
+ * @widget.description {邮件订阅表单；经 required default_injections 注入 footer-above 槽。}
+ * @widget.type {newsletter}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {footer-above}
+ * @widget.exclusive {false}
+ * @widget.supports {["footer-newsletter","layout-footer-above","layout-footer-newsletter","layout-global-footer-newsletter"]}
+ *
+ * @param title {default="订阅我们的邮件",type="string",label="标题"}
+ * @param description {default="获取最新的优惠信息和新品资讯",type="string",label="描述"}
+ * @param placeholder {default="请输入您的邮箱地址",type="string",label="占位符"}
+ * @param button_text {default="订阅",type="string",label="按钮文字"}
+ * @param layout {default="horizontal",type="select",label="布局",options={horizontal:"横向",vertical:"纵向"}}
+ */
+
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('footer-newsletter');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$title = __((string)($this->getData('title') ?: '订阅我们的邮件'));
+$description = __((string)($this->getData('description') ?: '获取最新的优惠信息和新品资讯'));
+$placeholder = __((string)($this->getData('placeholder') ?: '请输入您的邮箱地址'));
+$buttonText = __((string)($this->getData('button_text') ?: '订阅'));
+$layout = $this->getData('layout') ?? 'horizontal';
+?>
+
+<section class="<?= $esc($wc) ?> layout-<?= $esc((string)$layout) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-widget-code="footer-newsletter"
+         data-newsletter-root="1"
+         data-newsletter-kind="footer"
+         data-source-surface="footer"
+         data-testid="newsletter-footer"
+         data-weline-load="newsletterSubscribe">
+    <div class="newsletter-band">
+        <div class="newsletter-content">
+            <?php if ($title): ?>
+                <h3 class="newsletter-title"><?= $esc($title) ?></h3>
+            <?php endif; ?>
+
+            <?php if ($description): ?>
+                <p class="newsletter-description"><?= $esc($description) ?></p>
+            <?php endif; ?>
+        </div>
+
+        <w:form class="newsletter-form"
+                action="@url{'newsletter/subscribe'}"
+                method="post"
+                data-testid="newsletter-footer-form"
+                data-newsletter-form="1"
+                data-source-surface="footer">
+            <input type="hidden" name="source_surface" value="footer">
+            <div class="newsletter-controls">
+                <input type="email"
+                       name="email"
+                       class="w-input newsletter-input"
+                       placeholder="<?= $esc($placeholder) ?>"
+                       autocomplete="email"
+                       required>
+                <button type="submit" class="w-button newsletter-button" data-variant="primary">
+                    <?= $esc($buttonText) ?>
+                </button>
+            </div>
+            <div class="newsletter-meta">
+                <div class="newsletter-topics" role="group" aria-label="<?= $esc(__('主题偏好')) ?>">
+                    <label class="newsletter-topic">
+                        <input type="hidden" name="topic_promo" value="0">
+                        <input type="checkbox" name="topic_promo" value="1" checked>
+                        <span><?= $esc(__('优惠活动')) ?></span>
+                    </label>
+                    <label class="newsletter-topic">
+                        <input type="hidden" name="topic_new_arrivals" value="0">
+                        <input type="checkbox" name="topic_new_arrivals" value="1" checked>
+                        <span><?= $esc(__('新品上新')) ?></span>
+                    </label>
+                </div>
+                <p class="newsletter-privacy"><?= $esc(__('可随时退订')) ?></p>
+            </div>
+        </w:form>
+
+        <div class="newsletter-success"
+             data-testid="newsletter-subscribe-success"
+             hidden>
+            <p data-newsletter-success-message></p>
+            <p class="newsletter-coupon-wrap">
+                <span class="newsletter-coupon-label"><?= $esc(__('您的优惠码')) ?>:</span>
+                <strong data-newsletter-coupon hidden></strong>
+            </p>
+        </div>
+    </div>
+</section>
+
+<style>
+.<?= $wc ?> {
+    /* 全宽条带：自带底色，不假设父级是 primary */
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background:
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--weline-theme-primary) 6%, var(--weline-theme-surface)) 0%,
+            var(--weline-theme-surface) 100%
+        );
+    border-block: 1px solid color-mix(in srgb, var(--weline-theme-border) 70%, transparent);
+    color: var(--weline-theme-text);
+    padding-block: var(--weline-space-6);
+}
+
+.<?= $wc ?> .newsletter-band {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline, var(--weline-space-5));
+}
+
+.<?= $wc ?>.layout-horizontal .newsletter-band {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr);
+    align-items: center;
+    column-gap: var(--weline-space-8);
+    row-gap: var(--weline-space-4);
+}
+
+.<?= $wc ?>.layout-vertical .newsletter-band {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--weline-space-4);
+    text-align: center;
+}
+
+.<?= $wc ?> .newsletter-content {
+    min-width: 0;
+}
+
+.<?= $wc ?> .newsletter-title {
+    font-size: var(--weline-font-size-xl);
+    font-weight: 600;
+    margin: 0 0 var(--weline-space-2);
+    color: var(--weline-theme-text);
+    letter-spacing: 0.02em;
+}
+
+.<?= $wc ?> .newsletter-description {
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-text-muted);
+    margin: 0;
+    line-height: 1.55;
+}
+
+.<?= $wc ?> .newsletter-form {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-3);
+}
+
+.<?= $wc ?> .newsletter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: var(--weline-space-2);
+    max-inline-size: min(100%, 28rem);
+}
+
+.<?= $wc ?> .newsletter-input {
+    flex: 1 1 12rem;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+}
+
+.<?= $wc ?> .newsletter-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.<?= $wc ?> .newsletter-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-3) var(--weline-space-4);
+}
+
+.<?= $wc ?> .newsletter-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-4);
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-text);
+}
+
+.<?= $wc ?> .newsletter-topic {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-2);
+    cursor: pointer;
+}
+
+.<?= $wc ?> .newsletter-topic input[type="checkbox"] {
+    accent-color: var(--weline-theme-primary);
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+}
+
+.<?= $wc ?> .newsletter-privacy {
+    margin: 0;
+    font-size: var(--weline-font-size-xs);
+    color: var(--weline-theme-text-muted);
+}
+
+.<?= $wc ?> .newsletter-success {
+    grid-column: 1 / -1;
+    margin-top: var(--weline-space-2);
+    padding: var(--weline-space-3) var(--weline-space-4);
+    border-radius: var(--weline-radius-md);
+    background: color-mix(in srgb, var(--weline-theme-surface-raised) 88%, transparent);
+    color: var(--weline-theme-text);
+    border: 1px solid color-mix(in srgb, var(--weline-theme-border) 60%, transparent);
+}
+
+.<?= $wc ?> .newsletter-coupon-wrap {
+    margin: var(--weline-space-2) 0 0;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding-block: var(--weline-space-4);
+}
+
+@media (max-width: 768px) {
+    .<?= $wc ?>.layout-horizontal .newsletter-band {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .<?= $wc ?>.layout-horizontal .newsletter-controls {
+        justify-content: center;
+    }
+
+    .<?= $wc ?>.layout-horizontal .newsletter-meta {
+        justify-content: center;
+    }
+
+    .<?= $wc ?>.layout-horizontal .newsletter-topics {
+        justify-content: center;
+    }
+}
+</style>

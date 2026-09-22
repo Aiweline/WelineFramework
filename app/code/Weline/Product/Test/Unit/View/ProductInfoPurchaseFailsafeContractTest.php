@@ -17,6 +17,15 @@ final class ProductInfoPurchaseFailsafeContractTest extends TestCase
         self::assertStringContainsString('ensurePurchaseActionsFromFailsafe', $src);
         self::assertStringContainsString('coalesceBuyboxPurchaseActions', $src);
         self::assertStringContainsString('data-purchase-failsafe', $src);
+        self::assertStringNotContainsString(
+            "fetch('Weline_Cart::templates/frontend/widgets/product-add-to-cart.phtml')",
+            $src
+        );
+        self::assertStringNotContainsString(
+            "fetch('Weline_Checkout::templates/frontend/widgets/product-buy-now.phtml')",
+            $src
+        );
+        self::assertStringContainsString('Do NOT fetch product-add-to-cart', $src);
         self::assertStringContainsString("createElement('div')", $src);
         self::assertStringContainsString('product-native-detail__actions', $src);
         self::assertStringContainsString('data-testid', $src);

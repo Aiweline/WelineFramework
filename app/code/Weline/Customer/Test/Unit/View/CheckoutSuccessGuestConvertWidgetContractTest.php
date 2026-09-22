@@ -39,7 +39,9 @@ final class CheckoutSuccessGuestConvertWidgetContractTest extends TestCase
         );
         self::assertStringContainsString('<w:slot id="checkout-success-guest-account"', $src);
         self::assertStringContainsString('weline-code="checkout.success.guest_account"', $src);
-        self::assertStringContainsString('name="checkout-success-guest-convert"', $src);
+        self::assertStringNotContainsString('name="checkout-success-guest-convert"', $src);
+        self::assertStringNotContainsString('<w:widget type="content" name="checkout-success-guest-convert"', $src);
+        self::assertStringContainsString('Do not nest <w:widget>', $src);
         self::assertStringNotContainsString('GuestCheckoutConvertService', $src);
         self::assertStringNotContainsString('登录并保存订单', $src);
     }

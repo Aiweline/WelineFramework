@@ -2000,7 +2000,7 @@ $buildWorkerRuntimeSnapshot = static function (string $event = 'runtime') use (
         'should_exit' => $shouldExit ? 1 : 0,
         'ipc_draining' => $ipcDraining ? 1 : 0,
         'ts' => \microtime(true),
-    ];
+    ] + \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields();
 };
 $sendExitReasonToMaster = static function (string $reason, int $code = 0, array $context = []) use (&$ipcClient, &$exitReasonSent, $buildWorkerRuntimeSnapshot): void {
     $reason = \trim($reason);
@@ -2426,6 +2426,22 @@ while (true) {
                 $runtime->runDeferredWorkerBootstrapWarmup();
                 WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup done worker={$workerId}");
                 $warmupLog('warmup_success');
+                // Immediately refresh Master homepage_fpc after deferred adopt
+                // (do not wait for the next periodic status_report tick).
+                if ($warmupIpcClient !== null && $warmupIpcClient->isConnected()) {
+                    $homepageFields = \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields();
+                    if ((int)($homepageFields['homepage_fpc_hit'] ?? 0) === 1) {
+                        $warmupIpcClient->send(
+                            \Weline\Server\IPC\ControlMessage::statusReport(
+                                0,
+                                \memory_get_usage(true),
+                                0,
+                                $homepageFields
+                            ),
+                            false
+                        );
+                    }
+                }
             } catch (\Throwable $e) {
                 WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
                 $warmupLog('warmup_failed', 'WARNING');

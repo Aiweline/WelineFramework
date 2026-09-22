@@ -1,0 +1,111 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$items = (array)($this->getData('items') ?? []);
+$search = (string)($this->getData('search') ?? '');
+$listingUrl = (string)($this->getData('listing_url') ?? '');
+$total = (int)($this->getData('total') ?? 0);
+$esc = static fn(mixed $v): string => \htmlspecialchars((string)$v, \ENT_QUOTES, 'UTF-8');
+?>
+<div class="w-grid w-backend-page" data-testid="newsletter-subscriber-listing">
+    <div style="--w-span:12;">
+        <div
+            class="w-backend-page__heading w-cluster"
+            style="--w-mb:var(--weline-space-4);"
+            data-align="end"
+            data-justify="between"
+            data-wrap="true"
+        >
+            <div>
+                <h4 class="w-backend-page__title" style="--w-mb:0;"><?= $esc(__('邮件订阅名单')) ?></h4>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                    <?= $esc(__('共 %{1} 条', (string)$total)) ?>
+                </p>
+            </div>
+
+            <form
+                method="get"
+                action="<?= $esc($listingUrl) ?>"
+                class="w-cluster newsletter-subscriber-search"
+                style="--w-gap:var(--weline-space-2);max-inline-size:min(100%,28rem);"
+                data-align="center"
+                data-wrap="false"
+                data-testid="newsletter-subscriber-search"
+                role="search"
+                aria-label="<?= $esc(__('搜索邮箱')) ?>"
+            >
+                <label class="w-visually-hidden" for="newsletter-subscriber-search-input"><?= $esc(__('搜索邮箱')) ?></label>
+                <input
+                    id="newsletter-subscriber-search-input"
+                    class="w-input"
+                    data-size="sm"
+                    data-w-width="auto"
+                    type="search"
+                    name="search"
+                    value="<?= $esc($search) ?>"
+                    placeholder="<?= $esc(__('搜索邮箱')) ?>"
+                    autocomplete="off"
+                    style="inline-size:min(100%,14rem);flex:1 1 10rem;min-inline-size:8rem;"
+                    data-testid="newsletter-subscriber-search-input"
+                >
+                <button
+                    class="w-button"
+                    type="submit"
+                    data-tone="primary"
+                    data-size="sm"
+                    style="flex:0 0 auto;white-space:nowrap;"
+                    data-testid="newsletter-subscriber-search-submit"
+                >
+                    <?= $esc(__('搜索')) ?>
+                </button>
+            </form>
+        </div>
+
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" data-testid="newsletter-subscriber-table">
+                        <thead>
+                        <tr>
+                            <th><?= $esc(__('ID')) ?></th>
+                            <th><?= $esc(__('邮箱')) ?></th>
+                            <th><?= $esc(__('状态')) ?></th>
+                            <th><?= $esc(__('优惠主题')) ?></th>
+                            <th><?= $esc(__('上新主题')) ?></th>
+                            <th><?= $esc(__('券码')) ?></th>
+                            <th><?= $esc(__('发券状态')) ?></th>
+                            <th><?= $esc(__('来源')) ?></th>
+                            <th><?= $esc(__('创建时间')) ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($items === []): ?>
+                            <tr>
+                                <td colspan="9" class="w-text" data-align="center" data-tone="muted">
+                                    <?= $esc(__('暂无订阅记录')) ?>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($items as $row): ?>
+                                <?php $r = \is_array($row) ? $row : []; ?>
+                                <tr>
+                                    <td><?= $esc($r['subscriber_id'] ?? '') ?></td>
+                                    <td><?= $esc($r['email'] ?? '') ?></td>
+                                    <td><?= $esc($r['status'] ?? '') ?></td>
+                                    <td><?= !empty($r['topic_promo']) ? '✓' : '—' ?></td>
+                                    <td><?= !empty($r['topic_new_arrivals']) ? '✓' : '—' ?></td>
+                                    <td><?= $esc($r['coupon_code'] ?? '') ?></td>
+                                    <td><?= $esc($r['gift_status'] ?? '') ?></td>
+                                    <td><?= $esc($r['source_surface'] ?? '') ?></td>
+                                    <td><?= $esc($r['created_at'] ?? '') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

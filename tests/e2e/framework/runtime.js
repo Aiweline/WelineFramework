@@ -322,6 +322,37 @@ async function submitAndExpectParam(page, formLocator, paramSubstring, options =
   return req;
 }
 
+async function ensureAutomationFlagsStripped(page) {
+  if (!page || page.__welineAutomationFlagsStripped) {
+    return;
+  }
+
+  const stripScript = () => {
+    try {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+        configurable: true,
+      });
+    } catch (_) {
+      /* ignore */
+    }
+  };
+
+  try {
+    const context = typeof page.context === 'function' ? page.context() : null;
+    if (context && !context.__welineAutomationFlagsStripped) {
+      await context.addInitScript(stripScript);
+      context.__welineAutomationFlagsStripped = true;
+    } else if (!context) {
+      await page.addInitScript(stripScript);
+    }
+  } catch (_) {
+    /* ignore — host may deny init scripts */
+  }
+
+  page.__welineAutomationFlagsStripped = true;
+}
+
 async function gotoUrl(page, url, options = {}) {
   const {
     gotoOptions,
@@ -331,6 +362,8 @@ async function gotoUrl(page, url, options = {}) {
     allowLoadStateTimeout,
     settleMs,
   } = parseGotoOptions(options);
+
+  await ensureAutomationFlagsStripped(page);
 
   const response = await page.goto(url, gotoOptions);
 
@@ -719,6 +752,7 @@ module.exports = {
   getModuleFrontendRouter,
   getRuntimeInfo,
   gotoUrl,
+  ensureAutomationFlagsStripped,
   gotoApi,
   gotoBackend,
   gotoFrontend,

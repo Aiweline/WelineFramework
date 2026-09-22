@@ -38,7 +38,20 @@ class PixelEventPersistenceService
         $pixelAdditionalId = null;
         $additionalData = $post;
 
-        if ($pixelId && $this->shouldPersistAdditional($post)) {
+        // Ensure page_view carries dictionary required page_location/page_title into additional.
+        $eventName = (string)($additionalData['eventName'] ?? $additionalData['event'] ?? '');
+        if ($eventName === 'page_view' || $eventName === 'page_load') {
+            if (\trim((string)($additionalData['page_location'] ?? '')) === '') {
+                $additionalData['page_location'] = (string)($additionalData['url'] ?? '');
+            }
+            if (\trim((string)($additionalData['page_title'] ?? '')) === ''
+                && isset($additionalData['additionalInfo']['environment']['page_title'])
+            ) {
+                $additionalData['page_title'] = (string)$additionalData['additionalInfo']['environment']['page_title'];
+            }
+        }
+
+        if ($pixelId && $this->shouldPersistAdditional($additionalData)) {
             try {
                 $this->normalizeAbTestFields($post, $additionalData);
 
@@ -70,6 +83,9 @@ class PixelEventPersistenceService
     }
 
     /**
+     * Passive page events still persist additional when GA4 page params
+     * (page_location / page_title) or url are present — dictionary required_params.
+     *
      * @param array<string, mixed> $post
      */
     private function shouldPersistAdditional(array $post): bool
@@ -97,7 +113,18 @@ class PixelEventPersistenceService
             return false;
         }
 
-        return !isset(self::PASSIVE_EVENTS_WITH_BROWSER_INFO[$event]);
+        if (isset(self::PASSIVE_EVENTS_WITH_BROWSER_INFO[$event])) {
+            $pageLocation = \trim((string)($post['page_location'] ?? ''));
+            $pageTitle = \trim((string)($post['page_title'] ?? ''));
+            $url = \trim((string)($post['url'] ?? ''));
+            if ($pageLocation === '' && $url !== '') {
+                return true;
+            }
+
+            return $pageLocation !== '' || $pageTitle !== '';
+        }
+
+        return true;
     }
 
     private function isFilteredTraffic(mixed $value): bool

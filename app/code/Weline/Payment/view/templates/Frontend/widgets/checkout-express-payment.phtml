@@ -80,6 +80,7 @@ if ($logoFileHtml === '' && $logoRaw === '') {
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-testid="checkout-express-payment"
+         data-widget-code="checkout-express-payment"
          data-payment-express
          data-method-code="<?= $esc($configMethod) ?>">
     <header class="w-payment-express__header">
@@ -249,7 +250,9 @@ if ($logoFileHtml === '' && $logoRaw === '') {
 </style>
 <script>
 (function () {
-    const section = document.querySelector('[data-payment-express][data-testid="checkout-express-payment"]');
+    // Prefer data-payment-express so inline JS does not embed presence markers
+    // that presence counters (or strip failures) could misread as a second copy.
+    const section = document.querySelector('[data-payment-express]');
     if (!section || section.dataset.expressBound === '1') {
         return;
     }

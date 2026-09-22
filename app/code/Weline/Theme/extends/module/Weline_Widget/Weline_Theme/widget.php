@@ -93,7 +93,7 @@ return [
     // --- 侧栏 (sidebar) ---
     'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-menu/default.phtml',
     'Weline_Theme::theme/frontend/widgets/sidebar/mini-cart/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-newsletter/default.phtml',
+    // sidebar-newsletter：已迁至 Weline_Newsletter（D9/D10 同发布，防双注册）
     'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-ads/default.phtml',
     'Weline_Theme::theme/frontend/widgets/sidebar/tags-cloud/default.phtml',
     'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-social/default.phtml',
@@ -117,11 +117,22 @@ return [
     'Weline_Theme::theme/frontend/widgets/content/text-block/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/image-text/default.phtml',
     'Weline_Theme::theme/frontend/widgets/video/video-player/default.phtml',
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/video/video-carousel/default.phtml',
+        'params' => [
+            'items' => [
+                'type' => 'video_carousel_items',
+                'label' => '视频列表',
+                'description' => '可排序多视频项：平台、地址、作者、简介与关联商品',
+            ],
+        ],
+    ],
+
     'Weline_Theme::theme/frontend/widgets/content/countdown/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/brand-logos/default.phtml',
     'textile-heritage' => [
         'name' => '织艺谱系',
-        'description' => '可复用的真实织绣馆藏目录；默认六项注入首页品牌槽。',
+        'description' => '可复用的真实织绣馆藏目录；可在主题编辑器选用，不再注入默认首页品牌槽。',
         'type' => 'content',
         'code' => 'textile-heritage',
         'area' => 'frontend',
@@ -136,16 +147,8 @@ return [
             'brands',
             'textile-heritage',
         ],
-        'default_injections' => [[
-            'layout_type' => 'homepage',
-            'layout_option' => 'default',
-            'slot' => 'homepage-brands',
-            'area' => 'content',
-            'sort_order' => 0,
-            'required' => true,
-            'reason' => '汉服首页默认展示 Theme 真实织艺谱系',
-            'config' => $textileHeritageConfig,
-        ]],
+        // placement=manual：默认首页品牌槽由布局直嵌 brand-logos；本部件仅编辑器/CMS 选用。
+        'placement' => 'manual',
         'params' => [
             'title' => [
                 'default' => TextileHeritageCatalog::TITLE,
@@ -200,12 +203,12 @@ return [
             'background_color' => [
                 'type' => 'color',
                 'label' => '背景主色',
-                'default' => '#1b2430',
+                'default' => '#1f2124',
             ],
             'accent_color' => [
                 'type' => 'color',
                 'label' => '背景点缀色',
-                'default' => '#e08a2a',
+                'default' => '#b84a3c',
             ],
             'overlay_opacity' => [
                 'type' => 'select',
@@ -264,12 +267,12 @@ return [
             'background_color' => [
                 'type' => 'color',
                 'label' => '背景主色',
-                'default' => '#1b2430',
+                'default' => '#1f2124',
             ],
             'accent_color' => [
                 'type' => 'color',
                 'label' => '背景点缀色',
-                'default' => '#e08a2a',
+                'default' => '#b84a3c',
             ],
             'overlay_opacity' => [
                 'type' => 'select',
@@ -328,12 +331,12 @@ return [
             'background_color' => [
                 'type' => 'color',
                 'label' => '背景主色',
-                'default' => '#1b2430',
+                'default' => '#1f2124',
             ],
             'accent_color' => [
                 'type' => 'color',
                 'label' => '背景点缀色',
-                'default' => '#e08a2a',
+                'default' => '#b84a3c',
             ],
             'overlay_opacity' => [
                 'type' => 'select',
@@ -415,12 +418,11 @@ return [
             ],
         ],
     ],
-    'Weline_Theme::theme/frontend/widgets/newsletter/footer-newsletter/default.phtml',
+    // footer-newsletter / newsletter-popup：已迁至 Weline_Newsletter（D9/D10 同发布，防双注册）
     'Weline_Theme::theme/frontend/widgets/social/footer-social/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-payment/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-copyright/default.phtml',
     'Weline_Theme::theme/frontend/widgets/social/social-share/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/newsletter/newsletter-popup/default.phtml',
 
     // --- 评价 / 信任 / FAQ (testimonial / content / faq) ---
     'Weline_Theme::theme/frontend/widgets/testimonial/testimonials/default.phtml',

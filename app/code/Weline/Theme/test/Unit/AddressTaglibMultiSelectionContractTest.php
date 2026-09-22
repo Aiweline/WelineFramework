@@ -134,7 +134,10 @@ final class AddressTaglibMultiSelectionContractTest extends TestCore
         self::assertStringNotContainsString("postalField.addEventListener('change', schedule);", $js);
         self::assertStringContainsString('lastEnqueuedPostal', $js);
         self::assertStringContainsString('if (mine && t !== mine)', $js);
-        self::assertStringContainsString('single-float', (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address-loader.js'));
+        // Lookup may match outward prefix; never chop user-typed full postal in the input.
+        self::assertStringContainsString('Never replace user input with catalog postal', $js);
+        self::assertStringContainsString('group.pendingPostalCode = postal', $js);
+        self::assertStringContainsString('20260921-keep-postal2', (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address-loader.js'));
         $doc = html_entity_decode(\Weline\Theme\Taglib\Address::document(), ENT_QUOTES, 'UTF-8');
         self::assertStringContainsString('postal-lookup', $doc);
     }

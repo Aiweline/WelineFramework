@@ -2647,7 +2647,7 @@
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.09.19-sticky-bus1';
+    var PIXEL_SCRIPT_VERSION = '2026.09.22-param-shell1';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -3801,21 +3801,54 @@
     }
 
     function __getCartItems() {
-        var nodes = document.querySelectorAll ? document.querySelectorAll('.cart-item, [data-cart-item], [data-product-id].cart-item') : [];
+        var nodes = document.querySelectorAll
+            ? document.querySelectorAll([
+                '.cart-item',
+                '[data-cart-item]',
+                '[data-product-id].cart-item',
+                '.weline-cart-shell__line',
+                '[data-cart-line]',
+                '.weline-checkout__item',
+                '[data-checkout-item]',
+                '[data-testid="checkout-item"]'
+            ].join(','))
+            : [];
         var items = [];
         for (var i = 0; i < nodes.length && i < 20; i++) {
             var node = nodes[i];
             var productId = __firstAttr(node, ['data-product-id', 'data-item-id', 'data-id']);
-            var name = __firstAttr(node, ['data-product-name', 'data-name']) || __firstText(node, ['.cart-item-title', '.product-title', '.product-name', 'h3', 'a']);
-            var price = __firstNumber(node, ['[data-price]', '[data-pixel-value]', '.price-current', '.price-amount', '.cart-item-price']);
-            var qtyNode = node.querySelector ? node.querySelector('input[name="qty"], input[name="quantity"], [data-qty], [data-quantity]') : null;
-            var quantity = qtyNode ? __pixelNumber(qtyNode.value || qtyNode.getAttribute('data-qty') || qtyNode.getAttribute('data-quantity')) : null;
+            var name = __firstAttr(node, ['data-product-name', 'data-name'])
+                || __firstText(node, [
+                    '.cart-item-title',
+                    '.product-title',
+                    '.product-name',
+                    '.weline-cart-shell__line-title',
+                    '.weline-checkout__item-title',
+                    'h3',
+                    'a',
+                    'strong'
+                ]);
+            var price = __firstNumber(node, [
+                '[data-price]',
+                '[data-pixel-value]',
+                '.price-current',
+                '.price-amount',
+                '.cart-item-price',
+                '.weline-cart-shell__line-price-now',
+                '.weline-checkout__item-price-now'
+            ]);
+            var qtyNode = node.querySelector
+                ? node.querySelector('input[name="qty"], input[name="quantity"], input[data-cart-quantity], [data-qty], [data-quantity]')
+                : null;
+            var quantity = qtyNode
+                ? __pixelNumber(qtyNode.value || qtyNode.getAttribute('data-qty') || qtyNode.getAttribute('data-quantity'))
+                : null;
             if (!productId && !name && price === null) {
                 continue;
             }
             items.push({
                 product_id: productId,
-                item_id: productId,
+                item_id: productId || name,
                 name: name,
                 item_name: name,
                 price: price,
@@ -3953,13 +3986,108 @@
         return missing;
     }
 
+    /**
+     * Dictionary-aligned required params for events under R2-param-shell audit.
+     * Incomplete events must not enqueue / bridge GA4.
+     */
+    function __dictionaryRequiredParams(eventName) {
+        var normalized = __normalizePixelEventName(eventName);
+        if (normalized === 'page_view') {
+            return ['page_location', 'page_title'];
+        }
+        if (normalized === 'search') {
+            return ['search_term'];
+        }
+        if (normalized === 'view_cart' || normalized === 'remove_from_cart') {
+            return ['currency', 'value', 'items'];
+        }
+        if (normalized === 'begin_checkout') {
+            return ['items', 'currency', 'value'];
+        }
+        return null;
+    }
+
+    function __isPaymentRecoveryContext() {
+        try {
+            var href = String((window.location && window.location.href) || '');
+            var hash = String((window.location && window.location.hash) || '');
+            return href.indexOf('payment-recovery') > -1 || hash.indexOf('payment-recovery') > -1;
+        } catch (eRec) {
+            return false;
+        }
+    }
+
+    function __buildRequiredParamBag(eventName, payload, meta) {
+        var bag = Object.assign({}, meta || {}, payload || {});
+        if ((!bag.search_term || bag.search_term === '') && bag.query) {
+            bag.search_term = bag.query;
+        }
+        if ((!bag.page_location || bag.page_location === '')) {
+            bag.page_location = (payload && (payload.page_location || payload.url))
+                || (payload && payload.environment && payload.environment.page_location)
+                || (window.location && window.location.href)
+                || '';
+        }
+        if ((!bag.page_title || bag.page_title === '')) {
+            bag.page_title = (payload && payload.page_title)
+                || (payload && payload.environment && payload.environment.page_title)
+                || (document && document.title)
+                || '';
+        }
+        if ((!Array.isArray(bag.items) || !bag.items.length)
+            && payload && payload.additionalInfo && payload.additionalInfo.ecommerce
+            && Array.isArray(payload.additionalInfo.ecommerce.items)) {
+            bag.items = payload.additionalInfo.ecommerce.items;
+        }
+        return bag;
+    }
+
+    /**
+     * @returns {{drop:boolean, reason:string, missing:string[]}}
+     */
+    function __evaluateRequiredParamGate(eventName, payload, meta) {
+        var normalized = __normalizePixelEventName(eventName);
+        if (normalized === 'begin_checkout' && __isPaymentRecoveryContext()) {
+            return { drop: true, reason: 'payment_recovery', missing: ['items'] };
+        }
+        var required = __dictionaryRequiredParams(normalized);
+        if (!required) {
+            return { drop: false, reason: '', missing: [] };
+        }
+        var bag = __buildRequiredParamBag(normalized, payload, meta);
+        var missing = __missingFields(required, bag);
+        // Empty-cart shell: items missing or value unusable with no line items.
+        if (required.indexOf('items') > -1) {
+            var items = Array.isArray(bag.items) ? bag.items : [];
+            var valueNum = __pixelNumber(bag.value);
+            if (!items.length) {
+                if (missing.indexOf('items') === -1) {
+                    missing.push('items');
+                }
+            } else if (required.indexOf('value') > -1 && valueNum === null) {
+                if (missing.indexOf('value') === -1) {
+                    missing.push('value');
+                }
+            }
+        }
+        if (missing.length) {
+            return { drop: true, reason: 'missing_required_params', missing: missing };
+        }
+        return { drop: false, reason: '', missing: [] };
+    }
+
     function __getEventSpecificMeta(eventName, element, domEvent, baseMeta) {
         var normalized = __normalizePixelEventName(eventName);
         var meta = {};
         var required = [];
-        if (normalized.indexOf('search_') === 0) {
+        if (normalized === 'search' || normalized.indexOf('search_') === 0) {
             meta = Object.assign({}, __getSearchMeta(__findSearchInput(document), normalized), __getSearchResultMeta());
-            required = normalized === 'search_result_view' ? ['query', 'result_count'] : ['query'];
+            if (!meta.search_term && meta.query) {
+                meta.search_term = meta.query;
+            }
+            required = normalized === 'search'
+                ? ['search_term']
+                : (normalized === 'search_result_view' ? ['query', 'result_count'] : ['query']);
         } else if (['view_item', 'add_to_cart', 'buy_now', 'add_to_wishlist', 'friend_help_pay', 'selection_share', 'quick_buy', 'express_pay', 'add_payment_info'].indexOf(normalized) > -1) {
             meta = __getProductMeta(normalized, element);
             required = ['currency', 'value', 'items'];
@@ -4038,19 +4166,23 @@
 
     function __applyEventMetaToPayload(payload, meta) {
         var allowed = [
-            'query', 'query_length', 'url_query', 'input_name', 'input_id', 'form_action', 'form_method', 'result_count', 'category', 'search_url', 'suggestion_text', 'suggestion_url', 'suggestion_position',
+            'query', 'search_term', 'query_length', 'url_query', 'input_name', 'input_id', 'form_action', 'form_method', 'result_count', 'category', 'search_url', 'suggestion_text', 'suggestion_url', 'suggestion_position',
             'product_id', 'item_id', 'sku', 'name', 'content_name', 'price', 'quantity', 'qty', 'value', 'currency', 'items', 'selected_options', 'product_url',
             'total', 'grand_total', 'cart_total', 'cart_items_count',
             'shipping_method', 'shipping_tier', 'payment_method', 'payment_type', 'order_id', 'transaction_id',
             'order_uuid', 'checkout_group_uuid', 'transaction_no',
             'service_code', 'selected_service_code', 'coupon', 'tax', 'shipping',
-            'href', 'link_text', 'from_url', 'from_path', 'to_url', 'to_path', 'same_origin'
+            'href', 'link_text', 'from_url', 'from_path', 'to_url', 'to_path', 'same_origin',
+            'page_location', 'page_title'
         ];
         for (var i = 0; i < allowed.length; i++) {
             var key = allowed[i];
             if (meta && meta[key] !== undefined && meta[key] !== null && meta[key] !== '') {
                 payload[key] = meta[key];
             }
+        }
+        if ((!payload.search_term || payload.search_term === '') && payload.query) {
+            payload.search_term = payload.query;
         }
         if (payload.value !== undefined && payload.value !== null && payload.value !== '') {
             var value = __pixelNumber(payload.value);
@@ -5100,15 +5232,54 @@
             payload.environment = (payload.additionalInfo && payload.additionalInfo.environment)
                 || __buildEventEnvironmentContext(domElement);
             // GA4-aligned top-level mirrors for funnel / path attribution consumers.
-            payload.page_location = payload.environment.page_location;
+            payload.page_location = payload.environment.page_location || payload.url || window.location.href;
             payload.page_path = payload.environment.page_path;
-            payload.page_title = payload.environment.page_title;
+            payload.page_title = payload.environment.page_title || (document && document.title) || '';
             payload.page_referrer = payload.environment.page_referrer;
             payload.page_hostname = payload.environment.page_hostname;
             payload.content_locale = payload.environment.content_locale;
             payload.session_id = payload.environment.session_id;
             payload.sticky = (payload.additionalInfo && payload.additionalInfo.sticky) || __getStickyUtmPack() || null;
             payload.page_id = payload.environment.page_id;
+            // Keep page_view dictionary required params mirrored into additional.environment.
+            if (payload.additionalInfo && typeof payload.additionalInfo === 'object') {
+                payload.additionalInfo.environment = Object.assign({}, payload.additionalInfo.environment || {}, {
+                    page_location: payload.page_location,
+                    page_title: payload.page_title,
+                    page_path: payload.page_path || ''
+                });
+            }
+            if ((!payload.search_term || payload.search_term === '') && payload.query) {
+                payload.search_term = payload.query;
+            }
+            if ((!payload.search_term || payload.search_term === '') && mergedMeta && mergedMeta.search_term) {
+                payload.search_term = mergedMeta.search_term;
+            } else if ((!payload.search_term || payload.search_term === '') && mergedMeta && mergedMeta.query) {
+                payload.search_term = mergedMeta.query;
+            }
+
+            var paramGate = __evaluateRequiredParamGate(normalizedEventName, payload, mergedMeta);
+            if (paramGate.drop) {
+                try {
+                    var hostGate = String(window.location && window.location.hostname || '');
+                    var isDevGate = !!(window.DEV
+                        || window.WELINE_ENV === 'DEV'
+                        || window.__WELINE_DEBUG__
+                        || hostGate === 'localhost'
+                        || hostGate === '127.0.0.1'
+                        || /\.(?:test\.weline\.com|weline\.test)$/i.test(hostGate));
+                    if (isDevGate && typeof console !== 'undefined' && typeof console.log === 'function') {
+                        console.log('[WelinePixel] drop incomplete', {
+                            event: normalizedEventName,
+                            reason: paramGate.reason,
+                            missing: paramGate.missing
+                        });
+                    }
+                } catch (dropLogErr) {
+                }
+                return null;
+            }
+
             payload.__ga4Element = domElement;
             payload.__ga4Meta = mergedMeta;
             // 把监视来源扁平进 payload，供字典解析 / 第三方桥接识别前端声明事件
@@ -5339,6 +5510,93 @@
         return action.indexOf('search') > -1 || !!__findSearchInput(form);
     }
 
+    // Phase-2 关闭假沙盒后：路径级电商事件改由 behavior_monitor 主动 track（与旧 target(DOMContentLoaded) 对齐）。
+    var __pixelRouteCommerceSent = Object.create(null);
+
+    function __resolveRouteScopedCommerceEventName(pathname) {
+        var path = String(pathname || '');
+        if (!path) {
+            try {
+                path = new URL(__getPixelAppPath(window.location.href)).pathname;
+            } catch (ePath) {
+                path = String((window.location && window.location.pathname) || '');
+            }
+        }
+        if (path.indexOf('/product/') === 0) {
+            return 'view_item';
+        }
+        if (path === '/cart' || path === '/cart.html') {
+            return 'view_cart';
+        }
+        if (path === '/checkout' || path === '/checkout.html') {
+            return 'begin_checkout';
+        }
+        return '';
+    }
+
+    function __trackRouteScopedCommerceEvents(trigger, attempt) {
+        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function' || window.WelinePixel.__welineStub) {
+            return;
+        }
+        var path = '';
+        try {
+            path = new URL(__getPixelAppPath(window.location.href)).pathname;
+        } catch (ePath2) {
+            path = String((window.location && window.location.pathname) || '');
+        }
+        var eventName = __resolveRouteScopedCommerceEventName(path);
+        if (!eventName) {
+            return;
+        }
+        if (eventName === 'begin_checkout' && __isPaymentRecoveryContext()) {
+            return;
+        }
+        var key = eventName + '::' + path;
+        if (__pixelRouteCommerceSent[key]) {
+            return;
+        }
+        var root = null;
+        try {
+            root = document.querySelector(
+                '[data-testid="storefront-product-detail"], .product-native-detail, [data-pixel-event="view_item"]'
+            );
+        } catch (eRoot) {
+            root = null;
+        }
+        // header eager 可能早于 PDP DOM：等 DOMContentLoaded 再发，保证 items/currency 可解析。
+        if (eventName === 'view_item' && !root && document.readyState === 'loading') {
+            if (!window.__WelinePixelRouteCommerceDomWait) {
+                window.__WelinePixelRouteCommerceDomWait = true;
+                document.addEventListener('DOMContentLoaded', function () {
+                    window.__WelinePixelRouteCommerceDomWait = false;
+                    __trackRouteScopedCommerceEvents('dom_content_loaded');
+                }, { once: true });
+            }
+            return;
+        }
+        // Cart/checkout hydrate async：无 line items 时短重试，避免空壳入库；仍空则放弃（门闩也会 drop）。
+        if (eventName === 'view_cart' || eventName === 'begin_checkout') {
+            var cartItems = typeof __getCartItems === 'function' ? __getCartItems() : [];
+            var tryCount = attempt || 0;
+            if ((!cartItems || !cartItems.length) && tryCount < 8) {
+                window.setTimeout(function () {
+                    __trackRouteScopedCommerceEvents(trigger || 'cart_hydrate', tryCount + 1);
+                }, 350);
+                return;
+            }
+            if (!cartItems || !cartItems.length) {
+                return;
+            }
+        }
+        var tracked = window.WelinePixel.track(eventName, {
+            trigger: trigger || 'route',
+            source: 'behavior_monitor'
+        }, { element: root || undefined });
+        if (tracked) {
+            __pixelRouteCommerceSent[key] = true;
+        }
+    }
+
     function __trackPageTransition(type, toUrl, extra) {
         var fromUrl = __pixelLastLocation;
         var nextUrl = toUrl ? String(toUrl) : window.location.href;
@@ -5358,6 +5616,7 @@
         // A10：SPA pushState/replaceState/popstate/hashchange 后重跑 sticky 内链改写
         __ensureStickyUtmLocked();
         __scheduleStickyAnchorRewrite(160);
+        __trackRouteScopedCommerceEvents('page_transition_' + type);
     }
 
     function __initBehaviorTelemetry() {
@@ -5378,6 +5637,11 @@
             });
             __trackMatchedCustomEvents(null, null, { event_name: 'page_view', trigger: 'page_view' }, {});
         }
+
+        // PDP/购物车/结账：page_view 之外补发路径级电商事件（字典 require_exact_marker 由页内 marker 满足审计）。
+        __trackRouteScopedCommerceEvents(
+            document.readyState === 'loading' ? 'script_init' : document.readyState
+        );
 
         if (__getSearchQueryFromUrl() || window.location.pathname.indexOf('/search') === 0) {
             window.WelinePixel.track('search_result_view', __getSearchMeta(__findSearchInput(document), 'page_view'));

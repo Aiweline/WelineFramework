@@ -271,6 +271,17 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
     }
     window.__WelinePixelLazyScheduled = true;
 
+    // track 队列：与 PixelBootstrapHtmlService 对齐；无 header eager 时兜底不丢 CTA。
+    window.__WelinePixelPending = window.__WelinePixelPending || [];
+    if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+        window.WelinePixel = {
+            track: function () {
+                window.__WelinePixelPending.push({ fn: 'track', args: Array.prototype.slice.call(arguments) });
+            },
+            __welineStub: true
+        };
+    }
+
     function isLocalDevHost() {
         try {
             var host = String(window.location && window.location.hostname || '');
@@ -294,8 +305,27 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
         console.log.apply(console, args);
     }
 
+    function flushPendingTracks() {
+        var q = window.__WelinePixelPending || [];
+        window.__WelinePixelPending = [];
+        if (!q.length || !window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+            return;
+        }
+        if (window.WelinePixel.__welineStub) {
+            window.__WelinePixelPending = q;
+            return;
+        }
+        for (var i = 0; i < q.length; i++) {
+            try {
+                window.WelinePixel.track.apply(window.WelinePixel, q[i].args || []);
+            } catch (eFlush) {
+            }
+        }
+    }
+
     function loadWelinePixel(reason) {
         if (window.__WelinePixelLazyLoaded || window.__WelinePixelLoaded) {
+            flushPendingTracks();
             return;
         }
 
@@ -305,6 +335,7 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
         script.src = '<?= $__pixel_script_url ?>';
         script.async = true;
         script.onload = function () {
+            flushPendingTracks();
             devLog('loaded', { reason: reason || 'schedule', hasTrack: !!(window.WelinePixel && window.WelinePixel.track) });
         };
         script.onerror = function () {
@@ -342,12 +373,61 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
             '[data-cta]',
             '[data-cta-event]',
             '[data-pixel-event]',
+            '[data-visitor-event]',
             '[data-pb-ai-action]',
             '[class*="weline-pixel::"]',
             'a[class*="-cta"]',
             'button[class*="-cta"]',
             '.pb-c-cta'
         ].join(','));
+    }
+
+    function declaredPixelEventName(cta) {
+        if (!cta || !cta.getAttribute) {
+            return '';
+        }
+        var attr = String(
+            cta.getAttribute('data-visitor-event')
+            || cta.getAttribute('data-pixel-event')
+            || cta.getAttribute('data-cta-event')
+            || ''
+        ).trim();
+        if (attr) {
+            return attr;
+        }
+        var className = typeof cta.className === 'string' ? cta.className : '';
+        var tokens = className.split(/\s+/);
+        for (var i = 0; i < tokens.length; i++) {
+            var token = tokens[i];
+            if (token.indexOf('weline-pixel::') === 0 && token.indexOf(':value') === -1) {
+                return token.replace('weline-pixel::', '');
+            }
+        }
+        return '';
+    }
+
+    function enqueuePendingDeclaredTrack(cta, event) {
+        var eventName = declaredPixelEventName(cta);
+        if (!eventName) {
+            return;
+        }
+        window.__WelinePixelPending = window.__WelinePixelPending || [];
+        window.__WelinePixelPending.push({
+            fn: 'track',
+            args: [
+                eventName,
+                {
+                    trigger: 'click',
+                    source: 'behavior_monitor',
+                    bootstrap_queued: true
+                },
+                {
+                    element: cta,
+                    startedAt: Date.now(),
+                    domEvent: event || null
+                }
+            ]
+        });
     }
 
     // Capture CTA clicks even before pixel.js finishes loading.
@@ -357,12 +437,10 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
             return;
         }
         var className = typeof cta.className === 'string' ? cta.className : '';
-        var pixelClass = '';
-        className.split(/\s+/).forEach(function (token) {
-            if (token.indexOf('weline-pixel::') === 0 && token.indexOf(':value') === -1) {
-                pixelClass = token.replace('weline-pixel::', '');
-            }
-        });
+        var pixelClass = declaredPixelEventName(cta);
+        var pixelReady = !!(window.WelinePixel
+            && typeof window.WelinePixel.track === 'function'
+            && !window.WelinePixel.__welineStub);
         var info = {
             tag: cta.tagName,
             text: ((cta.innerText || cta.textContent || '') + '').trim().slice(0, 80),
@@ -371,12 +449,13 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
             dataCtaEvent: cta.getAttribute('data-cta-event') || '',
             pixelClass: pixelClass,
             className: className,
-            pixelReady: !!(window.WelinePixel && typeof window.WelinePixel.track === 'function')
+            pixelReady: pixelReady
         };
         if (isLocalDevHost()) {
             console.log('[WelineCTA] click', info);
         }
-        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+        if (!pixelReady) {
+            enqueuePendingDeclaredTrack(cta, event);
             loadWelinePixel('cta-click');
         }
     }, true);

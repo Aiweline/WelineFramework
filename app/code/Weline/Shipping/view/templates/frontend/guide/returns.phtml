@@ -14,6 +14,11 @@ $toc = [
     ['id' => 'returns-s7', 'label' => __('七、尺码与试穿建议')],
     ['id' => 'returns-s8', 'label' => __('八、争议与联系')],
 ];
+$tocPath = '/guide/returns';
+$rawPath = \function_exists('w_env_request_uri') ? (string)(\parse_url((string)\w_env_request_uri(), PHP_URL_PATH) ?: '') : '';
+if ($rawPath !== '' && $rawPath !== '/') {
+    $tocPath = $rawPath;
+}
 ?>
 <article class="amazon-doc" data-testid="shipping-returns" weline-code="shipping.returns">
     <style>
@@ -38,15 +43,15 @@ $toc = [
             border: 1px solid #ddd;
             border-radius: 8px;
             box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
-            overflow: hidden;
+            /* no overflow:hidden — bare #anchors break under storefront <base href="/"> */
         }
-        .amazon-doc__toc { padding: 1.1rem 1rem 1.25rem; border-right: 1px solid #e3e6e6; background: #fafafa; }
+        .amazon-doc__toc { border-radius: 8px 0 0 8px; padding: 1.1rem 1rem 1.25rem; border-right: 1px solid #e3e6e6; background: #fafafa; }
         .amazon-doc__toc h2 { margin: 0 0 .7rem; font-size: .95rem; }
         .amazon-doc__toc nav { display: grid; gap: .3rem; }
         .amazon-doc__toc a { display: block; padding: .35rem .5rem; border-radius: 4px; color: #007185; text-decoration: none; font-size: .9rem; line-height: 1.35; }
         .amazon-doc__toc a:hover { background: #f7fafa; color: #c45500; text-decoration: underline; }
-        .amazon-doc__body { padding: clamp(1.1rem, 2.4vw, 1.65rem); }
-        .amazon-doc__section { margin-top: 1.35rem; scroll-margin-top: 1rem; }
+        .amazon-doc__body { border-radius: 0 8px 8px 0; padding: clamp(1.1rem, 2.4vw, 1.65rem); }
+        .amazon-doc__section { margin-top: 1.35rem; scroll-margin-top: 12rem; }
         .amazon-doc__section:first-of-type { margin-top: 0; }
         .amazon-doc__section h2 { margin: 0 0 .7rem; font-size: 1.15rem; border-left: 4px solid #ff9900; padding-left: .65rem; }
         .amazon-doc__section p, .amazon-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: #333; }
@@ -56,7 +61,8 @@ $toc = [
         .amazon-doc__related a:hover { color: #c45500; text-decoration: underline; }
         @media (max-width: 900px) {
             .amazon-doc__panel { grid-template-columns: 1fr; }
-            .amazon-doc__toc { border-right: 0; border-bottom: 1px solid #e3e6e6; }
+            .amazon-doc__toc { border-right: 0; border-bottom: 1px solid #e3e6e6; border-radius: 8px 8px 0 0; }
+            .amazon-doc__body { border-radius: 0 0 8px 8px; }
             .amazon-doc__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
@@ -67,7 +73,7 @@ $toc = [
     <header class="amazon-doc__hero" aria-labelledby="returns-title">
         <p class="amazon-doc__eyebrow"><lang>帮助中心</lang></p>
         <h1 id="returns-title"><lang>退换政策</lang></h1>
-        <p><lang>本页说明退货、换货与退款的适用条件、办理流程、运费承担、到账时效与特殊品类规则。下单即表示您已阅读并理解本政策；法律法规另有强制性规定的，从其规定。</lang></p>
+        <p><lang>本页说明退货/换货条件（跨境寄回中国仓库）。退款到账另见退款政策。下单即表示已阅读；仅在当地强制性法律另有规定时，从其规定。</lang></p>
     </header>
 
     <div class="amazon-doc__panel">
@@ -75,7 +81,7 @@ $toc = [
             <h2><lang>目录</lang></h2>
             <nav>
                 <?php foreach ($toc as $item): ?>
-                    <a href="#<?= htmlspecialchars($item['id'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$item['label'], ENT_QUOTES, 'UTF-8') ?></a>
+                    <a href="<?= htmlspecialchars($tocPath . '#' . $item['id'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$item['label'], ENT_QUOTES, 'UTF-8') ?></a>
                 <?php endforeach; ?>
             </nav>
         </aside>
@@ -83,10 +89,10 @@ $toc = [
         <div class="amazon-doc__body">
             <section class="amazon-doc__section" id="returns-s1" weline-code="shipping.guide.returns.s1">
                 <h2><lang>一、适用条件</lang></h2>
-                <p><lang>1.1 一般情形：自签收之日起 7 日内，商品未经穿着使用（或仅试穿）、吊牌完整、不影响二次销售的，可申请退货或换货。</lang></p>
-                <p><lang>1.2 质量问题：存在做工瑕疵、破损、污渍、尺码与标称明显不符、错发漏发等情形的，不受「未使用」限制，但仍需保留商品与凭证并尽快申报。</lang></p>
-                <p><lang>1.3 特殊品类：定制/来图定做、剪裁改衣、贴身内衣、已下水洗涤、已拆封的易耗配件、以及商品页明确标注「不支持无理由退换」的特价/清仓商品，适用商品页特别约定；无质量问题通常不支持无理由退换。</lang></p>
-                <p><lang>1.4 法规权利：依法适用七日无理由退货的品类，按其法定条件执行；本政策不得减损您依法享有的权利。</lang></p>
+                <p><lang>1.1 一般情形：自签收之日起 7 日内，商品仅试穿未穿着使用、吊牌完整、不影响二次销售的，可申请退货或换货。跨境订单请尽早申请，以便安排寄回中国仓库。</lang></p>
+                <p><lang>1.2 质量问题：做工瑕疵、破损、污渍、尺码与标称明显不符、错发漏发等，不受「未使用」限制，但仍须保留商品与凭证并尽快申报。</lang></p>
+                <p><lang>1.3 特殊品类：定制/来图定做、剪裁改衣、贴身内衣、已下水、已拆封易耗配件，以及商品页标注「不支持无理由退换」的特价/清仓商品，无质量问题通常不支持无理由退换。</lang></p>
+                <p><lang>1.4 法规权利：仅当您所在地强制性法律赋予更长冷静期或额外权利时，在该强制范围内从其规定；除此之外以本政策与商品页约定为准。</lang></p>
             </section>
 
             <section class="amazon-doc__section" id="returns-s2" weline-code="shipping.guide.returns.s2">
@@ -111,9 +117,10 @@ $toc = [
 
             <section class="amazon-doc__section" id="returns-s4" weline-code="shipping.guide.returns.s4">
                 <h2><lang>四、运费说明</lang></h2>
-                <p><lang>4.1 因商品质量问题、错发、漏发导致的退换：往返运费由我们承担（按实际产生且合理的标准运费核实报销或直免）。</lang></p>
-                <p><lang>4.2 因个人原因（尺码不合适、不喜欢、拍错）退换：寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定，结账或客服确认时会明示。</lang></p>
-                <p><lang>4.3 到付件：未经同意的到付包裹可能被拒收，因此产生的费用由寄件方承担。</lang></p>
+                <p><lang>4.1 因质量问题、错发、漏发导致的退换：我们承担合理范围内寄回中国仓库的标准国际运费（按实际核实报销或直免）；加急/保价等增值费用除外。</lang></p>
+                <p><lang>4.2 因个人原因（尺码不合适、不喜欢、拍错）退换：寄回中国仓库的国际运费、可能产生的出口/进口税费与清关费由买家承担；换货再发出的运费以客服确认为准。包邮不包含回程。</lang></p>
+                <p><lang>4.3 到付件：未经同意寄到付至我方仓库的包裹可能被拒收，费用由寄件方承担。</lang></p>
+                <p><lang>4.4 跨境退货可能产生目的地出口手续或原进口税费不退等情况，除质量问题且我们书面同意承担外，相关成本由买家自行处理。</lang></p>
             </section>
 
             <section class="amazon-doc__section" id="returns-s5" weline-code="shipping.guide.returns.s5">

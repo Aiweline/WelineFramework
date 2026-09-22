@@ -150,9 +150,21 @@ class PublicApiAuthRouteMatcher
             return true;
         }
 
-        $controller = (string) $request->getController();
-        $action = (string) $request->getAction();
-        $controllerClass = (string) ($request->getRouterData('controller') ?? '');
+        $router = $request->getRouter();
+        $controllerClass = (string) ($router['class']['name'] ?? $request->getRouterData('controller') ?? '');
+        $action = (string) ($router['class']['method'] ?? '');
+        $controller = '';
+        if ($controllerClass !== '') {
+            $parts = explode('\\', $controllerClass);
+            $controller = (string) end($parts);
+        }
+        // Legacy magic getters (may be empty — Request has no real getController/getAction).
+        if ($controller === '') {
+            $controller = (string) $request->getController();
+        }
+        if ($action === '') {
+            $action = (string) $request->getAction();
+        }
 
         if ($controller !== '' && $action !== '') {
             if (in_array($controller, self::AUTH_CONTROLLERS, true) && in_array($action, self::AUTH_ACTIONS, true)) {
@@ -174,7 +186,7 @@ class PublicApiAuthRouteMatcher
 
         $paths = array_filter([
             $request->getRouteUrlPath(),
-            $request->getPath(),
+            (string) ($request->getData('path') ?? ''),
             (string) ($request->getRouterData('module_path') ?? ''),
         ]);
 

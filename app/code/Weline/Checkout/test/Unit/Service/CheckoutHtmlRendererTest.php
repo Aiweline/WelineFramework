@@ -298,7 +298,8 @@ final class CheckoutHtmlRendererTest extends TestCase
         $path = dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php';
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('ensurePaymentMethodListed', $src);
-        self::assertStringContainsString("if (\$selectedPayment !== '')", $src);
+        self::assertStringContainsString('$continuePayRequest', $src);
+        self::assertStringContainsString('if ($continuePayRequest && $selectedPayment !== \'\')', $src);
         self::assertStringNotContainsString(
             "if (\$selectedPayment !== '' && !\$checkoutBlocked)",
             $src
@@ -308,6 +309,10 @@ final class CheckoutHtmlRendererTest extends TestCase
         // Frontend worker must declare payment_method or getData loops with Unknown param toast.
         self::assertMatchesRegularExpression(
             "/'name'\\s*=>\\s*'getData'[\\s\\S]*?'payment_method'\\s*=>\\s*\\[/",
+            $src
+        );
+        self::assertMatchesRegularExpression(
+            "/'name'\\s*=>\\s*'getData'[\\s\\S]*?'continue_pay'\\s*=>\\s*\\[/",
             $src
         );
     }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 /**
- * Resolve YouTube / Vimeo ids and source URLs for the video-player widget.
+ * Resolve YouTube / Vimeo / Bilibili ids and source URLs for Theme video widgets.
  *
  * Accepts watch URLs, short links, embed URLs, and bare URLs pasted into embed_code.
  */
@@ -78,6 +78,55 @@ final class VideoEmbedResolver
     }
 
     /**
+     * Resolve a Bilibili BV id (e.g. BV1xx411c7mD) or av/aid token (e.g. av170001).
+     *
+     * Accepts www.bilibili.com/video/… pages, player.bilibili.com embed URLs, and iframe src.
+     * Does not follow b23.tv short links (no outbound HTTP).
+     */
+    public static function resolveBilibiliId(string $urlOrHtml): string
+    {
+        $candidates = self::candidateUrls($urlOrHtml);
+        foreach ($candidates as $candidate) {
+            if (preg_match('~bilibili\.com/video/(BV[0-9A-Za-z]+)~i', $candidate, $matches)) {
+                return self::normalizeBilibiliBv($matches[1]);
+            }
+            if (preg_match('~(?:^|[?&])bvid=(BV[0-9A-Za-z]+)~i', $candidate, $matches)) {
+                return self::normalizeBilibiliBv($matches[1]);
+            }
+            if (preg_match('~bilibili\.com/video/av(\d{1,12})\b~i', $candidate, $matches)) {
+                return 'av' . $matches[1];
+            }
+            if (
+                stripos($candidate, 'bilibili.com') !== false
+                && preg_match('~(?:^|[?&])aid=(\d{1,12})\b~i', $candidate, $matches)
+            ) {
+                return 'av' . $matches[1];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Build a trusted Bilibili player embed URL from a BV id or av/aid token.
+     */
+    public static function bilibiliEmbedUrl(string $id): string
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return '';
+        }
+        if (preg_match('~^BV[0-9A-Za-z]+$~i', $id)) {
+            return 'https://player.bilibili.com/player.html?bvid=' . self::normalizeBilibiliBv($id);
+        }
+        if (preg_match('~^(?:av)?(\d{1,12})$~i', $id, $matches)) {
+            return 'https://player.bilibili.com/player.html?aid=' . $matches[1];
+        }
+
+        return '';
+    }
+
+    /**
      * Trusted iframe hosts for video embeds (editor preview sanitizers must keep these).
      *
      * @return list<string>
@@ -90,7 +139,17 @@ final class VideoEmbedResolver
             'youtube-nocookie.com',
             'www.youtube-nocookie.com',
             'player.vimeo.com',
+            'player.bilibili.com',
         ];
+    }
+
+    private static function normalizeBilibiliBv(string $bv): string
+    {
+        if ($bv === '') {
+            return '';
+        }
+
+        return 'BV' . substr($bv, 2);
     }
 
     public static function isTrustedEmbedSrc(string $src): bool

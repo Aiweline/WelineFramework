@@ -180,6 +180,47 @@ class ControllerFetchFileAfterTest extends TestCase
         $this->assertSame('<section>prefetched</section>', $eventData->getData('content'));
         $this->assertGreaterThanOrEqual(1, count($template->fetchCalls));
     }
+
+    /**
+     * 政策壳等直接 fetch 全页 layouts/*.phtml 时，content≡layout，禁止再 wrap 嵌第二份文档。
+     */
+    public function testSkipsWrapWhenContentTemplateIsSameFrontendLayoutDocument(): void
+    {
+        $template = new ControllerFetchFileAfterTestTemplateStub();
+        $layoutPath = 'Weline_Theme::theme/frontend/layouts/policy/shipping.phtml';
+        $prefetched = '<!DOCTYPE html><html><head><title>Shipping</title></head>'
+            . '<body><header class="weline-header" role="banner">H</header>'
+            . '<main>shipping body</main></body></html>';
+
+        $observer = new class($template) extends ControllerFetchFileAfter {
+            public function __construct(private readonly Template $template)
+            {
+            }
+
+            protected function getTemplateInstance(): Template
+            {
+                return $this->template;
+            }
+        };
+
+        $eventData = new DataObject([
+            'layoutType' => 'policy',
+            'layoutOption' => 'shipping',
+            'contentTemplate' => $layoutPath,
+            'layoutTemplate' => 'theme/frontend/layouts/policy/shipping.phtml',
+            'fileName' => $layoutPath,
+            'content' => $prefetched,
+        ]);
+        $event = new Event(['data' => $eventData]);
+        $event->setName('test');
+
+        $observer->execute($event);
+
+        $this->assertSame([], $template->fetchCalls, 'must not re-fetch layout when already a layout document');
+        $this->assertSame($prefetched, $eventData->getData('content'));
+        $this->assertSame('theme/frontend/layouts/policy/shipping.phtml', $eventData->getData('fileName'));
+        $this->assertSame(1, substr_count(strtolower($prefetched), '<!doctype html>'));
+    }
 }
 
 class ControllerFetchFileAfterTestTemplateStub extends Template

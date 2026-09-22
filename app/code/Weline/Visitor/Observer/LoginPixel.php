@@ -8,6 +8,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Visitor\Service\PixelEncryptionService;
+use Weline\Visitor\Service\PixelEventService;
 
 class LoginPixel implements ObserverInterface
 {
@@ -62,7 +63,7 @@ class LoginPixel implements ObserverInterface
 
             $version = $token->getVersion();
             $encryptedData = $encryptionService->encrypt($pixelData, $version);
-            $this->sendPixelDataAsync($encryptedData, $version);
+            $this->deliverPixel($encryptedData, $version);
         } catch (\Throwable $e) {
             w_log_error('LoginPixel Observer Error: ' . $e->getMessage());
         }
@@ -104,32 +105,17 @@ class LoginPixel implements ObserverInterface
         return 0;
     }
 
-    private function sendPixelDataAsync(string $encryptedData, string $version): void
+    /**
+     * In-process delivery — Env base URL is often empty on WLS workers / CLI,
+     * so HTTP self-POST to the pixel REST endpoint silently no-ops.
+     */
+    private function deliverPixel(string $encryptedData, string $version): void
     {
-        $baseUrl = \Weline\Framework\App\Env::getInstance()->getBaseUrl();
-        if (empty($baseUrl)) {
-            $scheme = \Weline\Framework\Env\WelineEnv::server('REQUEST_SCHEME', 'http');
-            $host = \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', 'localhost');
-            $baseUrl = $scheme . '://' . $host;
-        }
-        $pixelUrl = rtrim($baseUrl, '/') . '/visitor/rest/v1/pixel';
-
-        $postData = json_encode([
+        /** @var PixelEventService $pixelEventService */
+        $pixelEventService = ObjectManager::getInstance(PixelEventService::class);
+        $pixelEventService->track([
             'encrypted' => $encryptedData,
             'version' => $version,
-        ], JSON_UNESCAPED_UNICODE);
-
-        $ch = curl_init($pixelUrl);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'X-Pixel-Version: ' . $version,
         ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 1);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1);
-        @curl_exec($ch);
-        curl_close($ch);
     }
 }

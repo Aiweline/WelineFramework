@@ -217,4 +217,24 @@ return [
             'source' => ['type' => 'string', 'required' => false, 'description' => '设置来源（如 env/service）'],
         ],
     ],
+
+    /**
+     * WLS 主进程 READY 后（ServiceOrchestrator::checkAndNotifyServerReady）
+     * Framework WarmCache / Theme FPC warmer 等订阅此事件。
+     */
+    'Weline_Server::start_after' => [
+        'name' => __('服务器启动后'),
+        'description' => __('WLS Master 全部必需服务 READY 且 lifecycle 已标 running 后派发一次；供缓存预热等 Observer。fail-open。'),
+        'doc' => 'lifecycle/服务器启动后.md',
+        'version' => '1.0.0',
+        'type' => 'application',
+        'data_contract' => [
+            'instance_name' => ['type' => 'string', 'required' => false, 'description' => '实例名'],
+            'pid' => ['type' => 'integer', 'required' => false, 'description' => 'Master PID'],
+            'host' => ['type' => 'string', 'required' => false, 'description' => '公网或绑定 Host'],
+            'port' => ['type' => 'integer', 'required' => false, 'description' => '主端口'],
+            'service_count' => ['type' => 'integer', 'required' => false, 'description' => '服务实例数'],
+            'start_time' => ['type' => 'integer', 'required' => false, 'description' => 'Unix 时间戳'],
+        ],
+    ],
 ];

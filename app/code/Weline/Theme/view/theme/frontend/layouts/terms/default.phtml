@@ -19,6 +19,7 @@
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\StorefrontHref;
 use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
@@ -58,6 +59,7 @@ $toc = [
     ['id' => 'terms-section-7', 'label' => WidgetI18n::label('七、争议解决')],
     ['id' => 'terms-section-8', 'label' => WidgetI18n::label('八、其他')],
 ];
+$tocFallbackPath = '/terms';
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
@@ -86,8 +88,16 @@ $toc = [
             flex-direction: column;
         }
         .amazon-terms__breadcrumb {
-            border-bottom: 1px solid var(--color-border-default, #ddd);
-            background: var(--color-bg-secondary, #eaeded);
+            margin: 0 0 var(--weline-space-4, 1rem);
+            border: 0;
+            background: transparent;
+        }
+        .amazon-terms__breadcrumb .w-frontend-breadcrumb {
+            padding-block: 0;
+            width: 100%;
+            max-width: none;
+            margin-inline: 0;
+            padding-inline: 0;
         }
 
         .amazon-terms__hero {
@@ -108,7 +118,7 @@ $toc = [
             min-width: 0;
             margin-inline: auto;
             padding-inline: var(--weline-layout-content-padding-inline);
-            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+            padding-block: var(--weline-space-4, 1rem) clamp(3rem, 6vw, 4.5rem);
         }
 
         .amazon-terms__eyebrow {
@@ -164,15 +174,16 @@ $toc = [
             border: 1px solid var(--color-border-default, #ddd);
             border-radius: 8px;
             box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
-            overflow: hidden;
+            /* no overflow:hidden — with <base href="/"> + sticky header, hash scroll must use document */
         }
 
         .amazon-terms__toc {
+            border-radius: 8px 0 0 8px;
             padding: 1.15rem 1rem 1.25rem;
             border-right: 1px solid var(--color-border-default, #e3e6e6);
             background: var(--color-bg-secondary, #fafafa);
             position: sticky;
-            top: 0.75rem;
+            top: 12rem;
         }
 
         .amazon-terms__toc h2 {
@@ -203,6 +214,7 @@ $toc = [
         }
 
         .amazon-terms__article {
+            border-radius: 0 8px 8px 0;
             padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
         }
 
@@ -216,7 +228,7 @@ $toc = [
 
         .amazon-terms__section {
             margin-top: 1.5rem;
-            scroll-margin-top: 1rem;
+            scroll-margin-top: 12rem;
         }
 
         .amazon-terms__section h2 {
@@ -278,6 +290,11 @@ $toc = [
                 position: static;
                 border-right: 0;
                 border-bottom: 1px solid var(--color-border-default, #e3e6e6);
+                border-radius: 8px 8px 0 0;
+            }
+
+            .amazon-terms__article {
+                border-radius: 0 0 8px 8px;
             }
 
             .amazon-terms__toc nav {
@@ -304,16 +321,7 @@ $toc = [
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
-
-        <if condition="meta.showBreadcrumb">
-            <div class="amazon-terms__breadcrumb">
-                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
-                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
-            </div>
-        </if>
-
-        <main class="amazon-terms__main" id="main-content" data-layout="terms">
+<main class="amazon-terms__main" id="main-content" data-layout="terms">
             <w:slot id="content"
                     name="内容区"
                     accept="layout-terms-content,layout-policy-term-condition-content,layout-policy-content,layout-default-content,content,policy-content,term-condition,terms,cms-content,faq"
@@ -329,6 +337,14 @@ $toc = [
                     <?php else: ?>
                         <div class="amazon-terms__body" weline-code="theme.terms.body">
                             <div class="amazon-terms__stage">
+                                <if condition="meta.showBreadcrumb">
+                                    <div class="amazon-terms__breadcrumb">
+                                        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+                                        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+                                        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+                                    </div>
+                                </if>
+
                                 <header class="amazon-terms__hero" aria-labelledby="terms-layout-title" weline-code="theme.terms.hero">
                                     <p class="amazon-terms__eyebrow"><?= $escape($siteName) ?></p>
                                     <h1 id="terms-layout-title"><?= $escape($title) ?></h1>
@@ -345,7 +361,7 @@ $toc = [
                                         <h2><?= $escape(WidgetI18n::label('目录')) ?></h2>
                                         <nav>
                                             <?php foreach ($toc as $item): ?>
-                                                <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
+                                                <a href="<?= $escape(StorefrontHref::fragmentHref((string)$item['id'], $tocFallbackPath)) ?>"><?= $escape($item['label']) ?></a>
                                             <?php endforeach; ?>
                                         </nav>
                                     </aside>
@@ -385,7 +401,7 @@ $toc = [
 
                                         <section class="amazon-terms__section" id="terms-section-4" weline-code="theme.terms.section_4">
                                             <h2><?= $escape(WidgetI18n::label('四、商品与交易')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('4.1 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.1 本网站展示的商品信息由本站经营者负责维护。我们将尽力保证信息真实、准确、完整；如存在明显错误，您有权在下单前或依法主张更正、取消或售后。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.2 商品价格、库存等信息可能随时变动，以实际下单时的信息为准。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.3 您在下单时，应仔细核对商品信息、价格、数量等，确认无误后再提交订单。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.4 订单提交成功后，您应按照约定支付款项。如未在规定时间内支付，订单可能被自动取消。')) ?></p>
@@ -408,14 +424,14 @@ $toc = [
                                         <section class="amazon-terms__section" id="terms-section-7" weline-code="theme.terms.section_7">
                                             <h2><?= $escape(WidgetI18n::label('七、争议解决')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('7.1 因本条款引起的或与本条款有关的任何争议，双方应友好协商解决。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('7.2 如协商不成，任何一方均可向本网站所在地有管辖权的人民法院提起诉讼。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('7.2 如协商不成，任何一方均可向经营者住所地有管辖权的人民法院提起诉讼；法律法规另有规定的除外。')) ?></p>
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-8" weline-code="theme.terms.section_8">
                                             <h2><?= $escape(WidgetI18n::label('八、其他')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('8.1 本条款自发布之日起生效，并持续有效，直至被修订或终止。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('8.2 如本条款的任何条款被认定为无效或不可执行，不影响其他条款的效力。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('8.3 我们保留对本条款的最终解释权，并有权根据法律法规和业务发展需要对本条款进行修订。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('8.3 我们有权根据法律法规和业务发展需要修订本条款；重大变更将通过本页更新或其他合理方式告知。本条款的解释以有利于保护消费者合法权益且符合强制性法律的方式为准。')) ?></p>
                                         </section>
 
                                         <div class="amazon-terms__footer-note">

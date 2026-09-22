@@ -1,11 +1,9 @@
 <?php
 /**
- * BC shim for themes/pages that still call the Review product hook.
- * Primary storefront delivery is the product-reviews widget via layout slot
- * default_injections (layout must not embed the widget directly).
+ * BC shim（已退役）：商品评论由 product-reviews 的 default_injections 注入布局空槽。
+ * placement=injection — 禁止在此 fetch 同身份部件（与注入并存会叠渲）。
  *
  * @hook-priority 220
  * @hook-sort-order 11
  * @hook-solo false
  */
-echo $this->fetch('Weline_Review::templates/frontend/widgets/product-reviews.phtml');

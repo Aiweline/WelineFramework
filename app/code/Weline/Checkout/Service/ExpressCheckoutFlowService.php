@@ -647,37 +647,13 @@ final class ExpressCheckoutFlowService
         }
 
         try {
-            /** @var PaymentTransaction $txn */
-            $txn = $this->om()->getInstance(PaymentTransaction::class);
-            $txn->clear()
-                ->where(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo)
-                ->find()
-                ->fetch();
-            if (!(int) $txn->getId()) {
-                return $out;
-            }
-            if ($txn->isSuccess()) {
-                $out['skipped'] = 'already_paid';
+            /** @var PaymentExpressFacadeInterface $express */
+            $express = $this->om()->getInstance(PaymentExpressFacadeInterface::class);
+            $paymentResult = $express->abandonExpressPayment($transactionNo, $reason);
+            $out = array_merge($out, $paymentResult);
 
-                return $out;
-            }
-
-            $request = $txn->getRequestData();
-            if (!is_array($request)) {
-                $request = [];
-            }
-            $meta = is_array($request['metadata'] ?? null) ? $request['metadata'] : [];
-            $meta['express_abandoned'] = 1;
-            $meta['express_abandon_reason'] = $reason;
-            unset($meta[ExpressCheckoutOrchestrator::META_AWAITING_CONFIRM]);
-            $request['metadata'] = $meta;
-            unset($request[ExpressCheckoutOrchestrator::META_AWAITING_CONFIRM]);
-            $txn->setRequestData($request)
-                ->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
-                ->save();
-
-            $orderUuid = trim((string) $txn->getData(PaymentTransaction::schema_fields_ORDER_ID));
-            if ($orderUuid !== '') {
+            $orderUuid = trim((string) ($paymentResult['order_uuid'] ?? ''));
+            if ($orderUuid !== '' && !empty($paymentResult['abandoned'])) {
                 $out['order_uuid'] = $orderUuid;
                 try {
                     /** @var Order $order */
@@ -1549,6 +1525,9 @@ final class ExpressCheckoutFlowService
             || !empty($decision['absolute']);
     }
 
+    /**
+     * TODO(payment-shell-compliance): move write to PaymentExpressFacade — Checkout must not setData/save PaymentTransaction.
+     */
     private function markConfirmCapture(string $transactionNo, int $grandMinor, string $currency): void
     {
         try {

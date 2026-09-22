@@ -9,6 +9,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\KeyBuilder;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -4548,6 +4549,8 @@ HTML;
         $cacheablePublished = !$isDraft && !$hasTargetIdentity;
 
         $layout = null;
+        /** @var ThemeRuntimeLayoutResolver $runtimeLayoutResolver */
+        $runtimeLayoutResolver = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
         // 草稿和页面级 target 不读缓存，保证编辑器/预览/页面级渲染每次按当前 identify 取数。
         if ($cacheablePublished && isset($this->layoutCache[$cacheKey])) {
             $layout = $this->layoutCache[$cacheKey];
@@ -4563,17 +4566,37 @@ HTML;
                 $layout = $cached['data'];
             } else {
                 unset(self::$publishedLayoutDataCache[$cacheKey]);
-                $runtimeCachedLayout = $this->runtimeCacheGet('layout.data.' . $cacheKey);
-                if (\is_array($runtimeCachedLayout)) {
-                    $this->layoutCache[$cacheKey] = $runtimeCachedLayout;
-                    $this->rememberPublishedLayoutData($cacheKey, $runtimeCachedLayout);
-                    $layout = $runtimeCachedLayout;
+                // Cross-worker structure reuse via CachePolicy HotCache (not theme_runtime IPC).
+                $hotCache = $this->resolvePublishedLayoutHotCache();
+                if ($hotCache instanceof StorefrontScopeHotCache) {
+                    $resolved = $hotCache->rememberPolicy(
+                        StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy(),
+                        $this->publishedLayoutStructureLogicalKey($themeId, $pageType, $area, $identity),
+                        static function () use (
+                            $runtimeLayoutResolver,
+                            $themeId,
+                            $pageType,
+                            $status,
+                            $area,
+                            $identity,
+                        ): array {
+                            return $runtimeLayoutResolver->resolveLayout(
+                                $themeId,
+                                $pageType,
+                                $status,
+                                $area,
+                                $identity,
+                            );
+                        },
+                    );
+                    if (\is_array($resolved)) {
+                        $this->layoutCache[$cacheKey] = $resolved;
+                        $this->rememberPublishedLayoutData($cacheKey, $resolved);
+                        $layout = $resolved;
+                    }
                 }
             }
         }
-
-        /** @var ThemeRuntimeLayoutResolver $runtimeLayoutResolver */
-        $runtimeLayoutResolver = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
 
         if (!\is_array($layout)) {
             // 1. Structure-only resolve (published 不读 legacy theme_layout).
@@ -4589,7 +4612,14 @@ HTML;
             if ($cacheablePublished) {
                 $this->layoutCache[$cacheKey] = $layout;
                 $this->rememberPublishedLayoutData($cacheKey, $layout);
-                $this->runtimeCacheSet('layout.data.' . $cacheKey, $layout, $this->publishedLayoutCacheTtl());
+                $hotCache = $this->resolvePublishedLayoutHotCache();
+                if ($hotCache instanceof StorefrontScopeHotCache) {
+                    $hotCache->rememberPolicy(
+                        StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy(),
+                        $this->publishedLayoutStructureLogicalKey($themeId, $pageType, $area, $identity),
+                        static fn(): array => $layout,
+                    );
+                }
             }
         }
 
@@ -4797,12 +4827,43 @@ HTML;
     }
 
     /**
-     * Published layout / widget output stay process-local (L1).
+     * @param array{layout_option?:string,scope?:string,target_type?:string,target_id?:int} $identity
+     */
+    private function publishedLayoutStructureLogicalKey(
+        int $themeId,
+        string $pageType,
+        string $area,
+        array $identity,
+    ): string {
+        return 'pub_layout|'
+            . ($area === 'backend' ? 'backend' : 'frontend') . '|'
+            . $themeId . '|'
+            . $pageType . '|'
+            . \trim((string)($identity['layout_option'] ?? 'default')) . '|'
+            . \trim((string)($identity['scope'] ?? '')) . '|'
+            . \trim((string)($identity['target_type'] ?? 'global')) . '|'
+            . (int)($identity['target_id'] ?? 0);
+    }
+
+    private function resolvePublishedLayoutHotCache(): ?StorefrontScopeHotCache
+    {
+        try {
+            $resolved = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+
+            return $resolved instanceof StorefrontScopeHotCache ? $resolved : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Published layout / widget output stay process-local (L1) plus HotCache Policy.
      *
      * Historical theme_runtime SharedState get/set burns ~200ms each under pool
      * pressure — the same regression Partials already escaped. Hot-path reads
-     * therefore never call wls.memory; publish still purges the shared namespace
-     * via {@see purgeRuntimeCacheNamespace()}.
+     * therefore never call wls.memory theme_runtime; publish still purges the
+     * shared namespace via {@see purgeRuntimeCacheNamespace()}. Structure reuse
+     * goes through {@see StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy()}.
      */
     private function runtimeCacheGet(string $key): mixed
     {

@@ -41,4 +41,7 @@
     <event name="Weline_Maintenance::maintenance">
         <observer name="Weline_Admin::maintenance" instance="Weline\Admin\Observer\Maintenance" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Acl::role_access_cache_invalidated">
+        <observer name="Weline_Admin::backend_menu_search_index_rebuild" instance="Weline\Admin\Observer\BackendMenuSearchIndexRebuildObserver" disabled="false" shared="true" sort="50"/>
+    </event>
 </config>

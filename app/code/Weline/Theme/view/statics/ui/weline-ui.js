@@ -1655,11 +1655,13 @@ function registerDialog() {
             if (isOpen || !emitLocal('before-open', { options })) return false;
             lastFocus = document.activeElement;
             element.dataset.state = 'open';
+            // Native <dialog hidden> keeps display:none even after showModal(); always clear it.
+            element.hidden = false;
+            element.removeAttribute('hidden');
             if (nativeDialog) {
                 element.showModal();
             } else {
                 ensureBodyHost();
-                element.hidden = false;
                 element.setAttribute('role', 'dialog');
                 element.setAttribute('aria-modal', 'true');
                 element.setAttribute('aria-hidden', 'false');
@@ -1714,6 +1716,8 @@ function registerDialog() {
         if (nativeDialog) {
             listen(element, 'close', () => {
                 element.dataset.state = 'closed';
+                element.hidden = true;
+                element.setAttribute('hidden', '');
                 popOverlay(element);
                 emitLocal('close', { returnValue: element.returnValue }, false);
             });
@@ -2664,7 +2668,7 @@ function registerNavFilter() {
             }
             sidebarCollapse()?.dismissOverlay?.();
         };
-        const applyFilter = () => {
+        const applyFilterLocal = () => {
             const query = input.value.trim().toLocaleLowerCase();
             const isFiltering = query !== '';
             const allEntries = [...list.querySelectorAll('.w-backend-nav__entry')];
@@ -2717,6 +2721,127 @@ function registerNavFilter() {
                 syncCurrentRouteAndScroll();
                 maybeDismissSearchOverlay();
             }
+            return visible;
+        };
+        const remoteSubtreeMatches = (entry, sourceIds) => {
+            const sid = (entry.getAttribute('data-source') || '').trim();
+            if (sid !== '' && sourceIds.has(sid)) {
+                return true;
+            }
+            return childEntries(entry).some((child) => remoteSubtreeMatches(child, sourceIds));
+        };
+        const hasRemoteMatchingAncestor = (entry, sourceIds) => {
+            let node = entry.parentElement;
+            while (node && node !== list) {
+                if (node.classList.contains('w-backend-nav__entry')) {
+                    const sid = (node.getAttribute('data-source') || '').trim();
+                    if (sid !== '' && sourceIds.has(sid)) {
+                        return true;
+                    }
+                }
+                node = node.parentElement;
+            }
+            return false;
+        };
+        const applyFilterBySourceIds = (query, sourceIds) => {
+            const isFiltering = query !== '';
+            const allEntries = [...list.querySelectorAll('.w-backend-nav__entry')];
+            let visible = 0;
+            element.setAttribute('data-w-nav-filtering', 'true');
+            clearCurrentRoute();
+            allEntries.forEach((entry) => {
+                const sid = (entry.getAttribute('data-source') || '').trim();
+                const remoteSelf = sid !== '' && sourceIds.has(sid);
+                // 命中叶节点时必须解开祖先 entry.hidden，否则嵌套菜单异语命中会被父裁切。
+                const remoteMatch = remoteSubtreeMatches(entry, sourceIds)
+                    || hasRemoteMatchingAncestor(entry, sourceIds);
+                const selfMatch = entryMatchesOwnLabel(entry, query);
+                const localMatch = matchesSubtree(entry, query) || hasMatchingAncestor(entry, query);
+                const match = remoteMatch || localMatch;
+                entry.hidden = !match;
+                if (match) {
+                    visible += 1;
+                    if (!isFilterSourceEntry(entry)) {
+                        setEntryExpandedForFilter(entry, selfMatch || remoteSelf);
+                    }
+                }
+            });
+            groups.forEach((group) => {
+                let sibling = group.nextElementSibling;
+                let hasVisible = false;
+                while (sibling && !sibling.classList.contains('w-backend-nav__group')) {
+                    if (sibling.classList.contains('w-backend-nav__entry') && !sibling.hidden) {
+                        hasVisible = true;
+                    }
+                    sibling = sibling.nextElementSibling;
+                }
+                group.hidden = !hasVisible;
+            });
+            if (empty instanceof HTMLElement) {
+                empty.hidden = !isFiltering || visible > 0;
+            }
+            emitLocal('change', { query, visible, filtering: isFiltering, remote: true }, false);
+            return visible;
+        };
+        let remoteFilterToken = 0;
+        let remoteFilterTimer = 0;
+        const applyRemoteFilter = async (rawQuery) => {
+            const query = String(rawQuery || '').trim();
+            if (query === '') {
+                return;
+            }
+            const token = ++remoteFilterToken;
+            try {
+                if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                    return;
+                }
+                if (typeof window.Weline.load === 'function') {
+                    await window.Weline.load('api');
+                }
+                const api = await window.Weline.Api.resource('search');
+                if (!api || typeof api.search !== 'function') {
+                    return;
+                }
+                const result = await api.search({
+                    q: query,
+                    type: 'backend_menu',
+                    area: 'backend',
+                    page_size: 48,
+                });
+                if (token !== remoteFilterToken) {
+                    return;
+                }
+                const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
+                if (payload && payload.success === false) {
+                    return;
+                }
+                const hits = Array.isArray(payload?.hits) ? payload.hits : [];
+                const sourceIds = new Set();
+                hits.forEach((hit) => {
+                    if (!hit || typeof hit !== 'object') return;
+                    const sid = String(hit.entity_id || hit.payload?.source_id || '').trim();
+                    if (sid) sourceIds.add(sid);
+                });
+                applyFilterBySourceIds(query.toLocaleLowerCase(), sourceIds);
+            } catch (_error) {
+                // Keep local filter if remote search fails.
+            }
+        };
+        const applyFilter = () => {
+            const raw = input.value.trim();
+            if (remoteFilterTimer) {
+                window.clearTimeout(remoteFilterTimer);
+                remoteFilterTimer = 0;
+            }
+            if (raw === '') {
+                remoteFilterToken += 1;
+                applyFilterLocal();
+                return;
+            }
+            applyFilterLocal();
+            remoteFilterTimer = window.setTimeout(() => {
+                applyRemoteFilter(raw);
+            }, 220);
         };
         listen(input, 'input', applyFilter);
         listen(input, 'focus', () => {

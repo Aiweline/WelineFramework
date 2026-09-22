@@ -212,7 +212,8 @@ class RegionService
     public function postalLookup(string $countryCode, string $postalCode, int $limit = 20): array
     {
         $countryCode = strtoupper(trim($countryCode));
-        $norm = \Weline\Shipping\Service\AddressCatalog\TsvGzReader::normalizePostal($postalCode);
+        $norms = \Weline\Shipping\Service\AddressCatalog\TsvGzReader::postalLookupNorms($postalCode);
+        $norm = $norms[0] ?? '';
         if ($countryCode === '' || !preg_match('/^[A-Z]{2}$/', $countryCode) || $norm === '') {
             return [];
         }
@@ -221,13 +222,25 @@ class RegionService
         $model = $this->objectManager->getInstance(\Weline\Shipping\Model\PostalPlace::class);
         $rows = $model->reset()
             ->where(\Weline\Shipping\Model\PostalPlace::schema_fields_COUNTRY_CODE, $countryCode)
-            ->where(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM, $norm)
-            ->limit($limit)
+            ->where(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM, $norms, 'in')
+            ->limit(max($limit * 3, 50))
             ->select()
             ->fetch()
             ->getItems();
+        $normRank = array_flip($norms);
+        usort($rows, static function ($a, $b) use ($normRank): int {
+            $an = (string)$a->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM);
+            $bn = (string)$b->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM);
+            $ar = $normRank[$an] ?? 99;
+            $br = $normRank[$bn] ?? 99;
+
+            return $ar <=> $br;
+        });
         $out = [];
         foreach ($rows as $row) {
+            if (count($out) >= $limit) {
+                break;
+            }
             $attachId = (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_ATTACH_REGION_ID);
             $out[] = [
                 'postal_place_id' => (int)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_ID),
@@ -256,18 +269,20 @@ class RegionService
      */
     public function postalCountries(string $postalCode): array
     {
-        $norm = \Weline\Shipping\Service\AddressCatalog\TsvGzReader::normalizePostal($postalCode);
+        $norms = \Weline\Shipping\Service\AddressCatalog\TsvGzReader::postalLookupNorms($postalCode);
+        $norm = $norms[0] ?? '';
         if ($norm === '') {
             return [];
         }
         /** @var \Weline\Shipping\Model\PostalPlace $model */
         $model = $this->objectManager->getInstance(\Weline\Shipping\Model\PostalPlace::class);
         $rows = $model->reset()
-            ->where(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM, $norm)
+            ->where(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM, $norms, 'in')
             ->limit(200)
             ->select()
             ->fetch()
             ->getItems();
+        $normRank = array_flip($norms);
         $supported = $this->websiteSupportedCountryCodes();
         $countrySortRanks = $this->countrySortRanks();
         /** @var EmbargoService $embargo */
@@ -278,9 +293,18 @@ class RegionService
             if ($cc === '' || !preg_match('/^[A-Z]{2}$/', $cc)) {
                 continue;
             }
+            $rowNorm = (string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_POSTAL_CODE_NORM);
+            $matchRank = (int)($normRank[$rowNorm] ?? 99);
             $cascadeRank = $this->postalPlaceCascadeRank($row);
-            if (isset($seen[$cc]) && $cascadeRank >= (int)($seen[$cc]['_cascade_rank'] ?? 99)) {
-                continue;
+            if (isset($seen[$cc])) {
+                $prevMatch = (int)($seen[$cc]['_match_rank'] ?? 99);
+                $prevCascade = (int)($seen[$cc]['_cascade_rank'] ?? 99);
+                if ($matchRank > $prevMatch) {
+                    continue;
+                }
+                if ($matchRank === $prevMatch && $cascadeRank >= $prevCascade) {
+                    continue;
+                }
             }
             $placeName = trim((string)$row->getData(\Weline\Shipping\Model\PostalPlace::schema_fields_PLACE_NAME));
             $eval = $embargo->evaluateAddress([
@@ -302,6 +326,7 @@ class RegionService
                 'supported' => isset($supported[$cc]),
                 'embargoed' => $isEmbargoed,
                 'sort_order' => (int)($countrySortRanks[$cc] ?? 9000),
+                '_match_rank' => $matchRank,
                 '_cascade_rank' => $cascadeRank,
             ];
         }
@@ -327,7 +352,7 @@ class RegionService
             return strcmp($a['country_code'], $b['country_code']);
         });
         foreach ($out as &$row) {
-            unset($row['_cascade_rank']);
+            unset($row['_cascade_rank'], $row['_match_rank']);
         }
         unset($row);
 

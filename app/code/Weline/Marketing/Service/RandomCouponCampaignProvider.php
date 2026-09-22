@@ -140,6 +140,8 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
         $attribution = ObjectManager::getInstance(CouponSourceAttribution::class);
         $source = $attribution->fromIssueContext($rule, $context);
 
+        $validDays = $this->resolveIssueValidDays($context);
+
         $prefix = 'MW';
         $code = $prefix . \strtoupper(\substr(\bin2hex(\random_bytes(4)), 0, 8));
         $coupon = $coupons->createCoupon([
@@ -151,7 +153,7 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
             Coupon::schema_fields_CUSTOMER_LIMIT => 1,
             Coupon::schema_fields_STATUS => Coupon::STATUS_ACTIVE,
             Coupon::schema_fields_START_DATE => Timezone::utcNowSql(),
-            Coupon::schema_fields_END_DATE => \gmdate('Y-m-d H:i:s', \time() + 86400 * 30),
+            Coupon::schema_fields_END_DATE => \gmdate('Y-m-d H:i:s', \time() + 86400 * $validDays),
             Coupon::schema_fields_SOURCE_MODULE => $source['source_module'],
             Coupon::schema_fields_SOURCE_TYPE => $source['source_type'],
             Coupon::schema_fields_SOURCE_ID => $source['source_id'],
@@ -162,6 +164,21 @@ final class RandomCouponCampaignProvider implements RandomCouponCampaignProvider
             'coupon_code' => (string)$coupon->getData(Coupon::schema_fields_CODE),
             'coupon_id' => (int)$coupon->getId(),
         ];
+    }
+
+    /**
+     * Issue context optional valid_days (positive int). Default 30 keeps WaitGift callers unchanged.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function resolveIssueValidDays(array $context): int
+    {
+        $raw = $context['valid_days'] ?? null;
+        if (\is_int($raw) && $raw > 0) {
+            return $raw;
+        }
+
+        return 30;
     }
 
     private function normalizeDiscountType(string $type): string

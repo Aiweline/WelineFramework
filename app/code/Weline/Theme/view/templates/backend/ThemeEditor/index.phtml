@@ -349,14 +349,21 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                 if (!link) {
                     return;
                 }
+                var editorPathRe = /\/theme\/backend\/theme-editor(?:\/|$)/i;
                 try {
                     if (document.referrer) {
                         var ref = new URL(document.referrer);
                         if (ref.origin === window.location.origin) {
-                            link.setAttribute(
-                                'data-return-href',
-                                ref.pathname + ref.search + ref.hash
-                            );
+                            var returnHref = ref.pathname + ref.search + ref.hash;
+                            var currentHref = window.location.pathname
+                                + window.location.search
+                                + window.location.hash;
+                            // 刷新/同页跳转：referrer 等于当前 URL，或仍是编辑器页（_t 等 query 会被 rewrite）→ 回主题列表
+                            var samePage = returnHref === currentHref
+                                || editorPathRe.test(ref.pathname);
+                            if (!samePage) {
+                                link.setAttribute('data-return-href', returnHref);
+                            }
                         }
                     }
                 } catch (e) {}

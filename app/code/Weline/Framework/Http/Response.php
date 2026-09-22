@@ -11,6 +11,7 @@ use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
+use Weline\Framework\View\Helper\HtmlCacheAdmission;
 use Weline\Framework\View\Helper\TitleLocaleProbe;
 
 /**
@@ -498,6 +499,10 @@ class Response implements ResponseInterface
         // Title×locale probe is independent of telemetry prep — FPC HIT marks
         // telemetryPrepared early and must still emit observability headers.
         $this->applyTitleLocaleProbeIfNeeded();
+        // Product-card CSS heal is independent of FPC publish: ?nocache / private
+        // responses skip publishResponse and would otherwise ship cards without
+        // data-weline-product-card-css (UA buttons + primary-link titles).
+        $this->healStorefrontProductCardCssIfNeeded();
 
         if ($this->telemetryPrepared) {
             return;
@@ -520,6 +525,32 @@ class Response implements ResponseInterface
             // Response decoration must never block the actual response emission.
         } finally {
             $this->telemetryPrepared = true;
+        }
+    }
+
+    /**
+     * Ensure canonical product-card CSS is present whenever the body already
+     * contains storefront cards. Runs on every HTML emission (FPC MISS included).
+     */
+    private function healStorefrontProductCardCssIfNeeded(): void
+    {
+        try {
+            if ($this->body === '' || \strncmp($this->body, 'WQB1', 4) === 0) {
+                return;
+            }
+            if (!\str_contains($this->body, 'weline-product-card')
+                && !\str_contains($this->body, 'data-testid="weline-product-card"')
+                && !\str_contains($this->body, "data-testid='weline-product-card'")
+            ) {
+                return;
+            }
+            $healed = HtmlCacheAdmission::healStorefrontProductCardCss($this->body);
+            if ($healed !== $this->body) {
+                $this->body = $healed;
+                $this->synchronizeContentLengthHeader();
+            }
+        } catch (\Throwable) {
+            // Decoration must never block emission.
         }
     }
 

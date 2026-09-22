@@ -12,14 +12,27 @@ final class ThemeLayoutScopeSlotMergeContractTest extends TestCase
 {
     public function testGetLayoutMergesSparseChildScopeBySlotInsteadOfWholePageOwnership(): void
     {
-        $source = $this->read('app/code/Weline/Theme/Service/ThemeLayoutService.php');
+        // Slot-near-priority ownership lives on the scoped publish read path
+        // (ThemeScopedWorkspace), not the legacy ThemeLayoutService whole-page merge.
+        $source = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php');
 
-        self::assertStringContainsString('$ownedSlotRows', $source);
-        self::assertStringContainsString('Sparse Scope ownership is per-slot', $source);
-        self::assertStringContainsString('isNoWidgetPlacementsRow', $source);
-        self::assertStringContainsString("array_key_exists(\$slotId, \$ownedSlotRows)", $source);
-        self::assertStringNotContainsString(
-            'Any exact rows establish ownership. An all-inactive set',
+        self::assertStringContainsString('composeLayoutPayloadBySlotNearPriority', $source);
+        self::assertStringContainsString('claimedSlots', $source);
+        self::assertStringContainsString('Slot-near-priority compose across parent_release_id chain', $source);
+        self::assertStringContainsString("isset(\$claimedSlots[\$slotId])", $source);
+    }
+
+    public function testPublishedStateComposesLayoutPayloadBySlotNearPriority(): void
+    {
+        $source = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php');
+
+        self::assertStringContainsString('composeLayoutPayloadBySlotNearPriority', $source);
+        self::assertStringContainsString('Slot-near-priority compose across parent_release_id chain', $source);
+        self::assertStringContainsString('RESOURCE_LAYOUT', $source);
+        self::assertStringContainsString('claimedSlots', $source);
+        // Storefront published reads must not return sparse near Release payloads as-is.
+        self::assertMatchesRegularExpression(
+            '/publishedState[\s\S]{0,1200}composeLayoutPayloadBySlotNearPriority/',
             $source,
         );
     }
@@ -29,10 +42,13 @@ final class ThemeLayoutScopeSlotMergeContractTest extends TestCase
         $source = $this->read('app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php');
 
         self::assertStringContainsString('storefront_chrome_hot_cache', $source);
+        self::assertStringContainsString('published_layout_structure_hot_cache', $source);
         self::assertStringContainsString('theme.chrome.', $source);
         self::assertStringContainsString('StorefrontScopeHotCache', $source);
         self::assertStringContainsString('weline_theme_storefront_chrome', $source);
+        self::assertStringContainsString('PUBLISHED_LAYOUT_STRUCTURE_POOL', $source);
         self::assertStringContainsString('purgeStorefrontChromeHotCachePool', $source);
+        self::assertStringContainsString('purgePublishedLayoutStructureHotCachePool', $source);
         self::assertStringContainsString('->clear()', $source);
         self::assertStringContainsString('compiled_template_cache', $source);
         self::assertStringContainsString('module_view_tpl_compiled', $source);

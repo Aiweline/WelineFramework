@@ -148,6 +148,8 @@ $hasQuick = !$loggedIn && (($quick['google'] ?? null) !== null || ($quick['faceb
 <?php endif; ?>
 <div class="account-social-login<?= $count === 0 ? ' account-social-login--empty' : '' ?>"
      data-w-component="account-social-login"
+     data-widget-code="account-social-login"
+     data-testid="account-social-login"
      data-social-login-count="<?= $safe((string) $count) ?>"
      data-social-logged-in="<?= $loggedIn ? '1' : '0' ?>"
      <?php if ($hasQuick): ?>data-social-quick="1"<?php endif; ?>

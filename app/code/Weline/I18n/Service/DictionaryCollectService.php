@@ -37,7 +37,11 @@ class DictionaryCollectService
      *     error?: string
      * }
      */
-    public function collect(string $localeCode, ?callable $onProgress = null): array
+    public function collect(
+        string $localeCode,
+        ?callable $onProgress = null,
+        bool $enqueueAiTranslation = true,
+    ): array
     {
         if ($onProgress !== null) {
             RegistryProgress::setWebReporter(static function (string $message, ?int $progress = null) use ($onProgress): void {
@@ -86,7 +90,7 @@ class DictionaryCollectService
             $defaultLocaleCount = (int) $persisted['default_locale_count'];
 
             $queued = [];
-            if ($collectedCount > 0) {
+            if ($enqueueAiTranslation && $collectedCount > 0) {
                 $this->report($onProgress, (string) __('提交 AI 翻译队列…'), 95);
                 $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_collect');
             }

@@ -567,6 +567,13 @@ final class FullPageCacheCoordinator
         );
         $this->registerLocalizedHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
         $this->registerRootHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
+        // Outbound SSR still reports MISS for this request, but the body is now
+        // in Process/Shared FPC. Mark the live response no-store so managed Nginx
+        // edge must not persist the MISS headers (cookieless probes would otherwise
+        // keep serving edge STALE/HIT with x-wls-fpc-status:MISS). Stored payload
+        // headers were already snapshotted above and stay edge-cacheable on HIT.
+        $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+        $response->setHeader('Pragma', 'no-cache');
         if (InternalHomepagePrime::isCurrentRequest()) {
             RequestContext::set(
                 self::INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY,
@@ -1237,9 +1244,29 @@ final class FullPageCacheCoordinator
         }
 
         $cacheKey = $this->internalHomepageReceiptCacheKey($receipt);
-        if ($cacheKey === null || $this->getProcessCachedPayload($cacheKey) === null) {
+        if ($cacheKey === null) {
             unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
             return null;
+        }
+        if ($this->getProcessCachedPayload($cacheKey) === null) {
+            // Process L1 may have been evicted by later multi-MB warmup pages
+            // while Shared still holds the published payload. Rehydrate instead
+            // of dropping the receipt (that caused homepage-ready-but-receipt-missing).
+            try {
+                $shared = $this->cache()->get($cacheKey);
+                if (\is_array($shared)) {
+                    $shared = $this->hydrateSharedPayload($shared);
+                }
+                if (\is_array($shared) && $this->payloadHasAuthoritativeBody($shared)) {
+                    $this->setProcessCachedPayload($cacheKey, $shared);
+                }
+            } catch (\Throwable) {
+                $shared = null;
+            }
+            if ($this->getProcessCachedPayload($cacheKey) === null) {
+                unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+                return null;
+            }
         }
 
         unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);

@@ -1,0 +1,135 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$config = (array)($this->getData('config') ?? []);
+$saveUrl = (string)($this->getData('save_url') ?? '');
+$esc = static fn(mixed $v): string => \htmlspecialchars((string)$v, \ENT_QUOTES, 'UTF-8');
+$enabled = !empty($config['enabled']);
+$type = (string)($config['discount_type'] ?? 'percentage');
+$value = (string)($config['discount_value'] ?? '10');
+$validDays = (string)($config['valid_days'] ?? '14');
+$ruleId = (string)($config['marketing_rule_id'] ?? '0');
+$cookieDays = (string)($config['popup_cookie_days'] ?? '14');
+?>
+<div class="w-grid w-backend-page" data-testid="newsletter-campaign-config">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading" style="--w-mb:var(--weline-space-4);">
+            <div>
+                <h4 class="w-backend-page__title" style="--w-mb:0;"><?= $esc(__('邮件订阅有奖配置')) ?></h4>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                    <?= $esc(__('配置订阅欢迎礼折扣与弹窗 Cookie；保存后同步 Marketing 规则。')) ?>
+                </p>
+            </div>
+        </div>
+
+        <div class="w-card">
+            <div class="w-card__body">
+                <form
+                    method="post"
+                    action="<?= $esc($saveUrl) ?>"
+                    class="w-form w-stack"
+                    style="--w-gap:var(--weline-space-4);"
+                >
+                    <div class="w-field" data-label-layout="stacked">
+                        <span class="w-field__label"><?= $esc(__('启用状态')) ?></span>
+                        <label class="w-cluster" style="--w-gap:var(--weline-space-2);" data-align="center">
+                            <input
+                                type="checkbox"
+                                name="enabled"
+                                value="1"
+                                class="w-input"
+                                data-testid="newsletter-campaign-enabled"
+                               <?= $enabled ? ' checked' : '' ?>
+                            >
+                            <span class="w-text"><?= $esc(__('启用订阅欢迎礼')) ?></span>
+                        </label>
+                    </div>
+
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:6;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="newsletter-campaign-discount-type"><?= $esc(__('折扣类型')) ?></label>
+                                <select
+                                    id="newsletter-campaign-discount-type"
+                                    class="w-select"
+                                    name="discount_type"
+                                    data-testid="newsletter-campaign-discount-type"
+                                >
+                                    <option value="percentage"<?= $type === 'percentage' ? ' selected' : '' ?>><?= $esc(__('百分比')) ?></option>
+                                    <option value="fixed_amount"<?= $type === 'fixed_amount' ? ' selected' : '' ?>><?= $esc(__('固定金额')) ?></option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="--w-span-md:6;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="newsletter-campaign-discount-value"><?= $esc(__('折扣值')) ?></label>
+                                <input
+                                    id="newsletter-campaign-discount-value"
+                                    class="w-input"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    name="discount_value"
+                                    value="<?= $esc($value) ?>"
+                                    data-testid="newsletter-campaign-discount-value"
+                                >
+                            </div>
+                        </div>
+                        <div style="--w-span-md:6;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="newsletter-campaign-valid-days"><?= $esc(__('有效天数')) ?></label>
+                                <input
+                                    id="newsletter-campaign-valid-days"
+                                    class="w-input"
+                                    type="number"
+                                    min="1"
+                                    name="valid_days"
+                                    value="<?= $esc($validDays) ?>"
+                                    data-testid="newsletter-campaign-valid-days"
+                                >
+                            </div>
+                        </div>
+                        <div style="--w-span-md:6;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="newsletter-campaign-cookie-days"><?= $esc(__('弹窗 Cookie 天数')) ?></label>
+                                <input
+                                    id="newsletter-campaign-cookie-days"
+                                    class="w-input"
+                                    type="number"
+                                    min="1"
+                                    name="popup_cookie_days"
+                                    value="<?= $esc($cookieDays) ?>"
+                                    data-testid="newsletter-campaign-cookie-days"
+                                >
+                            </div>
+                        </div>
+                        <div style="--w-span-md:6;">
+                            <div class="w-field" data-label-layout="stacked">
+                                <label class="w-field__label" for="newsletter-campaign-rule-id"><?= $esc(__('Marketing 规则 ID')) ?></label>
+                                <input
+                                    id="newsletter-campaign-rule-id"
+                                    class="w-input"
+                                    type="text"
+                                    value="<?= $esc($ruleId) ?>"
+                                    readonly
+                                    data-testid="newsletter-campaign-rule-id"
+                                >
+                                <p class="w-field__help"><?= $esc(__('保存并同步后由系统写入，只读。')) ?></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                        <button
+                            class="w-button"
+                            type="submit"
+                            data-tone="primary"
+                            data-testid="newsletter-campaign-save"
+                        ><?= $esc(__('保存并同步')) ?></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

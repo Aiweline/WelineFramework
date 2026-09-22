@@ -74,61 +74,61 @@ final class FaqSeedCopyCatalog
             FaqTemplatePacks::RETAIL => [
                 FaqTemplateSeedService::LOCALE_ZH => [
                     ['faq_key' => 'shipping', 'question' => '配送多久能到？', 'answer' => '国内订单一般 2–5 个工作日送达；偏远地区可能稍长。发货后可在订单页查看物流。'],
-                    ['faq_key' => 'returns', 'question' => '如何退换货？', 'answer' => '签收后 7 日内可申请退换（不影响二次销售）。在订单详情提交申请，按指引寄回即可。'],
+                    ['faq_key' => 'returns', 'question' => '如何退换货？', 'answer' => '中国大陆法定七日无理由退货适用品类从其规定；欧盟/EEA 等强制更长冷静期（如十四日）从其规定；不影响二次销售等条件以「退换政策」为准。请在订单详情提交申请并按指引寄回。'],
                     ['faq_key' => 'warranty', 'question' => '质保如何计算？', 'answer' => '自签收日起享质保（具体期限以商品页为准）。人为损坏、未按说明使用不在质保范围。'],
                     ['faq_key' => 'payment', 'question' => '支持哪些支付方式？', 'answer' => '支持主流银行卡、第三方支付与站内可用的钱包方式；结账页以当前可用渠道为准。'],
                 ],
                 FaqTemplateSeedService::LOCALE_EN => [
                     ['faq_key' => 'shipping', 'question' => 'How long does delivery take?', 'answer' => 'Domestic orders usually arrive in 2–5 business days; remote areas may take longer. Track shipping on the order page after dispatch.'],
-                    ['faq_key' => 'returns', 'question' => 'How do I return or exchange an item?', 'answer' => 'You can request a return or exchange within 7 days of delivery if the item is resalable. Submit the request from the order details and follow the return instructions.'],
+                    ['faq_key' => 'returns', 'question' => 'How do I return or exchange an item?', 'answer' => 'For mainland China, the statutory seven-day no-reason return applies to eligible categories as required by law. In the EU/EEA and similar jurisdictions, longer mandatory cooling-off periods (e.g. 14 days) apply. Resale conditions and details follow the Returns Policy. Submit the request from order details and follow the return instructions.'],
                     ['faq_key' => 'warranty', 'question' => 'How is the warranty calculated?', 'answer' => 'Warranty starts on the delivery date (see the product page for the exact term). Damage from misuse or failure to follow instructions is not covered.'],
                     ['faq_key' => 'payment', 'question' => 'Which payment methods are supported?', 'answer' => 'We support major cards, third-party payments, and any wallets enabled on this storefront. Available methods are shown at checkout.'],
                 ],
                 'ar_SA' => [
                     ['faq_key' => 'shipping', 'question' => 'كم يستغرق التوصيل؟', 'answer' => 'عادةً تصل الطلبات المحلية خلال 2–5 أيام عمل؛ وقد تستغرق المناطق النائية وقتًا أطول. يمكنك تتبع الشحنة من صفحة الطلب بعد الإرسال.'],
-                    ['faq_key' => 'returns', 'question' => 'كيف أُرجع أو أستبدل منتجًا؟', 'answer' => 'يمكنك طلب الإرجاع أو الاستبدال خلال 7 أيام من الاستلام إذا كان المنتج قابلًا لإعادة البيع. قدّم الطلب من تفاصيل الطلب واتبع تعليمات الإرجاع.'],
+                    ['faq_key' => 'returns', 'question' => 'كيف أُرجع أو أستبدل منتجًا؟', 'answer' => 'في الصين القارية تنطبق مهلة الإرجاع القانونية لسبعة أيام دون سبب على الفئات المؤهلة وفق القانون. في الاتحاد الأوروبي/المنطقة الاقتصادية الأوروبية وما شابهها تُطبَّق فترات تهدئة إلزامية أطول (مثل 14 يومًا). شروط إعادة البيع والتفاصيل وفق سياسة الإرجاع. قدّم الطلب من تفاصيل الطلب واتبع تعليمات الإرجاع.'],
                     ['faq_key' => 'warranty', 'question' => 'كيف تُحسب الضمان؟', 'answer' => 'يبدأ الضمان من تاريخ التسليم (راجع صفحة المنتج للمدة الدقيقة). الأضرار الناتجة عن سوء الاستخدام أو عدم اتباع التعليمات غير مشمولة.'],
                     ['faq_key' => 'payment', 'question' => 'ما طرق الدفع المدعومة؟', 'answer' => 'ندعم البطاقات الرئيسية والمدفوعات الخارجية والمحافظ المفعّلة في المتجر. تظهر الطرق المتاحة عند الدفع.'],
                 ],
                 'bn_BD' => [
                     ['faq_key' => 'shipping', 'question' => 'ডেলিভারি কতদিন লাগে?', 'answer' => 'দেশীয় অর্ডার সাধারণত ২–৫ কর্মদিবসে পৌঁছায়; দূরবর্তী এলাকায় আরও সময় লাগতে পারে। পাঠানোর পর অর্ডার পেজে শিপিং ট্র্যাক করুন।'],
-                    ['faq_key' => 'returns', 'question' => 'কীভাবে ফেরত বা এক্সচেঞ্জ করব?', 'answer' => 'পণ্য পুনরায় বিক্রয়যোগ্য থাকলে ডেলিভারির ৭ দিনের মধ্যে ফেরত বা এক্সচেঞ্জ অনুরোধ করতে পারেন। অর্ডার বিবরণ থেকে আবেদন জমা দিন এবং নির্দেশনা অনুসরণ করুন।'],
+                    ['faq_key' => 'returns', 'question' => 'কীভাবে ফেরত বা এক্সচেঞ্জ করব?', 'answer' => 'চীন মূল ভূখণ্ডে আইনানুগ যোগ্য ক্যাটাগরিতে সাত দিনের বিনা কারণে ফেরত প্রযোজ্য। ইইউ/ইইএ ও অনুরূপ এলাকায় দীর্ঘতর বাধ্যতামূলক কুলিং-অফ (যেমন ১৪ দিন) প্রযোজ্য। পুনর্বিক্রয়যোগ্যতা ও বিস্তারিত «রিটার্ন পলিসি» অনুসারে। অর্ডার বিবরণ থেকে আবেদন জমা দিন এবং নির্দেশনা অনুসরণ করুন।'],
                     ['faq_key' => 'warranty', 'question' => 'ওয়ারেন্টি কীভাবে গণনা হয়?', 'answer' => 'ওয়ারেন্টি ডেলিভারি তারিখ থেকে শুরু (সঠিক মেয়াদ পণ্য পেজে দেখুন)। অপব্যবহার বা নির্দেশনা না মানলে ক্ষতি কভার হয় না।'],
                     ['faq_key' => 'payment', 'question' => 'কোন কোন পেমেন্ট পদ্ধতি সমর্থিত?', 'answer' => 'প্রধান কার্ড, তৃতীয় পক্ষের পেমেন্ট এবং স্টোরফ্রন্টে সক্রিয় ওয়ালেট সমর্থিত। চেকআউটে উপলব্ধ পদ্ধতি দেখা যায়।'],
                 ],
                 'es_ES' => [
                     ['faq_key' => 'shipping', 'question' => '¿Cuánto tarda la entrega?', 'answer' => 'Los pedidos nacionales suelen llegar en 2–5 días laborables; las zonas remotas pueden tardar más. Puedes seguir el envío en la página del pedido tras el despacho.'],
-                    ['faq_key' => 'returns', 'question' => '¿Cómo devuelvo o cambio un artículo?', 'answer' => 'Puedes solicitar devolución o cambio en un plazo de 7 días tras la entrega si el artículo es revendible. Envía la solicitud desde los detalles del pedido y sigue las instrucciones.'],
+                    ['faq_key' => 'returns', 'question' => '¿Cómo devuelvo o cambio un artículo?', 'answer' => 'En China continental, la devolución legal sin motivo de siete días aplica a las categorías elegibles según la ley. En la UE/EEE y jurisdicciones similares rigen periodos de desistimiento obligatorios más largos (p. ej. 14 días). Las condiciones de reventa y el detalle siguen la Política de devoluciones. Envía la solicitud desde los detalles del pedido y sigue las instrucciones.'],
                     ['faq_key' => 'warranty', 'question' => '¿Cómo se calcula la garantía?', 'answer' => 'La garantía comienza en la fecha de entrega (consulta el plazo exacto en la ficha del producto). No cubre daños por mal uso o por no seguir las instrucciones.'],
                     ['faq_key' => 'payment', 'question' => '¿Qué métodos de pago se admiten?', 'answer' => 'Admitimos tarjetas principales, pagos de terceros y monederos activados en esta tienda. Los métodos disponibles se muestran al pagar.'],
                 ],
                 'fr_FR' => [
                     ['faq_key' => 'shipping', 'question' => 'Combien de temps faut-il pour la livraison ?', 'answer' => 'Les commandes nationales arrivent généralement en 2 à 5 jours ouvrés ; les zones éloignées peuvent prendre plus de temps. Suivez l’expédition sur la page de commande après l’envoi.'],
-                    ['faq_key' => 'returns', 'question' => 'Comment retourner ou échanger un article ?', 'answer' => 'Vous pouvez demander un retour ou un échange sous 7 jours après livraison si l’article est revendable. Soumettez la demande depuis les détails de commande et suivez les instructions.'],
+                    ['faq_key' => 'returns', 'question' => 'Comment retourner ou échanger un article ?', 'answer' => 'En Chine continentale, le délai légal de sept jours sans motif s’applique aux catégories éligibles selon la loi. Dans l’UE/EEE et juridictions similaires, des délais de rétractation obligatoires plus longs (ex. 14 jours) s’appliquent. Conditions de revente et détails selon la Politique de retours. Soumettez la demande depuis les détails de commande et suivez les instructions.'],
                     ['faq_key' => 'warranty', 'question' => 'Comment est calculée la garantie ?', 'answer' => 'La garantie commence à la date de livraison (voir la durée exacte sur la page produit). Les dommages dus à une mauvaise utilisation ou au non-respect des instructions ne sont pas couverts.'],
                     ['faq_key' => 'payment', 'question' => 'Quels moyens de paiement sont acceptés ?', 'answer' => 'Nous acceptons les principales cartes, les paiements tiers et les portefeuilles activés sur cette boutique. Les moyens disponibles s’affichent au paiement.'],
                 ],
                 'hi_IN' => [
                     ['faq_key' => 'shipping', 'question' => 'डिलीवरी में कितना समय लगता है?', 'answer' => 'घरेलू ऑर्डर आमतौर पर 2–5 कार्यदिवस में पहुँच जाते हैं; दूरदराज़ क्षेत्रों में अधिक समय लग सकता है। भेजने के बाद ऑर्डर पेज पर शिपिंग ट्रैक करें।'],
-                    ['faq_key' => 'returns', 'question' => 'मैं आइटम कैसे वापस या एक्सचेंज करूँ?', 'answer' => 'डिलीवरी के 7 दिनों के भीतर, यदि आइटम दोबारा बिकने योग्य हो, तो रिटर्न या एक्सचेंज का अनुरोध कर सकते हैं। ऑर्डर विवरण से आवेदन जमा करें और निर्देशों का पालन करें।'],
+                    ['faq_key' => 'returns', 'question' => 'मैं आइटम कैसे वापस या एक्सचेंज करूँ?', 'answer' => 'मुख्यभूमि चीन में वैधानिक सात-दिवसीय बिना-कारण रिटर्न योग्य श्रेणियों पर कानून के अनुसार लागू होता है। EU/EEA और समान क्षेत्रों में लंबी अनिवार्य कूलिंग-ऑफ अवधि (जैसे 14 दिन) लागू होती है। पुनर्विक्रय शर्तें और विवरण «रिटर्न नीति» के अनुसार। ऑर्डर विवरण से आवेदन जमा करें और निर्देशों का पालन करें।'],
                     ['faq_key' => 'warranty', 'question' => 'वारंटी की गणना कैसे होती है?', 'answer' => 'वारंटी डिलीवरी तिथि से शुरू होती है (सटीक अवधि उत्पाद पेज पर देखें)। दुरुपयोग या निर्देशों का पालन न करने से हुए नुकसान कवर नहीं होते।'],
                     ['faq_key' => 'payment', 'question' => 'कौन-से भुगतान तरीके समर्थित हैं?', 'answer' => 'हम प्रमुख कार्ड, थर्ड-पार्टी भुगतान और इस स्टोरफ्रंट पर सक्षम वॉलेट का समर्थन करते हैं। उपलब्ध तरीके चेकआउट पर दिखते हैं।'],
                 ],
                 'id_ID' => [
                     ['faq_key' => 'shipping', 'question' => 'Berapa lama pengiriman berlangsung?', 'answer' => 'Pesanan domestik biasanya tiba dalam 2–5 hari kerja; daerah terpencil mungkin lebih lama. Lacak pengiriman di halaman pesanan setelah dikirim.'],
-                    ['faq_key' => 'returns', 'question' => 'Bagaimana cara mengembalikan atau menukar barang?', 'answer' => 'Anda dapat meminta retur atau penukaran dalam 7 hari setelah diterima jika barang masih dapat dijual kembali. Ajukan dari detail pesanan dan ikuti petunjuk retur.'],
+                    ['faq_key' => 'returns', 'question' => 'Bagaimana cara mengembalikan atau menukar barang?', 'answer' => 'Di Tiongkok daratan, retur tanpa alasan tujuh hari menurut undang-undang berlaku untuk kategori yang memenuhi syarat. Di UE/EEA dan yurisdiksi serupa berlaku masa pendinginan wajib yang lebih lama (mis. 14 hari). Syarat dapat dijual kembali dan detail mengikuti Kebijakan Retur. Ajukan dari detail pesanan dan ikuti petunjuk retur.'],
                     ['faq_key' => 'warranty', 'question' => 'Bagaimana garansi dihitung?', 'answer' => 'Garansi dimulai sejak tanggal penerimaan (lihat jangka waktu pasti di halaman produk). Kerusakan karena penyalahgunaan atau tidak mengikuti petunjuk tidak ditanggung.'],
                     ['faq_key' => 'payment', 'question' => 'Metode pembayaran apa yang didukung?', 'answer' => 'Kami mendukung kartu utama, pembayaran pihak ketiga, dan dompet yang diaktifkan di toko ini. Metode yang tersedia ditampilkan saat checkout.'],
                 ],
                 'pt_BR' => [
                     ['faq_key' => 'shipping', 'question' => 'Quanto tempo leva a entrega?', 'answer' => 'Pedidos nacionais geralmente chegam em 2–5 dias úteis; áreas remotas podem demorar mais. Acompanhe o envio na página do pedido após o despacho.'],
-                    ['faq_key' => 'returns', 'question' => 'Como devolver ou trocar um item?', 'answer' => 'Você pode solicitar devolução ou troca em até 7 dias após a entrega se o item estiver revendável. Envie o pedido pelos detalhes do pedido e siga as instruções.'],
+                    ['faq_key' => 'returns', 'question' => 'Como devolver ou trocar um item?', 'answer' => 'Na China continental, a devolução legal sem motivo de sete dias aplica-se às categorias elegíveis conforme a lei. Na UE/EEE e jurisdições semelhantes aplicam-se períodos de reflexão obrigatórios mais longos (p.ex. 14 dias). Condições de revenda e detalhes seguem a Política de devoluções. Envie o pedido pelos detalhes do pedido e siga as instruções.'],
                     ['faq_key' => 'warranty', 'question' => 'Como a garantia é calculada?', 'answer' => 'A garantia começa na data de entrega (veja o prazo exato na página do produto). Danos por mau uso ou por não seguir as instruções não são cobertos.'],
                     ['faq_key' => 'payment', 'question' => 'Quais métodos de pagamento são aceitos?', 'answer' => 'Aceitamos cartões principais, pagamentos de terceiros e carteiras ativadas nesta loja. Os métodos disponíveis aparecem no checkout.'],
                 ],
                 'ur_PK' => [
                     ['faq_key' => 'shipping', 'question' => 'ڈیلیوری میں کتنا وقت لگتا ہے؟', 'answer' => 'ملکی آرڈرز عام طور پر 2–5 کاروباری دنوں میں پہنچ جاتے ہیں؛ دور دراز علاقوں میں زیادہ وقت لگ سکتا ہے۔ بھیجنے کے بعد آرڈر صفحے پر شپنگ ٹریک کریں۔'],
-                    ['faq_key' => 'returns', 'question' => 'آئٹم واپس یا ایکسچینج کیسے کروں؟', 'answer' => 'ڈیلیوری کے 7 دنوں کے اندر، اگر آئٹم دوبارہ فروخت کے قابل ہو تو واپسی یا تبادلے کی درخواست کر سکتے ہیں۔ آرڈر تفصیل سے درخواست جمع کروائیں اور ہدایات پر عمل کریں۔'],
+                    ['faq_key' => 'returns', 'question' => 'آئٹم واپس یا ایکسچینج کیسے کروں؟', 'answer' => 'مین لینڈ چین میں قانونی سات دن کی بلا وجہ واپسی اہل زمرہ جات پر قانون کے مطابق لاگو ہوتی ہے۔ EU/EEA اور مماثل دائرہ اختیار میں لمبی لازمی کولنگ آف مدتیں (جیسے 14 دن) لاگو ہوتی ہیں۔ دوبارہ فروخت کی شرائط اور تفصیل «واپسی پالیسی» کے مطابق۔ آرڈر تفصیل سے درخواست جمع کروائیں اور ہدایات پر عمل کریں۔'],
                     ['faq_key' => 'warranty', 'question' => 'وارنٹی کا حساب کیسے ہوتا ہے؟', 'answer' => 'وارنٹی ڈیلیوری کی تاریخ سے شروع ہوتی ہے (درست مدت پروڈکٹ صفحے پر دیکھیں)۔ غلط استعمال یا ہدایات نہ ماننے سے ہونے والے نقصان شامل نہیں۔'],
                     ['faq_key' => 'payment', 'question' => 'کون سے ادائیگی کے طریقے دستیاب ہیں؟', 'answer' => 'ہم بڑے کارڈز، تھرڈ پارٹی ادائیگیاں اور اس اسٹور فرنٹ پر فعال والیٹس سپورٹ کرتے ہیں۔ دستیاب طریقے چیک آؤٹ پر دکھائی دیتے ہیں۔'],
                 ],
@@ -329,7 +329,7 @@ final class FaqSeedCopyCatalog
     {
         return [
             FaqTemplateSeedService::LOCALE_ZH => [
-                ['q' => '下单后多久发货？', 'a' => '现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。'],
+                ['q' => '下单后多久发货？', 'a' => '现货订单通常在付款成功后 1–5 个工作日内发出（节假日顺延）；跨境干线参考约 7–25 个工作日，结算页时效为估算非保证。预售、定制或以商品页标注为准。详见「配送说明」。'],
                 ['q' => '如何查询物流？', 'a' => '登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。'],
                 ['q' => '运费如何计算？是否包邮？', 'a' => '运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。'],
                 ['q' => '支持哪些支付方式？', 'a' => '支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。'],
@@ -339,7 +339,7 @@ final class FaqSeedCopyCatalog
                 ['q' => '个人信息如何保护？', 'a' => '我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。'],
             ],
             FaqTemplateSeedService::LOCALE_EN => [
-                ['q' => 'How soon will my order ship?', 'a' => 'In-stock orders usually ship within 1–3 business days after payment (holidays excluded). Pre-order, custom, or product-page lead times apply when stated. See Shipping Guide.'],
+                ['q' => 'How soon will my order ship?', 'a' => 'In-stock orders usually ship within 1–5 business days after payment (holidays excluded). Cross-border trunk transit is about 7–25 business days for reference; checkout estimates are not guarantees. Pre-order, custom, or product-page lead times apply when stated. See Shipping Guide.'],
                 ['q' => 'How do I track my shipment?', 'a' => 'Sign in and open My Orders to see the carrier and tracking events. If there is no update for a long time (excluding holidays), contact support with your order number.'],
                 ['q' => 'How is shipping calculated? Do you offer free shipping?', 'a' => 'Shipping is calculated at checkout by destination, weight/volume, and service. Free-shipping or campaign thresholds are applied automatically when met.'],
                 ['q' => 'Which payment methods are supported?', 'a' => 'We support the online payment methods enabled for this storefront (for example PayPal). Exact options appear at checkout and in the Payment Guide.'],
@@ -349,7 +349,7 @@ final class FaqSeedCopyCatalog
                 ['q' => 'How is my personal data protected?', 'a' => 'We process personal data only as needed to provide transactions and services. See the Privacy Policy and Cookie Policy. Manage some preferences in account settings.'],
             ],
             'ar_SA' => [
-                ['q' => 'متى يُشحن طلبي؟', 'a' => 'طلبات المخزون تُشحن عادةً خلال 1–3 أيام عمل بعد الدفع (باستثناء العطل). أوقات الطلب المسبق أو التخصيص أو صفحة المنتج تُطبَّق عند ذكرها. راجع دليل الشحن.'],
+                ['q' => 'متى يُشحن طلبي؟', 'a' => 'طلبات المخزون تُشحن عادةً خلال 1–5 أيام عمل بعد الدفع (باستثناء العطل). مهلة النقل الرئيسي عبر الحدود تقريبًا 7–25 يوم عمل للمرجع؛ تقديرات الدفع ليست ضمانًا. أوقات الطلب المسبق أو التخصيص أو صفحة المنتج تُطبَّق عند ذكرها. راجع دليل الشحن.'],
                 ['q' => 'كيف أتتبع شحنتي؟', 'a' => 'سجّل الدخول وافتح طلباتي لرؤية الناقل وأحداث التتبع. إن لم يحدث تحديث طويلًا (باستثناء العطل)، تواصل مع الدعم برقم الطلب.'],
                 ['q' => 'كيف تُحسب رسوم الشحن؟ هل الشحن مجاني؟', 'a' => 'تُحسب عند الدفع حسب الوجهة والوزن/الحجم والخدمة. تُطبَّق عتبات الشحن المجاني أو الحملات تلقائيًا عند تحققها.'],
                 ['q' => 'ما طرق الدفع المدعومة؟', 'a' => 'ندعم طرق الدفع عبر الإنترنت المفعّلة في المتجر (مثل PayPal). تظهر الخيارات الدقيقة عند الدفع وفي دليل الدفع.'],
@@ -359,7 +359,7 @@ final class FaqSeedCopyCatalog
                 ['q' => 'كيف تُحمى بياناتي الشخصية؟', 'a' => 'نعالج البيانات الشخصية فقط بقدر الحاجة للمعاملات والخدمات. راجع سياسة الخصوصية وسياسة ملفات التعريف. أدِر بعض التفضيلات في إعدادات الحساب.'],
             ],
             'bn_BD' => [
-                ['q' => 'আমার অর্ডার কত তাড়াতাড়ি পাঠানো হবে?', 'a' => 'স্টকে থাকা অর্ডার সাধারণত পেমেন্টের পর ১–৩ কর্মদিবসে পাঠানো হয় (ছুটি বাদে)। প্রি-অর্ডার/কাস্টম/পণ্য পেজের সময় থাকলে সেটাই প্রযোজ্য। শিপিং গাইড দেখুন।'],
+                ['q' => 'আমার অর্ডার কত তাড়াতাড়ি পাঠানো হবে?', 'a' => 'স্টকে থাকা অর্ডার সাধারণত পেমেন্টের পর ১–৫ কর্মদিবসে পাঠানো হয় (ছুটি বাদে)। ক্রস-বর্ডার মূল রুট রেফারেন্স প্রায় ৭–২৫ কর্মদিবস; চেকআউট অনুমান গ্যারান্টি নয়। প্রি-অর্ডার/কাস্টম/পণ্য পেজের সময় থাকলে সেটাই প্রযোজ্য। শিপিং গাইড দেখুন।'],
                 ['q' => 'কীভাবে শিপমেন্ট ট্র্যাক করব?', 'a' => 'লগইন করে আমার অর্ডার খুলে ক্যারিয়ার ও ট্র্যাকিং ইভেন্ট দেখুন। দীর্ঘসময় আপডেট না থাকলে (ছুটি বাদে) অর্ডার নম্বর দিয়ে সাপোর্টে যোগাযোগ করুন।'],
                 ['q' => 'শিপিং কীভাবে হিসাব হয়? ফ্রি শিপিং আছে কি?', 'a' => 'চেকআউটে গন্তব্য, ওজন/ভলিউম ও সার্ভিস অনুযায়ী হিসাব হয়। ফ্রি-শিপিং বা ক্যাম্পেইন থ্রেশহোল্ড পূরণ হলে স্বয়ংক্রিয় প্রয়োগ হয়।'],
                 ['q' => 'কোন কোন পেমেন্ট পদ্ধতি সমর্থিত?', 'a' => 'এই স্টোরফ্রন্টে সক্রিয় অনলাইন পেমেন্ট (যেমন PayPal) সমর্থিত। সঠিক অপশন চেকআউট ও পেমেন্ট গাইডে দেখা যায়।'],
@@ -369,7 +369,7 @@ final class FaqSeedCopyCatalog
                 ['q' => 'আমার ব্যক্তিগত তথ্য কীভাবে সুরক্ষিত?', 'a' => 'লেনদেন ও সেবা দিতে প্রয়োজনীয় পরিসরেই ব্যক্তিগত তথ্য প্রক্রিয়া করি। প্রাইভেসি ও কুকি পলিসি দেখুন। অ্যাকাউন্ট সেটিংসে কিছু পছন্দ নিয়ন্ত্রণ করুন।'],
             ],
             'es_ES' => [
-                ['q' => '¿Cuándo se envía mi pedido?', 'a' => 'Los pedidos en stock suelen enviarse en 1–3 días laborables tras el pago (festivos excluidos). Prepedido, personalización o plazos de la ficha aplican si se indican. Ver Guía de envío.'],
+                ['q' => '¿Cuándo se envía mi pedido?', 'a' => 'Los pedidos en stock suelen enviarse en 1–5 días laborables tras el pago (festivos excluidos). El tránsito principal transfronterizo es de referencia unos 7–25 días laborables; las estimaciones del pago no son garantías. Prepedido, personalización o plazos de la ficha aplican si se indican. Ver Guía de envío.'],
                 ['q' => '¿Cómo rastrea mi envío?', 'a' => 'Inicia sesión y abre Mis pedidos para ver el transportista y los eventos. Si no hay actualización durante mucho tiempo (salvo festivos), contacta con soporte con el número de pedido.'],
                 ['q' => '¿Cómo se calcula el envío? ¿Hay envío gratis?', 'a' => 'Se calcula al pagar según destino, peso/volumen y servicio. Los umbrales de envío gratis o campañas se aplican automáticamente al cumplirse.'],
                 ['q' => '¿Qué métodos de pago se admiten?', 'a' => 'Admitimos los métodos online activados en esta tienda (por ejemplo PayPal). Las opciones exactas aparecen al pagar y en la Guía de pago.'],
@@ -379,7 +379,7 @@ final class FaqSeedCopyCatalog
                 ['q' => '¿Cómo se protegen mis datos personales?', 'a' => 'Tratamos datos personales solo lo necesario para transacciones y servicios. Ver Política de privacidad y de cookies. Gestiona preferencias en la cuenta.'],
             ],
             'fr_FR' => [
-                ['q' => 'Quand ma commande sera-t-elle expédiée ?', 'a' => 'Les commandes en stock partent généralement sous 1 à 3 jours ouvrés après paiement (jours fériés exclus). Précommande, sur-mesure ou délais indiqués sur la fiche s’appliquent. Voir le Guide d’expédition.'],
+                ['q' => 'Quand ma commande sera-t-elle expédiée ?', 'a' => 'Les commandes en stock partent généralement sous 1 à 5 jours ouvrés après paiement (jours fériés exclus). Le transit principal transfrontalier est d’environ 7–25 jours ouvrés à titre indicatif ; les estimations au paiement ne sont pas des garanties. Précommande, sur-mesure ou délais indiqués sur la fiche s’appliquent. Voir le Guide d’expédition.'],
                 ['q' => 'Comment suivre mon colis ?', 'a' => 'Connectez-vous et ouvrez Mes commandes pour voir le transporteur et le suivi. Sans mise à jour prolongée (hors jours fériés), contactez le support avec le numéro de commande.'],
                 ['q' => 'Comment sont calculés les frais de port ? Livraison gratuite ?', 'a' => 'Calculés au paiement selon destination, poids/volume et service. Les seuils de livraison gratuite ou campagnes s’appliquent automatiquement.'],
                 ['q' => 'Quels moyens de paiement sont acceptés ?', 'a' => 'Nous acceptons les moyens en ligne activés sur cette boutique (ex. PayPal). Les options exactes apparaissent au paiement et dans le Guide de paiement.'],
@@ -389,7 +389,7 @@ final class FaqSeedCopyCatalog
                 ['q' => 'Comment mes données personnelles sont-elles protégées ?', 'a' => 'Nous traitons les données uniquement autant que nécessaire pour transactions et services. Voir Politique de confidentialité et Cookies. Gérez certaines préférences dans le compte.'],
             ],
             'hi_IN' => [
-                ['q' => 'मेरा ऑर्डर कितनी जल्दी भेजा जाएगा?', 'a' => 'स्टॉक में उपलब्ध ऑर्डर आमतौर पर भुगतान के 1–3 कार्यदिवस में भेजे जाते हैं (छुट्टियाँ छोड़कर)। प्री-ऑर्डर/कस्टम/उत्पाद पेज का समय लागू होता है। शिपिंग गाइड देखें।'],
+                ['q' => 'मेरा ऑर्डर कितनी जल्दी भेजा जाएगा?', 'a' => 'स्टॉक में उपलब्ध ऑर्डर आमतौर पर भुगतान के 1–5 कार्यदिवस में भेजे जाते हैं (छुट्टियाँ छोड़कर)। क्रॉस-बॉर्डर मुख्य मार्ग संदर्भ लगभग 7–25 कार्यदिवस; चेकआउट अनुमान गारंटी नहीं। प्री-ऑर्डर/कस्टम/उत्पाद पेज का समय लागू होता है। शिपिंग गाइड देखें।'],
                 ['q' => 'मैं शिपमेंट कैसे ट्रैक करूँ?', 'a' => 'साइन इन करके मेरे ऑर्डर खोलें और कैरियर तथा ट्रैकिंग इवेंट देखें। लंबे समय तक अपडेट न हो (छुट्टियाँ छोड़कर) तो ऑर्डर नंबर के साथ सपोर्ट से संपर्क करें।'],
                 ['q' => 'शिपिंग कैसे गणना होती है? क्या फ्री शिपिंग है?', 'a' => 'चेकआउट पर गंतव्य, वजन/वॉल्यूम और सेवा के अनुसार गणना होती है। फ्री-शिपिंग या कैंपेन थ्रेशहोल्ड पूरे होने पर स्वतः लागू होते हैं।'],
                 ['q' => 'कौन-से भुगतान तरीके समर्थित हैं?', 'a' => 'इस स्टोरफ्रंट पर सक्षम ऑनलाइन भुगतान (जैसे PayPal) समर्थित हैं। सटीक विकल्प चेकआउट और भुगतान गाइड में दिखते हैं।'],
@@ -399,7 +399,7 @@ final class FaqSeedCopyCatalog
                 ['q' => 'मेरा व्यक्तिगत डेटा कैसे सुरक्षित है?', 'a' => 'हम लेन-देन और सेवाओं के लिए आवश्यक सीमा में ही व्यक्तिगत डेटा संसाधित करते हैं। गोपनीयता और कुकी नीति देखें। खाता सेटिंग में कुछ प्राथमिकताएँ प्रबंधित करें।'],
             ],
             'id_ID' => [
-                ['q' => 'Kapan pesanan saya dikirim?', 'a' => 'Pesanan ready stock biasanya dikirim dalam 1–3 hari kerja setelah pembayaran (hari libur dikecualikan). Pre-order, kustom, atau lead time di halaman produk berlaku jika disebutkan. Lihat Panduan Pengiriman.'],
+                ['q' => 'Kapan pesanan saya dikirim?', 'a' => 'Pesanan ready stock biasanya dikirim dalam 1–5 hari kerja setelah pembayaran (hari libur dikecualikan). Transit jalur utama lintas batas referensi sekitar 7–25 hari kerja; estimasi checkout bukan jaminan. Pre-order, kustom, atau lead time di halaman produk berlaku jika disebutkan. Lihat Panduan Pengiriman.'],
                 ['q' => 'Bagaimana melacak pengiriman?', 'a' => 'Masuk dan buka Pesanan Saya untuk melihat kurir dan peristiwa pelacakan. Jika lama tanpa pembaruan (kecuali hari libur), hubungi dukungan dengan nomor pesanan.'],
                 ['q' => 'Bagaimana ongkir dihitung? Ada gratis ongkir?', 'a' => 'Dihitung di checkout berdasarkan tujuan, berat/volume, dan layanan. Ambang gratis ongkir atau kampanye diterapkan otomatis jika terpenuhi.'],
                 ['q' => 'Metode pembayaran apa yang didukung?', 'a' => 'Kami mendukung metode online yang diaktifkan di toko ini (mis. PayPal). Opsi pasti muncul di checkout dan Panduan Pembayaran.'],
@@ -409,7 +409,7 @@ final class FaqSeedCopyCatalog
                 ['q' => 'Bagaimana data pribadi saya dilindungi?', 'a' => 'Kami memproses data pribadi hanya seperlunya untuk transaksi dan layanan. Lihat Kebijakan Privasi dan Cookie. Kelola beberapa preferensi di pengaturan akun.'],
             ],
             'pt_BR' => [
-                ['q' => 'Quando meu pedido será enviado?', 'a' => 'Pedidos em estoque geralmente saem em 1–3 dias úteis após o pagamento (feriados excluídos). Pré-venda, personalização ou prazos da página do produto valem quando indicados. Ver Guia de envio.'],
+                ['q' => 'Quando meu pedido será enviado?', 'a' => 'Pedidos em estoque geralmente saem em 1–5 dias úteis após o pagamento (feriados excluídos). O trânsito principal transfronteiriço é cerca de 7–25 dias úteis como referência; estimativas no checkout não são garantias. Pré-venda, personalização ou prazos da página do produto valem quando indicados. Ver Guia de envio.'],
                 ['q' => 'Como rastrear minha remessa?', 'a' => 'Entre e abra Meus pedidos para ver a transportadora e os eventos. Se não houver atualização por muito tempo (exceto feriados), contate o suporte com o número do pedido.'],
                 ['q' => 'Como o frete é calculado? Há frete grátis?', 'a' => 'É calculado no checkout por destino, peso/volume e serviço. Limites de frete grátis ou campanhas são aplicados automaticamente quando atingidos.'],
                 ['q' => 'Quais métodos de pagamento são aceitos?', 'a' => 'Aceitamos os métodos online ativados nesta loja (por exemplo PayPal). As opções exatas aparecem no checkout e no Guia de pagamento.'],
@@ -419,7 +419,7 @@ final class FaqSeedCopyCatalog
                 ['q' => 'Como meus dados pessoais são protegidos?', 'a' => 'Processamos dados pessoais apenas o necessário para transações e serviços. Ver Política de privacidade e de cookies. Gerencie preferências nas configurações da conta.'],
             ],
             'ur_PK' => [
-                ['q' => 'میرا آرڈر کتنی جلدی بھیجا جائے گا؟', 'a' => 'اسٹاک والے آرڈرز عام طور پر ادائیگی کے بعد 1–3 کاروباری دنوں میں بھیجے جاتے ہیں (چھٹیاں چھوڑ کر)۔ پری آرڈر/کسٹم/پروڈکٹ صفحے کا وقت لاگو ہوتا ہے۔ شپنگ گائیڈ دیکھیں۔'],
+                ['q' => 'میرا آرڈر کتنی جلدی بھیجا جائے گا؟', 'a' => 'اسٹاک والے آرڈرز عام طور پر ادائیگی کے بعد 1–5 کاروباری دنوں میں بھیجے جاتے ہیں (چھٹیاں چھوڑ کر)۔ کراس بارڈر مرکزی راستہ تقریباً 7–25 کاروباری دن حوالہ؛ چیک آؤٹ تخمینے ضمانت نہیں۔ پری آرڈر/کسٹم/پروڈکٹ صفحے کا وقت لاگو ہوتا ہے۔ شپنگ گائیڈ دیکھیں۔'],
                 ['q' => 'میں شپمنٹ کیسے ٹریک کروں؟', 'a' => 'سائن ان کر کے میرے آرڈرز کھولیں اور کیریئر و ٹریکنگ ایونٹس دیکھیں۔ طویل عرصہ اپ ڈیٹ نہ ہو (چھٹیاں چھوڑ کر) تو آرڈر نمبر کے ساتھ سپورٹ سے رابطہ کریں۔'],
                 ['q' => 'شپنگ کا حساب کیسے ہوتا ہے؟ کیا فری شپنگ ہے؟', 'a' => 'چیک آؤٹ پر منزل، وزن/حجم اور سروس کے مطابق حساب ہوتا ہے۔ فری شپنگ یا مہم کی حد پوری ہونے پر خود کار لاگو ہوتی ہے۔'],
                 ['q' => 'کون سے ادائیگی کے طریقے دستیاب ہیں؟', 'a' => 'اس اسٹور فرنٹ پر فعال آن لائن ادائیگیاں (جیسے PayPal) سپورٹ ہیں۔ درست اختیارات چیک آؤٹ اور ادائیگی گائیڈ میں ہیں۔'],

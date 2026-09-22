@@ -25,6 +25,7 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringContainsString('"footer-partner-links"', $src);
         self::assertStringContainsString('"footer-payment-account-links"', $src);
         self::assertStringContainsString('"footer-help-links"', $src);
+        self::assertStringNotContainsString('"footer-newsletter"', $src);
         self::assertStringContainsString('"slot":"footer"', $src);
         self::assertStringContainsString('"required":true', $src);
         self::assertStringContainsString('type="footer_link_groups"', $src);
@@ -35,6 +36,9 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringContainsString('<w:slot id="footer-partner-links"', $src);
         self::assertStringContainsString('<w:slot id="footer-payment-account-links"', $src);
         self::assertStringContainsString('<w:slot id="footer-help-links"', $src);
+        self::assertStringNotContainsString('<w:slot id="footer-newsletter"', $src);
+        self::assertStringNotContainsString('footer-newsletter-band', $src);
+        self::assertStringNotContainsString('footer-newsletter-slot', $src);
         self::assertStringContainsString('footer-section__links', $src);
         self::assertStringContainsString('footer-section__link', $src);
         self::assertStringContainsString('resolveFrontendSiteName', $src);

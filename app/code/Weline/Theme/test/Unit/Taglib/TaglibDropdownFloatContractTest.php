@@ -50,8 +50,7 @@ final class TaglibDropdownFloatContractTest extends TestCase
         $tag = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Taglib/Address.php');
         $js = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/statics/js/address.js');
 
-        self::assertStringContainsString('single-float2', $loader);
-        self::assertStringContainsString('v=20260911-single-float2', $tag);
+        self::assertStringContainsString('20260921-keep-postal2', $loader);
         self::assertStringContainsString('ensureSingleFloat', $js);
         self::assertStringContainsString('floating.attach', $js);
         self::assertStringContainsString('data-w-float-surface', $js);

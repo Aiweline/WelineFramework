@@ -420,21 +420,9 @@ class ApiDocService implements ApiDocumentationProviderInterface
         $methodPath = trim($methodPath, '-');
         
         // 构建完整路径
-        // 前端API: {模块router}/rest/v1/{控制器名}/{方法名}
-        // 后端API: {api_admin}/{模块router}/rest/v1/{控制器名}/{方法名}
-        if ($isBackendApi) {
-            // 后端API需要包含 api_admin 前缀（但这里只存储相对路径，前端会根据当前页面类型添加前缀）
-            $path = "{$moduleRouter}/rest/{$version}/{$controllerPath}/{$methodPath}";
-        } else {
-            // 前端API
-            $path = "{$moduleRouter}/rest/{$version}/{$controllerPath}/{$methodPath}";
-        }
-        
-        // 前端 Auth 的已注册地址包含区域及模块前缀，文档和登录共享该路径。
-        if (!$isBackendApi && $reflection->getName() === \Weline\Api\Api\Rest\V1\Auth::class) {
-            $apiArea = trim((string)\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend'), '/') ?: 'api';
-            $path = "{$apiArea}/{$moduleRouter}/{$path}";
-        }
+        // 前端/后端 API: {模块router}/rest/v1/{控制器名}/{方法名}
+        // Url::parser 已消费 rest_* 区域前缀；模块 router「api」不再二次剥离。
+        $path = "{$moduleRouter}/rest/{$version}/{$controllerPath}/{$methodPath}";
 
         return [
             'method' => $httpMethod,

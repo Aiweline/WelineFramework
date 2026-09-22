@@ -1,17 +1,17 @@
-﻿"Search shard 重复声明表 %{1}","Search shard 重复声明表 %{1}"
+Search shard 重复声明表 %{1},Search shard 重复声明表 %{1}
 搜索接口不支持该操作：%{1},搜索接口不支持该操作：%{1}
 热搜词已加载,热搜词已加载
 搜索,搜索
 热搜,热搜
-"开始预热搜索 Provider 索引（共 %{count} 个）…","开始预热搜索 Provider 索引（共 %{count} 个）…"
+开始预热搜索 Provider 索引（共 %{count} 个）…,开始预热搜索 Provider 索引（共 %{count} 个）…
 搜索索引已存在，跳过：%{code},搜索索引已存在，跳过：%{code}
 正在重建搜索索引：%{code}…,正在重建搜索索引：%{code}…
 搜索索引重建完成：%{code},搜索索引重建完成：%{code}
-"搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped}","搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped}"
-"Search 只接受 ResourceChange v1","搜索 只接受 ResourceChange v1"
-"Product Search 投影负载无效","Product Search 投影负载无效"
-"Product Search 投影 Scope kind 无效","Product Search 投影 Scope kind 无效"
-"Product Search 投影 Store Scope 无效","产品搜索投影 Store Scope 无效"
+搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped},搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped}
+Search 只接受 ResourceChange v1,搜索 只接受 ResourceChange v1
+Product Search 投影负载无效,Product Search 投影负载无效
+Product Search 投影 Scope kind 无效,Product Search 投影 Scope kind 无效
+Product Search 投影 Store Scope 无效,产品搜索投影 Store Scope 无效
 搜索：%{1},搜索：%{1}
 查看“%{1}”在本站汉服、文章与帮助中的相关结果。,查看“%{1}”在本站汉服、文章与帮助中的相关结果。
 在汉服商城中搜索商品、搭配灵感与帮助指南。,在汉服商城中搜索商品、搭配灵感与帮助指南。
@@ -41,21 +41,21 @@ eye,眼睛
 搜索报告,搜索报告
 chart,chart
 查看搜索报告,查看搜索报告
-"Search shard registry 创建后无法读取：website_id=%{1}","Search shard registry 创建后无法读取：website_id=%{1}"
-"Search shard ready 指纹与 schema version 不能为空","Search shard ready 指纹与 schema version 不能为空"
-"Search shard ready 指纹写入冲突：website_id=%{1}","Search shard ready 指纹写入冲突：website_id=%{1}"
-"Search shard 未 ready：website_id=%{1} status=%{2}","搜索分片未就绪：website_id=%{1} status=%{2}"
-"Search shard 状态来源不能为空","Search shard 状态来源不能为空"
-"非法 Search shard 状态迁移：%{1}→%{2}","非法 Search shard 状态迁移：%{1}→%{2}"
-"Search shard 终态写入冲突：website_id=%{1} expected=%{2}","Search shard 终态写入冲突：website_id=%{1} expected=%{2}"
-"website_id 不能为负数：%{1}","website_id 不能为负数：%{1}"
-"非法 search shard key：%{1}",非法搜索分片键：%{1}
-"非法 search shard 实体名：%{1}","非法 search shard 实体名：%{1}"
+Search shard registry 创建后无法读取：website_id=%{1},Search shard registry 创建后无法读取：website_id=%{1}
+Search shard ready 指纹与 schema version 不能为空,Search shard ready 指纹与 schema version 不能为空
+Search shard ready 指纹写入冲突：website_id=%{1},Search shard ready 指纹写入冲突：website_id=%{1}
+Search shard 未 ready：website_id=%{1} status=%{2},搜索分片未就绪：website_id=%{1} status=%{2}
+Search shard 状态来源不能为空,Search shard 状态来源不能为空
+非法 Search shard 状态迁移：%{1}→%{2},非法 Search shard 状态迁移：%{1}→%{2}
+Search shard 终态写入冲突：website_id=%{1} expected=%{2},Search shard 终态写入冲突：website_id=%{1} expected=%{2}
+website_id 不能为负数：%{1},website_id 不能为负数：%{1}
+非法 search shard key：%{1},非法搜索分片键：%{1}
+非法 search shard 实体名：%{1},非法 search shard 实体名：%{1}
 搜索筛选,搜索筛选
 全部,全部
 商品,商品
 博客,博客
-"共 %{1} 条","共 %{1} 条"
+共 %{1} 条,共 %{1} 条
 分类面包屑,分类面包屑
 请输入关键词开始搜索,请输入关键词开始搜索
 未找到相关结果,未找到相关结果
@@ -66,8 +66,8 @@ chart,chart
 否,否
 只读诊断,只读诊断
 配置管理,配置管理
-"此页面只读取当前索引事实；重建、迁移和生产切流仍只能通过受控 CLI 执行。","此页面只读取当前索引事实；重建、迁移和生产切流仍只能通过受控 CLI 执行。"
-"后台只允许切换安全的关闭或影子模式；生产启用、白名单和迁移操作仍只能通过受控 CLI 执行。","后台只允许切换安全的关闭或影子模式；生产启用、白名单和迁移操作仍只能通过受控 CLI 执行。"
+此页面只读取当前索引事实；重建、迁移和生产切流仍只能通过受控 CLI 执行。,此页面只读取当前索引事实；重建、迁移和生产切流仍只能通过受控 CLI 执行。
+后台只允许切换安全的关闭或影子模式；生产启用、白名单和迁移操作仍只能通过受控 CLI 执行。,后台只允许切换安全的关闭或影子模式；生产启用、白名单和迁移操作仍只能通过受控 CLI 执行。
 运行模式,运行模式
 当前配置由环境变量锁定，后台不可修改。,当前配置由环境变量锁定，后台不可修改。
 搜索运行模式,搜索运行模式
@@ -75,43 +75,43 @@ chart,chart
 影子比对,影子比对
 保存安全模式,保存安全模式
 当前没有记录。,当前没有记录。
-"搜索管理 · 性能慢日志","搜索管理 · 性能慢日志"
+搜索管理 · 性能慢日志,搜索管理 · 性能慢日志
 阈值,阈值
 时间,时间
-"近 24h","近 24h"
-"近 7 天","近 7 天"
-"近 30 天","近 30 天"
+近 24h,近 24h
+近 7 天,近 7 天
+近 30 天,近 30 天
 刷新,刷新
 慢请求数,慢请求数
-"最慢 ms","最慢 ms"
+最慢 ms,最慢 ms
 耗时分布,耗时分布
 慢请求列表,慢请求列表
-"该 Scope 近期无慢请求","该 Scope 近期无慢请求"
-"搜索管理 · 搜索报告","搜索管理 · 搜索报告"
-"近 24 小时","近 24 小时"
+该 Scope 近期无慢请求,该 Scope 近期无慢请求
+搜索管理 · 搜索报告,搜索管理 · 搜索报告
+近 24 小时,近 24 小时
 引擎只读,引擎只读
 请求量,请求量
 零结果率,零结果率
-"Top 类型","Top 类型"
+Top 类型,Top 类型
 趋势（按日）,趋势（按日）
-"Top 关键词","Top 关键词"
+Top 关键词,Top 关键词
 次数,次数
 类型,类型
 零结果词,零结果词
-"Search 增量索引","Search 增量索引"
-"从 Product current source 刷新 Website/Store Search 投影",从产品当前来源刷新网站/商店搜索投影
-"Search 增量消费者只接受完整 Website 或 Store Scope，当前为 %{1}","Search 增量消费者只接受完整 Website 或 Store Scope，当前为 %{1}"
-"Search full build 无法 provision Website shard：website_id=%{1} status=%{2}","搜索完整版本无法提供网站分片：website_id=%{1} status=%{2}"
-"Search shard ready 指纹无效：website_id=%{1}",搜索碎片就绪指纹无效：website_id=%{1}
-"Search full build 在 %{1} 次尝试内未获得稳定 Product 快照：%{2}","Search full build 在 %{1} 次尝试内未获得稳定 Product 快照：%{2}"
-"Search 降级标记写入冲突","Search 降级标记写入冲突"
-"Search 恢复标记 CAS 冲突","Search 恢复标记 CAS 冲突"
-"Search 恢复水位未与 Product current 追平","Search 恢复水位未与 Product current 追平"
+Search 增量索引,Search 增量索引
+从 Product current source 刷新 Website/Store Search 投影,从产品当前来源刷新网站/商店搜索投影
+Search 增量消费者只接受完整 Website 或 Store Scope，当前为 %{1},Search 增量消费者只接受完整 Website 或 Store Scope，当前为 %{1}
+Search full build 无法 provision Website shard：website_id=%{1} status=%{2},搜索完整版本无法提供网站分片：website_id=%{1} status=%{2}
+Search shard ready 指纹无效：website_id=%{1},搜索碎片就绪指纹无效：website_id=%{1}
+Search full build 在 %{1} 次尝试内未获得稳定 Product 快照：%{2},Search full build 在 %{1} 次尝试内未获得稳定 Product 快照：%{2}
+Search 降级标记写入冲突,Search 降级标记写入冲突
+Search 恢复标记 CAS 冲突,Search 恢复标记 CAS 冲突
+Search 恢复水位未与 Product current 追平,Search 恢复水位未与 Product current 追平
 搜索暂时不可用,搜索暂时不可用
 未知搜索类型：%{1},未知搜索类型：%{1}
-"Search shard 无法进入 provisioning：status=%{1}",搜索分片无法进入配置：status=%{1}
-"Search shard provision 返回身份不匹配","Search shard provision 返回身份不匹配"
-"Search shard provision 失败",搜索分片配置失败
+Search shard 无法进入 provisioning：status=%{1},搜索分片无法进入配置：status=%{1}
+Search shard provision 返回身份不匹配,Search shard provision 返回身份不匹配
+Search shard provision 失败,搜索分片配置失败
 未知搜索区域：%{1},未知搜索区域：%{1}
 搜索不接受未知参数,搜索不接受未知参数
 搜索关键词过长,搜索关键词过长
@@ -119,64 +119,64 @@ chart,chart
 搜索每页数量超出范围,搜索每页数量超出范围
 缺少搜索参数：%{1},缺少搜索参数：%{1}
 后台搜索需要已登录的管理员会话,后台搜索需要已登录的管理员会话
-"当前 storefront 请求没有冻结完整商城 Scope","当前 storefront 请求没有冻结完整商城 Scope"
+当前 storefront 请求没有冻结完整商城 Scope,当前 storefront 请求没有冻结完整商城 Scope
 热搜接口不接受未知参数,热搜接口不接受未知参数
 热搜数量超出范围,热搜数量超出范围
 搜索类型列表不接受未知参数,搜索类型列表不接受未知参数
 搜索参数类型无效：%{1},搜索参数类型无效：%{1}
 搜索参数过小：%{1},搜索参数过小：%{1}
 搜索参数过大：%{1},搜索参数过大：%{1}
-"Search Product 投影 %{1}#%{2}","Search Product 投影 %{1}#%{2}"
-"Search Product 直读要求完整 Store/Channel/locale/currency Scope","搜索产品直读要求完整 商店/渠道/地区/货币 范围"
-"Product 目录直读不可用","Product 目录直读不可用"
-"Product 目录直读返回了无效快照","Product 目录直读返回了无效快照"
-"Product 目录直读文档格式无效","Product 目录直读文档格式无效"
-"Product 目录直读文档的 locale/currency 维度不完整","Product 目录直读文档的 locale/currency 维度不完整"
-"Product 直读不可用","Product 直读不可用"
-"Search full build 水位或 shard 指纹无效","Search full build 水位或 shard 指纹无效"
-"Search full build 包含重复 Scope 文档：%{1}","Search full build 包含重复 Scope 文档：%{1}"
-"Search 增量事件身份无效","Search 增量事件身份无效"
-"Search 尚无 active generation：website_id=%{1}",搜索尚无活跃代：website_id=%{1}
-"Search document_version 不能为负数","Search document_version 不能为负数"
-"Search 查询缺少完整商城 Scope：%{1}","Search 查询缺少完整商城 Scope：%{1}"
-"Search 查询要求完整 Store/Channel/locale/currency Scope","搜索查询要求完整 商店/渠道/地区/货币 范围"
-"Search 查询参数超过允许长度","Search 查询参数超过允许长度"
-"Search 禁止无来源的成功响应","Search 禁止无来源的成功响应"
-"未知 search shard 实体：%{1}","未知 search shard 实体：%{1}"
-"Search Provider 索引重建","Search Provider 索引重建"
-"定时重建 Blog 等 Provider 搜索索引，保证前台只读索引","定时重建 Blog 等 Provider 搜索索引，保证前台只读索引"
-"Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条","Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条"
-"MIG-P3C：Search full clone shadow 到持久 alias CAS allowlist",MIG-P3C：搜索完整克隆影子到持久别名CAS白名单
+Search Product 投影 %{1}#%{2},Search Product 投影 %{1}#%{2}
+Search Product 直读要求完整 Store/Channel/locale/currency Scope,搜索产品直读要求完整 商店/渠道/地区/货币 范围
+Product 目录直读不可用,Product 目录直读不可用
+Product 目录直读返回了无效快照,Product 目录直读返回了无效快照
+Product 目录直读文档格式无效,Product 目录直读文档格式无效
+Product 目录直读文档的 locale/currency 维度不完整,Product 目录直读文档的 locale/currency 维度不完整
+Product 直读不可用,Product 直读不可用
+Search full build 水位或 shard 指纹无效,Search full build 水位或 shard 指纹无效
+Search full build 包含重复 Scope 文档：%{1},Search full build 包含重复 Scope 文档：%{1}
+Search 增量事件身份无效,Search 增量事件身份无效
+Search 尚无 active generation：website_id=%{1},搜索尚无活跃代：website_id=%{1}
+Search document_version 不能为负数,Search document_version 不能为负数
+Search 查询缺少完整商城 Scope：%{1},Search 查询缺少完整商城 Scope：%{1}
+Search 查询要求完整 Store/Channel/locale/currency Scope,搜索查询要求完整 商店/渠道/地区/货币 范围
+Search 查询参数超过允许长度,Search 查询参数超过允许长度
+Search 禁止无来源的成功响应,Search 禁止无来源的成功响应
+未知 search shard 实体：%{1},未知 search shard 实体：%{1}
+Search Provider 索引重建,Search Provider 索引重建
+定时重建 Blog 等 Provider 搜索索引，保证前台只读索引,定时重建 Blog 等 Provider 搜索索引，保证前台只读索引
+Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条,Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条
+MIG-P3C：Search full clone shadow 到持久 alias CAS allowlist,MIG-P3C：搜索完整克隆影子到持久别名CAS白名单
 打印帮助,打印帮助
-"在登记 full clone 只读清点 Product/Search/alias/rollout 证据","在登记 full clone 只读清点 Product/Search/alias/rollout 证据"
-"checkpoint 后全量重建并追平水位；保持 shadow 与 direct alias","checkpoint 后全量重建并追平水位；保持 shadow 与 direct alias"
-"新进程重载 checkpoint 并重算 Product/Search/shadow 证据","新进程重载 checkpoint 并重算 Product/Search/shadow 证据"
-"fresh verify 后执行逐 Website alias CAS 与精确 Scope allowlist","新鲜验证后执行逐网站别名 CAS 与准确范围白名单"
-"按 checkpoint 持久化 mode off 与 direct alias；保留索引事实","按 checkpoint 持久化 mode off 与 direct alias；保留索引事实"
-"migration registry 已登记的 full mig_clone_*","迁移注册表已注册完整的 mig_clone_*"
-"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）",apply输出的检查点ID（verify/allowlist/rollback必需）
-"目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
-"目标 Store ID，必须 >=1","目标 Store ID，必须 >=1"
-"目标 Channel ID，必须 >=1","目标 Channel ID，必须 >=1"
-"shadow 观察窗 locale（preflight/apply 必需）","shadow 观察窗 locale（preflight/apply 必需）"
-"shadow 观察窗 currency（preflight/apply 必需）","shadow 观察窗 currency（preflight/apply 必需）"
+在登记 full clone 只读清点 Product/Search/alias/rollout 证据,在登记 full clone 只读清点 Product/Search/alias/rollout 证据
+checkpoint 后全量重建并追平水位；保持 shadow 与 direct alias,checkpoint 后全量重建并追平水位；保持 shadow 与 direct alias
+新进程重载 checkpoint 并重算 Product/Search/shadow 证据,新进程重载 checkpoint 并重算 Product/Search/shadow 证据
+fresh verify 后执行逐 Website alias CAS 与精确 Scope allowlist,新鲜验证后执行逐网站别名 CAS 与准确范围白名单
+按 checkpoint 持久化 mode off 与 direct alias；保留索引事实,按 checkpoint 持久化 mode off 与 direct alias；保留索引事实
+migration registry 已登记的 full mig_clone_*,迁移注册表已注册完整的 mig_clone_*
+apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）,apply输出的检查点ID（verify/allowlist/rollback必需）
+目标 Website ID；0 是合法系统默认站点,目标 Website ID；0 是合法系统默认站点
+目标 Store ID，必须 >=1,目标 Store ID，必须 >=1
+目标 Channel ID，必须 >=1,目标 Channel ID，必须 >=1
+shadow 观察窗 locale（preflight/apply 必需）,shadow 观察窗 locale（preflight/apply 必需）
+shadow 观察窗 currency（preflight/apply 必需）,shadow 观察窗 currency（preflight/apply 必需）
 显示本帮助,显示本帮助
-"Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）","Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）"
-"全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）","全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）"
-"重建 Search Provider 内容索引（Blog 等非 Product 类型）","重建 Search Provider 内容索引（Blog 等非 Product 类型）"
-"仅重建指定 provider code（如 blog）","仅重建指定 provider code（如 blog）"
-"Website 维度，默认 0","Website 维度，默认 0"
+Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）,Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）
+全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）,全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）
+重建 Search Provider 内容索引（Blog 等非 Product 类型）,重建 Search Provider 内容索引（Blog 等非 Product 类型）
+仅重建指定 provider code（如 blog）,仅重建指定 provider code（如 blog）
+Website 维度，默认 0,Website 维度，默认 0
 显示帮助,显示帮助
-"重建全部 Provider 索引","重建全部 Provider 索引"
-"仅重建 Blog 索引","仅重建 Blog 索引"
+重建全部 Provider 索引,重建全部 Provider 索引
+仅重建 Blog 索引,仅重建 Blog 索引
 输入关键词…,输入关键词…
-"Product Search 投影事件负载无效","Product Search 投影事件负载无效"
-"Search Product 投影事件 %{1}","Search Product 投影事件 %{1}"
+Product Search 投影事件负载无效,Product Search 投影事件负载无效
+Search Product 投影事件 %{1},Search Product 投影事件 %{1}
 搜索类型列表不接受参数,搜索类型列表不接受参数
-"""Search shard 重复声明表 %{1}""","Search shard 重复声明表 %{1}"
+"""Search shard 重复声明表 %{1}""",Search shard 重复声明表 %{1}
 当前类型,当前类型
 全部%{1},全部%{1}
-"Search storefront 不接受客户端 Scope 参数","Search storefront 不接受客户端 Scope 参数"
-"找到 %{1} 件相关商品","找到 %{1} 件相关商品"
+Search storefront 不接受客户端 Scope 参数,Search storefront 不接受客户端 Scope 参数
+找到 %{1} 件相关商品,找到 %{1} 件相关商品
 未找到与“%{1}”匹配的商品,未找到与“%{1}”匹配的商品
-"MIG-P3C：Search shadow 到 allowlist（apply 必须 --database=mig_clone_*）",MIG-P3C：搜索影子到白名单（必须--database=mig_clone_*）
+MIG-P3C：Search shadow 到 allowlist（apply 必须 --database=mig_clone_*）,MIG-P3C：搜索影子到白名单（必须--database=mig_clone_*）

@@ -1534,6 +1534,7 @@ final class ManagedNginxProcessManager
         $output = (string)($reloadCommand['output'] ?? '');
         $remainingOldWorkerPids = \is_array($oldWorkerPids) ? $oldWorkerPids : [];
         $workerProbeFailed = false;
+        $sawConclusiveWorkerProbe = false;
         if ($code === 0 && $remainingOldWorkerPids !== []) {
             $deadline = (\hrtime(true) / 1_000_000_000)
                 + self::RELOAD_OLD_WORKER_TIMEOUT_SECONDS;
@@ -1542,9 +1543,12 @@ final class ManagedNginxProcessManager
                 SchedulerSystem::usleep(100000);
                 $currentWorkerPids = $this->childWorkerPids($masterPid);
                 if ($currentWorkerPids === null) {
-                    $workerProbeFailed = true;
-                    break;
+                    // Posix double-snapshot returns null while workers restart
+                    // mid-HUP. Treat as transient flux and keep waiting; a hard
+                    // fail here rolled back already-published Edge conf (|fpc2).
+                    continue;
                 }
+                $sawConclusiveWorkerProbe = true;
                 $remainingOldWorkerPids = \array_values(\array_intersect(
                     $oldWorkerPids,
                     $currentWorkerPids,
@@ -1552,6 +1556,17 @@ final class ManagedNginxProcessManager
             } while ($remainingOldWorkerPids !== []
                 && (\hrtime(true) / 1_000_000_000) < $deadline
             );
+            if (!$sawConclusiveWorkerProbe) {
+                $currentWorkerPids = $this->childWorkerPids($masterPid);
+                if ($currentWorkerPids === null) {
+                    $workerProbeFailed = true;
+                } else {
+                    $remainingOldWorkerPids = \array_values(\array_intersect(
+                        $oldWorkerPids,
+                        $currentWorkerPids,
+                    ));
+                }
+            }
         } else {
             SchedulerSystem::usleep(100000);
         }

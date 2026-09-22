@@ -529,9 +529,22 @@
             hydrateForCurrentType(mode === 'tob' || mode === 'toc' ? mode : null);
         });
         // After mini-cart network refresh finishes switching type, restore tags again.
+        // refresh:false（续付订单灌入）也要画券标，否则有优惠行却看不到 DEMO10。
         window.addEventListener('weline:cart-updated', function (event) {
             var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
             if (detail && detail.refresh === false) {
+                if (detail.clear_discount === true) {
+                    clearAppliedState();
+                    return;
+                }
+                var paintCode = String(
+                    detail.coupon_code
+                    || (detail.discount_preview && detail.discount_preview.coupon_code)
+                    || ''
+                ).trim();
+                if (paintCode) {
+                    syncAppliedState(paintCode, detail.discount_preview || detail.discount || null);
+                }
                 return;
             }
             if (resolveCartType(root) === 'toc') {

@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class PixelBootstrapHtmlService
 {
-    private const PIXEL_SCRIPT_VERSION = '20260919-sticky-bus1';
+    private const PIXEL_SCRIPT_VERSION = '20260922-param-shell1';
 
     public function __construct(
         private readonly VisitorTrackingConfig $trackingConfig
@@ -234,12 +234,61 @@ class PixelBootstrapHtmlService
             '[data-cta]',
             '[data-cta-event]',
             '[data-pixel-event]',
+            '[data-visitor-event]',
             '[data-pb-ai-action]',
             '[class*="weline-pixel::"]',
             'a[class*="-cta"]',
             'button[class*="-cta"]',
             '.pb-c-cta'
         ].join(','));
+    }
+
+    function declaredPixelEventName(cta) {
+        if (!cta || !cta.getAttribute) {
+            return '';
+        }
+        var attr = String(
+            cta.getAttribute('data-visitor-event')
+            || cta.getAttribute('data-pixel-event')
+            || cta.getAttribute('data-cta-event')
+            || ''
+        ).trim();
+        if (attr) {
+            return attr;
+        }
+        var className = typeof cta.className === 'string' ? cta.className : '';
+        var tokens = className.split(/\\s+/);
+        for (var i = 0; i < tokens.length; i++) {
+            var token = tokens[i];
+            if (token.indexOf('weline-pixel::') === 0 && token.indexOf(':value') === -1) {
+                return token.replace('weline-pixel::', '');
+            }
+        }
+        return '';
+    }
+
+    function enqueuePendingDeclaredTrack(cta, event) {
+        var eventName = declaredPixelEventName(cta);
+        if (!eventName) {
+            return;
+        }
+        window.__WelinePixelPending = window.__WelinePixelPending || [];
+        window.__WelinePixelPending.push({
+            fn: 'track',
+            args: [
+                eventName,
+                {
+                    trigger: 'click',
+                    source: 'behavior_monitor',
+                    bootstrap_queued: true
+                },
+                {
+                    element: cta,
+                    startedAt: Date.now(),
+                    domEvent: event || null
+                }
+            ]
+        });
     }
 
     // Capture CTA clicks even before pixel.js finishes loading.
@@ -249,12 +298,10 @@ class PixelBootstrapHtmlService
             return;
         }
         var className = typeof cta.className === 'string' ? cta.className : '';
-        var pixelClass = '';
-        className.split(/\\s+/).forEach(function (token) {
-            if (token.indexOf('weline-pixel::') === 0 && token.indexOf(':value') === -1) {
-                pixelClass = token.replace('weline-pixel::', '');
-            }
-        });
+        var pixelClass = declaredPixelEventName(cta);
+        var pixelReady = !!(window.WelinePixel
+            && typeof window.WelinePixel.track === 'function'
+            && !window.WelinePixel.__welineStub);
         var info = {
             tag: cta.tagName,
             text: ((cta.innerText || cta.textContent || '') + '').trim().slice(0, 80),
@@ -263,12 +310,14 @@ class PixelBootstrapHtmlService
             dataCtaEvent: cta.getAttribute('data-cta-event') || '',
             pixelClass: pixelClass,
             className: className,
-            pixelReady: !!(window.WelinePixel && typeof window.WelinePixel.track === 'function' && !window.WelinePixel.__welineStub)
+            pixelReady: pixelReady
         };
         if (isLocalDevHost()) {
             console.log('[WelineCTA] click', info);
         }
-        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function' || window.WelinePixel.__welineStub) {
+        if (!pixelReady) {
+            // 关键声明事件入队，避免「仅 load 脚本、本次数未 track」的偶发丢加购。
+            enqueuePendingDeclaredTrack(cta, event);
             loadWelinePixel('cta-click');
         }
     }, true);

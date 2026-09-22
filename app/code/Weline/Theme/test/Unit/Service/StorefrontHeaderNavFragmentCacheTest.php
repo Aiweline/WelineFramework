@@ -84,6 +84,18 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertSame(600, $policy->staleTtlSeconds);
     }
 
+    public function testPublishedLayoutStructurePolicyIsChannelScopedStructureOnly(): void
+    {
+        $policy = StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy();
+
+        self::assertSame('theme.layout.published', $policy->resource);
+        self::assertSame(StorefrontThemeCacheCoordinator::PUBLISHED_LAYOUT_STRUCTURE_POOL, $policy->pool);
+        self::assertSame('channel', $policy->scope);
+        self::assertSame([], $policy->vary);
+        self::assertSame(['theme'], $policy->dependencies);
+        self::assertSame(0, $policy->staleTtlSeconds);
+    }
+
     public function testHeaderSearchTypesUseAChannelLocalizedPolicy(): void
     {
         $policy = StorefrontThemeCacheCoordinator::headerSearchTypesPolicy();

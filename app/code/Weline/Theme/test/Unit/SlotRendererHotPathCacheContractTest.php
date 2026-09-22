@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
- * SlotRenderer 热路径不得再打 theme_runtime SharedState（与 Partials chrome 策略对齐）。
+ * SlotRenderer 热路径不得再打 theme_runtime SharedState；已发布结构走 CachePolicy HotCache。
  */
 final class SlotRendererHotPathCacheContractTest extends TestCase
 {
@@ -40,6 +41,25 @@ final class SlotRendererHotPathCacheContractTest extends TestCase
         $getBody = substr($src, $getPos, $runtimePos - $getPos);
         self::assertStringNotContainsString("\$cache->get('theme_runtime'", $getBody);
         self::assertStringNotContainsString("\$cache->set('theme_runtime'", $getBody);
+    }
+
+    public function testPublishedLayoutStructureUsesHotCachePolicy(): void
+    {
+        $src = $this->readService();
+        self::assertStringContainsString('StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy()', $src);
+        self::assertStringContainsString('publishedLayoutStructureLogicalKey(', $src);
+        self::assertStringContainsString('rememberPolicy(', $src);
+        self::assertStringContainsString('pub_layout|', $src);
+        // Draft / page target must stay out of the shared structure pool.
+        self::assertStringContainsString('$cacheablePublished = !$isDraft && !$hasTargetIdentity;', $src);
+
+        $policy = StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy();
+        self::assertSame('theme.layout.published', $policy->resource);
+        self::assertSame(StorefrontThemeCacheCoordinator::PUBLISHED_LAYOUT_STRUCTURE_POOL, $policy->pool);
+        self::assertSame('channel', $policy->scope);
+        self::assertSame([], $policy->vary);
+        self::assertSame(['theme'], $policy->dependencies);
+        self::assertSame(0, $policy->staleTtlSeconds);
     }
 
     public function testPublishStillPurgesSharedThemeRuntimeNamespace(): void

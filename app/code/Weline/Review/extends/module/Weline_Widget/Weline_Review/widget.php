@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     'product-reviews' => [
         'name' => '商品评论',
-        'description' => '万能评论大部件：列表、星级表单与图文视频提交；默认注入商品详情评论容器。',
+        'description' => '万能评论大部件：列表、星级表单与图文视频提交；经 default_injections 注入商品详情评论空槽。',
         'type' => 'comment',
         'code' => 'product-reviews',
         'area' => 'frontend',
@@ -19,6 +19,8 @@ return [
             'review',
             'reviews',
         ],
+        // placement=injection：布局只留空槽；同身份禁止再在钩子/布局里 fetch。
+        'placement' => 'injection',
         'default_injections' => [[
             'layout_type' => 'product',
             'layout_option' => 'default',

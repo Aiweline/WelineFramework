@@ -636,6 +636,7 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
 
     public function verifyCallback(CallbackRequest $request): CallbackResult
     {
+        // Mechanism A (frozen): local verify only — zero outbound HTTP; never call remote webhook verify.
         $rawBody = $request->getRawBody();
         if ($rawBody === '') {
             return CallbackResult::fromArray([
@@ -658,6 +659,7 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             ]);
         }
 
+        $eventType = (string) ($payload['event_type'] ?? 'paypal.webhook.received');
         $headers = $request->getHeaders();
         $transmission = $this->extractPayPalTransmissionHeaders($headers);
         $context = $request->getData('context');
@@ -673,40 +675,99 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             ?? $request->getData('verification_secret')
             ?? ''
         ));
-        if ($webhookId !== '') {
-            $config['webhook_id'] = $webhookId;
+        $certPem = '';
+        foreach ([
+            $config['webhook_cert_pem'] ?? null,
+            \is_array($context) ? ($context['webhook_cert_pem'] ?? null) : null,
+            $request->getData('verification_cert_pem'),
+        ] as $candidate) {
+            $candidate = trim((string) ($candidate ?? ''));
+            if ($candidate !== '') {
+                $certPem = $candidate;
+                break;
+            }
         }
-        if (!isset($config['environment'])) {
-            $config['environment'] = \is_array($context)
-                ? (string) ($context['environment'] ?? 'sandbox')
-                : 'sandbox';
-        }
+        $allowUnsigned = \is_array($context) && (
+            !empty($context['allow_unsigned_webhook'])
+            || !empty($config['allow_unsigned_webhook'])
+            || (!empty($context['runtime_config']) && \is_array($context['runtime_config'])
+                && !empty($context['runtime_config']['allow_unsigned_webhook']))
+        );
 
-        // Latest PayPal guidance: verify via /v1/notifications/verify-webhook-signature when webhook_id is configured.
-        if ($webhookId !== '') {
-            if (!$this->getApiClient()->verifyWebhookSignature($config, $rawBody, $transmission)) {
+        $hasTransmission = $transmission['transmission_sig'] !== ''
+            && $transmission['transmission_id'] !== ''
+            && $transmission['transmission_time'] !== '';
+
+        if ($webhookId !== '' && $certPem !== '' && $hasTransmission) {
+            if (!$this->verifyPayPalTransmissionLocally($rawBody, $transmission, $webhookId, $certPem)) {
                 return CallbackResult::fromArray([
                     'verified' => false,
-                    'message' => 'paypal webhook signature verification failed',
+                    'message' => 'paypal webhook local signature verification failed',
                     'provider_event_id' => $eventId,
-                    'event_type' => (string) ($payload['event_type'] ?? 'paypal.webhook.received'),
+                    'event_type' => $eventType,
                 ]);
             }
-        } elseif ($transmission['transmission_sig'] !== '') {
-            // Headers present but webhook_id not configured → reject (do not soft-accept signed traffic).
+
             return CallbackResult::fromArray([
-                'verified' => false,
-                'message' => 'paypal webhook_id missing for signature verification',
+                'verified' => true,
+                'event_type' => $eventType,
                 'provider_event_id' => $eventId,
             ]);
         }
-        // No webhook_id and no transmission headers (e.g. local inject): accept by event id only.
+
+        // Explicit DevRelay / test switch only — never soft-accept by event id in production.
+        if ($allowUnsigned) {
+            return CallbackResult::fromArray([
+                'verified' => true,
+                'event_type' => $eventType,
+                'provider_event_id' => $eventId,
+            ]);
+        }
 
         return CallbackResult::fromArray([
-            'verified' => true,
-            'event_type' => (string) ($payload['event_type'] ?? 'paypal.webhook.received'),
+            'verified' => false,
+            'message' => 'paypal webhook verification materials missing (local-only; fail-closed)',
             'provider_event_id' => $eventId,
+            'event_type' => $eventType,
         ]);
+    }
+
+    /**
+     * Local PayPal transmission signature check (no HTTP).
+     * Message = transmission_id|transmission_time|webhook_id|crc32(raw_body).
+     *
+     * @param array{auth_algo:string,cert_url:string,transmission_id:string,transmission_sig:string,transmission_time:string} $transmission
+     */
+    private function verifyPayPalTransmissionLocally(
+        string $rawBody,
+        array $transmission,
+        string $webhookId,
+        string $certPem,
+    ): bool {
+        $sigRaw = base64_decode($transmission['transmission_sig'], true);
+        if ($sigRaw === false || $sigRaw === '' || $webhookId === '' || $certPem === '') {
+            return false;
+        }
+
+        $crc = sprintf('%u', crc32($rawBody));
+        $message = $transmission['transmission_id'] . '|'
+            . $transmission['transmission_time'] . '|'
+            . $webhookId . '|'
+            . $crc;
+
+        $publicKey = openssl_pkey_get_public($certPem);
+        if ($publicKey === false) {
+            return false;
+        }
+
+        $algo = strtoupper(str_replace(['_', '-'], '', $transmission['auth_algo']));
+        $opensslAlgo = match ($algo) {
+            'SHA256WITHRSA', 'SHA256WITHRSAENCRYPTION' => OPENSSL_ALGO_SHA256,
+            'SHA1WITHRSA' => OPENSSL_ALGO_SHA1,
+            default => OPENSSL_ALGO_SHA256,
+        };
+
+        return openssl_verify($message, $sigRaw, $publicKey, $opensslAlgo) === 1;
     }
 
     /**

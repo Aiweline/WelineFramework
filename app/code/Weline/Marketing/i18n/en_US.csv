@@ -1,244 +1,244 @@
-﻿"订单 UUID","订单 UUID"
-订单号,订单号
-客户姓名,客户姓名
-客户邮箱,客户邮箱
-订单金额,"Order Amount"
-货币,货币
-继续支付链接,继续支付链接
-下单时间,下单时间
-支付状态,支付状态
-"商品明细 HTML（|raw）","商品明细 HTML（|raw）"
-激励券码,激励券码
-报价令牌,报价令牌
-收件邮箱,收件邮箱
-结账金额,结账金额
-结账金额（分）,结账金额（分）
-继续结账链接,继续结账链接
-结账开始时间,结账开始时间
-结账入口,结账入口
-语言,语言
-"网站 ID","网站 ID"
-购物车键,购物车键
-购物车金额,购物车金额
-购物车金额（分）,购物车金额（分）
-继续购物链接,继续购物链接
-加购/创建时间,加购/创建时间
-购物车更新时间,购物车更新时间
-未付订单催付,"Unpaid order reminder"
-营销挽回：未支付订单定时催付邮件,营销挽回：未支付订单定时催付邮件
-结账遗弃提醒,结账遗弃提醒
-营销挽回：遗弃结账报价定时提醒邮件,营销挽回：遗弃结账报价定时提醒邮件
-购物车遗弃提醒,购物车遗弃提醒
-营销挽回：遗弃购物车定时提醒邮件,营销挽回：遗弃购物车定时提醒邮件
-新客欢迎,新客欢迎
-生命周期：注册后欢迎邮件,生命周期：注册后欢迎邮件
-见面礼券码,见面礼券码
-营销报价服务不可用,营销报价服务不可用
-营销接口不支持操作：%{1},营销接口不支持操作：%{1}
-营销服务暂时不可用，请稍后再试。,营销服务暂时不可用，请稍后再试。
-万能优惠规则,万能优惠规则
-优惠券校验、折扣报价与会话绑定。,优惠券校验、折扣报价与会话绑定。
-营销后台接口不支持操作：%{1},营销后台接口不支持操作：%{1}
-营销后台服务暂时不可用。,营销后台服务暂时不可用。
-万能优惠规则后台,万能优惠规则后台
-"读取营销规则摘要，供后台浏览器 API 使用。","读取营销规则摘要，供后台浏览器 API 使用。"
-已达成,已达成
-还差,还差
-购物车优惠券槽默认部件迁移失败：%{1},购物车优惠券槽默认部件迁移失败：%{1}
+订单 UUID,Order UUID
+订单号,Order number
+客户姓名,Customer name
+客户邮箱,Customer email
+订单金额,Order Amount
+货币,Currency
+继续支付链接,Continue payment link
+下单时间,Order time
+支付状态,Payment status
+商品明细 HTML（|raw）,Product detail HTML (|raw)
+激励券码,Incentive coupon code
+报价令牌,Quote Token
+收件邮箱,Receiving email address
+结账金额,Checkout amount
+结账金额（分）,Checkout amount (cents)
+继续结账链接,Continue checkout link
+结账开始时间,Checkout start time
+结账入口,Checkout entry
+语言,Language
+网站 ID,Website ID:
+购物车键,Cart key
+购物车金额,Cart amount
+购物车金额（分）,Cart amount (cents)
+继续购物链接,Continue shopping link
+加购/创建时间,Add-to-cart / create time
+购物车更新时间,Cart updated at
+未付订单催付,Unpaid order reminder
+营销挽回：未支付订单定时催付邮件,Marketing win-back: unpaid order reminder emails
+结账遗弃提醒,Checkout abandonment reminder
+营销挽回：遗弃结账报价定时提醒邮件,Marketing win-back: abandoned checkout quote reminder emails
+购物车遗弃提醒,Cart abandonment reminder
+营销挽回：遗弃购物车定时提醒邮件,Marketing win-back: abandoned cart reminder emails
+新客欢迎,New customer welcome
+生命周期：注册后欢迎邮件,Lifecycle: post-signup welcome email
+见面礼券码,Welcome gift code
+营销报价服务不可用,Marketing quote service unavailable
+营销接口不支持操作：%{1},Marketing API does not support action: %{1}
+营销服务暂时不可用，请稍后再试。,Marketing service temporarily unavailable; please try again later.
+万能优惠规则,Universal discount rule
+优惠券校验、折扣报价与会话绑定。,"Coupon validation, discount quoting, and session binding."
+营销后台接口不支持操作：%{1},Marketing admin API does not support action: %{1}
+营销后台服务暂时不可用。,Marketing admin service temporarily unavailable.
+万能优惠规则后台,Universal promotion rules admin
+读取营销规则摘要，供后台浏览器 API 使用。,Read marketing rule summaries for the admin browser API.
+已达成,Achieved
+还差,Remaining
+购物车优惠券槽默认部件迁移失败：%{1},Cart coupon slot default widget migration failed: %{1}
 活动,Campaigns
-浏览当前进行中的营销活动与优惠说明。,"Browse active marketing campaigns and offer details."
-加载分群失败：%{1},加载分群失败：%{1}
-分群不存在,分群不存在
-请填写编码与名称,请填写编码与名称
-已保存分群,已保存分群
-保存失败：%{1},保存失败：%{1}
-营销分群,营销分群
+浏览当前进行中的营销活动与优惠说明。,Browse active marketing campaigns and offer details.
+加载分群失败：%{1},Load segment failed: %{1}
+分群不存在,Segment not found
+请填写编码与名称,Please enter code and name
+已保存分群,Segment saved
+保存失败：%{1},Save failed: %{1}
+营销分群,Marketing segment
 users,users
-薄分群配置,薄分群配置
-分群列表,分群列表
+薄分群配置,Thin segment config
+分群列表,Segment list
 list,list
-查看分群,查看分群
-新建分群,新建分群
+查看分群,View segment
+新建分群,New segment
 plus,plus
-编辑分群,编辑分群
+编辑分群,Edit segment
 edit,edit
-保存分群,保存分群
+保存分群,Save segment
 save,save
-加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
-加载促销活动表单失败：%{1},"Failed to load promotion form: %{1}"
-促销活动不存在,促销活动不存在
-促销活动保存成功,"Promotion saved successfully"
-保存促销活动失败：%{1},"Failed to save promotion: %{1}"
-万能促销活动,万能促销活动
+加载活动列表失败：%{1},Failed to load campaign list: %{1}
+加载促销活动表单失败：%{1},Failed to load promotion form: %{1}
+促销活动不存在,Promo campaign not found
+促销活动保存成功,Promotion saved successfully
+保存促销活动失败：%{1},Failed to save promotion: %{1}
+万能促销活动,Universal promotion activity
 circle,circle
-万能促销活动管理,万能促销活动管理
-万能促销活动列表,万能促销活动列表
-查看万能促销活动列表,查看万能促销活动列表
-添加万能促销活动,添加万能促销活动
-打开万能促销活动新建表单,打开万能促销活动新建表单
-编辑万能促销活动,编辑万能促销活动
-保存万能促销活动,保存万能促销活动
-加载规则列表失败：%{1},"Failed to load rule list: %{1}"
-加载规则列表失败,加载规则列表失败
-规则不存在,"Rule not found"
-加载规则表单失败：%{1},"Failed to load rule form: %{1}"
-规则名称和有效类型不能为空,"Rule name and valid type cannot be empty"
-规则状态无效,"Rule status is invalid"
-规则保存成功,"Rule saved successfully"
-保存规则失败：%{1},"Failed to save rule: %{1}"
-规则ID不能为空,"Rule ID is required"
-规则已删除,"Rule deleted"
-删除规则失败：%{1},"Failed to delete rule: %{1}"
-万能优惠规则管理,万能优惠规则管理
-万能优惠规则列表,万能优惠规则列表
-查看万能优惠规则列表,查看万能优惠规则列表
-添加规则,"Add Rule"
-添加营销规则,"Add marketing rules"
-编辑规则,编辑规则
-编辑营销规则,编辑营销规则
-保存规则,"save rule"
-保存营销规则,"Save marketing rules"
-删除规则,"Delete rule"
+万能促销活动管理,Universal promotion campaign management
+万能促销活动列表,Universal promotion campaign list
+查看万能促销活动列表,View universal promotion campaign list
+添加万能促销活动,Add universal promotion campaign
+打开万能促销活动新建表单,Open new universal promotion campaign form
+编辑万能促销活动,Edit universal promo campaign
+保存万能促销活动,Save universal promotion campaign
+加载规则列表失败：%{1},Failed to load rule list: %{1}
+加载规则列表失败,Load rule list failed
+规则不存在,Rule not found
+加载规则表单失败：%{1},Failed to load rule form: %{1}
+规则名称和有效类型不能为空,Rule name and valid type cannot be empty
+规则状态无效,Rule status is invalid
+规则保存成功,Rule saved successfully
+保存规则失败：%{1},Failed to save rule: %{1}
+规则ID不能为空,Rule ID is required
+规则已删除,Rule deleted
+删除规则失败：%{1},Failed to delete rule: %{1}
+万能优惠规则管理,Universal promotion rule management
+万能优惠规则列表,Universal promotion rule list
+查看万能优惠规则列表,View universal promotion rule list
+添加规则,Add Rule
+添加营销规则,Add marketing rules
+编辑规则,Edit rule
+编辑营销规则,Edit marketing rule
+保存规则,save rule
+保存营销规则,Save marketing rules
+删除规则,Delete rule
 trash,trash
-删除营销规则,"Delete marketing rules"
-加载生命周期活动失败：%{1},加载生命周期活动失败：%{1}
-生命周期活动不存在,生命周期活动不存在
-请填写活动名称,请填写活动名称
-已保存生命周期活动,已保存生命周期活动
-生命周期活动,生命周期活动
+删除营销规则,Delete marketing rules
+加载生命周期活动失败：%{1},Load lifecycle campaign failed: %{1}
+生命周期活动不存在,Lifecycle campaign not found
+请填写活动名称,Please enter campaign name
+已保存生命周期活动,Lifecycle campaign saved
+生命周期活动,Lifecycle campaign
 gift,gift
-欢迎礼等生命周期营销,欢迎礼等生命周期营销
-生命周期活动列表,生命周期活动列表
-查看生命周期活动,查看生命周期活动
-新建生命周期活动,新建生命周期活动
-编辑生命周期活动,编辑生命周期活动
-保存生命周期活动,保存生命周期活动
-加载挽回活动失败：%{1},加载挽回活动失败：%{1}
-挽回活动不存在,挽回活动不存在
-挽回活动已保存,挽回活动已保存
-挽回活动,挽回活动
+欢迎礼等生命周期营销,Welcome gift and lifecycle marketing
+生命周期活动列表,Lifecycle campaign list
+查看生命周期活动,View lifecycle campaigns
+新建生命周期活动,New lifecycle campaign
+编辑生命周期活动,Edit lifecycle campaign
+保存生命周期活动,Save lifecycle campaign
+加载挽回活动失败：%{1},Load win-back campaign failed: %{1}
+挽回活动不存在,Win-back campaign not found
+挽回活动已保存,Win-back campaign saved
+挽回活动,Win-back campaign
 mail,mail
-未付订单挽回营销,未付订单挽回营销
-挽回活动列表,挽回活动列表
-查看挽回活动,查看挽回活动
-新建挽回活动,新建挽回活动
-编辑挽回活动,编辑挽回活动
-保存挽回活动,保存挽回活动
-加载看板失败：%{1},加载看板失败：%{1}
-挽回看板,挽回看板
+未付订单挽回营销,Unpaid order win-back marketing
+挽回活动列表,Win-back campaign list
+查看挽回活动,View win-back campaigns
+新建挽回活动,New win-back campaign
+编辑挽回活动,Edit win-back campaign
+保存挽回活动,Save win-back campaign
+加载看板失败：%{1},Load board failed: %{1}
+挽回看板,Win-back board
 chart,chart
-挽回发送与券核销只读汇总,挽回发送与券核销只读汇总
-查看挽回运营汇总,查看挽回运营汇总
-加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
-优惠券不存在,优惠券不存在
-加载优惠券表单失败：%{1},"Failed to load coupon form: %{1}"
-后台手工,后台手工
-优惠券更新成功,优惠券更新成功
-优惠券保存成功,"Coupon saved successfully"
-保存优惠券失败：%{1},"Failed to save coupon: %{1}"
-万能优惠券,万能优惠券
-万能优惠券管理,万能优惠券管理
-万能优惠券列表,万能优惠券列表
-查看万能优惠券列表,查看万能优惠券列表
-添加万能优惠券,添加万能优惠券
-打开万能优惠券新建表单,打开万能优惠券新建表单
-编辑万能优惠券,编辑万能优惠券
-保存万能优惠券,保存万能优惠券
-优惠券代码不能为空,"Coupon Code Cannot Be Empty"
-优惠券无效或已过期,"Coupon is invalid or expired"
-免运费,"Free Shipping"
-免除订单运费,"Free shipping for order"
-百分比折扣,"Percentage Discount"
-按百分比折扣，支持设置最大折扣金额,"Percentage discount with maximum discount amount support"
-百分比封顶额换算失败：缺少基准货币到结账货币的汇率,百分比封顶额换算失败：缺少基准货币到结账货币的汇率
-"享受 %.2f%% 折扣，优惠 %s %.2f","享受 %.2f%% 折扣，优惠 %s %.2f"
-折扣百分比,"Discount Percentage"
-最大折扣金额（%{1}）,最大折扣金额（%{1}）
-封顶金额按站点基准货币录入；结账时按汇率换算。,封顶金额按站点基准货币录入；结账时按汇率换算。
-应用于,"Apply To"
-订单小计,"Order Subtotal"
+挽回发送与券核销只读汇总,Win-back send & coupon redeem read-only summary
+查看挽回运营汇总,View win-back ops summary
+加载优惠券列表失败：%{1},Failed to load coupon list: %{1}
+优惠券不存在,Coupon does not exist
+加载优惠券表单失败：%{1},Failed to load coupon form: %{1}
+后台手工,Admin manual
+优惠券更新成功,Coupon updated
+优惠券保存成功,Coupon saved successfully
+保存优惠券失败：%{1},Failed to save coupon: %{1}
+万能优惠券,Universal coupon
+万能优惠券管理,Universal coupon management
+万能优惠券列表,Universal coupon list
+查看万能优惠券列表,View universal coupon list
+添加万能优惠券,Add universal coupon
+打开万能优惠券新建表单,Open new universal coupon form
+编辑万能优惠券,Edit universal coupon
+保存万能优惠券,Save universal coupon
+优惠券代码不能为空,Coupon Code Cannot Be Empty
+优惠券无效或已过期,Coupon is invalid or expired
+免运费,Free Shipping
+免除订单运费,Free shipping for order
+百分比折扣,Percentage Discount
+按百分比折扣，支持设置最大折扣金额,Percentage discount with maximum discount amount support
+百分比封顶额换算失败：缺少基准货币到结账货币的汇率,Percent cap conversion failed: missing FX rate from base to checkout currency
+享受 %.2f%% 折扣，优惠 %s %.2f,"Enjoy %.2f%% off, save %s %.2f"
+折扣百分比,Discount Percentage
+最大折扣金额（%{1}）,Maximum discount amount (%{1})
+封顶金额按站点基准货币录入；结账时按汇率换算。,Cap amount is entered in site base currency; converted by FX at checkout.
+应用于,Apply To
+订单小计,Order Subtotal
 运费,Shipping
-匹配商品行,匹配商品行
-买X送Y,"Buy X Get Y"
+匹配商品行,Match product lines
+买X送Y,Buy X Get Y
 购买X件商品，赠送Y件商品（或折扣）,"Buy X items, get Y items (or discount)"
-"买 %d 送 %d，共赠送 %d 件商品，优惠 %s %.2f","买 %d 送 %d，共赠送 %d 件商品，优惠 %s %.2f"
-"买 %d 送 %d，享受 %.2f%% 折扣，优惠 %s %.2f","买 %d 送 %d，享受 %.2f%% 折扣，优惠 %s %.2f"
-买X送Y固定额换算失败：缺少基准货币到结账货币的汇率,买X送Y固定额换算失败：缺少基准货币到结账货币的汇率
-"买 %d 送 %d，每次优惠 %s %.2f，共优惠 %s %.2f","买 %d 送 %d，每次优惠 %s %.2f，共优惠 %s %.2f"
-购买数量（X）,"Buy Quantity (X)"
-赠送数量（Y）,"Get Quantity (Y)"
-赠送类型,"Gift Type"
-免费赠送,"Free Gift"
-固定金额折扣,"Fixed Amount Discount"
-"折扣值（百分比或金额；固定额为 %{1}）","折扣值（百分比或金额；固定额为 %{1}）"
-选择固定金额时按站点基准货币录入，结账按汇率换算。,选择固定金额时按站点基准货币录入，结账按汇率换算。
-按固定金额折扣（金额为站点基准货币，结账币种自动换算）,按固定金额折扣（金额为站点基准货币，结账币种自动换算）
-固定优惠换算失败：缺少基准货币到结账货币的汇率,固定优惠换算失败：缺少基准货币到结账货币的汇率
-"优惠 %s %.2f","优惠 %s %.2f"
-折扣金额（%{1}）,折扣金额（%{1}）
-"固定金额按站点基准货币录入；结账时按汇率换算到当前货币，禁止按数字 1:1 跨币种扣减。","固定金额按站点基准货币录入；结账时按汇率换算到当前货币，禁止按数字 1:1 跨币种扣减。"
-赠品产品,"Gift Product"
-赠送指定产品,"Gift specified product"
-"赠送产品 ID: %d，数量: %d","Free product ID: %d, quantity: %d"
-产品ID,"Product ID"
+买 %d 送 %d，共赠送 %d 件商品，优惠 %s %.2f,"Buy %d get %d, gift %d items total, save %s %.2f"
+买 %d 送 %d，享受 %.2f%% 折扣，优惠 %s %.2f,"Buy %d get %d, enjoy %.2f%% off, save %s %.2f"
+买X送Y固定额换算失败：缺少基准货币到结账货币的汇率,Buy-X-get-Y fixed amount conversion failed: missing FX from base to checkout currency
+买 %d 送 %d，每次优惠 %s %.2f，共优惠 %s %.2f,"Buy %d get %d, save %s %.2f each time, %s %.2f total"
+购买数量（X）,Buy Quantity (X)
+赠送数量（Y）,Get Quantity (Y)
+赠送类型,Gift Type
+免费赠送,Free Gift
+固定金额折扣,Fixed Amount Discount
+折扣值（百分比或金额；固定额为 %{1}）,Discount value (percent or amount; fixed amount is %{1})
+选择固定金额时按站点基准货币录入，结账按汇率换算。,"When fixed amount is selected, enter in site base currency; checkout converts by FX."
+按固定金额折扣（金额为站点基准货币，结账币种自动换算）,Discount by fixed amount (amount in site base currency; checkout currency auto-converted)
+固定优惠换算失败：缺少基准货币到结账货币的汇率,Fixed discount conversion failed: missing FX rate from base to checkout currency
+优惠 %s %.2f,Discount %s %.2f
+折扣金额（%{1}）,Discount amount (%{1})
+固定金额按站点基准货币录入；结账时按汇率换算到当前货币，禁止按数字 1:1 跨币种扣减。,Fixed amounts entered in site base currency; at checkout convert by FX—never deduct 1:1 across currencies by raw numbers.
+赠品产品,Gift Product
+赠送指定产品,Gift specified product
+赠送产品 ID: %d，数量: %d,"Free product ID: %d, quantity: %d"
+产品ID,Product ID
 数量,Quantity
-支付方式,"Payment Method"
-根据支付方式进行条件判断,"Condition based on payment method"
+支付方式,Payment Method
+根据支付方式进行条件判断,Condition based on payment method
 操作符,Operator
 属于,In
-不属于,"Not In"
-订单商品数量,"Order Item Count"
-根据订单中商品数量进行条件判断,"Condition based on order item count"
-"商品数 >=","Item Count >="
-"商品数 <=","Item Count <="
-"商品数 >","Item Count >"
-"商品数 <","Item Count <"
-"商品数 =","Item Count ="
-配送方式,"Shipping Method"
-根据配送方式进行条件判断,"Condition based on shipping method"
-根据订单小计金额进行条件判断（门槛金额为站点基准货币）,根据订单小计金额进行条件判断（门槛金额为站点基准货币）
-"订单金额 >=","Order Amount >="
-"订单金额 <=","Order Amount <="
-"订单金额 >","Order Amount >"
-"订单金额 <","Order Amount <"
-金额（%{1}）,金额（%{1}）
-门槛按站点基准货币录入；结账时按汇率换算后与订单小计比较。,门槛按站点基准货币录入；结账时按汇率换算后与订单小计比较。
-产品分类,"Product Category"
-根据产品分类进行条件判断,"Condition based on product category"
+不属于,Not In
+订单商品数量,Order Item Count
+根据订单中商品数量进行条件判断,Condition based on order item count
+商品数 >=,Item Count >=
+商品数 <=,Item Count <=
+商品数 >,Item Count >
+商品数 <,Item Count <
+商品数 =,Item Count =
+配送方式,Shipping Method
+根据配送方式进行条件判断,Condition based on shipping method
+根据订单小计金额进行条件判断（门槛金额为站点基准货币）,Condition by order subtotal (threshold amount in site base currency)
+订单金额 >=,Order Amount >=
+订单金额 <=,Order Amount <=
+订单金额 >,Order Amount >
+订单金额 <,Order Amount <
+金额（%{1}）,Amount (%{1})
+门槛按站点基准货币录入；结账时按汇率换算后与订单小计比较。,Threshold entered in site base currency; at checkout convert by FX then compare to order subtotal.
+产品分类,Product Category
+根据产品分类进行条件判断,Condition based on product category
 分类,Category
-产品库存状态,"Product Stock Status"
-根据产品库存状态进行条件判断,"Condition based on product stock status"
+产品库存状态,Product Stock Status
+根据产品库存状态进行条件判断,Condition based on product stock status
 等于,Equals
-不等于,"Not Equals"
-库存状态,"Stock Status"
-有库存,"In Stock"
-缺货,"Out of Stock"
-产品SKU,"Product SKU"
-根据产品SKU进行条件判断,"Condition based on product SKU"
+不等于,Not Equals
+库存状态,Stock Status
+有库存,In Stock
+缺货,Out of Stock
+产品SKU,Product SKU
+根据产品SKU进行条件判断,Condition based on product SKU
 包含,Contains
-不包含,"Not Contains"
-包含（模糊）,"Contains (Fuzzy)"
+不包含,Not Contains
+包含（模糊）,Contains (Fuzzy)
 SKU,SKU
-产品价格,"Product Price"
-根据产品价格进行条件判断,"Condition based on product price"
-"价格 >=","Price >="
-"价格 <=","Price <="
-"价格 >","Price >"
-"价格 <","Price <"
-价格（%{1}）,价格（%{1}）
-价格门槛按站点基准货币录入；结账时按汇率换算后与商品行价格比较。,价格门槛按站点基准货币录入；结账时按汇率换算后与商品行价格比较。
-匹配类型,"Match Type"
-任一产品,"Any Product"
-所有产品,"All Products"
-产品品牌,"Product Brand"
-根据产品品牌进行条件判断,"Condition based on product brand"
+产品价格,Product Price
+根据产品价格进行条件判断,Condition based on product price
+价格 >=,Price >=
+价格 <=,Price <=
+价格 >,Price >
+价格 <,Price <
+价格（%{1}）,Price (%{1})
+价格门槛按站点基准货币录入；结账时按汇率换算后与商品行价格比较。,Price threshold entered in site base currency; at checkout convert by FX then compare to line price.
+匹配类型,Match Type
+任一产品,Any Product
+所有产品,All Products
+产品品牌,Product Brand
+根据产品品牌进行条件判断,Condition based on product brand
 品牌,Brand
-日期范围,"Date Range"
-根据日期范围进行条件判断,"Condition based on date range"
-开始日期,"Start Date"
-结束日期,"End Date"
-星期几,"Day of Week"
-根据星期几进行条件判断,"Condition based on day of week"
+日期范围,Date Range
+根据日期范围进行条件判断,Condition based on date range
+开始日期,Start Date
+结束日期,End Date
+星期几,Day of Week
+根据星期几进行条件判断,Condition based on day of week
 星期,Week
 星期日,Sunday
 星期一,Monday
@@ -248,263 +248,263 @@ SKU,SKU
 星期五,Friday
 星期六,Saturday
 省份/州,Region
-根据省份或州进行条件判断,"Condition based on region"
+根据省份或州进行条件判断,Condition based on region
 国家,Country
-根据国家进行条件判断,"Condition based on country"
+根据国家进行条件判断,Condition based on country
 城市,City
-根据城市进行条件判断,"Condition based on city"
-货币代码,"Currency Code"
-根据货币代码进行条件判断,"Condition based on currency code"
-人民币,"Chinese Yuan"
-美元,"US Dollar"
+根据城市进行条件判断,Condition based on city
+货币代码,Currency Code
+根据货币代码进行条件判断,Condition based on currency code
+人民币,Chinese Yuan
+美元,US Dollar
 欧元,Euro
-英镑,"British Pound"
-日元,"Japanese Yen"
-VIP等级,"VIP Level"
-根据客户VIP等级进行条件判断,"Condition based on VIP level"
-"等级 >=","Level >="
-"等级 <=","Level <="
-注册时间,"Registration Date"
-根据客户注册时间进行条件判断,"Condition based on registration date"
-"注册时间 >=","Registration Date >="
-"注册时间 <=","Registration Date <="
-"注册时间 =","Registration Date ="
+英镑,British Pound
+日元,Japanese Yen
+VIP等级,VIP Level
+根据客户VIP等级进行条件判断,Condition based on VIP level
+等级 >=,Level >=
+等级 <=,Level <=
+注册时间,Registration Date
+根据客户注册时间进行条件判断,Condition based on registration date
+注册时间 >=,Registration Date >=
+注册时间 <=,Registration Date <=
+注册时间 =,Registration Date =
 日期,Date
-订单数量,"Order Count"
-根据客户订单数量进行条件判断,"Condition based on order count"
-"订单数 >=","Order Count >="
-"订单数 <=","Order Count <="
-"订单数 >","Order Count >"
-"订单数 <","Order Count <"
-"订单数 =","Order Count ="
-客户组,"Customer Group"
-根据客户所属的客户组进行条件判断,"Condition based on customer group"
+订单数量,Order Count
+根据客户订单数量进行条件判断,Condition based on order count
+订单数 >=,Order Count >=
+订单数 <=,Order Count <=
+订单数 >,Order Count >
+订单数 <,Order Count <
+订单数 =,Order Count =
+客户组,Customer Group
+根据客户所属的客户组进行条件判断,Condition based on customer group
 属性,Attribute
-累计消费,"Total Spent"
-根据客户累计消费金额进行条件判断,"Condition based on total spent"
-"累计消费 >=","Total Spent >="
-"累计消费 <=","Total Spent <="
-"累计消费 >","Total Spent >"
-"累计消费 <","Total Spent <"
+累计消费,Total Spent
+根据客户累计消费金额进行条件判断,Condition based on total spent
+累计消费 >=,Total Spent >=
+累计消费 <=,Total Spent <=
+累计消费 >,Total Spent >
+累计消费 <,Total Spent <
 金额,Amount
 生日,Birthday
 根据客户生日进行条件判断（支持生日月、生日周、生日当天）,"Condition based on customer birthday (supports birthday month, week, and day)"
 类型,Type
-生日月,"Birthday Month"
-生日周（前后3天）,"Birthday Week (±3 days)"
-生日当天,"Birthday Day"
-客户标签,"Customer Tags"
-根据客户标签进行条件判断,"Condition based on customer tags"
-包含任一标签,"Contains Any Tag"
-不包含任一标签,"Not Contains Any Tag"
+生日月,Birthday Month
+生日周（前后3天）,Birthday Week (±3 days)
+生日当天,Birthday Day
+客户标签,Customer Tags
+根据客户标签进行条件判断,Condition based on customer tags
+包含任一标签,Contains Any Tag
+不包含任一标签,Not Contains Any Tag
 标签,Tag
 优惠券,Coupon
-请输入优惠券代码,"Please enter a coupon code"
-该优惠券已应用,"This coupon is already applied"
-优惠券不可用,"Coupon unavailable"
+请输入优惠券代码,Please enter a coupon code
+该优惠券已应用,This coupon is already applied
+优惠券不可用,Coupon unavailable
 优惠券无效、不可用或已达使用上限,"Coupon is invalid, unavailable, or has reached its usage limit"
-营销服务暂时不可用,"Marketing service temporarily unavailable"
-已移除优惠券,"Coupon removed"
-输入优惠券代码,"Enter coupon code"
+营销服务暂时不可用,Marketing service temporarily unavailable
+已移除优惠券,Coupon removed
+输入优惠券代码,Enter coupon code
 应用中...,Applying...
-当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
-优惠券代码,"Coupon Code"
+当前暂无进行中的活动，请稍后再来看看。,There are no active campaigns right now. Please check back later.
+优惠券代码,Coupon Code
 应用,Apply
-满额进度,满额进度
-新客礼,新客礼
-注册领取见面礼,注册领取见面礼
-"配置遗弃时限并定时催付：未付订单、遗弃结账或购物车。事实面由 signals 提供，时限由本页决定。","配置遗弃时限并定时催付：未付订单、遗弃结账或购物车。事实面由 signals 提供，时限由本页决定。"
+满额进度,Spend progress
+新客礼,New customer gift
+注册领取见面礼,Register for welcome gift
+配置遗弃时限并定时催付：未付订单、遗弃结账或购物车。事实面由 signals 提供，时限由本页决定。,"Configure abandonment window and schedule reminders: unpaid orders, abandoned checkout or carts. Facts from signals; window set here."
 ID,ID
-名称,名称
+名称,Name
 状态,Status
-遗弃时限(小时),遗弃时限(小时)
-最大步数,最大步数
-网站,网站
+遗弃时限(小时),Abandonment window (hours)
+最大步数,Max steps
+网站,Website
 操作,Action
-还没有挽回活动,还没有挽回活动
-已启用,已启用
-已停用,已停用
-全部,全部
+还没有挽回活动,No win-back campaigns yet
+已启用,Enabled
+已停用,Deactivated
+全部,All
 编辑,Edit
-活动名称,"Campaign Name"
-活动类型,活动类型
-遗弃时限（小时）,遗弃时限（小时）
-"下单后经过这么久仍未支付，才视为遗弃并发送第 1 步催付。由营销决定，订单模块不写遗弃状态。","下单后经过这么久仍未支付，才视为遗弃并发送第 1 步催付。由营销决定，订单模块不写遗弃状态。"
-"进入结账后经过这么久仍未下单，才视为遗弃并发送第 1 步继续结账提醒。由营销决定，结账模块不写遗弃状态。","进入结账后经过这么久仍未下单，才视为遗弃并发送第 1 步继续结账提醒。由营销决定，结账模块不写遗弃状态。"
-"购物车最后更新后经过这么久仍未结账，才视为遗弃。有邮箱必触达；无邮箱保留信号、不发信。已有 quoted 结账会话时不发车信。","购物车最后更新后经过这么久仍未结账，才视为遗弃。有邮箱必触达；无邮箱保留信号、不发信。已有 quoted 结账会话时不发车信。"
-步骤间隔（小时）,步骤间隔（小时）
-冷却（小时）,冷却（小时）
-"激励券规则 ID（step≥2；0=不发券）","激励券规则 ID（step≥2；0=不发券）"
-"分群 ID（0=全部）","分群 ID（0=全部）"
-"网站 ID（0=全部）","网站 ID（0=全部）"
-保存,保存
-返回,返回
-新客,新客
-老客,老客
-"N 天未购","N 天未购"
-"薄分群：新客 / 老客 / N 天未购。活动可挂 segment_id。","薄分群：新客 / 老客 / N 天未购。活动可挂 segment_id。"
-编码,编码
-种类,种类
-还没有分群,还没有分群
-返回列表,"Return to list"
-"未购天数（仅 idle_days）","未购天数（仅 idle_days）"
-欢迎礼,欢迎礼
-"沉睡唤醒（未启用 Cron）","沉睡唤醒（未启用 Cron）"
-"生日礼（未启用 Cron）","生日礼（未启用 Cron）"
-"注册后欢迎信 ± 礼券；同客同活动仅发送一次。","注册后欢迎信 ± 礼券；同客同活动仅发送一次。"
-激励规则,激励规则
-还没有生命周期活动,还没有生命周期活动
-沉睡唤醒（枚举预留）,沉睡唤醒（枚举预留）
-生日礼（枚举预留）,生日礼（枚举预留）
-"激励券规则 ID","激励券规则 ID"
-"分群 ID","分群 ID"
-挽回运营看板,挽回运营看板
-"只读汇总：发送 / 跳过原因 / 已发券 / 券核销。不含邮件打开率与点击率。","只读汇总：发送 / 跳过原因 / 已发券 / 券核销。不含邮件打开率与点击率。"
-已发送,已发送
-已跳过,已跳过
-失败,失败
-已发券,已发券
-已核销,已核销
-跳过原因,跳过原因
-暂无数据,"No data"
-优惠券列表,"Coupon List"
-添加优惠券,"Add Coupon"
-无匹配结果，请调整筛选条件,无匹配结果，请调整筛选条件
-维护等待礼金,维护等待礼金
-促销活动主题,促销活动主题
+活动名称,Campaign Name
+活动类型,Campaign type
+遗弃时限（小时）,Abandonment window (hours)
+下单后经过这么久仍未支付，才视为遗弃并发送第 1 步催付。由营销决定，订单模块不写遗弃状态。,Only after this long unpaid post-order is it abandoned and step-1 reminder sent. Marketing decides; Order module does not write abandonment status.
+进入结账后经过这么久仍未下单，才视为遗弃并发送第 1 步继续结账提醒。由营销决定，结账模块不写遗弃状态。,Only after this long in checkout without placing an order is it abandoned and step-1 continue-checkout reminder sent. Marketing decides; Checkout module does not write abandonment status.
+购物车最后更新后经过这么久仍未结账，才视为遗弃。有邮箱必触达；无邮箱保留信号、不发信。已有 quoted 结账会话时不发车信。,"Only after this long since last cart update without checkout is it abandoned. Email required for outreach; without email keep signal, no send. Skip cart email when a quoted checkout session exists."
+步骤间隔（小时）,Step interval (hours)
+冷却（小时）,Cooldown (hours)
+激励券规则 ID（step≥2；0=不发券）,Incentive coupon rule ID (step≥2; 0=no coupon)
+分群 ID（0=全部）,Segment ID (0=all)
+网站 ID（0=全部）,Website ID (0 = all websites)
+保存,Save
+返回,Back.
+新客,New customer
+老客,Returning customer
+N 天未购,No purchase in N days
+薄分群：新客 / 老客 / N 天未购。活动可挂 segment_id。,Thin segments: new / returning / no purchase in N days. Campaigns can attach segment_id.
+编码,Encoding
+种类,Type
+还没有分群,No segments yet
+返回列表,Return to list
+未购天数（仅 idle_days）,Days since purchase (idle_days only)
+欢迎礼,Welcome gift
+沉睡唤醒（未启用 Cron）,Win-back sleepers (Cron not enabled)
+生日礼（未启用 Cron）,Birthday gift (Cron not enabled)
+注册后欢迎信 ± 礼券；同客同活动仅发送一次。,Post-signup welcome ± gift coupon; each customer gets each campaign only once.
+激励规则,Incentive rules
+还没有生命周期活动,No lifecycle campaigns yet
+沉睡唤醒（枚举预留）,Win-back sleepers (enum reserved)
+生日礼（枚举预留）,Birthday gift (enum reserved)
+激励券规则 ID,Incentive coupon rule ID
+分群 ID,Segment ID
+挽回运营看板,Win-back ops board
+只读汇总：发送 / 跳过原因 / 已发券 / 券核销。不含邮件打开率与点击率。,Read-only summary: sent / skip reasons / coupons issued / coupons redeemed. No open or click rates.
+已发送,Sent
+已跳过,Skipped
+失败,Failed
+已发券,Coupon sent
+已核销,Redeemed
+跳过原因,Skip reason
+暂无数据,No data
+优惠券列表,Coupon List
+添加优惠券,Add Coupon
+无匹配结果，请调整筛选条件,No matches; please adjust filters
+维护等待礼金,Maintenance wait gift
+促销活动主题,Promo campaign theme
 启用,Enable
 禁用,Disable
 已过期,Expired
-已用尽,已用尽
-固定金额,"fixed amount"
+已用尽,Exhausted
+固定金额,fixed amount
 赠品,giveaway
-搜索代码,搜索代码
-"优惠券代码，如 MW / SAVE","优惠券代码，如 MW / SAVE"
-来源活动,来源活动
-全部来源,全部来源
-全部类型,全部类型
-全部状态,全部状态
-筛选,筛选
-重置,重置
-来源,来源
-"折扣值（基准货币 %{1}）","折扣值（基准货币 %{1}）"
-使用次数,"Usage Count"
-"固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。","固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。"
-基础信息,基础信息
-营销规则,"Marketing Rule"
-请选择,"Please select"
-"例如 SAVE10","例如 SAVE10"
-顾客结账时输入的代码，建议大写字母与数字。,顾客结账时输入的代码，建议大写字母与数字。
-优惠设置,优惠设置
-站点基准货币,站点基准货币
-优惠类型,"Offer type"
-折扣值（%）,折扣值（%）
-折扣值,"Discount Value"
-"百分比折扣不带货币单位；例如 10 表示减免 10%。","百分比折扣不带货币单位；例如 10 表示减免 10%。"
-"此数字按站点基准货币 %{1} 配置；结账时按汇率换算到顾客货币。","此数字按站点基准货币 %{1} 配置；结账时按汇率换算到顾客货币。"
-当前类型无需填写折扣数值。,当前类型无需填写折扣数值。
-使用限制,使用限制
-"最低订单金额（基准货币 %{1}）","最低订单金额（基准货币 %{1}）"
-"此金额按站点基准货币 %{1} 配置门槛；结账币种会按汇率换算后比较。0 表示不限制。","此金额按站点基准货币 %{1} 配置门槛；结账币种会按汇率换算后比较。0 表示不限制。"
-总使用次数,"total number of uses"
-"全站合计可用次数；0 表示不限制。","全站合计可用次数；0 表示不限制。"
-每客户次数,"times per customer"
-同一顾客最多可用次数。,同一顾客最多可用次数。
-有效期,有效期
-开始时间,"Start time"
-"按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。","按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。"
-结束时间,"End time"
-更新优惠券,更新优惠券
-保存优惠券,"Save Coupon"
-万能优惠规则列表与维护入口,万能优惠规则列表与维护入口
-规则列表,"Rule List"
-系统同步,"System synced"
-规则名称,"Rule Name"
+搜索代码,Search code
+优惠券代码，如 MW / SAVE,"Coupon code, e.g. MW / SAVE"
+来源活动,Source campaign
+全部来源,All sources
+全部类型,All Types
+全部状态,All Statuses
+筛选,Filter
+重置,Reset
+来源,Source
+折扣值（基准货币 %{1}）,Discount value (base currency %{1})
+使用次数,Usage Count
+固定金额与最低订单金额一律按站点基准货币 %{1} 录入；结账时按汇率换算到顾客货币。勿把 USD 10 与 CNY 10 当作同一数字。,Fixed amounts and min order amounts are always entered in site base currency %{1}; at checkout convert by FX to customer currency. Do not treat USD 10 and CNY 10 as the same number.
+基础信息,Basic Information
+营销规则,Marketing Rule
+请选择,Please select
+例如 SAVE10,e.g. SAVE10
+顾客结账时输入的代码，建议大写字母与数字。,Code customers enter at checkout; prefer uppercase letters and digits.
+优惠设置,Discount settings
+站点基准货币,Site base currency
+优惠类型,Offer type
+折扣值（%）,Discount value (%)
+折扣值,Discount Value
+百分比折扣不带货币单位；例如 10 表示减免 10%。,Percent discount has no currency unit; e.g. 10 means 10% off.
+此数字按站点基准货币 %{1} 配置；结账时按汇率换算到顾客货币。,This number is configured in site base currency %{1}; at checkout convert by FX to customer currency.
+当前类型无需填写折扣数值。,Current type needs no discount value.
+使用限制,Usage limits
+最低订单金额（基准货币 %{1}）,Minimum order amount (base currency %{1})
+此金额按站点基准货币 %{1} 配置门槛；结账币种会按汇率换算后比较。0 表示不限制。,This amount sets the threshold in site base currency %{1}; checkout currency compares after FX. 0 means unlimited.
+总使用次数,total number of uses
+全站合计可用次数；0 表示不限制。,Sitewide total available uses; 0 means unlimited.
+每客户次数,times per customer
+同一顾客最多可用次数。,Max uses per customer.
+有效期,Valid until
+开始时间,Start time
+按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。,Enter in site timezone %{1} (blank=unlimited); system stores and judges in UTC.
+结束时间,End time
+更新优惠券,Update coupon
+保存优惠券,Save Coupon
+万能优惠规则列表与维护入口,Universal promotion rule list and maintenance entry
+规则列表,Rule List
+系统同步,System synced
+规则名称,Rule Name
 优先级,Priority
-系统同步折扣不可删除，请到来源模块管理活动,"System-synced discounts cannot be deleted; manage the activity in the source module"
-确定删除该营销规则吗？,"Delete this marketing rule?"
-删除,删除
-系统同步规则请到来源模块管理活动，折扣模块不可保存修改。,系统同步规则请到来源模块管理活动，折扣模块不可保存修改。
-新建营销规则,"Create new marketing rules"
-规则描述,"Rule description"
-规则类型,"Rule type"
+系统同步折扣不可删除，请到来源模块管理活动,System-synced discounts cannot be deleted; manage the activity in the source module
+确定删除该营销规则吗？,Delete this marketing rule?
+删除,Delete
+系统同步规则请到来源模块管理活动，折扣模块不可保存修改。,System sync rules: manage campaigns in the source module; Discount module cannot save edits.
+新建营销规则,Create new marketing rules
+规则描述,Rule description
+规则类型,Rule type
 促销活动,Promotion
-自动规则,"Automated rules"
-促销活动列表,"Campaign List"
-添加活动,"Add Campaign"
+自动规则,Automated rules
+促销活动列表,Campaign List
+添加活动,Add Campaign
 预算,Budget
 已花费,Spent
-新建促销活动,"Create new promotion"
-活动描述,"Activity description"
+新建促销活动,Create new promotion
+活动描述,Activity description
 草稿,draft
 暂停,pause
-"按站点时区 %{1} 录入，系统以 UTC 存储与判定。","按站点时区 %{1} 录入，系统以 UTC 存储与判定。"
-保存促销活动,"Save promotion"
-外部模块自动同步的折扣规则，请到来源模块管理活动以禁用；折扣模块不可删除。,"Externally synced discount rule. Disable it in the source module; Marketing cannot delete it."
-活动名称和有效营销规则不能为空,"Campaign name and active marketing rules cannot be empty"
-活动状态无效,"Activity status is invalid"
-活动结束时间必须晚于开始时间,"Event end time must be later than start time"
-活动预算不能为负数,"Campaign budget cannot be negative"
+按站点时区 %{1} 录入，系统以 UTC 存储与判定。,Enter in site timezone %{1}; system stores and judges in UTC.
+保存促销活动,Save promotion
+外部模块自动同步的折扣规则，请到来源模块管理活动以禁用；折扣模块不可删除。,Externally synced discount rule. Disable it in the source module; Marketing cannot delete it.
+活动名称和有效营销规则不能为空,Campaign name and active marketing rules cannot be empty
+活动状态无效,Activity status is invalid
+活动结束时间必须晚于开始时间,Event end time must be later than start time
+活动预算不能为负数,Campaign budget cannot be negative
 %{1}（%{2}）,%{1}（%{2}）
-未知来源,未知来源
-优惠券必须绑定有效营销规则,"Coupons must be bound to valid marketing rules"
-优惠券类型无效,"Invalid coupon type"
-优惠券状态无效,"Coupon status is invalid"
-优惠券代码已存在,"Coupon code already exists"
-"优惠券 ID 无效","Invalid coupon ID"
-批发不可用,批发不可用
-优惠券已保存，将在结账报价时生效,"Coupon saved and will apply at checkout quote"
-"已满 %{1}%{2}，可享满额优惠","已满 %{1}%{2}，可享满额优惠"
-"再买 %{1}%{2} 即可满额","再买 %{1}%{2} 即可满额"
+未知来源,Unknown source
+优惠券必须绑定有效营销规则,Coupons must be bound to valid marketing rules
+优惠券类型无效,Invalid coupon type
+优惠券状态无效,Coupon status is invalid
+优惠券代码已存在,Coupon code already exists
+优惠券 ID 无效,Invalid coupon ID
+批发不可用,Unavailable for wholesale
+优惠券已保存，将在结账报价时生效,Coupon saved and will apply at checkout quote
+已满 %{1}%{2}，可享满额优惠,Reached %{1}%{2}; threshold discount available
+再买 %{1}%{2} 即可满额,Buy %{1}%{2} more to reach threshold
 此折扣由「%{1}」活动自动同步，请到该模块管理活动以禁用或调整；折扣模块不可删除。,"This discount is synced from \%{1}\. Manage/disable the activity there; it cannot be deleted in Marketing."""""""""""""""
-无法保存该规则,"Unable to save this rule"
-无法删除该规则,"Unable to delete this rule"
+无法保存该规则,Unable to save this rule
+无法删除该规则,Unable to delete this rule
 系统同步折扣不可在折扣模块修改。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be edited in Marketing. Manage/disable the activity in \%{1}\."""""""""""""""
 系统同步折扣不可在折扣模块删除。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be deleted in Marketing. Manage/disable the activity in \%{1}\."""""""""""""""
-来源业务模块,"Source business module"
-营销未付订单挽回,营销未付订单挽回
-按挽回活动配置的遗弃时限扫描未付订单并发送催付邮件,按挽回活动配置的遗弃时限扫描未付订单并发送催付邮件
-营销结账遗弃挽回,营销结账遗弃挽回
-按挽回活动配置的遗弃时限扫描过期结账报价并发送继续结账邮件,按挽回活动配置的遗弃时限扫描过期结账报价并发送继续结账邮件
-营销购物车遗弃挽回,营销购物车遗弃挽回
-按挽回活动配置的遗弃时限扫描过期购物车并发送继续购物邮件,按挽回活动配置的遗弃时限扫描过期购物车并发送继续购物邮件
-"活动时间：%{1} — %{2}","Campaign period: %{1} — %{2}"
-客户分群信号,客户分群信号
-受众分群匹配；供挽回/生命周期活动过滤。,受众分群匹配；供挽回/生命周期活动过滤。
-配置遗弃时限并定时催付：未付订单或遗弃结账。结账/订单只提供事实，时限由本页决定。,配置遗弃时限并定时催付：未付订单或遗弃结账。结账/订单只提供事实，时限由本页决定。
-配置「下单后多久未付算遗弃」并定时催付。结账/订单只提供未付事实，时限由本页决定。,配置「下单后多久未付算遗弃」并定时催付。结账/订单只提供未付事实，时限由本页决定。
-"固定金额按站点基准货币 %{1} 录入，结账时按汇率换算。","固定金额按站点基准货币 %{1} 录入，结账时按汇率换算。"
-最低订单金额,"Minimum order amount"
-"按站点基准货币 %{1} 判定门槛；0 表示不限制。","按站点基准货币 %{1} 判定门槛；0 表示不限制。"
-基准货币,基准货币
-最低订单金额（%{1}）,最低订单金额（%{1}）
-"享受 %.2f%% 折扣，优惠 %.2f 元","Enjoy %.2f%% discount, save %.2f yuan"
-最大折扣金额,"Maximum Discount Amount"
-"买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元","Buy %d and get %d for free. A total of %d products will be given away, with a discount of %.2f yuan."
-"买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元","Buy %d and get %d free, enjoy %.2f%% discount, %.2f yuan discount"
-"买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元","Buy %d and get %d free, discount %.2f yuan each time, total discount %.2f yuan"
-折扣值（百分比或金额）,"Discount Value (Percentage or Amount)"
-按固定金额折扣,"Fixed amount discount"
-"优惠 %.2f 元","Discount %.2f yuan"
-折扣金额,"Discount Amount"
-根据订单小计金额进行条件判断,"Condition based on order subtotal"
+来源业务模块,Source business module
+营销未付订单挽回,Marketing unpaid order win-back
+按挽回活动配置的遗弃时限扫描未付订单并发送催付邮件,Scan unpaid orders by win-back abandonment window and send payment reminders
+营销结账遗弃挽回,Marketing checkout abandonment win-back
+按挽回活动配置的遗弃时限扫描过期结账报价并发送继续结账邮件,Scan expired checkout quotes by win-back abandonment window and send continue-checkout emails
+营销购物车遗弃挽回,Marketing cart abandonment win-back
+按挽回活动配置的遗弃时限扫描过期购物车并发送继续购物邮件,Scan expired carts by win-back abandonment window and send continue-shopping emails
+活动时间：%{1} — %{2},Campaign period: %{1} — %{2}
+客户分群信号,Customer segment signal
+受众分群匹配；供挽回/生命周期活动过滤。,Audience segment match; for win-back/lifecycle campaign filters.
+配置遗弃时限并定时催付：未付订单或遗弃结账。结账/订单只提供事实，时限由本页决定。,Configure abandonment window and schedule reminders: unpaid orders or abandoned checkout. Checkout/orders provide facts; window is set here.
+配置「下单后多久未付算遗弃」并定时催付。结账/订单只提供未付事实，时限由本页决定。,"Configure ""how long unpaid after order counts as abandoned"" and schedule reminders. Checkout/orders provide unpaid facts only; window is set here."
+固定金额按站点基准货币 %{1} 录入，结账时按汇率换算。,Fixed amount entered in site base currency %{1}; converted by FX at checkout.
+最低订单金额,Minimum order amount
+按站点基准货币 %{1} 判定门槛；0 表示不限制。,Threshold judged in site base currency %{1}; 0 means unlimited.
+基准货币,Base currency
+最低订单金额（%{1}）,Minimum order amount (%{1})
+享受 %.2f%% 折扣，优惠 %.2f 元,"Enjoy %.2f%% discount, save %.2f yuan"
+最大折扣金额,Maximum Discount Amount
+买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元,"Buy %d and get %d for free. A total of %d products will be given away, with a discount of %.2f yuan."
+买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元,"Buy %d and get %d free, enjoy %.2f%% discount, %.2f yuan discount"
+买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元,"Buy %d and get %d free, discount %.2f yuan each time, total discount %.2f yuan"
+折扣值（百分比或金额）,Discount Value (Percentage or Amount)
+按固定金额折扣,Fixed amount discount
+优惠 %.2f 元,Discount %.2f yuan
+折扣金额,Discount Amount
+根据订单小计金额进行条件判断,Condition based on order subtotal
 价格,Price
-优惠券无效或不可用,"Coupon is invalid or unavailable"
+优惠券无效或不可用,Coupon is invalid or unavailable
 后台,Background
 营销,Marketing
-规则管理,"Rule Management"
-优惠券管理,"Coupon Management"
-编辑优惠券,"Edit coupon"
-新建优惠券,"Create new coupon"
-清除优惠券,"Clear coupon"
-移除优惠券,"Remove coupon"
-促销活动管理,"Promotional event management"
-活动列表,"Activity list"
-查看促销活动列表,"View a list of promotions"
-添加促销活动,"Add promotion"
-打开促销活动新建表单,"Open the new promotion form"
-营销规则管理,"Marketing rule management"
-查看营销规则列表,"View a list of marketing rules"
-查看优惠券列表,"View coupon list"
-打开优惠券新建表单,"Open the coupon creation form"
+规则管理,Rule Management
+优惠券管理,Coupon Management
+编辑优惠券,Edit coupon
+新建优惠券,Create new coupon
+清除优惠券,Clear coupon
+移除优惠券,Remove coupon
+促销活动管理,Promotional event management
+活动列表,Activity list
+查看促销活动列表,View a list of promotions
+添加促销活动,Add promotion
+打开促销活动新建表单,Open the new promotion form
+营销规则管理,Marketing rule management
+查看营销规则列表,View a list of marketing rules
+查看优惠券列表,View coupon list
+打开优惠券新建表单,Open the coupon creation form
 促销,Promotion

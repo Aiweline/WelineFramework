@@ -35,11 +35,16 @@
 1. **先有用例**：URL、步骤、期望结果（来自 `doc/需求.md` 或 TaskContract）；禁止先写代码后补「随便点一下」。
 2. **起真实 WLS**（测试实例），确认 Worker/静态资源已加载本次改动。
 3. **打开当前宿主可用的真实 Browser，且打开即禁用 HTTP 缓存（硬，`browser_cache_disabled_on_open`）**，再按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
+3b. **打开即抹掉自动化检测标志（硬，`browser_strip_automation_flags`）**：与禁缓存同序、在页面脚本跑人机验证之前执行。WB-OP / Playwright 必须像真人浏览器，否则云端 reCAPTCHA / 人机验证会按「自动化」拦截登录与提交。
+   - **宿主 Browser（Cursor ide-browser 等）**：CDP `Page.addScriptToEvaluateOnNewDocument`（或等价 init script）注入：把 `navigator.webdriver` 置为 `undefined`/`false`；需要时再 `Page.reload` 后交互。
+   - **正式 Playwright runner**：Chromium `launchOptions` 须含 `--disable-blink-features=AutomationControlled`，并用 `ignoreDefaultArgs` 去掉 `--enable-automation`；`context.addInitScript` 同样清掉 `navigator.webdriver`（仓库 `tests/e2e/playwright.config.js` 已默认开启）。
+   - **禁止**：带着默认 `navigator.webdriver===true` / AutomationControlled 去点登录、提交、人机验证；禁止把「Human-machine verification failed / reCAPTCHA 拦自动化」写成 WB-OP pass 或甩测借口。
 4. **禁止替代物**：
    - 禁止只用 `curl` / `http:request` 宣称页面可用
    - 禁止只用 PHPUnit / 契约测试宣称 UI 完成
    - 禁止「代码已改，请用户自己打开看」代替 AI 自测（宿主无 Browser 时除外，须明确标注未完成）
    - 禁止带着默认磁盘缓存验收本回合改过的 CSS/JS/HTML（易误判「没改到」）
+   - 禁止未抹自动化标志就宣称登录/人机验证路径已验收
 5. 未跑通用例时，汇报只能写：**「代码已改，WebUI 验收未完成」**，禁止写「已完成 / 已交付」。
 
 ## 门禁 A2：Playwright 端到端（E2E，硬，`ui_feature_requires_e2e` + `plan_full_pathway_e2e_suite` + `forbid_user_manual_test_handoff`）

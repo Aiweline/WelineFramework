@@ -23,10 +23,168 @@ final class StorefrontProductWidgetCatalog
 {
     private const HANFU_SKU_PREFIX = 'HF-';
 
+    private const HOMEPAGE_SHELF_PLAN_KEY = 'product.homepage.shelf_plan.request';
+
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
         private readonly ProductRepository $products,
     ) {
+    }
+
+    /**
+     * Homepage Featured shelf (scene/curated). Staggered vs Deals / Hot (WO-HP-P1-02).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function homepageFeaturedCards(int $limit = 8): array
+    {
+        $limit = max(1, min(24, $limit));
+
+        return array_slice($this->homepageShelfPlan()['featured'], 0, $limit);
+    }
+
+    /**
+     * Homepage Deals of the Day (≥15% real discount or limited-deal flag). Never borrows from other shelves.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function homepageDealsCards(int $limit = 4): array
+    {
+        $limit = max(1, min(24, $limit));
+
+        return array_slice($this->homepageShelfPlan()['deals'], 0, $limit);
+    }
+
+    /**
+     * Homepage Hot / bestsellers shelf. Staggered vs Featured / Deals (WO-HP-P1-02).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function homepageHotCards(int $limit = 8): array
+    {
+        $limit = max(1, min(24, $limit));
+
+        return array_slice($this->homepageShelfPlan()['hot'], 0, $limit);
+    }
+
+    /**
+     * @return array{
+     *     featured: list<array<string, mixed>>,
+     *     deals: list<array<string, mixed>>,
+     *     hot: list<array<string, mixed>>
+     * }
+     */
+    private function homepageShelfPlan(): array
+    {
+        $cached = RequestContext::get(self::HOMEPAGE_SHELF_PLAN_KEY);
+        if (is_array($cached)
+            && isset($cached['featured'], $cached['deals'], $cached['hot'])
+            && is_array($cached['featured'])
+            && is_array($cached['deals'])
+            && is_array($cached['hot'])
+        ) {
+            return $cached;
+        }
+
+        $featuredPool = $this->buildFeaturedCandidateCards(24);
+        $dealsPool = $this->buildDealCandidateCards(48);
+        $hotPool = $this->bestSellerCards(48);
+
+        $plan = HomepageShelfStagger::select(
+            $featuredPool,
+            $dealsPool,
+            $hotPool,
+            8,
+            8,
+            8,
+        );
+        RequestContext::set(self::HOMEPAGE_SHELF_PLAN_KEY, $plan);
+
+        return $plan;
+    }
+
+    /**
+     * Featured candidates: newer arrivals first, then general catalog fill (not pure sales rank).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildFeaturedCandidateCards(int $limit): array
+    {
+        $limit = max(8, min(48, $limit));
+        $selected = [];
+        $seen = [];
+        foreach ($this->newArrivalCards($limit, 30) as $card) {
+            $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+            if ($productId <= 0 || isset($seen[$productId])) {
+                continue;
+            }
+            $seen[$productId] = true;
+            $selected[] = $card;
+            if (count($selected) >= $limit) {
+                return $selected;
+            }
+        }
+        foreach ($this->cards($limit) as $card) {
+            $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+            if ($productId <= 0 || isset($seen[$productId])) {
+                continue;
+            }
+            $seen[$productId] = true;
+            $selected[] = $card;
+            if (count($selected) >= $limit) {
+                break;
+            }
+        }
+
+        return $selected;
+    }
+
+    /**
+     * Deal candidates from published offers with real compare-at / campaign discount.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildDealCandidateCards(int $limit): array
+    {
+        $limit = max(8, min(96, $limit));
+        $offers = $this->catalog->publishedOfferSummaries(max($limit * 2, 48));
+        usort(
+            $offers,
+            static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
+                <=> (int)($left['product_id'] ?? 0),
+        );
+
+        $cards = [];
+        $seen = [];
+        foreach ($offers as $offer) {
+            $productId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($productId <= 0 || isset($seen[$productId])) {
+                continue;
+            }
+            $card = $this->mapOffer($offer, count($cards));
+            $percent = HomepageShelfStagger::discountPercent($card);
+            $limited = trim((string)($card['campaign_label'] ?? '')) !== ''
+                || !empty($offer['is_limited_deal'])
+                || !empty($offer['limited_deal']);
+            if ($percent < HomepageShelfStagger::MIN_DEAL_DISCOUNT_PERCENT && !$limited) {
+                continue;
+            }
+            if ($limited && $percent < HomepageShelfStagger::MIN_DEAL_DISCOUNT_PERCENT) {
+                $card['is_limited_deal'] = true;
+            }
+            $card['discount_percent'] = (int)max(
+                (int)round($percent),
+                $limited ? HomepageShelfStagger::MIN_DEAL_DISCOUNT_PERCENT : 0,
+            );
+            $card['is_sale'] = 1;
+            $seen[$productId] = true;
+            $cards[] = $card;
+            if (count($cards) >= $limit) {
+                break;
+            }
+        }
+
+        return $this->withReviewAggregates($cards);
     }
 
     /**
@@ -102,6 +260,75 @@ final class StorefrontProductWidgetCatalog
         $cards = [];
         foreach ($selectedOffers as $offer) {
             $cards[] = $this->mapOffer($offer, count($cards));
+        }
+
+        return $this->withReviewAggregates($cards);
+    }
+
+    /**
+     * Cards for an explicit product_id list (e.g. video-carousel related products).
+     *
+     * Preserves caller ID order, skips invalid/unpublished IDs, and does not apply
+     * the HF-* preference used by recommendation pools — curated picks must not drop.
+     *
+     * @param list<int|string> $productIds
+     * @return list<array{
+     *     id:int,
+     *     product_id:int,
+     *     name:string,
+     *     url:string,
+     *     image:string,
+     *     price:float,
+     *     original_price:float,
+     *     rating:float,
+     *     review_count:int,
+     *     global_offer_uuid:string,
+     *     sellable:bool
+     * }>
+     */
+    public function cardsByIds(array $productIds, int $limit = 12): array
+    {
+        $limit = max(1, min(24, $limit));
+        $orderedIds = [];
+        $seen = [];
+        foreach ($productIds as $rawId) {
+            $productId = max(0, (int)$rawId);
+            if ($productId <= 0 || isset($seen[$productId])) {
+                continue;
+            }
+            $seen[$productId] = true;
+            $orderedIds[] = $productId;
+            if (count($orderedIds) >= $limit) {
+                break;
+            }
+        }
+        if ($orderedIds === []) {
+            return [];
+        }
+
+        $offers = $this->catalog->publishedOffersForProductIds(
+            $orderedIds,
+            max(count($orderedIds), $limit),
+            false,
+        );
+        $offerByProductId = [];
+        foreach ($offers as $offer) {
+            $productId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($productId <= 0 || isset($offerByProductId[$productId])) {
+                continue;
+            }
+            $offerByProductId[$productId] = $offer;
+        }
+
+        $cards = [];
+        foreach ($orderedIds as $productId) {
+            if (!isset($offerByProductId[$productId])) {
+                continue;
+            }
+            $cards[] = $this->mapOffer($offerByProductId[$productId], count($cards));
+            if (count($cards) >= $limit) {
+                break;
+            }
         }
 
         return $this->withReviewAggregates($cards);

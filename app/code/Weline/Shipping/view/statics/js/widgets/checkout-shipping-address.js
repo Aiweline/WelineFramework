@@ -134,6 +134,7 @@
         if (selectedId !== '') {
             markSelected(selectedId);
         }
+        root.removeAttribute('data-user-address-editing');
         setMode('collapsed');
     }
 
@@ -154,6 +155,14 @@
      * @param {{expand?: boolean}} opts
      */
     function presentOrderAddress(address, opts) {
+        // 仅用户主动新增/编辑/选址时禁止强制收起；SSR 默认 mode=new 仍允许续付 hydrate 收起。
+        var liveMode = mode();
+        if (liveMode === 'edit' || liveMode === 'picking') {
+            return { complete: false, mode: liveMode, skipped: true };
+        }
+        if (root.getAttribute('data-user-address-editing') === '1') {
+            return { complete: false, mode: liveMode, skipped: true };
+        }
         var forceExpand = !!(opts && opts.expand);
         var payload = address && typeof address === 'object' ? address : {};
         var complete = isAddressPayloadComplete(payload);
@@ -192,6 +201,7 @@
         if (savedBox) {
             savedBox.hidden = false;
         }
+        root.removeAttribute('data-user-address-editing');
         setMode('collapsed');
         setShippingRequired(false);
         root.setAttribute('data-has-saved', '1');
@@ -557,6 +567,7 @@
         }
         markSelected(id);
         fillShipping(payload);
+        root.removeAttribute('data-user-address-editing');
         setMode('collapsed');
         // Quick-buy / HelpPay modal: local selection only — do not rewrite universal checkout delivery.
         if (isSessionIsolated()) {
@@ -586,6 +597,7 @@
         if (card) {
             selectSaved(card);
         }
+        root.setAttribute('data-user-address-editing', '1');
         resetAlsoUseReceivingDefault();
         setMode('edit');
         setMessage('', false);
@@ -602,6 +614,9 @@
     }
 
     function openNew() {
+        // 先标记编辑态再清表，避免 fillShipping 触发的 getData/sync 抢先 present→collapsed。
+        root.setAttribute('data-user-address-editing', '1');
+        setMode('new');
         root.querySelectorAll('[data-address-radio]').forEach(function (radio) {
             radio.checked = false;
         });
@@ -622,7 +637,6 @@
             postal_code: ''
         }, {clearEmpty: true});
         resetAlsoUseReceivingDefault();
-        setMode('new');
         setMessage('', false);
         if (editor && typeof editor.scrollIntoView === 'function') {
             editor.scrollIntoView({behavior: 'smooth', block: 'nearest'});
@@ -2266,11 +2280,12 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20260921-cpay-addr1');
+    root.setAttribute('data-shipping-js-rev', '20260921-cpay-addr3');
     var api = {
-        rev: '20260921-cpay-addr1',
+        rev: '20260921-cpay-addr3',
         root: root,
         mount: mount,
+        getMode: mode,
         applyFieldErrors: applyFieldErrors,
         focusFirstFieldError: focusFirstFieldError,
         sanitizeErrorMessage: sanitizeErrorMessage,
@@ -2288,9 +2303,10 @@
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20260921-cpay-addr1',
+        rev: '20260921-cpay-addr3',
         root: null,
         mount: mount,
+        getMode: function () { return ''; },
         applyFieldErrors: function () {},
         focusFirstFieldError: function () {},
         sanitizeErrorMessage: function (m) { return m == null ? '' : String(m); },

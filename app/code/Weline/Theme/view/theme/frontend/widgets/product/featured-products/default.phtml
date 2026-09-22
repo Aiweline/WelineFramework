@@ -69,7 +69,9 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 $products = [];
 try {
     if (class_exists(StorefrontProductWidgetCatalog::class)) {
-        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards($limit);
+        // 首页三货架错开：Featured 走场景精选池（WO-HP-P1-02）
+        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+            ->homepageFeaturedCards($limit);
     }
 } catch (\Throwable) {
     $products = [];

@@ -250,11 +250,172 @@ class ArrayType extends AbstractParamType
             case 'textarea':
                 $html = '<textarea class="w-textarea" rows="2" placeholder="' . htmlspecialchars($placeholder) . '" data-field="' . htmlspecialchars($fieldKey) . '">' . htmlspecialchars($this->scalarizeFieldDisplayValue($fieldValue, $fieldDef)) . '</textarea>';
                 break;
+            case 'product_picker':
+                $html = $this->renderItemProductPicker($key, $index, $fieldKey, $fieldValue, $fieldDef, $placeholder);
+                break;
             default:
                 $inputType = $type === 'number' ? 'number' : 'text';
                 $html = '<input type="' . $inputType . '" class="w-input" value="' . htmlspecialchars($this->scalarizeFieldDisplayValue($fieldValue, $fieldDef)) . '" placeholder="' . htmlspecialchars($placeholder) . '" data-field="' . htmlspecialchars($fieldKey) . '">';
         }
         return $html;
+    }
+
+    /**
+     * 项内 product_picker：委托 ProductPickerType::getHtml；类缺失/异常时降级为带 data-field 的文本框。
+     * 值协议与顶层一致（逗号分隔 product id）；同步 input 带 data-field 供数组 JSON 序列化。
+     *
+     * @param array<string, mixed> $fieldDef
+     */
+    private function renderItemProductPicker(
+        string $key,
+        int|string $index,
+        string $fieldKey,
+        mixed $fieldValue,
+        array $fieldDef,
+        string $placeholder
+    ): string {
+        $pickerClass = 'Weline\\Product\\Ui\\ParamType\\ProductPickerType';
+        if (!class_exists($pickerClass)) {
+            return $this->renderItemProductPickerTextFallback($fieldKey, $fieldValue, $placeholder);
+        }
+
+        try {
+            /** @var \Weline\Product\Ui\ParamType\ProductPickerType $picker */
+            $picker = new $pickerClass();
+            $itemKey = $key . '.' . $index . '.' . $fieldKey;
+            $param = array_merge($fieldDef, [
+                'i18n' => false,
+                'translatable' => false,
+                'label' => '',
+            ]);
+            $wrapped = $picker->getHtml($itemKey, $param, $fieldValue, '');
+
+            return $this->adaptProductPickerHtmlForArrayItem($wrapped, $fieldKey);
+        } catch (\Throwable) {
+            return $this->renderItemProductPickerTextFallback($fieldKey, $fieldValue, $placeholder);
+        }
+    }
+
+    /**
+     * 从 ProductPickerType::wrapField 输出中抽出选品控件，并给 sync hidden 打上 data-field。
+     */
+    private function adaptProductPickerHtmlForArrayItem(string $wrappedHtml, string $fieldKey): string
+    {
+        $html = $this->extractProductPickerInnerHtml($wrappedHtml);
+        $safeField = htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8');
+
+        $adapted = preg_replace_callback(
+            '/<input\b[^>]*\bdata-product-picker-sync\b[^>]*>/i',
+            static function (array $matches) use ($safeField): string {
+                $tag = $matches[0];
+                $tag = preg_replace('/\sname="[^"]*"/i', '', $tag) ?? $tag;
+                if (!preg_match('/\bdata-field="/i', $tag)) {
+                    $tag = preg_replace('/\s*\/?>$/', ' data-field="' . $safeField . '"$0', $tag, 1) ?? $tag;
+                }
+
+                return $tag;
+            },
+            $html,
+            1
+        );
+
+        return is_string($adapted) && $adapted !== '' ? $adapted : $html;
+    }
+
+    /**
+     * 抽出 w-param-field-input 内的选品根（含前置 link/script），去掉外层 label 包装以免数组项双重标签。
+     */
+    private function extractProductPickerInnerHtml(string $wrappedHtml): string
+    {
+        $fieldInputOpen = '<div class="w-param-field-input">';
+        $fi = strpos($wrappedHtml, $fieldInputOpen);
+        $pickerMarker = 'class="w-param-product-picker"';
+        $pickerPos = strpos($wrappedHtml, $pickerMarker);
+        if ($pickerPos === false) {
+            return $wrappedHtml;
+        }
+
+        $divStart = strrpos(substr($wrappedHtml, 0, $pickerPos + strlen($pickerMarker)), '<div');
+        if ($divStart === false) {
+            return $wrappedHtml;
+        }
+
+        $contentStart = $fi !== false ? ($fi + strlen($fieldInputOpen)) : $divStart;
+        $pickerEnd = $this->findBalancedDivEnd($wrappedHtml, $divStart);
+        if ($pickerEnd === null) {
+            return trim(substr($wrappedHtml, $contentStart));
+        }
+
+        $prefix = trim(substr($wrappedHtml, $contentStart, $divStart - $contentStart));
+        $picker = substr($wrappedHtml, $divStart, $pickerEnd - $divStart);
+
+        return trim($prefix . $picker);
+    }
+
+    /**
+     * @return int|null 闭合 </div> 之后的偏移（不含）
+     */
+    private function findBalancedDivEnd(string $html, int $divStart): ?int
+    {
+        $len = strlen($html);
+        $depth = 0;
+        $i = $divStart;
+        while ($i < $len) {
+            if ($html[$i] !== '<') {
+                $i++;
+                continue;
+            }
+            if (substr($html, $i, 4) === '<!--') {
+                $close = strpos($html, '-->', $i);
+                $i = $close === false ? $len : $close + 3;
+                continue;
+            }
+            if (!preg_match('/\A<\/?([a-zA-Z][a-zA-Z0-9]*)/', substr($html, $i), $tm)) {
+                $i++;
+                continue;
+            }
+            $tag = strtolower($tm[1]);
+            $gt = strpos($html, '>', $i);
+            if ($gt === false) {
+                return null;
+            }
+            $chunk = substr($html, $i, $gt - $i + 1);
+            $isClose = isset($html[$i + 1]) && $html[$i + 1] === '/';
+            $voidTags = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+            $selfClosing = str_ends_with(rtrim(substr($chunk, 0, -1)), '/') || in_array($tag, $voidTags, true);
+            if ($tag === 'div') {
+                if ($isClose) {
+                    $depth--;
+                    if ($depth === 0) {
+                        return $gt + 1;
+                    }
+                } elseif (!$selfClosing) {
+                    $depth++;
+                }
+            }
+            $i = $gt + 1;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param mixed $fieldValue
+     */
+    private function renderItemProductPickerTextFallback(string $fieldKey, mixed $fieldValue, string $placeholder): string
+    {
+        $display = is_array($fieldValue)
+            ? implode(',', array_values(array_filter(array_map(
+                static fn (mixed $id): int => is_array($id)
+                    ? (int)($id['product_id'] ?? $id['id'] ?? 0)
+                    : (int)$id,
+                $fieldValue
+            ), static fn (int $id): bool => $id > 0)))
+            : (string)$fieldValue;
+
+        return '<input type="text" class="w-input" value="' . htmlspecialchars($display)
+            . '" placeholder="' . htmlspecialchars($placeholder !== '' ? $placeholder : 'product_id,product_id')
+            . '" data-field="' . htmlspecialchars($fieldKey) . '">';
     }
 
     /**

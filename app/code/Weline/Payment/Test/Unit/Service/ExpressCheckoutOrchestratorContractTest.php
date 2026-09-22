@@ -211,4 +211,28 @@ final class ExpressCheckoutOrchestratorContractTest extends TestCase
         $unchanged = $orch->withExpressContext(['amount_minor' => 100], 'not_a_real_method');
         self::assertArrayNotHasKey('express_checkout', $unchanged);
     }
+
+    public function testAbandonExpressPaymentDeclaredOnFacade(): void
+    {
+        self::assertTrue(method_exists(PaymentExpressFacadeInterface::class, 'abandonExpressPayment'));
+        self::assertTrue(method_exists(ExpressCheckoutOrchestrator::class, 'abandonExpressPayment'));
+        $orchSrc = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ExpressCheckoutOrchestrator.php'
+        );
+        self::assertStringContainsString('function abandonExpressPayment', $orchSrc);
+        self::assertStringContainsString('express_abandoned', $orchSrc);
+        self::assertStringContainsString('STATUS_FAILED', $orchSrc);
+
+        $checkoutSrc = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/Checkout/Service/ExpressCheckoutFlowService.php'
+        );
+        $abandonStart = strpos($checkoutSrc, 'public function abandon(');
+        self::assertNotFalse($abandonStart);
+        $abandonEnd = strpos($checkoutSrc, 'public function buildAlreadyPaidResult', $abandonStart);
+        self::assertNotFalse($abandonEnd);
+        $abandonMethod = substr($checkoutSrc, $abandonStart, $abandonEnd - $abandonStart);
+        self::assertStringContainsString('abandonExpressPayment', $abandonMethod);
+        self::assertStringNotContainsString('->setData(PaymentTransaction::schema_fields_STATUS', $abandonMethod);
+        self::assertStringNotContainsString('->save()', $abandonMethod);
+    }
 }

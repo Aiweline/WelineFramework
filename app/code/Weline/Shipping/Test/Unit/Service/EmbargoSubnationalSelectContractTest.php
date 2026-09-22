@@ -48,15 +48,15 @@ final class EmbargoSubnationalSelectContractTest extends TestCase
         $loader = (string)file_get_contents(
             dirname(__DIR__, 4) . '/Theme/view/statics/js/address-loader.js',
         );
-        self::assertStringContainsString('20260917-open-load1', $loader);
+        self::assertStringContainsString('20260921-keep-postal2', $loader);
     }
 
     public function testModuleVersionsBumped(): void
     {
         $shipping = include dirname(__DIR__, 3) . '/etc/module.php';
         $theme = include dirname(__DIR__, 4) . '/Theme/etc/module.php';
-        self::assertSame('2.9.14', (string)($shipping['version'] ?? ''));
-        self::assertSame('2.2.430', (string)($theme['version'] ?? ''));
+        self::assertSame('2.9.22', (string)($shipping['version'] ?? ''));
+        self::assertSame('2.2.530', (string)($theme['version'] ?? ''));
     }
 
     public function testRegionJsonWritesFrameworkResponseHeaders(): void

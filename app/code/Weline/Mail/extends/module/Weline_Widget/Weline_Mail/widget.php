@@ -21,8 +21,8 @@ return [
             'account-register-extras',
             'layout-account-register-extras',
         ],
-        // Register page mounts via Customer fetch + tabs when enabled; keep slot for
-        // Theme overrides only (avoid double-render with default_injections).
+        // placement=layout：注册页已 Customer fetch 同身份，不再 default_injections。
+        'placement' => 'layout',
         'default_injections' => [],
     ],
 ];

@@ -37,7 +37,7 @@ final class EmbargoHookContractTest extends TestCase
         self::assertStringContainsString('data-address-lazy', $shared);
         self::assertStringContainsString('bootWhenOpen', $shared);
         self::assertStringContainsString('ensureAddressScript', $shared);
-        self::assertStringContainsString('20260917-open-load1', $shared);
+        self::assertStringContainsString('20260921-keep-postal2', $shared);
         self::assertStringNotContainsString('data-shipping-address-direct', $shared);
         self::assertStringContainsString('selection', $shared);
         self::assertStringContainsString("'multi'", $shared);

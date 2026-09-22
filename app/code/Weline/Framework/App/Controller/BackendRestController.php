@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Framework\App\Controller;
 
 use Weline\Framework\Controller\AbstractRestController;
+use Weline\Framework\Http\PublicApiAuthRouteMatcher;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
@@ -26,6 +28,17 @@ class BackendRestController extends AbstractRestController
 
         if ((\defined('ENV_TEST') && ENV_TEST === true) || \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__')) {
             return;
+        }
+
+        // Public Auth routes (login/refresh/…) must not require an existing session.
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            $matcher = ObjectManager::getInstance(PublicApiAuthRouteMatcher::class);
+            if ($matcher instanceof PublicApiAuthRouteMatcher && $matcher->matches($request)) {
+                return;
+            }
+        } catch (\Throwable) {
+            // Fall through to session gate when matcher is unavailable.
         }
 
         if (!$this->session->isLoggedIn()) {

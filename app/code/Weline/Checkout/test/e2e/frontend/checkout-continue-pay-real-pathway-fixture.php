@@ -71,6 +71,25 @@ try {
         $withTx = !isset($input['with_payment_transaction'])
             || filter_var($input['with_payment_transaction'], FILTER_VALIDATE_BOOLEAN);
 
+        // Overseas continue-pay demo: Middle East & Africa lane (not CN domestic).
+        $seedAddress = [
+            'name' => 'Continue Pay Seed',
+            'contact_name' => 'Continue Pay Seed',
+            'phone' => '+2348012345678',
+            'contact_phone' => '+2348012345678',
+            'email' => 'cpay-seed@example.test',
+            'country_code' => 'NG',
+            'country' => 'Nigeria',
+            'province' => 'Lagos',
+            'city' => 'Lagos',
+            'district' => 'Ikeja',
+            'address1' => '12 Admiralty Way, Lekki Phase 1',
+            'street' => '12 Admiralty Way, Lekki Phase 1',
+            'postal_code' => '100001',
+        ];
+        $seedAddressJson = json_encode($seedAddress, JSON_UNESCAPED_UNICODE);
+        $seedShippingMethod = 'SEED_LANE_MIDDLE_EAST_AFRICA';
+
         /** @var Order $order */
         $order = $om->getInstance(Order::class);
         $order->clear()->clearData()->setData([
@@ -91,6 +110,9 @@ try {
             Order::schema_fields_PAYMENT_STATUS => Order::PAYMENT_STATUS_PENDING,
             Order::schema_fields_FULFILLMENT_STATUS => Order::FULFILLMENT_STATUS_PENDING,
             Order::schema_fields_PAYMENT_METHOD => 'fake_card',
+            Order::schema_fields_SHIPPING_METHOD => $seedShippingMethod,
+            Order::schema_fields_SHIPPING_ADDRESS => $seedAddressJson,
+            Order::schema_fields_BILLING_ADDRESS => $seedAddressJson,
             Order::schema_fields_CUSTOMER_EMAIL => 'cpay-seed@example.test',
             Order::schema_fields_CUSTOMER_NAME => 'Continue Pay Seed',
             Order::schema_fields_WEBSITE_ID => 0,
@@ -145,11 +167,16 @@ try {
             'currency' => 'CNY',
             'config_version' => '1',
             'checkout_entry' => 'checkout',
+            'shipping_address' => $seedAddress,
+            'billing_address' => $seedAddress,
+            'shipping_method' => $seedShippingMethod,
             'submitted_result' => [
                 'checkout_group_uuid' => $groupUuid,
                 'order_uuids' => [$orderUuid],
                 'currency' => 'CNY',
                 'totals' => ['grand_total_minor' => 100],
+                'shipping_address' => $seedAddress,
+                'shipping_method' => $seedShippingMethod,
                 'orders' => [[
                     'order_uuid' => $orderUuid,
                     'status' => 'pending',

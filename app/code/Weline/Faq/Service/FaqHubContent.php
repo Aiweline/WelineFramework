@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Faq\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
 
 /**
@@ -51,13 +52,72 @@ final class FaqHubContent
     }
 
     /**
-     * Explicit hub FAQ bodies for DB seeds (default-website maintained locales).
+     * Hub FAQ bodies: prefer persisted site rows for the exact locale, then seed catalog.
+     * Catalog alone falls back to en_US for non-maintained locales (e.g. ru_RU) — DB wins when seeded.
      *
      * @return list<array{q:string,a:string}>
      */
     public function faqsForLocale(string $localeCode): array
     {
+        $localeCode = trim($localeCode);
+        if ($localeCode === '') {
+            $localeCode = FaqTemplateSeedService::LOCALE_ZH;
+        }
+
+        $fromDb = $this->loadSiteHubFromDb($localeCode);
+        if ($fromDb !== []) {
+            return $fromDb;
+        }
+
         return FaqSeedCopyCatalog::hubForLocale($localeCode);
+    }
+
+    /**
+     * Exact-locale site hub rows (hub_0..hub_N), ordered by key index.
+     *
+     * @return list<array{q:string,a:string}>
+     */
+    private function loadSiteHubFromDb(string $localeCode): array
+    {
+        try {
+            /** @var FaqService $faqs */
+            $faqs = ObjectManager::getInstance(FaqService::class);
+            $rows = $faqs->listForEntity(
+                'site',
+                SiteFaqTypeProvider::ENTITY_UUID,
+                0,
+                $localeCode,
+                true
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $byIndex = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (trim((string)($row['locale_code'] ?? '')) !== $localeCode) {
+                continue;
+            }
+            $key = strtolower(trim((string)($row['faq_key'] ?? '')));
+            if (preg_match('/^hub_(\d+)$/', $key, $m) !== 1) {
+                continue;
+            }
+            $q = trim((string)($row['question'] ?? ''));
+            $a = trim((string)($row['answer'] ?? ''));
+            if ($q === '' || $a === '') {
+                continue;
+            }
+            $byIndex[(int)$m[1]] = ['q' => $q, 'a' => $a];
+        }
+        if ($byIndex === []) {
+            return [];
+        }
+        ksort($byIndex, SORT_NUMERIC);
+
+        return array_values($byIndex);
     }
 
     /**

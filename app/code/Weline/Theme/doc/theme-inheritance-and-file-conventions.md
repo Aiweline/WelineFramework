@@ -58,6 +58,38 @@
 
 设计主题若需要品牌化，只能提供颜色 palette overlay（例如 `colors/_light.css`、`colors/_dark.css`）并让组件继续引用 Weline 语义 Token。旧 `--theme-*` 和 `--admin-*` 可以作为兼容 alias，但不能成为第二套全局组件系统。
 
+硬规则：`theme_design_must_not_override_core_runtime_assets`；操作细节见 [主题开发.md](../../../../../dev/ai-command/ai/主题开发.md) Mode B。
+
+## 新建设计主题（操作摘要）
+
+> 完整逐步清单与否决例见 [主题开发.md Mode B](../../../../../dev/ai-command/ai/主题开发.md)。开工前须声明 `work_mode=design_theme`。
+
+1. **register.php**（样例 `app/design/Weline/hanfu/register.php`）：
+
+```php
+Register::register(
+    TypeInterface::type,
+    'Weline_YourTheme',
+    [
+        'name' => 'your-theme',
+        'parent' => 'Default 默认主题', // 或已存在主题 name
+        'path' => __DIR__,
+    ],
+    '1.0.0',
+    '描述'
+);
+```
+
+2. **现代目录**：必须含 `{frontend|backend}/`（`colors/_*.css`、`variables/_*.css`、独立 `assets/css/{brand}.css`）；禁止照抄旧 `view/templates` 脚手架；勿依赖过时的 `theme:create` 输出。
+
+3. **安装 / 列表**：`php bin/w setup:upgrade` 或 `theme:install -t {name}` → `theme:listing`。
+
+4. **激活**：`php bin/w theme:active {name} frontend`（**不是** `theme:activate`）。正式店面 **published `theme_binding` 优先于裸 `is_active`**。
+
+5. **高压线**：禁止同 key 覆盖 `theme.css` / `theme.js`；模块模板走 `Weline_Module/templates/...`，禁止 `frontend/templates/`。
+
+对照样例（非第二权威）：[hanfu 主题继承研究](../../../../../app/design/Weline/hanfu/doc/开发/主题继承研究.md)。
+
 ## 普通模板覆盖规则
 
 普通模块模板指 `view/templates`，例如：

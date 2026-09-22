@@ -9,10 +9,12 @@
  * @param content {default="",name="主要内容（HTML字符串）",description="非空时覆盖默认正文"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ * @param showBreadcrumb {default=true,name="显示面包屑",description="是否显示面包屑导航"}
  * @param class {default="",name="额外CSS类",description="额外CSS类"}
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\StorefrontHref;
 use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
@@ -41,6 +43,7 @@ $toc = [
     ['id' => 'disclaimer-s6', 'label' => WidgetI18n::label('六、用户行为免责')],
     ['id' => 'disclaimer-s7', 'label' => WidgetI18n::label('七、其他')],
 ];
+$tocFallbackPath = '/policy/disclaimer';
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
@@ -63,6 +66,19 @@ $toc = [
             flex-direction: column;
             background: transparent;
         }
+        /* Prototype A: quiet trail inside content column — no full-bleed chrome strip */
+        .amazon-policy__breadcrumb {
+            margin: 0 0 var(--weline-space-4, 1rem);
+            border: 0;
+            background: transparent;
+        }
+        .amazon-policy__breadcrumb .w-frontend-breadcrumb {
+            padding-block: 0;
+            width: 100%;
+            max-width: none;
+            margin-inline: 0;
+            padding-inline: 0;
+        }
         .amazon-policy__main {
             flex: 1 0 auto;
             width: 100%;
@@ -75,7 +91,7 @@ $toc = [
             min-width: 0;
             margin-inline: auto;
             padding-inline: var(--weline-layout-content-padding-inline);
-            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+            padding-block: var(--weline-space-4, 1rem) clamp(3rem, 6vw, 4.5rem);
         }
         .amazon-policy__hero {
             margin: 0 0 1.25rem;
@@ -126,14 +142,15 @@ $toc = [
             border: 1px solid #ddd;
             border-radius: 8px;
             box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
-            overflow: hidden;
+            /* no overflow:hidden — with <base href="/"> + sticky header, hash scroll must use document */
         }
         .amazon-policy__toc {
+            border-radius: 8px 0 0 8px;
             padding: 1.15rem 1rem 1.25rem;
             border-right: 1px solid #e3e6e6;
             background: #fafafa;
             position: sticky;
-            top: 0.75rem;
+            top: 12rem;
         }
         .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
         .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
@@ -152,6 +169,7 @@ $toc = [
             text-decoration: underline;
         }
         .amazon-policy__article {
+            border-radius: 0 8px 8px 0;
             padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
         }
         .amazon-policy__intro {
@@ -161,7 +179,7 @@ $toc = [
             color: #565959;
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 1rem; }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 12rem; }
         .amazon-policy__section h2 {
             margin: 0 0 0.75rem;
             font-size: 1.2rem;
@@ -213,7 +231,9 @@ $toc = [
                 position: static;
                 border-right: 0;
                 border-bottom: 1px solid #e3e6e6;
+                border-radius: 8px 8px 0 0;
             }
+            .amazon-policy__article { border-radius: 0 0 8px 8px; }
             .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
@@ -254,6 +274,16 @@ $toc = [
                     {{meta.content}}
                 <else/>
                         <div class="amazon-policy__stage">
+                        <if condition="meta.showBreadcrumb">
+                            <div class="amazon-policy__breadcrumb">
+                                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-before</w:hook>
+                                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+                                <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-after</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+                            </div>
+                        </if>
+
                         <header class="amazon-policy__hero" aria-labelledby="policy-disclaimer-title" weline-code="theme.policy.hero">
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
@@ -272,7 +302,7 @@ $toc = [
                                         <h2><?= $escape(WidgetI18n::label('目录')) ?></h2>
                                         <nav>
                                             <?php foreach ($toc as $item): ?>
-                                                <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
+                                                <a href="<?= $escape(StorefrontHref::fragmentHref((string)$item['id'], $tocFallbackPath)) ?>"><?= $escape($item['label']) ?></a>
                                             <?php endforeach; ?>
                                         </nav>
                                     </aside>
@@ -296,15 +326,15 @@ $toc = [
                                         <section class="amazon-policy__section" id="disclaimer-s2" weline-code="theme.policy.section_3">
                                             <h2><?= $escape(WidgetI18n::label('二、信息内容免责')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('2.1 本网站不对用户发布的信息的真实性、准确性、完整性、合法性负责。用户应自行判断并承担相应风险。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('2.2 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。商品的实际质量、性能、规格等以实物为准。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.2 本站经营者对自营商品信息的真实性、准确性负责；因展示误差导致的订单问题，可依法或按售后政策办理退换。商品实物细节（色差、手感等）在合理范围内可能与图片存在差异。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('2.3 本网站可能包含第三方提供的内容或链接，我们不对第三方内容或链接的准确性、合法性、安全性负责。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s3" weline-code="theme.policy.section_4">
-                                            <h2><?= $escape(WidgetI18n::label('三、交易风险免责')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('3.1 本网站仅为交易双方提供信息发布和交易撮合服务，不对交易双方之间的交易行为承担责任。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('3.2 交易双方应自行承担交易风险，包括但不限于商品质量、交付、支付等风险。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('3.3 如发生交易纠纷，交易双方应自行协商解决。本网站可提供必要的协助，但不承担任何责任。')) ?></p>
+                                            <h2><?= $escape(WidgetI18n::label('三、交易与售后责任')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('3.1 本站作为商品销售方，对订单履约、商品质量与售后承担经营者依法应负的责任；不因本声明免除强制性法律责任。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('3.2 支付、物流等第三方服务商的系统故障，我们将协助核实与跟进，但在法律允许范围内，对非因我方故意或重大过失造成的间接损失可不承担责任。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('3.3 交易纠纷请优先通过订单售后与客服协商；协商不成可依法投诉或起诉。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s4" weline-code="theme.policy.section_5">
@@ -329,7 +359,7 @@ $toc = [
                                         <section class="amazon-policy__section" id="disclaimer-s7" weline-code="theme.policy.section_8">
                                             <h2><?= $escape(WidgetI18n::label('七、其他')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('7.1 本免责声明构成服务条款的一部分，与服务条款具有同等法律效力。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('7.2 我们保留对本免责声明的最终解释权，并有权根据法律法规和业务发展需要对本声明进行修订。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('7.2 我们有权根据法律法规和业务发展需要修订本声明；重大变更以本页更新为准。解释以有利于保护消费者合法权益且符合强制性法律的方式为准。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('7.3 如本免责声明的任何条款被认定为无效或不可执行，不影响其他条款的效力。')) ?></p>
                                         </section>
 

@@ -3,6 +3,10 @@
 
 > 本 README 由 `prepare_project 文档修复流程` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
 
+## 工程团队施工席
+
+本模块复杂 team / 像素与报表相关施工默认派 **`Team:数据分析:`**（整模块归属；与框架「事件」席无关）。见 `doc/ai/skills/visitor-data-analytics/SKILL.md`。
+
 ## 当前入口
 
 可选：需要检索时，可调用项目 MCP `prepare_project` / `resolve_task_context`，按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取上下文；**编码用宿主原生编辑**。

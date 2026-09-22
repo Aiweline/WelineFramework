@@ -34,6 +34,27 @@ final class PostalCountriesEmbargoContractTest extends TestCase
         self::assertSame('10001', TsvGzReader::normalizePostal(" 100 01 "));
     }
 
+    public function testPostalLookupNormsLetterFallbackAndNumericNoFallback(): void
+    {
+        self::assertSame(['SW1A1AA', 'SW1A', 'SW1'], TsvGzReader::postalLookupNorms('SW1A 1AA'));
+        self::assertSame(['M5V2T6', 'M5V'], TsvGzReader::postalLookupNorms('M5V 2T6'));
+        self::assertSame(['A65F4E2', 'A65'], TsvGzReader::postalLookupNorms('A65 F4E2'));
+        self::assertSame(['100001'], TsvGzReader::postalLookupNorms('100001'));
+        self::assertSame(['10001'], TsvGzReader::postalLookupNorms('10001'));
+        self::assertSame(['SW1A'], TsvGzReader::postalLookupNorms('SW1A'));
+    }
+
+    public function testPostalLookupUsesLookupNormsCandidates(): void
+    {
+        $region = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/RegionService.php');
+        $reader = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/AddressCatalog/TsvGzReader.php'
+        );
+        self::assertStringContainsString('function postalLookupNorms', $reader);
+        self::assertStringContainsString('postalLookupNorms', $region);
+        self::assertStringContainsString("POSTAL_CODE_NORM, \$norms, 'in'", $region);
+    }
+
     public function testDefaultMarketsTsvDeclaresSortOrderAndUsBeforeKr(): void
     {
         $tsv = dirname(__DIR__, 3) . '/data/default-markets/countries.tsv';
@@ -96,7 +117,7 @@ final class PostalCountriesEmbargoContractTest extends TestCase
     {
         $module = include dirname(__DIR__, 3) . '/etc/module.php';
         self::assertIsArray($module);
-        self::assertSame('2.4.96', (string)($module['version'] ?? ''));
+        self::assertSame('2.9.21', (string)($module['version'] ?? ''));
     }
 
     public function testRegionBackendExposesCountrySortEditor(): void

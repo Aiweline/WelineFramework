@@ -203,15 +203,19 @@ class PaymentService
         return $transaction;
     }
 
-    public function refund(string $transactionNo, float $amount, string $reason = ''): RefundResult
+    /**
+     * Refund by minor units (cents / fen). Primary public ABI.
+     */
+    public function refund(string $transactionNo, int $amountMinor, string $reason = ''): RefundResult
     {
+        $amountMinor = max(0, $amountMinor);
         $refund = $this->getRefundService()->refundByTransactionCode(
             $transactionNo,
-            (int) round($amount * 100),
+            $amountMinor,
             $reason,
             [
                 'source_code' => 'payment_service_refund',
-                'idempotency_key' => 'payment_service_refund:' . $transactionNo . ':' . (int) round($amount * 100) . ':' . sha1($reason),
+                'idempotency_key' => 'payment_service_refund:' . $transactionNo . ':' . $amountMinor . ':' . sha1($reason),
             ]
         );
 
@@ -228,6 +232,14 @@ class PaymentService
                 'provider_response' => $refund->getProviderResponse(),
             ],
         ]);
+    }
+
+    /**
+     * @deprecated Use refund() with amount_minor int. Float major-unit wrapper only.
+     */
+    public function refundWithMajorAmount(string $transactionNo, float $amount, string $reason = ''): RefundResult
+    {
+        return $this->refund($transactionNo, (int) round($amount * 100), $reason);
     }
 
     private function generateTransactionNo(): string

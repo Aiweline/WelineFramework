@@ -1261,11 +1261,22 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $rawFlag = Env::get('wls.worker.storefront_deferred_warmup_enabled', '0');
         }
 
-        if (!\in_array(
+        $flagEnabled = \in_array(
             \strtolower(\trim((string)$rawFlag)),
             ['1', 'true', 'yes', 'on', 'async', 'deferred'],
             true
-        )) {
+        );
+
+        // Default homepage READY is fail-open: in-process `/` prime is skipped
+        // so template compile faults cannot kill the Worker. Deferred critical
+        // warmup is then the only path that can publish Process FPC before the
+        // first public hit. Force it on when homepage proof is not yet HIT
+        // (fail-open or missed strict prime), even if the explicit deferred
+        // flag stays at the historical default `0`. Strict mode with a HIT
+        // proof still honors the explicit flag only.
+        $homepageNeedsDeferredPrime = $this->isHomepageReadyGateFailOpen()
+            || !((bool)($this->readyGateHomepageFpcProof['hit'] ?? false));
+        if (!$flagEnabled && !$homepageNeedsDeferredPrime) {
             return false;
         }
 
@@ -1299,13 +1310,48 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if ($this->isHomepageReadyGateFailOpen() || !$homepageProofHit) {
             $paths['/'] = '/';
         }
-        foreach ($this->readyGateDynamicCriticalWarmupPaths() as $path) {
-            $path = $this->normalizeInternalWarmupPath((string)$path);
-            if ($path === '' || $path === '/') {
+        // Prefer raw provider paths with normalizeInternalWarmupPath so locale
+        // homes keep their trailing slash (`/ar_SA/` → FPC key). Drop paths that
+        // App::redirectDefaultLocalizationPrefixIfNeeded would 301-strip (default
+        // locale/currency prefixes waste deferred slots — e.g. `/en_US/` → `/`).
+        try {
+            $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
+            if ($warmup instanceof FpcWarmupProviderInterface) {
+                foreach ($warmup->warmupPaths() as $rawPath) {
+                    $path = $this->filterDeferredStorefrontWarmupPath((string)$rawPath);
+                    if ($path === null || $path === '' || $path === '/') {
+                        continue;
+                    }
+                    $paths[$path] = $path;
+                }
+            }
+        } catch (\Throwable) {
+            foreach ($this->readyGateDynamicCriticalWarmupPaths() as $path) {
+                $path = $this->filterDeferredStorefrontWarmupPath((string)$path);
+                if ($path === null || $path === '' || $path === '/') {
+                    continue;
+                }
+                $paths[$path] = $path;
+            }
+        }
+        // Prefer `/` then `/products` before locale homes so catalog is not
+        // squeezed out (or probe-missed) after several multi-MB locale SSRs
+        // thrash Process L1.
+        $ordered = [];
+        if (isset($paths['/'])) {
+            $ordered['/'] = '/';
+        }
+        if (isset($paths['/products'])) {
+            $ordered['/products'] = '/products';
+        }
+        foreach ($paths as $path => $value) {
+            $path = (string)$path;
+            if ($path === '' || isset($ordered[$path])) {
                 continue;
             }
-            $paths[$path] = $path;
+            $ordered[$path] = $value;
         }
+        $paths = $ordered;
         // Keep `/` plus locale homes + catalog representatives. Default was 1,
         // which let homepage fail-open steal the only slot and left catalog cold
         // (debug 70285b: logged-in wait_miss on /products while `/` was warm).
@@ -1342,6 +1388,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     'warmed' => (int)($result['warmed'] ?? 0),
                     'failed' => (int)($result['failed'] ?? 0),
                     'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 4),
+                    'hosts' => $hosts,
                 ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
             }
             $this->adoptDeferredHomepageWarmupProof($hosts, $result);
@@ -1380,6 +1427,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         $homepageReady = false;
+        $homepageSample = null;
         foreach (\is_array($result['samples'] ?? null) ? $result['samples'] : [] as $sample) {
             if (!\is_array($sample)) {
                 continue;
@@ -1387,6 +1435,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             if ((string)($sample['path'] ?? '') !== '/') {
                 continue;
             }
+            $homepageSample = $sample;
             if ((bool)($sample['ready'] ?? false) !== true) {
                 continue;
             }
@@ -1394,37 +1443,91 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             break;
         }
         if (!$homepageReady) {
+            $this->logDeferredStorefrontWarmupStage('incomplete', [
+                'reason' => 'homepage-not-ready',
+                'hosts' => $hosts,
+                'homepage_sample' => $homepageSample,
+                'warmed' => (int)($result['warmed'] ?? 0),
+                'failed' => (int)($result['failed'] ?? 0),
+            ]);
             return;
         }
 
         $coordinator = new FullPageCacheCoordinator();
+        $candidateUris = [];
+        // Prefer the exact full_uri captured while `/` was still Process-hot
+        // (before later multi-MB locale/catalog SSRs can evict L1 + drop the receipt).
+        $sampleFullUri = \trim((string)($homepageSample['full_uri'] ?? ''));
+        if ($sampleFullUri !== '') {
+            $candidateUris[] = $sampleFullUri;
+        }
         foreach ($hosts as $host) {
             $host = \trim((string)$host);
             if ($host === '') {
                 continue;
             }
             foreach (['https', 'http'] as $scheme) {
-                $fullUri = $scheme . '://' . $host . '/';
-                $receipt = $coordinator->resolveRootHomepageProcessReceipt($fullUri, '');
-                if (!\is_array($receipt) || !isset($receipt['cache_key'])) {
-                    continue;
-                }
-                $normalized = $this->normalizeHomepageWarmupReceipt($receipt);
-                if ($normalized === [] || !isset($normalized['cache_key'])) {
-                    continue;
-                }
-                $this->homepageCacheWarmupReceipt = $normalized;
-                $this->homepageCacheFullUri = (string)$normalized['full_uri'];
-                $this->readyGateHomepageFpcProof = [
-                    'hit' => true,
-                    'fpc_status' => 'HIT',
-                    'source' => 'process',
-                    'full_uri' => (string)$normalized['full_uri'],
-                    'reason' => 'homepage-fpc:deferred-warmup:adopted',
-                    'http_status' => 200,
-                ];
-                return;
+                $candidateUris[] = $scheme . '://' . $host . '/';
             }
+        }
+        $candidateUris = \array_values(\array_unique($candidateUris));
+
+        foreach ($candidateUris as $fullUri) {
+            $receipt = $coordinator->resolveRootHomepageProcessReceipt($fullUri, '');
+            if (!\is_array($receipt) || !isset($receipt['cache_key'])) {
+                continue;
+            }
+            $normalized = $this->normalizeHomepageWarmupReceipt($receipt);
+            if ($normalized === [] || !isset($normalized['cache_key'])) {
+                continue;
+            }
+            $this->homepageCacheWarmupReceipt = $normalized;
+            $this->homepageCacheFullUri = (string)$normalized['full_uri'];
+            $this->readyGateHomepageFpcProof = [
+                'hit' => true,
+                'fpc_status' => 'HIT',
+                'source' => 'process',
+                'full_uri' => (string)$normalized['full_uri'],
+                'reason' => 'homepage-fpc:deferred-warmup:adopted',
+                'http_status' => 200,
+            ];
+            // Keep Worker readiness + Master status_report meta in sync with
+            // the live process proof (server:status otherwise stays on the
+            // fail-open snapshot taken at READY).
+            $this->publishAdoptedHomepageFpcProofToWorkerReadiness(
+                $this->readyGateHomepageFpcProof
+            );
+            $this->logDeferredStorefrontWarmupStage('adopted', [
+                'reason' => 'homepage-fpc:deferred-warmup:adopted',
+                'full_uri' => (string)$normalized['full_uri'],
+                'hosts' => $hosts,
+            ]);
+            return;
+        }
+
+        $this->logDeferredStorefrontWarmupStage('incomplete', [
+            'reason' => 'homepage-ready-but-receipt-missing',
+            'hosts' => $hosts,
+            'homepage_sample' => $homepageSample,
+            'candidate_uris' => $candidateUris,
+        ]);
+    }
+
+    /**
+     * Mirror deferred adopt into Server WorkerReadinessState so periodic
+     * status_report can refresh Master homepage_fpc meta.
+     *
+     * @param array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int} $proof
+     */
+    private function publishAdoptedHomepageFpcProofToWorkerReadiness(array $proof): void
+    {
+        if (!\class_exists(\Weline\Server\Service\Runtime\WorkerReadinessState::class)) {
+            return;
+        }
+        try {
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markBusinessHomepageHot($proof);
+        } catch (\Throwable) {
+            // Best-effort: adopt must not fail because readiness mirroring threw.
         }
     }
 
@@ -1459,6 +1562,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         'X-WLS-Performance-FPC-Source'
                     ));
                     $cookieCount = (int)($warmupMeta['set_cookie_count'] ?? 0);
+                    $cookieNames = \array_values(\array_filter(
+                        \array_map('strval', (array)($warmupMeta['set_cookie_names'] ?? [])),
+                        static fn(string $name): bool => $name !== '',
+                    ));
                     $sample = [
                         'host' => $host,
                         'path' => $path,
@@ -1468,13 +1575,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         'fpc_status' => $fpcStatus,
                         'fpc_source' => $cacheSource,
                         'set_cookie_count' => $cookieCount,
+                        'set_cookie_names' => $cookieNames,
+                        'full_uri' => \trim((string)($warmupMeta['full_uri'] ?? '')),
                     ];
 
                     if ($statusCode < 200 || $statusCode >= 400 || $bodyLength <= 0 || $cookieCount > 0) {
                         $failed++;
                         $reason = 'status=' . $statusCode
                             . ' body=' . $bodyLength
-                            . ' cookies=' . $cookieCount;
+                            . ' cookies=' . $cookieCount
+                            . ($cookieNames !== [] ? ':' . \implode(',', $cookieNames) : '');
                         $errors[] = $host . $path . ': ' . $reason;
                         $sample['ready'] = false;
                         $sample['reason'] = $reason;
@@ -1498,12 +1608,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         'X-WLS-Performance-FPC-Source'
                     ));
                     $probeBodyLength = (int)($probeMeta['body_length'] ?? 0);
+                    $probeFullUri = \trim((string)($probeMeta['full_uri'] ?? ''));
+                    if ($probeFullUri !== '') {
+                        $sample['full_uri'] = $probeFullUri;
+                    }
                     $sample['probe'] = [
                         'status' => (int)($probeMeta['status_code'] ?? 0),
                         'body_length' => $probeBodyLength,
                         'elapsed_ms' => (float)($probeMeta['elapsed_ms'] ?? 0.0),
                         'fpc_status' => $probeStatus,
                         'fpc_source' => $probeSource,
+                        'full_uri' => $probeFullUri,
                     ];
                     if ($probeStatus !== 'HIT' || $probeBodyLength <= 0) {
                         $failed++;
@@ -1520,6 +1635,19 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $sample['ready'] = true;
                     $sample['reason'] = 'ready:fpc-hit';
                     $samples[] = $sample;
+                    // Adopt homepage proof immediately while Process L1 still
+                    // holds `/` — later multi-MB locale/catalog SSRs can evict
+                    // the payload and make end-of-batch receipt lookup fail.
+                    if ($path === '/' && !(bool)($this->readyGateHomepageFpcProof['hit'] ?? false)) {
+                        $this->adoptDeferredHomepageWarmupProof(
+                            [$host],
+                            [
+                                'warmed' => 1,
+                                'failed' => 0,
+                                'samples' => [$sample],
+                            ],
+                        );
+                    }
                 } catch (\Throwable $e) {
                     $failed++;
                     $message = $host . $path . ': ' . $e->getMessage();
@@ -1550,17 +1678,30 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private function runStorefrontFpcWarmupAttempt(string $host, string $path, int $sequence): array
     {
+        // Pin Website defaults into the synthetic request so FPC variant/key
+        // matches App's 301 authority even when shared Website snapshots are cold.
+        $defaults = $this->resolveDeferredWarmupWebsiteDefaults();
+        $serverOverrides = [
+            'WLS_INTERNAL_STOREFRONT_WARMUP' => '1',
+        ];
+        if ($defaults['language'] !== '') {
+            $serverOverrides['WELINE_WEBSITE_LANGUAGE'] = $defaults['language'];
+        }
+        if ($defaults['currency'] !== '') {
+            $serverOverrides['WELINE_WEBSITE_CURRENCY'] = $defaults['currency'];
+        }
+
         return $this->runInternalWarmupRequest(
             $host,
             $path,
             $sequence,
             'storefront-fpc-warmup',
-            [
-                'WLS_INTERNAL_STOREFRONT_WARMUP' => '1',
-            ],
+            $serverOverrides,
             [
                 'User-Agent' => 'WLS-Storefront-FpcWarmup/1.0',
-                'Accept-Encoding' => 'identity',
+                // Prefer gzip so HIT can serve stored/transcoded bodies without
+                // relying solely on brotli→plaintext decode for identity clients.
+                'Accept-Encoding' => 'gzip, deflate',
                 'X-WLS-Storefront-Warmup' => '1',
             ],
         );
@@ -1569,7 +1710,20 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     /** @return list<string> */
     private function resolveProcessLocalDynamicWarmupHosts(): array
     {
-        return [$this->selectStorefrontWarmupHost($this->resolveCurrentInstanceWarmupHosts())];
+        // FPC keys include the public authority. Prefer the managed Nginx /
+        // Pure-WLS public_origin (e.g. host:9555) over the Worker listener
+        // port (e.g. host:19655) so deferred warmup publishes the same key
+        // public probes hit.
+        $candidates = [];
+        $publicOrigin = $this->resolveWorkerPublicOrigin();
+        if ($publicOrigin !== null) {
+            $candidates[] = $publicOrigin['host'];
+        }
+        foreach ($this->resolveCurrentInstanceWarmupHosts() as $host) {
+            $candidates[] = $host;
+        }
+
+        return [$this->selectStorefrontWarmupHost($candidates)];
     }
 
     /**
@@ -2306,6 +2460,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $port = (int)($data['main_port'] ?? $data['port'] ?? 0);
         $hosts = [];
+
+        // public_origin is the acceptance authority (TLS edge / managed Nginx).
+        // public_host + main_port is the Worker listener and must not win FPC
+        // identity selection when the two ports differ.
+        $publicOriginHost = $this->normalizeInternalWarmupHost(
+            \is_scalar($data['public_origin'] ?? null) ? (string)$data['public_origin'] : ''
+        );
+        if ($publicOriginHost !== null) {
+            $hosts[] = $publicOriginHost;
+        }
+
         foreach ([$data['public_host'] ?? null, $data['host'] ?? null] as $host) {
             if (!\is_scalar($host)) {
                 continue;
@@ -4553,6 +4718,109 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
+     * Keep trailing-slash locale homes, but drop paths that would 301 under the
+     * storefront default-language/currency strip contract.
+     */
+    private function filterDeferredStorefrontWarmupPath(string $rawPath): ?string
+    {
+        try {
+            $path = $this->normalizeInternalWarmupPath($rawPath);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+        if ($pathOnly === '') {
+            $pathOnly = '/';
+        }
+
+        $defaults = $this->resolveDeferredWarmupWebsiteDefaults();
+        $canonical = \Weline\Framework\App\State::canonicalizeStorefrontLocalizationPath(
+            $pathOnly,
+            $defaults['language'],
+            $defaults['currency'],
+        );
+        if ($canonical !== null) {
+            // Would 301 to $canonical (often `/` or `/products`) — skip the slot.
+            return null;
+        }
+
+        return $path;
+    }
+
+    /**
+     * Same default-language/currency authority App uses for 301 strip, plus
+     * State::resolveWebsiteDefault* when the shared Website snapshot is still cold.
+     * Never fall back to Env `lang` / `currency` alone — those can be zh_Hans_CN/CNY
+     * while the storefront default is en_US, which re-admits `/en_US/` slots and
+     * forks FPC variants for `/` + `/products` between warmup attempts.
+     *
+     * @return array{language:string,currency:string}
+     */
+    private function resolveDeferredWarmupWebsiteDefaults(): array
+    {
+        $language = '';
+        $currency = '';
+
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)
+                && \class_exists(\Weline\Websites\Model\Website::class)
+            ) {
+                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById(
+                    \Weline\Websites\Model\Website::ID_DEFAULT
+                );
+                $website = \is_array($snapshot['website'] ?? null) ? $snapshot['website'] : [];
+                $language = \trim((string)($website['default_language'] ?? ''));
+                $currency = \trim((string)($website['default_currency'] ?? ''));
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($language === '') {
+            try {
+                $language = \trim((string)(
+                    \Weline\Framework\Env\WelineEnv::get('website.language', '')
+                    ?: \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_LANGUAGE', '')
+                    ?: Env::get('website.language', null)
+                    ?: ''
+                ));
+            } catch (\Throwable) {
+                $language = \trim((string)(Env::get('website.language', null) ?: ''));
+            }
+        }
+        if ($currency === '') {
+            try {
+                $currency = \trim((string)(
+                    \Weline\Framework\Env\WelineEnv::get('website.currency', '')
+                    ?: \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CURRENCY', '')
+                    ?: Env::get('website.currency', null)
+                    ?: ''
+                ));
+            } catch (\Throwable) {
+                $currency = \trim((string)(Env::get('website.currency', null) ?: ''));
+            }
+        }
+
+        if ($language === '') {
+            try {
+                $language = \trim(\Weline\Framework\App\State::resolveWebsiteDefaultLanguage());
+            } catch (\Throwable) {
+            }
+        }
+        if ($currency === '') {
+            try {
+                $currency = \trim(\Weline\Framework\App\State::resolveWebsiteDefaultCurrency());
+            } catch (\Throwable) {
+            }
+        }
+
+        return [
+            'language' => $language,
+            'currency' => $currency,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     private function parseWarmupUrl(string $url): ?array
@@ -4628,6 +4896,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             ?? \getenv('WLS_PUBLIC_ORIGIN')
             ?: ''
         );
+        if ($raw === '') {
+            $instance = $this->readCurrentInstanceWarmupMetadata();
+            $raw = \is_scalar($instance['public_origin'] ?? null)
+                ? \trim((string)$instance['public_origin'])
+                : '';
+        }
         if ($raw === '') {
             return null;
         }

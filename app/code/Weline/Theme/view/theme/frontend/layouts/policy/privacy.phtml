@@ -9,10 +9,12 @@
  * @param content {default="",name="主要内容（HTML字符串）",description="非空时覆盖默认正文"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ * @param showBreadcrumb {default=true,name="显示面包屑",description="是否显示面包屑导航"}
  * @param class {default="",name="额外CSS类",description="额外CSS类"}
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\StorefrontHref;
 use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
@@ -44,6 +46,7 @@ $toc = [
     ['id' => 'privacy-s9', 'label' => WidgetI18n::label('九、政策更新')],
     ['id' => 'privacy-s10', 'label' => WidgetI18n::label('十、联系我们')],
 ];
+$tocFallbackPath = '/policy/privacy';
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
@@ -66,6 +69,19 @@ $toc = [
             flex-direction: column;
             background: transparent;
         }
+        /* Prototype A: quiet trail inside content column — no full-bleed chrome strip */
+        .amazon-policy__breadcrumb {
+            margin: 0 0 var(--weline-space-4, 1rem);
+            border: 0;
+            background: transparent;
+        }
+        .amazon-policy__breadcrumb .w-frontend-breadcrumb {
+            padding-block: 0;
+            width: 100%;
+            max-width: none;
+            margin-inline: 0;
+            padding-inline: 0;
+        }
         .amazon-policy__main {
             flex: 1 0 auto;
             width: 100%;
@@ -78,7 +94,7 @@ $toc = [
             min-width: 0;
             margin-inline: auto;
             padding-inline: var(--weline-layout-content-padding-inline);
-            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+            padding-block: var(--weline-space-4, 1rem) clamp(3rem, 6vw, 4.5rem);
         }
         .amazon-policy__hero {
             margin: 0 0 1.25rem;
@@ -129,14 +145,15 @@ $toc = [
             border: 1px solid #ddd;
             border-radius: 8px;
             box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
-            overflow: hidden;
+            /* no overflow:hidden — with <base href="/"> + sticky header, hash scroll must use document */
         }
         .amazon-policy__toc {
+            border-radius: 8px 0 0 8px;
             padding: 1.15rem 1rem 1.25rem;
             border-right: 1px solid #e3e6e6;
             background: #fafafa;
             position: sticky;
-            top: 0.75rem;
+            top: 12rem;
         }
         .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
         .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
@@ -155,6 +172,7 @@ $toc = [
             text-decoration: underline;
         }
         .amazon-policy__article {
+            border-radius: 0 8px 8px 0;
             padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
         }
         .amazon-policy__intro {
@@ -164,7 +182,7 @@ $toc = [
             color: #565959;
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 1rem; }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 12rem; }
         .amazon-policy__section h2 {
             margin: 0 0 0.75rem;
             font-size: 1.2rem;
@@ -216,7 +234,9 @@ $toc = [
                 position: static;
                 border-right: 0;
                 border-bottom: 1px solid #e3e6e6;
+                border-radius: 8px 8px 0 0;
             }
+            .amazon-policy__article { border-radius: 0 0 8px 8px; }
             .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
@@ -257,6 +277,16 @@ $toc = [
                     {{meta.content}}
                 <else/>
                         <div class="amazon-policy__stage">
+                        <if condition="meta.showBreadcrumb">
+                            <div class="amazon-policy__breadcrumb">
+                                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-before</w:hook>
+                                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+                                <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-after</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+                            </div>
+                        </if>
+
                         <header class="amazon-policy__hero" aria-labelledby="policy-privacy-title" weline-code="theme.policy.hero">
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
@@ -275,7 +305,7 @@ $toc = [
                                         <h2><?= $escape(WidgetI18n::label('目录')) ?></h2>
                                         <nav>
                                             <?php foreach ($toc as $item): ?>
-                                                <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
+                                                <a href="<?= $escape(StorefrontHref::fragmentHref((string)$item['id'], $tocFallbackPath)) ?>"><?= $escape($item['label']) ?></a>
                                             <?php endforeach; ?>
                                         </nav>
                                     </aside>
@@ -324,7 +354,7 @@ $toc = [
                                         <section class="amazon-policy__section" id="privacy-s4" weline-code="theme.policy.section_5">
                                             <h2><?= $escape(WidgetI18n::label('四、信息存储与安全')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('4.1 我们采用行业标准的安全措施保护您的个人信息，包括但不限于数据加密、访问控制、安全审计等。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('4.2 您的个人信息将存储在中华人民共和国境内。如需跨境传输，我们将依法进行安全评估并获得您的同意。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.2 您的个人信息主要在中国境内存储与处理。为完成支付、物流等服务，我们可能向境外服务商（如 PayPal、Stripe 等）提供必要信息，并将依法告知您，并在需要时取得同意或履行相关评估义务。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.3 我们仅在实现本政策所述目的所必需的期间内保留您的个人信息。超出保留期限后，我们将删除或匿名化处理您的个人信息。')) ?></p>
                                         </section>
 
