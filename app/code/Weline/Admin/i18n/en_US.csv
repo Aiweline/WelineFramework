@@ -1,444 +1,444 @@
-后台密码校验通过后,After the background password verification passes
-后台管理员密码校验通过后、建立会话前触发，允许集成模块接管 WebAuth/两步验证等登录流程。,"Triggered after the background administrator password verification passes and before the session is established, allowing the integrated module to take over login processes such as WebAuth/two-step verification."
+﻿后台密码校验通过后,"After the background password verification passes"
+"后台管理员密码校验通过后、建立会话前触发，允许集成模块接管 WebAuth/两步验证等登录流程。","Triggered after the background administrator password verification passes and before the session is established, allowing the integrated module to take over login processes such as WebAuth/two-step verification."
 菜单,Menu
-后台菜单,Backend menu
-后台首页顶部统计卡片,Backend Homepage Top Statistics Cards
+后台菜单,"Backend menu"
+后台首页顶部统计卡片,"Backend Homepage Top Statistics Cards"
 在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。,"Renders statistics cards in the top area of the backend homepage, such as visitor count, event count, site count, etc."
-后台首页主要概览,Backend Homepage Main Overview
+后台首页主要概览,"Backend Homepage Main Overview"
 在后台首页主要内容区域渲染核心数据概览，例如趋势、热门事件等。,"Renders core data overviews in the main content area of the backend homepage, such as trends, hot events, etc."
-后台首页标签页导航,Backend Homepage Tab Navigation
+后台首页标签页导航,"Backend Homepage Tab Navigation"
 在后台首页标签页导航区域动态追加标签页按钮，例如像素统计、数据分析等。,"Dynamically appends tab buttons to the tab navigation area of the backend homepage, such as pixel statistics, data analysis, etc."
-后台首页标签页内容,Backend Homepage Tab Content
+后台首页标签页内容,"Backend Homepage Tab Content"
 在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。,"Dynamically appends tab content panels to the tab content area of the backend homepage, such as pixel statistics panels, data analysis panels, etc."
-Backend login providers,Backend login providers
-Inject third-party sign-in providers above the backend login form.,Inject third-party sign-in providers above the backend login form.
-系统消息数据格式错误,System message data format error
-收到无效的系统消息数据。\n\n发送者：%{sender}\n数据类型：%{type}\n数据内容：%{content}\n\n请检查发送系统消息的代码，确保数据格式正确。,Invalid system message data received.\n\nSender: %{sender}\nData Type: %{type}\nData Content: %{content}\n\nPlease check the code that sends system messages to ensure the data format is correct.
+"Backend login providers","Backend login providers"
+"Inject third-party sign-in providers above the backend login form.","Inject third-party sign-in providers above the backend login form."
+系统消息数据格式错误,"System message data format error"
+"收到无效的系统消息数据。\n\n发送者：%{sender}\n数据类型：%{type}\n数据内容：%{content}\n\n请检查发送系统消息的代码，确保数据格式正确。","Invalid system message data received.\n\nSender: %{sender}\nData Type: %{type}\nData Content: %{content}\n\nPlease check the code that sends system messages to ensure the data format is correct."
 title,title
 content,content
-系统消息缺少必需字段,System message missing required fields
-收到的系统消息缺少必需字段。\n\n发送者：%{sender}\n缺少字段：%{fields}\n\n请确保消息数据包含 'title' 和 'content' 字段。\n\n当前数据：%{data},Received system message is missing required fields.\n\nSender: %{sender}\nMissing fields: %{fields}\n\nPlease ensure the message data contains 'title' and 'content' fields.\n\nCurrent data: %{data}
-系统消息保存失败,System message save failed
-保存系统消息时发生错误。\n\n发送者：%{sender}\n错误信息：%{error}\n\n消息标题：%{title}\n消息内容：%{content},An error occurred while saving the system message.\n\nSender: %{sender}\nError: %{error}\n\nMessage Title: %{title}\nMessage Content: %{content}
+系统消息缺少必需字段,"System message missing required fields"
+"收到的系统消息缺少必需字段。\n\n发送者：%{sender}\n缺少字段：%{fields}\n\n请确保消息数据包含 'title' 和 'content' 字段。\n\n当前数据：%{data}","Received system message is missing required fields.\n\nSender: %{sender}\nMissing fields: %{fields}\n\nPlease ensure the message data contains 'title' and 'content' fields.\n\nCurrent data: %{data}"
+系统消息保存失败,"System message save failed"
+"保存系统消息时发生错误。\n\n发送者：%{sender}\n错误信息：%{error}\n\n消息标题：%{title}\n消息内容：%{content}","An error occurred while saving the system message.\n\nSender: %{sender}\nError: %{error}\n\nMessage Title: %{title}\nMessage Content: %{content}"
 未知,Unknown
-SystemNotificationObserver Error: Failed to save error notification - %{error},SystemNotificationObserver Error: Failed to save error notification - %{error}
-未知来源,Unknown source
-你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。,Your account has been locked due to multiple login attempts! Please contact another administrator to unlock it.
-未登录,Not logged in
-访问后台需要先登录。,Accessing the backend requires logging in first.
-账户异常,Account Exception
-该账户不存在或已被删除，请使用有效账户重新登录。,This account does not exist or has been deleted. Please log in with a valid account.
-无权限,No permission
+"SystemNotificationObserver Error: Failed to save error notification - %{error}","SystemNotificationObserver Error: Failed to save error notification - %{error}"
+未知来源,"Unknown source"
+你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。,"Your account has been locked due to multiple login attempts! Please contact another administrator to unlock it."
+未登录,"Not logged in"
+访问后台需要先登录。,"Accessing the backend requires logging in first."
+账户异常,"Account Exception"
+该账户不存在或已被删除，请使用有效账户重新登录。,"This account does not exist or has been deleted. Please log in with a valid account."
+无权限,"No permission"
 用户没有分配角色，请联系管理员。,"User has no role assigned, please contact the administrator."
-您没有任何后台权限，请联系管理员。,You do not have any backend permissions. Please contact the administrator.
-您没有访问该页面的权限，请联系管理员。,You do not have permission to access this page. Please contact the administrator.
-当前没有可用的访问入口，请重新登录或联系管理员。,No access entry available. Please log in again or contact the administrator.
-您没有访问该页面的权限，请先登录或联系管理员。,You do not have permission to access this page. Please log in or contact the administrator.
+您没有任何后台权限，请联系管理员。,"You do not have any backend permissions. Please contact the administrator."
+您没有访问该页面的权限，请联系管理员。,"You do not have permission to access this page. Please contact the administrator."
+当前没有可用的访问入口，请重新登录或联系管理员。,"No access entry available. Please log in again or contact the administrator."
+您没有访问该页面的权限，请先登录或联系管理员。,"You do not have permission to access this page. Please log in or contact the administrator."
 人机验证失败或已过期，请重试,"Human-machine verification failed or has expired, please try again"
-异常的登录操作！,Abnormal login operation!
-账户不存在！,Account does not exist!
-账户被禁用！,Account is disabled!
-登录异常！,Login exception!
-您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,Your account has not been assigned a role and cannot log in to the backend. Please contact the system administrator to assign a role.
-认证设备服务暂时不可用，请稍后重试。,The authenticated device service is temporarily unavailable. Please try again later.
-登录凭据错误！,Invalid login credentials!
+异常的登录操作！,"Abnormal login operation!"
+账户不存在！,"Account does not exist!"
+账户被禁用！,"Account is disabled!"
+登录异常！,"Login exception!"
+您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,"Your account has not been assigned a role and cannot log in to the backend. Please contact the system administrator to assign a role."
+认证设备服务暂时不可用，请稍后重试。,"The authenticated device service is temporarily unavailable. Please try again later."
+登录凭据错误！,"Invalid login credentials!"
 验证码生成失败，请刷新重试。,"Verification code generation failed, please refresh and try again."
-请完成两步验证以完成登录。,Please complete two-step verification to complete your login.
-用户ID无效,Invalid user ID
-用户不存在,User does not exist
-修改成功！,Modified successfully!
-修改失败！,Modification failed!
-添加成功！,Added successfully!
-添加失败！,Add failed!
-用户ID不能为空,User ID cannot be empty
-超级管理员不能被删除,Super administrator cannot be deleted
-用户已删除，可在列表中重新激活,User has been deleted and can be reactivated in the list
-删除失败！,Delete failed!
-激活成功！,Activated successfully!
-激活失败！,Activation failed!
-禁用成功！,Disabled successfully!
-禁用失败！,Disable failed!
-用户名不能为空,Username cannot be empty
-邮箱不能为空,Email cannot be empty
-邮箱格式不正确,Email format is incorrect
-新增用户必须设置密码,Password is required for new user
-该用户名对应的管理员已删除，请先激活该用户,The administrator corresponding to this username has been deleted. Please activate the user first.
-用户名已存在,Username already exists
-该邮箱对应的管理员已删除，请先激活该用户,The administrator corresponding to this email address has been deleted. Please activate the user first.
-邮箱已存在,Email already exists
+请完成两步验证以完成登录。,"Please complete two-step verification to complete your login."
+用户ID无效,"Invalid user ID"
+用户不存在,"User does not exist"
+修改成功！,"Modified successfully!"
+修改失败！,"Modification failed!"
+添加成功！,"Added successfully!"
+添加失败！,"Add failed!"
+用户ID不能为空,"User ID cannot be empty"
+超级管理员不能被删除,"Super administrator cannot be deleted"
+用户已删除，可在列表中重新激活,"User has been deleted and can be reactivated in the list"
+删除失败！,"Delete failed!"
+激活成功！,"Activated successfully!"
+激活失败！,"Activation failed!"
+禁用成功！,"Disabled successfully!"
+禁用失败！,"Disable failed!"
+用户名不能为空,"Username cannot be empty"
+邮箱不能为空,"Email cannot be empty"
+邮箱格式不正确,"Email format is incorrect"
+新增用户必须设置密码,"Password is required for new user"
+该用户名对应的管理员已删除，请先激活该用户,"The administrator corresponding to this username has been deleted. Please activate the user first."
+用户名已存在,"Username already exists"
+该邮箱对应的管理员已删除，请先激活该用户,"The administrator corresponding to this email address has been deleted. Please activate the user first."
+邮箱已存在,"Email already exists"
 修改,Edit
 新增,Add
-%{1}管理员成功,%{1} administrator successfully
-保存失败,Save failed
-删除失败,Deletion failed
-超级管理员状态不能被修改,Super administrator status cannot be modified
-无效的操作类型,Invalid operation type
-用户已激活,User has been activated
-用户已禁用,User has been disabled
-操作失败,Operation failed
-不能给自己分配权限！,Cannot assign permissions to yourself!
-角色分配成功！,Role assigned successfully!
-角色分配失败！,Role assignment failed!
-不能修改自己的角色,You cannot modify your own role
-已取消角色分配,Role assignment has been removed
-角色分配成功,Role assigned successfully
-角色分配失败,Role assignment failed
-用户管理,User Management
-管理后台用户,Manage backend users
-管理员列表,Administrator list
-查看管理后台用户列表,View the list of admin users
-管理员添加界面,Administrator add interface
-添加管理员界面访问,Add administrator interface access
-管理员修改界面,Administrator modification interface
-修改管理员界面访问,Modify administrator interface access
-管理员修改请求,Admin modification request
-修改管理员请求,Modify admin request
-管理员添加请求,Admin add request
-请求添加管理员,Request to add an administrator
-管理员删除请求,Admin removal request
-请求删除管理员,Request to remove administrator
-激活管理员,Activate administrator
-请求激活管理员,Request activation of administrator
-禁用管理员,Disable administrator
-请求禁用管理员,Request to disable admin
-管理员保存API,Admin Save API
-AJAX保存管理员,AJAX save manager
-管理员删除API,Admin delete API
-AJAX删除管理员,AJAX delete admin
-管理员状态切换API,Administrator status switching API
-AJAX切换管理员状态,AJAX switch administrator status
-管理员角色归配,Administrator role assignment
-将管理员分配到角色,Assign administrators to roles
-管理员角色归配请求,Administrator role assignment request
-请求归配,request allocation
-管理员角色归配API,Administrator role assignment API
-AJAX分配角色,AJAX assign role
-关键参数ID不存在！,Key parameter ID does not exist!
-菜单不存在！,Menu does not exist!
-该菜单下有子菜单，请先删除子菜单！,This menu has submenus. Please delete the submenus first!
-删除成功！,Deleted successfully!
-参数错误：缺少排序数据,Parameter error: missing sort data
-排序更新成功,Sort updated successfully
-参数错误：缺少菜单ID,Parameter error: missing menu ID
-菜单不存在,Menu does not exist
+%{1}管理员成功,"%{1} administrator successfully"
+保存失败,"Save failed"
+删除失败,"Deletion failed"
+超级管理员状态不能被修改,"Super administrator status cannot be modified"
+无效的操作类型,"Invalid operation type"
+用户已激活,"User has been activated"
+用户已禁用,"User has been disabled"
+操作失败,"Operation failed"
+不能给自己分配权限！,"Cannot assign permissions to yourself!"
+角色分配成功！,"Role assigned successfully!"
+角色分配失败！,"Role assignment failed!"
+不能修改自己的角色,"You cannot modify your own role"
+已取消角色分配,"Role assignment has been removed"
+角色分配成功,"Role assigned successfully"
+角色分配失败,"Role assignment failed"
+用户管理,"User Management"
+管理后台用户,"Manage backend users"
+管理员列表,"Administrator list"
+查看管理后台用户列表,"View the list of admin users"
+管理员添加界面,"Administrator add interface"
+添加管理员界面访问,"Add administrator interface access"
+管理员修改界面,"Administrator modification interface"
+修改管理员界面访问,"Modify administrator interface access"
+管理员修改请求,"Admin modification request"
+修改管理员请求,"Modify admin request"
+管理员添加请求,"Admin add request"
+请求添加管理员,"Request to add an administrator"
+管理员删除请求,"Admin removal request"
+请求删除管理员,"Request to remove administrator"
+激活管理员,"Activate administrator"
+请求激活管理员,"Request activation of administrator"
+禁用管理员,"Disable administrator"
+请求禁用管理员,"Request to disable admin"
+管理员保存API,"Admin Save API"
+AJAX保存管理员,"AJAX save manager"
+管理员删除API,"Admin delete API"
+AJAX删除管理员,"AJAX delete admin"
+管理员状态切换API,"Administrator status switching API"
+AJAX切换管理员状态,"AJAX switch administrator status"
+管理员角色归配,"Administrator role assignment"
+将管理员分配到角色,"Assign administrators to roles"
+管理员角色归配请求,"Administrator role assignment request"
+请求归配,"request allocation"
+管理员角色归配API,"Administrator role assignment API"
+AJAX分配角色,"AJAX assign role"
+关键参数ID不存在！,"Key parameter ID does not exist!"
+菜单不存在！,"Menu does not exist!"
+该菜单下有子菜单，请先删除子菜单！,"This menu has submenus. Please delete the submenus first!"
+删除成功！,"Deleted successfully!"
+参数错误：缺少排序数据,"Parameter error: missing sort data"
+排序更新成功,"Sort updated successfully"
+参数错误：缺少菜单ID,"Parameter error: missing menu ID"
+菜单不存在,"Menu does not exist"
 <var>title</var>,<var>title</var>
 <var>tip</var>,<var>tip</var>
-后台快捷导航,Backend quick navigation
-打开主导航,Open main navigation
-搜索配置…,Search configs…
-访问前端,Visit storefront
-主题模式,Theme mode
-跟随系统,Follow system
-明亮模式,Light Mode
-暗黑模式,Dark Mode
-界面设置,Interface settings
-个人中心,Account center
-我的订阅,My subscriptions
-退出登录,Log out
-搜索 ...,Search ...
+后台快捷导航,"Backend quick navigation"
+打开主导航,"Open main navigation"
+搜索配置…,"Search configs…"
+访问前端,"Visit storefront"
+主题模式,"Theme mode"
+跟随系统,"Follow system"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
+界面设置,"Interface settings"
+个人中心,"Account center"
+我的订阅,"My subscriptions"
+退出登录,"Log out"
+"搜索 ...","Search ..."
 头像,Avatar
 资料,Profile
-我的钱包,My Wallet
+我的钱包,"My Wallet"
 设置,Settings
-锁定屏幕,Lock Screen
+锁定屏幕,"Lock Screen"
 退出,Logout
 通知,Notification
-全部已读,Mark All as Read
-暂无通知,No notifications
-管理订阅,Manage subscriptions
-确定删除该菜单吗？,Are you sure you want to delete this menu?
-删除后不可恢复！,Cannot be recovered after deletion!
+全部已读,"Mark All as Read"
+暂无通知,"No notifications"
+管理订阅,"Manage subscriptions"
+确定删除该菜单吗？,"Are you sure you want to delete this menu?"
+删除后不可恢复！,"Cannot be recovered after deletion!"
 取消,Cancel
 确定,Confirm
 删除!,Delete!
-删除成功,Deletion successful
-知道了,Got it
-主题模式切换失败,Theme mode switch failed
-网站维护,Website Maintenance
-网站正在维护中...,Website is under maintenance...
-请稍等片刻,Please wait a moment
-返回首页重试,Return to Home and Retry
+删除成功,"Deletion successful"
+知道了,"Got it"
+主题模式切换失败,"Theme mode switch failed"
+网站维护,"Website Maintenance"
+网站正在维护中...,"Website is under maintenance..."
+请稍等片刻,"Please wait a moment"
+返回首页重试,"Return to Home and Retry"
 刷新,Refresh
-为什么网站会处于维护模式？,Why is the website in maintenance mode?
-网站可能正在进行系统升级或数据维护，以提供更稳定的服务。,The website may be undergoing system upgrades or data maintenance to provide more stable services.
-多久能够恢复？,How long will it take to recover?
+为什么网站会处于维护模式？,"Why is the website in maintenance mode?"
+网站可能正在进行系统升级或数据维护，以提供更稳定的服务。,"The website may be undergoing system upgrades or data maintenance to provide more stable services."
+多久能够恢复？,"How long will it take to recover?"
 大部分网站升级只需几分钟，完成后即可恢复访问。,"Most website upgrades only take a few minutes, and access can be restored once complete."
-需要帮助吗？,Need help?
+需要帮助吗？,"Need help?"
 如果长时间看到此页面，请联系：,"If you see this page for a long time, please contact:"
-Weline Admin 管理面板,Weline Admin Management Panel
-新增管理员,Add Administrator
-用户信息,User Info
+"Weline Admin 管理面板","Weline Admin Management Panel"
+新增管理员,"Add Administrator"
+用户信息,"User Info"
 状态,Status
-创建时间,Create time
+创建时间,"Create time"
 操作,Operation
-超管,Super admin
+超管,"Super admin"
 已删除,Deleted
 已激活,Activated
 已禁用,Disabled
 受保护,Protected
-暂无管理员数据,No administrator data
+暂无管理员数据,"No administrator data"
 用户名,Username
-请输入用户名,Please enter the username
+请输入用户名,"Please enter the username"
 邮箱,Email
-请输入有效邮箱,Please enter a valid email
+请输入有效邮箱,"Please enter a valid email"
 密码,Password
-留空则不修改密码,Leave empty to keep current password
-请输入密码,Enter password
+留空则不修改密码,"Leave empty to keep current password"
+请输入密码,"Enter password"
 保存,Save
 保存中...,Saving...
 编辑,Edit
 激活,Activate
 禁用,Disable
 删除,Delete
-请输入邮箱,Please enter the email
-编辑管理员,Edit Administrator
-保存成功,Saved successfully
+请输入邮箱,"Please enter the email"
+编辑管理员,"Edit Administrator"
+保存成功,"Saved successfully"
 确定要删除用户「%{1}」吗？此操作不可恢复。,"Are you sure you want to delete user ""%{1}""? This action cannot be undone."
-确定要激活此用户吗？,Are you sure you want to activate this user?
+确定要激活此用户吗？,"Are you sure you want to activate this user?"
 确定要禁用此用户吗？禁用后该用户将无法登录。,"Are you sure you want to disable this user? Once disabled, this user will not be able to log in."
-操作成功,Operation successful
+操作成功,"Operation successful"
 网络错误，请检查网络后重试,"Network error, please check your network and try again"
-请填写必填项,Please fill in the required fields
-确认删除,Confirm Delete
-激活用户,Activate User
-禁用用户,Disable User
-角色归配,Role Assignment
+请填写必填项,"Please fill in the required fields"
+确认删除,"Confirm Delete"
+激活用户,"Activate User"
+禁用用户,"Disable User"
+角色归配,"Role Assignment"
 系统,System
 管理员,Administrator
-返回列表,Back to List
-选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。,Roles are saved automatically after selection. You cannot modify your own role.
-当前角色,Current Role
--- 未分配角色 --,-- No Role Assigned --
+返回列表,"Back to List"
+选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。,"Roles are saved automatically after selection. You cannot modify your own role."
+当前角色,"Current Role"
+"-- 未分配角色 --","-- No Role Assigned --"
 未分配,Unassigned
-（当前登录）,(Currently logged in)
+（当前登录）,"(Currently logged in)"
 已分配,Assigned
-用户名称验证成功,Username validation successful
-请输入用户名称,Please enter username
-邮箱验证成功,Email validation successful
-请输入用户邮箱,Please enter email
-密码输入验证成功,Password validation successful
-请输入用户密码,Please enter password
+用户名称验证成功,"Username validation successful"
+请输入用户名称,"Please enter username"
+邮箱验证成功,"Email validation successful"
+请输入用户邮箱,"Please enter email"
+密码输入验证成功,"Password validation successful"
+请输入用户密码,"Please enter password"
 提交,Submit
-插件管理,Plugin Management
-查看系统中所有已注册的插件（拦截器），了解函数修改情况,View all registered plugins (interceptors) in the system to understand function modifications
-配置文件,Configuration file
-插件数,Number of plugins
+插件管理,"Plugin Management"
+查看系统中所有已注册的插件（拦截器），了解函数修改情况,"View all registered plugins (interceptors) in the system to understand function modifications"
+配置文件,"Configuration file"
+插件数,"Number of plugins"
 已启用,Enabled
-涉及模块,Involved modules
+涉及模块,"Involved modules"
 搜索插件类、实例类、名称...,"Search Plugin Class, Instance Class, Name..."
-所有状态,All Statuses
-所有模块,All Modules
-展开全部,Expand all
-折叠全部,Collapse All
-暂无插件配置,No plugin configuration
+所有状态,"All Statuses"
+所有模块,"All Modules"
+展开全部,"Expand all"
+折叠全部,"Collapse All"
+暂无插件配置,"No plugin configuration"
 个拦截器,interceptor
 插件：,Plugin:
-拦截器名,Interceptor name
-目标类,Target class
-实例类,Instance Class
+拦截器名,"Interceptor name"
+目标类,"Target class"
+实例类,"Instance Class"
 排序,Sort
 模块,Module.
 找到,Found
-个拦截器，来自,interceptors from
-个配置文件,configuration files
-Cms内容管理,CMS Content Management
-内容管理,Content Management
+个拦截器，来自,"interceptors from"
+个配置文件,"configuration files"
+Cms内容管理,"CMS Content Management"
+内容管理,"Content Management"
 后台可视化建设页面等的内容管理。,"Content management for backend visual page building, etc."
-菜单管理,Menu Management
-菜单树,Menu tree
-搜索菜单...,Search Menu...
-新增菜单,Add Menu
-暂无菜单数据,No menu data
-菜单代码,Menu Code
-资源标识,Resource identifier
+菜单管理,"Menu Management"
+菜单树,"Menu tree"
+搜索菜单...,"Search Menu..."
+新增菜单,"Add Menu"
+暂无菜单数据,"No menu data"
+菜单代码,"Menu Code"
+资源标识,"Resource identifier"
 自定义,Custom
-添加子菜单,Add Submenu
-系统菜单无法删除,System menu cannot be deleted
+添加子菜单,"Add Submenu"
+系统菜单无法删除,"System menu cannot be deleted"
 总计,Total
-系统菜单,System Menu
-自定义菜单,Custom Menu
-顶级菜单,Top-level menu
-编辑菜单,Edit Menu
-菜单名称,Menu Name
-菜单标题,Menu title
-父级资源,Parent Resource
-无（顶级菜单）,None (top-level menu)
-动作URL,Action URL
-所属模块,Parent Module
-图标类,Icon class
+系统菜单,"System Menu"
+自定义菜单,"Custom Menu"
+顶级菜单,"Top-level menu"
+编辑菜单,"Edit Menu"
+菜单名称,"Menu Name"
+菜单标题,"Menu title"
+父级资源,"Parent Resource"
+无（顶级菜单）,"None (top-level menu)"
+动作URL,"Action URL"
+所属模块,"Parent Module"
+图标类,"Icon class"
 启用,Enable
-获取菜单信息失败,Failed to fetch menu information
-请求失败,Request failed
-确定要删除菜单,Are you sure you want to delete the menu
+获取菜单信息失败,"Failed to fetch menu information"
+请求失败,"Request failed"
+确定要删除菜单,"Are you sure you want to delete the menu"
 吗？,?
-系统事件,System Events
+系统事件,"System Events"
 查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件,"View all registered events and observers in the system, making it easy for developers to subscribe to system events using the observer pattern"
-事件类型,Event type
-观察者总数,Total Observers
+事件类型,"Event type"
+观察者总数,"Total Observers"
 搜索事件名、观察者、实例类...,"Search event name, observer, instance class..."
-所有事件,All Events
-暂无事件配置,No Event Configuration
+所有事件,"All Events"
+暂无事件配置,"No Event Configuration"
 个事件,events
 个观察者,observer
-观察者名,Observer Name
+观察者名,"Observer Name"
 共享,Shared
 独占,Exclusive
-个观察者，来自,observers from
-路由管理,Route management
+个观察者，来自,"observers from"
+路由管理,"Route management"
 查看和管理系统中所有已注册的路由，支持按模块分组浏览,"View and manage all registered routes in the system, supports browsing grouped by module"
-路由总数,Total routes
-GET 路由,GET route
-POST 路由,POST routing
+路由总数,"Total routes"
+"GET 路由","GET route"
+"POST 路由","POST routing"
 搜索路由路径、控制器...,"Search route path, controller..."
-所有方法,All Methods
-暂无路由数据,No routing data
-条路由,items of routes
+所有方法,"All Methods"
+暂无路由数据,"No routing data"
+条路由,"items of routes"
 方法,Method
-路由路径,Route path
-控制器信息,Controller Information
+路由路径,"Route path"
+控制器信息,"Controller Information"
 命名空间,Namespace
 控制器,Controller
-设为首页,Set as Homepage
+设为首页,"Set as Homepage"
 条路由，来自,"items of routes, from"
 个模块,modules
-模组管理,Module Management
-系统中安装的模组。,Modules installed in the system.
-模组名,Module Name
-安装位置,Installation Location
+模组管理,"Module Management"
+系统中安装的模组。,"Modules installed in the system."
+模组名,"Module Name"
+安装位置,"Installation Location"
 目录,Directory
 路由,Route
 版本,Version
 描述,Description
-后台主导航,Backend main navigation
-收起侧边栏,Collapse sidebar
-展开侧边栏,Expand sidebar
-搜索菜单,Search menu
-搜索菜单…,Search menu…
-没有匹配的菜单,No matching menu
-Weline 管理后台,Weline management background
+后台主导航,"Backend main navigation"
+收起侧边栏,"Collapse sidebar"
+展开侧边栏,"Expand sidebar"
+搜索菜单,"Search menu"
+搜索菜单…,"Search menu…"
+没有匹配的菜单,"No matching menu"
+"Weline 管理后台","Weline management background"
 加载中,loading
-响应式 Bootstrap 5 管理后台,Responsive Bootstrap 5 Admin Dashboard
-返回首页,Return to Home
+"响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
+返回首页,"Return to Home"
 网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The website may be undergoing system upgrades, or most of the content is being changed. Our developers are maintaining or upgrading data to provide better services."
-大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,Most website upgrade activities only take a few minutes or even seconds.
+大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only take a few minutes or even seconds."
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have questions about the website, please contact:"
 关闭,closure
-系统维护,System maintenance
+系统维护,"System maintenance"
 面板,Dashboard
 后台,Backend
 概览,Overview
-每分钟浏览者,Visitors Per Minute
+每分钟浏览者,"Visitors Per Minute"
 环比,Month-over-Month
-跳出率,Bounce Rate
-新浏览者,New Visitors
+跳出率,"Bounce Rate"
+新浏览者,"New Visitors"
 全部,All
 1月,January
-半年,Half Year
-1年,One Year
+半年,"Half Year"
+1年,"One Year"
 费用,Expenses
 维护,Maintenance
 利润,Profit
-社媒来源,Social Media Source
+社媒来源,"Social Media Source"
 五月,May
 四月,April
 三月,March
 二月,February
 一月,January
 十二月,December
-订单统计,Order Statistics
-区域营收,Regional Revenue
-查看更多,View More
-最近成交,Recent Transactions
-后台登录,Backend login
-登录 %{name} 管理面板,Login to %{name} Admin Panel
-安全管理入口,Security management entrance
-请输入管理员账号,Please enter the admin account
-验证码,Verification code
-请输入验证码,Please enter the verification code
-刷新验证码,Refresh verification code
-在受信任设备上记住我,Remember me on trusted devices
-登录,Log in
+订单统计,"Order Statistics"
+区域营收,"Regional Revenue"
+查看更多,"View More"
+最近成交,"Recent Transactions"
+后台登录,"Backend login"
+"登录 %{name} 管理面板","Login to %{name} Admin Panel"
+安全管理入口,"Security management entrance"
+请输入管理员账号,"Please enter the admin account"
+验证码,"Verification code"
+请输入验证码,"Please enter the verification code"
+刷新验证码,"Refresh verification code"
+在受信任设备上记住我,"Remember me on trusted devices"
+登录,"Log in"
 登录中…,Login...
-安全后台入口,Secure backend entrance
+安全后台入口,"Secure backend entrance"
 内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。,"Content, configuration, permissions and publishing actions are all completed in the unified backend. Please only log in from trusted devices and network environments."
-连续异常登录会自动提高验证强度。,Continuous abnormal logins will automatically increase the verification strength.
+连续异常登录会自动提高验证强度。,"Continuous abnormal logins will automatically increase the verification strength."
 配置、权限与模块维护在同一工作台闭环处理。,"Configuration, permissions and module maintenance are processed in a closed loop on the same workbench."
-仅在可信环境保存登录状态。,Save login status only in trusted environments.
-管理员登录,Administrator login
-访问后台前需要验证身份,Identity verification is required before accessing the backend
-点击刷新验证码,Click to refresh the verification code.
-记住我,Remember Me
-仅在你确认可信的设备和网络环境中保存登录状态。,Only save login state on trusted devices and network environments.
-WelineFramework Admin,WelineFramework Admin
+仅在可信环境保存登录状态。,"Save login status only in trusted environments."
+管理员登录,"Administrator login"
+访问后台前需要验证身份,"Identity verification is required before accessing the backend"
+点击刷新验证码,"Click to refresh the verification code."
+记住我,"Remember Me"
+仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
+"WelineFramework Admin","WelineFramework Admin"
 WelineFramework,WelineFramework
 记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
-当前认证会话无效。,The current authenticated session is invalid.
-认证设备服务不可用。,Authenticated device service is unavailable.
-最近访问,Recently Visited
-访问最多,Most Visited
-搜索菜单或配置,Search menu or config
-搜索菜单或配置…,Search menu or config…
-没有匹配的菜单或配置,No matching menu or config
-后台侧栏导航搜索扩展,Backend sidebar nav search extras
-在后台左侧栏搜索列表末尾注入额外可搜索条目（例如统一配置中心配置项）。,Inject extra searchable entries at the end of the backend left sidebar search list (for example System Config fields).
-管理员管理,Administrator Management
-请输入验证码！,Please enter the verification code!
-验证码错误！,Incorrect verification code!
+当前认证会话无效。,"The current authenticated session is invalid."
+认证设备服务不可用。,"Authenticated device service is unavailable."
+最近访问,"Recently Visited"
+访问最多,"Most Visited"
+搜索菜单或配置,"Search menu or config"
+搜索菜单或配置…,"Search menu or config…"
+没有匹配的菜单或配置,"No matching menu or config"
+后台侧栏导航搜索扩展,"Backend sidebar nav search extras"
+在后台左侧栏搜索列表末尾注入额外可搜索条目（例如统一配置中心配置项）。,"Inject extra searchable entries at the end of the backend left sidebar search list (for example System Config fields)."
+管理员管理,"Administrator Management"
+请输入验证码！,"Please enter the verification code!"
+验证码错误！,"Incorrect verification code!"
 错误！,Error!
 提示！,Prompt!
 警告！,Warning!
-异常警告！,Exception warning!
-操作成功！,Operation successful!
-常用菜单,Frequently Used Menus
-确认操作,Confirm operation
-请重试,Please try again
-加载失败,Load failed
+异常警告！,"Exception warning!"
+操作成功！,"Operation successful!"
+常用菜单,"Frequently Used Menus"
+确认操作,"Confirm operation"
+请重试,"Please try again"
+加载失败,"Load failed"
 输入,Input
-布局预设配置包,Layout Preset Configuration Package
-选择布局预设,Select Layout Preset
-默认布局,Default Layout
-浅色侧边栏,Light Sidebar
-深色菜单,Dark menu
-图标侧边栏,Icon Sidebar
-紧凑侧边栏,Compact Sidebar
-水平布局,Horizontal Layout
-水平布局（深色顶部栏）,Horizontal Layout (Dark Topbar)
-水平布局（盒装宽度）,Horizontal Layout (Boxed Width)
-盒装布局,Boxed Layout
+布局预设配置包,"Layout Preset Configuration Package"
+选择布局预设,"Select Layout Preset"
+默认布局,"Default Layout"
+浅色侧边栏,"Light Sidebar"
+深色菜单,"Dark menu"
+图标侧边栏,"Icon Sidebar"
+紧凑侧边栏,"Compact Sidebar"
+水平布局,"Horizontal Layout"
+水平布局（深色顶部栏）,"Horizontal Layout (Dark Topbar)"
+水平布局（盒装宽度）,"Horizontal Layout (Boxed Width)"
+盒装布局,"Boxed Layout"
 选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
-主题颜色,Theme Color
-选择主题模式,Select Theme Mode
-RTL模式,RTL Mode
-登录保护,Login protection
+主题颜色,"Theme Color"
+选择主题模式,"Select Theme Mode"
+RTL模式,"RTL Mode"
+登录保护,"Login protection"
 连续异常登录会自动提高验证强度，减少后台入口暴露面。,"Consecutive abnormal logins will automatically increase verification strength, reducing the exposure of the backend entry point."
-统一工作台,Unified Workbench
+统一工作台,"Unified Workbench"
 内容、配置、权限和模块操作都在同一后台闭环处理。,"Content, configuration, permissions, and module operations are all processed in the same backend closed loop."
-可信发布,Trusted Release
+可信发布,"Trusted Release"
 后台入口、品牌标识和基础样式都保持统一的可回退策略。,"Background entry, brand identity, and base styles all maintain a consistent fallback strategy."
-权限边界清晰,Clear permission boundaries
+权限边界清晰,"Clear permission boundaries"
 角色、菜单与访问入口统一受控。,"Roles, menus, and access points are centrally managed."
-发布动作集中,Publish action set
+发布动作集中,"Publish action set"
 配置调整、内容发布和模块维护在同一工作流里完成。,"Configuration adjustments, content publishing, and module maintenance are completed within the same workflow."
-受信任环境,Trusted Environment
-仅在可信设备和网络环境中保存登录状态。,Only save login state on trusted devices and network environments.
-账号开通,Account Activation
-密码重置,Reset Password
-权限分配,Permission assignment
-后台安全入口,Backend Security Entry
-把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里,"Consolidate the configuration, permissions, and publishing process of %{name} into a single backend workspace"
+受信任环境,"Trusted Environment"
+仅在可信设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
+账号开通,"Account Activation"
+密码重置,"Reset Password"
+权限分配,"Permission assignment"
+后台安全入口,"Backend Security Entry"
+"把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里","Consolidate the configuration, permissions, and publishing process of %{name} into a single backend workspace"
 这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。,"This is used for handling content publishing, configuration adjustments, permission assignment, and module maintenance. After logging in, you can continue your previous backend operation context."
-保持后台环境可信,Keep Backend Environment Trustworthy
+保持后台环境可信,"Keep Backend Environment Trustworthy"
 建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。,"Suggestion: Only save login status on trusted devices; if abnormal locking, account status changes, or missing permissions are detected, contact the super administrator for handling."
-安全入口,safe entrance
-欢迎回来,Welcome back
+安全入口,"safe entrance"
+欢迎回来,"Welcome back"
 输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,"Enter the admin account to proceed with backend tasks, configuration changes, and permission operations."
-安全验证已启用,Security verification enabled
-登录中,Logging in
-管理员账号由超级管理员统一开通与维护,Admin accounts are created and maintained uniformly by the super admin
+安全验证已启用,"Security verification enabled"
+登录中,"Logging in"
+管理员账号由超级管理员统一开通与维护,"Admin accounts are created and maintained uniformly by the super admin"
 如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,"To reset your password, unlock your account, or supplement backend permissions, please contact an existing super administrator."
-若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。,"If no custom admin logo is configured, the login page will automatically fall back to the built-in Weline logo."
-Toggle light/dark mode,Toggle light/dark mode
-主题色系切换,Theme color switch
-用户不存在！,User does not exist!
-事件管理,Event management
-用户列表,User list
+"若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。","If no custom admin logo is configured, the login page will automatically fall back to the built-in Weline logo."
+"Toggle light/dark mode","Toggle light/dark mode"
+主题色系切换,"Theme color switch"
+用户不存在！,"User does not exist!"
+事件管理,"Event management"
+用户列表,"User list"
