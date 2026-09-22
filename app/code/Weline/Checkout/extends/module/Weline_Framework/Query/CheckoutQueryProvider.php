@@ -482,6 +482,26 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         }
 
+        // 改券/改运费后：废掉金额漂移的 pending 支付，下次续付按新 grand 重开。
+        $authorityMinor = (int)($result['totals']['grand_total_minor'] ?? 0);
+        if ($authorityMinor > 0) {
+            try {
+                /** @var \Weline\Checkout\Api\CheckoutSessionStoreInterface $sessions */
+                $sessions = ObjectManager::getInstance(\Weline\Checkout\Api\CheckoutSessionStoreInterface::class);
+                $raw = $sessions->get($quoteToken);
+                $idem = is_array($raw) ? trim((string)($raw['idempotency_key'] ?? '')) : '';
+                if ($idem !== '') {
+                    $this->paymentRecoveryState->invalidatePendingIfAmountDrifted(
+                        $quoteToken,
+                        $idem,
+                        $authorityMinor,
+                        [$orderUuid],
+                    );
+                }
+            } catch (\Throwable) {
+            }
+        }
+
         return [
             'success' => true,
             'address' => $result['address'] ?? $address,
@@ -523,6 +543,17 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 customerId: $this->currentCustomerId(),
             );
             $existingPayment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
+            if (is_array($existingPayment) && !$this->paymentRecoveryState->canRetry($quoteToken, $idempotencyKey)) {
+                // 续付改券/运费后订单权威金额变了，禁止回放旧 pending PayPal（否则会出现页 15.90、网关 16.69）。
+                $authorityMinor = $this->resolveOrdersAuthorityAmountMinor($result->orderUuids);
+                $this->paymentRecoveryState->invalidatePendingIfAmountDrifted(
+                    $quoteToken,
+                    $idempotencyKey,
+                    $authorityMinor,
+                    $result->orderUuids,
+                );
+                $existingPayment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
+            }
             if (is_array($existingPayment) && !$this->paymentRecoveryState->canRetry($quoteToken, $idempotencyKey)) {
                 return $this->createdCheckoutResponse($result, $quoteToken, $existingPayment);
             }
@@ -641,6 +672,51 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'payment' => $payment,
             'data' => $result->toArray(),
         ];
+    }
+
+    /**
+     * Sum current unpaid-order money authority (post-amend coupon/shipping).
+     *
+     * @param list<string> $orderUuids
+     */
+    private function resolveOrdersAuthorityAmountMinor(array $orderUuids): int
+    {
+        $sum = 0;
+        foreach ($orderUuids as $orderUuid) {
+            $orderUuid = trim((string)$orderUuid);
+            if ($orderUuid === '') {
+                continue;
+            }
+            try {
+                /** @var \Weline\Order\Model\Order $order */
+                $order = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+                $order->clear()
+                    ->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $orderUuid)
+                    ->find()
+                    ->fetch();
+                if (!(int)$order->getData(\Weline\Order\Model\Order::schema_fields_ID)) {
+                    continue;
+                }
+                $moneyRaw = $order->getData(\Weline\Order\Model\Order::schema_fields_MONEY_SNAPSHOT_JSON);
+                $money = [];
+                if (is_string($moneyRaw) && $moneyRaw !== '') {
+                    $decoded = json_decode($moneyRaw, true);
+                    if (is_array($decoded)) {
+                        $money = $decoded;
+                    }
+                } elseif (is_array($moneyRaw)) {
+                    $money = $moneyRaw;
+                }
+                $minor = (int)($money['grand_total_minor'] ?? 0);
+                if ($minor <= 0) {
+                    $minor = (int)round(((float)$order->getData(\Weline\Order\Model\Order::schema_fields_GRAND_TOTAL)) * 100);
+                }
+                $sum += max(0, $minor);
+            } catch (\Throwable) {
+            }
+        }
+
+        return $sum;
     }
 
     /**

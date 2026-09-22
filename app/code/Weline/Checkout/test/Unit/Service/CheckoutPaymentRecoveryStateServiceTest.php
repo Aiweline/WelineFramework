@@ -195,4 +195,51 @@ final class CheckoutPaymentRecoveryStateServiceTest extends TestCase
         self::assertNotEmpty($history);
         self::assertSame('pending', $history[0]['outcome'] ?? null);
     }
+
+    public function testInvalidatePendingIfAmountDriftedForcesRetry(): void
+    {
+        $store = new InMemoryCheckoutSessionStore();
+        $store->put('qt_drift_1', [
+            'state' => CheckoutSession::STATE_SUBMITTED,
+            'idempotency_key' => 'order-idem-drift',
+            'submitted_result' => ['order_uuids' => ['order-drift']],
+            'payment_result' => [
+                'paid' => false,
+                'outcome' => 'pending',
+                'status' => 'pending',
+                'recoverable' => false,
+                'amount_minor' => 1669,
+                'redirect_url' => 'https://www.sandbox.paypal.com/checkoutnow?token=stale',
+            ],
+        ]);
+        $service = new CheckoutPaymentRecoveryStateService($store);
+
+        self::assertFalse($service->canRetry('qt_drift_1', 'order-idem-drift'));
+        self::assertTrue($service->invalidatePendingIfAmountDrifted(
+            'qt_drift_1',
+            'order-idem-drift',
+            1590,
+            ['order-drift'],
+        ));
+        self::assertTrue($service->canRetry('qt_drift_1', 'order-idem-drift'));
+        $payment = $service->get('qt_drift_1', 'order-idem-drift');
+        self::assertSame('failed', $payment['outcome']);
+        self::assertSame('amount_drift', $payment['cancel_source'] ?? null);
+        self::assertSame(1669, (int)($payment['stale_amount_minor'] ?? 0));
+        self::assertSame(1590, (int)($payment['authority_amount_minor'] ?? 0));
+
+        // Same amount → no invalidate.
+        $service->record('qt_drift_1', 'order-idem-drift', [
+            'paid' => false,
+            'outcome' => 'pending',
+            'status' => 'pending',
+            'amount_minor' => 1590,
+        ]);
+        self::assertFalse($service->invalidatePendingIfAmountDrifted(
+            'qt_drift_1',
+            'order-idem-drift',
+            1590,
+            ['order-drift'],
+        ));
+    }
 }

@@ -118,6 +118,115 @@ final class CheckoutPaymentRecoveryStateService
     }
 
     /**
+     * When unpaid order money changed (coupon/shipping amend) but payment_result is still
+     * pending with a stale redirect amount, flip pending→failed so resumePaymentV2 recreates
+     * the provider charge at the current order grand_total.
+     *
+     * @param list<string> $orderUuids
+     */
+    public function invalidatePendingIfAmountDrifted(
+        string $quoteToken,
+        string $orderIdempotencyKey,
+        int $authorityAmountMinor,
+        array $orderUuids = [],
+    ): bool {
+        $payment = $this->get($quoteToken, $orderIdempotencyKey);
+        if (!is_array($payment)) {
+            return false;
+        }
+        $outcome = strtolower(trim((string)($payment['outcome'] ?? '')));
+        if ($outcome !== 'pending') {
+            return false;
+        }
+        $authorityAmountMinor = max(0, $authorityAmountMinor);
+        if ($authorityAmountMinor <= 0) {
+            return false;
+        }
+        $pendingMinor = $this->resolveRecordedAmountMinor($payment, $orderUuids);
+        if ($pendingMinor <= 0 || $pendingMinor === $authorityAmountMinor) {
+            return false;
+        }
+
+        return $this->markBrowserCancel($quoteToken, $orderIdempotencyKey, [
+            'cancel_source' => 'amount_drift',
+            'stale_amount_minor' => $pendingMinor,
+            'authority_amount_minor' => $authorityAmountMinor,
+            'message' => 'Order amount changed; recreating payment at current grand total.',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $payment
+     * @param list<string> $orderUuids
+     */
+    private function resolveRecordedAmountMinor(array $payment, array $orderUuids = []): int
+    {
+        $fromResult = (int)($payment['amount_minor'] ?? 0);
+        if ($fromResult > 0) {
+            return $fromResult;
+        }
+        $fromTotals = (int)($payment['totals']['grand_total_minor'] ?? 0);
+        if ($fromTotals > 0) {
+            return $fromTotals;
+        }
+        $txSum = 0;
+        $txs = is_array($payment['transactions'] ?? null) ? $payment['transactions'] : [];
+        foreach ($txs as $tx) {
+            if (!is_array($tx)) {
+                continue;
+            }
+            $txSum += max(0, (int)($tx['amount_minor'] ?? 0));
+        }
+        if ($txSum > 0) {
+            return $txSum;
+        }
+
+        return $this->resolvePendingTransactionAmountMinor($orderUuids);
+    }
+
+    /**
+     * @param list<string> $orderUuids
+     */
+    private function resolvePendingTransactionAmountMinor(array $orderUuids): int
+    {
+        $sum = 0;
+        foreach ($orderUuids as $orderUuid) {
+            $orderUuid = trim((string)$orderUuid);
+            if ($orderUuid === '') {
+                continue;
+            }
+            try {
+                /** @var \Weline\Payment\Model\PaymentTransaction $tx */
+                $tx = ObjectManager::getInstance(\Weline\Payment\Model\PaymentTransaction::class);
+                $rows = $tx->clear()
+                    ->where(\Weline\Payment\Model\PaymentTransaction::schema_fields_ORDER_ID, $orderUuid)
+                    ->where(
+                        \Weline\Payment\Model\PaymentTransaction::schema_fields_STATUS,
+                        [
+                            \Weline\Payment\Model\PaymentTransaction::STATUS_PENDING,
+                            \Weline\Payment\Model\PaymentTransaction::STATUS_PROCESSING,
+                        ],
+                        'IN',
+                    )
+                    ->order(\Weline\Payment\Model\PaymentTransaction::schema_fields_ID, 'DESC')
+                    ->limit(1)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                foreach ($rows as $row) {
+                    if (!is_object($row) || !method_exists($row, 'getData')) {
+                        continue;
+                    }
+                    $sum += (int)round(((float)$row->getData(\Weline\Payment\Model\PaymentTransaction::schema_fields_AMOUNT)) * 100);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return max(0, $sum);
+    }
+
+    /**
      * Browser cancel/failure: flip pending→failed so resumePaymentV2 canRetry works.
      * Appends prior payment_result into payment_attempt_history via record().
      *

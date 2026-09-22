@@ -69,6 +69,7 @@ final class CheckoutOrderPaymentService
         $notificationPending = false;
         $redirectUrl = null;
         $lastPurpose = '';
+        $chargedAmountMinor = 0;
         foreach ($orderUuids as $orderUuid) {
             $order = $this->orders->get($orderUuid);
             $hangPurpose = $this->resolveHangPurpose(
@@ -320,8 +321,10 @@ final class CheckoutOrderPaymentService
                 'transaction_no' => $transaction->transactionNumber,
                 'method_code' => $transaction->methodCode,
                 'status' => $status,
+                'amount_minor' => $amountMinor,
                 'response' => $safeResponse,
             ];
+            $chargedAmountMinor += max(0, $amountMinor);
             if ($paid) {
                 try {
                     if ($hangPurpose === 'deposit') {
@@ -377,6 +380,8 @@ final class CheckoutOrderPaymentService
             'recoverable' => !in_array($outcome, ['paid', 'partial'], true) && !$notificationPending,
             'redirect_url' => $redirectUrl,
             'transactions' => $transactions,
+            // 续付金额漂移检测：pending 跳转金额须与订单权威 grand 对齐。
+            'amount_minor' => $chargedAmountMinor,
         ];
         if ($lastPurpose !== '') {
             $result['purpose'] = $lastPurpose;
