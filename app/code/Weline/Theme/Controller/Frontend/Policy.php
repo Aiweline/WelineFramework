@@ -142,8 +142,9 @@ class Policy extends FrontendController
         ];
         
         $title = $titles[$layout] ?? $titles['default'];
-        $this->assign('title', $title);
-        $this->assignThemeShellSeo((string)__($title), 'policy');
+        $translatedTitle = \Weline\Theme\Helper\WidgetI18n::label($title);
+        $this->assign('title', $translatedTitle);
+        $this->assignThemeShellSeo($translatedTitle, 'policy');
         
         $this->layoutType = 'policy.' . $layout;
         $this->request->setGet('page_type', 'policy');
@@ -249,9 +250,11 @@ class Policy extends FrontendController
         ];
         if (!in_array($pageType, $privateTypes, true)) {
             $seo['breadcrumbs'] = [
-                ['name' => (string)__('首页'), 'url' => '/'],
+                ['name' => \Weline\Theme\Helper\WidgetI18n::label('首页'), 'url' => '/'],
                 ['name' => $title, 'url' => ''],
             ];
+            // Visible Theme breadcrumb partial reads template `breadcrumbs` (not only the seo bag).
+            $this->assign('breadcrumbs', $seo['breadcrumbs']);
         }
 
         $this->assign('seo', $seo);

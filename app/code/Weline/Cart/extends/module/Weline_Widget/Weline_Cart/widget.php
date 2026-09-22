@@ -81,6 +81,8 @@ return [
             'product-add-to-cart',
             'add-to-cart',
         ],
+        // placement=injection：PDP 购买槽只留空槽；同身份禁止 product-info 内嵌 fetch。
+        'placement' => 'injection',
         'default_injections' => [[
             'layout_type' => 'product',
             'layout_option' => 'default',

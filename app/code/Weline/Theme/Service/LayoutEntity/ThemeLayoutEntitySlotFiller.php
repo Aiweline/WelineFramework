@@ -539,10 +539,10 @@ final class ThemeLayoutEntitySlotFiller
             }
         }
 
-        // Nested chrome slots are emitted as siblings in chrome.phtml (e.g.
-        // header-nav-extensions / footer-about-links) while the page shell keeps
-        // matching empty markers under header/footer. Inject roots first, then nested.
-        foreach ($this->orderChromeSlotsForInjection(\array_keys($bestInnerBySlot)) as $slotId) {
+        // Nested chrome slots are siblings in chrome.phtml while the page shell
+        // keeps markers under header/footer. Fill by shell layout position only
+        // (deeper first, then document order) — never by slot-id name/length.
+        foreach ($this->orderSlotsByShellLayout($html, \array_keys($bestInnerBySlot)) as $slotId) {
             $html = $this->replaceSlotInner($html, $slotId, $bestInnerBySlot[$slotId]);
         }
 
@@ -567,33 +567,6 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
-     * Roots first so nested page markers inside header/footer survive, then
-     * nested chrome slots (longer ids) fill header-nav-extensions etc.
-     *
-     * @param list<string> $slotIds
-     * @return list<string>
-     */
-    private function orderChromeSlotsForInjection(array $slotIds): array
-    {
-        $roots = [];
-        $nested = [];
-        foreach ($slotIds as $slotId) {
-            $slotId = \strtolower(\trim((string)$slotId));
-            if ($slotId === '') {
-                continue;
-            }
-            if (\in_array($slotId, SharedChromeService::CHROME_SLOTS, true)) {
-                $roots[$slotId] = $slotId;
-            } else {
-                $nested[$slotId] = $slotId;
-            }
-        }
-        \usort($nested, static fn(string $a, string $b): int => \strlen($b) <=> \strlen($a));
-
-        return \array_values(\array_merge(\array_values($roots), $nested));
-    }
-
-    /**
      * @param list<string> $slotIds
      */
     private function composeChromeSlotTree(string $chromeHtml, array $slotIds): string
@@ -611,9 +584,9 @@ final class ThemeLayoutEntitySlotFiller
             }
         }
 
-        \uksort($preferred, static fn(string $a, string $b): int => \strlen($b) <=> \strlen($a));
-        foreach ($preferred as $slotId => $inner) {
-            $chromeHtml = $this->replaceAllSlotInners($chromeHtml, $slotId, $inner);
+        // Apply by chrome layout position — never by slot-id name/length.
+        foreach ($this->orderSlotsByShellLayout($chromeHtml, \array_keys($preferred)) as $slotId) {
+            $chromeHtml = $this->replaceAllSlotInners($chromeHtml, $slotId, $preferred[$slotId]);
         }
 
         return $chromeHtml;
@@ -1147,10 +1120,17 @@ final class ThemeLayoutEntitySlotFiller
         $seen = [];
         foreach ($matches[1] as $slotId) {
             $slotId = (string)$slotId;
-            if (isset($seen[$slotId])) {
+            if ($slotId === '' || isset($seen[$slotId])) {
                 continue;
             }
             $seen[$slotId] = true;
+        }
+        // Layout document order only — NEVER sort by slot-id name/length.
+        // Children before parents (nesting depth in the shell), then open-marker
+        // position in the shell. That keeps homepage-hero at the top of content.
+        $ordered = $this->orderSlotsByShellLayout($html, \array_keys($seen));
+
+        foreach ($ordered as $slotId) {
             $inner = $this->boundaryScanner->extractSlotInner($rendered, $slotId, false, true);
             if ($inner === null) {
                 continue;
@@ -1160,10 +1140,162 @@ final class ThemeLayoutEntitySlotFiller
             if (trim($inner) === '') {
                 continue;
             }
+            // Homepage shell nests homepage-hero/promo/videos under content. Entity
+            // layout emits those as sibling top-level slots; a full content replace
+            // would wipe nested markers (and any already-spliced children).
+            // Always preserve when the shell still carries any homepage-* open marker,
+            // even if the entity leaf omitted that slot id from $ordered.
+            if ($slotId === 'content' && $this->shellContentCarriesHomepageNestedSlots($html)) {
+                $html = $this->mergeParentSlotPreservingNested($html, $slotId, $inner, $ordered);
+                continue;
+            }
+            if ($this->shellSlotInnerHasProtectedNestedSlots($html, $slotId, $ordered)) {
+                $html = $this->mergeParentSlotPreservingNested($html, $slotId, $inner, $ordered);
+                continue;
+            }
             $html = $this->replaceSlotInner($html, $slotId, $inner);
         }
 
         return $html;
+    }
+
+    /**
+     * Order entity slots by layout position in the shell HTML.
+     *
+     * Deeper nested markers first (so parent merge cannot erase children), then
+     * ascending open-marker offset (document order). Forbidden: name/length sorts.
+     *
+     * @param list<string> $slotIds
+     * @return list<string>
+     */
+    private function orderSlotsByShellLayout(string $shellHtml, array $slotIds): array
+    {
+        /** @var array<string, array{pos:int,inner_start:int,close:int,depth:int}> $meta */
+        $meta = [];
+        foreach ($slotIds as $slotId) {
+            $slotId = \strtolower(\trim((string)$slotId));
+            if ($slotId === '') {
+                continue;
+            }
+            try {
+                $open = SlotBoundaryMarkers::open($slotId);
+                $close = SlotBoundaryMarkers::close($slotId);
+            } catch (\InvalidArgumentException) {
+                continue;
+            }
+            $openPos = \strpos($shellHtml, $open);
+            if ($openPos === false) {
+                // Not on shell: process after layout-positioned slots (entity-only).
+                $meta[$slotId] = [
+                    'pos' => \PHP_INT_MAX,
+                    'inner_start' => \PHP_INT_MAX,
+                    'close' => \PHP_INT_MAX,
+                    'depth' => -1,
+                ];
+                continue;
+            }
+            $innerStart = $openPos + \strlen($open);
+            $closePos = \strpos($shellHtml, $close, $innerStart);
+            $meta[$slotId] = [
+                'pos' => $openPos,
+                'inner_start' => $innerStart,
+                'close' => $closePos === false ? $innerStart : $closePos,
+                'depth' => 0,
+            ];
+        }
+
+        foreach ($meta as $id => $m) {
+            if ($m['pos'] === \PHP_INT_MAX) {
+                continue;
+            }
+            $depth = 0;
+            foreach ($meta as $otherId => $other) {
+                if ($otherId === $id || $other['pos'] === \PHP_INT_MAX) {
+                    continue;
+                }
+                if ($other['inner_start'] <= $m['pos'] && $m['pos'] < $other['close']) {
+                    ++$depth;
+                }
+            }
+            $meta[$id]['depth'] = $depth;
+        }
+
+        $ordered = \array_keys($meta);
+        \usort(
+            $ordered,
+            static function (string $a, string $b) use ($meta): int {
+                $depthCmp = $meta[$b]['depth'] <=> $meta[$a]['depth'];
+                if ($depthCmp !== 0) {
+                    return $depthCmp;
+                }
+
+                return $meta[$a]['pos'] <=> $meta[$b]['pos'];
+            },
+        );
+
+        return $ordered;
+    }
+
+    /**
+     * @param list<string> $entitySlotIds
+     */
+    private function shellSlotInnerHasProtectedNestedSlots(
+        string $html,
+        string $slotId,
+        array $entitySlotIds,
+    ): bool {
+        $shellInner = $this->boundaryScanner->extractSlotInner($html, $slotId, false, true);
+        if ($shellInner === null || $shellInner === '') {
+            return false;
+        }
+        foreach ($entitySlotIds as $childId) {
+            if ($childId === $slotId) {
+                continue;
+            }
+            if (\str_contains($shellInner, SlotBoundaryMarkers::OPEN_PREFIX . $childId . '-->')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * True when homepage content still carries nested homepage-* slot opens.
+     * Used as a hard guard so sparse content widgets (trust-badges/store-music)
+     * cannot erase the slot tree before children are spliced.
+     */
+    private function shellContentCarriesHomepageNestedSlots(string $html): bool
+    {
+        $shellInner = $this->boundaryScanner->extractSlotInner($html, 'content', false, true);
+        if ($shellInner === null || $shellInner === '') {
+            return false;
+        }
+
+        return \str_contains($shellInner, SlotBoundaryMarkers::OPEN_PREFIX . 'homepage-');
+    }
+
+    /**
+     * Prepend entity parent widgets; keep shell nested slot document order.
+     *
+     * Nested children were already spliced in-place by layout position.
+     * Do NOT rebuild by slot-id name/length — layout position is authoritative.
+     *
+     * @param list<string> $entitySlotIds unused; kept for call-site stability
+     */
+    private function mergeParentSlotPreservingNested(
+        string $html,
+        string $slotId,
+        string $entityInner,
+        array $entitySlotIds,
+    ): string {
+        unset($entitySlotIds);
+        $shellInner = (string)$this->boundaryScanner->extractSlotInner($html, $slotId, false, true);
+        if (trim($shellInner) === '') {
+            return $this->replaceSlotInner($html, $slotId, $entityInner);
+        }
+
+        return $this->replaceSlotInner($html, $slotId, $entityInner . $shellInner);
     }
 
     private function primeLocaleConfigs(

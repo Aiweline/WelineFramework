@@ -14,6 +14,11 @@ $toc = [
     ['id' => 'shipping-s7', 'label' => __('七、发票与配送凭证')],
     ['id' => 'shipping-s8', 'label' => __('八、联系我们')],
 ];
+$tocPath = '/guide/shipping';
+$rawPath = \function_exists('w_env_request_uri') ? (string)(\parse_url((string)\w_env_request_uri(), PHP_URL_PATH) ?: '') : '';
+if ($rawPath !== '' && $rawPath !== '/') {
+    $tocPath = $rawPath;
+}
 ?>
 <article class="amazon-doc" data-testid="shipping-guide" weline-code="shipping.guide">
     <style>
@@ -38,15 +43,15 @@ $toc = [
             border: 1px solid #ddd;
             border-radius: 8px;
             box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
-            overflow: hidden;
+            /* no overflow:hidden — bare #anchors break under storefront <base href="/"> */
         }
-        .amazon-doc__toc { padding: 1.1rem 1rem 1.25rem; border-right: 1px solid #e3e6e6; background: #fafafa; }
+        .amazon-doc__toc { border-radius: 8px 0 0 8px; padding: 1.1rem 1rem 1.25rem; border-right: 1px solid #e3e6e6; background: #fafafa; }
         .amazon-doc__toc h2 { margin: 0 0 .7rem; font-size: .95rem; }
         .amazon-doc__toc nav { display: grid; gap: .3rem; }
         .amazon-doc__toc a { display: block; padding: .35rem .5rem; border-radius: 4px; color: #007185; text-decoration: none; font-size: .9rem; line-height: 1.35; }
         .amazon-doc__toc a:hover { background: #f7fafa; color: #c45500; text-decoration: underline; }
-        .amazon-doc__body { padding: clamp(1.1rem, 2.4vw, 1.65rem); }
-        .amazon-doc__section { margin-top: 1.35rem; scroll-margin-top: 1rem; }
+        .amazon-doc__body { border-radius: 0 8px 8px 0; padding: clamp(1.1rem, 2.4vw, 1.65rem); }
+        .amazon-doc__section { margin-top: 1.35rem; scroll-margin-top: 12rem; }
         .amazon-doc__section:first-of-type { margin-top: 0; }
         .amazon-doc__section h2 { margin: 0 0 .7rem; font-size: 1.15rem; border-left: 4px solid #ff9900; padding-left: .65rem; }
         .amazon-doc__section p, .amazon-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: #333; }
@@ -56,7 +61,8 @@ $toc = [
         .amazon-doc__related a:hover { color: #c45500; text-decoration: underline; }
         @media (max-width: 900px) {
             .amazon-doc__panel { grid-template-columns: 1fr; }
-            .amazon-doc__toc { border-right: 0; border-bottom: 1px solid #e3e6e6; }
+            .amazon-doc__toc { border-right: 0; border-bottom: 1px solid #e3e6e6; border-radius: 8px 8px 0 0; }
+            .amazon-doc__body { border-radius: 0 0 8px 8px; }
             .amazon-doc__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
@@ -67,7 +73,7 @@ $toc = [
     <header class="amazon-doc__hero" aria-labelledby="shipping-title">
         <p class="amazon-doc__eyebrow"><lang>帮助中心</lang></p>
         <h1 id="shipping-title"><lang>配送说明</lang></h1>
-        <p><lang>本页说明发货时效、配送范围、运费计算、物流跟踪、签收与异常处理。下单前请完整阅读；商品页若标注预售、定制或特殊物流规则，以商品页为准。</lang></p>
+        <p><lang>本站由中国大陆仓库发往海外。本页说明发货与参考送达时效、运费、跟踪、签收与异常处理。下单前请完整阅读；商品页预售/定制规则优先。</lang></p>
     </header>
 
     <div class="amazon-doc__panel">
@@ -75,7 +81,7 @@ $toc = [
             <h2><lang>目录</lang></h2>
             <nav>
                 <?php foreach ($toc as $item): ?>
-                    <a href="#<?= htmlspecialchars($item['id'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$item['label'], ENT_QUOTES, 'UTF-8') ?></a>
+                    <a href="<?= htmlspecialchars($tocPath . '#' . $item['id'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$item['label'], ENT_QUOTES, 'UTF-8') ?></a>
                 <?php endforeach; ?>
             </nav>
         </aside>
@@ -83,49 +89,51 @@ $toc = [
         <div class="amazon-doc__body">
             <section class="amazon-doc__section" id="shipping-s1" weline-code="shipping.guide.shipping.s1">
                 <h2><lang>一、发货时效</lang></h2>
-                <p><lang>1.1 现货订单：付款成功后，我们将在 1–3 个工作日内完成拣货、质检并发出（法定节假日与物流高峰期可能顺延）。</lang></p>
-                <p><lang>1.2 预售 / 定制 / 定金商品：发货时间以商品详情页或订单确认信息中的承诺时效为准。若因工艺、面料或尺码确认延迟，我们会通过站内消息或订单备注及时告知。</lang></p>
-                <p><lang>1.3 合并发货：同一收货地址、同一账户的多笔可合并订单，在不影响时效承诺的前提下可能合并为一包裹发出；不可合并的情况（不同仓库、不同承运要求、预售混现货等）将分别发货。</lang></p>
-                <p><lang>1.4 缺货与拆单：若部分商品暂时缺货，我们将优先发出有货商品，并就剩余商品给出补发时间或退款方案，不会无故取消整单。</lang></p>
+                <p><lang>1.1 工作日指中国大陆法定工作日。现货订单付款成功后，我们通常在 1–5 个工作日内拣货、质检并发出（中国法定节假日与物流高峰可能顺延）。</lang></p>
+                <p><lang>1.2 国际送达参考：发货后约 7–25 个工作日（视航线、旺季、海关而定）。结算页预计送达仅为估算，不保证固定到货日；海关查验与干线空窗期不单独计为延误违约。</lang></p>
+                <p><lang>1.3 预售 / 定制 / 定金：以商品页或订单确认信息为准。工艺、面料或尺码确认导致的延迟，我们会通过站内消息或订单备注告知。</lang></p>
+                <p><lang>1.4 合并与拆单：同一地址可合并的订单可能并包发出；缺货时可能先发有货部分并告知补发或退款方案，不无故整单取消。</lang></p>
             </section>
 
             <section class="amazon-doc__section" id="shipping-s2" weline-code="shipping.guide.shipping.s2">
                 <h2><lang>二、配送范围</lang></h2>
-                <p><lang>2.1 我们支持中国大陆多数省市自治区配送。港澳台及海外地区是否开通，以结账页可选配送方式及运费计算结果为准。</lang></p>
-                <p><lang>2.2 偏远地区、岛屿、牧区或需二次中转的地址，可能仅支持指定承运商，时效也可能长于常规区域。</lang></p>
-                <p><lang>2.3 如收货地址无法派送，客服会与您确认更改地址或安排退款；因地址信息不完整导致的延误，需由买家配合更正。</lang></p>
+                <p><lang>2.1 发货地为中国大陆。海外及跨境地址是否可配送、可选航线与运费，以结账页计算结果为准。</lang></p>
+                <p><lang>2.2 偏远岛屿、需多次中转或当地承运商覆盖弱的地址，可能仅支持指定渠道，时效长于常规航线。</lang></p>
+                <p><lang>2.3 地址无法派送或不完整时，需您配合更正；因此产生的滞留、退回或改派费用可能由买家承担。</lang></p>
             </section>
 
             <section class="amazon-doc__section" id="shipping-s3" weline-code="shipping.guide.shipping.s3">
                 <h2><lang>三、运费与包邮</lang></h2>
-                <p><lang>3.1 运费按收货地区、包裹重量/体积、所选配送服务在结账页实时计算，下单前可在结算页查看最终金额。</lang></p>
-                <p><lang>3.2 满足活动门槛（如满额包邮、会员包邮、指定活动）时，结账页会自动减免运费；活动规则以活动页或结算提示为准。</lang></p>
-                <p><lang>3.3 加急、保价、指定快递、到付等增值服务如有开通，将单独计费并在结算时明示。</lang></p>
-                <p><lang>3.4 因买家原因（拒收、地址错误、长期无人签收）导致退回的，可能需要买家承担退回运费或补差价后重发。</lang></p>
+                <p><lang>3.1 运费按目的地、重量/体积与国际航线在结账页计算，下单前请确认最终金额。</lang></p>
+                <p><lang>3.2 满额包邮等活动一般只减免去程标准运费，不含关税、清关、回程或二次派送；规则以活动页与结算提示为准。</lang></p>
+                <p><lang>3.3 加急、保价等增值服务如有开通，将单独计费并在结算时明示。</lang></p>
+                <p><lang>3.4 因拒收、地址错误、长期无人签收、清关失败导致退回或销毁的，退回/滞留费用通常由买家承担，重发需补差价。</lang></p>
             </section>
 
             <section class="amazon-doc__section" id="shipping-s4" weline-code="shipping.guide.shipping.s4">
                 <h2><lang>四、物流跟踪</lang></h2>
-                <p><lang>4.1 发货后，可在「我的订单」查看承运商、运单号与物流节点。部分承运商数据同步可能有 2–12 小时延迟。</lang></p>
-                <p><lang>4.2 若运单长时间无更新：请先确认是否逢周末、法定节假日或极端天气；仍无进展时，可通过帮助中心「联系客服」并提供订单号协助查询。</lang></p>
-                <p><lang>4.3 请保持下单手机畅通，以便快递员派送与驿站取件通知。需要改派自提点或代收点时，请按承运商短信/App 指引操作。</lang></p>
+                <p><lang>4.1 发货后可在「我的订单」查看运单号与节点。承运商同步可能延迟；国际干线连续数日无更新较常见，不等同于丢件。</lang></p>
+                <p><lang>4.2 若显著超过参考时效仍无进展：请先排除目的地节假日与清关中状态，再联系客服并提供订单号协助查询。</lang></p>
+                <p><lang>4.3 请保持收件电话/邮箱畅通，并留意海关或本地派送通知；需改派自提点时按当地承运商指引操作。</lang></p>
             </section>
 
             <section class="amazon-doc__section" id="shipping-s5" weline-code="shipping.guide.shipping.s5">
                 <h2><lang>五、签收与验收</lang></h2>
                 <ul>
-                    <li><lang>签收前请核对外包装是否完好；如有明显破损、浸水、变形，请当场与快递员共同开箱验货并拍照留证，必要时拒收。</lang></li>
-                    <li><lang>签收后请尽快核对商品数量、尺码、颜色与配件是否与订单一致；发现问题请在签收后 48 小时内联系客服并保留外包装与吊牌。</lang></li>
-                    <li><lang>代收、驿站、快递柜签收视为送达。若代收人签收后出现异常，请尽快联系客服，我们将协助向承运商核查。</lang></li>
-                    <li><lang>服装类商品建议在保持吊牌完整、未下水的前提下试穿确认尺码；定制件、剪裁件以商品页说明为准。</lang></li>
+                    <li><lang>签收时请核对外包装；明显破损、浸水、变形时请拍照留证，并尽快联系客服（建议 48 小时内）。</lang></li>
+                    <li><lang>运输破损或短少：保留外包装与运单，便于我们协助向承运商查验；逾期申报可能影响承运商受理。</lang></li>
+                    <li><lang>质量、错发、尺码问题适用「退换政策」；跨境寄回中国仓库的运费与税费承担见退换政策与配送政策。</lang></li>
+                    <li><lang>代收点/快递柜签收视为送达节点；代收后异常请尽快联系客服协助核查。</lang></li>
+                    <li><lang>服装请保留吊牌、未下水试穿；定制/剪裁件以商品页为准。</lang></li>
                 </ul>
             </section>
 
             <section class="amazon-doc__section" id="shipping-s6" weline-code="shipping.guide.shipping.s6">
                 <h2><lang>六、异常与赔付</lang></h2>
-                <p><lang>6.1 运输途中丢失、严重破损：请提供订单号、运单号、破损照片（含外包装与商品），我们将协调承运商查件并安排补发或退款。</lang></p>
-                <p><lang>6.2 物流显示已签收但未收到：请先向家人、门卫、邻居及附近驿站确认；仍无法找到时，在「签收」节点后 7 日内联系客服启动查询。</lang></p>
-                <p><lang>6.3 不可抗力（地震、台风、疫情管制、交通管制等）导致的延误，我们将尽力协调并及时同步进度，但不属于服务质量违约。</lang></p>
+                <p><lang>6.1 运输丢失或严重破损：请提供订单号、运单号与照片。核实后我们协调承运商查件，并视情况补发或退款（可扣除已产生的不可回收费用）。</lang></p>
+                <p><lang>6.2 显示已签收但未收到：请先向家人、门卫、邻居及代收点确认；仍无法找到时，在「签收」后 7 日内联系客服启动查询。</lang></p>
+                <p><lang>6.3 关税、清关与弃件以「配送政策」及结算页税费说明为准；默认税费到付、买家配合清关。</lang></p>
+                <p><lang>6.4 不可抗力及跨境固有风险（海关查验、口岸拥堵、航班调整、疫情管制等）导致的延误，我们协助同步进度，但不构成服务质量违约，亦不自动触发退款。</lang></p>
             </section>
 
             <section class="amazon-doc__section" id="shipping-s7" weline-code="shipping.guide.shipping.s7">

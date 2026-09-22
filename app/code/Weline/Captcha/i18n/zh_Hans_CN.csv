@@ -1,15 +1,15 @@
-﻿收集人机验证提供者,收集人机验证提供者
-"向统一 Captcha 注册 VerificationProviderInterface 实现。","向统一 Captcha 注册 VerificationProviderInterface 实现。"
+收集人机验证提供者,收集人机验证提供者
+向统一 Captcha 注册 VerificationProviderInterface 实现。,向统一 Captcha 注册 VerificationProviderInterface 实现。
 收集人机验证允许域名,收集人机验证允许域名
-"由 Websites 等域名所有者补充 reCAPTCHA hostname 白名单，Captcha 不反向依赖业务模块。","由 Websites 等域名所有者补充 reCAPTCHA hostname 白名单，Captcha 不反向依赖业务模块。"
-"Google Captcha 查询器不支持的操作：%{1}","Google Captcha 查询器不支持的操作：%{1}"
-"Google reCAPTCHA Enterprise 授权","Google reCAPTCHA 企业授权"
-"选择授权账户可访问的 Project，并为当前网站域名创建 Enterprise Key。","选择授权账户可访问的 Project，并为当前网站域名创建 Enterprise Key。"
+由 Websites 等域名所有者补充 reCAPTCHA hostname 白名单，Captcha 不反向依赖业务模块。,由 Websites 等域名所有者补充 reCAPTCHA hostname 白名单，Captcha 不反向依赖业务模块。
+Google Captcha 查询器不支持的操作：%{1},Google Captcha 查询器不支持的操作：%{1}
+Google reCAPTCHA Enterprise 授权,Google reCAPTCHA 企业授权
+选择授权账户可访问的 Project，并为当前网站域名创建 Enterprise Key。,选择授权账户可访问的 Project，并为当前网站域名创建 Enterprise Key。
 请先登录后台,请先登录后台
-"Google 授权已撤销","Google 授权已撤销"
+Google 授权已撤销,Google 授权已撤销
 人机验证,人机验证
-"已检测到人机验证凭据（腾讯云或 Google）。","已检测到人机验证凭据（腾讯云或 Google）。"
-"按国家路由腾讯云 / Google Enterprise / 本地图码；迁站请同步允许域名。","按国家路由腾讯云 / Google Enterprise / 本地图码；迁站请同步允许域名。"
+已检测到人机验证凭据（腾讯云或 Google）。,已检测到人机验证凭据（腾讯云或 Google）。
+按国家路由腾讯云 / Google Enterprise / 本地图码；迁站请同步允许域名。,按国家路由腾讯云 / Google Enterprise / 本地图码；迁站请同步允许域名。
 安全,安全
 开启人机验证,开启人机验证
 后台登录验证码,后台登录验证码
@@ -17,97 +17,97 @@
 请输入图片中的验证码,请输入图片中的验证码
 此表单受腾讯云验证码保护,此表单受腾讯云验证码保护
 无法初始化腾讯云验证请求,无法初始化腾讯云验证请求
-"腾讯云验证码校验失败：HTTP %{1} %{2}","腾讯云验证码校验失败：HTTP %{1} %{2}"
+腾讯云验证码校验失败：HTTP %{1} %{2},腾讯云验证码校验失败：HTTP %{1} %{2}
 腾讯云验证码返回了无效响应,腾讯云验证码返回了无效响应
-"此表单受 Google reCAPTCHA Enterprise 保护","此表单受 Google reCAPTCHA Enterprise 保护"
+此表单受 Google reCAPTCHA Enterprise 保护,此表单受 Google reCAPTCHA Enterprise 保护
 隐私权,隐私权
 条款,条款
-"受 Google 保护","受 Google 保护"
-"Google Enterprise API Key 配置错误：当前值像 Site Key（6L…），服务端校验需要 Cloud「API 密钥」（通常 AIza… 开头）。请到系统配置 → Weline_Captcha 更换 API Key。","Google Enterprise API Key 配置错误：当前值像 Site Key（6L…），服务端校验需要 Cloud「API 密钥」（通常 AIza… 开头）。请到系统配置 → Weline_Captcha 更换 API Key。"
-"Google Enterprise Site Key 无效：与项目 %{1} 不匹配或已删除。请到 Google Cloud → reCAPTCHA Enterprise 为该项目新建/复制 Site Key，并加入本地域名（如 *.test.weline.com），再写回系统配置 Weline_Captcha。","Google Enterprise Site Key 无效：与项目 %{1} 不匹配或已删除。请到 Google Cloud → reCAPTCHA Enterprise 为该项目新建/复制 Site Key，并加入本地域名（如 *.test.weline.com），再写回系统配置 Weline_Captcha。"
-"Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}","Google reCAPTCHA Enterprise验证失败：HTTP %{1} %{2}"
-"Google reCAPTCHA Enterprise 返回了无效响应","Google reCAPTCHA Enterprise 返回了无效响应"
-"无法初始化 Google 验证请求","无法初始化 Google 验证请求"
+受 Google 保护,受 Google 保护
+Google Enterprise API Key 配置错误：当前值像 Site Key（6L…），服务端校验需要 Cloud「API 密钥」（通常 AIza… 开头）。请到系统配置 → Weline_Captcha 更换 API Key。,Google Enterprise API Key 配置错误：当前值像 Site Key（6L…），服务端校验需要 Cloud「API 密钥」（通常 AIza… 开头）。请到系统配置 → Weline_Captcha 更换 API Key。
+Google Enterprise Site Key 无效：与项目 %{1} 不匹配或已删除。请到 Google Cloud → reCAPTCHA Enterprise 为该项目新建/复制 Site Key，并加入本地域名（如 *.test.weline.com），再写回系统配置 Weline_Captcha。,Google Enterprise Site Key 无效：与项目 %{1} 不匹配或已删除。请到 Google Cloud → reCAPTCHA Enterprise 为该项目新建/复制 Site Key，并加入本地域名（如 *.test.weline.com），再写回系统配置 Weline_Captcha。
+Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2},Google reCAPTCHA Enterprise验证失败：HTTP %{1} %{2}
+Google reCAPTCHA Enterprise 返回了无效响应,Google reCAPTCHA Enterprise 返回了无效响应
+无法初始化 Google 验证请求,无法初始化 Google 验证请求
 需要验证码验证,需要验证码验证
 验证码错误,验证码错误
 人机验证配置,人机验证配置
 check,查看
 系统配置,系统配置
-"Google 授权成功","Google 授权成功"
-"Google 连接测试成功","Google 连接测试成功"
-"授权 Google reCAPTCHA Enterprise","授权 Google reCAPTCHA Enterprise"
+Google 授权成功,Google 授权成功
+Google 连接测试成功,Google 连接测试成功
+授权 Google reCAPTCHA Enterprise,授权 Google reCAPTCHA Enterprise
 circle,圆圈
-"处理 Google reCAPTCHA Enterprise 回调","处理 Google reCAPTCHA Enterprise 回调"
+处理 Google reCAPTCHA Enterprise 回调,处理 Google reCAPTCHA Enterprise 回调
 login,登录
-"选择 Google Cloud Project",选择谷歌云项目
+选择 Google Cloud Project,选择谷歌云项目
 cloud,云
-"测试 Google reCAPTCHA Enterprise 连接","测试 Google reCAPTCHA Enterprise 连接"
+测试 Google reCAPTCHA Enterprise 连接,测试 Google reCAPTCHA Enterprise 连接
 link,关联
-"撤销 Google reCAPTCHA Enterprise 授权","撤销 Google reCAPTCHA Enterprise 授权"
+撤销 Google reCAPTCHA Enterprise 授权,撤销 Google reCAPTCHA Enterprise 授权
 刷新,刷新
 刷新验证码,刷新验证码
-"撤销 Google 授权","撤销 Google 授权"
-"此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。","此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。"
+撤销 Google 授权,撤销 Google 授权
+此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。,此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。
 确认撤销授权,确认撤销授权
 取消,取消
-"正在撤销 Google 授权…","正在撤销 Google 授权…"
-"选择后将为当前配置范围的网站域名创建并绑定 reCAPTCHA Enterprise Key。","选择后将为当前配置范围的网站域名创建并绑定 reCAPTCHA Enterprise Key。"
+正在撤销 Google 授权…,正在撤销 Google 授权…
+选择后将为当前配置范围的网站域名创建并绑定 reCAPTCHA Enterprise Key。,选择后将为当前配置范围的网站域名创建并绑定 reCAPTCHA Enterprise Key。
 返回人机验证配置,返回人机验证配置
-"Google Cloud Project",谷歌云项目
-"正在加载可访问的 Project…","正在加载可访问的 Project…"
-"创建并绑定 Enterprise Key","创建并绑定 Enterprise Key"
-"请选择 Project",请选择项目
-"当前账户没有可访问的 Project","当前账户没有可访问的 Project"
-"正在创建并绑定 Enterprise Key…","正在创建并绑定 Enterprise Key…"
-"Google Project 已绑定","Google Project 已绑定"
-"请先在统一配置中心填写 Google OAuth Client ID","请先在统一配置中心填写 Google OAuth Client ID"
-"Google 授权状态无效或已过期，请重新发起授权","Google 授权状态无效或已过期，请重新发起授权"
-"Google 授权回调缺少授权码","Google 授权回调缺少授权码"
-"Google OAuth 未返回 Access Token","Google OAuth 未返回 访问令牌"
-"Google 授权成功，并已为当前网站创建 reCAPTCHA Enterprise Key","Google 授权成功，并已为当前网站创建 reCAPTCHA Enterprise Key"
-"Google 授权已过期，请重新授权","Google 授权已过期，请重新授权"
-"Google Project ID 无效","Google 项目 ID 无效"
-"当前授权账户无权访问所选 Google Project","当前授权账户无权访问所选 Google Project"
-"Google Project 已绑定，但 Enterprise Key 创建失败","Google Project 已绑定，但 Enterprise Key 创建失败"
-"Google Project 与当前网站域名已绑定","Google Project 与当前网站域名已绑定"
-"Google 连接测试成功，可访问 %{1} 个 Project","Google 连接测试成功，可访问 %{1} 个 Project"
-"无法初始化 Google API 请求","无法初始化 Google API 请求"
-"Google API 请求失败：HTTP %{1} %{2}","Google API 请求失败：HTTP %{1} %{2}"
-"无法初始化 Google OAuth 请求","无法初始化 Google OAuth 请求"
-"Google OAuth 请求失败：HTTP %{1} %{2}","Google OAuth 请求失败：HTTP %{1} %{2}"
+Google Cloud Project,谷歌云项目
+正在加载可访问的 Project…,正在加载可访问的 Project…
+创建并绑定 Enterprise Key,创建并绑定 Enterprise Key
+请选择 Project,请选择项目
+当前账户没有可访问的 Project,当前账户没有可访问的 Project
+正在创建并绑定 Enterprise Key…,正在创建并绑定 Enterprise Key…
+Google Project 已绑定,Google Project 已绑定
+请先在统一配置中心填写 Google OAuth Client ID,请先在统一配置中心填写 Google OAuth Client ID
+Google 授权状态无效或已过期，请重新发起授权,Google 授权状态无效或已过期，请重新发起授权
+Google 授权回调缺少授权码,Google 授权回调缺少授权码
+Google OAuth 未返回 Access Token,Google OAuth 未返回 访问令牌
+Google 授权成功，并已为当前网站创建 reCAPTCHA Enterprise Key,Google 授权成功，并已为当前网站创建 reCAPTCHA Enterprise Key
+Google 授权已过期，请重新授权,Google 授权已过期，请重新授权
+Google Project ID 无效,Google 项目 ID 无效
+当前授权账户无权访问所选 Google Project,当前授权账户无权访问所选 Google Project
+Google Project 已绑定，但 Enterprise Key 创建失败,Google Project 已绑定，但 Enterprise Key 创建失败
+Google Project 与当前网站域名已绑定,Google Project 与当前网站域名已绑定
+Google 连接测试成功，可访问 %{1} 个 Project,Google 连接测试成功，可访问 %{1} 个 Project
+无法初始化 Google API 请求,无法初始化 Google API 请求
+Google API 请求失败：HTTP %{1} %{2},Google API 请求失败：HTTP %{1} %{2}
+无法初始化 Google OAuth 请求,无法初始化 Google OAuth 请求
+Google OAuth 请求失败：HTTP %{1} %{2},Google OAuth 请求失败：HTTP %{1} %{2}
 验证码提供者未注册：%{1},验证码提供者未注册：%{1}
-"不支持的验证码类型: %{1}","不支持的验证码类型: %{1}"
-"mdi mdi-shield-check","mdi mdi 屏蔽检查"
-"mdi mdi-google","mdi mdi-google"
-"mdi mdi-login-variant","mdi mdi 登录变体"
-"mdi mdi-cloud-outline","mdi mdi-cloud-outline"
-"mdi mdi-connection","mdi mdi-connection"
-"mdi mdi-link-off","mdi mdi-link-off"
+不支持的验证码类型: %{1},不支持的验证码类型: %{1}
+mdi mdi-shield-check,mdi mdi 屏蔽检查
+mdi mdi-google,mdi mdi-google
+mdi mdi-login-variant,mdi mdi 登录变体
+mdi mdi-cloud-outline,mdi mdi-cloud-outline
+mdi mdi-connection,mdi mdi-connection
+mdi mdi-link-off,mdi mdi-link-off
 当前表单要求人机验证，但验证码模块已关闭,当前表单要求人机验证，但验证码模块已关闭
-"Google reCAPTCHA Enterprise 已启用但配置不完整","Google reCAPTCHA Enterprise 已启用但配置不完整"
-"人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。","人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。"
-"最推荐：用 Google 一键授权自动绑定 Project 与 Enterprise Key；未配置完整时自动使用本地图形挑战。","最推荐：用 Google 一键授权自动绑定 Project 与 Enterprise Key；未配置完整时自动使用本地图形挑战。"
-"默认启用 Google；配置不完整时自动回退本地图形验证码；完整配置后远端失败会拒绝提交，不会静默降级。","默认启用 Google；配置不完整时自动回退本地图形验证码；完整配置后远端失败会拒绝提交，不会静默降级。"
-"推荐：Google 一键授权","推荐：Google 一键授权"
-"最推荐路径。填写 OAuth Client 后点「授权 Google」并选择 Project，系统会自动写入 Project ID、Site Key 与 Token；通常无需再手填下方密钥。","最推荐路径。填写 OAuth Client 后点「授权 Google」并选择 Project，系统会自动写入 Project ID、Site Key 与 Token；通常无需再手填下方密钥。"
+Google reCAPTCHA Enterprise 已启用但配置不完整,Google reCAPTCHA Enterprise 已启用但配置不完整
+人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。,人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。
+最推荐：用 Google 一键授权自动绑定 Project 与 Enterprise Key；未配置完整时自动使用本地图形挑战。,最推荐：用 Google 一键授权自动绑定 Project 与 Enterprise Key；未配置完整时自动使用本地图形挑战。
+默认启用 Google；配置不完整时自动回退本地图形验证码；完整配置后远端失败会拒绝提交，不会静默降级。,默认启用 Google；配置不完整时自动回退本地图形验证码；完整配置后远端失败会拒绝提交，不会静默降级。
+推荐：Google 一键授权,推荐：Google 一键授权
+最推荐路径。填写 OAuth Client 后点「授权 Google」并选择 Project，系统会自动写入 Project ID、Site Key 与 Token；通常无需再手填下方密钥。,最推荐路径。填写 OAuth Client 后点「授权 Google」并选择 Project，系统会自动写入 Project ID、Site Key 与 Token；通常无需再手填下方密钥。
 启用与风控参数,启用与风控参数
 授权成功后一般只需确认已启用；域名白名单与分数阈值可按站点微调。,授权成功后一般只需确认已启用；域名白名单与分数阈值可按站点微调。
-"手动填写 Enterprise 密钥（可选）","手动填写 Enterprise 密钥（可选）"
+手动填写 Enterprise 密钥（可选）,手动填写 Enterprise 密钥（可选）
 仅在无法使用一键授权、或需人工覆盖时填写。授权成功后这些字段通常已自动写入，不必重复手填。,仅在无法使用一键授权、或需人工覆盖时填写。授权成功后这些字段通常已自动写入，不必重复手填。
 一键授权后自动写入，一般无需手填。,一键授权后自动写入，一般无需手填。
 验证码配置,验证码配置
-"在 Google Cloud 创建 reCAPTCHA Enterprise Key，将 Project ID / Site Key / API Key 填回本页；未配置完整时自动使用本地图形挑战。","在 Google Cloud 创建 reCAPTCHA Enterprise Key，将 Project ID / Site Key / API Key 填回本页；未配置完整时自动使用本地图形挑战。"
+在 Google Cloud 创建 reCAPTCHA Enterprise Key，将 Project ID / Site Key / API Key 填回本页；未配置完整时自动使用本地图形挑战。,在 Google Cloud 创建 reCAPTCHA Enterprise Key，将 Project ID / Site Key / API Key 填回本页；未配置完整时自动使用本地图形挑战。
 使用指南（开发者）,使用指南（开发者）
-"本模块不提供 Google 一键授权。请在 Google Cloud 控制台创建 Enterprise Key 与 API Key，再把凭据填回下方字段。","本模块不提供 Google 一键授权。请在 Google Cloud 控制台创建 Enterprise Key 与 API Key，再把凭据填回下方字段。"
-"Google reCAPTCHA Enterprise 控制台","Google reCAPTCHA Enterprise 控制台"
-"创建 / 管理 Website 类型的 reCAPTCHA Enterprise Key，复制 Site Key。","创建 / 管理 Website 类型的 reCAPTCHA Enterprise Key，复制 Site Key。"
-"打开 reCAPTCHA 控制台","打开 reCAPTCHA 控制台"
-"Google Cloud API 凭据","Google Cloud API 凭据"
-"创建 API Key（建议限制 reCAPTCHA Enterprise API），用于服务端校验。","创建 API Key（建议限制 reCAPTCHA Enterprise API），用于服务端校验。"
+本模块不提供 Google 一键授权。请在 Google Cloud 控制台创建 Enterprise Key 与 API Key，再把凭据填回下方字段。,本模块不提供 Google 一键授权。请在 Google Cloud 控制台创建 Enterprise Key 与 API Key，再把凭据填回下方字段。
+Google reCAPTCHA Enterprise 控制台,Google reCAPTCHA Enterprise 控制台
+创建 / 管理 Website 类型的 reCAPTCHA Enterprise Key，复制 Site Key。,创建 / 管理 Website 类型的 reCAPTCHA Enterprise Key，复制 Site Key。
+打开 reCAPTCHA 控制台,打开 reCAPTCHA 控制台
+Google Cloud API 凭据,Google Cloud API 凭据
+创建 API Key（建议限制 reCAPTCHA Enterprise API），用于服务端校验。,创建 API Key（建议限制 reCAPTCHA Enterprise API），用于服务端校验。
 打开凭据页,打开凭据页
-"官方文档：创建 reCAPTCHA 密钥","官方文档：创建 reCAPTCHA 密钥"
-"Google 官方步骤说明。","Google 官方步骤说明。"
+官方文档：创建 reCAPTCHA 密钥,官方文档：创建 reCAPTCHA 密钥
+Google 官方步骤说明。,Google 官方步骤说明。
 打开官方文档,打开官方文档
-"启用后需填写完整 Project ID、Site Key 与 API Key 才会走 Google；否则自动使用本地图形验证码。","启用后需填写完整 Project ID、Site Key 与 API Key 才会走 Google；否则自动使用本地图形验证码。"
-"Enterprise API Key","Enterprise API Key"
-"服务端校验用；建议在 Google Cloud 凭据页限制到 reCAPTCHA Enterprise API。","服务端校验用；建议在 Google Cloud 凭据页限制到 reCAPTCHA Enterprise API。"
+启用后需填写完整 Project ID、Site Key 与 API Key 才会走 Google；否则自动使用本地图形验证码。,启用后需填写完整 Project ID、Site Key 与 API Key 才会走 Google；否则自动使用本地图形验证码。
+Enterprise API Key,Enterprise API Key
+服务端校验用；建议在 Google Cloud 凭据页限制到 reCAPTCHA Enterprise API。,服务端校验用；建议在 Google Cloud 凭据页限制到 reCAPTCHA Enterprise API。

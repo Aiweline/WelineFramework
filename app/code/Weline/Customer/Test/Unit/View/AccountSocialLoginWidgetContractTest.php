@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class AccountSocialLoginWidgetContractTest extends TestCase
 {
-    public function testLoginFormExposesSocialProvidersSlotWithFallbackWidget(): void
+    public function testLoginFormExposesSocialProvidersSlotWithoutSiblingFetch(): void
     {
         $loginForm = \dirname(__DIR__, 3) . '/view/templates/frontend/account/login.phtml';
         $widgetPhp = \dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Customer/widget.php';
@@ -24,11 +24,16 @@ final class AccountSocialLoginWidgetContractTest extends TestCase
         $loginSource = (string) \file_get_contents($loginForm);
         self::assertStringContainsString('<w:slot id="account-login-social-providers"', $loginSource);
         self::assertStringContainsString('CustomerAuthReturnUrlService', $loginSource);
-        self::assertStringContainsString('Weline_Customer::templates/frontend/widgets/account-social-login.phtml', $loginSource);
-        self::assertStringContainsString("setData('redirect_url', \$redirectUrl)", $loginSource);
         self::assertStringContainsString('data-w-auth-return', $loginSource);
         self::assertStringContainsString('w-auth-login__social--quick', $loginSource);
         self::assertStringContainsString('快捷登录', $loginSource);
+        self::assertStringContainsString('multiple="false"', $loginSource);
+        // Slot-only: do not fetch the widget beside the declared slot (stacked with required injection).
+        self::assertStringNotContainsString(
+            "fetch('Weline_Customer::templates/frontend/widgets/account-social-login.phtml')",
+            $loginSource
+        );
+        self::assertStringNotContainsString('social-login-fetch-error', $loginSource);
         $quickPos = strpos($loginSource, 'w-auth-login__social--quick');
         $formPos = strpos($loginSource, 'id="loginForm"');
         self::assertNotFalse($quickPos);
@@ -47,12 +52,15 @@ final class AccountSocialLoginWidgetContractTest extends TestCase
         self::assertStringContainsString("'enable_instagram'", $widgetSource);
         self::assertStringContainsString('account-login-social-providers', $widgetSource);
         self::assertStringContainsString('default_injections', $widgetSource);
+        self::assertStringContainsString("'placement' => 'injection'", $widgetSource);
 
         $tpl = (string) \file_get_contents($widgetTpl);
         self::assertStringContainsString("\$this->getData('redirect_url')", $tpl);
         self::assertStringContainsString('CustomerAuthReturnUrlService', $tpl);
         self::assertStringContainsString('getParam(\'redirect_url\')', $tpl);
         self::assertStringContainsString('@widget.code {account-social-login}', $tpl);
+        self::assertStringContainsString('data-widget-code="account-social-login"', $tpl);
+        self::assertStringContainsString('data-w-component="account-social-login"', $tpl);
         self::assertStringContainsString('enable_google', $tpl);
         self::assertStringContainsString('enable_facebook', $tpl);
         self::assertStringContainsString('enable_instagram', $tpl);

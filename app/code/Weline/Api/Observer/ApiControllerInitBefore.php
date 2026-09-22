@@ -140,7 +140,7 @@ class ApiControllerInitBefore implements ObserverInterface
         // Frontend auth API actions.
         $frontendAuthActions = ['postToken', 'postLogin', 'postExchange', 'postRefresh', 'postVerify', 'getTokenInfo', 'postLogout', 'getMe'];
         // 闁告艾娴烽鐝筆I闁哄倽顫夌涵鍫曞触瀹ュ繒绀勯柛姘捣椤忕徆PI濞达綀娉曢弫銈嗙▔瀹ュ懏鍊遍柣銊ュ閺岀喎鈻旈弴鐐村€抽柨?
-        $backendAuthActions = ['login', 'refresh', 'logout', 'me', 'tokenInfo'];
+        $backendAuthActions = ['postLogin', 'postRefresh', 'postLogout', 'getMe', 'getTokenInfo', 'login', 'refresh', 'logout', 'me', 'tokenInfo'];
         // 闁告艾鐗嗛懟鐔煎箥閳ь剟寮垫径瀣厵婵炲娲栭幃?
         $authActions = array_merge($frontendAuthActions, $backendAuthActions);
 

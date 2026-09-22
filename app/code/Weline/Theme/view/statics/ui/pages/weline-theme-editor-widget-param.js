@@ -2195,6 +2195,7 @@
                     seedFilePickerPreviewFromInput(input);
                 });
                 initMediaImagePicker(div);
+                initProductAdminPickers(div);
                 mountParamComponents(div);
                 var empty = q(wrapper, '.w-param-array-empty');
                 if (empty) empty.hidden = true;
@@ -2244,6 +2245,7 @@
                     seedFilePickerPreviewFromInput(input, previewUrl);
                 });
                 initMediaImagePicker(div);
+                initProductAdminPickers(div);
                 mountParamComponents(div);
                 var empty = q(wrapper, '.w-param-array-empty');
                 if (empty) empty.hidden = true;

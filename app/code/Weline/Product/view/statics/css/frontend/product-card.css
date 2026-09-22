@@ -340,18 +340,24 @@
 .weline-product-card .wpc-cta .btn-buy-now,
 .weline-product-card .wpc-cta a,
 .weline-product-card .wpc-cta button {
+  -webkit-appearance: none;
+  appearance: none;
   display: inline-flex;
   width: 100%;
   align-items: center;
   justify-content: center;
+  gap: var(--weline-space-2, 0.5rem);
   min-height: 2.35rem;
   padding: 0.45rem 0.85rem;
-  border-radius: 0.65rem;
+  border-radius: var(--weline-radius-lg, 0.65rem);
   box-sizing: border-box;
+  font: inherit;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.25;
   text-decoration: none;
   cursor: pointer;
+  box-shadow: none;
 }
 
 .weline-product-card .wpc-detail-link,

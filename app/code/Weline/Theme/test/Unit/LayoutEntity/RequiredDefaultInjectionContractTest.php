@@ -110,7 +110,6 @@ final class RequiredDefaultInjectionContractTest extends TestCase
             'Weline_Cart',
             'product-add-to-cart',
         ));
-        // Loose action/class markers must not suppress required injection.
         self::assertFalse(RequiredDefaultInjectionContract::slotInnerHasWidgetCode(
             '<button data-action="add">Add</button>',
             'Weline_Cart',
@@ -142,7 +141,6 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('anySlotRegionMissingWidget', $src);
         self::assertStringContainsString('fillRequiredDefaultsOnShell', $src);
         self::assertStringContainsString('required_default_injection_shell_scan_failed', $src);
-        // Entity-missing path must overlay the shell HTML, never append('').
         self::assertStringNotContainsString("->append('',", $src);
         self::assertStringContainsString('->append($html,', $src);
     }
@@ -157,12 +155,21 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('One execute wave per depth', $src);
         self::assertStringContainsString('anyRegionHasWidget', $src);
         self::assertStringContainsString('pageHasWidgetBoundToSlot', $src);
+        self::assertStringContainsString('pageHasWidgetPresent', $src);
+        self::assertStringContainsString('outermostSlotRegions', $src);
         self::assertStringContainsString('required_default_injection_render_failed', $src);
         self::assertStringContainsString('data-required-injection-presence', $src);
-        self::assertStringContainsString('required_default_injection_unfilled', $src);
+        self::assertStringContainsString('ProductCardRenderer::resetProductCardCssEmission', $src);
+        self::assertStringContainsString('resetPurchaseActionsAssetsEmission', $src);
+        self::assertStringContainsString('unfilled soft-skip', $src);
+        self::assertStringNotContainsString(
+            "throw new \\RuntimeException(\n            'required_default_injection_unfilled:",
+            $src,
+        );
         self::assertStringContainsString('uninstalledInjectionsForVersion', $src);
         self::assertStringContainsString('REQ-THEME-0036', $src);
-        self::assertStringContainsString('有部件必入声明槽', $src);
+        self::assertStringContainsString('Identity XOR', $src);
+        self::assertStringContainsString('unfilled must NOT 500', $src);
         self::assertStringContainsString('user_deleted@{versionId}', $src);
         self::assertStringNotContainsString('$html . $inner', $src);
         self::assertStringNotContainsString(
@@ -173,23 +180,39 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringNotContainsString('while ($pass < 16)', $src);
         self::assertStringNotContainsString('有槽才注', $src);
         self::assertStringNotContainsString('有槽必注', $src);
+        self::assertStringContainsString('pageHasWidgetPresent', $src);
+        self::assertStringContainsString('assertSlotHasAtMostOne', $src);
+        self::assertStringContainsString('outermostSlotRegions', $src);
+        // Duplicate is soft (log only): layout-owned chrome must drop default_injections JSON
+        self::assertStringNotContainsString(
+            "throw new \\RuntimeException(\n                'required_default_injection_duplicate:",
+            $src,
+        );
+        self::assertStringContainsString('soft-skip', $src);
+        self::assertStringContainsString('slotAllowsMultiple', $src);
+
+        $contract = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionContract.php'
+        );
+        self::assertStringContainsString('function pageHasWidgetPresent', $contract);
+        self::assertStringContainsString('function countWidgetPresent', $contract);
+        self::assertStringContainsString('array_unique', $contract);
+        self::assertStringContainsString('stripIgnoredPresenceRegions', $contract);
+        self::assertStringContainsString('pageHasWidgetPresent / countWidgetPresent', $contract);
     }
 
     /**
-     * 盯死：required 注入唯一合法省略是本版本人工卸载；空槽/缺 bake 不得静默放过。
+     * 同部件 XOR：卸载仍走版本化 user_deleted；未填店面软跳过（见 Overlay soft-skip）。
      */
     public function testRequiredInjectionOmissionIsOnlyVersionedHumanUninstall(): void
     {
         $contract = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionContract.php'
         );
-        self::assertStringContainsString('有部件必入声明槽', $contract);
+        self::assertStringContainsString('Identity XOR', $contract);
         self::assertStringContainsString('user_deleted@{versionId}', $contract);
-        self::assertStringContainsString(
-            'Missing published entities, param-only page-config, or stale',
-            $contract,
-        );
-        self::assertStringContainsString('are not valid omission reasons', $contract);
+        self::assertStringContainsString('missing fill must not 500', $contract);
+        self::assertStringContainsString('must not be both layout-embedded', $contract);
 
         $planner = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionPlanner.php'
@@ -206,7 +229,6 @@ final class RequiredDefaultInjectionContractTest extends TestCase
             $service,
         );
 
-        // Empty omissions → must merge; only omission list suppresses.
         $with = RequiredDefaultInjectionContract::merge([], 'checkout', [[
             'module' => 'Weline_Shipping',
             'type' => 'content',

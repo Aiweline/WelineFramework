@@ -25,6 +25,13 @@
             globalVar: "WelineSiteBlocks",
             async: true
         },
+        videoCarousel: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/video-carousel.js"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/video-carousel.js"],
+            globalVar: "WelineVideoCarousel",
+            async: true,
+            description: "首页/店面视频轮播切换与关联商品 dialog"
+        },
         miniCartExtras: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"],
             paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"],
@@ -143,8 +150,8 @@
             description: "账户中心两步验证面板"
         },
         checkoutCoupon: {
-            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260914-coupon-totals1"],
-            paths: ["/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260914-coupon-totals1"],
+            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260922-cpay-coupon-paint1"],
+            paths: ["/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260922-cpay-coupon-paint1"],
             globalVar: null,
             description: "结账/迷你购物车优惠券部件"
         },
@@ -236,8 +243,8 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260916-phone-intl1"],
-            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260916-phone-intl1"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260921-cpay-addr3"],
+            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260921-cpay-addr3"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
@@ -262,8 +269,8 @@
             description: "结账生命周期：weline:checkout:order-created / success"
         },
         checkoutExpressReview: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260918-express-ga4params1"],
-            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260918-express-ga4params1"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260921-shipping-i18n1"],
+            paths: ["/Weline/Checkout/view/statics/js/express-review.js?v=20260921-shipping-i18n1"],
             globalVar: "WelineCheckoutExpressReview",
             load: "lazy",
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
@@ -342,6 +349,13 @@
             globalVar: "WelineStoreMusic",
             load: "defer",
             description: "进店音乐"
+        },
+        newsletterSubscribe: {
+            origin_paths: ["app/code/Weline/Newsletter/view/statics/js/newsletter-subscribe.js?v=20260922-scroll-lock"],
+            paths: ["/Weline/Newsletter/view/statics/js/newsletter-subscribe.js?v=20260922-scroll-lock"],
+            globalVar: "WelineNewsletterSubscribe",
+            load: "defer",
+            description: "邮件订阅表单（BinQuery / 弹窗 cookie）"
         }
     });
 

@@ -60,4 +60,19 @@ interface PaymentExpressFacadeInterface
      * @return array{applied:bool,sinks:int}
      */
     public function applyExpressProfileFromPaymentResult(array $resultPayload, array $transactionContext = []): array;
+
+    /**
+     * Mark unpaid Express transaction as failed terminal state (PaymentTransaction + metadata).
+     * Already paid → skipped; Checkout must not write Payment Model directly.
+     *
+     * @return array{
+     *   transaction_no: string,
+     *   abandoned: bool,
+     *   skipped?: string,
+     *   status?: string,
+     *   order_uuid?: string,
+     *   error?: string
+     * }
+     */
+    public function abandonExpressPayment(string $transactionNo, string $reason = 'abandoned'): array;
 }

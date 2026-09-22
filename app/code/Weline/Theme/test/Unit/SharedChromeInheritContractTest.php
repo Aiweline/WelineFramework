@@ -169,7 +169,8 @@ final class SharedChromeInheritContractTest extends TestCase
 
         self::assertStringContainsString('"layout_type":"homepage"', $footer);
         self::assertStringNotContainsString('"layout_type":"*"', $footer);
-        self::assertStringContainsString('"layout_type":"homepage"', $category);
+        // category-menu：默认主题 header 布局已承载，禁止再声明 default_injections
+        self::assertStringNotContainsString('@widget.default_injections', $category);
         self::assertStringContainsString('"layout_type":"homepage"', $help);
         self::assertStringContainsString('ThemeLayout::PAGE_TYPE_HOME', $integrity);
         self::assertStringContainsString('非载体布局不得补齐本地 footer-container', $integrity);

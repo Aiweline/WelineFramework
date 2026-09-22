@@ -32,7 +32,9 @@ if (!$isEditorPreview) {
         $isEditorPreview = false;
     }
 }
-$shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
+// Nested homepage-* slots + layout entities own the content tree on storefront.
+// Never let meta.content (wrap residue / WLS meta leak) suppress hero/featured/videos.
+$shouldRenderMetaContent = false;
 
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
 $currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
@@ -109,11 +111,15 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
             padding-block: 0;
         }
 
-        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]) {
+        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]),
+        .theme-layout-homepage .homepage-section:has([data-site-block="brand-logos"]),
+        .theme-layout-homepage .homepage-section:has([data-site-block="testimonials"]),
+        .theme-layout-homepage .homepage-section:has([data-site-block="image-gallery"][data-variant="looks"]) {
             padding-block-end: 0;
         }
 
-        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]) + .homepage-section {
+        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]) + .homepage-section,
+        .theme-layout-homepage .homepage-section:has([data-site-block="brand-logos"]) + .homepage-section {
             padding-block-start: var(--weline-layout-spacing-md);
         }
 
@@ -171,7 +177,7 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
 
             <w:slot id="content"
                     name="Homepage content"
-                    accept="layout-homepage-content,layout-default-content,content,container,banner,carousel,product,category"
+                    accept="layout-homepage-content,layout-default-content,content,container,banner,carousel,product,category,testimonial,video"
                     multiple="true"
                     reject="header,footer"
                     position="content"
@@ -182,6 +188,7 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                 <?php if ($shouldRenderMetaContent): ?>
                     <?php echo $metaContent; ?>
                 <?php else: ?>
+
                     <w:slot id="homepage-hero"
                             name="Homepage hero"
                             accept="layout-homepage-hero,hero-slider,promo-banner,banner,carousel,hero"
@@ -195,16 +202,15 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                         </w:hook>
                     </w:slot>
 
-                    <w:slot id="homepage-brands"
-                            name="Homepage brands"
-                            accept="layout-homepage-brands,brand-list,brands,textile-heritage,content"
+                    <w:slot id="homepage-categories"
+                            name="Homepage categories"
+                            accept="layout-homepage-categories,category-grid,category-list,category,content,cards"
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_brands">
-                        <!-- Theme textile-heritage default_injections 优先；未应用时由同一 Theme 部件兜底 -->
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
-                            <w:widget type="content" name="textile-heritage" />
+                            class="homepage-section" weline-code="theme.homepage.homepage_categories">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/>
+                            <w:widget type="category" name="category-grid" />
                         </w:hook>
                     </w:slot>
 
@@ -220,15 +226,15 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                         </w:hook>
                     </w:slot>
 
-                    <w:slot id="homepage-categories"
-                            name="Homepage categories"
-                            accept="layout-homepage-categories,category-grid,category-list,category,content,cards"
+                    <w:slot id="homepage-deals"
+                            name="Homepage deals"
+                            accept="layout-homepage-deals,deals-of-day,product-list,product,content"
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section" weline-code="theme.homepage.homepage_categories">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/>
-                            <w:widget type="category" name="category-grid" />
+                            class="homepage-section" weline-code="theme.homepage.homepage_deals">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::deals<else/>
+                            <w:widget type="product" name="deals-of-day" />
                         </w:hook>
                     </w:slot>
 
@@ -268,6 +274,18 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                         </w:hook>
                     </w:slot>
 
+                    <w:slot id="homepage-brands"
+                            name="Homepage brands"
+                            accept="layout-homepage-brands,brand-list,brands,brand-logos,textile-heritage,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_brands">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
+                            <w:widget type="content" name="brand-logos" params='{"title":"合作品牌"}' />
+                        </w:hook>
+                    </w:slot>
+
                     <w:slot id="homepage-trust"
                             name="Homepage trust"
                             accept="layout-homepage-trust,trust-badges,testimonial,content"
@@ -275,10 +293,44 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_trust">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::trust
-                            <else/>
-                            <w:widget type="content" name="trust-badges" />
+                        <?php /* 信任徽章由 footer-above 全站默认加载；此处仅留空槽供可选扩展，禁止再嵌默认份 */ ?>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust</w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-testimonials"
+                            name="Homepage customer looks"
+                            accept="layout-homepage-testimonials,image-gallery,testimonials,testimonial,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_testimonials">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::testimonials<else/>
+                            <?php /* WO-HP-P1-03：原证言槽改 UGC 图墙，禁止再嵌第二套星级短评三卡 */ ?>
+                            <w:widget type="content" name="image-gallery" params='{"title":"买家秀","subtitle":"晒出你的汉服穿搭","columns":"3","variant":"looks"}' />
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-reviews"
+                            name="Homepage reviews"
+                            accept="layout-homepage-reviews,testimonials,testimonial,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section" weline-code="theme.homepage.homepage_reviews">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::reviews<else/>
+                            <w:widget type="testimonial" name="testimonials" params='{"title":"买家评价","subtitle":"来自顾客的星级口碑"}' />
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-videos"
+                            name="Homepage videos"
+                            accept="layout-homepage-videos,video,video-player,video-carousel,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_videos">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::videos<else/>
+                            <w:widget type="video" name="video-carousel" params='{"title":"穿搭灵感 · 视频轮播","subtitle":"滑动浏览穿搭视频，查看关联商品"}' />
                         </w:hook>
                     </w:slot>
                 <?php endif; ?>
@@ -291,7 +343,7 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
 
         <w:slot id="homepage-bottom"
                 name="首页底部扩展"
-                accept="layout-homepage-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges"
+                accept="layout-homepage-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges,video,video-player,video-carousel,testimonials,testimonial,deals-of-day"
                 reject="header,footer,navigation"
                 multiple="true"
                 append="true"

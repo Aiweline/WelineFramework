@@ -65,6 +65,55 @@ final class VideoEmbedResolverTest extends TestCase
     public function testTrustedEmbedSrc(): void
     {
         self::assertTrue(VideoEmbedResolver::isTrustedEmbedSrc('https://www.youtube.com/embed/CF_afGTGgUY'));
+        self::assertTrue(VideoEmbedResolver::isTrustedEmbedSrc('https://player.bilibili.com/player.html?bvid=BV1xx411c7mD'));
         self::assertFalse(VideoEmbedResolver::isTrustedEmbedSrc('https://evil.example/embed/x'));
+        self::assertContains('player.bilibili.com', VideoEmbedResolver::trustedEmbedHosts());
+    }
+
+    public function testResolveBilibiliIdFromBvPageAndPlayerUrl(): void
+    {
+        self::assertSame(
+            'BV1xx411c7mD',
+            VideoEmbedResolver::resolveBilibiliId('https://www.bilibili.com/video/BV1xx411c7mD')
+        );
+        self::assertSame(
+            'BV1xx411c7mD',
+            VideoEmbedResolver::resolveBilibiliId('https://player.bilibili.com/player.html?bvid=BV1xx411c7mD&high_quality=1')
+        );
+    }
+
+    public function testResolveBilibiliIdFromAvAndAid(): void
+    {
+        self::assertSame(
+            'av170001',
+            VideoEmbedResolver::resolveBilibiliId('https://www.bilibili.com/video/av170001')
+        );
+        self::assertSame(
+            'av170001',
+            VideoEmbedResolver::resolveBilibiliId('https://player.bilibili.com/player.html?aid=170001')
+        );
+    }
+
+    public function testResolveBilibiliIdFromIframeEmbedCode(): void
+    {
+        $html = '<iframe src="https://player.bilibili.com/player.html?bvid=BV1GJ411x7h7&page=1" allowfullscreen></iframe>';
+        self::assertSame('BV1GJ411x7h7', VideoEmbedResolver::resolveBilibiliId($html));
+    }
+
+    public function testBilibiliEmbedUrl(): void
+    {
+        self::assertSame(
+            'https://player.bilibili.com/player.html?bvid=BV1xx411c7mD',
+            VideoEmbedResolver::bilibiliEmbedUrl('BV1xx411c7mD')
+        );
+        self::assertSame(
+            'https://player.bilibili.com/player.html?aid=170001',
+            VideoEmbedResolver::bilibiliEmbedUrl('av170001')
+        );
+        self::assertSame(
+            'https://player.bilibili.com/player.html?aid=170001',
+            VideoEmbedResolver::bilibiliEmbedUrl('170001')
+        );
+        self::assertSame('', VideoEmbedResolver::bilibiliEmbedUrl('not-a-bili-id'));
     }
 }

@@ -7,7 +7,10 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\LayoutValueHydrationRegistry;
 use Weline\Theme\Service\ThemeComponentRenderer;
+use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeLayoutScopeNormalizer;
 use Weline\Theme\Service\ThemePlaceableRegistry;
 
 /**
@@ -97,6 +100,10 @@ final class ThemeLayoutEntityWidgetRenderer
                 return '<!-- theme-layout-entity:unknown-widget:' . \htmlspecialchars($module . '::' . $code, \ENT_QUOTES) . ' -->';
             }
 
+            // Entity hard-cut must hydrate file-image (and companions like
+            // image_file_html) the same way SlotRendererService does — otherwise
+            // hero/promo keep typed JSON but render gradient-only slides.
+            $config = $this->hydrateTypedLayoutValues($config, $scopeKey);
             $config['_widget_instance_key'] = $nodeUid;
             $html = (string)$this->componentRenderer->render($definition, $config, $theme, [
                 'area' => 'frontend',
@@ -107,6 +114,44 @@ final class ThemeLayoutEntityWidgetRenderer
             return '<!-- theme-layout-entity:render-error:'
                 . \htmlspecialchars($nodeUid . ':' . $e->getMessage(), \ENT_QUOTES)
                 . ' -->';
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function hydrateTypedLayoutValues(array $config, string $scopeKey): array
+    {
+        try {
+            /** @var LayoutValueHydrationRegistry $registry */
+            $registry = ObjectManager::getInstance(LayoutValueHydrationRegistry::class);
+            $scope = RequestContext::scopeIdentity();
+            if ($scope === null) {
+                $encoded = \trim($scopeKey) !== '' ? \trim($scopeKey) : ThemeContextService::DEFAULT_SCOPE;
+                $scope = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class)
+                    ->identityFromEncodedScope($encoded);
+            }
+
+            return $registry->hydrate($config, [
+                'scope_identity' => $scope,
+                // Empty locale: FileImage hydrator follows each usage.locale_code.
+                'locale_code' => '',
+                'actor_id' => null,
+                'roles' => [],
+                'purpose' => 'render',
+                'policy_revision' => 1,
+            ]);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning(
+                    '[ThemeLayoutEntityWidgetRenderer] typed hydrate soft-skip: ' . $e->getMessage(),
+                    ['scope' => $scopeKey],
+                    'theme_layout_entity',
+                );
+            }
+
+            return $config;
         }
     }
 

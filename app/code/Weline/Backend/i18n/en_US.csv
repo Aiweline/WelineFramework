@@ -1,940 +1,943 @@
-﻿标题,标题
-正文,正文
-类型标签,类型标签
-主题代码,主题代码
-后台通知邮件（默认）,后台通知邮件（默认）
-通知中心邮件渠道默认回退；无主题专用绑定时使用,通知中心邮件渠道默认回退；无主题专用绑定时使用
-系统告警邮件,系统告警邮件
-"通知主题 system_alert 的邮件渠道","通知主题 system_alert 的邮件渠道"
-安全告警邮件,安全告警邮件
-"通知主题 security_alert 的邮件渠道","通知主题 security_alert 的邮件渠道"
-"通知主题 %{1} 的邮件渠道","通知主题 %{1} 的邮件渠道"
-系统信息,"System Information"
+标题,Title
+正文,Body
+类型标签,Type label
+主题代码,Theme code
+后台通知邮件（默认）,Backend notification email (default)
+通知中心邮件渠道默认回退；无主题专用绑定时使用,Default fallback for notification-center mail channel; used when no theme-specific binding exists
+系统告警邮件,System alert email
+通知主题 system_alert 的邮件渠道,Mail channel for notification theme system_alert
+安全告警邮件,Security alert email
+通知主题 security_alert 的邮件渠道,Mail channel for notification theme security_alert
+通知主题 %{1} 的邮件渠道,Mail channel for notification theme %{1}
+系统信息,System Information
 系统,System
-一般系统信息通知,"General system information notifications"
-系统警告,"System Warning"
-系统警告通知,"System Warning Notification"
-系统告警,"System Alert"
-系统错误告警,"System Error Alert"
-安全告警,"Security alert"
+一般系统信息通知,General system information notifications
+系统警告,System Warning
+系统警告通知,System Warning Notification
+系统告警,System Alert
+系统错误告警,System Error Alert
+安全告警,Security alert
 安全,Security
-安全相关告警通知,"Security-related alert notifications"
-用户活动,"User activity"
+安全相关告警通知,Security-related alert notifications
+用户活动,User activity
 用户,User
 用户登录、操作等活动通知,"Notifications for user login, operations, and other activities"
-"- 强制全量重解析菜单（%{1}）；已清除 menu:* 指纹 %{2} 条","- 强制全量重解析菜单（%{1}）；已清除 menu:* 指纹 %{2} 条"
-"- 强制全量重解析菜单；已清除 menu:* 指纹 %{1} 条","- 强制全量重解析菜单；已清除 menu:* 指纹 %{1} 条"
-"- 菜单 ACL 产物为空，忽略 menu.xml 源指纹，强制全量重解析","- 菜单 ACL 产物为空，忽略 menu.xml 源指纹，强制全量重解析"
-"菜单 XML 无法解析：模块 %{1}，文件 %{2}。%{3}","Menu XML cannot be parsed: module %{1}, file %{2}. %{3}"
-未知解析错误,"Unknown parsing error"
-跳过格式不正确的菜单配置文件：%{1},"Skipped malformed menu configuration file: %{1}"
+- 强制全量重解析菜单（%{1}）；已清除 menu:* 指纹 %{2} 条,- Forcing full menu reparse (%{1}); cleared %{2} menu:* fingerprints
+- 强制全量重解析菜单；已清除 menu:* 指纹 %{1} 条,- Forcing full menu reparse; cleared %{1} menu:* fingerprints
+- 菜单 ACL 产物为空，忽略 menu.xml 源指纹，强制全量重解析,- Menu ACL output empty; ignoring menu.xml source fingerprints and forcing full reparse
+菜单 XML 无法解析：模块 %{1}，文件 %{2}。%{3},"Menu XML cannot be parsed: module %{1}, file %{2}. %{3}"
+未知解析错误,Unknown parsing error
+跳过格式不正确的菜单配置文件：%{1},Skipped malformed menu configuration file: %{1}
 "菜单配置错误：menu元素缺少source属性,文件：%{1}","Menu configuration error: menu element missing source attribute, file: %{1}"
 "菜单配置错误：menu元素缺少name属性,文件：%{1}","Menu configuration error: menu element missing name attribute, file: %{1}"
 "菜单配置错误：menu元素缺少title属性,文件：%{1}","Menu configuration error: menu element missing title attribute, file: %{1}"
 "菜单配置错误：menu元素缺少order属性,文件：%{1}","Menu configuration error: menu element missing order attribute, file: %{1}"
-后台头部,"Backend Header"
-"在后台页面的 <head> 标签内注入内容，允许其他模块在后台页面头部注入额外的 CSS、JavaScript 或其他资源。","Injects content into the <head> tag of backend pages, allowing other modules to inject additional CSS, JavaScript, or other resources into the backend page head."
-"AI 使用统计区块","AI usage statistics block"
-"在后台统计/仪表盘等 Tab 面板中展示 AI 使用量统计（今日 tokens、花费等），可由 Weline_Ai 等模块实现。","Displays AI usage statistics (today's tokens, costs, etc.) in backend statistics/dashboard tab panels, which can be implemented by modules such as Weline_Ai."
-后台页面凭证已失效，请刷新页面后重试。,"The background page credentials have expired. Please refresh the page and try again."
-当前后台账号无权执行该操作。,"The current backend account does not have permission to perform this operation."
-"ACL 资源未注册或未启用：%{1}。超管也不会自动放行，请先执行 setup:upgrade 收集权限。","ACL source is missing or disabled: %{1}. Super admin will not bypass until setup:upgrade collects it."
-"当前站点关闭了超管 ACL 旁路，且角色未授权资源：%{1}。","Super-admin ACL bypass is off for this site, and the role is not granted: %{1}."
+后台头部,Backend Header
+在后台页面的 <head> 标签内注入内容，允许其他模块在后台页面头部注入额外的 CSS、JavaScript 或其他资源。,"Injects content into the <head> tag of backend pages, allowing other modules to inject additional CSS, JavaScript, or other resources into the backend page head."
+AI 使用统计区块,AI usage statistics block
+在后台统计/仪表盘等 Tab 面板中展示 AI 使用量统计（今日 tokens、花费等），可由 Weline_Ai 等模块实现。,"Displays AI usage statistics (today's tokens, costs, etc.) in backend statistics/dashboard tab panels, which can be implemented by modules such as Weline_Ai."
+后台页面凭证已失效，请刷新页面后重试。,The background page credentials have expired. Please refresh the page and try again.
+当前后台账号无权执行该操作。,The current backend account does not have permission to perform this operation.
+ACL 资源未注册或未启用：%{1}。超管也不会自动放行，请先执行 setup:upgrade 收集权限。,ACL source is missing or disabled: %{1}. Super admin will not bypass until setup:upgrade collects it.
+当前站点关闭了超管 ACL 旁路，且角色未授权资源：%{1}。,"Super-admin ACL bypass is off for this site, and the role is not granted: %{1}."
 信息,Information
 成功,Success
 警告,Warning
 错误,Error
 紧急,Urgent
-"Weline UI 图标迁移无法读取 %{1}：%{2}","Weline UI icon migration cannot read %{1}: %{2}"
-"无法创建 Weline UI 图标迁移快照目录：%{1}","Unable to create Weline UI icon migration snapshot directory: %{1}"
-"无法写入 Weline UI 图标迁移快照：%{1}","Unable to write Weline UI icon migration snapshot: %{1}"
-"无法读取 Weline UI 图标迁移快照：%{1}","Unable to read Weline UI icon migration snapshot: %{1}"
-"Weline UI 图标迁移快照 JSON 无效：%{1}","Weline UI Icon Migration Snapshot JSON Invalid: %{1}"
-"Weline UI 图标迁移快照校验失败：%{1}","Weline UI icon migration snapshot verification failed: %{1}"
-"图标迁移目标不是 ORM Model：%{1}","Icon migration target is not ORM Model: %{1}"
-请先登录,"Please login first"
-用户已被禁用,"User has been disabled"
-后台安全凭证暂不可用,后台安全凭证暂不可用
-页面将自动重试，也可立即刷新。,页面将自动重试，也可立即刷新。
-立即刷新,立即刷新
+Weline UI 图标迁移无法读取 %{1}：%{2},Weline UI icon migration cannot read %{1}: %{2}
+无法创建 Weline UI 图标迁移快照目录：%{1},Unable to create Weline UI icon migration snapshot directory: %{1}
+无法写入 Weline UI 图标迁移快照：%{1},Unable to write Weline UI icon migration snapshot: %{1}
+无法读取 Weline UI 图标迁移快照：%{1},Unable to read Weline UI icon migration snapshot: %{1}
+Weline UI 图标迁移快照 JSON 无效：%{1},Weline UI Icon Migration Snapshot JSON Invalid: %{1}
+Weline UI 图标迁移快照校验失败：%{1},Weline UI icon migration snapshot verification failed: %{1}
+图标迁移目标不是 ORM Model：%{1},Icon migration target is not ORM Model: %{1}
+请先登录,Please login first
+用户已被禁用,User has been disabled
+后台安全凭证暂不可用,Backend security credentials are temporarily unavailable
+页面将自动重试，也可立即刷新。,"The page will retry automatically, or you can refresh now."
+立即刷新,Refresh now
 Telegram,Telegram
-"Telegram 渠道测试","Telegram channel test"
-"这是一条测试消息，如果您收到了它，说明 Telegram 渠道配置是可用的。","This is a test message. If you receive it, the Telegram channel configuration is available."
-"Bot Token（建议填在渠道配置）","Bot Token (it is recommended to fill in the channel configuration)"
-"Chat ID（建议填在联系人配置）","Chat ID (it is recommended to fill in the contact configuration)"
-消息格式,"Message format"
-"默认 HTML","Default HTML"
-关闭链接预览,"Close link preview"
-默认否,"Default No"
+Telegram 渠道测试,Telegram channel test
+这是一条测试消息，如果您收到了它，说明 Telegram 渠道配置是可用的。,"This is a test message. If you receive it, the Telegram channel configuration is available."
+Bot Token（建议填在渠道配置）,Bot Token (it is recommended to fill in the channel configuration)
+Chat ID（建议填在联系人配置）,Chat ID (it is recommended to fill in the contact configuration)
+消息格式,Message format
+默认 HTML,Default HTML
+关闭链接预览,Close link preview
+默认否,Default No
 否,No
 是,Yes
 钉钉,DingTalk
-"主题: %{topic}","Theme: %{topic}"
-钉钉渠道测试,"DingTalk Channel Test"
+主题: %{topic},Theme: %{topic}
+钉钉渠道测试,DingTalk Channel Test
 这是一条测试消息，如果您收到此消息，说明钉钉渠道配置正确。,"This is a test message. If you receive this message, the DingTalk channel configuration is correct."
-"Webhook URL","Webhook URL"
-签名密钥,"Signing Key"
-"加签密钥（SEC 开头）","Signing key (starts with SEC)"
+Webhook URL,Webhook URL
+签名密钥,Signing Key
+加签密钥（SEC 开头）,Signing key (starts with SEC)
 邮件,Mail
-邮件渠道测试,"Email channel test"
+邮件渠道测试,Email channel test
 这是一条测试消息，如果您收到此邮件，说明邮件渠道配置正确。,"This is a test message. If you receive this email, the email channel configuration is correct."
-收件邮箱,"Recipient Email"
-发件人（可选）,"Sender (optional)"
-使用默认,"Use default"
-邮件渠道覆盖（可选）,邮件渠道覆盖（可选）
+收件邮箱,Recipient Email
+发件人（可选）,Sender (optional)
+使用默认,Use default
+邮件渠道覆盖（可选）,Mail channel override (optional)
 飞书,Feishu
-飞书渠道测试,"Feishu Channel Test"
+飞书渠道测试,Feishu Channel Test
 这是一条测试消息，如果您收到此消息，说明飞书渠道配置正确。,"This is a test message. If you receive this message, the Feishu channel configuration is correct."
-签名密钥（可选）,"Signing Key (Optional)"
+签名密钥（可选）,Signing Key (Optional)
 Webhook,Webhook
-"Webhook 渠道测试","Webhook channel test"
-"这是一条测试消息，如果您的服务收到此请求，说明 Webhook 渠道配置正确。","This is a test message. If your service receives this request, the Webhook channel configuration is correct."
-"用于生成 X-Signature 头","Used to generate the X-Signature header"
-自定义请求头（可选）,"Custom Request Headers (Optional)"
-加载维护模式失败：%{1},"Failed to load maintenance mode: %{1}"
-无效的请求方法,"Invalid request method"
-开发者联系邮箱格式不正确,开发者联系邮箱格式不正确
-维护模式状态已更新,"Maintenance mode status updated"
-更新失败：%{1},"Update failed: %{1}"
-IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
-配置保存成功,"Configuration saved successfully"
-保存配置失败：%{1},"Save Configuration Failed: %{1}"
-系统维护中，请稍后再试,"System is under maintenance. Please try again later."
-"维护操作 Provider 不可用","Maintenance operation Provider is unavailable"
+Webhook 渠道测试,Webhook channel test
+这是一条测试消息，如果您的服务收到此请求，说明 Webhook 渠道配置正确。,"This is a test message. If your service receives this request, the Webhook channel configuration is correct."
+用于生成 X-Signature 头,Used to generate the X-Signature header
+自定义请求头（可选）,Custom Request Headers (Optional)
+加载维护模式失败：%{1},Failed to load maintenance mode: %{1}
+无效的请求方法,Invalid request method
+开发者联系邮箱格式不正确,Developer contact email format is invalid
+维护模式状态已更新,Maintenance mode status updated
+更新失败：%{1},Update failed: %{1}
+IP白名单格式错误：%{1},IP whitelist format error: %{1}
+配置保存成功,Configuration saved successfully
+保存配置失败：%{1},Save Configuration Failed: %{1}
+系统维护中，请稍后再试,System is under maintenance. Please try again later.
+维护操作 Provider 不可用,Maintenance operation Provider is unavailable
 自动备份失败：%{1}，维护模式已开启,"Auto Backup Failed: %{1}, Maintenance Mode Enabled"
-维护静态页刷新失败：%{1},维护静态页刷新失败：%{1}
-系统维护模式,"System Maintenance Mode"
+维护静态页刷新失败：%{1},Failed to refresh maintenance static pages: %{1}
+系统维护模式,System Maintenance Mode
 settings,settings
-查看系统维护模式,"View system maintenance mode"
-切换系统维护模式,"Switch system maintenance mode"
+查看系统维护模式,View system maintenance mode
+切换系统维护模式,Switch system maintenance mode
 switch,switch
-配置系统维护模式,"Configure system maintenance mode"
-加载邮件设置失败：%{1},"Failed to load email settings: %{1}"
-保存成功,"Saved successfully"
-保存失败：%{1},"Save failed: %{1}"
-邮件设置,"Email settings"
+配置系统维护模式,Configure system maintenance mode
+加载邮件设置失败：%{1},Failed to load email settings: %{1}
+保存成功,Saved successfully
+保存失败：%{1},Save failed: %{1}
+邮件设置,Email settings
 mail,mail
-查看邮件设置,"View email settings"
-保存邮件设置,"Save mail settings"
+查看邮件设置,View email settings
+保存邮件设置,Save mail settings
 save,save
-加载存储设置失败：%{1},"Failed to load storage settings: %{1}"
-存储设置,"Storage settings"
+加载存储设置失败：%{1},Failed to load storage settings: %{1}
+存储设置,Storage settings
 folder,folder
-查看存储设置,"View storage settings"
-保存存储设置,"Save storage settings"
-加载基础设置失败：%{1},"Failed to load basic settings: %{1}"
-基础设置,"Basic Settings"
-查看基础设置,"View basic settings"
-保存基础设置,"Save basic settings"
-保存成功！,"Saved successfully!"
-加载访问日志失败：%{1},"Failed to load access logs: %{1}"
-访问日志,"Access log"
+查看存储设置,View storage settings
+保存存储设置,Save storage settings
+加载基础设置失败：%{1},Failed to load basic settings: %{1}
+基础设置,Basic Settings
+查看基础设置,View basic settings
+保存基础设置,Save basic settings
+保存成功！,Saved successfully!
+加载访问日志失败：%{1},Failed to load access logs: %{1}
+访问日志,Access log
 file,file
-查看访问日志,"View access log"
-消息订阅,"Message subscription"
-主题和渠道不能为空,"Topic and channel cannot be empty"
-参数错误,"Parameter error"
+查看访问日志,View access log
+消息订阅,Message subscription
+主题和渠道不能为空,Topic and channel cannot be empty
+参数错误,Parameter error
 已启用,Enabled
 已禁用,Disabled
-后台通知,"Backend Notification"
-管理消息订阅,"Manage message subscriptions"
-我的订阅,"my subscription"
+后台通知,Backend Notification
+管理消息订阅,Manage message subscriptions
+我的订阅,my subscription
 bell,bell
-查看我的消息订阅,"View my message subscription"
-保存订阅,"Save subscription"
-保存订阅设置,"Save subscription settings"
-切换订阅,"Switch subscription"
+查看我的消息订阅,View my message subscription
+保存订阅,Save subscription
+保存订阅设置,Save subscription settings
+切换订阅,Switch subscription
 circle,circle
-切换订阅状态,"Switch subscription status"
-迁移诊断,"Migration diagnostics"
-发布诊断,"Release diagnostic"
+切换订阅状态,Switch subscription status
+迁移诊断,Migration diagnostics
+发布诊断,Release diagnostic
 search,search
-只读查看迁移克隆与检查点状态,"Read-only view of migration clone and checkpoint status"
-只读查看发布环境与当前标记,"Read-only view of the release environment and current tags"
-"外观与 Logo","Appearance & Logo"
-加载配置失败：%{1},"Failed to load configuration: %{1}"
-后台配置,"Backend configuration"
-后台配置管理,"Backend configuration management"
-查看后台配置,"View background configuration"
-保存后台配置,"Save background configuration"
-默认联系人,"Default Contact"
+只读查看迁移克隆与检查点状态,Read-only view of migration clone and checkpoint status
+只读查看发布环境与当前标记,Read-only view of the release environment and current tags
+外观与 Logo,Appearance & Logo
+加载配置失败：%{1},Failed to load configuration: %{1}
+后台配置,Backend configuration
+后台配置管理,Backend configuration management
+查看后台配置,View background configuration
+保存后台配置,Save background configuration
+默认联系人,Default Contact
 联系人,Contact
-联系人名称不能为空,"Contact name cannot be empty"
-联系人不存在,"Contact does not exist"
-更新成功,"Update successful"
-创建成功,"Created successfully"
-保存失败,"Save Failed"
-联系人和渠道不能为空,"Contact and channel cannot be empty"
+联系人名称不能为空,Contact name cannot be empty
+联系人不存在,Contact does not exist
+更新成功,Update successful
+创建成功,Created successfully
+保存失败,Save Failed
+联系人和渠道不能为空,Contact and channel cannot be empty
 已移除,Removed
-操作失败,"Operation failed"
-删除成功,"Deletion successful"
-删除失败,"Deletion failed"
+操作失败,Operation failed
+删除成功,Deletion successful
+删除失败,Deletion failed
 user,user
-管理联系人（多渠道配置）,"Manage contacts (multi-channel configuration)"
-联系人列表,"Contact list"
-查看联系人,"View contacts"
-保存联系人,"Save contact"
-添加渠道配置,"Add Channel Configuration"
+管理联系人（多渠道配置）,Manage contacts (multi-channel configuration)
+联系人列表,Contact list
+查看联系人,View contacts
+保存联系人,Save contact
+添加渠道配置,Add Channel Configuration
 plus,plus
-为联系人添加渠道配置,"Add channel configuration for contacts"
-移除渠道配置,"Remove channel configuration"
+为联系人添加渠道配置,Add channel configuration for contacts
+移除渠道配置,Remove channel configuration
 minus,minus
-移除联系人的某渠道配置,"Remove a channel configuration from a contact"
-删除联系人,"Delete contact"
+移除联系人的某渠道配置,Remove a channel configuration from a contact
+删除联系人,Delete contact
 trash,trash
-基本资料,基本资料
-头像设置,头像设置
-个人语言,个人语言
-修改密码,修改密码
-无法加载当前管理员资料,无法加载当前管理员资料
-用户名和邮箱不能为空,用户名和邮箱不能为空
-请输入有效的邮箱地址,请输入有效的邮箱地址
-基本资料已保存,基本资料已保存
-基本资料保存失败：%{1},基本资料保存失败：%{1}
-头像已保存,头像已保存
-头像保存失败：%{1},头像保存失败：%{1}
-请选择一个有效的个人语言,请选择一个有效的个人语言
-个人语言保存失败,个人语言保存失败
-个人语言已保存,个人语言已保存
-请填写当前密码和新密码,请填写当前密码和新密码
-当前密码不正确,当前密码不正确
-"新密码至少 6 位","新密码至少 6 位"
-两次输入的新密码不一致,两次输入的新密码不一致
-密码已更新,密码已更新
-密码更新失败：%{1},密码更新失败：%{1}
-我的资料,我的资料
-管理基本资料,管理基本资料
-查看基本资料,查看基本资料
+基本资料,Basic profile
+头像设置,Avatar settings
+个人语言,Personal language
+修改密码,Change password
+无法加载当前管理员资料,Unable to load the current admin profile
+用户名和邮箱不能为空,Username and email cannot be empty
+请输入有效的邮箱地址,Please enter a valid email address
+基本资料已保存,Basic profile saved
+基本资料保存失败：%{1},Failed to save basic profile: %{1}
+头像已保存,Avatar saved
+头像保存失败：%{1},Failed to save avatar: %{1}
+请选择一个有效的个人语言,Please select a valid personal language
+个人语言保存失败,Failed to save personal language
+个人语言已保存,Personal language saved
+请填写当前密码和新密码,Please enter the current password and a new password
+当前密码不正确,Current password is incorrect
+新密码至少 6 位,New password must be at least 6 characters
+两次输入的新密码不一致,The two new passwords do not match
+密码已更新,Password updated
+密码更新失败：%{1},Failed to update password: %{1}
+我的资料,My profile
+管理基本资料,Manage basic profile
+查看基本资料,View basic profile
 image,image
-设置个人头像,设置个人头像
+设置个人头像,Set personal avatar
 language,language
-设置个人语言,设置个人语言
+设置个人语言,Set personal language
 lock,lock
-修改登录密码,修改登录密码
+修改登录密码,Change login password
 短信,SMS
-我的联系人,"My Contacts"
-渠道和联系方式不能为空,"Channel and contact information cannot be empty"
-保存失败，请稍后重试或联系管理员,"Save failed. Please try again later or contact the administrator"
-更新失败,"Update failed"
-已设为默认,"Set as default"
-设置失败,"Setting failed"
-联系人管理,"Contact management"
-管理用户联系人,"Manage user contacts"
-查看我的联系人,"View my contacts"
-更新联系人,"Update contact"
+我的联系人,My Contacts
+渠道和联系方式不能为空,Channel and contact information cannot be empty
+保存失败，请稍后重试或联系管理员,Save failed. Please try again later or contact the administrator
+更新失败,Update failed
+已设为默认,Set as default
+设置失败,Setting failed
+联系人管理,Contact management
+管理用户联系人,Manage user contacts
+查看我的联系人,View my contacts
+更新联系人,Update contact
 edit,edit
-设为默认,"Set as Default"
+设为默认,Set as Default
 star,star
-设为默认联系人,"Set as default contact"
-渠道配置,"Channel configuration"
-编辑渠道,"Edit Channel"
-新建渠道,"New Channel"
-渠道标识和名称不能为空,"Channel identifier and name cannot be empty"
-渠道不存在,"Channel does not exist"
-渠道标识已存在,"Channel identifier already exists"
-请选择渠道类型,"Please select a channel type"
-渠道适配器不存在,"Channel adapter does not exist"
+设为默认联系人,Set as default contact
+渠道配置,Channel configuration
+编辑渠道,Edit Channel
+新建渠道,New Channel
+渠道标识和名称不能为空,Channel identifier and name cannot be empty
+渠道不存在,Channel does not exist
+渠道标识已存在,Channel identifier already exists
+请选择渠道类型,Please select a channel type
+渠道适配器不存在,Channel adapter does not exist
 测试成功，渠道配置正确,"Test Passed, Channel Configuration Correct"
 测试失败，请检查配置,"Test failed, please check configuration"
-测试失败：%{1},"Test Failed: %{1}"
-配置通知渠道,"Configure notification channels"
-渠道列表,"Channel list"
+测试失败：%{1},Test Failed: %{1}
+配置通知渠道,Configure notification channels
+渠道列表,Channel list
 list,list
-查看通知渠道,"View notification channels"
-编辑渠道配置,"Edit Channel Configuration"
-保存渠道,"save channel"
-保存渠道配置,"Save channel configuration"
-测试渠道,"test channel"
+查看通知渠道,View notification channels
+编辑渠道配置,Edit Channel Configuration
+保存渠道,save channel
+保存渠道配置,Save channel configuration
+测试渠道,test channel
 arrow-right,arrow-right
-测试渠道连通性,"Test channel connectivity"
-删除渠道,"Delete channel"
-删除渠道配置,"Delete channel configuration"
-通知中心,"Notification Center"
-通知不存在或无权查看,"Notification does not exist or you do not have permission to view it."
-通知详情,"Notification Details"
-已标记为已读,"Marked as read"
-标记失败,"Mark failed"
-未登录,"Not logged in"
-已标记全部已读,"Marked all as read"
-请指定主题类型,"Please specify topic type"
-"已将该类 %{count} 条通知标记为已读","Marked %{count} notifications of this type as read"
-查看系统通知,"View system notifications"
-通知列表,"Notification list"
+测试渠道连通性,Test channel connectivity
+删除渠道,Delete channel
+删除渠道配置,Delete channel configuration
+通知中心,Notification Center
+通知不存在或无权查看,Notification does not exist or you do not have permission to view it.
+通知详情,Notification Details
+已标记为已读,Marked as read
+标记失败,Mark failed
+未登录,Not logged in
+已标记全部已读,Marked all as read
+请指定主题类型,Please specify topic type
+已将该类 %{count} 条通知标记为已读,Marked %{count} notifications of this type as read
+查看系统通知,View system notifications
+通知列表,Notification list
 check,check
-查看通知列表,"View notification list"
-查看通知详情,"View notification details"
-加载备份管理失败：%{1},"Failed to load backup management: %{1}"
-备份创建成功,"Backup created successfully"
-备份创建失败：%{1},"Backup creation failed: %{1}"
-系统备份,"System Backup"
+查看通知列表,View notification list
+查看通知详情,View notification details
+加载备份管理失败：%{1},Failed to load backup management: %{1}
+备份创建成功,Backup created successfully
+备份创建失败：%{1},Backup creation failed: %{1}
+系统备份,System Backup
 store,store
-查看系统备份,"View system backup"
-创建系统备份,"Create system backup"
-后端主题配置字段无效：%{1},"Invalid backend theme configuration field: %{1}"
-后端主题模式不能为空。,"Backend theme mode cannot be empty."
-后端文字方向配置无效。,"The backend text direction configuration is invalid."
-后端主题模式无效。,"Invalid backend theme mode."
-后端主题模式无效：%{1},"Invalid backend theme mode: %{1}"
-加载数据统计失败：%{1},"Failed to load data statistics: %{1}"
-数据统计,"Data statistics"
+查看系统备份,View system backup
+创建系统备份,Create system backup
+后端主题配置字段无效：%{1},Invalid backend theme configuration field: %{1}
+后端主题模式不能为空。,Backend theme mode cannot be empty.
+后端文字方向配置无效。,The backend text direction configuration is invalid.
+后端主题模式无效。,Invalid backend theme mode.
+后端主题模式无效：%{1},Invalid backend theme mode: %{1}
+加载数据统计失败：%{1},Failed to load data statistics: %{1}
+数据统计,Data statistics
 chart,chart
-查看数据统计,"View statistics"
-保存失败，请重试！%{1},"Save failed. Please try again! %{1}"
-保存失败，请重试!不支持的类型：%{1},"Save failed. Please try again! Unsupported type: %{1}"
+查看数据统计,View statistics
+保存失败，请重试！%{1},Save failed. Please try again! %{1}
+保存失败，请重试!不支持的类型：%{1},Save failed. Please try again! Unsupported type: %{1}
 "保存成功,缓存清理成功！","Saved successfully, cache cleared successfully!"
-"保存失败! %{1}","Save Failed! %{1}"
-"配置 key 不能为空","Config key cannot be empty"
-"配置 key 格式无效","Config key format is invalid"
-"配置 value 必须是标量值","Config value must be a scalar value"
-"配置 value 长度不能超过 %{1} 字符","Config value cannot exceed %{1} characters"
-"配置 module 格式无效","Config module format is invalid"
-"配置 scope 格式无效","Config scope format is invalid"
-"配置 locale 格式无效","Config locale format is invalid"
-保存系统配置,"Save system configuration"
-保存后台系统配置,"Save background system configuration"
-加载系统监控失败：%{1},"Failed to load system monitoring: %{1}"
-系统监控,"System Monitoring"
+保存失败! %{1},Save Failed! %{1}
+配置 key 不能为空,Config key cannot be empty
+配置 key 格式无效,Config key format is invalid
+配置 value 必须是标量值,Config value must be a scalar value
+配置 value 长度不能超过 %{1} 字符,Config value cannot exceed %{1} characters
+配置 module 格式无效,Config module format is invalid
+配置 scope 格式无效,Config scope format is invalid
+配置 locale 格式无效,Config locale format is invalid
+保存系统配置,Save system configuration
+保存后台系统配置,Save background system configuration
+加载系统监控失败：%{1},Failed to load system monitoring: %{1}
+系统监控,System Monitoring
 grid,grid
-查看系统监控,"View system monitoring"
-用户名和密码不能为空,"Username and password cannot be empty"
-用户不存在,"User does not exist"
-密码错误,"Incorrect Password"
-创建token失败,"Failed to create token"
-登录成功,"Login successful"
-登录失败：%{1},"Login failed: %{1}"
-Token不能为空,"Token cannot be empty"
-Token无效或已过期,"Token is invalid or expired"
-Token刷新成功,"Token refreshed successfully"
-刷新token失败：%{1},"Failed to refresh token: %{1}"
-撤销token失败,"Failed to revoke token"
-Token已撤销,"Token has been revoked"
-撤销token失败：%{1},"Failed to revoke token: %{1}"
-用户未登录,"User not logged in"
-获取用户信息成功,"Successfully got user info"
-获取用户信息失败：%{1},"Failed to get user info: %{1}"
-Token无效,"Token is invalid"
-获取token信息成功,"Successfully got token information"
-获取token信息失败：%{1},"Failed to get token information: %{1}"
-消息主题不能为空,"Message subject cannot be empty"
-消息标题不能为空,"Message title cannot be empty"
-消息内容不能为空,"Message content cannot be empty"
-通知已发送,"Notification sent"
-发送通知失败：%{error},"Failed to send notification: %{error}"
-"找不到模组: %{1}","Cannot find module: %{1}"
+查看系统监控,View system monitoring
+用户名和密码不能为空,Username and password cannot be empty
+用户不存在,User does not exist
+密码错误,Incorrect Password
+创建token失败,Failed to create token
+登录成功,Login successful
+登录失败：%{1},Login failed: %{1}
+Token不能为空,Token cannot be empty
+Token无效或已过期,Token is invalid or expired
+Token刷新成功,Token refreshed successfully
+刷新token失败：%{1},Failed to refresh token: %{1}
+撤销token失败,Failed to revoke token
+Token已撤销,Token has been revoked
+撤销token失败：%{1},Failed to revoke token: %{1}
+用户未登录,User not logged in
+获取用户信息成功,Successfully got user info
+获取用户信息失败：%{1},Failed to get user info: %{1}
+Token无效,Token is invalid
+获取token信息成功,Successfully got token information
+获取token信息失败：%{1},Failed to get token information: %{1}
+消息主题不能为空,Message subject cannot be empty
+消息标题不能为空,Message title cannot be empty
+消息内容不能为空,Message content cannot be empty
+通知已发送,Notification sent
+发送通知失败：%{error},Failed to send notification: %{error}
+找不到模组: %{1},Cannot find module: %{1}
 通知,Notification
-未读通知,"unread notifications"
-关闭通知,"Turn off notifications"
-暂无通知,"No notifications"
-查看全部,"View all"
-管理订阅,"Manage subscriptions"
+未读通知,unread notifications
+关闭通知,Turn off notifications
+暂无通知,No notifications
+查看全部,View all
+管理订阅,Manage subscriptions
 关闭,closure
 确定,Sure
 取消,Cancel
-请重试,"Please try again"
-未找到可提交的表单。,"No submittable form found."
-发送通知失败,"Failed to send notification"
-总用户数,"Total Users"
-总订单数,"Total Orders"
-总产品数,"Total Products"
-总访问数,"Total Visits"
+请重试,Please try again
+未找到可提交的表单。,No submittable form found.
+发送通知失败,Failed to send notification
+总用户数,Total Users
+总订单数,Total Orders
+总产品数,Total Products
+总访问数,Total Visits
 提示,Prompt
-数据统计功能正在开发中，敬请期待。,"The data statistics feature is under development. Please stay tuned."
+数据统计功能正在开发中，敬请期待。,The data statistics feature is under development. Please stay tuned.
 基础设置功能正在开发中，敬请期待。,"Basic settings feature is under development, please stay tuned."
-站点名称,"Site Name"
-站点URL,"Site URL"
-时区,"Time zone"
-默认语言,"Default Language"
-保存设置,"Save Settings"
+站点名称,Site Name
+站点URL,Site URL
+时区,Time zone
+默认语言,Default Language
+保存设置,Save Settings
 存储设置功能正在开发中，敬请期待。,"Storage settings feature is under development, please stay tuned."
 邮件设置功能正在开发中，敬请期待。,"Email settings feature is under development, please stay tuned."
-新建联系人,"New Contact"
+新建联系人,New Contact
 暂无联系人，请先新建联系人，再为其添加渠道配置。,"No contacts. Please create a contact first, then add channel configuration for them."
 尚未添加渠道配置，通知不会发到此联系人。,"No channel configuration added yet, notifications will not be sent to this contact."
-添加渠道,"Add Channel"
-再添加渠道,"Add another channel"
-联系人名称,"Contact name"
+添加渠道,Add Channel
+再添加渠道,Add another channel
+联系人名称,Contact name
 保存,Save
 渠道,Channel
-请选择渠道,"Please select a channel"
-请先选择渠道,"Please select a channel first"
+请选择渠道,Please select a channel
+请先选择渠道,Please select a channel first
 未命名,Unnamed
-编辑名称,"Edit name"
+编辑名称,Edit name
 可用,Available
-未配置,"Not configured"
+未配置,Not configured
 编辑,Edit
 移除,Remove
 如：运维值班,"e.g., Operations Duty"
 确认组件不可用，请刷新页面后重试,"Confirm that the component is unavailable, please refresh the page and try again"
-编辑联系人,"Edit Contact"
-请输入联系人名称,"Please enter the contact name"
-确定要移除此渠道配置吗？,"Are you sure you want to remove this channel configuration?"
-确定要删除此联系人吗？,"Are you sure you want to delete this contact?"
-系统监控功能正在开发中，敬请期待。,"System monitoring is under development. Stay tuned."
-PHP版本,"PHP version"
-服务器软件,"Server Software"
-内存限制,"Memory limit"
-最大执行时间,"Max Execution Time"
+编辑联系人,Edit Contact
+请输入联系人名称,Please enter the contact name
+确定要移除此渠道配置吗？,Are you sure you want to remove this channel configuration?
+确定要删除此联系人吗？,Are you sure you want to delete this contact?
+系统监控功能正在开发中，敬请期待。,System monitoring is under development. Stay tuned.
+PHP版本,PHP version
+服务器软件,Server Software
+内存限制,Memory limit
+最大执行时间,Max Execution Time
 秒,second
-"配置全站 Logo 与站点图标：未填写 Logo 时默认使用与登录页一致的 W 字母黄色丝带标识；填写后前后台顶栏、登录页与浏览器标签页将统一使用此处配置。","Configure the site logo and favicon. When no logo is configured, the W mark with the yellow ribbon used on the login page is shown by default. Custom values apply consistently to the storefront, admin header, login page, and browser tab."
-"当前使用默认 Logo","Currently using the default logo"
-"未配置自定义 Logo，后台顶栏与登录页使用同一个 W 字母黄色丝带标识。","No custom logo is configured. The admin header and login page use the same W mark with the yellow ribbon."
-Logo配置,"Logo configuration"
-深色Logo（大图）,"Dark Logo (large)"
+配置全站 Logo 与站点图标：未填写 Logo 时默认使用与登录页一致的 W 字母黄色丝带标识；填写后前后台顶栏、登录页与浏览器标签页将统一使用此处配置。,"Configure the site logo and favicon. When no logo is configured, the W mark with the yellow ribbon used on the login page is shown by default. Custom values apply consistently to the storefront, admin header, login page, and browser tab."
+当前使用默认 Logo,Currently using the default logo
+未配置自定义 Logo，后台顶栏与登录页使用同一个 W 字母黄色丝带标识。,No custom logo is configured. The admin header and login page use the same W mark with the yellow ribbon.
+Logo配置,Logo configuration
+深色Logo（大图）,Dark Logo (large)
 用于深色主题的大尺寸Logo，建议高度70px,"Large logo for dark theme, recommended height 70px"
-浅色Logo（大图）,"Light Logo (Large)"
+浅色Logo（大图）,Light Logo (Large)
 用于浅色主题的大尺寸Logo，建议高度70px,"Large logo for light theme, recommended height 70px"
-小Logo,"Small Logo"
+小Logo,Small Logo
 用于侧边栏折叠时的小尺寸Logo，建议高度50px,"Small logo for when the sidebar is collapsed, recommended height 50px"
-站点图标（Favicon）,"Site icon (Favicon)"
-"前后台浏览器标签页图标；留空则使用 Theme 默认 icon（与 Logo 同源）。","Front and back browser tab icon; if left blank, the Theme default icon (same origin as Logo) will be used."
-登录页背景,"Login Page Background"
-登录页背景图,"Login Page Background Image"
-"建议尺寸 1920x1080，留空使用默认背景","Recommended 1920x1080"
-站点信息,"Site Information"
-后台管理系统的名称,"Backend Management System Name"
-站点描述,"Site Description"
-后台管理系统的描述信息,"Backend Management System Description"
-保存配置,"Save Configuration"
+站点图标（Favicon）,Site icon (Favicon)
+前后台浏览器标签页图标；留空则使用 Theme 默认 icon（与 Logo 同源）。,"Front and back browser tab icon; if left blank, the Theme default icon (same origin as Logo) will be used."
+登录页背景,Login Page Background
+登录页背景图,Login Page Background Image
+建议尺寸 1920x1080，留空使用默认背景,Recommended 1920x1080
+站点信息,Site Information
+后台管理系统的名称,Backend Management System Name
+站点描述,Site Description
+后台管理系统的描述信息,Backend Management System Description
+保存配置,Save Configuration
 重置,Reset
-"默认 Weline Logo","Default Weline logo"
-确定要重置表单吗？,"Are you sure you want to reset the form?"
-添加联系人,"Add Contact"
-暂无联系人,"No contacts"
+默认 Weline Logo,Default Weline logo
+确定要重置表单吗？,Are you sure you want to reset the form?
+添加联系人,Add Contact
+暂无联系人,No contacts
 添加,Add
 默认,Default
-添加更多,"Add More"
-联系方式,"Contact information"
-备注名称,"Remark name"
+添加更多,Add More
+联系方式,Contact information
+备注名称,Remark name
 删除,Delete
-"邮箱、手机号或用户 ID","Email, phone number, or user ID"
+邮箱、手机号或用户 ID,"Email, phone number, or user ID"
 可选,Optional
-确定要将此联系人设为默认吗？,"Are you sure you want to set this contact as the default?"
+确定要将此联系人设为默认吗？,Are you sure you want to set this contact as the default?
 集中查看系统消息、告警与业务提醒。,"Centrally view system messages, alarms and business reminders."
-全部已读,"Mark All as Read"
+全部已读,Mark All as Read
 关键词,Keywords
 类型,Type
-全部类型,"All types"
+全部类型,All types
 状态,Status
 全部,All
 未读,Unread
 已读,Read
 搜索,Search
-暂无通知消息,"No notification messages"
-新的系统消息会显示在这里。,"New system messages will appear here."
-查看详情,"View Details"
+暂无通知消息,No notification messages
+新的系统消息会显示在这里。,New system messages will appear here.
+查看详情,View Details
 共,Total
 条通知，第,"items of notifications, page"
 页,Page
-确定要将所有通知标记为已读吗？,"Are you sure you want to mark all notifications as read?"
+确定要将所有通知标记为已读吗？,Are you sure you want to mark all notifications as read?
 网络错误，请重试,"Network error, please try again"
-搜索标题或内容,"Search title or content"
-通知分页,"Notification pagination"
-上一页,"Previous page"
-下一页,"Next page"
-返回通知中心,"Return to Notification Center"
-发生错误,"An error occurred"
+搜索标题或内容,Search title or content
+通知分页,Notification pagination
+上一页,Previous page
+下一页,Next page
+返回通知中心,Return to Notification Center
+发生错误,An error occurred
 上一条,Previous
 下一条,Next
-附加信息,"Additional Info"
-已推送渠道,"Pushed channel"
-此类全部已读,"Mark all of this type as read"
-订阅设置,"Subscription Settings"
-"使用 ← → 方向键切换","Use ← → arrow keys to switch"
+附加信息,Additional Info
+已推送渠道,Pushed channel
+此类全部已读,Mark all of this type as read
+订阅设置,Subscription Settings
+使用 ← → 方向键切换,Use ← → arrow keys to switch
 主题,theme
-确定要将「%{name}」类的所有通知标记为已读吗？,"Mark all notifications of type「%{name}」as read?"
-相邻通知,"adjacent notification"
-已是第一条,"This is the first one"
-已是最后一条,"This is the last one"
-暂无渠道配置,"No channel configuration"
-创建第一个渠道,"Create first channel"
-最低级别,"Minimum level"
-订阅主题,"Subscribe to Topic"
+确定要将「%{name}」类的所有通知标记为已读吗？,Mark all notifications of type「%{name}」as read?
+相邻通知,adjacent notification
+已是第一条,This is the first one
+已是最后一条,This is the last one
+暂无渠道配置,No channel configuration
+创建第一个渠道,Create first channel
+最低级别,Minimum level
+订阅主题,Subscribe to Topic
 操作,Operation
-全部主题,"All Themes"
+全部主题,All Themes
 个主题,topics
 启用,Enable
 禁用,Disable
 ≥,≥
 确定要删除此渠道吗？删除后将停止向该渠道发送通知。,"Are you sure you want to delete this channel? After deletion, notifications will stop being sent to this channel."
-返回列表,"Return to List"
-渠道类型,"Channel type"
-请选择,"Please select"
-渠道名称,"Channel name"
-最低通知级别,"Minimum notification level"
-只发送达到此级别的通知,"Only send notifications that reach this level"
-启用此渠道,"Enable this channel"
-请先选择渠道类型,"Please select a channel type first"
-留空表示订阅所有主题,"Leave blank to subscribe to all topics"
-测试连接,"Test Connection"
+返回列表,Return to List
+渠道类型,Channel type
+请选择,Please select
+渠道名称,Channel name
+最低通知级别,Minimum notification level
+只发送达到此级别的通知,Only send notifications that reach this level
+启用此渠道,Enable this channel
+请先选择渠道类型,Please select a channel type first
+留空表示订阅所有主题,Leave blank to subscribe to all topics
+测试连接,Test Connection
 帮助,Help
-渠道类型说明,"Channel type description"
-"通过飞书机器人 Webhook 发送消息","Send message via Feishu bot Webhook"
-"通过钉钉机器人 Webhook 发送消息","Send message via DingTalk bot Webhook"
-"使用系统 SMTP 配置发送邮件","Send email using the system SMTP configuration"
-"向自定义 URL 发送 POST 请求","Send POST request to custom URL"
-通知级别,"Notification Level"
-只有达到设定级别的通知才会发送到此渠道。级别从低到高：,"Only notifications that reach the set level will be sent to this channel. Levels from low to high:"
+渠道类型说明,Channel type description
+通过飞书机器人 Webhook 发送消息,Send message via Feishu bot Webhook
+通过钉钉机器人 Webhook 发送消息,Send message via DingTalk bot Webhook
+使用系统 SMTP 配置发送邮件,Send email using the system SMTP configuration
+向自定义 URL 发送 POST 请求,Send POST request to custom URL
+通知级别,Notification Level
+只有达到设定级别的通知才会发送到此渠道。级别从低到高：,Only notifications that reach the set level will be sent to this channel. Levels from low to high:
 如：飞书机器人-研发群,"e.g., Feishu Bot - Dev Group"
-正在测试连接...,"Testing connection..."
-测试失败,"Test Failed"
-只读查看克隆登记和检查点；不提供迁移执行或销毁操作。,"Read-only view of clone registrations and checkpoints; no migration execution or destruction operations are provided."
-只读,"read only"
+正在测试连接...,Testing connection...
+测试失败,Test Failed
+只读查看克隆登记和检查点；不提供迁移执行或销毁操作。,Read-only view of clone registrations and checkpoints; no migration execution or destruction operations are provided.
+只读,read only
 连接器,connector
-当前数据库,"Current database"
-克隆环境,"Clone environment"
-已登记的隔离克隆,"Registered quarantine clone"
+当前数据库,Current database
+克隆环境,Clone environment
+已登记的隔离克隆,Registered quarantine clone
 数据库,database
 模式,model
-源库,"source library"
-创建时间,"Creation time"
+源库,source library
+创建时间,Creation time
 指纹,fingerprint
-暂无克隆登记,"No clone registration yet"
-最近检查点,"latest checkpoint"
+暂无克隆登记,No clone registration yet
+最近检查点,latest checkpoint
 阶段,stage
-更新时间,"Update time"
-日志条数,"Number of log entries"
-暂无检查点,"No checkpoints yet"
-"只读查看当前发布标记；不提供发布、回滚或 Webhook 回放操作。","Read-only view of the current publish tag; no publish, rollback, or webhook playback operations are provided."
-部署模式,"Deployment mode"
-发布版本,"release version"
-当前发布标记,"current release tag"
-未找到当前发布标记文件,"Current release tag file not found"
-内核版本通知状态,"Kernel version notification status"
-检查值,"Check value"
-通知指纹,"Notification fingerprint"
-通知时间,"Notification time"
-只改用户名和邮箱。头像、语言、密码请到左侧对应栏目。,只改用户名和邮箱。头像、语言、密码请到左侧对应栏目。
+更新时间,Update time
+日志条数,Number of log entries
+暂无检查点,No checkpoints yet
+只读查看当前发布标记；不提供发布、回滚或 Webhook 回放操作。,"Read-only view of the current publish tag; no publish, rollback, or webhook playback operations are provided."
+部署模式,Deployment mode
+发布版本,release version
+当前发布标记,current release tag
+未找到当前发布标记文件,Current release tag file not found
+内核版本通知状态,Kernel version notification status
+检查值,Check value
+通知指纹,Notification fingerprint
+通知时间,Notification time
+只改用户名和邮箱。头像、语言、密码请到左侧对应栏目。,"Only username and email are edited here. Use the left-side sections for avatar, language, and password."
 用户名,Username
 邮箱,Email
-只影响你自己的后台界面。网站前台默认语言、其他管理员互不影响。地址里写了语言时，以地址为准。,只影响你自己的后台界面。网站前台默认语言、其他管理员互不影响。地址里写了语言时，以地址为准。
-保存语言,保存语言
-从媒体库选择图片；选图后侧栏会即时预览。点「保存头像」后顶栏也会更新。,"Pick an image from the media library; the sidebar previews immediately. Click Save avatar to update the top bar."
-头像图片,头像图片
-"媒体选图组件不可用，请检查 MediaManager 模块。","媒体选图组件不可用，请检查 MediaManager 模块。"
-保存头像,保存头像
-选择头像,选择头像
-个人中心导航,个人中心导航
-修改后需使用新密码重新登录。请确认两次新密码一致。,修改后需使用新密码重新登录。请确认两次新密码一致。
-当前密码,当前密码
-新密码,新密码
-确认新密码,确认新密码
-更新密码,更新密码
+只影响你自己的后台界面。网站前台默认语言、其他管理员互不影响。地址里写了语言时，以地址为准。,"This only affects your own admin UI. The storefront default language and other admins are unaffected. If the URL includes a language, the URL wins."
+保存语言,Save language
+从媒体库选择图片；选图后侧栏会即时预览。点「保存头像」后顶栏也会更新。,Pick an image from the media library; the sidebar previews immediately. Click Save avatar to update the top bar.
+头像图片,Avatar image
+媒体选图组件不可用，请检查 MediaManager 模块。,Media picker is unavailable; please check the MediaManager module.
+保存头像,Save avatar
+选择头像,Choose avatar
+个人中心导航,Account center navigation
+修改后需使用新密码重新登录。请确认两次新密码一致。,"After changing, sign in again with the new password. Make sure both new password fields match."
+当前密码,Current password
+新密码,New password
+确认新密码,Confirm new password
+更新密码,Update password
 访问日志功能正在开发中，敬请期待。,"The access log feature is under development, please stay tuned."
-日志列表,"Log list"
+日志列表,Log list
 时间,Time
-IP地址,"IP address"
+IP地址,IP address
 URL,URL
-状态码,"Status Code"
-"User Agent","User Agent"
-暂无访问日志记录,"No access log records found"
-搜索IP地址或URL,"Search IP address or URL"
-管理联系人,"Manage contacts"
-选择您希望通过哪些渠道接收不同类型的消息通知。外部渠道需要先在联系人里配置对应渠道信息。,"Select the channels through which you wish to receive different types of message notifications. External channels require configuring the corresponding channel information in Contacts first."
-暂无可订阅的消息主题,"No subscribable message topics"
-已配置联系人,"Contact configured"
-未配置联系人,"Contact not configured"
-重要提示,"Important Notice"
+状态码,Status Code
+User Agent,User Agent
+暂无访问日志记录,No access log records found
+搜索IP地址或URL,Search IP address or URL
+管理联系人,Manage contacts
+选择您希望通过哪些渠道接收不同类型的消息通知。外部渠道需要先在联系人里配置对应渠道信息。,Select the channels through which you wish to receive different types of message notifications. External channels require configuring the corresponding channel information in Contacts first.
+暂无可订阅的消息主题,No subscribable message topics
+已配置联系人,Contact configured
+未配置联系人,Contact not configured
+重要提示,Important Notice
 开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,"After enabling maintenance mode, the frontend will display a maintenance page, but the backend will remain accessible."
-维护模式设置,"Maintenance mode settings"
-启用维护模式,"Enable maintenance mode"
-维护消息,"Maintenance message"
-此消息将显示给访问前台的用户,"This message will be displayed to users visiting the frontend"
-开发者联系邮箱,开发者联系邮箱
-维护页「需要帮助吗？」卡片中展示的联系邮箱。留空时回退到站点联系邮箱。,维护页「需要帮助吗？」卡片中展示的联系邮箱。留空时回退到站点联系邮箱。
-在统一配置中心管理,在统一配置中心管理
-当前状态,"Current status"
-系统当前处于维护模式,"The system is currently in maintenance mode"
-系统当前正常运行,"The system is currently running normally"
+维护模式设置,Maintenance mode settings
+启用维护模式,Enable maintenance mode
+维护消息,Maintenance message
+此消息将显示给访问前台的用户,This message will be displayed to users visiting the frontend
+开发者联系邮箱,Developer contact email
+维护页「需要帮助吗？」卡片中展示的联系邮箱。留空时回退到站点联系邮箱。,"Contact email shown on the maintenance page “Need help?” card. When empty, falls back to the site contact email."
+在统一配置中心管理,Manage in the unified configuration center
+当前状态,Current status
+系统当前处于维护模式,The system is currently in maintenance mode
+系统当前正常运行,The system is currently running normally
 系统备份功能正在开发中，敬请期待。,"The system backup feature is under development, please stay tuned."
-创建备份,"Create backup"
-备份类型,"Backup type"
-完整备份,"Full Backup"
-仅数据库,"Database only"
-仅文件,"File only"
-备份列表,"Backup list"
-备份文件,"Backup file"
+创建备份,Create backup
+备份类型,Backup type
+完整备份,Full Backup
+仅数据库,Database only
+仅文件,File only
+备份列表,Backup list
+备份文件,Backup file
 大小,Size
 下载,download
-暂无备份文件,"No backup files"
-创建备份失败,"Failed to create backup"
-下载备份：,"Download backup:"
-确定要删除这个备份吗？,"Are you sure you want to delete this backup?"
-删除备份：,"Delete backup:"
+暂无备份文件,No backup files
+创建备份失败,Failed to create backup
+下载备份：,Download backup:
+确定要删除这个备份吗？,Are you sure you want to delete this backup?
+删除备份：,Delete backup:
 用户不存在，请联系管理员,"The user does not exist, please contact the administrator"
-用户不存在！,"User does not exist!"
-"框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}（文件与数据库均未找到）。请修复 menu.xml 的 parent/source 链。","框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}（文件与数据库均未找到）。请修复 menu.xml 的 parent/source 链。"
-模块不存在：%{1},"Module does not exist: %{1}"
+用户不存在！,User does not exist!
+框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}（文件与数据库均未找到）。请修复 menu.xml 的 parent/source 链。,Framework contract error: broken menu ACL chain. Menu %{1} (module %{2}) declares missing parent %{3} (not found in files or database). Fix the parent/source chain in menu.xml.
+模块不存在：%{1},Module does not exist: %{1}
 后台安全凭证暂不可用，请稍后刷新页面。,"The background security credentials are temporarily unavailable, please refresh the page later."
 其他,Other
-后端主题配置字段无效。,"The backend theme configuration field is invalid."
-"请指定 --username=、--user_id= 或 --email= 之一","Please specify one of --username=, --user_id=, or --email="
-"请指定 --role_id= 或 --role= 选择要分配的角色","Specify --role_id= or --role= to select role"
-已为用户分配角色,"Role assigned to user"
-该用户已拥有该角色,"User already has this role"
-分配失败,"Assignment failed"
-"角色 ID %{id} 不存在","Role ID %{id} does not exist"
+后端主题配置字段无效。,The backend theme configuration field is invalid.
+请指定 --username=、--user_id= 或 --email= 之一,"Please specify one of --username=, --user_id=, or --email="
+请指定 --role_id= 或 --role= 选择要分配的角色,Specify --role_id= or --role= to select role
+已为用户分配角色,Role assigned to user
+该用户已拥有该角色,User already has this role
+分配失败,Assignment failed
+角色 ID %{id} 不存在,Role ID %{id} does not exist
 角色名「%{name}」不存在,"Role name ""%{name}"" does not exist"
-暂无可用角色，请先在后台创建角色,"No roles available. Create roles in backend first."
-可用角色：,"Available roles:"
-为指定后台用户分配所选角色。,"Assign selected role to backend user."
-用户ID,"User ID"
-角色ID,"Role ID"
-角色名,"Role Name"
-显示帮助信息,"Show help information"
-分配超管,"Assign super admin"
-分配其他角色,"Assign other roles"
-用户邮箱不能为空,"User email cannot be empty"
-用户密码不能为空,"User password cannot be empty"
-重置成功,"Reset Successful"
-用户名不能为空,"Username cannot be empty"
-邮箱不能为空,"Email cannot be empty"
-密码不能为空,"Password cannot be empty"
-用户已存在,"User already exists"
-用户创建失败,"User creation failed"
-用户创建成功,"User created successfully"
-用户创建失败：%s,"User creation failed: %s"
-已为用户分配超管角色,"Assigned super admin role"
-该用户已是超管角色,"This user is already a super admin"
-为指定后台用户分配超管角色。,"Assign super management roles to specified backend users."
-"对比后端用户/角色数据与 getAclContext 结果，排查没角色或没权限。","Compare backend user/role data with getAclContext results to troubleshoot missing roles or permissions."
-"指定用户ID，不传则查 1 和 3","Specify user ID; if not provided, query 1 and 3"
-刷新模块列表...,"Refresh Module List..."
-"已刷新：%{1} 个激活模块","Refreshed: %{1} active module(s)"
-模块刷新失败：%{1},"Module refresh failed: %{1}"
-"开始收集模块 %{1} 的菜单...","Start collecting menus for module %{1}"
-开始收集菜单...,"Start collecting menus..."
-"未从 menu.xml 解析到任何菜单。","No menus parsed from menu.xml."
-"发现 %{1} 个配置文件但解析结果为空，请检查 XML 格式。","发现 %{1} 个配置文件但解析结果为空，请检查 XML 格式。"
-"菜单收集完成！共解析 %{1} 条菜单（来自 %{2} 个 menu.xml 文件）","Menu collection complete! Parsed %{1} menus (from %{2} menu.xml files)"
-"新增 %{1} 条菜单：","Add %{1} Menu Items:"
-"更新 %{1} 条菜单：","Updated %{1} menu items:"
-"删除 %{1} 条菜单（模块已移除）：","Deleted %{1} menu(s) (module removed):"
-"禁用 %{1} 条菜单（模块已禁用）：","Disable %{1} menu items (module disabled):"
-菜单无变化。,"No changes to menu."
-清理事件缓存...,"Clearing Event Cache..."
-事件缓存清理失败：%{1},"Event cache cleanup failed: %{1}"
-编译插件/DI...,"Compile plugin/DI..."
-DI编译失败：%{1},"DI compilation failed: %{1}"
-清理全部缓存...,"Clearing All Cache..."
-全部缓存清理完成！,"All Cache Cleared!"
-缓存清理失败：%{1},"Cache Cleanup Failed: %{1}"
-清理模板缓存...,"Cleaning template cache..."
-模板缓存清理完成！,"Template cache cleanup complete!"
-模板缓存清理失败：%{1},"Template cache cleanup failed: %{1}"
-菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
-从媒体库选择图片，左侧可预览。保存后顶栏与个人中心侧栏会同步更新。,从媒体库选择图片，左侧可预览。保存后顶栏与个人中心侧栏会同步更新。
-尚未选择头像,尚未选择头像
-"框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。","Framework Convention Error: Menu ACL discontinuity. Menu %{1} (Module %{2}) declares a non-existent parent %{3}. Please fix the parent/source chain in menu.xml."
-"发现 %{1} 个配置文件但解析失败，请检查 XML 格式。","Found %{1} configuration files but parsing failed, please check the XML format."
-"发件人 code（可选）","发件人 code（可选）"
-后台通知邮件,后台通知邮件
-通知中心邮件渠道发信,通知中心邮件渠道发信
-消息主题,"Message Subject"
-"使用 ← → 方向键可切换上/下一条","Use ← → to switch between notifications"
-"JS: inject_path函数path路径不允许为空！","JS: The inject_path function path is not allowed to be empty!"
+暂无可用角色，请先在后台创建角色,No roles available. Create roles in backend first.
+可用角色：,Available roles:
+为指定后台用户分配所选角色。,Assign selected role to backend user.
+用户ID,User ID
+角色ID,Role ID
+角色名,Role Name
+显示帮助信息,Show help information
+分配超管,Assign super admin
+分配其他角色,Assign other roles
+用户邮箱不能为空,User email cannot be empty
+用户密码不能为空,User password cannot be empty
+重置成功,Reset Successful
+用户名不能为空,Username cannot be empty
+邮箱不能为空,Email cannot be empty
+密码不能为空,Password cannot be empty
+用户已存在,User already exists
+用户创建失败,User creation failed
+用户创建成功,User created successfully
+用户创建失败：%s,User creation failed: %s
+已为用户分配超管角色,Assigned super admin role
+该用户已是超管角色,This user is already a super admin
+为指定后台用户分配超管角色。,Assign super management roles to specified backend users.
+对比后端用户/角色数据与 getAclContext 结果，排查没角色或没权限。,Compare backend user/role data with getAclContext results to troubleshoot missing roles or permissions.
+指定用户ID，不传则查 1 和 3,"Specify user ID; if not provided, query 1 and 3"
+刷新模块列表...,Refresh Module List...
+已刷新：%{1} 个激活模块,Refreshed: %{1} active module(s)
+模块刷新失败：%{1},Module refresh failed: %{1}
+开始收集模块 %{1} 的菜单...,Start collecting menus for module %{1}
+开始收集菜单...,Start collecting menus...
+未从 menu.xml 解析到任何菜单。,No menus parsed from menu.xml.
+发现 %{1} 个配置文件但解析结果为空，请检查 XML 格式。,Found %{1} config file(s) but parse result is empty; please check the XML format.
+菜单收集完成！共解析 %{1} 条菜单（来自 %{2} 个 menu.xml 文件）,Menu collection complete! Parsed %{1} menus (from %{2} menu.xml files)
+新增 %{1} 条菜单：,Add %{1} Menu Items:
+更新 %{1} 条菜单：,Updated %{1} menu items:
+删除 %{1} 条菜单（模块已移除）：,Deleted %{1} menu(s) (module removed):
+禁用 %{1} 条菜单（模块已禁用）：,Disable %{1} menu items (module disabled):
+菜单无变化。,No changes to menu.
+清理事件缓存...,Clearing Event Cache...
+事件缓存清理失败：%{1},Event cache cleanup failed: %{1}
+编译插件/DI...,Compile plugin/DI...
+DI编译失败：%{1},DI compilation failed: %{1}
+清理全部缓存...,Clearing All Cache...
+全部缓存清理完成！,All Cache Cleared!
+缓存清理失败：%{1},Cache Cleanup Failed: %{1}
+清理模板缓存...,Cleaning template cache...
+模板缓存清理完成！,Template cache cleanup complete!
+模板缓存清理失败：%{1},Template cache cleanup failed: %{1}
+菜单收集和系统更新完成！菜单已生效。,Menu collection and system update complete! Menu is now active.
+重建后台菜单搜索索引...,Rebuilding backend menu search index...
+后台菜单搜索索引已重建：%{1} 条,Backend menu search index rebuilt: %{1} entries
+后台菜单搜索索引重建失败：%{1},Failed to rebuild backend menu search index: %{1}
+从媒体库选择图片，左侧可预览。保存后顶栏与个人中心侧栏会同步更新。,"Pick an image from the media library; preview appears on the left. After saving, the top bar and account-center sidebar update together."
+尚未选择头像,No avatar selected yet
+框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。,Framework Convention Error: Menu ACL discontinuity. Menu %{1} (Module %{2}) declares a non-existent parent %{3}. Please fix the parent/source chain in menu.xml.
+发现 %{1} 个配置文件但解析失败，请检查 XML 格式。,"Found %{1} configuration files but parsing failed, please check the XML format."
+发件人 code（可选）,Sender code (optional)
+后台通知邮件,Backend notification email
+通知中心邮件渠道发信,Send via notification-center mail channel
+消息主题,Message Subject
+使用 ← → 方向键可切换上/下一条,Use ← → to switch between notifications
+JS: inject_path函数path路径不允许为空！,JS: The inject_path function path is not allowed to be empty!
 ri-notification-3-line,ri-notification-3-line
 ri-list-check,ri-list-check
 ri-file-text-line,ri-file-text-line
-"AI 中心","AI Center"
-"SEO 管理","SEO management"
-业务运营,"Business operations"
-主题模板,"Theme templates"
-事件与扩展,"Events & extensions"
+AI 中心,AI Center
+SEO 管理,SEO management
+业务运营,Business operations
+主题模板,Theme templates
+事件与扩展,Events & extensions
 仪表盘,Dashboard
-其他工具,"Other tools"
-内容管理,"Content management"
-内容系统,"Content system"
-博客管理,"Blog management"
+其他工具,Other tools
+内容管理,Content management
+内容系统,Content system
+博客管理,Blog management
 合作伙伴,Partners
-后端模板库,"Backend template library"
-商品与目录,"Products & catalog"
-商品运营,"Product operations"
+后端模板库,Backend template library
+商品与目录,Products & catalog
+商品运营,Product operations
 分类体系,Taxonomy
-高级维护,"Advanced maintenance"
-商城管理,"Store management"
+高级维护,Advanced maintenance
+商城管理,Store management
 国际化,internationalization
-媒体管理,"Media management"
-客户管理,"Customer management"
-库存与仓储,"Inventory & warehouse"
-应用与扩展,"Apps & extensions"
-开发工作台,"Developer workspace"
+媒体管理,Media management
+客户管理,Customer management
+库存与仓储,Inventory & warehouse
+应用与扩展,Apps & extensions
+开发工作台,Developer workspace
 开发者,Developer
-支付管理,"Payment management"
-数据工具,"Data tools"
-框架服务,"Framework services"
-模组管理,"Module Management"
+支付管理,Payment management
+数据工具,Data tools
+框架服务,Framework services
+模组管理,Module Management
 消息通知,Notifications
-用户与权限,"Users and permissions"
-用户管理,"User Management"
-税务与搜索,"Tax & search"
-系统服务,"System services"
-系统管理,"System Management"
-系统维护,"System maintenance"
-系统配置,"System Configuration"
-维护模式,"Maintenance mode"
-编辑器与组件,"Editors & components"
-菜单与路由,"Menus & routes"
+用户与权限,Users and permissions
+用户管理,User Management
+税务与搜索,Tax & search
+系统服务,System services
+系统管理,System Management
+系统维护,System maintenance
+系统配置,System Configuration
+维护模式,Maintenance mode
+编辑器与组件,Editors & components
+菜单与路由,Menus & routes
 营销管理,Marketing
-订单管理,"Order Management"
-调试工具,"Debugging Tools"
-货币管理,"Currency Management"
-运营工具,"Operations tools"
-配送管理,"Shipping Management"
-2FA账户管理,"2FA Account Management"
-"AI 建站工作台","AI website building workbench"
-"AI 智能体","AI Agents"
-"AI 管理","AI management"
-"AI 风格","AI Style"
-AI翻译,"AI translation"
-API管理,"API management"
-API规则管理,"API rule management"
-API集成,"API integration"
-"B2B 管理","B2B management"
-CDN管理,"CDN management"
-"CMS 页面","CMS page"
-Debug配置,"Debug Config"
-EAV数据管理,"EAV data management"
-EAV管理器,"EAV manager"
-Feed管理,"Feed Management"
-"Hook 列表","Hook list"
-IP白名单,"IP whitelist"
-Multipass管理,"Multipass management"
-SEO优化,"SEO optimization"
-SEO总览,"SEO Overview"
-SEO账户,"SEO account"
-"SKU 注册表","SKU registry"
-"SQL 控制台","SQL console"
-Sitemap管理,"Sitemap Management"
-Smtp邮件服务,"Smtp mail service"
-Smtp配置,"Smtp configuration"
-Sticker列表,"Sticker list"
-Sticker测试,"Sticker test"
-Sticker管理,"Sticker management"
-"Store 商品复制","Store product copy"
-URL管理器,"URL manager"
-URL路由列表,"URL route list"
-URL路由重写,"URL route rewrite"
-Webhook诊断,"Webhook diagnostics"
-一站式配置订单,"One-stop configuration order"
-一致性异常,"Consistency exception"
-下载历史,"Download history"
-主体管理,"Subject management"
-主题列表,"Topic list"
-主题管理,"Theme management"
-事件列表,"event list"
-事件看板,"Event board"
-事件管理,"Event management"
-互通应用,"interoperable applications"
+订单管理,Order Management
+调试工具,Debugging Tools
+货币管理,Currency Management
+运营工具,Operations tools
+配送管理,Shipping Management
+2FA账户管理,2FA Account Management
+AI 建站工作台,AI website building workbench
+AI 智能体,AI Agents
+AI 管理,AI management
+AI 风格,AI Style
+AI翻译,AI translation
+API管理,API management
+API规则管理,API rule management
+API集成,API integration
+B2B 管理,B2B management
+CDN管理,CDN management
+CMS 页面,CMS page
+Debug配置,Debug Config
+EAV数据管理,EAV data management
+EAV管理器,EAV manager
+Feed管理,Feed Management
+Hook 列表,Hook list
+IP白名单,IP whitelist
+Multipass管理,Multipass management
+SEO优化,SEO optimization
+SEO总览,SEO Overview
+SEO账户,SEO account
+SKU 注册表,SKU registry
+SQL 控制台,SQL console
+Sitemap管理,Sitemap Management
+Smtp邮件服务,Smtp mail service
+Smtp配置,Smtp configuration
+Sticker列表,Sticker list
+Sticker测试,Sticker test
+Sticker管理,Sticker management
+Store 商品复制,Store product copy
+URL管理器,URL manager
+URL路由列表,URL route list
+URL路由重写,URL route rewrite
+Webhook诊断,Webhook diagnostics
+一站式配置订单,One-stop configuration order
+一致性异常,Consistency exception
+下载历史,Download history
+主体管理,Subject management
+主题列表,Topic list
+主题管理,Theme management
+事件列表,event list
+事件看板,Event board
+事件管理,Event management
+互通应用,interoperable applications
 交易记录,Transactions
 仓库,storehouse
-仓库授权,"Warehouse authorization"
-价目表,"price list"
-企业邮箱,"Business email"
-优惠券管理,"Coupon Management"
-会话管理,"Session Management"
-使用指南,"User Guide"
+仓库授权,Warehouse authorization
+价目表,price list
+企业邮箱,Business email
+优惠券管理,Coupon Management
+会话管理,Session Management
+使用指南,User Guide
 促销活动,promotions
-像素分析,"Pixel analysis"
-元数据列表,"Metadata list"
-元数据管理,"Metadata management"
-元数据配置管理,"Metadata configuration"
-免邮规则,"Free Shipping Rule"
-冷归档明细,"Cold archive details"
-分类管理,"Category management"
-刷新注册表,"Refresh Registry"
-前端模板库,"Frontend template library"
-前端账户,"Frontend Account"
-前端预览,"Frontend Preview"
-双因素认证,"Two-factor authentication"
-发件记录,"Shipping records"
-发布历史,"Release History"
-发布控制,"Release Control"
-发布管理,"Release management"
-发货地址,"Shipping Address"
-可视化编辑,"Visual Editor"
-可视化编辑器,"Visual Editor"
-后台仪表盘,"Backend dashboard"
-后台日志,"Backend activity log"
-后端账户,"Backend Account"
+像素分析,Pixel analysis
+元数据列表,Metadata list
+元数据管理,Metadata management
+元数据配置管理,Metadata configuration
+免邮规则,Free Shipping Rule
+冷归档明细,Cold archive details
+分类管理,Category management
+刷新注册表,Refresh Registry
+前端模板库,Frontend template library
+前端账户,Frontend Account
+前端预览,Frontend Preview
+双因素认证,Two-factor authentication
+发件记录,Shipping records
+发布历史,Release History
+发布控制,Release Control
+发布管理,Release management
+发货地址,Shipping Address
+可视化编辑,Visual Editor
+可视化编辑器,Visual Editor
+后台仪表盘,Backend dashboard
+后台日志,Backend activity log
+后端账户,Backend Account
 商品,Products
-商品分片,"Product sharding"
-商品分类,"Product classification"
-商品媒体,"commodity media"
-商品绑定,"Product binding"
-商城首页,"Mall homepage"
-商家档案,"Business profile"
-商家管理,"Merchant management"
-商店管理,"store management"
-回收站,"Recycle bin"
+商品分片,Product sharding
+商品分类,Product classification
+商品媒体,commodity media
+商品绑定,Product binding
+商城首页,Mall homepage
+商家档案,Business profile
+商家管理,Merchant management
+商店管理,store management
+回收站,Recycle bin
 国家,Country
-地区管理,"Region Management"
-场景配置,"Scene configuration"
-域名服务,"Domain Service"
-域名管理,"Domain management"
-增量状态,"incremental status"
-失败水位,"failure level"
-媒体管理器,"Media Manager"
-存储配置,"Storage configuration"
-安全日志,"Security log"
-安全设置,"Security settings"
-官网登录提供方,"Official login provider"
-客户列表,"Customer List"
-客户组,"customer group"
-客户资产,"customer assets"
-客服人员,"customer service staff"
-客服工作台,"Customer Service Console"
-客服服务,"Customer Service"
-客服配置,"Service Configuration"
-已安装模块,"Installed modules"
-"已验证 LKG","Verified LKG"
-布局列表,"Layout list"
-布局管理,"Layout management"
-布局计划,"Layout schedule"
-平台管理,"Platform Management"
+地区管理,Region Management
+场景配置,Scene configuration
+域名服务,Domain Service
+域名管理,Domain management
+增量状态,incremental status
+失败水位,failure level
+媒体管理器,Media Manager
+存储配置,Storage configuration
+安全日志,Security log
+安全设置,Security settings
+官网登录提供方,Official login provider
+客户列表,Customer List
+客户组,customer group
+客户资产,customer assets
+客服人员,customer service staff
+客服工作台,Customer Service Console
+客服服务,Customer Service
+客服配置,Service Configuration
+已安装模块,Installed modules
+已验证 LKG,Verified LKG
+布局列表,Layout list
+布局管理,Layout management
+布局计划,Layout schedule
+平台管理,Platform Management
 库存,Stock
-库存调整,"inventory adjustment"
-库存账本,"Inventory ledger"
-库存迁移,"Inventory migration"
-库存预占,"inventory preemption"
-应用商城,"App Store"
-开发工具,"Developer tools"
-开发文档,"Developer Docs"
-异步事件死信运维,"Asynchronous event dead letter operation and maintenance"
-异步资源变更验收台,"Asynchronous resource change acceptance platform"
-影子验证,"Shadow verification"
-循环依赖检测,"Circular dependency detection"
+库存调整,inventory adjustment
+库存账本,Inventory ledger
+库存迁移,Inventory migration
+库存预占,inventory preemption
+应用商城,App Store
+开发工具,Developer tools
+开发文档,Developer Docs
+异步事件死信运维,Asynchronous event dead letter operation and maintenance
+异步资源变更验收台,Asynchronous resource change acceptance platform
+影子验证,Shadow verification
+循环依赖检测,Circular dependency detection
 快递公司,Carrier
-快速入门,"Quick start"
+快速入门,Quick start
 总览,Overview
-我的模块,"My modules"
-打开验证器APP,"Open Authenticator App"
-扩展列表,"Extension list"
-扩展管理,"Extension management"
-扫描元数据,"Scan metadata"
-报价令牌,"quote token"
-拆分规则,"Split rules"
-推送管理,"Push management"
-插件管理,"Plugin management"
-搜索管理,"Search management"
-搜索配置,"Search configuration"
-支付对账,"payment reconciliation"
-支付方式,"Payment Method"
-支付诊断,"Pay Diagnosis"
-攻击日志,"Attack Log"
-数据库管理,"Database management"
-文档管理,"Document management"
-文档管理配置,"Document Management Config"
-文档说明,"Documentation description"
+我的模块,My modules
+打开验证器APP,Open Authenticator App
+扩展列表,Extension list
+扩展管理,Extension management
+扫描元数据,Scan metadata
+报价令牌,quote token
+拆分规则,Split rules
+推送管理,Push management
+插件管理,Plugin management
+搜索管理,Search management
+搜索配置,Search configuration
+支付对账,payment reconciliation
+支付方式,Payment Method
+支付诊断,Pay Diagnosis
+攻击日志,Attack Log
+数据库管理,Database management
+文档管理,Document management
+文档管理配置,Document Management Config
+文档说明,Documentation description
 本地化,Localization
-权限标签,"Permissions label"
-权限管理,"Permission management"
-权限角色,"Permission role"
-查看全部网站异步事件,"View async events for all websites"
-标签库,"Tag library"
-标签资源,"Tag Resources"
-标签验证,"Tag verification"
-核心更新,"Core Update"
-模块资源,"Module Resources"
-沙盒配置,"Sandbox Config"
-流量渠道,"Traffic channels"
-测试沙盒,"Test sandbox"
-测试管理,"test management"
-消息队列,"Message queue"
+权限标签,Permissions label
+权限管理,Permission management
+权限角色,Permission role
+查看全部网站异步事件,View async events for all websites
+标签库,Tag library
+标签资源,Tag Resources
+标签验证,Tag verification
+核心更新,Core Update
+模块资源,Module Resources
+沙盒配置,Sandbox Config
+流量渠道,Traffic channels
+测试沙盒,Test sandbox
+测试管理,test management
+消息队列,Message queue
 消费者,consumer
-渠道管理,"Channel management"
-热表明细,"Hot table details"
+渠道管理,Channel management
+热表明细,Hot table details
 物流跟踪,Tracking
-环境管理,"Environment Manager"
-生成式搜索引擎优化,"Generative engine optimization"
-用户列表,"User list"
-税务管理,"tax management"
-税务规则,"tax rules"
-税引擎状态,"tax engine status"
-税率,"tax rate"
-税类,"tax category"
-站点授权,"Site authorization"
-站点文案,"site copywriting"
-站点管理,"Site Management"
-站点账户绑定,"Site Account Binding"
-索引代次,"Index generation"
-组件库,"Component Library"
-结算账本,"Settlement ledger"
-结账会话,"Checkout session"
-结账诊断,"Checkout diagnostics"
-统一配置中心,"Unified configuration center"
-续费尝试,"Renewal attempt"
-续费调度,"Renewal Scheduling"
-综合测试,"Comprehensive testing"
-缓存服务,"Cache service"
-缓存策略,"caching strategy"
-缓存管理,"Cache Management"
-编辑器管理,"Editor management"
-网站功能授权,"Website function authorization"
-网站备份,"Site Backup"
-网站服务,"Website Service"
-网站管理,"Website management"
-网站维护,"Site Maintenance"
-网站迁移与复制,"Website migration and replication"
-翻译服务,"Translation Service"
-翻译记录,"Translation Records"
-菜单管理,"Menu management"
-营销规则,"Marketing Rule"
-融媒体管理,"Social Media Management"
-规则管理,"Rule Management"
-角色归配,"Role assignment"
-计划任务,"Scheduled tasks"
-订单价格快照,"Order price snapshot"
-订单列表,"Order List"
-订单发票管理,"Order invoice management"
-订单发货管理,"Order delivery management"
-订单异常与补偿,"Order exceptions and compensation"
-订单收款记录,"Order collection record"
-订单状态管理,"Order Status Management"
-订单退款管理,"Order refund management"
+环境管理,Environment Manager
+生成式搜索引擎优化,Generative engine optimization
+用户列表,User list
+税务管理,tax management
+税务规则,tax rules
+税引擎状态,tax engine status
+税率,tax rate
+税类,tax category
+站点授权,Site authorization
+站点文案,site copywriting
+站点管理,Site Management
+站点账户绑定,Site Account Binding
+索引代次,Index generation
+组件库,Component Library
+结算账本,Settlement ledger
+结账会话,Checkout session
+结账诊断,Checkout diagnostics
+统一配置中心,Unified configuration center
+续费尝试,Renewal attempt
+续费调度,Renewal Scheduling
+综合测试,Comprehensive testing
+缓存服务,Cache service
+缓存策略,caching strategy
+缓存管理,Cache Management
+编辑器管理,Editor management
+网站功能授权,Website function authorization
+网站备份,Site Backup
+网站服务,Website Service
+网站管理,Website management
+网站维护,Site Maintenance
+网站迁移与复制,Website migration and replication
+翻译服务,Translation Service
+翻译记录,Translation Records
+菜单管理,Menu management
+营销规则,Marketing Rule
+融媒体管理,Social Media Management
+规则管理,Rule Management
+角色归配,Role assignment
+计划任务,Scheduled tasks
+订单价格快照,Order price snapshot
+订单列表,Order List
+订单发票管理,Order invoice management
+订单发货管理,Order delivery management
+订单异常与补偿,Order exceptions and compensation
+订单收款记录,Order collection record
+订单状态管理,Order Status Management
+订单退款管理,Order refund management
 订阅,subscription
-订阅周期,"Subscription cycle"
-订阅管理,"Subscription management"
-许可证管理,"License Management"
-设备管理,"Device management"
-访问信息,"Visitor insights"
-评论管理,"Review management"
+订阅周期,Subscription cycle
+订阅管理,Subscription management
+许可证管理,License Management
+设备管理,Device management
+访问信息,Visitor insights
+评论管理,Review management
 词典,Dictionary
-询盘表单,"Inquiry forms"
-语言申请,"Language application"
-账户管理,"Account Management"
-账户绑定,"Account Binding"
-货币列表,"Currency List"
-货币配置,"Currency Configuration"
-购物车检查,"Cart inspection"
-费用模板,"Rate Template"
-资产结算,"Asset settlement"
-资产账户,"asset account"
-资产账本,"Asset ledger"
-资产退回,"Asset return"
-资产预留,"Asset reservation"
-路由管理,"Route management"
-迁移状态,"Migration status"
-运送地址,"Shipping addresses"
-退款冲正,"Refund offset"
-退款对账,"Refund reconciliation"
-部件管理,"Widget Management"
-部署配置,"Deployment configuration"
-配送区域,"Shipping Zone"
-配送总览,"Shipping overview"
-配送服务,"Shipping Service"
-重放异步事件死信,"Replay async event dead letters"
-重试诊断,"Retry diagnostics"
-销售报价,"sales quotation"
-队列列表,"Queue list"
-队列类型,"Queue type"
-降级状态,"Degraded status"
-面板配置,"Panel configuration"
-预占租约,"Preemption lease"
-预热管理,"Warm-up management"
-验证码配置,"Captcha configuration"
-默认模型,"Default model"
-后台主导航,"Backend primary navigation"
-搜索菜单,"Search menus"
-搜索菜单…,"Search menus…"
-没有匹配的菜单,"No matching menus"
-后台菜单,"Backend menu"
+询盘表单,Inquiry forms
+语言申请,Language application
+账户管理,Account Management
+账户绑定,Account Binding
+货币列表,Currency List
+货币配置,Currency Configuration
+购物车检查,Cart inspection
+费用模板,Rate Template
+资产结算,Asset settlement
+资产账户,asset account
+资产账本,Asset ledger
+资产退回,Asset return
+资产预留,Asset reservation
+路由管理,Route management
+迁移状态,Migration status
+运送地址,Shipping addresses
+退款冲正,Refund offset
+退款对账,Refund reconciliation
+部件管理,Widget Management
+部署配置,Deployment configuration
+配送区域,Shipping Zone
+配送总览,Shipping overview
+配送服务,Shipping Service
+重放异步事件死信,Replay async event dead letters
+重试诊断,Retry diagnostics
+销售报价,sales quotation
+队列列表,Queue list
+队列类型,Queue type
+降级状态,Degraded status
+面板配置,Panel configuration
+预占租约,Preemption lease
+预热管理,Warm-up management
+验证码配置,Captcha configuration
+默认模型,Default model
+后台主导航,Backend primary navigation
+搜索菜单,Search menus
+搜索菜单…,Search menus…
+没有匹配的菜单,No matching menus
+后台菜单,Backend menu

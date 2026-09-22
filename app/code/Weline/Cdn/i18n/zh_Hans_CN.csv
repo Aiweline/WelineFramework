@@ -1,4 +1,4 @@
-﻿CDN预热URL投递,CDN预热URL投递
+CDN预热URL投递,CDN预热URL投递
 在提交CDN预热URL时触发，允许其他模块监听并处理预热URL。事件数据包含模块名、提供者、URL列表等信息。,在提交CDN预热URL时触发，允许其他模块监听并处理预热URL。事件数据包含模块名、提供者、URL列表等信息。
 CDN缓存清理,CDN缓存清理
 在清理CDN缓存时触发，允许其他模块监听并处理缓存清理操作。事件数据包含域名、清理模式等信息。,在清理CDN缓存时触发，允许其他模块监听并处理缓存清理操作。事件数据包含域名、清理模式等信息。
@@ -8,76 +8,76 @@ CDN规则推送,CDN规则推送
 在推送CDN规则到服务商时触发，允许其他模块监听并参与规则推送。事件数据包含规则列表、域名等信息。,在推送CDN规则到服务商时触发，允许其他模块监听并参与规则推送。事件数据包含规则列表、域名等信息。
 CDN统一请求事件,CDN统一请求事件
 CDN供应商列表,CDN供应商列表
-"获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。","获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。"
+获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。,获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。
 CDN账户列表,CDN账户列表
-"获取CDN账户列表时触发，允许其他模块补充或修改账户列表数据。事件数据包含 accounts 数组及 adapter 过滤条件。","获取CDN账户列表时触发，允许其他模块补充或修改账户列表数据。事件数据包含 accounts 数组及 adapter 过滤条件。"
-"CDN 资源变更清理失败","CDN 资源变更清理失败"
-"CDN 查询器不支持的操作：%{1}","CDN 查询器不支持的操作：%{1}"
-"CDN 查询","CDN 查询"
-"提供 CDN 适配器、账户管理、域名绑定等能力","提供 CDN 适配器、账户管理、域名绑定等能力"
-"获取所有可用的 CDN 适配器","获取所有可用的 CDN 适配器"
-"获取 CDN 账户列表","获取 CDN 账户列表"
+获取CDN账户列表时触发，允许其他模块补充或修改账户列表数据。事件数据包含 accounts 数组及 adapter 过滤条件。,获取CDN账户列表时触发，允许其他模块补充或修改账户列表数据。事件数据包含 accounts 数组及 adapter 过滤条件。
+CDN 资源变更清理失败,CDN 资源变更清理失败
+CDN 查询器不支持的操作：%{1},CDN 查询器不支持的操作：%{1}
+CDN 查询,CDN 查询
+提供 CDN 适配器、账户管理、域名绑定等能力,提供 CDN 适配器、账户管理、域名绑定等能力
+获取所有可用的 CDN 适配器,获取所有可用的 CDN 适配器
+获取 CDN 账户列表,获取 CDN 账户列表
 按适配器过滤,按适配器过滤
 按状态过滤,按状态过滤
-"获取单个 CDN 账户详情","获取单个 CDN 账户详情"
-"账户 ID","账户 ID"
-"创建或更新 CDN 账户","创建或更新 CDN 账户"
-"账户 ID（更新时必填）","账户 ID（更新时必填）"
+获取单个 CDN 账户详情,获取单个 CDN 账户详情
+账户 ID,账户 ID
+创建或更新 CDN 账户,创建或更新 CDN 账户
+账户 ID（更新时必填）,账户 ID（更新时必填）
 适配器代码,适配器代码
 账户名称,账户名称
 账户描述,账户描述
 凭证信息,凭证信息
 是否设为默认,是否设为默认
 状态,状态
-"删除 CDN 账户","删除 CDN 账户"
+删除 CDN 账户,删除 CDN 账户
 设置默认账户,设置默认账户
 获取指定适配器的默认账户,获取指定适配器的默认账户
 获取账户关联的域名列表,获取账户关联的域名列表
-"创建或更新 CDN 域名绑定","创建或更新 CDN 域名绑定"
-"域名 ID（更新时必填）","域名 ID（更新时必填）"
-"网站 ID","网站 ID"
+创建或更新 CDN 域名绑定,创建或更新 CDN 域名绑定
+域名 ID（更新时必填）,域名 ID（更新时必填）
+网站 ID,网站 ID
 域名名称,域名名称
-"CDN Zone ID","CDN 区域 ID"
-"关联账户 ID","关联账户 ID"
+CDN Zone ID,CDN 区域 ID
+关联账户 ID,关联账户 ID
 是否继承默认账户,是否继承默认账户
 预热间隔秒数,预热间隔秒数
 是否启用,是否启用
-"删除 CDN 域名绑定","删除 CDN 域名绑定"
-"域名 ID","域名 ID"
-"执行 CDN 预热任务","执行 CDN 预热任务"
-"启用或禁用 CDN 预热 URL","启用或禁用 CDN 预热 URL"
-"删除 CDN 预热 URL","删除 CDN 预热 URL"
-"重新收集 CDN API 规则","重新收集 CDN API 规则"
-"启用或禁用 CDN API 规则","启用或禁用 CDN API 规则"
-"规则 ID","规则 ID"
+删除 CDN 域名绑定,删除 CDN 域名绑定
+域名 ID,域名 ID
+执行 CDN 预热任务,执行 CDN 预热任务
+启用或禁用 CDN 预热 URL,启用或禁用 CDN 预热 URL
+删除 CDN 预热 URL,删除 CDN 预热 URL
+重新收集 CDN API 规则,重新收集 CDN API 规则
+启用或禁用 CDN API 规则,启用或禁用 CDN API 规则
+规则 ID,规则 ID
 启用状态,启用状态
-"删除 CDN API 规则","删除 CDN API 规则"
-"读取 CDN 全局规则","读取 CDN 全局规则"
-"读取 CDN 域名规则","读取 CDN 域名规则"
-"保存 CDN 全局规则","保存 CDN 全局规则"
-"保存 CDN 域名规则","保存 CDN 域名规则"
-"从 CDN 导入域名规则","从 CDN 导入域名规则"
-"推送 CDN 域名规则","推送 CDN 域名规则"
-"读取可推送的 CDN 域名","读取可推送的 CDN 域名"
-"确保域名在 CDN 中存在（创建或返回已有 Zone）","确保域名在 CDN 中存在（创建或返回已有 Zone）"
+删除 CDN API 规则,删除 CDN API 规则
+读取 CDN 全局规则,读取 CDN 全局规则
+读取 CDN 域名规则,读取 CDN 域名规则
+保存 CDN 全局规则,保存 CDN 全局规则
+保存 CDN 域名规则,保存 CDN 域名规则
+从 CDN 导入域名规则,从 CDN 导入域名规则
+推送 CDN 域名规则,推送 CDN 域名规则
+读取可推送的 CDN 域名,读取可推送的 CDN 域名
+确保域名在 CDN 中存在（创建或返回已有 Zone）,确保域名在 CDN 中存在（创建或返回已有 Zone）
 域名,域名
 测试账户连接,测试账户连接
 获取适配器详细信息,获取适配器详细信息
-"将 CDN/媒体账户绑定到 Scope（TEST-P1D-02）","将 CDN/媒体账户绑定到 Scope（TEST-P1D-02）"
-"解析 Scope 授权账户绑定（跨请求 DB）","解析 Scope 授权账户绑定（跨请求 DB）"
-"删除本 Scope 覆盖，恢复父级/Global 绑定","删除本 Scope 覆盖，恢复父级/Global 绑定"
-"解析 Scope COW 媒体 URL","解析 Scope COW 媒体 URL"
-"解析 Scope 授权账户（脱敏，无 credentials）","解析 Scope 授权账户（脱敏，无 credentials）"
-"预览或同步当前企业邮箱域名的 Cloudflare DNS","预览或同步当前企业邮箱域名的 Cloudflare DNS"
+将 CDN/媒体账户绑定到 Scope（TEST-P1D-02）,将 CDN/媒体账户绑定到 Scope（TEST-P1D-02）
+解析 Scope 授权账户绑定（跨请求 DB）,解析 Scope 授权账户绑定（跨请求 DB）
+删除本 Scope 覆盖，恢复父级/Global 绑定,删除本 Scope 覆盖，恢复父级/Global 绑定
+解析 Scope COW 媒体 URL,解析 Scope COW 媒体 URL
+解析 Scope 授权账户（脱敏，无 credentials）,解析 Scope 授权账户（脱敏，无 credentials）
+预览或同步当前企业邮箱域名的 Cloudflare DNS,预览或同步当前企业邮箱域名的 Cloudflare DNS
 适配器代码和账户名称不能为空,适配器代码和账户名称不能为空
-"未找到 CDN 适配器：%{1}","未找到 CDN 适配器：%{1}"
+未找到 CDN 适配器：%{1},未找到 CDN 适配器：%{1}
 账户不存在：%{1},账户不存在：%{1}
 更新,更新
 创建,创建
 账户%{1}成功,账户%{1}成功
 保存账户失败：%{1},保存账户失败：%{1}
 保存失败：%{1},保存失败：%{1}
-"账户 ID 无效","账户 ID 无效"
+账户 ID 无效,账户 ID 无效
 账户不存在,账户不存在
 账户已删除,账户已删除
 删除失败：%{1},删除失败：%{1}
@@ -85,18 +85,18 @@ CDN账户列表,CDN账户列表
 域名不存在,域名不存在
 域名删除成功,域名删除成功
 已设为默认账户,已设为默认账户
-"域名和账户 ID 不能为空","域名和账户 ID 不能为空"
+域名和账户 ID 不能为空,域名和账户 ID 不能为空
 适配器不存在：%{1},适配器不存在：%{1}
-"ensureZone 失败：%{1}","ensureZone 失败：%{1}"
+ensureZone 失败：%{1},ensureZone 失败：%{1}
 适配器不存在,适配器不存在
 账户凭证为空,账户凭证为空
 该适配器未提供连接验证,该适配器未提供连接验证
-"邮箱 DNS 参数格式无效。","邮箱 DNS 参数格式无效。"
+邮箱 DNS 参数格式无效。,邮箱 DNS 参数格式无效。
 Cloudflare,Cloudflare
-"已检测到 Cloudflare OAuth Client。","已检测到 Cloudflare OAuth Client。"
-"加速与证书联动时需要 OAuth Client。","加速与证书联动时需要 OAuth Client。"
+已检测到 Cloudflare OAuth Client。,已检测到 Cloudflare OAuth Client。
+加速与证书联动时需要 OAuth Client。,加速与证书联动时需要 OAuth Client。
 基建,基建
-"CDN / Cloudflare OAuth","CDN / Cloudflare OAuth"
+CDN / Cloudflare OAuth,CDN / Cloudflare OAuth
 id属性不能为空,id属性不能为空
 搜索CDN账户...,搜索CDN账户...
 请选择CDN账户,请选择CDN账户
@@ -117,63 +117,63 @@ CDN域名管理工具栏扩展,CDN域名管理工具栏扩展
 URL列表不能为空,URL列表不能为空
 处理完成,处理完成
 "CDN 攻击恢复信号接收: 域名数=%{1}, 持续时间=%{2}分钟","CDN 攻击恢复信号接收: 域名数=%{1}, 持续时间=%{2}分钟"
-"CDN 攻击恢复: 无受影响域名","CDN 攻击恢复: 无受影响域名"
-"CDN 攻击恢复: 未找到域名 %{1} 的 CDN 配置","CDN 攻击恢复: 未找到域名 %{1} 的 CDN 配置"
-"CDN 攻击恢复: 域名 %{1} 未关联 CDN 账户","CDN 攻击恢复: 域名 %{1} 未关联 CDN 账户"
+CDN 攻击恢复: 无受影响域名,CDN 攻击恢复: 无受影响域名
+CDN 攻击恢复: 未找到域名 %{1} 的 CDN 配置,CDN 攻击恢复: 未找到域名 %{1} 的 CDN 配置
+CDN 攻击恢复: 域名 %{1} 未关联 CDN 账户,CDN 攻击恢复: 域名 %{1} 未关联 CDN 账户
 "CDN 攻击防护模式已关闭: 域名=%{1}, CDN=%{2}","CDN 攻击防护模式已关闭: 域名=%{1}, CDN=%{2}"
 "CDN 攻击防护模式关闭失败: 域名=%{1}, 错误=%{2}","CDN 攻击防护模式关闭失败: 域名=%{1}, 错误=%{2}"
-"CDN 攻击恢复处理异常: %{1}","CDN 攻击恢复处理异常: %{1}"
-"未找到 CDN 域名配置","未找到 CDN 域名配置"
+CDN 攻击恢复处理异常: %{1},CDN 攻击恢复处理异常: %{1}
+未找到 CDN 域名配置,未找到 CDN 域名配置
 未知的操作类型：%{1},未知的操作类型：%{1}
-"URL 列表不能为空","URL 列表不能为空"
-"URL 未匹配当前网站的 CDN 域名","URL 未匹配当前网站的 CDN 域名"
+URL 列表不能为空,URL 列表不能为空
+URL 未匹配当前网站的 CDN 域名,URL 未匹配当前网站的 CDN 域名
 缓存清理成功,缓存清理成功
 缓存清理失败,缓存清理失败
-"site_id 必须是非负整数","site_id 必须是非负整数"
-"当前网站 ID 无效","当前网站 ID 无效"
-"site_id 不能为负数","site_id 不能为负数"
+site_id 必须是非负整数,site_id 必须是非负整数
+当前网站 ID 无效,当前网站 ID 无效
+site_id 不能为负数,site_id 不能为负数
 缓存清理完成,缓存清理完成
-"URL 缓存清理完成","URL 缓存清理完成"
+URL 缓存清理完成,URL 缓存清理完成
 规则列表不能为空,规则列表不能为空
 规则推送成功,规则推送成功
-"无 CDN 配置","无 CDN 配置"
-"CDN 能力检测完成","CDN 能力检测完成"
-"CDN 攻击信号缺少站点上下文，已拒绝处理","CDN 攻击信号缺少站点上下文，已拒绝处理"
+无 CDN 配置,无 CDN 配置
+CDN 能力检测完成,CDN 能力检测完成
+CDN 攻击信号缺少站点上下文，已拒绝处理,CDN 攻击信号缺少站点上下文，已拒绝处理
 "CDN 攻击信号接收: 域名=%{1}, 类型=%{2}, IP=%{3}, 攻击次数=%{4}","CDN 攻击信号接收: 域名=%{1}, 类型=%{2}, IP=%{3}, 攻击次数=%{4}"
-"攻击信号由 Cron 监控触发","攻击信号由 Cron 监控触发"
-"CDN 攻击信号: 未找到域名 %{1} 的 CDN 配置","CDN 攻击信号: 未找到域名 %{1} 的 CDN 配置"
-"CDN 攻击信号: 域名 %{1} 未关联 CDN 账户","CDN 攻击信号: 域名 %{1} 未关联 CDN 账户"
-"CDN 攻击信号: CDN 账户 ID=%{1} 不存在","CDN 攻击信号: CDN 账户 ID=%{1} 不存在"
-"CDN 攻击信号: 无法解析 CDN 适配器，账户类型=%{1}","CDN 攻击信号: 无法解析 CDN 适配器，账户类型=%{1}"
-"CDN 攻击信号: CDN 适配器 %{1} 不支持攻击防护模式","CDN 攻击信号: CDN 适配器 %{1} 不支持攻击防护模式"
+攻击信号由 Cron 监控触发,攻击信号由 Cron 监控触发
+CDN 攻击信号: 未找到域名 %{1} 的 CDN 配置,CDN 攻击信号: 未找到域名 %{1} 的 CDN 配置
+CDN 攻击信号: 域名 %{1} 未关联 CDN 账户,CDN 攻击信号: 域名 %{1} 未关联 CDN 账户
+CDN 攻击信号: CDN 账户 ID=%{1} 不存在,CDN 攻击信号: CDN 账户 ID=%{1} 不存在
+CDN 攻击信号: 无法解析 CDN 适配器，账户类型=%{1},CDN 攻击信号: 无法解析 CDN 适配器，账户类型=%{1}
+CDN 攻击信号: CDN 适配器 %{1} 不支持攻击防护模式,CDN 攻击信号: CDN 适配器 %{1} 不支持攻击防护模式
 "CDN 攻击防护模式已开启: 域名=%{1}, CDN=%{2}","CDN 攻击防护模式已开启: 域名=%{1}, CDN=%{2}"
 "CDN 攻击防护模式开启失败: 域名=%{1}, 错误=%{2}","CDN 攻击防护模式开启失败: 域名=%{1}, 错误=%{2}"
-"CDN 攻击信号处理异常: %{1}","CDN 攻击信号处理异常: %{1}"
+CDN 攻击信号处理异常: %{1},CDN 攻击信号处理异常: %{1}
 清理列表不能为空,清理列表不能为空
-"Cloudflare Token 验证失败","Cloudflare Token 验证失败"
-"Token 有效；清缓存权限需由实际清理结果确认","Token 有效；清缓存权限需由实际清理结果确认"
-"Zone 不可访问或与域名不匹配","Zone 不可访问或与域名不匹配"
-"Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认","Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认"
+Cloudflare Token 验证失败,Cloudflare Token 验证失败
+Token 有效；清缓存权限需由实际清理结果确认,Token 有效；清缓存权限需由实际清理结果确认
+Zone 不可访问或与域名不匹配,Zone 不可访问或与域名不匹配
+Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认,Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认
 获取现有规则失败,获取现有规则失败
-"规则推送成功，共 %{count} 条","规则推送成功，共 %{count} 条"
+规则推送成功，共 %{count} 条,规则推送成功，共 %{count} 条
 规则推送失败,规则推送失败
-"Zone不存在: %{1}","Zone不存在: %{1}"
-"Cloudflare 攻击防护模式已开启","Cloudflare 攻击防护模式已开启"
+Zone不存在: %{1},Zone不存在: %{1}
+Cloudflare 攻击防护模式已开启,Cloudflare 攻击防护模式已开启
 开启攻击防护模式失败,开启攻击防护模式失败
-"开启攻击防护模式异常: %{1}","开启攻击防护模式异常: %{1}"
-"Cloudflare 攻击防护模式已关闭","Cloudflare 攻击防护模式已关闭"
+开启攻击防护模式异常: %{1},开启攻击防护模式异常: %{1}
+Cloudflare 攻击防护模式已关闭,Cloudflare 攻击防护模式已关闭
 关闭攻击防护模式失败,关闭攻击防护模式失败
-"关闭攻击防护模式异常: %{1}","关闭攻击防护模式异常: %{1}"
-"Cloudflare API Token未配置","Cloudflare API 令牌未配置"
-"请求失败: %{1}","请求失败: %{1}"
-"HTTP错误: %{1}","HTTP错误: %{1}"
-"Cloudflare 返回无效响应","Cloudflare 返回无效响应"
+关闭攻击防护模式异常: %{1},关闭攻击防护模式异常: %{1}
+Cloudflare API Token未配置,Cloudflare API 令牌未配置
+请求失败: %{1},请求失败: %{1}
+HTTP错误: %{1},HTTP错误: %{1}
+Cloudflare 返回无效响应,Cloudflare 返回无效响应
 加载域名列表失败：%{1},加载域名列表失败：%{1}
 无效的请求方法,无效的请求方法
 网站不能为空,网站不能为空
 适配器不能为空,适配器不能为空
 域名名称不能为空,域名名称不能为空
-"Zone ID不能为空","Zone ID不能为空"
+Zone ID不能为空,Zone ID不能为空
 无效的适配器,无效的适配器
 "域名 ""%{1}"" 已存在，请使用不同的域名","域名 ""%{1}"" 已存在，请使用不同的域名"
 域名保存成功,域名保存成功
@@ -186,7 +186,7 @@ URL列表不能为空,URL列表不能为空
 推送失败：%{1},推送失败：%{1}
 清理失败：%{1},清理失败：%{1}
 加载API规则列表失败：%{1},加载API规则列表失败：%{1}
-"规则收集完成，共收集 %{1} 条规则","规则收集完成，共收集 %{1} 条规则"
+规则收集完成，共收集 %{1} 条规则,规则收集完成，共收集 %{1} 条规则
 规则收集失败：%{1},规则收集失败：%{1}
 规则ID不能为空,规则ID不能为空
 规则不存在,规则不存在
@@ -205,14 +205,14 @@ URL列表不能为空,URL列表不能为空
 未知域名,未知域名
 获取域名列表失败：%{1},获取域名列表失败：%{1}
 没有可推送的域名,没有可推送的域名
-"开始推送规则到 %{1} 个域名...","开始推送规则到 %{1} 个域名..."
-"[%{1}/%{2}] 正在推送域名: %{3} (ID: %{4})","[%{1}/%{2}] 正在推送域名: %{3} (ID: %{4})"
-"[%{1}/%{2}] ✓ 推送成功: %{3} - %{4}","[%{1}/%{2}] ✓ 推送成功: %{3} - %{4}"
+开始推送规则到 %{1} 个域名...,开始推送规则到 %{1} 个域名...
+[%{1}/%{2}] 正在推送域名: %{3} (ID: %{4}),[%{1}/%{2}] 正在推送域名: %{3} (ID: %{4})
+[%{1}/%{2}] ✓ 推送成功: %{3} - %{4},[%{1}/%{2}] ✓ 推送成功: %{3} - %{4}
 推送成功,推送成功
 推送失败,推送失败
-"[%{1}/%{2}] ✗ 推送失败: %{3} - %{4}","[%{1}/%{2}] ✗ 推送失败: %{3} - %{4}"
-"推送完成：总共 %{1} 个，成功 %{2} 个，失败 %{3} 个","推送完成：总共 %{1} 个，成功 %{2} 个，失败 %{3} 个"
-"推送完成：成功 %{1}，失败 %{2}","推送完成：成功 %{1}，失败 %{2}"
+[%{1}/%{2}] ✗ 推送失败: %{3} - %{4},[%{1}/%{2}] ✗ 推送失败: %{3} - %{4}
+推送完成：总共 %{1} 个，成功 %{2} 个，失败 %{3} 个,推送完成：总共 %{1} 个，成功 %{2} 个，失败 %{3} 个
+推送完成：成功 %{1}，失败 %{2},推送完成：成功 %{1}，失败 %{2}
 错误：%{1},错误：%{1}
 频率限制,频率限制
 路径扫描,路径扫描
@@ -227,12 +227,12 @@ Slowloris,斯洛洛里斯
 日志ID不能为空,日志ID不能为空
 日志不存在,日志不存在
 删除成功,删除成功
-"删除失败: %{1}","删除失败: %{1}"
+删除失败: %{1},删除失败: %{1}
 请选择要删除的日志,请选择要删除的日志
-"成功删除 %{1} 条日志","成功删除 %{1} 条日志"
-"批量删除失败: %{1}","批量删除失败: %{1}"
-"成功清理 %{1} 天前的日志","成功清理 %{1} 天前的日志"
-"清理失败: %{1}","清理失败: %{1}"
+成功删除 %{1} 条日志,成功删除 %{1} 条日志
+批量删除失败: %{1},批量删除失败: %{1}
+成功清理 %{1} 天前的日志,成功清理 %{1} 天前的日志
+清理失败: %{1},清理失败: %{1}
 攻击类型,攻击类型
 攻击者IP,攻击者IP
 攻击次数,攻击次数
@@ -242,9 +242,9 @@ Slowloris,斯洛洛里斯
 开始时间,开始时间
 结束时间,结束时间
 创建时间,创建时间
-"Cloudflare OAuth 授权失败：%{1}","Cloudflare OAuth 授权失败：%{1}"
-"Cloudflare OAuth 授权已取消。","Cloudflare OAuth 授权已取消。"
-"Cloudflare OAuth 授权成功。","Cloudflare OAuth 授权成功。"
+Cloudflare OAuth 授权失败：%{1},Cloudflare OAuth 授权失败：%{1}
+Cloudflare OAuth 授权已取消。,Cloudflare OAuth 授权已取消。
+Cloudflare OAuth 授权成功。,Cloudflare OAuth 授权成功。
 加载账户列表失败：%{1},加载账户列表失败：%{1}
 账户名称不能为空,账户名称不能为空
 账户保存成功,账户保存成功
@@ -257,7 +257,7 @@ Slowloris,斯洛洛里斯
 加载统计信息失败：%{1},加载统计信息失败：%{1}
 预热任务执行完成,预热任务执行完成
 执行失败：%{1},执行失败：%{1}
-"URL ID不能为空","URL ID不能为空"
+URL ID不能为空,URL ID不能为空
 URL不存在,URL不存在
 URL已启用,URL已启用
 URL已禁用,URL已禁用
@@ -267,7 +267,7 @@ URL删除成功,URL删除成功
 无效的清理模式,无效的清理模式
 Host列表不能为空,Host列表不能为空
 Tag列表不能为空,Tag列表不能为空
-"Cache Key列表不能为空","Cache Key列表不能为空"
+Cache Key列表不能为空,Cache Key列表不能为空
 检测到攻击,检测到攻击
 已通知CDN,已通知CDN
 秒,秒
@@ -294,7 +294,7 @@ ID,ID
 操作,操作
 查看详情,查看详情
 删除,删除
-"共 %{1} 条记录，第 %{2}/%{3} 页","共 %{1} 条记录，第 %{2}/%{3} 页"
+共 %{1} 条记录，第 %{2}/%{3} 页,共 %{1} 条记录，第 %{2}/%{3} 页
 清理历史日志,清理历史日志
 清理多少天前的日志,清理多少天前的日志
 7天前,7天前
@@ -320,11 +320,11 @@ ID,ID
 记录时间,记录时间
 攻击原因/详情,攻击原因/详情
 攻击时间线,攻击时间线
-"来自 %{1} 的 %{2} 攻击","来自 %{1} 的 %{2} 攻击"
+来自 %{1} 的 %{2} 攻击,来自 %{1} 的 %{2} 攻击
 未知IP,未知IP
 向CDN服务商发送攻击防护请求,向CDN服务商发送攻击防护请求
 攻击已恢复,攻击已恢复
-"持续时间 %{1}","持续时间 %{1}"
+持续时间 %{1},持续时间 %{1}
 CDN响应详情,CDN响应详情
 返回列表,返回列表
 模块筛选,模块筛选
@@ -413,23 +413,23 @@ JSON格式错误,JSON格式错误
 确定要设置此账户为默认账户吗？,确定要设置此账户为默认账户吗？
 请选择适配器,请选择适配器
 凭据配置,凭据配置
-"请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。","请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。"
-"Cloudflare API Token 权限要求：","Cloudflare API Token 权限要求："
-"清理缓存；资源范围选择目标 Zone","清理缓存；资源范围选择目标 Zone"
-"自动查找 Zone ID 时需要","自动查找 Zone ID 时需要"
+请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。,请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。
+Cloudflare API Token 权限要求：,Cloudflare API Token 权限要求：
+清理缓存；资源范围选择目标 Zone,清理缓存；资源范围选择目标 Zone
+自动查找 Zone ID 时需要,自动查找 Zone ID 时需要
 仅管理缓存规则时需要,仅管理缓存规则时需要
 前往Cloudflare创建Token,前往Cloudflare创建Token
-"API Token",API令牌
-"留空保留已保存的 Token","留空保留已保存的 Token"
-"请输入API Token","请输入API Token"
-"Account ID",账户ID
-"请输入Account ID（Cloudflare）",请输入账户ID（Cloudflare）
-"Account ID 可选；缓存清理使用域名配置中的 Zone ID","Account ID 可选；缓存清理使用域名配置中的 Zone ID"
-"验证 Zone ID（可选）","验证 Zone ID（可选）"
+API Token,API令牌
+留空保留已保存的 Token,留空保留已保存的 Token
+请输入API Token,请输入API Token
+Account ID,账户ID
+请输入Account ID（Cloudflare）,请输入账户ID（Cloudflare）
+Account ID 可选；缓存清理使用域名配置中的 Zone ID,Account ID 可选；缓存清理使用域名配置中的 Zone ID
+验证 Zone ID（可选）,验证 Zone ID（可选）
 测试已保存账户连接,测试已保存账户连接
-"回源 Origin Token（只读）","回源 Origin Token（只读）"
-"请在 app/etc/env.php 的 server.origin_token 中配置","请在 app/etc/env.php 的 server.origin_token 中配置"
-"CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。","CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。"
+回源 Origin Token（只读）,回源 Origin Token（只读）
+请在 app/etc/env.php 的 server.origin_token 中配置,请在 app/etc/env.php 的 server.origin_token 中配置
+CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。,CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。
 设置为该适配器的默认账户,设置为该适配器的默认账户
 保存,保存
 正在验证连接,正在验证连接
@@ -437,7 +437,7 @@ JSON格式错误,JSON格式错误
 搜索域名,搜索域名
 全部状态,全部状态
 网站名称,网站名称
-"Zone ID",区域ID
+Zone ID,区域ID
 暂无数据,暂无数据
 未知网站,未知网站
 清理缓存,清理缓存
@@ -450,7 +450,7 @@ JSON格式错误,JSON格式错误
 请选择网站,请选择网站
 从Weline_Websites模块选择网站,从Weline_Websites模块选择网站
 例如：example.com,例如：example.com
-"CDN提供商的Zone ID，例如Cloudflare的Zone ID","CDN提供商的Zone ID，例如Cloudflare的Zone ID"
+CDN提供商的Zone ID，例如Cloudflare的Zone ID,CDN提供商的Zone ID，例如Cloudflare的Zone ID
 账户关联,账户关联
 继承默认账户,继承默认账户
 请先选择适配器,请先选择适配器
@@ -475,60 +475,60 @@ URL,网址
 确定执行,确定执行
 执行失败,执行失败
 确定要删除此URL吗？,确定要删除此URL吗？
-"Cloudflare 账户未配置可用令牌。","Cloudflare 账户未配置可用令牌。"
-"Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。","Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。"
-"Cloudflare OAuth 令牌交换失败。","Cloudflare OAuth 令牌交换失败。"
-"Cloudflare 网络请求初始化失败。","Cloudflare 网络请求初始化失败。"
-"Cloudflare 网络请求失败（cURL %{1}）。","Cloudflare 网络请求失败（cURL %{1}）。"
-"Cloudflare 返回了无法解析的响应（HTTP %{1}）。","Cloudflare 返回了无法解析的响应（HTTP %{1}）。"
-"Cloudflare 返回了无效响应。","Cloudflare 返回了无效响应。"
-"Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。","Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。"
-"Cloudflare API 拒绝请求（代码 %{1}）。","Cloudflare API 拒绝请求（代码 %{1}）。"
-"Cloudflare OAuth 请求失败（代码 %{1}）。","Cloudflare OAuth 请求失败（代码 %{1}）。"
+Cloudflare 账户未配置可用令牌。,Cloudflare 账户未配置可用令牌。
+Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。,Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。
+Cloudflare OAuth 令牌交换失败。,Cloudflare OAuth 令牌交换失败。
+Cloudflare 网络请求初始化失败。,Cloudflare 网络请求初始化失败。
+Cloudflare 网络请求失败（cURL %{1}）。,Cloudflare 网络请求失败（cURL %{1}）。
+Cloudflare 返回了无法解析的响应（HTTP %{1}）。,Cloudflare 返回了无法解析的响应（HTTP %{1}）。
+Cloudflare 返回了无效响应。,Cloudflare 返回了无效响应。
+Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。,Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。
+Cloudflare API 拒绝请求（代码 %{1}）。,Cloudflare API 拒绝请求（代码 %{1}）。
+Cloudflare OAuth 请求失败（代码 %{1}）。,Cloudflare OAuth 请求失败（代码 %{1}）。
 邮箱域名不能为空。,邮箱域名不能为空。
-"DNS-only 主机名不属于当前邮箱域名。","DNS-only 主机名不属于当前邮箱域名。"
-"邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。","邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。"
-"邮件 A/AAAA 必须保持 DNS-only；Cloudflare 代理不支持 SMTP、IMAP 或 POP。","邮件 A/AAAA 必须保持 DNS-only；Cloudflare 代理不支持 SMTP、IMAP 或 POP。"
-"PTR/rDNS 必须在服务器或云厂商控制台配置，Cloudflare DNS 不能代配。","PTR/rDNS 必须在服务器或云厂商控制台配置，Cloudflare DNS 不能代配。"
-"邮件主机 %{1} 当前是 CNAME；请先人工确认后改为 A/AAAA。","邮件主机 %{1} 当前是 CNAME；请先人工确认后改为 A/AAAA。"
-"邮件主机 %{1} 没有 A/AAAA；请输入公网源站 IP 后再预览。","邮件主机 %{1} 没有 A/AAAA；请输入公网源站 IP 后再预览。"
-"邮件主机 %{1} 的 CNAME 与 A/AAAA 冲突，自动配置已停止。","邮件主机 %{1} 的 CNAME 与 A/AAAA 冲突，自动配置已停止。"
-"Cloudflare Email Routing 已锁定 %{1} %{2}；请先在 Cloudflare 中解除托管，再执行一键配置。","Cloudflare Email Routing 已锁定 %{1} %{2}；请先在 Cloudflare 中解除托管，再执行一键配置。"
-"邮箱 DNS 计划包含不支持的记录类型：%{1}","邮箱 DNS 计划包含不支持的记录类型：%{1}"
-"邮箱 DNS 记录缺少 type、name 或 content。","邮箱 DNS 记录缺少 type、name 或 content。"
-"请先连接 Cloudflare 账户。","请先连接 Cloudflare 账户。"
-"Cloudflare DNS 预览完成：%{1} 项变更。","Cloudflare DNS 预览完成：%{1} 项变更。"
-"Cloudflare DNS 无需变更。","Cloudflare DNS 无需变更。"
-"Cloudflare DNS 写入后校验未收敛。","Cloudflare DNS 写入后校验未收敛。"
-"Cloudflare DNS 写入失败，已尝试回滚。","Cloudflare DNS 写入失败，已尝试回滚。"
-"Cloudflare DNS 已同步。","Cloudflare DNS 已同步。"
-"Cloudflare 账户中找不到唯一的活动域名 %{1}。","Cloudflare 账户中找不到唯一的活动域名 %{1}。"
-"Cloudflare DNS 列表响应无效。","Cloudflare DNS 列表响应无效。"
-"Cloudflare DNS 记录分页超过安全上限。","Cloudflare DNS 记录分页超过安全上限。"
-"Cloudflare OAuth 未返回授权码。","Cloudflare OAuth 未返回授权码。"
-"Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。","Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。"
-"Cloudflare OAuth 授权已过期，请重新连接。","Cloudflare OAuth 授权已过期，请重新连接。"
-"由 Cloudflare OAuth 管理；令牌会自动刷新。","由 Cloudflare OAuth 管理；令牌会自动刷新。"
-"Cloudflare OAuth 账户保存失败。","Cloudflare OAuth 账户保存失败。"
-"Cloudflare OAuth 缺少必需 scope：%{1}","Cloudflare OAuth 缺少必需 scope：%{1}"
+DNS-only 主机名不属于当前邮箱域名。,DNS-only 主机名不属于当前邮箱域名。
+邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。,邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。
+邮件 A/AAAA 必须保持 DNS-only；Cloudflare 代理不支持 SMTP、IMAP 或 POP。,邮件 A/AAAA 必须保持 DNS-only；Cloudflare 代理不支持 SMTP、IMAP 或 POP。
+PTR/rDNS 必须在服务器或云厂商控制台配置，Cloudflare DNS 不能代配。,PTR/rDNS 必须在服务器或云厂商控制台配置，Cloudflare DNS 不能代配。
+邮件主机 %{1} 当前是 CNAME；请先人工确认后改为 A/AAAA。,邮件主机 %{1} 当前是 CNAME；请先人工确认后改为 A/AAAA。
+邮件主机 %{1} 没有 A/AAAA；请输入公网源站 IP 后再预览。,邮件主机 %{1} 没有 A/AAAA；请输入公网源站 IP 后再预览。
+邮件主机 %{1} 的 CNAME 与 A/AAAA 冲突，自动配置已停止。,邮件主机 %{1} 的 CNAME 与 A/AAAA 冲突，自动配置已停止。
+Cloudflare Email Routing 已锁定 %{1} %{2}；请先在 Cloudflare 中解除托管，再执行一键配置。,Cloudflare Email Routing 已锁定 %{1} %{2}；请先在 Cloudflare 中解除托管，再执行一键配置。
+邮箱 DNS 计划包含不支持的记录类型：%{1},邮箱 DNS 计划包含不支持的记录类型：%{1}
+邮箱 DNS 记录缺少 type、name 或 content。,邮箱 DNS 记录缺少 type、name 或 content。
+请先连接 Cloudflare 账户。,请先连接 Cloudflare 账户。
+Cloudflare DNS 预览完成：%{1} 项变更。,Cloudflare DNS 预览完成：%{1} 项变更。
+Cloudflare DNS 无需变更。,Cloudflare DNS 无需变更。
+Cloudflare DNS 写入后校验未收敛。,Cloudflare DNS 写入后校验未收敛。
+Cloudflare DNS 写入失败，已尝试回滚。,Cloudflare DNS 写入失败，已尝试回滚。
+Cloudflare DNS 已同步。,Cloudflare DNS 已同步。
+Cloudflare 账户中找不到唯一的活动域名 %{1}。,Cloudflare 账户中找不到唯一的活动域名 %{1}。
+Cloudflare DNS 列表响应无效。,Cloudflare DNS 列表响应无效。
+Cloudflare DNS 记录分页超过安全上限。,Cloudflare DNS 记录分页超过安全上限。
+Cloudflare OAuth 未返回授权码。,Cloudflare OAuth 未返回授权码。
+Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。,Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。
+Cloudflare OAuth 授权已过期，请重新连接。,Cloudflare OAuth 授权已过期，请重新连接。
+由 Cloudflare OAuth 管理；令牌会自动刷新。,由 Cloudflare OAuth 管理；令牌会自动刷新。
+Cloudflare OAuth 账户保存失败。,Cloudflare OAuth 账户保存失败。
+Cloudflare OAuth 缺少必需 scope：%{1},Cloudflare OAuth 缺少必需 scope：%{1}
 未配置账户凭据,未配置账户凭据
-"Cloudflare OAuth state 无效或已过期，请重新连接。","Cloudflare OAuth state 无效或已过期，请重新连接。"
-"Cloudflare OAuth 回调地址不匹配。","Cloudflare OAuth 回调地址不匹配。"
+Cloudflare OAuth state 无效或已过期，请重新连接。,Cloudflare OAuth state 无效或已过期，请重新连接。
+Cloudflare OAuth 回调地址不匹配。,Cloudflare OAuth 回调地址不匹配。
 域名不存在：%{1},域名不存在：%{1}
 域名未启用,域名未启用
-"该适配器不支持按 URL 前缀清理","该适配器不支持按 URL 前缀清理"
+该适配器不支持按 URL 前缀清理,该适配器不支持按 URL 前缀清理
 无效的清理模式：%{1},无效的清理模式：%{1}
 域名未配置账户且无默认账户,域名未配置账户且无默认账户
 账户未激活,账户未激活
 账户适配器与域名不匹配,账户适配器与域名不匹配
 凭证信息格式无效,凭证信息格式无效
-"已删除 %{1} 条","已删除 %{1} 条"
+已删除 %{1} 条,已删除 %{1} 条
 清理完成,清理完成
 收集完成,收集完成
 已更新,已更新
 保存成功,保存成功
-"域名不能为空，请使用 --domain=域名ID或名称","域名不能为空，请使用 --domain=域名ID或名称"
-"清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys","清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys"
+域名不能为空，请使用 --domain=域名ID或名称,域名不能为空，请使用 --domain=域名ID或名称
+清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys,清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys
 无效的清理模式：%{1}，支持的模式：%{2},无效的清理模式：%{1}，支持的模式：%{2}
 "URL列表不能为空，请使用 --urls=url1,url2","URL列表不能为空，请使用 --urls=url1,url2"
 "Host列表不能为空，请使用 --hosts=host1,host2","Host列表不能为空，请使用 --hosts=host1,host2"
@@ -537,61 +537,61 @@ URL,网址
 正在清理缓存...,正在清理缓存...
 缓存清理成功：%{1},缓存清理成功：%{1}
 缓存清理失败：%{1},缓存清理失败：%{1}
-"推送 Weline 标准默认 CDN 规则到目标域名","推送 Weline 标准默认 CDN 规则到目标域名"
+推送 Weline 标准默认 CDN 规则到目标域名,推送 Weline 标准默认 CDN 规则到目标域名
 选项:,选项:
-"--domain=域名ID或名称   指定要推送的单个域名","--domain=域名ID或名称   指定要推送的单个域名"
+--domain=域名ID或名称   指定要推送的单个域名,--domain=域名ID或名称   指定要推送的单个域名
 示例:,示例:
-"未发现任何默认规则（app/code/Weline/Cdn/etc/default-rules.json 为空或不存在）","未发现任何默认规则（app/code/Weline/Cdn/etc/default-rules.json 为空或不存在）"
-"共发现 %{1} 条默认规则","共发现 %{1} 条默认规则"
-"Dry-run 模式：未执行实际推送","Dry-run 模式：未执行实际推送"
-"未匹配到任何要推送的域名（请检查 --domain 或 --all）","未匹配到任何要推送的域名（请检查 --domain 或 --all）"
+未发现任何默认规则（app/code/Weline/Cdn/etc/default-rules.json 为空或不存在）,未发现任何默认规则（app/code/Weline/Cdn/etc/default-rules.json 为空或不存在）
+共发现 %{1} 条默认规则,共发现 %{1} 条默认规则
+Dry-run 模式：未执行实际推送,Dry-run 模式：未执行实际推送
+未匹配到任何要推送的域名（请检查 --domain 或 --all）,未匹配到任何要推送的域名（请检查 --domain 或 --all）
 正在推送到域名：%{1},正在推送到域名：%{1}
-"-> 成功（%{1}）","-> 成功（%{1}）"
+-> 成功（%{1}）,-> 成功（%{1}）
 已推送,已推送
-"-> 失败：%{1}","-> 失败：%{1}"
-"-> 异常：%{1}","-> 异常：%{1}"
-"推送完成：成功 %{1} 个，失败 %{2} 个","推送完成：成功 %{1} 个，失败 %{2} 个"
-"网站代码不能为空，请使用 --site=网站代码","网站代码不能为空，请使用 --site=网站代码"
+-> 失败：%{1},-> 失败：%{1}
+-> 异常：%{1},-> 异常：%{1}
+推送完成：成功 %{1} 个，失败 %{2} 个,推送完成：成功 %{1} 个，失败 %{2} 个
+网站代码不能为空，请使用 --site=网站代码,网站代码不能为空，请使用 --site=网站代码
 网站不存在：%{1},网站不存在：%{1}
 该网站已配置CDN域名,该网站已配置CDN域名
 无法从网站URL解析域名,无法从网站URL解析域名
 未找到默认账户，请先配置账户,未找到默认账户，请先配置账户
-"自动查询到Zone ID：%{1}","自动查询到Zone ID：%{1}"
-"查询Zone ID失败：%{1}","查询Zone ID失败：%{1}"
-"请使用 --zone-id=xxx 手动指定Zone ID","请使用 --zone-id=xxx 手动指定Zone ID"
+自动查询到Zone ID：%{1},自动查询到Zone ID：%{1}
+查询Zone ID失败：%{1},查询Zone ID失败：%{1}
+请使用 --zone-id=xxx 手动指定Zone ID,请使用 --zone-id=xxx 手动指定Zone ID
 CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 默认规则推送成功,默认规则推送成功
 默认规则推送失败：%{1},默认规则推送失败：%{1}
 模块不存在：%{1},模块不存在：%{1}
-"正在收集模块 %{1} 的规则...","正在收集模块 %{1} 的规则..."
-"模块 %{1} 规则收集完成，共收集 %{2} 条规则","模块 %{1} 规则收集完成，共收集 %{2} 条规则"
+正在收集模块 %{1} 的规则...,正在收集模块 %{1} 的规则...
+模块 %{1} 规则收集完成，共收集 %{2} 条规则,模块 %{1} 规则收集完成，共收集 %{2} 条规则
 正在收集所有模块的规则...,正在收集所有模块的规则...
 规则收集完成,规则收集完成
 规则收集失败,规则收集失败
 收集Api和Controller中的@Cdn注释规则,收集Api和Controller中的@Cdn注释规则
 正在导入规则...,正在导入规则...
-"规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
+规则导入成功，共导入 %{1} 条规则,规则导入成功，共导入 %{1} 条规则
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
-"CDN ResourceChange Observer 只接受 v1 契约","CDN ResourceChange Observer 只接受 v1 契约"
+CDN ResourceChange Observer 只接受 v1 契约,CDN ResourceChange Observer 只接受 v1 契约
 账户配置有效,账户配置有效
-"成功清理 %{count} 个URL","成功清理 %{count} 个URL"
+成功清理 %{count} 个URL,成功清理 %{count} 个URL
 URL清理失败,URL清理失败
-"成功清理 %{count} 个Host","成功清理 %{count} 个Host"
+成功清理 %{count} 个Host,成功清理 %{count} 个Host
 Host清理失败,Host清理失败
-"成功清理 %{count} 个Tag","成功清理 %{count} 个Tag"
+成功清理 %{count} 个Tag,成功清理 %{count} 个Tag
 Tag清理失败,Tag清理失败
-"成功清理 %{count} 个Cache Key","成功清理 %{count} 个Cache Key"
-"Cache Key清理失败","Cache Key清理失败"
+成功清理 %{count} 个Cache Key,成功清理 %{count} 个Cache Key
+Cache Key清理失败,Cache Key清理失败
 "Zone ID ""%{1}"" 已存在，请使用不同的 Zone ID","Zone ID ""%{1}"" 已存在，请使用不同的 Zone ID"
 读取Zone信息,读取Zone信息
 读取缓存规则,读取缓存规则
 编辑缓存规则,编辑缓存规则
-"Cloudflare Zone 创建需要 Account ID","Cloudflare 区域创建需要帐户 ID"
+Cloudflare Zone 创建需要 Account ID,Cloudflare 区域创建需要帐户 ID
 收集失败：%{1},收集失败：%{1}
-"缺少预热 URL 的站点上下文","缺少预热 URL 的站点上下文"
-"站点 %{1} 未找到 URL %{2} 对应的 CDN 域名","站点 %{1} 未找到 URL %{2} 对应的 CDN 域名"
-"domain_id 必须是正整数","domain_id 必须是正整数"
+缺少预热 URL 的站点上下文,缺少预热 URL 的站点上下文
+站点 %{1} 未找到 URL %{2} 对应的 CDN 域名,站点 %{1} 未找到 URL %{2} 对应的 CDN 域名
+domain_id 必须是正整数,domain_id 必须是正整数
 API规则管理,API规则管理
 CDN管理,CDN管理
 域名管理,域名管理

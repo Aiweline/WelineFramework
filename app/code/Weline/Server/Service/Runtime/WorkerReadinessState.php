@@ -353,6 +353,35 @@ final class WorkerReadinessState
     }
 
     /**
+     * Flatten homepage FPC proof for ControlMessage::statusReport (scalar-only
+     * context). Master auditChildStatusReport rebuilds homepage_fpc meta.
+     *
+     * @return array{
+     *     warmup_state:string,
+     *     homepage_fpc_hit:int,
+     *     homepage_fpc_status:string,
+     *     homepage_fpc_source:string,
+     *     homepage_fpc_reason:string,
+     *     homepage_fpc_full_uri:string,
+     *     homepage_fpc_http_status:int
+     * }
+     */
+    public static function statusReportHomepageFields(): array
+    {
+        $fpc = self::$homepageFpcProof;
+
+        return [
+            'warmup_state' => self::$warmupState,
+            'homepage_fpc_hit' => !empty($fpc['hit']) ? 1 : 0,
+            'homepage_fpc_status' => \strtoupper(\trim((string)($fpc['fpc_status'] ?? ''))),
+            'homepage_fpc_source' => \strtolower(\trim((string)($fpc['source'] ?? ''))),
+            'homepage_fpc_reason' => \substr(\trim((string)($fpc['reason'] ?? '')), 0, 240),
+            'homepage_fpc_full_uri' => \substr(\trim((string)($fpc['full_uri'] ?? '')), 0, 240),
+            'homepage_fpc_http_status' => (int)($fpc['http_status'] ?? 0),
+        ];
+    }
+
+    /**
      * Preserve the exact dynamic-render receipt for Master-side admission.
      * Normalization happens here; trust and threshold validation remain the
      * Orchestrator's responsibility so a rejected proof retains diagnostics.

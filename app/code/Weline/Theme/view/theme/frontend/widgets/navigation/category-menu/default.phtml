@@ -1,12 +1,14 @@
 <?php
 /**
- * 分类菜单部件：Header 横向分类条（Amazon chrome），默认注入 category-menu。
+ * 分类菜单部件：Header 横向分类条（Amazon chrome）。
+ * 默认主题 header 布局已用 `<w:widget type="navigation" name="category-menu" />` 占槽，
+ * 不再声明 default_injections（布局已有则禁再走 required 注入，避免 chrome/页槽双计报错）。
  *
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {category-menu}
  * @widget.name {分类菜单}
- * @widget.description {Header 横向分类导航（mega/overflow）；默认注入 category-menu 槽。}
+ * @widget.description {Header 横向分类导航（mega/overflow）；由默认主题 header 布局承载，不走 default_injections。}
  * @widget.type {navigation}
  * @widget.area {frontend}
  * @widget.position {["header"]}
@@ -14,7 +16,6 @@
  * @widget.slot {category-menu}
  * @widget.supports {["layout-header-category-menu","layout-header-categories","category-menu"]}
  * @widget.exclusive {true}
- * @widget.default_injections {[{"layout_type":"homepage","slot":"category-menu","area":"header","sort_order":0,"required":true,"reason":"全局 chrome 载体默认展示横向分类条；非首页继承合并","config":{"show_banner_with_children":true}}]}
  *
  * @param title {default="分类导航",type="string",label="无障碍标题"}
  * @param show_banner_with_children {default=true,type="bool",label="有子分类时展示 Banner/描述",description="Mega Menu：有子分类时是否在子分类上方展示分类 Banner 与描述"}

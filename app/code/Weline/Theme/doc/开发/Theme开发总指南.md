@@ -2,6 +2,8 @@
 
 > **写任何 `.phtml` / 模板 / 布局 / 部件前**：先读 [AI硬规则索引.md](../../Ai/doc/AI硬规则索引.md) 与 [Taglib 场景映射表.md](../../Taglib/doc/场景映射表.md)。
 >
+> **先判 `work_mode`（硬）**：维护默认主题 / 新开 design / Theme PHP 运行时是三件事。工程团队主题席须先声明 `work_mode∈{default_theme,design_theme,theme_module_runtime}` 再落文件——完整双模式手册见 [主题开发.md](../../../../../dev/ai-command/ai/主题开发.md)；新建 design 操作摘要见 [theme-inheritance「新建设计主题」](../theme-inheritance-and-file-conventions.md#新建设计主题操作摘要)。
+>
 > 适用范围：WelineFramework 当前主题开发、布局开发、部件开发、主题覆盖、前端请求链路、Taglib 与可视化编辑器相关开发。
 >
 > MCP / AI 侧将本指南视为 **`frontend_development`（前端开发规范）** 表面；其中「前台 section 身份属性（`weline-code`）」只是规范条目之一，不是独立技能名。
@@ -10,6 +12,7 @@
 
 建议按下面顺序建立上下文，再动源码：
 
+0. **先判 work_mode** → [主题开发.md](../../../../../dev/ai-command/ai/主题开发.md) Mode A/B/C；新建 design 再读 inheritance「新建设计主题」节
 1. `AGENTS.md`
 2. `app/code/Weline/Ai/doc/AI开发治理.md`
 3. `app/code/Weline/Theme/doc/README.md`
@@ -263,9 +266,11 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 - 新增无前缀全局基础组件类来替代 `w-*`
 - 在可复用组件里大量硬编码颜色、边框、圆角、阴影
 
-## 4.1 前端文案与 i18n（强推荐）
+## 4.1 前端文案与 i18n（高压线 · 开发语言默认中文）
 
-主题模板（layout / partial / component / widget 的 `.phtml`）里，用户可见文案**优先**使用 `<lang>` 标签与 `@lang()` / `@lang{}` 内联语法；**不要**在 HTML 正文或属性里写 `<?= __('...') ?>`。
+**开发成员约定（强制）**：前端开发语言默认**简体中文**。模板 / 菜单 / ACL / `__()` / `@lang` / `<lang>` 的用户可见源串必须写中文；**禁止**英文当默认源串。多语言展示靠模块 **中英 CSV**（`i18n/zh_Hans_CN.csv` + `i18n/en_US.csv`）翻译——**不是 CSS、也不是把模板改成英文**。MCP：`module_i18n_chinese_source_default` / `frontend_ui_requires_zh_en_csv`；权威：`模块翻译CSV规范.md`。
+
+主题模板（layout / partial / component / widget 的 `.phtml`）里，用户可见文案**必须**使用 `<lang>` 标签与 `@lang()` / `@lang{}` 内联语法；**不要**在 HTML 正文或属性里写 `<?= __('...') ?>`。
 
 **为什么前端首选 `@lang` / `<lang>`，而不是 `__()`**：
 
@@ -276,7 +281,7 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 **推荐写法**：
 
 ```html
-<!-- HTML 正文 -->
+<!-- HTML 正文：源串写中文 -->
 <h1><lang>用户管理</lang></h1>
 <button><lang>保存</lang></button>
 
@@ -298,7 +303,10 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 <span>@lang('支持 .ico, .png, .svg')</span>
 ```
 
-**硬规则**：`@lang()` / `@lang{}` 把未加引号的逗号当参数分隔；含逗号源文必须 `<lang>…</lang>` 或 `@lang('…')`（权威：`01-lang标签使用指南.md`；MCP id `at_lang_no_unquoted_comma`）。
+**硬规则**：
+
+1. `@lang()` / `@lang{}` 把未加引号的逗号当参数分隔；含逗号源文必须 `<lang>…</lang>` 或 `@lang('…')`（权威：`01-lang标签使用指南.md`；MCP id `at_lang_no_unquoted_comma`）。
+2. **中英 CSV 同回合齐写**：新增/改动用户可见文案后，必须维护本模块 `i18n/zh_Hans_CN.csv`（第二列中文身份）与 `i18n/en_US.csv`（第二列真实英文），再执行 `php bin/w i18n:collect`，并抽检当前 locale。未完成双语不得宣称 UI 交付完成。
 
 **仍使用 `__()` 的合理场景**（仅限 PHP 逻辑层，不在 HTML 直接输出）：
 
@@ -306,7 +314,8 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 - `<?php ?>` 块内分支逻辑所需的文案
 - 外部 `.js` 文件依赖的全局变量注入（在 PHP 块赋值 `window.i18nTexts` 等）
 
-详细语法与占位符规则：`app/code/Weline/Framework/doc/4-内置标签/01-lang标签使用指南.md`
+详细语法与占位符规则：`app/code/Weline/Framework/doc/4-内置标签/01-lang标签使用指南.md`  
+CSV 与 collect：`app/code/Weline/I18n/doc/模块翻译CSV规范.md`
 
 ## 5. 布局与部件的边界
 
@@ -346,9 +355,12 @@ component 负责：
 
 重点规则：
 
-- **硬规则（布局内嵌归属）**：Theme `view/theme/**/{layouts,partials}/**/*.phtml` 中，仅允许归属 `Weline_Theme` 的 `<w:widget>` / `fetch(...Weline_Theme::.../widgets/...)` 做 slot 嵌套；其他模块部件必须用空 `<w:slot>` + 该模块 `default_injections`（应用注入）。本地/升级门禁：`php bin/w frontend:check-theme-layout-widgets`
+- **硬规则（本模块才可标签内嵌）**：`<w:widget>` / `fetch(.../widgets/...)` **只能**引用**本模块**部件。Theme 布局仅可内嵌 `Weline_Theme`；Customer/Product 等自有布局亦同理——禁止布局标签拉第三方部件。
+- **硬规则（同模块 XOR，禁止运行时去重补丁）**：同一模块下，布局/宿主已用标签内嵌某部件 ↔ **禁止**再在该部件 JSON 写 `default_injections`（二选一，否则会重复出现两个）。布局已提供 → 清空 JSON 并标 `placement=layout`；走注入 → 布局只留空 `<w:slot>` + `placement=injection`。禁止用页级 presence / 槽内 count 等运行时「只留一份」打补丁。门禁：`php bin/w frontend:check-required-injection-sibling-fetch`（`setup:upgrade` 致命）。
+- **硬规则（跨模块禁布局互调 · 只走 JSON）**：不同模块之间 **禁止**在布局/partial 里互相 `<w:widget>` / `fetch` 调用对方部件；外国部件**只能**经拥有模块的 JSON `default_injections`（应用部件默认注入）+ 空槽进入。门禁：`php bin/w frontend:check-theme-layout-widgets`。
+- **工程团队**：部件相关施工/复审分配给专席 **部件开发工程师**（MCP `widget_development` / `工程团队.md`）。
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
-- `default_injections` 只表示“建议默认放在哪里”（非 Theme 开箱内容的唯一合法路径）
+- `default_injections`：跨模块开箱进槽的**唯一合法路径**；同模块若已布局内嵌则不得再写
 - Dashboard 注入可选 `default_view`（`DashboardView.code`）：声明后才在对应视图身份就绪时自动挂载；删除后写 `user_deleted`，手动“应用”可恢复
 - Theme 监听 `Weline_Dashboard::layout_identity_ready`，只匹配 `default_view === view_code` 做一次性补齐
 - `accept="*"` 表示接受所有部件

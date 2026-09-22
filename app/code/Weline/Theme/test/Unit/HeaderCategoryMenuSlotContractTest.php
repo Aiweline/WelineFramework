@@ -34,7 +34,7 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
         self::assertStringNotContainsString('<nav class="categories-nav"', $source);
     }
 
-    public function testCategoryMenuWidgetDeclaresDefaultInjectionAndHorizontalPartial(): void
+    public function testCategoryMenuWidgetIsLayoutOwnedWithoutDefaultInjection(): void
     {
         $widgetPath = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/navigation/category-menu/default.phtml';
         $partialPath = dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/categories-horizontal-nav.phtml';
@@ -45,8 +45,7 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
         $partial = (string)file_get_contents($partialPath);
 
         self::assertStringContainsString('@widget.slot {category-menu}', $widget);
-        self::assertStringContainsString('@widget.default_injections', $widget);
-        self::assertStringContainsString('"slot":"category-menu"', $widget);
+        self::assertStringNotContainsString('@widget.default_injections', $widget);
         self::assertStringContainsString('categories-horizontal-nav.phtml', $widget);
         self::assertStringContainsString('id="categories-list"', $partial);
         self::assertStringContainsString('categories-overflow-wrapper', $partial);

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Acl',
-    "version" => '1.1.9',
+    "version" => '1.1.10',
     "requires" => [
         'Weline_Framework' => '*',
     ],

@@ -20,6 +20,9 @@ final class StorefrontThemeCacheCoordinator
 
     public const PUBLISHED_SNAPSHOT_POOL = 'weline_theme_published_snapshot';
 
+    /** Published Slot/layout structure projection (language-neutral mount graph). */
+    public const PUBLISHED_LAYOUT_STRUCTURE_POOL = 'weline_theme_published_layout_structure';
+
     /**
      * 公开资源用 ThemeEditorContext 的完整身份寻址，不附加访问者范围或语言。
      * 发布、回滚及主题切换沿既有 global/storefront/theme 代次失效。
@@ -30,6 +33,24 @@ final class StorefrontThemeCacheCoordinator
             resource: 'theme.published_snapshot',
             pool: self::PUBLISHED_SNAPSHOT_POOL,
             scope: 'global',
+            dependencies: ['theme'],
+            freshTtlSeconds: 3600,
+            staleTtlSeconds: 0,
+        );
+    }
+
+    /**
+     * Published layout / Slot structure only — no lang/currency/request_id.
+     * Logical key carries area/theme/page_type/layout_option/target; Policy scope
+     * injects website/store/channel. Draft/preview/target pages must not call this.
+     */
+    public static function publishedLayoutStructurePolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'theme.layout.published',
+            pool: self::PUBLISHED_LAYOUT_STRUCTURE_POOL,
+            scope: 'channel',
+            vary: [],
             dependencies: ['theme'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 0,

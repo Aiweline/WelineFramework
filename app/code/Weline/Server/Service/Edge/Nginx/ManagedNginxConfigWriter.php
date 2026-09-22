@@ -170,16 +170,29 @@ NGINX;
 
     # HTML/API 边缘微缓存：有 Cookie、Authorization 或 Upgrade 时回源。
     # 浏览器会给同域 CSS/JS 自动带 Cookie；静态扩展名使用独立 location，不套用该 bypass。
+    # FPC MISS/BYPASS 的冷 SSR 响应禁止写入 edge：否则 cookieless 公网探针会长期吃到
+    # 带 x-wls-fpc-status:MISS 的 STALE/HIT，而进程 FPC 实际已暖（warmup 为 in-process）。
+    # cache key 代次 |fpc2 淘汰历史误缓存的 MISS 条目。
     proxy_cache_path {$cacheDir} levels=1:2 keys_zone=wls_edge:{$keysZoneMb}m max_size={$cacheMaxMb}m inactive=30m use_temp_path=off;
     map "\$http_cookie|\$http_authorization|\$http_upgrade" \$wls_edge_bypass {
         default 1;
         "||"    0;
     }
+    map \$upstream_http_x_wls_fpc_status \$wls_edge_skip_fpc_miss_status {
+        default 0;
+        MISS    1;
+        BYPASS  1;
+    }
+    map \$upstream_http_x_weline_fpc \$wls_edge_skip_fpc_miss_weline {
+        default 0;
+        MISS    1;
+        BYPASS  1;
+    }
 NGINX;
             $cacheLocationBlock = <<<NGINX
 
             proxy_cache wls_edge;
-            proxy_cache_key "\$scheme\$request_method\$host\$request_uri";
+            proxy_cache_key "\$scheme\$request_method\$host\$request_uri|fpc2";
             proxy_cache_methods GET HEAD;
             proxy_cache_valid 200 {$ttl}s;
             proxy_cache_valid 301 302 {$ttl}s;
@@ -189,7 +202,7 @@ NGINX;
             proxy_cache_background_update on;
             proxy_cache_revalidate on;
             proxy_cache_bypass \$wls_edge_bypass;
-            proxy_no_cache \$wls_edge_bypass;
+            proxy_no_cache \$wls_edge_bypass \$wls_edge_skip_fpc_miss_status \$wls_edge_skip_fpc_miss_weline;
             add_header X-Wls-Edge-Cache \$upstream_cache_status always;
 NGINX;
         }
@@ -259,6 +272,7 @@ NGINX;
 
         # Public static assets: browsers always attach same-origin Cookie; do not
         # treat Cookie/Authorization as edge bypass (unlike HTML/API below).
+        # Strip identity headers before upstream so WLS Static L1 never sees them.
         location ~* \.(?:{$staticExt})$ {
             proxy_pass http://wls_backend;
             proxy_http_version 1.1;
@@ -270,6 +284,8 @@ NGINX;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header Cookie "";
+            proxy_set_header Authorization "";
             proxy_buffering on;
             proxy_buffer_size 64k;
             proxy_buffers 32 64k;

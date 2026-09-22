@@ -21,6 +21,7 @@
 - 目录：`app/code/Weline/Visitor`
 - Vendor：`Weline`
 - Module：`Visitor`
+- **工程团队施工席**：`Team:数据分析:`（整模块；像素/报表；非框架 Event）→ `doc/ai/skills/visitor-data-analytics/SKILL.md`
 
 ## 代码面清单
 

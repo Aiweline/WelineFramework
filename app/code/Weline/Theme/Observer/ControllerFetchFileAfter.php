@@ -66,6 +66,22 @@ class ControllerFetchFileAfter implements ObserverInterface
         };
         $memoryProbe('start', $fallbackContent);
 
+        // Policy/terms/guide 等壳控制器直接 fetch 全页 layouts/*.phtml。
+        // FetchBefore 仍会把同一路径写成 contentTemplate+layoutTemplate；
+        // 若再 wrap，meta.content 会嵌进第二份 <html>/<head>/header。
+        if ($this->isSameFrontendLayoutDocument($contentTemplate, $layoutTemplate)) {
+            $html = $fallbackContent !== ''
+                ? $fallbackContent
+                : $this->renderContentTemplate($template, $contentTemplate, '');
+            if ($html !== '') {
+                $eventData->setData('content', $html);
+                $eventData->setData('fileName', $layoutTemplate);
+                $memoryProbe('layout_document_skip_wrap', $html);
+
+                return;
+            }
+        }
+
         try {
             $contentHtml = $this->renderContentTemplate($template, $contentTemplate, $fallbackContent);
             $memoryProbe('after_content_template', $contentHtml);
@@ -270,6 +286,42 @@ class ControllerFetchFileAfter implements ObserverInterface
         }
 
         return $fallbackContent;
+    }
+
+    /**
+     * 控制器已直接取全页布局文档时（content 与 layout 指向同一 layouts/… 路径），禁止再包一层。
+     */
+    private function isSameFrontendLayoutDocument(string $contentTemplate, string $layoutTemplate): bool
+    {
+        $contentKey = $this->normalizeFrontendLayoutDocumentKey($contentTemplate);
+        $layoutKey = $this->normalizeFrontendLayoutDocumentKey($layoutTemplate);
+        if ($contentKey === '' || $layoutKey === '') {
+            return false;
+        }
+
+        return $contentKey === $layoutKey;
+    }
+
+    /**
+     * 仅识别 frontend layouts 文档路径；内容 partial 返回空串以免误跳过包装。
+     */
+    private function normalizeFrontendLayoutDocumentKey(string $templatePath): string
+    {
+        $path = \str_replace('\\', '/', \trim($templatePath));
+        if ($path === '') {
+            return '';
+        }
+        if (\str_contains($path, '::')) {
+            $path = (string)\explode('::', $path, 2)[1];
+        }
+        $path = \ltrim($path, '/');
+        $path = \strtolower($path);
+        // theme/frontend/layouts/... 或 frontend/layouts/...
+        if (\preg_match('#(?:^|/)(?:theme/)?frontend/layouts/.+\.phtml$#', $path) !== 1) {
+            return '';
+        }
+
+        return $path;
     }
 
     private function renderFastAccountAuthLayout(Template $template, string $layoutTemplate, string $contentHtml): ?string
@@ -832,16 +884,26 @@ HTML;
         }
         $metaData['contentTemplate'] = $contentTemplate;
         $isEditorPreviewTemplate = (bool)$template->getData('editor_mode');
+        $layoutType = strtolower(trim((string)($template->getData('layoutType') ?? '')));
+        // Homepage (and any layout with nested homepage-* slots) must not echo meta.content
+        // in place of the slot tree. WLS workers can leak prior-request content into meta;
+        // empty homepage-shell wrap residue must not suppress hero/featured/videos.
+        $forbidMetaContentDump = $isEditorPreviewTemplate
+            || $layoutType === 'homepage'
+            || str_starts_with($layoutType, 'homepage/')
+            || str_starts_with($layoutType, 'homepage.');
         // Editor must keep nested w:slot shells; never preserve prebuilt meta.content dumps.
-        $preserveAssignedContentMeta = !$isEditorPreviewTemplate && array_key_exists('content', $metaData);
-        if ($contentRenderKey !== '') {
+        $preserveAssignedContentMeta = !$forbidMetaContentDump && array_key_exists('content', $metaData);
+        if ($contentRenderKey !== '' || $forbidMetaContentDump) {
             unset($metaData['content']);
-            $metaData['contentRenderKey'] = $contentRenderKey;
+            if ($contentRenderKey !== '') {
+                $metaData['contentRenderKey'] = $contentRenderKey;
+            } else {
+                unset($metaData['contentRenderKey']);
+            }
         } else {
             unset($metaData['contentRenderKey']);
-            if ($isEditorPreviewTemplate) {
-                unset($metaData['content']);
-            } elseif (!$preserveAssignedContentMeta) {
+            if (!$preserveAssignedContentMeta) {
                 $metaData['content'] = $contentHtml;
             }
         }

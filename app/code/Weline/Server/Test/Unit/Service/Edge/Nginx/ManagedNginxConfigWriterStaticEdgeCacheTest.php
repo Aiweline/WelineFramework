@@ -80,12 +80,39 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'proxy_no_cache $wls_edge_bypass;',
             $staticBlock,
         );
+        self::assertStringContainsString(
+            'proxy_set_header Cookie "";',
+            $staticBlock,
+            'Edge must discard inbound Cookie before proxying public static assets.',
+        );
+        self::assertStringContainsString(
+            'proxy_set_header Authorization "";',
+            $staticBlock,
+            'Edge must discard Authorization before proxying public static assets.',
+        );
 
         $genericBlock = \substr($config, $genericStart);
         self::assertStringContainsString('proxy_cache_bypass $wls_edge_bypass;', $genericBlock);
-        self::assertStringContainsString('proxy_no_cache $wls_edge_bypass;', $genericBlock);
+        self::assertStringContainsString(
+            'proxy_no_cache $wls_edge_bypass $wls_edge_skip_fpc_miss_status $wls_edge_skip_fpc_miss_weline;',
+            $genericBlock,
+            'HTML edge must refuse to store upstream FPC MISS/BYPASS responses.',
+        );
+        self::assertStringContainsString(
+            'proxy_cache_key "$scheme$request_method$host$request_uri|fpc2";',
+            $genericBlock,
+            'HTML edge cache key generation must bump past MISS-poisoned entries.',
+        );
         self::assertStringContainsString(
             'map "$http_cookie|$http_authorization|$http_upgrade" $wls_edge_bypass',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map $upstream_http_x_wls_fpc_status $wls_edge_skip_fpc_miss_status',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map $upstream_http_x_weline_fpc $wls_edge_skip_fpc_miss_weline',
             $config,
         );
     }

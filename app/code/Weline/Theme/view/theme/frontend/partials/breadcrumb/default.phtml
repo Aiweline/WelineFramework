@@ -6,12 +6,18 @@
 $items = $this->getData('meta.items') ?? $this->getData('items') ?? [];
 $items = is_array($items) ? $items : [];
 
-// Storefront controllers may publish name/url trails (PDP / PLP) when meta.items is empty.
+// Storefront controllers may publish name/url trails (PDP / PLP / Theme shells) when meta.items is empty.
 if ($items === []) {
     $raw = $this->getData('storefront_product_breadcrumbs')
         ?? $this->getData('storefront_category_breadcrumbs')
         ?? $this->getData('breadcrumbs')
-        ?? [];
+        ?? null;
+    if (!is_array($raw) || $raw === []) {
+        $seoBag = $this->getData('seo');
+        $raw = (is_array($seoBag) && is_array($seoBag['breadcrumbs'] ?? null))
+            ? $seoBag['breadcrumbs']
+            : [];
+    }
     if (is_array($raw) && $raw !== []) {
         $normalized = [];
         $total = count($raw);

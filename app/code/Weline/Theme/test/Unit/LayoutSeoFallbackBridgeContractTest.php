@@ -23,6 +23,7 @@ final class LayoutSeoFallbackBridgeContractTest extends TestCase
         self::assertStringContainsString("'robots' => \$robots", $src);
         self::assertStringContainsString("\$seo['breadcrumbs'] = [", $src);
         self::assertStringContainsString("['name' => (string)__('首页'), 'url' => '/']", $src);
+        self::assertStringContainsString("\$this->assign('breadcrumbs', \$seo['breadcrumbs'])", $src);
         self::assertStringNotContainsString("'title' => \$title", $src);
         self::assertStringNotContainsString("'description' => \$description", $src);
         self::assertStringContainsString("\$this->assign('title', \$title)", $src);

@@ -17,13 +17,22 @@ final class ProductReviewsWidgetContractTest extends TestCase
         self::assertIsArray($widgets);
         self::assertArrayHasKey('product-reviews', $widgets);
         $widget = $widgets['product-reviews'];
+        $widgetSource = (string)file_get_contents($path);
         self::assertSame('product-reviews', $widget['slot'] ?? null);
         self::assertSame('comment', $widget['type'] ?? null);
         self::assertSame('Weline_Review::templates/frontend/widgets/product-reviews.phtml', $widget['template'] ?? null);
+        self::assertStringContainsString("'placement' => 'injection'", $widgetSource);
+        self::assertSame('injection', $widgets['product-reviews']['placement'] ?? null);
         $injection = $widget['default_injections'][0] ?? [];
         self::assertSame('product-reviews', $injection['slot'] ?? null);
         self::assertSame('product', $injection['layout_type'] ?? null);
         self::assertTrue((bool)($injection['required'] ?? false));
+
+        $hook = (string)file_get_contents(
+            dirname(__DIR__, 5) . '/view/hooks/Weline_Review/frontend/layouts/product-reviews/content.phtml'
+        );
+        self::assertStringNotContainsString('fetch(', $hook);
+        self::assertStringContainsString('placement=injection', $hook);
     }
 
     public function testWidgetTemplateUsesThemeTokensExternalAssetsAndNoInlineScript(): void

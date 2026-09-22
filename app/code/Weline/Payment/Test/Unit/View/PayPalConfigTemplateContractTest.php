@@ -54,5 +54,19 @@ final class PayPalConfigTemplateContractTest extends TestCase
         self::assertStringContainsString("return 'paypal';", $provider);
         self::assertStringContainsString("'checkout_template_code' => 'paypal'", $provider);
         self::assertStringContainsString('ProviderConnectInterface', $provider);
+
+        foreach (['sandbox_client_secret', 'live_client_secret'] as $secretField) {
+            self::assertTrue(
+                (bool) preg_match(
+                    '/key="payment\/method\/paypal\/' . preg_quote($secretField, '/') . '"([\s\S]*?)\/>/',
+                    $template,
+                    $m
+                ),
+                $secretField . ' field missing'
+            );
+            self::assertStringContainsString('value-type="encrypted"', $m[1]);
+            self::assertStringContainsString('type="secret"', $m[1]);
+            self::assertStringNotContainsString('value-type="string"', $m[1]);
+        }
     }
 }

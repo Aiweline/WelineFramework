@@ -50,7 +50,12 @@ final class SearchQueryProvider implements QueryProviderInterface
     private function search(array $params): array
     {
         try {
-            $result = $this->hub->search($params, autocomplete: true);
+            // Backend typed search (e.g. sidebar menu filter) needs full page_size;
+            // storefront autocomplete stays capped at 8.
+            $area = strtolower(trim((string)($params['area'] ?? 'frontend')));
+            $type = trim((string)($params['type'] ?? 'all'));
+            $autocomplete = !($area === 'backend' && $type !== '' && $type !== 'all');
+            $result = $this->hub->search($params, autocomplete: $autocomplete);
             $payload = $result->toArray() + [
                 'website_id' => (int)(RequestContext::scopeMetadata()['website_id'] ?? 0),
                 'store_id' => (int)(RequestContext::scopeMetadata()['store_id'] ?? 0),

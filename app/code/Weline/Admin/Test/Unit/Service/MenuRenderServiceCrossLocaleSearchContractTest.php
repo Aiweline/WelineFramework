@@ -8,66 +8,35 @@ namespace Weline\Admin\Test\Unit\Service;
 require_once BP . 'app/bootstrap.php';
 
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 use Weline\Admin\Model\MenuAccessLog;
 use Weline\Admin\Service\MenuRenderService;
 
 final class MenuRenderServiceCrossLocaleSearchContractTest extends TestCase
 {
-    public function testBuildCrossLocaleSearchTextIncludesSourceAndLocaleTranslations(): void
+    public function testBuildCrossLocaleSearchTextIncludesOtherLocales(): void
     {
         $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
-
         $prop = new \ReflectionProperty(MenuRenderService::class, 'moduleLocaleWords');
         $prop->setAccessible(true);
         $prop->setValue($service, [
-            'Weline_Product|zh_Hans_CN' => ['Products' => '商品'],
-            'Weline_Product|en_US' => ['Products' => 'Products'],
-            'Weline_Product|ja_JP' => ['Products' => '商品'],
+            'Weline_Product|en_US' => ['Products' => 'Products', '商品' => 'Products'],
+            'Weline_Product|zh_Hans_CN' => ['Products' => '商品', '商品' => '商品'],
         ]);
-
         $localeProp = new \ReflectionProperty(MenuRenderService::class, 'activeLocaleCodes');
         $localeProp->setAccessible(true);
-        $localeProp->setValue($service, ['zh_Hans_CN', 'en_US', 'ja_JP']);
+        $localeProp->setValue($service, ['zh_Hans_CN', 'en_US']);
 
         $text = $service->buildCrossLocaleSearchText('Products', 'Weline_Product::catalog');
-        $lower = mb_strtolower($text);
-
-        self::assertStringContainsString('products', $lower);
+        self::assertStringContainsString('Products', $text);
         self::assertStringContainsString('商品', $text);
     }
 
-    public function testBuildCrossLocaleSearchTextFallsBackToSourceWhenUntranslated(): void
-    {
-        $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
-        $localeProp = new \ReflectionProperty(MenuRenderService::class, 'activeLocaleCodes');
-        $localeProp->setAccessible(true);
-        $localeProp->setValue($service, ['en_US', 'zh_Hans_CN']);
-
-        $prop = new \ReflectionProperty(MenuRenderService::class, 'moduleLocaleWords');
-        $prop->setAccessible(true);
-        $prop->setValue($service, [
-            'Weline_Demo|en_US' => [],
-            'Weline_Demo|zh_Hans_CN' => [],
-        ]);
-
-        $text = $service->buildCrossLocaleSearchText('UniqueMenuKeyXYZ', 'Weline_Demo::x');
-        self::assertSame('UniqueMenuKeyXYZ', $text);
-    }
-
-    public function testRenderMenuNodeEmitsDataSearchText(): void
+    public function testRenderMenuNodeDoesNotEmbedDataSearchText(): void
     {
         $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
         $localeProp = new \ReflectionProperty(MenuRenderService::class, 'activeLocaleCodes');
         $localeProp->setAccessible(true);
         $localeProp->setValue($service, ['zh_Hans_CN', 'en_US']);
-
-        $words = new \ReflectionProperty(MenuRenderService::class, 'moduleLocaleWords');
-        $words->setAccessible(true);
-        $words->setValue($service, [
-            'Weline_Product|zh_Hans_CN' => ['Products' => '商品'],
-            'Weline_Product|en_US' => ['Products' => 'Products'],
-        ]);
 
         $backend = new \ReflectionProperty(MenuRenderService::class, 'cachedBackendUrlPrefix');
         $backend->setAccessible(true);
@@ -77,27 +46,39 @@ final class MenuRenderServiceCrossLocaleSearchContractTest extends TestCase
         $frontend->setValue($service, '/');
         $current = new \ReflectionProperty(MenuRenderService::class, 'cachedCurrentUrl');
         $current->setAccessible(true);
-        $current->setValue($service, '');
+        $current->setValue($service, '/backend/dashboard');
 
-        $method = new ReflectionMethod(MenuRenderService::class, 'renderMenuNode');
+        $method = new \ReflectionMethod(MenuRenderService::class, 'renderMenuNode');
         $method->setAccessible(true);
-        $html = (string)$method->invoke($service, [
+        $html = $method->invoke($service, [
+            'type' => 'menus',
             'source_id' => 'Weline_Product::catalog',
-            'source_name' => 'Products',
+            'source_name' => '商品',
             'route' => 'product/backend/catalog/index',
             'icon' => 'circle',
             'is_enable' => 1,
-            'type' => 'menus',
             'nodes' => [],
-            'is_backend' => true,
-        ], false);
+        ], true);
 
-        self::assertStringContainsString('data-search-text="', $html);
-        self::assertMatchesRegularExpression('/data-search-text="[^"]*商品[^"]*"/u', $html);
-        self::assertMatchesRegularExpression('/data-search-text="[^"]*Products[^"]*"/', $html);
+        self::assertStringNotContainsString('data-search-text=', $html);
+        self::assertStringContainsString('data-source="Weline_Product::catalog"', $html);
     }
 
-    public function testCollectNavigableMenuSearchItemsKeepsCrossLocaleText(): void
+    public function testRenderMenuSourceDoesNotPrefetchOnHotPath(): void
+    {
+        $source = (string)file_get_contents((new \ReflectionClass(MenuRenderService::class))->getFileName() ?: '');
+        self::assertStringContainsString('buildIndexSearchItems', $source);
+        self::assertStringContainsString('交叉语种可搜词已迁至 Search DB 索引', $source);
+        if (!preg_match('/public function renderMenu\(array \$menus\): string\s*\{(.*?)\n    public function /s', $source, $m)) {
+            self::fail('无法截取 renderMenu 方法体');
+        }
+        self::assertStringNotContainsString('prefetchCrossLocaleMenuWords', $m[1]);
+        self::assertStringContainsString('Parser::prefetchWords', $m[1]);
+        self::assertStringContainsString('State::getLangLocal()', $m[1]);
+        self::assertStringNotContainsString('data-search-text', $m[1]);
+    }
+
+    public function testBuildIndexSearchItemsIncludesRouteAndSearchText(): void
     {
         $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
         $localeProp = new \ReflectionProperty(MenuRenderService::class, 'activeLocaleCodes');
@@ -106,61 +87,38 @@ final class MenuRenderServiceCrossLocaleSearchContractTest extends TestCase
         $words = new \ReflectionProperty(MenuRenderService::class, 'moduleLocaleWords');
         $words->setAccessible(true);
         $words->setValue($service, [
-            'Weline_Product|zh_Hans_CN' => ['Products' => '商品'],
-            'Weline_Product|en_US' => ['Products' => 'Products'],
+            'Weline_Product|en_US' => ['商品' => 'Products'],
+            'Weline_Product|zh_Hans_CN' => ['商品' => '商品'],
         ]);
+        $backend = new \ReflectionProperty(MenuRenderService::class, 'cachedBackendUrlPrefix');
+        $backend->setAccessible(true);
+        $backend->setValue($service, '/backend');
+        $frontend = new \ReflectionProperty(MenuRenderService::class, 'cachedFrontendUrlPrefix');
+        $frontend->setAccessible(true);
+        $frontend->setValue($service, '/');
+        $prefetch = new \ReflectionMethod(MenuRenderService::class, 'prefetchCrossLocaleMenuWords');
+        $prefetch->setAccessible(true);
+        $prefetch->invoke($service, ['商品']);
+        $backend->setValue($service, '/backend');
+        $frontend->setValue($service, '/');
 
-        $items = $service->collectNavigableMenuSearchItems([
-            [
-                'source_id' => 'Weline_Product::catalog',
-                'source_name' => 'Products',
-                'route' => 'product/backend/catalog/index',
-                'is_enable' => 1,
-                'type' => 'menus',
-                'nodes' => [],
-                'is_backend' => true,
-            ],
-            [
-                'source_id' => 'Weline_Product::group',
-                'source_name' => 'Catalog',
-                'route' => '',
-                'is_enable' => 1,
-                'type' => 'menus',
-                'nodes' => [],
-                'is_backend' => true,
-            ],
-        ]);
+        $walk = new \ReflectionMethod(MenuRenderService::class, 'walkNavigableMenuSearchItems');
+        $walk->setAccessible(true);
+        $items = [];
+        $menus = [[
+            'type' => 'menus',
+            'source_id' => 'Weline_Product::catalog',
+            'source_name' => '商品',
+            'route' => 'product/backend/catalog/index',
+            'is_enable' => 1,
+            'nodes' => [],
+        ]];
+        $args = [$menus, &$items];
+        $walk->invokeArgs($service, $args);
 
         self::assertCount(1, $items);
         self::assertSame('Weline_Product::catalog', $items[0]['source_id']);
-        self::assertStringContainsString('商品', $items[0]['search_text']);
+        self::assertSame('product/backend/catalog/index', $items[0]['route']);
         self::assertStringContainsString('Products', $items[0]['search_text']);
-    }
-
-    public function testResolveMenuTitleRawUsesPrefetchedPhraseWordsWithoutGeneratedLocaleInclude(): void
-    {
-        $service = new MenuRenderService($this->createStub(MenuAccessLog::class));
-        $localeProp = new \ReflectionProperty(MenuRenderService::class, 'activeLocaleCodes');
-        $localeProp->setAccessible(true);
-        $localeProp->setValue($service, ['en_US', 'zh_Hans_CN']);
-
-        $source = \file_get_contents((new \ReflectionClass(MenuRenderService::class))->getFileName() ?: '');
-        self::assertIsString($source);
-        self::assertStringNotContainsString('getGeneratedLocaleWords', $source);
-        self::assertStringNotContainsString('flattenLocaleWords', $source);
-        self::assertDoesNotMatchRegularExpression(
-            "/include\\s+\\\$localeFile|include\\s+BP\\s*\\.\\s*DS\\s*\\.\\s*'generated'/",
-            $source
-        );
-
-        $prefetch = new \ReflectionMethod(MenuRenderService::class, 'prefetchCrossLocaleMenuWords');
-        $prefetch->setAccessible(true);
-        $prefetch->invoke($service, ['Products']);
-
-        // 未注入模块 CSV、且未保证 DB 有词时，至少回退 source，且不炸内存路径。
-        self::assertSame(
-            'Products',
-            $service->resolveMenuTitleRaw('Products', 'Weline_Demo::x', 'en_US')
-        );
     }
 }

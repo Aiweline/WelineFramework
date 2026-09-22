@@ -5356,6 +5356,20 @@ while (true) {
                 $runtime->runDeferredWorkerBootstrapWarmup();
                 WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup done worker={$workerId}");
                 $warmupLog('warmup_success');
+                if ($warmupIpcClient !== null && $warmupIpcClient->isConnected()) {
+                    $homepageFields = \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields();
+                    if ((int)($homepageFields['homepage_fpc_hit'] ?? 0) === 1) {
+                        $warmupIpcClient->send(
+                            \Weline\Server\IPC\ControlMessage::statusReport(
+                                0,
+                                \memory_get_usage(true),
+                                0,
+                                $homepageFields
+                            ),
+                            false
+                        );
+                    }
+                }
             } catch (\Throwable $e) {
                 WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
                 $warmupLog('warmup_failed', 'WARNING');
@@ -5919,7 +5933,7 @@ while (true) {
                 'websocket_connections' => $drainCounters['websocket_connections'],
                 'http2_connections' => $http2StatusConnectionCount,
                 'drain_counters_version' => 1,
-            ];
+            ] + \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields();
             foreach ($http3Status as $http3Metric => $http3Value) {
                 if (!\is_string($http3Metric) || !\is_int($http3Value)) {
                     continue;

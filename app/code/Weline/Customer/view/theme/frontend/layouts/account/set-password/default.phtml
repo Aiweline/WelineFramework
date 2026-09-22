@@ -169,21 +169,25 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
             column-gap: clamp(1rem, 3vw, 2.5rem);
             padding: clamp(1rem, 3vh, 2rem) clamp(1rem, 4vw, 3rem) clamp(1.5rem, 4vh, 2.5rem);
             overflow: visible;
-            background: var(--account-login-promo-bg, #1b2430);
+            background: var(--account-login-promo-bg, var(--color-bg-dark));
         }
         .account-login-widget__backdrop {
             position: absolute;
             inset: 0;
             pointer-events: none;
-            background-color: var(--account-login-promo-bg, #1b2430);
+            background-color: var(--account-login-promo-bg, var(--color-bg-dark));
             background-size: cover;
             background-position: center;
             overflow: hidden;
         }
         .account-login-widget--wash .account-login-widget__backdrop {
             background-image:
-                radial-gradient(90% 70% at 12% 18%, rgba(255, 153, 0, 0.28) 0%, transparent 55%),
-                linear-gradient(145deg, #1b2430 0%, #37475a 46%, var(--account-login-accent, #e08a2a) 100%);
+                linear-gradient(105deg, var(--account-login-promo-bg, var(--color-bg-dark)) 0%, color-mix(in srgb, var(--account-login-promo-bg, var(--color-bg-dark)) 62%, transparent) 28%, transparent 58%),
+                radial-gradient(ellipse 58% 48% at 86% 88%, color-mix(in srgb, var(--account-login-accent, var(--color-primary)) 22%, transparent) 0%, transparent 70%),
+                url('/Weline/Theme/view/theme/frontend/assets/images/ink/ox-cloth-caravan.webp?v=20260921-ox1');
+            background-size: cover, cover, cover;
+            background-position: center, center, 62% center;
+            background-blend-mode: normal, normal, luminosity;
         }
         .account-login-widget__overlay {
             position: absolute;

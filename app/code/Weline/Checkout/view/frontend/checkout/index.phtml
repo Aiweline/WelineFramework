@@ -167,6 +167,30 @@ $copy = [
                     <span><?= __('运费') ?></span>
                     <strong data-shipping-amount="">0.00</strong>
                 </div>
+                <div role="listitem" data-checkout-discount-row hidden>
+                    <span data-checkout-discount-label><?= __('优惠') ?></span>
+                    <strong data-discount-amount="">0.00</strong>
+                </div>
+                <div role="listitem" data-checkout-deposit-row hidden>
+                    <span><?= WidgetI18n::label('批发定金') ?></span>
+                    <strong data-deposit-amount="">0.00</strong>
+                </div>
+                <div role="listitem" data-checkout-credit-row hidden>
+                    <span><?= WidgetI18n::label('批发信用抵扣') ?></span>
+                    <strong data-credit-amount="">0.00</strong>
+                </div>
+                <div role="listitem" data-checkout-tax-row hidden>
+                    <span><?= __('关税与税费（预估）') ?></span>
+                    <strong data-tax-amount="">0.00</strong>
+                </div>
+                <div role="listitem" data-checkout-cod-fee-row hidden>
+                    <span><?= WidgetI18n::label('货到付款手续费') ?></span>
+                    <strong data-cod-fee-amount="">0.00</strong>
+                </div>
+                <div class="weline-checkout__grand" role="listitem">
+                    <span data-grand-total-label><?= __('应付合计') ?></span>
+                    <strong data-grand-total="">0.00</strong>
+                </div>
             </div>
             <div class="weline-checkout__extras mini-cart-drawer__extras"
                  data-weline-load="miniCartExtras"
@@ -201,33 +225,7 @@ $copy = [
                 </w:slot>
             </div>
             <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)?v=20260907-price-header-layout">
-            <div class="weline-checkout__totals weline-checkout__totals--tail" role="list">
-                <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-discount-after</w:hook>
-                <div role="listitem" data-checkout-discount-row hidden>
-                    <span><?= __('优惠') ?></span>
-                    <strong data-discount-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-deposit-row hidden>
-                    <span><?= WidgetI18n::label('批发定金') ?></span>
-                    <strong data-deposit-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-credit-row hidden>
-                    <span><?= WidgetI18n::label('批发信用抵扣') ?></span>
-                    <strong data-credit-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-tax-row hidden>
-                    <span><?= __('关税与税费（预估）') ?></span>
-                    <strong data-tax-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-cod-fee-row hidden>
-                    <span><?= WidgetI18n::label('货到付款手续费') ?></span>
-                    <strong data-cod-fee-amount="">0.00</strong>
-                </div>
-                <div class="weline-checkout__grand" role="listitem">
-                    <span data-grand-total-label><?= __('应付合计') ?></span>
-                    <strong data-grand-total="">0.00</strong>
-                </div>
-            </div>
+            <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-discount-after</w:hook>
             <button class="weline-checkout__submit" type="submit" data-submit>
                 <?= htmlspecialchars($copy['submit'], ENT_QUOTES, 'UTF-8') ?>
             </button>
@@ -1127,7 +1125,11 @@ $copy = [
     const subtotalNode = root.querySelector('[data-subtotal]');
     const shippingAmountNode = root.querySelector('[data-shipping-amount]');
     const discountRowNode = root.querySelector('[data-checkout-discount-row]');
+    const discountLabelNode = root.querySelector('[data-checkout-discount-label]');
     const discountAmountNode = root.querySelector('[data-discount-amount]');
+    const discountLabelDefault = discountLabelNode
+        ? String(discountLabelNode.textContent || '').trim()
+        : <?= json_encode((string)__('优惠'), JSON_UNESCAPED_UNICODE) ?>;
     const depositRowNode = root.querySelector('[data-checkout-deposit-row]');
     const depositAmountNode = root.querySelector('[data-deposit-amount]');
     const creditRowNode = root.querySelector('[data-checkout-credit-row]');
@@ -1152,6 +1154,11 @@ $copy = [
         const websiteId = String(site.website_id || site.websiteId || '0');
         return 'weline_checkout_quote_token_w' + websiteId;
     }
+    function continuePayQuoteTokenStorageKey() {
+        const site = window.site || {};
+        const websiteId = String(site.website_id || site.websiteId || '0');
+        return 'weline_checkout_continue_pay_quote_token_w' + websiteId;
+    }
     function readStoredQuoteToken() {
         try {
             return text(window.sessionStorage.getItem(quoteTokenStorageKey())).trim();
@@ -1169,12 +1176,83 @@ $copy = [
         } catch (error) {
         }
     }
+    function persistContinuePayQuoteToken(token) {
+        const value = text(token).trim();
+        if (!value) {
+            return;
+        }
+        try {
+            window.sessionStorage.setItem(continuePayQuoteTokenStorageKey(), value);
+        } catch (error) {
+        }
+    }
+    function clearContinuePayQuoteToken() {
+        try {
+            window.sessionStorage.removeItem(continuePayQuoteTokenStorageKey());
+        } catch (error) {
+        }
+    }
+    function wipePollutedBrowseQuoteToken() {
+        try {
+            const brTok = readStoredQuoteToken();
+            // 续付 submitted token / 旧版 mint 进 browse 的槽一律丢掉。
+            if (brTok === '' || /^qt_cpay_/i.test(brTok)) {
+                if (brTok !== '') {
+                    window.sessionStorage.removeItem(quoteTokenStorageKey());
+                }
+                return;
+            }
+            const cpTok = text(window.sessionStorage.getItem(continuePayQuoteTokenStorageKey())).trim();
+            if (cpTok !== '' && cpTok === brTok) {
+                window.sessionStorage.removeItem(quoteTokenStorageKey());
+            }
+        } catch (eWipe) {}
+    }
+    async function releaseContinuePayIsolation() {
+        const bucketId = continuePayBinding && continuePayBinding.bucket_id
+            ? text(continuePayBinding.bucket_id).trim()
+            : '';
+        continuePayBinding = null;
+        clearContinuePayQuoteToken();
+        wipePollutedBrowseQuoteToken();
+        syncContinuePayChrome();
+        try {
+            const api = await getApi();
+            if (api && typeof api.releaseContinuePaySession === 'function') {
+                const released = await api.releaseContinuePaySession({
+                    bucket_id: bucketId,
+                });
+                if (released && Array.isArray(released.buckets)) {
+                    sessionBuckets = released.buckets;
+                } else {
+                    sessionBuckets = Array.isArray(sessionBuckets)
+                        ? sessionBuckets.filter(function (b) {
+                            return !b || b.payment_mode !== 'continue_pay';
+                        })
+                        : [];
+                }
+                renderTypeSwitcher();
+            }
+        } catch (eRelease) {
+            sessionBuckets = Array.isArray(sessionBuckets)
+                ? sessionBuckets.filter(function (b) {
+                    return !b || b.payment_mode !== 'continue_pay';
+                })
+                : [];
+            renderTypeSwitcher();
+        }
+    }
     // Winback continue_checkout_url: /checkout?quote_token=… → persist before getData.
+    // Never adopt a payment-recovery hash token into the normal browse slot.
     (function adoptQuoteTokenFromUrl() {
         try {
+            if (String(window.location.hash || '').indexOf('payment-recovery') !== -1) {
+                return;
+            }
             const params = new URLSearchParams(window.location.search || '');
             const fromUrl = text(params.get('quote_token')).trim();
-            if (fromUrl) {
+            // 禁止把续付 qt_cpay_ 写进 browse 槽。
+            if (fromUrl && !/^qt_cpay_/i.test(fromUrl)) {
                 persistQuoteToken(fromUrl);
             }
         } catch (error) {
@@ -1581,6 +1659,117 @@ $copy = [
         return !!(continuePayBinding && continuePayBinding.order_uuid && continuePayBinding.quote_token);
     }
 
+    function mergeContinuePayOrderTotals(totals) {
+        if (!totals || typeof totals !== 'object' || !continuePayBinding) {
+            return;
+        }
+        continuePayBinding.order = Object.assign({}, continuePayBinding.order || {}, {
+            subtotal: totals.subtotal != null
+                ? Number(totals.subtotal) || 0
+                : (continuePayBinding.order && continuePayBinding.order.subtotal),
+            shipping_amount: totals.shipping_amount != null
+                ? Number(totals.shipping_amount) || 0
+                : (continuePayBinding.order && continuePayBinding.order.shipping_amount),
+            tax_amount: totals.tax_amount != null
+                ? Number(totals.tax_amount) || 0
+                : (continuePayBinding.order && continuePayBinding.order.tax_amount),
+            discount_amount: totals.discount_amount != null
+                ? Number(totals.discount_amount) || 0
+                : (continuePayBinding.order && continuePayBinding.order.discount_amount),
+            grand_total: totals.grand_total != null
+                ? Number(totals.grand_total) || 0
+                : (continuePayBinding.order && continuePayBinding.order.grand_total),
+            coupon_code: totals.coupon_code != null
+                ? text(totals.coupon_code).trim().toUpperCase()
+                : (continuePayBinding.order && continuePayBinding.order.coupon_code),
+        });
+        if (Array.isArray(checkoutState.shippingMethods)) {
+            const shipCode = selectedValue('shipping_method')
+                || text(continuePayBinding.order && continuePayBinding.order.shipping_method || '').trim();
+            const fee = Number(continuePayBinding.order.shipping_amount || 0) || 0;
+            checkoutState.shippingMethods = checkoutState.shippingMethods.map(function (entry) {
+                if (!entry || (shipCode && text(entry.code) !== text(shipCode))) {
+                    return entry;
+                }
+                return Object.assign({}, entry, { amount: fee, fee: fee });
+            });
+        }
+        checkoutState.cart = checkoutState.cart && typeof checkoutState.cart === 'object'
+            ? checkoutState.cart
+            : {};
+        checkoutState.cart.summary = checkoutState.cart.summary || {};
+        checkoutState.cart.subtotal = Number(continuePayBinding.order.subtotal || 0) || 0;
+        checkoutState.cart.shipping_amount = Number(continuePayBinding.order.shipping_amount || 0) || 0;
+        checkoutState.cart.tax_amount = Number(continuePayBinding.order.tax_amount || 0) || 0;
+        checkoutState.cart.discount_amount = Number(continuePayBinding.order.discount_amount || 0) || 0;
+        checkoutState.cart.grand_total = Number(continuePayBinding.order.grand_total || 0) || 0;
+        checkoutState.cart.summary.subtotal = checkoutState.cart.subtotal;
+        checkoutState.cart.summary.shipping_amount = checkoutState.cart.shipping_amount;
+        checkoutState.cart.summary.tax_amount = checkoutState.cart.tax_amount;
+        checkoutState.cart.summary.discount_amount = checkoutState.cart.discount_amount;
+        checkoutState.cart.summary.grand_total = checkoutState.cart.grand_total;
+        if (Number(checkoutState.cart.discount_amount || 0) > 0 && continuePayBinding.order.coupon_code) {
+            pendingCouponCode = text(continuePayBinding.order.coupon_code).trim().toUpperCase();
+            pendingDiscountPreview = {
+                coupon_code: pendingCouponCode,
+                amount_minor: Math.round(Number(checkoutState.cart.discount_amount) * 100),
+                currency: checkoutState.currency || continuePayBinding.order.currency || 'USD',
+            };
+            checkoutState.cart.discount_preview = pendingDiscountPreview;
+        } else {
+            pendingCouponCode = '';
+            pendingDiscountPreview = null;
+            delete checkoutState.cart.discount_preview;
+        }
+    }
+
+    /**
+     * 续付=旧结账会话可改：券/运费写回未付订单后摘要与 PayPal 同权威金额。
+     * @param {{coupon_code?:string,clear_coupon?:boolean}|null} opts
+     */
+    async function amendContinuePayOrderMoney(opts) {
+        if (!isContinuePayMode() || !continuePayBinding) {
+            return null;
+        }
+        opts = opts && typeof opts === 'object' ? opts : {};
+        const api = await getApi();
+        let shippingMethodCp = selectedValue('shipping_method');
+        if (!shippingMethodCp && checkoutState.shippingMethods && checkoutState.shippingMethods.length) {
+            const firstCp = checkoutState.shippingMethods.find(function (entry) {
+                return entry && entry.code;
+            });
+            shippingMethodCp = firstCp ? text(firstCp.code) : '';
+        }
+        if (!shippingMethodCp) {
+            shippingMethodCp = text(continuePayBinding.order && continuePayBinding.order.shipping_method || '').trim();
+        }
+        const payload = {
+            quote_token: continuePayBinding.quote_token,
+            order_uuid: continuePayBinding.order_uuid,
+            address: formAddress(),
+            shipping_method: shippingMethodCp,
+            service_code: shippingMethodCp,
+            currency: checkoutState.currency
+                || (continuePayBinding.order && continuePayBinding.order.currency)
+                || '',
+        };
+        if (opts.clear_coupon === true) {
+            payload.coupon_code = '';
+        } else if (Object.prototype.hasOwnProperty.call(opts, 'coupon_code')) {
+            payload.coupon_code = text(opts.coupon_code).trim().toUpperCase();
+        }
+        // 不传 coupon_code → 服务端读营销会话（旧结账 session 灌入）。
+        const amended = await api.amendUnpaidCheckoutAddress(payload);
+        if (!amended || amended.success === false) {
+            throw new Error(text(amended && amended.message) || copy.load_failed);
+        }
+        if (amended.totals && typeof amended.totals === 'object') {
+            mergeContinuePayOrderTotals(amended.totals);
+            renderTotals();
+        }
+        return amended;
+    }
+
     function syncContinuePayChrome() {
         if (!continueChrome) {
             return;
@@ -1624,6 +1813,13 @@ $copy = [
         if (submitButton) {
             setText(submitButton, (continuePayBinding.chrome && continuePayBinding.chrome.cta_label) || copy.continue_payment);
         }
+        // 续付仍可加券/改券（旧结账会话能力），禁止藏券槽。
+        root.querySelectorAll(
+            '.weline-checkout__coupon-slot, [weline-code="checkout.checkout.coupon_slot"], .weline-checkout__extras'
+        ).forEach(function (slot) {
+            slot.hidden = false;
+            slot.removeAttribute('hidden');
+        });
         // Chrome 已承载续付状态，避免与下方 notice 同文案叠显。
         if (message) {
             message.hidden = true;
@@ -1671,13 +1867,28 @@ $copy = [
         if (!isContinuePayMode()) {
             return;
         }
+        // 用户主动新增/编辑/选址时禁止再 present→collapsed（getData/render 会反复 sync）。
+        // SSR 默认 mode=new 不拦，否则续付齐全地址无法首次收起。
+        const widget = window.WelineShippingCheckoutAddress;
+        const addrRoot = (widget && widget.root)
+            || document.querySelector('.w-shipping-checkout-address, [data-shipping-checkout-address]');
+        const liveMode = text(
+            (widget && typeof widget.getMode === 'function' ? widget.getMode() : '')
+            || (addrRoot && addrRoot.getAttribute('data-mode'))
+            || ''
+        ).trim();
+        if (liveMode === 'edit' || liveMode === 'picking') {
+            return;
+        }
+        if (addrRoot && addrRoot.getAttribute('data-user-address-editing') === '1') {
+            return;
+        }
         const order = continuePayBinding && continuePayBinding.order
             ? continuePayBinding.order
             : null;
         const ship = order && order.shipping_address && typeof order.shipping_address === 'object'
             ? order.shipping_address
             : {};
-        const widget = window.WelineShippingCheckoutAddress;
         if (widget && typeof widget.presentOrderAddress === 'function') {
             widget.presentOrderAddress(ship, {
                 expand: isContinuePayAddressIncomplete(),
@@ -1763,7 +1974,7 @@ $copy = [
                 },
             });
             if (bucket.quote_token) {
-                persistQuoteToken(bucket.quote_token);
+                persistContinuePayQuoteToken(bucket.quote_token);
             }
             syncContinuePayChrome();
             renderTypeSwitcher();
@@ -1773,10 +1984,8 @@ $copy = [
             return;
         }
         continuePayBinding = null;
+        clearContinuePayQuoteToken();
         syncContinuePayChrome();
-        if (bucket.quote_token) {
-            persistQuoteToken(bucket.quote_token);
-        }
         if (bucket.cart_type === 'tob' || bucket.type_code === 'tob') {
             try {
                 document.cookie = 'weline_selling_mode=tob; path=/; max-age=31536000';
@@ -1786,8 +1995,14 @@ $copy = [
                 document.cookie = 'weline_selling_mode=toc; path=/; max-age=31536000';
             } catch (eCookie2) {}
         }
-        renderTypeSwitcher();
-        loadCheckoutWithRetry().catch(function (error) {
+        const browseTok = text(bucket.quote_token).trim();
+        releaseContinuePayIsolation().then(function () {
+            if (browseTok && !/^qt_cpay_/i.test(browseTok)) {
+                persistQuoteToken(browseTok);
+            }
+            renderTypeSwitcher();
+            return loadCheckoutWithRetry();
+        }).catch(function (error) {
             setMessage(error.message || copy.load_failed, 'error');
         });
     }
@@ -1799,50 +2014,124 @@ $copy = [
         if (!order) {
             return;
         }
-        const lines = Array.isArray(order.lines) ? order.lines : [];
-        if (itemsBox && lines.length) {
-            const html = lines.map(function (line) {
-                const name = text(line.name || line.product_name || line.sku || 'Item');
-                const qty = text(line.qty || line.quantity || 1);
-                return '<div class="weline-checkout__item"><strong>' + name + '</strong> × ' + qty + '</div>';
-            }).join('');
-            itemsBox.innerHTML = html;
-        } else if (itemsBox && (!data || !data.items_html)) {
-            itemsBox.innerHTML = '<div class="weline-checkout__item"><strong>'
-                + text(order.order_uuid || '')
-                + '</strong></div>';
+        // P2E-003：商品 DOM 只吃服务端 renderItems HTML（图+规格+价），禁止手拼标题。
+        if (itemsBox) {
+            const bindingHtml = text(continuePayBinding && continuePayBinding.items_html || '').trim();
+            const dataHtml = text(data && data.items_html || '').trim();
+            const preferHtml = (bindingHtml.indexOf('weline-checkout__item-title') !== -1
+                || bindingHtml.indexOf('weline-checkout__item-thumb') !== -1)
+                ? bindingHtml
+                : ((dataHtml.indexOf('weline-checkout__item-title') !== -1) ? dataHtml : bindingHtml);
+            if (preferHtml !== '' && preferHtml.indexOf('weline-checkout__empty') === -1) {
+                applyServerHtml(itemsBox, preferHtml);
+            }
         }
-        if (order.grand_total != null && checkoutState.cart) {
-            checkoutState.cart.is_empty = false;
-            checkoutState.cart.summary = checkoutState.cart.summary || {};
-            checkoutState.cart.summary.grand_total = order.grand_total;
-            checkoutState.cart.summary.currency = order.currency || checkoutState.currency;
+        const lines = Array.isArray(order.lines) ? order.lines : (
+            Array.isArray(continuePayBinding.items) ? continuePayBinding.items : []
+        );
+        checkoutState.cart = checkoutState.cart && typeof checkoutState.cart === 'object'
+            ? checkoutState.cart
+            : {};
+        checkoutState.cart.is_empty = false;
+        checkoutState.cart.item_count = lines.length || Number(checkoutState.cart.item_count || 1) || 1;
+        checkoutState.cart.summary = checkoutState.cart.summary || {};
+        if (order.subtotal != null) {
+            checkoutState.cart.subtotal = Number(order.subtotal) || 0;
+            checkoutState.cart.summary.subtotal = checkoutState.cart.subtotal;
+        } else if (lines.length) {
+            const fromLines = lines.reduce(function (sum, line) {
+                if (!line || typeof line !== 'object') {
+                    return sum;
+                }
+                if (line.row_total != null) {
+                    return sum + (Number(line.row_total) || 0);
+                }
+                if (line.row_total_minor != null) {
+                    return sum + ((Number(line.row_total_minor) || 0) / 100);
+                }
+                return sum;
+            }, 0);
+            if (fromLines > 0) {
+                checkoutState.cart.subtotal = fromLines;
+                checkoutState.cart.summary.subtotal = fromLines;
+            }
+        }
+        if (order.grand_total != null) {
+            checkoutState.cart.grand_total = Number(order.grand_total) || 0;
+            checkoutState.cart.summary.grand_total = checkoutState.cart.grand_total;
+        }
+        // 续付金额以订单 money 为准（可经 amend 改运费/券后回写）；进续付时先用订单行，再灌会话券。
+        const frozenShip = order.shipping_amount != null ? Number(order.shipping_amount) || 0 : null;
+        const frozenTax = order.tax_amount != null ? Number(order.tax_amount) || 0 : 0;
+        const frozenDiscount = order.discount_amount != null ? Number(order.discount_amount) || 0 : 0;
+        if (frozenShip != null) {
+            checkoutState.cart.shipping_amount = frozenShip;
+            checkoutState.cart.summary.shipping_amount = frozenShip;
+        }
+        checkoutState.cart.tax_amount = frozenTax;
+        checkoutState.cart.summary.tax_amount = frozenTax;
+        checkoutState.cart.discount_amount = frozenDiscount;
+        checkoutState.cart.summary.discount_amount = frozenDiscount;
+        if (frozenDiscount > 0 && order.coupon_code) {
+            pendingCouponCode = text(order.coupon_code).trim().toUpperCase();
+            pendingDiscountPreview = {
+                coupon_code: pendingCouponCode,
+                amount_minor: Math.round(frozenDiscount * 100),
+                currency: order.currency || checkoutState.currency || 'USD',
+            };
+            checkoutState.cart.discount_preview = pendingDiscountPreview;
+        }
+        checkoutState.taxEstimate = null;
+        checkoutState.cart.summary.currency = order.currency || checkoutState.currency;
+        if (order.currency) {
+            checkoutState.currency = order.currency;
+        }
+        if (emptyState) {
+            emptyState.hidden = true;
         }
         // Ensure binding payment method shows name+icon even when cart getData is empty/blocked.
         // Prefer adopt/getData server HTML; never invent a bare code <span> label.
         const method = text(continuePayBinding.payment_method).trim();
-        if (!method || !paymentBox) {
-            return;
+        if (method && paymentBox) {
+            const bindingHtml = text(continuePayBinding.payment_methods_html || '').trim();
+            const dataHtml = text(data && data.payment_methods_html || '').trim();
+            const currentHasRadio = !!paymentBox.querySelector('input[name="payment_method"]');
+            const currentHasLogo = !!paymentBox.querySelector('.weline-checkout__payment-logo, img.weline-checkout__payment-logo');
+            const currentLooksBare = currentHasRadio && !currentHasLogo
+                && (paymentBox.innerText || '').indexOf(method) !== -1
+                && !(paymentBox.querySelector('.weline-checkout__payment-title-row strong'));
+            const preferHtml = (bindingHtml.indexOf('name="payment_method"') !== -1 && bindingHtml.indexOf('payment-logo') !== -1)
+                ? bindingHtml
+                : ((dataHtml.indexOf('name="payment_method"') !== -1) ? dataHtml : bindingHtml);
+            if (preferHtml !== '' && preferHtml.indexOf('name="payment_method"') !== -1
+                && (!currentHasRadio || currentLooksBare || (preferHtml.indexOf('payment-logo') !== -1 && !currentHasLogo))) {
+                applyServerHtml(paymentBox, preferHtml);
+            }
+            const methods = Array.isArray(continuePayBinding.payment_methods) && continuePayBinding.payment_methods.length
+                ? continuePayBinding.payment_methods
+                : (Array.isArray(data && data.payment_methods) ? data.payment_methods : []);
+            if (methods.length) {
+                checkoutState.paymentMethods = methods;
+            }
         }
-        const bindingHtml = text(continuePayBinding.payment_methods_html || '').trim();
-        const dataHtml = text(data && data.payment_methods_html || '').trim();
-        const currentHasRadio = !!paymentBox.querySelector('input[name="payment_method"]');
-        const currentHasLogo = !!paymentBox.querySelector('.weline-checkout__payment-logo, img.weline-checkout__payment-logo');
-        const currentLooksBare = currentHasRadio && !currentHasLogo
-            && (paymentBox.innerText || '').indexOf(method) !== -1
-            && !(paymentBox.querySelector('.weline-checkout__payment-title-row strong'));
-        const preferHtml = (bindingHtml.indexOf('name="payment_method"') !== -1 && bindingHtml.indexOf('payment-logo') !== -1)
-            ? bindingHtml
-            : ((dataHtml.indexOf('name="payment_method"') !== -1) ? dataHtml : bindingHtml);
-        if (preferHtml !== '' && preferHtml.indexOf('name="payment_method"') !== -1
-            && (!currentHasRadio || currentLooksBare || (preferHtml.indexOf('payment-logo') !== -1 && !currentHasLogo))) {
-            applyServerHtml(paymentBox, preferHtml);
-        }
-        const methods = Array.isArray(continuePayBinding.payment_methods) && continuePayBinding.payment_methods.length
-            ? continuePayBinding.payment_methods
-            : (Array.isArray(data && data.payment_methods) ? data.payment_methods : []);
-        if (methods.length) {
-            checkoutState.paymentMethods = methods;
+
+        // Same for order shipping lane (empty cart cannot re-quote). Prefer binding
+        // HTML so a stale getData Americas row cannot win over the order lane.
+        if (shippingBox) {
+            const shipBindingHtml = text(continuePayBinding.shipping_methods_html || '').trim();
+            const shipDataHtml = text(data && data.shipping_methods_html || '').trim();
+            const preferShipHtml = (shipBindingHtml.indexOf('name="shipping_method"') !== -1)
+                ? shipBindingHtml
+                : shipDataHtml;
+            if (preferShipHtml !== '' && preferShipHtml.indexOf('name="shipping_method"') !== -1) {
+                applyServerHtml(shippingBox, preferShipHtml);
+            }
+            const shipMethods = Array.isArray(continuePayBinding.shipping_methods) && continuePayBinding.shipping_methods.length
+                ? continuePayBinding.shipping_methods
+                : (Array.isArray(data && data.shipping_methods) ? data.shipping_methods : []);
+            if (shipMethods.length) {
+                checkoutState.shippingMethods = shipMethods;
+            }
         }
     }
 
@@ -1859,7 +2148,8 @@ $copy = [
         if (!adopted || adopted.success === false) {
             throw new Error(text(adopted && adopted.message) || copy.load_failed);
         }
-        persistQuoteToken(state.quote_token);
+        // 续付凭据只进 continue_pay 槽，禁止覆盖普通 browse quote_token（否则传统结账被污染）。
+        persistContinuePayQuoteToken(state.quote_token);
         continuePayBinding = Object.assign({}, adopted.bucket || {}, {
             order_uuid: state.order_uuid,
             quote_token: state.quote_token,
@@ -1868,8 +2158,13 @@ $copy = [
             country_code: state.country_code,
             order: adopted.order || null,
             address_complete: adopted.address_complete,
+            items: Array.isArray(adopted.items) ? adopted.items : [],
+            items_html: text(adopted.items_html || ''),
             payment_methods: Array.isArray(adopted.payment_methods) ? adopted.payment_methods : [],
             payment_methods_html: text(adopted.payment_methods_html || ''),
+            shipping_methods: Array.isArray(adopted.shipping_methods) ? adopted.shipping_methods : [],
+            shipping_methods_html: text(adopted.shipping_methods_html || ''),
+            shipping_method: text(adopted.order && adopted.order.shipping_method),
             chrome: adopted.chrome || {
                 title: copy.continue_pay_chrome || copy.continue_payment,
                 detail: copy.continue_pay_detail || copy.continue_pay_chrome,
@@ -1889,6 +2184,12 @@ $copy = [
         syncContinuePayAddressPanel();
         if (emptyState) {
             emptyState.hidden = true;
+        }
+        // 旧结账会话券灌入未付订单并重算应付（有订单仍可改）。
+        try {
+            await amendContinuePayOrderMoney({});
+        } catch (eAmendCoupon) {
+            // 券灌入失败不阻断续付展示；摘要仍用订单当前 money。
         }
     }
 
@@ -1968,17 +2269,8 @@ $copy = [
     function navigateToSuccess(state) {
         if (isContinuePayMode()) {
             try {
-                getApi().then(function (api) {
-                    if (api && typeof api.releaseContinuePaySession === 'function') {
-                        api.releaseContinuePaySession({
-                            bucket_id: continuePayBinding && continuePayBinding.bucket_id
-                                ? continuePayBinding.bucket_id
-                                : '',
-                        }).catch(function () {});
-                    }
-                }).catch(function () {});
+                releaseContinuePayIsolation().catch(function () {});
             } catch (eRelease) {}
-            continuePayBinding = null;
         }
         if (window.WelineCart && typeof window.WelineCart.invalidateAfterCheckout === 'function') {
             try {
@@ -2281,7 +2573,137 @@ $copy = [
         } catch (eFieldsReady) {}
     }
 
+    function continuePayFrozenMoney() {
+        if (!isContinuePayMode() || !continuePayBinding || !continuePayBinding.order) {
+            return null;
+        }
+        const order = continuePayBinding.order;
+        const subtotal = Number(order.subtotal != null ? order.subtotal : checkoutState.cart.subtotal) || 0;
+        const shipping = Number(order.shipping_amount != null ? order.shipping_amount : 0) || 0;
+        const tax = Number(order.tax_amount != null ? order.tax_amount : 0) || 0;
+        const discount = Number(order.discount_amount != null ? order.discount_amount : 0) || 0;
+        let grand = Number(order.grand_total != null ? order.grand_total : NaN);
+        if (!(grand >= 0)) {
+            grand = Math.max(0, subtotal + shipping - discount + tax);
+        }
+        return {
+            subtotal: subtotal,
+            shipping: shipping,
+            tax: tax,
+            discount: discount,
+            grand_total: grand,
+        };
+    }
+
+    function paintCheckoutCouponTag(code, amountMinor, currency) {
+        const couponCode = text(code).trim().toUpperCase();
+        const minor = Math.max(0, Math.round(Number(amountMinor) || 0));
+        try {
+            window.dispatchEvent(new CustomEvent('weline:cart-updated', {
+                detail: {
+                    source: 'continue-pay-coupon-paint',
+                    refresh: false,
+                    coupon_code: couponCode,
+                    clear_discount: !(couponCode && minor > 0),
+                    discount_preview: (couponCode && minor > 0) ? {
+                        coupon_code: couponCode,
+                        amount_minor: minor,
+                        currency: text(currency || checkoutState.currency || 'USD').trim() || 'USD',
+                    } : null,
+                },
+            }));
+        } catch (ePaint) {}
+    }
+
+    function setDiscountRowLabel(couponCode) {
+        if (!discountLabelNode) {
+            return;
+        }
+        const code = text(couponCode).trim().toUpperCase();
+        if (code !== '') {
+            setText(discountLabelNode, discountLabelDefault + ' (' + code + ')');
+        } else {
+            setText(discountLabelNode, discountLabelDefault);
+        }
+    }
+
+    function applyContinuePayFrozenTotals(frozen) {
+        // 小计/运费必须始终写出，禁止只露优惠行让人看不懂账。
+        if (subtotalNode) {
+            const subRow = subtotalNode.closest('[role="listitem"]');
+            if (subRow) {
+                subRow.hidden = false;
+                subRow.removeAttribute('hidden');
+            }
+        }
+        if (shippingAmountNode) {
+            const shipRow = shippingAmountNode.closest('[role="listitem"]');
+            if (shipRow) {
+                shipRow.hidden = false;
+                shipRow.removeAttribute('hidden');
+            }
+        }
+        setText(subtotalNode, money(frozen.subtotal));
+        setText(shippingAmountNode, money(frozen.shipping));
+        const couponCode = text(
+            continuePayBinding
+            && continuePayBinding.order
+            && continuePayBinding.order.coupon_code
+        ).trim().toUpperCase();
+        if (discountRowNode && discountAmountNode) {
+            if (frozen.discount > 0) {
+                discountRowNode.hidden = false;
+                setDiscountRowLabel(couponCode);
+                setText(discountAmountNode, '-' + money(frozen.discount));
+            } else {
+                discountRowNode.hidden = true;
+                setDiscountRowLabel('');
+                setText(discountAmountNode, money(0));
+            }
+        }
+        if (depositRowNode && depositAmountNode) {
+            depositRowNode.hidden = true;
+            setText(depositAmountNode, money(0));
+        }
+        if (creditRowNode && creditAmountNode) {
+            creditRowNode.hidden = true;
+            setText(creditAmountNode, money(0));
+        }
+        if (taxRowNode && taxAmountNode) {
+            if (frozen.tax > 0) {
+                taxRowNode.hidden = false;
+                setText(taxAmountNode, money(frozen.tax));
+            } else {
+                taxRowNode.hidden = true;
+                setText(taxAmountNode, money(0));
+            }
+        }
+        if (codFeeRowNode && codFeeAmountNode) {
+            codFeeRowNode.hidden = true;
+            setText(codFeeAmountNode, money(0));
+        }
+        if (grandTotalLabelNode) {
+            setText(grandTotalLabelNode, grandTotalLabelDefault || grandTotalLabelDeposit);
+        }
+        setText(grandTotalNode, money(frozen.grand_total));
+        syncLifecycleDomFields({ amount: Number(frozen.grand_total || 0).toFixed(2) });
+        if (frozen.discount > 0 && couponCode) {
+            paintCheckoutCouponTag(
+                couponCode,
+                Math.round(Number(frozen.discount) * 100),
+                (continuePayBinding.order && continuePayBinding.order.currency) || checkoutState.currency
+            );
+        } else if (!(frozen.discount > 0)) {
+            paintCheckoutCouponTag('', 0, checkoutState.currency);
+        }
+    }
+
     function renderTotals() {
+        const frozen = continuePayFrozenMoney();
+        if (frozen) {
+            applyContinuePayFrozenTotals(frozen);
+            return;
+        }
         const subtotal = Number(checkoutState.cart.subtotal || 0);
         const shipping = selectedShippingAmount();
         const discount = discountAmountMajor(checkoutState.cart);
@@ -2321,9 +2743,16 @@ $copy = [
             // tob 禁营销折：优惠行只展示零售券预览。
             if (!tob && discount > 0) {
                 discountRowNode.hidden = false;
+                const previewCode = text(
+                    (checkoutState.cart && checkoutState.cart.discount_preview && checkoutState.cart.discount_preview.coupon_code)
+                    || pendingCouponCode
+                    || ''
+                ).trim().toUpperCase();
+                setDiscountRowLabel(previewCode);
                 setText(discountAmountNode, '-' + money(discount));
             } else {
                 discountRowNode.hidden = true;
+                setDiscountRowLabel('');
                 setText(discountAmountNode, money(0));
             }
         }
@@ -2387,12 +2816,17 @@ $copy = [
         }
         applyDefaultShippingAddress(data.default_shipping_address);
         checkoutState.currency = text(data.currency || data.cart && data.cart.currency || 'CNY') || 'CNY';
-        checkoutState.cart = applyPendingDiscountToCart(data.cart || {});
+        // 续付：禁止把 browse 券预览并进 cart，否则摘要应付会偏离订单/PayPal。
+        checkoutState.cart = isContinuePayMode()
+            ? (data.cart && typeof data.cart === 'object' ? data.cart : {})
+            : applyPendingDiscountToCart(data.cart || {});
         checkoutState.shippingMethods = Array.isArray(data.shipping_methods) ? data.shipping_methods : [];
         checkoutState.paymentMethods = Array.isArray(data.payment_methods) ? data.payment_methods : [];
-        checkoutState.taxEstimate = data.tax_estimate && typeof data.tax_estimate === 'object'
-            ? data.tax_estimate
-            : null;
+        checkoutState.taxEstimate = isContinuePayMode()
+            ? null
+            : (data.tax_estimate && typeof data.tax_estimate === 'object'
+                ? data.tax_estimate
+                : null);
         checkoutState.identity = data.identity || checkoutState.identity || {
             checkout_mode: 'guest',
             is_guest_checkout: true,
@@ -2571,17 +3005,31 @@ $copy = [
     async function loadCheckout() {
         const api = await getApi();
         let sellingMode = checkoutCartType();
+        const continuePay = isContinuePayMode();
         const getDataParams = {
             shipping_address: formAddress(),
             guest_token: await ensureGuestToken(),
             cart_type: sellingMode,
             selling_mode: sellingMode,
-            quote_token: readStoredQuoteToken(),
+            // 续付只用 binding/订单 token；普通结账只用 browse 槽——互不覆盖。
+            quote_token: continuePay
+                ? text(continuePayBinding && continuePayBinding.quote_token).trim()
+                : readStoredQuoteToken(),
         };
-        if (isContinuePayMode()) {
+        if (continuePay) {
+            // Schema type=boolean；WQB1 保留 JS number，传 1 会 Invalid param type 并触发 toast 循环。
+            getDataParams.continue_pay = true;
             const boundMethod = text(continuePayBinding && continuePayBinding.payment_method).trim();
             if (boundMethod) {
                 getDataParams.payment_method = boundMethod;
+            }
+            const boundShipping = text(
+                continuePayBinding
+                && continuePayBinding.order
+                && continuePayBinding.order.shipping_method
+            ).trim() || text(continuePayBinding && continuePayBinding.shipping_method).trim();
+            if (boundShipping) {
+                getDataParams.shipping_method = boundShipping;
             }
         }
         if (pendingCouponCode) {
@@ -2592,15 +3040,42 @@ $copy = [
             data = await api.getData(getDataParams);
         } catch (error) {
             const msg = text(error && error.message).trim();
-            // Stale worker index: strip undeclared payment_method and retry once (stops reload toast loops).
+            // Stale worker / type mismatch: strip or coerce once (stops reload toast loops).
+            let stripped = false;
             if (getDataParams.payment_method && /Unknown frontend worker param:\s*payment_method/i.test(msg)) {
                 delete getDataParams.payment_method;
+                stripped = true;
+            }
+            if (getDataParams.shipping_method && /Unknown frontend worker param:\s*shipping_method/i.test(msg)) {
+                delete getDataParams.shipping_method;
+                stripped = true;
+            }
+            if (getDataParams.continue_pay !== undefined && /Unknown frontend worker param:\s*continue_pay/i.test(msg)) {
+                delete getDataParams.continue_pay;
+                stripped = true;
+            }
+            if (
+                getDataParams.continue_pay !== undefined
+                && /Invalid param type:\s*continue_pay/i.test(msg)
+            ) {
+                getDataParams.continue_pay = true;
+                stripped = true;
+            }
+            if (stripped) {
                 data = await api.getData(getDataParams);
             } else {
                 throw error;
             }
         }
-        persistQuoteToken(text(data && (data.quote_token || (data.data && data.data.quote_token))));
+        const returnedToken = text(data && (data.quote_token || (data.data && data.data.quote_token)));
+        if (continuePay) {
+            // 续付 getData 可能 mint 临时 browse token——绝不能写进普通槽。
+            if (returnedToken) {
+                persistContinuePayQuoteToken(returnedToken);
+            }
+        } else {
+            persistQuoteToken(returnedToken);
+        }
         if (root && data && data.cart && data.cart.cart_type) {
             root.setAttribute('data-cart-type', String(data.cart.cart_type).toLowerCase());
         }
@@ -2758,7 +3233,7 @@ $copy = [
                 const errMsg = text(error && error.message).trim() || copy.load_failed;
                 setMessage(errMsg, 'error');
                 // Never hard-reload on frontend worker param validation — that loops forever.
-                if (/Unknown frontend worker param/i.test(errMsg)) {
+                if (/Unknown frontend worker param|Invalid param type/i.test(errMsg)) {
                     return;
                 }
                 // Mini-cart already mutated the cart; soft getData failure would leave
@@ -2843,9 +3318,17 @@ $copy = [
                 shipping_method: shippingMethodCp,
                 service_code: shippingMethodCp,
                 currency: checkoutState.currency || '',
+                coupon_code: pendingCouponCode
+                    || text(continuePayBinding.order && continuePayBinding.order.coupon_code || '').trim().toUpperCase()
+                    || undefined,
             });
             if (!amended || amended.success === false) {
                 throw new Error(text(amended && amended.message) || copy.load_failed);
+            }
+            // Amend 可能重算运费/税/券；摘要与 resume 金额必须跟订单 totals 对齐。
+            if (amended.totals && typeof amended.totals === 'object') {
+                mergeContinuePayOrderTotals(amended.totals);
+                renderTotals();
             }
             const resumeState = {
                 quote_token: continuePayBinding.quote_token,
@@ -3143,18 +3626,67 @@ $copy = [
         if (source === 'checkout-empty') {
             return;
         }
+        // 续付：券加/撤写回未付订单，禁止只改 browse preview 导致摘要与 PayPal 分叉。
+        if (isContinuePayMode()) {
+            if (source === 'continue-pay-amend' || source === 'continue-pay-coupon-paint') {
+                return;
+            }
+            const clear = detail.clear_discount === true;
+            const code = clear
+                ? ''
+                : text(detail.coupon_code
+                    || (detail.discount_preview && detail.discount_preview.coupon_code)
+                    || '').trim().toUpperCase();
+            if (clear || code || detail.discount_preview) {
+                amendContinuePayOrderMoney(clear
+                    ? { clear_coupon: true }
+                    : (code ? { coupon_code: code } : {})
+                ).then(function (amended) {
+                    if (!amended || !amended.totals) {
+                        return;
+                    }
+                    const discMinor = Math.round((Number(amended.totals.discount_amount) || 0) * 100);
+                    const couponCode = text(amended.totals.coupon_code || code || '').trim().toUpperCase();
+                    try {
+                        window.dispatchEvent(new CustomEvent('weline:cart-updated', {
+                            detail: {
+                                source: 'continue-pay-amend',
+                                refresh: false,
+                                coupon_code: couponCode,
+                                clear_discount: discMinor <= 0,
+                                discount_preview: discMinor > 0 ? {
+                                    coupon_code: couponCode,
+                                    amount_minor: discMinor,
+                                    currency: amended.totals.currency || checkoutState.currency || 'USD',
+                                } : null,
+                            },
+                        }));
+                    } catch (eNotify) {}
+                }).catch(function (err) {
+                    setMessage((err && err.message) || copy.load_failed, 'error');
+                });
+                if (detail.refresh === false) {
+                    return;
+                }
+            }
+        }
         rememberPendingDiscount(detail);
         if (detail.clear_discount === true) {
             checkoutState.cart = mergeDiscountPreviewIntoCart(checkoutState.cart, null, true);
-            renderTotals();
+            if (!isContinuePayMode()) {
+                renderTotals();
+            }
         } else {
             const preview = resolveEventDiscountPreview(detail);
-            if (preview) {
+            if (preview && !isContinuePayMode()) {
                 checkoutState.cart = mergeDiscountPreviewIntoCart(checkoutState.cart, preview, false);
                 renderTotals();
             }
         }
         if (detail.refresh === false) {
+            return;
+        }
+        if (isContinuePayMode()) {
             return;
         }
         scheduleReload({ hardOnFailure: true });
@@ -3250,8 +3782,8 @@ $copy = [
         // Continue-pay entry: full checkout + binding (not recovery island).
         adoptContinuePayFromRecovery(initialPaymentRecovery).catch(function (error) {
             setMessage(error.message || copy.load_failed, 'error');
-            // Fallback: keep form usable rather than isolated recovery dual-card.
-            persistQuoteToken(initialPaymentRecovery.quote_token);
+            // Fallback：续付 token 只进 continue_pay 槽，勿污染 browse。
+            persistContinuePayQuoteToken(initialPaymentRecovery.quote_token);
             continuePayBinding = Object.assign({}, initialPaymentRecovery, {
                 chrome: {
                     title: copy.continue_pay_chrome || copy.continue_payment,
@@ -3267,7 +3799,18 @@ $copy = [
             loadCheckoutWithRetry().catch(function () {});
         });
     } else {
-        loadCheckoutWithRetry().then(function () {
+        // 传统结账入口：释放续付 cookie 桶 + 清续付槽 + 丢掉污染 browse token。
+        releaseContinuePayIsolation().then(function () {
+            try {
+                const migrateKey = 'weline_checkout_cpay_isolate_v2_' + quoteTokenStorageKey();
+                if (!window.sessionStorage.getItem(migrateKey)) {
+                    // 旧版把续付 getData mint 的 browse token 写进了普通槽；升迁清一次。
+                    window.sessionStorage.removeItem(quoteTokenStorageKey());
+                    window.sessionStorage.setItem(migrateKey, '1');
+                }
+            } catch (eTok) {}
+            return loadCheckoutWithRetry();
+        }).then(function () {
             maybeAutoStartExpressPay();
         }).catch(function (error) {
             setMessage(error.message || copy.load_failed, 'error');

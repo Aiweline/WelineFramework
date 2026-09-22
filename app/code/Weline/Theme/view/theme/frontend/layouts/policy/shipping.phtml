@@ -5,14 +5,16 @@
  * @meta.description {default="说明配送范围、时效、费用与异常处理",name="配送政策说明",description="配送政策"}
  * @param title {default="配送政策",name="页面标题",description="页面标题"}
  * @param meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
- * @param meta_description {default="了解配送范围、时效、费用与异常处理规则。",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
+ * @param meta_description {default="中国大陆仓发往海外：配送范围、参考时效、运费与清关责任说明。",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
  * @param content {default="",name="主要内容（HTML字符串）",description="非空时覆盖默认正文"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ * @param showBreadcrumb {default=true,name="显示面包屑",description="是否显示面包屑导航"}
  * @param class {default="",name="额外CSS类",description="额外CSS类"}
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\StorefrontHref;
 use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
@@ -37,9 +39,11 @@ $toc = [
     ['id' => 'shipping-s2', 'label' => WidgetI18n::label('二、配送时效')],
     ['id' => 'shipping-s3', 'label' => WidgetI18n::label('三、运费与包邮')],
     ['id' => 'shipping-s4', 'label' => WidgetI18n::label('四、签收与异常')],
-    ['id' => 'shipping-s5', 'label' => WidgetI18n::label('五、政策更新')],
-    ['id' => 'shipping-s6', 'label' => WidgetI18n::label('六、联系我们')],
+    ['id' => 'shipping-s5', 'label' => WidgetI18n::label('五、跨境清关与税费')],
+    ['id' => 'shipping-s6', 'label' => WidgetI18n::label('六、政策更新')],
+    ['id' => 'shipping-s7', 'label' => WidgetI18n::label('七、联系我们')],
 ];
+$tocFallbackPath = '/policy/shipping';
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
@@ -62,6 +66,19 @@ $toc = [
             flex-direction: column;
             background: transparent;
         }
+        /* Prototype A: quiet trail inside content column — no full-bleed chrome strip */
+        .amazon-policy__breadcrumb {
+            margin: 0 0 var(--weline-space-4, 1rem);
+            border: 0;
+            background: transparent;
+        }
+        .amazon-policy__breadcrumb .w-frontend-breadcrumb {
+            padding-block: 0;
+            width: 100%;
+            max-width: none;
+            margin-inline: 0;
+            padding-inline: 0;
+        }
         .amazon-policy__main {
             flex: 1 0 auto;
             width: 100%;
@@ -74,7 +91,7 @@ $toc = [
             min-width: 0;
             margin-inline: auto;
             padding-inline: var(--weline-layout-content-padding-inline);
-            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+            padding-block: var(--weline-space-4, 1rem) clamp(3rem, 6vw, 4.5rem);
         }
         .amazon-policy__hero {
             margin: 0 0 1.25rem;
@@ -125,14 +142,15 @@ $toc = [
             border: 1px solid #ddd;
             border-radius: 8px;
             box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
-            overflow: hidden;
+            /* no overflow:hidden — with <base href="/"> + sticky header, hash scroll must use document */
         }
         .amazon-policy__toc {
+            border-radius: 8px 0 0 8px;
             padding: 1.15rem 1rem 1.25rem;
             border-right: 1px solid #e3e6e6;
             background: #fafafa;
             position: sticky;
-            top: 0.75rem;
+            top: 12rem;
         }
         .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
         .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
@@ -151,6 +169,7 @@ $toc = [
             text-decoration: underline;
         }
         .amazon-policy__article {
+            border-radius: 0 8px 8px 0;
             padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
         }
         .amazon-policy__intro {
@@ -160,7 +179,7 @@ $toc = [
             color: #565959;
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 1rem; }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 12rem; }
         .amazon-policy__section h2 {
             margin: 0 0 0.75rem;
             font-size: 1.2rem;
@@ -212,7 +231,9 @@ $toc = [
                 position: static;
                 border-right: 0;
                 border-bottom: 1px solid #e3e6e6;
+                border-radius: 8px 8px 0 0;
             }
+            .amazon-policy__article { border-radius: 0 0 8px 8px; }
             .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
@@ -253,10 +274,20 @@ $toc = [
                     {{meta.content}}
                 <else/>
                         <div class="amazon-policy__stage">
+                        <if condition="meta.showBreadcrumb">
+                            <div class="amazon-policy__breadcrumb">
+                                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-before</w:hook>
+                                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+                                <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-after</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+                            </div>
+                        </if>
+
                         <header class="amazon-policy__hero" aria-labelledby="policy-shipping-title" weline-code="theme.policy.hero">
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
                                 <h1 id="policy-shipping-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('配送政策')) ?><?php endif; ?></h1>
-                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('本配送政策说明配送范围、时效、费用与签收异常处理。操作型配送说明请另见配送指南。')) ?></p>
+                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('本站商品由中国大陆仓库发出、发往海外及跨境地址。本页说明范围、参考时效、运费与清关责任；操作说明另见配送指南。')) ?></p>
                                 <div class="amazon-policy__meta">
                                     <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
                                     <a href="/guide/shipping"><?= $escape(WidgetI18n::label('配送指南')) ?></a>
@@ -270,46 +301,57 @@ $toc = [
                                         <h2><?= $escape(WidgetI18n::label('目录')) ?></h2>
                                         <nav>
                                             <?php foreach ($toc as $item): ?>
-                                                <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
+                                                <a href="<?= $escape(StorefrontHref::fragmentHref((string)$item['id'], $tocFallbackPath)) ?>"><?= $escape($item['label']) ?></a>
                                             <?php endforeach; ?>
                                         </nav>
                                     </aside>
 
                                     <article class="amazon-policy__article" aria-label="<?= $escape($ariaArticle) ?>">
-                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('下单前请确认收货地址可配送。具体承运方式与费用以结算页展示为准。')) ?></p>
+                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('下单即确认：包裹自中国大陆发出。请确保海外地址可通达、可清关；承运方案、参考时效与费用以结算页为准。结算页展示的送达时间仅为估算，不构成保证送达日。')) ?></p>
 
                                         <section class="amazon-policy__section" id="shipping-s1" weline-code="theme.policy.section_shipping_1">
                                             <h2><?= $escape(WidgetI18n::label('一、配送范围')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('1.1 我们向结算页可选地址提供配送服务；偏远或受限地区可能无法下单或需加收费用。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('1.2 跨境配送可能受海关、检疫与当地法规限制，清关所需资料由收件人配合提供。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('1.1 发货地为中国大陆仓库。我们向结算页可选的海外及跨境地址提供配送；偏远岛屿、战乱/制裁地区或承运商拒收地址可能无法下单或需加收费用。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('1.2 跨境配送受出口报关、进口海关、检疫与目的地法规约束。清关所需身份/税号等资料由收件人及时如实提供；卖方不代办目的地个人清关手续，另有书面约定除外。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="shipping-s2" weline-code="theme.policy.section_shipping_2">
                                             <h2><?= $escape(WidgetI18n::label('二、配送时效')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('2.1 预计发货与送达时间仅为参考，可能因库存、节假日、承运商或不可抗力延迟。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('2.2 订单发货后，您可在账户订单详情中查看物流追踪信息（如承运商提供）。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.1 「工作日」指中国大陆法定工作日（不含中国法定节假日与物流高峰顺延日）。现货订单付款成功后，我们通常在 1–5 个工作日内完成拣货并发出；预售/定制以商品页为准。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.2 国际干线与末端派送参考时效一般为发货后约 7–25 个工作日（视航线、旺季与海关而定）。该区间及结算页预计送达仅为参考，不构成固定送达承诺，亦不得仅以「感觉偏慢」主张违约或自动退款。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.3 海关查验、清关排队、航班/口岸拥堵、承运商中转、目的地节假日、极端天气、疫情或管制等导致的延误，不计入卖方履约延误，卖方在合理范围内协助查询但不保证缩短清关时间。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.4 发货后可在订单中查看运单（如承运商提供）。国际干线可能连续数日无轨迹更新，属跨境运输常见情况，不单独构成丢件认定。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="shipping-s3" weline-code="theme.policy.section_shipping_3">
                                             <h2><?= $escape(WidgetI18n::label('三、运费与包邮')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('3.1 运费按地址、重量/体积、承运方案与活动规则计算，以结算页最终金额为准。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('3.2 包邮或减免活动以页面标注与结算结果为准；不符合条件的订单仍需支付运费。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('3.1 运费按目的地、重量/体积、国际航线方案与活动规则计算，以结算页最终金额为准；币种换算以结算展示为准。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('3.2 包邮或减免一般仅覆盖去程标准国际运费，不含关税、清关费、回程、仓储、销毁或二次派送；不符合活动条件的订单仍需支付运费。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="shipping-s4" weline-code="theme.policy.section_shipping_4">
                                             <h2><?= $escape(WidgetI18n::label('四、签收与异常')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('4.1 请当面核对外包装；如发现破损、短少或错发，请尽快联系客服并保留凭证。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('4.2 因地址错误、拒收、无人签收导致的退回或二次配送费用，可能由买方承担。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.1 签收时请核对外包装。发现破损、短少或错发，请尽快（建议签收后 48 小时内）联系客服并保留外包装、运单与照片，以便协助向承运商查验；逾期可能影响承运商受理。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.2 因地址错误、税号缺失、拒收、无人签收、超期未取件导致的退回、滞留、销毁或二次配送费用，由买家承担；已付货款在核实后按协商办理退款或重发（可扣除已产生费用）。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.3 商品质量问题适用退换政策与强制性法规；运输查验窗不减损您依法对质量问题的权利，但跨境回寄中国仓库的运费与税费承担规则仍以下文及退换政策为准。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="shipping-s5" weline-code="theme.policy.section_shipping_5">
-                                            <h2><?= $escape(WidgetI18n::label('五、政策更新')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('5.1 我们可能根据业务与法规调整本政策，更新后以本页最新版本为准。')) ?></p>
+                                            <h2><?= $escape(WidgetI18n::label('五、跨境清关与税费')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('5.1 是否可配送至您的国家/地区、承运方案与费用，以结算页可选结果为准；结算页可能展示「运费不含关税与税费」或预估税金提示。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('5.2 关税、增值税及其他进口税费：未在结算页明示由卖家承担的，默认由收件人按目的地海关要求缴纳（含到付）。卖方不对海关最终税额作保证，预估仅供参考。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('5.3 因资料不全、拒付税费、超期未清关、收件人弃件或当地禁止进口导致退运、销毁或滞留的，相关费用（回程运费、仓储、销毁、罚款等）由买家承担；商品款项在扣除费用后协商退款或重发。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('5.4 卖方不因清关延误、税款争议或目的地政策变化承担额外赔偿，法律法规强制要求的除外。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="shipping-s6" weline-code="theme.policy.section_shipping_6">
-                                            <h2><?= $escape(WidgetI18n::label('六、联系我们')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('6.1 如对配送有疑问，请通过联系我们页或帮助中心提交订单号与问题描述。')) ?></p>
+                                            <h2><?= $escape(WidgetI18n::label('六、政策更新')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('6.1 我们可能根据业务与法规调整本政策，更新后以本页最新版本为准。')) ?></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="shipping-s7" weline-code="theme.policy.section_shipping_7">
+                                            <h2><?= $escape(WidgetI18n::label('七、联系我们')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('7.1 如对配送有疑问，请通过联系我们页或帮助中心提交订单号与问题描述。')) ?></p>
                                         </section>
 
                                         <div class="amazon-policy__footer-note">

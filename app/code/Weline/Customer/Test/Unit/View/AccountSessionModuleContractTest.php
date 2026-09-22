@@ -78,10 +78,13 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('isLogoutAuthSignal', $js);
         self::assertStringContainsString('skipGuestNegativeCache', $js);
         self::assertStringContainsString('optimistic_keep_login_signal', $js);
-        self::assertStringContainsString(
-            'const loggedIn = !!(result && (result.isLogin || result.logged_in));',
-            $js
-        );
+        self::assertStringContainsString('isTrustedSignedInCache', $js);
+        self::assertStringContainsString('paintHeaderGuestChrome', $js);
+        self::assertStringContainsString('bindAccountChromeInteraction', $js);
+        self::assertStringContainsString('reconcileSignedInChromeNavigation', $js);
+        self::assertStringContainsString('resolveUserIdentity(rawUser)', $js);
+        self::assertStringContainsString('result.isLogin || result.logged_in', $js);
+        self::assertStringContainsString('&& this.resolveUserIdentity(rawUser)', $js);
         self::assertStringNotContainsString('result.isLogin || result.logged_in || result.success', $js);
     }
 

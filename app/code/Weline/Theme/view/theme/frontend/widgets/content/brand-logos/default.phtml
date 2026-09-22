@@ -6,7 +6,7 @@
  *
  * @widget.code {brand-logos}
  * @widget.name {品牌Logo}
- * @widget.description {展示合作品牌 Logo；首页织艺谱系由 Theme textile-heritage 默认注入}
+ * @widget.description {展示合作品牌 Logo；空列表时回退 Theme 织艺谱系目录}
  * @widget.type {content}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -54,8 +54,11 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
     return $isChineseLocale ? $source : $english;
 };
 
-if ($usesCraftDirectory && in_array(trim($title), ['', '合作品牌', (string) __('合作品牌'), '织艺谱系 · Textile Heritage'], true)) {
+// 空列表回退织艺目录时：仅无标题或已是谱系标题才改成谱系名；显式「合作品牌」保留。
+if ($usesCraftDirectory && in_array(trim($title), ['', '织艺谱系 · Textile Heritage', (string) __('织艺谱系 · Textile Heritage')], true)) {
     $title = $translateDefaultCopy('织艺谱系 · Textile Heritage', 'Textile Heritage');
+} elseif (in_array(trim($title), ['合作品牌', (string) __('合作品牌'), 'Partner brands', 'Partner Brands'], true)) {
+    $title = $translateDefaultCopy('合作品牌', 'Partner brands');
 }
 
 if (!in_array($columns, ['4', '5', '6', '8'], true)) {
@@ -83,6 +86,7 @@ if ($usesCraftDirectory && class_exists(\Weline\Theme\Service\TextileHeritageCat
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-site-block="brand-logos"
          data-columns="<?= $esc($columns) ?>">
 
     <?php if ($title !== ''): ?>

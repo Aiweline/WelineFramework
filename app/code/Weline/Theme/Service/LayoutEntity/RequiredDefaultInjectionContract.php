@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 /**
- * Storefront contract for required default_injections.
+ * Storefront contract for default_injections planning helpers.
  *
- * Design (2026-09-20, corrected): 有部件必入声明槽 — subject is the widget.
- * When a required `default_injections` declaration exists and this theme layout
- * version did not record a human uninstall (`user_deleted@{versionId}`), the
- * widget MUST appear in its declared slot. The slot is destination only, not
- * the trigger. Missing published entities, param-only page-config, or stale
- * snapshots are not valid omission reasons.
+ * Design (2026-09-21 user纠偏):
+ * - Identity XOR (SAME module): the *same* widget must not be both layout-embedded
+ *   and listed in `default_injections` JSON (layout OR injection — not both; delete JSON).
+ * - CROSS module: FORBID layout/partial mutual widget calls; foreign widgets enter
+ *   ONLY via owning-module JSON `default_injections` + empty slot.
+ * - Overlay is best-effort; missing fill must not 500. Uninstall (`user_deleted@{versionId}`)
+ *   still omits a planned injection.
  *
- * Published render merges/overlays required injections; this class does not write layouts.
+ * Runtime presence helpers (pageHasWidgetPresent / countWidgetPresent) avoid
+ * stacking the same code; XOR at registry/static gate remains the source-of-truth
+ * fix for dual-path (delete layout copy XOR `default_injections` JSON — do not 500).
  */
 final class RequiredDefaultInjectionContract
 {
@@ -74,6 +77,91 @@ final class RequiredDefaultInjectionContract
             || str_contains($innerNorm, "data-testid='" . $code . "'")
             || str_contains($innerNorm, 'data-testid="' . $testid . '"')
             || str_contains($innerNorm, "data-testid='" . $testid . "'");
+    }
+
+    /**
+     * Page-level presence (整页 once): same explicit markers as slotInnerHasWidgetCode,
+     * plus data-w-component="{code}" for templates that fetch the widget shell beside
+     * an empty declared slot. Prevents required overlay from stacking a second copy.
+     */
+    public static function pageHasWidgetPresent(string $pageHtml, string $module, string $code): bool
+    {
+        $pageHtml = self::stripIgnoredPresenceRegions($pageHtml);
+        if (self::slotInnerHasWidgetCode($pageHtml, $module, $code)) {
+            return true;
+        }
+        $code = strtolower(trim($code));
+        if ($code === '' || $pageHtml === '') {
+            return false;
+        }
+        $norm = strtolower($pageHtml);
+
+        return str_contains($norm, 'data-w-component="' . $code . '"')
+            || str_contains($norm, "data-w-component='" . $code . "'")
+            || (bool)preg_match(
+                '/\bdata-w-component=(["\'])([^"\']*\s)?' . preg_quote($code, '/') . '(\s[^"\']*)?\1/',
+                $norm,
+            );
+    }
+
+    /**
+     * Count explicit presence markers (style/script + ignore regions stripped).
+     * Counts one marker family only (widget-code → testid → component).
+     */
+    public static function countWidgetPresent(string $pageHtml, string $module, string $code): int
+    {
+        unset($module);
+        $code = strtolower(trim($code));
+        if ($code === '' || $pageHtml === '') {
+            return 0;
+        }
+        $plain = self::stripIgnoredPresenceRegions($pageHtml);
+        $plain = preg_replace('~<(style|script)\b[^>]*>.*?</\1>~is', '', $plain) ?? $plain;
+        $plain = strtolower($plain);
+        $testid = str_replace('_', '-', $code);
+
+        $byWidgetCode = substr_count($plain, 'data-widget-code="' . $code . '"')
+            + substr_count($plain, "data-widget-code='" . $code . "'");
+        if ($byWidgetCode > 0) {
+            return $byWidgetCode;
+        }
+
+        // hyphenated $code === $testid must not double-count one data-testid.
+        $testIdNeedles = array_values(array_unique([
+            'data-testid="' . $code . '"',
+            "data-testid='" . $code . "'",
+            'data-testid="' . $testid . '"',
+            "data-testid='" . $testid . "'",
+        ]));
+        $byTestId = 0;
+        foreach ($testIdNeedles as $needle) {
+            $byTestId += substr_count($plain, $needle);
+        }
+        if ($byTestId > 0) {
+            return $byTestId;
+        }
+
+        return substr_count($plain, 'data-w-component="' . $code . '"')
+            + substr_count($plain, "data-w-component='" . $code . "'");
+    }
+
+    private static function stripIgnoredPresenceRegions(string $html): string
+    {
+        if ($html === '') {
+            return '';
+        }
+        $html = preg_replace(
+            '/<([a-z0-9]+)([^>]*\bdata-purchase-failsafe\b[^>]*)>.*?<\/\1>/is',
+            '',
+            $html,
+        ) ?? $html;
+        $html = preg_replace(
+            '/<([a-z0-9]+)([^>]*\bdata-required-injection-ignore\b[^>]*)>.*?<\/\1>/is',
+            '',
+            $html,
+        ) ?? $html;
+
+        return $html;
     }
 
     /**

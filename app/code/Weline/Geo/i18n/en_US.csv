@@ -1,386 +1,386 @@
-﻿"GEO feed item add","GEO feed item add"
-"Triggered when a GEO feed item is added.","Triggered when a GEO feed item is added."
-"GEO feed item update","GEO feed item update"
-"Triggered when a GEO feed item is updated.","Triggered when a GEO feed item is updated."
-"GEO feed item delete","GEO feed item delete"
-"Triggered when a GEO feed item is deleted.","Triggered when a GEO feed item is deleted."
-"GEO feed submit request","GEO feed submit request"
-"Unified entrypoint for syncing new or updated URLs into GEO feeds.","Unified entrypoint for syncing new or updated URLs into GEO feeds."
-"website_id 必须是非负整数","website_id must be a non-negative integer"
-"website_id 不能为负数","website_id cannot be negative"
-加载Feed列表失败：%{1},"Failed to load Feed list: %{1}"
-内容源由系统维护，不可手工新建；请从列表进入启用设置。,内容源由系统维护，不可手工新建；请从列表进入启用设置。
-Feed不存在,"Feed does not exist"
+GEO feed item add,GEO feed item add
+Triggered when a GEO feed item is added.,Triggered when a GEO feed item is added.
+GEO feed item update,GEO feed item update
+Triggered when a GEO feed item is updated.,Triggered when a GEO feed item is updated.
+GEO feed item delete,GEO feed item delete
+Triggered when a GEO feed item is deleted.,Triggered when a GEO feed item is deleted.
+GEO feed submit request,GEO feed submit request
+Unified entrypoint for syncing new or updated URLs into GEO feeds.,Unified entrypoint for syncing new or updated URLs into GEO feeds.
+website_id 必须是非负整数,website_id must be a non-negative integer
+website_id 不能为负数,website_id cannot be negative
+加载Feed列表失败：%{1},Failed to load Feed list: %{1}
+内容源由系统维护，不可手工新建；请从列表进入启用设置。,Content sources are system-maintained and cannot be created manually; open Enable settings from the list.
+Feed不存在,Feed does not exist
 内容,Content
 产品,Product
 文章,Article
 自定义,Custom
 数据库,Database
 API,API
-每10分钟（有变更才生成）,每10分钟（有变更才生成）
+每10分钟（有变更才生成）,Every 10 minutes (generate only on change)
 每小时,Hourly
 每天,Daily
 每周,Weekly
-实时（已停用，等同定时）,实时（已停用，等同定时）
-加载Feed失败：%{1},"Failed to load Feed: %{1}"
-无效的请求方法,"Invalid request method"
-内容源由系统维护，不可手工新建,内容源由系统维护，不可手工新建
-"Saved successfully","Saved successfully"
-保存失败：%{1},"Save failed: %{1}"
-请选择Feed,"Please select feed"
-生成成功,"Generate successful"
-生成失败：%{1},"Generate failed: %{1}"
-Feed管理,"Feed Management"
+实时（已停用，等同定时）,"Realtime (disabled, same as scheduled)"
+加载Feed失败：%{1},Failed to load Feed: %{1}
+无效的请求方法,Invalid request method
+内容源由系统维护，不可手工新建,Content sources are system-maintained; cannot create manually
+Saved successfully,Saved successfully
+保存失败：%{1},Save failed: %{1}
+请选择Feed,Please select feed
+生成成功,Generate successful
+生成失败：%{1},Generate failed: %{1}
+Feed管理,Feed Management
 circle,circle
-查看Feed列表,"View feed list"
-编辑Feed,"Edit Feed"
+查看Feed列表,View feed list
+编辑Feed,Edit Feed
 edit,edit
-保存Feed,"Save feed"
+保存Feed,Save feed
 save,save
-生成Feed,"Generate feed"
+生成Feed,Generate feed
 refresh,refresh
-加载平台列表失败：%{1},"Failed to load platform list: %{1}"
-平台不存在,"Platform does not exist"
-加载平台失败：%{1},"Failed to load platform: %{1}"
-请填写平台代码和名称,"Please fill in platform code and name"
-请选择平台,"Please select platform"
-加载账户列表失败：%{1},"Failed to load account list: %{1}"
-请填写必填项,"Please fill in required fields"
-账户不存在,"Account does not exist"
-请选择账户,"Please select an account"
-平台适配器不存在,"Platform adapter does not exist"
-连接成功,"Connection successful"
-连接失败,"Connection failed"
-测试失败：%{1},"Test failed: %{1}"
-平台管理,"Platform Management"
+加载平台列表失败：%{1},Failed to load platform list: %{1}
+平台不存在,Platform does not exist
+加载平台失败：%{1},Failed to load platform: %{1}
+请填写平台代码和名称,Please fill in platform code and name
+请选择平台,Please select platform
+加载账户列表失败：%{1},Failed to load account list: %{1}
+请填写必填项,Please fill in required fields
+账户不存在,Account does not exist
+请选择账户,Please select an account
+平台适配器不存在,Platform adapter does not exist
+连接成功,Connection successful
+连接失败,Connection failed
+测试失败：%{1},Test failed: %{1}
+平台管理,Platform Management
 cloud,cloud
-查看平台列表,"View platform list"
-编辑平台,"Edit Platform"
-保存平台,"save platform"
-平台账户管理,"Platform Account Management"
+查看平台列表,View platform list
+编辑平台,Edit Platform
+保存平台,save platform
+平台账户管理,Platform Account Management
 user,user
-保存账户,"save account"
-测试连接,"Test Connection"
+保存账户,save account
+测试连接,Test Connection
 link,link
-加载推送历史失败：%{1},"Failed to load push history: %{1}"
-加载推送页面失败：%{1},"Failed to load push page: %{1}"
-请选择内容源,请选择内容源
-请选择推送平台,"Please select push platform"
-内容源不存在,内容源不存在
-未知错误,未知错误
-"推送完成：成功 %{1} 个，失败 %{2} 个","推送完成：成功 %{1} 个，失败 %{2} 个"
-推送失败：%{1},"Push failed: %{1}"
-缺少推送记录,缺少推送记录
-推送记录不存在,推送记录不存在
-仅可重试失败的定时推送,仅可重试失败的定时推送
-重试成功：%{1},重试成功：%{1}
-"重试失败：%{1} — %{2}","重试失败：%{1} — %{2}"
-重试失败：%{1},重试失败：%{1}
-推送管理,"Push management"
+加载推送历史失败：%{1},Failed to load push history: %{1}
+加载推送页面失败：%{1},Failed to load push page: %{1}
+请选择内容源,Please select a content source
+请选择推送平台,Please select push platform
+内容源不存在,Content source not found
+未知错误,Unknown error
+推送完成：成功 %{1} 个，失败 %{2} 个,"Push Complete: Successful %{1}, Failed %{2}"
+推送失败：%{1},Push failed: %{1}
+缺少推送记录,Missing push record
+推送记录不存在,Push record not found
+仅可重试失败的定时推送,Only failed scheduled pushes can be retried
+重试成功：%{1},Retry succeeded: %{1}
+重试失败：%{1} — %{2},Retry failed: %{1} — %{2}
+重试失败：%{1},Retry failed: %{1}
+推送管理,Push management
 arrow-right,arrow-right
-查看推送历史,"View push history"
+查看推送历史,View push history
 history,history
-一键推送,"One-Click Push"
-执行推送,"Execute push"
+一键推送,One-Click Push
+执行推送,Execute push
 play,play
-"浏览器不支持Geolocation API","浏览器不支持Geolocation API"
-定位失败,定位失败
-用户拒绝了定位权限,用户拒绝了定位权限
-位置信息不可用,位置信息不可用
-定位请求超时,定位请求超时
-IP定位服务响应错误,IP定位服务响应错误
-IP定位失败,IP定位失败
-"IP定位服务不可用: %{1}","IP定位服务不可用: %{1}"
-"GEO 协议与 AI 搜索发现","GEO protocol and AI search discovery"
-"llms.txt / ai.txt","llms.txt / ai.txt"
-"启用 AI 搜索发现文件","Enable AI search to discover files"
-"GEO Feed","GEO Feed"
-"启用 JSON Feed / RSS Feed","Enable JSON Feed / RSS Feed"
-自动推送,"Auto Push"
-"内容更新后由 Weline_Geo 自动处理推送","After content is updated, Weline_Geo automatically handles the push"
-"站点 GEO Feed","Site GEO Feed"
-"使用第一个启用 Feed","Use the first enabled Feed"
-"llms.txt 站点说明","llms.txt Site Description"
-"留空时由 Weline_Geo 使用站点名称和默认说明自动生成。","When left blank, it will be automatically generated by Weline_Geo using the site name and default description."
-编辑账户,"Edit Account"
-添加账户,"Add Account"
+浏览器不支持Geolocation API,The browser does not support the Geolocation API.
+定位失败,Locate failed
+用户拒绝了定位权限,User denied geolocation permission
+位置信息不可用,Position information unavailable
+定位请求超时,Location request timeout
+IP定位服务响应错误,IP geolocation service returned an error.
+IP定位失败,IP location failed
+IP定位服务不可用: %{1},IP location service unavailable: %{1}
+GEO 协议与 AI 搜索发现,GEO protocol and AI search discovery
+llms.txt / ai.txt,llms.txt / ai.txt
+启用 AI 搜索发现文件,Enable AI search to discover files
+GEO Feed,GEO Feed
+启用 JSON Feed / RSS Feed,Enable JSON Feed / RSS Feed
+自动推送,Auto Push
+内容更新后由 Weline_Geo 自动处理推送,"After content is updated, Weline_Geo automatically handles the push"
+站点 GEO Feed,Site GEO Feed
+使用第一个启用 Feed,Use the first enabled Feed
+llms.txt 站点说明,llms.txt Site Description
+留空时由 Weline_Geo 使用站点名称和默认说明自动生成。,"When left blank, it will be automatically generated by Weline_Geo using the site name and default description."
+编辑账户,Edit Account
+添加账户,Add Account
 首页,Homepage
-账户名称,"Account Name"
-API密钥,"API Key"
-留空则不修改,"Leave blank to not modify"
-请输入API密钥,"Please enter the API key"
-API密钥将被加密存储,"API keys will be stored encrypted"
-API密钥（Secret）,"API key (Secret)"
-"如果需要，请输入API Secret","If needed, enter the API Secret."
-是否默认账户,"Default account"
-设为默认,"Set as Default"
+账户名称,Account Name
+API密钥,API Key
+留空则不修改,Leave blank to not modify
+请输入API密钥,Please enter the API key
+API密钥将被加密存储,API keys will be stored encrypted
+API密钥（Secret）,API key (Secret)
+如果需要，请输入API Secret,"If needed, enter the API Secret."
+是否默认账户,Default account
+设为默认,Set as Default
 是否激活,Activate
 激活,Active
 保存,Save
 返回,Back
-"选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。","选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。"
-添加平台,"Add Platform"
-平台,平台
-代码,代码
-格式,格式
+选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。,"Pick a built-in platform to use official push URL; keys are configured per platform ""Accounts"" (no one-click OAuth yet)."
+添加平台,Add Platform
+平台,Platform
+代码,Code
+格式,Format
 状态,Status
 操作,Action
-还没有平台。先添加一个平台并配置账户，才能主动推送。,"No platforms yet. Add a platform and configure an account before pushing."
+还没有平台。先添加一个平台并配置账户，才能主动推送。,No platforms yet. Add a platform and configure an account before pushing.
 启用,Enabled
 禁用,Disabled
 编辑,Edit
 账户,Account
-"推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。","推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。"
-已配置,已配置
-"选择内置平台后会自动填入官方推送地址与内容源格式。API 密钥请到「平台账户」配置；当前不支持一键 OAuth 授权。","选择内置平台后会自动填入官方推送地址与内容源格式。API 密钥请到「平台账户」配置；当前不支持一键 OAuth 授权。"
-请选择或搜索平台...,请选择或搜索平台...
-平台代码保存后不可更改,平台代码保存后不可更改
-标注「已配置」的平台再次保存会更新现有记录,标注「已配置」的平台再次保存会更新现有记录
-平台名称,"Platform Name"
-"推送 API 地址","推送 API 地址"
-选择平台后自动填入,选择平台后自动填入
-由内置适配器提供；一般无需手改。,由内置适配器提供；一般无需手改。
-我要自定义推送地址,我要自定义推送地址
-内容源格式,内容源格式
-请选择内容源格式...,请选择内容源格式...
-是否启用,"Is Enabled"
-高级配置（JSON）,高级配置（JSON）
-"密钥不写在这里。保存平台后，请到该平台的「账户」里填写 API Key。","密钥不写在这里。保存平台后，请到该平台的「账户」里填写 API Key。"
+推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。,"View push API URL under ""Edit""; this page is for toggles and account config."
+已配置,Configured
+选择内置平台后会自动填入官方推送地址与内容源格式。API 密钥请到「平台账户」配置；当前不支持一键 OAuth 授权。,"After selecting a built-in platform, official push URL and content-source format auto-fill. Configure API keys under ""Platform accounts""; one-click OAuth is not supported yet."
+请选择或搜索平台...,Please select or search platform...
+平台代码保存后不可更改,Platform code immutable after save
+标注「已配置」的平台再次保存会更新现有记录,"Saving again for platforms marked ""Configured"" updates the existing record"
+平台名称,Platform Name
+推送 API 地址,Push API URL
+选择平台后自动填入,Auto-fill after selecting platform
+由内置适配器提供；一般无需手改。,Provided by built-in adapter; usually no manual edit.
+我要自定义推送地址,I want a custom push URL
+内容源格式,Content source format
+请选择内容源格式...,Please select content source format...
+是否启用,Is Enabled
+高级配置（JSON）,Advanced config (JSON)
+密钥不写在这里。保存平台后，请到该平台的「账户」里填写 API Key。,"Keys are not entered here. After saving the platform, fill API Key under that platform's ""Accounts""."
 取消,Cancel
 Success,Success
-保存失败,"Save Failed"
+保存失败,Save Failed
 确定,Confirm
-请重试,"Please try again."
-账户配置指南,账户配置指南
-"API Key","API Key"
-"API Secret","API Secret"
-官方文档,官方文档
+请重试,Please try again.
+账户配置指南,Account setup guide
+API Key,API Key
+API Secret,API Secret
+官方文档,Official docs
 ID,ID
-默认,默认
-连接,连接
-最后测试,"Last Test"
-还没有账户。添加密钥后才能推送。,还没有账户。添加密钥后才能推送。
-已激活,已激活
+默认,Default
+连接,Connect
+最后测试,Last Test
+还没有账户。添加密钥后才能推送。,No accounts yet. Add a key before pushing.
+已激活,Activated
 未激活,Inactive
-正常,正常
+正常,Normal
 失败,Failed
-待测试,"Pending Test"
-关闭,关闭
-填写下方凭证后保存；密钥会加密存储。,填写下方凭证后保存；密钥会加密存储。
-例如：生产主账户,例如：生产主账户
-尚未选择文件,尚未选择文件
-必填,必填
-可选,可选
-平台未要求时可留空,平台未要求时可留空
-设为默认账户,"Set as Default Account"
-保存成功,"Save Successful"
-测试成功,"Test Passed"
-测试失败,"Test Failed"
-"请先上传服务账号 JSON 文件","请先上传服务账号 JSON 文件"
-"不是有效的服务账号 JSON（需含 private_key 与 client_email）","不是有效的服务账号 JSON（需含 private_key 与 client_email）"
-已载入,已载入
-此页仅人工立即推送。定时推送请回到「推送管理」用统一配置开关开启（每天一次）。,此页仅人工立即推送。定时推送请回到「推送管理」用统一配置开关开启（每天一次）。
-没有已启用的内容源。请先到内容源管理开启。,没有已启用的内容源。请先到内容源管理开启。
-内容源管理,内容源管理
-没有已启用的平台。请先添加平台并在「账户」中配置密钥。,没有已启用的平台。请先添加平台并在「账户」中配置密钥。
-选择内容源,选择内容源
-选择平台,"Select Platform"
-开始推送,"Start Push"
-返回历史,返回历史
-请重试。若持续失败，请检查平台账户密钥与推送地址。,请重试。若持续失败，请检查平台账户密钥与推送地址。
-推送失败,"Push Failed"
+待测试,Pending Test
+关闭,Close
+填写下方凭证后保存；密钥会加密存储。,Fill credentials below and save; keys are stored encrypted.
+例如：生产主账户,e.g. production main account
+尚未选择文件,No file selected yet
+必填,Required
+可选,Optional
+平台未要求时可留空,Leave blank if platform does not require
+设为默认账户,Set as Default Account
+保存成功,Save Successful
+测试成功,Test Passed
+测试失败,Test Failed
+请先上传服务账号 JSON 文件,Please upload service account JSON file first
+不是有效的服务账号 JSON（需含 private_key 与 client_email）,Not a valid service account JSON (needs private_key and client_email)
+已载入,Loaded
+此页仅人工立即推送。定时推送请回到「推送管理」用统一配置开关开启（每天一次）。,"This page is manual immediate push only. For scheduled push return to ""Push management"" and enable unified config (once daily)."
+没有已启用的内容源。请先到内容源管理开启。,No enabled content sources. Enable them in content source management first.
+内容源管理,Content Source Management
+没有已启用的平台。请先添加平台并在「账户」中配置密钥。,"No enabled platforms. Add a platform and configure keys under ""Accounts"" first."
+选择内容源,Select content source
+选择平台,Select Platform
+开始推送,Start Push
+返回历史,Back to history
+请重试。若持续失败，请检查平台账户密钥与推送地址。,"Please retry. If it keeps failing, check platform account keys and push URL."
+推送失败,Push Failed
 提示,Prompt
-请选择内容源和至少一个平台,请选择内容源和至少一个平台
-"本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。","本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。"
-定时推送失败,定时推送失败
-以下为最近定时推送失败，请核对平台账户与内容源后重试；成功后仍会出现在下方全部历史中。,以下为最近定时推送失败，请核对平台账户与内容源后重试；成功后仍会出现在下方全部历史中。
-内容源,内容源
-失败原因,失败原因
-时间,时间
-处理,处理
-查看错误,"View Error"
-重试,重试
-全部推送历史,全部推送历史
-推送类型,"Push Type"
-条目数,"Items Count"
-推送时间,"Push Time"
-还没有推送记录。,还没有推送记录。
-请先在「平台管理」配置账户密钥，确认「内容源」已启用，再点「一键推送」。推送成功或失败后都会出现在这里。,请先在「平台管理」配置账户密钥，确认「内容源」已启用，再点「一键推送」。推送成功或失败后都会出现在这里。
-去一键推送,去一键推送
+请选择内容源和至少一个平台,Select content source and at least one platform
+本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。,"""One-click push"" on this page is manual immediate push. Scheduled push is controlled by the unified config switch below, default once daily at 02:00. Failed scheduled pushes are listed below first for handling."
+定时推送失败,Scheduled push failed
+以下为最近定时推送失败，请核对平台账户与内容源后重试；成功后仍会出现在下方全部历史中。,Recent scheduled push failures below; verify platform accounts and content sources then retry; successes still appear in full history below.
+内容源,Content source
+失败原因,Failure reason
+时间,Time
+处理,Process
+查看错误,View Error
+重试,Retry
+全部推送历史,All push history
+推送类型,Push Type
+条目数,Items Count
+推送时间,Push Time
+还没有推送记录。,No push records yet.
+请先在「平台管理」配置账户密钥，确认「内容源」已启用，再点「一键推送」。推送成功或失败后都会出现在这里。,"First configure account keys under ""Platform management"", confirm ""Content sources"" enabled, then click ""One-click push"". Success or failure both appear here."
+去一键推送,Go to one-click push
 成功,Success
 待处理,Pending
-错误信息,"Error Message"
-重试结果,重试结果
-重试失败,重试失败
-请检查平台账户后重试,请检查平台账户后重试
-内容源由系统自动维护；仅可开关是否启用，不可新建或改元数据。,内容源由系统自动维护；仅可开关是否启用，不可新建或改元数据。
-Feed名称,"Feed Name"
-Feed类型,"Feed Type"
-数据源,"Data source"
-更新频率,"Update Frequency"
-最后生成,"Last Generated"
-暂无数据,"No Data"
+错误信息,Error Message
+重试结果,Retry result
+重试失败,Retry failed
+请检查平台账户后重试,Check platform account then retry
+内容源由系统自动维护；仅可开关是否启用，不可新建或改元数据。,Content sources are auto-maintained; only enable toggle allowed—no create or metadata edit.
+Feed名称,Feed Name
+Feed类型,Feed Type
+数据源,Data source
+更新频率,Update Frequency
+最后生成,Last Generated
+暂无数据,No Data
 是,Yes
 否,No
-启用设置,启用设置
-内容源由系统自动维护，元数据不可修改；此处仅可开关是否启用。,内容源由系统自动维护，元数据不可修改；此处仅可开关是否启用。
-数据源类型,"Source Type"
-数据源配置（JSON）,"Source Config (JSON)"
-"Feed URL","Feed URL"
-由系统策略维护,由系统策略维护
-配置（JSON）,"Config (JSON)"
-定位成功,定位成功
-经纬度参数不能为空,经纬度参数不能为空
-经纬度格式不正确,经纬度格式不正确
-经纬度范围不正确,经纬度范围不正确
-获取地址成功,获取地址成功
-创建队列失败。,"Failed to create queue."
-"合并更新 Feed 队列失败。","合并更新 Feed 队列失败。"
-"重开 Feed 队列失败。","重开 Feed 队列失败。"
-"Feed ID 无效。","Feed ID 无效。"
-"Feed 格式无效。","Feed 格式无效。"
-"Feed 推送类型无效。","Feed 推送类型无效。"
-"Google Indexing / SGE 账户指南","Google Indexing / SGE 账户指南"
-"使用 Google Cloud 服务账号调用 Indexing API；上传下载的 JSON 密钥文件即可，一般不需要 Secret。","使用 Google Cloud 服务账号调用 Indexing API；上传下载的 JSON 密钥文件即可，一般不需要 Secret。"
-"打开 Google Cloud Console，创建或选择项目。","打开 Google Cloud Console，创建或选择项目。"
-"启用「Indexing API」。","启用「Indexing API」。"
-"创建服务账号并下载 JSON 密钥文件。","创建服务账号并下载 JSON 密钥文件。"
-"在 Google Search Console 将该服务账号邮箱添加为网站所有者。","在 Google Search Console 将该服务账号邮箱添加为网站所有者。"
-"下方直接上传该 JSON 文件；Secret 留空即可。","下方直接上传该 JSON 文件；Secret 留空即可。"
-"服务账号 JSON","服务账号 JSON"
-"选择 Google 下载的 .json 密钥文件（含 private_key / client_email）","选择 Google 下载的 .json 密钥文件（含 private_key / client_email）"
-"Indexing API 通常不需要，可留空","Indexing API 通常不需要，可留空"
-"Google Indexing API 文档","Google Indexing API 文档"
-"Bing Webmaster 账户指南","Bing Webmaster 账户指南"
-"在 Bing Webmaster Tools 生成 API Key，用于提交站点内容。","在 Bing Webmaster Tools 生成 API Key，用于提交站点内容。"
-"登录 Bing Webmaster Tools 并验证网站。","登录 Bing Webmaster Tools 并验证网站。"
-"进入「设置 → API 访问」生成密钥。","进入「设置 → API 访问」生成密钥。"
-"将密钥填入「API Key」；Secret 一般留空。","将密钥填入「API Key」；Secret 一般留空。"
-"Bing API Key","Bing API Key"
-"Webmaster Tools 中生成的 API Key","Webmaster Tools 中生成的 API Key"
-通常不需要,通常不需要
-"Bing URL 提交说明","Bing URL 提交说明"
-"Perplexity 账户指南","Perplexity 账户指南"
-"使用 Perplexity API Key；若控制台提供了额外密钥再填 Secret。","使用 Perplexity API Key；若控制台提供了额外密钥再填 Secret。"
-"登录 Perplexity 开发者/API 控制台。","登录 Perplexity 开发者/API 控制台。"
-"创建 API Key 并复制。","创建 API Key 并复制。"
-"填入「API Key」；若有第二段密钥再填 Secret。","填入「API Key」；若有第二段密钥再填 Secret。"
-"Perplexity API Key","Perplexity API Key"
-控制台创建的主密钥,控制台创建的主密钥
-仅当控制台提供时填写,仅当控制台提供时填写
-"Perplexity 文档","Perplexity 文档"
-"OpenAI 账户指南","OpenAI 账户指南"
-"使用 OpenAI API Key（sk-…）；组织级若要求再填 Secret。","使用 OpenAI API Key（sk-…）；组织级若要求再填 Secret。"
-"打开 platform.openai.com → API keys。","打开 platform.openai.com → API keys。"
-创建密钥并立即复制保存。,创建密钥并立即复制保存。
-"填入「API Key」；Organization / 项目密钥如有要求再填 Secret。","填入「API Key」；Organization / 项目密钥如有要求再填 Secret。"
-"OpenAI API Key","OpenAI API Key"
-"以 sk- 开头的密钥","以 sk- 开头的密钥"
-"Organization / Secret","Organization / Secret"
-"OpenAI API Keys","OpenAI API Keys"
-"Claude / Anthropic 账户指南","Claude / Anthropic 账户指南"
-"在 Anthropic Console 创建 API Key。","在 Anthropic Console 创建 API Key。"
-"登录 console.anthropic.com。","登录 console.anthropic.com。"
-"填入「API Key」；Secret 通常留空。","填入「API Key」；Secret 通常留空。"
-"Anthropic API Key","Anthropic API Key"
-"Console 中的 API Key","Console 中的 API Key"
-"Anthropic Console","Anthropic Console"
-"百度 AI 账户指南","百度 AI 账户指南"
-"百度智能云应用需要 API Key 与 Secret Key。","百度智能云应用需要 API Key 与 Secret Key。"
-登录百度智能云控制台，创建应用。,登录百度智能云控制台，创建应用。
-"在应用详情中复制 API Key 与 Secret Key。","在应用详情中复制 API Key 与 Secret Key。"
-"分别填入下方两个字段（Secret 必填）。","分别填入下方两个字段（Secret 必填）。"
-"应用的 API Key","应用的 API Key"
-"Secret Key","Secret Key"
-"与 API Key 成对使用，必填","与 API Key 成对使用，必填"
-百度智能云文档,百度智能云文档
-"Brave Search 账户指南","Brave Search 账户指南"
-"在 Brave Search API 控制台申请订阅密钥。","在 Brave Search API 控制台申请订阅密钥。"
-"打开 api.search.brave.com 并注册。","打开 api.search.brave.com 并注册。"
-"创建订阅并复制 API Key。","创建订阅并复制 API Key。"
-"填入「API Key」；Secret 留空。","填入「API Key」；Secret 留空。"
-"Brave API Key","Brave API Key"
-"Subscription token / API Key","Subscription token / API Key"
-"Brave Search API","Brave Search API"
-"Cohere 账户指南","Cohere 账户指南"
-"在 Cohere Dashboard 创建 API Key。","在 Cohere Dashboard 创建 API Key。"
-"登录 dashboard.cohere.com。","登录 dashboard.cohere.com。"
-"填入「API Key」。","填入「API Key」。"
-"Cohere API Key","Cohere API Key"
-"Dashboard 中的 API Key","Dashboard 中的 API Key"
-"Cohere Dashboard","Cohere Dashboard"
-"You.com 账户指南","You.com 账户指南"
-"在 You.com 开发者控制台获取 API 凭证。","在 You.com 开发者控制台获取 API 凭证。"
-"登录 You.com 开发者/API 后台。","登录 You.com 开发者/API 后台。"
-"创建或复制 API Key。","创建或复制 API Key。"
-"填入「API Key」；若有第二密钥再填 Secret。","填入「API Key」；若有第二密钥再填 Secret。"
-"You.com API Key","You.com API Key"
-控制台主密钥,控制台主密钥
+启用设置,Enable settings
+内容源由系统自动维护，元数据不可修改；此处仅可开关是否启用。,Content sources are auto-maintained; metadata immutable; here you may only toggle enable.
+数据源类型,Source Type
+数据源配置（JSON）,Source Config (JSON)
+Feed URL,Feed URL
+由系统策略维护,Maintained by system policy
+配置（JSON）,Config (JSON)
+定位成功,Locate succeeded
+经纬度参数不能为空,Latitude and longitude parameters cannot be empty
+经纬度格式不正确,Incorrect latitude and longitude format
+经纬度范围不正确,Incorrect latitude and longitude range
+获取地址成功,Address retrieved successfully
+创建队列失败。,Failed to create queue.
+合并更新 Feed 队列失败。,Merge-update Feed queue failed.
+重开 Feed 队列失败。,Reopen Feed queue failed.
+Feed ID 无效。,Invalid Feed ID.
+Feed 格式无效。,Invalid Feed format.
+Feed 推送类型无效。,Invalid Feed push type.
+Google Indexing / SGE 账户指南,Google Indexing / SGE account guide
+使用 Google Cloud 服务账号调用 Indexing API；上传下载的 JSON 密钥文件即可，一般不需要 Secret。,Call Indexing API with a Google Cloud service account; upload the downloaded JSON key file; Secret usually not needed.
+打开 Google Cloud Console，创建或选择项目。,Open Google Cloud Console; create or select a project.
+启用「Indexing API」。,"Enable ""Indexing API""."
+创建服务账号并下载 JSON 密钥文件。,Create service account and download JSON key file.
+在 Google Search Console 将该服务账号邮箱添加为网站所有者。,In Google Search Console add the service account email as a site owner.
+下方直接上传该 JSON 文件；Secret 留空即可。,Upload that JSON file below; leave Secret blank.
+服务账号 JSON,Service account JSON
+选择 Google 下载的 .json 密钥文件（含 private_key / client_email）,Select the .json key file downloaded from Google (contains private_key / client_email)
+Indexing API 通常不需要，可留空,Indexing API usually not required; can leave blank
+Google Indexing API 文档,Google Indexing API docs
+Bing Webmaster 账户指南,Bing Webmaster account guide
+在 Bing Webmaster Tools 生成 API Key，用于提交站点内容。,Generate an API Key in Bing Webmaster Tools to submit site content.
+登录 Bing Webmaster Tools 并验证网站。,Sign in to Bing Webmaster Tools and verify the site.
+进入「设置 → API 访问」生成密钥。,Go to Settings → API Access to generate keys.
+将密钥填入「API Key」；Secret 一般留空。,"Put key into ""API Key""; Secret usually blank."
+Bing API Key,Bing API Key
+Webmaster Tools 中生成的 API Key,API Key generated in Webmaster Tools
+通常不需要,Usually not needed
+Bing URL 提交说明,Bing URL submission guide
+Perplexity 账户指南,Perplexity account guide
+使用 Perplexity API Key；若控制台提供了额外密钥再填 Secret。,Use Perplexity API Key; fill Secret only if console provides an extra key.
+登录 Perplexity 开发者/API 控制台。,Sign in to Perplexity developer/API console.
+创建 API Key 并复制。,Create API Key and copy it.
+填入「API Key」；若有第二段密钥再填 Secret。,"Enter ""API Key""; if a second key segment exists, fill Secret."
+Perplexity API Key,Perplexity API Key
+控制台创建的主密钥,Console-created master key
+仅当控制台提供时填写,Fill only when console provides it
+Perplexity 文档,Perplexity docs
+OpenAI 账户指南,OpenAI account guide
+使用 OpenAI API Key（sk-…）；组织级若要求再填 Secret。,Use OpenAI API Key (sk-…); fill Secret only if org requires it.
+打开 platform.openai.com → API keys。,Open platform.openai.com → API keys.
+创建密钥并立即复制保存。,Create key and copy it immediately.
+填入「API Key」；Organization / 项目密钥如有要求再填 Secret。,"Enter ""API Key""; fill Secret if Organization / project key requires it."
+OpenAI API Key,OpenAI API Key
+以 sk- 开头的密钥,Key starting with sk-
+Organization / Secret,Organization / Secret
+OpenAI API Keys,OpenAI API Keys
+Claude / Anthropic 账户指南,Claude / Anthropic account guide
+在 Anthropic Console 创建 API Key。,Create an API Key in the Anthropic Console.
+登录 console.anthropic.com。,Sign in to console.anthropic.com.
+填入「API Key」；Secret 通常留空。,"Enter ""API Key""; Secret is usually left blank."
+Anthropic API Key,Anthropic API Key
+Console 中的 API Key,API Key in Console
+Anthropic Console,Anthropic Console
+百度 AI 账户指南,Baidu AI account guide
+百度智能云应用需要 API Key 与 Secret Key。,Baidu Intelligent Cloud apps need API Key and Secret Key.
+登录百度智能云控制台，创建应用。,Sign in to Baidu Intelligent Cloud console and create an app.
+在应用详情中复制 API Key 与 Secret Key。,Copy API Key and Secret Key from the app details.
+分别填入下方两个字段（Secret 必填）。,Fill the two fields below (Secret required).
+应用的 API Key,Applied API Key
+Secret Key,Secret Key
+与 API Key 成对使用，必填,Used with API Key; required
+百度智能云文档,Baidu Intelligent Cloud docs
+Brave Search 账户指南,Brave Search account guide
+在 Brave Search API 控制台申请订阅密钥。,Apply for a subscription key in the Brave Search API console.
+打开 api.search.brave.com 并注册。,Open api.search.brave.com and register.
+创建订阅并复制 API Key。,Create subscription and copy API Key.
+填入「API Key」；Secret 留空。,"Enter ""API Key""; leave Secret blank."
+Brave API Key,Brave API Key
+Subscription token / API Key,Subscription token / API Key
+Brave Search API,Brave Search API
+Cohere 账户指南,Cohere account guide
+在 Cohere Dashboard 创建 API Key。,Create an API Key in the Cohere Dashboard.
+登录 dashboard.cohere.com。,Sign in to dashboard.cohere.com.
+填入「API Key」。,"Enter ""API Key""."
+Cohere API Key,Cohere API Key
+Dashboard 中的 API Key,API Key in Dashboard
+Cohere Dashboard,Cohere Dashboard
+You.com 账户指南,You.com account guide
+在 You.com 开发者控制台获取 API 凭证。,Get API credentials from the You.com developer console.
+登录 You.com 开发者/API 后台。,Sign in to You.com developer/API console.
+创建或复制 API Key。,Create or copy API Key.
+填入「API Key」；若有第二密钥再填 Secret。,"Enter ""API Key""; if a second key exists, fill Secret."
+You.com API Key,You.com API Key
+控制台主密钥,Console master key
 You.com,You.com
-"DuckDuckGo 账户指南","DuckDuckGo 账户指南"
-"若使用 Instant Answer / 合作方 API，按控制台说明填写密钥。","若使用 Instant Answer / 合作方 API，按控制台说明填写密钥。"
-"确认已获得 DuckDuckGo 侧可用的 API 凭证。","确认已获得 DuckDuckGo 侧可用的 API 凭证。"
-"将主密钥填入「API Key」。","将主密钥填入「API Key」。"
-"按对方文档决定是否填写 Secret。","按对方文档决定是否填写 Secret。"
-合作方提供的主密钥,合作方提供的主密钥
-按文档选填,按文档选填
+DuckDuckGo 账户指南,DuckDuckGo account guide
+若使用 Instant Answer / 合作方 API，按控制台说明填写密钥。,"If using Instant Answer / partner API, fill keys per console docs."
+确认已获得 DuckDuckGo 侧可用的 API 凭证。,Confirm you have usable DuckDuckGo API credentials.
+将主密钥填入「API Key」。,"Put master key into ""API Key""."
+按对方文档决定是否填写 Secret。,Follow their docs on whether to fill Secret.
+合作方提供的主密钥,Partner-provided master key
+按文档选填,Fill per docs
 DuckDuckGo,DuckDuckGo
-"请按该平台控制台说明填写 API 凭证；密钥会加密保存。","请按该平台控制台说明填写 API 凭证；密钥会加密保存。"
-打开对应平台的开发者控制台。,打开对应平台的开发者控制台。
-"填入下方字段；仅当平台要求时再填 Secret。","填入下方字段；仅当平台要求时再填 Secret。"
-平台主密钥,平台主密钥
-"ip-api.com请求失败: %{1}","ip-api.com请求失败: %{1}"
-"ip-api.com返回错误状态码: %{1}","ip-api.com返回错误状态码: %{1}"
-"ip-api.com返回数据解析失败: %{1}","ip-api.com返回数据解析失败: %{1}"
-"ip-api.com定位失败: %{1}","ip-api.com定位失败: %{1}"
-"ipwhois.app请求失败: %{1}","ipwhois.app请求失败: %{1}"
-"ipwhois.app返回错误状态码: %{1}","ipwhois.app返回错误状态码: %{1}"
-"ipwhois.app返回数据解析失败: %{1}","ipwhois.app返回数据解析失败: %{1}"
-"ipwhois.app定位失败: %{1}","ipwhois.app定位失败: %{1}"
-"ipapi.co请求失败: %{1}","ipapi.co请求失败: %{1}"
-"ipapi.co返回错误状态码: %{1}","ipapi.co返回错误状态码: %{1}"
-"ipapi.co返回数据解析失败: %{1}","ipapi.co返回数据解析失败: %{1}"
-"ipapi.co定位失败: %{1}","ipapi.co定位失败: %{1}"
-"geojs.io请求失败: %{1}","geojs.io请求失败: %{1}"
-"geojs.io返回错误状态码: %{1}","geojs.io返回错误状态码: %{1}"
-"geojs.io返回数据解析失败: %{1}","geojs.io返回数据解析失败: %{1}"
-geojs.io返回空数据,geojs.io返回空数据
-本地定位服务暂未实现，将使用备用通道,本地定位服务暂未实现，将使用备用通道
-"ipinfo.io请求失败: %{1}","ipinfo.io请求失败: %{1}"
-"ipinfo.io返回错误状态码: %{1}","ipinfo.io返回错误状态码: %{1}"
-"ipinfo.io返回数据解析失败: %{1}","ipinfo.io返回数据解析失败: %{1}"
-"ipinfo.io定位失败: %{1}","ipinfo.io定位失败: %{1}"
-没有可用的定位服务提供者,没有可用的定位服务提供者
-"所有定位服务提供者都失败，最后错误: %{1}","所有定位服务提供者都失败，最后错误: %{1}"
-"请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。","请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。"
-"Feed ID","Feed ID"
-"平台 ID","Platform ID"
-平台代码,"Platform Code"
-默认账户,"Default Account"
-激活状态,"Active Status"
-连接状态,"Connection Status"
-API密钥（可选）,"API Secret (Optional)"
-选择Feed,"Select Feed"
-请选择Feed和至少一个平台,"Please select feed and at least one platform"
-请填写Feed名称,"Please fill in feed name"
-添加Feed,"Add Feed"
-启用自动推送,"Enable Auto Push"
-"配置 AI 搜索平台与账户后，即可把 GEO Feed 主动推送给对方。","Configure AI search platforms and accounts to actively push GEO feeds."
-API端点,"API Endpoint"
-Feed格式,"Feed Format"
-请选择,"Please Select"
+请按该平台控制台说明填写 API 凭证；密钥会加密保存。,Fill API credentials per that platform console; keys are stored encrypted.
+打开对应平台的开发者控制台。,Open the corresponding platform developer console.
+填入下方字段；仅当平台要求时再填 Secret。,Fill fields below; fill Secret only when the platform requires it.
+平台主密钥,Platform master key
+ip-api.com请求失败: %{1},ip-api.com request failed: %{1}
+ip-api.com返回错误状态码: %{1},ip-api.com returned error status code: %{1}
+ip-api.com返回数据解析失败: %{1},ip-api.com response data parsing failed: %{1}
+ip-api.com定位失败: %{1},ip-api.com location failed: %{1}
+ipwhois.app请求失败: %{1},ipwhois.app request failed: %{1}
+ipwhois.app返回错误状态码: %{1},ipwhois.app returned error status code: %{1}
+ipwhois.app返回数据解析失败: %{1},ipwhois.app response data parsing failed: %{1}
+ipwhois.app定位失败: %{1},ipwhois.app location failed: %{1}
+ipapi.co请求失败: %{1},ipapi.co request failed: %{1}
+ipapi.co返回错误状态码: %{1},ipapi.co returned error status code: %{1}
+ipapi.co返回数据解析失败: %{1},ipapi.co response data parsing failed: %{1}
+ipapi.co定位失败: %{1},ipapi.co location failed: %{1}
+geojs.io请求失败: %{1},geojs.io request failed: %{1}
+geojs.io返回错误状态码: %{1},geojs.io returned error status code: %{1}
+geojs.io返回数据解析失败: %{1},geojs.io response data parsing failed: %{1}
+geojs.io返回空数据,geojs.io returned empty data
+本地定位服务暂未实现，将使用备用通道,"Local location service not implemented, will use fallback channels"
+ipinfo.io请求失败: %{1},ipinfo.io request failed: %{1}
+ipinfo.io返回错误状态码: %{1},ipinfo.io returned error status code: %{1}
+ipinfo.io返回数据解析失败: %{1},ipinfo.io response data parsing failed: %{1}
+ipinfo.io定位失败: %{1},ipinfo.io location failed: %{1}
+没有可用的定位服务提供者,No available location service providers
+所有定位服务提供者都失败，最后错误: %{1},"All location service providers failed, last error: %{1}"
+请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。,"Fill API keys under ""Platform accounts""; one-click OAuth is not supported yet."
+Feed ID,Feed ID
+平台 ID,Platform ID
+平台代码,Platform Code
+默认账户,Default Account
+激活状态,Active Status
+连接状态,Connection Status
+API密钥（可选）,API Secret (Optional)
+选择Feed,Select Feed
+请选择Feed和至少一个平台,Please select feed and at least one platform
+请填写Feed名称,Please fill in feed name
+添加Feed,Add Feed
+启用自动推送,Enable Auto Push
+配置 AI 搜索平台与账户后，即可把 GEO Feed 主动推送给对方。,Configure AI search platforms and accounts to actively push GEO feeds.
+API端点,API Endpoint
+Feed格式,Feed Format
+请选择,Please Select
 实时,Realtime
-推送历史,"Push History"
-"""GEO feed item add""","GEO feed item add"
-中国大陆,中国大陆
-配送至,"Ship to"
-选择配送地址,选择配送地址
-自动定位,自动定位
-手动选择,手动选择
-Geo模块未加载,Geo模块未加载
-获取地址信息失败,获取地址信息失败
-定位失败，请稍后重试,定位失败，请稍后重试
-请输入配送地址（格式：省/市/区）,请输入配送地址（格式：省/市/区）
-中国,中国
-定位中...,定位中...
-生成式搜索引擎优化,"Generative engine optimization"
+推送历史,Push History
+"""GEO feed item add""",GEO feed item add
+中国大陆,Mainland China
+配送至,Ship to
+选择配送地址,Select shipping address
+自动定位,Auto locate
+手动选择,Manual selection.
+Geo模块未加载,The Geo module has not been loaded.
+获取地址信息失败,Failed to retrieve address information.
+定位失败，请稍后重试,Location failed. Please try again later.
+请输入配送地址（格式：省/市/区）,Please enter the delivery address (format: Province/City/District).
+中国,China
+定位中...,Locating...
+生成式搜索引擎优化,Generative engine optimization

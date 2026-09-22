@@ -132,6 +132,16 @@ class Cookie
 
     public static function static_file(): void
     {
+        // Inbound Cookie/Authorization are irrelevant for public static assets.
+        // Historically this only stripped response Set-Cookie; clear request
+        // identity so StaticFile never keys off session/consent cookies.
+        $_COOKIE = [];
+        try {
+            \Weline\Framework\Env\WelineEnv::setServer('HTTP_COOKIE', '', 'Cookie::static_file');
+            \Weline\Framework\Env\WelineEnv::setServer('HTTP_AUTHORIZATION', '', 'Cookie::static_file');
+        } catch (\Throwable) {
+        }
+
         if (headers_sent()) return;
         // 设置缓存策略
         header('Cache-Control: public, max-age=31536000, immutable');

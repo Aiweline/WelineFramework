@@ -9,6 +9,18 @@ Weline Framework 提供了统一的API接口开发规范，确保所有API接口
 - Observer 类、Helper 类、Service 类等非 API 控制器不需要遵循 API 规范
 - 不符合规范的接口在路由注册时会被拦截，无法正常访问
 
+### 0.1 归属模块落盘（硬 · MCP `api_rest_in_owning_module`）
+
+REST / 公开 API **必须写在资源归属的 `Vendor_Module`** 下（通常 `app/code/{Vendor}/{Module}/Api/Rest/...`），**禁止跨模块代写**：
+
+| 资源域 | 归属模块（示例） | 禁止落点 |
+|--------|------------------|----------|
+| 网站列表、站点语种、域名/编排等 Website 面 | `Weline_Websites` | `Weline_I18n` 或其它模块 |
+| 词典取词/录入、翻译收集与进度等 I18n 面 | `Weline_I18n` | `Weline_Websites` 或其它模块 |
+| 其它业务资源 | 拥有该 Model/Service/领域边界的模块 | 任意「图方便」的邻模块 |
+
+工程团队：触及 Rest/SDK 时必须上场框架专席 **`API`**（`Team:API:`），`get_skill(api_sdk_development|weline-api-sdk)`，并同步更新 **owning-module** 的 REST/API 文档（同变更集）。后端席可提供 Service，但不得代写他模块 Rest 控制器。权威：`dev/ai-command/ai/工程团队.md`、MCP `HardConstraintsCatalog::api_rest_in_owning_module`。
+
 **规范说明**：
 - API文档信息使用PHPDoc的 `@Document` 标签
 - **不需要** `ApiDoc` Attribute（Acl注解已经可以用于权限控制和API识别）

@@ -2595,7 +2595,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.09.19-sticky-bus1';
+    var PIXEL_SCRIPT_VERSION = '2026.09.22-param-shell1';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -5289,6 +5289,74 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return action.indexOf('search') > -1 || !!__findSearchInput(form);
     }
 
+    // Phase-2 关闭假沙盒后：路径级电商事件改由 behavior_monitor 主动 track（与旧 target(DOMContentLoaded) 对齐）。
+    var __pixelRouteCommerceSent = Object.create(null);
+
+    function __resolveRouteScopedCommerceEventName(pathname) {
+        var path = String(pathname || '');
+        if (!path) {
+            try {
+                path = new URL(__getPixelAppPath(window.location.href)).pathname;
+            } catch (ePath) {
+                path = String((window.location && window.location.pathname) || '');
+            }
+        }
+        if (path.indexOf('/product/') === 0) {
+            return 'view_item';
+        }
+        if (path === '/cart' || path === '/cart.html') {
+            return 'view_cart';
+        }
+        if (path === '/checkout' || path === '/checkout.html') {
+            return 'begin_checkout';
+        }
+        return '';
+    }
+
+    function __trackRouteScopedCommerceEvents(trigger) {
+        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function' || window.WelinePixel.__welineStub) {
+            return;
+        }
+        var path = '';
+        try {
+            path = new URL(__getPixelAppPath(window.location.href)).pathname;
+        } catch (ePath2) {
+            path = String((window.location && window.location.pathname) || '');
+        }
+        var eventName = __resolveRouteScopedCommerceEventName(path);
+        if (!eventName) {
+            return;
+        }
+        var key = eventName + '::' + path;
+        if (__pixelRouteCommerceSent[key]) {
+            return;
+        }
+        var root = null;
+        try {
+            root = document.querySelector(
+                '[data-testid="storefront-product-detail"], .product-native-detail, [data-pixel-event="view_item"]'
+            );
+        } catch (eRoot) {
+            root = null;
+        }
+        // header eager 可能早于 PDP DOM：等 DOMContentLoaded 再发，保证 items/currency 可解析。
+        if (eventName === 'view_item' && !root && document.readyState === 'loading') {
+            if (!window.__WelinePixelRouteCommerceDomWait) {
+                window.__WelinePixelRouteCommerceDomWait = true;
+                document.addEventListener('DOMContentLoaded', function () {
+                    window.__WelinePixelRouteCommerceDomWait = false;
+                    __trackRouteScopedCommerceEvents('dom_content_loaded');
+                }, { once: true });
+            }
+            return;
+        }
+        __pixelRouteCommerceSent[key] = true;
+        window.WelinePixel.track(eventName, {
+            trigger: trigger || 'route',
+            source: 'behavior_monitor'
+        }, { element: root || undefined });
+    }
+
     function __trackPageTransition(type, toUrl, extra) {
         var fromUrl = __pixelLastLocation;
         var nextUrl = toUrl ? String(toUrl) : window.location.href;
@@ -5308,6 +5376,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         // A10：SPA pushState/replaceState/popstate/hashchange 后重跑 sticky 内链改写
         __ensureStickyUtmLocked();
         __scheduleStickyAnchorRewrite(160);
+        __trackRouteScopedCommerceEvents('page_transition_' + type);
     }
 
     function __initBehaviorTelemetry() {
@@ -5328,6 +5397,11 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             });
             __trackMatchedCustomEvents(null, null, { event_name: 'page_view', trigger: 'page_view' }, {});
         }
+
+        // PDP/购物车/结账：page_view 之外补发路径级电商事件（字典 require_exact_marker 由页内 marker 满足审计）。
+        __trackRouteScopedCommerceEvents(
+            document.readyState === 'loading' ? 'script_init' : document.readyState
+        );
 
         if (__getSearchQueryFromUrl() || window.location.pathname.indexOf('/search') === 0) {
             window.WelinePixel.track('search_result_view', __getSearchMeta(__findSearchInput(document), 'page_view'));
@@ -9009,7 +9083,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.09.19-sticky-bus1';
+    var PIXEL_SCRIPT_VERSION = '2026.09.22-param-shell1';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -11685,6 +11759,74 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return action.indexOf('search') > -1 || !!__findSearchInput(form);
     }
 
+    // Phase-2 关闭假沙盒后：路径级电商事件改由 behavior_monitor 主动 track（与旧 target(DOMContentLoaded) 对齐）。
+    var __pixelRouteCommerceSent = Object.create(null);
+
+    function __resolveRouteScopedCommerceEventName(pathname) {
+        var path = String(pathname || '');
+        if (!path) {
+            try {
+                path = new URL(__getPixelAppPath(window.location.href)).pathname;
+            } catch (ePath) {
+                path = String((window.location && window.location.pathname) || '');
+            }
+        }
+        if (path.indexOf('/product/') === 0) {
+            return 'view_item';
+        }
+        if (path === '/cart' || path === '/cart.html') {
+            return 'view_cart';
+        }
+        if (path === '/checkout' || path === '/checkout.html') {
+            return 'begin_checkout';
+        }
+        return '';
+    }
+
+    function __trackRouteScopedCommerceEvents(trigger) {
+        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function' || window.WelinePixel.__welineStub) {
+            return;
+        }
+        var path = '';
+        try {
+            path = new URL(__getPixelAppPath(window.location.href)).pathname;
+        } catch (ePath2) {
+            path = String((window.location && window.location.pathname) || '');
+        }
+        var eventName = __resolveRouteScopedCommerceEventName(path);
+        if (!eventName) {
+            return;
+        }
+        var key = eventName + '::' + path;
+        if (__pixelRouteCommerceSent[key]) {
+            return;
+        }
+        var root = null;
+        try {
+            root = document.querySelector(
+                '[data-testid="storefront-product-detail"], .product-native-detail, [data-pixel-event="view_item"]'
+            );
+        } catch (eRoot) {
+            root = null;
+        }
+        // header eager 可能早于 PDP DOM：等 DOMContentLoaded 再发，保证 items/currency 可解析。
+        if (eventName === 'view_item' && !root && document.readyState === 'loading') {
+            if (!window.__WelinePixelRouteCommerceDomWait) {
+                window.__WelinePixelRouteCommerceDomWait = true;
+                document.addEventListener('DOMContentLoaded', function () {
+                    window.__WelinePixelRouteCommerceDomWait = false;
+                    __trackRouteScopedCommerceEvents('dom_content_loaded');
+                }, { once: true });
+            }
+            return;
+        }
+        __pixelRouteCommerceSent[key] = true;
+        window.WelinePixel.track(eventName, {
+            trigger: trigger || 'route',
+            source: 'behavior_monitor'
+        }, { element: root || undefined });
+    }
+
     function __trackPageTransition(type, toUrl, extra) {
         var fromUrl = __pixelLastLocation;
         var nextUrl = toUrl ? String(toUrl) : window.location.href;
@@ -11704,6 +11846,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         // A10：SPA pushState/replaceState/popstate/hashchange 后重跑 sticky 内链改写
         __ensureStickyUtmLocked();
         __scheduleStickyAnchorRewrite(160);
+        __trackRouteScopedCommerceEvents('page_transition_' + type);
     }
 
     function __initBehaviorTelemetry() {
@@ -11724,6 +11867,11 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             });
             __trackMatchedCustomEvents(null, null, { event_name: 'page_view', trigger: 'page_view' }, {});
         }
+
+        // PDP/购物车/结账：page_view 之外补发路径级电商事件（字典 require_exact_marker 由页内 marker 满足审计）。
+        __trackRouteScopedCommerceEvents(
+            document.readyState === 'loading' ? 'script_init' : document.readyState
+        );
 
         if (__getSearchQueryFromUrl() || window.location.pathname.indexOf('/search') === 0) {
             window.WelinePixel.track('search_result_view', __getSearchMeta(__findSearchInput(document), 'page_view'));

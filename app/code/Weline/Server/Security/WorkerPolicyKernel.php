@@ -480,13 +480,21 @@ final class WorkerPolicyKernel
             }
         }
 
+        $headers = $parsed['headers'];
+        // Public static assets never consume session/consent cookies. Align with
+        // Framework Cookie::static_file() and managed Nginx Cookie stripping so
+        // Static L1 / origin never treat browser same-origin Cookie as identity.
+        if ($this->isPublicStaticAssetPath((string)$parsed['path'])) {
+            unset($headers['cookie'], $headers['authorization']);
+        }
+
         return WorkerPolicyDecision::allow(
             $clientIp,
             $parsed['method'],
             $parsed['protocol'],
             $parsed['target'],
             $parsed['path'],
-            $parsed['headers'],
+            $headers,
             $parsed['body'],
             $this->loadedDigest,
             $trustedProxy,
@@ -1251,6 +1259,15 @@ final class WorkerPolicyKernel
 
         return \str_starts_with($pathOnly, '/maintenance/frontend/wait-gift')
             || \str_starts_with($pathOnly, '/maintenance/frontend/recovery-check');
+    }
+
+    /**
+     * Public fingerprinted static assets (module view/statics, pub/static, common
+     * binary extensions). Same path set as the maintenance static whitelist.
+     */
+    public function isPublicStaticAssetPath(string $path): bool
+    {
+        return $this->isMaintenanceStaticAssetPath($path);
     }
 
     /**

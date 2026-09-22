@@ -32,6 +32,50 @@ $columns = Block::choice($this->getData('columns'), ['2','3','4'], '3');
 $layout = Block::choice($this->getData('layout'), ['grid','carousel'], 'grid');
 $showRating = Block::boolean($this->getData('show_rating'), true);
 $showAvatar = Block::boolean($this->getData('show_avatar'), true);
+
+$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
+$isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
+$translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
+    $translated = trim((string)WidgetI18n::label($source));
+    if ($translated !== '' && $translated !== $source) {
+        return $translated;
+    }
+
+    return $isChineseLocale ? $source : $english;
+};
+
+if ($items === []) {
+    $items = [
+        [
+            'content' => $translateDefaultCopy(
+                '马面裙腰头贴合，走动不勒，日常通勤也能穿出仪式感。',
+                'The mamian skirt sits comfortably at the waist—easy for everyday wear with a sense of occasion.'
+            ),
+            'author' => $translateDefaultCopy('林予安', 'Lin Yuan'),
+            'position' => $translateDefaultCopy('常州 · 常客', 'Changzhou · Returning customer'),
+            'rating' => 5,
+        ],
+        [
+            'content' => $translateDefaultCopy(
+                '面料垂感好，妆花细节经得起近看，收到后立刻回购同系列配件。',
+                'The drape is excellent and the woven details hold up close—ordered matching accessories the same day.'
+            ),
+            'author' => $translateDefaultCopy('周澄', 'Zhou Cheng'),
+            'position' => $translateDefaultCopy('上海 · 礼服场景', 'Shanghai · Formal occasions'),
+            'rating' => 5,
+        ],
+        [
+            'content' => $translateDefaultCopy(
+                '尺码建议准，客服改衣沟通清楚，第一次穿汉服也不慌。',
+                'Sizing advice was accurate and alterations support was clear—first-time Hanfu felt easy.'
+            ),
+            'author' => $translateDefaultCopy('何清禾', 'He Qinghe'),
+            'position' => $translateDefaultCopy('成都 · 新手', 'Chengdu · First purchase'),
+            'rating' => 4,
+        ],
+    ];
+}
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>"
@@ -68,5 +112,4 @@ $showAvatar = Block::boolean($this->getData('show_avatar'), true);
             <button type="button" class="w-button w-button-outline" data-tone="neutral" data-variant="outline" data-scroll-direction="1"><lang>下一条</lang></button>
         </div>
     <?php endif; ?>
-    <?php if ($items === []): ?><p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p><?php endif; ?>
 </section>

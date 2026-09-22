@@ -27,6 +27,14 @@ use Weline\I18n\Api\Translation\TranslationCollectorInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Register\Installer;
 
+/**
+ * theme:create — 脚手架生成器。
+ *
+ * WARNING：历史输出曾落旧 `view/templates` 树，已过时。
+ * 现代 design 主题须含 `{frontend|backend}/`（colors/_ / variables/_ / 独立 CSS），
+ * 激活用 `theme:active`（不是 theme:activate），细节见 `dev/ai-command/ai/主题开发.md` Mode B
+ * 与样例 `app/design/Weline/hanfu/`。生成结构仅作最小骨架，勿当第二权威。
+ */
 class Create implements CommandInterface
 {
     private WelineTheme $welineTheme;
@@ -490,8 +498,8 @@ class Create implements CommandInterface
         } else {
             $this->printing->success(__('主题已完整创建！'));
             $this->printing->note(__('您可以：'));
-            $this->printing->note(__('1. 运行 php bin/w module:install 安装主题'));
-            $this->printing->note(__('2. 运行 php bin/w theme:activate %{1} 激活主题', [$themeName]));
+            $this->printing->note(__('1. 运行 php bin/w setup:upgrade 或 theme:install 安装主题'));
+            $this->printing->note(__('2. 运行 php bin/w theme:active %{1} frontend 激活主题', [$themeName]));
         }
         
         // 进入操作菜单
@@ -732,12 +740,16 @@ class Create implements CommandInterface
         // 创建 register.php 文件
         $this->createRegisterFile($themePath, $themeName, $parentTheme, $version, $description);
 
-        // 创建基础目录结构（可选，根据实际需求）
+        // 现代 design 树：必须含 frontend/（themeSupportsArea）；禁止再生成旧 view/templates 脚手架
+        $safeBrand = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $themeName) ?: 'brand';
         $directories = [
-            'view' . DS . 'templates',
-            'view' . DS . 'statics' . DS . 'css',
-            'view' . DS . 'statics' . DS . 'js',
-            'view' . DS . 'statics' . DS . 'images',
+            'frontend' . DS . 'colors',
+            'frontend' . DS . 'variables',
+            'frontend' . DS . 'assets' . DS . 'css',
+            'frontend' . DS . 'layouts',
+            'frontend' . DS . 'partials',
+            'backend' . DS . 'colors',
+            'backend' . DS . 'variables',
         ];
 
         foreach ($directories as $dir) {
@@ -747,12 +759,58 @@ class Create implements CommandInterface
             }
         }
 
+        $this->createModernSkinSkeleton($themePath, $safeBrand);
+
+        $this->printing->warning(__(
+            'WARNING：请按主题开发.md Mode B / hanfu 现代 frontend/ 树继续完善；激活命令为 php bin/w theme:active %{1} frontend（不是 theme:activate）',
+            [$themeName]
+        ));
+
         // 创建 README.md 文件
         $this->createReadmeFile($themePath, $themeName, $parentTheme, $version, $description);
 
         // 如果选择创建默认模板文件
         if ($createTemplate) {
             $this->createDefaultTemplate($themePath, $themeName);
+        }
+    }
+
+    /**
+     * 写入最小现代皮肤骨架（colors/variables/独立 CSS）。
+     */
+    private function createModernSkinSkeleton(string $themePath, string $brand): void
+    {
+        $colorFile = $themePath . DS . 'frontend' . DS . 'colors' . DS . '_' . $brand . '.css';
+        $variableFile = $themePath . DS . 'frontend' . DS . 'variables' . DS . '_' . $brand . '.css';
+        $brandCss = $themePath . DS . 'frontend' . DS . 'assets' . DS . 'css' . DS . $brand . '.css';
+
+        $colorStub = <<<CSS
+/* Design theme color overlay. Filename MUST start with _. Do NOT override assets/css/theme.css. */
+:root {
+  /* --color-brand: …; */
+}
+CSS;
+        $variableStub = <<<CSS
+/* Design theme variable overlay. Filename MUST start with _. */
+:root {
+  /* --weline-theme-spacing-unit: …; */
+}
+CSS;
+        $brandStub = <<<CSS
+/* Brand presentation CSS. Mount via <theme:css> — never replace theme.css / theme.js. */
+CSS;
+
+        foreach ([
+            $colorFile => $colorStub,
+            $variableFile => $variableStub,
+            $brandCss => $brandStub,
+        ] as $path => $contents) {
+            if (is_file($path)) {
+                continue;
+            }
+            $this->file->open($path, File::mode_w);
+            $this->file->write($contents);
+            $this->file->close();
         }
     }
 
@@ -826,10 +884,11 @@ Register::register(
         'name' => '{$themeName}',
 PHP;
 
-        // 如果有父主题，添加 parent 参数
-        if (!empty($parentTheme)) {
-            $registerContent .= "\n        'parent' => '{$parentTheme}',";
+        // 如果有父主题，添加 parent 参数；未指定时默认继承「Default 默认主题」
+        if ($parentTheme === '') {
+            $parentTheme = 'Default 默认主题';
         }
+        $registerContent .= "\n        'parent' => '{$parentTheme}',";
 
         $registerContent .= <<<PHP
 
@@ -884,27 +943,33 @@ MD;
 
 ```
 {$themeName}/
-├── register.php              # 主题注册文件
-├── view/                     # 视图文件目录
-│   ├── templates/           # 模板文件
-│   └── statics/             # 静态资源
-│       ├── css/             # 样式文件
-│       ├── js/              # JavaScript文件
-│       └── images/          # 图片资源
-└── README.md                # 本文件
+├── register.php
+├── frontend/
+│   ├── colors/_*.css
+│   ├── variables/_*.css
+│   ├── assets/css/{brand}.css
+│   ├── layouts/
+│   └── partials/
+└── backend/                  # 可选
 ```
+
+> WARNING：旧 `view/templates` 脚手架已过时。权威流程见 `dev/ai-command/ai/主题开发.md` Mode B 与样例 `app/design/Weline/hanfu/`。
+> 禁止同 key 覆盖 `assets/css/theme.css` / `assets/js/theme.js`。
 
 ## 使用说明
 
-1. 主题已自动注册，可以通过以下命令安装：
+1. 安装主题：
    ```bash
-   php bin/w module:install
+   php bin/w setup:upgrade
+   # 或 php bin/w theme:install -t {$themeName}
+   php bin/w theme:listing
    ```
 
-2. 激活主题：
+2. 激活主题（注意命令是 theme:active，不是 theme:activate）：
    ```bash
-   php bin/w theme:activate {$themeName}
+   php bin/w theme:active {$themeName} frontend
    ```
+   正式店面还需配置 published theme_binding（优先于裸 is_active）。
 
 ## 开发说明
 
@@ -960,8 +1025,9 @@ MD;
         
         $this->printing->success(__('═══════════════════════════════════════════════════════'));
         $this->printing->warning(__('下一步操作:'));
-        $this->printing->note(__('1. 运行 php bin/w module:install 安装主题'));
-        $this->printing->note(__('2. 运行 php bin/w theme:activate %{1} 激活主题', [$themeName]));
+        $this->printing->note(__('1. 运行 php bin/w setup:upgrade 或 theme:install 安装主题'));
+        $this->printing->note(__('2. 运行 php bin/w theme:active %{1} frontend 激活主题（不是 theme:activate）', [$themeName]));
+        $this->printing->note(__('3. 配置 Website/Scope published theme_binding；细节见主题开发.md Mode B'));
         $this->printing->success(__('═══════════════════════════════════════════════════════'));
     }
 
@@ -1398,7 +1464,9 @@ USAGE;
         $help .= '  • ' . __('模块名称格式: Weline_<PascalCase主题名称>') . PHP_EOL;
         $help .= '  • ' . __('支持主题继承，可以指定父主题') . PHP_EOL;
         $help .= '  • ' . __('自动生成 register.php 注册文件') . PHP_EOL;
-        $help .= '  • ' . __('自动创建基础目录结构（view/templates, view/statics等）') . PHP_EOL;
+        $help .= '  • ' . __('自动创建现代 frontend/ 最小树（colors/_、variables/_、独立 brand CSS）') . PHP_EOL;
+        $help .= '  • ' . __('WARNING：旧 view/templates 脚手架已过时；请按主题开发.md Mode B / hanfu 完善') . PHP_EOL;
+        $help .= '  • ' . __('激活命令：php bin/w theme:active <name> frontend（不是 theme:activate）') . PHP_EOL;
         $help .= PHP_EOL . '💡 ' . __('二次操作模式') . ':' . PHP_EOL;
         $help .= '  • ' . __('运行 php bin/w theme:create <主题名> 可进入二次操作模式') . PHP_EOL;
         $help .= '  • ' . __('支持重新创建主题、创建模板文件、查看和修改配置等操作') . PHP_EOL;
@@ -3014,7 +3082,7 @@ USAGE;
                 
                 if ($wasActive && !$this->welineTheme->isActive()) {
                     $this->printing->warning(__('提示：主题已重装，但当前为未激活状态'));
-                    $this->printing->note(__('如需激活主题，请使用命令：php bin/w theme:activate %{1}', [$themeName]));
+                    $this->printing->note(__('如需激活主题，请使用命令：php bin/w theme:active %{1} frontend', [$themeName]));
                 }
             } else {
                 $this->printing->error(__('主题重装失败，请检查 register.php 文件'));

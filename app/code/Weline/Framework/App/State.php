@@ -399,7 +399,12 @@ class State extends DataObject
      *     canonical: list<string>
      * }
      */
-    public static function resolveLocalizationFromPathSegments(array $segments): array
+    /**
+     * @param bool $detectAreaPrefix When false, never treat the first segment as an area
+     *        route key. Use after Url::parser already consumed rest_frontend / rest_backend
+     *        so a module router named "api" is not stripped again.
+     */
+    public static function resolveLocalizationFromPathSegments(array $segments, bool $detectAreaPrefix = true): array
     {
         $segments = \array_values(\array_map(
             static fn(mixed $segment): string => (string)$segment,
@@ -408,7 +413,11 @@ class State extends DataObject
 
         $index = 0;
         $areaOffset = 0;
-        if (isset($segments[$index]) && Env::getAreaByRoutePrefix($segments[$index]) !== null) {
+        if (
+            $detectAreaPrefix
+            && isset($segments[$index])
+            && Env::getAreaByRoutePrefix($segments[$index]) !== null
+        ) {
             $index++;
             $areaOffset = 1;
         }

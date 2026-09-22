@@ -19,13 +19,7 @@ class Install implements InstallInterface
     {
         /** @var Role $role */
         $role = ObjectManager::getInstance(Role::class);
-        $role->load(1);
-        if (!$role->getId()) {
-            $role->clearData()->setId(1)
-                ->setRoleName('超级管理员')
-                ->setRoleDescription('拥有所有权限的超管角色')
-                ->save(true);
-        }
+        Role::ensureSuperAdminRoleExists();
         $role->load(2);
         if (!$role->getId()) {
             $role->clearData()->setId(2)

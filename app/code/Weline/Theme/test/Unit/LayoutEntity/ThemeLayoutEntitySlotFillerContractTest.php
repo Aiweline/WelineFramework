@@ -24,7 +24,6 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString('function includeEntityPhtml', $src);
         self::assertStringContainsString('pageCurrentJson', $src);
         self::assertStringNotContainsString('processSlotsWithLayout', $src);
-        self::assertStringContainsString('orderChromeSlotsForInjection', $src);
         self::assertStringContainsString('header-nav-extensions', $src);
         self::assertStringContainsString('theme_layout_entity_chrome_soft_skip', $src);
         self::assertStringContainsString('function fillNestedChromeExtensionSlots', $src);
@@ -38,6 +37,19 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString('overlayLocaleOnLayout(', $src);
         self::assertStringContainsString('lives in RESOURCE_I18N', $src);
         self::assertStringContainsString('Prefer request scope for i18n identity', $src);
+        // Slot fill order = layout document position only (never name/length sorts).
+        self::assertStringContainsString('orderSlotsByShellLayout', $src);
+        self::assertStringContainsString('NEVER sort by slot-id name/length', $src);
+        self::assertStringNotContainsString('orderChromeSlotsForInjection', $src);
+        self::assertStringNotContainsString('strlen($b) <=> strlen($a)', $src);
+        // Nested homepage-* under content must survive entity content splice
+        // and keep shell document order (hero before later sections).
+        self::assertStringContainsString('mergeParentSlotPreservingNested', $src);
+        self::assertStringContainsString('shellSlotInnerHasProtectedNestedSlots', $src);
+        self::assertStringContainsString('shellContentCarriesHomepageNestedSlots', $src);
+        self::assertStringContainsString("slotId === 'content' && \$this->shellContentCarriesHomepageNestedSlots", $src);
+        self::assertStringContainsString('keep shell nested slot document order', $src);
+        self::assertStringContainsString('$entityInner . $shellInner', $src);
         // Hard-cut: published is r{id} only — delete scandir / s* / older-r* fishing.
         self::assertStringContainsString("pageStructureOrRelease('', true, \$preferredReleaseId)", $src);
         self::assertStringNotContainsString('scandir($pageRoot)', $src);

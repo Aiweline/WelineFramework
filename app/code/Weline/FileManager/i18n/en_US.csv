@@ -1,326 +1,326 @@
-﻿已选文件:,"Selected file:"
-点击下载,"Click to download."
-"file-image 节点缺少类型化 usage。","The file-image node is missing typed usage."
-"图片运行时解析缺少显式 ScopeIdentity。","Image runtime resolution is missing an explicit ScopeIdentity."
-图片语境语言与当前布局语言不一致。,"Image context language does not match the current layout language."
-"所指定的文件管理器不存在! 文件管理器名：%{1}","The specified file manager does not exist! File manager name: %{1}"
-"使用：%{1} 文件管理器代替。","Use: %{1} file manager instead."
-未找到可用的文件管理器实现。,"No available file manager implementation was found."
-文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。,"File manager tags cannot contain the </file-manager> tag. Only the <file-manager/> tag can be used."
-缺少目标ID。文档：%{1},"Missing target ID. Document: %{1}"
+已选文件:,Selected file:
+点击下载,Click to download.
+file-image 节点缺少类型化 usage。,The file-image node is missing typed usage.
+图片运行时解析缺少显式 ScopeIdentity。,Image runtime resolution is missing an explicit ScopeIdentity.
+图片语境语言与当前布局语言不一致。,Image context language does not match the current layout language.
+所指定的文件管理器不存在! 文件管理器名：%{1},The specified file manager does not exist! File manager name: %{1}
+使用：%{1} 文件管理器代替。,Use: %{1} file manager instead.
+未找到可用的文件管理器实现。,No available file manager implementation was found.
+文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。,File manager tags cannot contain the </file-manager> tag. Only the <file-manager/> tag can be used.
+缺少目标ID。文档：%{1},Missing target ID. Document: %{1}
 "缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}","Missing target ID. Please use an ID selector, e.g.: target=""#id"". Document: %{1}"
-"FileAsset 哈希回填读取到无效数据。","FileAsset 哈希回填读取到无效数据。"
-"FileAsset 哈希回填无数据进展。","FileAsset 哈希回填无数据进展。"
-"FileAsset 旧数据无效，升级已停止。","FileAsset 旧数据无效，升级已停止。"
-"FileAsset 旧存储身份无效，升级已停止。","FileAsset 旧存储身份无效，升级已停止。"
-"FileAsset 旧数据存在重复存储对象身份，升级已停止。","FileAsset 旧数据存在重复存储对象身份，升级已停止。"
-"FileAsset 存储身份哈希回填校验失败。","FileAsset 存储身份哈希回填校验失败。"
-"FileAsset 旧数据超过安全升级上限。","FileAsset 旧数据超过安全升级上限。"
-"FileAsset 旧数据预检无数据进展。","FileAsset 旧数据预检无数据进展。"
-无法读取旧媒体文件：%{1},"Unable to read the legacy media file: %{1}"
-无法计算旧媒体文件校验值：%{1},"Unable to calculate the legacy media file checksum: %{1}"
-旧媒体文件校验连续无数据进展：%{1},"Legacy media file verification made no progress: %{1}"
-"FileManager MediaReference Observer 只接受 v1 契约","FileManager MediaReference Observer 只接受 v1 契约"
-媒体引用身份,媒体引用身份
+FileAsset 哈希回填读取到无效数据。,FileAsset hash backfill read invalid data.
+FileAsset 哈希回填无数据进展。,FileAsset hash backfilling is showing no progress/data.
+FileAsset 旧数据无效，升级已停止。,File asset data is invalid; the upgrade has been stopped.
+FileAsset 旧存储身份无效，升级已停止。,FileAsset: The old storage identity is invalid; the upgrade has been stopped.
+FileAsset 旧数据存在重复存储对象身份，升级已停止。,"The old data for FileAssets contains duplicate storage object IDs, and the upgrade has been stopped."
+FileAsset 存储身份哈希回填校验失败。,FileAsset storage: Identity hash backfill verification failed.
+FileAsset 旧数据超过安全升级上限。,FileAsset: Old data exceeds the security upgrade limit.
+FileAsset 旧数据预检无数据进展。,File Asset: No progress on the preliminary data check.
+无法读取旧媒体文件：%{1},Unable to read the legacy media file: %{1}
+无法计算旧媒体文件校验值：%{1},Unable to calculate the legacy media file checksum: %{1}
+旧媒体文件校验连续无数据进展：%{1},Legacy media file verification made no progress: %{1}
+FileManager MediaReference Observer 只接受 v1 契约,FileManager MediaReference Observer only accepts v1 contract
+媒体引用身份,Media ref identity
 link,link
-绑定/卸载媒体引用与按范围清理,绑定/卸载媒体引用与按范围清理
-"WLS 文件管理器","WLS file manager"
-"WLS 文件管理器源码回收：%{1}","WLS File Manager source trash: %{1}"
-"WLS source archive: %{1}","WLS source archive: %{1}"
-"WLS source directory archive: %{1}","WLS source directory archive: %{1}"
-"WLS source selection archive: %{1}","WLS source selection archive: %{1}"
-文件不可读取。,"The file is not readable."
-文件超过下载大小限制。,"The file exceeds the download size limit."
-"WLS 文件管理器压缩：%{1}","WLS File Manager compression: %{1}"
-"WLS 文件管理器回收：%{1}","WLS File Manager trash: %{1}"
-项目根目录,"Project Root"
-"当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。","The current Weline project root. Future file listing, uploads, and deletes must be constrained by path allowlists."
-"Panel Instance Root","Panel Instance Root"
-"Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately.","Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately."
-"Current Weline project root; directory browsing is restricted to approved root cards.","Current Weline project root; directory browsing is restricted to approved root cards."
-"Child Project var","Child Project var"
+绑定/卸载媒体引用与按范围清理,Bind/unbind media refs and clean by scope
+WLS 文件管理器,WLS file manager
+WLS 文件管理器源码回收：%{1},WLS File Manager source trash: %{1}
+WLS source archive: %{1},WLS source archive: %{1}
+WLS source directory archive: %{1},WLS source directory archive: %{1}
+WLS source selection archive: %{1},WLS source selection archive: %{1}
+文件不可读取。,The file is not readable.
+文件超过下载大小限制。,The file exceeds the download size limit.
+WLS 文件管理器压缩：%{1},WLS File Manager compression: %{1}
+WLS 文件管理器回收：%{1},WLS File Manager trash: %{1}
+项目根目录,Project Root
+当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。,"The current Weline project root. Future file listing, uploads, and deletes must be constrained by path allowlists."
+Panel Instance Root,Panel Instance Root
+Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately.,Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately.
+Current Weline project root; directory browsing is restricted to approved root cards.,Current Weline project root; directory browsing is restricted to approved root cards.
+Child Project var,Child Project var
 "Child project runtime files; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","Child project runtime files; controlled writes require ACL, confirmation, extension checks, and operation audit logs."
-"Child Project pub","Child Project pub"
+Child Project pub,Child Project pub
 "Child project public assets root; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","Child project public assets root; controlled writes require ACL, confirmation, extension checks, and operation audit logs."
-模块目录,"Module Directory"
+模块目录,Module Directory
 框架模块源码目录，仅作为只读路径上下文展示。,"Framework module source directory, shown only as read-only path context."
-运行时目录,"Runtime Directory"
+运行时目录,Runtime Directory
 缓存、日志、队列和临时运行数据所在目录。,"Directory for cache, logs, queues, and temporary runtime data."
-公开目录,"Public Directory"
-静态资源和公开媒体入口目录。,"Entry directory for static assets and public media."
+公开目录,Public Directory
+静态资源和公开媒体入口目录。,Entry directory for static assets and public media.
 可访问,Accessible
-未找到,"Not found"
-受控写入根目录,"Controlled Write Root"
-只读根目录,"Read-only Root"
-没有可浏览的根目录。,"No browsable root directory is available."
+未找到,Not found
+受控写入根目录,Controlled Write Root
+只读根目录,Read-only Root
+没有可浏览的根目录。,No browsable root directory is available.
 所选路径不在允许的根目录内，已回到根目录。,"The selected path is outside the allowed root directories, so the browser returned to the root."
-当前目录不可读取。,"The current directory is not readable."
-当前目录读取失败。,"The current directory could not be read."
-此文件类型暂不支持预览。,"This file type cannot be previewed yet."
-此文件看起来是二进制内容，暂不支持预览。,"This file appears to be binary content and cannot be previewed yet."
-预览内容已截断，不能直接编辑。,"The preview content is truncated and cannot be edited directly."
-目标路径不在允许的根目录内。,"The target path is outside the allowed root."
-目标文件不可写。,"The target file is not writable."
-文件扩展名不在源码编辑白名单内。,"The file extension is not in the source edit allowlist."
-文件路径无效或不在允许的根目录内。,"The file path is invalid or outside the allowed root directories."
-没有可写入的根目录。,"No writable root directory is available."
-所选根目录当前为只读。,"The selected root is currently read-only."
-写入目录无效或不在允许的根目录内。,"The write directory is invalid or outside the allowed root."
-当前目录不可写。,"The current directory is not writable."
-源码编辑策略未允许当前根目录。,"The source edit policy does not allow the current root."
-源码文件名无效或扩展名不在允许列表内。,"The source file name is invalid or its extension is not allowed."
-源码编辑路径被策略保护。,"The source edit path is protected by policy."
-源码改名需要提供不同的新名称。,"Source rename requires a different new name."
-源码编辑只允许修改已存在文件。,"Source editing can only modify existing files."
-目标源码文件已存在。,"The target source file already exists."
-"源码回收仅允许小于 128 KB 的单个源码文件。","Source trash only allows one source file smaller than 128 KB."
-"Source policy does not allow the selected root.","Source policy does not allow the selected root."
-"Source file name or extension is not allowed.","Source file name or extension is not allowed."
-"Source directory is invalid or outside the selected root.","Source directory is invalid or outside the selected root."
-"Source path is protected by policy.","Source path is protected by policy."
-"Source archive requires an existing readable file.","Source archive requires an existing readable file."
-"Source archive only allows one source file smaller than 128 KB.","Source archive only allows one source file smaller than 128 KB."
-"Source directory name is invalid.","Source directory name is invalid."
-"Source archive requires an existing readable directory.","Source archive requires an existing readable directory."
-"Source selection is invalid.","Source selection is invalid."
-"Source selection requires existing readable entries.","Source selection requires existing readable entries."
-"Source archive only allows source files smaller than 128 KB.","Source archive only allows source files smaller than 128 KB."
-"文本内容超过 128 KB 或包含二进制空字节。","Text content exceeds 128 KB or contains binary null bytes."
-"No writable root is available.","No writable root is available."
-"Selected root is read-only.","Selected root is read-only."
-"File path is invalid or outside the selected root.","File path is invalid or outside the selected root."
-"Target parent directory is not writable.","Target parent directory is not writable."
-"File uploaded.","File uploaded."
-"Entry renamed.","Entry renamed."
-"Entry deleted.","Entry deleted."
-"Directory tree deleted.","Directory tree deleted."
-"Archive created.","Archive created."
-"Large-file compression queue created.","Large-file compression queue created."
-"Recoverable trash queue created.","Recoverable trash queue created."
-"Trash entry restored.","Trash entry restored."
-回收条目已永久清理。,"Trash entry permanently purged."
-路径策略已保存。,"Path policy saved."
-路径策略已恢复默认继承。,"Path policy reset to default inheritance."
-目录已创建。,"Directory created."
-文本文件已保存。,"Text file saved."
-源码文件已保存。,"Source file saved."
-源码文件已创建。,"Source file created."
-源码文件已重命名。,"Source file renamed."
-源码文件已移入可恢复回收站。,"Source file moved to recoverable trash."
-"Source archive queue created.","Source archive queue created."
-"Source directory archive queue created.","Source directory archive queue created."
-"Source selection archive queue created.","Source selection archive queue created."
-"Upload file","Upload file"
-"Rename entry","Rename entry"
-"Delete entry","Delete entry"
-"Delete directory tree","Delete directory tree"
-"Compress entry","Compress entry"
-"Queued compression","Queued compression"
-"Queued trash move","Queued trash move"
-"Restore trash entry","Restore trash entry"
-"Purge trash entry","Purge trash entry"
-"Save path policy","Save path policy"
-"Reset path policy","Reset path policy"
-创建目录,"Create Directory"
-保存文本,"Save Text"
-保存源码,"Save source"
-创建源码文件,"Create source file"
-重命名源码文件,"Rename source file"
-回收源码文件,"Trash source file"
-队列回收源码文件,"Queue source trash file"
-"Queued source archive","Queued source archive"
-"Queued source directory archive","Queued source directory archive"
-"Queued source selection archive","Queued source selection archive"
+当前目录不可读取。,The current directory is not readable.
+当前目录读取失败。,The current directory could not be read.
+此文件类型暂不支持预览。,This file type cannot be previewed yet.
+此文件看起来是二进制内容，暂不支持预览。,This file appears to be binary content and cannot be previewed yet.
+预览内容已截断，不能直接编辑。,The preview content is truncated and cannot be edited directly.
+目标路径不在允许的根目录内。,The target path is outside the allowed root.
+目标文件不可写。,The target file is not writable.
+文件扩展名不在源码编辑白名单内。,The file extension is not in the source edit allowlist.
+文件路径无效或不在允许的根目录内。,The file path is invalid or outside the allowed root directories.
+没有可写入的根目录。,No writable root directory is available.
+所选根目录当前为只读。,The selected root is currently read-only.
+写入目录无效或不在允许的根目录内。,The write directory is invalid or outside the allowed root.
+当前目录不可写。,The current directory is not writable.
+源码编辑策略未允许当前根目录。,The source edit policy does not allow the current root.
+源码文件名无效或扩展名不在允许列表内。,The source file name is invalid or its extension is not allowed.
+源码编辑路径被策略保护。,The source edit path is protected by policy.
+源码改名需要提供不同的新名称。,Source rename requires a different new name.
+源码编辑只允许修改已存在文件。,Source editing can only modify existing files.
+目标源码文件已存在。,The target source file already exists.
+源码回收仅允许小于 128 KB 的单个源码文件。,Source trash only allows one source file smaller than 128 KB.
+Source policy does not allow the selected root.,Source policy does not allow the selected root.
+Source file name or extension is not allowed.,Source file name or extension is not allowed.
+Source directory is invalid or outside the selected root.,Source directory is invalid or outside the selected root.
+Source path is protected by policy.,Source path is protected by policy.
+Source archive requires an existing readable file.,Source archive requires an existing readable file.
+Source archive only allows one source file smaller than 128 KB.,Source archive only allows one source file smaller than 128 KB.
+Source directory name is invalid.,Source directory name is invalid.
+Source archive requires an existing readable directory.,Source archive requires an existing readable directory.
+Source selection is invalid.,Source selection is invalid.
+Source selection requires existing readable entries.,Source selection requires existing readable entries.
+Source archive only allows source files smaller than 128 KB.,Source archive only allows source files smaller than 128 KB.
+文本内容超过 128 KB 或包含二进制空字节。,Text content exceeds 128 KB or contains binary null bytes.
+No writable root is available.,No writable root is available.
+Selected root is read-only.,Selected root is read-only.
+File path is invalid or outside the selected root.,File path is invalid or outside the selected root.
+Target parent directory is not writable.,Target parent directory is not writable.
+File uploaded.,File uploaded.
+Entry renamed.,Entry renamed.
+Entry deleted.,Entry deleted.
+Directory tree deleted.,Directory tree deleted.
+Archive created.,Archive created.
+Large-file compression queue created.,Large-file compression queue created.
+Recoverable trash queue created.,Recoverable trash queue created.
+Trash entry restored.,Trash entry restored.
+回收条目已永久清理。,Trash entry permanently purged.
+路径策略已保存。,Path policy saved.
+路径策略已恢复默认继承。,Path policy reset to default inheritance.
+目录已创建。,Directory created.
+文本文件已保存。,Text file saved.
+源码文件已保存。,Source file saved.
+源码文件已创建。,Source file created.
+源码文件已重命名。,Source file renamed.
+源码文件已移入可恢复回收站。,Source file moved to recoverable trash.
+Source archive queue created.,Source archive queue created.
+Source directory archive queue created.,Source directory archive queue created.
+Source selection archive queue created.,Source selection archive queue created.
+Upload file,Upload file
+Rename entry,Rename entry
+Delete entry,Delete entry
+Delete directory tree,Delete directory tree
+Compress entry,Compress entry
+Queued compression,Queued compression
+Queued trash move,Queued trash move
+Restore trash entry,Restore trash entry
+Purge trash entry,Purge trash entry
+Save path policy,Save path policy
+Reset path policy,Reset path policy
+创建目录,Create Directory
+保存文本,Save Text
+保存源码,Save source
+创建源码文件,Create source file
+重命名源码文件,Rename source file
+回收源码文件,Trash source file
+队列回收源码文件,Queue source trash file
+Queued source archive,Queued source archive
+Queued source directory archive,Queued source directory archive
+Queued source selection archive,Queued source selection archive
 成功,Success
 已拒绝,Denied
 失败,Failed
-"Upload file name or extension is not allowed.","Upload file name or extension is not allowed."
-"No valid uploaded file was detected.","No valid uploaded file was detected."
-"Uploaded file must be larger than 0 B and no larger than 5 MB.","Uploaded file must be larger than 0 B and no larger than 5 MB."
-"Target file or directory does not exist.","Target file or directory does not exist."
-"Uploaded file could not be saved.","Uploaded file could not be saved."
-"Rename operation failed.","Rename operation failed."
-"Deleting a root directory is not allowed.","Deleting a root directory is not allowed."
-"This directory is not empty. Enable recursive delete and type DELETE_TREE to delete it.","This directory is not empty. Enable recursive delete and type DELETE_TREE to delete it."
-"Recursive directory delete requires enabling recursive delete and typing DELETE_TREE.","Recursive directory delete requires enabling recursive delete and typing DELETE_TREE."
-"Directory tree contains too many entries for recursive delete.","Directory tree contains too many entries for recursive delete."
-"Directory tree exceeds the 10 MB recursive delete limit.","Directory tree exceeds the 10 MB recursive delete limit."
-"Symbolic links cannot be deleted from the panel.","Symbolic links cannot be deleted from the panel."
-"Delete operation failed.","Delete operation failed."
-"Compressing a root directory is not allowed.","Compressing a root directory is not allowed."
-"Archive name must be a safe .zip file name.","Archive name must be a safe .zip file name."
-"Archive target already exists.","Archive target already exists."
-"Large-file compression queue could not be created.","Large-file compression queue could not be created."
-"A pending or running queue already targets this archive.","A pending or running queue already targets this archive."
-"Large-file queue status could not be loaded.","Large-file queue status could not be loaded."
-"A pending or running queue already targets this trash move.","A pending or running queue already targets this trash move."
-"Root entries and existing trash entries cannot be queued for trash.","Root entries and existing trash entries cannot be queued for trash."
-"Symbolic links cannot be moved to trash from the panel.","Symbolic links cannot be moved to trash from the panel."
-"Trash source contains too many entries for this stage.","Trash source contains too many entries for this stage."
-"Trash source exceeds the 512 MB queue limit.","Trash source exceeds the 512 MB queue limit."
-"Trash directory could not be created.","Trash directory could not be created."
-"Trash directory is not writable.","Trash directory is not writable."
-"Trash target already exists.","Trash target already exists."
-"Trash move failed.","Trash move failed."
-"Trash source could not be scanned.","Trash source could not be scanned."
-"Trash entry does not exist.","Trash entry does not exist."
-"Trash entry is outside the recoverable trash directory.","Trash entry is outside the recoverable trash directory."
-"Trash queue record is invalid.","Trash queue record is invalid."
-"Trash queue is not complete yet.","Trash queue is not complete yet."
-"Restore target already exists.","Restore target already exists."
-"Trash entry could not be restored.","Trash entry could not be restored."
-"永久清理前请勾选确认并输入 PURGE_TRASH。","Select confirmation and type PURGE_TRASH before permanent purge."
-"不能永久清理整个 .wls-trash 根目录。","The entire .wls-trash root cannot be permanently purged."
-回收条目永久清理失败。,"Trash entry permanent purge failed."
+Upload file name or extension is not allowed.,Upload file name or extension is not allowed.
+No valid uploaded file was detected.,No valid uploaded file was detected.
+Uploaded file must be larger than 0 B and no larger than 5 MB.,Uploaded file must be larger than 0 B and no larger than 5 MB.
+Target file or directory does not exist.,Target file or directory does not exist.
+Uploaded file could not be saved.,Uploaded file could not be saved.
+Rename operation failed.,Rename operation failed.
+Deleting a root directory is not allowed.,Deleting a root directory is not allowed.
+This directory is not empty. Enable recursive delete and type DELETE_TREE to delete it.,This directory is not empty. Enable recursive delete and type DELETE_TREE to delete it.
+Recursive directory delete requires enabling recursive delete and typing DELETE_TREE.,Recursive directory delete requires enabling recursive delete and typing DELETE_TREE.
+Directory tree contains too many entries for recursive delete.,Directory tree contains too many entries for recursive delete.
+Directory tree exceeds the 10 MB recursive delete limit.,Directory tree exceeds the 10 MB recursive delete limit.
+Symbolic links cannot be deleted from the panel.,Symbolic links cannot be deleted from the panel.
+Delete operation failed.,Delete operation failed.
+Compressing a root directory is not allowed.,Compressing a root directory is not allowed.
+Archive name must be a safe .zip file name.,Archive name must be a safe .zip file name.
+Archive target already exists.,Archive target already exists.
+Large-file compression queue could not be created.,Large-file compression queue could not be created.
+A pending or running queue already targets this archive.,A pending or running queue already targets this archive.
+Large-file queue status could not be loaded.,Large-file queue status could not be loaded.
+A pending or running queue already targets this trash move.,A pending or running queue already targets this trash move.
+Root entries and existing trash entries cannot be queued for trash.,Root entries and existing trash entries cannot be queued for trash.
+Symbolic links cannot be moved to trash from the panel.,Symbolic links cannot be moved to trash from the panel.
+Trash source contains too many entries for this stage.,Trash source contains too many entries for this stage.
+Trash source exceeds the 512 MB queue limit.,Trash source exceeds the 512 MB queue limit.
+Trash directory could not be created.,Trash directory could not be created.
+Trash directory is not writable.,Trash directory is not writable.
+Trash target already exists.,Trash target already exists.
+Trash move failed.,Trash move failed.
+Trash source could not be scanned.,Trash source could not be scanned.
+Trash entry does not exist.,Trash entry does not exist.
+Trash entry is outside the recoverable trash directory.,Trash entry is outside the recoverable trash directory.
+Trash queue record is invalid.,Trash queue record is invalid.
+Trash queue is not complete yet.,Trash queue is not complete yet.
+Restore target already exists.,Restore target already exists.
+Trash entry could not be restored.,Trash entry could not be restored.
+永久清理前请勾选确认并输入 PURGE_TRASH。,Select confirmation and type PURGE_TRASH before permanent purge.
+不能永久清理整个 .wls-trash 根目录。,The entire .wls-trash root cannot be permanently purged.
+回收条目永久清理失败。,Trash entry permanent purge failed.
 回收条目已清理，但队列审计状态更新失败。,"Trash entry was purged, but queue audit state could not be updated."
-源码回收队列已创建。,"Source trash queue created."
-已有待处理或运行中的源码回收队列。,"A pending or running source trash queue already targets this file."
-"PHP ZipArchive extension is not available.","PHP ZipArchive extension is not available."
-"Target file or directory is not readable.","Target file or directory is not readable."
-"Symbolic links cannot be compressed from the panel.","Symbolic links cannot be compressed from the panel."
-"Archive source contains too many entries for this stage.","Archive source contains too many entries for this stage."
-"Archive source exceeds the 10 MB compression limit.","Archive source exceeds the 10 MB compression limit."
-"Archive could not be created.","Archive could not be created."
-"保存路径策略前请勾选确认并输入 SAVE_PATH_POLICY。","Select confirmation and type SAVE_PATH_POLICY before saving the path policy."
-路径策略包含不支持的写入根目录。,"The path policy contains an unsupported write root."
-路径策略包含不支持的源码编辑根目录。,"The path policy contains an unsupported source edit root."
-启用源码编辑时至少选择一个源码根目录。,"Select at least one source root when enabling source editing."
-路径策略写入失败。,"The path policy could not be written."
-"恢复默认路径策略前请勾选确认并输入 RESET_PATH_POLICY。","Select confirmation and type RESET_PATH_POLICY before resetting the path policy."
-路径策略恢复默认失败。,"The path policy could not be reset."
-请求方式错误。,"Invalid request method."
-请先完成写入确认。,"Complete the write confirmation first."
+源码回收队列已创建。,Source trash queue created.
+已有待处理或运行中的源码回收队列。,A pending or running source trash queue already targets this file.
+PHP ZipArchive extension is not available.,PHP ZipArchive extension is not available.
+Target file or directory is not readable.,Target file or directory is not readable.
+Symbolic links cannot be compressed from the panel.,Symbolic links cannot be compressed from the panel.
+Archive source contains too many entries for this stage.,Archive source contains too many entries for this stage.
+Archive source exceeds the 10 MB compression limit.,Archive source exceeds the 10 MB compression limit.
+Archive could not be created.,Archive could not be created.
+保存路径策略前请勾选确认并输入 SAVE_PATH_POLICY。,Select confirmation and type SAVE_PATH_POLICY before saving the path policy.
+路径策略包含不支持的写入根目录。,The path policy contains an unsupported write root.
+路径策略包含不支持的源码编辑根目录。,The path policy contains an unsupported source edit root.
+启用源码编辑时至少选择一个源码根目录。,Select at least one source root when enabling source editing.
+路径策略写入失败。,The path policy could not be written.
+恢复默认路径策略前请勾选确认并输入 RESET_PATH_POLICY。,Select confirmation and type RESET_PATH_POLICY before resetting the path policy.
+路径策略恢复默认失败。,The path policy could not be reset.
+请求方式错误。,Invalid request method.
+请先完成写入确认。,Complete the write confirmation first.
 名称无效。仅允许字母、数字、点、下划线和短横线，且不能以点开头。,"Invalid name. Only letters, numbers, dots, underscores, and hyphens are allowed, and names cannot start with a dot."
-文本文件名无效或扩展名不在允许列表内。,"The text file name is invalid or its extension is not allowed."
-目标已存在。,"The target already exists."
-目标文件已存在，请勾选覆盖确认。,"The target file already exists. Check overwrite confirmation first."
-文件系统写入失败。,"Filesystem write failed."
-"A pending or running queue already targets this source directory archive.","A pending or running queue already targets this source directory archive."
-"A pending or running queue already targets this source selection archive.","A pending or running queue already targets this source selection archive."
-"Source selection archive accepts up to 20 entries.","Source selection archive accepts up to 20 entries."
-"Source directory archive exceeds the 10 MB source queue limit.","Source directory archive exceeds the 10 MB source queue limit."
-"Queued source trash move","Queued source trash move"
-"Queue operation","Queue operation"
+文本文件名无效或扩展名不在允许列表内。,The text file name is invalid or its extension is not allowed.
+目标已存在。,The target already exists.
+目标文件已存在，请勾选覆盖确认。,The target file already exists. Check overwrite confirmation first.
+文件系统写入失败。,Filesystem write failed.
+A pending or running queue already targets this source directory archive.,A pending or running queue already targets this source directory archive.
+A pending or running queue already targets this source selection archive.,A pending or running queue already targets this source selection archive.
+Source selection archive accepts up to 20 entries.,Source selection archive accepts up to 20 entries.
+Source directory archive exceeds the 10 MB source queue limit.,Source directory archive exceeds the 10 MB source queue limit.
+Queued source trash move,Queued source trash move
+Queue operation,Queue operation
 Pending,Pending
 Running,Running
 Done,Done
 Error,Error
 Stopped,Stopped
 可恢复回收项,Restorable
-等待队列完成,"Waiting for queue"
-目标已存在,"Target exists"
-已永久清理,"Permanently purged"
-回收项不可用,"Trash entry unavailable"
-队列失败,"Queue failed"
+等待队列完成,Waiting for queue
+目标已存在,Target exists
+已永久清理,Permanently purged
+回收项不可用,Trash entry unavailable
+队列失败,Queue failed
 "Project context is resolved; guarded writes can target child project var/pub when those directories exist, are writable, and are enabled by the path policy.","Project context is resolved; guarded writes can target child project var/pub when those directories exist, are writable, and are enabled by the path policy."
-"Local context only; guarded writes target the current panel instance var/pub roots and can be narrowed by the path policy.","Local context only; guarded writes target the current panel instance var/pub roots and can be narrowed by the path policy."
-路径白名单,"Path Allowlist"
-策略受控,"Policy controlled"
-文件浏览,"File Browsing"
+Local context only; guarded writes target the current panel instance var/pub roots and can be narrowed by the path policy.,Local context only; guarded writes target the current panel instance var/pub roots and can be narrowed by the path policy.
+路径白名单,Path Allowlist
+策略受控,Policy controlled
+文件浏览,File Browsing
 已启用,Enabled
-"目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。","Directory listing, text preview, and restricted downloads are available; downloads remain capped at 20 MB."
-"Change Operations","Change Operations"
+目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。,"Directory listing, text preview, and restricted downloads are available; downloads remain capped at 20 MB."
+Change Operations,Change Operations
 Guarded,Guarded
 "Directory creation, small text saves, guarded uploads, same-folder rename, file, empty-directory, bounded recursive directory delete, bounded ZIP compression, and queued large ZIP compression require ACL, confirmation, and operation logs.","Directory creation, small text saves, guarded uploads, same-folder rename, file, empty-directory, bounded recursive directory delete, bounded ZIP compression, and queued large ZIP compression require ACL, confirmation, and operation logs."
 settings,settings
-"WLS 面板文件管理器入口","WLS Panel File Manager Entry"
-"查看 WLS 文件管理器","View WLS File Manager"
+WLS 面板文件管理器入口,WLS Panel File Manager Entry
+查看 WLS 文件管理器,View WLS File Manager
 folder,folder
-"查看 WLS 面板文件管理器","View WLS Panel File Manager"
-"View WLS File Roots","View WLS File Roots"
-"View WLS Panel file roots","View WLS Panel file roots"
-"View WLS File Browser","View WLS File Browser"
+查看 WLS 面板文件管理器,View WLS Panel File Manager
+View WLS File Roots,View WLS File Roots
+View WLS Panel file roots,View WLS Panel file roots
+View WLS File Browser,View WLS File Browser
 tree,tree
-"View WLS Panel file browser","View WLS Panel file browser"
-"View WLS File Policy","View WLS File Policy"
+View WLS Panel file browser,View WLS Panel file browser
+View WLS File Policy,View WLS File Policy
 edit,edit
-"View WLS Panel file path policy","View WLS Panel file path policy"
-"View WLS File Write Operations","View WLS File Write Operations"
-"View WLS Panel file write operations","View WLS Panel file write operations"
-"View WLS File Queue","View WLS File Queue"
+View WLS Panel file path policy,View WLS Panel file path policy
+View WLS File Write Operations,View WLS File Write Operations
+View WLS Panel file write operations,View WLS Panel file write operations
+View WLS File Queue,View WLS File Queue
 clock,clock
-"View WLS Panel file queue operations","View WLS Panel file queue operations"
-"View WLS File Operation Log","View WLS File Operation Log"
-"View WLS Panel file operation log","View WLS Panel file operation log"
-"View WLS File Capabilities","View WLS File Capabilities"
+View WLS Panel file queue operations,View WLS Panel file queue operations
+View WLS File Operation Log,View WLS File Operation Log
+View WLS Panel file operation log,View WLS Panel file operation log
+View WLS File Capabilities,View WLS File Capabilities
 puzzle,puzzle
-"View WLS Panel file capabilities","View WLS Panel file capabilities"
-"受控写入 WLS 文件","Controlled writing to WLS files"
-创建目录和保存小文本文件,"Create directories and save small text files"
+View WLS Panel file capabilities,View WLS Panel file capabilities
+受控写入 WLS 文件,Controlled writing to WLS files
+创建目录和保存小文本文件,Create directories and save small text files
 plus,plus
-创建受控源码文件,"Create controlled source code files"
-重命名受控源码文件,"Rename controlled source files"
-"受控回收 WLS 源码文件","Controlled recycling of WLS source code files"
+创建受控源码文件,Create controlled source code files
+重命名受控源码文件,Rename controlled source files
+受控回收 WLS 源码文件,Controlled recycling of WLS source code files
 trash,trash
-将受控源码文件移动到可恢复回收站,"Move controlled source files to the recoverable recycle bin"
-"队列回收 WLS 源码文件","Queue recycling WLS source code file"
-将受控源码文件通过队列移动到可恢复回收站,"Move controlled source files through the queue to the recoverable recycle bin"
-"Queue WLS source file archive","Queue WLS source file archive"
+将受控源码文件移动到可恢复回收站,Move controlled source files to the recoverable recycle bin
+队列回收 WLS 源码文件,Queue recycling WLS source code file
+将受控源码文件通过队列移动到可恢复回收站,Move controlled source files through the queue to the recoverable recycle bin
+Queue WLS source file archive,Queue WLS source file archive
 arrow-down,arrow-down
-"Archive one controlled source file through queue","Archive one controlled source file through queue"
-"Queue WLS source directory archive","Queue WLS source directory archive"
-"Archive one controlled source directory through queue","Archive one controlled source directory through queue"
-"Queue WLS source selection archive","Queue WLS source selection archive"
+Archive one controlled source file through queue,Archive one controlled source file through queue
+Queue WLS source directory archive,Queue WLS source directory archive
+Archive one controlled source directory through queue,Archive one controlled source directory through queue
+Queue WLS source selection archive,Queue WLS source selection archive
 check,check
-"Archive selected controlled source entries through queue","Archive selected controlled source entries through queue"
-"下载 WLS 文件","Download WLS file"
+Archive selected controlled source entries through queue,Archive selected controlled source entries through queue
+下载 WLS 文件,Download WLS file
 download,download
-"下载 WLS 面板文件管理器文件","Download WLS Panel File Manager File"
-"Controlled WLS file write","Controlled WLS file write"
+下载 WLS 面板文件管理器文件,Download WLS Panel File Manager File
+Controlled WLS file write,Controlled WLS file write
 upload,upload
-"Upload controlled WLS files","Upload controlled WLS files"
+Upload controlled WLS files,Upload controlled WLS files
 box,box
-"Rename controlled WLS files","Rename controlled WLS files"
-"Delete controlled WLS files","Delete controlled WLS files"
-"Create guarded WLS ZIP archives","Create guarded WLS ZIP archives"
-"Queue WLS large ZIP archive","Queue WLS large ZIP archive"
-"Create queued WLS file archives","Create queued WLS file archives"
-"Queue recoverable WLS trash move","Queue recoverable WLS trash move"
-"Move controlled WLS files to recoverable trash through queue","Move controlled WLS files to recoverable trash through queue"
-"Restore WLS trash queue entry","Restore WLS trash queue entry"
+Rename controlled WLS files,Rename controlled WLS files
+Delete controlled WLS files,Delete controlled WLS files
+Create guarded WLS ZIP archives,Create guarded WLS ZIP archives
+Queue WLS large ZIP archive,Queue WLS large ZIP archive
+Create queued WLS file archives,Create queued WLS file archives
+Queue recoverable WLS trash move,Queue recoverable WLS trash move
+Move controlled WLS files to recoverable trash through queue,Move controlled WLS files to recoverable trash through queue
+Restore WLS trash queue entry,Restore WLS trash queue entry
 history,history
-"Restore a recoverable WLS file queue entry","Restore a recoverable WLS file queue entry"
-"Purge WLS trash queue entry","Purge WLS trash queue entry"
-"Permanently purge a queue-created WLS trash entry","Permanently purge a queue-created WLS trash entry"
-"保存 WLS 文件路径策略","Save WLS file path policy"
-"保存 WLS 面板文件管理器的项目级路径策略","Save project-level path policy for WLS panel file manager"
-"恢复 WLS 文件路径默认策略","Restore WLS file path default policy"
+Restore a recoverable WLS file queue entry,Restore a recoverable WLS file queue entry
+Purge WLS trash queue entry,Purge WLS trash queue entry
+Permanently purge a queue-created WLS trash entry,Permanently purge a queue-created WLS trash entry
+保存 WLS 文件路径策略,Save WLS file path policy
+保存 WLS 面板文件管理器的项目级路径策略,Save project-level path policy for WLS panel file manager
+恢复 WLS 文件路径默认策略,Restore WLS file path default policy
 refresh,refresh
-"恢复 WLS 面板文件管理器的项目级路径默认继承策略","Restore project-level path default inheritance policy for WLS panel file manager"
-"当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。","No Weline file manager is currently available. Select weline_media in the backend file manager settings."
-文件资源引用数据无效。,"The file resource reference data is invalid."
-文件资源基础元数据无效。,"The file asset base metadata is invalid."
-文件资源可见性无效。,"File resource visibility is invalid."
-文件资源生命周期无效。,"The file asset lifecycle state is invalid."
-文件资源扩展元数据超过长度限制。,"The file asset extension metadata exceeds the length limit."
-"文件资源扩展元数据 JSON 无效。","The file asset extension metadata JSON is invalid."
-资源语言元数据无效。,"The file asset locale metadata is invalid."
-资源翻译状态无效。,"Resource translation status is invalid."
-资源翻译来源无效。,"Resource translation source is invalid."
-"审核通过的资源语言必须填写名称、默认 alt 和描述。","Reviewed asset locale metadata requires a name, default alt text, and description."
+恢复 WLS 面板文件管理器的项目级路径默认继承策略,Restore project-level path default inheritance policy for WLS panel file manager
+当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。,No Weline file manager is currently available. Select weline_media in the backend file manager settings.
+文件资源引用数据无效。,The file resource reference data is invalid.
+文件资源基础元数据无效。,The file asset base metadata is invalid.
+文件资源可见性无效。,File resource visibility is invalid.
+文件资源生命周期无效。,The file asset lifecycle state is invalid.
+文件资源扩展元数据超过长度限制。,The file asset extension metadata exceeds the length limit.
+文件资源扩展元数据 JSON 无效。,The file asset extension metadata JSON is invalid.
+资源语言元数据无效。,The file asset locale metadata is invalid.
+资源翻译状态无效。,Resource translation status is invalid.
+资源翻译来源无效。,Resource translation source is invalid.
+审核通过的资源语言必须填写名称、默认 alt 和描述。,"Reviewed asset locale metadata requires a name, default alt text, and description."
 预览,Preview
-暂无缩略图,"No thumbnail available"
+暂无缩略图,No thumbnail available
 关闭,closure
-"子项目 var/pub 受控写入","Subproject var/pub controlled writing"
-子项目路径待校验,"Subproject path needs to be verified"
-"当前实例 var/pub 受控写入","Current instance var/pub controlled writes"
-"All actions","All actions"
-"Create directory","Create directory"
-"Save text","Save text"
-"Save source","Save source"
-"Create source file","Create source file"
-"Rename source file","Rename source file"
-"Trash source file","Trash source file"
-"All results","All results"
+子项目 var/pub 受控写入,Subproject var/pub controlled writing
+子项目路径待校验,Subproject path needs to be verified
+当前实例 var/pub 受控写入,Current instance var/pub controlled writes
+All actions,All actions
+Create directory,Create directory
+Save text,Save text
+Save source,Save source
+Create source file,Create source file
+Rename source file,Rename source file
+Trash source file,Trash source file
+All results,All results
 Success,Success
 Denied,Denied
 Failed,Failed
-"All roots","All roots"
+All roots,All roots
 Policy,Policy
-"WLS 文件管理器导航","WLS File Manager Navigation"
-"WLS Panel Plugin","WLS Panel Plugin"
-文件管理器,"File Manager"
-"WLS 面板","WLS Panel"
+WLS 文件管理器导航,WLS File Manager Navigation
+WLS Panel Plugin,WLS Panel Plugin
+文件管理器,File Manager
+WLS 面板,WLS Panel
 路径,Paths
 浏览,Browse
 策略,Strategy
@@ -328,387 +328,387 @@ Policy,Policy
 队列,Queue
 日志,Logs
 能力,Capabilities
-插件商城,"Plugin Marketplace"
+插件商城,Plugin Marketplace
 深色,Dark
 浅色,Light
-切换明暗色,"Toggle color mode"
-"WLS 独立面板插件","WLS Standalone Panel Plugin"
-"当前版本提供目录浏览、文本预览、受限下载，以及 var/pub 根目录内的目录创建、小文本保存、受控上传、同目录重命名、删除、受限压缩和队列化大文件压缩。","This version provides directory browsing, text preview, limited downloads, and directory creation, small text saves, guarded uploads, same-folder rename, delete, bounded compression, and queued large-file compression inside var/pub roots."
-项目后台,"Project Admin"
-"返回 WLS","Back to WLS"
-项目上下文,"Project Context"
-"项目 ID","Project ID"
-当前项目,"Current Project"
+切换明暗色,Toggle color mode
+WLS 独立面板插件,WLS Standalone Panel Plugin
+当前版本提供目录浏览、文本预览、受限下载，以及 var/pub 根目录内的目录创建、小文本保存、受控上传、同目录重命名、删除、受限压缩和队列化大文件压缩。,"This version provides directory browsing, text preview, limited downloads, and directory creation, small text saves, guarded uploads, same-folder rename, delete, bounded compression, and queued large-file compression inside var/pub roots."
+项目后台,Project Admin
+返回 WLS,Back to WLS
+项目上下文,Project Context
+项目 ID,Project ID
+当前项目,Current Project
 域名,Domain
-未指定,"Not specified"
-项目类型,"Project Type"
+未指定,Not specified
+项目类型,Project Type
 默认,Default
-入口能力,"Entry Capability"
-路径策略,"path strategy"
-路径摘要,"Path Summary"
-暂无路径信息,"No path information"
-项目级写入根策略,"Project write-root policy"
-"保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。","Saving immediately affects every guarded write action on this page. Real project paths are resolved only on the server and are never returned through URLs or forms."
-已保存策略,"Saved policy"
-默认继承,"Default inheritance"
-"Path policy summary","Path policy summary"
-策略键,"Policy key"
-启用根,"Enabled roots"
-全部只读,"All read-only"
-源码编辑,"Source editing"
-默认关闭,"Off by default"
-更新时间,"Updated at"
-未保存,"Not saved"
-当前上下文没有可配置的受控写入根。,"The current context has no configurable guarded write roots."
-允许源码编辑策略,"Allow source edit policy"
-"仅允许编辑已存在且小于 128 KB 的源码文件；新建、同目录改名和单文件回收需使用独立 SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH 表单，不会开放上传、硬删除或队列操作。","Only existing source files smaller than 128 KB can be edited; new files, same-directory renames, and single-file trash moves must use the separate SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH forms, and upload, hard delete, and queue operations are not opened."
-源码扩展名,"Source extensions"
-当前上下文没有可配置的源码根。,"No configurable source roots are available for the current context."
-策略备注,"Policy note"
-"例如：仅允许子项目 var 写入，pub 由发布流程接管。","For example: allow only child project var writes; pub is handled by the deploy flow."
-备注只用于面板审计说明，不参与路径计算。,"Notes are only used for panel audit context and do not participate in path calculation."
-我确认立即更新此项目的文件写入根策略。,"I confirm this project's file write-root policy should be updated now."
-确认短语,"Confirmation Phrase"
-保存路径策略,"Save path policy"
-恢复默认继承,"Reset to default inheritance"
-删除当前项目或域名的已保存策略，让写入根重新按面板默认规则计算。,"Delete the saved policy for the current project or domain so write roots are calculated from panel defaults again."
-可恢复,"Reset available"
-无需恢复,"No reset needed"
-我确认删除当前项目或域名的已保存路径策略。,"I confirm the saved path policy for the current project or domain should be deleted."
-恢复确认短语,"Reset confirmation phrase"
-恢复默认策略,"Reset default policy"
-目录浏览,"Directory Browser"
-只读目录列表,"Read-only Directory List"
-目录浏览被限制在下列根目录内，越权路径会自动回到根目录。,"Directory browsing is limited to the roots below; unauthorized paths automatically return to the root."
-根目录,"Root Directory"
-当前目录,"Current Directory"
-返回上级,"Go Up"
-文件预览,"File Preview"
-未选择可预览文件。,"No previewable file selected."
-编辑此文本,"Edit this text"
-当前预览文件不能直接编辑：%{1},"The current preview file cannot be edited directly: %{1}"
-"预览内容已截断，仅显示前 64 KB。","Preview content is truncated. Only the first 64 KB is shown."
+入口能力,Entry Capability
+路径策略,path strategy
+路径摘要,Path Summary
+暂无路径信息,No path information
+项目级写入根策略,Project write-root policy
+保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。,Saving immediately affects every guarded write action on this page. Real project paths are resolved only on the server and are never returned through URLs or forms.
+已保存策略,Saved policy
+默认继承,Default inheritance
+Path policy summary,Path policy summary
+策略键,Policy key
+启用根,Enabled roots
+全部只读,All read-only
+源码编辑,Source editing
+默认关闭,Off by default
+更新时间,Updated at
+未保存,Not saved
+当前上下文没有可配置的受控写入根。,The current context has no configurable guarded write roots.
+允许源码编辑策略,Allow source edit policy
+仅允许编辑已存在且小于 128 KB 的源码文件；新建、同目录改名和单文件回收需使用独立 SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH 表单，不会开放上传、硬删除或队列操作。,"Only existing source files smaller than 128 KB can be edited; new files, same-directory renames, and single-file trash moves must use the separate SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH forms, and upload, hard delete, and queue operations are not opened."
+源码扩展名,Source extensions
+当前上下文没有可配置的源码根。,No configurable source roots are available for the current context.
+策略备注,Policy note
+例如：仅允许子项目 var 写入，pub 由发布流程接管。,For example: allow only child project var writes; pub is handled by the deploy flow.
+备注只用于面板审计说明，不参与路径计算。,Notes are only used for panel audit context and do not participate in path calculation.
+我确认立即更新此项目的文件写入根策略。,I confirm this project's file write-root policy should be updated now.
+确认短语,Confirmation Phrase
+保存路径策略,Save path policy
+恢复默认继承,Reset to default inheritance
+删除当前项目或域名的已保存策略，让写入根重新按面板默认规则计算。,Delete the saved policy for the current project or domain so write roots are calculated from panel defaults again.
+可恢复,Reset available
+无需恢复,No reset needed
+我确认删除当前项目或域名的已保存路径策略。,I confirm the saved path policy for the current project or domain should be deleted.
+恢复确认短语,Reset confirmation phrase
+恢复默认策略,Reset default policy
+目录浏览,Directory Browser
+只读目录列表,Read-only Directory List
+目录浏览被限制在下列根目录内，越权路径会自动回到根目录。,Directory browsing is limited to the roots below; unauthorized paths automatically return to the root.
+根目录,Root Directory
+当前目录,Current Directory
+返回上级,Go Up
+文件预览,File Preview
+未选择可预览文件。,No previewable file selected.
+编辑此文本,Edit this text
+当前预览文件不能直接编辑：%{1},The current preview file cannot be edited directly: %{1}
+预览内容已截断，仅显示前 64 KB。,Preview content is truncated. Only the first 64 KB is shown.
 名称,Name
 类型,Type
 大小,Size
-修改时间,"Modified Time"
+修改时间,Modified Time
 状态,Status
 操作,Actions
 文件夹,Folder
 文件,File
 可读,Readable
-不可读,"Not readable"
+不可读,Not readable
 下载,Download
-"已显示前 200 项，继续收窄目录查看剩余内容。","Showing the first 200 items. Narrow the directory to inspect the remaining content."
-此目录暂无可显示文件。,"This directory has no displayable files."
-受控写入,"controlled write"
-第一阶段写入能力,"First Write Slice"
-"Ordinary writes stay on var/pub roots. Source roots require source policy and dedicated source actions.","Ordinary writes stay on var/pub roots. Source roots require source policy and dedicated source actions."
-源码编辑可用,"Source editing available"
-当前根目录可写,"Current Root Writable"
-当前根目录只读,"Current Root Read-only"
-写入目录,"Write Directory"
-允许扩展名,"Allowed Extensions"
+已显示前 200 项，继续收窄目录查看剩余内容。,Showing the first 200 items. Narrow the directory to inspect the remaining content.
+此目录暂无可显示文件。,This directory has no displayable files.
+受控写入,controlled write
+第一阶段写入能力,First Write Slice
+Ordinary writes stay on var/pub roots. Source roots require source policy and dedicated source actions.,Ordinary writes stay on var/pub roots. Source roots require source policy and dedicated source actions.
+源码编辑可用,Source editing available
+当前根目录可写,Current Root Writable
+当前根目录只读,Current Root Read-only
+写入目录,Write Directory
+允许扩展名,Allowed Extensions
 非破坏性,Non-destructive
-目录名,"Directory Name"
+目录名,Directory Name
 仅允许字母、数字、点、下划线和短横线，且不能以点开头。,"Only letters, numbers, dots, underscores, and hyphens are allowed, and names cannot start with a dot."
-我确认在当前允许根目录内创建这个目录。,"I confirm this directory will be created inside the current allowed root."
-保存小文本,"Save Small Text"
-源码策略,"Source policy"
-"128 KB","128 KB"
-已载入预览文件：%{1},"Preview file loaded: %{1}"
-"保存源码前仍需要勾选确认并输入 SAVE_SOURCE。","Before saving source, confirm and type SAVE_SOURCE."
-"保存前仍需要勾选确认并输入 SAVE_TEXT。","Saving still requires selecting confirmation and typing SAVE_TEXT."
-文件名,"File Name"
-写入相对目录,"Write relative directory"
-文本内容,"Text Content"
+我确认在当前允许根目录内创建这个目录。,I confirm this directory will be created inside the current allowed root.
+保存小文本,Save Small Text
+源码策略,Source policy
+128 KB,128 KB
+已载入预览文件：%{1},Preview file loaded: %{1}
+保存源码前仍需要勾选确认并输入 SAVE_SOURCE。,"Before saving source, confirm and type SAVE_SOURCE."
+保存前仍需要勾选确认并输入 SAVE_TEXT。,Saving still requires selecting confirmation and typing SAVE_TEXT.
+文件名,File Name
+写入相对目录,Write relative directory
+文本内容,Text Content
 未修改,Unchanged
 已修改,Modified
-"超过 128 KB","Over 128 KB"
+超过 128 KB,Over 128 KB
 光标,Cursor
-文本编辑器工具,"Text editor tools"
-自动换行,"Soft Wrap"
-字号,"Font Size"
-编辑器字号,"Editor Font Size"
-还原预览,"Revert Preview"
+文本编辑器工具,Text editor tools
+自动换行,Soft Wrap
+字号,Font Size
+编辑器字号,Editor Font Size
+还原预览,Revert Preview
 行,lines
 字符,chars
 字节,bytes
-"源码编辑仅允许保存已存在的 php、phtml、js、ts、vue、css、scss、html、xml、json、md 等小源码文件。","Source editing only saves existing small source files such as php, phtml, js, ts, vue, css, scss, html, xml, json, and md."
-"只允许保存 txt、md、json、csv、xml、yaml、yml、ini、conf、log、css 等文本文件。","Only txt, md, json, csv, xml, yaml, yml, ini, conf, log, css and similar text files are allowed."
-如果文件已存在，允许覆盖。,"Allow overwrite if the file already exists."
-我确认这个写入目标位于当前允许根目录内。,"I confirm this write target is inside the current allowed root."
-"5 MB","5 MB"
+源码编辑仅允许保存已存在的 php、phtml、js、ts、vue、css、scss、html、xml、json、md 等小源码文件。,"Source editing only saves existing small source files such as php, phtml, js, ts, vue, css, scss, html, xml, json, and md."
+只允许保存 txt、md、json、csv、xml、yaml、yml、ini、conf、log、css 等文本文件。,"Only txt, md, json, csv, xml, yaml, yml, ini, conf, log, css and similar text files are allowed."
+如果文件已存在，允许覆盖。,Allow overwrite if the file already exists.
+我确认这个写入目标位于当前允许根目录内。,I confirm this write target is inside the current allowed root.
+5 MB,5 MB
 File,File
-"Allowed upload extensions","Allowed upload extensions"
-"Allow overwrite when a file with the same name already exists.","Allow overwrite when a file with the same name already exists."
-"I confirm this upload target is inside the current allowlisted root.","I confirm this upload target is inside the current allowlisted root."
-"Confirmation phrase","Confirmation phrase"
-"Same folder","Same folder"
-"Relative path","Relative path"
-"Use the relative path shown in the file list.","Use the relative path shown in the file list."
-"New name","New name"
-"I confirm this rename stays inside the same allowlisted folder.","I confirm this rename stays inside the same allowlisted folder."
-"Bounded ZIP","Bounded ZIP"
-"Compress a file or directory into a sibling ZIP archive.","Compress a file or directory into a sibling ZIP archive."
-"Archive name","Archive name"
-"Limits: 200 entries and 10 MB source data. Existing archives are not overwritten.","Limits: 200 entries and 10 MB source data. Existing archives are not overwritten."
-"I confirm this archive stays inside the same allowlisted folder.","I confirm this archive stays inside the same allowlisted folder."
-"Bounded delete","Bounded delete"
-"I understand this delete cannot be undone from the panel.","I understand this delete cannot be undone from the panel."
-"Allow bounded recursive directory delete for this target.","Allow bounded recursive directory delete for this target."
-大文件队列,"Large-file Queue"
-"Large ZIP compression and recoverable trash moves are queued through Weline Queue so WLS requests stay responsive. Workers re-check root boundaries before writing or moving files.","Large ZIP compression and recoverable trash moves are queued through Weline Queue so WLS requests stay responsive. Workers re-check root boundaries before writing or moving files."
-当前根目录可入队,"Current root can enqueue"
-"Queue Summary","Queue Summary"
+Allowed upload extensions,Allowed upload extensions
+Allow overwrite when a file with the same name already exists.,Allow overwrite when a file with the same name already exists.
+I confirm this upload target is inside the current allowlisted root.,I confirm this upload target is inside the current allowlisted root.
+Confirmation phrase,Confirmation phrase
+Same folder,Same folder
+Relative path,Relative path
+Use the relative path shown in the file list.,Use the relative path shown in the file list.
+New name,New name
+I confirm this rename stays inside the same allowlisted folder.,I confirm this rename stays inside the same allowlisted folder.
+Bounded ZIP,Bounded ZIP
+Compress a file or directory into a sibling ZIP archive.,Compress a file or directory into a sibling ZIP archive.
+Archive name,Archive name
+Limits: 200 entries and 10 MB source data. Existing archives are not overwritten.,Limits: 200 entries and 10 MB source data. Existing archives are not overwritten.
+I confirm this archive stays inside the same allowlisted folder.,I confirm this archive stays inside the same allowlisted folder.
+Bounded delete,Bounded delete
+I understand this delete cannot be undone from the panel.,I understand this delete cannot be undone from the panel.
+Allow bounded recursive directory delete for this target.,Allow bounded recursive directory delete for this target.
+大文件队列,Large-file Queue
+Large ZIP compression and recoverable trash moves are queued through Weline Queue so WLS requests stay responsive. Workers re-check root boundaries before writing or moving files.,Large ZIP compression and recoverable trash moves are queued through Weline Queue so WLS requests stay responsive. Workers re-check root boundaries before writing or moving files.
+当前根目录可入队,Current root can enqueue
+Queue Summary,Queue Summary
 Shown,Shown
-回收历史,"Trash History"
+回收历史,Trash History
 可恢复回收,Restorable
-"Queue ZIP compression","Queue ZIP compression"
+Queue ZIP compression,Queue ZIP compression
 Async,Async
-"Use this for larger folders or files that should not be compressed inside a browser request.","Use this for larger folders or files that should not be compressed inside a browser request."
-"Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes.","Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes."
-"I confirm this queued archive should be written into the same allowlisted folder.","I confirm this queued archive should be written into the same allowlisted folder."
-"Create queue","Create queue"
-"Source policy","Source policy"
-"Source file name","Source file name"
+Use this for larger folders or files that should not be compressed inside a browser request.,Use this for larger folders or files that should not be compressed inside a browser request.
+Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes.,Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes.
+I confirm this queued archive should be written into the same allowlisted folder.,I confirm this queued archive should be written into the same allowlisted folder.
+Create queue,Create queue
+Source policy,Source policy
+Source file name,Source file name
 "Creates one new file in the current source-policy root. Directories, uploads, renames, deletes, and queue operations stay disabled for source roots.","Creates one new file in the current source-policy root. Directories, uploads, renames, deletes, and queue operations stay disabled for source roots."
-"Initial content","Initial content"
-"Optional. Max 128 KB; binary content is rejected.","Optional. Max 128 KB; binary content is rejected."
-"Allowed source extensions","Allowed source extensions"
-"I confirm this new source file belongs in the current source-policy root.","I confirm this new source file belongs in the current source-policy root."
-"Current source file name","Current source file name"
+Initial content,Initial content
+Optional. Max 128 KB; binary content is rejected.,Optional. Max 128 KB; binary content is rejected.
+Allowed source extensions,Allowed source extensions
+I confirm this new source file belongs in the current source-policy root.,I confirm this new source file belongs in the current source-policy root.
+Current source file name,Current source file name
 "Renames one existing file in the current source-policy directory. Cross-folder moves, overwrites, deletes, uploads, and queue operations stay disabled for source roots.","Renames one existing file in the current source-policy directory. Cross-folder moves, overwrites, deletes, uploads, and queue operations stay disabled for source roots."
-"New source file name","New source file name"
-"I confirm this rename stays inside the current source-policy root.","I confirm this rename stays inside the current source-policy root."
+New source file name,New source file name
+I confirm this rename stays inside the current source-policy root.,I confirm this rename stays inside the current source-policy root.
 Recoverable,Recoverable
 "Moves one existing source-policy file into the same root .wls-trash folder. Directories, hard delete, purge, and broad source queues stay disabled.","Moves one existing source-policy file into the same root .wls-trash folder. Directories, hard delete, purge, and broad source queues stay disabled."
 "I confirm this source file should be moved into recoverable trash, not permanently deleted.","I confirm this source file should be moved into recoverable trash, not permanently deleted."
-"Queue source trash","Queue source trash"
-"Source queue","Source queue"
+Queue source trash,Queue source trash
+Source queue,Source queue
 "Queues one existing source-policy file into recoverable .wls-trash. Single file only, max 128 KB; directories, purge, hard delete, upload, and broad source queues stay disabled.","Queues one existing source-policy file into recoverable .wls-trash. Single file only, max 128 KB; directories, purge, hard delete, upload, and broad source queues stay disabled."
 "I confirm this source file should be queued for recoverable trash, not permanently deleted.","I confirm this source file should be queued for recoverable trash, not permanently deleted."
-"Create source trash queue","Create source trash queue"
-"Queue source archive","Queue source archive"
+Create source trash queue,Create source trash queue
+Queue source archive,Queue source archive
 Read-only,Read-only
 "Queues one existing source-policy file into a server-side archive under var/wls-panel/file-manager/source-archives. Single file only, max 128 KB; directories, source-root zip writes, upload, delete, and overwrite stay disabled.","Queues one existing source-policy file into a server-side archive under var/wls-panel/file-manager/source-archives. Single file only, max 128 KB; directories, source-root zip writes, upload, delete, and overwrite stay disabled."
-"I confirm this source file should be archived through a read-only queue.","I confirm this source file should be archived through a read-only queue."
-"Create source archive queue","Create source archive queue"
-"Queue source directory archive","Queue source directory archive"
-"Source directory name","Source directory name"
-"Queues one existing source-policy child directory into a server-side archive under var/wls-panel/file-manager/source-archives. Max 200 entries and 10 MB; the source tree is only read by the worker.","Queues one existing source-policy child directory into a server-side archive under var/wls-panel/file-manager/source-archives. Max 200 entries and 10 MB; the source tree is only read by the worker."
-"I confirm this source directory should be archived through a read-only queue.","I confirm this source directory should be archived through a read-only queue."
-"Create source directory archive queue","Create source directory archive queue"
-"Queue source selection archive","Queue source selection archive"
-"Source entry names","Source entry names"
+I confirm this source file should be archived through a read-only queue.,I confirm this source file should be archived through a read-only queue.
+Create source archive queue,Create source archive queue
+Queue source directory archive,Queue source directory archive
+Source directory name,Source directory name
+Queues one existing source-policy child directory into a server-side archive under var/wls-panel/file-manager/source-archives. Max 200 entries and 10 MB; the source tree is only read by the worker.,Queues one existing source-policy child directory into a server-side archive under var/wls-panel/file-manager/source-archives. Max 200 entries and 10 MB; the source tree is only read by the worker.
+I confirm this source directory should be archived through a read-only queue.,I confirm this source directory should be archived through a read-only queue.
+Create source directory archive queue,Create source directory archive queue
+Queue source selection archive,Queue source selection archive
+Source entry names,Source entry names
 "Queues up to 20 files or child directories from the current source-policy directory into one read-only archive under var/wls-panel/file-manager/source-archives. Max 200 archived entries and 10 MB; no source-root ZIP writes, upload, delete, or overwrite.","Queues up to 20 files or child directories from the current source-policy directory into one read-only archive under var/wls-panel/file-manager/source-archives. Max 200 archived entries and 10 MB; no source-root ZIP writes, upload, delete, or overwrite."
-"I confirm these selected source entries should be archived through a read-only queue.","I confirm these selected source entries should be archived through a read-only queue."
-"Create source selection archive queue","Create source selection archive queue"
-"Queue recoverable trash","Queue recoverable trash"
-"Moves the target into the same root .wls-trash folder. Completed jobs can be restored from the recent queue list while the original path is still free.","Moves the target into the same root .wls-trash folder. Completed jobs can be restored from the recent queue list while the original path is still free."
+I confirm these selected source entries should be archived through a read-only queue.,I confirm these selected source entries should be archived through a read-only queue.
+Create source selection archive queue,Create source selection archive queue
+Queue recoverable trash,Queue recoverable trash
+Moves the target into the same root .wls-trash folder. Completed jobs can be restored from the recent queue list while the original path is still free.,Moves the target into the same root .wls-trash folder. Completed jobs can be restored from the recent queue list while the original path is still free.
 "I confirm this target should be moved into recoverable trash, not permanently deleted.","I confirm this target should be moved into recoverable trash, not permanently deleted."
-"Create recoverable queue","Create recoverable queue"
-"Recent queue jobs","Recent queue jobs"
-"Latest 10","Latest 10"
+Create recoverable queue,Create recoverable queue
+Recent queue jobs,Recent queue jobs
+Latest 10,Latest 10
 Source,Source
 Target,Target
 Start,Start
 End,End
 Restore,Restore
-"No queued large-file operations yet.","No queued large-file operations yet."
-"Latest 30","Latest 30"
-"Only queue-created trash entries are listed here. Restore remains available only while the original path is still free and the .wls-trash entry exists. Permanent purge requires explicit PURGE_TRASH confirmation.","Only queue-created trash entries are listed here. Restore remains available only while the original path is still free and the .wls-trash entry exists. Permanent purge requires explicit PURGE_TRASH confirmation."
+No queued large-file operations yet.,No queued large-file operations yet.
+Latest 30,Latest 30
+Only queue-created trash entries are listed here. Restore remains available only while the original path is still free and the .wls-trash entry exists. Permanent purge requires explicit PURGE_TRASH confirmation.,Only queue-created trash entries are listed here. Restore remains available only while the original path is still free and the .wls-trash entry exists. Permanent purge requires explicit PURGE_TRASH confirmation.
 Trash,Trash
 Purged,Purged
-我确认永久删除此回收条目。,"I confirm this trash entry should be permanently deleted."
-永久清理,"Permanent purge"
-暂无可恢复回收历史。,"No recoverable trash history yet."
-"Operation Logs","Operation Logs"
-"Audit Summary","Audit Summary"
+我确认永久删除此回收条目。,I confirm this trash entry should be permanently deleted.
+永久清理,Permanent purge
+暂无可恢复回收历史。,No recoverable trash history yet.
+Operation Logs,Operation Logs
+Audit Summary,Audit Summary
 Scanned,Scanned
-"Audit Filters","Audit Filters"
+Audit Filters,Audit Filters
 Action,Action
 Result,Result
 Root,Root
 Keyword,Keyword
 "Path, target, domain, or IP","Path, target, domain, or IP"
-"Filter Logs","Filter Logs"
-"Reset Filters","Reset Filters"
+Filter Logs,Filter Logs
+Reset Filters,Reset Filters
 Latest,Latest
-"No matching file operation logs.","No matching file operation logs."
-暂无文件操作日志。,"No file operation logs yet."
-能力阶段,"Capability Stages"
+No matching file operation logs.,No matching file operation logs.
+暂无文件操作日志。,No file operation logs yet.
+能力阶段,Capability Stages
 processed=%{1},processed=%{1}
 filled=%{1},filled=%{1}
 skipped=%{1},skipped=%{1}
 errors=%{1},errors=%{1}
-AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务,AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务
-已续队下一批,已续队下一批
+AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务,AI translation is experiencing high load or errors. This batch has ended.  Do not immediately rejoin the queue; wait for the next scheduled task.
+已续队下一批,The next batch of the team has been added.
 next_offset=%{1},next_offset=%{1}
-"WLS 文件管理器大文件操作","WLS File Manager large-file operation"
-"由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。","Large-file compression task created by WLS File Manager to avoid long-running file work inside panel requests."
-"WLS 文件队列内容无效。","WLS file queue content is invalid."
-"WLS source directory archive queue payload is invalid.","WLS source directory archive queue payload is invalid."
-"WLS source archive queue payload is invalid.","WLS source archive queue payload is invalid."
-"WLS source selection archive queue payload is invalid.","WLS source selection archive queue payload is invalid."
-"WLS 源码文件队列内容无效。","WLS source file queue payload is invalid."
-"WLS 文件管理器队列压缩开始：%{1}","WLS File Manager queued compression started: %{1}"
-"WLS 文件管理器队列压缩失败：%{1}","WLS File Manager queued compression failed: %{1}"
-"WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。","WLS File Manager queued compression completed: %{1} (%{2} entries, %{3} bytes)."
-"WLS source archive queue started: %{1}","WLS source archive queue started: %{1}"
-"WLS source archive queue failed: %{1}","WLS source archive queue failed: %{1}"
+WLS 文件管理器大文件操作,WLS File Manager large-file operation
+由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。,Large-file compression task created by WLS File Manager to avoid long-running file work inside panel requests.
+WLS 文件队列内容无效。,WLS file queue content is invalid.
+WLS source directory archive queue payload is invalid.,WLS source directory archive queue payload is invalid.
+WLS source archive queue payload is invalid.,WLS source archive queue payload is invalid.
+WLS source selection archive queue payload is invalid.,WLS source selection archive queue payload is invalid.
+WLS 源码文件队列内容无效。,WLS source file queue payload is invalid.
+WLS 文件管理器队列压缩开始：%{1},WLS File Manager queued compression started: %{1}
+WLS 文件管理器队列压缩失败：%{1},WLS File Manager queued compression failed: %{1}
+WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。,"WLS File Manager queued compression completed: %{1} (%{2} entries, %{3} bytes)."
+WLS source archive queue started: %{1},WLS source archive queue started: %{1}
+WLS source archive queue failed: %{1},WLS source archive queue failed: %{1}
 "WLS source archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS source archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)"
-"WLS source directory archive queue started: %{1}","WLS source directory archive queue started: %{1}"
-"WLS source directory archive queue failed: %{1}","WLS source directory archive queue failed: %{1}"
+WLS source directory archive queue started: %{1},WLS source directory archive queue started: %{1}
+WLS source directory archive queue failed: %{1},WLS source directory archive queue failed: %{1}
 "WLS source directory archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS source directory archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)"
-"WLS source selection archive queue started: %{1}","WLS source selection archive queue started: %{1}"
-"WLS source selection archive queue failed: %{1}","WLS source selection archive queue failed: %{1}"
+WLS source selection archive queue started: %{1},WLS source selection archive queue started: %{1}
+WLS source selection archive queue failed: %{1},WLS source selection archive queue failed: %{1}
 "WLS source selection archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS source selection archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)"
-"WLS 文件管理器队列回收开始：%{1}","WLS File Manager queued trash started: %{1}"
-"WLS 文件管理器队列回收失败：%{1}","WLS File Manager queued trash failed: %{1}"
-"WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。","WLS File Manager queued trash completed: %{1} -> %{2} (%{3} entries, %{4} bytes, recoverable)."
-已解析图片结果无效。,"The resolved image result is invalid."
-图片使用数据版本或身份无效。,"Image usage data version or identity is invalid."
-"图片 alt 状态无效。","Image alt status is invalid."
-图片加载策略无效。,"The image loading strategy is invalid."
-图片响应式宽度数量或唯一性无效。,"The number or uniqueness of responsive image widths is invalid."
-图片响应式宽度无效。,"Image responsive width is invalid."
-"图片文本或响应式 sizes 超过长度限制。","Image text or the responsive sizes value exceeds the length limit."
-"装饰图片的 alt 必须为空。","The alt of the decorative image must be empty."
-"图片 UI 宽高必须成对设置。","图片 UI 宽高必须成对设置。"
-"图片 UI 宽高无效。","图片 UI 宽高无效。"
-"图片宽高比格式无效，请使用如 16/9 或 16:9。","图片宽高比格式无效，请使用如 16/9 或 16:9。"
-图片宽高比数值无效。,图片宽高比数值无效。
-"图片 UI 尺寸字段无效：%{1}","图片 UI 尺寸字段无效：%{1}"
-图片语境语言与发布语言不一致。,"The image context language is inconsistent with the posting language."
-"图片 alt 尚未审核确认。","Image alt has not yet been reviewed and confirmed."
-"信息图片必须填写 alt。","Information pictures must fill in alt."
-图片使用数据布尔字段无效：%{1},"An ImageUsage boolean field is invalid: %{1}"
-文件访问上下文无效。,"The file access context is invalid."
-文件访问上下文角色无效。,"A role in the file access context is invalid."
-"建议尺寸：%{1} × %{2} px","建议尺寸：%{1} × %{2} px"
-推荐比例：%{1},推荐比例：%{1}
-源语言元数据缺失，无法补缺翻译。,源语言元数据缺失，无法补缺翻译。
-"语言 %{1} 翻译失败或 AI 翻译不可用。","语言 %{1} 翻译失败或 AI 翻译不可用。"
-"语言 %{1} 翻译结果为空。","语言 %{1} 翻译结果为空。"
-上传源必须是流。,"The upload source must be a stream."
-目标文件已存在，禁止覆盖。,"The target file already exists and cannot be overwritten."
-文件资源上传必须从根边界使用写意图事务。,"File asset uploads must use a write-intent transaction from the root boundary."
-存储对象删除失败。,"Failed to delete the storage object."
-文件资源写入结果无效。,"The file resource write result is invalid."
-文件资源写入失败，且存储对象无法自动回收，请立即人工清理。,"The file asset write failed and the storage object could not be reclaimed automatically. Clean it up immediately."
-存储对象不存在。,"The storage object does not exist."
-文件资源注册必须从根边界使用写意图事务。,文件资源注册必须从根边界使用写意图事务。
-目标文件不存在，无法覆盖。,目标文件不存在，无法覆盖。
-文件资源覆盖必须从根边界使用写意图事务。,文件资源覆盖必须从根边界使用写意图事务。
-文件资源覆盖结果无效。,文件资源覆盖结果无效。
-机器翻译的资源元数据必须先保存为待审核草稿。,"Machine-translated asset metadata must first be saved as a draft pending review."
-目标文件资源状态已变化，请刷新后重试。,"The target file asset state changed. Refresh and try again."
-读取上传流失败。,读取上传流失败。
-读取上传流时连续无数据进展。,读取上传流时连续无数据进展。
-读取存储对象时连续无数据进展。,"No progress was made while reading the storage object."
-存储磁盘可见性配置无效。,"The storage disk visibility configuration is invalid."
-文件资源可见性必须与所选磁盘可见性一致。,"File asset visibility must match the selected disk visibility."
-"私有存储 URL 适配器未提供不可缓存的临时 URL。","The private-storage URL adapter did not provide a non-cacheable temporary URL."
-私有文件必须配置有效访问策略。,"A private file must have a valid access policy."
-私有文件访问策略列表无效或超过限制。,"The private-file access policy list is invalid or exceeds the limit."
-私有文件访问策略不能为空。,"The private-file access policy cannot be empty."
-文件图片语言必须与当前请求语言一致。,"The file-image locale must match the current request locale."
-图片语境语言与当前请求语言不一致。,"The image context locale does not match the current request locale."
-"文件图片渲染缺少显式 ScopeIdentity。","File image rendering requires an explicit ScopeIdentity."
-源文件与目标文件不能相同。,"The source file and target file cannot be the same."
-源文件资源已删除，不能移动。,"The source file asset has been deleted and cannot be moved."
-文件移动补偿清理目标对象失败。,"Move compensation could not remove the target object."
-文件移动失败且物理对象补偿失败。,"The file move failed and physical-object compensation also failed."
-目录不能移动到自身或其子目录。,"A directory cannot be moved into itself or one of its descendants."
-目录中的文件数量超过单次操作上限。,"The directory contains more files than one operation can process."
-存储目录返回了越界文件。,"The storage directory returned an out-of-scope file."
-源目录包含已删除的文件资源，不能移动。,"The source directory contains a deleted file asset and cannot be moved."
-文件资源对应的存储对象不存在。,"The storage object for this file asset does not exist."
-目标目录包含已登记的同名文件资源。,"The target directory contains a registered file asset with the same name."
-源目录已被其他请求修改，请刷新后重试。,"The source directory changed in another request. Refresh and try again."
-存储目录移动失败。,"Failed to move the storage directory."
-目录移动失败且物理对象补偿失败。,"The directory move failed and physical-object compensation also failed."
-存储目录未完全删除。,"The storage directory was not fully deleted."
-存储目录未完全删除，相关资源已禁用并等待清理。,"The storage directory was not fully deleted; related assets were disabled pending cleanup."
-文件资源仍被业务内容引用，不能删除。,"The file asset is still referenced by business content and cannot be deleted."
-当前文件访问上下文不允许修改存储对象。,"The current file access context does not allow storage-object mutations."
-文件资源修改必须位于写意图事务内。,"File asset mutations must run inside a write-intent transaction."
-文件资源身份无效。,"The file asset identity is invalid."
-文件资源已被其他请求修改，请刷新后重试。,"The file asset was changed by another request. Refresh and try again."
-文件资源已被其他请求删除。,"The file asset was deleted by another request."
-文件资源对象键不能为空。,"The file asset object key cannot be empty."
-磁盘中的文件资源超过单次目录操作扫描上限。,"The disk contains more file assets than one directory operation can scan."
-目录中的文件资源超过单次操作上限。,"The number of file assets in the directory exceeds the per-operation limit."
-目录移动补偿恢复超过条目上限。,"Directory-move compensation exceeds the restore item limit."
-目录移动补偿恢复源目录失败。,"Directory-move compensation could not restore the source directory."
-目录移动补偿遇到越界对象。,"Directory-move compensation encountered an out-of-scope object."
-目录移动补偿清理目标目录失败。,"Directory-move compensation could not remove the target directory."
-"资源 ID 不能为空。","Resource ID cannot be empty."
-文件资源不存在。,"The file resource does not exist."
-文件资源缺少精确语言元数据：%{1},"File resource is missing precise language metadata: %{1}"
-公开发布的页面不能引用私有文件资源。,"A publicly published page cannot reference a private file asset."
-图片资源对应的存储对象不存在。,"The storage object for this image asset does not exist."
-图片语境语言与当前语言不一致。,"The image context locale does not match the current locale."
-所选资源不是图片。,"The selected resource is not an image."
-图片资源语言元数据尚未审核。,"Image resource language metadata has not yet been reviewed."
-语言代码无效：%{1},"Invalid language code: %{1}"
-文件资源不可用。,"The file resource is not available."
-文件资源尚未完成元数据审核。,"The file asset metadata review is incomplete."
-当前访问上下文不允许管理私有文件资源。,"The current access context cannot manage private file assets."
-当前上下文无权读取私有文件资源。,"The current context does not have permission to read private file resources."
-文件访问策略版本已更新，请刷新访问上下文。,"The file access policy has changed. Refresh the access context."
-"当前 Scope 无权读取私有文件资源。","The current scope cannot read this private file asset."
-当前角色无权读取私有文件资源。,"The current role cannot read this private file asset."
-私有文件访问策略无效。,"The private file access policy is invalid."
-私有文件访问策略列表超过限制。,"The private-file access policy list exceeds the limit."
-存储磁盘仍被文件资源引用，不能删除。,"The storage disk is still referenced by file assets and cannot be deleted."
-"文件资源多语言 AI 补缺翻译","文件资源多语言 AI 补缺翻译"
-源码编辑默认关闭,"Source editing is off by default"
-源码编辑策略允许,"Source edit policy allowed"
-源码编辑策略禁用,"Source edit policy disabled"
-源码编辑策略允许此只读根目录内的已存在小源码文件进入保存表单。,"The source edit policy allows existing small source files in this read-only root to enter the save form."
-策略只读根目录,"Policy read-only root"
-策略禁用,"Policy disabled"
-策略只读,"Policy read-only"
-当前项目路径策略已禁用此根目录写入。,"The current project path policy has disabled writes for this root."
-策略允许,"Policy allowed"
-当前项目路径策略允许此根目录受控写入。,"The current project path policy allows guarded writes for this root."
-"存储对象尚未建立 FileAsset，不能访问。","The storage object has no FileAsset record and cannot be accessed."
-上传失败，且已写入文件无法自动回收，请立即人工清理。,"The upload failed and the written file could not be reclaimed automatically. Clean it up immediately."
-文件资源修订版本无效。,"The file asset revision is invalid."
-资源身份与当前存储对象不匹配。,"The asset identity does not match the current storage object."
-文件资源元数据保存必须位于写意图事务内。,"File asset metadata must be saved inside a write-intent transaction."
-私有文件资源缺少既有访问策略。,"The private file asset is missing its existing access policy."
-资源元数据更新不能修改私有访问策略。,"Asset metadata updates cannot modify the private access policy."
-"资源引用 owner 身份无效。","The resource reference owner has an invalid identity."
-单个业务版本的文件资源引用数量超过限制。,"A single business-object version exceeds the file resource reference limit."
-文件资源引用写入必须位于写意图事务内。,"File asset references must be written inside a write-intent transaction."
-引用的文件资源不可用。,"The referenced file asset is unavailable."
-引用的文件资源不存在。,"The referenced file asset does not exist."
-"文件布局仅索引模式必须指定完整 owner 身份。","File-layout index-only mode requires a complete owner identity."
-"文件布局校验缺少显式 ScopeIdentity 或 locale_code。","File layout validation is missing an explicit ScopeIdentity or locale_code."
-"Theme 布局内容超过文件校验上限。","Theme layout content exceeds the file verification limit."
-"文件资源 AI 自动翻译未启用，cron 已跳过","文件资源 AI 自动翻译未启用，cron 已跳过"
-"文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒","文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒"
-"文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒","文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒"
-"图片 usage JSON 无效。","Image usage JSON is invalid."
-"文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒","文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒"
-无法读取上传源以计算校验值。,"Unable to read the upload source to calculate its checksum."
-读取上传源时连续无数据进展。,"No progress was made while reading the upload source."
-上传源无法恢复到原始读取位置。,"Unable to rewind the upload source to its initial position."
-"私有图片变体 URL 必须不可共享缓存且带过期时间。","A private image-variant URL must be non-cacheable in shared caches and include an expiration time."
-允许的文件类型：,"Allowed file types:"
-允许的文件大小：,"Allowed file size:"
-"mdi mdi-folder-outline","mdi mdi-folder-outline"
-"mdi mdi-file-tree-outline","mdi mdi-file-tree-outline"
-"mdi mdi-shield-edit-outline","mdi mdi-shield-edit-outline"
-"mdi mdi-file-edit-outline","mdi mdi-file-edit-outline"
-"mdi mdi-progress-clock","mdi mdi-progress-clock"
-"mdi mdi-clipboard-text-clock-outline","mdi mdi-clipboard-text-clock-outline"
-"mdi mdi-puzzle-outline","mdi mdi-puzzle-outline"
-私有文件元数据修改缺少访问上下文。,"Private file metadata updates require an access context."
-私有文件详情读取缺少访问上下文。,"Reading private file details requires an access context."
-私有文件上传缺少访问上下文。,"Private file uploads require an access context."
-私有文件操作缺少访问上下文。,"Private file mutations require an access context."
-私有文件重试上传缺少访问上下文。,"Retrying an upload over a private file identity requires an access context."
+WLS 文件管理器队列回收开始：%{1},WLS File Manager queued trash started: %{1}
+WLS 文件管理器队列回收失败：%{1},WLS File Manager queued trash failed: %{1}
+WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。,"WLS File Manager queued trash completed: %{1} -> %{2} (%{3} entries, %{4} bytes, recoverable)."
+已解析图片结果无效。,The resolved image result is invalid.
+图片使用数据版本或身份无效。,Image usage data version or identity is invalid.
+图片 alt 状态无效。,Image alt status is invalid.
+图片加载策略无效。,The image loading strategy is invalid.
+图片响应式宽度数量或唯一性无效。,The number or uniqueness of responsive image widths is invalid.
+图片响应式宽度无效。,Image responsive width is invalid.
+图片文本或响应式 sizes 超过长度限制。,Image text or the responsive sizes value exceeds the length limit.
+装饰图片的 alt 必须为空。,The alt of the decorative image must be empty.
+图片 UI 宽高必须成对设置。,Image UI width and height must be set in pairs.
+图片 UI 宽高无效。,Invalid image UI width and height.
+图片宽高比格式无效，请使用如 16/9 或 16:9。,Invalid image aspect ratio format. Please use formats like 16/9 or 16:9.
+图片宽高比数值无效。,Invalid image aspect ratio value.
+图片 UI 尺寸字段无效：%{1},Invalid image UI size field: %{1}
+图片语境语言与发布语言不一致。,The image context language is inconsistent with the posting language.
+图片 alt 尚未审核确认。,Image alt has not yet been reviewed and confirmed.
+信息图片必须填写 alt。,Information pictures must fill in alt.
+图片使用数据布尔字段无效：%{1},An ImageUsage boolean field is invalid: %{1}
+文件访问上下文无效。,The file access context is invalid.
+文件访问上下文角色无效。,A role in the file access context is invalid.
+建议尺寸：%{1} × %{2} px,Suggested size: %{1} × %{2} px
+推荐比例：%{1},Recommended ratio: %{1}
+源语言元数据缺失，无法补缺翻译。,"Source language metadata is missing, making it impossible to provide a complete translation."
+语言 %{1} 翻译失败或 AI 翻译不可用。,Language %{1} translation failed or AI translation is unavailable.
+语言 %{1} 翻译结果为空。,"The translation result for the language ""%{1}"" is empty."
+上传源必须是流。,The upload source must be a stream.
+目标文件已存在，禁止覆盖。,The target file already exists and cannot be overwritten.
+文件资源上传必须从根边界使用写意图事务。,File asset uploads must use a write-intent transaction from the root boundary.
+存储对象删除失败。,Failed to delete the storage object.
+文件资源写入结果无效。,The file resource write result is invalid.
+文件资源写入失败，且存储对象无法自动回收，请立即人工清理。,The file asset write failed and the storage object could not be reclaimed automatically. Clean it up immediately.
+存储对象不存在。,The storage object does not exist.
+文件资源注册必须从根边界使用写意图事务。,File resource register must use write-intent txn from root boundary.
+目标文件不存在，无法覆盖。,Target file missing; cannot overwrite.
+文件资源覆盖必须从根边界使用写意图事务。,File resource overwrite must use write-intent txn from root boundary.
+文件资源覆盖结果无效。,Invalid file resource overwrite result.
+机器翻译的资源元数据必须先保存为待审核草稿。,Machine-translated asset metadata must first be saved as a draft pending review.
+目标文件资源状态已变化，请刷新后重试。,The target file asset state changed. Refresh and try again.
+读取上传流失败。,Failed to read the upload stream.
+读取上传流时连续无数据进展。,No progress was made while reading the upload stream.
+读取存储对象时连续无数据进展。,No progress was made while reading the storage object.
+存储磁盘可见性配置无效。,The storage disk visibility configuration is invalid.
+文件资源可见性必须与所选磁盘可见性一致。,File asset visibility must match the selected disk visibility.
+私有存储 URL 适配器未提供不可缓存的临时 URL。,The private-storage URL adapter did not provide a non-cacheable temporary URL.
+私有文件必须配置有效访问策略。,A private file must have a valid access policy.
+私有文件访问策略列表无效或超过限制。,The private-file access policy list is invalid or exceeds the limit.
+私有文件访问策略不能为空。,The private-file access policy cannot be empty.
+文件图片语言必须与当前请求语言一致。,The file-image locale must match the current request locale.
+图片语境语言与当前请求语言不一致。,The image context locale does not match the current request locale.
+文件图片渲染缺少显式 ScopeIdentity。,File image rendering requires an explicit ScopeIdentity.
+源文件与目标文件不能相同。,The source file and target file cannot be the same.
+源文件资源已删除，不能移动。,The source file asset has been deleted and cannot be moved.
+文件移动补偿清理目标对象失败。,Move compensation could not remove the target object.
+文件移动失败且物理对象补偿失败。,The file move failed and physical-object compensation also failed.
+目录不能移动到自身或其子目录。,A directory cannot be moved into itself or one of its descendants.
+目录中的文件数量超过单次操作上限。,The directory contains more files than one operation can process.
+存储目录返回了越界文件。,The storage directory returned an out-of-scope file.
+源目录包含已删除的文件资源，不能移动。,The source directory contains a deleted file asset and cannot be moved.
+文件资源对应的存储对象不存在。,The storage object for this file asset does not exist.
+目标目录包含已登记的同名文件资源。,The target directory contains a registered file asset with the same name.
+源目录已被其他请求修改，请刷新后重试。,The source directory changed in another request. Refresh and try again.
+存储目录移动失败。,Failed to move the storage directory.
+目录移动失败且物理对象补偿失败。,The directory move failed and physical-object compensation also failed.
+存储目录未完全删除。,The storage directory was not fully deleted.
+存储目录未完全删除，相关资源已禁用并等待清理。,The storage directory was not fully deleted; related assets were disabled pending cleanup.
+文件资源仍被业务内容引用，不能删除。,The file asset is still referenced by business content and cannot be deleted.
+当前文件访问上下文不允许修改存储对象。,The current file access context does not allow storage-object mutations.
+文件资源修改必须位于写意图事务内。,File asset mutations must run inside a write-intent transaction.
+文件资源身份无效。,The file asset identity is invalid.
+文件资源已被其他请求修改，请刷新后重试。,The file asset was changed by another request. Refresh and try again.
+文件资源已被其他请求删除。,The file asset was deleted by another request.
+文件资源对象键不能为空。,The file asset object key cannot be empty.
+磁盘中的文件资源超过单次目录操作扫描上限。,The disk contains more file assets than one directory operation can scan.
+目录中的文件资源超过单次操作上限。,The number of file assets in the directory exceeds the per-operation limit.
+目录移动补偿恢复超过条目上限。,Directory-move compensation exceeds the restore item limit.
+目录移动补偿恢复源目录失败。,Directory-move compensation could not restore the source directory.
+目录移动补偿遇到越界对象。,Directory-move compensation encountered an out-of-scope object.
+目录移动补偿清理目标目录失败。,Directory-move compensation could not remove the target directory.
+资源 ID 不能为空。,Resource ID cannot be empty.
+文件资源不存在。,The file resource does not exist.
+文件资源缺少精确语言元数据：%{1},File resource is missing precise language metadata: %{1}
+公开发布的页面不能引用私有文件资源。,A publicly published page cannot reference a private file asset.
+图片资源对应的存储对象不存在。,The storage object for this image asset does not exist.
+图片语境语言与当前语言不一致。,The image context locale does not match the current locale.
+所选资源不是图片。,The selected resource is not an image.
+图片资源语言元数据尚未审核。,Image resource language metadata has not yet been reviewed.
+语言代码无效：%{1},Invalid language code: %{1}
+文件资源不可用。,The file resource is not available.
+文件资源尚未完成元数据审核。,The file asset metadata review is incomplete.
+当前访问上下文不允许管理私有文件资源。,The current access context cannot manage private file assets.
+当前上下文无权读取私有文件资源。,The current context does not have permission to read private file resources.
+文件访问策略版本已更新，请刷新访问上下文。,The file access policy has changed. Refresh the access context.
+当前 Scope 无权读取私有文件资源。,The current scope cannot read this private file asset.
+当前角色无权读取私有文件资源。,The current role cannot read this private file asset.
+私有文件访问策略无效。,The private file access policy is invalid.
+私有文件访问策略列表超过限制。,The private-file access policy list exceeds the limit.
+存储磁盘仍被文件资源引用，不能删除。,The storage disk is still referenced by file assets and cannot be deleted.
+文件资源多语言 AI 补缺翻译,Multilingual AI-powered translation for file resources.
+源码编辑默认关闭,Source editing is off by default
+源码编辑策略允许,Source edit policy allowed
+源码编辑策略禁用,Source edit policy disabled
+源码编辑策略允许此只读根目录内的已存在小源码文件进入保存表单。,The source edit policy allows existing small source files in this read-only root to enter the save form.
+策略只读根目录,Policy read-only root
+策略禁用,Policy disabled
+策略只读,Policy read-only
+当前项目路径策略已禁用此根目录写入。,The current project path policy has disabled writes for this root.
+策略允许,Policy allowed
+当前项目路径策略允许此根目录受控写入。,The current project path policy allows guarded writes for this root.
+存储对象尚未建立 FileAsset，不能访问。,The storage object has no FileAsset record and cannot be accessed.
+上传失败，且已写入文件无法自动回收，请立即人工清理。,The upload failed and the written file could not be reclaimed automatically. Clean it up immediately.
+文件资源修订版本无效。,The file asset revision is invalid.
+资源身份与当前存储对象不匹配。,The asset identity does not match the current storage object.
+文件资源元数据保存必须位于写意图事务内。,File asset metadata must be saved inside a write-intent transaction.
+私有文件资源缺少既有访问策略。,The private file asset is missing its existing access policy.
+资源元数据更新不能修改私有访问策略。,Asset metadata updates cannot modify the private access policy.
+资源引用 owner 身份无效。,The resource reference owner has an invalid identity.
+单个业务版本的文件资源引用数量超过限制。,A single business-object version exceeds the file resource reference limit.
+文件资源引用写入必须位于写意图事务内。,File asset references must be written inside a write-intent transaction.
+引用的文件资源不可用。,The referenced file asset is unavailable.
+引用的文件资源不存在。,The referenced file asset does not exist.
+文件布局仅索引模式必须指定完整 owner 身份。,File-layout index-only mode requires a complete owner identity.
+文件布局校验缺少显式 ScopeIdentity 或 locale_code。,File layout validation is missing an explicit ScopeIdentity or locale_code.
+Theme 布局内容超过文件校验上限。,Theme layout content exceeds the file verification limit.
+文件资源 AI 自动翻译未启用，cron 已跳过,File resources: AI automatic translation is disabled; cron job skipped.
+文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒,"File resources: AI translation not queued (not enabled, no available slots, or tasks already waiting).  Time taken: %{1} seconds."
+文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒,"File resource AI translation has been queued as #%{1}, taking %{2} seconds."
+图片 usage JSON 无效。,Image usage JSON is invalid.
+文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒,"File resources: AI translation not queued (disabled or tasks already pending), processing time: %{1} seconds."
+无法读取上传源以计算校验值。,Unable to read the upload source to calculate its checksum.
+读取上传源时连续无数据进展。,No progress was made while reading the upload source.
+上传源无法恢复到原始读取位置。,Unable to rewind the upload source to its initial position.
+私有图片变体 URL 必须不可共享缓存且带过期时间。,A private image-variant URL must be non-cacheable in shared caches and include an expiration time.
+允许的文件类型：,Allowed file types:
+允许的文件大小：,Allowed file size:
+mdi mdi-folder-outline,mdi mdi-folder-outline
+mdi mdi-file-tree-outline,mdi mdi-file-tree-outline
+mdi mdi-shield-edit-outline,mdi mdi-shield-edit-outline
+mdi mdi-file-edit-outline,mdi mdi-file-edit-outline
+mdi mdi-progress-clock,mdi mdi-progress-clock
+mdi mdi-clipboard-text-clock-outline,mdi mdi-clipboard-text-clock-outline
+mdi mdi-puzzle-outline,mdi mdi-puzzle-outline
+私有文件元数据修改缺少访问上下文。,Private file metadata updates require an access context.
+私有文件详情读取缺少访问上下文。,Reading private file details requires an access context.
+私有文件上传缺少访问上下文。,Private file uploads require an access context.
+私有文件操作缺少访问上下文。,Private file mutations require an access context.
+私有文件重试上传缺少访问上下文。,Retrying an upload over a private file identity requires an access context.

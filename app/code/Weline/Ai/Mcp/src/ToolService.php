@@ -6,7 +6,7 @@ namespace LearningMcp;
 
 final class ToolService
 {
-    public const VERSION = '0.13.14';
+    public const VERSION = '0.13.24';
 
     /** MCP server instructions: bootstrap + hard-constraints preamble (bodies in HardConstraintsCatalog). */
     public static function instructions(): string

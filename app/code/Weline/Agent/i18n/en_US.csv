@@ -1,463 +1,463 @@
-﻿不支持的智能体操作：%{1},不支持的智能体操作：%{1}
-请先登录后台,请先登录后台
-编码智能体,"Coding Agent"
-"专为代码编写、编辑、分析设计的智能体。支持读取文件、搜索替换、grep 搜索、目录浏览、glob 查找、执行终端命令等工具。","Agent for coding: read files, search/replace, grep, list dir, glob, run terminal commands."
-"正在调用 AI...","Calling AI..."
-未找到工具：%{1},"Tool not found: %{1}"
-"执行失败: %{1}","Execution failed: %{1}"
-"HTTP 请求","HTTP Request"
-"发送 HTTP 请求","Send HTTP request"
-"请求 URL","Request URL"
-"HTTP 方法","HTTP Method"
+不支持的智能体操作：%{1},Unsupported agent operation: %{1}
+请先登录后台,Please log in to the backend first.
+编码智能体,Coding Agent
+专为代码编写、编辑、分析设计的智能体。支持读取文件、搜索替换、grep 搜索、目录浏览、glob 查找、执行终端命令等工具。,"Agent for coding: read files, search/replace, grep, list dir, glob, run terminal commands."
+正在调用 AI...,Calling AI...
+未找到工具：%{1},Tool not found: %{1}
+执行失败: %{1},Execution failed: %{1}
+HTTP 请求,HTTP Request
+发送 HTTP 请求,Send HTTP request
+请求 URL,Request URL
+HTTP 方法,HTTP Method
 请求头,Headers
-请求体（JSON）,"Body (JSON)"
-超时时间（秒）,"Timeout (seconds)"
-是否跟随重定向,"Follow Redirects"
+请求体（JSON）,Body (JSON)
+超时时间（秒）,Timeout (seconds)
+是否跟随重定向,Follow Redirects
 文件系统,Filesystem
-文件读写操作,"File read/write operations"
-操作类型,"Action Type"
-文件路径,"File Path"
-"写入内容（仅 write 操作）","Content (write only)"
-写入模式,"Write Mode"
-文件编码,"File Encoding"
-文件写入成功,"File written successfully"
-文件删除成功,"File deleted successfully"
-"Shell 命令执行","Shell Execute"
-"执行 Shell 命令（受白名单限制）","Execute Shell commands (whitelisted)"
-要执行的命令,"Command to execute"
-工作目录,"Working Directory"
+文件读写操作,File read/write operations
+操作类型,Action Type
+文件路径,File Path
+写入内容（仅 write 操作）,Content (write only)
+写入模式,Write Mode
+文件编码,File Encoding
+文件写入成功,File written successfully
+文件删除成功,File deleted successfully
+Shell 命令执行,Shell Execute
+执行 Shell 命令（受白名单限制）,Execute Shell commands (whitelisted)
+要执行的命令,Command to execute
+工作目录,Working Directory
 检测到危险命令模式，禁止执行,"Dangerous command pattern detected, execution forbidden"
-数据库查询,"Database Query"
-"执行数据库查询（仅限 SELECT）","Execute database query (SELECT only)"
-"SQL 查询语句（仅支持 SELECT）","SQL Query (SELECT only)"
-返回行数限制,"Row Limit"
+数据库查询,Database Query
+执行数据库查询（仅限 SELECT）,Execute database query (SELECT only)
+SQL 查询语句（仅支持 SELECT）,SQL Query (SELECT only)
+返回行数限制,Row Limit
 偏移量,Offset
-聊天侧边栏扩展,"Chat sidebar extension"
-在聊天控制台的侧边栏区域触发，允许其他模块在侧边栏添加自定义内容，如快捷指令、历史会话列表等。,"Triggered in the chat console sidebar so other modules can add custom content such as quick commands and session history."
-消息工具栏扩展,"Message toolbar extension"
+聊天侧边栏扩展,Chat sidebar extension
+在聊天控制台的侧边栏区域触发，允许其他模块在侧边栏添加自定义内容，如快捷指令、历史会话列表等。,Triggered in the chat console sidebar so other modules can add custom content such as quick commands and session history.
+消息工具栏扩展,Message toolbar extension
 在聊天消息的工具栏区域触发，允许其他模块为消息添加自定义操作按钮，如复制、重新生成、收藏等。,"Triggered in the message toolbar so other modules can add actions such as copy, regenerate, and bookmark."
-"SEO 助手","SEO Assistant"
-"面向关键词研究、内容优化、元数据与技术 SEO 检查的适配器。","Adapter tuned for keyword research, content optimization, metadata, and technical SEO checks."
-"IT 运维助手","IT Ops Assistant"
+SEO 助手,SEO Assistant
+面向关键词研究、内容优化、元数据与技术 SEO 检查的适配器。,"Adapter tuned for keyword research, content optimization, metadata, and technical SEO checks."
+IT 运维助手,IT Ops Assistant
 面向监控、日志分析、事件分流与变更安全操作的适配器。,"Adapter tuned for monitoring, log analysis, incident triage, and change-safe operations."
-智能体适配器,"Agent Adapter"
+智能体适配器,Agent Adapter
 默认适配器：基于角色的智能体对话，含工具、记忆上下文与安全护栏。,"Default adapter for role-based agent conversations with tools, memory context, and safety guardrails."
-会话不存在,"Session does not exist"
-会话管理,"Session Management"
-"管理 AI 对话会话","Manage AI chat sessions"
-会话列表,"Session List"
-查看会话列表,"View session list"
-查看会话,"View session"
-查看会话详情,"View session detail"
-归档会话,"Archive session"
-删除会话,"Delete session"
-角色不存在,"Role not found"
-选择角色模板,"Choose role template"
-描述业务场景与项目数量,"Describe business context and project count"
-"生成 AI 建议","Generate AI Suggestion"
-检查并保存,"Review and save"
-角色管理,"Role Management"
-管理智能体角色,"Manage agent roles"
-角色列表,"Role List"
-查看角色列表,"View role list"
-添加角色,"Add role"
-编辑角色,"Edit role"
-保存角色,"Save role"
-"AI 建议","AI Suggestion"
-"生成 AI 角色建议","Generate AI role suggestion"
-删除角色,"Delete role"
-切换角色,"Toggle Role"
-切换角色状态,"Toggle role status"
-技能不存在,"Skill not found"
-"Shell 命令","Shell Command"
+会话不存在,Session does not exist
+会话管理,Session Management
+管理 AI 对话会话,Manage AI chat sessions
+会话列表,Session List
+查看会话列表,View session list
+查看会话,View session
+查看会话详情,View session detail
+归档会话,Archive session
+删除会话,Delete session
+角色不存在,Role not found
+选择角色模板,Choose role template
+描述业务场景与项目数量,Describe business context and project count
+生成 AI 建议,Generate AI Suggestion
+检查并保存,Review and save
+角色管理,Role Management
+管理智能体角色,Manage agent roles
+角色列表,Role List
+查看角色列表,View role list
+添加角色,Add role
+编辑角色,Edit role
+保存角色,Save role
+AI 建议,AI Suggestion
+生成 AI 角色建议,Generate AI role suggestion
+删除角色,Delete role
+切换角色,Toggle Role
+切换角色状态,Toggle role status
+技能不存在,Skill not found
+Shell 命令,Shell Command
 浏览器,Browser
-"API 请求","API Request"
+API 请求,API Request
 数据库,Database
-代码执行,"Code Execution"
-技能管理,"Skill Management"
-"管理 AI 智能体技能","Manage AI agent skills"
-技能列表,"Skill List"
-查看技能列表,"View skill list"
-查看技能,"View skill"
-查看技能详情,"View skill detail"
-切换状态,"Toggle status"
-启用/禁用技能,"Enable/disable skill"
-任务不存在,"Task not found"
-调度任务,"Schedule Tasks"
-"管理 AI 智能体调度任务","Manage AI agent schedule tasks"
-任务列表,"Task List"
-查看调度任务列表,"View schedule task list"
-添加任务,"Add Task"
-添加调度任务,"Add schedule task"
-编辑任务,"Edit Task"
-编辑调度任务,"Edit schedule task"
-保存任务,"Save Task"
-保存调度任务,"Save schedule task"
-删除任务,"Delete Task"
-删除调度任务,"Delete schedule task"
-切换任务状态,"Toggle task status"
-立即执行,"Run Now"
-立即执行任务,"Run task now"
-操作成功,操作成功
-操作失败,操作失败
-记忆管理,"Memory Management"
-管理智能体记忆图谱节点与边,"Manage agent memory graph nodes and edges"
-记忆列表,"Memory List"
-查看记忆列表,"View memory list"
-聊天控制台,"Chat Console"
-"与 AI 智能体对话","Chat with AI agent"
-聊天界面,"Chat UI"
-访问聊天控制台,"Access chat console"
-消息不能为空,"Message cannot be empty"
-角色不存在或已禁用,"Role does not exist or is disabled"
+代码执行,Code Execution
+技能管理,Skill Management
+管理 AI 智能体技能,Manage AI agent skills
+技能列表,Skill List
+查看技能列表,View skill list
+查看技能,View skill
+查看技能详情,View skill detail
+切换状态,Toggle status
+启用/禁用技能,Enable/disable skill
+任务不存在,Task not found
+调度任务,Schedule Tasks
+管理 AI 智能体调度任务,Manage AI agent schedule tasks
+任务列表,Task List
+查看调度任务列表,View schedule task list
+添加任务,Add Task
+添加调度任务,Add schedule task
+编辑任务,Edit Task
+编辑调度任务,Edit schedule task
+保存任务,Save Task
+保存调度任务,Save schedule task
+删除任务,Delete Task
+删除调度任务,Delete schedule task
+切换任务状态,Toggle task status
+立即执行,Run Now
+立即执行任务,Run task now
+操作成功,Operation successful
+操作失败,Operation failed
+记忆管理,Memory Management
+管理智能体记忆图谱节点与边,Manage agent memory graph nodes and edges
+记忆列表,Memory List
+查看记忆列表,View memory list
+聊天控制台,Chat Console
+与 AI 智能体对话,Chat with AI agent
+聊天界面,Chat UI
+访问聊天控制台,Access chat console
+消息不能为空,Message cannot be empty
+角色不存在或已禁用,Role does not exist or is disabled
 成功,Success
-"会话 ID 无效","Invalid session ID"
-历史已清除,"History cleared"
-调度管理,"Schedule Management"
-让智能体按时间自动执行任务，适合巡检、汇总和定期清理。,让智能体按时间自动执行任务，适合巡检、汇总和定期清理。
-新建调度,"New Schedule"
-任务,任务
+会话 ID 无效,Invalid session ID
+历史已清除,History cleared
+调度管理,Schedule Management
+让智能体按时间自动执行任务，适合巡检、汇总和定期清理。,"Let the agent run tasks on a schedule—ideal for inspections, summaries, and periodic cleanup."
+新建调度,New Schedule
+任务,Tasks
 角色,Role
-触发,触发
+触发,Trigger
 状态,Status
-下次运行,"Next Run"
+下次运行,Next Run
 操作,Actions
 编辑,Edit
-停用,停用
+停用,Disable
 启用,Active
-还没有定时任务,还没有定时任务
-先准备好角色，再创建第一条调度。例如：每天早上生成一份运营摘要。,先准备好角色，再创建第一条调度。例如：每天早上生成一份运营摘要。
-创建第一条调度,创建第一条调度
-编辑调度,"Edit Schedule"
-写清楚要做什么、何时做、用哪个角色执行。,写清楚要做什么、何时做、用哪个角色执行。
-返回列表,返回列表
-任务名称,任务名称
-例如：每日运营摘要,例如：每日运营摘要
-执行角色,执行角色
-先不指定,先不指定
-何时执行（Cron）,何时执行（Cron）
-"例：0 9 * * * 表示每天 9:00","例：0 9 * * * 表示每天 9:00"
+还没有定时任务,No scheduled tasks yet
+先准备好角色，再创建第一条调度。例如：每天早上生成一份运营摘要。,"Prepare roles first, then create your first schedule. Example: generate an operations summary every morning."
+创建第一条调度,Create the first schedule
+编辑调度,Edit Schedule
+写清楚要做什么、何时做、用哪个角色执行。,"Clearly state what to do, when to do it, and which role should execute it."
+返回列表,Back to list
+任务名称,Task name
+例如：每日运营摘要,Example: daily operations summary
+执行角色,Execution role
+先不指定,Do not specify yet
+何时执行（Cron）,When to run (Cron)
+例：0 9 * * * 表示每天 9:00,Example: 0 9 * * * means every day at 9:00
 禁用,Disabled
-说明（可选）,说明（可选）
-要智能体做什么,要智能体做什么
-附加上下文（JSON，可选）,附加上下文（JSON，可选）
-保存调度,保存调度
-"Weline.Api 不可用，无法保存","Weline.Api 不可用，无法保存"
-保存失败,保存失败
-保存成功,"Saved successfully"
-选一个场景起步，再按需要细调权限与技能。,选一个场景起步，再按需要细调权限与技能。
-引导已开启,引导已开启
-引导已关闭,引导已关闭
-创建角色,"Create Role"
-已有角色,"Existing Roles"
-已启用,已启用
-可用模板,可用模板
-创建步骤,创建步骤
-"1. 选配置","1. 选配置"
-"单项目 / 多项目 / 企业","单项目 / 多项目 / 企业"
-"2. 选模板","2. 选模板"
-通用、编码、运维、SEO,通用、编码、运维、SEO
-"3. 管理角色","3. 管理角色"
-编辑已有智能体,编辑已有智能体
-快速开始,快速开始
-使用,使用
-使用模板,"Use Template"
-先选工作方式,先选工作方式
-告诉智能体你同时在管多少项目，权限建议会跟着变。,告诉智能体你同时在管多少项目，权限建议会跟着变。
-用此配置创建,用此配置创建
-暂无配置预设,暂无配置预设
-可以直接新建角色，稍后再补齐引导配置。,可以直接新建角色，稍后再补齐引导配置。
-或从模板开始,或从模板开始
-模板会预填人设、技能与安全边界，创建后仍可改。,模板会预填人设、技能与安全边界，创建后仍可改。
-空白新建,空白新建
+说明（可选）,Description (optional)
+要智能体做什么,What should the agent do
+附加上下文（JSON，可选）,"Additional context (JSON, optional)"
+保存调度,Save schedule
+Weline.Api 不可用，无法保存,"Weline.Api unavailable, unable to save"
+保存失败,Save failed
+保存成功,Saved successfully
+选一个场景起步，再按需要细调权限与技能。,"Pick a scenario to start, then fine-tune permissions and skills as needed."
+引导已开启,Guidance is on
+引导已关闭,Guidance is off
+创建角色,Create Role
+已有角色,Existing Roles
+已启用,Enabled
+可用模板,Available templates
+创建步骤,Creation steps
+1. 选配置,1. Select configuration
+单项目 / 多项目 / 企业,Single project / Multi-project / Enterprise
+2. 选模板,2. Select template
+通用、编码、运维、SEO,"General, coding, operations, SEO"
+3. 管理角色,3. Manage roles
+编辑已有智能体,Edit existing agent
+快速开始,Quick start
+使用,Use
+使用模板,Use Template
+先选工作方式,Choose a working mode first
+告诉智能体你同时在管多少项目，权限建议会跟着变。,Tell the agent how many projects you manage at once; permission suggestions will adjust accordingly.
+用此配置创建,Create with this configuration
+暂无配置预设,No configuration presets yet
+可以直接新建角色，稍后再补齐引导配置。,You can create a role now and finish guidance configuration later.
+或从模板开始,Or start from a template
+模板会预填人设、技能与安全边界，创建后仍可改。,"The template pre-fills persona, skills, and safety boundaries; you can still change them after creation."
+空白新建,Create blank
 名称,Name
 代码,Code
 默认,Default
-更新,更新
-还没有角色,还没有角色
-先选上方配置或模板创建第一个智能体，之后就能聊天、调度和记记忆。,先选上方配置或模板创建第一个智能体，之后就能聊天、调度和记记忆。
-创建第一个角色,创建第一个角色
-"先选模板与场景，再用 AI 建议补齐；高级权限可稍后展开。","先选模板与场景，再用 AI 建议补齐；高级权限可稍后展开。"
-引导配置,"Guided Setup"
-告诉智能体你在做什么，它会帮你填好人设与技能边界。,告诉智能体你在做什么，它会帮你填好人设与技能边界。
-推荐流程,推荐流程
-引导关闭,引导关闭
-角色模板,"Role Template"
-"可先应用模板基线，再点「生成 AI 建议」细化。","可先应用模板基线，再点「生成 AI 建议」细化。"
-工作规模,工作规模
-期望输出,"Expected Output"
-示例：带优先级的每日任务看板,示例：带优先级的每日任务看板
-"业务场景 / 目标","Business Context / Goal"
-"示例：管理 6 个项目，每日汇总并按优先级分发。","Example: Manage 6 projects with daily summary and priority routing."
-项目数量,"Project Count"
-工作流风格,"Workflow Style"
+更新,Update
+还没有角色,No roles yet
+先选上方配置或模板创建第一个智能体，之后就能聊天、调度和记记忆。,"First choose a configuration or template above to create your first agent; then you can chat, schedule, and record memories."
+创建第一个角色,Create the first role
+先选模板与场景，再用 AI 建议补齐；高级权限可稍后展开。,"Choose a template and scenario first, then complete with AI suggestions; advanced permissions can be expanded later."
+引导配置,Guided Setup
+告诉智能体你在做什么，它会帮你填好人设与技能边界。,Tell the agent what you are doing; it will help fill in the persona and skill boundaries.
+推荐流程,Recommended workflow
+引导关闭,Guidance off
+角色模板,Role Template
+可先应用模板基线，再点「生成 AI 建议」细化。,"You can apply the template baseline first, then click “Generate AI suggestions” to refine."
+工作规模,Work scale
+期望输出,Expected Output
+示例：带优先级的每日任务看板,Example: daily task board with priorities
+业务场景 / 目标,Business Context / Goal
+示例：管理 6 个项目，每日汇总并按优先级分发。,Example: Manage 6 projects with daily summary and priority routing.
+项目数量,Project Count
+工作流风格,Workflow Style
 均衡,Balanced
-速度优先,"Speed First"
-安全优先,"Safety First"
-风险等级,"Risk Level"
+速度优先,Speed First
+安全优先,Safety First
+风险等级,Risk Level
 安全,Safe
 标准,Standard
 激进,Aggressive
-应用模板基线,"Apply Template Baseline"
-显示高级设置,"Show Advanced Settings"
-建议步骤,"Suggested Steps"
-高级配置,"Advanced Configuration"
-"AI 模型","AI Model"
-使用默认模型,"Use default model"
-场景适配器,"Scenario Adapter"
-使用默认适配器,"Use default adapter"
-可用技能,可用技能
-勾选后，角色才能调用对应工具。危险技能请搭配更严权限。,勾选后，角色才能调用对应工具。危险技能请搭配更严权限。
-需谨慎,需谨慎
-需确认,需确认
-权限（每行一条）,"Permissions (one per line)"
-示例：fs.read:/app/*,"Example: fs.read:/app/*"
-"模型配置 JSON","Model config JSON"
-基本信息,"Basic Info"
-角色代码,"Role Code"
-角色名称,"Role Name"
+应用模板基线,Apply Template Baseline
+显示高级设置,Show Advanced Settings
+建议步骤,Suggested Steps
+高级配置,Advanced Configuration
+AI 模型,AI Model
+使用默认模型,Use default model
+场景适配器,Scenario Adapter
+使用默认适配器,Use default adapter
+可用技能,Available skills
+勾选后，角色才能调用对应工具。危险技能请搭配更严权限。,Only after checking the box can the role call the matching tools. Pair dangerous skills with stricter permissions.
+需谨慎,Use with caution
+需确认,Needs confirmation
+权限（每行一条）,Permissions (one per line)
+示例：fs.read:/app/*,Example: fs.read:/app/*
+模型配置 JSON,Model config JSON
+基本信息,Basic Info
+角色代码,Role Code
+角色名称,Role Name
 图标,Icon
 描述,Description
-系统提示词,"System Prompt"
-人设与行为边界,人设与行为边界
-取消,取消
-"来源：AI 建议","来源：AI 建议"
-来源：模板基线,来源：模板基线
-未找到模板,未找到模板
-已应用模板基线,已应用模板基线
-选择配置以获取项目规模默认值。,"Select a profile to get project-scale defaults."
-"Weline.Api 不可用，无法生成建议","Weline.Api 不可用，无法生成建议"
-正在生成…,正在生成…
-建议生成失败,建议生成失败
-建议已生成,"Suggestion generated"
-隐藏高级设置,隐藏高级设置
-智能体从对话里记住的事实、偏好与事件。不需要的可以归档。,智能体从对话里记住的事实、偏好与事件。不需要的可以归档。
-记忆节点,记忆节点
-近期关系,近期关系
-类型,类型
-全部类型,全部类型
-全部状态,全部状态
+系统提示词,System Prompt
+人设与行为边界,Persona and behavior boundaries
+取消,Cancel
+来源：AI 建议,Source: AI suggestion
+来源：模板基线,Source: template baseline
+未找到模板,Template not found
+已应用模板基线,Template baseline applied
+选择配置以获取项目规模默认值。,Select a profile to get project-scale defaults.
+Weline.Api 不可用，无法生成建议,"Weline.Api unavailable, unable to generate suggestions"
+正在生成…,Generating...
+建议生成失败,Failed to generate suggestion
+建议已生成,Suggestion generated
+隐藏高级设置,Hide advanced settings
+智能体从对话里记住的事实、偏好与事件。不需要的可以归档。,"Facts, preferences, and events the agent remembers from conversations. Archive what you don’t need."
+记忆节点,Memory node
+近期关系,Recent relationships
+类型,Type
+全部类型,All Types
+全部状态,All Statuses
 筛选,Filter
-内容,内容
-重要度,重要度
-还没有可展示的记忆,还没有可展示的记忆
-多聊几轮有价值的信息后，智能体会自动提炼记忆节点。,多聊几轮有价值的信息后，智能体会自动提炼记忆节点。
-去聊天产生记忆,去聊天产生记忆
-起点,起点
-关系,关系
-终点,终点
-技能详情,"Skill Detail"
-查看技能能力边界、参数约定与权限要求，便于配置角色时心里有数。,查看技能能力边界、参数约定与权限要求，便于配置角色时心里有数。
-未命名技能,未命名技能
-常规,常规
-执行前确认,执行前确认
-可直接执行,可直接执行
-"技能 ID","技能 ID"
-实现类,实现类
-暂无描述。,暂无描述。
+内容,Content
+重要度,Importance
+还没有可展示的记忆,No memories to display yet
+多聊几轮有价值的信息后，智能体会自动提炼记忆节点。,"After a few rounds of valuable information, the agent will automatically extract memory nodes."
+去聊天产生记忆,Chat to create memories
+起点,Starting point
+关系,Relationship
+终点,End point
+技能详情,Skill Detail
+查看技能能力边界、参数约定与权限要求，便于配置角色时心里有数。,"View skill capability boundaries, parameter conventions, and permission requirements so you know what to expect when configuring roles."
+未命名技能,Unnamed skill
+常规,Standard
+执行前确认,Confirm before execution
+可直接执行,Can run directly
+技能 ID,Skill ID
+实现类,Implementation class
+暂无描述。,No description yet.
 参数,Parameters
-未声明参数。,未声明参数。
-所需权限,"Permission Required"
-无额外权限要求。,无额外权限要求。
-技能是智能体能调用的工具。危险技能会要求更严的角色权限。,技能是智能体能调用的工具。危险技能会要求更严的角色权限。
-当前列表,当前列表
-危险技能,危险技能
-按分类查看,按分类查看
-全部技能,全部技能
+未声明参数。,No parameters declared.
+所需权限,Permission Required
+无额外权限要求。,No additional permission requirements.
+技能是智能体能调用的工具。危险技能会要求更严的角色权限。,Skills are tools an agent can call. Dangerous skills require stricter role permissions.
+当前列表,Current list
+危险技能,Dangerous skills
+按分类查看,View by category
+全部技能,All skills
 技能,Skills
 分类,Category
-风险,风险
+风险,Risk
 查看,View
-这里还没有技能,这里还没有技能
-安装或启用内置技能后，角色才能真正“动手”读写文件、查库或发请求。,安装或启用内置技能后，角色才能真正“动手”读写文件、查库或发请求。
-选一个已启用角色，开始对话或验证技能是否可用。,选一个已启用角色，开始对话或验证技能是否可用。
-历史会话,历史会话
-管理角色,管理角色
-可用角色,"Available Roles"
-没有可用角色,没有可用角色
-请先创建并启用至少一个角色，再回来聊天。,请先创建并启用至少一个角色，再回来聊天。
-去创建角色,去创建角色
-最近会话,最近会话
-未命名会话,未命名会话
-还没有会话。选角色说一句就会出现在这里。,还没有会话。选角色说一句就会出现在这里。
-对话区,对话区
-未选择角色,未选择角色
-先选左侧角色，再开始对话,先选左侧角色，再开始对话
-发送后会在此显示你的消息与智能体回复。工具调用结果会出现在时间线里。,发送后会在此显示你的消息与智能体回复。工具调用结果会出现在时间线里。
+这里还没有技能,No skills here yet
+安装或启用内置技能后，角色才能真正“动手”读写文件、查库或发请求。,"After installing or enabling built-in skills, the role can truly get hands-on: read/write files, query the database, or send requests."
+选一个已启用角色，开始对话或验证技能是否可用。,Select an enabled role to start a conversation or verify that skills are available.
+历史会话,Chat history
+管理角色,Manage roles
+可用角色,Available Roles
+没有可用角色,No roles available
+请先创建并启用至少一个角色，再回来聊天。,"Please create and enable at least one role, then come back to chat."
+去创建角色,Go create a role
+最近会话,Recent sessions
+未命名会话,Untitled session
+还没有会话。选角色说一句就会出现在这里。,No sessions yet. Pick a role and say something—it will show up here.
+对话区,Conversation area
+未选择角色,No role selected
+先选左侧角色，再开始对话,"Select a role on the left, then start chatting"
+发送后会在此显示你的消息与智能体回复。工具调用结果会出现在时间线里。,"After sending, your message and the agent’s reply appear here. Tool call results show up in the timeline."
 消息,Messages
-输入要问智能体的话…,输入要问智能体的话…
-发送,发送
-新会话,新会话
-用户,用户
+输入要问智能体的话…,Enter what you want to ask the agent…
+发送,Send
+新会话,New session
+用户,User
 智能体,Agent
-系统,系统
-工具,工具
-未知,未知
-会话详情,"Session Detail"
-回放完整对话时间线，便于排查角色行为与上下文。,回放完整对话时间线，便于排查角色行为与上下文。
-会话信息,"Session Info"
+系统,System
+工具,Tools
+未知,Unknown
+会话详情,Session Detail
+回放完整对话时间线，便于排查角色行为与上下文。,Replay the full conversation timeline to troubleshoot role behaviour and context.
+会话信息,Session Info
 渠道,Channel
-"上下文 ID","Context ID"
-消息数,"Message Count"
-更新时间,"Updated At"
-消息时间线,消息时间线
-该会话暂无消息,该会话暂无消息
-去聊天控制台跟角色说几句，这里就会出现对话记录。,去聊天控制台跟角色说几句，这里就会出现对话记录。
-去聊天,去聊天
-查看人与智能体的对话记录，便于回放和排查。,查看人与智能体的对话记录，便于回放和排查。
-打开聊天台,打开聊天台
+上下文 ID,Context ID
+消息数,Message Count
+更新时间,Updated At
+消息时间线,Message timeline
+该会话暂无消息,This session has no messages yet
+去聊天控制台跟角色说几句，这里就会出现对话记录。,"Go to the chat console, say a few words to the role, and conversation records will appear here."
+去聊天,Go to chat
+查看人与智能体的对话记录，便于回放和排查。,View conversation logs between people and agents for replay and troubleshooting.
+打开聊天台,Open chat console
 标题,Title
-归档,归档
-删除,删除
-还没有会话,还没有会话
-在路径下按模式搜索文件，返回匹配行及其文件路径与行号。,"Search for a pattern in files under path. Returns matching lines with file path and line number."
-搜索模式（支持正则）,"Search pattern (regex supported)"
-"搜索目录（相对项目根），默认 app/code","Directory to search (relative to project root), default app/code"
-"文件 glob 过滤，例如 *.php","File glob filter, e.g. *.php"
-最大返回结果数,"Maximum results to return"
-"pattern 必填","pattern is required"
-无效或不可访问的路径：%{1},"Invalid or inaccessible path: %{1}"
-"执行 Shell 命令。仅限安全命令（git、npm、php、grep 等）。","Execute a shell command. Restricted to safe commands (git, npm, php, grep, etc)."
+归档,Archive
+删除,Delete
+还没有会话,No sessions yet
+在路径下按模式搜索文件，返回匹配行及其文件路径与行号。,Search for a pattern in files under path. Returns matching lines with file path and line number.
+搜索模式（支持正则）,Search pattern (regex supported)
+搜索目录（相对项目根），默认 app/code,"Directory to search (relative to project root), default app/code"
+文件 glob 过滤，例如 *.php,"File glob filter, e.g. *.php"
+最大返回结果数,Maximum results to return
+pattern 必填,pattern is required
+无效或不可访问的路径：%{1},Invalid or inaccessible path: %{1}
+执行 Shell 命令。仅限安全命令（git、npm、php、grep 等）。,"Execute a shell command. Restricted to safe commands (git, npm, php, grep, etc)."
 工作目录，可选,"Working directory, optional"
-"command 必填","command is required"
-"命令不允许。仅可使用安全命令（git、npm、php、grep 等）。","Command not allowed. Use safe commands only (git, npm, php, grep, etc)."
-列出目录中的文件与子目录。,"List files and subdirectories in a directory."
-目录路径（相对项目根）,"Directory path (relative to project root)"
-"path 必填","path is required"
-访问被拒绝：路径必须在工作区内,"Access denied: path must be within workspace"
-不是目录：%{1},"Not a directory: %{1}"
-列出目录失败,"Failed to list directory"
-"对代码库做语义搜索：按含义查找相关代码、类与 API。用于探索结构、找相似实现或理解工作原理。","Semantic search over codebase: finds relevant code, classes, APIs by meaning. Use for exploring structure, finding similar implementations, or understanding how something works."
-"自然语言或关键词（例如「会话存在哪里」「处理 ACL 的类」）","Natural language or keywords (e.g. where is session stored, class that handles ACL)"
-"过滤：all|docs|api|code|config，默认 all","Filter: all|docs|api|code|config. Default all"
-"按模块过滤，例如 Weline_Framework、Weline_Ai","Filter by module, e.g. Weline_Framework, Weline_Ai"
-最大结果数（1-30）,"Max results (1-30)"
-"query 必填","query is required"
+command 必填,command is required
+命令不允许。仅可使用安全命令（git、npm、php、grep 等）。,"Command not allowed. Use safe commands only (git, npm, php, grep, etc)."
+列出目录中的文件与子目录。,List files and subdirectories in a directory.
+目录路径（相对项目根）,Directory path (relative to project root)
+path 必填,path is required
+访问被拒绝：路径必须在工作区内,Access denied: path must be within workspace
+不是目录：%{1},Not a directory: %{1}
+列出目录失败,Failed to list directory
+对代码库做语义搜索：按含义查找相关代码、类与 API。用于探索结构、找相似实现或理解工作原理。,"Semantic search over codebase: finds relevant code, classes, APIs by meaning. Use for exploring structure, finding similar implementations, or understanding how something works."
+自然语言或关键词（例如「会话存在哪里」「处理 ACL 的类」）,"Natural language or keywords (e.g. where is session stored, class that handles ACL)"
+过滤：all|docs|api|code|config，默认 all,Filter: all|docs|api|code|config. Default all
+按模块过滤，例如 Weline_Framework、Weline_Ai,"Filter by module, e.g. Weline_Framework, Weline_Ai"
+最大结果数（1-30）,Max results (1-30)
+query 必填,query is required
 读取工作区文件内容。路径可为相对项目根或绝对路径。用于查看代码、配置与模板。,"Read file contents from the workspace. Path is relative to project root or absolute. Use for inspecting code, configs, templates."
-文件路径（相对项目根或绝对路径）,"File path (relative to project root or absolute)"
-"起始行（从 1 开始），可选","Start line (1-based), optional"
+文件路径（相对项目根或绝对路径）,File path (relative to project root or absolute)
+起始行（从 1 开始），可选,"Start line (1-based), optional"
 读取行数，可选,"Number of lines to read, optional"
-文件未找到：%{1},"File not found: %{1}"
-路径不是文件：%{1},"Path is not a file: %{1}"
-读取文件失败：%{1},"Failed to read file: %{1}"
-"按 glob 模式查找文件（例如 **/*.php、app/code/**/*.phtml）。","Find files matching a glob pattern (e.g. **/*.php, app/code/**/*.phtml)."
-"Glob 模式，例如 **/*.php 或 app/code/**/*.php","Glob pattern, e.g. **/*.php or app/code/**/*.php"
-"搜索基路径，默认 app/code","Base path to search, default app/code"
-最大返回文件数,"Maximum files to return"
-"glob_pattern 必填","glob_pattern is required"
-无效路径：%{1},"Invalid path: %{1}"
-"在文件中搜索并替换文本。old_string 必须精确匹配。用于精确改代码。","Search and replace text in a file. old_string must match exactly. Use for precise code edits."
-要编辑的文件路径,"File path to edit"
-要查找的精确字符串（含空白必须匹配）,"Exact string to find (must match including whitespace)"
-替换字符串,"Replacement string"
-"path、old_string 与 new_string 必填","path, old_string and new_string are required"
-"文件中未找到 old_string。请确保含空白与换行精确匹配。","old_string not found in file. Ensure exact match including whitespace and newlines."
-替换失败,"Replacement failed"
-写入文件失败：%{1},"Failed to write file: %{1}"
-"已应用 %{1} 处替换","%{1} replacement(s) applied"
-角色代码和名称必填,"Role code and name are required"
-角色代码已存在,"Role code already exists"
-默认角色不可删除,"Default role cannot be deleted"
-删除成功,"Deleted successfully"
-状态已更新,"Status updated"
-任务名称和提示词不能为空,"Task name and prompt cannot be empty"
-任务已加入执行队列,"Task queued for execution"
+文件未找到：%{1},File not found: %{1}
+路径不是文件：%{1},Path is not a file: %{1}
+读取文件失败：%{1},Failed to read file: %{1}
+按 glob 模式查找文件（例如 **/*.php、app/code/**/*.phtml）。,"Find files matching a glob pattern (e.g. **/*.php, app/code/**/*.phtml)."
+Glob 模式，例如 **/*.php 或 app/code/**/*.php,"Glob pattern, e.g. **/*.php or app/code/**/*.php"
+搜索基路径，默认 app/code,"Base path to search, default app/code"
+最大返回文件数,Maximum files to return
+glob_pattern 必填,glob_pattern is required
+无效路径：%{1},Invalid path: %{1}
+在文件中搜索并替换文本。old_string 必须精确匹配。用于精确改代码。,Search and replace text in a file. old_string must match exactly. Use for precise code edits.
+要编辑的文件路径,File path to edit
+要查找的精确字符串（含空白必须匹配）,Exact string to find (must match including whitespace)
+替换字符串,Replacement string
+path、old_string 与 new_string 必填,"path, old_string and new_string are required"
+文件中未找到 old_string。请确保含空白与换行精确匹配。,old_string not found in file. Ensure exact match including whitespace and newlines.
+替换失败,Replacement failed
+写入文件失败：%{1},Failed to write file: %{1}
+已应用 %{1} 处替换,%{1} replacement(s) applied
+角色代码和名称必填,Role code and name are required
+角色代码已存在,Role code already exists
+默认角色不可删除,Default role cannot be deleted
+删除成功,Deleted successfully
+状态已更新,Status updated
+任务名称和提示词不能为空,Task name and prompt cannot be empty
+任务已加入执行队列,Task queued for execution
 已归档,Archived
 已删除,Deleted
-请先选择角色,请先选择角色
-会话与角色不匹配,会话与角色不匹配
-对话失败,对话失败
-回复已生成,回复已生成
-"AI 建议不可用，已应用模板草稿。","AI suggestion unavailable, applied template draft."
+请先选择角色,Please select a role first
+会话与角色不匹配,Session and role mismatch
+对话失败,Conversation failed
+回复已生成,Reply generated
+AI 建议不可用，已应用模板草稿。,"AI suggestion unavailable, applied template draft."
 未找到可用模型，已应用模板草稿。,"No active model found, applied template draft."
-完整对话体验即将接入,完整对话体验即将接入
-当前可先确认左侧角色是否齐全。流式聊天与工具调用面板会在此展开。,当前可先确认左侧角色是否齐全。流式聊天与工具调用面板会在此展开。
-查看历史会话,查看历史会话
+完整对话体验即将接入,Full conversation experience coming soon
+当前可先确认左侧角色是否齐全。流式聊天与工具调用面板会在此展开。,"For now, confirm that the roles on the left are complete. The streaming chat and tool-call panel will expand here."
+查看历史会话,View conversation history
 已暂停,Paused
-用自然语言写清楚目标，例如：汇总昨日订单异常并给出处理建议。,用自然语言写清楚目标，例如：汇总昨日订单异常并给出处理建议。
-响应无效,响应无效
-"角色 ID","Role ID"
+用自然语言写清楚目标，例如：汇总昨日订单异常并给出处理建议。,"Describe the goal in natural language, e.g.: summarize yesterday's order anomalies and suggest actions."
+响应无效,Invalid response
+角色 ID,Role ID
 触发器,Trigger
-暂无调度任务。,"No schedules found."
-创建调度,"Create Schedule"
+暂无调度任务。,No schedules found.
+创建调度,Create Schedule
 返回,Back
-无角色,"No role"
-"Cron 表达式","Cron Expression"
+无角色,No role
+Cron 表达式,Cron Expression
 提示词,Prompt
-"上下文 JSON","Context JSON"
+上下文 JSON,Context JSON
 保存,Save
-引导式角色配置,"Guided Role Setup"
-"从配置与模板预设开始，再用 AI 建议自动填充高级字段。","Start with profile and template presets, then use AI suggestion to auto-fill advanced fields."
-引导已启用,"Guide Enabled"
-引导已禁用,"Guide Disabled"
-创建引导式角色,"Create Guided Role"
-使用此配置,"Use This Profile"
-模板快速开始,"Template Quick Start"
-新建角色,"New Role"
+引导式角色配置,Guided Role Setup
+从配置与模板预设开始，再用 AI 建议自动填充高级字段。,"Start with profile and template presets, then use AI suggestion to auto-fill advanced fields."
+引导已启用,Guide Enabled
+引导已禁用,Guide Disabled
+创建引导式角色,Create Guided Role
+使用此配置,Use This Profile
+模板快速开始,Template Quick Start
+新建角色,New Role
 是,Yes
 否,No
-暂无角色记录。,"No role records yet."
+暂无角色记录。,No role records yet.
 推荐,Recommended
-"请先选择模板。可立即应用基线配置，也可选择运行 AI 建议。","Choose a template first. You can apply baseline config instantly, then optionally run AI suggestion."
-智能体配置,"Agent Profile"
-示例：自动创建带优先级的每日任务看板。,"Example: Auto-create daily task board with priorities."
+请先选择模板。可立即应用基线配置，也可选择运行 AI 建议。,"Choose a template first. You can apply baseline config instantly, then optionally run AI suggestion."
+智能体配置,Agent Profile
+示例：自动创建带优先级的每日任务看板。,Example: Auto-create daily task board with priorities.
 危险,Dangerous
-需要确认,"Requires Confirmation"
+需要确认,Requires Confirmation
 ID,ID
 类名,Class
 全部,All
-暂无技能记录。,"No skill records found."
-智能体聊天控制台,"Agent Chat Console"
-未找到已启用角色。请先创建并启用角色。,"No enabled role found. Please create and enable roles first."
-控制台状态,"Console Status"
-"后台控制台入口正常。请通过 API 或前台聊天入口发送消息。","Backend console entry is healthy. Use API or frontend chat entry to send messages."
-角色管理：配置角色/模型/技能与权限。,"Role management: configure role/model/skills and permissions."
-会话管理：查看聊天历史与已归档会话。,"Session management: inspect chat history and archived conversations."
-调度管理：创建自动提示词任务。,"Schedule management: create automatic prompt jobs."
-前往角色管理,"Go To Role Management"
-该会话暂无消息。,"No messages in this session yet."
+暂无技能记录。,No skill records found.
+智能体聊天控制台,Agent Chat Console
+未找到已启用角色。请先创建并启用角色。,No enabled role found. Please create and enable roles first.
+控制台状态,Console Status
+后台控制台入口正常。请通过 API 或前台聊天入口发送消息。,Backend console entry is healthy. Use API or frontend chat entry to send messages.
+角色管理：配置角色/模型/技能与权限。,Role management: configure role/model/skills and permissions.
+会话管理：查看聊天历史与已归档会话。,Session management: inspect chat history and archived conversations.
+调度管理：创建自动提示词任务。,Schedule management: create automatic prompt jobs.
+前往角色管理,Go To Role Management
+该会话暂无消息。,No messages in this session yet.
 会话,Sessions
-暂无会话。,"No sessions found."
-在路径下按模式搜索文件。,"Search for a pattern in files under path."
-"执行 Shell 命令。仅限安全命令。","Execute a shell command. Restricted to safe commands."
-"对代码库做语义搜索（向量 + 关键词）。用 codebase_search 做基于含义的查询。","Semantic search over codebase (vector + keyword). Use codebase_search for meaning-based queries."
-"按 glob 模式查找文件。","Find files matching a glob pattern."
+暂无会话。,No sessions found.
+在路径下按模式搜索文件。,Search for a pattern in files under path.
+执行 Shell 命令。仅限安全命令。,Execute a shell command. Restricted to safe commands.
+对代码库做语义搜索（向量 + 关键词）。用 codebase_search 做基于含义的查询。,Semantic search over codebase (vector + keyword). Use codebase_search for meaning-based queries.
+按 glob 模式查找文件。,Find files matching a glob pattern.
 复制,Copy
 重新生成,Regenerate
 收藏,Bookmark
-单项目,"Single Project"
-多项目,"Multi Project"
-企业治理,"Enterprise Governance"
-适合单个项目的轻量配置。,"Simple setup for one project with minimal overhead."
-适合并行管理多个项目的团队。,"Recommended for teams managing many projects in parallel."
-以治理与安全为先，审批更清晰。,"Governance-first setup with safer defaults and clear approvals."
-适合单个项目的轻量流程。,"Simple workflow for one project."
-适合多项目并行的优先级流程。,"Prioritized workflow for many projects."
-严格安全与治理模式。,"Strict safety and governance mode."
-"生成 AI 建议并自动填充字段","Generate AI suggestion and auto-fill fields"
-检查高级设置并保存,"Review advanced settings and save"
-通用助手,"General Assistant"
-日常多项目协作与轻量执行。,"Daily multi-project collaboration and lightweight execution."
-编码助手,"Coding Assistant"
-"代码阅读、调试、Shell 诊断与补丁规划。","Code reading, debugging, shell diagnostics, and patch planning."
+单项目,Single Project
+多项目,Multi Project
+企业治理,Enterprise Governance
+适合单个项目的轻量配置。,Simple setup for one project with minimal overhead.
+适合并行管理多个项目的团队。,Recommended for teams managing many projects in parallel.
+以治理与安全为先，审批更清晰。,Governance-first setup with safer defaults and clear approvals.
+适合单个项目的轻量流程。,Simple workflow for one project.
+适合多项目并行的优先级流程。,Prioritized workflow for many projects.
+严格安全与治理模式。,Strict safety and governance mode.
+生成 AI 建议并自动填充字段,Generate AI suggestion and auto-fill fields
+检查高级设置并保存,Review advanced settings and save
+通用助手,General Assistant
+日常多项目协作与轻量执行。,Daily multi-project collaboration and lightweight execution.
+编码助手,Coding Assistant
+代码阅读、调试、Shell 诊断与补丁规划。,"Code reading, debugging, shell diagnostics, and patch planning."
 监控、事件分流与稳定性优先排障。,"Monitoring, incident triage, and stability-first troubleshooting."
 关键词策略、优化规划与内容结构指导。,"Keyword strategy, optimization planning, and content structure guidance."
 协调,Coordination
 汇总,Summaries
-轻量运维,"Light ops"
+轻量运维,Light ops
 调试,Debugging
 自动化,Automation
-实现支持,"Implementation support"
-健康检查,"Health checks"
-日志分析,"Log analysis"
-"事件 SOP","Incident SOP"
+实现支持,Implementation support
+健康检查,Health checks
+日志分析,Log analysis
+事件 SOP,Incident SOP
 关键词,Keywords
-页面优化,"Page optimization"
-内容规划,"Content planning"
-面向单项目的轻量协作助手。,"Focused assistant for one project with low overhead coordination."
-针对单项目聚焦优化。,"Optimized for single-project focus."
-以治理为先、可审计可预期的执行助手。,"Governance-first assistant with predictable and auditable execution."
-针对治理与合规优化。,"Optimized for governance and compliance."
-面向多项目并行与优先级分发的协调助手。,"Coordinator assistant for many parallel projects with priority routing."
-针对多项目路由优化。,"Optimized for multi-project routing."
-"要执行的命令（例如 php bin/w cache:clear）","Command to run (e.g. php bin/w cache:clear)"
+页面优化,Page optimization
+内容规划,Content planning
+面向单项目的轻量协作助手。,Focused assistant for one project with low overhead coordination.
+针对单项目聚焦优化。,Optimized for single-project focus.
+以治理为先、可审计可预期的执行助手。,Governance-first assistant with predictable and auditable execution.
+针对治理与合规优化。,Optimized for governance and compliance.
+面向多项目并行与优先级分发的协调助手。,Coordinator assistant for many parallel projects with priority routing.
+针对多项目路由优化。,Optimized for multi-project routing.
+要执行的命令（例如 php bin/w cache:clear）,Command to run (e.g. php bin/w cache:clear)

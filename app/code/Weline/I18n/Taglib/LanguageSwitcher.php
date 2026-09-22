@@ -6,6 +6,7 @@ namespace Weline\I18n\Taglib;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Phrase\DictionaryCacheNamespace;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -177,6 +178,22 @@ class LanguageSwitcher implements TaglibInterface
             // WLS only loads the current request module CSV into Phrase layers.
             // Login/header pages are often Weline_Admin / Theme, so chrome copy
             // must come from Weline_I18n's own dictionary for displayLocale.
+            $chromeSources = [
+                '搜索国家、语言或代码...',
+                '切换语言',
+                '没有匹配的语言',
+                '申请支持其他语言',
+                '正在加载语言目录与人机验证...',
+                '申请表加载失败',
+                '重新加载',
+                '加载失败，请稍后重试',
+                '关闭',
+                '未分组国家',
+            ];
+            try {
+                Parser::prefetchWords($chromeSources, $displayLocale);
+            } catch (\Throwable) {
+            }
             $searchPlaceholder = $searchPlaceholderAttr !== ''
                 ? $searchPlaceholderAttr
                 : self::translateChrome('搜索国家、语言或代码...', $displayLocale);
@@ -997,6 +1014,19 @@ class LanguageSwitcher implements TaglibInterface
         $dictionary = self::loadChromeDictionary($locale);
         if (isset($dictionary[$source]) && $dictionary[$source] !== '') {
             return $dictionary[$source];
+        }
+        // 模块 CSV 仅 zh/en；非中英语种 chrome 走全局词典预取（WLS 热路径不读整本 language 包）。
+        try {
+            $prefetched = \trim((string)(Parser::getPrefetchedGlobalWord($locale, $source) ?? ''));
+            if ($prefetched !== '') {
+                return $prefetched;
+            }
+            Parser::prefetchWords([$source], $locale);
+            $prefetched = \trim((string)(Parser::getPrefetchedGlobalWord($locale, $source) ?? ''));
+            if ($prefetched !== '') {
+                return $prefetched;
+            }
+        } catch (\Throwable) {
         }
         try {
             $fallback = (string)__($source);

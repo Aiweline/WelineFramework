@@ -775,7 +775,7 @@ try {
     $sortedNames = $names;
     sort($sortedNames);
     check($sortedNames === $indexTools, 'compact tool surface equals the nine index/knowledge tools');
-    check(ToolService::VERSION === '0.13.14', 'tool service version is 0.13.14');
+    check(ToolService::VERSION === '0.13.21', 'tool service version is 0.13.21');
     check(str_contains(substr(ToolService::instructions(), 0, 512), 'prepare_project'), 'first 512 instruction characters contain prepare_project');
     check(str_contains(ToolService::instructions(), 'resolve_task_context'), 'instructions mention resolve_task_context');
     check(str_contains(ToolService::instructions(), 'resolve_skill'), 'instructions mention resolve_skill');

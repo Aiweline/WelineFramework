@@ -7,5 +7,5 @@ Use `Weline_Customer::frontend::account::login::providers` to inject **non-OAuth
 Implementation path examples:
 
 - Extends OAuth providers: `extends.php` → `extends/module/Weline_Customer/SocialLoginProvider/`
-- Slot + widget: `view/templates/frontend/account/login.phtml`, `extends/module/Weline_Widget/Weline_Customer/widget.php`, `view/templates/frontend/widgets/account-social-login.phtml`
+- Slot + widget: `view/templates/frontend/account/login.phtml`（**仅声明槽**，禁止旁路 `fetch` 同部件）、`extends/module/Weline_Widget/Weline_Customer/widget.php`、`view/templates/frontend/widgets/account-social-login.phtml`
 - Hook identity bridge: `view/hooks/Weline_Customer/frontend/account/login/providers.phtml`

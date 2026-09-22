@@ -1,281 +1,282 @@
-﻿元数据路径扫描,元数据路径扫描
-用于触发元数据路径扫描事件，允许其他模块监听并处理扫描任务。扫描器会扫描指定路径下的文件，提取元数据信息并存储到数据库中。,用于触发元数据路径扫描事件，允许其他模块监听并处理扫描任务。扫描器会扫描指定路径下的文件，提取元数据信息并存储到数据库中。
-"按可信请求 Scope 解析 public.* 命名空间配置。","按可信请求 Scope 解析 public.* 命名空间配置。"
-"前台 Meta 读取仅允许 public.* 命名空间","前台 Meta 读取仅允许 public.* 命名空间"
-"Meta config_key 不能为空","Meta config_key 不能为空"
-"当前请求没有可用的商城 Scope","当前请求没有可用的商城 Scope"
+元数据路径扫描,Metadata path scan
+用于触发元数据路径扫描事件，允许其他模块监听并处理扫描任务。扫描器会扫描指定路径下的文件，提取元数据信息并存储到数据库中。,"This triggers a metadata path scan event, allowing other modules to listen to and process the scan task. The scanner scans files within the specified path, extracts metadata information, and stores it in a database."
+按可信请求 Scope 解析 public.* 命名空间配置。,Parse the public.* namespace configuration based on the trusted request scope.
+前台 Meta 读取仅允许 public.* 命名空间,"The frontend meta reads only namespaces that start with ""public.*""."
+Meta config_key 不能为空,The Meta config_key cannot be empty.
+当前请求没有可用的商城 Scope,No available store scopes for the current request.
 关闭,Close
-翻译窗口,翻译窗口
+翻译窗口,Translation window.
 刷新,Refresh
-提交,提交
-"MetaConfig 指纹%{1}失败：%{2}","MetaConfig 指纹%{1}失败：%{2}"
-"没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>","没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>"
-请设置meta标签key属性！,请设置meta标签key属性！
-翻译完成!,翻译完成!
-命名空间参数不能为空,命名空间参数不能为空
-参数不完整,参数不完整
-"找到的 Meta 配置类型不正确：%{meta_identify}，期望文件类型，实际为：%{type}","找到的 Meta 配置类型不正确：%{meta_identify}，期望文件类型，实际为：%{type}"
-"未找到对应的 Meta 配置：%{meta_identify}。请确认该配置已正确扫描到数据库中。","未找到对应的 Meta 配置：%{meta_identify}。请确认该配置已正确扫描到数据库中。"
-"Meta 配置缺少命名空间：","Meta 配置缺少命名空间："
-"未找到对应的 Meta 配置：","未找到对应的 Meta 配置："
-"保存参数 %{param} 失败：%{error}","保存参数 %{param} 失败：%{error}"
-配置已保存,配置已保存
-配置已保存（已保存：%d，跳过：%d）,配置已保存（已保存：%d，跳过：%d）
-保存失败：,保存失败：
-未找到对应的字段配置：%{param},未找到对应的字段配置：%{param}
-该字段未启用多语言：%{param},该字段未启用多语言：%{param}
-"未找到对应的 Meta 配置：%{meta_identify}","未找到对应的 Meta 配置：%{meta_identify}"
-未找到参数定义：%{param},未找到参数定义：%{param}
-获取翻译数据失败：,获取翻译数据失败：
-"翻译已保存（共 %{count} 条）","翻译已保存（共 %{count} 条）"
-保存翻译失败：,保存翻译失败：
-获取语言列表失败：,获取语言列表失败：
-未找到对应的字段配置：%{field},未找到对应的字段配置：%{field}
-该字段未启用多语言：%{field},该字段未启用多语言：%{field}
-保存成功,保存成功
-请指定扫描路径,请指定扫描路径
-扫描任务已提交，请查看扫描结果,扫描任务已提交，请查看扫描结果
-扫描失败：%1,扫描失败：%1
-"扫描完成：成功 %1 个，失败 %2 个，跳过 %3 个","扫描完成：成功 %1 个，失败 %2 个，跳过 %3 个"
-"文件扫描失败：%1 - %2","文件扫描失败：%1 - %2"
-"MetaConfig 部分更新要求已完成且有效的身份指纹，config_id=%{1}","MetaConfig 部分更新要求已完成且有效的身份指纹，config_id=%{1}"
-"MetaConfig 部分更新无法读取原身份，config_id=%{1}","MetaConfig 部分更新无法读取原身份，config_id=%{1}"
-"MetaConfig 可选 owner 身份存在歧义，config_id=%{1}","MetaConfig 可选 owner 身份存在歧义，config_id=%{1}"
-"MetaConfig 兼容删除的事务连接与精确身份不匹配，config_id=%{1}","MetaConfig 兼容删除的事务连接与精确身份不匹配，config_id=%{1}"
-"MetaConfig 兼容删除未能删除精确记录，config_id=%{1}","MetaConfig 兼容删除未能删除精确记录，config_id=%{1}"
-请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,请前往i18n模块收集词语后重试！或者开启实时收集词语功能！
-填写正确！,填写正确！
-Meta翻译,Meta翻译
-筛选条件,筛选条件
-命名空间,命名空间
-请选择,请选择
-区域,区域
-全部,全部
+提交,Submit
+MetaConfig 指纹%{1}失败：%{2},MetaConfig fingerprint %{1} failed: %{2}
+"没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>","No localization data found! <a target=""_blank"" href=""%{url}"">Go to I18n installation and enable</a>. Search for a local language: %{search} or manually refresh the page: <a href=""%{refresh}"">Refresh</a>"
+请设置meta标签key属性！,Please set the `key` attribute for the meta tags!
+翻译完成!,Translation complete!
+命名空间参数不能为空,Namespace parameters cannot be empty.
+参数不完整,Incomplete parameters
+找到的 Meta 配置类型不正确：%{meta_identify}，期望文件类型，实际为：%{type},"The identified Meta configuration type is incorrect: %{meta_identify}. Expected file type, but found: %{type}."
+未找到对应的 Meta 配置：%{meta_identify}。请确认该配置已正确扫描到数据库中。,No corresponding Meta configuration found: %{meta_identify}. Please ensure that this configuration has been correctly scanned into the database.
+Meta 配置缺少命名空间：,Meta configuration is missing the namespace.
+未找到对应的 Meta 配置：,Meta configuration not found:
+保存参数 %{param} 失败：%{error},Failed to save parameter %{param}: %{error}
+配置已保存,Configuration saved
+配置已保存（已保存：%d，跳过：%d）,"Configuration saved (saved: %d, skipped: %d)"
+保存失败：,Save failed:
+未找到对应的字段配置：%{param},No corresponding field configuration found: %{param}
+该字段未启用多语言：%{param},This field does not support multilingual functionality: %{param}
+未找到对应的 Meta 配置：%{meta_identify},Meta configuration not found: %{meta_identify}
+未找到参数定义：%{param},Parameter definition not found: %{param}
+获取翻译数据失败：,Failed to retrieve translation data.
+翻译已保存（共 %{count} 条）,Translations saved (total: %{count} items).
+保存翻译失败：,Failed to save translation:
+获取语言列表失败：,Failed to retrieve the list of languages.
+未找到对应的字段配置：%{field},No corresponding field configuration found: %{field}
+该字段未启用多语言：%{field},This field does not support multiple languages: %{field}
+保存成功,Save successful
+请指定扫描路径,Please specify the scan path.
+扫描任务已提交，请查看扫描结果,The scanning task has been submitted. Please check the scan results.
+扫描失败：%1,Scan failed: %1
+扫描完成：成功 %1 个，失败 %2 个，跳过 %3 个,"Scanning complete: %1 successful, %2 failed, %3 skipped."
+文件扫描失败：%1 - %2,File scanning failed: %1 - %2
+MetaConfig 部分更新要求已完成且有效的身份指纹，config_id=%{1},"MetaConfig updates have been completed and require a valid identity fingerprint, config_id=%{1}."
+MetaConfig 部分更新无法读取原身份，config_id=%{1},"MetaConfig updates cannot read the original identity, config_id=%{1}."
+MetaConfig 可选 owner 身份存在歧义，config_id=%{1},"The optional ""owner"" identity in MetaConfig has ambiguity; config_id=%{1}."
+MetaConfig 兼容删除的事务连接与精确身份不匹配，config_id=%{1},"MetaConfig: The transaction connection to be deleted is incompatible and does not match the exact identity, config_id=%{1}."
+MetaConfig 兼容删除未能删除精确记录，config_id=%{1},"MetaConfig: Incompatible deletion, unable to delete the exact record, config_id=%{1}."
+请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,Please go to the i18n module to collect terms and try again! Or enable the real-time term collection feature!
+填写正确！,Correct!
+Meta翻译,Meta translation.
+筛选条件,Filter criteria
+命名空间,Namespace
+请选择,Please select...
+区域,Region
+全部,All
 Scope,Scope
 语言,Language
-"类型 (可选)","类型 (可选)"
-"分类 (可选)","分类 (可选)"
-"实体ID (可选)","实体ID (可选)"
-例如：主题ID、模块ID等,例如：主题ID、模块ID等
-对应实体的记录ID，用于过滤配置,对应实体的记录ID，用于过滤配置
-加载文件树,加载文件树
-元数据文件树,元数据文件树
-请先加载文件树,请先加载文件树
-元数据详情,元数据详情
-请选择左侧文件以查看详情,请选择左侧文件以查看详情
-"Meta 翻译","Meta 翻译"
-加载中...,加载中...
-正在加载翻译...,正在加载翻译...
+类型 (可选),Type (optional)
+分类 (可选),Category (Optional)
+实体ID (可选),Entity ID (optional)
+例如：主题ID、模块ID等,"For example: Topic ID, Module ID, etc."
+对应实体的记录ID，用于过滤配置,"Record IDs corresponding to the entities, used for filtering configurations."
+加载文件树,Loading file tree.
+元数据文件树,Metadata file tree.
+请先加载文件树,Please load the file tree first.
+元数据详情,Metadata details.
+请选择左侧文件以查看详情,Please select a file on the left to view details.
+Meta 翻译,Meta Translation
+加载中...,Loading...
+正在加载翻译...,Loading translation...
 取消,Cancel
-保存翻译,保存翻译
-参数翻译,参数翻译
-请先选择命名空间,请先选择命名空间
-正在加载...,正在加载...
-加载失败,加载失败
-"共 %s 个节点","共 %s 个节点"
-未找到符合条件的元数据文件,未找到符合条件的元数据文件
-正在加载元数据...,正在加载元数据...
-翻译名称,翻译名称
-翻译描述,翻译描述
-该文件没有可配置的参数。,该文件没有可配置的参数。
-翻译参数,翻译参数
-保存配置,保存配置
-保存失败,保存失败
-成功,成功
-配置保存成功,配置保存成功
-确定,确定
-默认值,默认值
-如果某语言没有翻译，将使用此默认值,如果某语言没有翻译，将使用此默认值
-多语言翻译,"Multilingual Translation"
-没有可用的语言,"No languages available"
-留空则使用默认值,留空则使用默认值
-翻译已保存,翻译已保存
-名称,名称
-描述,描述
-元数据管理,"Metadata management"
-系统,系统
-当前结果,当前结果
-类型数量,类型数量
-快速操作,快速操作
-扫描元数据,"Scan metadata"
-新增记录,新增记录
-全部命名空间,全部命名空间
-类型,类型
-全部类型,全部类型
-路径/标识关键词,路径/标识关键词
-搜索文件路径、标识或说明...,搜索文件路径、标识或说明...
-筛选,筛选
-清空筛选,清空筛选
-元数据列表,"Metadata list"
-"支持快速查看 JSON、跳转翻译与编辑数据。","支持快速查看 JSON、跳转翻译与编辑数据。"
-当前筛选结果：,当前筛选结果：
-暂无匹配的元数据,暂无匹配的元数据
-尝试调整筛选条件，或先扫描模块规约文件生成记录。,尝试调整筛选条件，或先扫描模块规约文件生成记录。
-去扫描,去扫描
-手动新增,手动新增
-"命名空间 / 类型","命名空间 / 类型"
-识别信息,识别信息
-文件路径,文件路径
-描述信息,描述信息
-操作,操作
-未命名组件,未命名组件
-标识,标识
-暂无描述,暂无描述
-带自定义设置,带自定义设置
-编辑,编辑
+保存翻译,Save translation.
+参数翻译,Parameter translation.
+请先选择命名空间,Please select a namespace first.
+正在加载...,Loading...
+加载失败,Loading failed
+共 %s 个节点,%s node(s) total
+未找到符合条件的元数据文件,No metadata files matching the specified criteria were found.
+正在加载元数据...,Loading metadata...
+翻译名称,Translation Name
+翻译描述,Please provide the Chinese text you would like me to translate. I will only return the English translation.
+该文件没有可配置的参数。,This file has no configurable parameters.
+翻译参数,Translation parameters.
+保存配置,Save configuration
+保存失败,Save failed
+成功,Success
+配置保存成功,Configuration saved successfully.
+确定,Confirm
+默认值,Default value
+如果某语言没有翻译，将使用此默认值,"If a language has no translation, this default value will be used."
+多语言翻译,Multilingual Translation
+没有可用的语言,No languages available
+留空则使用默认值,Leave blank to use the default value.
+翻译已保存,Translation saved.
+名称,Name
+描述,Description
+元数据管理,Metadata management
+系统,System
+当前结果,Current results.
+类型数量,Type Quantity
+快速操作,Quick actions
+扫描元数据,Scan metadata
+新增记录,Add Record
+全部命名空间,All namespaces.
+类型,Type
+全部类型,All Types
+路径/标识关键词,Path/Identifier keywords.
+搜索文件路径、标识或说明...,"Search for file paths, identifiers, or descriptions..."
+筛选,Filter
+清空筛选,Clear filters.
+元数据列表,Metadata list
+支持快速查看 JSON、跳转翻译与编辑数据。,"Supports quick viewing of JSON, jumping to translations, and editing data."
+当前筛选结果：,Current filter results:
+暂无匹配的元数据,No matching metadata found.
+尝试调整筛选条件，或先扫描模块规约文件生成记录。,"Try adjusting the filter conditions, or first scan the module specification file generation records."
+去扫描,Go to scan
+手动新增,Manually add
+命名空间 / 类型,Namespace / Type
+识别信息,Identification information.
+文件路径,File Path
+描述信息,Description information.
+操作,Actions
+未命名组件,Unnamed component
+标识,Identity
+暂无描述,No description available.
+带自定义设置,With custom settings.
+编辑,Edit
 JSON,JSON
-翻译,翻译
-复制Key,复制Key
-"复制 JSON","复制 JSON"
-已复制,已复制
-编辑元数据,编辑元数据
-新增元数据,新增元数据
-"维护命名空间、标识与 JSON 元数据；info.* 字段会自动收集为翻译词条。","维护命名空间、标识与 JSON 元数据；info.* 字段会自动收集为翻译词条。"
-基础信息,基础信息
-请输入命名空间,请输入命名空间
-分类,分类
-相对路径,相对路径
-完整路径,完整路径
-"Meta 数据","Meta 数据"
-"使用 JSON 定义完整元数据结构","使用 JSON 定义完整元数据结构"
-格式化,格式化
-"校验 JSON","校验 JSON"
-"请输入合法的 JSON","请输入合法的 JSON"
-"可选设置 (setting)","可选设置 (setting)"
-存放表单默认值、展示参数等额外配置,存放表单默认值、展示参数等额外配置
-信息预览,信息预览
-"从 JSON info 节点解析的可读信息，便于确认翻译内容。","从 JSON info 节点解析的可读信息，便于确认翻译内容。"
-"当前 JSON 中未找到 info.* 字段，建议补充 name、description 等信息。","当前 JSON 中未找到 info.* 字段，建议补充 name、description 等信息。"
-"翻译 Key 预览","翻译 Key 预览"
-"根据当前数据自动生成，可在 Taglib 翻译页中使用。","根据当前数据自动生成，可在 Taglib 翻译页中使用。"
-复制,复制
-常用操作,常用操作
-"Meta JSON 中的 info.* 字段会自动收集为词条。","Meta JSON 中的 info.* 字段会自动收集为词条。"
-保存后可在元数据列表页快速跳转翻译。,保存后可在元数据列表页快速跳转翻译。
-"Setting 字段建议保持 JSON 格式，方便扩展。","Setting 字段建议保持 JSON 格式，方便扩展。"
+翻译,Translate
+复制Key,Copy Key
+复制 JSON,Copy JSON.
+已复制,Copied
+编辑元数据,Edit metadata
+新增元数据,New metadata.
+维护命名空间、标识与 JSON 元数据；info.* 字段会自动收集为翻译词条。,"Maintain namespaces, identifiers, and JSON metadata; info.* fields will be automatically collected as translation entries."
+基础信息,Basic Information
+请输入命名空间,Please enter the namespace.
+分类,Categories
+相对路径,Relative path
+完整路径,Full Path
+Meta 数据,Meta data.
+使用 JSON 定义完整元数据结构,Use JSON to define the complete metadata structure
+格式化,Format
+校验 JSON,Validate JSON.
+请输入合法的 JSON,Please enter valid JSON.
+可选设置 (setting),Optional settings.
+存放表单默认值、展示参数等额外配置,"Stores default form values, display parameters, and other additional configurations."
+信息预览,Information Preview
+从 JSON info 节点解析的可读信息，便于确认翻译内容。,"Readable information parsed from the JSON info node, making it easier to confirm the translation content."
+当前 JSON 中未找到 info.* 字段，建议补充 name、description 等信息。,"The JSON does not contain any fields starting with ""info."". It is recommended to add information such as ""name"" and ""description."""
+翻译 Key 预览,Key Preview
+根据当前数据自动生成，可在 Taglib 翻译页中使用。,Automatically generated based on current data and can be used on the Taglib translation page.
+复制,Copy
+常用操作,Common operations
+Meta JSON 中的 info.* 字段会自动收集为词条。,The `info.*` fields in Meta JSON are automatically collected and used as terms.
+保存后可在元数据列表页快速跳转翻译。,"After saving, you can quickly jump to the translation from the metadata list page."
+Setting 字段建议保持 JSON 格式，方便扩展。,"The ""Setting"" field is recommended to be kept in JSON format for easy extensibility."
 保存,Save
-返回列表,返回列表
-"JSON 校验通过","JSON 校验通过"
-元数据扫描器,元数据扫描器
-扫描器,扫描器
-事件扫描,事件扫描
-直接扫描,直接扫描
-"直接使用服务类解析 PHTML 文件，实时返回成功/失败结果。","直接使用服务类解析 PHTML 文件，实时返回成功/失败结果。"
-使用提示,使用提示
-严格模式下缺少关键字段会直接中断,严格模式下缺少关键字段会直接中断
-触发事件扫描,触发事件扫描
-由事件监听者负责消费扫描任务，适合在线队列或自定义处理。,由事件监听者负责消费扫描任务，适合在线队列或自定义处理。
-异步/队列友好,异步/队列友好
-扫描路径,扫描路径
-请输入合法路径,请输入合法路径
-严格模式,严格模式
-开启,开启
-提交扫描任务,提交扫描任务
-立即扫描并返回结果,立即扫描并返回结果
-"适合调试阶段快速验证 @meta 标记是否生效。","适合调试阶段快速验证 @meta 标记是否生效。"
-实时结果,实时结果
-开启（严格）,开启（严格）
-关闭（宽松）,关闭（宽松）
-"直接扫描会立即解析所有 PHTML 文件，并展示成功/失败清单。执行时间与文件数量相关。","直接扫描会立即解析所有 PHTML 文件，并展示成功/失败清单。执行时间与文件数量相关。"
-立即扫描,立即扫描
-查看元数据,查看元数据
-扫描结果,扫描结果
-结果,结果
-成功解析,成功解析
-解析失败,解析失败
-被跳过,被跳过
-成功文件,成功文件
-暂无数据,暂无数据
+返回列表,Back to list
+JSON 校验通过,JSON validation passed.
+元数据扫描器,Metadata scanner
+扫描器,Scanner
+事件扫描,Event scanning
+直接扫描,Direct scan.
+直接使用服务类解析 PHTML 文件，实时返回成功/失败结果。,Directly parse PHTML files using service-based parsing and return success/failure results in real-time.
+使用提示,Usage tips.
+严格模式下缺少关键字段会直接中断,"In strict mode, the absence of a required field will cause an immediate error."
+触发事件扫描,Trigger event scanning.
+由事件监听者负责消费扫描任务，适合在线队列或自定义处理。,"The event listener is responsible for consuming scan tasks, making it suitable for online queues or custom processing."
+异步/队列友好,Asynchronous/Queue-friendly
+扫描路径,Scanning path.
+请输入合法路径,Please enter a valid path.
+严格模式,Strict mode.
+开启,Enable
+提交扫描任务,Submit scan task.
+立即扫描并返回结果,Scan now and return the results.
+适合调试阶段快速验证 @meta 标记是否生效。,Suitable for quickly verifying whether the `@meta` tag is effective during the debugging phase.
+实时结果,Real-time results.
+开启（严格）,Enable (strictly).
+关闭（宽松）,Close (loosely)
+直接扫描会立即解析所有 PHTML 文件，并展示成功/失败清单。执行时间与文件数量相关。,Direct scanning will immediately parse all PHTML files and display a list of successes and failures. The execution time is related to the number of files.
+立即扫描,Scan now.
+查看元数据,View metadata.
+扫描结果,Scan results.
+结果,Results.
+成功解析,Successfully parsed.
+解析失败,Parsing failed
+被跳过,Skipped.
+成功文件,Successful document.
+暂无数据,No data available.
 OK,OK
-失败文件,失败文件
-暂无失败记录,暂无失败记录
-失败,失败
-"跳过文件 (无 @meta 标记)","跳过文件 (无 @meta 标记)"
-全部文件均尝试解析，无跳过项。,全部文件均尝试解析，无跳过项。
-返回扫描器,返回扫描器
-查看元数据列表,查看元数据列表
-"MetaConfig 原子建件后无法读取完全相同的身份。","MetaConfig 原子建件后无法读取完全相同的身份。"
-"MetaConfig 原子建件后的可选 owner 身份不再唯一。","MetaConfig 原子建件后的可选 owner 身份不再唯一。"
-"MetaConfig 身份指纹碰撞，config_id=%{1}","MetaConfig 身份指纹碰撞，config_id=%{1}"
-"MetaConfig 迁移窗口发现重复身份，config_id=%{1}","MetaConfig 迁移窗口发现重复身份，config_id=%{1}"
-"MetaConfig 原子建件不支持当前数据库类型。","MetaConfig 原子建件不支持当前数据库类型。"
-模块不存在：%1,模块不存在：%1
-扫描路径不存在：%1,扫描路径不存在：%1
-文件不存在：%1,文件不存在：%1
-"文件缺少必需字段 @meta.namespace：%1","文件缺少必需字段 @meta.namespace：%1"
-"文件缺少必需字段 @meta.%1.type：%2","文件缺少必需字段 @meta.%1.type：%2"
-"文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2","文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2"
-"元数据缺少必需字段 type：%1","元数据缺少必需字段 type：%1"
-"元数据缺少必需字段 @meta.%1.info.name：%2","元数据缺少必需字段 @meta.%1.info.name：%2"
-"Meta 自动翻译：I18n AI 未启用，已跳过","Meta 自动翻译：I18n AI 未启用，已跳过"
-"@meta:: %{1}: translated=%{2}","@meta:: %{1}: translated=%{2}"
+失败文件,Failed files
+暂无失败记录,No failures recorded.
+失败,Failed
+跳过文件 (无 @meta 标记),Skip file (no @meta tag).
+全部文件均尝试解析，无跳过项。,"All files were attempted to be parsed, and no files were skipped."
+返回扫描器,Return to scanner.
+查看元数据列表,View the metadata list.
+MetaConfig 原子建件后无法读取完全相同的身份。,"After MetaConfig atomic components are created, it is no longer possible to read the exact same identity."
+MetaConfig 原子建件后的可选 owner 身份不再唯一。,"After the MetaConfig atomic component is created, the optional owner identity is no longer unique."
+MetaConfig 身份指纹碰撞，config_id=%{1},"MetaConfig identity fingerprint collision, config_id=%{1}"
+MetaConfig 迁移窗口发现重复身份，config_id=%{1},"MetaConfig migration window detected duplicate identities, config_id=%{1}."
+MetaConfig 原子建件不支持当前数据库类型。,MetaConfig's atomic components do not support the current database type.
+模块不存在：%1,Module not found: %1
+扫描路径不存在：%1,The specified scan path does not exist: %1
+文件不存在：%1,File not found: %1
+文件缺少必需字段 @meta.namespace：%1,The file is missing the required field: @meta.namespace: %1.
+文件缺少必需字段 @meta.%1.type：%2,The file is missing a required field: @meta.%1.type: %2
+文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2,The file defines a metadata section but is missing the `@meta.%1.info.*` field: %2.
+元数据缺少必需字段 type：%1,Metadata is missing required field: type: %1
+元数据缺少必需字段 @meta.%1.info.name：%2,Missing required field in metadata: @meta.%1.info.name: %2
+Meta 自动翻译：I18n AI 未启用，已跳过,"Meta automatic translation: I18n AI is not enabled, skipped."
+@meta:: %{1}: translated=%{2},@meta:: %{1}: translated=%{2}
 "MetaLocal: translated=%{1}, skipped=%{2}","MetaLocal: translated=%{1}, skipped=%{2}"
-模块不存在：%{1},模块不存在：%{1}
-"未指定模块，将扫描所有扩展了 Meta 模块的模块...","未指定模块，将扫描所有扩展了 Meta 模块的模块..."
-"通过 ExtendsData 找到 %{1} 个扩展了 Meta 模块的模块","通过 ExtendsData 找到 %{1} 个扩展了 Meta 模块的模块"
-"无法从 ExtendsData 获取模块列表，将回退到扫描所有模块: %{1}","无法从 ExtendsData 获取模块列表，将回退到扫描所有模块: %{1}"
-"共找到 %{1} 个需要扫描的模块","共找到 %{1} 个需要扫描的模块"
-"未找到扩展 Meta 模块的模块，将扫描所有模块...","未找到扩展 Meta 模块的模块，将扫描所有模块..."
-"共找到 %{1} 个唯一模块","共找到 %{1} 个唯一模块"
-"准备扫描 %{1} 个模块...","准备扫描 %{1} 个模块..."
-"跳过模块（索引 %{1}）：模块名为空","跳过模块（索引 %{1}）：模块名为空"
-"跳过模块 %{1}：已处理过","跳过模块 %{1}：已处理过"
-"开始扫描模块 %{1} 的 @meta.json 规约文件...","开始扫描模块 %{1} 的 @meta.json 规约文件..."
-"处理模块（索引 %{1}）时出错：%{2}","处理模块（索引 %{1}）时出错：%{2}"
-"模块 %{1} 没有路径信息","模块 %{1} 没有路径信息"
-"模块 %{1} 路径不存在：%{2}","模块 %{1} 路径不存在：%{2}"
-"模块 %{1} 规约文件不存在：%{2}","模块 %{1} 规约文件不存在：%{2}"
-"模块 %{1} 没有规约文件，跳过","模块 %{1} 没有规约文件，跳过"
-找到规约文件：%{1},找到规约文件：%{1}
-"模块 %{1} 规约文件 JSON 格式错误：%{2}","模块 %{1} 规约文件 JSON 格式错误：%{2}"
-"模块 %{1} 规约文件格式错误：缺少 'meta' 字段","模块 %{1} 规约文件格式错误：缺少 'meta' 字段"
-"模块 %{1} 规约文件中需提供 'base_path' 或 'scan_paths'","模块 %{1} 规约文件中需提供 'base_path' 或 'scan_paths'"
-扫描路径数：%{1},扫描路径数：%{1}
-从路径提取命名空间：%{1},从路径提取命名空间：%{1}
-命名空间：%{1},命名空间：%{1}
-"模块 %{1} 基础模块不存在：%{2}","模块 %{1} 基础模块不存在：%{2}"
-跳过非法路径：%{1},跳过非法路径：%{1}
-跳过不存在的路径：%{1},跳过不存在的路径：%{1}
-扫描路径：%{1},扫描路径：%{1}
-"模块 %{1} 扫描完成：成功 %{2}，失败 %{3}","模块 %{1} 扫描完成：成功 %{2}，失败 %{3}"
-【扫描失败】模块：%{1},【扫描失败】模块：%{1}
-堆栈跟踪：,堆栈跟踪：
-所有模块扫描完成！,所有模块扫描完成！
-"成功存储：%{1} 条元数据","成功存储：%{1} 条元数据"
-"跳过：%{1} 个模块","跳过：%{1} 个模块"
-"失败：%{1} 个文件验证失败","失败：%{1} 个文件验证失败"
-文件：%{1},文件：%{1}
-"\n详细信息：","\n详细信息："
-【文件验证失败】,【文件验证失败】
-文件路径：%{1},文件路径：%{1}
-"Meta Key：%{1}","Meta Key：%{1}"
-验证错误详情：,验证错误详情：
-"%{1}. %{2}","%{1}. %{2}"
-解决方案：,解决方案：
-"1. 检查 @meta.json 规约文件，确保定义了对应的 meta key","1. 检查 @meta.json 规约文件，确保定义了对应的 meta key"
-"2. 或者从文件中移除未定义的 @meta.xxx 字段","2. 或者从文件中移除未定义的 @meta.xxx 字段"
-"3. 或者更新规约文件，添加缺失的 meta key 定义","3. 或者更新规约文件，添加缺失的 meta key 定义"
-"错误：%{1} - %{2}","错误：%{1} - %{2}"
-"存储 Meta 字段：%{1} -> %{2}","存储 Meta 字段：%{1} -> %{2}"
-"存储 Group：%{1} -> %{2}","存储 Group：%{1} -> %{2}"
-字段名称：%{1},字段名称：%{1}
-"完整 Meta Key：%{1}","完整 Meta Key：%{1}"
-"错误原因：该 Meta Key 在规约文件（@meta.json）中未定义","错误原因：该 Meta Key 在规约文件（@meta.json）中未定义"
-"说明：文件中的 @meta.%{1} 字段对应的完整路径 %{2} 在规约文件中找不到对应的定义","说明：文件中的 @meta.%{1} 字段对应的完整路径 %{2} 在规约文件中找不到对应的定义"
-"扫描 @meta.json 规约文件并存储元数据到数据库","扫描 @meta.json 规约文件并存储元数据到数据库"
-模块名称（可选，不指定则扫描所有模块）,模块名称（可选，不指定则扫描所有模块）
-显示详细信息,显示详细信息
-显示帮助信息,显示帮助信息
-模块名称，例如：Weline_Theme（可选）,模块名称，例如：Weline_Theme（可选）
-扫描所有模块,扫描所有模块
-扫描指定模块,扫描指定模块
-使用完整命令名,使用完整命令名
-详细输出,详细输出
-简短参数,简短参数
-元数据配置管理,"Metadata configuration"
-配置管理,配置管理
-"编辑元数据 #%1","编辑元数据 #%1"
-尝试调整筛选条件或重新扫描。,尝试调整筛选条件或重新扫描。
-"使用 JSON 格式定义完整的元数据结构","使用 JSON 格式定义完整的元数据结构"
-"从 JSON info 节点中解析出的可读信息，便于确认翻译内容。","从 JSON info 节点中解析出的可读信息，便于确认翻译内容。"
-"保存后可在""元数据列表""页快速跳转翻译。","保存后可在""元数据列表""页快速跳转翻译。"
+模块不存在：%{1},Module Not Found: %{1}
+未指定模块，将扫描所有扩展了 Meta 模块的模块...,No module specified; scanning all modules that extend the Meta module...
+通过 ExtendsData 找到 %{1} 个扩展了 Meta 模块的模块,Found %{1} modules that extend the Meta module using ExtendsData.
+无法从 ExtendsData 获取模块列表，将回退到扫描所有模块: %{1},Unable to retrieve the list of modules from ExtendsData; falling back to scanning all modules: %{1}
+共找到 %{1} 个需要扫描的模块,Found %{1} modules that need to be scanned.
+未找到扩展 Meta 模块的模块，将扫描所有模块...,Module for the extended Meta module not found. Scanning all modules...
+共找到 %{1} 个唯一模块,Found %{1} unique modules.
+准备扫描 %{1} 个模块...,Preparing to scan %{1} modules...
+跳过模块（索引 %{1}）：模块名为空,Skipping module (index %{1}): Module name is empty.
+跳过模块 %{1}：已处理过,Skip module %{1}: Already processed.
+开始扫描模块 %{1} 的 @meta.json 规约文件...,Starting to scan the @meta.json specification file for module %{1}...
+处理模块（索引 %{1}）时出错：%{2},Error processing module (index %{1}): %{2}
+模块 %{1} 没有路径信息,Module %{1} has no path information.
+模块 %{1} 路径不存在：%{2},"Module ""%{1}"" path does not exist: %{2}"
+模块 %{1} 规约文件不存在：%{2},Module %{1} specification file not found: %{2}
+模块 %{1} 没有规约文件，跳过,Module %{1} has no specification file; skipping.
+找到规约文件：%{1},Found the agreement document: %{1}
+模块 %{1} 规约文件 JSON 格式错误：%{2},Module %{1}: Invalid JSON format in the specification file: %{2}
+模块 %{1} 规约文件格式错误：缺少 'meta' 字段,Module %{1}: Invalid configuration file format: Missing 'meta' field.
+模块 %{1} 规约文件中需提供 'base_path' 或 'scan_paths',The module %{1} specification file must provide either 'base_path' or 'scan_paths'.
+扫描路径数：%{1},Number of scanned paths: %{1}
+从路径提取命名空间：%{1},Extract namespace from path: %{1}
+命名空间：%{1},Namespace: %{1}
+模块 %{1} 基础模块不存在：%{2},Module %{1} base module not found: %{2}
+跳过非法路径：%{1},Skip illegal path: %{1}
+跳过不存在的路径：%{1},Skip non-existent paths: %{1}
+扫描路径：%{1},Scan path: %{1}
+模块 %{1} 扫描完成：成功 %{2}，失败 %{3},"Module %{1} scan completed: %{2} successful, %{3} failed."
+【扫描失败】模块：%{1},[Scan Failed] Module: %{1}
+堆栈跟踪：,Stack trace:
+所有模块扫描完成！,All modules have been scanned.
+成功存储：%{1} 条元数据,Successfully stored: %{1} metadata entries.
+跳过：%{1} 个模块,Skip: %{1} modules.
+失败：%{1} 个文件验证失败,Failed: %{1} files failed verification.
+文件：%{1},File: %{1}
+\n详细信息：,Detailed information:
+【文件验证失败】,[File verification failed]
+文件路径：%{1},File Path: %{1}
+Meta Key：%{1},Meta Key：%{1}
+验证错误详情：,Validation error details:
+%{1}. %{2},%{1}. %{2}
+解决方案：,Solution:
+1. 检查 @meta.json 规约文件，确保定义了对应的 meta key,Check the `@meta.json` specification file to ensure that the corresponding meta keys are defined.
+2. 或者从文件中移除未定义的 @meta.xxx 字段,"2. Alternatively, remove undefined `@meta.xxx` fields from the file."
+3. 或者更新规约文件，添加缺失的 meta key 定义,"3. Alternatively, update the configuration file and add the missing meta key definitions."
+错误：%{1} - %{2},Error: %{1} - %{2}
+存储 Meta 字段：%{1} -> %{2},Storing Meta field: %{1} -> %{2}
+存储 Group：%{1} -> %{2},Storage Group: %{1} -> %{2}
+字段名称：%{1},Field Name: %{1}
+完整 Meta Key：%{1},Full Meta Key: %{1}
+错误原因：该 Meta Key 在规约文件（@meta.json）中未定义,Error reason: This Meta Key is not defined in the configuration file (@meta.json).
+说明：文件中的 @meta.%{1} 字段对应的完整路径 %{2} 在规约文件中找不到对应的定义,Explanation: The complete path %{2} corresponding to the @meta.%{1} field in the file was not found with a matching definition in the specification file.
+扫描 @meta.json 规约文件并存储元数据到数据库,Scan the @meta.json specification file and store the metadata in the database.
+模块名称（可选，不指定则扫描所有模块）,"Module name (optional, if not specified, all modules will be scanned)."
+显示详细信息,Show details
+显示帮助信息,Show help information.
+模块名称，例如：Weline_Theme（可选）,"Module name (optional), for example: Weline_Theme."
+扫描所有模块,Scan all modules.
+扫描指定模块,Scan the specified module.
+使用完整命令名,Use the full command name.
+详细输出,Detailed output.
+简短参数,Short parameters.
+元数据配置管理,Metadata configuration
+配置管理,Configuration management
+编辑元数据 #%1,Edit metadata.
+尝试调整筛选条件或重新扫描。,Try adjusting the filter criteria or rescan.
+使用 JSON 格式定义完整的元数据结构,Define the complete metadata structure using JSON format.
+从 JSON info 节点中解析出的可读信息，便于确认翻译内容。,"Readable information parsed from the JSON info node, which facilitates the verification of translation content."
+"保存后可在""元数据列表""页快速跳转翻译。","After saving, you can quickly jump to the ""Metadata List"" page for translation."
+﻿元数据路径扫描,Metadata path scan
