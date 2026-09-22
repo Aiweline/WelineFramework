@@ -1760,7 +1760,22 @@ $copy = [
             payload.coupon_code = text(opts.coupon_code).trim().toUpperCase();
         }
         // 不传 coupon_code → 服务端读营销会话（旧结账 session 灌入）。
-        const amended = await api.amendUnpaidCheckoutAddress(payload);
+        let amended;
+        try {
+            amended = await api.amendUnpaidCheckoutAddress(payload);
+        } catch (error) {
+            const msg = text(error && error.message).trim();
+            // 旧 worker 描述未声明 coupon_code：剥掉后仍改址/运费，券靠营销会话侧写回。
+            if (
+                Object.prototype.hasOwnProperty.call(payload, 'coupon_code')
+                && /Unknown frontend worker param:\s*coupon_code/i.test(msg)
+            ) {
+                delete payload.coupon_code;
+                amended = await api.amendUnpaidCheckoutAddress(payload);
+            } else {
+                throw error;
+            }
+        }
         if (!amended || amended.success === false) {
             throw new Error(text(amended && amended.message) || copy.load_failed);
         }
@@ -3053,6 +3068,10 @@ $copy = [
             }
             if (getDataParams.continue_pay !== undefined && /Unknown frontend worker param:\s*continue_pay/i.test(msg)) {
                 delete getDataParams.continue_pay;
+                stripped = true;
+            }
+            if (getDataParams.coupon_code !== undefined && /Unknown frontend worker param:\s*coupon_code/i.test(msg)) {
+                delete getDataParams.coupon_code;
                 stripped = true;
             }
             if (
