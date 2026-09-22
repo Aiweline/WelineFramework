@@ -274,7 +274,9 @@ final class HelpPayOrchestrator
      */
     public function startQuickPayment(array $input): array
     {
-        $input['payment_method'] = strtolower(trim((string) ($input['payment_method'] ?? 'paypal'))) ?: 'paypal';
+        $requested = strtolower(trim((string) ($input['payment_method'] ?? '')));
+        // Prefer local fake_card when caller omitted method (Buy-now /q/ must not only hardcode PayPal).
+        $input['payment_method'] = $requested !== '' ? $requested : 'fake_card';
 
         return $this->startLinkPayment($input, PaymentLinkServiceInterface::KIND_QUICK_PAY, 'quick_pay_self');
     }
@@ -335,6 +337,11 @@ final class HelpPayOrchestrator
         }
 
         $billing = \is_array($input['billing_address'] ?? null) ? $input['billing_address'] : [];
+        $ship = \is_array($row['shipping_snapshot'] ?? null) ? $row['shipping_snapshot'] : [];
+        // Quick-self /q/ often has shipping only; fake_card requires billing — reuse ship-to.
+        if ($mode === 'quick_pay_self' && !$this->billingAddressComplete($billing) && $ship !== []) {
+            $billing = $this->billingFromShippingSnapshot($ship, $billing);
+        }
         if ($this->paymentMethodRequiresBilling($method, $amountMinor, $currency) && !$this->billingAddressComplete($billing)) {
             throw new \InvalidArgumentException('helppay_billing_incomplete');
         }
@@ -361,7 +368,6 @@ final class HelpPayOrchestrator
             ? (string) $customerId
             : (($mode === 'quick_pay_self' ? 'quickpay:' : 'helppay:') . $token);
 
-        $ship = \is_array($row['shipping_snapshot'] ?? null) ? $row['shipping_snapshot'] : [];
         $countryCode = strtoupper(trim((string) (
             $billing['country_code']
             ?? $billing['country']
