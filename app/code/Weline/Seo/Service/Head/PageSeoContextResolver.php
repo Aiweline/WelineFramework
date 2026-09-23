@@ -1105,7 +1105,26 @@ class PageSeoContextResolver
         $organization = $this->toArray($seo['organization'] ?? $meta['organization'] ?? []);
         $organization['name'] = (string) ($organization['name'] ?? $siteName);
         $organization['url'] = (string) ($organization['url'] ?? $this->absoluteUrl($template, '/'));
+        if (empty($organization['alternateName'])) {
+            $alternate = $this->resolveOrganizationAlternateName((string) $organization['name']);
+            if ($alternate !== '') {
+                $organization['alternateName'] = $alternate;
+            }
+        }
+
         return $organization;
+    }
+
+    private function resolveOrganizationAlternateName(string $displayName): string
+    {
+        try {
+            if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                return trim((string)(\Weline\Websites\Data\WebsiteData::getOrganizationAlternateName($displayName) ?? ''));
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 
     /**

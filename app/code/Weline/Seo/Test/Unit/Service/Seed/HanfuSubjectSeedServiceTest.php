@@ -22,7 +22,7 @@ class HanfuSubjectSeedServiceTest extends TestCore
         $this->assertSame(SeoSubject::SUBJECT_TYPE_WEBSITE, HanfuSubjectSeedService::SEED_SUBJECT_TYPE);
         $this->assertSame(0, HanfuSubjectSeedService::SEED_ENTITY_ID);
         $this->assertSame(900001, HanfuSubjectSeedService::LEGACY_DEMO_ENTITY_ID);
-        $this->assertSame('长安汉服 · Hanfu Atelier', HanfuSubjectSeedService::SEED_TITLE);
+        $this->assertSame('长安汉服', HanfuSubjectSeedService::SEED_TITLE);
         $this->assertStringContainsString('明制、宋制、唐制汉服与马面裙', HanfuSubjectSeedService::SEED_DESCRIPTION);
         $this->assertStringNotContainsString('示例', HanfuSubjectSeedService::SEED_TITLE);
         $this->assertStringNotContainsString('示例', HanfuSubjectSeedService::SEED_DESCRIPTION);

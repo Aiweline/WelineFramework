@@ -39,7 +39,7 @@ $platform = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::s
 $description = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::schema_fields_DESCRIPTION) : '';
 $isActive = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::schema_fields_IS_ACTIVE) : 1;
 $enableCronPush = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS) : 1;
-$enableCronSitemap = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::schema_fields_ENABLE_CRON_SITEMAP) : 0;
+$enableCronSitemap = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::schema_fields_ENABLE_CRON_SITEMAP) : 1;
 
 $configBoundary = new \Weline\Seo\Service\SeoAccountConfig();
 $accountConfig = $account ? $account->getConfigArray() : [];
@@ -80,6 +80,27 @@ try {
     $seoAccountWebsiteSelectOptions = [];
 }
 $seoAccountWebsiteSelectOptionsJson = json_encode($seoAccountWebsiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+
+$boundWebsiteIds = [];
+if ($id > 0) {
+    try {
+        /** @var \Weline\Seo\Model\SeoWebsiteAccount $seoWebsiteAccountModel */
+        $seoWebsiteAccountModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
+        foreach ($seoWebsiteAccountModel->reset()
+            ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $id)
+            ->select()
+            ->fetchArray() as $bindingRow) {
+            $boundId = (int)($bindingRow[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? -1);
+            if ($boundId >= 0) {
+                $boundWebsiteIds[] = $boundId;
+            }
+        }
+        $boundWebsiteIds = array_values(array_unique($boundWebsiteIds));
+    } catch (\Throwable) {
+        $boundWebsiteIds = [];
+    }
+}
+$boundWebsiteIdsValue = implode(',', array_map('strval', $boundWebsiteIds));
 
 // 平台功能说明和配置指引
 $platformFeatures = [
@@ -235,6 +256,7 @@ foreach ($platforms as $code => $info) {
      data-saving="<?= htmlspecialchars((string)__('保存中…'), ENT_QUOTES, 'UTF-8') ?>"
      data-verifying="<?= htmlspecialchars((string)__('验证中…'), ENT_QUOTES, 'UTF-8') ?>"
      data-save-completed="<?= htmlspecialchars((string)__('账户保存成功'), ENT_QUOTES, 'UTF-8') ?>"
+     data-bind-mismatch="<?= htmlspecialchars((string)__('账户已保存，但站点绑定未同步成功，请重试保存。'), ENT_QUOTES, 'UTF-8') ?>"
      data-verify-completed="<?= htmlspecialchars((string)__('配置验证通过'), ENT_QUOTES, 'UTF-8') ?>"
      data-verify-failed-title="<?= htmlspecialchars((string)__('验证失败'), ENT_QUOTES, 'UTF-8') ?>"
      data-open-gsc="<?= htmlspecialchars((string)__('去 Google Search Console'), ENT_QUOTES, 'UTF-8') ?>"
@@ -526,6 +548,7 @@ foreach ($platforms as $code => $info) {
                         return;
                     }
                     const wrap = input.closest('[data-seo-capability-switch]');
+                    const wasUnsupported = input.getAttribute('data-seo-unsupported') === '1';
                     input.disabled = false;
                     if (!supported) {
                         input.checked = false;
@@ -545,6 +568,10 @@ foreach ($platforms as $code => $info) {
                             wrap.removeAttribute('data-unsupported');
                             wrap.style.opacity = '';
                             wrap.style.cursor = '';
+                        }
+                        // 平台从不支持切回可支持：自动选项默认勾上，除非用户之后主动取消
+                        if (wasUnsupported) {
+                            input.checked = true;
                         }
                     }
                     if (hint) {
@@ -1457,16 +1484,33 @@ foreach ($platforms as $code => $info) {
                                 <textarea name="config_json" id="configJsonTextarea" hidden><?= htmlspecialchars($configJson, ENT_QUOTES) ?></textarea>
                             </div>
 
-                            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                                <div style="--w-span-md:4;">
-                                    <div class="w-switch">
-                                        <input type="checkbox" name="is_active" value="1" id="is_active" <?= $isActive === 1 ? 'checked' : '' ?>>
-                                        <label for="is_active">
-                                            <lang>启用账户</lang>
-                                        </label>
-                                    </div>
+                            <div class="w-field" style="--w-mb:var(--weline-space-4);" data-seo-account-website-bindings>
+                                <label class="w-field__label" for="seo_account_bound_websites_trigger"><lang>绑定站点</lang></label>
+                                <w:websites:website:select
+                                    id="seo_account_bound_websites"
+                                    name="website_ids"
+                                    value="boundWebsiteIdsValue"
+                                    display=""
+                                    options="seoAccountWebsiteSelectOptionsJson"
+                                    multiple="true"
+                                    empty-label="@lang(请选择要绑定的站点)"
+                                    placeholder="@lang(搜索站点名称或域名)"
+                                    clearable="false"
+                                />
+                                <div class="w-field__hint">
+                                    <lang>保存账户时同步本页所选站点；可多选。Sitemap 频率等细项可在站点绑定页调整。</lang>
                                 </div>
-                                <div style="--w-span-md:4;">
+                            </div>
+
+                            <div class="w-stack" data-gap="sm" style="--w-mb:var(--weline-space-4);" data-seo-account-cron-switches>
+                                <div class="w-switch">
+                                    <input type="checkbox" name="is_active" value="1" id="is_active" <?= $isActive === 1 ? 'checked' : '' ?>>
+                                    <label for="is_active">
+                                        <lang>启用账户</lang>
+                                    </label>
+                                </div>
+                                <div>
+                                    <input type="hidden" name="enable_cron_push_urls" value="0">
                                     <div class="w-switch" data-seo-capability-switch="url_push">
                                         <input type="checkbox" name="enable_cron_push_urls" value="1" id="enable_cron_push_urls" <?= $enableCronPush === 1 ? 'checked' : '' ?>>
                                         <label for="enable_cron_push_urls">
@@ -1475,7 +1519,8 @@ foreach ($platforms as $code => $info) {
                                     </div>
                                     <div class="w-field__hint" id="seoCronPushHint" hidden style="--w-mt:var(--weline-space-1);"></div>
                                 </div>
-                                <div style="--w-span-md:4;">
+                                <div>
+                                    <input type="hidden" name="enable_cron_sitemap" value="0">
                                     <div class="w-switch" data-seo-capability-switch="sitemap">
                                         <input type="checkbox" name="enable_cron_sitemap" value="1" id="enable_cron_sitemap" <?= $enableCronSitemap === 1 ? 'checked' : '' ?>>
                                         <label for="enable_cron_sitemap">

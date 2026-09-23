@@ -98,8 +98,11 @@ final class SitemapProtocolRenderer
             }
 
             $website = $this->websiteResolver->currentWebsite();
-            $baseUrl = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
-            $xml = $this->websiteDirectory->rewriteLoopbackOriginsInXml($xml, $baseUrl);
+            $baseUrl = $this->serveBaseUrl($website);
+            // File path already scopes the website code; align <loc> onto the live
+            // request origin so another site's canonical tree remains inspectable
+            // on the project entry Host (Host+sub_path entry still preferred).
+            $xml = $this->websiteDirectory->rewriteAllOriginsInXml($xml, $baseUrl);
             if ($baseUrl !== '') {
                 $this->validateXmlAndOrigins($xml, $baseUrl);
             }
@@ -130,7 +133,7 @@ final class SitemapProtocolRenderer
         if (!is_string($xml) || $xml === '' || strlen($xml) > AtomicSitemapPublisher::STANDARD_MAX_BYTES) {
             throw new \RuntimeException((string)__('Canonical Sitemap 不可读或超过协议限制'));
         }
-        $baseUrl = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
+        $baseUrl = $this->serveBaseUrl($website);
         $xml = $this->websiteDirectory->rewriteLoopbackOriginsInXml($xml, $baseUrl);
         $this->validateXmlAndOrigins($xml, $baseUrl);
         return $xml;
@@ -146,7 +149,7 @@ final class SitemapProtocolRenderer
         if ($websiteId < 0) {
             throw new \RuntimeException((string)__('当前请求站点 ID 非法'));
         }
-        $baseUrl = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
+        $baseUrl = $this->serveBaseUrl($website);
         $rows = $this->sitemapUrl->reset()->getActiveUrls($websiteId);
         if (count($rows) > AtomicSitemapPublisher::STANDARD_MAX_URLS) {
             throw new \RuntimeException((string)__('数据库 fallback URL 数超过单文件限制'));
@@ -169,7 +172,7 @@ final class SitemapProtocolRenderer
             if (!preg_match('#^https?://#i', $loc)) {
                 $loc = $baseUrl . '/' . ltrim($loc, '/');
             }
-            $loc = $this->websiteDirectory->rewriteLoopbackPublicUrl($loc, $baseUrl);
+            $loc = $this->websiteDirectory->rewriteToPublicOriginUrl($loc, $baseUrl);
             $this->assertSameOrigin($loc, $baseUrl);
             if (strlen($loc) >= 2048 || isset($seen[$loc])) {
                 throw new \RuntimeException((string)__('数据库 fallback 包含重复或超长 URL'));
@@ -218,6 +221,34 @@ final class SitemapProtocolRenderer
         foreach ($nodes as $node) {
             $this->assertSameOrigin(trim($node->textContent), $baseUrl);
         }
+    }
+
+    /**
+     * Public origin used when serving /sitemap.xml (and shards).
+     *
+     * Prefer the live request origin when it shares the configured host so
+     * project Host:port (e.g. :9555) matches crawler-facing <loc> values.
+     * Different hosts keep the configured canonical origin.
+     *
+     * @param array<string,mixed> $website
+     */
+    private function serveBaseUrl(array $website): string
+    {
+        $configured = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
+        $request = rtrim($this->websiteDirectory->currentBaseUrl(), '/');
+        if ($request === '') {
+            return $configured;
+        }
+        if ($configured === '') {
+            return $request;
+        }
+        $configuredHost = strtolower((string)(parse_url($configured, PHP_URL_HOST) ?: ''));
+        $requestHost = strtolower((string)(parse_url($request, PHP_URL_HOST) ?: ''));
+        if ($configuredHost !== '' && $configuredHost === $requestHost) {
+            return $request;
+        }
+
+        return $configured;
     }
 
     private function assertSameOrigin(string $url, string $baseUrl): void

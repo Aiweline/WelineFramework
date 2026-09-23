@@ -111,6 +111,33 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertStringContainsString('#itemlist', $html);
     }
 
+    public function testOrganizationAlternateNameIsRendered(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'home',
+            'site_name' => '长安汉服',
+            'title' => '长安汉服',
+            'description' => 'Ink-wash Hanfu boutique.',
+            'robots' => 'index,follow',
+            'canonical_url' => 'https://shop.test/',
+            'url' => 'https://shop.test/',
+            'organization' => [
+                'name' => '长安汉服',
+                'url' => 'https://shop.test/',
+                'alternateName' => "Chang'an Hanfu",
+            ],
+        ]);
+
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
+
+        self::assertStringContainsString('"name": "长安汉服"', $html);
+        self::assertStringContainsString('"alternateName": "Chang\'an Hanfu"', $html);
+    }
+
     public function testEcommerceListingDoesNotEmitProductItemList(): void
     {
         $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
@@ -136,6 +163,37 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertStringContainsString('"@type": "WebPage"', $html);
         self::assertStringNotContainsString('"@type": "ItemList"', $html);
         self::assertStringNotContainsString('"@type": "CollectionPage"', $html);
+    }
+
+    public function testPolicyPageTypeMapsContentCategoryToLegalAndKeepsWebPageShell(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'policy',
+            'site_name' => 'Shop',
+            'title' => 'Accessibility Statement',
+            'description' => 'Accessibility policy.',
+            'robots' => 'index,follow',
+            'canonical_url' => 'https://shop.test/policy/accessibility',
+            'url' => 'https://shop.test/policy/accessibility',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/'],
+            'breadcrumbs' => [
+                ['name' => 'Home', 'url' => 'https://shop.test/'],
+                ['name' => 'Accessibility Statement', 'url' => ''],
+            ],
+        ]);
+
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
+
+        // 事实层 page-type 保持 policy；归一层 content-category=legal；壳仍为 WebPage
+        self::assertStringContainsString('<meta name="page-type" content="policy">', $html);
+        self::assertStringContainsString('<meta name="content-category" content="legal">', $html);
+        self::assertStringContainsString('"@type": "WebPage"', $html);
+        self::assertStringNotContainsString('AccessibilityPage', $html);
+        self::assertStringNotContainsString('<meta name="page-type" content="legal">', $html);
     }
 
     public function testSeoProfileProviderReceivesSlotAndOptionsInContext(): void

@@ -75,7 +75,7 @@ final class SeoAdminAccountService
             return (new SeoAccountVerifier())->verify($platform, $verifiedConfig);
         }
 
-        return $this->transactions->run($this->accounts->getConnection(), function () use (
+        $saved = $this->transactions->run($this->accounts->getConnection(), function () use (
             $accountId,
             $name,
             $platform,
@@ -93,8 +93,13 @@ final class SeoAdminAccountService
                 }
             }
             $config = $this->prepareConfig($account, $platform, $config, $capability);
-            $enablePush = !empty($capability['supports_url_push']) ? (int)!empty($params['enable_cron_push_urls']) : 0;
-            $enableSitemap = !empty($capability['supports_sitemap_submit']) ? (int)!empty($params['enable_cron_sitemap']) : 0;
+            // 平台支持时默认开启；仅当请求显式传 false/0 或平台不支持时关闭
+            $enablePush = !empty($capability['supports_url_push'])
+                ? (int)(array_key_exists('enable_cron_push_urls', $params) ? !empty($params['enable_cron_push_urls']) : 1)
+                : 0;
+            $enableSitemap = !empty($capability['supports_sitemap_submit'])
+                ? (int)(array_key_exists('enable_cron_sitemap', $params) ? !empty($params['enable_cron_sitemap']) : 1)
+                : 0;
             $account->setData(SeoAccount::schema_fields_NAME, $name)
                 ->setData(SeoAccount::schema_fields_PLATFORM, $platform)
                 ->setData(SeoAccount::schema_fields_PROVIDER, $platform)
@@ -109,6 +114,54 @@ final class SeoAdminAccountService
             $account->save();
             return $this->result(__('账户保存成功'), ['account_id' => (int)$account->getId()]);
         });
+
+        if (!array_key_exists('website_ids', $params)) {
+            return $saved;
+        }
+
+        $savedAccountId = (int)($saved['data']['account_id'] ?? 0);
+        if ($savedAccountId <= 0) {
+            return $saved;
+        }
+
+        $websiteIds = $params['website_ids'];
+        if (is_string($websiteIds)) {
+            $websiteIds = array_values(array_filter(array_map('trim', explode(',', $websiteIds)), static fn(string $v): bool => $v !== ''));
+        }
+        if (!is_array($websiteIds)) {
+            $websiteIds = [];
+        }
+        $bindResult = $this->saveAccountWebsiteBindings($savedAccountId, $websiteIds);
+        $normalizedIds = $this->normalizeWebsiteIds($websiteIds);
+        $saved['message'] = (string)__('账户保存成功，已同步站点绑定');
+        $saved['data'] = is_array($saved['data'] ?? null) ? $saved['data'] : [];
+        $saved['data']['bindings'] = $bindResult['data'] ?? [];
+        $saved['data']['bound_website_ids'] = $normalizedIds;
+        // 再读库核对（尤其 website_id=0），避免「成功」但未落盘
+        $verified = [];
+        foreach ($this->websiteAccounts->reset()
+            ->where(SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $savedAccountId)
+            ->select()->fetchArray() as $binding) {
+            if (!is_array($binding)) {
+                continue;
+            }
+            if (!array_key_exists(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $binding)) {
+                continue;
+            }
+            $verifiedId = (int)$binding[SeoWebsiteAccount::schema_fields_WEBSITE_ID];
+            if ($verifiedId < 0) {
+                continue;
+            }
+            $verified[$verifiedId] = $verifiedId;
+        }
+        $verified = array_values($verified);
+        sort($verified);
+        $expected = $normalizedIds;
+        sort($expected);
+        if ($verified !== $expected) {
+            throw new \RuntimeException((string)__('账户已保存，但站点绑定未同步成功，请重试保存。'));
+        }
+        return $saved;
     }
 
     private function prepareConfig(SeoAccount $account, string $platform, array $posted, array $capability): array

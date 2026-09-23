@@ -49,4 +49,34 @@ final class WebsiteOriginRoutingTest extends TestCase
             self::assertSame('https://shop.example:8443/store/cn', (new SeoWebsiteDirectory())->currentBaseUrl());
         } finally { $_SERVER = $before; }
     }
+
+    public function testRewriteToPublicOriginAlignsSameHostPortDifference(): void
+    {
+        $directory = new SeoWebsiteDirectory();
+        self::assertSame(
+            'https://p05113ef3.test.weline.com:9555/policy/accessibility',
+            $directory->rewriteToPublicOriginUrl(
+                'https://p05113ef3.test.weline.com/policy/accessibility',
+                'https://p05113ef3.test.weline.com:9555',
+            ),
+        );
+        self::assertSame(
+            'https://other.example/path',
+            $directory->rewriteToPublicOriginUrl(
+                'https://other.example/path',
+                'https://p05113ef3.test.weline.com:9555',
+            ),
+        );
+        $xml = '<urlset><url><loc>https://p05113ef3.test.weline.com/about</loc></url></urlset>';
+        $out = $directory->rewriteLoopbackOriginsInXml($xml, 'https://p05113ef3.test.weline.com:9555');
+        self::assertStringContainsString('https://p05113ef3.test.weline.com:9555/about', $out);
+        $foreign = $directory->rewriteAllOriginsInXml(
+            '<urlset><url><loc>http://e2e-theme-default-e2e_default_injection_mso3wfcu_1.test/sitemaps/x/canonical/a.xml</loc></url></urlset>',
+            'https://p05113ef3.test.weline.com:9555',
+        );
+        self::assertStringContainsString(
+            'https://p05113ef3.test.weline.com:9555/sitemaps/x/canonical/a.xml',
+            $foreign,
+        );
+    }
 }

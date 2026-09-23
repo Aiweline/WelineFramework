@@ -207,7 +207,8 @@ Sitemap 首页是纯读取页，打开时不生成 XML。同步、生成、提�
   索引/分片 URL 在后台展示时同样改写为当前项目入口，重新生成后会写入真实 origin。
   canonical 文件内容的同源校验仍只认站点配置 origin，不按别名域名拆分生成。
 - `/sitemap.xml` 与 `/sitemaps/{code}/{target}/*.xml` 在协议输出时会把历史 localhost `<loc>`
-  改写为当前项目 origin，再做同源校验；避免默认站占位 URL 导致 503 `<error>`。
+  **以及同 host 但 scheme/port 不一致的 `<loc>`**（例如落盘无端口、爬虫访问 `:9555`）
+  改写为当前请求 serve origin，再做同源校验；避免默认站占位 URL 或开发端口差导致 503 `<error>`。
 - 生成物落在 `pub/sitemaps/**`，但 WLS 不得把 `/sitemaps/**`（以及根路径
   `sitemap.xml` / `robots.txt`）当静态文件直出：`StaticRequestBypassDecider` 必须把它们
   交给框架，走 `ProtocolRouteRewrite` → `SitemapProtocolRenderer`，否则磁盘里的

@@ -2145,6 +2145,28 @@
   margin-top: 16px;
 }
 
+.weline-seo-panel__section--a11y,
+.weline-seo-panel__section--a11y-teaser {
+  margin-top: 16px;
+}
+
+.weline-seo-panel__section--a11y ul,
+.weline-seo-panel__section--a11y-teaser ul {
+  margin: 8px 0 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.weline-seo-panel__a11y-open {
+  margin: 10px 0 12px;
+}
+
+.weline-seo-panel__a11y-open .weline-seo-panel__publish-btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .weline-seo-panel__eeat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
