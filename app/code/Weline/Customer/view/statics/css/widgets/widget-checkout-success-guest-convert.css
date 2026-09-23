@@ -1,0 +1,12 @@
+.checkout-success-guest-convert {
+    margin: 0 0 16px;
+    padding: 16px 18px;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
+    background: #fff;
+    display: grid;
+    gap: 12px;
+}
+.checkout-success-guest-convert__copy p { margin: 6px 0 0; color: #565959; font-size: 14px; }
+.checkout-success-guest-convert__copy em { font-style: normal; color: #0f1111; }
+.checkout-success-guest-convert__status { margin: 0; color: #b12704; font-size: 13px; }

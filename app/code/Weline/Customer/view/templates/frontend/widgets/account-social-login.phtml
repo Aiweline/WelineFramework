@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Customer::css/widgets/widget-account-social-login.css,Weline_Customer::js/account-social-quick.js}
  * 顾客社媒登录入口（应用部件）：默认注入登录表单社媒 slot。
  *
  * @var \Weline\Framework\View\Template $this
@@ -69,82 +70,6 @@ $quickJsonRaw = (string) json_encode(
 $hasQuick = !$loggedIn && (($quick['google'] ?? null) !== null || ($quick['facebook'] ?? null) !== null);
 ?>
 <?php if ($count > 0): ?>
-<style>
-/* 部件自带样式：不依赖懒加载 page CSS，避免被全宽提交按钮类与列表 disc 盖掉 */
-.account-social-login[data-w-component="account-social-login"] {
-    display: block;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__list,
-.account-social-login[data-w-component="account-social-login"] .account-social-login__list--logos {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 0.85rem;
-    margin: 0;
-    padding: 0.15rem 0 0.35rem;
-    list-style: none !important;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__item {
-    display: block;
-    margin: 0;
-    padding: 0;
-    width: auto;
-    list-style: none !important;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__item::marker {
-    content: "" !important;
-    font-size: 0;
-}
-.account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo {
-    box-sizing: border-box;
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    width: 2.75rem !important;
-    height: 2.75rem !important;
-    min-width: 2.75rem !important;
-    max-width: 2.75rem !important;
-    min-height: 2.75rem !important;
-    margin: 0;
-    padding: 0 !important;
-    border: 1px solid #d5d9d9;
-    border-radius: 999px !important;
-    background: #fff;
-    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.06);
-    text-decoration: none;
-    color: inherit;
-    line-height: 0;
-    transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-}
-.account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo:hover,
-.account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo:focus-visible {
-    background: #f7f8f8;
-    border-color: #bbb;
-    box-shadow: 0 0 0 3px rgba(15, 17, 17, 0.08);
-    outline: none;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__logo,
-.account-social-login[data-w-component="account-social-login"] .account-social-login__mark {
-    display: block;
-    width: 1.375rem;
-    height: 1.375rem;
-    line-height: 0;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__btn--google {
-    border-color: #dadce0;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__btn--facebook {
-    border-color: #1877f2;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__btn--instagram {
-    border-color: #e1306c;
-}
-</style>
 <?php endif; ?>
 <div class="account-social-login<?= $count === 0 ? ' account-social-login--empty' : '' ?>"
      data-w-component="account-social-login"
@@ -176,18 +101,9 @@ $hasQuick = !$loggedIn && (($quick['google'] ?? null) !== null || ($quick['faceb
             </div>
         <?php endforeach; ?>
     </div>
-    <p class="account-social-login__help" style="margin:0.35rem 0 0;text-align:center;font-size:12px;color:#64748b;">
-        <a href="@url{'guide/social-login'}" style="color:#475569;text-decoration:underline;"><lang>社媒登录指南与政策</lang></a>
+    <p class="account-social-login__help" data-widget-style-class="49436a73677e961a">
+        <a href="@url{'guide/social-login'}" data-widget-style-class="6d13de47b4eb6050"><lang>社媒登录指南与政策</lang></a>
     </p>
-    <?php if ($hasQuick): ?>
-    <?php
-    // Compiled templates live under view/tpl/**; __DIR__ is unsafe for locating statics.
-    $quickJsPath = BP . '/app/code/Weline/Customer/view/statics/js/account-social-quick.js';
-    $quickJs = is_file($quickJsPath) ? (string) file_get_contents($quickJsPath) : '';
-    ?>
-    <?php if ($quickJs !== ''): ?>
-    <script data-no-extract="true" data-w-social-quick-boot><?= $quickJs ?></script>
-    <?php endif; ?>
-    <?php endif; ?>
+
     <?php endif; ?>
 </div>
