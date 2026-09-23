@@ -294,6 +294,7 @@ class Data extends AbstractHelper
                             ];
                             $this->collectFrontendQueryBinRouteAlias($name, $params);
                             $this->collectFrontendStreamRouteAlias($name, $params);
+                            $this->collectFrontendApiDemoRouteAlias($name, $params);
 
                             // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
@@ -960,6 +961,37 @@ class Data extends AbstractHelper
 
         $aliasParams = $params;
         $aliasParams['base_router'] = 'framework';
+        $aliasParams['router'] = preg_replace('#^api/#', '', $route) ?: $route;
+
+        $this->collected_route_registrations[] = [
+            'type' => RegisterDataInterface::ROUTER,
+            'module_name' => $moduleName,
+            'params' => $aliasParams,
+        ];
+    }
+
+    /**
+     * Docs hit /api/api-demo/download; Router::Api() matches after removing the outer /api.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function collectFrontendApiDemoRouteAlias(string $moduleName, array $params): void
+    {
+        $route = (string)($params['router'] ?? '');
+        if (!str_starts_with($route, 'api/api-demo')) {
+            return;
+        }
+
+        $class = (string)($params['class'] ?? '');
+        if (
+            $class === ''
+            || !is_a($class, \Weline\Framework\App\Controller\FrontendRestController::class, true)
+        ) {
+            return;
+        }
+
+        $aliasParams = $params;
+        $aliasParams['base_router'] = 'api-demo';
         $aliasParams['router'] = preg_replace('#^api/#', '', $route) ?: $route;
 
         $this->collected_route_registrations[] = [

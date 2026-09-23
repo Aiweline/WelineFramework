@@ -105,6 +105,53 @@ final class StorefrontScopeHotCache
         }
     }
 
+    /**
+     * Read a warm Policy envelope without running a builder.
+     *
+     * Returns null on L1/L2 miss/expired. Never invents a HIT and never
+     * publishes a new shared entry — callers must fall through to rememberPolicy.
+     */
+    public function peekPolicy(CachePolicy|string $policy, string $logicalKey): mixed
+    {
+        $policy = $this->resolvePolicy($policy);
+        if (!KeyBuilder::policyAllowsSharedCache($policy)) {
+            if (!Context::hasCurrent()) {
+                return null;
+            }
+            $memoKey = $this->requestMemoKey($policy->resource, $logicalKey);
+            return RequestContext::has($memoKey) ? RequestContext::get($memoKey) : null;
+        }
+        $key = $this->policyKey($policy, $logicalKey);
+        if ($key === null) {
+            return null;
+        }
+        $processKey = $policy->pool . '|' . $key;
+        $entry = self::$processCache[$processKey] ?? null;
+        if (is_array($entry)) {
+            $status = $this->entryStatus($entry);
+            if ($status === 'fresh' || $status === 'stale') {
+                return $entry['payload'];
+            }
+            unset(self::$processCache[$processKey]);
+        }
+        try {
+            $cached = $this->readShared($this->pool($policy->pool), $key, true);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!is_array($cached) || !array_key_exists('payload', $cached)) {
+            return null;
+        }
+        $entry = $this->normalizeEnvelope($cached, $policy->freshTtlSeconds, $policy->staleTtlSeconds);
+        $status = $this->entryStatus($entry);
+        if ($status !== 'fresh' && $status !== 'stale') {
+            return null;
+        }
+        $this->storeProcessEntry($processKey, $entry);
+
+        return $entry['payload'];
+    }
+
     private function resolvePolicy(CachePolicy|string $policy): CachePolicy
     {
         $manager = $this->cacheManager ?? ObjectManager::getInstance(CacheManager::class);

@@ -35,6 +35,7 @@
 1. **先有用例**：URL、步骤、期望结果（来自 `doc/需求.md` 或 TaskContract）；禁止先写代码后补「随便点一下」。
 2. **起真实 WLS**（测试实例），确认 Worker/静态资源已加载本次改动。
 3. **打开当前宿主可用的真实 Browser，且打开即禁用 HTTP 缓存（硬，`browser_cache_disabled_on_open`）**，再按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
+3a. **操作员 Browser 默认非抢占 / 后台（硬，`browser_operator_non_preemptive`）**：WB-OP 可以在后台完成，**禁止**默认抢占用户 IDE/对话焦点。Cursor ide-browser：`browser_navigate` **省略** `position`（后台开页、保留焦点）；**禁止**默认传 `position:"active"` 或把 Browser 面板强行拉到前台。后台 ≠ 免测——仍须按用例跑完 WB-OP。仅当用户**明确**要求观看/聚焦 Browser 时才可前台（与 `e2e_playwright_headless_default` 同精神）。
 3b. **打开即抹掉自动化检测标志（硬，`browser_strip_automation_flags`）**：与禁缓存同序、在页面脚本跑人机验证之前执行。WB-OP / Playwright 必须像真人浏览器，否则云端 reCAPTCHA / 人机验证会按「自动化」拦截登录与提交。
    - **宿主 Browser（Cursor ide-browser 等）**：CDP `Page.addScriptToEvaluateOnNewDocument`（或等价 init script）注入：把 `navigator.webdriver` 置为 `undefined`/`false`；需要时再 `Page.reload` 后交互。
    - **正式 Playwright runner**：Chromium `launchOptions` 须含 `--disable-blink-features=AutomationControlled`，并用 `ignoreDefaultArgs` 去掉 `--enable-automation`；`context.addInitScript` 同样清掉 `navigator.webdriver`（仓库 `tests/e2e/playwright.config.js` 已默认开启）。
@@ -45,6 +46,7 @@
    - 禁止「代码已改，请用户自己打开看」代替 AI 自测（宿主无 Browser 时除外，须明确标注未完成）
    - 禁止带着默认磁盘缓存验收本回合改过的 CSS/JS/HTML（易误判「没改到」）
    - 禁止未抹自动化标志就宣称登录/人机验证路径已验收
+   - 禁止默认抢占式前台打开验收 Browser（须后台非抢占，见 3a）
 5. 未跑通用例时，汇报只能写：**「代码已改，WebUI 验收未完成」**，禁止写「已完成 / 已交付」。
 
 ## 门禁 A2：Playwright 端到端（E2E，硬，`ui_feature_requires_e2e` + `plan_full_pathway_e2e_suite` + `forbid_user_manual_test_handoff`）
@@ -74,7 +76,7 @@
 打开顺序（机器契约 `closeout_delivery_reminder.browser_open_order`）：
 
 ```text
-disable_http_cache_for_session → navigate_or_reload_ignore_cache → run_wb_op_and_optional_wb_vis
+prefer_background_non_preemptive_navigate → disable_http_cache_for_session → strip_automation_detection_flags → navigate_or_reload_ignore_cache → run_wb_op_and_optional_wb_vis
 ```
 
 ## 门禁 B：视觉证据（WB-VIS）
@@ -162,6 +164,7 @@ disable_http_cache_for_session → navigate_or_reload_ignore_cache → run_wb_op
 | 「代码改完了」无 Browser | 补跑 WB-OP；未跑则改口为验收未完成 |
 | 只 curl 200 就交 UI | curl 只探活；交互必须真实 Browser |
 | 带着默认缓存验本回合 CSS/JS | 打开前 `setCacheDisabled` 或 `ignoreCache` 重载 |
+| 默认 `position:active` 抢焦点 | 省略 `position` 后台开页；仅用户要求观看时前台 |
 | 交付不写地址 | 末尾补「交付地址」小节 |
 | 让用户自己找路由 | AI 列出探活过的完整 http(s) 链接 |
 | 主 Host 写成 `*.weline.test` | 改用 `{project_hash}.test.weline.com` |

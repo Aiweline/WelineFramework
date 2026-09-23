@@ -1,0 +1,25 @@
+[34mRun mode: Command-line output (default)[0m
+[34mRun mode: Specify module - Weline_Framework[0m
+[34mCollecting test suite...[0m
+[34mRun mode: Specify module file - Weline_Framework::WlsRuntimeAdoptHomepageFpcMetaContractTest[0m
+[34mCollection complete, preparing to run...[0m
+[34mRunning module file test: Weline_Framework::WlsRuntimeAdoptHomepageFpcMetaContractTest[0m
+[32m'/opt/homebrew/Cellar/php@8.4/8.4.22/bin/php' /Users/weline/Project/Official/框架/vendor//phpunit/phpunit/phpunit --configuration /Users/weline/Project/Official/框架/tests/phpunit/config.xml --testdox app/code/Weline/Framework/test/Unit/Runtime/WlsRuntimeAdoptHomepageFpcMetaContractTest.php[0m
+[34mPHPUnit 10.5.36 by Sebastian Bergmann and contributors.[0m
+Runtime:       PHP 8.4.22
+Configuration: /Users/weline/Project/Official/框架/tests/phpunit/config.xml
+....                                                                4 / 4 (100%)
+[34mTime: 00:00.032, Memory: 32.00 MB[0m
+Wls Runtime Adopt Homepage Fpc Meta Contract (Weline\Framework\Test\Unit\Runtime\WlsRuntimeAdoptHomepageFpcMetaContract)
+✔ Adopt calls worker readiness mark business homepage hot
+✔ Deferred warmup adopts homepage immediately and prefers catalog slot
+✔ Deferred warmup skips locales after consecutive probe failures
+✔ Deferred warmup forces products and seals critical before locales
+[32mOK, but there were issues![0m
+[34mTests: 4, Assertions: 42, PHPUnit Deprecations: 1.[0m
+[32m────────────────────────────────────────────────────────────────────────────────[0m
+[32m✓ Test completed![0m
+[34mNote: Tests have completed.[0m
+[34m
+[0m
+[34mExecuting command:phpunit:run --module=Weline_Framework[0m

@@ -26,7 +26,7 @@ final class HtmlCacheAdmission
     /**
      * Heal missing product-card CSS before FPC/hook admission.
      *
-     * Slot/DOM repair and asset extract can drop the inline <style> while leaving
+     * Slot/DOM repair and asset extract can drop the stylesheet declaration while leaving
      * cards, which permanently blocks Full Page Cache publish. Re-inject once.
      */
     public static function healStorefrontProductCardCss(string $html): string
@@ -39,6 +39,9 @@ final class HtmlCacheAdmission
         if ($tag === '') {
             return $html;
         }
+
+        $headEnd = stripos($html, '</head>');
+        if ($headEnd !== false) { return substr_replace($html, $tag, $headEnd, 0); }
 
         if (\preg_match('/<body\b[^>]*>/i', $html, $match, \PREG_OFFSET_CAPTURE) === 1) {
             $offset = (int)$match[0][1] + \strlen($match[0][0]);
@@ -58,7 +61,7 @@ final class HtmlCacheAdmission
     }
 
     /**
-     * Storefront pages that render canonical product cards must carry the inline
+     * Storefront pages that render canonical product cards must carry the external
      * product-card CSS marker.
      */
     public static function storefrontProductCardCssOk(string $body): bool
@@ -86,15 +89,13 @@ final class HtmlCacheAdmission
             }
         }
 
-        $cssPath = \dirname(__DIR__, 3)
-            . '/Product/view/statics/css/frontend/product-card.css';
-        $css = \is_file($cssPath) ? (string)\file_get_contents($cssPath) : '';
-        if ($css === '') {
+        try {
+            $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\View\Template::class)
+                ->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Product::css/frontend/product-card.css');
+            return '<link rel="stylesheet" data-weline-product-card-css="1" data-weline-widget-asset="source" data-weline-source-position="head" href="'
+                . htmlspecialchars((string)$url, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+        } catch (\Throwable) {
             return '';
         }
-
-        return '<style data-weline-product-card-css="1" data-no-extract="true">'
-            . $css
-            . '</style>' . "\n";
     }
 }

@@ -50,7 +50,7 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20260918-fiber-form-ob-v2';
+    public const COMPILER_GENERATION = '20260923-if-condition-getdata-form-hidden-v4';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
@@ -1315,6 +1315,7 @@ class Taglib
                     'role' => 0,
                     'style' => 0,
                     'novalidate' => 0,
+                    'hidden' => 0,
                     'intent' => 0,
                     'csrf' => 0,
                     'captcha' => 0,

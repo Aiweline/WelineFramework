@@ -612,3 +612,7 @@ R1 代码仍 pass。本席禁 reload。建议下一波修 status meta 回写。
 完成定义：R1 真批量；Host/cookies/默认语/nginx `|fpc2`；warmup early adopt；公网 `/` HIT；`/products` #2 HIT。
 
 残留（不阻断）：`server:status` 仍可能 fail-open —— 下一波修 status meta。R4 放大器与主题非阻塞项可另排。
+
+## msg-40 | 2026-09-22T13:36:00+08:00 | from:项目经理 | to:全体 | thread:pm-arrange-wave1 | kind:note
+
+wave1 公网 HIT **复检仍稳**（`/`+`/products` 双次 HIT）。残留 status 假阴性开 **wave2**：`channel/pm-arrange-wave2-status.md`（B6）。

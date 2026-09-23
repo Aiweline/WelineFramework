@@ -8,6 +8,8 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Phrase\DictionaryCollectBusyException;
+use Weline\Framework\Phrase\DictionaryCollectGate;
 use Weline\Framework\Phrase\DictionaryCompiler;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -23,7 +25,7 @@ final class Collect implements CommandInterface
     ) {
     }
 
-    public function execute(array $args = [], array $data = []): void
+    public function execute(array $args = [], array $data = []): int
     {
         $moduleName = $args['module'] ?? $args['m'] ?? $args[1] ?? null;
         $moduleName = is_string($moduleName) ? trim($moduleName) : null;
@@ -41,13 +43,23 @@ final class Collect implements CommandInterface
                     ? __('模块 %{1} 语言包收集成功！', [$moduleName])
                     : __('语言包收集成功！'),
             );
+        } catch (DictionaryCollectBusyException $busy) {
+            $this->printing->warning($busy->getMessage());
+
+            return 75; // EX_TEMPFAIL — duplicate launch refused
         } catch (\Throwable $throwable) {
+            if (DictionaryCollectGate::isBusy($throwable)) {
+                $this->printing->warning($throwable->getMessage());
+
+                return 75;
+            }
             $this->printing->error(
                 $moduleName
                     ? __('模块 %{1} 语言包收集失败：%{2}', [$moduleName, $throwable->getMessage()])
                     : __('语言包收集失败：%{1}', [$throwable->getMessage()]),
             );
-            return;
+
+            return 1;
         }
 
         $this->printing->note(__('正在清理翻译缓存...'));
@@ -68,6 +80,8 @@ final class Collect implements CommandInterface
                 __('翻译缓存清理失败：%{1}，但翻译收集已完成', [$exception->getMessage()]),
             );
         }
+
+        return 0;
     }
 
     public function tip(): string

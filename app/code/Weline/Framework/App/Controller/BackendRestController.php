@@ -42,6 +42,9 @@ class BackendRestController extends AbstractRestController
         }
 
         if (!$this->session->isLoggedIn()) {
+            if ($this->authenticateBearerBackendToken()) {
+                return;
+            }
             if (!$this->legacySessionRecoveryAllowed()) {
                 $this->terminateUnauthenticated();
             }
@@ -60,6 +63,52 @@ class BackendRestController extends AbstractRestController
             } else {
                 $this->terminateUnauthenticated();
             }
+        }
+    }
+
+    /**
+     * Accept Backend Auth Bearer tokens (Admin REST demos / non-browser clients).
+     */
+    private function authenticateBearerBackendToken(): bool
+    {
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            $token = '';
+            $auth = (string)($request->getHeader('Authorization') ?? '');
+            if (\preg_match('/^\s*Bearer\s+(\S+)\s*$/i', $auth, $m) === 1) {
+                $token = $m[1];
+            }
+            if ($token === '') {
+                $token = \trim((string)($request->getHeader('X-API-Token') ?? $request->getHeader('X-Api-Token') ?? ''));
+            }
+            if ($token === '') {
+                return false;
+            }
+
+            $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(\Weline\Backend\Api\Auth\BackendApiAuthenticationInterface::class);
+            if (!$provider instanceof \Weline\Backend\Api\Auth\BackendApiAuthenticationInterface) {
+                return false;
+            }
+
+            $backendUser = $provider->getUserByToken($token);
+            if ($backendUser === null) {
+                return false;
+            }
+            $actor = $provider->loadActor((int)$backendUser->getId());
+            if ($actor === null || !$actor->isEnabled() || $actor->isDeleted()) {
+                return false;
+            }
+
+            $user = $actor->getUser();
+            if (!$user instanceof \Weline\Framework\Session\Auth\AuthenticableInterface) {
+                return false;
+            }
+            $this->session->login($user);
+
+            return $this->session->isLoggedIn();
+        } catch (\Throwable) {
+            return false;
         }
     }
 

@@ -1,0 +1,43 @@
+root#1 http=200 ttfb=0.021623 total=0.024060
+x-weline-fpc: HIT x-wls-edge-cache: HIT 
+root#2 http=200 ttfb=0.006178 total=0.008388
+x-weline-fpc: HIT x-wls-edge-cache: HIT 
+root#3 http=200 ttfb=0.006251 total=0.008318
+x-weline-fpc: HIT x-wls-edge-cache: HIT 
+root#4 http=200 ttfb=0.007686 total=0.011615
+x-weline-fpc: HIT x-wls-edge-cache: HIT 
+root#5 http=200 ttfb=0.004669 total=0.007101
+x-weline-fpc: HIT x-wls-edge-cache: HIT 
+root#6 http=200 ttfb=0.010042 total=0.012269
+x-weline-fpc: HIT x-wls-edge-cache: HIT 
+prod#1 http=200 ttfb=0.005027 total=0.008878
+x-weline-fpc: HIT x-wls-fpc-status: HIT x-wls-edge-cache: HIT 
+prod#2 http=200 ttfb=0.005247 total=0.009035
+x-weline-fpc: HIT x-wls-fpc-status: HIT x-wls-edge-cache: HIT 
+prod#3 http=200 ttfb=0.005431 total=0.009287
+x-weline-fpc: HIT x-wls-fpc-status: HIT x-wls-edge-cache: HIT 
+bypass[frontend=1] ttfb=0.028428 total=0.030661
+x-weline-fpc: HIT
+x-wls-fpc-status: HIT
+x-wls-edge-cache: BYPASS
+---
+bypass[customer=1] ttfb=0.026628 total=0.028743
+x-weline-fpc: HIT
+x-wls-fpc-status: HIT
+x-wls-edge-cache: BYPASS
+---
+bypass[PHPSESSID=diagbypass] ttfb=0.027270 total=0.029371
+x-weline-fpc: HIT
+x-wls-fpc-status: HIT
+x-wls-edge-cache: BYPASS
+---
+bypass[form_key=abc] ttfb=0.027117 total=0.029335
+x-weline-fpc: HIT
+x-wls-fpc-status: HIT
+x-wls-edge-cache: BYPASS
+---
+bypass[weline_logged_in=1] ttfb=0.026439 total=0.028778
+x-weline-fpc: HIT
+x-wls-fpc-status: HIT
+x-wls-edge-cache: BYPASS
+---

@@ -25,8 +25,22 @@ class DictionaryCompiler
 
     /**
      * @return array<string, array<string, string>>
+     * @throws DictionaryCollectBusyException when another collect already holds the single-flight lock
      */
     public function compile(?string $moduleName = null, bool $useCache = false): array
+    {
+        DictionaryCollectGate::acquire($moduleName);
+        try {
+            return $this->compileLocked($moduleName, $useCache);
+        } finally {
+            DictionaryCollectGate::release();
+        }
+    }
+
+    /**
+     * @return array<string, array<string, string>>
+     */
+    private function compileLocked(?string $moduleName, bool $useCache): array
     {
         $_prevMemLimit = ini_get('memory_limit');
         $currentLimit = $this->parseMemoryLimit((string)$_prevMemLimit);
@@ -77,6 +91,7 @@ class DictionaryCompiler
             echo str_repeat('=', 80) . "\n\n";
         }
 
+        unset($useCache);
         $payload = [
             'module' => $moduleName,
             'locals_words' => &$localsWords,

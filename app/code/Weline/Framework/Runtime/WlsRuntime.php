@@ -99,6 +99,31 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private bool $readyGateWorkerBootstrapWarmupCompleted = false;
 
     /**
+     * Captured by handle() finally when bag-prime pending (wave8-8c2/8c3).
+     *
+     * @var array{seeded?:int,peeked?:int,bags?:list<string>,errors?:list<string>,providers?:int}|null
+     */
+    private ?array $deferredHotCacheBagPrimeCapture = null;
+
+    /**
+     * Instance flag: ServerBag/getServer drops custom WLS_PRIME_* keys, so finally
+     * must not rely on request->getServer('WLS_PRIME_HOT_CACHE_BAGS') (wave8-8c3).
+     */
+    private bool $deferredHotCacheBagPrimePending = false;
+
+    /** wave8-8c7: stage survives ServerBag strip of WLS_PRIME_HOT_CACHE_BAGS_STAGE. */
+    private string $deferredHotCacheBagPrimeStage = '';
+
+    /**
+     * P5-fiber-yield O2: bag-prime latch must be Fiber-local. A live peer Fiber's
+     * handle() finally used to see the process-wide pending flag, clear it, and
+     * leave the bag-prime Fiber with capture_miss.
+     *
+     * @var \WeakMap<\Fiber, array{pending: bool, stage: string, capture: ?array}>|null
+     */
+    private ?\WeakMap $fiberHotCacheBagPrimeStates = null;
+
+    /**
      * @var array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int}|null
      */
     private ?array $readyGateHomepageFpcProof = null;
@@ -1200,6 +1225,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $runFpcProcessPullWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredFpcProcessPullWarmup();
         $runDynamicFirstRenderWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredDynamicFirstRenderWarmup();
         $runStorefrontCriticalWarmup = $this->shouldRunDeferredStorefrontCriticalWarmup();
+        $runStorefrontPeerBagHydrate = !$runStorefrontCriticalWarmup
+            && $this->shouldRunDeferredStorefrontPeerHotCacheBagHydrate();
         if ($this->readyGateWorkerRegistryWarmupCompleted) {
             $runRegistryWarmup = false;
             $runUrlMetadataWarmup = false;
@@ -1212,6 +1239,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             && !$runFpcProcessPullWarmup
             && !$runDynamicFirstRenderWarmup
             && !$runStorefrontCriticalWarmup
+            && !$runStorefrontPeerBagHydrate
         ) {
             return;
         }
@@ -1235,6 +1263,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // and lets the shared FPC build lock publish one response without
             // holding the control-plane READY handshake open.
             $this->runDeferredStorefrontCriticalWarmup();
+        } elseif ($runStorefrontPeerBagHydrate) {
+            // wave8-8c6: non-owner Workers hydrate HotCache bags (esp.
+            // chrome_slot_projection) into Process L1 after owner Shared publish.
+            $this->runDeferredStorefrontPeerHotCacheBagHydrate();
         }
         if ($runBackendFirstRenderWarmup) {
             $this->runDeferredBackendFirstRenderWarmup();
@@ -1251,6 +1283,39 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     private function shouldRunDeferredStorefrontCriticalWarmup(): bool
+    {
+        if (!$this->needsDeferredStorefrontWarmup()) {
+            return false;
+        }
+
+        // A cold storefront render is expensive and publishes to shared FPC.
+        // Elect one Worker so the remaining Workers do not render the same
+        // path concurrently and wait on the shared build lock.
+        return $this->isDynamicFirstRenderWarmupOwnerWorker(
+            'WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID',
+            'wls.worker.storefront_deferred_warmup_owner_worker_id',
+            1
+        );
+    }
+
+    /**
+     * wave8-8c6: non-owner Workers must hydrate HotCache bags (chrome_slot_projection)
+     * into Process L1 after the owner publishes Shared — low-rc probes are sticky.
+     */
+    private function shouldRunDeferredStorefrontPeerHotCacheBagHydrate(): bool
+    {
+        if (!$this->needsDeferredStorefrontWarmup()) {
+            return false;
+        }
+
+        return !$this->isDynamicFirstRenderWarmupOwnerWorker(
+            'WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID',
+            'wls.worker.storefront_deferred_warmup_owner_worker_id',
+            1
+        );
+    }
+
+    private function needsDeferredStorefrontWarmup(): bool
     {
         if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
             return false;
@@ -1276,18 +1341,46 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // proof still honors the explicit flag only.
         $homepageNeedsDeferredPrime = $this->isHomepageReadyGateFailOpen()
             || !((bool)($this->readyGateHomepageFpcProof['hit'] ?? false));
-        if (!$flagEnabled && !$homepageNeedsDeferredPrime) {
-            return false;
+
+        return $flagEnabled || $homepageNeedsDeferredPrime;
+    }
+
+    /**
+     * wave8-8c6: peer Workers hydrate Theme/Product HotCache bags without
+     * re-running critical FPC SSR. Delay so owner Shared publish lands first.
+     */
+    private function runDeferredStorefrontPeerHotCacheBagHydrate(): void
+    {
+        $startedAt = \microtime(true);
+        $workerId = \max(1, (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 1));
+        $delayMs = (int)(Env::get('wls.worker.storefront_peer_bag_hydrate_delay_ms', 6000) ?: 6000);
+        $delayMs = \max(0, \min(20000, $delayMs)) + (($workerId - 1) * 250);
+        if ($delayMs > 0) {
+            SchedulerSystem::yieldDelay($delayMs);
         }
 
-        // A cold storefront render is expensive and publishes to shared FPC.
-        // Elect one Worker so the remaining Workers do not render the same
-        // path concurrently and wait on the shared build lock.
-        return $this->isDynamicFirstRenderWarmupOwnerWorker(
-            'WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID',
-            'wls.worker.storefront_deferred_warmup_owner_worker_id',
-            1
-        );
+        // Light stage: Product skips catalog.full; Theme still primes chrome_slot.
+        $bagPrime = $this->primeDeferredStorefrontHotCacheBags('peer_hydrate');
+        // Retry once if chrome_slot still missing (owner Shared may land mid-window).
+        $bags = \is_array($bagPrime['bags'] ?? null) ? $bagPrime['bags'] : [];
+        if (!\in_array('theme.layout_entity.chrome_slot_projection', $bags, true)) {
+            SchedulerSystem::yieldDelay(2000);
+            $bagPrime = $this->primeDeferredStorefrontHotCacheBags('peer_hydrate');
+        }
+        $this->logDeferredStorefrontWarmupStage('peer_bags_hydrated', [
+            'worker_id' => $workerId,
+            'delay_ms' => $delayMs,
+            'bag_prime' => $bagPrime,
+            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+        ]);
+
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] deferred storefront peer bag hydrate worker='
+                . $workerId
+                . ' seeded=' . (int)($bagPrime['seeded'] ?? 0)
+                . ' bags=' . \implode(',', \is_array($bagPrime['bags'] ?? null) ? $bagPrime['bags'] : [])
+                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+        }
     }
 
     /**
@@ -1307,8 +1400,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // which left every Worker cold for the first anonymous homepage SSR.
         $homepageProofHit = \is_array($this->readyGateHomepageFpcProof)
             && (bool)($this->readyGateHomepageFpcProof['hit'] ?? false);
-        if ($this->isHomepageReadyGateFailOpen() || !$homepageProofHit) {
+        $needsCriticalPrime = $this->isHomepageReadyGateFailOpen() || !$homepageProofHit;
+        if ($needsCriticalPrime) {
+            // Force both critical slots even when the provider omits `/products`
+            // so Shared HotCache/FPC exist before the first public/probe MISS.
             $paths['/'] = '/';
+            $paths['/products'] = '/products';
         }
         // Prefer raw provider paths with normalizeInternalWarmupPath so locale
         // homes keep their trailing slash (`/ar_SA/` → FPC key). Drop paths that
@@ -1334,30 +1431,52 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $paths[$path] = $path;
             }
         }
-        // Prefer `/` then `/products` before locale homes so catalog is not
-        // squeezed out (or probe-missed) after several multi-MB locale SSRs
-        // thrash Process L1.
-        $ordered = [];
+        // Hot-path reserve: `/` + directory representative `/products` always
+        // take slots before locale homes (public_origin Host already selected
+        // below). Locale extras fill the remaining max_paths budget only.
+        $critical = [];
         if (isset($paths['/'])) {
-            $ordered['/'] = '/';
+            $critical['/'] = '/';
         }
         if (isset($paths['/products'])) {
-            $ordered['/products'] = '/products';
+            $critical['/products'] = '/products';
         }
+        $localeExtras = [];
         foreach ($paths as $path => $value) {
             $path = (string)$path;
-            if ($path === '' || isset($ordered[$path])) {
+            if ($path === '' || isset($critical[$path])) {
                 continue;
             }
-            $ordered[$path] = $value;
+            $localeExtras[$path] = $value;
         }
-        $paths = $ordered;
         // Keep `/` plus locale homes + catalog representatives. Default was 1,
         // which let homepage fail-open steal the only slot and left catalog cold
         // (debug 70285b: logged-in wait_miss on /products while `/` was warm).
         $maxPaths = (int)(Env::get('wls.worker.storefront_deferred_warmup_max_paths', 6) ?: 6);
-        $paths = \array_slice(\array_values($paths), 0, \max(1, \min(8, $maxPaths)));
-        if ($paths === []) {
+        $budget = \max(1, \min(8, $maxPaths));
+        $criticalList = \array_values($critical);
+        $localeBudget = \max(0, $budget - \count($criticalList));
+        // wls-perf A+B (architect msg-5): fail-open near-virgin window hard-seals
+        // localeBudget=0 so `/`+`/products` seal first; Provider may still declare
+        // locale paths — extras stay on the deferred ledger (not deleted).
+        // P7 B′: localeIdleBudget is env-gated (default 0) and MUST NOT inherit
+        // max_paths−critical — multi-locale full HTML SSR is out of mandatory wall clock.
+        $localeIdleRaw = Env::get('wls.worker.storefront_locale_idle_budget', null);
+        if ($localeIdleRaw === null || $localeIdleRaw === '') {
+            $localeIdleRaw = Env::get('storefront_locale_idle_budget', 0);
+        }
+        $localeIdleBudget = \max(0, \min(8, (int)$localeIdleRaw));
+        // Always retain Provider-declared extras for begin.log locale_deferred_paths.
+        $localeDeferred = \array_values($localeExtras);
+        if ($needsCriticalPrime) {
+            $localeBudget = 0;
+        } else {
+            // B′: non-near-virgin also must not default multi-locale SSR into wall clock.
+            $localeBudget = 0;
+        }
+        $localeList = \array_slice(\array_values($localeExtras), 0, $localeBudget);
+        $paths = \array_merge($criticalList, $localeList);
+        if ($paths === [] && $criticalList === [] && $localeDeferred === []) {
             $this->logDeferredStorefrontWarmupStage('skipped', [
                 'reason' => 'no-provider-path',
                 'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
@@ -1367,12 +1486,128 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
         $this->logDeferredStorefrontWarmupStage('begin', [
-            'paths' => $paths,
+            'paths' => $paths === [] ? $criticalList : $paths,
+            'critical_paths' => $criticalList,
+            'locale_paths' => $localeList,
+            'locale_deferred_paths' => $localeDeferred,
+            'locale_budget_near_virgin' => $localeBudget,
+            'locale_idle_budget' => $localeIdleBudget,
             'hosts' => $hosts,
             'max_paths' => $maxPaths,
+            'needs_critical_prime' => $needsCriticalPrime,
         ]);
 
-        $result = $this->runStorefrontFpcWarmupInternal($paths, $hosts);
+        // wave8-8c3 + perf A: prime light/peek bags BEFORE critical FPC seal.
+        // Product pre_critical is Shared peek-only (禁冷 publishedOffers(1000)).
+        $bagPrimePre = $this->primeDeferredStorefrontHotCacheBags('pre_critical');
+
+        // Phase A: seal `/` + `/products` (and adopt) before any locale SSR so
+        // Process/Shared stock exists for the first public/probe cold window.
+        $resultCritical = $criticalList === []
+            ? ['warmed' => 0, 'failed' => 0, 'errors' => [], 'samples' => [], 'elapsed_ms' => 0.0]
+            : $this->runStorefrontFpcWarmupInternal($criticalList, $hosts);
+        $this->retouchDeferredCriticalProcessL1($hosts, $criticalList);
+        // Retouch bags after FPC SSR / PostResponse chrome seeds.
+        $bagPrimeCritical = $this->primeDeferredStorefrontHotCacheBags('critical');
+        $this->logDeferredStorefrontWarmupStage('critical_sealed', [
+            'paths' => $criticalList,
+            'hosts' => $hosts,
+            'warmed' => (int)($resultCritical['warmed'] ?? 0),
+            'failed' => (int)($resultCritical['failed'] ?? 0),
+            'elapsed_ms' => (float)($resultCritical['elapsed_ms'] ?? 0.0),
+            'bag_prime_pre' => $bagPrimePre,
+            'bag_prime' => $bagPrimeCritical,
+            'samples' => \array_slice(
+                \is_array($resultCritical['samples'] ?? null) ? $resultCritical['samples'] : [],
+                0,
+                4
+            ),
+        ]);
+
+        // Heavy catalog bags only AFTER critical seal (out of first-request window).
+        // P5 O2: idle-gate so critical_sealed yields the event loop before long sync.
+        $idleGateHeavy = $this->awaitDeferredStorefrontIdleGate('post_critical_heavy');
+        $bagPrimeHeavy = $this->primeDeferredStorefrontHotCacheBags('post_critical_heavy');
+        $this->logDeferredStorefrontWarmupStage('post_critical_heavy', [
+            'bag_prime' => $bagPrimeHeavy,
+            'idle_gate' => $idleGateHeavy,
+            'elapsed_ms' => (float)($bagPrimeHeavy['elapsed_ms'] ?? 0.0),
+        ]);
+
+        // B′: locale full HTML SSR only when env budget>0 (idle-gate + begin).
+        // Default budget=0 → skip SSR, keep Provider deferred ledger, log skipped.
+        $localeIdleSkipped = false;
+        if ($localeList === [] && $localeDeferred !== [] && $localeIdleBudget > 0) {
+            $idleGateLocale = $this->awaitDeferredStorefrontIdleGate('locale_idle');
+            $localeList = \array_slice($localeDeferred, 0, $localeIdleBudget);
+            $paths = \array_merge($criticalList, $localeList);
+            $this->logDeferredStorefrontWarmupStage('locale_idle_begin', [
+                'locale_paths' => $localeList,
+                'locale_idle_budget' => $localeIdleBudget,
+                'deferred_count' => \count($localeDeferred),
+                'idle_gate' => $idleGateLocale,
+            ]);
+        } elseif ($localeDeferred !== [] && $localeIdleBudget <= 0) {
+            $localeIdleSkipped = true;
+            $this->logDeferredStorefrontWarmupStage('locale_idle_skipped', [
+                'deferred_count' => \count($localeDeferred),
+                'locale_idle_budget' => $localeIdleBudget,
+                'budget' => $localeIdleBudget,
+                'reason' => 'budget_zero',
+            ]);
+        }
+
+        // P8 O1 / UC-post-locale: only run locale FPC when list non-empty; track
+        // whether SSR actually executed so post_locale retouch is gated.
+        $localeSsrRan = $localeList !== [];
+        $resultLocale = $localeSsrRan
+            ? $this->runStorefrontFpcWarmupInternal($localeList, $hosts, true)
+            : ['warmed' => 0, 'failed' => 0, 'errors' => [], 'samples' => [], 'elapsed_ms' => 0.0];
+
+        // Retouch Process L1 bags only after locale extras may have evicted them.
+        // locale_idle_skipped / localeList empty → post_locale_skipped (禁同成本全量种袋).
+        if ($localeSsrRan) {
+            $bagPrimeFinal = $this->primeDeferredStorefrontHotCacheBags('post_locale');
+        } else {
+            $postLocaleSkipReason = $localeIdleSkipped ? 'locale_idle_skipped' : 'locale_ssr_not_run';
+            $bagPrimeFinal = [
+                'stage' => 'post_locale_skipped',
+                'reason' => $postLocaleSkipReason,
+                'post_response_drained' => 0,
+                'seeded' => 0,
+                'peeked' => 0,
+                'bags' => [],
+                'errors' => [],
+                'providers' => 0,
+                'in_request' => false,
+                'elapsed_ms' => 0.0,
+                'skipped' => true,
+            ];
+            $this->logDeferredStorefrontWarmupStage('post_locale_skipped', [
+                'reason' => $postLocaleSkipReason,
+                'locale_idle_budget' => $localeIdleBudget,
+                'deferred_count' => \count($localeDeferred),
+                'elapsed_ms' => 0.0,
+            ]);
+        }
+
+        $result = [
+            'warmed' => (int)($resultCritical['warmed'] ?? 0) + (int)($resultLocale['warmed'] ?? 0),
+            'failed' => (int)($resultCritical['failed'] ?? 0) + (int)($resultLocale['failed'] ?? 0),
+            'errors' => \array_slice(\array_merge(
+                \is_array($resultCritical['errors'] ?? null) ? $resultCritical['errors'] : [],
+                \is_array($resultLocale['errors'] ?? null) ? $resultLocale['errors'] : [],
+            ), 0, 8),
+            'samples' => \array_slice(\array_merge(
+                \is_array($resultCritical['samples'] ?? null) ? $resultCritical['samples'] : [],
+                \is_array($resultLocale['samples'] ?? null) ? $resultLocale['samples'] : [],
+            ), 0, 8),
+            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            'bag_prime_critical' => $bagPrimeCritical,
+            'bag_prime_heavy' => $bagPrimeHeavy,
+            'bag_prime_final' => $bagPrimeFinal,
+        ];
+
         if ((int)($result['failed'] ?? 0) > 0) {
             $this->logDeferredStorefrontWarmupStage('failed', [
                 'paths' => $paths,
@@ -1380,6 +1615,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 'warmed' => (int)($result['warmed'] ?? 0),
                 'failed' => (int)($result['failed'] ?? 0),
                 'elapsed_ms' => (float)($result['elapsed_ms'] ?? 0.0),
+                'bag_prime_final' => $bagPrimeFinal,
                 'samples' => \array_slice(\is_array($result['samples'] ?? null) ? $result['samples'] : [], 0, 4),
                 'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 4),
             ]);
@@ -1401,6 +1637,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'warmed' => (int)($result['warmed'] ?? 0),
             'failed' => (int)($result['failed'] ?? 0),
             'elapsed_ms' => (float)($result['elapsed_ms'] ?? 0.0),
+            'bag_prime_final' => $bagPrimeFinal,
             'samples' => \array_slice(\is_array($result['samples'] ?? null) ? $result['samples'] : [], 0, 4),
         ]);
         $this->adoptDeferredHomepageWarmupProof($hosts, $result);
@@ -1408,7 +1645,594 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if (\function_exists('w_log_info')) {
             \w_log_info('[WlsRuntime] deferred storefront critical warmup done warmed='
                 . (int)($result['warmed'] ?? 0)
-                . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0));
+                . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0)
+                . ' bags_seeded=' . (int)($bagPrimeFinal['seeded'] ?? 0));
+        }
+    }
+
+    /**
+     * wave8-8c2: drain PostResponse + prime header/builder HotCache bags inside a
+     * live storefront request Context (compiled registry may lag until compile).
+     * Fail-open; never invents FPC HIT; never clears shared FPC.
+     *
+     * @return array{
+     *   stage:string,
+     *   post_response_drained:int,
+     *   seeded:int,
+     *   peeked:int,
+     *   bags:list<string>,
+     *   errors:list<string>,
+     *   elapsed_ms:float,
+     *   providers?:int,
+     *   in_request?:bool,
+     *   db_span_count?:int,
+     *   db_duration_ms?:float,
+     *   wls_span_count?:int,
+     *   wls_duration_ms?:float
+     * }
+     */
+    private function primeDeferredStorefrontHotCacheBags(string $stage): array
+    {
+        $startedAt = \microtime(true);
+        $drained = 0;
+        try {
+            // Flush wave7 PostResponse chrome.rendered seeds before public hit.
+            $drained = PostResponseTaskQueue::drain(250.0, 64);
+        } catch (\Throwable) {
+            $drained = 0;
+        }
+
+        // Bag prime must run with frozen storefront scope (CachePolicy keys).
+        // After FPC warmup handle() resets Context — so open a dedicated / request.
+        $payload = [
+            'stage' => $stage,
+            'post_response_drained' => $drained,
+            'seeded' => 0,
+            'peeked' => 0,
+            'bags' => [],
+            'errors' => [],
+            'providers' => 0,
+            'in_request' => false,
+            'elapsed_ms' => 0.0,
+            'db_span_count' => 0,
+            'db_duration_ms' => 0.0,
+            'wls_span_count' => 0,
+            'wls_duration_ms' => 0.0,
+        ];
+        try {
+            $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
+            $host = \trim((string)($hosts[0] ?? ''));
+            if ($host === '') {
+                $host = '127.0.0.1';
+            }
+            $this->beginHotCacheBagPrimeLatch($stage);
+            try {
+                $this->runStorefrontFpcWarmupAttemptWithBagPrime($host, '/', $stage);
+            } finally {
+                // Keep Fiber-local capture; only drop the pending latch.
+                $this->clearHotCacheBagPrimePendingLatch();
+            }
+            $captured = $this->takeHotCacheBagPrimeCapture();
+            // One cooperative retry when a peer Fiber raced the legacy process latch.
+            if ($captured === null) {
+                SchedulerSystem::yieldDelay(25);
+                $this->beginHotCacheBagPrimeLatch($stage);
+                try {
+                    $this->runStorefrontFpcWarmupAttemptWithBagPrime($host, '/', $stage);
+                } finally {
+                    $this->clearHotCacheBagPrimePendingLatch();
+                }
+                $captured = $this->takeHotCacheBagPrimeCapture();
+                if ($captured !== null) {
+                    $errors = \is_array($captured['errors'] ?? null) ? $captured['errors'] : [];
+                    \array_unshift($errors, 'capture_retry');
+                    $captured['errors'] = \array_slice($errors, 0, 8);
+                }
+            }
+            if ($captured !== null) {
+                $payload['seeded'] = (int)($captured['seeded'] ?? 0);
+                $payload['peeked'] = (int)($captured['peeked'] ?? 0);
+                $payload['bags'] = \array_values(\is_array($captured['bags'] ?? null) ? $captured['bags'] : []);
+                $payload['errors'] = \array_slice(
+                    \is_array($captured['errors'] ?? null) ? $captured['errors'] : [],
+                    0,
+                    8
+                );
+                $payload['providers'] = (int)($captured['providers'] ?? 0);
+                $payload['in_request'] = true;
+                $payload['db_span_count'] = (int)($captured['db_span_count'] ?? 0);
+                $payload['db_duration_ms'] = (float)($captured['db_duration_ms'] ?? 0.0);
+                $payload['wls_span_count'] = (int)($captured['wls_span_count'] ?? 0);
+                $payload['wls_duration_ms'] = (float)($captured['wls_duration_ms'] ?? 0.0);
+            } else {
+                // Fallback: invoke providers without Context (may no-op Shared keys).
+                $fallback = $this->invokeStorefrontHotCacheBagProviders();
+                $payload['seeded'] = (int)($fallback['seeded'] ?? 0);
+                $payload['peeked'] = (int)($fallback['peeked'] ?? 0);
+                $payload['bags'] = \array_values(\is_array($fallback['bags'] ?? null) ? $fallback['bags'] : []);
+                $payload['errors'] = \array_slice(
+                    \array_merge(['capture_miss'], \is_array($fallback['errors'] ?? null) ? $fallback['errors'] : []),
+                    0,
+                    8
+                );
+                $payload['providers'] = (int)($fallback['providers'] ?? 0);
+            }
+        } catch (\Throwable $e) {
+            $this->clearHotCacheBagPrimePendingLatch();
+            $payload['errors'][] = 'bag_prime_request:' . $e->getMessage();
+        }
+
+        $payload['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
+        $this->logDeferredStorefrontWarmupStage('hot_cache_bags_primed', $payload);
+
+        return $payload;
+    }
+
+    /**
+     * Internal `/` request that keeps storefront Context long enough to seed bags
+     * even when FPC is already HIT (SSR skipped).
+     */
+    private function runStorefrontFpcWarmupAttemptWithBagPrime(
+        string $host,
+        string $path,
+        string $stage,
+    ): array {
+        $defaults = $this->resolveDeferredWarmupWebsiteDefaults();
+        $serverOverrides = [
+            'WLS_INTERNAL_STOREFRONT_WARMUP' => '1',
+            'WLS_PRIME_HOT_CACHE_BAGS' => '1',
+            'WLS_PRIME_HOT_CACHE_BAGS_STAGE' => $stage,
+        ];
+        if ($defaults['language'] !== '') {
+            $serverOverrides['WELINE_WEBSITE_LANGUAGE'] = $defaults['language'];
+        }
+        if ($defaults['currency'] !== '') {
+            $serverOverrides['WELINE_WEBSITE_CURRENCY'] = $defaults['currency'];
+        }
+
+        return $this->runInternalWarmupRequest(
+            $host,
+            $path,
+            9000 + (\strlen($stage) % 100),
+            'storefront-hotcache-bag-prime',
+            $serverOverrides,
+            [
+                'User-Agent' => 'WLS-Storefront-HotCacheBagPrime/1.0',
+                // Match near-virgin probe transport. Do NOT set X-WLS-Fpc-Bypass:
+                // wave8-8c4 bypass forced 3× full SSR + catalog rebuild and thrash
+                // Shared/Process LRU so peer-worker probes saw chrome/builder L1/L2 absent.
+                'Accept-Encoding' => 'identity',
+                'X-WLS-Storefront-Warmup' => '1',
+                'X-WLS-HotCache-Bag-Prime' => '1',
+            ],
+        );
+    }
+
+    /**
+     * Resolve Theme/Product bag primers even when generated modules.php lags
+     * (wave8-8c logged seeded=0/bags=[] because capability was not compiled yet).
+     *
+     * @return array{
+     *   seeded:int,
+     *   peeked:int,
+     *   bags:list<string>,
+     *   errors:list<string>,
+     *   providers:int
+     * }
+     */
+    private function invokeStorefrontHotCacheBagProviders(): array
+    {
+        $seeded = 0;
+        $peeked = 0;
+        $bags = [];
+        $errors = [];
+        $providers = 0;
+
+        $implementations = [];
+        try {
+            $registry = ObjectManager::getInstance(\Weline\Framework\Compilation\ServiceProviderRegistry::class);
+            foreach ($registry->implementationsWithPrefix(
+                StorefrontHotCacheBagWarmupProviderInterface::CAPABILITY_PREFIX
+            ) as $capability => $implementation) {
+                if (\is_string($implementation) && $implementation !== '') {
+                    $implementations[(string)$capability] = $implementation;
+                }
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'registry:' . $e->getMessage();
+        }
+
+        // Fail-open fallbacks: work before the next framework:compile refreshes provides.
+        // Product BEFORE Theme so header chrome is written last (MRU) and survives
+        // Shared/Process LRU pressure from catalog.full (wave8-8c5).
+        foreach ([
+            'storefront_hot_cache_bag_warmup.Weline_Product'
+                => 'Weline\\Product\\Api\\Runtime\\StorefrontHotCacheBagWarmupProvider',
+            'storefront_hot_cache_bag_warmup.Weline_Theme'
+                => 'Weline\\Theme\\Api\\Runtime\\StorefrontHotCacheBagWarmupProvider',
+        ] as $capability => $implementation) {
+            if (!isset($implementations[$capability]) && \class_exists($implementation)) {
+                $implementations[$capability] = $implementation;
+            }
+        }
+
+        $ordered = [];
+        foreach ([
+            'storefront_hot_cache_bag_warmup.Weline_Product',
+            'storefront_hot_cache_bag_warmup.Weline_Theme',
+        ] as $capability) {
+            if (isset($implementations[$capability])) {
+                $ordered[$capability] = $implementations[$capability];
+                unset($implementations[$capability]);
+            }
+        }
+        foreach ($implementations as $capability => $implementation) {
+            $ordered[$capability] = $implementation;
+        }
+
+        foreach ($ordered as $capability => $implementation) {
+            if (!\is_string($implementation)
+                || !\class_exists($implementation)
+                || !\is_subclass_of($implementation, StorefrontHotCacheBagWarmupProviderInterface::class)
+            ) {
+                continue;
+            }
+            $providers++;
+            try {
+                $provider = ObjectManager::getInstance($implementation);
+                if (!$provider instanceof StorefrontHotCacheBagWarmupProviderInterface) {
+                    continue;
+                }
+                $result = $provider->primeCriticalBags();
+                $seeded += (int)($result['seeded'] ?? 0);
+                $peeked += (int)($result['peeked'] ?? 0);
+                foreach (\is_array($result['bags'] ?? null) ? $result['bags'] : [] as $bag) {
+                    $bag = \trim((string)$bag);
+                    if ($bag !== '') {
+                        $bags[$bag] = $bag;
+                    }
+                }
+                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
+                    $errors[] = (string)$capability . ':' . (string)$error;
+                }
+            } catch (\Throwable $e) {
+                $errors[] = (string)$capability . ':' . $e->getMessage();
+            }
+            SchedulerSystem::yield();
+        }
+
+        if ($providers === 0) {
+            $errors[] = 'no_bag_warmup_providers';
+        }
+
+        return [
+            'seeded' => $seeded,
+            'peeked' => $peeked,
+            'bags' => \array_values($bags),
+            'errors' => \array_slice($errors, 0, 8),
+            'providers' => $providers,
+        ];
+    }
+
+    /**
+     * Called from handle() finally while storefront Context is still alive.
+     * wave8-8c3: prefer instance pending flag — ServerBag strips custom WLS_PRIME_*.
+     */
+    private function maybeCaptureHotCacheBagPrimeBeforeReset(Request $request): void
+    {
+        $pending = $this->isHotCacheBagPrimePendingForCurrentFiber();
+        if (!$pending) {
+            $currentFiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+            // P5 O2: under Fiber, process-wide $_SERVER can leak across peer Fibers
+            // during yield — never steal another Fiber's bag-prime latch.
+            if ($currentFiber instanceof \Fiber) {
+                return;
+            }
+            $flag = '';
+            try {
+                if (\method_exists($request, 'getServer')) {
+                    $flag = \trim((string)$request->getServer('WLS_PRIME_HOT_CACHE_BAGS'));
+                }
+            } catch (\Throwable) {
+                $flag = '';
+            }
+            if ($flag === '') {
+                $flag = \trim((string)($_SERVER['WLS_PRIME_HOT_CACHE_BAGS'] ?? ''));
+            }
+            if (!\in_array(\strtolower($flag), ['1', 'true', 'yes', 'on'], true)) {
+                return;
+            }
+        }
+        $this->clearHotCacheBagPrimePendingLatch();
+
+        try {
+            // Drain any PostResponse seeds queued during this same request first.
+            PostResponseTaskQueue::drain(250.0, 64);
+        } catch (\Throwable) {
+        }
+
+        $stage = \trim($this->hotCacheBagPrimeStageForCurrentFiber());
+        if ($stage === '') {
+            try {
+                $stage = \trim((string)($_SERVER['WLS_PRIME_HOT_CACHE_BAGS_STAGE'] ?? ''));
+            } catch (\Throwable) {
+                $stage = '';
+            }
+        }
+        try {
+            // wave8-8c7: Product/Theme seeders must not rely on stripped $_SERVER stage.
+            RequestContext::set('wls.storefront_hot_cache_bag_prime.stage', $stage);
+        } catch (\Throwable) {
+        }
+
+        $dbBefore = 0;
+        $dbMsBefore = 0.0;
+        $wlsBefore = 0;
+        $wlsMsBefore = 0.0;
+        try {
+            $before = RequestLifecycleTrace::getAggregateSummary();
+            $dbBefore = (int)($before['db_span_count'] ?? 0);
+            $dbMsBefore = (float)($before['db_duration_ms'] ?? 0.0);
+            $wlsBefore = (int)($before['wls_span_count'] ?? 0);
+            $wlsMsBefore = (float)($before['wls_duration_ms'] ?? 0.0);
+        } catch (\Throwable) {
+        }
+
+        try {
+            $captured = $this->invokeStorefrontHotCacheBagProviders();
+            $dbAfter = $dbBefore;
+            $dbMsAfter = $dbMsBefore;
+            $wlsAfter = $wlsBefore;
+            $wlsMsAfter = $wlsMsBefore;
+            try {
+                $after = RequestLifecycleTrace::getAggregateSummary();
+                $dbAfter = (int)($after['db_span_count'] ?? 0);
+                $dbMsAfter = (float)($after['db_duration_ms'] ?? 0.0);
+                $wlsAfter = (int)($after['wls_span_count'] ?? 0);
+                $wlsMsAfter = (float)($after['wls_duration_ms'] ?? 0.0);
+            } catch (\Throwable) {
+            }
+            $captured['db_span_count'] = \max(0, $dbAfter - $dbBefore);
+            $captured['db_duration_ms'] = \round(\max(0.0, $dbMsAfter - $dbMsBefore), 2);
+            $captured['wls_span_count'] = \max(0, $wlsAfter - $wlsBefore);
+            $captured['wls_duration_ms'] = \round(\max(0.0, $wlsMsAfter - $wlsMsBefore), 2);
+            $this->storeHotCacheBagPrimeCapture($captured);
+        } catch (\Throwable $e) {
+            $this->storeHotCacheBagPrimeCapture([
+                'seeded' => 0,
+                'peeked' => 0,
+                'bags' => [],
+                'errors' => ['in_request:' . $e->getMessage()],
+                'providers' => 0,
+                'db_span_count' => 0,
+                'db_duration_ms' => 0.0,
+                'wls_span_count' => 0,
+                'wls_duration_ms' => 0.0,
+            ]);
+        } finally {
+            try {
+                RequestContext::remove('wls.storefront_hot_cache_bag_prime.stage');
+            } catch (\Throwable) {
+            }
+            $this->writeHotCacheBagPrimeFiberState(['stage' => '']);
+        }
+    }
+
+    /**
+     * P5 O2: after critical_sealed, cooperatively yield the event loop before
+     * long sync (heavy bags / locale idle SSR). Bounded peer drain only —
+     * does not invent FPC HIT and does not disable deferred priming.
+     *
+     * @return array{
+     *   stage:string,
+     *   rounds:int,
+     *   peer_suspended_before:int,
+     *   peer_suspended_after:int,
+     *   elapsed_ms:float,
+     *   mode:string
+     * }
+     */
+    private function awaitDeferredStorefrontIdleGate(string $stage): array
+    {
+        $startedAt = \microtime(true);
+        $peerBefore = WlsConcurrency::getOtherSuspendedRequestFiberCount();
+        $rounds = 0;
+        $maxWaitMs = \max(0, \min(
+            5000,
+            (int)(Env::get('wls.worker.storefront_deferred_idle_gate_max_ms', 750) ?: 750)
+        ));
+        $sliceMs = \max(5, \min(
+            100,
+            (int)(Env::get('wls.worker.storefront_deferred_idle_gate_slice_ms', 25) ?: 25)
+        ));
+        $quietNeeded = \max(1, \min(
+            4,
+            (int)(Env::get('wls.worker.storefront_deferred_idle_gate_quiet_slices', 2) ?: 2)
+        ));
+
+        // Always release once so critical_sealed is observable before heavy/idle.
+        SchedulerSystem::yield();
+        $rounds++;
+
+        $quiet = 0;
+        while (true) {
+            $elapsedMs = (\microtime(true) - $startedAt) * 1000.0;
+            if ($elapsedMs >= $maxWaitMs) {
+                break;
+            }
+            $peers = WlsConcurrency::getOtherSuspendedRequestFiberCount();
+            if ($peers === 0) {
+                $quiet++;
+                if ($quiet >= $quietNeeded) {
+                    break;
+                }
+            } else {
+                $quiet = 0;
+            }
+            SchedulerSystem::yieldDelay($sliceMs);
+            $rounds++;
+        }
+
+        $payload = [
+            'stage' => $stage,
+            'rounds' => $rounds,
+            'peer_suspended_before' => $peerBefore,
+            'peer_suspended_after' => WlsConcurrency::getOtherSuspendedRequestFiberCount(),
+            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            'max_wait_ms' => $maxWaitMs,
+            'slice_ms' => $sliceMs,
+            'quiet_needed' => $quietNeeded,
+            'mode' => $peerBefore > 0 ? 'peer_drain' : 'quiet_window',
+        ];
+        $this->logDeferredStorefrontWarmupStage('idle_gate', $payload);
+
+        return $payload;
+    }
+
+    /**
+     * @return array{pending: bool, stage: string, capture: ?array}
+     */
+    private function readHotCacheBagPrimeFiberState(): array
+    {
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if (!$fiber instanceof \Fiber) {
+            return [
+                'pending' => $this->deferredHotCacheBagPrimePending,
+                'stage' => $this->deferredHotCacheBagPrimeStage,
+                'capture' => $this->deferredHotCacheBagPrimeCapture,
+            ];
+        }
+
+        if ($this->fiberHotCacheBagPrimeStates === null) {
+            $this->fiberHotCacheBagPrimeStates = new \WeakMap();
+        }
+        if (!isset($this->fiberHotCacheBagPrimeStates[$fiber])) {
+            return ['pending' => false, 'stage' => '', 'capture' => null];
+        }
+        $state = $this->fiberHotCacheBagPrimeStates[$fiber];
+
+        return [
+            'pending' => (bool)($state['pending'] ?? false),
+            'stage' => (string)($state['stage'] ?? ''),
+            'capture' => \is_array($state['capture'] ?? null) ? $state['capture'] : null,
+        ];
+    }
+
+    /**
+     * @param array{pending?: bool, stage?: string, capture?: ?array} $patch
+     */
+    private function writeHotCacheBagPrimeFiberState(array $patch): void
+    {
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if (!$fiber instanceof \Fiber) {
+            if (\array_key_exists('pending', $patch)) {
+                $this->deferredHotCacheBagPrimePending = (bool)$patch['pending'];
+            }
+            if (\array_key_exists('stage', $patch)) {
+                $this->deferredHotCacheBagPrimeStage = (string)$patch['stage'];
+            }
+            if (\array_key_exists('capture', $patch)) {
+                $cap = $patch['capture'];
+                $this->deferredHotCacheBagPrimeCapture = \is_array($cap) ? $cap : null;
+            }
+            return;
+        }
+
+        if ($this->fiberHotCacheBagPrimeStates === null) {
+            $this->fiberHotCacheBagPrimeStates = new \WeakMap();
+        }
+        $state = isset($this->fiberHotCacheBagPrimeStates[$fiber])
+            && \is_array($this->fiberHotCacheBagPrimeStates[$fiber])
+            ? $this->fiberHotCacheBagPrimeStates[$fiber]
+            : ['pending' => false, 'stage' => '', 'capture' => null];
+        if (\array_key_exists('pending', $patch)) {
+            $state['pending'] = (bool)$patch['pending'];
+        }
+        if (\array_key_exists('stage', $patch)) {
+            $state['stage'] = (string)$patch['stage'];
+        }
+        if (\array_key_exists('capture', $patch)) {
+            $cap = $patch['capture'];
+            $state['capture'] = \is_array($cap) ? $cap : null;
+        }
+        $this->fiberHotCacheBagPrimeStates[$fiber] = $state;
+    }
+
+    private function beginHotCacheBagPrimeLatch(string $stage): void
+    {
+        $this->writeHotCacheBagPrimeFiberState([
+            'pending' => true,
+            'stage' => $stage,
+            'capture' => null,
+        ]);
+    }
+
+    private function clearHotCacheBagPrimePendingLatch(): void
+    {
+        $this->writeHotCacheBagPrimeFiberState(['pending' => false]);
+    }
+
+    private function isHotCacheBagPrimePendingForCurrentFiber(): bool
+    {
+        return (bool)($this->readHotCacheBagPrimeFiberState()['pending'] ?? false);
+    }
+
+    private function hotCacheBagPrimeStageForCurrentFiber(): string
+    {
+        return \trim((string)($this->readHotCacheBagPrimeFiberState()['stage'] ?? ''));
+    }
+
+    /**
+     * @param array{seeded?:int,peeked?:int,bags?:list<string>,errors?:list<string>,providers?:int,db_span_count?:int,db_duration_ms?:float,wls_span_count?:int,wls_duration_ms?:float} $captured
+     */
+    private function storeHotCacheBagPrimeCapture(array $captured): void
+    {
+        $this->writeHotCacheBagPrimeFiberState(['capture' => $captured]);
+    }
+
+    /**
+     * @return array{seeded?:int,peeked?:int,bags?:list<string>,errors?:list<string>,providers?:int,db_span_count?:int,db_duration_ms?:float,wls_span_count?:int,wls_duration_ms?:float}|null
+     */
+    private function takeHotCacheBagPrimeCapture(): ?array
+    {
+        $state = $this->readHotCacheBagPrimeFiberState();
+        $capture = \is_array($state['capture'] ?? null) ? $state['capture'] : null;
+        $this->writeHotCacheBagPrimeFiberState(['capture' => null]);
+
+        return $capture;
+    }
+
+    /**
+     * Best-effort LRU retouch of sealed critical FPC Process L1 before locale
+     * extras run. Does not invent HIT status — probe miss is ignored.
+     *
+     * @param list<string> $hosts
+     * @param list<string> $criticalPaths
+     */
+    private function retouchDeferredCriticalProcessL1(array $hosts, array $criticalPaths): void
+    {
+        if ($hosts === [] || $criticalPaths === []) {
+            return;
+        }
+        $sequence = 0;
+        foreach ($hosts as $host) {
+            $host = \trim((string)$host);
+            if ($host === '') {
+                continue;
+            }
+            foreach ($criticalPaths as $path) {
+                $path = (string)$path;
+                if ($path !== '/' && $path !== '/products') {
+                    continue;
+                }
+                $sequence++;
+                try {
+                    $this->runStorefrontFpcWarmupAttempt($host, $path, $sequence);
+                } catch (\Throwable) {
+                    // Fail-open: retouch must not abort deferred warmup.
+                }
+                SchedulerSystem::yield();
+            }
         }
     }
 
@@ -1534,19 +2358,37 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     /**
      * @param list<string> $paths
      * @param list<string> $hosts
+     * @param bool $localeIdleSlice P5 O2: locale_idle SSR — yield/idle between paths
      * @return array{warmed:int,failed:int,errors:list<string>,samples:list<array<string,mixed>>,elapsed_ms:float}
      */
-    private function runStorefrontFpcWarmupInternal(array $paths, array $hosts): array
-    {
+    private function runStorefrontFpcWarmupInternal(
+        array $paths,
+        array $hosts,
+        bool $localeIdleSlice = false,
+    ): array {
         $startedAt = \microtime(true);
         $warmed = 0;
         $failed = 0;
         $errors = [];
         $samples = [];
         $sequence = 0;
+        // After this many consecutive non-critical (locale) probe/build failures,
+        // skip remaining locale slots so multi-MB MISS SSR does not thrash Process
+        // L1 or starve already-warmed `/` + `/products` HIT.
+        $localeFailSkipThreshold = 2;
+        $localeYieldMs = $localeIdleSlice
+            ? \max(10, \min(200, (int)(Env::get('wls.worker.storefront_locale_idle_yield_ms', 50) ?: 50)))
+            : 0;
 
         foreach ($hosts as $host) {
+            $consecutiveLocaleFailures = 0;
+            $skipRemainingLocales = false;
             foreach ($paths as $path) {
+                $path = (string)$path;
+                $isCriticalPath = ($path === '/' || $path === '/products');
+                if ($skipRemainingLocales && !$isCriticalPath) {
+                    continue;
+                }
                 $sequence++;
                 try {
                     $warmupMeta = $this->runStorefrontFpcWarmupAttempt($host, $path, $sequence);
@@ -1589,7 +2431,27 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         $sample['ready'] = false;
                         $sample['reason'] = $reason;
                         $samples[] = $sample;
+                        if (!$isCriticalPath) {
+                            $consecutiveLocaleFailures++;
+                            if ($consecutiveLocaleFailures >= $localeFailSkipThreshold) {
+                                $skipRemainingLocales = true;
+                            }
+                        } else {
+                            $consecutiveLocaleFailures = 0;
+                        }
+                        if ($localeIdleSlice && !$isCriticalPath && $localeYieldMs > 0) {
+                            SchedulerSystem::yieldDelay($localeYieldMs);
+                        } else {
+                            SchedulerSystem::yield();
+                        }
                         continue;
+                    }
+
+                    // P5 O2: between locale build and HIT probe, yield the event loop.
+                    if ($localeIdleSlice && !$isCriticalPath && $localeYieldMs > 0) {
+                        SchedulerSystem::yieldDelay($localeYieldMs);
+                    } else {
+                        SchedulerSystem::yield();
                     }
 
                     // A build response itself does not always expose a cache
@@ -1628,6 +2490,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         $sample['ready'] = false;
                         $sample['reason'] = $reason;
                         $samples[] = $sample;
+                        if (!$isCriticalPath) {
+                            $consecutiveLocaleFailures++;
+                            if ($consecutiveLocaleFailures >= $localeFailSkipThreshold) {
+                                $skipRemainingLocales = true;
+                            }
+                        } else {
+                            $consecutiveLocaleFailures = 0;
+                        }
                         continue;
                     }
 
@@ -1635,6 +2505,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $sample['ready'] = true;
                     $sample['reason'] = 'ready:fpc-hit';
                     $samples[] = $sample;
+                    $consecutiveLocaleFailures = 0;
                     // Adopt homepage proof immediately while Process L1 still
                     // holds `/` — later multi-MB locale/catalog SSRs can evict
                     // the payload and make end-of-batch receipt lookup fail.
@@ -1658,9 +2529,21 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         'ready' => false,
                         'reason' => $e->getMessage(),
                     ];
+                    if (!$isCriticalPath) {
+                        $consecutiveLocaleFailures++;
+                        if ($consecutiveLocaleFailures >= $localeFailSkipThreshold) {
+                            $skipRemainingLocales = true;
+                        }
+                    } else {
+                        $consecutiveLocaleFailures = 0;
+                    }
                 }
 
-                SchedulerSystem::yield();
+                if ($localeIdleSlice && !$isCriticalPath && $localeYieldMs > 0) {
+                    SchedulerSystem::yieldDelay($localeYieldMs);
+                } else {
+                    SchedulerSystem::yield();
+                }
             }
         }
 
@@ -6028,6 +6911,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 } catch (\Throwable $e) {
                     RequestResetException::append($finalizationFailures, 'request_trace_reset', $e);
                 }
+            }
+            // wave8-8c2: seed HotCache bags while storefront Context is still alive
+            // (after FPC HIT/MISS body is ready, before StateManager::reset).
+            try {
+                if ($request instanceof Request) {
+                    $this->maybeCaptureHotCacheBagPrimeBeforeReset($request);
+                }
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'hot_cache_bag_prime', $e);
             }
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             try {

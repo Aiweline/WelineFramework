@@ -55,6 +55,9 @@ final class FiberOutputBuffer
 
     private static int $missingFrameWarnings = 0;
 
+    /** Depth while inside the process-level OB display handler callback. */
+    private static int $inHandlerDepth = 0;
+
     public static function install(): void
     {
         self::ensureInstalled('install');
@@ -337,26 +340,47 @@ final class FiberOutputBuffer
             return $chunk;
         }
 
-        $fiber = \Fiber::getCurrent();
-        if ($fiber === null) {
-            if (self::$mainBufferStack !== []) {
-                self::appendToFrame(self::$mainBufferStack[\array_key_last(self::$mainBufferStack)], $chunk);
-            }
+        // Re-entry (error/side-effect path while already in the display handler):
+        // never ob_*/echo/log — only mark overflow and drop the chunk.
+        if (self::$inHandlerDepth > 0) {
+            self::markCurrentFrameOverflowed('handler_reentrancy', \strlen($chunk));
             return '';
         }
 
-        if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
-            $stack = self::$fiberBufferStacks[$fiber];
-            if ($stack !== []) {
-                self::appendToFrame($stack[\array_key_last($stack)], $chunk);
+        self::$inHandlerDepth++;
+        try {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber === null) {
+                if (self::$mainBufferStack !== []) {
+                    self::appendToFrame(self::$mainBufferStack[\array_key_last(self::$mainBufferStack)], $chunk);
+                }
+                return '';
             }
-        }
 
-        return '';
+            if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+                $stack = self::$fiberBufferStacks[$fiber];
+                if ($stack !== []) {
+                    self::appendToFrame($stack[\array_key_last($stack)], $chunk);
+                }
+            }
+
+            return '';
+        } catch (\Throwable) {
+            self::markCurrentFrameOverflowed('handler_exception', \strlen($chunk));
+            return '';
+        } finally {
+            self::$inHandlerDepth--;
+        }
     }
 
     private static function flushInstalledBufferIntoCurrentFrame(): bool
     {
+        // Never call ob_* from inside the display-handler stack — PHP fatals with
+        // "Cannot use output buffering in output buffering display handlers".
+        if (self::$inHandlerDepth > 0) {
+            return false;
+        }
+
         if (!self::isInstalledBufferActive()) {
             return true;
         }
@@ -381,15 +405,82 @@ final class FiberOutputBuffer
         $chunkBytes = \strlen($chunk);
         $overflowContext = self::buildAppendOverflowContext($frame->bytes, $chunkBytes);
         if ($overflowContext !== null) {
-            $frame->buffer = '';
-            $frame->bytes = 0;
-            $frame->overflowed = true;
-            $frame->overflowContext = $overflowContext;
+            self::markFrameOverflowed($frame, $overflowContext);
             return;
         }
 
-        $frame->buffer .= $chunk;
-        $frame->bytes += $chunkBytes;
+        // Overflow must win before concat; if concat still fails under pressure,
+        // convert to a request-boundary OverflowException instead of E_ERROR.
+        try {
+            $frame->buffer .= $chunk;
+            $frame->bytes += $chunkBytes;
+        } catch (\Throwable) {
+            self::markFrameOverflowed(
+                $frame,
+                self::buildOverflowContext(
+                    'append_exception',
+                    $frame->bytes,
+                    $chunkBytes,
+                    0,
+                    self::getMemoryLimitBytes(),
+                    $chunkBytes + self::MIN_MEMORY_HEADROOM_BYTES
+                )
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $overflowContext
+     */
+    private static function markFrameOverflowed(FiberOutputCaptureFrame $frame, array $overflowContext): void
+    {
+        $frame->buffer = '';
+        $frame->bytes = 0;
+        $frame->overflowed = true;
+        $frame->overflowContext = $overflowContext;
+    }
+
+    private static function markCurrentFrameOverflowed(string $reason, int $chunkBytes = 0): void
+    {
+        $frame = self::currentCaptureFrame();
+        if ($frame === null || $frame->overflowed) {
+            return;
+        }
+
+        self::markFrameOverflowed(
+            $frame,
+            self::buildOverflowContext(
+                $reason,
+                $frame->bytes,
+                $chunkBytes,
+                0,
+                self::getMemoryLimitBytes(),
+                $chunkBytes + self::MIN_MEMORY_HEADROOM_BYTES
+            )
+        );
+    }
+
+    private static function currentCaptureFrame(): ?FiberOutputCaptureFrame
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            if (self::$mainBufferStack === []) {
+                return null;
+            }
+
+            return self::$mainBufferStack[\array_key_last(self::$mainBufferStack)];
+        }
+
+        if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
+            return null;
+        }
+
+        $stack = self::$fiberBufferStacks[$fiber];
+        if ($stack === []) {
+            return null;
+        }
+
+        return $stack[\array_key_last($stack)];
     }
 
     private static function finishFrame(FiberOutputCaptureFrame $frame): string
@@ -431,13 +522,14 @@ final class FiberOutputBuffer
         }
 
         $projectedAppendBytes = $currentBytes + $chunkBytes + self::MIN_MEMORY_HEADROOM_BYTES;
-        // In persistent workers memory_get_usage(true) includes arena pages that
-        // PHP may reuse after previous large requests. Guard against live memory
-        // pressure, while logging real usage separately for diagnostics.
+        // Prefer the stricter of emalloc vs real arena usage. Persistent workers
+        // often sit near the limit on real pages (e.g. ~511MB/512MB) while emalloc
+        // still looks fine — appending then fatals inside the OB display handler.
         $memoryUsage = \memory_get_usage(false);
         $realMemoryUsage = \memory_get_usage(true);
+        $guardUsage = \max($memoryUsage, $realMemoryUsage);
 
-        if ($memoryUsage + $projectedAppendBytes >= $memoryLimit) {
+        if ($guardUsage + $projectedAppendBytes >= $memoryLimit) {
             return self::buildOverflowContext(
                 'memory_headroom',
                 $currentBytes,
@@ -559,6 +651,7 @@ final class FiberOutputBuffer
     {
         self::$installed = false;
         self::$installedLevel = 0;
+        self::$inHandlerDepth = 0;
         if ($clearCaptureStacks) {
             self::$fiberBufferStacks = null;
             self::$mainBufferStack = [];

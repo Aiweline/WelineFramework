@@ -391,8 +391,20 @@ class CachePool implements CachePoolInterface, RemembererInterface
 
     public function deleteMultiple(array $keys): bool
     {
-        $success = true;
+        if ($keys === []) {
+            return true;
+        }
 
+        if ($this->adapter instanceof BatchCacheAdapterInterface) {
+            $physicalKeys = [];
+            foreach ($keys as $key) {
+                $physicalKeys[] = $this->buildKey((string) $key);
+            }
+
+            return $this->adapter->deleteMultiple($physicalKeys);
+        }
+
+        $success = true;
         foreach ($keys as $key) {
             if (!$this->delete((string) $key)) {
                 $success = false;

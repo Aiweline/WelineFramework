@@ -414,7 +414,7 @@ class Compile extends CommandAbstract
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $path = $file->getPathname();
-                if (\preg_match('#[\\\\/](test|tests|view|views|i18n|doc|docs)[\\\\/]#i', $path)) {
+                if (\preg_match('#[\\\\/](test|tests|view|views|i18n|doc|docs|script|scripts)[\\\\/]#i', $path)) {
                     continue;
                 }
                 $files[] = $path;
@@ -602,15 +602,17 @@ class Compile extends CommandAbstract
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $path = $file->getPathname();
-                // 跳过 test、view、i18n、doc、example、Lib、UnitTest、Observer 等目录
+                // 跳过 test、view、i18n、doc、example、Lib、UnitTest、Observer、scripts 等目录
                 // Observer 类由 EventsManager 动态实例化，不需要预编译 DI 元数据
-                if (\preg_match('#[\\\\/](test|tests|view|views|i18n|doc|docs|Console|example|examples|Lib|UnitTest|Observer)[\\\\/]#i', $path)) {
+                // scripts/ 下一锤子脚本若被 class_exists 加载会执行顶层副作用（连库/写文件），表现为「验证模块卡住」
+                if (\preg_match('#[\\\\/](test|tests|view|views|i18n|doc|docs|Console|example|examples|Lib|UnitTest|Observer|script|scripts)[\\\\/]#i', $path)) {
                     continue;
                 }
                 // 跳过非类文件
                 $basename = $file->getBasename('.php');
-                if ($basename[0] !== \strtoupper($basename[0])) {
-                    continue; // 跳过非大写开头的文件（非类文件）
+                // `_` 的 strtoupper 仍是 `_`，会漏过 `_build_*.php` 一类脚本；显式跳过下划线/非字母开头
+                if ($basename === '' || !\ctype_upper($basename[0])) {
+                    continue; // 跳过非大写字母开头的文件（非类文件）
                 }
                 $files[] = $path;
             }

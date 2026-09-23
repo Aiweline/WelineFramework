@@ -53,4 +53,34 @@ final class FormRendererTest extends TestCase
         self::assertStringNotContainsString('flushMo', $js);
         self::assertStringNotContainsString('onFlush:flushForms,mountAll', $js);
     }
+
+    public function testBareHiddenBooleanAttributeIsEmitted(): void
+    {
+        $open = FormRenderer::open([
+            'class' => 'weline-checkout__grid',
+            'data-checkout-form' => '',
+            'hidden' => '',
+            'method' => 'post',
+            'intent' => 'checkout.submit',
+        ]);
+
+        self::assertMatchesRegularExpression('/\bhidden\b/', $open);
+        self::assertStringContainsString('data-checkout-form', $open);
+        self::assertStringContainsString('data-weline-form="1"', $open);
+        self::assertTrue(FormRenderer::isReservedLiteralAttributeValue('hidden', ''));
+        self::assertTrue(FormRenderer::isReservedLiteralAttributeValue('hidden', 'hidden'));
+        self::assertStringContainsString('</form>', FormRenderer::close());
+    }
+
+    public function testHiddenFalseyValuesAreNotEmitted(): void
+    {
+        $open = FormRenderer::open([
+            'hidden' => '0',
+            'method' => 'get',
+            'intent' => 'probe',
+        ]);
+
+        self::assertDoesNotMatchRegularExpression('/\bhidden\b/', $open);
+        self::assertStringContainsString('</form>', FormRenderer::close());
+    }
 }
