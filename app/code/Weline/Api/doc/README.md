@@ -18,6 +18,7 @@
 
 ## 核心约定
 
+- **API Demo 可下载包**：权威源在各业务模块 `source/api-demo/`；本模块只做下载协助。Agent 操作首例见 `doc/api-demo-download.md` → I18n `远程翻译API-Demo下载与验收.md`。
 - 前台 API 用户登录沿用 `Auth::postLogin` / `TokenService`。认证通过后，当前请求的 `api_authenticated_user` 是公开只读 `Weline\Api\Api\AuthenticatedApiUser`，提供 `getUserId()`、`getRoleId()` 和 `getIdempotencyScope()`（`api_user:<id>`）；不含 token 或密码。业务模块只读这个对象，不从请求参数提取身份。
 - 带 ACL 的前台 REST 在该 API 用户身份下复用角色路由授权；缺少授权返回 403。应用仍按安装 scope 授权，普通前台 Session 和 WeShop Customer 的既有行为保持不变。
 - 浏览器业务请求不能绕过本模块自己写原生 Ajax/fetch/axios 直连后端业务控制器。浏览器业务协议统一走 `Weline.Api.*`。

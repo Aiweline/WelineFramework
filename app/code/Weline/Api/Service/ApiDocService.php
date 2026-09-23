@@ -28,12 +28,14 @@ class ApiDocService implements ApiDocumentationProviderInterface
     private CachePoolInterface $cache;
     private Handle $moduleHandle;
     private QueryProviderRegistry $queryProviderRegistry;
+    private ApiDemoPackageService $apiDemoPackageService;
     
     public function __construct()
     {
         $this->cache = w_cache('api_doc');
         $this->moduleHandle = ObjectManager::getInstance(Handle::class);
         $this->queryProviderRegistry = ObjectManager::getInstance(QueryProviderRegistry::class);
+        $this->apiDemoPackageService = ObjectManager::getInstance(ApiDemoPackageService::class);
     }
 
     private function getReflectionTypeName(?\ReflectionType $type): string
@@ -803,8 +805,50 @@ class ApiDocService implements ApiDocumentationProviderInterface
                     continue;
                 }
 
+                $moduleName = (string)($providerDescriptor['module'] ?? 'Frontend Worker API');
+                $example = [
+                    'frontend_worker' => true,
+                    'provider' => $provider,
+                    'operation' => $operation,
+                    'mode' => (string)($operationDescriptor['mode'] ?? ''),
+                    'graph' => (bool)($operationDescriptor['graph'] ?? false),
+                    'cost' => (int)($operationDescriptor['cost'] ?? 1),
+                    'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
+                    'auth' => (string)($operationDescriptor['auth'] ?? ''),
+                    'sample_params' => $this->buildFrontendWorkerSampleParams($operationDescriptor['params'] ?? [], [
+                        'provider' => $provider,
+                        'operation' => $operation,
+                        'module' => $moduleName,
+                    ]),
+                    'code' => $this->buildFrontendWorkerExampleCode($provider, $operation, $operationDescriptor['params'] ?? [], [
+                        'provider' => $provider,
+                        'operation' => $operation,
+                        'module' => $moduleName,
+                    ]),
+                ];
+
+                $demoId = $this->apiDemoPackageService->resolveDemoId(
+                    $providerDescriptor['demo'] ?? null,
+                    $provider
+                );
+                if ($demoId !== null && $this->apiDemoPackageService->isValidModuleName($moduleName)) {
+                    $demos = $this->apiDemoPackageService->buildDownloadUrls($moduleName, $demoId);
+                    if ($demos !== []) {
+                        $example['demos'] = $demos;
+                        $hint = (string)__(
+                            '本 Demo 调用 Admin REST，需后台 Token；勿与 Frontend Worker / BinQuery 鉴权面混用。'
+                        );
+                        if ($provider === 'i18n_remote_translation') {
+                            $hint .= ' ' . (string)__(
+                                '请求体可传 type=phrase|meta|local_model（默认 phrase）；可用环境变量 WELINE_REMOTE_TYPE 切换。'
+                            );
+                        }
+                        $example['demo_auth_hint'] = $hint;
+                    }
+                }
+
                 $apis[] = [
-                    'module' => (string)($providerDescriptor['module'] ?? 'Frontend Worker API'),
+                    'module' => $moduleName,
                     'version' => 'worker-v1',
                     'class' => 'FrontendWorker\\' . $provider,
                     'method' => $provider . '.' . $operation,
@@ -829,26 +873,7 @@ class ApiDocService implements ApiDocumentationProviderInterface
                             'type' => (string)($operationDescriptor['returns']['type'] ?? 'mixed'),
                         ],
                     ],
-                    'example' => [
-                        'frontend_worker' => true,
-                        'provider' => $provider,
-                        'operation' => $operation,
-                        'mode' => (string)($operationDescriptor['mode'] ?? ''),
-                        'graph' => (bool)($operationDescriptor['graph'] ?? false),
-                        'cost' => (int)($operationDescriptor['cost'] ?? 1),
-                        'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
-                        'auth' => (string)($operationDescriptor['auth'] ?? ''),
-                        'sample_params' => $this->buildFrontendWorkerSampleParams($operationDescriptor['params'] ?? [], [
-                            'provider' => $provider,
-                            'operation' => $operation,
-                            'module' => (string)($providerDescriptor['module'] ?? ''),
-                        ]),
-                        'code' => $this->buildFrontendWorkerExampleCode($provider, $operation, $operationDescriptor['params'] ?? [], [
-                            'provider' => $provider,
-                            'operation' => $operation,
-                            'module' => (string)($providerDescriptor['module'] ?? ''),
-                        ]),
-                    ],
+                    'example' => $example,
                     'frontend_worker' => true,
                     'worker' => [
                         'provider' => $provider,

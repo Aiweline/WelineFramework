@@ -39,7 +39,7 @@ class Auth extends BackendRestController
      * @Document(summary='后端管理员登录', description='使用后端管理员用户名和密码登录，返回访问令牌。需要提供有效的后端管理员账户。', tags=['认证', '登录', '后端'], category='认证接口')
      * @example
      * Method: POST
-     * Path: /{api_admin}/api/rest/v1/backend/auth/login
+     * Path: /api/rest/v1/backend/auth/login
      * Header:
      * - Content-Type: application/json
      * Body:
@@ -144,7 +144,7 @@ class Auth extends BackendRestController
      * @Document(summary='刷新访问令牌', description='使用当前有效的访问令牌刷新获取新的访问令牌。需要提供有效的token。', tags=['认证', '令牌', '后端'], category='认证接口')
      * @example
      * Method: POST
-     * Path: /{api_admin}/api/rest/v1/backend/auth/refresh
+     * Path: /api/rest/v1/backend/auth/refresh
      * Header:
      * - Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
      * - Content-Type: application/json
@@ -203,7 +203,7 @@ class Auth extends BackendRestController
      * @Document(summary='撤销访问令牌', description='撤销当前访问令牌，使其立即失效。需要提供有效的token。', tags=['认证', '令牌', '后端'], category='认证接口')
      * @example
      * Method: POST
-     * Path: /{api_admin}/api/rest/v1/backend/auth/logout
+     * Path: /api/rest/v1/backend/auth/logout
      * Header:
      * - Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
      * - Content-Type: application/json
@@ -245,7 +245,7 @@ class Auth extends BackendRestController
      * @Document(summary='获取当前用户信息', description='获取当前登录的后端管理员用户的详细信息，包括ID、用户名、邮箱、头像等。需要已登录状态。', tags=['用户', '后端'], category='用户接口')
      * @example
      * Method: GET
-     * Path: /{api_admin}/api/rest/v1/backend/auth/me
+     * Path: /api/rest/v1/backend/auth/me
      * Header:
      * - Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
      * Response:
@@ -304,7 +304,7 @@ class Auth extends BackendRestController
      * @Document(summary='获取token信息', description='获取指定访问令牌的详细信息，包括令牌状态、过期时间等。需要提供有效的token。', tags=['认证', '令牌', '后端'], category='认证接口')
      * @example
      * Method: GET
-     * Path: /{api_admin}/api/rest/v1/backend/auth/token-info
+     * Path: /api/rest/v1/backend/auth/token-info
      * Header:
      * - Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
      * Response:
