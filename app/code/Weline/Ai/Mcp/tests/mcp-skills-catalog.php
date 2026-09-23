@@ -146,6 +146,8 @@ skillCheck(!in_array('合规', is_array($teamBundle['framework_seats'] ?? null) 
 skillCheck(in_array('UI', is_array($teamBundle['core_roster'] ?? null) ? $teamBundle['core_roster'] : [], true), 'engineering team core roster includes UI');
 skillCheck(in_array('acceptance_substantive_signoff', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle acceptance_substantive_signoff');
 skillCheck(in_array('findings_wake_pm', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle findings_wake_pm');
+skillCheck(in_array('requirement_issuer_owns_acceptance', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle requirement_issuer_owns_acceptance');
+skillCheck(($teamBundle['peer_talk']['result_waiting_acceptance'] ?? '') === 'waiting_acceptance', 'engineering team peer_talk waiting_acceptance');
 skillCheck(in_array('requirement_session_dashboard', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle requirement_session_dashboard');
 skillCheck(in_array('pm_plan_lifecycle', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle pm_plan_lifecycle');
 skillCheck(($teamBundle['session_path'] ?? '') === 'doc/开发/session/{slug}.md', 'engineering team session_path');
@@ -161,6 +163,14 @@ skillCheck(in_array('surfaces.md', is_array($teamBundle['minutes_extra'] ?? null
 $seatMirrors = $teamBundle['seat_skill_mirrors'] ?? [];
 skillCheck(($seatMirrors['schema_version'] ?? '') === 'seat-skill-mirrors.v1', 'engineering team seat_skill_mirrors schema');
 $seatMap = is_array($seatMirrors['seats'] ?? null) ? $seatMirrors['seats'] : [];
+$widgetSeat = $seatMap['部件开发工程师'] ?? [];
+$widgetPrompt = (string) ($widgetSeat['prompt_increment'] ?? '');
+skillCheck(str_contains($widgetPrompt, '所有 CSS/可执行 JS 禁内联')
+    && str_contains($widgetPrompt, 'style=') && str_contains($widgetPrompt, 'on*=')
+    && str_contains($widgetPrompt, 'source-postion/source-position'), 'widget prompt mandates external resources and position aliases');
+skillCheck(in_array('app/code/Weline/Theme/doc/部件静态资源固化规范.md',
+    $widgetSeat['authoritative_docs'] ?? [], true), 'widget seat loads authoritative asset position contract');
+
 $expectedSeats = array_merge(
     is_array($teamBundle['core_roster'] ?? null) ? $teamBundle['core_roster'] : [],
     is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [],
@@ -242,6 +252,14 @@ skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''),
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'work_mode'), '主题开发工程师 prompt requires work_mode');
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'theme.css'), '主题开发工程师 prompt forbids design theme.css override');
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'theme:active'), '主题开发工程师 prompt mentions theme:active lifecycle');
+skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), '必装永远存在')
+    && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'user_deleted@{versionId}'), '主题开发工程师 prompt mandates required defaults always present');
+skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), '席位底线')
+    && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'theme_seat_integrity_over_peer_requests')
+    && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'escalate')
+    && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), '驳回'), '主题开发工程师 prompt mandates seat integrity over peer requests with veto');
+skillCheck(in_array('app/code/Weline/Theme/doc/开发/spec/required-default-always-present.md', is_array($themeEngineerSeat['authoritative_docs'] ?? null) ? $themeEngineerSeat['authoritative_docs'] : [], true), '主题开发工程师 docs include required-default-always-present spec');
+skillCheck(in_array('app/code/Weline/Ai/doc/开发/team/theme-engineer-charter/meetings/席位底线补钉.md', is_array($themeEngineerSeat['authoritative_docs'] ?? null) ? $themeEngineerSeat['authoritative_docs'] : [], true), '主题开发工程师 docs include 席位底线补钉 meeting');
 $themePrompt = (string) ($themeEngineerSeat['prompt_increment'] ?? '');
 skillCheck(
     (str_contains($themePrompt, 'frontend') && str_contains($themePrompt, 'backend'))
@@ -280,6 +298,11 @@ skillCheck(
     '测试 prompt mandates browser_strip_automation_flags'
 );
 skillCheck(
+    str_contains($testPrompt, 'browser_operator_non_preemptive')
+    || str_contains($testPrompt, '非抢占'),
+    '测试 prompt mandates browser_operator_non_preemptive'
+);
+skillCheck(
     (str_contains($testPrompt, '自造') || str_contains($testPrompt, '假数据') || str_contains($testPrompt, '假响应'))
     && (str_contains($testPrompt, '禁止') || str_contains($testPrompt, '自欺')),
     '测试 prompt forbids self-fabricated data circular pass'
@@ -312,6 +335,9 @@ skillCheck(str_contains($perfPrompt, '业务特性'), '性能检查工程师 pro
 skillCheck(str_contains($perfPrompt, '架构师'), '性能检查工程师 prompt jointly works with 架构师');
 skillCheck(str_contains($perfPrompt, '合规'), '性能检查工程师 prompt requires cache compliance check');
 skillCheck(str_contains($perfPrompt, '项目经理') && (str_contains($perfPrompt, '请立刻组队') || str_contains($perfPrompt, '请安排') || str_contains($perfPrompt, '拉起') || str_contains($perfPrompt, 'escalate')), '性能检查工程师 prompt wakes PM to arrange after findings');
+skillCheck(str_contains($perfPrompt, '禁拆壳')
+    && str_contains($perfPrompt, 'theme_seat_integrity_over_peer_requests')
+    && (str_contains($perfPrompt, 'header') || str_contains($perfPrompt, 'default_injections')), '性能检查工程师 prompt forbids strip-shell prescriptions');
 $archSeat = is_array($seatMap['架构师'] ?? null) ? $seatMap['架构师'] : [];
 $archPrompt = (string) ($archSeat['prompt_increment'] ?? '');
 skillCheck(str_contains($archPrompt, '性能检查'), '架构师 prompt mentions 性能检查工程师 collaboration');
@@ -371,6 +397,10 @@ skillCheck(
     str_contains($teamCmd, 'browser_strip_automation_flags') || str_contains($teamCmd, '抹掉自动化标志'),
     'engineering team command mandates browser_strip_automation_flags'
 );
+skillCheck(
+    str_contains($teamCmd, 'browser_operator_non_preemptive') || str_contains($teamCmd, '非抢占'),
+    'engineering team command mandates browser_operator_non_preemptive'
+);
 skillCheck(str_contains($teamCmd, 'component-negotiate.md'), 'engineering team command mentions component-negotiate.md');
 skillCheck(str_contains($teamCmd, '框架优先'), 'engineering team command mentions 框架优先');
 skillCheck(str_contains($teamCmd, '事件'), 'engineering team command mentions 事件 seat');
@@ -379,6 +409,8 @@ skillCheck(str_contains($teamCmd, '技能引用') && str_contains($teamCmd, 'tag
 skillCheck(str_contains($teamCmd, 'analytics_engineer_for_visitor_work') || str_contains($teamCmd, 'Weline_Visitor'), 'engineering team command mentions visitor analytics hard rule');
 skillCheck(str_contains($teamCmd, 'seat_skill_mirrors'), 'engineering team command mentions seat_skill_mirrors');
 skillCheck(str_contains($teamCmd, 'findings_wake_pm') || str_contains($teamCmd, '直接拉起项目经理') || str_contains($teamCmd, '请立刻组队解决'), 'engineering team command mentions findings_wake_pm');
+skillCheck(str_contains($teamCmd, 'requirement_issuer_owns_acceptance') || str_contains($teamCmd, 'waiting_acceptance') || str_contains($teamCmd, '甩手掌柜'), 'engineering team command mentions requirement_issuer_owns_acceptance');
+skillCheck(str_contains($teamCmd, 'issuer_acceptance'), 'engineering team command mentions issuer_acceptance');
 skillCheck(str_contains($teamCmd, 'requirement_session_dashboard') || str_contains($teamCmd, 'doc/开发/session/'), 'engineering team command mentions SESSION path');
 skillCheck(str_contains($teamCmd, 'pm_plan_lifecycle') || str_contains($teamCmd, '计划生命周期'), 'engineering team command mentions pm_plan_lifecycle');
 skillCheck(str_contains($teamCmd, 'notify_pm'), 'engineering team command requires notify_pm');
@@ -389,6 +421,7 @@ if (!is_file($sessionTplPath)) {
 skillCheck(is_file($sessionTplPath), 'requirement-session template exists');
 $sessionTpl = is_file($sessionTplPath) ? (string) file_get_contents($sessionTplPath) : '';
 skillCheck(str_contains($sessionTpl, '计划项表') && str_contains($sessionTpl, '交付通知日志'), 'requirement-session template has plan + notify sections');
+skillCheck(str_contains($sessionTpl, 'issuer_seat') && str_contains($sessionTpl, 'issuer_acceptance'), 'requirement-session template has issuer columns');
 skillCheck(str_contains($teamCmd, 'related_web_urls'), 'engineering team command requires related_web_urls on report card');
 skillCheck(
     str_contains($teamCmd, 'related_web_urls')
@@ -399,6 +432,7 @@ skillCheck(!str_contains($teamCmd, 'team_issue_board') && str_contains($teamCmd,
 $pmSeat = is_array($seatMap['项目经理'] ?? null) ? $seatMap['项目经理'] : [];
 $pmPrompt = (string) ($pmSeat['prompt_increment'] ?? '');
 skillCheck(str_contains($pmPrompt, 'findings_wake_pm') || str_contains($pmPrompt, '同回合'), '项目经理 prompt covers same-turn staffing on escalate');
+skillCheck(str_contains($pmPrompt, 'requirement_issuer_owns_acceptance') || str_contains($pmPrompt, 'issuer_acceptance') || str_contains($pmPrompt, '发起席'), '项目经理 prompt covers issuer acceptance wake');
 skillCheck(str_contains($pmPrompt, 'requirement_session_dashboard') || str_contains($pmPrompt, 'session/'), '项目经理 prompt covers SESSION dashboard');
 skillCheck(str_contains($pmPrompt, 'pm_plan_lifecycle') || str_contains($pmPrompt, 'notify_pm') || str_contains($pmPrompt, 'DoD'), '项目经理 prompt covers plan lifecycle / DoD');
 skillCheck(
@@ -414,7 +448,12 @@ skillCheck(
     '测试 prompt mandates related_web_urls on closed pass'
 );
 skillCheck(str_contains($ecommercePrompt, 'findings_wake_pm') || str_contains($ecommercePrompt, '请立刻组队解决') || str_contains($ecommercePrompt, '@项目经理'), '电商顾问 prompt wakes PM on findings');
+skillCheck(str_contains($ecommercePrompt, 'requirement_issuer_owns_acceptance') || str_contains($ecommercePrompt, 'waiting_acceptance'), '电商顾问 prompt owns issuer acceptance');
 skillCheck(str_contains($perfPrompt, 'findings_wake_pm') || str_contains($perfPrompt, '请立刻组队解决') || str_contains($perfPrompt, '@项目经理'), '性能检查工程师 prompt wakes PM on findings');
+skillCheck(str_contains($perfPrompt, 'requirement_issuer_owns_acceptance') || str_contains($perfPrompt, 'waiting_acceptance'), '性能检查工程师 prompt owns issuer acceptance');
+$promptOptSeat = is_array($seatMap['提示词优化工程师'] ?? null) ? $seatMap['提示词优化工程师'] : [];
+$promptOptPrompt = (string) ($promptOptSeat['prompt_increment'] ?? '');
+skillCheck(str_contains($promptOptPrompt, 'requirement_issuer_owns_acceptance') || str_contains($promptOptPrompt, 'waiting_acceptance'), '提示词优化工程师 prompt owns issuer acceptance');
 skillCheck(!is_file(dirname(__DIR__, 2) . '/doc/开发/team/board/issues.md'), 'Ai team board issues.md removed');
 skillCheck(str_contains($teamCmd, 'frontend_development') || str_contains($teamCmd, 'Theme开发总指南'), 'engineering team command mirrors frontend skills');
 skillCheck(str_contains($teamCmd, 'event_extension') || str_contains($teamCmd, '事件命名与注册规范'), 'engineering team command mirrors event skills');

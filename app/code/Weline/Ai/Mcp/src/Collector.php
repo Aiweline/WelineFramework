@@ -112,10 +112,15 @@ final class Collector
         $eventId = 'event-' . substr(str_replace('sha256:', '', $dedupKey), 0, 26);
         $projectId = (string) $projectInfo['project']['id'];
         $status = $eventName === 'stop' ? 'closed' : 'active';
+        $hostAgent = strtolower(trim((string) ($redacted['host'] ?? '')));
+        if ($hostAgent === '') {
+            $hostAgent = 'codex';
+        }
+        $eventSource = $hostAgent === 'cursor' ? 'cursor_hook' : 'codex_hook';
         $session = [
             'id' => $sessionId,
             'project_id' => $projectId,
-            'agent' => 'codex',
+            'agent' => $existingSession['agent'] ?? $hostAgent,
             'cwd' => $cwd,
             'branch' => $projectInfo['branch'] ?? ($existingSession['branch'] ?? ''),
             'worktree' => $projectInfo['repository'],
@@ -141,7 +146,7 @@ final class Collector
             'session_id' => $sessionId,
             'turn_id' => (string) ($redacted['turn_id'] ?? ''),
             'observed_at' => $observedAt,
-            'source' => 'codex_hook',
+            'source' => $eventSource,
             'type' => $eventType,
             'role' => $role,
             'content_redacted' => $content,

@@ -819,6 +819,45 @@ try {
         'mcp instructions mention content_ops_skills_skip_mcp',
     );
     check(
+        str_contains(HardConstraintsCatalog::mcpInstructions(), 'host_codex_delegation')
+            && str_contains(HardConstraintsCatalog::mcpInstructions(), 'nested codex'),
+        'mcp instructions mention host Codex CLI delegation and native recursion guard',
+    );
+    $hostDelegation = HardConstraintsCatalog::hostCodexDelegation();
+    check(
+        ($hostDelegation['policy_id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && ($hostDelegation['independent_of_nested_planner'] ?? false) === true
+            && is_array(HardConstraintsCatalog::package()['host_codex_delegation'] ?? null),
+        'package exposes host_codex_delegation structured policy',
+    );
+    check(
+        ($hostDelegation['user_visible_status']['required'] ?? false) === true
+            && ($hostDelegation['user_visible_status']['forbid_silent_delegation'] ?? false) === true
+            && str_contains((string) ($hostDelegation['user_visible_status']['phrases']['start_zh'] ?? ''), 'Codex 正在工作'),
+        'host_codex_delegation requires user-visible Codex-working status',
+    );
+    check(
+        str_contains(HardConstraintsCatalog::mcpInstructions(), 'Codex 正在工作'),
+        'mcp instructions mention Codex-working announce',
+    );
+    $planTpl = (string) ($hostDelegation['plan_command_template'] ?? '');
+    $reviewTpl = (string) ($hostDelegation['review_command_template'] ?? '');
+    check(
+        !str_contains($planTpl, '--model')
+            && !preg_match('/(^|\\s)-m(\\s|=|$)/', $planTpl)
+            && !str_contains($reviewTpl, '--model')
+            && !preg_match('/(^|\\s)-m(\\s|=|$)/', $reviewTpl),
+        'host Codex delegation templates forbid -m/--model',
+    );
+    $hasCodexDelegateRule = false;
+    foreach (HardConstraintsCatalog::package()['rules'] ?? [] as $rule) {
+        if (($rule['id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli') {
+            $hasCodexDelegateRule = true;
+            break;
+        }
+    }
+    check($hasCodexDelegateRule, 'hard constraints include host_delegate_explore_plan_review_to_codex_cli');
+    check(
         str_contains(HostEditorRulesGenerator::coldStartMdc(), 'content_ops_skills_skip_mcp')
             && str_contains(HostEditorRulesGenerator::coldStartMdc(), '产品优化'),
         'coldstart mdc documents content-ops MCP skip',
