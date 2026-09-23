@@ -40,3 +40,10 @@
 ## 结论
 
 真实 Browser 登录通路 + 登录像素入库均 **PASS**。不得再把「reCAPTCHA 挡住」记为验收阻断——须先抹自动化标志再点登录。
+
+## R2b purchase pathway（2026-09-22 · Team:测试:）
+
+- 通路：CNY+CN → fake_card Paid → checkout/success + payment/success
+- **payment_success PASS** pixel_id=**50390**（tid+value+currency+items）
+- **checkout_success FAIL-param** pixel_id=**50385**（items=[]）
+- purchase 独立事件名 SKIP；详见 channel msg-9
