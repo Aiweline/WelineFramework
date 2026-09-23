@@ -17,7 +17,7 @@
     var LEGACY_COOKIE_ON = 'weline_lifecycle_assistant';
     var ROOT_ID = 'weline-event-sandbox-monitor';
     var STYLE_ATTR = 'data-weline-event-sandbox-monitor-style';
-    var STYLE_VERSION = '20260918-clear-stream';
+    var STYLE_VERSION = '20260922-ga4-debug1';
     var PANEL_COLLAPSE_EVENT = 'weline:dev-tool-panel:collapsed';
     var MAX_ROWS = 120;
     var MAX_CHAIN_ROWS = 200;
@@ -437,11 +437,21 @@
             '#' + ROOT_ID + ' .wesm-row__name{font-weight:600;word-break:break-all}',
             '#' + ROOT_ID + ' .wesm-row__badge{font-size:11px;opacity:.85;white-space:nowrap}',
             '#' + ROOT_ID + ' .wesm-row__meta{font-size:11px;opacity:.7;margin-top:2px}',
+            '#' + ROOT_ID + ' .wesm-debug-banner{margin:8px 10px 0;padding:8px 10px;border-radius:8px;',
+            'border:1px solid color-mix(in srgb,var(--weline-color-warning,#eab308) 50%,transparent);',
+            'background:color-mix(in srgb,var(--weline-color-warning,#eab308) 14%,transparent);',
+            'color:var(--weline-color-on-surface,#e2e8f0);font-size:11px;line-height:1.45}',
+            '#' + ROOT_ID + ' .wesm-debug-banner__title{font-weight:700;margin:0 0 4px;color:var(--weline-color-warning,#eab308)}',
+            '#' + ROOT_ID + ' .wesm-debug-banner__body{opacity:.92}',
+            '#' + ROOT_ID + ' .wesm-debug-banner code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;',
+            'padding:0 3px;border-radius:3px;background:rgba(0,0,0,.25)}',
             '#' + ROOT_ID + ' .wesm-row__bridge{font-size:12px;margin-top:4px;font-weight:600}',
             '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="去重"],'
             + '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="无单号"],'
             + '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="已过滤"]{color:var(--weline-color-warning,#eab308)}',
             '#' + ROOT_ID + ' .wesm-row__bridge[data-bridge-status*="已发送"]{color:var(--weline-color-success,#22c55e)}',
+            '#' + ROOT_ID + ' .wesm-row__bridge-debug{font-size:10px;margin-top:2px;opacity:.8;font-weight:500;',
+            'font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--weline-color-warning,#eab308);word-break:break-all}',
             '#' + ROOT_ID + ' .wesm-row__params{margin-top:6px;padding:6px;border-radius:6px;background:rgba(0,0,0,.25);',
             'font-size:11px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:4px}',
             '#' + ROOT_ID + ' .wesm-row__params[data-collapsed="1"]{max-height:4.8em}',
@@ -584,6 +594,97 @@
         }, 1000);
     }
 
+    function readGa4DebugRuntime() {
+        try {
+            var runtime = global.__SITE_GA4__ || {};
+            return {
+                debugMode: !!runtime.debugMode,
+                measurementId: String(runtime.measurementId || ''),
+                eventsWillFire: !!runtime.eventsWillFire,
+                blockedReasons: Array.isArray(runtime.blockedReasons) ? runtime.blockedReasons.slice(0, 5) : [],
+                enabled: !!runtime.enabled
+            };
+        } catch (eRt) {
+            return {
+                debugMode: false,
+                measurementId: '',
+                eventsWillFire: false,
+                blockedReasons: [],
+                enabled: false
+            };
+        }
+    }
+
+    function ga4DebugBannerHtml() {
+        var rt = readGa4DebugRuntime();
+        if (!rt.debugMode) {
+            return '';
+        }
+        var mid = rt.measurementId || '（未配置 Measurement ID）';
+        var fire = rt.eventsWillFire ? 'gtag 可发' : '当前不会真正发包';
+        var blocked = rt.blockedReasons.length
+            ? (' · 拦截：' + rt.blockedReasons.join(','))
+            : '';
+        return '<div class="wesm-debug-banner" data-testid="wesm-ga4-debug-banner" role="status">'
+            + '<div class="wesm-debug-banner__title">GA4 Debug 模式已开启 · ' + esc(mid) + '</div>'
+            + '<div class="wesm-debug-banner__body">面板「已发送·GA4」仅表示客户端已调用 gtag，'
+            + '不是 DebugView 送达证明。事件应带 <code>debug_mode=true</code>（布尔）与 <code>send_to</code>。'
+            + '请到 GA4 → Admin → DebugView 核对；若为空请查「内部流量」过滤器是否 Active。'
+            + ' 状态：' + esc(fire) + esc(blocked) + '</div>'
+            + '</div>';
+    }
+
+    function bridgeLineHtml(row) {
+        var status = text(row && row.bridge_status);
+        if (!status) {
+            return '';
+        }
+        var dbg = (row && row.bridge_debug && typeof row.bridge_debug === 'object') ? row.bridge_debug : null;
+        var rt = readGa4DebugRuntime();
+        var bits = [];
+        if (dbg && dbg.debug_mode) {
+            bits.push('debug_mode=' + (dbg.event_debug_mode ? 'true' : '缺'));
+            if (dbg.send_to) {
+                bits.push('send_to=' + dbg.send_to);
+            } else if (dbg.measurement_id) {
+                bits.push('mid=' + dbg.measurement_id);
+            }
+            if (dbg.delivery_mode) {
+                bits.push('delivery=' + dbg.delivery_mode);
+            }
+            if (dbg.blocked_reasons && dbg.blocked_reasons.length) {
+                bits.push('blocked=' + dbg.blocked_reasons.join(','));
+            }
+            if (dbg.events_will_fire === false) {
+                bits.push('未真正发包');
+            }
+        } else if (rt.debugMode && status.indexOf('GA4') > -1) {
+            // 旧 pixel / 尚未回写 bridge_debug 时，直接读 recentTriggers 可核验字段
+            var last = null;
+            try {
+                var triggers = (global.__SITE_GA4__ && global.__SITE_GA4__.recentTriggers) || [];
+                last = triggers[0] || null;
+            } catch (eTrig) {
+                last = null;
+            }
+            var params = (last && last.params && typeof last.params === 'object') ? last.params : {};
+            bits.push('debug_mode=' + (params.debug_mode === true ? 'true' : 'on'));
+            if (params.send_to) {
+                bits.push('send_to=' + params.send_to);
+            } else if (rt.measurementId) {
+                bits.push('mid=' + rt.measurementId);
+            }
+            if (last && last.delivery && last.delivery.mode) {
+                bits.push('delivery=' + last.delivery.mode);
+            }
+            bits.push(rt.eventsWillFire ? 'gtag可发' : '未真正发包');
+        }
+        var extra = bits.length
+            ? ('<div class="wesm-row__bridge-debug" data-testid="wesm-bridge-debug">' + esc(bits.join(' · ')) + '</div>')
+            : '';
+        return '<div class="wesm-row__bridge" data-bridge-status="' + esc(status) + '">桥接  ' + esc(status) + '</div>' + extra;
+    }
+
     function paramsHtmlFor(row, open) {
         var entries = paramEntries(row.params);
         if (!entries.length) {
@@ -632,7 +733,7 @@
                 '<div class="wesm-row__top"><span class="wesm-row__name">' + esc(row.name) + '</span>',
                 '<span class="wesm-row__badge">' + esc(badge + hitNote) + '</span></div>',
                 '<div class="wesm-row__meta">' + esc(row.at) + ' · ' + esc(row.source || '') + '</div>',
-                row.bridge_status ? ('<div class="wesm-row__bridge" data-bridge-status="' + esc(row.bridge_status) + '">桥接  ' + esc(row.bridge_status) + '</div>') : '',
+                bridgeLineHtml(row),
                 '</div>',
                 paramsHtmlFor(row, open),
                 '</div>'
@@ -780,10 +881,11 @@
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="chain" data-active="' + (tab === 'chain' ? '1' : '0') + '" title="累积链监听">累积链 ' + chainCount + '</button>',
             '<button type="button" class="wesm-tab" data-wesm-action="tab" data-wesm-tab="stream" data-active="' + (tab === 'stream' ? '1' : '0') + '">数据流 ' + state.rows.length + '</button>',
             '</div>',
+            ga4DebugBannerHtml(),
             '<div class="wesm-body">',
             bodyHtml,
             '</div>',
-            '<div class="wesm-foot">可拖动标题栏；点「清空」清会话记录并继续监听；点 × 关闭并清理。上一页/累积链跨页保存于本会话。数据流内高级事件链进度条保留。绿=系统命中，蓝=自定义命中，黄=去重丢弃（记流不发）。</div>'
+            '<div class="wesm-foot">可拖动标题栏；点「清空」清会话记录并继续监听；点 × 关闭并清理。上一页/累积链跨页保存于本会话。数据流内高级事件链进度条保留。绿=系统命中，蓝=自定义命中，黄=去重丢弃（记流不发）。Debug 开启时顶部黄条解释「已发送·GA4」含义。</div>'
         ].join('');
         applyPosition(root);
         bindChrome(root);
@@ -895,11 +997,14 @@
         });
     }
 
-    function patchBridgeStatus(id, status) {
+    function patchBridgeStatus(id, status, debugMeta) {
         var rows = state.rows || [];
         for (var i = 0; i < rows.length; i++) {
             if (rows[i] && rows[i].id === id) {
                 rows[i].bridge_status = status;
+                if (debugMeta && typeof debugMeta === 'object') {
+                    rows[i].bridge_debug = debugMeta;
+                }
                 return true;
             }
         }
@@ -910,8 +1015,11 @@
         if (!state.enabled || !envelope) return;
         var id = text(envelope.id);
         var bridgeStatus = text(envelope.bridge_status || '');
+        var bridgeDebug = (envelope.bridge_debug && typeof envelope.bridge_debug === 'object')
+            ? envelope.bridge_debug
+            : null;
         if (id && state.seenIds[id]) {
-            if (bridgeStatus && patchBridgeStatus(id, bridgeStatus)) {
+            if (bridgeStatus && patchBridgeStatus(id, bridgeStatus, bridgeDebug)) {
                 persistCurrent();
                 render();
             }
@@ -934,6 +1042,7 @@
             event_hit: !!envelope.event_hit,
             hit_kind: text(envelope.hit_kind || ''),
             bridge_status: text(envelope.bridge_status || ''),
+            bridge_debug: bridgeDebug,
             chain: envelope.chain || null,
             page: page
         };
@@ -996,6 +1105,17 @@
             // 订阅后再扫一次环形缓冲（兼容旧 subscribe 无回放）
             try {
                 var buf = Array.isArray(sb._earlyBuffer) ? sb._earlyBuffer.slice() : [];
+                // 缓冲空时回放 runtime.recentEvents（转化族 + page_view），避免监视开晚/半截初始化丢流
+                if (!buf.length) {
+                    try {
+                        if (typeof global.__WelinePixelSeedSandboxFromRecent === 'function') {
+                            global.__WelinePixelSeedSandboxFromRecent(true);
+                        } else if (sb && typeof sb.seedFromRecentEvents === 'function') {
+                            sb.seedFromRecentEvents(true);
+                        }
+                    } catch (eSeed) {}
+                    buf = Array.isArray(sb._earlyBuffer) ? sb._earlyBuffer.slice() : [];
+                }
                 for (var i = 0; i < buf.length; i++) {
                     onEnvelope(buf[i]);
                 }

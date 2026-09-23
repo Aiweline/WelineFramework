@@ -46,7 +46,7 @@ final class StorefrontPixelBootstrapWidgetContractTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/^\s*declare\s*\(\s*strict_types\s*=\s*1\s*\)\s*;/m', $tpl);
         self::assertStringContainsString('header-widget-eager', $svc);
         self::assertStringContainsString('__WelinePixelPending', $svc);
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260922-param-shell1'", $svc);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260923-r2d-param2'", $svc);
     }
 
     public function testThemeAndHanfuHeadersDeclarePixelBootstrapSlot(): void

@@ -13,6 +13,8 @@ return [
         'page_layouts' => ['*'],
         'position' => ['header'],
         'slot' => 'header-pixel-bootstrap',
+        // placement=injection：Theme header 只留空槽；禁止布局内嵌本部件。
+        'placement' => 'injection',
         'supports' => [
             'storefront-pixel-bootstrap',
             'layout-header-pixel-bootstrap',

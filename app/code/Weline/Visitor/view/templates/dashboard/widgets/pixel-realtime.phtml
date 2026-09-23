@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Visitor::css/widgets/widget-pixel-realtime.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * Dashboard Widget: 像素实时动向
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
@@ -45,7 +46,7 @@ $detailUrl = $service->detailUrl($listConfig);
             $time = substr((string)($row['timestamp'] ?? ''), 11, 5) ?: '-';
             ?>
             <div title="<?= $h(__('事件 %{1}', [$count])) ?>">
-                <i style="height: <?= (int)$height ?>%"></i>
+                <i data-widget-style="height: <?= (int)$height ?>%"></i>
                 <span><?= $h($time) ?></span>
             </div>
         <?php endforeach; ?>
@@ -69,99 +70,3 @@ $detailUrl = $service->detailUrl($listConfig);
         </ul>
     <?php endif; ?>
 </section>
-<style>
-.pixel-realtime-total {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    border-radius: 6px;
-    background: var(--w-dashboard-surface-soft, #f8fafc);
-    padding: 12px;
-}
-.pixel-realtime-total strong {
-    color: #14b8a6;
-    font-size: 24px;
-    line-height: 1;
-}
-.pixel-realtime-total span {
-    color: var(--w-dashboard-muted, #6b7280);
-    font-size: 12px;
-}
-.pixel-realtime-bars {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 6px;
-    height: 72px;
-    align-items: end;
-}
-.pixel-realtime-bars div {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    gap: 4px;
-    height: 100%;
-    text-align: center;
-}
-.pixel-realtime-bars i {
-    display: block;
-    width: 100%;
-    min-height: 6px;
-    border-radius: 5px 5px 2px 2px;
-    background: #f59e0b;
-}
-.pixel-realtime-bars span,
-.pixel-recent-list span {
-    color: var(--w-dashboard-muted, #6b7280);
-    font-size: 11px;
-    line-height: 1;
-}
-.pixel-recent-list {
-    display: grid;
-    gap: 7px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-.pixel-recent-list li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    min-width: 0;
-}
-.pixel-recent-list strong {
-    min-width: 0;
-    color: var(--w-dashboard-heading, #1f2937);
-    font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.dashboard-widget-pixel-realtime header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-.pixel-widget-detail {
-    color: var(--bs-primary, #2563eb);
-    text-decoration: none;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-.pixel-widget-detail:hover {
-    text-decoration: underline;
-}
-.pixel-recent-link {
-    color: inherit;
-    text-decoration: none;
-    min-width: 0;
-}
-.pixel-recent-link:hover strong {
-    color: var(--bs-primary, #2563eb);
-    text-decoration: underline;
-}
-</style>

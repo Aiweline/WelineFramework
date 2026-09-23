@@ -1,10 +1,19 @@
 (function() {
-    // 防止重复加载像素代码
+    // 防止重复加载；沙盒就绪后才置 __WelinePixelLoaded。
+    // 半截初始化（flag 已置但无 emit）允许重入补建，避免监视流永久空。
     if (window.__WelinePixelLoaded) {
-        console.warn('Weline Pixel: 像素已加载，跳过重复加载。如需添加自定义事件，请使用像素hook方式（监听 Weline_Visitor::taglib_pixel 事件）');
-        return;
+        var __sbReady = !!(window.WelinePixelSandbox
+            && typeof window.WelinePixelSandbox.emit === 'function'
+            && window.WelineEventSandbox);
+        if (__sbReady) {
+            console.warn('Weline Pixel: 像素已加载，跳过重复加载。如需添加自定义事件，请使用像素hook方式（监听 Weline_Visitor::taglib_pixel 事件）');
+            return;
+        }
+        try {
+            console.warn('Weline Pixel: 检测到半截初始化（缺沙盒），重入补建 WelinePixelSandbox');
+        } catch (eHalf) {}
+        window.__WelinePixelLoaded = false;
     }
-    window.__WelinePixelLoaded = true;
 
     var __visitorTrackingConfig = window.__WelineVisitorTrackingConfig || {};
     var __trackingRuntimeFetchInFlight = false;
@@ -2647,7 +2656,7 @@
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.09.22-param-shell1';
+    var PIXEL_SCRIPT_VERSION = '2026.09.23-list-select1';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -3859,12 +3868,248 @@
         return items;
     }
 
+    function __resolveItemListNameFromPath(pathname) {
+        var path = String(pathname || '');
+        if (path.indexOf('/search') === 0 || path.indexOf('/catalogsearch') === 0) {
+            return 'search_results';
+        }
+        if (path.indexOf('/category/') === 0) {
+            return 'category';
+        }
+        if (path === '/products' || path.indexOf('/products/') === 0) {
+            return 'products';
+        }
+        if (path === '/' || path === '') {
+            return 'home';
+        }
+        return 'product_list';
+    }
+
+    function __isProductListPath(pathname) {
+        var path = String(pathname || '');
+        return path === '/products'
+            || path.indexOf('/products/') === 0
+            || path.indexOf('/category/') === 0
+            || path === '/search'
+            || path.indexOf('/search/') === 0
+            || path.indexOf('/catalogsearch') === 0;
+    }
+
+    function __getProductListItemsFromCard(card) {
+        if (!card) {
+            return [];
+        }
+        var productId = __firstAttr(card, ['data-product-id', 'data-item-id', 'data-id']);
+        var name = __firstAttr(card, ['data-product-name', 'data-name', 'data-item-name'])
+            || __firstText(card, ['.wpc-title', '.product-title', '.product-name', 'h3', 'a']);
+        var price = __firstNumber(card, ['[data-pixel-value]', '[data-price]', '.wpc-price-now', '.price-current', '.price-amount']);
+        if (!productId && !name && price === null) {
+            return [];
+        }
+        var listName = '';
+        try {
+            listName = __resolveItemListNameFromPath(new URL(__getPixelAppPath(window.location.href)).pathname);
+        } catch (eList) {
+            listName = 'product_list';
+        }
+        return [{
+            item_id: productId || name,
+            product_id: productId,
+            item_name: name,
+            name: name,
+            price: price,
+            quantity: 1,
+            qty: 1,
+            item_list_name: listName,
+            item_list_id: listName
+        }];
+    }
+
+    function __getProductListItems(limit) {
+        limit = limit || 20;
+        var nodes = document.querySelectorAll
+            ? document.querySelectorAll([
+                '[data-testid="weline-product-card"][data-product-id]',
+                '.weline-product-card[data-product-id]',
+                '.product-card[data-product-id]',
+                'article.product-card[data-product-id]',
+                '[data-product-id].product-card'
+            ].join(','))
+            : [];
+        var items = [];
+        var seen = Object.create(null);
+        for (var i = 0; i < nodes.length && items.length < limit; i++) {
+            var row = __getProductListItemsFromCard(nodes[i]);
+            if (!row.length) {
+                continue;
+            }
+            var key = String(row[0].item_id || row[0].name || i);
+            if (seen[key]) {
+                continue;
+            }
+            seen[key] = 1;
+            items.push(row[0]);
+        }
+        return items;
+    }
+
+    function __getProductListMeta(eventName, element) {
+        var items = [];
+        if (eventName === 'select_item' && element) {
+            var card = element.closest
+                ? element.closest('[data-testid="weline-product-card"], .weline-product-card, .product-card, [data-product-id]')
+                : null;
+            items = __getProductListItemsFromCard(card);
+        }
+        if (!items.length) {
+            items = __getProductListItems(20);
+        }
+        var listName = '';
+        try {
+            listName = __resolveItemListNameFromPath(new URL(__getPixelAppPath(window.location.href)).pathname);
+        } catch (eName) {
+            listName = 'product_list';
+        }
+        return {
+            items: items,
+            item_list_name: listName,
+            item_list_id: listName,
+            currency: __resolvePixelCurrency('') || 'CNY'
+        };
+    }
+
+    function __getCtaLinkMeta(element, baseMeta) {
+        baseMeta = baseMeta || {};
+        var link = null;
+        try {
+            link = (element && element.closest) ? element.closest('a[href], button, [data-pixel-event], [data-cta-event]') : null;
+        } catch (eCta) {
+            link = element || null;
+        }
+        var href = '';
+        if (link) {
+            href = String(link.href || link.getAttribute('href') || baseMeta.href || baseMeta.link_url || '').trim();
+        } else {
+            href = String(baseMeta.href || baseMeta.link_url || '').trim();
+        }
+        var text = '';
+        if (link) {
+            text = String(__pixelText(link) || link.getAttribute('aria-label') || link.getAttribute('title') || '').trim().slice(0, 180);
+        }
+        if (!text) {
+            text = String(baseMeta.link_text || baseMeta.text || '').trim().slice(0, 180);
+        }
+        return {
+            link_url: href,
+            link_text: text,
+            href: href,
+            currency: __resolvePixelCurrency('') || 'CNY'
+        };
+    }
+
+    function __getRemoveFromCartMeta(element) {
+        var btn = null;
+        try {
+            btn = (element && element.closest)
+                ? element.closest('[data-cart-action="remove"], [data-pixel-event="remove_from_cart"]')
+                : null;
+        } catch (eRm) {
+            btn = element || null;
+        }
+        if (!btn && element && element.getAttribute && element.getAttribute('data-cart-action') === 'remove') {
+            btn = element;
+        }
+        if (!btn) {
+            return null;
+        }
+        var line = btn.closest
+            ? btn.closest('[data-cart-line], .weline-cart-shell__line, .cart-item, [data-cart-item]')
+            : null;
+        var productId = __firstAttr(btn, ['data-product-id', 'data-item-id'])
+            || (line ? __firstAttr(line, ['data-product-id', 'data-item-id', 'data-id']) : '');
+        var name = __firstAttr(btn, ['data-product-name', 'data-name', 'aria-label'])
+            || (line ? (__firstAttr(line, ['data-product-name', 'data-name'])
+                || __firstText(line, ['.weline-cart-shell__line-title', '.cart-item-title', '.product-title', 'strong', 'a'])) : '');
+        var price = __firstNumber(btn, ['[data-pixel-value]', '[data-price]'])
+            || __pixelNumber(btn.getAttribute('data-pixel-value') || btn.getAttribute('data-price'));
+        if (price === null && line) {
+            price = __firstNumber(line, ['[data-price]', '[data-pixel-value]', '.weline-cart-shell__line-price-now', '.price-amount']);
+        }
+        var qty = __pixelNumber(btn.getAttribute('data-qty') || btn.getAttribute('data-quantity'));
+        if ((qty === null || qty <= 0) && line) {
+            var qtyNode = line.querySelector
+                ? line.querySelector('input[name="qty"], input[data-cart-quantity], [data-qty]')
+                : null;
+            qty = qtyNode
+                ? __pixelNumber(qtyNode.value || qtyNode.getAttribute('data-qty'))
+                : __pixelNumber(line.getAttribute('data-qty'));
+        }
+        if (qty === null || qty <= 0) {
+            qty = 1;
+        }
+        var currency = String(
+            btn.getAttribute('data-pixel-currency')
+            || btn.getAttribute('data-currency')
+            || (line && (line.getAttribute('data-pixel-currency') || line.getAttribute('data-currency')))
+            || __resolvePixelCurrency('')
+            || 'CNY'
+        ).trim();
+        var value = price !== null ? Math.round(price * qty * 100) / 100 : null;
+        if (value === null) {
+            value = __pixelNumber(btn.getAttribute('data-pixel-value'));
+        }
+        if (!productId && !name && value === null) {
+            return null;
+        }
+        var items = [{
+            item_id: productId || name,
+            product_id: productId,
+            item_name: name,
+            name: name,
+            price: price,
+            quantity: qty,
+            qty: qty
+        }];
+        return {
+            items: items,
+            value: value !== null && value >= 0 ? value : 0,
+            currency: currency || 'CNY',
+            cart_items_count: 1
+        };
+    }
+
     function __getCartMeta(eventName, element) {
         var value = __resolvePixelValue(eventName, element);
         if (value === null) {
-            value = __firstNumber(document, ['[data-summary-total], [data-mini-cart-subtotal], [data-weshop-summary-grand-total], .cart-summary-total strong, .cart-summary-card__row--total .cart-summary-card__value, .weshop-checkout-summary-total span:last-child']);
+            value = __firstNumber(document, [
+                '[data-cart-grand-total]',
+                '[data-summary-total]',
+                '[data-mini-cart-subtotal]',
+                '[data-weshop-summary-grand-total]',
+                '.weline-cart-shell__summary-row--payable [data-cart-grand-total]',
+                '.weline-cart-shell__summary-row--payable strong',
+                '[data-pixel-value]',
+                '.cart-summary-total strong',
+                '.cart-summary-card__row--total .cart-summary-card__value',
+                '.weshop-checkout-summary-total span:last-child'
+            ]);
         }
         var items = __getCartItems();
+        if ((value === null || value <= 0) && items.length) {
+            var sum = 0;
+            var priced = 0;
+            for (var i = 0; i < items.length; i++) {
+                var unit = __pixelNumber(items[i].price);
+                var qty = __pixelNumber(items[i].quantity || items[i].qty) || 1;
+                if (unit !== null && unit > 0) {
+                    sum += unit * qty;
+                    priced += 1;
+                }
+            }
+            if (priced > 0 && sum > 0) {
+                value = Math.round(sum * 100) / 100;
+            }
+        }
         return {
             value: value,
             total: value,
@@ -3995,14 +4240,28 @@
         if (normalized === 'page_view') {
             return ['page_location', 'page_title'];
         }
-        if (normalized === 'search') {
+        if (normalized === 'search' || normalized === 'search_submit' || normalized === 'search_result_view') {
             return ['search_term'];
+        }
+        if (normalized === 'site_error') {
+            return ['error_message'];
+        }
+        if (normalized === 'hero_cta_click' || normalized === 'cta_click'
+            || (normalized.length > 10 && normalized.slice(-10) === '_cta_click')) {
+            return ['link_url', 'link_text'];
+        }
+        if (normalized === 'select_item' || normalized === 'view_item_list') {
+            return ['items'];
         }
         if (normalized === 'view_cart' || normalized === 'remove_from_cart') {
             return ['currency', 'value', 'items'];
         }
         if (normalized === 'begin_checkout') {
             return ['items', 'currency', 'value'];
+        }
+        if (normalized === 'checkout_success' || normalized === 'payment_success' || normalized === 'purchase'
+            || (normalized.length > 17 && normalized.slice(-17) === '_checkout_success')) {
+            return ['transaction_id', 'currency', 'value', 'items'];
         }
         return null;
     }
@@ -4043,7 +4302,7 @@
     }
 
     /**
-     * @returns {{drop:boolean, reason:string, missing:string[]}}
+     * Required-param gate result: drop / reason / missing fields.
      */
     function __evaluateRequiredParamGate(eventName, payload, meta) {
         var normalized = __normalizePixelEventName(eventName);
@@ -4056,7 +4315,7 @@
         }
         var bag = __buildRequiredParamBag(normalized, payload, meta);
         var missing = __missingFields(required, bag);
-        // Empty-cart shell: items missing or value unusable with no line items.
+        // Empty-cart shell: items missing or value unusable (incl. value=0 with lines).
         if (required.indexOf('items') > -1) {
             var items = Array.isArray(bag.items) ? bag.items : [];
             var valueNum = __pixelNumber(bag.value);
@@ -4064,10 +4323,23 @@
                 if (missing.indexOf('items') === -1) {
                     missing.push('items');
                 }
-            } else if (required.indexOf('value') > -1 && valueNum === null) {
-                if (missing.indexOf('value') === -1) {
-                    missing.push('value');
+            } else if (required.indexOf('value') > -1) {
+                // remove_from_cart may legitimately be 0 (free gift); view_cart/begin_checkout forbid value<=0 shells.
+                var allowZeroValue = normalized === 'remove_from_cart';
+                if (valueNum === null || (!allowZeroValue && valueNum <= 0)) {
+                    if (missing.indexOf('value') === -1) {
+                        missing.push('value');
+                    }
                 }
+            }
+        }
+        if (required.indexOf('error_message') > -1) {
+            var errMsg = String(bag.error_message || '').trim();
+            if (!errMsg && bag.incident && typeof bag.incident === 'object') {
+                errMsg = String(bag.incident.error_message || bag.incident.message || '').trim();
+            }
+            if (!errMsg && missing.indexOf('error_message') === -1) {
+                missing.push('error_message');
             }
         }
         if (missing.length) {
@@ -4082,12 +4354,20 @@
         var required = [];
         if (normalized === 'search' || normalized.indexOf('search_') === 0) {
             meta = Object.assign({}, __getSearchMeta(__findSearchInput(document), normalized), __getSearchResultMeta());
-            if (!meta.search_term && meta.query) {
+            // baseMeta (caller) must NOT reintroduce country-picker 「中国/China」 over URL q.
+            meta = Object.assign({}, meta, baseMeta || {});
+            var forcedTerm = String(__getSearchQueryFromUrl() || meta.url_query || '').trim();
+            if (forcedTerm) {
+                meta.query = forcedTerm;
+                meta.search_term = forcedTerm;
+                meta.url_query = forcedTerm;
+                meta.query_length = forcedTerm.length;
+            } else if (!meta.search_term && meta.query) {
                 meta.search_term = meta.query;
             }
-            required = normalized === 'search'
+            required = normalized === 'search' || normalized === 'search_submit'
                 ? ['search_term']
-                : (normalized === 'search_result_view' ? ['query', 'result_count'] : ['query']);
+                : (normalized === 'search_result_view' ? ['search_term', 'query', 'result_count'] : ['query']);
         } else if (['view_item', 'add_to_cart', 'buy_now', 'add_to_wishlist', 'friend_help_pay', 'selection_share', 'quick_buy', 'express_pay', 'add_payment_info'].indexOf(normalized) > -1) {
             meta = __getProductMeta(normalized, element);
             required = ['currency', 'value', 'items'];
@@ -4096,7 +4376,21 @@
             }
         } else if (['view_cart', 'remove_from_cart'].indexOf(normalized) > -1) {
             meta = __getCartMeta(normalized, element);
+            // remove_from_cart: prefer the clicked line / button payload over whole-cart scrape.
+            if (normalized === 'remove_from_cart') {
+                var removeLineMeta = __getRemoveFromCartMeta(element);
+                if (removeLineMeta && Array.isArray(removeLineMeta.items) && removeLineMeta.items.length) {
+                    meta = Object.assign({}, meta, removeLineMeta);
+                }
+            }
             required = ['currency', 'value', 'items'];
+        } else if (normalized === 'select_item' || normalized === 'view_item_list') {
+            meta = __getProductListMeta(normalized, element);
+            required = ['items'];
+        } else if (normalized === 'hero_cta_click' || normalized === 'cta_click'
+            || (normalized.length > 10 && normalized.slice(-10) === '_cta_click')) {
+            meta = __getCtaLinkMeta(element, baseMeta);
+            required = ['link_url', 'link_text'];
         } else if (normalized === 'express_pay_started') {
             // PDP 拉起仍用商品元数据；结账页用结账汇总
             if ((window.location.pathname || '').indexOf('/product/') === 0) {
@@ -4134,7 +4428,19 @@
             required = ['href', 'from_url'];
         }
 
+        var scrapedItems = Array.isArray(meta.items) ? meta.items : null;
+        var scrapedValue = meta.value;
         meta = Object.assign({}, meta, baseMeta || {});
+        // Caller empty items:[] must not wipe DOM-scraped line items (checkout_success SSR hole).
+        if (Array.isArray(baseMeta && baseMeta.items) && baseMeta.items.length === 0
+            && scrapedItems && scrapedItems.length) {
+            meta.items = scrapedItems;
+            meta.cart_items_count = scrapedItems.length;
+        }
+        if ((meta.value === null || meta.value === undefined || meta.value === '' || meta.value === 0)
+            && scrapedValue !== null && scrapedValue !== undefined && scrapedValue !== '' && scrapedValue !== 0) {
+            meta.value = scrapedValue;
+        }
         // 站内别名 → GA4 推荐参数（供 schema 校验与转发）
         if (!meta.payment_type && (meta.payment_method || baseMeta && baseMeta.payment_method)) {
             meta.payment_type = meta.payment_method || (baseMeta && baseMeta.payment_method) || '';
@@ -4154,6 +4460,18 @@
         }
         if (!meta.currency) {
             meta.currency = __resolvePixelCurrency('') || 'CNY';
+        }
+        // Final: URL q always wins for search family (country picker China/中国 must not stick).
+        if (normalized === 'search' || normalized.indexOf('search_') === 0) {
+            var finalTerm = String(__getSearchQueryFromUrl() || meta.url_query || '').trim();
+            if (finalTerm) {
+                meta.query = finalTerm;
+                meta.search_term = finalTerm;
+                meta.url_query = finalTerm;
+                meta.query_length = finalTerm.length;
+            } else if (meta.query && !meta.search_term) {
+                meta.search_term = meta.query;
+            }
         }
         var missing = __missingFields(required, meta);
         meta.event_schema = {
@@ -4577,7 +4895,7 @@
     var __incidentStepRing = [];
     var __incidentThrottleMap = {};
     var __INCIDENT_RING_MAX = 30;
-    var __INCIDENT_THROTTLE_MS = 8000;
+    var __INCIDENT_THROTTLE_MS = 60000;
 
     function __pushIncidentStep(step) {
         if (!step || typeof step !== 'object') {
@@ -4675,12 +4993,50 @@
         return false;
     }
 
+    function __isBenignSiteIncident(raw) {
+        raw = raw || {};
+        var message = String(raw.message || raw.error_message || '').trim();
+        var lower = message.toLowerCase();
+        var code = String(raw.error_code || raw.code || '').trim().toLowerCase();
+        var capture = String(raw.capture_source || raw.source || '').trim().toLowerCase();
+        var status = parseInt(raw.http_status || raw.status || 0, 10) || 0;
+        // Auth / capability noise — not actionable site exceptions.
+        if (/^not signed in\.?$/i.test(message)
+            || /未登录/.test(message)
+            || /capability_denied/i.test(lower)
+            || /frontend worker (operation )?is not allowed/i.test(lower)
+            || /frontend worker not allowed/i.test(lower)
+            || code === 'capability_denied'
+            || status === 401
+            || status === 403) {
+            return true;
+        }
+        // API timeout / protocol flood (tens of thousands of rows).
+        if (code === 'worker_timeout'
+            || code === 'protocol_error'
+            || /worker request timed out/i.test(message)
+            || /invalid weline binary magic/i.test(message)) {
+            return true;
+        }
+        // Resource tag failures are almost always extension/CDN noise.
+        if (capture === 'resource' || /^resource_load_failed:/i.test(message)) {
+            return true;
+        }
+        return false;
+    }
+
     function __reportSiteIncident(raw) {
         raw = raw || {};
         if (!__visitorPixelEnabled()) {
             return;
         }
-        var message = String(raw.message || raw.error_message || 'site_error').slice(0, 1024);
+        if (__isBenignSiteIncident(raw)) {
+            return;
+        }
+        var message = String(raw.message || raw.error_message || '').trim().slice(0, 1024);
+        if (!message) {
+            return;
+        }
         var errorType = String(raw.type || raw.error_type || '').trim();
         var errorCode = String(raw.error_code || '').trim();
         var captureSource = String(raw.capture_source || raw.source || 'manual').trim();
@@ -4729,6 +5085,7 @@
         if (window.WelinePixel && typeof window.WelinePixel.track === 'function') {
             window.WelinePixel.track('site_error', {
                 name: message.slice(0, 120),
+                error_message: message,
                 incident: incident,
                 value: 0
             }, { keepalive: true });
@@ -5041,6 +5398,9 @@
      */
     function __emitConversionDedupeSandbox(eventName, meta) {
         try {
+            if (typeof __ensurePixelSandboxBus === 'function') {
+                __ensurePixelSandboxBus();
+            }
             var sb = window.WelineEventSandbox || window.WelinePixelSandbox;
             if (!sb || typeof sb.emit !== 'function') {
                 return;
@@ -5197,6 +5557,16 @@
             var eventMeta = __getEventSpecificMeta(normalizedEventName, domElement, options.domEvent || null, meta || {});
             var mergedMeta = Object.assign({}, eventMeta, meta || {});
             delete mergedMeta.domElement;
+            // Caller empty items:[] must not wipe DOM/meta-scraped line items (checkout_success SSR hole).
+            if (Array.isArray(meta && meta.items) && meta.items.length === 0
+                && Array.isArray(eventMeta.items) && eventMeta.items.length) {
+                mergedMeta.items = eventMeta.items;
+                mergedMeta.cart_items_count = eventMeta.items.length;
+            }
+            if ((mergedMeta.value === null || mergedMeta.value === undefined || mergedMeta.value === '')
+                && eventMeta.value !== null && eventMeta.value !== undefined && eventMeta.value !== '') {
+                mergedMeta.value = eventMeta.value;
+            }
 
             payload.url = window.location.href;
             payload.eventName = normalizedEventName;
@@ -5221,7 +5591,21 @@
             if (normalizedEventName === 'site_error' && mergedMeta.incident && typeof mergedMeta.incident === 'object') {
                 payload.additionalInfo = payload.additionalInfo || {};
                 payload.additionalInfo.incident = mergedMeta.incident;
-                payload.name = payload.name || String(mergedMeta.incident.error_message || mergedMeta.incident.message || 'site_error').slice(0, 120);
+                var siteErrMsg = String(
+                    mergedMeta.error_message
+                    || mergedMeta.incident.error_message
+                    || mergedMeta.incident.message
+                    || mergedMeta.name
+                    || 'site_error'
+                ).trim().slice(0, 1024);
+                payload.error_message = siteErrMsg;
+                payload.name = payload.name || siteErrMsg.slice(0, 120);
+            } else if (normalizedEventName === 'site_error') {
+                var bareErr = String(mergedMeta.error_message || mergedMeta.message || mergedMeta.name || '').trim();
+                if (bareErr) {
+                    payload.error_message = bareErr.slice(0, 1024);
+                    payload.name = payload.name || bareErr.slice(0, 120);
+                }
             } else if (normalizedEventName && normalizedEventName !== 'site_error') {
                 __pushIncidentStep({ name: normalizedEventName, detail: String((mergedMeta && (mergedMeta.name || mergedMeta.link_text)) || '').slice(0, 80) });
             }
@@ -5256,6 +5640,49 @@
                 payload.search_term = mergedMeta.search_term;
             } else if ((!payload.search_term || payload.search_term === '') && mergedMeta && mergedMeta.query) {
                 payload.search_term = mergedMeta.query;
+            }
+            // Hard override: page URL q is the only allowed search_term for search family.
+            if (normalizedEventName === 'search'
+                || normalizedEventName === 'search_submit'
+                || normalizedEventName === 'search_result_view'
+                || (normalizedEventName && normalizedEventName.indexOf('search_') === 0)) {
+                var urlSearchTerm = '';
+                try {
+                    urlSearchTerm = String(__getSearchQueryFromUrl() || '').trim();
+                } catch (eUrlTerm) {
+                    urlSearchTerm = '';
+                }
+                if (!urlSearchTerm && mergedMeta && mergedMeta.url_query) {
+                    urlSearchTerm = String(mergedMeta.url_query || '').trim();
+                }
+                if (urlSearchTerm) {
+                    payload.query = urlSearchTerm;
+                    payload.search_term = urlSearchTerm;
+                    mergedMeta.query = urlSearchTerm;
+                    mergedMeta.search_term = urlSearchTerm;
+                    mergedMeta.url_query = urlSearchTerm;
+                    if (payload.additionalInfo && payload.additionalInfo.meta) {
+                        payload.additionalInfo.meta.query = urlSearchTerm;
+                        payload.additionalInfo.meta.search_term = urlSearchTerm;
+                        payload.additionalInfo.meta.url_query = urlSearchTerm;
+                    }
+                }
+            }
+            // CTA required params: always flatten link_url / link_text from DOM.
+            if (normalizedEventName === 'hero_cta_click' || normalizedEventName === 'cta_click'
+                || (normalizedEventName && normalizedEventName.length > 10
+                    && normalizedEventName.slice(-10) === '_cta_click')) {
+                var ctaFlat = __getCtaLinkMeta(domElement, mergedMeta);
+                if (ctaFlat.link_url) {
+                    payload.link_url = ctaFlat.link_url;
+                    payload.href = ctaFlat.link_url;
+                    mergedMeta.link_url = ctaFlat.link_url;
+                    mergedMeta.href = ctaFlat.link_url;
+                }
+                if (ctaFlat.link_text) {
+                    payload.link_text = ctaFlat.link_text;
+                    mergedMeta.link_text = ctaFlat.link_text;
+                }
             }
 
             var paramGate = __evaluateRequiredParamGate(normalizedEventName, payload, mergedMeta);
@@ -5447,13 +5874,52 @@
         }
     };
 
+    function __isChromeLocaleSearchInput(element) {
+        if (!element) {
+            return true;
+        }
+        try {
+            if (element.hasAttribute
+                && (element.hasAttribute('data-country-search')
+                    || element.hasAttribute('data-currency-search')
+                    || element.hasAttribute('data-lang-search')
+                    || element.hasAttribute('data-website-search'))) {
+                return true;
+            }
+        } catch (eChrome) {
+        }
+        var bag = [
+            element.getAttribute ? element.getAttribute('placeholder') : '',
+            element.getAttribute ? element.getAttribute('aria-label') : '',
+            element.name || '',
+            element.id || '',
+            typeof element.className === 'string' ? element.className : ''
+        ].join(' ');
+        return /国家|地区|country|region|currency|语言|language|locale|website/i.test(bag);
+    }
+
     function __findSearchInput(scope) {
         var root = scope || document;
         if (root && __isSearchInput(root)) {
             return root;
         }
-        if (root && root.querySelector) {
-            return root.querySelector('input[type="search"], input[name="q"], input[name="search"], input[name="keyword"], input[name="query"], input[placeholder*="Search"], input[placeholder*="搜索"], [data-weshop-search] input, .search-input');
+        if (!root || !root.querySelector) {
+            return null;
+        }
+        // Prefer product search name=q — never the header country picker (type=search value=中国).
+        var preferred = root.querySelector(
+            'form[action*="search"] input[name="q"], [data-weshop-search] input[name="q"], .header-search input[name="q"], input[name="q"]'
+        );
+        if (preferred && __isSearchInput(preferred)) {
+            return preferred;
+        }
+        var nodes = root.querySelectorAll(
+            'input[name="q"], input[name="search"], input[name="keyword"], input[name="query"], input[type="search"], input[placeholder*="Search"], input[placeholder*="搜索"], [data-weshop-search] input, .search-input'
+        );
+        for (var i = 0; i < nodes.length; i++) {
+            if (__isSearchInput(nodes[i])) {
+                return nodes[i];
+            }
         }
         return null;
     }
@@ -5467,10 +5933,27 @@
         }
     }
 
+    function __isStorefrontSearchResultPath() {
+        var path = '';
+        try {
+            path = new URL(__getPixelAppPath(window.location.href)).pathname;
+        } catch (ePath) {
+            path = String((window.location && window.location.pathname) || '');
+        }
+        return /\/(?:search|catalogsearch)(?:\/|$|\.html)/i.test(path);
+    }
+
     function __getSearchMeta(input, trigger, form) {
+        var urlQuery = String(__getSearchQueryFromUrl() || '').trim();
         var searchForm = form || (input && input.closest ? input.closest('form') : null);
         var searchInput = input || __findSearchInput(searchForm) || __findSearchInput(document);
-        var value = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
+        var value = '';
+        // URL q is canonical on result landings — never bind country/locale chrome (e.g. 「中国」).
+        if (urlQuery) {
+            value = urlQuery;
+        } else if (searchInput && typeof searchInput.value === 'string' && !__isChromeLocaleSearchInput(searchInput)) {
+            value = searchInput.value;
+        }
         if (!value && searchForm && window.FormData) {
             try {
                 var formData = new FormData(searchForm);
@@ -5478,20 +5961,18 @@
             } catch (e) {
             }
         }
-        if (!value) {
-            value = __getSearchQueryFromUrl();
-        }
-        value = String(value || '');
+        value = String(value || '').trim();
         return {
             trigger: trigger,
             source: 'behavior_monitor',
             query: value,
+            search_term: value,
             query_length: value.length,
             input_name: searchInput && searchInput.name ? searchInput.name : '',
             input_id: searchInput && searchInput.id ? searchInput.id : '',
             form_action: searchForm ? (searchForm.getAttribute('action') || '') : '',
             form_method: searchForm ? (searchForm.getAttribute('method') || 'get') : '',
-            url_query: __getSearchQueryFromUrl()
+            url_query: urlQuery
         };
     }
 
@@ -5499,7 +5980,10 @@
         if (!element || !element.matches) {
             return false;
         }
-        return element.matches('input[type="search"], input[name="q"], input[name="search"], input[name="keyword"], input[name="query"], input[placeholder*="Search"], input[placeholder*="搜索"], [data-weshop-search] input, .search-input');
+        if (!element.matches('input[type="search"], input[name="q"], input[name="search"], input[name="keyword"], input[name="query"], input[placeholder*="Search"], input[placeholder*="搜索"], [data-weshop-search] input, .search-input')) {
+            return false;
+        }
+        return !__isChromeLocaleSearchInput(element);
     }
 
     function __isSearchForm(form) {
@@ -5530,6 +6014,9 @@
         }
         if (path === '/checkout' || path === '/checkout.html') {
             return 'begin_checkout';
+        }
+        if (__isProductListPath(path)) {
+            return 'view_item_list';
         }
         return '';
     }
@@ -5574,9 +6061,34 @@
             }
             return;
         }
-        // Cart/checkout hydrate async：无 line items 时短重试，避免空壳入库；仍空则放弃（门闩也会 drop）。
+        // List pages: wait for product cards then emit view_item_list with items.
+        if (eventName === 'view_item_list') {
+            var listMeta = __getProductListMeta('view_item_list', null);
+            var listItems = listMeta && Array.isArray(listMeta.items) ? listMeta.items : [];
+            var listTry = attempt || 0;
+            if ((!listItems || !listItems.length) && listTry < 10) {
+                window.setTimeout(function () {
+                    __trackRouteScopedCommerceEvents(trigger || 'list_hydrate', listTry + 1);
+                }, 350);
+                return;
+            }
+            if (!listItems || !listItems.length) {
+                return;
+            }
+            var listTracked = window.WelinePixel.track('view_item_list', Object.assign({}, listMeta, {
+                trigger: trigger || 'route',
+                source: 'behavior_monitor'
+            }));
+            if (listTracked) {
+                __pixelRouteCommerceSent[key] = true;
+            }
+            return;
+        }
+        // Cart/checkout hydrate async：无 line items 时短重试；有货但 value 未就绪也重试。
         if (eventName === 'view_cart' || eventName === 'begin_checkout') {
-            var cartItems = typeof __getCartItems === 'function' ? __getCartItems() : [];
+            var cartMeta = typeof __getCartMeta === 'function' ? __getCartMeta(eventName, null) : { items: [], value: null };
+            var cartItems = cartMeta && Array.isArray(cartMeta.items) ? cartMeta.items : [];
+            var cartValue = cartMeta ? __pixelNumber(cartMeta.value) : null;
             var tryCount = attempt || 0;
             if ((!cartItems || !cartItems.length) && tryCount < 8) {
                 window.setTimeout(function () {
@@ -5585,6 +6097,16 @@
                 return;
             }
             if (!cartItems || !cartItems.length) {
+                return;
+            }
+            if ((cartValue === null || cartValue <= 0) && tryCount < 10) {
+                window.setTimeout(function () {
+                    __trackRouteScopedCommerceEvents(trigger || 'cart_value_hydrate', tryCount + 1);
+                }, 350);
+                return;
+            }
+            // Still no usable total after hydrate — do not emit value=0 shells.
+            if (cartValue === null || cartValue <= 0) {
                 return;
             }
         }
@@ -5643,8 +6165,19 @@
             document.readyState === 'loading' ? 'script_init' : document.readyState
         );
 
-        if (__getSearchQueryFromUrl() || window.location.pathname.indexOf('/search') === 0) {
-            window.WelinePixel.track('search_result_view', __getSearchMeta(__findSearchInput(document), 'page_view'));
+        if (__getSearchQueryFromUrl() || __isStorefrontSearchResultPath()) {
+            var searchMeta = __getSearchMeta(__findSearchInput(document), 'page_view');
+            if (searchMeta.query && !searchMeta.search_term) {
+                searchMeta.search_term = searchMeta.query;
+            }
+            // GA4 recommended `search` + 站内 search_result_view（有 term 才发 search）
+            if (searchMeta.search_term || searchMeta.query) {
+                window.WelinePixel.track('search', Object.assign({}, searchMeta, {
+                    trigger: 'page_view',
+                    source: 'behavior_monitor'
+                }));
+            }
+            window.WelinePixel.track('search_result_view', searchMeta);
         }
 
         window.addEventListener('load', function () {
@@ -5754,13 +6287,37 @@
             var startedAt = Date.now();
             var tracked = false;
             var pixelEventName = __findPixelEventNameFromElement(element);
+            // Cart remove button may only carry data-cart-action before class paint.
+            if (!pixelEventName && element && element.closest) {
+                var removeBtn = element.closest('[data-cart-action="remove"], [data-pixel-event="remove_from_cart"]');
+                if (removeBtn) {
+                    pixelEventName = 'remove_from_cart';
+                    element = removeBtn;
+                }
+            }
             if (pixelEventName) {
-                window.WelinePixel.track(pixelEventName, {
+                var declaredMeta = {
                     trigger: 'click',
                     source: 'behavior_monitor',
                     element: __getElementSnapshot(element),
                     domElement: element
-                }, { startedAt: startedAt, element: element, domEvent: event });
+                };
+                if (pixelEventName === 'hero_cta_click' || pixelEventName === 'cta_click'
+                    || (pixelEventName.length > 10 && pixelEventName.slice(-10) === '_cta_click')) {
+                    declaredMeta = Object.assign(declaredMeta, __getCtaLinkMeta(element, declaredMeta));
+                }
+                if (pixelEventName === 'remove_from_cart') {
+                    var rmMeta = __getRemoveFromCartMeta(element);
+                    if (rmMeta) {
+                        declaredMeta = Object.assign(declaredMeta, rmMeta);
+                    }
+                }
+                window.WelinePixel.track(pixelEventName, declaredMeta, {
+                    startedAt: startedAt,
+                    element: element,
+                    domEvent: event,
+                    keepalive: pixelEventName.indexOf('cta_click') > -1 || pixelEventName === 'remove_from_cart'
+                });
                 tracked = true;
             }
 
@@ -5789,8 +6346,37 @@
 
             var link = element && element.closest ? element.closest('a[href]') : null;
             if (link) {
+                // Product list card → select_item (GA4) before / instead of bare route_click.
+                var productCard = link.closest
+                    ? link.closest('[data-testid="weline-product-card"], .weline-product-card, .product-card')
+                    : null;
+                var hrefForSelect = String(link.href || link.getAttribute('href') || '');
+                var isProductHref = false;
+                try {
+                    isProductHref = new URL(hrefForSelect, window.location.href).pathname.indexOf('/product/') > -1
+                        || __getPixelAppPath(hrefForSelect).indexOf('/product/') > -1;
+                } catch (eHrefSel) {
+                    isProductHref = hrefForSelect.indexOf('/product/') > -1;
+                }
+                if (productCard && isProductHref) {
+                    var selectItems = __getProductListItemsFromCard(productCard);
+                    if (selectItems.length) {
+                        window.WelinePixel.track('select_item', {
+                            trigger: 'click',
+                            source: 'behavior_monitor',
+                            items: selectItems,
+                            item_list_name: selectItems[0].item_list_name || 'product_list',
+                            item_list_id: selectItems[0].item_list_id || 'product_list',
+                            currency: __resolvePixelCurrency('') || 'CNY',
+                            element: __getElementSnapshot(productCard),
+                            domElement: productCard
+                        }, { startedAt: startedAt, element: productCard, domEvent: event, keepalive: true });
+                        tracked = true;
+                        pixelEventName = pixelEventName || 'select_item';
+                    }
+                }
                 // 链接上已有业务像素标记时，只记业务事件，避免一点击再叠一条 route_click
-                var linkBusinessEvent = __findPixelEventNameFromElement(link);
+                var linkBusinessEvent = pixelEventName || __findPixelEventNameFromElement(link);
                 if (!linkBusinessEvent) {
                     var href = link.href || link.getAttribute('href') || '';
                     window.WelinePixel.track('route_click', {
@@ -5899,8 +6485,8 @@
         __initPageBuilderOptimizationImpressions();
     }
 
-    __initBehaviorTelemetry();
-    __startPageBuilderOptimizationImpressions();
+    // Behavior / PageBuilder 印象初始化挪到沙盒 + Forwarders 桥接就绪之后，
+    // 且用 try/catch 包住，避免抛错阻断 WelinePixelSandbox 创建。
 
     // 创建 iframe 沙箱
     function initPixelSandbox() {
@@ -6144,7 +6730,7 @@
         subscribers: (window.WelinePixelSandbox && Array.isArray(window.WelinePixelSandbox.subscribers)) ? window.WelinePixelSandbox.subscribers : [],
         iframe: (window.WelinePixelSandbox && window.WelinePixelSandbox.iframe) || null,
         vendorFrames: (window.WelinePixelSandbox && window.WelinePixelSandbox.vendorFrames) || {},
-        _lifecycleBridged: false,
+        _lifecycleBridged: !!(window.WelinePixelSandbox && window.WelinePixelSandbox._lifecycleBridged),
         _emitSeq: 0,
         // 监视晚于 SSR track 订阅时，靠环形缓冲回放，避免 checkout_success / 黄标丢在「全量数据流」外
         _earlyBuffer: (window.WelinePixelSandbox && Array.isArray(window.WelinePixelSandbox._earlyBuffer))
@@ -6318,6 +6904,9 @@
                 chain: extras.chain || detail.chain || null,
                 bridge_status: String(extras.bridge_status || detail.bridge_status || ''),
                 bridge_patch: !!(extras.bridge_patch || detail.bridge_patch),
+                bridge_debug: (extras.bridge_debug && typeof extras.bridge_debug === 'object')
+                    ? extras.bridge_debug
+                    : ((detail.bridge_debug && typeof detail.bridge_debug === 'object') ? detail.bridge_debug : null),
                 raw: detail
             };
         },
@@ -6482,6 +7071,10 @@
             this.ensureLifecycleBridge();
             // 回放缓冲：成功页 SSR track 常早于监视 subscribe
             try {
+                if ((!Array.isArray(this._earlyBuffer) || !this._earlyBuffer.length)
+                    && typeof __seedSandboxFromRecentEvents === 'function') {
+                    __seedSandboxFromRecentEvents(true);
+                }
                 var buf = Array.isArray(this._earlyBuffer) ? this._earlyBuffer.slice() : [];
                 for (var ri = 0; ri < buf.length; ri++) {
                     try {
@@ -6651,6 +7244,29 @@
         return map[code] || '';
     }
 
+    /**
+     * Debug 模式下附带可核验元数据，避免「已发送·GA4」被误读成 DebugView 已送达。
+     */
+    function __buildBridgeDebugMeta(code) {
+        var runtime = window.__SITE_GA4__ || {};
+        if (!runtime.debugMode) {
+            return null;
+        }
+        var last = (runtime.recentTriggers && runtime.recentTriggers[0]) || null;
+        var params = (last && last.params && typeof last.params === 'object') ? last.params : {};
+        var blocked = Array.isArray(runtime.blockedReasons) ? runtime.blockedReasons.slice(0, 5) : [];
+        return {
+            debug_mode: true,
+            measurement_id: String(runtime.measurementId || (last && last.measurementId) || ''),
+            delivery_mode: String((last && last.delivery && last.delivery.mode) || ''),
+            event_debug_mode: params.debug_mode === true,
+            send_to: String(params.send_to || ''),
+            events_will_fire: !!runtime.eventsWillFire,
+            blocked_reasons: blocked,
+            bridge_code: String(code || '')
+        };
+    }
+
     function __emitPanelBridgeStatus(event, code, patch) {
         var sb = window.WelinePixelSandbox;
         if (!sb || typeof sb.emit !== 'function' || !event) {
@@ -6658,17 +7274,23 @@
         }
         var id = String(event.eventId || (event.payload && event.payload.event_id) || '');
         var label = __bridgeStatusLabel(code);
-        sb.emit(Object.assign({}, event, {
-            eventId: id,
-            bridge_status: label,
-            bridge_patch: !!patch
-        }), {
+        var debugMeta = __buildBridgeDebugMeta(code);
+        var extras = {
             id: id,
             bridge_status: label,
             bridge_patch: !!patch,
             source: 'track',
             event_name: event.eventName || event.weline_event || ''
-        });
+        };
+        if (debugMeta) {
+            extras.bridge_debug = debugMeta;
+        }
+        sb.emit(Object.assign({}, event, {
+            eventId: id,
+            bridge_status: label,
+            bridge_patch: !!patch,
+            bridge_debug: debugMeta || undefined
+        }), extras);
     }
 
     function __recentBridgeDeliveryStatus() {
@@ -6715,57 +7337,228 @@
         return { action: 'send', name: name, meta: meta };
     }
 
-    var __origForwardersEmit = window.WelineVisitorForwarders.emit;
-    window.WelineVisitorForwarders.emit = function (event) {
-        event = event || {};
-        if (event.source === 'dedupe' || event.hit_kind === 'dedupe' || event.trigger === 'dedupe') {
-            return;
+    /**
+     * 轻量总线兜底：全量沙盒对象尚未挂上时，仍能缓冲 emit，供监视 subscribe 回放。
+     */
+    function __ensurePixelSandboxBus() {
+        var sb = window.WelinePixelSandbox;
+        if (sb && typeof sb.emit === 'function') {
+            window.WelineEventSandbox = window.WelineEventSandbox || sb;
+            return sb;
         }
-        if (!event.eventId) {
-            event.eventId = (event.payload && event.payload.event_id) || ('wv-bridge-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8));
-        }
-        try {
-            __emitPanelBridgeStatus(event, 'pending', false);
-        } catch (ePanel) {
-        }
-        var gate = __conversionBridgeGate(event);
-        if (gate.action !== 'send') {
-            try {
-                __emitPanelBridgeStatus(event, gate.action, true);
-            } catch (ePatch) {
-            }
-            if (gate.action === 'dedupe') {
-                try {
-                    __emitConversionDedupeSandbox(gate.name, gate.meta);
-                } catch (eYellow) {
+        var stub = {
+            subscribers: (sb && Array.isArray(sb.subscribers)) ? sb.subscribers : [],
+            _earlyBuffer: (sb && Array.isArray(sb._earlyBuffer)) ? sb._earlyBuffer : [],
+            _earlyBufferMax: 100,
+            _emitSeq: (sb && sb._emitSeq) || 0,
+            emit: function (raw, extras) {
+                extras = extras && typeof extras === 'object' ? extras : {};
+                raw = raw && typeof raw === 'object' ? raw : {};
+                var detail = raw.detail && typeof raw.detail === 'object' ? raw.detail : raw;
+                var name = String(
+                    extras.event_name || detail.eventName || detail.weline_event || detail.name || raw.name || 'event'
+                ).trim();
+                var envelope = {
+                    id: String(extras.id || detail.eventId || detail.event_id || ('sbx-stub-' + Date.now() + '-' + (++this._emitSeq))),
+                    ts: Number(detail.timestampMs || extras.ts || Date.now()) || Date.now(),
+                    name: name,
+                    event_name: name,
+                    source: String(extras.source || detail.source || 'track'),
+                    params: (detail.params && typeof detail.params === 'object') ? detail.params : (detail.payload || detail || {}),
+                    missing: [],
+                    anomaly: false,
+                    event_hit: extras.event_hit !== false,
+                    hit_kind: String(extras.hit_kind || detail.hit_kind || ''),
+                    vendor: '',
+                    third_party_event: '',
+                    mode: '',
+                    chain: null,
+                    bridge_status: String(extras.bridge_status || ''),
+                    bridge_patch: !!extras.bridge_patch,
+                    bridge_debug: (extras.bridge_debug && typeof extras.bridge_debug === 'object') ? extras.bridge_debug : null,
+                    raw: detail
+                };
+                this._earlyBuffer = Array.isArray(this._earlyBuffer) ? this._earlyBuffer : [];
+                this._earlyBuffer.push(envelope);
+                if (this._earlyBuffer.length > (this._earlyBufferMax || 100)) {
+                    this._earlyBuffer = this._earlyBuffer.slice(-(this._earlyBufferMax || 100));
                 }
+                var list = Array.isArray(this.subscribers) ? this.subscribers.slice() : [];
+                for (var i = 0; i < list.length; i++) {
+                    try { list[i](envelope); } catch (eSub) {}
+                }
+                try {
+                    window.dispatchEvent(new CustomEvent('weline:pixel-sandbox:event', { detail: envelope }));
+                } catch (eDisp) {}
+                return envelope;
+            },
+            subscribe: function (fn) {
+                if (typeof fn !== 'function') { return function () {}; }
+                this.subscribers = Array.isArray(this.subscribers) ? this.subscribers : [];
+                this.subscribers.push(fn);
+                return function () {};
             }
-            return;
+        };
+        window.WelinePixelSandbox = stub;
+        window.WelineEventSandbox = stub;
+        return stub;
+    }
+
+    /**
+     * 监视开启且 _earlyBuffer 空时，回放 runtime.recentEvents（转化族 + 本页 page_view）。
+     */
+    function __seedSandboxFromRecentEvents(force) {
+        var sb = __ensurePixelSandboxBus();
+        if (!sb || typeof sb.emit !== 'function') {
+            return 0;
         }
-        try {
-            __markConversionDedupeSeen(gate.name, gate.meta);
-        } catch (eMark) {
+        var buf = Array.isArray(sb._earlyBuffer) ? sb._earlyBuffer : [];
+        if (!force && buf.length) {
+            return 0;
         }
-        __conversionBridgeBypass = true;
-        try {
-            __origForwardersEmit.call(window.WelineVisitorForwarders, event);
-        } finally {
-            __conversionBridgeBypass = false;
+        var runtime = window.__WelineVisitorRuntime || {};
+        var recent = Array.isArray(runtime.recentEvents) ? runtime.recentEvents.slice() : [];
+        if (!recent.length) {
+            return 0;
         }
-        try {
-            if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.postToDefaultFrame === 'function') {
-                window.WelinePixelSandbox.postToDefaultFrame(event);
+        var conversionNames = {
+            checkout_success: 1,
+            payment_success: 1,
+            purchase: 1,
+            begin_checkout: 1,
+            add_payment_info: 1,
+            add_shipping_info: 1,
+            add_to_cart: 1
+        };
+        var seenIds = {};
+        for (var bi = 0; bi < buf.length; bi++) {
+            var bid = buf[bi] && buf[bi].id ? String(buf[bi].id) : '';
+            if (bid) { seenIds[bid] = 1; }
+        }
+        var seeded = 0;
+        // recentEvents 新在前；倒序 emit 保持时间线
+        for (var ri = recent.length - 1; ri >= 0; ri--) {
+            var ev = recent[ri];
+            if (!ev || typeof ev !== 'object') { continue; }
+            var name = String(ev.eventName || ev.weline_event || '').trim();
+            if (!name) { continue; }
+            var isConv = !!conversionNames[name];
+            var isPageView = name === 'page_view';
+            if (!isConv && !isPageView) { continue; }
+            var eid = String(ev.eventId || '');
+            if (eid && seenIds[eid]) { continue; }
+            if (eid) { seenIds[eid] = 1; }
+            try {
+                sb.emit({
+                    eventId: eid || undefined,
+                    eventName: name,
+                    weline_event: name,
+                    name: name,
+                    timestampMs: Number(ev.timestampMs || Date.now()) || Date.now(),
+                    page: ev.page || {},
+                    traffic: ev.traffic || {},
+                    forwarding: ev.forwarding || {},
+                    platforms: ev.platforms || {},
+                    payload: ev.payload || {},
+                    params: ev.payload || {},
+                    source: 'track',
+                    trigger: 'runtime_replay'
+                }, {
+                    id: eid || undefined,
+                    source: 'track',
+                    event_hit: true,
+                    hit_kind: 'system',
+                    event_name: name,
+                    ga4_event: (ev.platforms && ev.platforms.ga4 && ev.platforms.ga4.eventName) || ''
+                });
+                seeded += 1;
+            } catch (eSeedOne) {}
+        }
+        return seeded;
+    }
+    window.__WelinePixelSeedSandboxFromRecent = __seedSandboxFromRecentEvents;
+
+    if (!window.__WelineVisitorForwardersBridgeWrapped) {
+        var __origForwardersEmit = window.WelineVisitorForwarders.emit;
+        window.WelineVisitorForwarders.emit = function (event) {
+            event = event || {};
+            if (event.source === 'dedupe' || event.hit_kind === 'dedupe' || event.trigger === 'dedupe') {
+                return;
             }
-        } catch (eFrame) {
-        }
-        try {
-            __emitPanelBridgeStatus(event, __recentBridgeDeliveryStatus(), true);
-        } catch (eStatus) {
-        }
-    };
+            try { __ensurePixelSandboxBus(); } catch (eBus) {}
+            if (!event.eventId) {
+                event.eventId = (event.payload && event.payload.event_id) || ('wv-bridge-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8));
+            }
+            try {
+                __emitPanelBridgeStatus(event, 'pending', false);
+            } catch (ePanel) {
+            }
+            var gate = __conversionBridgeGate(event);
+            if (gate.action !== 'send') {
+                try {
+                    __emitPanelBridgeStatus(event, gate.action, true);
+                } catch (ePatch) {
+                }
+                if (gate.action === 'dedupe') {
+                    try {
+                        __emitConversionDedupeSandbox(gate.name, gate.meta);
+                    } catch (eYellow) {
+                    }
+                }
+                return;
+            }
+            try {
+                __markConversionDedupeSeen(gate.name, gate.meta);
+            } catch (eMark) {
+            }
+            __conversionBridgeBypass = true;
+            try {
+                __origForwardersEmit.call(window.WelineVisitorForwarders, event);
+            } finally {
+                __conversionBridgeBypass = false;
+            }
+            try {
+                if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.postToDefaultFrame === 'function') {
+                    window.WelinePixelSandbox.postToDefaultFrame(event);
+                }
+            } catch (eFrame) {
+            }
+            try {
+                __emitPanelBridgeStatus(event, __recentBridgeDeliveryStatus(), true);
+            } catch (eStatus) {
+            }
+        };
+        window.__WelineVisitorForwardersBridgeWrapped = true;
+    }
 
     try {
         __installSiteErrorMonitors();
     } catch (eInstall) {
     }
+
+    // 沙盒与桥接已就绪：再跑行为遥测 / PageBuilder 印象（失败不得回滚沙盒）
+    try {
+        __initBehaviorTelemetry();
+    } catch (eTel) {
+        try {
+            if (window.DEV) {
+                console.debug('Weline Pixel: behavior telemetry init failed', eTel);
+            }
+        } catch (eLogTel) {}
+    }
+    try {
+        __startPageBuilderOptimizationImpressions();
+    } catch (ePb) {
+        try {
+            if (window.DEV) {
+                console.debug('Weline Pixel: pagebuilder impressions init failed', ePb);
+            }
+        } catch (eLogPb) {}
+    }
+    try {
+        __seedSandboxFromRecentEvents(false);
+    } catch (eSeedInit) {}
+
+    window.WelineEventSandbox = window.WelinePixelSandbox;
+    window.__WelinePixelLoaded = true;
 })();

@@ -1,0 +1,62 @@
+.dashboard-widget-pixel-trend {
+    min-height: 230px;
+}
+.pixel-trend-bars {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
+    gap: 8px;
+    height: 180px;
+    align-items: end;
+}
+.pixel-trend-bars div {
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 5px;
+    text-align: center;
+}
+.pixel-trend-bars i {
+    display: block;
+    width: 100%;
+    min-height: 12px;
+    border-radius: 6px 6px 3px 3px;
+    background: linear-gradient(180deg, #06b6d4 0%, #2563eb 100%);
+}
+.pixel-trend-bars strong {
+    color: var(--w-dashboard-heading, #1f2937);
+    font-size: 11px;
+    line-height: 1;
+    overflow-wrap: anywhere;
+}
+.pixel-trend-bars span,
+.pixel-empty {
+    color: var(--w-dashboard-muted, #6b7280);
+    font-size: 12px;
+    line-height: 1.2;
+}
+.dashboard-widget-pixel-trend header,
+.dashboard-widget-pixel-realtime header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.pixel-widget-detail {
+    color: var(--bs-primary, #2563eb);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.pixel-widget-detail:hover {
+    text-decoration: underline;
+}
+.pixel-empty {
+    min-height: 150px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--w-dashboard-border, #e5e7eb);
+    border-radius: 8px;
+}

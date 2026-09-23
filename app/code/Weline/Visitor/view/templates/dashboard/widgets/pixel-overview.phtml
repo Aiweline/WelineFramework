@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Visitor::css/widgets/widget-pixel-overview.css}
  * Dashboard Widget: 像素概览
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
@@ -51,70 +52,3 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
         <a class="pixel-widget-detail" href="<?= $h($detailUrl) ?>"><?= __('查看事件列表') ?></a>
     </footer>
 </section>
-<style>
-.dashboard-widget-pixel {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-.dashboard-widget-pixel header {
-    margin-bottom: 0 !important;
-}
-.pixel-overview-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-}
-.pixel-overview-grid div {
-    min-width: 0;
-    border-radius: 6px;
-    background: var(--w-dashboard-surface-soft, #f8fafc);
-    padding: 12px 8px;
-    text-align: center;
-}
-.pixel-overview-grid strong {
-    display: block;
-    color: var(--bs-primary, #2563eb);
-    font-size: 22px;
-    line-height: 1;
-    overflow-wrap: anywhere;
-}
-.pixel-overview-grid span {
-    display: block;
-    margin-top: 7px;
-    font-size: 13px;
-    line-height: 1.25;
-}
-.pixel-overview-grid small {
-    display: block;
-    margin-top: 3px;
-    color: var(--w-dashboard-muted, #6b7280);
-    font-size: 12px;
-    line-height: 1.25;
-}
-.pixel-widget-foot {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    color: var(--w-dashboard-muted, #6b7280);
-    font-size: 12px;
-}
-.pixel-widget-foot .positive {
-    color: #10b981;
-    font-weight: 700;
-}
-.pixel-widget-foot .negative {
-    color: #ef4444;
-    font-weight: 700;
-}
-.pixel-widget-detail {
-    margin-left: auto;
-    color: var(--bs-primary, #2563eb);
-    text-decoration: none;
-    font-weight: 600;
-}
-.pixel-widget-detail:hover {
-    text-decoration: underline;
-}
-</style>
