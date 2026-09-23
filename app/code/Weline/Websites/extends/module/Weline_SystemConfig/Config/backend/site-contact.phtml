@@ -45,3 +45,9 @@
         validation="max:191"
     />
 </w:config:group>
+
+<w:config:group code="website_legal" label="网站经营主体信息" description="仅当前网站使用，不继承全局主体信息。" sort="20">
+    <w:config:field key="website/legal/legal_name" label="经营主体" type="text" value-type="string" default="" scope="website" validation="max:255" />
+    <w:config:field key="website/legal/registered_address" label="注册地址" type="textarea" value-type="string" default="" scope="website" validation="max:512" />
+    <w:config:field key="website/legal/legal_contact_email" label="公司联系邮箱" type="text" value-type="string" default="" scope="website" validation="max:255" />
+</w:config:group>

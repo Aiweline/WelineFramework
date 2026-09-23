@@ -9,6 +9,7 @@ use Weline\I18n\Api\Localization\LocalModel;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\I18nAiTranslationAdapter;
 use Weline\I18n\Service\I18nCsvCodec;
+use Weline\I18n\Service\RemoteDictionaryAssistService;
 
 final class LocalModelTranslationService
 {
@@ -86,6 +87,226 @@ final class LocalModelTranslationService
         }
 
         return $items;
+    }
+
+    /**
+     * 远程协助：按 locales 展开 LocalModel 未译字段行。
+     *
+     * @param list<string> $locales
+     * @return array{
+     *   items:list<array{local_model:string,local_id_field:string,record_id:int,field:string,source:string,locale:string}>,
+     *   next_cursor:?string,
+     *   has_more:bool,
+     *   limit:int,
+     *   type:string
+     * }
+     */
+    public function remotePending(array $locales, int $limit, ?string $cursor): array
+    {
+        $locales = array_values(array_unique(array_filter(array_map(
+            static fn ($c): string => trim((string)$c),
+            $locales
+        ), static fn (string $c): bool => $c !== '')));
+        if ($locales === []) {
+            throw new \InvalidArgumentException((string)__('locales 不能为空'), 422);
+        }
+
+        $limit = max(1, min(
+            RemoteDictionaryAssistService::LIMIT_MAX,
+            $limit > 0 ? $limit : RemoteDictionaryAssistService::LIMIT_DEFAULT
+        ));
+        $offset = $this->decodeRemoteCursor($cursor);
+        $need = $offset + $limit + 1;
+        $expanded = [];
+
+        foreach ($this->catalog->descriptors() as $descriptor) {
+            try {
+                foreach ($this->iterateParentRows($descriptor) as $parentRow) {
+                    $recordId = (int)($parentRow[$descriptor['parent_id_field']] ?? 0);
+                    if ($recordId <= 0) {
+                        continue;
+                    }
+                    foreach ($descriptor['fields'] as $field) {
+                        $sourceText = $this->resolveSourceText($descriptor, $recordId, $field, $parentRow);
+                        if ($sourceText === '') {
+                            continue;
+                        }
+                        $existingByCode = $this->loadExistingLocalValues(
+                            $descriptor['local_model'],
+                            $descriptor['local_id_field'],
+                            $recordId,
+                        );
+                        foreach ($locales as $localeCode) {
+                            $stored = trim((string)(($existingByCode[$localeCode] ?? [])[$field] ?? ''));
+                            if ($this->isRealTranslation($stored, $sourceText)) {
+                                continue;
+                            }
+                            $expanded[] = [
+                                'local_model' => $descriptor['local_model'],
+                                'local_id_field' => $descriptor['local_id_field'],
+                                'record_id' => $recordId,
+                                'field' => $field,
+                                'source' => $sourceText,
+                                'locale' => $localeCode,
+                            ];
+                            if (count($expanded) >= $need) {
+                                break 4;
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        $slice = array_slice($expanded, $offset, $limit + 1);
+        $hasMore = count($slice) > $limit;
+        if ($hasMore) {
+            $slice = array_slice($slice, 0, $limit);
+        }
+
+        return [
+            'items' => $slice,
+            'next_cursor' => $hasMore ? $this->encodeRemoteCursor($offset + count($slice)) : null,
+            'has_more' => $hasMore,
+            'limit' => $limit,
+            'type' => RemoteDictionaryAssistService::TYPE_LOCAL_MODEL,
+        ];
+    }
+
+    /**
+     * 远程协助：Local 表 upsert（已有真译则 skip）。
+     *
+     * @param list<array<string,mixed>> $items
+     * @param list<string> $allowedLocales 网站语种门禁；空则不校验 locale
+     * @return array{written:int,skipped:int,invalid:int,invalid_items:list<array{index:int,reason:string}>,type:string}
+     */
+    public function remoteIngest(array $items, array $allowedLocales = []): array
+    {
+        if (count($items) > RemoteDictionaryAssistService::ITEMS_MAX) {
+            throw new \InvalidArgumentException(
+                (string)__('items 超过上限 %{1}', [RemoteDictionaryAssistService::ITEMS_MAX]),
+                422
+            );
+        }
+
+        $allowedMap = $allowedLocales === []
+            ? null
+            : array_fill_keys(array_map(static fn ($c): string => trim((string)$c), $allowedLocales), true);
+
+        $descriptorByClass = [];
+        foreach ($this->catalog->descriptors() as $descriptor) {
+            $descriptorByClass[$descriptor['local_model']] = $descriptor;
+        }
+
+        $written = 0;
+        $skipped = 0;
+        $invalid = 0;
+        $invalidItems = [];
+        $seen = [];
+
+        foreach ($items as $index => $raw) {
+            if (!is_array($raw)) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'empty_source'];
+                continue;
+            }
+
+            $localModelClass = trim((string)($raw['local_model'] ?? ''));
+            $localIdField = trim((string)($raw['local_id_field'] ?? ''));
+            $recordId = (int)($raw['record_id'] ?? 0);
+            $field = trim((string)($raw['field'] ?? ''));
+            $locale = trim((string)($raw['locale'] ?? ''));
+            $translation = (string)($raw['translation'] ?? '');
+            $sourceHint = trim((string)($raw['source'] ?? ''));
+
+            if ($localModelClass === '' || $recordId <= 0 || $field === '' || $locale === '') {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'wrong_shape_for_type'];
+                continue;
+            }
+            if ($allowedMap !== null && !isset($allowedMap[$locale])) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'locale_not_allowed'];
+                continue;
+            }
+            if (trim($translation) === '') {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'empty_translation'];
+                continue;
+            }
+            if (mb_strlen($translation) > RemoteDictionaryAssistService::FIELD_MAX_LEN
+                || ($sourceHint !== '' && mb_strlen($sourceHint) > RemoteDictionaryAssistService::FIELD_MAX_LEN)
+            ) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'too_long'];
+                continue;
+            }
+
+            $descriptor = $descriptorByClass[$localModelClass] ?? null;
+            if ($descriptor === null || !in_array($field, $descriptor['fields'], true)) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'wrong_shape_for_type'];
+                continue;
+            }
+            if ($localIdField === '') {
+                $localIdField = $descriptor['local_id_field'];
+            }
+            if ($localIdField !== $descriptor['local_id_field']) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'wrong_shape_for_type'];
+                continue;
+            }
+
+            $batchKey = $localModelClass . "\0" . $recordId . "\0" . $field . "\0" . $locale;
+            if (isset($seen[$batchKey])) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'duplicate_in_batch'];
+                continue;
+            }
+            $seen[$batchKey] = true;
+
+            try {
+                $existingByCode = $this->loadExistingLocalValues($localModelClass, $localIdField, $recordId);
+                $stored = trim((string)(($existingByCode[$locale] ?? [])[$field] ?? ''));
+                $sourceText = $sourceHint;
+                if ($sourceText === '') {
+                    $sourceText = $this->resolveSourceText(
+                        $descriptor,
+                        $recordId,
+                        $field,
+                        [$descriptor['parent_id_field'] => $recordId],
+                    );
+                }
+                if ($this->isRealTranslation($stored, $sourceText !== '' ? $sourceText : $stored)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $this->upsertLocalValue($localModelClass, $localIdField, $recordId, $locale, $field, $translation);
+                $written++;
+            } catch (\Throwable) {
+                $this->recoverLocalModelConnection($localModelClass);
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'empty_translation'];
+            }
+        }
+
+        w_log_info('remote local_model ingest', [
+            'type' => RemoteDictionaryAssistService::TYPE_LOCAL_MODEL,
+            'written' => $written,
+            'skipped' => $skipped,
+            'invalid' => $invalid,
+        ], 'i18n');
+
+        return [
+            'written' => $written,
+            'skipped' => $skipped,
+            'invalid' => $invalid,
+            'invalid_items' => $invalidItems,
+            'type' => RemoteDictionaryAssistService::TYPE_LOCAL_MODEL,
+        ];
     }
 
     /**
@@ -705,5 +926,33 @@ final class LocalModelTranslationService
             || str_contains($message, 'Unique violation')
             || str_contains($message, 'duplicate key')
             || str_contains($message, '23505');
+    }
+
+    private function encodeRemoteCursor(int $offset): string
+    {
+        $json = json_encode(['o' => max(0, $offset)], JSON_THROW_ON_ERROR);
+
+        return rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
+    }
+
+    private function decodeRemoteCursor(?string $cursor): int
+    {
+        if ($cursor === null || trim($cursor) === '') {
+            return 0;
+        }
+        $pad = strlen($cursor) % 4;
+        if ($pad > 0) {
+            $cursor .= str_repeat('=', 4 - $pad);
+        }
+        $raw = base64_decode(strtr($cursor, '-_', '+/'), true);
+        if (!is_string($raw) || $raw === '') {
+            throw new \InvalidArgumentException((string)__('cursor 无效'), 422);
+        }
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            throw new \InvalidArgumentException((string)__('cursor 无效'), 422);
+        }
+
+        return max(0, (int)($data['o'] ?? 0));
     }
 }

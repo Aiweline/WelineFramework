@@ -17,6 +17,8 @@ final class DictionaryCollectCronContractTest extends TestCase
         self::assertStringContainsString('I18nCollectCommand', $cron);
         self::assertStringContainsString('Weline\\Framework\\Console\\Console\\I18n\\Collect', $cron);
         self::assertStringContainsString('collectCommand->execute', $cron);
+        self::assertStringContainsString('exitCode === 75', $cron);
+        self::assertStringContainsString('已有收集进行中', $cron);
         self::assertStringContainsString("execute_name(): string", $cron);
         self::assertStringContainsString("'i18n_dictionary_collect'", $cron);
         self::assertStringContainsString("'10 * * * *'", $cron);

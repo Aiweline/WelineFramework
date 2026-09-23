@@ -641,9 +641,6 @@ class DetectWebsite implements
         $path = $this->canonicalRequestPath($path);
 
         $hostNorm = \strtolower(\trim($currentHost));
-        if ($this->isReservedProjectHost($hostNorm)) {
-            return null;
-        }
         $candidates = [];
 
         foreach ($domainRows as $domainRow) {
@@ -651,8 +648,14 @@ class DetectWebsite implements
             if ($domain === '' || !$this->isHostMatch($hostNorm, $domain)) {
                 continue;
             }
+            // On the reserved project Host, only non-empty sub_path bindings may
+            // claim a request; empty sub_path stays with findDefaultSiteForProjectHost.
+            $subPathProbe = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''));
+            if ($this->isReservedProjectHost($hostNorm) && ($subPathProbe === '' || $subPathProbe === '/')) {
+                continue;
+            }
 
-            $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''));
+            $subPath = $subPathProbe;
             if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
                 $subPath = '/' . $subPath;
             }
@@ -741,9 +744,7 @@ class DetectWebsite implements
             return null;
         }
 
-        $cachePath = $this->isReservedProjectHost($matchContext['host'])
-            ? '/'
-            : $matchContext['path'];
+        $cachePath = $matchContext['path'];
         $cacheIdentity = \implode("\n", [
             $matchContext['scheme'],
             $matchContext['host'],
@@ -781,7 +782,11 @@ class DetectWebsite implements
 
         $currentHost = $matchContext['host'];
         if ($this->isReservedProjectHost($currentHost)) {
-            $matchedSite = $this->findDefaultSiteForProjectHost($requestUrl, $currentHost, $websiteModel);
+            // Project Host stays the default-site entry, but WebsiteDomain rows on
+            // the same Host with a non-empty sub_path must still win for that prefix
+            // (e.g. https://p{hash}.test.weline.com/e2e-site/sitemap.xml).
+            $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel)
+                ?? $this->findDefaultSiteForProjectHost($requestUrl, $currentHost, $websiteModel);
         } else {
             $matchedSite = $this->chooseWebsiteCandidate([
                 $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel),

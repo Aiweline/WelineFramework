@@ -18,6 +18,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\DictionaryCompiler;
 use Weline\Framework\Phrase\DictionaryEvents;
 use Weline\Framework\Phrase\Parser as PhraseParser;
+use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\Runtime;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\Framework\Manager\Message;
@@ -399,11 +401,16 @@ class Dictionary extends BaseController
     private function getLocaleName($localeCode)
     {
         try {
-            // 使用输出缓冲确保不会产生任何输出
-            ob_start();
-            $result = $this->i18n->getLocaleName($localeCode, \Weline\Framework\Http\Cookie::getLangLocal());
-            ob_end_clean();
-            return $result;
+            // Fiber-local silence: never install a process-global bare ob layer under WLS.
+            FiberOutputBuffer::beginCapture();
+            try {
+                $result = $this->i18n->getLocaleName($localeCode, \Weline\Framework\Http\Cookie::getLangLocal());
+                FiberOutputBuffer::discardCapture();
+                return $result;
+            } catch (\Throwable $e) {
+                FiberOutputBuffer::discardCapture();
+                throw $e;
+            }
         } catch (\Exception $e) {
             return $localeCode;
         }
@@ -1236,11 +1243,17 @@ class Dictionary extends BaseController
      */
     public function getQuickTranslationData()
     {
-        // 清理任何可能的输出缓冲
-        while (ob_get_level()) {
-            ob_end_clean();
+        // Persistent: drop only this fiber's capture frames (never drain process-global handler).
+        // FPM: clear stray buffers before JSON; fetchJson also resets under WLS.
+        if (Runtime::isPersistent()) {
+            if (FiberOutputBuffer::hasActiveCapture()) {
+                FiberOutputBuffer::resetCurrent();
+            }
+        } else {
+            while (\ob_get_level() > 0) {
+                \ob_end_clean();
+            }
         }
-        ob_start();
         
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         
@@ -1588,11 +1601,16 @@ class Dictionary extends BaseController
      */
     public function postSetTranslationMode()
     {
-        // 清理任何可能的输出缓冲
-        while (ob_get_level()) {
-            ob_end_clean();
+        // Persistent: resetCurrent only; never while-drain Fiber installed handler.
+        if (Runtime::isPersistent()) {
+            if (FiberOutputBuffer::hasActiveCapture()) {
+                FiberOutputBuffer::resetCurrent();
+            }
+        } else {
+            while (\ob_get_level() > 0) {
+                \ob_end_clean();
+            }
         }
-        ob_start();
         
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         
@@ -1609,9 +1627,6 @@ class Dictionary extends BaseController
             // 更新缓存中的翻译模式
             $this->setTranslationModeCache($mode);
             
-            // 清理输出缓冲
-            ob_end_clean();
-            
             return $this->fetchJson([
                 'success' => true,
                 'mode' => $mode,
@@ -1619,8 +1634,6 @@ class Dictionary extends BaseController
             ]);
             
         } catch (\Exception $e) {
-            // 清理输出缓冲
-            ob_end_clean();
             return $this->fetchJson($this->error($e->getMessage()));
         }
     }
@@ -1636,9 +1649,8 @@ class Dictionary extends BaseController
             throw new \Exception(__('配置文件不存在'));
         }
         
-        // 使用输出缓冲确保不会产生任何输出
-        ob_start();
-        
+        // Fiber-local silence around include; var_export(..., true) avoids nested bare ob.
+        FiberOutputBuffer::beginCapture();
         try {
             // 读取当前配置
             $config = include $envFile;
@@ -1658,10 +1670,7 @@ class Dictionary extends BaseController
                 'auto_register' => $this->isAutoRegisterEnabled(),
             ];
             
-            // 生成新的配置文件内容
-            ob_start();
-            var_export($config);
-            $configString = ob_get_clean();
+            $configString = \var_export($config, true);
             $content = "<?php return " . $configString . ";";
             
             // 写入文件
@@ -1669,11 +1678,10 @@ class Dictionary extends BaseController
                 throw new \Exception(__('写入配置文件失败'));
             }
             
-        } finally {
-            // 清理所有输出缓冲
-            while (ob_get_level()) {
-                ob_end_clean();
-            }
+            FiberOutputBuffer::discardCapture();
+        } catch (\Throwable $e) {
+            FiberOutputBuffer::discardCapture();
+            throw $e;
         }
     }
 

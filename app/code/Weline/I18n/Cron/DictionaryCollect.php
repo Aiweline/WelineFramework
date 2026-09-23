@@ -44,8 +44,11 @@ class DictionaryCollect implements CronTaskInterface
 
         try {
             // Same entry as CLI: php bin/w i18n:collect（全部模块）
-            $this->collectCommand->execute([], []);
+            $exitCode = $this->collectCommand->execute([], []);
             $duration = round(microtime(true) - $startTime, 2);
+            if ((int)$exitCode === 75) {
+                return 'I18n 词典收集跳过：已有收集进行中（单飞锁），耗时 ' . $duration . ' 秒';
+            }
 
             return 'I18n 词典收集完成（复用 i18n:collect），耗时 ' . $duration . ' 秒';
         } catch (\Throwable $throwable) {

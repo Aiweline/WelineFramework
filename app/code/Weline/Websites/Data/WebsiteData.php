@@ -154,6 +154,129 @@ class WebsiteData
     }
 
     /**
+     * 指定语种站名（LocalDescription 优先，回退主表）。供 Organization.alternateName 等配置驱动用途。
+     */
+    public static function getNameForLocale(string $locale): ?string
+    {
+        $website = self::getWebsite();
+        if (!$website instanceof Website) {
+            return null;
+        }
+        $locale = trim($locale);
+        if ($locale === '') {
+            return self::getName();
+        }
+
+        $localized = self::resolveLocalizedFieldForLocale(
+            (int)$website->getId(),
+            WebsiteLocalDescription::schema_fields_NAME,
+            $locale,
+        );
+        if ($localized !== null && $localized !== '') {
+            return $localized;
+        }
+
+        $name = trim((string)$website->getName());
+
+        return $name !== '' ? $name : null;
+    }
+
+    /**
+     * 指定语种网站简介（LocalDescription 优先，回退主表）。供邮件壳等按邮件 locale 取品牌叙述。
+     */
+    public static function getDescriptionForLocale(string $locale): ?string
+    {
+        $website = self::getWebsite();
+        if (!$website instanceof Website) {
+            return null;
+        }
+        $locale = trim($locale);
+        if ($locale === '') {
+            return self::getDescription();
+        }
+
+        $localized = self::resolveLocalizedFieldForLocale(
+            (int)$website->getId(),
+            WebsiteLocalDescription::schema_fields_DESCRIPTION,
+            $locale,
+        );
+        if ($localized !== null && $localized !== '') {
+            return $localized;
+        }
+
+        $description = trim((string)$website->getDescription());
+
+        return $description !== '' ? $description : null;
+    }
+
+    /**
+     * Organization.alternateName：取「另一语种」已配置站名（非当前展示名）。
+     * 优先 en_US ↔ 主表/中文源；无其它语种配置则返回 null（禁止硬编码品牌字）。
+     */
+    public static function getOrganizationAlternateName(string $currentDisplayName = ''): ?string
+    {
+        $website = self::getWebsite();
+        if (!$website instanceof Website) {
+            return null;
+        }
+
+        $current = trim($currentDisplayName);
+        if ($current === '') {
+            $current = trim((string)(self::getName() ?? ''));
+        }
+
+        $candidates = [];
+        $currentLocale = '';
+        try {
+            $currentLocale = trim((string)\Weline\Framework\Http\Cookie::getLang());
+        } catch (\Throwable) {
+            $currentLocale = '';
+        }
+
+        $preferLocales = [];
+        $normalized = strtolower(str_replace('_', '-', $currentLocale));
+        if ($normalized === '' || str_starts_with($normalized, 'zh')) {
+            $preferLocales[] = 'en_US';
+            $preferLocales[] = 'en';
+        } else {
+            $preferLocales[] = 'zh_Hans_CN';
+            $preferLocales[] = 'zh_CN';
+            $preferLocales[] = 'zh_Hant_TW';
+        }
+
+        foreach ($preferLocales as $locale) {
+            $name = self::resolveLocalizedFieldForLocale(
+                (int)$website->getId(),
+                WebsiteLocalDescription::schema_fields_NAME,
+                $locale,
+            );
+            if ($name !== null && $name !== '') {
+                $candidates[] = $name;
+            }
+        }
+
+        $mainName = trim((string)$website->getName());
+        if ($mainName !== '') {
+            $candidates[] = $mainName;
+        }
+
+        foreach (self::listConfiguredLocalNames((int)$website->getId()) as $name) {
+            $candidates[] = $name;
+        }
+
+        foreach ($candidates as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '' || $candidate === $current) {
+                continue;
+            }
+
+            return $candidate;
+        }
+
+        return null;
+    }
+
+    /**
      * 获取当前网站简介（网站范围品牌/SEO 叙述；优先当前语言 LocalDescription）
      */
     public static function getDescription(): ?string
@@ -183,10 +306,6 @@ class WebsiteData
 
     private static function resolveLocalizedField(int $websiteId, string $field): ?string
     {
-        if ($websiteId < 0 || $field === '') {
-            return null;
-        }
-
         $locale = '';
         try {
             $locale = trim((string)\Weline\Framework\Http\Cookie::getLang());
@@ -196,6 +315,16 @@ class WebsiteData
         if ($locale === '') {
             return null;
         }
+
+        return self::resolveLocalizedFieldForLocale($websiteId, $field, $locale);
+    }
+
+    private static function resolveLocalizedFieldForLocale(int $websiteId, string $field, string $locale): ?string
+    {
+        if ($websiteId < 0 || $field === '' || trim($locale) === '') {
+            return null;
+        }
+        $locale = trim($locale);
 
         $cacheKey = $websiteId . "\0" . $locale . "\0" . $field;
         if (array_key_exists($cacheKey, self::$localizedFieldCache)) {
@@ -229,6 +358,39 @@ class WebsiteData
         self::$localizedFieldCache[$cacheKey] = '';
 
         return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function listConfiguredLocalNames(int $websiteId): array
+    {
+        if ($websiteId < 0) {
+            return [];
+        }
+        try {
+            /** @var WebsiteLocalDescription $local */
+            $local = ObjectManager::getInstance(WebsiteLocalDescription::class);
+            $items = $local->reset()
+                ->where(WebsiteLocalDescription::schema_fields_ID, $websiteId)
+                ->select()
+                ->fetch()
+                ->getItems();
+            $names = [];
+            foreach ($items as $item) {
+                if (!$item instanceof WebsiteLocalDescription) {
+                    continue;
+                }
+                $value = trim((string)$item->getData(WebsiteLocalDescription::schema_fields_NAME));
+                if ($value !== '') {
+                    $names[] = $value;
+                }
+            }
+
+            return $names;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

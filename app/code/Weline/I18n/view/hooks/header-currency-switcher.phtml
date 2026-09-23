@@ -311,6 +311,7 @@ $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency
     data-w-component="menu choice-filter"
     data-w-placement="bottom-end"
     data-w-choice-page-size="<?= $selectorPageSize ?>"
+    data-weline-load="currency"
 >
     <button
         type="button"
@@ -372,10 +373,11 @@ $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency
     </div>
 </div>
 <?php
-// Request-global: Template::getData does not survive separate Hook/FPC fragment contexts.
-$assetsFlagKey = '__weline_i18n_header_choice_assets_rendered';
-if (empty($GLOBALS[$assetsFlagKey])) {
-    $GLOBALS[$assetsFlagKey] = true;
+// Request-scoped dedupe (WLS-safe). Never use $GLOBALS — worker reuse leaks the flag
+// across requests and poisons static hook HTML caches without currency.js.
+$assetsFlagKey = 'view.i18n.header_choice_assets_rendered';
+if (!\Weline\Framework\Runtime\RequestContext::get($assetsFlagKey)) {
+    \Weline\Framework\Runtime\RequestContext::set($assetsFlagKey, true);
     echo $this->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
 }
 ?>

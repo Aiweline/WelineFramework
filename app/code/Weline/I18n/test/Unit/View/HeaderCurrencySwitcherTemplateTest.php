@@ -32,7 +32,12 @@ final class HeaderCurrencySwitcherTemplateTest extends TestCase
         $content = (string) file_get_contents($path);
 
         self::assertStringContainsString('SwitcherInstanceId::create(', $content);
-        self::assertStringNotContainsString('RequestContext::get(', $content);
+        // Instance ids must stay random per render; RequestContext may be used for assets
+        // dedupe, but must not feed the switcher DOM id.
+        self::assertDoesNotMatchRegularExpression(
+            '/\$currencySwitcherId\s*=\s*[^\n]*RequestContext::/',
+            $content
+        );
         self::assertStringContainsString('$currencySwitcherId', $content);
         self::assertStringContainsString('aria-controls="<?= $escape($currencySwitcherId) ?>"', $content);
         self::assertStringContainsString('id="<?= $escape($currencySwitcherId) ?>"', $content);
