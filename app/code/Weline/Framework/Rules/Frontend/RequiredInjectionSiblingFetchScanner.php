@@ -213,8 +213,10 @@ final class RequiredInjectionSiblingFetchScanner
                     if ($suffix !== '') {
                         $byTpl[$suffix] = $code;
                     }
+                    // 禁止用裸 basename（尤其 default.phtml）建索引：大量部件模板都叫 default.phtml，
+                    // 否则会把顶栏 top-bar/default 误判成 checkout-delivery-context 等 required 注入。
                     $base = strtolower(basename(str_replace('\\', '/', $tpl), '.phtml'));
-                    if ($base !== '') {
+                    if ($base !== '' && $base !== 'default') {
                         $byTpl['widgets/' . $base . '.phtml'] = $code;
                         $byTpl[$base] = $code;
                     }
@@ -269,6 +271,10 @@ final class RequiredInjectionSiblingFetchScanner
             return $index['by_template_suffix'][$suffix];
         }
         $base = basename($norm, '.phtml');
+        // default.phtml 过短且高度冲突，仅允许精确 code / 完整 suffix 命中
+        if ($base === 'default') {
+            return null;
+        }
         if ($base !== '' && isset($index['by_code'][$base])) {
             return $base;
         }
