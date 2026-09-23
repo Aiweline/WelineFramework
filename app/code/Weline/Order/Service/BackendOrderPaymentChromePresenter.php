@@ -86,6 +86,9 @@ final class BackendOrderPaymentChromePresenter
         if ($shipping !== '' && $shippingLabel === '') {
             $shippingLabel = $shipping;
         }
+        if ($shipping !== '' && $shippingLabel !== '') {
+            $shippingLabel = (string)__($shippingLabel);
+        }
         $shippingAmount = $this->shippingAmountMajor($data);
         $shippingSummary = $shipping === ''
             ? $shippingLabel

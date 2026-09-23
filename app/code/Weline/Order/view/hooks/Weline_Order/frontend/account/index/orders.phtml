@@ -136,7 +136,7 @@ $statusLabel = static function (string $status): string {
             <div class="account-order-detail__shipping-header">
                 <h4 id="account-order-shipping-title"><?= __('收货信息') ?></h4>
                 <?php if (trim((string)($detailShipping['method'] ?? '')) !== ''): ?>
-                    <span><?= $escape($detailShipping['method']) ?></span>
+                    <span><?= $escape(__((string)$detailShipping['method'])) ?></span>
                 <?php endif; ?>
             </div>
             <p class="account-order-detail__shipping-recipient">
@@ -160,7 +160,7 @@ $statusLabel = static function (string $status): string {
             <h4><?= __('收货信息') ?></h4>
             <p><?= __('帮我付订单在店面不展示收货地址。如需更正，请撤销后重新发起。') ?></p>
             <?php if (trim((string)($detailShipping['method'] ?? '')) !== ''): ?>
-                <p><?= __('物流方式') ?>: <?= $escape($detailShipping['method']) ?></p>
+                <p><?= __('物流方式') ?>: <?= $escape(__((string)$detailShipping['method'])) ?></p>
             <?php endif; ?>
         </section>
         <?php endif; ?>
