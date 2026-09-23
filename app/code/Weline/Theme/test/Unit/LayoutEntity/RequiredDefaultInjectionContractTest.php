@@ -33,6 +33,50 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertCount(1, $merged['list-filters']);
     }
 
+    public function testWrongSlotIdentityIsRelocatedNotDuplicated(): void
+    {
+        $slots = [
+            'content' => [[
+                'node_uid' => 'drifted-filters-uid',
+                'widget_module' => 'Weline_Filters',
+                'widget_code' => 'category-filters',
+                'slot_id' => 'content',
+                'sort_order' => 0,
+            ]],
+        ];
+
+        $merged = RequiredDefaultInjectionContract::merge($slots, 'category', [$this->filtersDeclaration()], []);
+
+        self::assertArrayNotHasKey('content', $merged);
+        self::assertCount(1, $merged['category-filters'] ?? []);
+        self::assertSame('drifted-filters-uid', $merged['category-filters'][0]['node_uid'] ?? '');
+        self::assertSame('category-filters', $merged['category-filters'][0]['slot_id'] ?? '');
+    }
+
+    public function testDualSlotSameIdentityCollapsesToDeclaredOnce(): void
+    {
+        $slots = [
+            'content' => [[
+                'node_uid' => 'old-content-copy',
+                'widget_module' => 'Weline_Filters',
+                'widget_code' => 'category-filters',
+                'slot_id' => 'content',
+            ]],
+            'category-filters' => [[
+                'node_uid' => 'bake-merger-copy',
+                'widget_module' => 'Weline_Filters',
+                'widget_code' => 'category-filters',
+                'slot_id' => 'category-filters',
+            ]],
+        ];
+
+        $merged = RequiredDefaultInjectionContract::merge($slots, 'category', [$this->filtersDeclaration()], []);
+
+        self::assertArrayNotHasKey('content', $merged);
+        self::assertCount(1, $merged['category-filters'] ?? []);
+        self::assertSame('bake-merger-copy', $merged['category-filters'][0]['node_uid'] ?? '');
+    }
+
     public function testEmptyModuleSeedDoesNotSuppressRequiredModule(): void
     {
         $slots = [
@@ -278,6 +322,52 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php');
         self::assertStringContainsString('fillRequiredDefaultsOnShell', $src);
         self::assertStringContainsString('required_default_injection_failed', $src);
+        // Soft path uses actual $pageType so requiredForPage inherits chrome-carrier
+        // slots only — never force HOME (that plans content→newsletter onto policy).
+        self::assertStringContainsString('fillRequiredDefaultsOnShell(', $src);
+        self::assertStringContainsString('forcing HOME would plan content→newsletter', $src);
+        self::assertStringContainsString('amazon-policy__', $src);
+        self::assertStringContainsString('footer-*-links', $src);
+        // HOME remains as last-resort safety-net detect only.
+        self::assertStringContainsString('PAGE_TYPE_HOME', $src);
+    }
+
+    public function testNonHomepageInheritsHomepageChromeExtensionInjections(): void
+    {
+        self::assertTrue(RequiredDefaultInjectionContract::isInheritedChromeCarrierSlot('footer-payment-account-links'));
+        self::assertTrue(RequiredDefaultInjectionContract::isInheritedChromeCarrierSlot('footer-help-links'));
+        self::assertTrue(RequiredDefaultInjectionContract::isInheritedChromeCarrierSlot('header-nav-extensions'));
+        self::assertFalse(RequiredDefaultInjectionContract::isInheritedChromeCarrierSlot('footer'));
+        self::assertFalse(RequiredDefaultInjectionContract::isInheritedChromeCarrierSlot('list-filters'));
+
+        $items = RequiredDefaultInjectionContract::requiredInjections([
+            $this->filtersDeclaration(),
+            $this->footerPaymentLinkDeclaration(),
+        ], 'products');
+
+        $codes = array_map(static fn(array $row): string => (string)$row['widget_code'], $items);
+        self::assertContains('category-filters', $codes);
+        self::assertContains('footer-payment-methods-link', $codes);
+
+        $payment = null;
+        foreach ($items as $row) {
+            if (($row['widget_code'] ?? '') === 'footer-payment-methods-link') {
+                $payment = $row;
+                break;
+            }
+        }
+        self::assertNotNull($payment);
+        self::assertSame('footer-payment-account-links', $payment['slot_id']);
+        self::assertSame('Weline_Payment', $payment['widget_module']);
+    }
+
+    public function testHomepageDoesNotDoubleCountChromeCarrierInjections(): void
+    {
+        $items = RequiredDefaultInjectionContract::requiredInjections([
+            $this->footerPaymentLinkDeclaration(),
+        ], 'homepage');
+        self::assertCount(1, $items);
+        self::assertSame('footer-payment-methods-link', $items[0]['widget_code']);
     }
 
     /**
@@ -307,6 +397,26 @@ final class RequiredDefaultInjectionContractTest extends TestCase
                     'required' => true,
                 ],
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function footerPaymentLinkDeclaration(): array
+    {
+        return [
+            'module' => 'Weline_Payment',
+            'type' => 'footer',
+            'code' => 'footer-payment-methods-link',
+            'default_injections' => [[
+                'layout_type' => 'homepage',
+                'slot' => 'footer-payment-account-links',
+                'area' => 'footer',
+                'sort_order' => 0,
+                'required' => true,
+                'config' => ['label' => '支付方式'],
+            ]],
         ];
     }
 }

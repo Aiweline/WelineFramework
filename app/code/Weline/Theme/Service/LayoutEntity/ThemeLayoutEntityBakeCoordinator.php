@@ -85,6 +85,11 @@ final class ThemeLayoutEntityBakeCoordinator
             $this->updateConfigSidecarsOnly($themeId, $scope, $identityHash, $nodes, $published, $releaseId, $draftRevisionId);
         }
 
+        // wave8-8s5: chrome structural bake must refresh published whole-shells under scope.
+        if ($published && $chromeTouched && $structural) {
+            $this->refreshPublishedWholeShellsForScope($themeId, $scope);
+        }
+
         $this->bustPresentationCaches($themeId);
     }
 
@@ -103,6 +108,9 @@ final class ThemeLayoutEntityBakeCoordinator
 
         $version = $this->scopeVersions->ensureCurrent($themeId, $scope);
         $chromeNodes = $this->slotTree->filterChromeNodes($nodes);
+        // 布局固化与默认注入: homepage carrier required JSON → chrome structure bake.
+        $chromeNodes = $this->mergeRequiredDefaultsIntoNodes($chromeNodes, $themeId, 'homepage');
+        $chromeNodes = $this->slotTree->filterChromeNodes($chromeNodes);
         $this->scopeVersions->setChromePayload($version, $chromeNodes);
         $version = $this->scopeVersions->getCurrent($themeId, $scope) ?? $version;
 
@@ -134,6 +142,9 @@ final class ThemeLayoutEntityBakeCoordinator
         int $draftRevisionId = 0,
     ): string {
         $contentNodes = $this->slotTree->filterContentNodes($nodes);
+        // 布局固化与默认注入: required JSON default_injections bake into layout.phtml nodes.
+        $contentNodes = $this->mergeRequiredDefaultsIntoNodes($contentNodes, $themeId, $layoutType);
+        $contentNodes = $this->slotTree->filterContentNodes($contentNodes);
         $structureKey = $this->structureKeyForNodes($contentNodes, $draftRevisionId, $releaseId);
         $identityKey = $this->pathsIdentityKey($identityHash, $layoutType);
         $configByUid = [];
@@ -182,7 +193,618 @@ final class ThemeLayoutEntityBakeCoordinator
             $published,
         );
 
+        // wave8-8s5: published bake writes whole-shell (chrome + page) for storefront include.
+        if ($published) {
+            $this->writePublishedWholeShell(
+                $themeId,
+                $scope,
+                $identityKey,
+                $paths->pageStructureOrRelease($structureKey, true, $releaseId),
+            );
+        }
+
         return $path;
+    }
+
+    /**
+     * Plugin / injection-collect: rematerialize involved layouts under all themes
+     * (merge required JSON into structure), finalize chrome.rendered, then refresh shells
+     * that echo ThemeLayoutEntityChrome::renderCurrent (never raw chrome.phtml injectors).
+     *
+     * @see app/code/Weline/Theme/doc/布局固化与默认注入.md §3.3
+     */
+    public function rebakeAfterInjectionCollect(?int $themeId = null): int
+    {
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $root = $paths->root();
+        if (!\is_dir($root)) {
+            return 0;
+        }
+
+        $written = 0;
+        $themeDirs = $themeId !== null && $themeId > 0
+            ? [$root . $themeId]
+            : (\glob($root . '*', \GLOB_ONLYDIR) ?: []);
+        foreach ($themeDirs as $themeDir) {
+            if (!\is_string($themeDir) || !\is_dir($themeDir)) {
+                continue;
+            }
+            $tid = (int)\basename($themeDir);
+            if ($tid < 1) {
+                continue;
+            }
+            foreach (\glob($themeDir . \DIRECTORY_SEPARATOR . '*', \GLOB_ONLYDIR) ?: [] as $scopeDir) {
+                if (!\is_string($scopeDir) || !\is_dir($scopeDir)) {
+                    continue;
+                }
+                $written += $this->rematerializePublishedPagesUnderScopeDir($tid, $scopeDir);
+                $written += $this->rematerializeChromeVersionsUnderScopeDir($tid, $scopeDir);
+                // Architecture: finalize chrome.rendered (nested footer-*-links promote)
+                // BEFORE refreshing shell.phtml. Shell embeds renderCurrent(), which reads
+                // those snapshots — never raw chrome.phtml injectors (布局固化与默认注入.md).
+                $written += $this->dropChromeRenderedSnapshotsUnderScopeDir($scopeDir);
+                $written += $this->resolidifyChromeRenderedUnderScopeDir($scopeDir);
+                $written += $this->refreshPublishedWholeShellsUnderScopeDir($tid, $scopeDir);
+            }
+        }
+
+        if ($written > 0 && ($themeId === null || $themeId < 1)) {
+            $this->bustPresentationCaches(0);
+        } elseif ($written > 0 && $themeId !== null && $themeId > 0) {
+            $this->bustPresentationCaches($themeId);
+        }
+
+        return $written;
+    }
+
+    /**
+     * Runtime dynamic solidify for the active theme when published layout.phtml is missing.
+     * Merges required default_injections then materializes; returns absolute layout.phtml or ''.
+     */
+    public function dynamicSolidifyPublishedPage(
+        int $themeId,
+        string $scope,
+        string $identityHash,
+        string $layoutType,
+        array $nodes,
+        ?int $releaseId = null,
+    ): string {
+        if ($themeId < 1 || \trim($scope) === '' || \trim($layoutType) === '') {
+            return '';
+        }
+        try {
+            return $this->bakePageFromNodes(
+                $themeId,
+                $scope,
+                $identityHash,
+                $layoutType,
+                $nodes,
+                true,
+                $releaseId,
+                0,
+            );
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                w_log_warning(
+                    'theme_layout_entity_dynamic_solidify_failed: ' . $e->getMessage(),
+                    [
+                        'theme_id' => $themeId,
+                        'scope' => $scope,
+                        'layout_type' => $layoutType,
+                    ],
+                    'theme_layout_entity',
+                );
+            }
+
+            return '';
+        }
+    }
+
+    /**
+     * Rematerialize an existing published page dir from page-config + required merge.
+     */
+    public function rematerializePublishedPageAt(
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+        string $pageType,
+    ): string {
+        if ($themeId < 1 || $scope === '' || $identityKey === '' || $structureOrRelease === '' || $pageType === '') {
+            return '';
+        }
+        $config = $this->configStore->readPageConfig($themeId, $scope, $identityKey, $structureOrRelease);
+        if ($config === []) {
+            return '';
+        }
+        $nodes = [];
+        foreach ($config as $uid => $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $uid = \strtolower(\trim((string)($node['node_uid'] ?? $uid)));
+            if ($uid === '') {
+                continue;
+            }
+            $node['node_uid'] = $uid;
+            // Legacy/param-only page-config: fill identity from structure before merge.
+            $node = $this->configStore->hydratePageNodeFromStructure(
+                $node,
+                $uid,
+                $themeId,
+                $scope,
+                $identityKey . '/' . $structureOrRelease,
+            );
+            $nodes[$uid] = $node;
+        }
+        // Structure slot listing is placement authority when the same uid drifted to content.
+        $nodes = $this->healNodeSlotsFromStructure(
+            $nodes,
+            $themeId,
+            $scope,
+            $identityKey,
+            $structureOrRelease,
+        );
+        $nodes = $this->mergeRequiredDefaultsIntoNodes($nodes, $themeId, $pageType);
+        $nodes = $this->slotTree->filterContentNodes($nodes);
+        $releaseId = null;
+        if (\preg_match('/^r(\d+)$/', $structureOrRelease, $m) === 1) {
+            $releaseId = (int)$m[1];
+        }
+        $structureKey = $releaseId !== null
+            ? ('release-' . $releaseId)
+            : $this->structureKeyForNodes($nodes, 0, null);
+        $configByUid = [];
+        foreach ($nodes as $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $uid = \strtolower(\trim((string)($node['node_uid'] ?? '')));
+            if ($uid !== '') {
+                $configByUid[$uid] = $node;
+            }
+        }
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $path = $this->materializer->materializePage(
+            $themeId,
+            $scope,
+            $identityKey,
+            $structureKey,
+            $nodes,
+            $configByUid,
+            true,
+            $releaseId,
+            $pageType,
+        );
+        if (!\is_file($path)) {
+            return '';
+        }
+        $this->writePublishedWholeShell(
+            $themeId,
+            $scope,
+            $identityKey,
+            $paths->pageStructureOrRelease($structureKey, true, $releaseId),
+        );
+
+        return $path;
+    }
+
+    /**
+     * @param array<string|int, mixed> $nodes
+     * @return array<string, array<string, mixed>>
+     */
+    private function mergeRequiredDefaultsIntoNodes(array $nodes, int $themeId, string $pageType): array
+    {
+        /** @var RequiredDefaultInjectionBakeMerger $merger */
+        $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
+
+        return $merger->mergeIntoNodes($nodes, $themeId, $pageType);
+    }
+
+    /**
+     * When structure.json lists a node under slot S but page-config says another slot
+     * (commonly parent `content`), prefer structure placement before required merge.
+     *
+     * @param array<string, array<string, mixed>> $nodes
+     * @return array<string, array<string, mixed>>
+     */
+    private function healNodeSlotsFromStructure(
+        array $nodes,
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+    ): array {
+        $path = ObjectManager::getInstance(ThemeLayoutEntityPaths::class)
+            ->pageStructureJson($themeId, $scope, $identityKey, $structureOrRelease);
+        if ($path === '' || !\is_file($path)) {
+            return $nodes;
+        }
+        try {
+            $decoded = \json_decode((string)\file_get_contents($path), true);
+        } catch (\Throwable) {
+            return $nodes;
+        }
+        if (!\is_array($decoded)) {
+            return $nodes;
+        }
+        $slots = $decoded['slots'] ?? $decoded;
+        if (!\is_array($slots)) {
+            return $nodes;
+        }
+        foreach ($slots as $slotId => $widgets) {
+            $slotId = \trim((string)$slotId);
+            if ($slotId === '' || !\is_array($widgets)) {
+                continue;
+            }
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+                if ($uid === '' || !isset($nodes[$uid]) || !\is_array($nodes[$uid])) {
+                    continue;
+                }
+                $current = \trim((string)($nodes[$uid]['slot_id'] ?? ''));
+                if ($current !== '' && $current !== $slotId) {
+                    $nodes[$uid]['slot_id'] = $slotId;
+                } elseif ($current === '') {
+                    $nodes[$uid]['slot_id'] = $slotId;
+                }
+                foreach (['widget_module', 'widget_code', 'widget_type', 'area'] as $key) {
+                    $value = \trim((string)($widget[$key] ?? ''));
+                    if ($value !== '' && \trim((string)($nodes[$uid][$key] ?? '')) === '') {
+                        $nodes[$uid][$key] = $value;
+                    }
+                }
+            }
+        }
+
+        return $nodes;
+    }
+
+    private function rematerializePublishedPagesUnderScopeDir(int $themeId, string $scopeDir): int
+    {
+        $scopeDir = \rtrim($scopeDir, '/\\') . \DIRECTORY_SEPARATOR;
+        $scopeKey = \basename(\rtrim($scopeDir, '/\\'));
+        if ($scopeKey === '' || $scopeKey === '.' || $scopeKey === '..') {
+            return 0;
+        }
+        $layoutFiles = \glob($scopeDir . 'pages' . \DIRECTORY_SEPARATOR . '*' . \DIRECTORY_SEPARATOR
+            . 'r*' . \DIRECTORY_SEPARATOR . 'layout.phtml') ?: [];
+        if ($layoutFiles === []) {
+            return 0;
+        }
+        $written = 0;
+        foreach ($layoutFiles as $layoutPath) {
+            if (!\is_string($layoutPath) || !\is_file($layoutPath)) {
+                continue;
+            }
+            $structureOrRelease = \basename(\dirname($layoutPath));
+            $identityKey = \basename(\dirname(\dirname($layoutPath)));
+            $pageType = $this->readPageTypeFromStructureJson(\dirname($layoutPath) . \DIRECTORY_SEPARATOR . 'structure.json');
+            if ($pageType === '') {
+                $pageType = $this->inferPageTypeFromIdentity($themeId, $scopeKey, $identityKey);
+            }
+            if ($pageType === '') {
+                continue;
+            }
+            try {
+                $path = $this->rematerializePublishedPageAt(
+                    $themeId,
+                    $scopeKey,
+                    $identityKey,
+                    $structureOrRelease,
+                    $pageType,
+                );
+                if ($path !== '' && \is_file($path)) {
+                    ++$written;
+                }
+            } catch (\Throwable) {
+                // Soft: shell refresh + chrome.rendered still run.
+            }
+        }
+
+        return $written;
+    }
+
+    private function rematerializeChromeVersionsUnderScopeDir(int $themeId, string $scopeDir): int
+    {
+        $scopeDir = \rtrim($scopeDir, '/\\') . \DIRECTORY_SEPARATOR;
+        $written = 0;
+        foreach ($this->chromeDirsUnderScope($scopeDir) as $chromeDir) {
+            $phtml = $chromeDir . \DIRECTORY_SEPARATOR . 'chrome.phtml';
+            if (!\is_file($phtml)) {
+                continue;
+            }
+            $versionId = 0;
+            if (\preg_match('#/tv(\d+)/chrome#', $chromeDir, $m) === 1) {
+                $versionId = (int)$m[1];
+            }
+            if ($versionId < 1) {
+                continue;
+            }
+            try {
+                $version = clone ObjectManager::getInstance(ThemeScopeVersion::class);
+                $version->load($versionId);
+                if ((int)$version->getVersionId() !== $versionId || (int)$version->getThemeId() !== $themeId) {
+                    continue;
+                }
+                $nodes = $version->getChromePayload();
+                if (!\is_array($nodes) || $nodes === []) {
+                    continue;
+                }
+                $merged = $this->mergeRequiredDefaultsIntoNodes($nodes, $themeId, 'homepage');
+                $merged = $this->slotTree->filterChromeNodes($merged);
+                $this->scopeVersions->setChromePayload($version, $merged);
+                $version = clone ObjectManager::getInstance(ThemeScopeVersion::class);
+                $version->load($versionId);
+                if ((int)$version->getVersionId() !== $versionId) {
+                    continue;
+                }
+                $path = $this->materializer->materializeChrome($version);
+                if (\is_file($path)) {
+                    ++$written;
+                }
+            } catch (\Throwable) {
+                // Soft: chrome.rendered resolidify still applies Overlay.
+            }
+        }
+
+        return $written;
+    }
+
+    private function rematerializeChromeUnderScopeDir(int $themeId, string $scopeDir): int
+    {
+        return $this->rematerializeChromeVersionsUnderScopeDir($themeId, $scopeDir);
+    }
+
+    private function readPageTypeFromStructureJson(string $path): string
+    {
+        if (!\is_file($path)) {
+            return '';
+        }
+        $decoded = \json_decode((string)\file_get_contents($path), true);
+        if (!\is_array($decoded)) {
+            return '';
+        }
+
+        return \trim((string)($decoded['page_type'] ?? ''));
+    }
+
+    private function inferPageTypeFromIdentity(int $themeId, string $scopeKey, string $identityKey): string
+    {
+        /** @var RequiredDefaultInjectionBakeMerger $merger */
+        $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
+        $candidates = $merger->involvedExactLayoutTypes();
+        if ($merger->hasWildcardRequired()) {
+            $candidates = \array_values(\array_unique(\array_merge($candidates, [
+                'homepage', 'category', 'product', 'products', 'cart', 'checkout',
+                'account/login', 'cms_page',
+            ])));
+        }
+        if ($candidates === []) {
+            $candidates = ['homepage'];
+        }
+        foreach ($candidates as $pageType) {
+            $expected = $this->identityKeyForPageType($themeId, $pageType, $scopeKey);
+            if ($expected !== '' && $expected === $identityKey) {
+                return $pageType;
+            }
+        }
+
+        return '';
+    }
+
+    private function identityKeyForPageType(int $themeId, string $pageType, string $scope): string
+    {
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        try {
+            /** @var \Weline\Theme\Service\ThemeRuntimeLayoutResolver $resolver */
+            $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class);
+            $context = $resolver->buildContext($themeId, $pageType, 'frontend', [
+                'layout_option' => 'default',
+                'scope' => $scope,
+                'target_type' => 'global',
+                'target_id' => 0,
+                'locale_code' => 'default',
+            ]);
+
+            return $paths->identityKey($context->identityHash());
+        } catch (\Throwable) {
+            return $paths->identityKey(\hash('sha256', $pageType . '|' . $scope));
+        }
+    }
+
+    /**
+     * Drop durable chrome.rendered.* under a scope dir so runtime re-solidifies
+     * with required default_injections (plugin install / injection-collect).
+     */
+    private function dropChromeRenderedSnapshotsUnderScopeDir(string $scopeDir): int
+    {
+        $scopeDir = \rtrim($scopeDir, '/\\') . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($scopeDir)) {
+            return 0;
+        }
+        $dropped = 0;
+        foreach ($this->chromeDirsUnderScope($scopeDir) as $chromeDir) {
+            foreach (\glob($chromeDir . \DIRECTORY_SEPARATOR . 'chrome.rendered*.html') ?: [] as $snapshot) {
+                if (!\is_string($snapshot) || !\is_file($snapshot)) {
+                    continue;
+                }
+                if (@\unlink($snapshot)) {
+                    ++$dropped;
+                }
+            }
+        }
+
+        return $dropped;
+    }
+
+    /**
+     * Eager chrome.rendered solidify after injection-collect (zh + en baseline).
+     * Other locales still dynamic-solidify on first hit (§3.1).
+     */
+    private function resolidifyChromeRenderedUnderScopeDir(string $scopeDir): int
+    {
+        $scopeDir = \rtrim($scopeDir, '/\\') . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($scopeDir)) {
+            return 0;
+        }
+        $written = 0;
+        /** @var ThemeLayoutEntityChrome $chrome */
+        $chrome = ObjectManager::getInstance(ThemeLayoutEntityChrome::class);
+        foreach ($this->chromeDirsUnderScope($scopeDir) as $chromeDir) {
+            $phtml = $chromeDir . \DIRECTORY_SEPARATOR . 'chrome.phtml';
+            if (!\is_file($phtml)) {
+                continue;
+            }
+            foreach (['zh_Hans_CN', 'en_US'] as $locale) {
+                try {
+                    $html = $chrome->forceResolidifyRenderedSnapshot($phtml, $locale);
+                    if ($html !== '') {
+                        ++$written;
+                    }
+                } catch (\Throwable) {
+                    // Soft: next storefront hit still dynamic-solidifies.
+                }
+            }
+        }
+
+        return $written;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function chromeDirsUnderScope(string $scopeDir): array
+    {
+        $dirs = \glob($scopeDir . 'tv*' . \DIRECTORY_SEPARATOR . 'chrome', \GLOB_ONLYDIR) ?: [];
+        if (\is_dir($scopeDir . 'chrome')) {
+            $dirs[] = $scopeDir . 'chrome';
+        }
+        $out = [];
+        foreach ($dirs as $dir) {
+            if (\is_string($dir) && \is_dir($dir)) {
+                $out[] = $dir;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Concat finalized chrome (via renderCurrent → chrome.rendered) + layout.phtml → shell.phtml.
+     *
+     * Do NOT paste raw chrome.phtml injectors into the shell: nested footer-*-links stay blank
+     * under CTX_SOLIDIFYING, while language/currency hooks still render — the live half-footer bug.
+     */
+    public function writePublishedWholeShell(
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+    ): string {
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $pagePath = $paths->pagePhtml($themeId, $scope, $identityKey, $structureOrRelease);
+        $shellPath = $paths->shellPhtml($themeId, $scope, $identityKey, $structureOrRelease);
+        if (!\is_file($pagePath)) {
+            return '';
+        }
+
+        $pageSrc = (string)\file_get_contents($pagePath);
+        $body = "<?php\ndeclare(strict_types=1);\n"
+            . "/** Auto-generated whole-shell: chrome via ThemeLayoutEntityChrome::renderCurrent (chrome.rendered). */\n"
+            . "?>\n";
+        if ($themeId > 0 && \trim($scope) !== '') {
+            $body .= $this->buildPublishedShellChromeEchoStub($themeId, $scope);
+        }
+        $pageBody = \preg_replace(
+            '/^\s*<\?php\s+declare\(strict_types=1\);\s*\/\*\*.*?\*\/\s*\?>\s*/s',
+            '',
+            $pageSrc,
+        ) ?? $pageSrc;
+        $body .= $pageBody;
+
+        $dir = \dirname($shellPath);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+            throw new \RuntimeException('theme_layout_entity_shell_dir_failed: ' . $dir);
+        }
+        if (@\file_put_contents($shellPath, $body) === false) {
+            throw new \RuntimeException('theme_layout_entity_shell_write_failed: ' . $shellPath);
+        }
+        if (\function_exists('opcache_compile_file')) {
+            @\opcache_compile_file($shellPath);
+        }
+
+        return $shellPath;
+    }
+
+    /**
+     * Request-time stub: echo finalized chrome.rendered for the active locale (not raw chrome.phtml).
+     */
+    private function buildPublishedShellChromeEchoStub(int $themeId, string $scope): string
+    {
+        $scopeExport = \var_export(\trim($scope), true);
+
+        return "<?php\n"
+            . "echo \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\n"
+            . "    \\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityChrome::class\n"
+            . ")->renderCurrent({$themeId}, {$scopeExport});\n"
+            . "?>\n";
+    }
+
+    private function refreshPublishedWholeShellsForScope(int $themeId, string $scope): int
+    {
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $scopeDir = $paths->themeScopeDir($themeId, $scope);
+
+        return $this->refreshPublishedWholeShellsUnderScopeDir($themeId, $scopeDir);
+    }
+
+    private function refreshPublishedWholeShellsUnderScopeDir(int $themeId, string $scopeDir): int
+    {
+        $scopeDir = \rtrim($scopeDir, '/\\') . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($scopeDir)) {
+            return 0;
+        }
+        $layoutFiles = \glob($scopeDir . 'pages' . \DIRECTORY_SEPARATOR . '*' . \DIRECTORY_SEPARATOR
+            . 'r*' . \DIRECTORY_SEPARATOR . 'layout.phtml') ?: [];
+        if ($layoutFiles === []) {
+            return 0;
+        }
+
+        $scope = \basename(\rtrim($scopeDir, '/\\'));
+        if ($scope === '' || $themeId < 1) {
+            return 0;
+        }
+
+        $written = 0;
+        foreach ($layoutFiles as $layoutPath) {
+            if (!\is_string($layoutPath) || !\is_file($layoutPath)) {
+                continue;
+            }
+            $shellPath = \dirname($layoutPath) . \DIRECTORY_SEPARATOR . 'shell.phtml';
+            $pageSrc = (string)\file_get_contents($layoutPath);
+            $body = "<?php\ndeclare(strict_types=1);\n"
+                . "/** Auto-generated whole-shell: chrome via ThemeLayoutEntityChrome::renderCurrent (chrome.rendered). */\n"
+                . "?>\n";
+            $body .= $this->buildPublishedShellChromeEchoStub($themeId, $scope);
+            $pageBody = \preg_replace(
+                '/^\s*<\?php\s+declare\(strict_types=1\);\s*\/\*\*.*?\*\/\s*\?>\s*/s',
+                '',
+                $pageSrc,
+            ) ?? $pageSrc;
+            $body .= $pageBody;
+            if (@\file_put_contents($shellPath, $body) !== false) {
+                ++$written;
+                if (\function_exists('opcache_compile_file')) {
+                    @\opcache_compile_file($shellPath);
+                }
+            }
+        }
+
+        return $written;
     }
 
     /**
@@ -218,6 +840,13 @@ final class ThemeLayoutEntityBakeCoordinator
                 }
             }
             $this->configStore->writeChromeConfig($themeId, $scope, $version->getVersionId(), $config);
+            $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
+            $this->configStore->writeChromeAssets(
+                $themeId,
+                $scope,
+                $version->getVersionId(),
+                $collector->collectFromNodes($collector->withChromeRegistryBaseline($merged), true),
+            );
         }
 
         if ($contentNodes !== []) {
@@ -236,6 +865,14 @@ final class ThemeLayoutEntityBakeCoordinator
                 }
             }
             $this->configStore->writePageConfig($themeId, $scope, $identityKey, $structureOrRelease, $config);
+            $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
+            $this->configStore->writePageAssets(
+                $themeId,
+                $scope,
+                $identityKey,
+                $structureOrRelease,
+                $collector->collectFromNodes($contentNodes, true),
+            );
         }
     }
 
@@ -367,8 +1004,6 @@ final class ThemeLayoutEntityBakeCoordinator
         \usort($structural, static fn(array $a, array $b): int => strcmp($a['node_uid'], $b['node_uid']));
         $payload = \json_encode([
             'nodes' => $structural,
-            'draft_revision_id' => $draftRevisionId,
-            'release_id' => $releaseId,
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
 
         return \hash('sha256', \is_string($payload) ? $payload : '');

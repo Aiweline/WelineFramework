@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 
@@ -45,6 +46,13 @@ final class ThemeLayoutEntityMaterializer
         $path = $this->paths->chromePhtml($themeId, $scope, $versionId);
         $this->writePhtml($path, $phtml);
         $this->configStore->writeChromeConfig($themeId, $scope, $versionId, $configByUid);
+        $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
+        $this->configStore->writeChromeAssets(
+            $themeId,
+            $scope,
+            $versionId,
+            $collector->collectFromNodes($collector->withChromeRegistryBaseline($nodes), true),
+        );
         // Drop stale request-time snapshots (legacy bare + every locale variant)
         // so the next storefront hit re-renders under the request language.
         foreach ($this->paths->chromeRenderedHtmlSnapshots($themeId, $scope, $versionId) as $rendered) {
@@ -114,9 +122,18 @@ final class ThemeLayoutEntityMaterializer
         $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $structureOrRelease);
         $this->writePhtml($path, $phtml);
         $this->configStore->writePageConfig($themeId, $scope, $identityKey, $structureOrRelease, $configByUid);
+        $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
+        $this->configStore->writePageAssets(
+            $themeId,
+            $scope,
+            $identityKey,
+            $structureOrRelease,
+            $collector->collectFromNodes($nodes, true),
+        );
         $this->writeStructureJson(
             $this->paths->pageStructureJson($themeId, $scope, $identityKey, $structureOrRelease),
             $bySlot,
+            $pageType,
         );
         $this->opcacheCompile($path);
 
@@ -128,7 +145,7 @@ final class ThemeLayoutEntityMaterializer
      *
      * @param array<string, list<array<string, mixed>>> $bySlot
      */
-    private function writeStructureJson(string $path, array $bySlot): void
+    private function writeStructureJson(string $path, array $bySlot, string $pageType = ''): void
     {
         $slots = [];
         \ksort($bySlot);
@@ -160,7 +177,10 @@ final class ThemeLayoutEntityMaterializer
             throw new \RuntimeException('Failed to create layout entity structure dir: ' . $dir);
         }
         $json = \json_encode(
-            ['slots' => $slots],
+            [
+                'page_type' => \trim($pageType),
+                'slots' => $slots,
+            ],
             \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT,
         );
         if ($json === false || @\file_put_contents($path, $json . "\n") === false) {

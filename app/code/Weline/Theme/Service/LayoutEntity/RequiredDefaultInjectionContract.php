@@ -184,6 +184,14 @@ final class RequiredDefaultInjectionContract
     }
 
     /**
+     * Bake-time required merge (page-level identity once).
+     *
+     * Same module+code may appear at most once on the page. If the identity already
+     * exists under a wrong slot (e.g. parent `content` after slot_id drift), relocate
+     * it to the declared slot and drop extras — never new a second node_uid merely
+     * because the declared slot looks empty. Aligns with storefront
+     * {@see pageHasWidgetPresent} / overlay soft-dedup.
+     *
      * @param array<string, list<array<string, mixed>>> $slots
      * @param list<array<string, mixed>> $declarations
      * @param list<array<string, mixed>> $omissions
@@ -197,17 +205,23 @@ final class RequiredDefaultInjectionContract
         }
 
         foreach (self::requiredForPage($declarations, $pageType) as $item) {
-            $slotId = $item['slot_id'];
-            if (self::slotHasWidget($slots, $slotId, $item['widget_module'], $item['widget_code'])) {
+            $slotId = (string)$item['slot_id'];
+            $module = (string)$item['widget_module'];
+            $code = (string)$item['widget_code'];
+            if (self::isOmitted($omissions, $slotId, $module, $code)) {
                 continue;
             }
-            if (self::isOmitted($omissions, $slotId, $item['widget_module'], $item['widget_code'])) {
+            $hits = self::findPageWidgetHits($slots, $module, $code);
+            if ($hits === []) {
+                $slots[$slotId][] = $item['node'];
+                self::sortSlotWidgets($slots[$slotId]);
                 continue;
             }
-            $slots[$slotId][] = $item['node'];
-            usort(
-                $slots[$slotId],
-                static fn(array $a, array $b): int => ((int)($a['sort_order'] ?? 0)) <=> ((int)($b['sort_order'] ?? 0)),
+            $slots = self::collapseHitsToDeclaredSlot(
+                $slots,
+                $hits,
+                $slotId,
+                \is_array($item['node'] ?? null) ? $item['node'] : [],
             );
         }
 
@@ -215,10 +229,218 @@ final class RequiredDefaultInjectionContract
     }
 
     /**
+     * @param array<string, list<array<string, mixed>>> $slots
+     * @return list<array{slot:string,widget:array<string,mixed>}>
+     */
+    public static function findPageWidgetHits(array $slots, string $module, string $code): array
+    {
+        $module = trim($module);
+        $code = trim($code);
+        if ($code === '') {
+            return [];
+        }
+        $hits = [];
+        foreach ($slots as $slotId => $widgets) {
+            if (!\is_array($widgets)) {
+                continue;
+            }
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                if (!self::widgetIdentityMatches($widget, $module, $code)) {
+                    continue;
+                }
+                $hits[] = [
+                    'slot' => (string)$slotId,
+                    'widget' => $widget,
+                ];
+            }
+        }
+
+        return $hits;
+    }
+
+    /**
+     * @param array<string, list<array<string, mixed>>> $slots
+     * @param list<array{slot:string,widget:array<string,mixed>}> $hits
+     * @param array<string, mixed> $templateNode
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private static function collapseHitsToDeclaredSlot(
+        array $slots,
+        array $hits,
+        string $declaredSlot,
+        array $templateNode,
+    ): array {
+        $declaredSlot = trim($declaredSlot);
+        if ($declaredSlot === '' || $hits === []) {
+            return $slots;
+        }
+        $module = trim((string)($templateNode['widget_module'] ?? $hits[0]['widget']['widget_module'] ?? ''));
+        $code = trim((string)($templateNode['widget_code'] ?? $hits[0]['widget']['widget_code'] ?? ''));
+
+        $canonical = null;
+        foreach ($hits as $hit) {
+            if ((string)($hit['slot'] ?? '') === $declaredSlot) {
+                $canonical = $hit['widget'];
+                break;
+            }
+        }
+        if (!\is_array($canonical)) {
+            $canonical = $hits[0]['widget'];
+        }
+
+        foreach ($slots as $slotId => $widgets) {
+            if (!\is_array($widgets)) {
+                continue;
+            }
+            $kept = [];
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                if (self::widgetIdentityMatches($widget, $module, $code)) {
+                    continue;
+                }
+                $kept[] = $widget;
+            }
+            if ($kept === []) {
+                unset($slots[$slotId]);
+            } else {
+                $slots[$slotId] = $kept;
+            }
+        }
+
+        $canonical['slot_id'] = $declaredSlot;
+        if (trim((string)($canonical['widget_module'] ?? '')) === '' && $module !== '') {
+            $canonical['widget_module'] = $module;
+        }
+        if (trim((string)($canonical['widget_code'] ?? '')) === '' && $code !== '') {
+            $canonical['widget_code'] = $code;
+        }
+        if (trim((string)($canonical['area'] ?? '')) === '') {
+            $area = trim((string)($templateNode['area'] ?? ''));
+            if ($area !== '') {
+                $canonical['area'] = $area;
+            }
+        }
+        if (trim((string)($canonical['node_uid'] ?? '')) === '') {
+            $uid = trim((string)($templateNode['node_uid'] ?? ''));
+            if ($uid === '') {
+                $uid = \substr(\hash('sha256', $declaredSlot . '|' . $module . '|' . $code), 0, 32);
+            }
+            $canonical['node_uid'] = \strtolower($uid);
+        }
+        if (!isset($slots[$declaredSlot]) || !\is_array($slots[$declaredSlot])) {
+            $slots[$declaredSlot] = [];
+        }
+        $slots[$declaredSlot][] = $canonical;
+        self::sortSlotWidgets($slots[$declaredSlot]);
+
+        return $slots;
+    }
+
+    /**
+     * @param array<string, mixed> $widget
+     */
+    private static function widgetIdentityMatches(array $widget, string $module, string $code): bool
+    {
+        if (trim((string)($widget['widget_code'] ?? '')) !== $code) {
+            return false;
+        }
+        $existingModule = trim((string)($widget['widget_module'] ?? ''));
+        if ($existingModule === $module) {
+            return true;
+        }
+
+        return $existingModule === '' && $module === '';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $widgets
+     */
+    private static function sortSlotWidgets(array &$widgets): void
+    {
+        usort(
+            $widgets,
+            static fn(array $a, array $b): int => ((int)($a['sort_order'] ?? 0)) <=> ((int)($b['sort_order'] ?? 0)),
+        );
+    }
+
+    /**
+     * Nested chrome destinations owned by the homepage chrome carrier.
+     * Non-homepage pages inherit these via required overlay (非首页继承合并).
+     */
+    public static function isInheritedChromeCarrierSlot(string $slotId): bool
+    {
+        $slotId = strtolower(trim($slotId));
+        if ($slotId === '') {
+            return false;
+        }
+        // Root chrome shells are spliced as wholes; only nested extension slots inherit.
+        if (in_array($slotId, ['header', 'footer', 'delivery'], true)) {
+            return false;
+        }
+        foreach (['header', 'footer'] as $root) {
+            if (str_starts_with($slotId, $root . '-') || str_starts_with($slotId, $root . '_')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param list<array<string, mixed>> $declarations
      * @return list<array{slot_id:string,widget_module:string,widget_code:string,node:array<string,mixed>}>
      */
     private static function requiredForPage(array $declarations, string $pageType): array
+    {
+        $pageType = trim($pageType);
+        $items = self::collectRequiredForExactPage($declarations, $pageType);
+        // Chrome carrier (homepage) nests footer-*-links / header-nav-extensions etc.
+        // Non-homepage pages splice chrome roots but keep empty/missing-config nested
+        // slots unless we also plan those homepage required injections here.
+        if ($pageType !== '' && $pageType !== 'homepage') {
+            $seen = [];
+            foreach ($items as $item) {
+                $seen[self::injectionIdentityKey($item)] = true;
+            }
+            foreach (self::collectRequiredForExactPage($declarations, 'homepage') as $carrierItem) {
+                $slotId = trim((string)($carrierItem['slot_id'] ?? ''));
+                if (!self::isInheritedChromeCarrierSlot($slotId)) {
+                    continue;
+                }
+                $key = self::injectionIdentityKey($carrierItem);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $items[] = $carrierItem;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array{slot_id?:string,widget_module?:string,widget_code?:string} $item
+     */
+    private static function injectionIdentityKey(array $item): string
+    {
+        return strtolower(trim((string)($item['slot_id'] ?? '')))
+            . '|'
+            . strtolower(trim((string)($item['widget_module'] ?? '')))
+            . '|'
+            . strtolower(trim((string)($item['widget_code'] ?? '')));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $declarations
+     * @return list<array{slot_id:string,widget_module:string,widget_code:string,node:array<string,mixed>}>
+     */
+    private static function collectRequiredForExactPage(array $declarations, string $pageType): array
     {
         $items = [];
         foreach ($declarations as $declaration) {
@@ -257,6 +479,7 @@ final class RequiredDefaultInjectionContract
                     $area = 'content';
                 }
                 $sort = (int)($injection['sort_order'] ?? 0);
+                $config = is_array($injection['config'] ?? null) ? $injection['config'] : [];
                 $items[] = [
                     'slot_id' => $slotId,
                     'widget_module' => $module,
@@ -270,7 +493,7 @@ final class RequiredDefaultInjectionContract
                         'is_active' => true,
                         'area' => $area,
                         'slot_id' => $slotId,
-                        'config' => [],
+                        'config' => $config,
                     ],
                 ];
             }
