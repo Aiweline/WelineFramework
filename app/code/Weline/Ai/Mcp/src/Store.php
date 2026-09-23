@@ -1004,6 +1004,103 @@ final class Store
         );
     }
 
+    /**
+     * Compact conflict surface for prepare_project / Cursor SessionStart.
+     *
+     * @return array{
+     *   project_id: string,
+     *   contested_count: int,
+     *   open_conflict_count: int,
+     *   contested: list<array<string,mixed>>,
+     *   contradictions: list<array<string,mixed>>,
+     *   user_decision_required: bool
+     * }
+     */
+    public function learningConflictReport(string $projectId, int $limit = 8): array
+    {
+        $projectId = trim($projectId);
+        $limit = max(1, min(20, $limit));
+        if ($projectId === '') {
+            return [
+                'project_id' => '',
+                'contested_count' => 0,
+                'open_conflict_count' => 0,
+                'contested' => [],
+                'contradictions' => [],
+                'user_decision_required' => false,
+            ];
+        }
+
+        $contested = $this->searchExperiences(
+            $projectId,
+            '',
+            [],
+            ['contested'],
+            [],
+            $limit,
+            0,
+        )['experiences'] ?? [];
+
+        $rows = $this->all(
+            'SELECT c.id, c.left_experience_id, c.right_experience_id, c.status,
+                COALESCE(c.resolution_json, \'{}\') AS resolution_json, c.created_at,
+                le.title AS left_title, le.reusable_rule AS left_rule,
+                re.title AS right_title, re.reusable_rule AS right_rule
+             FROM contradictions c
+             LEFT JOIN experiences le ON le.id = c.left_experience_id
+             LEFT JOIN experiences re ON re.id = c.right_experience_id
+             WHERE c.status IN (\'open\', \'contested\')
+               AND (
+                    le.project_id = ? OR re.project_id = ?
+                    OR c.left_experience_id IN (SELECT id FROM experiences WHERE project_id = ?)
+                    OR c.right_experience_id IN (SELECT id FROM experiences WHERE project_id = ?)
+               )
+             ORDER BY c.created_at DESC
+             LIMIT ?',
+            [$projectId, $projectId, $projectId, $projectId, $limit],
+        );
+        $contradictions = [];
+        foreach ($rows as $row) {
+            $contradictions[] = [
+                'contradiction_id' => (string) $row['id'],
+                'status' => (string) $row['status'],
+                'left_experience_id' => (string) $row['left_experience_id'],
+                'right_experience_id' => (string) $row['right_experience_id'],
+                'left_title' => (string) ($row['left_title'] ?? ''),
+                'right_title' => (string) ($row['right_title'] ?? ''),
+                'left_rule' => Text::truncate((string) ($row['left_rule'] ?? ''), 240),
+                'right_rule' => Text::truncate((string) ($row['right_rule'] ?? ''), 240),
+                'created_at' => (string) ($row['created_at'] ?? ''),
+            ];
+        }
+
+        $contestedSummaries = [];
+        foreach ($contested as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $contestedSummaries[] = [
+                'experience_id' => (string) ($item['experience_id'] ?? ''),
+                'title' => (string) ($item['title'] ?? ''),
+                'reusable_rule' => Text::truncate((string) ($item['reusable_rule'] ?? ''), 240),
+                'confidence' => (float) ($item['confidence'] ?? 0),
+                'status' => (string) ($item['status'] ?? 'contested'),
+            ];
+        }
+
+        $openCount = count($contradictions);
+        $contestedCount = count($contestedSummaries);
+
+        return [
+            'project_id' => $projectId,
+            'contested_count' => $contestedCount,
+            'open_conflict_count' => $openCount,
+            'contested' => $contestedSummaries,
+            'contradictions' => $contradictions,
+            'user_decision_required' => $openCount > 0 || $contestedCount > 0,
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function explainExperience(string $id): array
     {

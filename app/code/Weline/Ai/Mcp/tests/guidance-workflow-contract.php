@@ -120,7 +120,22 @@ foreach ($norms as $norm) {
     }
 }
 
+$widgetAssetNorm = '';
+foreach ($widgetDevSurface['norms'] ?? [] as $norm) {
+    if (($norm['id'] ?? '') === 'widget_static_assets_bake_to_head') {
+        $widgetAssetNorm = (string) ($norm['summary'] ?? '');
+    }
+}
 $checks = [
+    'widget assets expose both position spellings and body alias' => str_contains($widgetAssetNorm, 'source-postion')
+        && str_contains($widgetAssetNorm, 'source-position') && str_contains($widgetAssetNorm, 'end-body')
+        && str_contains($widgetAssetNorm, 'source-postion（优先）')
+        && str_contains($widgetAssetNorm, 'head→footer→body')
+        && str_contains($widgetAssetNorm, '无 footer 落 body 末尾'),
+    'widget assets forbid all inline CSS and executable JS' => str_contains($widgetAssetNorm, '所有')
+        && str_contains($widgetAssetNorm, 'style=') && str_contains($widgetAssetNorm, 'on*=')
+        && !str_contains($widgetAssetNorm, '大段'),
+
     'surface id is frontend_development' => ($frontend['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_FRONTEND_DEVELOPMENT
         && ($frontend['label'] ?? '') === '前端开发规范',
     'session_startup_notices are pointer-only' => is_array($contract['session_startup_notices'] ?? null)
@@ -345,6 +360,15 @@ $checks = [
     'hard_constraints include browser_operator_self_test' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'browser_operator_self_test'),
+        false,
+    ),
+    'hard_constraints include browser_operator_non_preemptive' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'browser_operator_non_preemptive'
+            && str_contains((string) ($rule['summary'] ?? ''), 'BACKGROUND')
+            && str_contains((string) ($rule['summary'] ?? ''), 'position')
+            && str_contains((string) ($rule['summary'] ?? ''), 'active')),
         false,
     ),
     'hard_constraints include ui_feature_requires_e2e' => array_reduce(
@@ -582,6 +606,72 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'SIMPLE SKIP')),
         false,
     ),
+    'hard_constraints include host_delegate_explore_plan_review_to_codex_cli' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && str_contains((string) ($rule['summary'] ?? ''), 'codex exec')
+            && str_contains((string) ($rule['summary'] ?? ''), 'codex review')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Cursor')
+            && str_contains((string) ($rule['summary'] ?? ''), 'content_ops_skills_skip_mcp')
+            && str_contains((string) ($rule['summary'] ?? ''), 'knowledge.codex.enabled')
+            && (str_contains((string) ($rule['summary'] ?? ''), '-m') || str_contains((string) ($rule['summary'] ?? ''), '--model'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'host_plan_mode_for_planning')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_content_focus_only')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID spawning')
+                || str_contains((string) ($rule['summary'] ?? ''), 'nested'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'vague')
+                || str_contains((string) ($rule['summary'] ?? ''), 'second'))
+            && str_contains((string) ($rule['summary'] ?? ''), '正在工作')
+            && str_contains((string) ($rule['summary'] ?? ''), 'silent')),
+        false,
+    ),
+    'hostCodexDelegation schema and plan contract' => (static function () use ($hardConstraintsPackage): bool {
+        $delegation = HardConstraintsCatalog::hostCodexDelegation();
+        $sections = $delegation['plan_content_contract']['sections_only'] ?? null;
+        $planTpl = (string) ($delegation['plan_command_template'] ?? '');
+        $reviewTpl = (string) ($delegation['review_command_template'] ?? '');
+        $fallbackWhen = $delegation['fallback']['when'] ?? [];
+        $pkgDelegation = $hardConstraintsPackage['host_codex_delegation'] ?? null;
+        $visible = $delegation['user_visible_status'] ?? null;
+
+        return ($delegation['schema_version'] ?? '') === 'host-codex-delegation.v1'
+            && ($delegation['policy_id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && ($delegation['independent_of_nested_planner'] ?? false) === true
+            && ($delegation['native_codex_recursion_guard']['when_host_is_codex'] ?? '') === 'do_not_spawn_nested_codex'
+            && ($delegation['model_policy']['model_argument_forbidden'] ?? false) === true
+            && is_array($sections)
+            && $sections === ['背景', '方案', '细节']
+            && str_contains($planTpl, 'read-only')
+            && str_contains($planTpl, 'approval_policy="never"')
+            && str_contains($planTpl, 'printf')
+            && str_contains($planTpl, '$PLAN_PROMPT')
+            && str_contains($reviewTpl, '--uncommitted')
+            && str_contains($reviewTpl, 'cd "$REPOSITORY"')
+            && is_string($delegation['plan_prompt'] ?? null)
+            && is_string($delegation['review_prompt'] ?? null)
+            && str_contains((string) $delegation['plan_prompt'], '背景')
+            && !preg_match('/(^|\\s)-m(\\s|=|$)/', $planTpl)
+            && !str_contains($planTpl, '--model')
+            && !preg_match('/(^|\\s)-m(\\s|=|$)/', $reviewTpl)
+            && !str_contains($reviewTpl, '--model')
+            && is_array($fallbackWhen)
+            && in_array('cli_missing', $fallbackWhen, true)
+            && in_array('not_executable', $fallbackWhen, true)
+            && in_array('authentication_failure', $fallbackWhen, true)
+            && in_array('timeout', $fallbackWhen, true)
+            && in_array('invalid_output', $fallbackWhen, true)
+            && is_array($pkgDelegation)
+            && ($pkgDelegation['policy_id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && is_array($visible)
+            && ($visible['required'] ?? false) === true
+            && ($visible['forbid_silent_delegation'] ?? false) === true
+            && ($visible['announce_in_chat_before_launch'] ?? false) === true
+            && is_array($visible['must_include_tokens'] ?? null)
+            && in_array('Codex', $visible['must_include_tokens'], true)
+            && in_array('正在工作', $visible['must_include_tokens'], true)
+            && str_contains((string) ($visible['phrases']['start_zh'] ?? ''), 'Codex 正在工作');
+    })(),
     'hard_constraints include plan_content_focus_only' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -662,6 +752,17 @@ $checks = [
             && (str_contains((string) ($rule['summary'] ?? ''), 'Issue') || str_contains((string) ($rule['summary'] ?? ''), 'task list'))),
         false,
     ),
+    'hard_constraints include requirement_issuer_owns_acceptance' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_issuer_owns_acceptance'
+            && str_contains((string) ($rule['summary'] ?? ''), 'waiting_acceptance')
+            && str_contains((string) ($rule['summary'] ?? ''), 'issuer_acceptance')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'hands-off')
+                || str_contains((string) ($rule['summary'] ?? ''), '甩手')
+                || str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT'))),
+        false,
+    ),
     'hard_constraints include requirement_session_dashboard' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -706,6 +807,7 @@ $checks = [
             'theme_work_assigns_theme_engineer',
             'visitor_work_assigns_data_analytics',
             'findings_wake_pm',
+            'requirement_issuer_owns_acceptance',
             'requirement_session_dashboard',
             'pm_plan_lifecycle',
         ],
@@ -713,7 +815,7 @@ $checks = [
             static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
             is_array($teamSurface['norms'] ?? null) ? $teamSurface['norms'] : [],
         ))),
-    )) === 16,
+    )) === 17,
     'engineering team surface norms include seat_closed_reports_related_web_urls' => in_array(
         'seat_closed_reports_related_web_urls',
         array_values(array_filter(array_map(
@@ -782,6 +884,22 @@ $checks = [
             true,
         )
         && in_array(
+            'required_default_always_present_without_user_deleted',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
+            'theme_seat_integrity_over_peer_requests',
+            array_values(array_filter(array_map(
+                static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+                is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
+            ))),
+            true,
+        )
+        && in_array(
             'public_component_library_dual_stack',
             array_values(array_filter(array_map(
                 static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
@@ -800,6 +918,49 @@ $checks = [
         $body = (string) file_get_contents($themeCmdPath);
 
         return str_contains($body, 'work_mode') && str_contains($body, 'theme:active');
+    })(),
+    'theme_development command doc covers required_default_always_present' => (static function (): bool {
+        $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';
+        if (!is_file($themeCmdPath)) {
+            $themeCmdPath = dirname(__DIR__, 5) . '/dev/ai-command/ai/主题开发.md';
+        }
+        if (!is_file($themeCmdPath)) {
+            return false;
+        }
+        $body = (string) file_get_contents($themeCmdPath);
+
+        return str_contains($body, '必装永远存在')
+            && str_contains($body, 'user_deleted@{versionId}')
+            && str_contains($body, 'required_default_always_present_without_user_deleted');
+    })(),
+    'theme_development command doc covers seat integrity over peer requests' => (static function (): bool {
+        $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';
+        if (!is_file($themeCmdPath)) {
+            $themeCmdPath = dirname(__DIR__, 5) . '/dev/ai-command/ai/主题开发.md';
+        }
+        if (!is_file($themeCmdPath)) {
+            return false;
+        }
+        $body = (string) file_get_contents($themeCmdPath);
+
+        return str_contains($body, '席位底线')
+            && str_contains($body, 'theme_seat_integrity_over_peer_requests')
+            && str_contains($body, 'escalate')
+            && str_contains($body, '驳回');
+    })(),
+    'performance_check command doc forbids strip-shell prescriptions' => (static function (): bool {
+        $perfCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/性能检查.md';
+        if (!is_file($perfCmdPath)) {
+            $perfCmdPath = dirname(__DIR__, 5) . '/dev/ai-command/ai/性能检查.md';
+        }
+        if (!is_file($perfCmdPath)) {
+            return false;
+        }
+        $body = (string) file_get_contents($perfCmdPath);
+
+        return str_contains($body, '禁拆壳')
+            && str_contains($body, 'theme_seat_integrity_over_peer_requests')
+            && str_contains($body, 'header');
     })(),
     'theme_development command doc covers four layers or public component library' => (static function (): bool {
         $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';
@@ -938,6 +1099,14 @@ $checks = [
         $activePerformanceCheckIds,
         true,
     ),
+    'performance_check norms include theme_seat_integrity_over_peer_requests' => in_array(
+        'theme_seat_integrity_over_peer_requests',
+        array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($performanceCheckSurface['norms'] ?? null) ? $performanceCheckSurface['norms'] : [],
+        ))),
+        true,
+    ),
     'resolveActiveSurfaceIds matches prompt optimization task' => in_array(
         GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION,
         $activePromptOptimizationIds,
@@ -1042,6 +1211,29 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'work_mode')),
         false,
     ),
+    'hard_constraints include required_default_always_present_without_user_deleted' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'required_default_always_present_without_user_deleted'
+            && str_contains((string) ($rule['summary'] ?? ''), 'user_deleted@{versionId}')
+            && str_contains((string) ($rule['summary'] ?? ''), 'default_injections')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST memorize')),
+        false,
+    ),
+    'hard_constraints include theme_seat_integrity_over_peer_requests' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_seat_integrity_over_peer_requests'
+            && str_contains((string) ($rule['summary'] ?? ''), '主题开发工程师')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'OUTRANKS')
+                || str_contains((string) ($rule['summary'] ?? ''), 'bottom line'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'escalate')
+            && str_contains((string) ($rule['summary'] ?? ''), 'header')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'reject')
+                || str_contains((string) ($rule['summary'] ?? ''), 'veto')
+                || str_contains((string) ($rule['summary'] ?? ''), '驳回'))),
+        false,
+    ),
     'hard_constraints include theme_design_must_not_override_core_runtime_assets' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1076,7 +1268,8 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'performance_engineer_for_design_and_review'
             && str_contains((string) ($rule['summary'] ?? ''), 'Team:性能检查工程师:')
-            && str_contains((string) ($rule['summary'] ?? ''), 'performance_check')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'performance_check')
+            && str_contains((string) ($rule['summary'] ?? ''), 'theme_seat_integrity_over_peer_requests')),
         false,
     ),
     'hard_constraints include prompt_engineer_for_skill_prompt_work' => array_reduce(
@@ -1153,6 +1346,9 @@ $checks = [
     ),
     'mcp instructions mention host Plan Mode' => str_contains(ToolService::instructions(), 'host_plan_mode_for_planning')
         && str_contains(ToolService::instructions(), 'requirement_acceptance_always'),
+    'mcp instructions mention host Codex CLI delegation' => str_contains(ToolService::instructions(), 'host_codex_delegation')
+        && str_contains(ToolService::instructions(), 'nested codex')
+        && str_contains(ToolService::instructions(), 'knowledge.codex.enabled'),
     'mcp instructions mention plan_content_focus_only' => str_contains(ToolService::instructions(), 'plan_content_focus_only')
         && str_contains(ToolService::instructions(), '背景+方案+细节'),
     'surfaces include requirement_clarify_use_case' => ($clarifySurface['id'] ?? '')
@@ -1216,7 +1412,9 @@ $checks = [
         && in_array('close_acceptance_browser_tabs', $closeoutReminder['browser_release_order'], true)
         && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '关闭'),
     'closeout reminder requires browser cache disabled on open' => ($closeoutReminder['browser_cache_disabled_on_open_required'] ?? false) === true
+        && ($closeoutReminder['browser_operator_non_preemptive_required'] ?? false) === true
         && is_array($closeoutReminder['browser_open_order'] ?? null)
+        && in_array('prefer_background_non_preemptive_navigate', $closeoutReminder['browser_open_order'], true)
         && in_array('disable_http_cache_for_session', $closeoutReminder['browser_open_order'], true)
         && in_array('strip_automation_detection_flags', $closeoutReminder['browser_open_order'], true)
         && in_array('navigate_or_reload_ignore_cache', $closeoutReminder['browser_open_order'], true)
@@ -1224,6 +1422,11 @@ $checks = [
     'webui surface requires browser_cache_disabled_on_open norm' => array_reduce(
         is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_cache_disabled_on_open'),
+        false,
+    ),
+    'webui surface requires browser_operator_non_preemptive norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_operator_non_preemptive'),
         false,
     ),
     'webui surface requires browser_release_after_delivery norm' => array_reduce(
@@ -1499,7 +1702,10 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'staged')
             && str_contains((string) ($rule['summary'] ?? ''), 'untracked')
             && str_contains((string) ($rule['summary'] ?? ''), 'Agent Shell')
-            && str_contains((string) ($rule['summary'] ?? ''), 'git checkout')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'git checkout')
+            && str_contains((string) ($rule['summary'] ?? ''), 'dirty-load')
+            && str_contains((string) ($rule['summary'] ?? ''), 'other-session')
+            && str_contains((string) ($rule['summary'] ?? ''), 'cross-session overwrite')),
         false,
     ),
     'MCP hard constraints require runtime status query local-first' => array_reduce(
@@ -1515,7 +1721,16 @@ $checks = [
     'mcp instructions require local-first status queries' => str_contains(ToolService::instructions(), 'runtime_status_query_local_first')
         || str_contains(ToolService::instructions(), 'LOCAL-FIRST'),
     'mcp instructions ban wiping dirty workspace with git' => str_contains(ToolService::instructions(), 'preserve_dirty_workspace')
-        && str_contains(ToolService::instructions(), 'never git checkout'),
+        && str_contains(ToolService::instructions(), 'never git checkout')
+        && str_contains(ToolService::instructions(), 'dirty-load')
+        && str_contains(ToolService::instructions(), 'other-session'),
+    'session_startup_notices mention dirty-load preserve' => array_reduce(
+        $contract['session_startup_notices'] ?? [],
+        static fn (bool $ok, mixed $notice): bool => $ok || (is_string($notice)
+            && str_contains($notice, 'preserve_dirty_workspace')
+            && str_contains($notice, 'dirty-load')),
+        false,
+    ),
     'MCP hard constraints require host editor rules mcp-generated only' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1771,6 +1986,13 @@ $checks = [
     'theme_layout_widget_owner norm exists' => array_reduce(
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'theme_layout_widget_owner'),
+        false,
+    ),
+    'frontend_development norms include required_default_always_present' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'required_default_always_present_without_user_deleted'
+            && str_contains((string) ($norm['summary'] ?? ''), 'user_deleted@{versionId}')),
         false,
     ),
     'hard_rules require preview storefront delivery parity' => array_reduce(

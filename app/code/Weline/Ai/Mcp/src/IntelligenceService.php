@@ -194,6 +194,12 @@ final class IntelligenceService
                 self::strings($input['paths'] ?? []),
                 max(1, min(10, (int) ($input['learning_limit'] ?? 5))),
             );
+            $learningConflicts = [];
+            try {
+                $learningConflicts = $this->learningStore->learningConflictReport($index->projectId());
+            } catch (Throwable) {
+                $learningConflicts = [];
+            }
 
             $groups = is_array($context['context'] ?? null) ? $context['context'] : [];
             $fragments = [];
@@ -229,8 +235,44 @@ final class IntelligenceService
                         'summary' => Text::truncate($rule, 500),
                         'source' => 'validated_session_learning',
                         'experience_id' => (string) ($item['experience_id'] ?? ''),
+                        'status' => (string) ($item['status'] ?? ''),
                     ];
                 }
+            }
+            foreach (is_array($learningConflicts['contested'] ?? null) ? $learningConflicts['contested'] : [] as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $rule = trim((string) ($item['reusable_rule'] ?? ''));
+                if ($rule === '') {
+                    continue;
+                }
+                $ruleSummaries[] = [
+                    'summary' => 'CONFLICT/CONTESTED: ' . Text::truncate($rule, 480),
+                    'source' => 'contested_session_learning',
+                    'experience_id' => (string) ($item['experience_id'] ?? ''),
+                    'status' => 'contested',
+                    'user_decision_required' => true,
+                ];
+            }
+            foreach (is_array($learningConflicts['contradictions'] ?? null) ? $learningConflicts['contradictions'] : [] as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $ruleSummaries[] = [
+                    'summary' => Text::truncate(
+                        'OPEN CONTRADICTION: '
+                        . (string) ($item['left_title'] ?? '')
+                        . ' vs '
+                        . (string) ($item['right_title'] ?? '')
+                        . ' — stop and ask user',
+                        500,
+                    ),
+                    'source' => 'learning_contradiction',
+                    'contradiction_id' => (string) ($item['contradiction_id'] ?? ''),
+                    'status' => (string) ($item['status'] ?? 'open'),
+                    'user_decision_required' => true,
+                ];
             }
             $sessionId = trim((string) ($input['client_session_id'] ?? ''));
             $workflowContract = GuidanceWorkflowCatalog::forTask($task);

@@ -43,6 +43,11 @@ final class CodexInvoker
                 'learning_skills' => $this->learningSkillSchemaPath(),
             ],
             'unavailable_reason' => $error,
+            // Nested MCP planner only; host Cursor↔Codex CLI work split is independent
+            // (HardConstraintsCatalog::hostCodexDelegation / host_delegate_explore_plan_review_to_codex_cli).
+            'purpose' => 'nested_mcp_planner',
+            'host_delegation_policy' => 'host_delegate_explore_plan_review_to_codex_cli',
+            'host_delegation_independent' => true,
         ];
     }
 

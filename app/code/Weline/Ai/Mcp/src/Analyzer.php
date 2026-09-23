@@ -312,7 +312,8 @@ final class Analyzer
         }
         $modelSignal = $this->model !== null
             && $this->config->get('analysis.automatic_learning.enabled', true) === true
-            && ($corrections !== [] || $this->hasModelLearningSignal($evidenceSignals));
+            && ($corrections !== [] || $this->hasModelLearningSignal($evidenceSignals))
+            && !$this->hasDurableKnowledgeCorrections($corrections);
         if ($modelSignal) {
             try {
                 $modelResult = $this->analyzeWithModel($session, $events, $evidenceSignals, $signals);
@@ -490,17 +491,18 @@ final class Analyzer
                 $signals[] = ['type' => 'assistant_retraction', 'event_id' => $event['event_id'], 'summary' => $evidence['claim'], 'evidence_id' => $evidenceId];
             }
             if ($event['type'] === 'user_message') {
-                $kind = self::correctionKind($content, $hasPriorAgentActivity);
+                $kind = self::correctionKind($content, $hasPriorAgentActivity)
+                    ?? self::durableKnowledgeKind($content);
                 if ($kind !== null) {
                     $evidenceId = self::evidenceId((string) $event['event_id'], $kind);
-                    $intent = in_array($kind, ['intent_correction', 'preference_correction', 'acceptance_criteria'], true);
+                    $intent = in_array($kind, ['intent_correction', 'preference_correction', 'acceptance_criteria', 'durable_knowledge'], true);
                     $evidence = $this->newEvidence(
                         $event,
                         $evidenceId,
                         $intent ? 'user_intent' : 'user_technical_claim',
                         Text::truncate($content, 1_600),
                         'supports',
-                        $intent ? 1.0 : 0.6,
+                        $intent ? 1.0 : 0.85,
                         true,
                         ['kind' => $kind],
                     );
@@ -512,13 +514,19 @@ final class Analyzer
                     ];
                     $correction = [
                         'source' => 'user',
-                        'kind' => $kind,
+                        'kind' => $kind === 'durable_knowledge' ? 'project_fact' : $kind,
                         'summary' => $evidence['claim'],
                         'event_ids' => [$event['event_id']],
                     ];
                     $corrections[] = ['correction' => $correction, 'evidence_id' => $evidenceId, 'event' => $event, 'wrong' => $wrong];
-                    $evidenceSignals[] = ['evidence' => $evidence, 'event' => $event, 'result' => 'correction'];
-                    $signals[] = ['type' => 'user_correction', 'event_id' => $event['event_id'], 'kind' => $kind, 'summary' => $evidence['claim'], 'evidence_id' => $evidenceId];
+                    $evidenceSignals[] = ['evidence' => $evidence, 'event' => $event, 'result' => $kind === 'durable_knowledge' ? 'durable_knowledge' : 'correction'];
+                    $signals[] = [
+                        'type' => $kind === 'durable_knowledge' ? 'user_durable_knowledge' : 'user_correction',
+                        'event_id' => $event['event_id'],
+                        'kind' => $kind,
+                        'summary' => $evidence['claim'],
+                        'evidence_id' => $evidenceId,
+                    ];
                 }
             }
             if (in_array($event['type'], [
@@ -779,6 +787,22 @@ final class Analyzer
         ];
     }
 
+    private static function durableKnowledgeKind(string $content): ?string
+    {
+        $lower = mb_strtolower($content, 'UTF-8');
+        if (!self::containsAny($lower, [
+            '以后', '从今以后', '长期', '规矩', '约定', '作为标准', '记住', '固定为',
+            '永远', '一律', '必须始终', '项目约定', '仓库规定', '这是知识', '当成知识',
+            'from now on', 'going forward', 'always use', 'must always',
+            'project rule', 'lasting rule', 'as a rule', 'treat this as knowledge',
+            'durable rule', 'standing rule',
+        ])) {
+            return null;
+        }
+
+        return 'durable_knowledge';
+    }
+
     private static function correctionKind(string $content, bool $hasPrior): ?string
     {
         $lower = mb_strtolower($content, 'UTF-8');
@@ -836,7 +860,7 @@ final class Analyzer
     /** @return array<string, float> */
     private static function confidenceForCorrection(string $kind, bool $hasWrongPath, bool $successfulOutcome): array
     {
-        $source = in_array($kind, ['intent_correction', 'preference_correction', 'acceptance_criteria'], true) ? 1.0 : 0.6;
+        $source = in_array($kind, ['intent_correction', 'preference_correction', 'acceptance_criteria', 'project_fact', 'durable_knowledge'], true) ? 1.0 : 0.6;
         return [
             'source_authority' => $source,
             'evidence_quality' => 0.9,
@@ -874,12 +898,37 @@ final class Analyzer
     }
 
     /** @param list<array<string, mixed>> $evidenceSignals */
+    /** @param list<array<string, mixed>> $corrections */
+    private function hasDurableKnowledgeCorrections(array $corrections): bool
+    {
+        foreach ($corrections as $item) {
+            $kind = (string) (($item['correction']['kind'] ?? ''));
+            $result = (string) (($item['result'] ?? ''));
+            // Durable user rules skip Codex extraction and use deterministic project_fact learning.
+            if ($kind === 'project_fact' && isset($item['event']) && is_array($item['event'])) {
+                $content = mb_strtolower((string) ($item['event']['content_redacted'] ?? ''), 'UTF-8');
+                if (self::durableKnowledgeKind($content) !== null) {
+                    return true;
+                }
+            }
+            if ($result === 'durable_knowledge') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function hasModelLearningSignal(array $evidenceSignals): bool
     {
         foreach ($evidenceSignals as $signal) {
             $evidence = is_array($signal['evidence'] ?? null) ? $signal['evidence'] : [];
+            $type = (string) ($evidence['evidence_type'] ?? '');
+            if (in_array($type, ['user_intent', 'user_technical_claim', 'user_confirmation'], true)) {
+                return true;
+            }
             if (($signal['result'] ?? '') === 'passed'
-                && in_array((string) ($evidence['evidence_type'] ?? ''), [
+                && in_array($type, [
                     'test_result', 'build_result', 'lint_result', 'browser_result',
                     'runtime_observation', 'user_confirmation', 'ci_result',
                 ], true)) {
