@@ -15,6 +15,7 @@
  * @widget.supports {["backend-order-b2b-chat","b2b-order-chat","b2b"]}
  * @widget.default_injections {[{"layout_type":"backend-order-view","layout_option":"default","slot":"backend-order-b2b-chat","area":"content","sort_order":20,"required":true,"reason":"批发/挂单订单详情默认展示商家侧订单沟通","config":{"title":"订单沟通"}}]}
  *
+ * @widget.source {Weline_B2B::css/b2b-storefront.css,Weline_B2B::css/widgets/widget-backend-order-chat.css}
  * @param title {default="订单沟通",type="string",label="标题"}
  */
 
@@ -86,19 +87,18 @@ if ($orderType !== 'tob' && !$hasHang && !$hasThread) {
 
 $chatRole = 'merchant';
 ?>
-<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260912-hang-admin-chat1">
 <div data-weline-load="b2bOrderChat"></div>
 <div class="w-card <?= $escape($wc) ?>"
-     style="--w-mb:var(--weline-space-4);"
+     data-widget-style-class="8f323ed6ec0465a9"
      weline-code="<?= $escape($scope->code) ?>"
      data-uid="<?= $escape($scope->uid) ?>"
      data-js-ns="<?= $escape($scope->jsNs) ?>"
      data-testid="b2b-backend-order-chat-card">
     <div class="w-card__header">
-        <h5 class="w-card__title" style="--w-mb:0;"><?= $escape(__($title)) ?></h5>
+        <h5 class="w-card__title" data-widget-style-class="cb829d8150391682"><?= $escape(__($title)) ?></h5>
     </div>
     <div class="w-card__body">
-        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
+        <p class="w-text" data-tone="muted" data-size="sm" data-widget-style-class="18e72ef0fa8f05c6">
             <?= __('与客户就本批发订单的定金/尾款协商消息，前后台同一线程。') ?>
         </p>
         <?php

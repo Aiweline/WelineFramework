@@ -120,6 +120,23 @@
     color: var(--color-text-secondary, #6b655c);
 }
 
+.w-product-purchase-panel__error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md, 0.75rem);
+    padding: var(--spacing-xl, 1.5rem);
+    text-align: center;
+}
+
+.w-product-purchase-panel__error-text {
+    margin: 0;
+    color: var(--color-danger, var(--color-error, #b42318));
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.5;
+    max-width: 28rem;
+}
+
 .product-native-detail--quick-add {
     width: 100%;
     max-width: none;

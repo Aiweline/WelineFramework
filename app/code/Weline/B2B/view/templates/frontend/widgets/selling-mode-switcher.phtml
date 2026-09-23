@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_B2B::css/widgets/widget-selling-mode-switcher.css,Weline_B2B::css/b2b-storefront.css}
  * PDP selling-mode switcher + wholesale membership apply drawer.
  *
  * @var \Weline\Framework\View\Template $this
@@ -105,7 +106,6 @@ $drawerHint = '';
 
 $drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-guest'), 0, 10);
 ?>
-<link rel="stylesheet" href="/Weline/B2B/view/statics/css/b2b-storefront.css?v=20260914-no-cart-chooser" data-no-extract="true">
 <div class="b2b-selling-mode product-native-detail__variant-axis"
      data-b2b-selling-mode="1"
      data-selling-mode="<?= $escape($sellingMode) ?>"
@@ -264,13 +264,13 @@ $drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-guest')
                             <textarea class="w-textarea" id="<?= $escape($drawerId) ?>-notes" name="notes" rows="3" maxlength="2000"><?= $escape((string)($application['notes'] ?? '')) ?></textarea>
                         </div>
                     </div>
-                    <div class="w-alert" data-tone="info" data-testid="b2b-membership-tier-info" style="--w-mb:var(--weline-space-3);">
-                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                    <div class="w-alert" data-tone="info" data-testid="b2b-membership-tier-info" data-widget-style-class="39137a73cd2f2659">
+                        <p class="w-text" data-size="sm" data-widget-style-class="ae51788a61972142">
                             <lang>批发等级从 VIP0 初级起（批准后默认入门档）。开启批发信用后，系统按等级目标额度向您的批发信用钱包补差额，仅可用于批发（ToB）订单优惠抵扣；同档消费后不会自动回补。</lang>
                         </p>
                     </div>
                     <p class="b2b-selling-mode__hint" data-b2b-apply-status aria-live="polite"></p>
-                    <div class="w-drawer__footer" style="padding:0;border:0;">
+                    <div class="w-drawer__footer" data-widget-style-class="1fcd95b0a5bce98b">
                         <button type="submit" class="w-button" data-variant="primary" data-testid="b2b-membership-submit">
                             <?= $escape($submitLabel) ?>
                         </button>
