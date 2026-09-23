@@ -25,6 +25,8 @@ class PaymentLedger extends Model
     public const TYPE_PAYMENT = 'payment';
     public const TYPE_REFUND = 'refund';
     public const TYPE_ADJUSTMENT = 'adjustment';
+    /** 支付方式激励 / 业务折扣入账（与 ROLE_DISCOUNT 同发布单元；透传真相源仍为 session 快照） */
+    public const TYPE_DISCOUNT = 'discount';
 
     public const DIRECTION_DEBIT = 'debit';
     public const DIRECTION_CREDIT = 'credit';

@@ -88,7 +88,7 @@
         value-type="json"
         default="CN,US"
         scope="global,website,store"
-        options="CN:CN,US:US,GB:GB,DE:DE,FR:FR,JP:JP,HK:HK,SG:SG,AU:AU,CA:CA"
+        options="CN:CN,US:US,XZ:XZ,GB:GB,DE:DE,FR:FR,JP:JP,HK:HK,SG:SG,AU:AU,CA:CA"
         validation="in_options" />
 
     <w:config:field
@@ -148,4 +148,101 @@
         value-type="bool"
         default="1"
         scope="global,website,store" />
+</w:config:group>
+
+<w:config:group
+    code="fake_card_incentive"
+    label="支付方式激励折扣"
+    description="Fake Card 对照验收用激励。未启用=0。"
+    sort="20">
+    <w:config:field
+        key="payment/method/fake_card/incentive_enabled"
+        label="启用激励折扣"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_type"
+        label="激励形态"
+        type="select"
+        value-type="string"
+        default="fixed_amount"
+        scope="global,website,store"
+        options="fixed_amount:固定额,percentage:百分比"
+        validation="in_options" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_amount_minor"
+        label="固定减免额（最小货币单位）"
+        type="number"
+        value-type="int"
+        default="0"
+        scope="global,website,store"
+        validation="min:0" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_percent"
+        label="百分比"
+        type="number"
+        value-type="float"
+        default="0"
+        scope="global,website,store"
+        validation="min:0|max:100" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_cap_minor"
+        label="封顶（最小货币单位）"
+        type="number"
+        value-type="int"
+        default="0"
+        scope="global,website,store"
+        validation="min:0" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_funding_source"
+        label="资金来源"
+        type="select"
+        value-type="string"
+        default="merchant"
+        scope="global,website,store"
+        options="merchant:商家,provider:支付商,platform:平台,shared:共同"
+        validation="in_options" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_valid_from"
+        label="生效开始"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_valid_to"
+        label="生效结束"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_label"
+        label="摘要行标签"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:120" />
+
+    <w:config:field
+        key="payment/method/fake_card/incentive_publish_version"
+        label="发布版本号"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:64" />
 </w:config:group>

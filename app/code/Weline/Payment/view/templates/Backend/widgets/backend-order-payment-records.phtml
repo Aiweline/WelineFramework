@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Payment::css/widgets/widget-backend-order-payment-records.css}
  * 后台订单详情：万能支付 Attempt 记录。
  *
  * @var \Weline\Framework\View\Template $this
@@ -48,13 +49,13 @@ $recordsService = ObjectManager::getInstance(BackendOrderPaymentRecordsService::
 $payments = $recordsService->listForOrderId($orderId);
 ?>
 <div class="w-card <?= $esc($wc) ?>"
-     style="--w-mb:var(--weline-space-4);"
+     data-widget-style-class="2053f7a1da5b989b"
      weline-code="<?= $esc($scope->code) ?>"
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>"
      data-testid="backend-order-payment-records">
     <div class="w-card__header">
-        <h5 class="w-card__title" style="--w-mb:0;"><?= $esc($title) ?></h5>
+        <h5 class="w-card__title" data-widget-style-class="c1bca77bc9910b68"><?= $esc($title) ?></h5>
     </div>
     <div class="w-card__body">
         <div class="w-table-wrap">
@@ -88,14 +89,14 @@ $payments = $recordsService->listForOrderId($orderId);
                                 data-method="<?= $esc($methodCode) ?>"
                                 data-status="<?= $esc((string)($payment['status'] ?? '')) ?>">
                                 <td>
-                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);"
+                                    <div class="w-cluster" data-align="center" data-widget-style-class="500e15d6399a3615"
                                          data-testid="payment-record-method">
                                         <?php if ($methodIcon !== ''): ?>
                                             <img src="<?= $esc($methodIcon) ?>"
                                                  alt="<?= $esc($methodLabel) ?>"
                                                  width="20"
                                                  height="20"
-                                                 style="object-fit:contain;inline-size:20px;block-size:20px;flex-shrink:0;"
+                                                 data-widget-style-class="5b48e4abd46331da"
                                                  data-testid="payment-record-method-icon"
                                                  data-method-code="<?= $esc($methodCode) ?>">
                                         <?php endif; ?>

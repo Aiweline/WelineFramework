@@ -9,6 +9,10 @@ $shareHint = (string) ($this->getData('share_hint') ?? '');
 $token = trim((string) ($this->getData('token') ?? ($bill['token'] ?? '')));
 $amount = ((int) ($bill['amount_minor'] ?? 0)) / 100;
 $currency = (string) ($bill['currency_code'] ?? 'USD');
+$preferredMethod = strtolower(trim((string) ($this->getData('preferred_payment_method') ?? 'fake_card')));
+if ($preferredMethod === '') {
+    $preferredMethod = 'fake_card';
+}
 $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 if (isset($_SERVER['REQUEST_SCHEME']) && is_string($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] !== '') {
@@ -52,10 +56,15 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
                 data-testid="quick-pay-submit"
                 data-helppay-pay
                 data-helppay-quick-self-pay="1"
-                data-payment-method="paypal"
+                data-payment-method="<?= $escape($preferredMethod) ?>"
                 data-token="<?= $escape($token) ?>">
             <?= $escape(__('立即支付')) ?>
         </button>
+        <?php if ($preferredMethod === 'fake_card'): ?>
+            <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:var(--weline-space-2, var(--space-2)) 0 0;">
+                <lang>本机测试支付将即时完成并进入成功页（Fake result=Paid）。</lang>
+            </p>
+        <?php endif; ?>
     </div>
 
     <?php if ($absoluteShare !== ''): ?>

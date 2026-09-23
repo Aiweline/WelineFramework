@@ -281,7 +281,7 @@ final class PaymentCheckoutSessionPersistenceService
 
     /**
      * @param array<string, mixed> $orderData
-     * @return list<array{key:string,label:string,amount_minor:int}>
+     * @return list<array<string, mixed>>
      */
     private function normalizeDiscountLines(array $orderData): array
     {
@@ -300,6 +300,7 @@ final class PaymentCheckoutSessionPersistenceService
                     ? (string) __('优惠券 (%1)', [$couponCode])
                     : (string) __('优惠'),
                 'amount_minor' => -1 * $discountMinor,
+                'source_type' => $couponCode !== '' ? 'coupon' : 'cart',
             ]];
         }
 
@@ -312,11 +313,28 @@ final class PaymentCheckoutSessionPersistenceService
             if ($amountMinor === 0) {
                 continue;
             }
-            $lines[] = [
+            $normalized = [
                 'key' => (string) ($line['key'] ?? 'discount'),
                 'label' => (string) ($line['label'] ?? __('优惠')),
                 'amount_minor' => $amountMinor,
             ];
+            $sourceType = strtolower(trim((string) ($line['source_type'] ?? '')));
+            if ($sourceType !== '') {
+                $normalized['source_type'] = $sourceType;
+            }
+            $funding = strtolower(trim((string) ($line['funding_source'] ?? '')));
+            if ($funding !== '') {
+                $normalized['funding_source'] = $funding;
+            }
+            $methodCode = strtolower(trim((string) ($line['method_code'] ?? '')));
+            if ($methodCode !== '') {
+                $normalized['method_code'] = $methodCode;
+            }
+            $ruleVersion = trim((string) ($line['rule_version'] ?? ''));
+            if ($ruleVersion !== '') {
+                $normalized['rule_version'] = $ruleVersion;
+            }
+            $lines[] = $normalized;
         }
 
         return $lines;

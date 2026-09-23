@@ -267,7 +267,7 @@ if ($paymentReturnCancelled) {
         </header>
         <?php if ($shippingMethod !== ''): ?>
             <p class="amz-order-confirm__ship-method">
-                <?= $escape(__('配送方式')) ?>：<strong><?= $escape($shippingMethod) ?></strong>
+                <?= $escape(__('配送方式')) ?>：<strong><?= $escape(__($shippingMethod)) ?></strong>
             </p>
         <?php elseif ($isSuccess): ?>
             <p class="amz-order-confirm__ship-method amz-order-confirm__ship-method--estimate">
