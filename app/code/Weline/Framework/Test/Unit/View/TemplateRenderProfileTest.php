@@ -48,6 +48,10 @@ final class TemplateRenderProfileTest extends TestCase
             'total_ms' => 12.0,
             'max_ms' => 7.0,
             'bytes' => 300,
+            'db_duration_ms' => 0.0,
+            'db_span_count' => 0,
+            'wls_duration_ms' => 0.0,
+            'php_ms' => 12.0,
         ], $aggregate['files'][$relative]);
         self::assertEmpty(RequestContext::get('view.template.profile'));
         self::assertSame($aggregate, RequestLifecycleTrace::getAggregateSummary()['template_render_files'] ?? null);
@@ -63,6 +67,10 @@ final class TemplateRenderProfileTest extends TestCase
             'capture_ms' => 0.13,
             'total_ms' => 20.0,
             'bytes' => 41,
+            'db_duration_ms' => 0.0,
+            'db_span_count' => 0,
+            'wls_duration_ms' => 0.0,
+            'php_ms' => 20.0,
         ], RequestContext::get('view.template.profile')[0]);
 
         // 保留原有的独立 include_ms 阈值判断。
@@ -74,7 +82,18 @@ final class TemplateRenderProfileTest extends TestCase
         self::assertCount(80, $profile);
         self::assertSame(42, $profile[0]['bytes']);
         self::assertSame(178, $profile[79]['bytes']);
-        self::assertSame(['file', 'init_ms', 'include_ms', 'capture_ms', 'total_ms', 'bytes'], array_keys($profile[79]));
+        self::assertSame([
+            'file',
+            'init_ms',
+            'include_ms',
+            'capture_ms',
+            'total_ms',
+            'bytes',
+            'db_duration_ms',
+            'db_span_count',
+            'wls_duration_ms',
+            'php_ms',
+        ], array_keys($profile[79]));
 
         $aggregate = RequestContext::get('view.template.aggregate');
         self::assertIsArray($aggregate);
@@ -132,6 +151,52 @@ final class TemplateRenderProfileTest extends TestCase
         self::assertArrayHasKey('bounded-127.phtml', $aggregate['files']);
         self::assertArrayNotHasKey('overflow-a.phtml', $aggregate['files']);
         self::assertArrayNotHasKey('overflow-b.phtml', $aggregate['files']);
+    }
+
+    public function testOverlayAnnotatesWidgetWrapperAndFullDocumentBody(): void
+    {
+        $annotate = new \ReflectionMethod(Template::class, 'annotateTemplateRenderOverlay');
+        RequestContext::set('view.template.overlay', true);
+
+        $widget = '<div class="widget-wrapper" data-widget-code="recently-viewed">body</div>';
+        $out = $annotate->invoke(
+            $this->template,
+            $widget,
+            'app/code/Weline/Product/view/templates/frontend/widgets/com_recently-viewed.phtml',
+            640.5,
+            163000,
+            [
+                'db_duration_ms' => 400.0,
+                'db_span_count' => 12,
+                'wls_duration_ms' => 25.0,
+                'wls_span_count' => 2,
+            ]
+        );
+        self::assertStringContainsString('class="wls-tpl-perf"', $out);
+        self::assertStringContainsString('data-wls-tpl-ms="640.5"', $out);
+        self::assertStringContainsString('data-wls-tpl-db-ms="400.0"', $out);
+        self::assertStringContainsString('data-wls-tpl-php-ms="215.5"', $out);
+        self::assertStringContainsString('db 400.0ms(12q)', $out);
+        self::assertStringContainsString('php 215.5ms', $out);
+        self::assertStringContainsString('widgets/com_recently-viewed.phtml', $out);
+        self::assertStringStartsWith('<div class="widget-wrapper"', $out);
+        self::assertMatchesRegularExpression(
+            '/<div class="widget-wrapper"[^>]*>\s*<div class="wls-tpl-perf"/',
+            $out
+        );
+
+        $doc = '<!doctype html><html><body class="x"><main>ok</main></body></html>';
+        $docOut = $annotate->invoke($this->template, $doc, 'layouts/product/com_default.phtml', 1200.0, 900000);
+        self::assertMatchesRegularExpression('/<body class="x">\s*<div class="wls-tpl-perf"/', $docOut);
+
+        $fast = $annotate->invoke($this->template, $widget, 'fast.phtml', 4.0, 10);
+        self::assertSame($widget, $fast);
+        $near = $annotate->invoke($this->template, $widget, 'near.phtml', 6.0, 10);
+        self::assertStringContainsString('wls-tpl-perf', $near);
+
+        RequestContext::set('view.template.overlay', false);
+        $off = $annotate->invoke($this->template, $widget, 'widgets/com_x.phtml', 200.0, 10);
+        self::assertSame($widget, $off);
     }
 
     private function record(string $file, float $init, float $include, float $capture, float $total, int $bytes): void

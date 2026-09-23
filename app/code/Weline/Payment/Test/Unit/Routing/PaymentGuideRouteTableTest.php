@@ -16,7 +16,7 @@ final class PaymentGuideRouteTableTest extends TestCase
 
         Router::process($path, $rule);
 
-        self::assertSame('payment/frontend/guide/payment/index', $path);
+        self::assertSame('payment/frontend/guide/payment', $path);
         self::assertSame('Weline_Payment', $rule['module'] ?? null);
     }
 

@@ -10,7 +10,8 @@ use Weline\Payment\Service\PaymentBrowserCallbackRoutes;
 /** Owns public storefront /guide/payment routes for payment customer guides. */
 final class Router implements RouterInterface
 {
-    private const INDEX_ROUTE = 'payment/frontend/guide/payment/index';
+    // Must match generated frontend_pc key (controller index method, no trailing /index).
+    private const INDEX_ROUTE = 'payment/frontend/guide/payment';
     private const VIEW_ROUTE = 'payment/frontend/guide/payment/view';
     private const POLICY_ROUTE = 'payment/frontend/guide/payment/policy';
     private const AGREEMENT_ROUTE = 'payment/frontend/guide/payment/agreement';

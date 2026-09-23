@@ -32,6 +32,28 @@ final class SharedChromeService
      */
     public const CHROME_SLOTS = ['header', 'footer', 'delivery'];
 
+    /**
+     * Header nested slots in partials/header/default.phtml that omit the header- prefix
+     * but still belong to global shared chrome (add/remove must bake chrome).
+     *
+     * @var list<string>
+     */
+    public const HEADER_NESTED_CHROME_SLOTS = [
+        'top-bar',
+        'top-bar-rights',
+        'logo',
+        'search',
+        'language',
+        'currency',
+        'user-area',
+        'all-menu',
+        'category-menu',
+        'policy-links',
+        'nav-extensions',
+        'navigation',
+        'pixel-bootstrap',
+    ];
+
     public function __construct(
         private readonly ThemeScopedWorkspaceInterface $workspace,
     ) {
@@ -54,6 +76,12 @@ final class SharedChromeService
             return false;
         }
         if (\in_array($slotId, self::CHROME_SLOTS, true)) {
+            return true;
+        }
+        if (\in_array($slotId, self::HEADER_NESTED_CHROME_SLOTS, true)) {
+            return true;
+        }
+        if (\str_starts_with($slotId, 'top-bar-') || \str_starts_with($slotId, 'top_bar_')) {
             return true;
         }
 

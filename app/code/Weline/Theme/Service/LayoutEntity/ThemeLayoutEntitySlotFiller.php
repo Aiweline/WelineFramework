@@ -2108,16 +2108,34 @@ final class ThemeLayoutEntitySlotFiller
      */
     private function loadPublishedChromeBakeHtmlDirect(int $themeId, string $scope): string
     {
+        $scope = \trim($scope);
+        if ($themeId < 1 || $scope === '') {
+            return '';
+        }
         try {
-            $scope = \trim($scope);
-            if ($themeId < 1 || $scope === '') {
-                return '';
-            }
             // Prefer ThemeLayoutEntityChrome::renderCurrent → chrome.rendered.{locale}
             // (finalized nested footer-*-links). Never raw-include chrome.phtml injectors.
             return $this->chrome->renderCurrent($themeId, $scope, null, false);
-        } catch (\Throwable) {
-            return '';
+        } catch (\Throwable $first) {
+            try {
+                \Weline\Framework\Manager\ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class)
+                    ->ensurePublishedChromeForScope($themeId, $scope, []);
+                return $this->chrome->renderCurrent($themeId, $scope, null, false);
+            } catch (\Throwable $e) {
+                if (\function_exists('w_log_warning')) {
+                    w_log_warning(
+                        'theme_layout_entity_chrome_bake_html_miss: ' . $e->getMessage(),
+                        [
+                            'theme_id' => $themeId,
+                            'scope' => $scope,
+                            'first' => $first->getMessage(),
+                        ],
+                        'theme_layout_entity',
+                    );
+                }
+
+                return '';
+            }
         }
     }
 

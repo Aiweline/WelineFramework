@@ -3049,6 +3049,9 @@ class SlotRendererService
         $config = $this->mergeTranslatedWidgetConfig($widget, $config, $definition);
         $config = $this->hydrateTypedLayoutValues($config, $renderArea, $widget);
         $widgetOutputCacheKey = $this->buildWidgetOutputCacheKey($widget, $config);
+        if ($widgetOutputCacheKey !== null && $this->shouldBypassWidgetOutputCacheForTemplatePerfOverlay()) {
+            $widgetOutputCacheKey = null;
+        }
         if ($widgetOutputCacheKey !== null) {
             $cachedWidget = self::$widgetOutputCache[$widgetOutputCacheKey] ?? null;
             if (\is_array($cachedWidget)
@@ -4330,6 +4333,32 @@ HTML;
     /**
      * 获取部件元数据
      */
+    private function shouldBypassWidgetOutputCacheForTemplatePerfOverlay(): bool
+    {
+        try {
+            if (RequestContext::get('view.template.overlay') === true) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if ((bool)Env::get('wls.performance.template_render_overlay_enabled', false)) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            /** @var \Weline\Framework\Http\Request $request */
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            $flag = (string)($request->getGet('wls_tpl_perf') ?? $request->getParam('wls_tpl_perf') ?? '');
+            return $flag === '1' || \strtolower($flag) === 'true';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function buildWidgetOutputCacheKey(array $widget, array $config): ?string
     {
         $widgetModule = (string)($widget['widget_module'] ?? '');

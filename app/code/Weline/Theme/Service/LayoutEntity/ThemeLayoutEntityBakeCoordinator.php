@@ -17,7 +17,7 @@ use Weline\Theme\Service\ThemeScopeVersionService;
  */
 final class ThemeLayoutEntityBakeCoordinator
 {
-    private array $lastRebakeReport = ['migrated' => 0, 'unmapped' => []];
+    private array $lastRebakeReport = ['migrated' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
 
     public function getLastRebakeReport(): array
     {
@@ -135,8 +135,127 @@ final class ThemeLayoutEntityBakeCoordinator
             $this->updateConfigSidecarsOnly($themeId, $scope, $identityHash, $nodes,
                 $published, $releaseId, $draftRevisionId, $layoutType, $layoutOption, $area, $versionId);
         }
+
+        // Global chrome must exist for the scope even when this write only touched page content.
+        $this->ensurePublishedChromeForScope($themeId, $scope, $chromeTouched ? $nodes : []);
+        if ($chromeTouched && $this->sharedChrome->isChromeCarrierPageType($layoutType)) {
+            $this->syncCarrierChromePayloadIfStale($themeId, $scope, $nodes, $published);
+        }
+
         // 一次布局提交只通知一次展示依赖；不再清空所有框架缓存池。
         $this->bustPresentationCaches($themeId, $scope);
+    }
+
+    /**
+     * Ensure shared chrome is materialized + published for theme+scope.
+     * Creates ThemeScopeVersion when missing (DaoCharms / orphan page-only solidify).
+     *
+     * @param array<string|int, mixed> $nodes
+     */
+    public function ensurePublishedChromeForScope(int $themeId, string $scope, array $nodes = []): string
+    {
+        $scope = \trim($scope);
+        if ($themeId < 1 || $scope === '') {
+            throw new \InvalidArgumentException('theme_layout_entity_chrome_ensure_identity_invalid');
+        }
+
+        $published = $this->pointers->resolvePublishedChrome($themeId, $scope);
+        if ($published !== null && \is_file((string)($published['path'] ?? ''))) {
+            if ($nodes !== []) {
+                $this->syncCarrierChromePayloadIfStale($themeId, $scope, $nodes, true);
+                $again = $this->pointers->resolvePublishedChrome($themeId, $scope);
+                if ($again !== null && \is_file((string)($again['path'] ?? ''))) {
+                    return (string)$again['path'];
+                }
+            }
+
+            return (string)$published['path'];
+        }
+
+        // Current version may already have chrome.phtml but never marked published.
+        $current = $this->scopeVersions->ensureCurrent($themeId, $scope);
+        $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
+            ->readChromeBinding($themeId, $scope, $current->getVersionId());
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $currentPath = $binding?->templatePath
+            ?? $paths->chromePhtml($themeId, $scope, $current->getVersionId());
+        if (\is_file($currentPath) && $nodes === []) {
+            if (!$current->isPublished()) {
+                $this->scopeVersions->markPublished($current);
+            }
+            $this->pointers->invalidateChrome($themeId, $scope);
+            $this->pointers->rememberChromePointer($themeId, $scope, $current->getVersionId(), $currentPath, true);
+
+            return $currentPath;
+        }
+
+        $path = $this->bakeChromeFromNodes($themeId, $scope, $nodes, true, false);
+        $version = $this->scopeVersions->getCurrent($themeId, $scope);
+        if ($version === null) {
+            throw new \RuntimeException('theme_layout_entity_chrome_ensure_version_missing');
+        }
+        if (!$version->isPublished()) {
+            $this->scopeVersions->markPublished($version);
+        }
+        $this->pointers->invalidateChrome($themeId, $scope);
+        $this->pointers->rememberChromePointer($themeId, $scope, $version->getVersionId(), $path, true);
+
+        return $path;
+    }
+
+    /**
+     * Bootstrap shared chrome for scopes that have page shells but no published chrome.
+     */
+    public function bootstrapMissingChromeScopes(?int $themeId = null): int
+    {
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $root = $paths->root();
+        if (!\is_dir($root)) {
+            return 0;
+        }
+
+        $bootstrapped = 0;
+        $themeDirs = \glob($root . ($themeId !== null && $themeId > 0 ? (string)$themeId : '*'), GLOB_ONLYDIR) ?: [];
+        foreach ($themeDirs as $themeDir) {
+            $tid = (int)\basename($themeDir);
+            if ($tid < 1) {
+                continue;
+            }
+            if ($themeId !== null && $themeId > 0 && $tid !== $themeId) {
+                continue;
+            }
+            $scopeDirs = \glob($themeDir . \DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) ?: [];
+            foreach ($scopeDirs as $scopeDir) {
+                $scopeKey = \basename($scopeDir);
+                if ($scopeKey === '' || $scopeKey === '.' || $scopeKey === '..') {
+                    continue;
+                }
+                $pagesDir = $scopeDir . \DIRECTORY_SEPARATOR . 'pages';
+                if (!\is_dir($pagesDir)) {
+                    continue;
+                }
+                // Directory name is the sanitized storage scope (equals raw scope for storefront keys).
+                $scope = $scopeKey;
+                $existing = $this->pointers->resolvePublishedChrome($tid, $scope);
+                if ($existing !== null && \is_file((string)($existing['path'] ?? ''))) {
+                    continue;
+                }
+                try {
+                    $this->ensurePublishedChromeForScope($tid, $scope, []);
+                    ++$bootstrapped;
+                } catch (\Throwable $e) {
+                    if (\function_exists('w_log_warning')) {
+                        w_log_warning(
+                            'theme_layout_entity_chrome_bootstrap_failed: ' . $e->getMessage(),
+                            ['theme_id' => $tid, 'scope' => $scope],
+                            'theme_layout_entity',
+                        );
+                    }
+                }
+            }
+        }
+
+        return $bootstrapped;
     }
 
     /**
@@ -280,6 +399,9 @@ final class ThemeLayoutEntityBakeCoordinator
 
         }
 
+        // Page solidify must not leave the scope without shared chrome (header/footer).
+        $this->ensurePublishedChromeForScope($themeId, $scope, []);
+
         return $path;
     }
 
@@ -299,7 +421,7 @@ final class ThemeLayoutEntityBakeCoordinator
         $enumerator = ObjectManager::getInstance(ThemeLayoutEntityInjectionTargets::class);
         $targets = $enumerator->resolve($changes, $themeId);
         $report = $enumerator->reportForTargets($targets);
-        $this->lastRebakeReport = ['migrated' => 0, 'unmapped' => $report['unresolved']];
+        $this->lastRebakeReport = ['migrated' => 0, 'unmapped' => $report['unresolved'], 'chrome_bootstrapped' => 0];
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
         $seen = $scopes = [];
         foreach ($targets as $target) {
@@ -379,6 +501,10 @@ final class ThemeLayoutEntityBakeCoordinator
         foreach ($scopes as [$tid, $scope]) {
             $this->bustPresentationCaches($tid, $scope);
         }
+        // Scopes with page shells but never-created ThemeScopeVersion get chrome here.
+        $bootstrapped = $this->bootstrapMissingChromeScopes($themeId);
+        $this->lastRebakeReport['chrome_bootstrapped'] = $bootstrapped;
+        $this->lastRebakeReport['migrated'] += $bootstrapped;
         if ($changes !== [] && $this->lastRebakeReport['unmapped'] !== [] && function_exists('w_log_warning')) {
             w_log_warning('theme_layout_injection_versions_unmapped', $this->lastRebakeReport, 'theme_layout_entity');
         }

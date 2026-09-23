@@ -21,6 +21,11 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString("MODE_INHERIT = 'inherit'", $src);
         self::assertStringContainsString("MODE_LOCAL = 'local'", $src);
         self::assertStringContainsString("CHROME_AREAS = ['header', 'footer']", $src);
+        self::assertStringContainsString('HEADER_NESTED_CHROME_SLOTS', $src);
+        self::assertStringContainsString("'user-area'", $src);
+        self::assertStringContainsString("'currency'", $src);
+        self::assertStringContainsString("'language'", $src);
+        self::assertStringContainsString("'top-bar-rights'", $src);
         self::assertStringContainsString('function resolveModes(', $src);
         self::assertStringContainsString('function resolveWriteLayoutType(', $src);
         self::assertStringContainsString('function detach(', $src);
@@ -34,6 +39,23 @@ final class SharedChromeInheritContractTest extends TestCase
             $src,
         );
         self::assertStringContainsString("workspace->publish(", $src);
+    }
+
+    public function testNestedHeaderSlotsAreChromeTargets(): void
+    {
+        $service = new \Weline\Theme\Service\SharedChromeService(
+            $this->createMock(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class),
+        );
+        foreach (['user-area', 'currency', 'language', 'top-bar-rights', 'top-bar', 'logo', 'search'] as $slot) {
+            self::assertTrue(
+                $service->isChromeSlot($slot),
+                $slot . ' must be a global chrome slot',
+            );
+            self::assertTrue(
+                $service->isChromeTarget('', $slot),
+                $slot . ' must be isChromeTarget',
+            );
+        }
     }
 
     public function testThemeEditorExposesChromeModeDetachRestoreEndpoints(): void

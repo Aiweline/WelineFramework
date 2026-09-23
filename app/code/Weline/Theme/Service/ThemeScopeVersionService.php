@@ -34,6 +34,16 @@ final class ThemeScopeVersionService
             return $current;
         }
 
+        // Orphan rows may exist with is_current=0 (unique on version_number still holds).
+        $orphan = $this->loadLatestForScope($themeId, $scope);
+        if ($orphan instanceof ThemeScopeVersion) {
+            $this->unsetCurrent($themeId, $scope);
+            $orphan->setIsCurrent(true)->save();
+            $this->forgetFlagged($themeId, $scope);
+
+            return $orphan;
+        }
+
         $version = clone $this->versionModel;
         $version->reset()
             ->clearData()
@@ -53,6 +63,27 @@ final class ThemeScopeVersionService
             ->save();
 
         return $version;
+    }
+
+    private function loadLatestForScope(int $themeId, string $scope): ?ThemeScopeVersion
+    {
+        $result = $this->versionModel->reset()
+            ->where(ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeScopeVersion::schema_fields_SCOPE, $scope)
+            ->order(ThemeScopeVersion::schema_fields_VERSION_NUMBER, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+
+        if (!\is_array($result) || $result === []) {
+            return null;
+        }
+
+        $row = \is_array($result[0] ?? null) ? $result[0] : $result;
+        $version = clone $this->versionModel;
+        $version->setData($row);
+
+        return $version->getVersionId() > 0 ? $version : null;
     }
 
     public function getCurrent(int $themeId, string $scope): ?ThemeScopeVersion

@@ -1520,8 +1520,17 @@ class Template extends DataObject
         // WLS swaps the request instance per incoming request. Refresh the legacy
         // `$this->request` reference so older templates using that property stay correct.
         $this->request = ObjectManager::getInstance(Request::class);
+        RequestLifecycleTrace::armTemplatePerfOverlayIfRequested();
+        $ioBefore = RequestLifecycleTrace::isEnabled()
+            ? RequestLifecycleTrace::snapshotIoCounters()
+            : ['db_duration_ms' => 0.0, 'db_span_count' => 0, 'wls_duration_ms' => 0.0, 'wls_span_count' => 0];
         $profileInitEnd = \microtime(true);
         $reusableTemplateCacheKey = $this->buildReusableTemplateOutputCacheKey($filename, $dictionary);
+        if ($reusableTemplateCacheKey !== null) {
+            if ($this->shouldAnnotateTemplateRenderOverlay()) {
+                $reusableTemplateCacheKey = null;
+            }
+        }
         if ($reusableTemplateCacheKey !== null) {
             $cachedTemplate = $this->readReusableTemplateOutputCache(
                 $reusableTemplateCacheKey,
@@ -1529,16 +1538,20 @@ class Template extends DataObject
             );
             if ($cachedTemplate['status'] !== 'miss' && \is_string($cachedTemplate['html'])) {
                 $profileEnd = \microtime(true);
+                $totalMs = ($profileEnd - $profileStart) * 1000;
+                $html = $cachedTemplate['html'];
+                $io = $this->deltaTemplateIoCounters($ioBefore);
                 $this->recordTemplateRenderProfile(
                     $filename,
                     ($profileInitEnd - $profileStart) * 1000,
                     0.0,
                     0.0,
-                    ($profileEnd - $profileStart) * 1000,
-                    \strlen($cachedTemplate['html'])
+                    $totalMs,
+                    \strlen($html),
+                    $io
                 );
 
-                return $cachedTemplate['html'];
+                return $this->annotateTemplateRenderOverlay($html, $filename, $totalMs, \strlen($html), $io);
             }
         }
         $traceAccountSidebar = $this->shouldTraceAccountSidebarTemplate($filename);
@@ -1622,13 +1635,16 @@ class Template extends DataObject
             );
         }
         $profileEnd = \microtime(true);
+        $totalMs = ($profileEnd - $profileStart) * 1000;
+        $io = $this->deltaTemplateIoCounters($ioBefore);
         $this->recordTemplateRenderProfile(
             $filename,
             ($profileInitEnd - $profileStart) * 1000,
             (($profileIncludeEnd ?? $profileEnd) - ($profileIncludeStart ?? $profileInitEnd)) * 1000,
             ($profileEnd - ($profileIncludeEnd ?? $profileInitEnd)) * 1000,
-            ($profileEnd - $profileStart) * 1000,
-            \strlen($result)
+            $totalMs,
+            \strlen($result),
+            $io
         );
         if ($traceAccountSidebar) {
             $this->logAccountSidebarTemplateTrace('template_ob_end', [
@@ -1640,18 +1656,143 @@ class Template extends DataObject
                 'buffer' => FiberOutputBuffer::debugState(),
             ]);
         }
-        return $result;
+        return $this->annotateTemplateRenderOverlay($result, $filename, $totalMs, \strlen($result), $io);
     }
 
+    /**
+     * @param array{db_duration_ms: float, db_span_count: int, wls_duration_ms: float, wls_span_count: int} $before
+     * @return array{db_duration_ms: float, db_span_count: int, wls_duration_ms: float, wls_span_count: int, php_ms: float}
+     */
+    private function deltaTemplateIoCounters(array $before, ?float $totalMs = null): array
+    {
+        $after = RequestLifecycleTrace::isEnabled()
+            ? RequestLifecycleTrace::snapshotIoCounters()
+            : ['db_duration_ms' => 0.0, 'db_span_count' => 0, 'wls_duration_ms' => 0.0, 'wls_span_count' => 0];
+        $dbMs = \max(0.0, (float)$after['db_duration_ms'] - (float)$before['db_duration_ms']);
+        $wlsMs = \max(0.0, (float)$after['wls_duration_ms'] - (float)$before['wls_duration_ms']);
+        $dbCount = \max(0, (int)$after['db_span_count'] - (int)$before['db_span_count']);
+        $wlsCount = \max(0, (int)$after['wls_span_count'] - (int)$before['wls_span_count']);
+
+        return [
+            'db_duration_ms' => \round($dbMs, 2),
+            'db_span_count' => $dbCount,
+            'wls_duration_ms' => \round($wlsMs, 2),
+            'wls_span_count' => $wlsCount,
+            'php_ms' => 0.0,
+        ];
+    }
+
+    /**
+     * @param array{db_duration_ms?: float, db_span_count?: int, wls_duration_ms?: float, wls_span_count?: int, php_ms?: float}|null $io
+     * @return array{db_duration_ms: float, db_span_count: int, wls_duration_ms: float, wls_span_count: int, php_ms: float}
+     */
+    private function finalizeTemplateIoCounters(?array $io, float $totalMs): array
+    {
+        $dbMs = \round((float)($io['db_duration_ms'] ?? 0.0), 2);
+        $wlsMs = \round((float)($io['wls_duration_ms'] ?? 0.0), 2);
+        $phpMs = \round(\max(0.0, $totalMs - $dbMs - $wlsMs), 2);
+
+        return [
+            'db_duration_ms' => $dbMs,
+            'db_span_count' => (int)($io['db_span_count'] ?? 0),
+            'wls_duration_ms' => $wlsMs,
+            'wls_span_count' => (int)($io['wls_span_count'] ?? 0),
+            'php_ms' => $phpMs,
+        ];
+    }
+
+    /**
+     * DEV 诊断：在模板/部件 HTML 旁标注本段渲染耗时（query `wls_tpl_perf=1` 或 env 闸门）。
+     * 嵌套模板各自打点，便于肉眼定位 PDP 冷路径最慢块；不改变业务 HTML 语义。
+     */
+    private function shouldAnnotateTemplateRenderOverlay(): bool
+    {
+        return RequestLifecycleTrace::isTemplatePerfOverlayRequested();
+    }
+
+    /**
+     * @param array{db_duration_ms?: float, db_span_count?: int, wls_duration_ms?: float, wls_span_count?: int, php_ms?: float}|null $io
+     */
+    private function annotateTemplateRenderOverlay(
+        string $html,
+        string $filename,
+        float $totalMs,
+        int $bytes,
+        ?array $io = null
+    ): string {
+        if ($html === '' || !$this->shouldAnnotateTemplateRenderOverlay()) {
+            return $html;
+        }
+        // Overlay 开启时放宽阈值，尽量把部件级耗时露出来。
+        if ($totalMs < 5.0) {
+            return $html;
+        }
+
+        $io = $this->finalizeTemplateIoCounters($io, $totalMs);
+
+        $path = \str_replace('\\', '/', $filename);
+        $basePath = \defined('BP') ? \str_replace('\\', '/', (string)BP) : '';
+        if ($basePath !== '' && \str_starts_with($path, $basePath)) {
+            $path = \ltrim(\substr($path, \strlen($basePath)), '/');
+        }
+
+        $short = $path;
+        if (\preg_match('#/(widgets|partials|layouts|templates|hooks)/(.+)$#', $path, $m) === 1) {
+            $short = $m[1] . '/' . $m[2];
+        } elseif (\str_contains($path, '/')) {
+            $parts = \explode('/', $path);
+            $short = \implode('/', \array_slice($parts, -3));
+        }
+
+        $tone = $totalMs >= 500.0 ? '#b91c1c' : ($totalMs >= 100.0 ? '#c2410c' : '#a16207');
+        $dbPart = \sprintf('db %sms(%dq)', \number_format($io['db_duration_ms'], 1, '.', ''), $io['db_span_count']);
+        $wlsPart = \sprintf('wls %sms(%d)', \number_format($io['wls_duration_ms'], 1, '.', ''), $io['wls_span_count']);
+        $phpPart = \sprintf('php %sms', \number_format($io['php_ms'], 1, '.', ''));
+        $badge = \sprintf(
+            '<div class="wls-tpl-perf" data-wls-tpl-file="%s" data-wls-tpl-ms="%s" data-wls-tpl-db-ms="%s" data-wls-tpl-php-ms="%s" data-wls-tpl-wls-ms="%s" data-wls-tpl-db-q="%d" data-wls-tpl-bytes="%d" style="position:relative;z-index:2147483000;display:inline-block;margin:2px 0;padding:2px 8px;border-radius:4px;background:%s;color:#fff;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;box-shadow:0 1px 4px rgba(0,0,0,.25);max-width:100%%;word-break:break-all;">⏱ %s · total %sms · %s · %s · %s · %sB</div>',
+            \htmlspecialchars($path, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars(\number_format($totalMs, 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars(\number_format($io['db_duration_ms'], 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars(\number_format($io['php_ms'], 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars(\number_format($io['wls_duration_ms'], 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            $io['db_span_count'],
+            $bytes,
+            $tone,
+            \htmlspecialchars($short, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars(\number_format($totalMs, 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars($dbPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars($wlsPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars($phpPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \number_format($bytes)
+        );
+
+        // 完整文档：插到 <body> 后，避免破坏 doctype/head。
+        if (\preg_match('/<body\b[^>]*>/i', $html, $bodyMatch, \PREG_OFFSET_CAPTURE) === 1) {
+            $insertAt = (int)$bodyMatch[0][1] + \strlen((string)$bodyMatch[0][0]);
+            return \substr($html, 0, $insertAt) . $badge . \substr($html, $insertAt);
+        }
+
+        // 部件外壳：徽标作为 .widget-wrapper 首子节点，紧挨部件。
+        if (\preg_match('/^(<\s*div\b[^>]*\bwidget-wrapper\b[^>]*>)/i', $html, $wrapMatch) === 1) {
+            return $wrapMatch[1] . $badge . \substr($html, \strlen($wrapMatch[1]));
+        }
+
+        return $badge . $html;
+    }
+
+    /**
+     * @param array{db_duration_ms?: float, db_span_count?: int, wls_duration_ms?: float, wls_span_count?: int, php_ms?: float}|null $io
+     */
     private function recordTemplateRenderProfile(
         string $filename,
         float $initMs,
         float $includeMs,
         float $captureMs,
         float $totalMs,
-        int $bytes
+        int $bytes,
+        ?array $io = null
     ): void {
-        $traceEnabled = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled();
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
         if (!$traceEnabled && $totalMs < 20.0 && $includeMs < 20.0) {
             return;
         }
@@ -1660,6 +1801,7 @@ class Template extends DataObject
         if ($basePath !== '' && \str_starts_with($path, $basePath)) {
             $path = \ltrim(\substr($path, \strlen($basePath)), '/');
         }
+        $io = $this->finalizeTemplateIoCounters($io, $totalMs);
 
         if ($traceEnabled) {
             // 小模板也会积少成多；仅在当前请求累计，避免逐次写入 trace 明细。
@@ -1673,6 +1815,10 @@ class Template extends DataObject
                     'total_ms' => 0.0,
                     'max_ms' => 0.0,
                     'bytes' => 0,
+                    'db_duration_ms' => 0.0,
+                    'db_span_count' => 0,
+                    'wls_duration_ms' => 0.0,
+                    'php_ms' => 0.0,
                 ];
                 ++$entry['calls'];
                 $entry['init_ms'] += $initMs;
@@ -1681,6 +1827,10 @@ class Template extends DataObject
                 $entry['total_ms'] += $totalMs;
                 $entry['max_ms'] = \max($entry['max_ms'], $totalMs);
                 $entry['bytes'] += $bytes;
+                $entry['db_duration_ms'] = \round((float)$entry['db_duration_ms'] + $io['db_duration_ms'], 2);
+                $entry['db_span_count'] = (int)$entry['db_span_count'] + $io['db_span_count'];
+                $entry['wls_duration_ms'] = \round((float)$entry['wls_duration_ms'] + $io['wls_duration_ms'], 2);
+                $entry['php_ms'] = \round((float)$entry['php_ms'] + $io['php_ms'], 2);
                 $aggregate['files'][$path] = $entry;
             } else {
                 ++$aggregate['overflow_calls'];
@@ -1701,6 +1851,10 @@ class Template extends DataObject
             'capture_ms' => \round($captureMs, 2),
             'total_ms' => \round($totalMs, 2),
             'bytes' => $bytes,
+            'db_duration_ms' => $io['db_duration_ms'],
+            'db_span_count' => $io['db_span_count'],
+            'wls_duration_ms' => $io['wls_duration_ms'],
+            'php_ms' => $io['php_ms'],
         ];
 
         if (\count($profile) > 80) {
