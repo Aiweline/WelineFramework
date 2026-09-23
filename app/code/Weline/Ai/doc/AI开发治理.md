@@ -26,7 +26,7 @@
 ## 范围与安全
 
 - 保留无关工作区改动，只修改任务授权范围。
-- MCP 自愈、宿主重载、插件代次刷新与崩溃恢复必须保留任务开始前已存在的 tracked、staged、untracked 与 ignored 脏改；**宿主 Agent Shell 禁止**为「清场 / 对齐 HEAD」执行 `git checkout --` / `restore` / `clean` / `stash` 擦脏。MCP 内部只允许只读 Git 检查，禁止包括分支切换在内的全部 Git 写操作，也禁止 config/helper/pager 命令注入及任何 force/discard 变体。权威：`preserve_dirty_workspace` / [AI硬规则索引](./AI硬规则索引.md)。
+- MCP 自愈、宿主重载、插件代次刷新与崩溃恢复必须保留任务开始前已存在的 tracked、staged、untracked 与 ignored 脏改；**宿主 Agent Shell 禁止**为「清场 / 对齐 HEAD」执行 `git checkout --` / `restore` / `clean` / `stash` 擦脏。编辑前必须 **dirty-load** 当前磁盘脏改再改；禁止用会话历史/其它会话旧版本写回导致相互覆盖。MCP 内部只允许只读 Git 检查，禁止包括分支切换在内的全部 Git 写操作，也禁止 config/helper/pager 命令注入及任何 force/discard 变体。权威：`preserve_dirty_workspace` / [AI硬规则索引](./AI硬规则索引.md)。
 - 不使用假数据、隐藏开关、静默降级、弱化断言或切换 Provider/账号来制造成功。
 - 不在文档、会话指令或索引反馈中保存凭据和个人/生产数据。
 - 本地可回退实现和隔离验证可作为正常开发步骤；提交、推送、发布、部署、外部消息及生产数据变更仍需要用户明确授权。
