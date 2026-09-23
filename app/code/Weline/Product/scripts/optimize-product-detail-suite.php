@@ -1963,6 +1963,48 @@ function suiteAssembleHtml(array $t, array $imgs, callable $h): string
         . '</div>';
 }
 
+/** §5.4：给杂志楼层挂滚轮入场钩（店面 JS/CSS 消费） */
+function suiteTagRevealFloors(string $html): string
+{
+    $out = preg_replace_callback(
+        '/<(div|section)\s+class="(weline-detail-(?:prose|feature|figure-stack|figure-row|bento|text)[^"]*)"/i',
+        static function (array $m): string {
+            $tag = $m[1];
+            $cls = $m[2];
+            if (str_contains($cls, 'weline-detail-reveal')) {
+                return '<' . $tag . ' class="' . $cls . '"';
+            }
+
+            return '<' . $tag . ' class="' . $cls . ' weline-detail-reveal" data-weline-detail-reveal="1"';
+        },
+        $html
+    );
+
+    return is_string($out) ? $out : $html;
+}
+
+function suiteExistingDescriptionLooksMagazine(PDO $pdo, int $productId, string $locale): bool
+{
+    $st = $pdo->prepare(
+        "SELECT value_text FROM w_product_ws_0_attribute_value
+         WHERE entity_id=? AND attribute_code='description' AND locale=?
+         ORDER BY length(COALESCE(value_text,'')) DESC LIMIT 1"
+    );
+    $st->execute([(string)$productId, $locale]);
+    $html = (string)($st->fetchColumn() ?: '');
+    if ($html === '' && $locale === 'zh_Hans_CN') {
+        $st->execute([(string)$productId, '']);
+        $html = (string)($st->fetchColumn() ?: '');
+    }
+    if ($html === '') {
+        return false;
+    }
+
+    return (str_contains($html, 'data-weds') || str_contains($html, '<!--weds:xq-->'))
+        && str_contains($html, 'weline-detail-feature')
+        && str_contains($html, 'weline-detail-prose');
+}
+
 $ok = 0;
 $skip = 0;
 $fail = 0;
@@ -1997,8 +2039,39 @@ foreach ($productIds as $productId) {
     }
     $copy = suiteBuildCopyPacks($meta, $assets);
     $writes = [];
+    $keptLocales = 0;
     foreach ($localePlan as $locale => $baseKey) {
         if (!isset($copy[$baseKey])) {
+            if (suiteExistingDescriptionLooksMagazine($pdo, $productId, (string)$locale)
+                || ($locale === '' && suiteExistingDescriptionLooksMagazine($pdo, $productId, 'zh_Hans_CN'))) {
+                // 无文案包但店面已有杂志 HTML：补 §5.4 reveal 钩后写回，勿 EN dump
+                $keepLocale = (string)$locale;
+                $stKeep = $pdo->prepare(
+                    "SELECT value_text FROM w_product_ws_0_attribute_value
+                     WHERE entity_id=? AND attribute_code='description' AND locale=?
+                     ORDER BY length(COALESCE(value_text,'')) DESC LIMIT 1"
+                );
+                $stKeep->execute([(string)$productId, $keepLocale]);
+                $keepHtml = (string)($stKeep->fetchColumn() ?: '');
+                if ($keepHtml === '' && $keepLocale === '') {
+                    $stKeep->execute([(string)$productId, 'zh_Hans_CN']);
+                    $keepHtml = (string)($stKeep->fetchColumn() ?: '');
+                }
+                if ($keepHtml !== '') {
+                    $tagged = suiteTagRevealFloors($keepHtml);
+                    if ($tagged !== $keepHtml) {
+                        $writes[] = ['locale' => $keepLocale, 'html' => $tagged, 'len' => strlen($tagged)];
+                        echo "tag-reveal locale " . ($keepLocale === '' ? '(empty)' : $keepLocale) . "\n";
+                    } else {
+                        echo "keep locale " . ($keepLocale === '' ? '(empty)' : $keepLocale) . " (no pack; magazine HTML present)\n";
+                        $keptLocales++;
+                    }
+                } else {
+                    echo "keep locale " . ($keepLocale === '' ? '(empty)' : $keepLocale) . " (no pack; magazine HTML present)\n";
+                    $keptLocales++;
+                }
+                continue;
+            }
             fwrite(STDERR, "fail {$productId}: missing pack {$baseKey} for locale {$locale}\n");
             $fail++;
             continue 2;
@@ -2014,6 +2087,7 @@ foreach ($productIds as $productId) {
             $fail++;
             continue 2;
         }
+        $html = suiteTagRevealFloors($html);
         foreach ($banned as $b) {
             if (str_contains($html, $b)) {
                 fwrite(STDERR, "fail {$productId} banned {$b}\n");
@@ -2050,7 +2124,12 @@ foreach ($productIds as $productId) {
         }
         $writes[] = ['locale' => $locale, 'html' => $html, 'len' => strlen($html)];
     }
-    echo $meta['short'] . "\timgs=" . count($assets) . "\tlocales=" . count($writes) . "\n";
+    if ($writes === [] && $keptLocales === 0) {
+        fwrite(STDERR, "fail {$productId}: nothing to write\n");
+        $fail++;
+        continue;
+    }
+    echo $meta['short'] . "\timgs=" . count($assets) . "\tlocales=" . count($writes) . "\tkept=" . $keptLocales . "\n";
     foreach ($writes as $w) {
         echo ($w['locale'] === '' ? '(empty)' : $w['locale']) . "\t" . $w['len'] . "\n";
     }

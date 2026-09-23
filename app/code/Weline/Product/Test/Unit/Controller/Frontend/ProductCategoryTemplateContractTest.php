@@ -45,11 +45,11 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-category-sort"', $template);
         self::assertStringContainsString('data-testid="storefront-category-grid"', $template);
         self::assertStringContainsString('amz-plp__results-bar', $template);
-        self::assertStringContainsString('<w:product:card', $template);
-        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $template);
-        self::assertStringContainsString('show-sku="true"', $template);
+        self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $template);
+        self::assertStringContainsString("'show_sku' => true", $template);
         self::assertStringContainsString('weline-product-card-shelf', $template);
         self::assertStringContainsString('storefront_category_breadcrumbs', $template);
+        self::assertStringNotContainsString('<w:product:card', $template);
         self::assertStringNotContainsString('amz-card product-card', $template);
         self::assertStringNotContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $template);
         self::assertStringNotContainsString("button.textContent = '", $template);

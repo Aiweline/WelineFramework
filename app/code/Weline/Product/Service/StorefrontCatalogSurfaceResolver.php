@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Runtime\RequestContext;
+
 /**
  * Resolves the public catalog surface before the Product controller rewrites
  * the request into its shared listing action.
@@ -12,8 +14,18 @@ final class StorefrontCatalogSurfaceResolver
 {
     /**
      * Shared social/share image for catalog listing surfaces (absolute-capable path).
+     * Default-website / Hanfu storefronts only — DaoCharms uses SHARE_IMAGE_BY_WEBSITE.
      */
     public const SHARE_IMAGE = '/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp';
+
+    /**
+     * Website-scoped share images (empty = omit Hanfu asset on that storefront).
+     *
+     * @var array<string, string>
+     */
+    private const SHARE_IMAGE_BY_WEBSITE = [
+        'daocharms' => '',
+    ];
 
     /**
      * @var array<string, array{
@@ -121,18 +133,109 @@ final class StorefrontCatalogSurfaceResolver
     ];
 
     /**
+     * DaoCharms ritual-objects catalog copy (website code = daocharms).
+     *
+     * @var array<string, array{
+     *     zh:array{title:string,heading:string,lede:string,seo_title:string,seo_description:string,seo_keywords:string,share_image_alt:string},
+     *     en:array{title:string,heading:string,lede:string,seo_title:string,seo_description:string,seo_keywords:string,share_image_alt:string}
+     * }>
+     */
+    private const SURFACES_DAOCHARMS = [
+        'products' => [
+            'zh' => [
+                'title' => '仪式物件',
+                'heading' => '仪式物件',
+                'lede' => '浏览可佩戴吊坠、无为空间物件与居家器物，可按价格与名称排序。',
+                'seo_title' => '仪式物件 | DaoCharms',
+                'seo_description' => '选购 DaoCharms 仪式物件：天然石与木质吊坠、香器与磬铃，以及安静的居家器物。',
+                'seo_keywords' => '仪式物件,吊坠,无为,道家,DaoCharms',
+                'share_image_alt' => 'DaoCharms 仪式物件',
+            ],
+            'en' => [
+                'title' => 'Ritual Objects',
+                'heading' => 'Shop Ritual Objects',
+                'lede' => 'Browse wearable rituals, Wu Wei sanctuary objects, and quiet home pieces — sort by price or name.',
+                'seo_title' => 'Shop Ritual Objects',
+                'seo_description' => 'Shop DaoCharms ritual objects: natural-stone pendants, incense and bells, and quiet home pieces.',
+                'seo_keywords' => 'ritual objects,pendants,wu wei,dao,DaoCharms',
+                'share_image_alt' => 'DaoCharms ritual objects',
+            ],
+        ],
+        'categories' => [
+            'zh' => [
+                'title' => '物件分类',
+                'heading' => '按系列探索',
+                'lede' => '从可佩戴仪式、无为空间、居家器物与居服中，找到适合日常节奏的物件。',
+                'seo_title' => '物件分类 | DaoCharms',
+                'seo_description' => '按系列探索 DaoCharms：可佩戴仪式、无为空间、居家器物与居服。',
+                'seo_keywords' => '分类,吊坠,香器,居服,DaoCharms',
+                'share_image_alt' => 'DaoCharms 物件分类',
+            ],
+            'en' => [
+                'title' => 'Collections',
+                'heading' => 'Explore by Collection',
+                'lede' => 'Browse Wearable Rituals, Wu Wei Sanctuary, home objects, and lounge wear for quieter everyday rituals.',
+                'seo_title' => 'Collections | DaoCharms',
+                'seo_description' => 'Explore DaoCharms by collection: wearable rituals, sanctuary objects, home pieces, and lounge wear.',
+                'seo_keywords' => 'collections,pendants,incense,lounge wear,DaoCharms',
+                'share_image_alt' => 'DaoCharms collections',
+            ],
+        ],
+        'new_arrivals' => [
+            'zh' => [
+                'title' => '新品上架',
+                'heading' => '新到物件',
+                'lede' => '按上架时间探索最新仪式物件与材质作品。',
+                'seo_title' => '新品 | DaoCharms',
+                'seo_description' => '探索 DaoCharms 新品：最新吊坠、香器与居家器物。',
+                'seo_keywords' => '新品,仪式物件,DaoCharms',
+                'share_image_alt' => 'DaoCharms 新品',
+            ],
+            'en' => [
+                'title' => 'New Arrivals',
+                'heading' => 'New Ritual Objects',
+                'lede' => 'Explore the latest ritual objects and material pieces in arrival order.',
+                'seo_title' => 'New Arrivals | DaoCharms',
+                'seo_description' => 'Discover new DaoCharms pendants, incense pieces, and quiet home objects.',
+                'seo_keywords' => 'new arrivals,ritual objects,DaoCharms',
+                'share_image_alt' => 'DaoCharms new arrivals',
+            ],
+        ],
+        'best_sellers' => [
+            'zh' => [
+                'title' => '热销榜',
+                'heading' => '人气物件',
+                'lede' => '查看当前最受欢迎的仪式物件，快速发现店铺口碑之选。',
+                'seo_title' => '热销 | DaoCharms',
+                'seo_description' => '探索 DaoCharms 热销仪式物件与吊坠。',
+                'seo_keywords' => '热销,人气物件,DaoCharms',
+                'share_image_alt' => 'DaoCharms 热销物件',
+            ],
+            'en' => [
+                'title' => 'Best Sellers',
+                'heading' => 'Most-Loved Objects',
+                'lede' => 'Discover the ritual objects our customers return to most.',
+                'seo_title' => 'Best Sellers | DaoCharms',
+                'seo_description' => 'Discover best-selling DaoCharms ritual objects and pendants.',
+                'seo_keywords' => 'best sellers,ritual objects,DaoCharms',
+                'share_image_alt' => 'DaoCharms best sellers',
+            ],
+        ],
+    ];
+
+    /**
      * @return array<string, string>
      */
-    public function resolve(string $requestUri, string $locale = ''): array
+    public function resolve(string $requestUri, string $locale = '', string $websiteCode = ''): array
     {
-        return $this->resolveSupported($requestUri, $locale)
-            ?? $this->localizedSurface('products', $locale);
+        return $this->resolveSupported($requestUri, $locale, $websiteCode)
+            ?? $this->localizedSurface('products', $locale, $websiteCode);
     }
 
     /**
      * @return array<string, string>|null
      */
-    public function resolveSupported(string $requestUri, string $locale = ''): ?array
+    public function resolveSupported(string $requestUri, string $locale = '', string $websiteCode = ''): ?array
     {
         $path = parse_url($requestUri, PHP_URL_PATH);
         if (!is_string($path)) {
@@ -175,19 +278,25 @@ final class StorefrontCatalogSurfaceResolver
             return null;
         }
 
-        return $this->localizedSurface($surfaceCode, $locale);
+        return $this->localizedSurface($surfaceCode, $locale, $websiteCode);
     }
 
     /**
      * @return array<string, string>
      */
-    private function localizedSurface(string $surfaceCode, string $locale): array
+    private function localizedSurface(string $surfaceCode, string $locale, string $websiteCode = ''): array
     {
         $surface = self::SURFACES[$surfaceCode];
+        $websiteCode = $this->normalizeWebsiteCode($websiteCode);
+        $copyBucket = $surface;
+        if ($websiteCode === 'daocharms' && isset(self::SURFACES_DAOCHARMS[$surfaceCode])) {
+            $copyBucket = array_merge($surface, self::SURFACES_DAOCHARMS[$surfaceCode]);
+        }
+
         $normalizedLocale = strtolower(str_replace('-', '_', trim($locale)));
         $copy = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh')
-            ? $surface['zh']
-            : $surface['en'];
+            ? $copyBucket['zh']
+            : $copyBucket['en'];
 
         return [
             'code' => $surfaceCode,
@@ -201,9 +310,32 @@ final class StorefrontCatalogSurfaceResolver
             'seo_title' => $copy['seo_title'],
             'seo_description' => $copy['seo_description'],
             'seo_keywords' => $copy['seo_keywords'],
-            'share_image' => self::SHARE_IMAGE,
+            'share_image' => $this->shareImageForWebsite($websiteCode),
             'share_image_alt' => $copy['share_image_alt'],
         ];
+    }
+
+    private function normalizeWebsiteCode(string $websiteCode): string
+    {
+        $code = strtolower(trim($websiteCode));
+        if ($code !== '') {
+            return $code;
+        }
+
+        try {
+            return strtolower(trim((string)RequestContext::getWelineWebsiteCode()));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function shareImageForWebsite(string $websiteCode): string
+    {
+        if ($websiteCode !== '' && array_key_exists($websiteCode, self::SHARE_IMAGE_BY_WEBSITE)) {
+            return self::SHARE_IMAGE_BY_WEBSITE[$websiteCode];
+        }
+
+        return self::SHARE_IMAGE;
     }
 
     private function isCurrencySegment(string $segment): bool

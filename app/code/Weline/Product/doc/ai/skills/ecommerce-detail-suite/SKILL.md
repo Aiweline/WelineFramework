@@ -2,11 +2,14 @@
 name: ecommerce-detail-suite
 description: >-
   CHILD skill slot ② under parent 产品优化. SKIP MCP (content_ops_skills_skip_mcp)—
-  host Read this dir + 详情优化.md. Triggers: 详情优化/商详优化/… OR /product/ with
-  those intents. Parent 产品优化 launches three parallel subagents. Skip ONLY if
-  data-weds="xq" AND §5.2 layout gate PASS (magazine HTML: feature/poem-aside +
-  pair + checklist; Browser≥640 visible—NOT big-image stack; §5.3 native
-  Flex/Grid + text-safety); else FORCE HTML relayout. NOT weline-product-knowledge.
+  host Read this dir + 详情优化.md. MUST also Read companion triad:
+  frontend-design (审美细节) + ui-ux-pro-max (风格质感) + interaction-design (交互).
+  Triggers: 详情优化/商详优化/… OR /product/ with those intents. Parent 产品优化
+  launches three parallel subagents. Skip ONLY if data-weds="xq" AND §5.2 layout
+  gate PASS (magazine HTML: feature/poem-aside + pair + checklist; Browser≥640
+  visible—NOT big-image stack; §5.3 native Flex/Grid + text-safety + triad polish;
+  §5.4 motion/scroll/brand + interaction-design); else FORCE HTML relayout.
+  NOT weline-product-knowledge.
 ---
 
 <!-- weline:product-detail-optimize:hand-written -->
@@ -40,7 +43,19 @@ description: >-
 | DetailFlow / 文案 FABE / 工业详情包 | **宿主 Agent Store** `companions/`（本仓目录不一定有副本） | 楼层蓝图、卖点、QC |
 | **产品图处理** | **本仓** `companions/weline-image-pipeline.md` | 像素 SOP |
 
-另齐读（按需）：`frontend-design`、`weline-theme-development`、`changan-hanfu-brand`、审图、`local-browser-urls`。
+### 设计三件套（严重 · 排版/质感/交互必引）
+
+详情 HTML 杂志排版与动效 **禁止只靠本文件模板交差**。动手前 **同回合宿主 Read** 下列三技能（Agent Store），并按分工落进 §5.3 / §5.4：
+
+| 技能 | 安装位置 | 本套件职责 | 落到 |
+|------|----------|------------|------|
+| **`frontend-design`** | 宿主 Agent Store `skills/frontend-design/` | **审美与细节**：字阶层级、留白、反模板构图、有意图的排版节奏 | **§5.3** + §五字阶/行宽 |
+| **`ui-ux-pro-max`** | 宿主 Agent Store `skills/ui-ux-pro-max/` | **风格与质感**：材质感、视觉系统、高级表面、反廉价货盘皮 | **§5.3** 质感闸 + 品牌可辨 |
+| **`interaction-design`** | 宿主 Agent Store `skills/interaction-design/` | **交互**：滚轮入场、微交互、状态反馈、`prefers-reduced-motion` | **§5.4** 动效闸 |
+
+**冲突裁决（硬）**：Theme Token / `weline-theme-development` / 品牌技能（汉服→`changan-hanfu-brand`）/ §5.2‑D 不裁脸 **>** 三件套里任何「炫技模板」；Weline 店面优先复用 `productDetailReveal`，禁为详情硬塞 React/Framer。
+
+另齐读（按需）：`weline-theme-development`、`changan-hanfu-brand`、审图、`local-browser-urls`。
 
 ---
 
@@ -77,9 +92,9 @@ description: >-
 | **检测** | 动手前读各语种（至少默认语）详情 HTML：**有标记 ≠ 可跳过**。必须再跑 **§5.2**（结构计数 + Browser 可见排版）。仅当「有标记 **且** §5.2 PASS」才视为已优化 |
 | **兼容** | 历史 `data-weline-detail-suite=` 可参与标记检测；**绝不**用 1688 属性做兼容；**绝不**因有标记就跳过排版闸 |
 | **跳过** | 标记齐 **且** §5.2 PASS，且用户未强制 → 可跳过；汇报须写 `跳过：data-weds=xq + 排版闸PASS` |
-| **强制重做** | `强制重做` / `重跑优化` / `忽略已优化标记` / `--force`；或用户点名 **糊图未处理 / 千篇一律大图 / 没设计 / 相册滑梯 / 没有任何排版 / 没有布局效果 / 全是大图 / 一张大图从上到下 / 翻译没做 / 其它语言仍中文或英文 / 启用语漏译 / 尺码表还是图 / 诗句侧栏 / 文图拼版 / 竖排烤字 / 布局太单一 / 没用上排版**（即使已有 `data-weds`）→ **必须重做 HTML 杂志排版**；重做后仍须写回 `data-weds="xq"` |
-| **自动强制（严重）** | 只要 §5.2 FAIL（含「只有通栏大图竖叠、无左右/双列/清单等可见版式」），**即使已有 `data-weds`** → **视为未优化，强制重做详情 HTML**；禁止「修糊边/换图」冒充排版完成 |
-| **禁止** | 把 `xq` 写成买家可见文案；禁止用 `1688` / 货源 / 营销 token 当跳过标记；**禁止**糊图/相册模板/漏译/信息烤图残留/诗侧栏拼版/**纯大图竖墙无排版**仍盖 `data-weds` 交差 |
+| **强制重做** | `强制重做` / `重跑优化` / `忽略已优化标记` / `--force`；或用户点名 **糊图未处理 / 千篇一律大图 / 没设计 / 相册滑梯 / 没有任何排版 / 没有布局效果 / 全是大图 / 一张大图从上到下 / 翻译没做 / 其它语言仍中文或英文 / 启用语漏译 / 尺码表还是图 / 诗句侧栏 / 文图拼版 / 竖排烤字 / 布局太单一 / 没用上排版 / 没动画 / 滚轮没效果 / 没有高级感 / 没有品牌感 / 页面死板**（即使已有 `data-weds`）→ **必须重做 HTML 杂志排版（含 §5.4 动效）**；重做后仍须写回 `data-weds="xq"` |
+| **自动强制（严重）** | 只要 §5.2 FAIL（含「只有通栏大图竖叠、无左右/双列/清单等可见版式」）或 **§5.4 FAIL**（无滚轮入场/无品牌氛围动效），**即使已有 `data-weds`** → **视为未优化，强制重做详情 HTML**；禁止「修糊边/换图」冒充排版完成 |
+| **禁止** | 把 `xq` 写成买家可见文案；禁止用 `1688` / 货源 / 营销 token 当跳过标记；**禁止**糊图/相册模板/漏译/信息烤图残留/诗侧栏拼版/**纯大图竖墙无排版**/**死板无动效**仍盖 `data-weds` 交差 |
 
 ---
 
@@ -90,7 +105,7 @@ description: >-
 | 详情排版/卖点 | 详情正文：图结果、旁文、卖点、尺码语义、详情内排版 | 顶栏/买卖区/SEO/价格/规格轴/主题全局 |
 | **主图/规格图处理** | `main`/`gallery`/`variant` 像素与 FileAsset | 勿把主图缺陷留给详情；规格图规则=主图（仅尺寸可不同） |
 
-汇报：`表面：主图|规格|详情` · `target_ar：…` · `裁后补回：是` · `图处理：已做` · `类审：N→0` ·（详情另加）`风格：古风` · `排版：多样（非纯竖叠）` · `三方：已抹` · `卖点：已表`。
+汇报：`表面：主图|规格|详情` · `target_ar：…` · `裁后补回：是` · `图处理：已做` · `类审：N→0` ·（详情另加）`风格：古风` · `排版：多样（非纯竖叠）` · `§5.4：滚轮入场·品牌氛围` · `三方：已抹` · `卖点：已表`。
 
 - 禁编造不可见图参数；字体色仅 Theme Token；禁 Ollama。
 
@@ -452,8 +467,9 @@ Step L1  卖点表（FABE）→ 每点一句证据，禁止无证据编造
 Step L2  书面锁原型序列（≥4 种，密→疏→密）；写出后再落 HTML
 Step L3  按图选槽：竖图走 stack/fullbleed/editorial；真横才 feature_lr
 Step L4  图文交错：通栏后接 prose；要点旁文；pair 双色；quiet 透气；checklist/spec 收束
-Step L5  字阶地板（§五‑B）+ §5.3 原生布局/CSS Token + 禁图容器框底描边
-Step L6  Browser 禁缓存验收：非相册滑梯、可读、无小字巨图、§5.2‑D 不裁脸
+Step L5  字阶地板（§五‑B）+ §5.3 原生布局/CSS Token + **齐读 frontend-design + ui-ux-pro-max**（审美·质感）+ 禁图容器框底描边
+Step L5b §5.4 动效·高级感·品牌感 + **齐读 interaction-design**（交互）：楼层滚轮入场 + 有节制微动效（见 §5.4）
+Step L6  Browser 禁缓存验收：非相册滑梯、可读、无小字巨图、§5.2‑D 不裁脸、**滚轮可见入场动效**、观感非「排版太弱」
 ```
 
 推荐序列示例（汉服竖图多）：
@@ -533,14 +549,14 @@ Step L6  Browser 禁缓存验收：非相册滑梯、可读、无小字巨图、
 
 ```
 有 data-weds？
-  ├─ 否 → 必须做详情（含本闸）
-  └─ 是 → 跑 §5.2 A+B+D
-        ├─ PASS → 才可跳过（除非用户强制）
-        └─ FAIL → 自动强制重做 HTML 排版（无视标记）
-写 data-weds 前：A+B+D 必须 PASS；否则禁止盖章。
+  ├─ 否 → 必须做详情（含本闸 + §5.3 + §5.4）
+  └─ 是 → 跑 §5.2 A+B+D，并对照 §5.3 / §5.4
+        ├─ 全 PASS → 才可跳过（除非用户强制）
+        └─ 任 FAIL → 自动强制重做 HTML 排版/动效（无视标记）
+写 data-weds 前：A+B+D + §5.3 质感 + §5.4 动效 必须 PASS；否则禁止盖章。
 ```
 
-口令：**有标记不够；看不见杂志排版 = 强制重做。**
+口令：**有标记不够；看不见杂志排版 = 强制重做；看不见滚轮呼吸 = 同样未完工。**
 
 #### D. 详情区展示 CSS 硬闸（严重 · 用户已验「诗侧栏横切脸」）
 
@@ -607,9 +623,68 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 
 - §5.2 A+B+D = **能否盖章**的硬闸（结构 + Browser + 不裁脸）。  
 - §5.3 = **杂志质感**硬约束：无 Flex/Grid 意图、无文字安全、无行宽、Hero 用 cover 裁脸、Bento 空卡刷屏 → 即使 class 凑齐也视为 **审美未完工**，应在重做 HTML 时一并修，**禁止**「结构过了就交苹果风 cover Hero」。  
-- 汇报建议加一行：`§5.3：Flex/Grid=是；文字安全=是；行宽=是；Hero/Bento/Spec=…`。
+- §5.4 = **动效·高级感·品牌感**硬闸：无滚轮入场、页面死板、无品牌氛围 → **未完工**，禁止盖 `data-weds`。  
+- **设计三件套（必引）**：写/改详情排版前宿主 Read  
+  - `frontend-design` → **审美和细节**（字阶·留白·反模板）  
+  - `ui-ux-pro-max` → **风格和质感**（材质·高级表面·视觉系统）  
+  - `interaction-design` → **交互**（滚轮 reveal·微反馈·reduced-motion）  
+  未齐读三件套而交出「结构过了但观感弱」→ **§5.3/§5.4 FAIL**，禁 `data-weds`。  
+- 汇报建议加一行：`§5.3：Flex/Grid=是；文字安全=是；行宽=是；Hero/Bento/Spec=…；三件套=frontend-design+ui-ux-pro-max+interaction-design` · `§5.4：滚轮入场=是；品牌氛围=是；reduced-motion=已尊重`。
 
-口令：**指南学结构，不学苹果皮；高级感来自留白·字阶·基线·HTML 文案，不是 cover 切脸。**
+口令：**指南学结构，不学苹果皮；高级感来自留白·字阶·基线·HTML 文案·有节制动效，不是 cover 切脸。审美看 frontend-design，质感看 ui-ux-pro-max，交互看 interaction-design。**
+
+### 5.4 动效 · 高级感 · 品牌感（严重 · 滚轮有戏 · 整页质感）
+
+> **目标**：详情不是「静态杂志 PDF」，而是 **有呼吸感的品牌卷轴**——滚轮推进时楼层有入场/错落，整页观感高级、有品牌识别，而不是货盘相册或廉价闪烁轮播。  
+> **冲突裁决**：§5.2 / §5.2‑D（不裁脸）· Theme Token · 品牌技能（汉服→`changan-hanfu-brand`）> 任意第三方「炫技动效」模板。
+
+#### A. 必须达成的观感（缺一 FAIL）
+
+| # | 维度 | 必须看见 | FAIL |
+|---|------|----------|------|
+| 1 | **滚轮入场** | 详情主楼层（lead / feature|poem-aside / pair|triptych / checklist|spec / 卖点墙）在进入视口时有 **淡入 + 轻位移**（或等价 staggered reveal）；滚一段就能感到节奏 | 全程静态硬切；滚轮像翻 JPG 相册 |
+| 2 | **高级感** | 动效 **慢而稳**（常见 0.55–0.9s、ease-out / cubic-bezier 柔缓）；位移小（约 12–28px）；不抢内容；与 §5.3 留白·字阶一致 | 弹跳/抖动/霓虹闪；时长 <0.25s 的廉价闪现；全页同时乱闪 |
+| 3 | **品牌感** | 动效气质贴品牌：汉服/古风 → 克制、水墨卷轴感（轻 fade / 竖向轻移 / 诗栏略晚于图）；禁止科技紫渐变、赛博扫光、电商大红甩动 | 通用模板动效套任何品类；动效破坏古风/品牌识别 |
+| 4 | **整页效果** | 开合有呼吸：密楼层可短 stagger，quiet 后下一块再入场；首屏 lead 可轻入场，其后随滚轮接力 | 只有首屏动一次、后面全死；或每张图同构弹跳到页底 |
+
+#### B. 落码硬规（CSS / 轻 JS）
+
+| 规则 | 要求 | 禁止 |
+|------|------|------|
+| **挂点** | 详情根或各楼层挂统一揭示钩（推荐 `data-weline-detail-reveal` / `.weline-detail-reveal`）；入场后加 `is-in` / `data-inview="1"` | 无钩、只靠「浏览器默认」交差 |
+| **触发** | `IntersectionObserver`（`rootMargin` 约 `0px 0px -8% 0px`，`threshold` 约 0.12–0.2）或等价 CSS scroll-driven（若店面已支持且降级安全） | 依赖 hover 才动（移动端无 hover）；依赖滚轮 delta 手写卡顿脚本 |
+| **属性** | 优先 `opacity` + `transform: translateY/X`；可用极轻 `filter`；**`will-change` 仅入场前短暂** | 持续 `box-shadow` 动画；大面积 `blur` 滤镜拖性能；改 `top/left` 触发布局抖动 |
+| **色与字** | **仅 Theme Token**；动效不改语义色乱闪 | 硬编码炫彩描边、彩虹扫光当「高级」 |
+| **无障碍** | `@media (prefers-reduced-motion: reduce)` 下 **立刻静态终态**（无位移、无延迟） | 无视系统「减少动态效果」 |
+| **性能** | 同屏 stagger ≤ 4；大图不跟滤镜动画；脚本 ≤ 一次 observer | 每 img 独立重 observer 炸主线程；无限 loop 呼吸灯抢注意力 |
+| **与裁脸闸** | 动效 **不得** 用 overflow:hidden + 缩放裁切人脸绕过 §5.2‑D | 入场 zoom-crop 切脸 |
+
+落地优先级：
+
+1. **店面已有** `.weline-detail-*` / `product-info` 共享 reveal CSS/JS → **复用**，禁止私造第二套。  
+2. 无共享基建 → 在详情描述安全范围内补 **最小** reveal CSS + 一段 observer（或模块静态资源一次登记）；class 须能过店面白名单/`safeDetailTextClass`（与 §5.3 一致，禁随意 `<section>`）。  
+3. **同回合必读三件套**：`frontend-design`（审美·细节）+ `ui-ux-pro-max`（风格·质感）+ `interaction-design`（交互·滚轮·反馈）；再加 `weline-theme-development`（Token）+ 品牌技能（有则）。禁止「只跑 reveal 脚本、不读三件套」交差。
+
+#### C. Browser 验收（禁缓存 · 与 §5.2‑B 同开）
+
+桌面宽 ≥640px 打开 PDP 详情区：
+
+1. 从买卖区滚入详情：至少 **3 个**不同楼层可见入场（opacity/transform 变化），不是「刷新瞬间全页已定格」。  
+2. 连续快滚：无严重卡顿、无布局跳动把图裁断。  
+3. DevTools 模拟 `prefers-reduced-motion: reduce` → 楼层直接终态、无入场位移。  
+4. 汉服等品牌品：动效克制，不出现科技风扫光/弹跳。
+
+#### D. 与 `data-weds` / 跳过
+
+```
+写 data-weds 前：§5.2 A+B+D + §5.3 质感 + §5.4 动效 必须 PASS
+有标记跳过：须复验 §5.4（滚轮仍有入场）；FAIL → 强制补动效/重做
+用户点名「没动画 / 滚轮没效果 / 没高级感 / 没品牌感 / 页面死板」→ 即使有标记也必须按本闸重做
+```
+
+汇报须写：`§5.4：reveal=是；楼层入场≥3；品牌气质=…；reduced-motion=已尊重`。
+
+口令：**详情要会呼吸；滚轮有戏，高级克制，品牌可辨；死板静态 = 未完工。**
 
 ---
 
@@ -739,10 +814,10 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 1. 分流；禁抠图；禁 blur-fill；禁色垫假拓；**锁目录 target_ar（方 canvas/方卡→1:1；非裁后细长比）**
 2. 裁/剥框 → **真·生图 AI outpaint 装进画幅**（`GenerateImage`+参考图+目标比）→ mid-lap 保清
 3. 禁 cover 裁窄；禁随便加背景；禁对 sharp 猛去噪；禁空放大；无真横勿硬凑横槽
-4. 按图选槽；抹三方；卖点表；**§六字段级真译（缺一/只译标题禁 data-weds）**；**版式 SOP §五 + §5.2 硬闸（结构+Browser；大图竖墙=FAIL）+ §5.3（Flex/Grid·文字安全·行宽）**
+4. 按图选槽；抹三方；卖点表；**§六字段级真译（缺一/只译标题禁 data-weds）**；**版式 SOP §五 + §5.2 硬闸（结构+Browser；大图竖墙=FAIL）+ §5.3（Flex/Grid·文字安全·行宽）+ §5.4（滚轮入场·高级感·品牌感）**
 5. **全量类审**（§3.5‑A）：blur-fill/色垫假拓/抠图/细长条/方图被裁窄/拼版/**信息烤图** → 批量修 → 复扫 0 BAD
-6. 质检：… · **尺码表仍是图** · **启用语漏译 / 只译段题正文英包 / EN·ZH 渗漏**
-7. **`/{locale}/product/` 禁缓存抽检** → 交付 → 关 Browser
+6. 质检：… · **尺码表仍是图** · **启用语漏译 / 只译段题正文英包 / EN·ZH 渗漏** · **无滚轮动效 / 页面死板**
+7. **`/{locale}/product/` 禁缓存抽检**（含滚轮入场） → 交付 → 关 Browser
 ```
 图处理逐步与问题表 → `companions/weline-image-pipeline.md`。
 
@@ -775,6 +850,9 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 - **详情区 `object-fit:cover` + 限高裁切人脸/头脚**（§5.2‑D；用户已验诗侧栏横切）  
 - **照抄外部指南：Hero cover 切脸 / Apple 灰硬编码 / 系统字体栈 / 长文 absolute 压在实拍上**（§5.3：只学 Flex·Grid·留白·基线·行宽）  
 - **无证据 Bento 空卡墙、宽屏正文无 max-width 拉成长河**（§5.3）  
+- **详情静态死板：无滚轮入场、无品牌气质动效、或廉价弹跳/霓虹扫光冒充高级感**（§5.4）  
+- **无视 `prefers-reduced-motion`，或动效用 overflow+缩放裁切人脸**（§5.4）  
+- **排版太弱：结构 class 齐了但观感仍像货盘**——未 Read **`frontend-design`（审美细节）+ `ui-ux-pro-max`（风格质感）+ `interaction-design`（交互）** 三件套仍交稿（§5.3‑D / §5.4）  
 - **改 `product-info.phtml` 却不清 `view/tpl` 编译稿，仍验旧 CSS**  
 - **糊图未处理仍盖 `data-weds`**（低码率 soft / soft_blur 未 ESRGAN 或换清原图）  
 - 左右刷屏；同棚三联；小字巨图  
@@ -794,8 +872,8 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 ## 十、口令
 
 **主图/规格：剥框后用 AI 拓边装进目录 AR（方图画幅要装下人）；禁裁人凑方、禁随便加背景。**  
-**详情：杂志卷轴非相册滑梯；§5.2 硬闸（结构 + Browser + **§5.2‑D 禁 cover 裁脸**）+ **§5.3 原生 Flex/Grid·文字安全·行宽·Hero/Bento/Spec 映射**；禁止纯竖叠与千篇一律大图到底；禁抠图与糊边；清三方；卖点表。**  
+**详情：杂志卷轴非相册滑梯；§5.2 硬闸（结构 + Browser + **§5.2‑D 禁 cover 裁脸**）+ **§5.3 原生 Flex/Grid·文字安全·行宽·Hero/Bento/Spec 映射** + **§5.4 滚轮入场·高级克制·品牌可辨**；禁止纯竖叠与千篇一律大图到底；禁抠图与糊边；清三方；卖点表。**  
 **多语：启用语字段级真译（段题+正文+清单+info+护理+尺码）；`/{locale}/product/` 店面可见；只译标题留英文正文 = 未完工。**  
 **尺码·规格·信息烤图：审图抽数 → 删图 → `weline-detail-text--*` HTML；表头脚注同步全部启用语。**  
 **诗侧栏文图拼版：抽诗删拼版 → HTML 竖排 + 净实拍 `poem-aside`；禁当杂志美学；右图 **contain 不裁切**。**  
-**糊图未处理、相册模板未拆开、启用语漏译/标题译正文不译、信息烤图未转 HTML、诗侧栏残留、§5.2/5.2‑D FAIL = 不得写 `data-weds`；有标记不够。**
+**糊图未处理、相册模板未拆开、启用语漏译/标题译正文不译、信息烤图未转 HTML、诗侧栏残留、§5.2/5.2‑D FAIL、§5.4 无滚轮呼吸 = 不得写 `data-weds`；有标记不够。**

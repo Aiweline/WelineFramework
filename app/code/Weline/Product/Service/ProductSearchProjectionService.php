@@ -67,13 +67,46 @@ final class ProductSearchProjectionService
     }
 
     /**
+     * Full-website snapshot (indexer / migration). Storefront direct reads must
+     * use {@see snapshotScope()} so one product watermark bump cannot force a
+     * multi-store/channel rebuild on the request path.
+     *
      * @return array<string,mixed>
      */
     public function snapshotWebsite(int $websiteId): array
     {
+        return $this->buildSnapshot($websiteId, null, null);
+    }
+
+    /**
+     * Request-scoped published snapshot for Search direct/degrade reads.
+     *
+     * @return array<string,mixed>
+     */
+    public function snapshotScope(int $websiteId, int $storeId, int $channelId): array
+    {
+        if ($storeId < 0 || $channelId < 0) {
+            throw new \InvalidArgumentException((string)__(
+                'Product Search Scope 快照要求非负 store_id/channel_id',
+            ));
+        }
+
+        return $this->buildSnapshot($websiteId, $storeId, $channelId);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildSnapshot(
+        int $websiteId,
+        ?int $onlyStoreId,
+        ?int $onlyChannelId,
+    ): array {
         $website = $this->website($websiteId);
         $watermark = $this->stream->current($websiteId);
-        $cacheKey = (string)$websiteId;
+        $cacheKey = $onlyStoreId === null
+            ? (string)$websiteId
+            : $websiteId . ':' . $onlyStoreId . ':' . (int)$onlyChannelId;
         $cached = self::$snapshotProcessCache[$cacheKey] ?? null;
         if (\is_array($cached)
             && (int)($cached['watermark'] ?? -1) === $watermark
@@ -82,7 +115,20 @@ final class ProductSearchProjectionService
             return $cached['snapshot'];
         }
 
-        $scopes = $this->activeScopes($websiteId);
+        $scopes = $this->activeScopes($websiteId, $onlyStoreId);
+        if ($onlyChannelId !== null) {
+            $scopes = \array_values(\array_filter(
+                $scopes,
+                static fn(array $scope): bool => $scope['channel']->id === $onlyChannelId,
+            ));
+            if ($scopes === []) {
+                throw new \RuntimeException((string)__(
+                    'Product Search 找不到可用 Store/Channel Scope：store_id=%{1} channel_id=%{2}',
+                    [$onlyStoreId, $onlyChannelId],
+                ));
+            }
+        }
+
         $publishedProducts = [];
         foreach ($this->products->listAll($websiteId) as $row) {
             if ((string)($row[Product::schema_fields_STATUS] ?? '') !== Product::STATUS_PUBLISHED) {
@@ -177,6 +223,11 @@ final class ProductSearchProjectionService
             'documents' => $documents,
             'snapshot_hash' => $this->hashDocuments($documents),
         ];
+        if ($onlyStoreId !== null) {
+            $snapshot['store_id'] = $onlyStoreId;
+            $snapshot['channel_id'] = (int)$onlyChannelId;
+            $snapshot['scope_contract'] = 'product.search_projection_scope_snapshot.v1';
+        }
         self::$snapshotProcessCache[$cacheKey] = [
             'watermark' => $watermark,
             'snapshot' => $snapshot,

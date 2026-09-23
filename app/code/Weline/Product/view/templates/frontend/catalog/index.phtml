@@ -81,17 +81,20 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
             <?php endif; ?>
         </div>
     <?php else: ?>
-        <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
         <div class="product-storefront__grid weline-product-card-shelf">
-            <?php foreach ($offers as $index => $offer): ?>
-                <?php
-                $product = ProductCardRenderer::fromStorefrontOffer(is_array($offer) ? $offer : [], (int)$index);
-                if ((int)($product['id'] ?? 0) <= 0) {
-                    continue;
-                }
-                ?>
-                <w:product:card product="product" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card" wishlist-pixel="true" />
-            <?php endforeach; ?>
+            <?= ProductCardRenderer::projectFromOffers($offers, [
+                'show_price' => true,
+                'show_rating' => false,
+                'show_add_to_cart' => true,
+                'show_wishlist' => true,
+                'show_compare' => true,
+                'show_quickview' => true,
+                'show_labels' => true,
+                'show_sku' => true,
+                'density' => 'standard',
+                'class' => 'wpc-listing-card',
+                'wishlist_pixel' => true,
+            ]) ?>
         </div>
         <?php if ($totalPages > 1 && $pageOptions !== []): ?>
             <nav class="product-storefront__pager"

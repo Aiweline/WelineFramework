@@ -66,7 +66,7 @@ description: >-
 | 槽 | 对照权威 | 最低检查项（FAIL 即返工） |
 |----|----------|---------------------------|
 | ① | 图管线 + `ecommerce-product-image` | main+gallery+variant 齐；`target_ar`（方卡→1:1）；真 outpaint 非 cover；无抠图虚空/拖影糊边/色垫；空放大=否；备份有 |
-| ② | `详情优化` + detail-suite | 烤字/诗侧栏/信息表已 textify；**§5.2+D PASS**（杂志 HTML + Browser 左右栏/pair + **contain 不裁脸**；清 tpl）；`data-weds=xq`；无相册滑梯 |
+| ② | `详情优化` + detail-suite | 烤字/诗侧栏/信息表已 textify；**§5.2+D PASS**（杂志 HTML + Browser 左右栏/pair + **contain 不裁脸**；清 tpl）；**§5.4 PASS**（滚轮入场≥3 楼层、高级克制、品牌气质、reduced-motion）；`data-weds=xq`；无相册滑梯 |
 | ③ | `翻译优化` + i18n | 启用语全表已检；字段级真译无 EN/ZH 渗漏；`/{locale}/product/` 抽检过 |
 
 ### 返工规则
@@ -80,7 +80,7 @@ description: >-
 ## Agent 必做（父）
 
 1. Read 本文件 + `产品优化.md`。  
-2. 跳过检测：② **仅当** `data-weds` **且** 详情套件 **§5.2 排版硬闸 PASS** 且无强制 → 可跳过派 ②；凡「大图竖墙 / 无布局效果」→ **强制派 ② 重做 HTML**；①③ 仍按缺口；整单跳过仅当三面均已过闸。  
+2. 跳过检测：② **仅当** `data-weds` **且** 详情套件 **§5.2 排版硬闸 PASS** **且 §5.4 动效闸 PASS** 且无强制 → 可跳过派 ②；凡「大图竖墙 / 无布局效果 / 没动画 / 滚轮没效果 / 没高级感」→ **强制派 ② 重做 HTML+动效**；①③ 仍按缺口；整单跳过仅当三面均已过闸。  
 3. **并行启动 ①②③**。  
 4. **审查#1** → 失败则点名返工 → 再审至 #1 PASS。  
 5. **审查#2** → 失败则点名返工 → 再审至 #2 PASS。  

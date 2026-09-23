@@ -1,0 +1,56 @@
+.wc-theme_widget_wishlist_icon .wishlist-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1_5, .375rem);
+    color: inherit;
+    text-decoration: none;
+    padding: var(--spacing-sm, 0.5rem);
+    border: var(--border-width-thin, 1px) solid transparent;
+    border-radius: var(--border-radius-sm, 0.25rem);
+}
+.wc-theme_widget_wishlist_icon .wishlist-link:hover {
+    border-color: currentColor;
+    background: var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
+}
+.wc-theme_widget_wishlist_icon .wishlist-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--weline-chrome-action-icon-size, 1.25rem);
+    block-size: var(--weline-chrome-action-icon-size, 1.25rem);
+    flex-shrink: 0;
+}
+.wc-theme_widget_wishlist_icon .header-wishlist-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    block-size: 100%;
+}
+.wc-theme_widget_wishlist_icon .header-wishlist-icon svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    fill: none;
+}
+.wc-theme_widget_wishlist_icon .wishlist-count {
+    position: absolute;
+    top: calc(var(--spacing-0_5, 0.125rem) * -1);
+    right: calc(var(--spacing-0_5, 0.125rem) * -1);
+    min-width: var(--spacing-4_5, 1.125rem);
+    height: var(--spacing-4_5, 1.125rem);
+    padding: 0 0.2rem;
+    border-radius: 999px;
+    background: var(--weline-theme-danger, var(--color-danger));
+    color: var(--color-on-danger, #fff);
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: var(--spacing-4_5, 1.125rem);
+    text-align: center;
+    font-weight: 700;
+}
+.wc-theme_widget_wishlist_icon .wishlist-count[hidden] { display: none !important; }
+.wc-theme_widget_wishlist_icon .wishlist-label { font-size: var(--font-size-sm, .875rem); font-weight: 600; }
+/* 顶栏工具区压缩：收藏仅图标+角标，文案留 title/aria */
+.wc-theme_widget_wishlist_icon .wishlist-info { display: none; }

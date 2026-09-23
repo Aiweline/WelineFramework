@@ -14,6 +14,7 @@
  * @widget.supports {["layout-product-related-products","related-products"]}
  * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-related-products", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认相关产品槽", "config":{"title":"相关产品","limit":4,"columns":"4","layout":"carousel"} }]}
  *
+ * @widget.source {Weline_Product::css/widgets/related-products.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="相关产品",type="string",label="标题"}
  * @param limit {default=4,type="number",label="显示数量"}
  * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
@@ -141,9 +142,6 @@ if ($products === []) {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-layout="<?= $esc($layout) ?>"
          data-columns="<?= $esc($columns) ?>">
-    <link rel="stylesheet"
-          href="@static(Weline_Product::css/widgets/related-products.css)?v=20260906-product-card1"
-          data-no-extract="true">
     <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="wpr-header">
         <h2 class="wpr-title"><?= $esc($widgetTitle) ?></h2>
