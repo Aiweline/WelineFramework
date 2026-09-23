@@ -862,6 +862,74 @@
         renewGuestSession();
     });
 
+    /**
+     * Official Visitor pixel markers for remove_from_cart (event_dictionary).
+     * Stamps cart-page [data-cart-action=remove] and mini-cart [data-remove-item]
+     * so declarative pixel can fire with currency/value/items scrape hooks.
+     * Works even when cart index.phtml is still served from a stale template cache.
+     */
+    var REMOVE_PIXEL_CLASS = 'weline-pixel::remove_from_cart';
+    var REMOVE_PIXEL_EVENT = 'remove_from_cart';
+    var removePixelObserver = null;
+
+    function stampRemoveFromCartMarkers(root) {
+        if (!global.document || !global.document.querySelectorAll) {
+            return 0;
+        }
+        var scope = root && root.querySelectorAll ? root : global.document;
+        var nodes = scope.querySelectorAll
+            ? scope.querySelectorAll('[data-cart-action="remove"], [data-remove-item]')
+            : [];
+        var stamped = 0;
+        for (var i = 0; i < nodes.length; i++) {
+            var btn = nodes[i];
+            if (!btn || !btn.classList) {
+                continue;
+            }
+            if (!btn.classList.contains(REMOVE_PIXEL_CLASS)) {
+                btn.classList.add(REMOVE_PIXEL_CLASS);
+            }
+            if (btn.getAttribute('data-pixel-event') !== REMOVE_PIXEL_EVENT) {
+                btn.setAttribute('data-pixel-event', REMOVE_PIXEL_EVENT);
+            }
+            var line = btn.closest
+                ? (btn.closest('[data-cart-line], [data-cart-item], .weline-cart-shell__line, .mini-cart-drawer__item') || null)
+                : null;
+            if (line) {
+                if (!btn.getAttribute('data-product-id') && line.getAttribute('data-product-id')) {
+                    btn.setAttribute('data-product-id', line.getAttribute('data-product-id'));
+                }
+                if (!btn.getAttribute('data-price') && (line.getAttribute('data-price') || line.getAttribute('data-pixel-value'))) {
+                    btn.setAttribute('data-price', line.getAttribute('data-price') || line.getAttribute('data-pixel-value'));
+                }
+                if (!btn.getAttribute('data-currency') && (line.getAttribute('data-currency') || line.getAttribute('data-pixel-currency'))) {
+                    var cur = line.getAttribute('data-currency') || line.getAttribute('data-pixel-currency');
+                    btn.setAttribute('data-currency', cur);
+                    btn.setAttribute('data-pixel-currency', cur);
+                }
+            }
+            stamped += 1;
+        }
+        return stamped;
+    }
+
+    function observeRemoveFromCartMarkers() {
+        stampRemoveFromCartMarkers(global.document);
+        if (removePixelObserver || !global.MutationObserver || !global.document.body) {
+            return;
+        }
+        removePixelObserver = new MutationObserver(function (mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                var m = mutations[i];
+                if (m.addedNodes && m.addedNodes.length) {
+                    stampRemoveFromCartMarkers(m.target || global.document);
+                    return;
+                }
+            }
+        });
+        removePixelObserver.observe(global.document.body, { childList: true, subtree: true });
+    }
+
     var api = {
         WEEK_MS: WEEK_MS,
         GUEST_SESSION_MS: GUEST_SESSION_MS,
@@ -897,6 +965,7 @@
         isCheckoutSuccessSurface: isCheckoutSuccessSurface,
         currentDisplayCurrency: currentDisplayCurrency,
         currentDisplayLocale: currentDisplayLocale,
+        stampRemoveFromCartMarkers: stampRemoveFromCartMarkers,
         dispatchApplyCoupon: function (code, meta) {
             var payload = storePendingCoupon(code, meta || {});
             global.dispatchEvent(new CustomEvent(APPLY_EVENT, {
@@ -908,9 +977,16 @@
 
     global.WelineCart = api;
 
+    function bootWithPixelStamp() {
+        try {
+            boot();
+        } catch (eBoot) {}
+        observeRemoveFromCartMarkers();
+    }
+
     if (global.document.readyState === 'loading') {
-        global.document.addEventListener('DOMContentLoaded', boot);
+        global.document.addEventListener('DOMContentLoaded', bootWithPixelStamp);
     } else {
-        boot();
+        bootWithPixelStamp();
     }
 })(typeof window !== 'undefined' ? window : this);

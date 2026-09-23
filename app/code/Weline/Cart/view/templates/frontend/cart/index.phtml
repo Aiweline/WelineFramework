@@ -28,12 +28,13 @@ $copy = [
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260910-tob-remove-1">
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260923-qa05-view-mutex-1">
 
 <section class="weline-cart-shell weline-cart-shell--amazon"
          data-cart-content="1"
          data-weline-cart
          data-cart-type="toc"
+         data-cart-view="loading"
          aria-busy="true"
          weline-code="cart.cart.section_1">
     <header class="weline-cart-shell__header">
@@ -42,27 +43,28 @@ $copy = [
         <p class="weline-cart-shell__subtitle" data-cart-subtitle hidden></p>
     </header>
 
-    <div class="weline-cart-shell__state" data-cart-state="loading" role="status" aria-live="polite">
+    <?php /* Page-shell states only — do not reuse mini-cart drawer copy hooks here. */ ?>
+    <div class="weline-cart-shell__state" data-cart-state="loading" data-cart-page-state="loading" role="status" aria-live="polite">
         <span class="weline-cart-shell__spinner" aria-hidden="true"></span>
-        <p><?= $escape($copy['loading']) ?></p>
+        <p data-cart-page-loading><?= $escape($copy['loading']) ?></p>
     </div>
 
-    <div class="weline-cart-shell__state" data-cart-state="empty" hidden>
-        <h2><?= $escape($copy['emptyTitle']) ?></h2>
-        <p class="weline-cart-shell__empty-lead" data-cart-empty-lead><?= $escape($copy['emptyMessage']) ?></p>
+    <div class="weline-cart-shell__state" data-cart-state="empty" data-cart-page-state="empty" hidden aria-hidden="true" inert>
+        <h2 data-cart-page-empty-title><?= $escape($copy['emptyTitle']) ?></h2>
+        <p class="weline-cart-shell__empty-lead" data-cart-empty-lead data-cart-page-empty-lead><?= $escape($copy['emptyMessage']) ?></p>
         <div class="weline-cart-shell__empty-actions">
             <a class="weline-cart-shell__continue" href="@url{'products'}"><?= __('浏览商品') ?></a>
             <div class="weline-cart-shell__siblings" data-cart-siblings hidden></div>
         </div>
     </div>
 
-    <div class="weline-cart-shell__state weline-cart-shell__state--error" data-cart-state="error" role="alert" hidden>
-        <h2><?= __('暂时无法加载购物车') ?></h2>
-        <p data-cart-error><?= $escape($copy['loadFailed']) ?></p>
+    <div class="weline-cart-shell__state weline-cart-shell__state--error" data-cart-state="error" data-cart-page-state="error" role="alert" hidden aria-hidden="true" inert>
+        <h2 data-cart-page-error-title><?= __('暂时无法加载购物车') ?></h2>
+        <p data-cart-error data-cart-page-error><?= $escape($copy['loadFailed']) ?></p>
         <button class="weline-cart-shell__retry" type="button" data-cart-retry><?= __('重试') ?></button>
     </div>
 
-    <div class="weline-cart-shell__grid" data-cart-state="ready" hidden>
+    <div class="weline-cart-shell__grid" data-cart-state="ready" data-cart-page-state="ready" hidden aria-hidden="true" inert>
         <div class="weline-cart-shell__items-card">
             <p class="weline-cart-shell__message" data-cart-message role="status" aria-live="polite"></p>
             <div class="weline-cart-shell__price-head">
@@ -576,11 +578,30 @@ $copy = [
     }
 
     function showState(state) {
+        // Exclusive page shell: only one of loading|empty|error|ready may paint.
+        // CSS `[data-cart-view]` + hidden/aria-hidden/inert — do not rely on hidden alone.
+        const next = String(state || '').trim();
+        const allowed = { loading: 1, empty: 1, error: 1, ready: 1 };
+        const view = allowed[next] ? next : 'loading';
+        root.setAttribute('data-cart-view', view);
         stateNodes.forEach(function (node) {
-            node.hidden = node.dataset.cartState !== state;
+            const active = node.dataset.cartState === view;
+            node.hidden = !active;
+            if (active) {
+                node.removeAttribute('hidden');
+                node.removeAttribute('aria-hidden');
+                node.removeAttribute('inert');
+            } else {
+                node.setAttribute('hidden', '');
+                node.setAttribute('aria-hidden', 'true');
+                node.setAttribute('inert', '');
+            }
         });
-        root.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+        root.setAttribute('aria-busy', view === 'loading' ? 'true' : 'false');
     }
+
+    // Paint-before-fetch: clear non-loading shells immediately (avoids SSR/a11y bleed).
+    showState('loading');
 
     function amountFromMinor(item, minorKey, decimalKey) {
         const minor = Number(item && item[minorKey]);
@@ -722,6 +743,20 @@ $copy = [
         if (itemId) {
             row.dataset.itemId = itemId;
         }
+        // Pixel scrape hooks for remove_from_cart / view_cart (Visitor __getCartItems).
+        const productId = text(item && (item.product_id || item.legacy_product_id || item.offer_id)).trim();
+        if (productId) {
+            row.dataset.productId = productId;
+        }
+        const lineName = text(item && item.name).trim();
+        if (lineName) {
+            row.dataset.productName = lineName;
+            row.dataset.name = lineName;
+        }
+        if (currency) {
+            row.dataset.currency = currency;
+            row.dataset.pixelCurrency = currency;
+        }
         const lineFound = !(item && Object.prototype.hasOwnProperty.call(item, 'found')) || Boolean(item.found);
         const lineSellable = !(item && Object.prototype.hasOwnProperty.call(item, 'sellable')) || Boolean(item.sellable);
         const lineBlocked = !lineFound || !lineSellable;
@@ -735,6 +770,10 @@ $copy = [
         const image = text(item && item.image).trim();
         const unitAmount = amountFromMinor(item, 'unit_price_minor', 'price');
         const rowAmount = amountFromMinor(item, 'row_total_minor', 'row_total');
+        if (unitAmount > 0) {
+            row.dataset.price = String(unitAmount);
+            row.dataset.pixelValue = String(rowAmount > 0 ? rowAmount : unitAmount * quantity);
+        }
 
         const media = document.createElement('div');
         media.className = 'weline-cart-shell__line-media';
@@ -815,11 +854,24 @@ $copy = [
 
         const remove = document.createElement('button');
         remove.type = 'button';
-        remove.className = 'weline-cart-shell__action weline-cart-shell__action--remove';
+        // Official Visitor pixel markers (event_dictionary remove_from_cart).
+        remove.className = 'weline-cart-shell__action weline-cart-shell__action--remove weline-pixel::remove_from_cart';
         remove.dataset.cartAction = 'remove';
+        remove.dataset.pixelEvent = 'remove_from_cart';
         remove.dataset.itemId = itemId;
         remove.textContent = copy.remove;
         remove.setAttribute('aria-label', copy.remove + ' ' + text(item && item.name));
+        if (productId) {
+            remove.dataset.productId = productId;
+        }
+        if (unitAmount > 0) {
+            remove.dataset.price = String(unitAmount);
+            remove.dataset.pixelValue = String(rowAmount > 0 ? rowAmount : unitAmount * quantity);
+        }
+        if (currency) {
+            remove.dataset.currency = currency;
+            remove.dataset.pixelCurrency = currency;
+        }
 
         meta.appendChild(qtyWrap);
         meta.appendChild(remove);
@@ -834,6 +886,10 @@ $copy = [
         const nowEl = document.createElement('span');
         nowEl.className = 'weline-cart-shell__line-price-now';
         nowEl.textContent = money(rowAmount, currency);
+        if (rowAmount > 0) {
+            nowEl.dataset.price = String(rowAmount);
+            nowEl.dataset.pixelValue = String(rowAmount);
+        }
         priceRow.appendChild(nowEl);
 
         const compareAtMinor = Math.max(0, Number(item && item.compare_at_minor) || 0);

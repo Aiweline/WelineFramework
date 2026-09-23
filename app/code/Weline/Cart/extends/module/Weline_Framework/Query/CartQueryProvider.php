@@ -8,6 +8,7 @@ use Weline\Cart\Service\CartPersistencePolicy;
 use Weline\Cart\Service\CartScopeResolver;
 use Weline\Cart\Service\CartConflictException;
 use Weline\Cart\Service\CartService;
+use Weline\Cart\Service\FreeShippingProgressService;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -332,7 +333,7 @@ class CartQueryProvider implements QueryProviderInterface
             }
         }
 
-        return $summary;
+        return $this->enrichSummaryWithFreeShippingProgress($summary);
     }
 
     /**
@@ -501,6 +502,25 @@ class CartQueryProvider implements QueryProviderInterface
     }
 
     /**
+     * Mini-cart progress is unavailable without matched shipping eligibility.
+     *
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    private function enrichSummaryWithFreeShippingProgress(array $summary): array
+    {
+        try {
+            /** @var FreeShippingProgressService $progress */
+            $progress = ObjectManager::getInstance(FreeShippingProgressService::class);
+            $summary['free_shipping_progress'] = $progress->build($summary);
+        } catch (\Throwable) {
+            // Progress is optional chrome; never fail cart reads/mutations.
+        }
+
+        return $summary;
+    }
+
+    /**
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
@@ -538,6 +558,8 @@ class CartQueryProvider implements QueryProviderInterface
      */
     private function successFromSummary(array $summary): array
     {
+        $summary = $this->enrichSummaryWithFreeShippingProgress($summary);
+
         return [
             'success' => (bool)($summary['success'] ?? false),
             'message' => (string)($summary['message'] ?? ''),

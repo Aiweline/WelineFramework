@@ -70,6 +70,69 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('selection: readEavSelection(button)', $script);
     }
 
+    public function testPurchasePanelReopenClearsNativeDialogHidden(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
+        );
+        $modules = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js',
+        );
+
+        // Weline.UI.dialog close() sets hidden on native <dialog>; reopen must clear it
+        // or the second listing Add-to-Cart looks like a no-op (invisible modal).
+        self::assertStringContainsString('function revealPurchasePanel(dialog)', $script);
+        self::assertStringContainsString('function closePurchasePanel(dialog)', $script);
+        self::assertStringContainsString('dialog.removeAttribute(\'hidden\')', $script);
+        self::assertStringContainsString('revealPurchasePanel(dialog)', $script);
+        self::assertStringContainsString('closePurchasePanel(dialog)', $script);
+        self::assertStringContainsString('Weline.UI.dialog', $script);
+        self::assertStringContainsString(
+            'product-purchase-actions.js?v=20260922-purchase-panel-binquery',
+            $modules,
+        );
+    }
+
+    public function testPurchasePanelFetchFailureReplacesLoadingWithError(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
+        );
+
+        self::assertStringContainsString('function humanizePurchaseError(error, fallback)', $script);
+        self::assertStringContainsString('function showPurchasePanelError(body, message)', $script);
+        self::assertStringContainsString('w-product-purchase-panel__error', $script);
+        self::assertStringContainsString('failed to fetch|networkerror', $script);
+        self::assertStringContainsString('worker_timeout', $script);
+        self::assertStringContainsString('worker request timed out', $script);
+        self::assertStringContainsString('网络异常，无法打开加购面板，请稍后重试', $script);
+        self::assertStringContainsString('showPurchasePanelError(body, msg)', $script);
+    }
+
+    public function testPurchasePanelLoadsViaBinQueryProductProvider(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
+        );
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-card-add-to-cart.phtml',
+        );
+        $modules = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js',
+        );
+
+        // Storefront business I/O must be BinQuery — never native fetch to REST panel URL.
+        self::assertStringContainsString('function waitForProductApi()', $script);
+        self::assertStringContainsString("resource('product')", $script);
+        self::assertStringContainsString('getPurchasePanel(panelParams', $script);
+        self::assertStringNotContainsString('fetch(url.toString()', $script);
+        self::assertStringNotContainsString('data-purchase-panel-url', $template);
+        self::assertStringContainsString(
+            'product-purchase-actions.js?v=20260922-purchase-panel-binquery',
+            $modules,
+        );
+    }
+
     public function testAddOfferResolvesCartTypeFromPreferredModeBeforeSsrHtml(): void
     {
         $script = (string)file_get_contents(

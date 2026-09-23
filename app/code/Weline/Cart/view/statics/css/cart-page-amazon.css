@@ -87,9 +87,23 @@
     text-align: center;
 }
 
+/* QA-05: exclusive page shell — only the active data-cart-view may paint.
+ * Do not rely on HTML [hidden] alone (a11y scanners / cascade fights). */
+.weline-cart-shell--amazon > [data-cart-state] {
+    display: none !important;
+}
+.weline-cart-shell--amazon[data-cart-view="loading"] > [data-cart-state="loading"],
+.weline-cart-shell--amazon[data-cart-view="empty"] > [data-cart-state="empty"],
+.weline-cart-shell--amazon[data-cart-view="error"] > [data-cart-state="error"] {
+    display: flex !important;
+}
+.weline-cart-shell--amazon[data-cart-view="ready"] > [data-cart-state="ready"] {
+    display: grid !important;
+}
+
 .weline-cart-shell--amazon .weline-cart-shell__state[hidden],
 .weline-cart-shell--amazon .weline-cart-shell__grid[hidden] {
-    display: none;
+    display: none !important;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__state h2 {
@@ -213,7 +227,6 @@
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__grid {
-    display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
     gap: 20px;
     align-items: start;

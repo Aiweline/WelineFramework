@@ -4,20 +4,27 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Controller;
 
-use Weline\Cart\Service\CartService;
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
 
+/**
+ * Storefront cart page.
+ *
+ * Lines hydrate via QueryBin in the browser. SSR must stay cheap: heavy
+ * LayoutSlotRenderer fill historically spent ~30s, starved the 2-worker pool,
+ * and surfaced as nginx 502 + RequestExit fiber cancel.
+ *
+ * HARD: keep Theme Partials header/footer chrome (theme_seat_integrity).
+ * Bare HTML shells that omit chrome are rejected as a performance "fix".
+ */
 class Index extends FrontendController
 {
     public function index(): string
     {
-        $cart = $this->cartService()->storefrontSummary();
+        // Authoritative lines hydrate via QueryBin in the browser shell.
+        // SSR must not call storefrontSummary / QueryBin (empty shell only).
+        $cart = $this->emptyStorefrontSummary();
 
-        // The authoritative storefront cart is hydrated through QueryBin. The
-        // HTML request can carry a different WLS session, so it must not select
-        // an empty-only layout before the browser has read Cart.
         $this->layoutType = 'cart.default';
         $this->request->setGet('page_type', 'cart');
         $this->request->setGet('layout_type', 'cart');
@@ -34,18 +41,43 @@ class Index extends FrontendController
         ]);
         $this->assign('cart', $cart);
         $this->assign('items', $cart['items'] ?? []);
-        $this->assign('meta', [
+        $meta = [
             'showHeader' => true,
             'showFooter' => true,
             'class' => 'weline-cart-page',
             'message' => WidgetI18n::label('您的购物车是空的'),
-        ]);
+        ];
+        $this->assign('meta', $meta);
 
-        return (string)$this->fetch('Weline_Cart::templates/frontend/cart/index.phtml');
+        // P0: template()/fetchHtml — skips fetch_file_after LayoutSlotRenderer
+        // entity fill (after_ms≈30s / worker starvation / nginx 502 + RequestExit).
+        // Theme Partials header/footer stay; do not tear chrome.
+        $body = $this->template('Weline_Cart::templates/frontend/cart/index.phtml');
+        $meta['content'] = $body;
+        $this->assign('meta', $meta);
+        $this->assign('content', $body);
+
+        return $this->template('Weline_Cart::theme/frontend/layouts/cart/default.phtml');
     }
 
-    private function cartService(): CartService
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyStorefrontSummary(): array
     {
-        return ObjectManager::getInstance(CartService::class);
+        return [
+            'success' => true,
+            'message' => '',
+            'items' => [],
+            'cart_count' => 0,
+            'item_count' => 0,
+            'distinct_count' => 0,
+            'is_empty' => true,
+            'subtotal' => 0.0,
+            'grand_total' => 0.0,
+            'subtotal_minor' => 0,
+            'grand_total_minor' => 0,
+            'sibling_carts' => [],
+        ];
     }
 }
