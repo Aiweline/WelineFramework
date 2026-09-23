@@ -15,6 +15,47 @@ use Weline\Framework\Cache\CachePolicy;
  */
 final class StorefrontThemeCacheCoordinator
 {
+    public const LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL = 'weline_theme_layout_entity_published_projection';
+
+    public static function publishedChromeRenderedPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'theme.layout_entity.chrome_rendered',
+            pool: self::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
+            scope: 'channel',
+            vary: ['lang'],
+            dependencies: ['theme', 'global/i18n'],
+            freshTtlSeconds: 3600,
+            staleTtlSeconds: 86400,
+        );
+    }
+
+    public static function publishedChromeSlotProjectionPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'theme.layout_entity.chrome_slot_projection',
+            pool: self::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
+            scope: 'website',
+            vary: ['lang'],
+            dependencies: ['theme', 'global/i18n'],
+            freshTtlSeconds: 3600,
+            staleTtlSeconds: 86400,
+        );
+    }
+
+    public static function publishedPageEntityLocationPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'theme.layout_entity.page_location',
+            pool: self::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
+            scope: 'channel',
+            vary: [],
+            dependencies: ['theme'],
+            freshTtlSeconds: 3600,
+            staleTtlSeconds: 86400,
+        );
+    }
+
     public const HEADER_NAV_POOL = 'weline_theme_storefront_header_nav';
     public const STOREFRONT_CHROME_POOL = 'weline_theme_storefront_chrome';
 

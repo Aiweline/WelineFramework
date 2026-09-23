@@ -23,6 +23,49 @@ final class ThemeLayoutEntityConfigStore
     ) {
     }
 
+    public function readBoundConfig(EntityRenderBinding $binding): array
+    {
+        $key = 'theme.layout_entity.bound_config.' . $binding->cacheKey();
+        $cached = \Weline\Framework\Runtime\RequestContext::get($key);
+        if (is_array($cached)) {
+            return $cached;
+        }
+        $config = $this->readWithHotCache('bound|' . $binding->cacheKey(), $binding->configPath);
+        \Weline\Framework\Runtime\RequestContext::set($key, $config);
+        return $config;
+    }
+
+    public function readBoundAssets(EntityRenderBinding $binding): array
+    {
+        return $this->readJsonFile($binding->assetsPath);
+    }
+
+    private function pageBindingForRead(int $themeId, string $scope, string $identityKey, string $entityKey): ?EntityRenderBinding
+    {
+        $key = 'theme.layout_entity.page_binding.' . hash('sha256', json_encode([$themeId, $scope, $identityKey, $entityKey], JSON_THROW_ON_ERROR));
+        $binding = \Weline\Framework\Runtime\RequestContext::get($key);
+        if (!$binding instanceof EntityRenderBinding) {
+            $binding = (new ThemeLayoutEntityBindingStore($this->paths))->readPageBinding($themeId, $scope, $identityKey, $entityKey);
+            if ($binding !== null) {
+                \Weline\Framework\Runtime\RequestContext::set($key, $binding);
+            }
+        }
+        return $binding;
+    }
+
+    private function chromeBindingForRead(int $themeId, string $scope, int $versionId): ?EntityRenderBinding
+    {
+        $key = 'theme.layout_entity.chrome_binding.' . hash('sha256', json_encode([$themeId, $scope, $versionId], JSON_THROW_ON_ERROR));
+        $binding = \Weline\Framework\Runtime\RequestContext::get($key);
+        if (!$binding instanceof EntityRenderBinding) {
+            $binding = (new ThemeLayoutEntityBindingStore($this->paths))->readChromeBinding($themeId, $scope, $versionId);
+            if ($binding !== null) {
+                \Weline\Framework\Runtime\RequestContext::set($key, $binding);
+            }
+        }
+        return $binding;
+    }
+
     public static function cachePolicy(): CachePolicy
     {
         return new CachePolicy(
@@ -70,6 +113,79 @@ final class ThemeLayoutEntityConfigStore
     }
 
     /**
+     * @param array<string, mixed> $manifest
+     */
+    public function writePageAssets(
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+        array $manifest,
+    ): string {
+        $path = $this->paths->pageAssetsJson($themeId, $scope, $identityKey, $structureOrRelease);
+        $this->writeJsonFile($path, $manifest);
+        $this->warmCache(
+            'assets|page|' . $themeId . '|' . $this->paths->scopeKey($scope) . '|' . $identityKey . '|' . $structureOrRelease,
+            $manifest,
+        );
+
+        return $path;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     */
+    public function writeChromeAssets(
+        int $themeId,
+        string $scope,
+        int $themeVersionId,
+        array $manifest,
+    ): string {
+        $path = $this->paths->chromeAssetsJson($themeId, $scope, $themeVersionId);
+        $this->writeJsonFile($path, $manifest);
+        $this->warmCache(
+            'assets|chrome|' . $themeId . '|' . $this->paths->scopeKey($scope) . '|tv' . $themeVersionId,
+            $manifest,
+        );
+
+        return $path;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function readPageAssets(
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+    ): array {
+        $binding = $this->pageBindingForRead($themeId, $scope, $identityKey, $structureOrRelease);
+        if ($binding !== null) {
+            return $this->readJsonFile($binding->assetsPath);
+        }
+        // Asset sidecars are tiny; always disk-read so bake/CLI writes are visible
+        // without depending on RequestContext-scoped HotCache key identity.
+        return $this->readJsonFile(
+            $this->paths->pageAssetsJson($themeId, $scope, $identityKey, $structureOrRelease)
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function readChromeAssets(int $themeId, string $scope, int $themeVersionId): array
+    {
+        $binding = $this->chromeBindingForRead($themeId, $scope, $themeVersionId);
+        if ($binding !== null) {
+            return $this->readJsonFile($binding->assetsPath);
+        }
+        return $this->readJsonFile(
+            $this->paths->chromeAssetsJson($themeId, $scope, $themeVersionId)
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function readPageConfig(
@@ -78,6 +194,10 @@ final class ThemeLayoutEntityConfigStore
         string $identityKey,
         string $structureOrRelease,
     ): array {
+        $binding = $this->pageBindingForRead($themeId, $scope, $identityKey, $structureOrRelease);
+        if ($binding !== null) {
+            return $this->readBoundConfig($binding);
+        }
         $path = $this->paths->pageConfigJson($themeId, $scope, $identityKey, $structureOrRelease);
         $logicalKey = $this->pageLogicalKey($themeId, $scope, $identityKey, $structureOrRelease);
 
@@ -89,6 +209,10 @@ final class ThemeLayoutEntityConfigStore
      */
     public function readChromeConfig(int $themeId, string $scope, int $themeVersionId): array
     {
+        $binding = $this->chromeBindingForRead($themeId, $scope, $themeVersionId);
+        if ($binding !== null) {
+            return $this->readBoundConfig($binding);
+        }
         $path = $this->paths->chromeConfigJson($themeId, $scope, $themeVersionId);
         $logicalKey = $this->chromeLogicalKey($themeId, $scope, $themeVersionId);
 
@@ -149,7 +273,7 @@ final class ThemeLayoutEntityConfigStore
         if ($meta === []) {
             return $entry;
         }
-        foreach (['widget_module', 'widget_code', 'widget_type', 'slot_id', 'area'] as $key) {
+        foreach (['widget_module', 'widget_code', 'widget_type', 'slot_id', 'area', 'layout_source', 'source', 'source_position'] as $key) {
             $value = \trim((string)($meta[$key] ?? ''));
             if ($value !== '' && \trim((string)($entry[$key] ?? '')) === '') {
                 $entry[$key] = $value;
@@ -190,22 +314,23 @@ final class ThemeLayoutEntityConfigStore
             return [];
         }
         $path = $this->paths->pageStructureJson($themeId, $scopeKey, $identityKey, $structureOrRelease);
-        $slots = $this->readStructureSlotsCached($path);
-        foreach ($slots as $widgets) {
-            if (!\is_array($widgets)) {
-                continue;
-            }
-            foreach ($widgets as $widget) {
-                if (!\is_array($widget)) {
-                    continue;
+        $indexKey = 'theme.layout_entity.structure_index.' . hash('sha256', $path);
+        $index = \Weline\Framework\Runtime\RequestContext::get($indexKey);
+        if (!is_array($index)) {
+            $index = [];
+            foreach ($this->readStructureSlotsCached($path) as $widgets) {
+                foreach (is_array($widgets) ? $widgets : [] as $widget) {
+                    if (is_array($widget)) {
+                        $uid = strtolower(trim((string)($widget['node_uid'] ?? '')));
+                        if ($uid !== '') {
+                            $index[$uid] = $widget;
+                        }
+                    }
                 }
-                if (\strtolower(\trim((string)($widget['node_uid'] ?? ''))) === $nodeUid) {
-                    return $widget;
-                }
             }
+            \Weline\Framework\Runtime\RequestContext::set($indexKey, $index);
         }
-
-        return [];
+        return $index[$nodeUid] ?? [];
     }
 
     /**
@@ -315,6 +440,8 @@ final class ThemeLayoutEntityConfigStore
         if (!$hotCache instanceof StorefrontScopeHotCache) {
             return;
         }
+        // rememberPolicy keeps an existing HIT — forget first so disk writes are visible.
+        $hotCache->forgetPolicy(self::cachePolicy(), $logicalKey);
         $hotCache->rememberPolicy(
             self::cachePolicy(),
             $logicalKey,
@@ -350,8 +477,18 @@ final class ThemeLayoutEntityConfigStore
         if ($json === false) {
             throw new \RuntimeException('Failed to encode layout entity config JSON.');
         }
-        if (@\file_put_contents($path, $json . "\n") === false) {
-            throw new \RuntimeException('Failed to write layout entity config: ' . $path);
+        $temporary = tempnam($dir, '.entity-config-');
+        if ($temporary === false) {
+            throw new \RuntimeException('Failed to stage layout entity config: ' . $path);
+        }
+        try {
+            if (file_put_contents($temporary, $json . "\n") === false || !rename($temporary, $path)) {
+                throw new \RuntimeException('Failed to write layout entity config: ' . $path);
+            }
+        } finally {
+            if (is_file($temporary)) {
+                unlink($temporary);
+            }
         }
     }
 

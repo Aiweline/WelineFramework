@@ -14,6 +14,7 @@ use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\ThemeWidgetDefaultInjection;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService;
+use Weline\Widget\Service\DefaultInjectionPlanRepository;
 
 class WidgetDefaultInjectionService
 {
@@ -44,6 +45,7 @@ class WidgetDefaultInjectionService
 
     public function __construct(
         private readonly ThemeComponentCatalog $componentCatalog,
+        private readonly DefaultInjectionPlanRepository $planRepository,
         private readonly ThemeLayoutService $layoutService,
         private readonly WelineTheme $welineTheme,
         private readonly ThemeLayout $themeLayout,
@@ -362,6 +364,7 @@ class WidgetDefaultInjectionService
         }
 
         $this->componentCatalog->clearCache();
+        $this->planRepository->clearMemo();
         $applied = 0;
 
         foreach ($this->getAllThemes() as $theme) {
@@ -500,7 +503,7 @@ class WidgetDefaultInjectionService
                 continue;
             }
             try {
-                $nodeUid = $this->saveInjection($themeId, $item, $status);
+                $nodeUid = $this->saveInjection($themeId, $item, $status, self::SOURCE_AUTO);
                 $this->markInitialHandled($themeId, $item, self::SOURCE_AUTO, true);
                 $item['node_uid'] = $nodeUid;
                 $item['status'] = $status;
@@ -594,7 +597,7 @@ class WidgetDefaultInjectionService
         }
 
         try {
-            $nodeUid = $this->saveInjection($themeId, $footerContainerItem, $status);
+            $nodeUid = $this->saveInjection($themeId, $footerContainerItem, $status, self::SOURCE_AUTO);
             $this->markInitialHandled($themeId, $footerContainerItem, self::SOURCE_AUTO, true);
             $footerContainerItem['node_uid'] = $nodeUid;
             $footerContainerItem['status'] = $status;
@@ -923,7 +926,7 @@ class WidgetDefaultInjectionService
             if ($this->resolveInstallBlocker($themeId, $item, $status, $componentArea) !== null) {
                 continue;
             }
-            $this->saveInjection($themeId, $item, $status);
+            $this->saveInjection($themeId, $item, $status, self::SOURCE_AUTO);
             $this->markInitialHandled($themeId, $item, self::SOURCE_AUTO, true);
             $applied++;
         }
@@ -1101,7 +1104,7 @@ class WidgetDefaultInjectionService
         );
     }
 
-    private function saveInjection(int $themeId, array $item, string $status): string
+    private function saveInjection(int $themeId, array $item, string $status, string $source = self::SOURCE_MANUAL_APPLY): string
     {
         if ($status === ThemeLayout::STATUS_PUBLISHED) {
             return '';
@@ -1129,6 +1132,7 @@ class WidgetDefaultInjectionService
                 'sort_order' => $item['sort_order'],
                 'exclusive' => (bool)($item['exclusive'] ?? false),
                 'is_active' => true,
+                'source' => $source,
             ],
             'system:widget-default-injection',
             '',
@@ -1151,10 +1155,11 @@ class WidgetDefaultInjectionService
         $identity = $this->normalizeIdentity($identity);
         $items = [];
 
-        foreach ($this->componentCatalog->getDefinitions($componentArea, $theme) as $definition) {
-            if ($widgetFilter !== [] && !$this->definitionMatchesWidgetFilter($definition, $widgetFilter)) {
+        foreach ($this->planRepository->listDeclarations($componentArea) as $declaration) {
+            if ($widgetFilter !== [] && !$this->declarationMatchesWidgetFilter($declaration, $widgetFilter)) {
                 continue;
             }
+            $definition = $this->definitionFromPlanDeclaration($declaration);
             foreach ($this->getDefinitionDefaultInjections($definition) as $rawInjection) {
                 $item = $this->normalizeInjection($definition, $rawInjection, $pageType, $identity, $identityProvided);
                 if ($item === null) {
@@ -1191,7 +1196,7 @@ class WidgetDefaultInjectionService
                 if ($status === ThemeLayout::STATUS_PUBLISHED) {
                     continue;
                 }
-                $nodeUid = $this->saveInjection($themeId, $item, $status);
+                $nodeUid = $this->saveInjection($themeId, $item, $status, self::SOURCE_AUTO);
                 if ($nodeUid === '') {
                     continue;
                 }
@@ -2431,6 +2436,96 @@ class WidgetDefaultInjectionService
     {
         return isset($filter[$this->widgetIdentityKey($definition->module, $definition->type, $definition->code, $definition->area)])
             || isset($filter[$this->widgetIdentityKey($definition->module, $definition->type, $definition->code, '')]);
+    }
+
+    /**
+     * @param array<string, mixed> $declaration
+     * @param array<string, mixed> $filter
+     */
+    private function declarationMatchesWidgetFilter(array $declaration, array $filter): bool
+    {
+        $module = trim((string)($declaration['module'] ?? ''));
+        $type = trim((string)($declaration['type'] ?? ''));
+        $code = trim((string)($declaration['code'] ?? ''));
+        $area = trim((string)($declaration['area'] ?? ''));
+
+        return isset($filter[$this->widgetIdentityKey($module, $type, $code, $area)])
+            || isset($filter[$this->widgetIdentityKey($module, $type, $code, '')]);
+    }
+
+    /**
+     * @param array<string, mixed> $declaration
+     */
+    private function definitionFromPlanDeclaration(array $declaration): ThemeComponentDefinition
+    {
+        $module = trim((string)($declaration['module'] ?? ''));
+        $type = trim((string)($declaration['type'] ?? ''));
+        $code = trim((string)($declaration['code'] ?? ''));
+        $area = trim((string)($declaration['area'] ?? 'frontend'));
+        if ($area === '') {
+            $area = 'frontend';
+        }
+        $injections = $declaration['default_injections'] ?? [];
+        if (!is_array($injections)) {
+            $injections = [];
+        }
+        $slots = $declaration['slots'] ?? [];
+        if (!is_array($slots)) {
+            $slots = [];
+        }
+        $params = $declaration['params'] ?? [];
+        if (!is_array($params)) {
+            $params = [];
+        }
+        $defaultConfig = [];
+        foreach ($params as $key => $param) {
+            if (is_array($param) && array_key_exists('default', $param)) {
+                $defaultConfig[$key] = $param['default'];
+            }
+        }
+        $position = $declaration['position'] ?? [];
+        if (!is_array($position) || $position === []) {
+            $position = ['content'];
+        }
+        $pageLayouts = $declaration['page_layouts'] ?? ['*'];
+        if (!is_array($pageLayouts) || $pageLayouts === []) {
+            $pageLayouts = ['*'];
+        }
+        $supports = $declaration['supports'] ?? [];
+        if (!is_array($supports)) {
+            $supports = [];
+        }
+        $slot = $declaration['slot'] ?? null;
+        $slot = is_string($slot) && trim($slot) !== '' ? trim($slot) : null;
+        $template = trim((string)($declaration['template'] ?? ''));
+
+        return new ThemeComponentDefinition(
+            module: $module,
+            type: $type,
+            code: $code,
+            name: (string)($declaration['name'] ?? $code),
+            description: (string)($declaration['description'] ?? ''),
+            area: $area,
+            sourceType: 'widget_registry_entry',
+            category: $type,
+            defaultConfig: $defaultConfig,
+            meta: [
+                'default_injections' => $injections,
+            ],
+            params: $params,
+            position: $position,
+            pageLayouts: $pageLayouts,
+            slots: $slots,
+            slot: $slot,
+            defaultInjections: $injections,
+            supports: $supports,
+            exclusive: (bool)($declaration['exclusive'] ?? false),
+            compatible: (bool)($declaration['compatible'] ?? false),
+            isContainer: (bool)($declaration['is_container'] ?? false),
+            templatePath: $template !== '' ? $template : null,
+            logicalKey: "{$module}/{$type}/{$code}",
+            layerKey: 'widget_registry_entry',
+        );
     }
 
     private function widgetIdentityKey(string $module, string $type, string $code, string $area = ''): string

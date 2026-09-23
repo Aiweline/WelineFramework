@@ -102,6 +102,52 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         return $snapshot;
     }
 
+    /** Read this identity's release using its recorded parent chain. */
+    public function readHistoricalLayoutRelease(ThemeEditorContext $context, int $releaseId): ?array
+    {
+        $release = $this->loadRelease($releaseId);
+        if (!$release instanceof ThemeScopeRelease
+            || (string)$release->getData(ThemeScopeRelease::schema_fields_IDENTITY_HASH) !== $context->identityHash()) {
+            return null;
+        }
+        return $this->composeLayoutPayloadBySlotNearPriority($release);
+    }
+
+    /** Read an immutable draft revision without rebasing it onto today's parent release. */
+    public function readHistoricalLayoutRevision(ThemeEditorContext $context, int $revisionId): array
+    {
+        $missing = ['resolved' => false, 'reason' => 'historical_draft_baseline_missing',
+            'draft_revision_id' => $revisionId, 'draft_payload' => null];
+        $workspace = $this->findWorkspace($context, false, false);
+        $revision = (clone $this->revisions)->clearData()->clearQuery()->load($revisionId);
+        if (!$workspace || $revision->getId() !== $revisionId
+            || (int)$revision->getData(ThemeScopeRevision::schema_fields_WORKSPACE_ID) !== $workspace->getId()) {
+            return $missing + ['identity_mismatch' => true];
+        }
+        $parent = $this->loadRelease((int)$revision->getData(ThemeScopeRevision::schema_fields_PARENT_RELEASE_ID));
+        if ($parent instanceof ThemeScopeRelease) {
+            $payload = $this->patchEngine->apply($this->composeLayoutPayloadBySlotNearPriority($parent), $this->commandsForRevision($revisionId));
+            return ['resolved' => true, 'reason' => '', 'draft_revision_id' => $revisionId, 'draft_payload' => $payload];
+        }
+        // A published snapshot of this exact revision is an immutable baseline too.
+        $rows = (clone $this->releases)->clearData()->clearQuery()
+            ->where(ThemeScopeRelease::schema_fields_WORKSPACE_ID, $workspace->getId())
+            ->where(ThemeScopeRelease::schema_fields_REVISION_ID, $revisionId)
+            ->where(ThemeScopeRelease::schema_fields_STATUS, ThemeScopeRelease::STATUS_EFFECTIVE)
+            ->select()->fetchArray();
+        $payloads = [];
+        if (is_array($rows) && isset($rows[ThemeScopeRelease::schema_fields_ID])) { $rows = [$rows]; }
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $release = (clone $this->releases)->clearData()->setData($row);
+            $payload = $this->composeLayoutPayloadBySlotNearPriority($release);
+            $payloads[hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR))] = $payload;
+        }
+        if (count($payloads) === 1) {
+            return ['resolved' => true, 'reason' => '', 'draft_revision_id' => $revisionId, 'draft_payload' => array_values($payloads)[0]];
+        }
+        return $missing;
+    }
+
     public function load(ThemeEditorContext $context, bool $includeDraft = true): array
     {
         $cacheKey = $this->requestLoadCacheKey($context, $includeDraft);
@@ -694,6 +740,15 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 true,
                 $releaseId,
                 (int)($receipt['revision_id'] ?? 0),
+                (string)($contextClaims['layout_option'] ?? 'default'),
+                (string)($contextClaims['area'] ?? 'frontend'),
+                ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionService::class)
+                    ->getPublishedVersion($themeId, $layoutType, [
+                        'scope' => $scope,
+                        'layout_option' => $contextClaims['layout_option'] ?? 'default',
+                        'target_type' => $contextClaims['target_type'] ?? 'global',
+                        'target_id' => (int)($contextClaims['target_id'] ?? 0),
+                    ])?->getVersionId() ?? 0,
             );
         }
     }
@@ -1779,6 +1834,15 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 $published,
                 $releaseId,
                 $draftRevisionId,
+                $context->layoutOption,
+                $context->area,
+                ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionService::class)
+                    ->getCurrentVersion($themeId, $context->identityLayoutType(), [
+                        'scope' => $scope,
+                        'layout_option' => $context->layoutOption,
+                        'target_type' => $context->targetType,
+                        'target_id' => $context->targetId,
+                    ])?->getVersionId() ?? 0,
             );
         } catch (\Throwable $e) {
             throw new \RuntimeException(

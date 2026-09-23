@@ -17,6 +17,13 @@ use Weline\Theme\Service\ThemeScopeVersionService;
  */
 final class ThemeLayoutEntityBakeCoordinator
 {
+    private array $lastRebakeReport = ['migrated' => 0, 'unmapped' => []];
+
+    public function getLastRebakeReport(): array
+    {
+        return $this->lastRebakeReport;
+    }
+
     public function __construct(
         private readonly ThemeScopeVersionService $scopeVersions,
         private readonly ThemeLayoutEntityMaterializer $materializer,
@@ -40,91 +47,62 @@ final class ThemeLayoutEntityBakeCoordinator
         bool $published,
         ?int $releaseId,
         int $draftRevisionId = 0,
+        string $layoutOption = 'default',
+        string $area = 'frontend',
+        ?int $versionId = null,
     ): void {
         if ($themeId < 1 || $scope === '') {
             throw new \InvalidArgumentException('theme_layout_entity_bake_identity_invalid');
         }
 
-        if ($this->sharedChrome->isChromeCarrierPageType($layoutType)) {
-            $this->syncCarrierChromePayloadIfStale($themeId, $scope, $nodes, $published);
-        }
-
-        // 发布必须整页物化到 r{releaseId}：publish 入口常不带 ADD_NODE 变更列表（节点已在草稿），
-        // 若仍走 config-only，店面硬切找不到 r{id} 会 fail-closed（禁止回退 s*）。
-        $structural = $published || $this->commandsAreStructural($commands);
+        $structural = $this->commandsAreStructural($commands);
         $chromeTouched = $this->commandsTouchChrome($commands, $nodes);
-
         if ($chromeTouched) {
-            $this->bakeChromeFromNodes($themeId, $scope, $nodes, $structural);
+            $this->bakeChromeFromNodes($themeId, $scope, $nodes, $structural, false, $versionId);
         }
 
-        if ($structural && !$chromeTouched) {
-            $this->bakePageFromNodes(
-                $themeId,
-                $scope,
-                $identityHash,
-                $layoutType,
-                $nodes,
-                $published,
-                $releaseId,
-                $draftRevisionId,
-            );
-        } elseif ($structural && $chromeTouched) {
-            // Chrome structural bake already done; still bake page content without chrome nodes.
-            $this->bakePageFromNodes(
-                $themeId,
-                $scope,
-                $identityHash,
-                $layoutType,
-                $nodes,
-                $published,
-                $releaseId,
-                $draftRevisionId,
-            );
-        } elseif (!$structural) {
-            $this->updateConfigSidecarsOnly($themeId, $scope, $identityHash, $nodes, $published, $releaseId, $draftRevisionId);
+        if ($structural) {
+            $this->bakePageFromNodes($themeId, $scope, $identityHash, $layoutType,
+                $nodes, $published, $releaseId, $draftRevisionId, versionId: $versionId, layoutOption: $layoutOption, area: $area);
+        } else {
+            $this->updateConfigSidecarsOnly($themeId, $scope, $identityHash, $nodes,
+                $published, $releaseId, $draftRevisionId, $layoutType, $layoutOption, $area, $versionId);
         }
-
-        // wave8-8s5: chrome structural bake must refresh published whole-shells under scope.
-        if ($published && $chromeTouched && $structural) {
-            $this->refreshPublishedWholeShellsForScope($themeId, $scope);
-        }
-
-        $this->bustPresentationCaches($themeId);
+        // 一次布局提交只通知一次展示依赖；不再清空所有框架缓存池。
+        $this->bustPresentationCaches($themeId, $scope);
     }
 
     /**
      * @param array<string|int, mixed> $nodes
      */
-    public function bakeChromeFromNodes(int $themeId, string $scope, array $nodes, bool $structural = true): string
+    public function bakeChromeFromNodes(int $themeId, string $scope, array $nodes, bool $structural = true, bool $invalidate = true, ?int $versionId = null): string
     {
-        // Config edits must not rewrite chrome.phtml. Sidecar + snapshot bust live in updateConfigSidecarsOnly.
-        if (!$structural) {
-            $version = $this->scopeVersions->ensureCurrent($themeId, $scope);
-            $this->materializer->bustChromeRenderedSnapshots($version);
-
-            return '';
-        }
-
         $version = $this->scopeVersions->ensureCurrent($themeId, $scope);
         $chromeNodes = $this->slotTree->filterChromeNodes($nodes);
-        // 布局固化与默认注入: homepage carrier required JSON → chrome structure bake.
-        $chromeNodes = $this->mergeRequiredDefaultsIntoNodes($chromeNodes, $themeId, 'homepage');
-        $chromeNodes = $this->slotTree->filterChromeNodes($chromeNodes);
-        $this->scopeVersions->setChromePayload($version, $chromeNodes);
-        $version = $this->scopeVersions->getCurrent($themeId, $scope) ?? $version;
-
+        if (!$structural) {
+            // 配置提交合并完整节点，不能截掉默认注入或未出现在局部提交中的节点。
+            $chromeNodes = $this->mergeChromePayloadNodes($version->getChromePayload(), $chromeNodes);
+        } else {
+            $chromeNodes = $this->mergeRequiredDefaultsIntoNodes($chromeNodes, $themeId, 'homepage', $versionId);
+            $chromeNodes = $this->slotTree->filterChromeNodes($chromeNodes);
+        }
+        if ($chromeNodes !== $version->getChromePayload()) {
+            $this->scopeVersions->setChromePayload($version, $chromeNodes);
+            $version = $this->scopeVersions->getCurrent($themeId, $scope) ?? $version;
+        }
+        // Materializer 按最终结构摘要复用模板；配置只产生新的绑定。
         $path = $this->materializer->materializeChrome($version);
         if (!\is_file($path)) {
             throw new \RuntimeException('theme_layout_entity_chrome_bake_failed');
         }
+        $this->pointers->invalidateChrome($themeId, $scope);
         $this->pointers->rememberChromePointer($themeId, $scope, $version->getVersionId(), $path, false);
         if ($version->isPublished()) {
             $this->pointers->rememberChromePointer($themeId, $scope, $version->getVersionId(), $path, true);
         }
-        $this->pointers->invalidateChrome($themeId, $scope);
-        $this->bustPresentationCaches($themeId);
-
+        if ($invalidate) {
+            $this->bustPresentationCaches($themeId, $scope);
+        }
         return $path;
     }
 
@@ -140,12 +118,21 @@ final class ThemeLayoutEntityBakeCoordinator
         bool $published,
         ?int $releaseId,
         int $draftRevisionId = 0,
+        ?int $versionId = null,
+        array $changes = [],
+        bool $updateCurrent = true,
+        string $layoutOption = 'default',
+        string $area = 'frontend',
+        bool $mergeDefaults = true,
     ): string {
         $contentNodes = $this->slotTree->filterContentNodes($nodes);
         // 布局固化与默认注入: required JSON default_injections bake into layout.phtml nodes.
-        $contentNodes = $this->mergeRequiredDefaultsIntoNodes($contentNodes, $themeId, $layoutType);
+        if ($mergeDefaults) {
+            $contentNodes = $this->mergeRequiredDefaultsIntoNodes($contentNodes, $themeId, $layoutType, $versionId, $changes, $layoutOption);
+        }
         $contentNodes = $this->slotTree->filterContentNodes($contentNodes);
-        $structureKey = $this->structureKeyForNodes($contentNodes, $draftRevisionId, $releaseId);
+        $structureKey = hash('sha256', $this->structureKeyForNodes($contentNodes, $draftRevisionId, $releaseId)
+            . '|' . $this->sourceLayoutFingerprint($themeId, $layoutType, $layoutOption, $area));
         $identityKey = $this->pathsIdentityKey($identityHash, $layoutType);
         $configByUid = [];
         foreach ($contentNodes as $node) {
@@ -170,37 +157,24 @@ final class ThemeLayoutEntityBakeCoordinator
             $published,
             $releaseId,
             $layoutType,
+            $draftRevisionId,
         );
         if (!\is_file($path)) {
             throw new \RuntimeException('theme_layout_entity_page_bake_failed');
         }
-        $this->pointers->rememberPagePointer(
-            $themeId,
-            $scope,
-            $identityHash !== '' ? $identityHash : $identityKey,
-            $structureKey,
-            $path,
-            $published,
-            $releaseId,
-        );
         $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
-        $this->writePageCurrentPointer(
-            $paths,
-            $themeId,
-            $scope,
-            $identityKey,
-            $paths->pageStructureOrRelease($structureKey, $published, $releaseId),
-            $published,
-        );
+        $entityKey = $published && $releaseId !== null && $releaseId > 0
+            ? 'r' . $releaseId : 'd' . $draftRevisionId;
+        $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
+            ->readPageBinding($themeId, $scope, $identityKey, $entityKey);
+        if ($updateCurrent) {
+            $this->writePageCurrentPointer($paths, $themeId, $scope, $identityKey, $entityKey, $published);
+        $this->pointers->invalidatePage($themeId, $scope,
+            $identityHash !== '' ? $identityHash : $identityKey, $structureKey, $published, $releaseId);
+        $this->pointers->rememberPagePointer($themeId, $scope,
+            $identityHash !== '' ? $identityHash : $identityKey,
+            $binding?->structureKey ?? $structureKey, $path, $published, $releaseId);
 
-        // wave8-8s5: published bake writes whole-shell (chrome + page) for storefront include.
-        if ($published) {
-            $this->writePublishedWholeShell(
-                $themeId,
-                $scope,
-                $identityKey,
-                $paths->pageStructureOrRelease($structureKey, true, $releaseId),
-            );
         }
 
         return $path;
@@ -213,48 +187,87 @@ final class ThemeLayoutEntityBakeCoordinator
      *
      * @see app/code/Weline/Theme/doc/布局固化与默认注入.md §3.3
      */
-    public function rebakeAfterInjectionCollect(?int $themeId = null): int
+    public function rebakeAfterInjectionCollect(?int $themeId = null, array $changes = []): int
     {
-        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
-        $root = $paths->root();
-        if (!\is_dir($root)) {
-            return 0;
+        $enumerator = ObjectManager::getInstance(ThemeLayoutEntityInjectionTargets::class);
+        $targets = $enumerator->resolve($changes, $themeId);
+        $report = $enumerator->reportForTargets($targets);
+        $this->lastRebakeReport = ['migrated' => 0, 'unmapped' => $report['unresolved']];
+        $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
+        $seen = $scopes = [];
+        foreach ($targets as $target) {
+            if (empty($target['version_resolved'])
+                && ($changes !== [] || ($target['reason'] ?? '') === 'historical_draft_baseline_missing')) {
+                continue;
+            }
+            $key = implode('|', [$target['theme_id'], $target['scope'], $target['identity_hash'],
+                $target['published'] ? 'r' . $target['release_id'] : 'd' . $target['draft_revision_id']]);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            foreach ($merger->unresolvedRetiredNodes($target['nodes'], $target['layout_type'], $changes) as $unresolved) {
+                $this->lastRebakeReport['unmapped'][] = ['identity' => $key] + $unresolved;
+            }
+            $this->bakePageFromNodes($target['theme_id'], $target['scope'], $target['identity_hash'],
+                $target['layout_type'], $target['nodes'], $target['published'], $target['release_id'],
+                $target['draft_revision_id'], $target['version_id'], $changes, $target['current'],
+                $target['layout_option'], $target['area'], !empty($target['version_resolved']));
+            ++$this->lastRebakeReport['migrated'];
+            $scopes[$target['theme_id'] . '|' . $target['scope']] = [$target['theme_id'], $target['scope']];
         }
-
-        $written = 0;
-        $themeDirs = $themeId !== null && $themeId > 0
-            ? [$root . $themeId]
-            : (\glob($root . '*', \GLOB_ONLYDIR) ?: []);
-        foreach ($themeDirs as $themeDir) {
-            if (!\is_string($themeDir) || !\is_dir($themeDir)) {
-                continue;
+        // Chrome has its own version authority; enumerate it even when no page artifact exists.
+        $chromeAffected = $changes === [];
+        foreach ($changes as $change) {
+            foreach (array_merge($change['before'] ?? [], $change['after'] ?? []) as $declaration) {
+                $chromeAffected = $chromeAffected || $this->sharedChrome->isChromeTarget((string)($declaration['area'] ?? ''), (string)($declaration['slot'] ?? ''));
             }
-            $tid = (int)\basename($themeDir);
-            if ($tid < 1) {
-                continue;
+        }
+        if ($chromeAffected) {
+            $query = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearQuery()->clearData();
+            if ($themeId !== null && $themeId > 0) {
+                $query->where('theme_id', $themeId);
             }
-            foreach (\glob($themeDir . \DIRECTORY_SEPARATOR . '*', \GLOB_ONLYDIR) ?: [] as $scopeDir) {
-                if (!\is_string($scopeDir) || !\is_dir($scopeDir)) {
-                    continue;
+            $rows = $query->select()->fetchArray();
+            $rows = !is_array($rows) || $rows === [] ? [] : (array_is_list($rows) ? $rows : [$rows]);
+            foreach ($rows as $row) {
+                $version = clone ObjectManager::getInstance(ThemeScopeVersion::class);
+                $version->load((int)$row['version_id']);
+                $tid = $version->getThemeId();
+                $scope = $version->getScope();
+                // Scope-version 与布局版本分别拥有身份，按快照映射人工卸载决定。
+                $omissionBinding = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionBindingResolver::class)
+                    ->resolveChromeOmissions($tid, $scope, $version->getChromePayload());
+                if (empty($omissionBinding['resolved'])) {
+                    $this->lastRebakeReport['unmapped'][] = [
+                        'theme_id' => $tid, 'scope' => $scope, 'chrome_version_id' => $version->getVersionId(),
+                        'reason' => (string)($omissionBinding['reason'] ?? 'chrome_layout_version_unmapped'),
+                    ];
+                    if ($changes !== []) {
+                        continue;
+                    }
                 }
-                $written += $this->rematerializePublishedPagesUnderScopeDir($tid, $scopeDir);
-                $written += $this->rematerializeChromeVersionsUnderScopeDir($tid, $scopeDir);
-                // Architecture: finalize chrome.rendered (nested footer-*-links promote)
-                // BEFORE refreshing shell.phtml. Shell embeds renderCurrent(), which reads
-                // those snapshots — never raw chrome.phtml injectors (布局固化与默认注入.md).
-                $written += $this->dropChromeRenderedSnapshotsUnderScopeDir($scopeDir);
-                $written += $this->resolidifyChromeRenderedUnderScopeDir($scopeDir);
-                $written += $this->refreshPublishedWholeShellsUnderScopeDir($tid, $scopeDir);
+                // 迁移可原样绑定自身权威快照；只有重放注入差异才需要卸载版本映射。
+                $nodes = empty($omissionBinding['resolved']) ? $version->getChromePayload()
+                    : $merger->mergeIntoNodes($version->getChromePayload(), $tid, 'homepage', 0,
+                        $changes, $omissionBinding['omissions']);
+                $nodes = $this->slotTree->filterChromeNodes($nodes);
+                if ($nodes !== $version->getChromePayload()) {
+                    $this->scopeVersions->setChromePayload($version, $nodes);
+                }
+                $this->materializer->materializeChrome($version);
+                $this->pointers->invalidateChrome($tid, $scope);
+                $scopes[$tid . '|' . $scope] = [$tid, $scope];
+                ++$this->lastRebakeReport['migrated'];
             }
         }
-
-        if ($written > 0 && ($themeId === null || $themeId < 1)) {
-            $this->bustPresentationCaches(0);
-        } elseif ($written > 0 && $themeId !== null && $themeId > 0) {
-            $this->bustPresentationCaches($themeId);
+        foreach ($scopes as [$tid, $scope]) {
+            $this->bustPresentationCaches($tid, $scope);
         }
-
-        return $written;
+        if ($changes !== [] && $this->lastRebakeReport['unmapped'] !== [] && function_exists('w_log_warning')) {
+            w_log_warning('theme_layout_injection_versions_unmapped', $this->lastRebakeReport, 'theme_layout_entity');
+        }
+        return $this->lastRebakeReport['migrated'];
     }
 
     /**
@@ -268,6 +281,8 @@ final class ThemeLayoutEntityBakeCoordinator
         string $layoutType,
         array $nodes,
         ?int $releaseId = null,
+        string $layoutOption = 'default',
+        string $area = 'frontend',
     ): string {
         if ($themeId < 1 || \trim($scope) === '' || \trim($layoutType) === '') {
             return '';
@@ -282,6 +297,8 @@ final class ThemeLayoutEntityBakeCoordinator
                 true,
                 $releaseId,
                 0,
+                layoutOption: $layoutOption,
+                area: $area,
             );
         } catch (\Throwable $e) {
             if (\function_exists('w_log_warning')) {
@@ -309,6 +326,8 @@ final class ThemeLayoutEntityBakeCoordinator
         string $identityKey,
         string $structureOrRelease,
         string $pageType,
+        string $layoutOption = 'default',
+        string $area = 'frontend',
     ): string {
         if ($themeId < 1 || $scope === '' || $identityKey === '' || $structureOrRelease === '' || $pageType === '') {
             return '';
@@ -351,9 +370,8 @@ final class ThemeLayoutEntityBakeCoordinator
         if (\preg_match('/^r(\d+)$/', $structureOrRelease, $m) === 1) {
             $releaseId = (int)$m[1];
         }
-        $structureKey = $releaseId !== null
-            ? ('release-' . $releaseId)
-            : $this->structureKeyForNodes($nodes, 0, null);
+        $structureKey = hash('sha256', $this->structureKeyForNodes($nodes, 0, null)
+            . '|' . $this->sourceLayoutFingerprint($themeId, $pageType, $layoutOption, $area));
         $configByUid = [];
         foreach ($nodes as $node) {
             if (!\is_array($node)) {
@@ -393,12 +411,12 @@ final class ThemeLayoutEntityBakeCoordinator
      * @param array<string|int, mixed> $nodes
      * @return array<string, array<string, mixed>>
      */
-    private function mergeRequiredDefaultsIntoNodes(array $nodes, int $themeId, string $pageType): array
+    private function mergeRequiredDefaultsIntoNodes(array $nodes, int $themeId, string $pageType, ?int $versionId = null, array $changes = [], string $layoutOption = 'default'): array
     {
         /** @var RequiredDefaultInjectionBakeMerger $merger */
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
 
-        return $merger->mergeIntoNodes($nodes, $themeId, $pageType);
+        return $merger->mergeIntoNodes($nodes, $themeId, $pageType, $versionId, $changes, null, $layoutOption);
     }
 
     /**
@@ -706,6 +724,11 @@ final class ThemeLayoutEntityBakeCoordinator
         string $structureOrRelease,
     ): string {
         $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
+            ->readPageBinding($themeId, $scope, $identityKey, $structureOrRelease);
+        if ($binding !== null) {
+            return is_file($binding->shellPath) ? $binding->shellPath : '';
+        }
         $pagePath = $paths->pagePhtml($themeId, $scope, $identityKey, $structureOrRelease);
         $shellPath = $paths->shellPhtml($themeId, $scope, $identityKey, $structureOrRelease);
         if (!\is_file($pagePath)) {
@@ -730,8 +753,9 @@ final class ThemeLayoutEntityBakeCoordinator
         if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
             throw new \RuntimeException('theme_layout_entity_shell_dir_failed: ' . $dir);
         }
-        if (@\file_put_contents($shellPath, $body) === false) {
-            throw new \RuntimeException('theme_layout_entity_shell_write_failed: ' . $shellPath);
+        if (!is_file($shellPath) || file_get_contents($shellPath) !== $body) {
+            ObjectManager::getInstance(\Weline\Framework\Compilation\AtomicCompiledFilePublisher::class)
+                ->publish($shellPath, $body);
         }
         if (\function_exists('opcache_compile_file')) {
             @\opcache_compile_file($shellPath);
@@ -818,62 +842,47 @@ final class ThemeLayoutEntityBakeCoordinator
         bool $published,
         ?int $releaseId,
         int $draftRevisionId,
+        string $layoutType = '',
+        string $layoutOption = 'default',
+        string $area = 'frontend',
+        ?int $versionId = null,
     ): void {
-        $chromeNodes = $this->slotTree->filterChromeNodes($nodes);
-        $contentNodes = $this->slotTree->filterContentNodes($nodes);
-
-        if ($chromeNodes !== []) {
-            $version = $this->scopeVersions->ensureCurrent($themeId, $scope);
-            // Config-only writes may pass a partial node set; merge into payload instead of truncating.
-            $merged = $this->mergeChromePayloadNodes($version->getChromePayload(), $chromeNodes);
-            $this->scopeVersions->setChromePayload($version, $merged);
-            $version = $this->scopeVersions->getCurrent($themeId, $scope) ?? $version;
-            // Config-only: patch chrome-config sidecar entries without rebaking phtml structure.
-            $config = $this->configStore->readChromeConfig($themeId, $scope, $version->getVersionId());
-            foreach ($chromeNodes as $node) {
-                if (!\is_array($node)) {
-                    continue;
-                }
-                $uid = \strtolower(\trim((string)($node['node_uid'] ?? '')));
-                if ($uid !== '') {
-                    $config[$uid] = \is_array($node['config'] ?? null) ? $node['config'] : [];
-                }
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $store = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class);
+        $identityKey = $this->pathsIdentityKey($identityHash, $layoutType);
+        $entityKey = $published && $releaseId !== null && $releaseId > 0
+            ? 'r' . $releaseId : 'd' . $draftRevisionId;
+        $binding = $store->readPageBinding($themeId, $scope, $identityKey, $entityKey);
+        // 发布身份缺失时只能从该发布快照重建，不能借用未发布草稿。
+        if ($binding === null && !$published) {
+            $file = $paths->pageCurrentJson($themeId, $scope, $identityKey);
+            $current = \is_file($file) ? \json_decode((string)\file_get_contents($file), true) : [];
+            $previous = (string)($current['draft'] ?? $current['published'] ?? '');
+            if ($previous !== '') {
+                $binding = $store->readPageBinding($themeId, $scope, $identityKey, $previous);
             }
-            $this->configStore->writeChromeConfig($themeId, $scope, $version->getVersionId(), $config);
-            $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
-            $this->configStore->writeChromeAssets(
-                $themeId,
-                $scope,
-                $version->getVersionId(),
-                $collector->collectFromNodes($collector->withChromeRegistryBaseline($merged), true),
-            );
         }
-
-        if ($contentNodes !== []) {
-            $structureKey = $this->structureKeyForNodes($contentNodes, $draftRevisionId, $releaseId);
-            $identityKey = $this->pathsIdentityKey($identityHash, '');
-            $structureOrRelease = ObjectManager::getInstance(ThemeLayoutEntityPaths::class)
-                ->pageStructureOrRelease($structureKey, $published, $releaseId);
-            $config = [];
-            foreach ($contentNodes as $node) {
-                if (!\is_array($node)) {
-                    continue;
-                }
-                $uid = \strtolower(\trim((string)($node['node_uid'] ?? '')));
-                if ($uid !== '') {
-                    $config[$uid] = $node;
-                }
+        if ($binding === null) {
+            // 首次生成或旧格式迁移才需要固化；正常配置写入只复用已有结构。
+            $this->bakePageFromNodes($themeId, $scope, $identityHash, $layoutType,
+                $nodes, $published, $releaseId, $draftRevisionId, versionId: $versionId, layoutOption: $layoutOption, area: $area);
+            return;
+        }
+        $config = $this->configStore->readBoundConfig($binding);
+        foreach ($this->slotTree->filterContentNodes($nodes) as $uid => $node) {
+            if (!\is_array($node)) {
+                continue;
             }
-            $this->configStore->writePageConfig($themeId, $scope, $identityKey, $structureOrRelease, $config);
-            $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
-            $this->configStore->writePageAssets(
-                $themeId,
-                $scope,
-                $identityKey,
-                $structureOrRelease,
-                $collector->collectFromNodes($contentNodes, true),
-            );
+            $uid = \strtolower(\trim((string)($node['node_uid'] ?? $uid)));
+            if ($uid !== '') {
+                $config[$uid] = \array_replace(\is_array($config[$uid] ?? null) ? $config[$uid] : [], $node);
+                $config[$uid]['node_uid'] = $uid;
+            }
         }
+        $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
+        $store->publishPageBinding($themeId, $scope, $identityKey, $entityKey,
+            $binding->structureKey, $config, $collector->collectFromNodes($config, true));
+        $this->writePageCurrentPointer($paths, $themeId, $scope, $identityKey, $entityKey, $published);
     }
 
     /**
@@ -922,28 +931,43 @@ final class ThemeLayoutEntityBakeCoordinator
      */
     private function commandsTouchChrome(array $commands, array $nodes): bool
     {
-        foreach ($nodes as $node) {
-            if (!\is_array($node)) {
-                continue;
+        if ($commands === []) {
+            foreach ($nodes as $node) {
+                if (\is_array($node) && $this->sharedChrome->isChromeTarget(
+                    (string)($node['area'] ?? ''), isset($node['slot_id']) ? (string)$node['slot_id'] : null,
+                )) {
+                    return true;
+                }
             }
-            $area = (string)($node['area'] ?? '');
-            $slot = isset($node['slot_id']) ? (string)$node['slot_id'] : null;
-            if ($this->sharedChrome->isChromeTarget($area, $slot)) {
-                return true;
+            return false;
+        }
+        $byUid = [];
+        foreach ($nodes as $uid => $node) {
+            if (\is_array($node)) {
+                $byUid[(string)($node['node_uid'] ?? $uid)] = $node;
             }
         }
         foreach ($commands as $command) {
-            $path = '';
-            if (\is_object($command) && \method_exists($command, 'toArray')) {
-                $path = (string)(($command->toArray()['path'] ?? ''));
-            } elseif (\is_array($command)) {
-                $path = (string)($command['path'] ?? '');
+            $entry = \is_object($command) && \method_exists($command, 'toArray') ? $command->toArray() : $command;
+            if (!\is_array($entry)) {
+                continue;
             }
-            if (\preg_match('#header|footer#i', $path) === 1) {
+            $path = (string)($entry['path'] ?? '');
+            if (\preg_match('#header|footer#i', $path) === 1 || $path === '/nodes') {
+                return true;
+            }
+            \preg_match('#^/nodes/([a-f0-9]{32})(?:/|$)#', $path, $match);
+            $uid = (string)($entry['node_uid'] ?? $match[1] ?? '');
+            $node = $byUid[$uid] ?? (\is_array($entry['value'] ?? null) ? $entry['value'] : null);
+            if ($node === null) {
+                // 被删除的节点不在结果中；交给最终结构摘要判断，不能漏掉公共壳删除。
+                return true;
+            }
+            if ($this->sharedChrome->isChromeTarget((string)($node['area'] ?? ''),
+                isset($node['slot_id']) ? (string)$node['slot_id'] : null)) {
                 return true;
             }
         }
-
         return false;
     }
 
@@ -963,23 +987,48 @@ final class ThemeLayoutEntityBakeCoordinator
         if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
             return;
         }
-        $existing = [];
-        if (\is_file($file)) {
-            $decoded = \json_decode((string)\file_get_contents($file), true);
-            if (\is_array($decoded)) {
-                $existing = $decoded;
+        $publisher = ObjectManager::getInstance(\Weline\Framework\Compilation\AtomicCompiledFilePublisher::class);
+        $acquired = $publisher->acquireDirectoryLock($dir);
+        try {
+            $existing = [];
+            if (\is_file($file)) {
+                $decoded = \json_decode((string)\file_get_contents($file), true);
+                if (\is_array($decoded)) {
+                    $existing = $decoded;
+                }
+            }
+            $existing[$published ? 'published' : 'draft'] = $structureOrRelease;
+            $json = \json_encode($existing, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                return;
+            }
+            if (!is_file($file) || file_get_contents($file) !== $json . "\n") {
+                $publisher->publish($file, $json . "\n");
+            }
+        } finally {
+            if ($acquired) {
+                $publisher::releaseDirectoryLock($dir);
             }
         }
-        $existing[$published ? 'published' : 'draft'] = $structureOrRelease;
-        $json = \json_encode($existing, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            return;
+    }
+
+    /** 写路径按既有主题继承顺序查找一个布局文件，不扫描资源目录。 */
+    private function sourceLayoutFingerprint(int $themeId, string $layoutType, string $layoutOption, string $area): string
+    {
+        $theme = clone ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+        $theme->load($themeId);
+        $directories = ObjectManager::getInstance(\Weline\Theme\Service\ThemeDirectoryResolver::class)
+            ->getAreaDirectories($area, $theme);
+        $sourceHash = '';
+        foreach ($directories as $directory) {
+            $path = rtrim((string)($directory['path'] ?? ''), '/\\')
+                . '/layouts/' . $layoutType . '/' . $layoutOption . '.phtml';
+            if (is_file($path)) {
+                $sourceHash = (string)hash_file('sha256', $path);
+                break;
+            }
         }
-        $tmp = $file . '.tmp';
-        if (@\file_put_contents($tmp, $json . "\n") === false) {
-            return;
-        }
-        @\rename($tmp, $file);
+        return hash('sha256', json_encode([$area, $layoutType, $layoutOption, $sourceHash], JSON_THROW_ON_ERROR));
     }
 
     /** @param array<string|int, mixed> $nodes */
@@ -1020,16 +1069,12 @@ final class ThemeLayoutEntityBakeCoordinator
         return $layoutType !== '' ? \substr(\hash('sha256', $layoutType), 0, 16) : 'page';
     }
 
-    private function bustPresentationCaches(int $themeId): void
+    private function bustPresentationCaches(int $themeId, ?string $scope = null): void
     {
         try {
             /** @var ThemeRuntimeCacheCleaner $cleaner */
             $cleaner = ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class);
-            if (\method_exists($cleaner, 'clearNonGlobalCaches')) {
-                $cleaner->clearNonGlobalCaches($themeId > 0 ? $themeId : null, 'theme_layout_entity_bake');
-            } elseif (\method_exists($cleaner, 'clearAllThemeRelatedCaches')) {
-                $cleaner->clearAllThemeRelatedCaches($themeId);
-            }
+            $cleaner->clearLayoutEntityCaches($themeId > 0 ? $themeId : null, $scope);
         } catch (\Throwable $e) {
             throw new \RuntimeException('theme_layout_entity_presentation_bust_failed: ' . $e->getMessage(), 0, $e);
         }

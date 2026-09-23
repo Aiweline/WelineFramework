@@ -131,6 +131,7 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
         self::assertStringContainsString('outermostSlotRegions', $src);
         self::assertStringContainsString('soft-skip', $src);
         self::assertStringContainsString('slotAllowsMultiple', $src);
+        self::assertStringContainsString('isEffectivelyBlankSlotInner', $src);
         self::assertStringNotContainsString(
             "throw new \\RuntimeException(\n                'required_default_injection_duplicate:",
             $src,
@@ -154,5 +155,20 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
         self::assertSame(1, substr_count($after, 'INJECTED'));
         self::assertSame(0, substr_count($after, 'BAKED'));
         self::assertSame(1, substr_count($after, 'data-testid="checkout-coupon"'));
+    }
+
+    public function testMissingConfigOnlyInnerIsTreatedAsBlankForReplace(): void
+    {
+        self::assertTrue(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::isEffectivelyBlankSlotInner(
+                "\n<!-- theme-layout-entity:missing-config:32632f9bb53fea2cc396dbd9b6fd3dc1 -->"
+                . '<!-- theme-layout-entity:missing-config:bd21a0d1fbf795295f8f2a16049df5d5 -->'
+            )
+        );
+        self::assertFalse(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::isEffectivelyBlankSlotInner(
+                '<a data-testid="footer-payment-methods-link">支付方式</a>'
+            )
+        );
     }
 }

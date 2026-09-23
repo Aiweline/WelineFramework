@@ -1446,6 +1446,27 @@ try {
         exit(0);
     }
 
+    if ($action === 'binding_snapshot') {
+        $rows = (clone ObjectManager::getInstance(ThemeScopeWorkspace::class))->clearQuery()->clearData()
+            ->where('theme_id', $themeId)->where('layout_type', $pageType)->where('resource_type', 'layout')
+            ->select()->fetchArray();
+        $rows = !is_array($rows) || $rows === [] ? [] : (array_is_list($rows) ? $rows : [$rows]);
+        $bindings = [];
+        $store = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBindingStore::class);
+        foreach ($rows as $row) {
+            $key = substr((string)$row['identity_hash'], 0, 16);
+            $binding = $store->readPageBinding($themeId, (string)$row['scope'], $key, 'd' . (int)$row['draft_revision_id']);
+            if ($binding !== null && is_file($binding->templatePath)) {
+                clearstatcache(true, $binding->templatePath);
+                $bindings[$key] = ['structure_key' => $binding->structureKey, 'config_key' => $binding->configKey,
+                    'template_hash' => hash_file('sha256', $binding->templatePath),
+                    'template_mtime' => filemtime($binding->templatePath)];
+            }
+        }
+        output_json(['bindings' => $bindings]);
+        exit(0);
+    }
+
     if ($action === 'snapshot') {
         output_json(snapshot_theme_editor_fixture($layout, $version, $themeId, $pageType, $identity));
         exit(0);

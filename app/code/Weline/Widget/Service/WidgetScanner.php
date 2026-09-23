@@ -466,6 +466,7 @@ class WidgetScanner
     private function processWidgetEntry($entry, string $moduleName, string $basePath, $key): ?array
     {
         try {
+            $entry = $this->normalizeWidgetEntry($entry, $key);
             // 格式1：纯字符串（模板路径）
             if (is_string($entry)) {
                 return $this->processSimplifiedWidget($entry, [], $moduleName, $basePath);
@@ -493,6 +494,16 @@ class WidgetScanner
             w_log_error("处理部件条目失败 (key={$key}): " . $e->getMessage(), [], 'WidgetScanner');
             return null;
         }
+    }
+
+    /** A template-path key with overrides is equivalent to an explicit template field. */
+    private function normalizeWidgetEntry(mixed $entry, mixed $key): mixed
+    {
+        if (is_array($entry) && !isset($entry['template']) && is_string($key)
+            && preg_match('#^[A-Za-z][A-Za-z0-9_]*::[^\r\n]+\.phtml$#D', $key) === 1) {
+            $entry['template'] = $key;
+        }
+        return $entry;
     }
 
     /**

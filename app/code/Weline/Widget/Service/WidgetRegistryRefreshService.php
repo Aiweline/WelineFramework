@@ -25,11 +25,13 @@ class WidgetRegistryRefreshService
         $report['param_schema_success'] = $schemaOk;
 
         $widgets = $report['created_default_injection_widgets'] ?? [];
-        if (($report['success'] ?? false) && is_array($widgets) && $widgets !== []) {
+        $changes = $report['injection_structure_changes'] ?? [];
+        if (($report['success'] ?? false) && is_array($widgets) && ($widgets !== [] || $changes !== [])) {
             $eventData = [
                 'source' => $source,
                 'widgets' => array_values($widgets),
                 'registry_report' => $report,
+                'injection_structure_changes' => $changes,
             ];
             $this->eventsManager->dispatch('Weline_Widget::widget_install_after', $eventData);
             $report['widget_install_event_dispatched'] = true;

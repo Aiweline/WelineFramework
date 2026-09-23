@@ -13,15 +13,15 @@ final class ThemeLayoutEntityChromePayloadMergeTest extends TestCase
 {
     public function testConfigOnlyPathMergesChromePayloadInsteadOfReplace(): void
     {
-        $path = \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';
-        self::assertFileExists($path);
-        $src = (string)\file_get_contents($path);
-
-        self::assertStringContainsString('function mergeChromePayloadNodes', $src);
-        self::assertStringContainsString('function syncCarrierChromePayloadIfStale', $src);
-        self::assertStringContainsString('merge into payload instead of truncating', $src);
-        self::assertStringContainsString('readChromeConfig', $src);
-        self::assertStringContainsString('syncCarrierChromePayloadIfStale', $src);
+        $class = new \ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class);
+        $existing = ['a' => ['node_uid' => 'a', 'widget_module' => 'Weline_Theme', 'widget_code' => 'header', 'config' => ['title' => 'old']],
+            'injected' => ['node_uid' => 'injected', 'source' => 'default_injection', 'widget_code' => 'navigation']];
+        $result = $class->getMethod('mergeChromePayloadNodes')->invoke($class->newInstanceWithoutConstructor(),
+            $existing, ['a' => ['config' => ['title' => 'new']]]);
+        self::assertSame($existing['injected'], $result['injected']);
+        self::assertSame('Weline_Theme', $result['a']['widget_module']);
+        self::assertSame('header', $result['a']['widget_code']);
+        self::assertSame(['title' => 'new'], $result['a']['config']);
     }
 
     public function testUpgradeReconcileChromePayloadMigrationPresent(): void

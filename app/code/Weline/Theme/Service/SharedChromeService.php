@@ -23,8 +23,14 @@ final class SharedChromeService
     /** @var list<string> */
     public const CHROME_AREAS = ['header', 'footer'];
 
-    /** @var list<string> */
-    public const CHROME_SLOTS = ['header', 'footer'];
+    /**
+     * Root chrome destinations baked into chrome.phtml / shell.phtml.
+     * `delivery` sits in the chrome bake (header-adjacent strip) even though it is
+     * not under the header-/footer- prefix.
+     *
+     * @var list<string>
+     */
+    public const CHROME_SLOTS = ['header', 'footer', 'delivery'];
 
     public function __construct(
         private readonly ThemeScopedWorkspaceInterface $workspace,
@@ -52,7 +58,7 @@ final class SharedChromeService
         }
 
         // Nested chrome slots stay under the same global chrome ownership model.
-        foreach (self::CHROME_SLOTS as $root) {
+        foreach (['header', 'footer'] as $root) {
             if ($slotId === $root || \str_starts_with($slotId, $root . '-') || \str_starts_with($slotId, $root . '_')) {
                 return true;
             }

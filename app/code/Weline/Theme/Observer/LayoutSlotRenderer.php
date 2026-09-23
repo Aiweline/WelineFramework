@@ -161,14 +161,179 @@ class LayoutSlotRenderer implements ObserverInterface
             return;
         }
 
-        // === 绗簩姝ワ細澶勭悊鎻掓Ы鏇挎崲 ===
-        // 妫€鏌ユ槸鍚﹀寘鍚彃妲芥爣璁帮紙鏀寔鏂版棫涓ょ鏂瑰紡锛?
-        // 娉ㄦ剰锛氫笉鍐嶅己鍒舵鏌?isLayoutTemplate锛屽洜涓?fetch_file_after 浜嬩欢
-        // 鑾峰彇鐨勬槸瀹屾暣娓叉煋鍚庣殑 HTML锛屽寘鍚墍鏈夊瓙妯℃澘锛堝 partials锛夌殑鍐呭
+        // === 第二步：处理插槽替换 ===
+        // 检查是否包含插槽标记（支持新旧两种方式）
+        // 注意：不再强制检查 isLayoutTemplate，因为 fetch_file_after 事件
+        // 获取的是完整渲染后的 HTML，包含所有子模板（如 partials）的内容
+
+        // wave8-8s5: HARD zero-runtime-fill for published storefront when shell is solidified.
+        // wave8-8s5+safety: leftover required placeholders (list-filters / category-filters)
+        // still take a narrow fill/overlay heal — publish/shell bake miss must not ship empty filters.
+        // Editor canvas / editor_mode / preview Token keep the heavy fill path.
+        // Narrow check (align PublishedSlotHost) — ignore authoritativePreviewContext false-positives
+        // from panel probe cookies.
+        if ($area === 'frontend' && $this->shouldForcePublishedZeroRuntimeFill()) {
+            // wave9-9s5: gate FIRST — complete chrome shells skip fill WITHOUT prime/loadFragments
+            // (prime was paying shell include tax on the supposed ≪100ms fast path).
+            // wave9-9s6: empty footer--shell is 缺壳; try durable chrome.rendered splice
+            // BEFORE prime so common incomplete shells can still +skip_fill_solidified ≪100.
+            $gateReason = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                ::shellSafetyNetFillReason($html);
+            $needsSafetyNet = $gateReason !== 'none';
+
+            $ctxBefore = RequestContext::get(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE
+            );
+            $reason = 'forced_published_storefront';
+            if ($ctxBefore === false) {
+                $reason = 'ctx_was_false';
+            } elseif ($ctxBefore === true) {
+                $reason = 'forced_despite_ctx_true';
+            } elseif ($ctxBefore === null) {
+                $reason = 'forced_ctx_unset';
+            }
+
+            $themeIdForPrime = 0;
+            $pageTypeForPrime = '';
+            $snapshotPrefill = false;
+            if ($needsSafetyNet) {
+                try {
+                    $themeIdForPrime = $this->resolveThemeId($area);
+                    if ($themeIdForPrime > 0) {
+                        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $prefillFiller */
+                        $prefillFiller = ObjectManager::getInstance(
+                            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+                        );
+                        $html = $prefillFiller->prefillPublishedChromeFromRenderedSnapshot(
+                            $html,
+                            $themeIdForPrime,
+                        );
+                        $gateReason = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                            ::shellSafetyNetFillReason($html);
+                        $needsSafetyNet = $gateReason !== 'none';
+                        $snapshotPrefill = !$needsSafetyNet;
+                    }
+                } catch (\Throwable) {
+                    // soft — fall through to prime+heal when still incomplete
+                }
+            }
+
+            if (!$needsSafetyNet) {
+                if ($snapshotPrefill) {
+                    $reason .= '+chrome_snapshot_prefill';
+                }
+                $reason .= '+skip_fill_solidified';
+                if ($gateReason !== 'none' && !$snapshotPrefill) {
+                    $reason .= '+gate_' . $gateReason;
+                } elseif ($snapshotPrefill) {
+                    $reason .= '+gate_none_after_snapshot';
+                }
+                RequestContext::set(
+                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_ZERO_FILL_APPLIED,
+                    true,
+                );
+                RequestContext::set(
+                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_ZERO_FILL_REASON,
+                    $reason,
+                );
+                try {
+                    RequestLifecycleTrace::measurePhase(
+                        'theme.layout_slot.zero_runtime_fill',
+                        static fn () => null,
+                        ['reason' => $reason, 'skipped_fill' => true, 'gate' => $gateReason],
+                    );
+                } catch (\Throwable) {
+                    // trace is best-effort
+                }
+                // 布局固化与默认注入.md §3–§4: complete solidified shell → strip only.
+                // Required JSON default_injections must already live in chrome.rendered /
+                // layout bake (minus user_deleted). Per-request Overlay is NOT the primary path.
+                $html = SlotBoundaryMarkers::strip($html);
+                $event->setData('content', $this->finalizeFrontendHtml($html, $area));
+                return;
+            }
+
+            // Heal path only: last-chance prime so late bake deps can still set CTX=false.
+            try {
+                if ($themeIdForPrime < 1) {
+                    $themeIdForPrime = $this->resolveThemeId($area);
+                }
+                $pageTypeForPrime = $this->detectPageType($template);
+                if ($themeIdForPrime > 0 && $pageTypeForPrime !== '') {
+                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::primeStorefront(
+                        $themeIdForPrime,
+                        $pageTypeForPrime,
+                    );
+                }
+            } catch (\Throwable) {
+                // Continue — safety-net / strip still apply to whatever the shell already has.
+            }
+
+            $ctxAfter = RequestContext::get(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE
+            );
+            if ($ctxAfter === false && $ctxBefore !== false) {
+                $reason .= '+prime_recovered';
+            }
+            $reason .= '+safety_net_fill+gate_' . $gateReason;
+
+            RequestContext::set(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_ZERO_FILL_APPLIED,
+                true,
+            );
+            RequestContext::set(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_ZERO_FILL_REASON,
+                $reason,
+            );
+            try {
+                RequestLifecycleTrace::measurePhase(
+                    'theme.layout_slot.zero_runtime_fill',
+                    static fn () => null,
+                    ['reason' => $reason, 'skipped_fill' => false, 'gate' => $gateReason],
+                );
+            } catch (\Throwable) {
+                // trace is best-effort
+            }
+
+            // Narrow safety net (§3.1): no usable solidified chrome / incomplete shell —
+            // heal + bake-time Overlay for THIS response. Lasting fix = rebake /
+            // chrome.rendered finalize (injection-collect / publish), not every-request Overlay.
+            $themeId = $themeIdForPrime > 0 ? $themeIdForPrime : $this->resolveThemeId($area);
+            $pageType = $this->resolveSafetyNetPageType($template, $html, $pageTypeForPrime);
+            if ($pageType === '') {
+                $pageType = ThemeLayout::PAGE_TYPE_HOME;
+            }
+            if ($themeId > 0 && $pageType !== '') {
+                try {
+                    /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $filler */
+                    $filler = ObjectManager::getInstance(
+                        \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+                    );
+                    $html = $filler->healPublishedPlaceholderShell($html, $themeId, $pageType, $area);
+                    // Actual $pageType (not HOME): requiredForPage inherits chrome-carrier only;
+                    // forcing HOME would plan content→newsletter onto policy/terms.
+                    $html = $filler->fillRequiredDefaultsOnShell(
+                        $html,
+                        $themeId,
+                        $pageType,
+                        ThemeLayout::STATUS_PUBLISHED,
+                    );
+                } catch (\Throwable) {
+                    // Soft: still strip markers and deliver whatever healed.
+                }
+            }
+
+            $html = SlotBoundaryMarkers::strip($html);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
+            return;
+        }
+
+        $isEditorOrPreview = $this->isEditorOrPreviewMode();
         $hasSlotMarkers = strpos($html, 'data-wslot') !== false || strpos($html, 'widget-slot-area') !== false;
 
-        // Fast path: normal frontend HTML without slot markers needs no theme or DOM pass.
-        $isEditorOrPreview = $this->isEditorOrPreviewMode();
+        // Fast path: normal frontend HTML without reactive slot markers needs no fill.
+        // wave8-8s2: published host emits theme-published-slot / data-slot-id only
+        // (no data-wslot) → zero-runtime-fill early return. Editor/preview keep markers.
         if (!$hasSlotMarkers && !$isEditorOrPreview) {
             $event->setData('content', $this->finalizeFrontendHtml($html, $area));
             return;
@@ -334,7 +499,11 @@ class LayoutSlotRenderer implements ObserverInterface
             }
         }
 
-        if (\defined('PROD') && PROD) {
+        // wave8-8s4: published storefront outbound always strip markers (DEV probes too).
+        // Editor canvas returns above; preview Token / editor_mode keep markers for the canvas.
+        if ($this->shouldForcePublishedZeroRuntimeFill()) {
+            $html = SlotBoundaryMarkers::strip($html);
+        } elseif (\defined('PROD') && PROD) {
             $html = SlotBoundaryMarkers::strip($html);
         }
 
@@ -1461,6 +1630,38 @@ HTML;
     }
 
     /**
+     * wave8-8s4: published delivery gate for hard zero-runtime-fill.
+     * Aligns with PublishedSlotHost::isEditorOrPreviewRequest (editor_mode + preview Token only).
+     * Does NOT treat authoritativePreviewContext / panel cookies as preview — that false-positive
+     * skipped the 8s3 CTX===false early-return and left LayoutSlot on the fill path.
+     */
+    private function shouldForcePublishedZeroRuntimeFill(): bool
+    {
+        if ($this->isEditorCanvasRequest()) {
+            return false;
+        }
+
+        try {
+            $editorMode = \trim((string)$this->request->getParam('editor_mode', ''));
+            if ($editorMode === '1' || \strtolower($editorMode) === 'true') {
+                return false;
+            }
+        } catch (\Throwable) {
+            // fall through — treat as published
+        }
+
+        try {
+            if ($this->previewTokenService->isPreviewMode()) {
+                return false;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        return true;
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     private function resolveLivePreviewContext(): ?array
@@ -1698,6 +1899,72 @@ HTML;
         }
 
         return ThemeLayout::PAGE_TYPE_DEFAULT;
+    }
+
+    /**
+     * Safety-net pageType: detectPageType can miss when fetch_file_after fileName is a
+     * compiled cache path (no layouts/{type}). Fall back to CTX_LAYOUT_TYPE + shell slot ids.
+     */
+    private function resolveSafetyNetPageType(string $template, string $html, string $detected = ''): string
+    {
+        $pageType = \trim($detected);
+        if ($pageType === '') {
+            $pageType = \trim($this->detectPageType($template));
+        }
+        if ($pageType !== '' && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
+            return $pageType;
+        }
+
+        $ctxLayout = RequestContext::get(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_LAYOUT_TYPE
+        );
+        if (\is_string($ctxLayout) && \trim($ctxLayout) !== '') {
+            $mapped = \trim($this->pageTypeResolver->mapLayoutTypeToPageType($ctxLayout));
+            if ($mapped !== '') {
+                return $mapped;
+            }
+        }
+
+        if (\str_contains($html, 'list-filters')
+            || \preg_match('/\bdata-placeholder\s*=\s*(["\'])list-filters\1/', $html) === 1
+        ) {
+            return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
+        }
+        if (\str_contains($html, 'category-filters')
+            || \preg_match('/\bdata-placeholder\s*=\s*(["\'])category-filters\1/', $html) === 1
+        ) {
+            return ThemeLayout::PAGE_TYPE_CATEGORY;
+        }
+        // Cart / checkout shells often lack layout path in compiled fileName and have
+        // no filter heuristics — still need a pageType so homepage chrome carrier
+        // required injections (footer-*-links) can run on the zero-fill soft path.
+        if (\preg_match('/\b(?:cart-layout|checkout-layout|data-page-type=["\']cart["\']|data-page-type=["\']checkout["\'])/i', $html) === 1
+            || \str_contains($html, 'data-widget-code="cart-')
+            || \str_contains($html, 'data-testid="cart-')
+        ) {
+            if (\str_contains($html, 'checkout') || \str_contains($html, 'data-widget-code="checkout-')) {
+                return ThemeLayout::PAGE_TYPE_CHECKOUT;
+            }
+
+            return ThemeLayout::PAGE_TYPE_CART;
+        }
+        // Policy / terms shells: never fall through to HOME (that plans homepage
+        // content widgets like newsletter-popup into data-slot-id=content).
+        if (\preg_match(
+            '/amazon-policy__|data-layout=["\']policy-|data-testid=["\']storefront-(?:privacy|refund|cookie|shipping|disclaimer|accessibility|term)/i',
+            $html,
+        ) === 1) {
+            return ThemeLayout::PAGE_TYPE_POLICY;
+        }
+        if (\preg_match('/amazon-terms__|data-layout=["\']terms/i', $html) === 1) {
+            return ThemeLayout::PAGE_TYPE_TERMS;
+        }
+        // Last resort: keep chrome inherit alive when detectPageType is empty.
+        if ($pageType === '' || $pageType === ThemeLayout::PAGE_TYPE_DEFAULT) {
+            return ThemeLayout::PAGE_TYPE_HOME;
+        }
+
+        return $pageType;
     }
 
     private function resolveThemeId(string $area): int

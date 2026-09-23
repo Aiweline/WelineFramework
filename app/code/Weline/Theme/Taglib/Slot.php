@@ -139,6 +139,9 @@ class Slot implements TaglibInterface
     
     /**
      * 处理开始标签
+     *
+     * wave8-8s: published storefront emits bake via PublishedSlotHost (no data-wslot);
+     * editor/preview/backend keep reactive markers for fill / processSlots.
      */
     private static function processTagStart(array $attrs, string $file, int $line): string
     {
@@ -155,8 +158,22 @@ class Slot implements TaglibInterface
         // 获取包裹元素标签
         $wrapper = $attrs['wrapper'] ?? 'div';
         $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
+        $safeId = htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8');
+        $extraClass = \trim((string)($attrs['class'] ?? ''));
+        $publishedClass = \htmlspecialchars(
+            \trim('theme-published-slot' . ($extraClass !== '' ? ' ' . $extraClass : '')),
+            ENT_QUOTES,
+            'UTF-8',
+        );
 
-        return SlotBoundaryMarkers::open($id) . "<{$wrapper}{$htmlAttrs}>";
+        // Published: open wrapper first, then Fiber-local body capture (never stringify into quotes).
+        // Native ob_start is process-global and unsafe under WLS Fiber concurrency (align Form 2.5.101).
+        return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
+            . SlotBoundaryMarkers::open($id) . "<{$wrapper}{$htmlAttrs}>"
+            . '<?php else: ?>'
+            . "<{$wrapper} class=\"{$publishedClass}\" data-slot-id=\"{$safeId}\">"
+            . '<?php \\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture(); ?>'
+            . '<?php endif; ?>';
     }
     
     /**
@@ -167,12 +184,25 @@ class Slot implements TaglibInterface
         $wrapper = $attrs['wrapper'] ?? 'div';
         $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
         $id = (string) ($attrs['id'] ?? '');
+        $idExport = \var_export($id, true);
 
-        return "</{$wrapper}>" . SlotBoundaryMarkers::close($id);
+        return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
+            . "</{$wrapper}>" . SlotBoundaryMarkers::close($id)
+            . '<?php else: '
+            . '$__welinePublishedSlotDefault = (string)\\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture(); '
+            . 'echo \\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::publishedInner('
+            . $idExport . ', $__welinePublishedSlotDefault); '
+            . '?>'
+            . "</{$wrapper}>"
+            . '<?php endif; ?>';
     }
     
     /**
      * 处理完整标签（自闭合或成对）
+     *
+     * Hotfix: never embed compiled default HTML/PHP inside a single-quoted
+     * publishedInner(..., '...') literal — nested quotes / `UTF-8` / `<?=` cause ParseError.
+     * Non-empty body → FiberOutputBuffer beginCapture/endCapture (discard on error); empty → var_export('').
      */
     private static function processFullTag(array $attrs, string $content, string $file, int $line): string
     {
@@ -189,10 +219,44 @@ class Slot implements TaglibInterface
         // 获取包裹元素标签
         $wrapper = $attrs['wrapper'] ?? 'div';
         $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
-        
-        return SlotBoundaryMarkers::open($id)
+        $idExport = \var_export((string)$id, true);
+        $safeId = htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8');
+        $extraClass = \trim((string)($attrs['class'] ?? ''));
+        $publishedClass = \htmlspecialchars(
+            \trim('theme-published-slot' . ($extraClass !== '' ? ' ' . $extraClass : '')),
+            ENT_QUOTES,
+            'UTF-8',
+        );
+
+        $reactive = SlotBoundaryMarkers::open($id)
             . "<{$wrapper}{$htmlAttrs}>{$content}</{$wrapper}>"
             . SlotBoundaryMarkers::close($id);
+
+        if (\trim($content) === '') {
+            return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
+                . $reactive
+                . '<?php else: ?>'
+                . "<{$wrapper} class=\"{$publishedClass}\" data-slot-id=\"{$safeId}\">"
+                . '<?php echo \\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::publishedInner('
+                . $idExport . ', ' . \var_export('', true) . '); ?>'
+                . "</{$wrapper}>"
+                . '<?php endif; ?>';
+        }
+
+        return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
+            . $reactive
+            . '<?php else: ?>'
+            . "<{$wrapper} class=\"{$publishedClass}\" data-slot-id=\"{$safeId}\">"
+            . '<?php \\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture(); try { ?>'
+            . $content
+            . '<?php $__welinePublishedSlotDefault = (string)\\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture(); '
+            . 'echo \\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::publishedInner('
+            . $idExport . ', $__welinePublishedSlotDefault); '
+            . '} catch (\\Throwable $__weline_slot_e) { '
+            . '\\Weline\\Framework\\Runtime\\FiberOutputBuffer::discardCapture(); '
+            . 'throw $__weline_slot_e; } ?>'
+            . "</{$wrapper}>"
+            . '<?php endif; ?>';
     }
 
     /**

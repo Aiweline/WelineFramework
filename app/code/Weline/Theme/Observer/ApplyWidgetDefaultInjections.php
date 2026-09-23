@@ -6,6 +6,8 @@ namespace Weline\Theme\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
 
@@ -21,13 +23,34 @@ class ApplyWidgetDefaultInjections implements ObserverInterface
     {
         try {
             $widgets = $this->widgetsFromEvent($event);
-            if ($widgets === []) {
+            $changes = $event->getData('injection_structure_changes');
+            $changes = is_array($changes) ? $changes : [];
+            if ($widgets === [] && $changes === []) {
                 return;
             }
 
-            $applied = $this->defaultInjectionService->applyInstalledWidgetsForAvailableThemes($widgets);
-            if ($applied > 0) {
-                $this->slotRendererService->clearCache();
+            if ($widgets !== []) {
+                $this->defaultInjectionService->applyInstalledWidgetsForAvailableThemes($widgets);
+            }
+            if ($changes === []) {
+                return;
+            }
+            ObjectManager::getInstance(\Weline\Widget\Service\DefaultInjectionPlanRepository::class)->clearMemo();
+            $this->slotRendererService->clearCache();
+            // Plugin/registry install with JSON default_injections: always re-solidify
+            // involved published shells + drop chrome.rendered across ALL themes so the
+            // next hit dynamically re-bakes required widgets (minus user_deleted only).
+            // Do not gate on applied>0 — catalog may already have decisions while
+            // durable snapshots are still incomplete.
+            try {
+                ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class)
+                    ->rebakeAfterInjectionCollect(null, $changes);
+            } catch (\Throwable $bakeError) {
+                w_log_error(
+                    '注入收集后固化整壳重生失败: ' . $bakeError->getMessage(),
+                    [],
+                    'ThemeWidgetDefaultInjection',
+                );
             }
         } catch (\Throwable $e) {
             w_log_error('应用部件默认注入失败: ' . $e->getMessage(), [], 'ThemeWidgetDefaultInjection');
