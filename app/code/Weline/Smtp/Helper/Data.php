@@ -117,6 +117,28 @@ class Data
     }
 
     /**
+     * 写入邮件壳三区背景图路径（相对 pub/media 或空串清空）。
+     *
+     * @param array{header?:string,body?:string,footer?:string} $paths
+     */
+    public function setMailShellBackgrounds(string $scope, array $paths): void
+    {
+        $scope = $this->resolveScope($scope);
+        $map = [
+            'header' => self::key_smtp_mail_bg_header,
+            'body' => self::key_smtp_mail_bg_body,
+            'footer' => self::key_smtp_mail_bg_footer,
+        ];
+        foreach ($map as $region => $key) {
+            if (!array_key_exists($region, $paths)) {
+                continue;
+            }
+            $val = trim((string)$paths[$region]);
+            $this->writeScoped($key, $val, 'Weline_Smtp', $scope, 'string');
+        }
+    }
+
+    /**
      * 规范化存储范围：显式 scope 优先；否则 RequestContext ScopeIdentity；再回落 Global。
      */
     public function resolveScope(?string $scope = null): string

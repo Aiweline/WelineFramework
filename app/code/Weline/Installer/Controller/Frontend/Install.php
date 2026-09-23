@@ -18,6 +18,7 @@ use Weline\Framework\Env\Api\EnvCheckerInterface;
 use Weline\Framework\Env\Api\EnvRequirementsCollectorInterface;
 use Weline\Framework\Env\Service\EnvChecker;
 use Weline\Framework\Env\Service\EnvRequirementsCollector;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Ui\FormKey;
 
 /**
@@ -163,9 +164,13 @@ class Install extends FrontendController
         header('Connection: keep-alive');
         header('X-Accel-Buffering: no');
 
-        // 禁用输出缓冲
-        while (ob_get_level()) {
-            ob_end_flush();
+        // FPM: drain buffers for SSE. WLS: never while-end_flush Fiber installed handler.
+        if (!Runtime::isPersistent()) {
+            while (ob_get_level()) {
+                ob_end_flush();
+            }
+        } elseif (ob_get_level() > 0) {
+            @ob_flush();
         }
 
         $this->sendSseMessage('start', ['msg' => __('开始环境修复...')]);

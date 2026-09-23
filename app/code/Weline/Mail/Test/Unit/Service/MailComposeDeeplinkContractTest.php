@@ -39,6 +39,21 @@ final class MailComposeDeeplinkContractTest extends TestCase
         self::assertStringContainsString('compose_open', $tpl);
         self::assertStringContainsString('compose_source', $tpl);
         self::assertStringContainsString('name="source"', $tpl);
+        self::assertStringContainsString('mail-enterprise-compose-cancel', $tpl);
+        self::assertStringContainsString('composeCloseParams', $tpl);
+
+        $mailboxStart = strpos($tpl, "if (\$view === 'mailbox')");
+        $accountsStart = strpos($tpl, "elseif (\$view === 'accounts')");
+        self::assertNotFalse($mailboxStart);
+        self::assertNotFalse($accountsStart);
+        self::assertGreaterThan($mailboxStart, $accountsStart);
+        $mailboxTpl = substr($tpl, $mailboxStart, $accountsStart - $mailboxStart);
+        self::assertStringNotContainsString('<details', $mailboxTpl);
+        self::assertStringNotContainsString('<summary', $mailboxTpl);
+        self::assertStringContainsString('if ($composeOpen)', $mailboxTpl);
+        self::assertStringContainsString('id="mail-compose"', $mailboxTpl);
+        self::assertStringNotContainsString('展开写信', $mailboxTpl);
+        self::assertStringNotContainsString('收起写信', $mailboxTpl);
 
         $eventsSrc = (string)file_get_contents(BP . 'app/code/Weline/Mail/event.php');
         self::assertStringContainsString('Weline_Mail::mail_message_sent', $eventsSrc);

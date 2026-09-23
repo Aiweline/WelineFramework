@@ -1,5 +1,12 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/**
+ * 企业邮箱管理（后台）
+ *
+ * work_mode: implement（本波仅修 Mail 自有模板内联 CSS / w-* 结构；禁覆盖 Theme 核心 theme.css / theme.js）
+ * area: backend
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
 use Weline\Mail\Model\MailAccount;
 use Weline\Mail\Model\MailDomain;
 
@@ -28,182 +35,620 @@ $composeSourceId = (int)($compose_source_id ?? 0);
 $composeAccountId = (int)($compose_account_id ?? $selectedAccountId);
 $composeAccountLocked = (bool)($compose_account_locked ?? false);
 $composeCanPickAccount = (bool)($compose_can_pick_account ?? false);
+$navItems = [
+    'mailbox' => __('邮箱'),
+    'accounts' => __('用户与账号'),
+    'domains' => __('域名与 DNS'),
+];
 ?>
 <style data-no-extract="true">
-.mail-enterprise{display:grid;gap:var(--weline-space-5);max-width:1440px;margin:0 auto;font-family:Inter,var(--weline-font-family)}
-.mail-enterprise__hero,.mail-enterprise__card{background:var(--weline-color-surface);border:1px solid var(--weline-color-border);border-radius:var(--weline-radius-lg)}
-.mail-enterprise__hero{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--weline-space-4);padding:var(--weline-space-5)}
-.mail-enterprise__hero h1,.mail-enterprise h2,.mail-enterprise h3{margin:0}.mail-enterprise__hero p{margin:.4rem 0 0;color:var(--weline-color-text-secondary)}
-.mail-enterprise__tabs{display:flex;gap:var(--weline-space-2);flex-wrap:wrap}
-.mail-enterprise__tabs a{padding:.7rem 1rem;border:1px solid var(--weline-color-border);border-radius:var(--weline-radius-md);text-decoration:none;color:inherit}
-.mail-enterprise__tabs a[aria-current=true]{background:var(--weline-color-primary);border-color:var(--weline-color-primary);color:var(--weline-color-on-primary)}
-.mail-enterprise__toolbar{display:flex;align-items:end;justify-content:space-between;gap:var(--weline-space-3);flex-wrap:wrap}
-.mail-enterprise__layout{display:grid;grid-template-columns:minmax(18rem,2fr) minmax(22rem,3fr);gap:var(--weline-space-4)}
-.mail-enterprise__card{overflow:hidden}.mail-enterprise__card-head,.mail-enterprise__card-body{padding:var(--weline-space-4)}.mail-enterprise__card-head{border-bottom:1px solid var(--weline-color-border)}
-.mail-enterprise__row{display:block;padding:var(--weline-space-4);border-bottom:1px solid var(--weline-color-border);color:inherit;text-decoration:none}
-.mail-enterprise__row:hover,.mail-enterprise__row.is-active{background:var(--weline-color-surface-subtle)}
-.mail-enterprise__meta{display:flex;justify-content:space-between;gap:var(--weline-space-3);font-size:.82rem;color:var(--weline-color-text-secondary)}
-.mail-enterprise__subject{margin:.35rem 0;font-weight:650}.mail-enterprise__preview{margin:0;color:var(--weline-color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mail-enterprise__reader-body{padding:var(--weline-space-5);white-space:pre-wrap;word-break:break-word;line-height:1.65}.mail-enterprise__empty{display:grid;place-items:center;min-height:16rem;padding:var(--weline-space-5);text-align:center;color:var(--weline-color-text-secondary)}
-.mail-enterprise__form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--weline-space-3)}.mail-enterprise__form-grid .is-wide{grid-column:1/-1}
-.mail-enterprise__table-wrap{overflow:auto}.mail-enterprise__table{width:100%;border-collapse:collapse;min-width:760px}.mail-enterprise__table th,.mail-enterprise__table td{padding:.8rem;border-bottom:1px solid var(--weline-color-border);text-align:left;vertical-align:top}
-.mail-enterprise__actions{display:flex;gap:var(--weline-space-2);flex-wrap:wrap}.mail-enterprise__domains{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--weline-space-4)}
-.mail-enterprise__dns{display:grid;gap:.55rem;margin:var(--weline-space-4) 0;padding:0;list-style:none}.mail-enterprise__dns li{padding:.7rem;border:1px solid var(--weline-color-border);border-radius:var(--weline-radius-md);word-break:break-all}
-.mail-enterprise details summary{cursor:pointer;font-weight:650}.mail-enterprise__notice{padding:var(--weline-space-4);border-left:4px solid var(--weline-color-warning);background:var(--weline-color-surface-subtle)}
-@media (max-width:767px){.mail-enterprise__hero,.mail-enterprise__meta{flex-direction:column}.mail-enterprise__layout,.mail-enterprise__form-grid,.mail-enterprise__domains{grid-template-columns:1fr}.mail-enterprise__toolbar>*{width:100%}}
-@media (min-width:768px) and (max-width:1023px){.mail-enterprise__layout{grid-template-columns:minmax(15rem,1fr) minmax(18rem,1.35fr)}.mail-enterprise__domains{grid-template-columns:1fr}}
-@media (min-width:1024px){.mail-enterprise__layout{min-height:36rem}}
+/* Mail enterprise layout only — tokens: --weline-theme-* / --weline-space-* / --weline-radius-* / --weline-font-* */
+.mail-enterprise {
+    font-family: var(--weline-font-family);
+}
+.mail-enterprise__layout {
+    display: grid;
+    grid-template-columns: minmax(18rem, 2fr) minmax(22rem, 3fr);
+    gap: var(--weline-space-4);
+    min-height: 24rem;
+}
+.mail-enterprise__row {
+    display: block;
+    padding: var(--weline-space-4);
+    border-bottom: 1px solid var(--weline-theme-border);
+    color: inherit;
+    text-decoration: none;
+}
+.mail-enterprise__row:hover,
+.mail-enterprise__row.is-active {
+    background: var(--weline-theme-surface-hover);
+}
+.mail-enterprise__meta {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-text-muted);
+}
+.mail-enterprise__subject {
+    margin: var(--weline-space-1) 0;
+    font-weight: 650;
+    color: var(--weline-theme-text);
+}
+.mail-enterprise__preview {
+    margin: 0;
+    color: var(--weline-theme-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mail-enterprise__reader-body {
+    padding: var(--weline-space-5);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.65;
+    color: var(--weline-theme-text);
+}
+.mail-enterprise__form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--weline-space-3);
+}
+.mail-enterprise__form-grid .is-wide {
+    grid-column: 1 / -1;
+}
+.mail-enterprise__actions {
+    display: flex;
+    gap: var(--weline-space-2);
+    flex-wrap: wrap;
+}
+.mail-enterprise__domains {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--weline-space-4);
+}
+.mail-enterprise__dns {
+    display: grid;
+    gap: var(--weline-space-2);
+    margin: var(--weline-space-4) 0;
+    padding: 0;
+    list-style: none;
+}
+.mail-enterprise__dns li {
+    padding: var(--weline-space-3);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    word-break: break-all;
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
+}
+.mail-enterprise details > summary {
+    cursor: pointer;
+    list-style: none;
+}
+.mail-enterprise details > summary::-webkit-details-marker {
+    display: none;
+}
+.mail-enterprise__folders {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    padding: var(--weline-space-1);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-pill, 999px);
+    background: var(--weline-theme-surface-muted);
+}
+.mail-enterprise__folder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--weline-control-height-sm, 2rem);
+    padding-inline: var(--weline-space-3);
+    border-radius: var(--weline-radius-pill, 999px);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+    font-weight: 650;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.mail-enterprise__folder:hover {
+    color: var(--weline-theme-text);
+}
+.mail-enterprise__folder[aria-current="page"] {
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-primary);
+    box-shadow: var(--weline-shadow-xs, 0 1px 2px color-mix(in srgb, var(--weline-theme-text) 8%, transparent));
+}
+.mail-enterprise__panel-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2);
+    font-weight: 650;
+    color: var(--weline-theme-text);
+    cursor: pointer;
+}
+.mail-enterprise__stalwart-alert .mail-enterprise__actions {
+    margin-block-start: var(--weline-space-2);
+}
+@media (max-width: 767px) {
+    .mail-enterprise__meta {
+        flex-direction: column;
+    }
+    .mail-enterprise__layout,
+    .mail-enterprise__form-grid,
+    .mail-enterprise__domains {
+        grid-template-columns: 1fr;
+    }
+    .mail-enterprise__folders {
+        width: 100%;
+        justify-content: stretch;
+    }
+    .mail-enterprise__folder {
+        flex: 1 1 auto;
+    }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+    .mail-enterprise__layout {
+        grid-template-columns: minmax(15rem, 1fr) minmax(18rem, 1.35fr);
+    }
+    .mail-enterprise__domains {
+        grid-template-columns: 1fr;
+    }
+}
+@media (min-width: 1024px) {
+    .mail-enterprise__layout {
+        min-height: 36rem;
+    }
+}
 </style>
-<div class="mail-enterprise">
-    <header class="mail-enterprise__hero">
-        <div>
-            <h1><?= __('企业邮箱管理') ?></h1>
-            <p><?= __('查看真实邮件、管理用户邮箱、代发邮件，并指导每个域名完成 DNS。') ?></p>
+<div class="w-backend-page mail-enterprise" data-testid="mail-enterprise-page">
+    <header class="w-backend-page__heading w-cluster" data-align="start" data-justify="between" style="--w-gap:var(--weline-space-3);" data-testid="mail-enterprise-intro">
+        <?php /* 主标题由布局壳/菜单提供，页内勿再写「企业邮箱管理」h1 */ ?>
+        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; min-inline-size:0; flex:1 1 16rem;">
+            <?= __('查看真实邮件、管理用户邮箱、代发邮件，并指导每个域名完成 DNS。') ?>
+        </p>
+        <div class="mail-enterprise__status" style="max-inline-size:min(100%,24rem);">
+            <?php if ($managementReady): ?>
+                <span class="w-badge" data-tone="success" data-testid="mail-enterprise-stalwart-ready">
+                    <?= __('Stalwart 管理连接正常') ?>
+                </span>
+            <?php else: ?>
+                <div class="w-alert" data-tone="warning" data-testid="mail-enterprise-stalwart-warning">
+                    <div class="w-alert__content">
+                        <div class="w-alert__title"><?= __('Stalwart 管理连接待配置') ?></div>
+                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                            <?= __('完成管理连接后才能开通真实邮箱并同步 DNS。') ?>
+                        </p>
+                        <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-2);">
+                            <a class="w-button" data-tone="primary" data-size="sm"
+                               href="@backend-url{$basePath|['view' => 'domains']}"
+                               data-testid="mail-enterprise-stalwart-config-link">
+                                <?= __('去域名与 DNS') ?>
+                            </a>
+                            <a class="w-button" data-variant="outline" data-size="sm"
+                               href="@backend-url{$basePath|['view' => 'domains']}#mail-engine-setup"
+                               data-testid="mail-enterprise-stalwart-engine-link">
+                                <?= __('配置引擎') ?>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
-        <span class="w-badge" data-tone="<?= $managementReady ? 'success' : 'warning' ?>"><?= $managementReady ? __('Stalwart 管理连接正常') : __('Stalwart 管理连接待配置') ?></span>
     </header>
-    <nav class="mail-enterprise__tabs" aria-label="<?= $escape(__('企业邮箱管理导航')) ?>">
-        <?php foreach (['mailbox' => __('邮箱'), 'accounts' => __('用户与账号'), 'domains' => __('域名与 DNS')] as $key => $label): ?>
-            <a href="@backend-url{$basePath|['view' => $key]}" aria-current="<?= $view === $key ? 'true' : 'false' ?>"><?= $label ?></a>
-        <?php endforeach; ?>
+
+    <nav class="w-tabs" data-w-component="tabs" data-variant="soft" aria-label="<?= $escape(__('企业邮箱管理导航')) ?>">
+        <div class="w-tabs__list" role="tablist">
+            <?php foreach ($navItems as $key => $label): ?>
+                <?php $selected = $view === $key; ?>
+                <a class="w-tabs__tab<?= $selected ? ' active' : '' ?>"
+                   href="@backend-url{$basePath|['view' => $key]}"
+                   role="tab"
+                   aria-selected="<?= $selected ? 'true' : 'false' ?>"
+                   aria-current="<?= $selected ? 'page' : 'false' ?>"
+                   tabindex="<?= $selected ? '0' : '-1' ?>"
+                   <?= $selected ? 'data-state="active"' : '' ?>><?= $label ?></a>
+            <?php endforeach; ?>
+        </div>
     </nav>
 
     <?php if ($view === 'mailbox'): ?>
-        <div class="mail-enterprise__toolbar">
-            <form method="get" action="@backend-url{$basePath}">
+        <?php
+        $composeParams = [
+            'view' => 'mailbox',
+            'account' => $selectedAccountId,
+            'folder' => $folder,
+            'compose' => '1',
+        ];
+        $composeCloseParams = [
+            'view' => 'mailbox',
+            'account' => $selectedAccountId,
+            'folder' => $folder,
+        ];
+        $folderLabel = $folder === 'sent' ? __('已发送') : __('收件箱');
+        ?>
+        <div class="w-toolbar" data-testid="mail-enterprise-mailbox-toolbar">
+            <form method="get" action="@backend-url{$basePath}" class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
                 <input type="hidden" name="view" value="mailbox">
                 <input type="hidden" name="folder" value="<?= $escape($folder) ?>">
-                <label class="w-field"><span class="w-field__label"><?= __('当前邮箱') ?></span><select class="w-select" name="account" onchange="this.form.submit()"><?php foreach ($mailboxAccounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?> · 用户 #<?= (int)$account->getData(MailAccount::schema_fields_CUSTOMER_ID) ?></option><?php endforeach; ?></select></label>
+                <label class="w-field" style="--w-min-inline-size:min(100%,22rem);">
+                    <span class="w-field__label"><?= __('当前邮箱') ?></span>
+                    <span class="w-field__control">
+                        <select class="w-select" name="account" onchange="this.form.submit()">
+                            <?php foreach ($mailboxAccounts as $account): ?>
+                                <?php
+                                $optEmail = (string)$account->getData(MailAccount::schema_fields_EMAIL);
+                                $optName = trim((string)$account->getData(MailAccount::schema_fields_DISPLAY_NAME));
+                                $optLabel = $optName !== '' ? $optEmail . ' · ' . $optName : $optEmail;
+                                ?>
+                                <option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>>
+                                    <?= $escape($optLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </span>
+                </label>
             </form>
-            <div class="mail-enterprise__tabs"><?php foreach (['inbox' => __('收件箱'), 'sent' => __('已发送')] as $key => $label): ?><a href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $key]}" aria-current="<?= $folder === $key ? 'true' : 'false' ?>"><?= $label ?></a><?php endforeach; ?></div>
+            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                <nav class="mail-enterprise__folders" aria-label="<?= $escape(__('邮件夹')) ?>" data-testid="mail-enterprise-folder-nav">
+                    <?php foreach (['inbox' => __('收件箱'), 'sent' => __('已发送')] as $key => $label): ?>
+                        <a class="mail-enterprise__folder"
+                           href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $key]}"
+                           aria-current="<?= $folder === $key ? 'page' : 'false' ?>"><?= $label ?></a>
+                    <?php endforeach; ?>
+                </nav>
+                <?php if ($composeOpen): ?>
+                    <a class="w-button"
+                       data-variant="outline"
+                       data-size="sm"
+                       href="@backend-url{$basePath|$composeCloseParams}"
+                       data-testid="mail-enterprise-compose-close-toolbar"><?= __('取消') ?></a>
+                <?php else: ?>
+                    <a class="w-button"
+                       data-tone="primary"
+                       data-size="sm"
+                       href="@backend-url{$basePath|$composeParams}#mail-compose"
+                       data-testid="mail-enterprise-compose-cta"><?= __('写邮件') ?></a>
+                <?php endif; ?>
+            </div>
         </div>
 
-        <div class="mail-enterprise__card">
-            <details <?= $composeOpen ? 'open' : '' ?>>
-                <summary class="mail-enterprise__card-head"><?= __('使用当前邮箱发送邮件') ?></summary>
-                <div class="mail-enterprise__card-body">
+        <?php if ($composeOpen): ?>
+            <section class="w-card" id="mail-compose" data-testid="mail-enterprise-compose" aria-labelledby="mail-compose-title">
+                <div class="w-card__header w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1); min-inline-size:0;">
+                        <h2 class="w-card__title" id="mail-compose-title" style="--w-m:0;"><?= __('写邮件') ?></h2>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><?= __('使用当前邮箱发送邮件') ?></p>
+                    </div>
+                    <a class="w-button" data-variant="ghost" data-size="sm"
+                       href="@backend-url{$basePath|$composeCloseParams}"
+                       data-testid="mail-enterprise-compose-cancel"><?= __('取消') ?></a>
+                </div>
+                <div class="w-card__body">
                     <?php if ($composeAccountLocked && $composeAccountId <= 0): ?>
                         <div class="w-alert" data-tone="warning"><?= __('当前账号邮箱不是本机企业邮箱，需外部发送。') ?></div>
                     <?php else: ?>
-                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/send-as'}">
-                        <input type="hidden" name="return_view" value="mailbox"><input type="hidden" name="folder" value="sent">
-                        <?php if ($composeSource !== ''): ?>
-                            <input type="hidden" name="source" value="<?= $escape($composeSource) ?>">
-                            <input type="hidden" name="source_id" value="<?= $composeSourceId ?>">
-                        <?php endif; ?>
-                        <div class="mail-enterprise__form-grid">
-                            <label class="w-field"><span class="w-field__label"><?= __('发件账号') ?></span>
-                                <?php if ($composeAccountLocked): ?>
-                                    <input type="hidden" name="account_id" value="<?= $composeAccountId ?>">
-                                    <input class="w-input" type="text" value="<?php
-                                        $lockedLabel = '';
-                                        foreach ($mailboxAccounts as $account) {
-                                            if ((int)$account->getId() === $composeAccountId) {
-                                                $lockedLabel = (string)$account->getData(MailAccount::schema_fields_EMAIL);
-                                                break;
+                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/send-as'}">
+                            <input type="hidden" name="return_view" value="mailbox">
+                            <input type="hidden" name="folder" value="sent">
+                            <?php if ($composeSource !== ''): ?>
+                                <input type="hidden" name="source" value="<?= $escape($composeSource) ?>">
+                                <input type="hidden" name="source_id" value="<?= $composeSourceId ?>">
+                            <?php endif; ?>
+                            <div class="mail-enterprise__form-grid">
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('发件账号') ?></span>
+                                    <?php if ($composeAccountLocked): ?>
+                                        <input type="hidden" name="account_id" value="<?= $composeAccountId ?>">
+                                        <input class="w-input" type="text" value="<?php
+                                            $lockedLabel = '';
+                                            foreach ($mailboxAccounts as $account) {
+                                                if ((int)$account->getId() === $composeAccountId) {
+                                                    $lockedLabel = (string)$account->getData(MailAccount::schema_fields_EMAIL);
+                                                    break;
+                                                }
                                             }
-                                        }
-                                        echo $escape($lockedLabel);
-                                    ?>" readonly>
-                                <?php else: ?>
-                                    <select class="w-select" name="account_id" required><?php foreach ($mailboxAccounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $composeAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></option><?php endforeach; ?></select>
-                                <?php endif; ?>
-                            </label>
-                            <label class="w-field"><span class="w-field__label"><?= __('收件人') ?></span><input class="w-input" type="text" name="to_email" value="<?= $escape($composeTo) ?>" required></label>
-                            <label class="w-field is-wide"><span class="w-field__label"><?= __('主题') ?></span><input class="w-input" type="text" name="subject" value="<?= $escape($composeSubject) ?>" maxlength="180" required></label>
-                            <label class="w-field is-wide"><span class="w-field__label"><?= __('正文') ?></span><textarea class="w-textarea" name="body" rows="7" required><?= $escape($composeBody) ?></textarea></label>
-                        </div>
-                        <button class="w-button" data-tone="primary" type="submit"><?= __('发送邮件') ?></button>
-                    </w:form>
+                                            echo $escape($lockedLabel);
+                                        ?>" readonly>
+                                    <?php else: ?>
+                                        <select class="w-select" name="account_id" required>
+                                            <?php foreach ($mailboxAccounts as $account): ?>
+                                                <option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $composeAccountId ? 'selected' : '' ?>>
+                                                    <?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php endif; ?>
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('收件人') ?></span>
+                                    <input class="w-input" type="text" name="to_email" value="<?= $escape($composeTo) ?>" required>
+                                </label>
+                                <label class="w-field is-wide">
+                                    <span class="w-field__label"><?= __('主题') ?></span>
+                                    <input class="w-input" type="text" name="subject" value="<?= $escape($composeSubject) ?>" maxlength="180" required>
+                                </label>
+                                <label class="w-field is-wide">
+                                    <span class="w-field__label"><?= __('正文') ?></span>
+                                    <textarea class="w-textarea" name="body" rows="7" required><?= $escape($composeBody) ?></textarea>
+                                </label>
+                            </div>
+                            <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-3);">
+                                <button class="w-button" data-tone="primary" type="submit"><?= __('发送邮件') ?></button>
+                                <a class="w-button" data-variant="outline"
+                                   href="@backend-url{$basePath|$composeCloseParams}"
+                                   data-testid="mail-enterprise-compose-cancel-secondary"><?= __('取消') ?></a>
+                            </div>
+                        </w:form>
                     <?php endif; ?>
                 </div>
-            </details>
-        </div>
+            </section>
+        <?php endif; ?>
 
-        <?php if ($mailboxError): ?><div class="w-alert" data-tone="danger"><?= $escape($mailboxError) ?></div><?php endif; ?>
-        <div class="mail-enterprise__layout">
-            <div class="mail-enterprise__card">
-                <div class="mail-enterprise__card-head"><strong><?= $escape($selectedMailbox) ?></strong></div>
-                <?php if ($messages === []): ?><div class="mail-enterprise__empty"><?= __('这个邮件夹暂无邮件。') ?></div><?php else: foreach ($messages as $message): ?>
-                    <?php $mailMsgParams = ['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $folder, 'message' => (string)($message['id'] ?? '')]; $active = is_array($selectedMessage) && (string)($selectedMessage['id'] ?? '') === (string)($message['id'] ?? ''); ?>
-                    <a class="mail-enterprise__row <?= $active ? 'is-active' : '' ?>" href="@backend-url{$basePath|$mailMsgParams}"><div class="mail-enterprise__meta"><span><?= $escape($folder === 'sent' ? ($message['to'] ?? '') : ($message['from'] ?? '')) ?></span><time><?= $escape($message['received_at'] ?? '') ?></time></div><div class="mail-enterprise__subject"><?= $escape($message['subject'] ?? __('（无主题）')) ?></div><p class="mail-enterprise__preview"><?= $escape($message['preview'] ?? '') ?></p></a>
-                <?php endforeach; endif; ?>
-            </div>
-            <article class="mail-enterprise__card">
-                <?php if (is_array($selectedMessage)): ?><header class="mail-enterprise__card-head"><h2><?= $escape($selectedMessage['subject'] ?? __('（无主题）')) ?></h2><div class="mail-enterprise__meta"><span><?= __('发件人') ?>：<?= $escape($selectedMessage['from'] ?? '') ?></span><span><?= __('收件人') ?>：<?= $escape($selectedMessage['to'] ?? '') ?></span></div></header><div class="mail-enterprise__reader-body"><?= $escape($selectedMessage['body'] ?? '') ?></div><?php else: ?><div class="mail-enterprise__empty"><?= __('选择一封邮件查看正文。') ?></div><?php endif; ?>
+        <?php if ($mailboxError): ?>
+            <div class="w-alert" data-tone="danger"><?= $escape($mailboxError) ?></div>
+        <?php endif; ?>
+
+        <div class="mail-enterprise__layout" data-testid="mail-enterprise-workspace">
+            <section class="w-card">
+                <div class="w-card__header w-cluster" data-align="baseline" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                    <h2 class="w-card__title" style="--w-m:0;"><?= $escape((string)$folderLabel) ?></h2>
+                    <?php if ($selectedMailbox !== ''): ?>
+                        <span class="w-text" data-tone="muted" data-size="sm"><?= $escape($selectedMailbox) ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php if ($messages === []): ?>
+                    <div class="w-empty" data-testid="mail-enterprise-folder-empty">
+                        <w:icon name="mail" size="sm"></w:icon>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('这个邮件夹暂无邮件。') ?></p>
+                        <div class="mail-enterprise__actions">
+                            <a class="w-button" data-tone="primary" data-size="sm"
+                               href="@backend-url{$basePath|$composeParams}#mail-compose"><?= __('写第一封邮件') ?></a>
+                            <a class="w-button" data-variant="outline" data-tone="neutral" data-size="sm"
+                               href="@backend-url{$basePath|['view' => 'accounts']}"><?= __('去用户与账号') ?></a>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($messages as $message): ?>
+                        <?php
+                        $mailMsgParams = [
+                            'view' => 'mailbox',
+                            'account' => $selectedAccountId,
+                            'folder' => $folder,
+                            'message' => (string)($message['id'] ?? ''),
+                        ];
+                        $active = is_array($selectedMessage) && (string)($selectedMessage['id'] ?? '') === (string)($message['id'] ?? '');
+                        ?>
+                        <a class="mail-enterprise__row <?= $active ? 'is-active' : '' ?>" href="@backend-url{$basePath|$mailMsgParams}">
+                            <div class="mail-enterprise__meta">
+                                <span><?= $escape($folder === 'sent' ? ($message['to'] ?? '') : ($message['from'] ?? '')) ?></span>
+                                <time><?= $escape($message['received_at'] ?? '') ?></time>
+                            </div>
+                            <div class="mail-enterprise__subject"><?= $escape($message['subject'] ?? __('（无主题）')) ?></div>
+                            <p class="mail-enterprise__preview"><?= $escape($message['preview'] ?? '') ?></p>
+                        </a>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </section>
+
+            <article class="w-card">
+                <?php if (is_array($selectedMessage)): ?>
+                    <header class="w-card__header">
+                        <h2 class="w-card__title"><?= $escape($selectedMessage['subject'] ?? __('（无主题）')) ?></h2>
+                        <div class="mail-enterprise__meta" style="--w-mt:var(--weline-space-2);">
+                            <span><?= __('发件人') ?>：<?= $escape($selectedMessage['from'] ?? '') ?></span>
+                            <span><?= __('收件人') ?>：<?= $escape($selectedMessage['to'] ?? '') ?></span>
+                        </div>
+                    </header>
+                    <div class="mail-enterprise__reader-body"><?= $escape($selectedMessage['body'] ?? '') ?></div>
+                <?php elseif ($messages === []): ?>
+                    <div class="w-empty" data-testid="mail-enterprise-reader-empty">
+                        <w:icon name="mail" size="sm"></w:icon>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无邮件可阅读。写一封或开通更多账号后回来查看。') ?></p>
+                    </div>
+                <?php else: ?>
+                    <div class="w-empty" data-testid="mail-enterprise-reader-empty">
+                        <w:icon name="mail" size="sm"></w:icon>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('选择一封邮件查看正文。') ?></p>
+                    </div>
+                <?php endif; ?>
             </article>
         </div>
 
     <?php elseif ($view === 'accounts'): ?>
-        <div class="mail-enterprise__card">
+        <section class="w-card">
             <details open>
-                <summary class="mail-enterprise__card-head"><?= __('开通企业邮箱账号') ?></summary>
-                <div class="mail-enterprise__card-body">
+                <summary class="w-card__header mail-enterprise__panel-summary"><?= __('开通企业邮箱账号') ?></summary>
+                <div class="w-card__body">
                     <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-account'}">
                         <input type="hidden" name="return_view" value="accounts">
                         <div class="mail-enterprise__form-grid">
-                            <label class="w-field"><span class="w-field__label"><?= __('邮箱域名') ?></span><select class="w-select" name="domain_id" required><?php foreach ($domains as $domain): ?><option value="<?= (int)$domain->getId() ?>"><?= $escape($domain->getData(MailDomain::schema_fields_DOMAIN_NAME)) ?> · <?= $escape($domain->getData(MailDomain::schema_fields_ENGINE)) ?></option><?php endforeach; ?></select></label>
-                            <label class="w-field"><span class="w-field__label"><?= __('邮箱账号前缀') ?></span><input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required></label>
-                            <label class="w-field"><span class="w-field__label"><?= __('系统用户 ID') ?></span><input class="w-input" type="number" min="0" name="customer_id" value="0"></label>
-                            <label class="w-field"><span class="w-field__label"><?= __('显示名称') ?></span><input class="w-input" type="text" name="display_name"></label>
-                            <label class="w-field"><span class="w-field__label"><?= __('容量 MB') ?></span><input class="w-input" type="number" min="128" name="quota_mb" value="1024"></label>
-                            <label class="w-field"><span class="w-field__label"><?= __('初始密码（真实邮箱至少 12 位）') ?></span><input class="w-input" type="password" name="password" minlength="12" autocomplete="new-password"></label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('邮箱域名') ?></span>
+                                <select class="w-select" name="domain_id" required>
+                                    <?php foreach ($domains as $domain): ?>
+                                        <option value="<?= (int)$domain->getId() ?>">
+                                            <?= $escape($domain->getData(MailDomain::schema_fields_DOMAIN_NAME)) ?> · <?= $escape($domain->getData(MailDomain::schema_fields_ENGINE)) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('邮箱账号前缀') ?></span>
+                                <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required>
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('系统用户 ID') ?></span>
+                                <input class="w-input" type="number" min="0" name="customer_id" value="0">
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('显示名称') ?></span>
+                                <input class="w-input" type="text" name="display_name">
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('容量 MB') ?></span>
+                                <input class="w-input" type="number" min="128" name="quota_mb" value="1024">
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('初始密码（真实邮箱至少 12 位）') ?></span>
+                                <input class="w-input" type="password" name="password" minlength="12" autocomplete="new-password">
+                            </label>
                         </div>
-                        <button class="w-button" data-tone="primary" type="submit"><?= __('开通邮箱') ?></button>
+                        <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-3);">
+                            <button class="w-button" data-tone="primary" type="submit"><?= __('开通邮箱') ?></button>
+                        </div>
                     </w:form>
                 </div>
             </details>
-        </div>
-        <div class="mail-enterprise__card mail-enterprise__table-wrap">
-            <table class="mail-enterprise__table">
-                <thead><tr><th><?= __('邮箱') ?></th><th><?= __('系统用户') ?></th><th><?= __('状态') ?></th><th><?= __('容量') ?></th><th><?= __('操作') ?></th></tr></thead>
-                <tbody><?php foreach ($accounts as $account): ?>
-                    <tr>
-                        <td><strong><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></strong><br><span class="w-text" data-tone="muted"><?= $escape($account->getData(MailAccount::schema_fields_DISPLAY_NAME)) ?></span></td>
-                        <td>#<?= (int)$account->getData(MailAccount::schema_fields_CUSTOMER_ID) ?></td>
-                        <td><?= $escape($account->getData(MailAccount::schema_fields_STATUS)) ?></td>
-                        <td><?= (int)$account->getData(MailAccount::schema_fields_QUOTA_MB) ?> MB</td>
-                        <td>
-                            <div class="mail-enterprise__actions">
-                                <a class="w-button" data-variant="outline" href="@backend-url{$basePath|['view' => 'mailbox', 'account' => (int)$account->getId()]}"><?= __('查看邮件') ?></a>
-                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-status'}"><input type="hidden" name="return_view" value="accounts"><input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>"><input type="hidden" name="status" value="<?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? 'active' : 'suspended' ?>"><button class="w-button" data-variant="outline" type="submit"><?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? __('恢复') : __('暂停') ?></button></w:form>
-                            </div>
-                            <details><summary><?= __('开通/重置密码') ?></summary><w:form method="post" action="@backend-url{'weline_mail/backend/index/reset-account-password'}"><input type="hidden" name="return_view" value="accounts"><input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>"><label class="w-field"><span class="w-field__label"><?= __('新密码') ?></span><input class="w-input" type="password" name="password" minlength="12" required autocomplete="new-password"></label><button class="w-button" data-tone="primary" type="submit"><?= __('确认更新') ?></button></w:form></details>
-                        </td>
-                    </tr>
-                <?php endforeach; ?></tbody>
-            </table>
-        </div>
+        </section>
+
+        <section class="w-card">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table">
+                        <thead>
+                        <tr>
+                            <th><?= __('邮箱') ?></th>
+                            <th><?= __('系统用户') ?></th>
+                            <th><?= __('状态') ?></th>
+                            <th><?= __('容量') ?></th>
+                            <th><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($accounts === []): ?>
+                            <tr>
+                                <td colspan="5">
+                                    <div class="w-empty" style="--w-min-block-size:8rem;--w-p:var(--weline-space-4);">
+                                        <w:icon name="user" size="sm"></w:icon>
+                                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无邮箱账号。') ?></p>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($accounts as $account): ?>
+                                <tr>
+                                    <td>
+                                        <strong><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></strong><br>
+                                        <span class="w-text" data-tone="muted" data-size="sm"><?= $escape($account->getData(MailAccount::schema_fields_DISPLAY_NAME)) ?></span>
+                                    </td>
+                                    <td>#<?= (int)$account->getData(MailAccount::schema_fields_CUSTOMER_ID) ?></td>
+                                    <td><span class="w-badge" data-tone="neutral"><?= $escape($account->getData(MailAccount::schema_fields_STATUS)) ?></span></td>
+                                    <td><?= (int)$account->getData(MailAccount::schema_fields_QUOTA_MB) ?> MB</td>
+                                    <td>
+                                        <div class="mail-enterprise__actions">
+                                            <a class="w-button" data-variant="outline" data-size="sm"
+                                               href="@backend-url{$basePath|['view' => 'mailbox', 'account' => (int)$account->getId()]}"><?= __('查看邮件') ?></a>
+                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-status'}">
+                                                <input type="hidden" name="return_view" value="accounts">
+                                                <input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>">
+                                                <input type="hidden" name="status" value="<?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? 'active' : 'suspended' ?>">
+                                                <button class="w-button" data-variant="outline" data-size="sm" type="submit">
+                                                    <?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? __('恢复') : __('暂停') ?>
+                                                </button>
+                                            </w:form>
+                                        </div>
+                                        <details>
+                                            <summary class="w-text" data-size="sm"><?= __('开通/重置密码') ?></summary>
+                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/reset-account-password'}">
+                                                <input type="hidden" name="return_view" value="accounts">
+                                                <input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>">
+                                                <label class="w-field">
+                                                    <span class="w-field__label"><?= __('新密码') ?></span>
+                                                    <input class="w-input" type="password" name="password" minlength="12" required autocomplete="new-password">
+                                                </label>
+                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit"><?= __('确认更新') ?></button>
+                                            </w:form>
+                                        </details>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
 
     <?php else: ?>
-        <div class="mail-enterprise__notice"><?= __('mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云、DNS-only），否则会隐藏源站 IP，SMTP/IMAP 无法工作。smtp 子域名可选；若配置也必须 DNS-only。') ?></div>
-        <div class="mail-enterprise__card">
+        <section class="w-card" id="mail-engine-setup" data-testid="mail-enterprise-engine-setup">
+            <div class="w-card__header">
+                <h2 class="w-card__title" style="--w-m:0;"><?= __('配置引擎') ?></h2>
+            </div>
+            <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                    <?= __('先完成本机 Stalwart 引擎安装与管理连接，再配置下方域名 DNS。可在服务器上运行检测与安装计划命令。') ?>
+                </p>
+                <ul class="w-text" data-size="sm" style="--w-m:0; padding-inline-start:1.25rem;">
+                    <li><code>php bin/w mail:env:check</code> — <?= __('检测企业邮箱服务环境') ?></li>
+                    <li><code>php bin/w mail:env:install</code> — <?= __('查看或执行安装计划') ?></li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="w-alert" data-tone="warning">
+            <?= __('mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云、DNS-only），否则会隐藏源站 IP，SMTP/IMAP 无法工作。smtp 子域名可选；若配置也必须 DNS-only。') ?>
+        </div>
+
+        <section class="w-card">
             <details>
-                <summary class="mail-enterprise__card-head"><?= __('新增邮箱域名') ?></summary>
-                <div class="mail-enterprise__card-body">
+                <summary class="w-card__header mail-enterprise__panel-summary"><?= __('新增邮箱域名') ?></summary>
+                <div class="w-card__body">
                     <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-domain'}">
                         <input type="hidden" name="return_view" value="domains">
                         <div class="mail-enterprise__form-grid">
-                            <label class="w-field"><span class="w-field__label"><?= __('网站域名') ?></span><select class="w-select" name="website_domain" required><?php foreach ($websiteOptions as $option): if (!empty($option['is_created'])) { continue; } ?><option value="<?= $escape($option['domain'] ?? '') ?>"><?= $escape($option['domain'] ?? '') ?></option><?php endforeach; ?></select></label>
-                            <label class="w-field"><span class="w-field__label"><?= __('邮件主机') ?></span><input class="w-input" type="text" name="hostname" placeholder="mail.example.com"></label>
-                            <input type="hidden" name="engine" value="stalwart"><input type="hidden" name="default_quota_mb" value="1024">
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('网站域名') ?></span>
+                                <select class="w-select" name="website_domain" required>
+                                    <?php foreach ($websiteOptions as $option):
+                                        if (!empty($option['is_created'])) {
+                                            continue;
+                                        }
+                                        ?>
+                                        <option value="<?= $escape($option['domain'] ?? '') ?>"><?= $escape($option['domain'] ?? '') ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('邮件主机') ?></span>
+                                <input class="w-input" type="text" name="hostname" placeholder="mail.example.com">
+                            </label>
+                            <input type="hidden" name="engine" value="stalwart">
+                            <input type="hidden" name="default_quota_mb" value="1024">
                         </div>
-                        <button class="w-button" data-tone="primary" type="submit"><?= __('创建邮箱域名') ?></button>
+                        <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-3);">
+                            <button class="w-button" data-tone="primary" type="submit"><?= __('创建邮箱域名') ?></button>
+                        </div>
                     </w:form>
                 </div>
             </details>
-        </div>
+        </section>
+
         <div class="mail-enterprise__domains">
+            <?php if ($domains === []): ?>
+                <div class="w-card" style="grid-column:1/-1;">
+                    <div class="w-empty">
+                        <w:icon name="globe" size="sm"></w:icon>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无邮箱域名。请先新增域名并完成 DNS。') ?></p>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php foreach ($domains as $domain):
                 $domainName = (string)$domain->getData(MailDomain::schema_fields_DOMAIN_NAME);
                 $host = (string)$domain->getData(MailDomain::schema_fields_HOSTNAME);
                 $originIp = (string)$domain->getData(MailDomain::schema_fields_ORIGIN_IP);
                 $selector = (string)$domain->getData(MailDomain::schema_fields_DKIM_SELECTOR);
                 $publicKey = (string)$domain->getData(MailDomain::schema_fields_DKIM_PUBLIC_KEY);
-            ?>
-                <article class="mail-enterprise__card">
-                    <header class="mail-enterprise__card-head"><h2><?= $escape($domainName) ?></h2><div class="mail-enterprise__meta"><span><?= $escape($host) ?></span><span><?= $escape($domain->getData(MailDomain::schema_fields_STATUS)) ?></span></div></header>
-                    <div class="mail-enterprise__card-body">
+                ?>
+                <article class="w-card">
+                    <header class="w-card__header">
+                        <h2 class="w-card__title"><?= $escape($domainName) ?></h2>
+                        <div class="mail-enterprise__meta" style="--w-mt:var(--weline-space-2);">
+                            <span><?= $escape($host) ?></span>
+                            <span class="w-badge" data-tone="neutral"><?= $escape($domain->getData(MailDomain::schema_fields_STATUS)) ?></span>
+                        </div>
+                    </header>
+                    <div class="w-card__body">
                         <ul class="mail-enterprise__dns">
                             <li><strong>A / AAAA</strong> · <?= $escape($host) ?> → <?= $escape($originIp ?: __('源站公网 IP')) ?> · <strong>DNS-only</strong></li>
                             <li><strong>MX</strong> · <?= $escape($domainName) ?> → <?= $escape($host) ?> · priority 10</li>
@@ -212,20 +657,50 @@ $composeCanPickAccount = (bool)($compose_can_pick_account ?? false);
                             <li><strong>TXT DMARC</strong> · <?= $escape('_dmarc.' . $domainName) ?> → v=DMARC1; p=none; rua=mailto:postmaster@<?= $escape($domainName) ?></li>
                             <li><strong><?= __('可选') ?></strong> · smtp.<?= $escape($domainName) ?> CNAME <?= $escape($host) ?> · DNS-only</li>
                         </ul>
-                        <p><?= __('TLS 证书必须有效，但不要求购买商业证书：可由 Stalwart/ACME 自动申请 Let’s Encrypt，也可使用自有证书。') ?></p>
-                        <a class="w-button" data-variant="outline" href="@backend-url{'cdn/backend/oauth/connect'|$cloudflareConnectParams}"><?= __('连接或重新授权 Cloudflare') ?></a>
+                        <p class="w-text" data-tone="muted" data-size="sm">
+                            <?= __('TLS 证书必须有效，但不要求购买商业证书：可由 Stalwart/ACME 自动申请 Let’s Encrypt，也可使用自有证书。') ?>
+                        </p>
+                        <div class="mail-enterprise__actions">
+                            <a class="w-button" data-variant="outline" data-size="sm"
+                               href="@backend-url{'cdn/backend/oauth/connect'|$cloudflareConnectParams}"><?= __('连接或重新授权 Cloudflare') ?></a>
+                        </div>
                         <details>
-                            <summary><?= __('Cloudflare 一键 DNS 配置') ?></summary>
+                            <summary class="w-text" data-size="sm"><?= __('Cloudflare 一键 DNS 配置') ?></summary>
                             <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
-                                <input type="hidden" name="return_view" value="domains"><input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
-                                <label class="w-field"><span class="w-field__label"><?= __('源站公网 IP') ?></span><input class="w-input" type="text" name="origin_ip" value="<?= $escape($originIp) ?>"></label>
-                                <label class="w-field"><span class="w-field__label"><?= __('DKIM 选择器') ?></span><input class="w-input" type="text" name="dkim_selector" value="<?= $escape($selector) ?>"></label>
-                                <label class="w-field"><span class="w-field__label"><?= __('DKIM 公钥（只填公钥正文）') ?></span><textarea class="w-textarea" name="dkim_public_key" rows="4"><?= $escape($publicKey) ?></textarea></label>
-                                <label><input type="checkbox" name="confirm_public_origin" value="1"> <?= __('我确认 mail 主机必须 DNS-only，源站公网 IP 将可见') ?></label>
-                                <div class="mail-enterprise__actions"><button class="w-button" data-variant="outline" type="submit" name="apply" value="0"><?= __('预览变更') ?></button><button class="w-button" data-tone="primary" type="submit" name="apply" value="1"><?= __('应用 DNS') ?></button></div>
+                                <input type="hidden" name="return_view" value="domains">
+                                <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('源站公网 IP') ?></span>
+                                    <input class="w-input" type="text" name="origin_ip" value="<?= $escape($originIp) ?>">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('DKIM 选择器') ?></span>
+                                    <input class="w-input" type="text" name="dkim_selector" value="<?= $escape($selector) ?>">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('DKIM 公钥（只填公钥正文）') ?></span>
+                                    <textarea class="w-textarea" name="dkim_public_key" rows="4"><?= $escape($publicKey) ?></textarea>
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label">
+                                        <input type="checkbox" name="confirm_public_origin" value="1">
+                                        <?= __('我确认 mail 主机必须 DNS-only，源站公网 IP 将可见') ?>
+                                    </span>
+                                </label>
+                                <div class="mail-enterprise__actions">
+                                    <button class="w-button" data-variant="outline" data-size="sm" type="submit" name="apply" value="0"><?= __('预览变更') ?></button>
+                                    <button class="w-button" data-tone="primary" data-size="sm" type="submit" name="apply" value="1"><?= __('应用 DNS') ?></button>
+                                </div>
                             </w:form>
                         </details>
-                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}"><input type="hidden" name="return_view" value="domains"><input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>"><input type="hidden" name="status" value="<?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? 'suspended' : 'active' ?>"><button class="w-button" data-variant="outline" type="submit"><?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?></button></w:form>
+                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
+                            <input type="hidden" name="return_view" value="domains">
+                            <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
+                            <input type="hidden" name="status" value="<?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? 'suspended' : 'active' ?>">
+                            <button class="w-button" data-variant="outline" data-size="sm" type="submit">
+                                <?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?>
+                            </button>
+                        </w:form>
                     </div>
                 </article>
             <?php endforeach; ?>

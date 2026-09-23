@@ -62,6 +62,14 @@ final class MailShellRegionStore
     }
 
     /**
+     * 清空当前 storage_scope 的壳区覆盖（header="" / footer=[]），预览回落 shell.phtml。
+     */
+    public function clear(string $storageScope): void
+    {
+        $this->save($storageScope, '', []);
+    }
+
+    /**
      * @param list<string> $footerRows
      */
     public function save(string $storageScope, string $header, array $footerRows): void
@@ -86,6 +94,11 @@ final class MailShellRegionStore
                 JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
             );
         }
+        $this->persistPayload($storageScope, $payload, 'smtp_mail_shell_regions_save');
+    }
+
+    private function persistPayload(string $storageScope, string $payload, string $reason): void
+    {
         $this->store->setScopedConfig(
             self::CONFIG_KEY,
             $payload,
@@ -95,7 +108,7 @@ final class MailShellRegionStore
             ConfigReader::LOCALE_DEFAULT,
             [
                 'value_type' => 'json',
-                'reason' => 'smtp_mail_shell_regions_save',
+                'reason' => $reason,
             ]
         );
     }

@@ -9,6 +9,7 @@ use Weline\FileManager\Api\Data\FileAccessContext;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Storage\Api\Data\StorageDiskCode;
 use Weline\Storage\Api\Runtime\StorageRequestResourceFactoryInterface;
 
@@ -1098,16 +1099,22 @@ class AiDrawService
                 $foreground = \imagecolorallocate($image, 255, 255, 255);
                 \imagefilledrectangle($image, 0, 0, $width, $height, $background);
                 \imagestring($image, 5, 88, 118, 'MOCK', $foreground);
-                \ob_start();
-                if (\str_contains($mime, 'webp') && \function_exists('imagewebp')) {
-                    \imagewebp($image, null, 90);
-                } elseif (\str_contains($mime, 'jpeg') || \str_contains($mime, 'jpg')) {
-                    \imagejpeg($image, null, 90);
-                } else {
-                    \imagepng($image);
-                    $mime = 'image/png';
+                FiberOutputBuffer::beginCapture();
+                try {
+                    if (\str_contains($mime, 'webp') && \function_exists('imagewebp')) {
+                        \imagewebp($image, null, 90);
+                    } elseif (\str_contains($mime, 'jpeg') || \str_contains($mime, 'jpg')) {
+                        \imagejpeg($image, null, 90);
+                    } else {
+                        \imagepng($image);
+                        $mime = 'image/png';
+                    }
+                    $bytes = FiberOutputBuffer::endCapture();
+                } catch (\Throwable $e) {
+                    FiberOutputBuffer::discardCapture();
+                    \imagedestroy($image);
+                    throw $e;
                 }
-                $bytes = \ob_get_clean();
                 \imagedestroy($image);
                 if (\is_string($bytes) && $bytes !== '') {
                     return ['bytes' => $bytes, 'mime_type' => $mime];

@@ -8,6 +8,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Theme\Api\Asset\StaticAssetPublisherInterface;
 
 class RouterRunBefore implements ObserverInterface
@@ -17,12 +18,12 @@ class RouterRunBefore implements ObserverInterface
         if (headers_sent()) {
             return;
         }
-        $ob = ob_start();
+        FiberOutputBuffer::beginCapture();
         try {
             $this->handleStaticPaths();
         } finally {
-            if ($ob) {
-                ob_end_clean();
+            if (FiberOutputBuffer::hasActiveCapture()) {
+                FiberOutputBuffer::discardCapture();
             }
         }
     }

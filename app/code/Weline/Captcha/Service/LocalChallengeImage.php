@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Captcha\Service;
 
+use Weline\Framework\Runtime\FiberOutputBuffer;
+
 /**
  * Renders a local challenge without embedding the plaintext answer in markup.
  *
@@ -178,9 +180,15 @@ final class LocalChallengeImage
             $arc,
         );
 
-        \ob_start();
-        \imagepng($image);
-        $png = \ob_get_clean();
+        FiberOutputBuffer::beginCapture();
+        try {
+            \imagepng($image);
+            $png = FiberOutputBuffer::endCapture();
+        } catch (\Throwable $e) {
+            FiberOutputBuffer::discardCapture();
+            \imagedestroy($image);
+            throw $e;
+        }
         \imagedestroy($image);
         return \is_string($png) ? $png : '';
     }

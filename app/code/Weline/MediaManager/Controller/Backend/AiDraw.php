@@ -9,6 +9,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Ui\FormKey;
 use Weline\MediaManager\Service\AiDrawService;
 use Weline\MediaManager\Service\MediaFileAccessContextFactory;
@@ -220,8 +222,14 @@ class AiDraw extends BackendController
             $this->redirect(404);
             return;
         }
-        while (\ob_get_level() > 0) {
-            \ob_end_clean();
+        if (Runtime::isPersistent()) {
+            if (FiberOutputBuffer::hasActiveCapture()) {
+                FiberOutputBuffer::resetCurrent();
+            }
+        } else {
+            while (\ob_get_level() > 0) {
+                \ob_end_clean();
+            }
         }
         $response = $this->request->getResponse();
         $response->setHeader('Content-Type', $loaded['mime_type']);
