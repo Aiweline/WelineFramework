@@ -26,12 +26,13 @@ $copy = [
     'required' => (string)__('请补全收货信息并选择配送和支付方式。'),
     'api_missing' => (string)__('Weline.Api 尚未就绪，请刷新页面后重试。'),
     'guest_session_failed' => (string)__('无法恢复购物车会话，请刷新页面后重试。'),
+    'guest_cart_mismatch' => (string)__('购物车会话尚未对齐，请刷新后重试。若仍看到空车，请返回购物车确认商品。'),
     'swatch_preview' => (string)__('查看规格图'),
     'swatch_preview_close' => (string)__('关闭'),
     'switch_checkout_type' => (string)__('切换结账'),
 ];
 ?>
-<section class="weline-checkout" data-weline-checkout data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle" data-testid="checkout-form-page" weline-code="checkout.checkout.index.section_1">
+<section class="weline-checkout" data-weline-checkout data-checkout-view="loading" data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle" data-testid="checkout-form-page" aria-busy="true" weline-code="checkout.checkout.index.section_1">
     <header class="weline-checkout__header">
         <div class="weline-checkout__header-title">
             <p class="weline-checkout__eyebrow"><?= __('安全结账') ?></p>
@@ -61,19 +62,19 @@ $copy = [
         </span>
     </div>
 
-    <div class="weline-checkout__notice" data-checkout-message aria-live="polite"><?= htmlspecialchars($copy['loading'], ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="weline-checkout__notice" data-checkout-message data-checkout-page-loading aria-live="polite"><?= htmlspecialchars($copy['loading'], ENT_QUOTES, 'UTF-8') ?></div>
 
-    <section class="weline-checkout__empty-state" data-checkout-empty hidden weline-code="checkout.checkout.empty.section_1">
+    <section class="weline-checkout__empty-state" data-checkout-empty hidden aria-hidden="true" inert weline-code="checkout.checkout.empty.section_1">
         <p class="weline-checkout__eyebrow"><?= __('暂时无法结账') ?></p>
         <h2><?= __('购物车是空的') ?></h2>
-        <p><?= __('先选择需要采购的商品，再回来完成配送与支付。') ?></p>
+        <p data-checkout-empty-detail><?= __('先选择需要采购的商品，再回来完成配送与支付。') ?></p>
         <div class="weline-checkout__empty-actions">
             <a class="weline-checkout__empty-primary" href="@url{'products'}"><?= __('返回选购') ?></a>
             <a class="weline-checkout__empty-secondary" href="@url{'cart'}"><?= __('查看购物车') ?></a>
         </div>
     </section>
 
-    <section class="weline-checkout__payment-recovery" data-checkout-payment-recovery hidden weline-code="checkout.checkout.payment_recovery.section_1">
+    <section class="weline-checkout__payment-recovery" data-checkout-payment-recovery hidden aria-hidden="true" inert weline-code="checkout.checkout.payment_recovery.section_1">
         <p class="weline-checkout__eyebrow"><?= __('订单已创建') ?></p>
         <h2 data-payment-recovery-title><?= __('支付状态待确认') ?></h2>
         <p data-payment-recovery-detail><?= htmlspecialchars($copy['payment_pending'], ENT_QUOTES, 'UTF-8') ?></p>
@@ -89,6 +90,12 @@ $copy = [
         </div>
     </section>
 
+    <?php
+    // FormRenderer BOOLEAN_ATTRIBUTES may not yet include `hidden` (framework seat).
+    // Host wrapper owns the initial invisible shell; keep `hidden` on w:form for when Form lands.
+    // NOTE: never write angle-bracket w:form tags inside comments — Taglib will parse them.
+    ?>
+    <div class="weline-checkout__form-host" data-checkout-form-host hidden aria-hidden="true" inert>
     <w:form class="weline-checkout__grid" data-checkout-form hidden>
         <div class="weline-checkout__main">
             <div class="weline-checkout__express-host" data-checkout-express-host hidden>
@@ -191,7 +198,7 @@ $copy = [
                         weline-code="checkout.checkout.credit_slot">
                 </w:slot>
             </div>
-            <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)?v=20260907-price-header-layout">
+            <?php // mini-cart-drawer.css：由 chrome @widget.layout_source bake→head，禁止 body @static 重复 ?>
             <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-discount-after</w:hook>
             <div class="weline-checkout__totals" role="list">
                 <div role="listitem">
@@ -222,6 +229,10 @@ $copy = [
                     <span><?= WidgetI18n::label('货到付款手续费') ?></span>
                     <strong data-cod-fee-amount="">0.00</strong>
                 </div>
+                <div role="listitem" data-checkout-payment-incentive-row hidden data-testid="checkout-payment-incentive-row">
+                    <span><?= __('支付方式优惠') ?></span>
+                    <strong data-payment-incentive-amount="">0.00</strong>
+                </div>
                 <div class="weline-checkout__grand" role="listitem">
                     <span data-grand-total-label><?= __('应付合计') ?></span>
                     <strong data-grand-total="">0.00</strong>
@@ -242,6 +253,7 @@ $copy = [
             <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-after</w:hook>
         </aside>
     </w:form>
+    </div>
     <dialog class="weline-checkout__swatch-preview" data-checkout-swatch-preview>
         <div class="weline-checkout__swatch-preview-panel">
             <img class="weline-checkout__swatch-preview-img" data-checkout-swatch-preview-img alt="">
@@ -370,10 +382,40 @@ $copy = [
     .weline-checkout__payment-recovery[hidden],
     .weline-checkout__continue-chrome[hidden],
     .weline-checkout__type-switch[hidden],
+    .weline-checkout__form-host[hidden],
     .weline-checkout__grid[hidden],
     .weline-checkout__notice[hidden],
     .weline-checkout__express-host[hidden] {
-        display: none;
+        display: none !important;
+    }
+    /* QA-09: exclusive checkout shell — loading never paints form/empty together. */
+    .weline-checkout[data-checkout-view="loading"] > .weline-checkout__form-host,
+    .weline-checkout[data-checkout-view="loading"] > [data-checkout-empty],
+    .weline-checkout[data-checkout-view="loading"] > [data-checkout-payment-recovery],
+    .weline-checkout[data-checkout-view="empty"] > .weline-checkout__form-host,
+    .weline-checkout[data-checkout-view="empty"] > [data-checkout-payment-recovery],
+    .weline-checkout[data-checkout-view="ready"] > [data-checkout-empty],
+    .weline-checkout[data-checkout-view="ready"] > [data-checkout-payment-recovery],
+    .weline-checkout[data-checkout-view="recovery"] > .weline-checkout__form-host,
+    .weline-checkout[data-checkout-view="recovery"] > [data-checkout-empty],
+    .weline-checkout[data-checkout-view="continue_pay"] > [data-checkout-empty],
+    .weline-checkout[data-checkout-view="continue_pay"] > [data-checkout-payment-recovery],
+    .weline-checkout[data-checkout-view="mismatch"] > .weline-checkout__form-host,
+    .weline-checkout[data-checkout-view="mismatch"] > [data-checkout-payment-recovery] {
+        display: none !important;
+    }
+    .weline-checkout[data-checkout-view="loading"] > [data-checkout-message],
+    .weline-checkout[data-checkout-view="mismatch"] > [data-checkout-message] {
+        display: block;
+    }
+    .weline-checkout[data-checkout-view="empty"] > [data-checkout-empty],
+    .weline-checkout[data-checkout-view="recovery"] > [data-checkout-payment-recovery],
+    .weline-checkout[data-checkout-view="mismatch"] > [data-checkout-empty] {
+        display: block;
+    }
+    .weline-checkout[data-checkout-view="ready"] > .weline-checkout__form-host,
+    .weline-checkout[data-checkout-view="continue_pay"] > .weline-checkout__form-host {
+        display: contents;
     }
     .weline-checkout__continue-chrome {
         margin: 0 0 16px;
@@ -672,8 +714,25 @@ $copy = [
     .weline-checkout__payment-title-row strong {
         margin: 0;
     }
+    .weline-checkout__payment-title-meta {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-left: auto;
+    }
+    .weline-checkout__payment-incentive {
+        color: var(--color-success, var(--color-primary));
+        font-size: var(--font-size-sm, 12px);
+        font-weight: var(--font-weight-semibold, 600);
+        line-height: 1.4;
+        white-space: nowrap;
+    }
+    .weline-checkout__option--payment:has(input:checked) .weline-checkout__payment-incentive {
+        font-weight: var(--font-weight-bold, 700);
+    }
     .weline-checkout__payment-details {
-        color: #0066c0;
+        color: var(--checkout-link, var(--color-link, #0066c0));
         font-size: 12px;
         line-height: 1.4;
         text-decoration: none;
@@ -1098,8 +1157,10 @@ $copy = [
     }
 
     const form = root.querySelector('[data-checkout-form]');
+    const formHost = root.querySelector('[data-checkout-form-host]');
     const message = root.querySelector('[data-checkout-message]');
     const emptyState = root.querySelector('[data-checkout-empty]');
+    const emptyDetail = root.querySelector('[data-checkout-empty-detail]');
     const expressHost = root.querySelector('[data-checkout-express-host]');
     const paymentRecovery = root.querySelector('[data-checkout-payment-recovery]');
     const paymentRecoveryTitle = root.querySelector('[data-payment-recovery-title]');
@@ -1114,6 +1175,7 @@ $copy = [
     const typeSwitchMenu = root.querySelector('[data-checkout-type-menu]');
     let continuePayBinding = null;
     let sessionBuckets = [];
+    let guestTokenAligned = false;
 
     const paymentOrderReference = root.querySelector('[data-payment-order-reference]');
     const paymentRetryButton = root.querySelector('[data-payment-retry]');
@@ -1139,12 +1201,15 @@ $copy = [
     const taxAmountNode = root.querySelector('[data-tax-amount]');
     const codFeeRowNode = root.querySelector('[data-checkout-cod-fee-row]');
     const codFeeAmountNode = root.querySelector('[data-cod-fee-amount]');
+    const paymentIncentiveRowNode = root.querySelector('[data-checkout-payment-incentive-row]');
+    const paymentIncentiveAmountNode = root.querySelector('[data-payment-incentive-amount]');
     const grandTotalLabelNode = root.querySelector('[data-grand-total-label]');
     const grandTotalNode = root.querySelector('[data-grand-total]');
     const grandTotalLabelDefault = grandTotalLabelNode
         ? String(grandTotalLabelNode.textContent || '').trim()
         : '';
     const grandTotalLabelDeposit = <?= json_encode((string)__('本次应付定金'), JSON_UNESCAPED_UNICODE) ?>;
+    let paymentIncentiveReconcileSeq = 0;
 
     let checkoutApi = null;
     let activePaymentRecovery = null;
@@ -1344,6 +1409,102 @@ $copy = [
         return value == null ? '' : String(value);
     }
 
+    function setShellHidden(node, hidden) {
+        if (!node) {
+            return;
+        }
+        node.hidden = !!hidden;
+        if (hidden) {
+            node.setAttribute('hidden', '');
+            node.setAttribute('aria-hidden', 'true');
+            node.setAttribute('inert', '');
+        } else {
+            node.removeAttribute('hidden');
+            node.removeAttribute('aria-hidden');
+            node.removeAttribute('inert');
+        }
+    }
+
+    /**
+     * FormRenderer may drop bare hidden on w:form. Always drive visibility via
+     * the host wrapper + forced style on the form element.
+     * Never put HTML/taglib angle-bracket names in script comments (they get parsed).
+     */
+    function setFormVisible(visible) {
+        const show = !!visible;
+        setShellHidden(formHost, !show);
+        if (form) {
+            form.hidden = !show;
+            if (show) {
+                form.removeAttribute('hidden');
+                form.style.removeProperty('display');
+            } else {
+                form.setAttribute('hidden', '');
+                form.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Exclusive checkout shell: loading | empty | ready | recovery | continue_pay | mismatch
+     * Initial SSR must stay on loading until cookie guest token is aligned and getData returns.
+     */
+    function showCheckoutShell(mode) {
+        const allowed = {
+            loading: 1,
+            empty: 1,
+            ready: 1,
+            recovery: 1,
+            continue_pay: 1,
+            mismatch: 1,
+        };
+        const view = allowed[String(mode || '').trim()] ? String(mode).trim() : 'loading';
+        root.setAttribute('data-checkout-view', view);
+        root.setAttribute('aria-busy', view === 'loading' ? 'true' : 'false');
+
+        const formVisible = view === 'ready' || view === 'continue_pay';
+        setFormVisible(formVisible);
+
+        setShellHidden(emptyState, !(view === 'empty' || view === 'mismatch'));
+        setShellHidden(paymentRecovery, view !== 'recovery');
+
+        if (message) {
+            if (view === 'loading' || view === 'mismatch' || view === 'recovery') {
+                setShellHidden(message, false);
+            } else if (view === 'empty' || view === 'continue_pay') {
+                setShellHidden(message, true);
+            } else {
+                // ready: message may carry guidance / blocking — leave visibility to caller
+                setShellHidden(message, false);
+            }
+        }
+        if (expressHost && !formVisible) {
+            setShellHidden(expressHost, true);
+        }
+    }
+
+    function localCartClaimsItems(cartType) {
+        const mode = String(cartType || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+        if (!window.WelineCart || typeof window.WelineCart.getCachedSummary !== 'function') {
+            return false;
+        }
+        try {
+            const summary = window.WelineCart.getCachedSummary({
+                cartType: mode,
+                requireTokenMatch: true,
+            });
+            if (!summary || typeof summary !== 'object' || summary.is_empty === true) {
+                return false;
+            }
+            if (Number(summary.cart_count || summary.item_count || 0) > 0) {
+                return true;
+            }
+            return Array.isArray(summary.items) && summary.items.length > 0;
+        } catch (error) {
+            return false;
+        }
+    }
+
     function setMessage(value, type) {
         if (!message) {
             return;
@@ -1523,6 +1684,7 @@ $copy = [
 
         if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
             if (token) {
+                guestTokenAligned = true;
                 return token;
             }
             throw new Error(copy.api_missing);
@@ -1531,6 +1693,7 @@ $copy = [
         const cartApi = await window.Weline.Api.resource('cart');
         if (!cartApi || typeof cartApi.issueGuestToken !== 'function') {
             if (token) {
+                guestTokenAligned = true;
                 return token;
             }
             throw new Error(copy.guest_session_failed);
@@ -1544,6 +1707,7 @@ $copy = [
         const adopted = text(payload && payload.guest_token).trim();
         if (!adopted) {
             if (token) {
+                guestTokenAligned = true;
                 return token;
             }
             throw new Error(copy.guest_session_failed);
@@ -1559,6 +1723,7 @@ $copy = [
                 // This request still owns the token even when storage is unavailable.
             }
         }
+        guestTokenAligned = true;
         return adopted;
     }
 
@@ -1624,20 +1789,9 @@ $copy = [
 
     function showPaymentRecovery(state) {
         activePaymentRecovery = state;
-        if (form) {
-            form.hidden = true;
-        }
+        showCheckoutShell('recovery');
         if (expressHost) {
-            expressHost.hidden = true;
-        }
-        if (emptyState) {
-            emptyState.hidden = true;
-        }
-        if (paymentRecovery) {
-            paymentRecovery.hidden = false;
-        }
-        if (message) {
-            message.hidden = false;
+            setShellHidden(expressHost, true);
         }
         const pending = state.outcome === 'pending';
         setText(paymentRecoveryTitle, pending ? copy.payment_pending : copy.payment_failed);
@@ -1750,8 +1904,8 @@ $copy = [
             address: formAddress(),
             shipping_method: shippingMethodCp,
             service_code: shippingMethodCp,
-            currency: checkoutState.currency
-                || (continuePayBinding.order && continuePayBinding.order.currency)
+            currency: (continuePayBinding.order && continuePayBinding.order.currency)
+                || checkoutState.currency
                 || '',
         };
         if (opts.clear_coupon === true) {
@@ -1818,14 +1972,9 @@ $copy = [
             setText(continueChromeOrder, continuePayBinding.order_uuid || '');
         }
         if (paymentRecovery) {
-            paymentRecovery.hidden = true;
+            setShellHidden(paymentRecovery, true);
         }
-        if (form) {
-            form.hidden = false;
-        }
-        if (emptyState) {
-            emptyState.hidden = true;
-        }
+        showCheckoutShell('continue_pay');
         if (submitButton) {
             setText(submitButton, (continuePayBinding.chrome && continuePayBinding.chrome.cta_label) || copy.continue_payment);
         }
@@ -1838,7 +1987,7 @@ $copy = [
         });
         // Chrome 已承载续付状态，避免与下方 notice 同文案叠显。
         if (message) {
-            message.hidden = true;
+            setShellHidden(message, true);
             setMessage('', '');
         }
     }
@@ -2103,10 +2252,10 @@ $copy = [
             checkoutState.currency = order.currency;
         }
         if (emptyState) {
-            emptyState.hidden = true;
+            setShellHidden(emptyState, true);
         }
         // Ensure binding payment method shows name+icon even when cart getData is empty/blocked.
-        // Prefer adopt/getData server HTML; never invent a bare code <span> label.
+        // Prefer adopt/getData server HTML; never invent a bare code span label.
         const method = text(continuePayBinding.payment_method).trim();
         if (method && paymentBox) {
             const bindingHtml = text(continuePayBinding.payment_methods_html || '').trim();
@@ -2162,7 +2311,12 @@ $copy = [
             prior_quote_token: prior && prior !== state.quote_token ? prior : '',
         });
         if (!adopted || adopted.success === false) {
-            throw new Error(text(adopted && adopted.message) || copy.load_failed);
+            const adoptErr = new Error(text(adopted && adopted.message) || copy.load_failed);
+            adoptErr.code = text(adopted && adopted.error_code || '');
+            adoptErr.error_code = adoptErr.code;
+            adoptErr.already_paid = !!(adopted && adopted.already_paid);
+            adoptErr.checkout_group_uuid = text(adopted && adopted.checkout_group_uuid || '');
+            throw adoptErr;
         }
         // 续付凭据只进 continue_pay 槽，禁止覆盖普通 browse quote_token（否则传统结账被污染）。
         persistContinuePayQuoteToken(state.quote_token);
@@ -2199,7 +2353,7 @@ $copy = [
         syncContinuePayChrome();
         syncContinuePayAddressPanel();
         if (emptyState) {
-            emptyState.hidden = true;
+            setShellHidden(emptyState, true);
         }
         // 旧结账会话券灌入未付订单并重算应付（有订单仍可改）。
         try {
@@ -2376,6 +2530,22 @@ $copy = [
             return minor / 100;
         }
         return Number(method.cod_fee || method.fee_major || 0) || 0;
+    }
+
+    /** 选中支付方式的可兑现激励（正数 major）；来自列表扁字段，禁前端自算百分比。 */
+    function selectedIncentiveSavingsMajor() {
+        const code = selectedValue('payment_method');
+        const method = checkoutState.paymentMethods.find(function (entry) {
+            return entry && entry.code === code;
+        });
+        if (!method || !method.incentive_available) {
+            return 0;
+        }
+        const minor = Number(method.incentive_savings_minor || 0);
+        if (minor > 0) {
+            return minor / 100;
+        }
+        return 0;
     }
 
     /** Server-enriched duty/tax on selected shipping method (never invent rates in browser). */
@@ -2698,6 +2868,10 @@ $copy = [
             codFeeRowNode.hidden = true;
             setText(codFeeAmountNode, money(0));
         }
+        if (paymentIncentiveRowNode && paymentIncentiveAmountNode) {
+            paymentIncentiveRowNode.hidden = true;
+            setText(paymentIncentiveAmountNode, money(0));
+        }
         if (grandTotalLabelNode) {
             setText(grandTotalLabelNode, grandTotalLabelDefault || grandTotalLabelDeposit);
         }
@@ -2810,6 +2984,16 @@ $copy = [
                 setText(codFeeAmountNode, money(0));
             }
         }
+        const incentive = tob ? 0 : selectedIncentiveSavingsMajor();
+        if (paymentIncentiveRowNode && paymentIncentiveAmountNode) {
+            if (incentive > 0) {
+                paymentIncentiveRowNode.hidden = false;
+                setText(paymentIncentiveAmountNode, '-' + money(incentive));
+            } else {
+                paymentIncentiveRowNode.hidden = true;
+                setText(paymentIncentiveAmountNode, money(0));
+            }
+        }
         if (grandTotalLabelNode) {
             setText(
                 grandTotalLabelNode,
@@ -2818,7 +3002,7 @@ $copy = [
         }
         const payable = tob
             ? Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor)
-            : Math.max(0, subtotal + shipping - discount + tax + codFee);
+            : Math.max(0, subtotal + shipping - discount + tax + codFee - incentive);
         setText(grandTotalNode, money(payable));
         syncLifecycleDomFields({ amount: payable.toFixed(2) });
     }
@@ -2880,26 +3064,49 @@ $copy = [
             || (checkoutState.cart && checkoutState.cart.blocking_message)
             || ''
         ).trim();
-        if (form) {
-            form.hidden = isContinuePayMode() ? false : (cartIsEmpty || hangPurpose);
+        // Cookie-aligned guest only — never paint form/empty while still on loading shell.
+        if (!guestTokenAligned && !isContinuePayMode()) {
+            showCheckoutShell('loading');
+            setMessage(copy.loading, '');
+            return;
+        }
+        if (isContinuePayMode()) {
+            showCheckoutShell('continue_pay');
+        } else if (hangPurpose) {
+            showCheckoutShell('ready');
+            setFormVisible(false);
+            setShellHidden(emptyState, true);
+            setShellHidden(message, true);
+        } else if (cartIsEmpty) {
+            // Cart page claims items under the same guest cookie → mismatch, not silent empty.
+            if (localCartClaimsItems(checkoutCartType())) {
+                showCheckoutShell('mismatch');
+                if (emptyDetail) {
+                    setText(emptyDetail, copy.guest_cart_mismatch);
+                }
+                setMessage(copy.guest_cart_mismatch, 'error');
+            } else {
+                showCheckoutShell('empty');
+                if (emptyDetail) {
+                    setText(
+                        emptyDetail,
+                        '<?= __('先选择需要采购的商品，再回来完成配送与支付。') ?>'
+                    );
+                }
+            }
+        } else {
+            showCheckoutShell('ready');
         }
         if (expressHost) {
-            expressHost.hidden = isContinuePayMode()
-                ? true
-                : (cartIsEmpty || hangPurpose || checkoutBlocked);
-        }
-        if (emptyState) {
-            emptyState.hidden = hangPurpose || isContinuePayMode() ? true : !cartIsEmpty;
-        }
-        if (isContinuePayMode() && form) {
-            form.hidden = false;
+            setShellHidden(
+                expressHost,
+                isContinuePayMode()
+                    ? true
+                    : (cartIsEmpty || hangPurpose || checkoutBlocked)
+            );
         }
         syncContinuePayChrome();
         renderTypeSwitcher();
-        if (message) {
-            // Continue-pay：状态由 chrome 承载，notice 默认隐藏，避免双条同文案。
-            message.hidden = hangPurpose ? true : (isContinuePayMode() ? true : cartIsEmpty);
-        }
         const emailInput = form ? form.querySelector('input[name="email"]') : null;
         if (emailInput) {
             emailInput.required = Boolean(checkoutState.identity.is_guest_checkout);
@@ -2949,10 +3156,14 @@ $copy = [
         } else if (isContinuePayMode()) {
             setMessage('', '');
             if (message) {
-                message.hidden = true;
+                setShellHidden(message, true);
             }
         } else if (cartIsEmpty) {
-            setMessage(copy.empty_cart, 'error');
+            // Empty / mismatch shells own the copy — avoid stacking notice + empty SSR form.
+            if (!localCartClaimsItems(checkoutCartType())) {
+                setMessage(copy.empty_cart, 'error');
+                setShellHidden(message, true);
+            }
         } else if (checkoutBlocked) {
             setMessage(blockingMessage || '<?= __('购物车中有不可结算的商品，请返回购物车移除后重试') ?>', 'error');
         } else {
@@ -3019,6 +3230,8 @@ $copy = [
     }
 
     async function loadCheckout() {
+        showCheckoutShell('loading');
+        setMessage(copy.loading, '');
         const api = await getApi();
         let sellingMode = checkoutCartType();
         const continuePay = isContinuePayMode();
@@ -3046,6 +3259,12 @@ $copy = [
             ).trim() || text(continuePayBinding && continuePayBinding.shipping_method).trim();
             if (boundShipping) {
                 getDataParams.shipping_method = boundShipping;
+            }
+        } else {
+            // 普通结账：把当前选中方式传给 getData，便于激励列表/摘要与壳侧核对。
+            const selectedPm = selectedValue('payment_method');
+            if (selectedPm) {
+                getDataParams.payment_method = selectedPm;
             }
         }
         if (pendingCouponCode) {
@@ -3337,7 +3556,9 @@ $copy = [
                 address: address,
                 shipping_method: shippingMethodCp,
                 service_code: shippingMethodCp,
-                currency: checkoutState.currency || '',
+                currency: (continuePayBinding.order && continuePayBinding.order.currency)
+                    || checkoutState.currency
+                    || '',
                 coupon_code: pendingCouponCode
                     || text(continuePayBinding.order && continuePayBinding.order.coupon_code || '').trim().toUpperCase()
                     || undefined,
@@ -3610,7 +3831,37 @@ $copy = [
         shippingBox.addEventListener('change', renderTotals);
     }
     if (paymentBox) {
-        paymentBox.addEventListener('change', renderTotals);
+        paymentBox.addEventListener('change', function () {
+            // 即时用列表扁字段重算（禁先高后低）；再异步 getData 核对。
+            renderTotals();
+            schedulePaymentIncentiveReconcile();
+        });
+    }
+
+    let paymentIncentiveReconcileTimer = 0;
+    function schedulePaymentIncentiveReconcile() {
+        if (isContinuePayMode()) {
+            return;
+        }
+        window.clearTimeout(paymentIncentiveReconcileTimer);
+        const seq = ++paymentIncentiveReconcileSeq;
+        paymentIncentiveReconcileTimer = window.setTimeout(function () {
+            loadCheckoutWithRetry().then(function () {
+                if (seq !== paymentIncentiveReconcileSeq) {
+                    return;
+                }
+                renderTotals();
+            }).catch(function (error) {
+                if (seq !== paymentIncentiveReconcileSeq) {
+                    return;
+                }
+                const errMsg = text(error && error.message).trim() || copy.load_failed;
+                if (/Unknown frontend worker param|Invalid param type/i.test(errMsg)) {
+                    return;
+                }
+                setMessage(errMsg, 'error');
+            });
+        }, 200);
     }
 
     // tob 信用勾选/输入变更后刷新摘要抵扣行与本次应付定金。
@@ -3798,10 +4049,48 @@ $copy = [
     }
 
     const initialPaymentRecovery = paymentRecoveryFromLocation();
+    showCheckoutShell('loading');
+    setMessage(copy.loading, '');
     if (initialPaymentRecovery) {
         // Continue-pay entry: full checkout + binding (not recovery island).
         adoptContinuePayFromRecovery(initialPaymentRecovery).catch(function (error) {
-            setMessage(error.message || copy.load_failed, 'error');
+            const response = error && error.response && typeof error.response === 'object'
+                ? error.response
+                : {};
+            const nested = response.data && typeof response.data === 'object' ? response.data : {};
+            const payload = nested.data && typeof nested.data === 'object'
+                ? nested.data
+                : (nested.error_code || nested.already_paid ? nested : response);
+            const errCode = text(
+                (error && error.error_code)
+                || payload.error_code
+                || nested.error_code
+                || response.error_code
+                || ''
+            ).trim();
+            const msg = text(
+                (error && error.message)
+                || payload.message
+                || nested.message
+                || response.message
+                || ''
+            );
+            const alreadySettled = errCode === 'continue_pay_order_not_pending'
+                || !!(error && error.already_paid)
+                || !!(payload.already_paid)
+                || !!(nested.already_paid)
+                || /已不可继续支付|can no longer (be paid|continue payment)|already\s*paid|not_pending/i.test(msg);
+            if (alreadySettled) {
+                // 已付订单：禁止 fallback 成可点「继续支付」的 recovery 岛。
+                navigateToSuccess({
+                    order_uuid: initialPaymentRecovery.order_uuid,
+                    checkout_group_uuid: initialPaymentRecovery.checkout_group_uuid
+                        || text(payload.checkout_group_uuid || nested.checkout_group_uuid || ''),
+                    quote_token: initialPaymentRecovery.quote_token,
+                });
+                return;
+            }
+            setMessage(msg || copy.load_failed, 'error');
             // Fallback：续付 token 只进 continue_pay 槽，勿污染 browse。
             persistContinuePayQuoteToken(initialPaymentRecovery.quote_token);
             continuePayBinding = Object.assign({}, initialPaymentRecovery, {

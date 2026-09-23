@@ -162,6 +162,10 @@ final class CheckoutOrderPaymentService
             $lastPurpose = $hangPurpose;
 
             $customerId = (int)($order->customerId ?? 0);
+            $seedDiscountLines = [];
+            if (\is_array($order->typePayload['discount_lines'] ?? null)) {
+                $seedDiscountLines = $order->typePayload['discount_lines'];
+            }
             $paymentContext = [
                 'order_id' => $order->orderUuid,
                 'payable_type' => 'weline_order',
@@ -178,6 +182,7 @@ final class CheckoutOrderPaymentService
                 'actor_id' => $customerId > 0 ? (string)$customerId : 'anonymous',
                 'items' => $order->items,
                 'totals' => $order->money,
+                'discount_lines' => $seedDiscountLines,
                 'shipping_snapshot' => $order->shipping,
                 'coupon_code' => trim((string) ($context['coupon_code'] ?? '')),
                 'metadata' => [
@@ -190,6 +195,13 @@ final class CheckoutOrderPaymentService
                 'idempotency_key' => $idempotencyKey . ':' . $order->orderUuid
                     . ($hangPurpose !== '' ? ':' . $hangPurpose : ''),
             ];
+            // 选中支付方式激励：并入 discount_lines 并下调应付（与 PaymentService create 幂等）
+            if ($hangPurpose === '' || $hangPurpose === 'full') {
+                $paymentContext = (new CheckoutPaymentIncentiveApplier())
+                    ->applyToPaymentContext($methodCode, $paymentContext);
+                $amountMinor = (int)($paymentContext['amount_minor'] ?? $amountMinor);
+                $this->syncOrderPaymentIncentive($order, $paymentContext);
+            }
             if (!empty($context['express_checkout'])) {
                 try {
                     /** @var \Weline\Payment\Api\PaymentExpressFacadeInterface $express */
@@ -391,6 +403,70 @@ final class CheckoutOrderPaymentService
         }
 
         return $result;
+    }
+
+    /**
+     * 站内订单应付与激励扣减后的网关应付对齐（写入 money + type_payload.discount_lines）。
+     *
+     * @param array<string, mixed> $paymentContext
+     */
+    private function syncOrderPaymentIncentive(OrderReadResult $order, array $paymentContext): void
+    {
+        $newGrand = max(0, (int)($paymentContext['amount_minor'] ?? 0));
+        $incentiveMinor = (int)($paymentContext['payment_method_incentive_amount_minor'] ?? 0);
+        $lines = \is_array($paymentContext['discount_lines'] ?? null) ? $paymentContext['discount_lines'] : [];
+        $prevGrand = (int)($order->money['grand_total_minor'] ?? 0);
+        if ($incentiveMinor >= 0 && $lines === []) {
+            return;
+        }
+        if ($newGrand <= 0 || $newGrand === $prevGrand) {
+            // 仍落盘 discount_lines，供下次支付幂等
+            if ($lines !== []) {
+                try {
+                    $this->orders->mergeTypePayload($order->orderUuid, [
+                        'discount_lines' => $lines,
+                        'payment_method_incentive_amount_minor' => $incentiveMinor,
+                    ]);
+                } catch (\Throwable) {
+                }
+            }
+
+            return;
+        }
+
+        $money = $order->money;
+        $prevDiscount = max(0, (int)($money['discount_amount_minor'] ?? 0));
+        $incentiveAbs = abs($incentiveMinor);
+        // 若应付已含旧激励，先还原再写入新激励绝对值
+        $prevIncentiveAbs = abs((int)($order->typePayload['payment_method_incentive_amount_minor'] ?? 0));
+        $baseDiscount = max(0, $prevDiscount - $prevIncentiveAbs);
+        $discountAmountMinor = $baseDiscount + $incentiveAbs;
+        $money['discount_amount_minor'] = $discountAmountMinor;
+        $money['grand_total_minor'] = $newGrand;
+        $money['payment_method_incentive_amount_minor'] = $incentiveMinor;
+        $toMajor = static fn (int $minor): float => round($minor / 100, 2);
+
+        try {
+            /** @var \Weline\Order\Model\Order $row */
+            $row = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+            $row->clear()->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $order->orderUuid)->find();
+            if (!$row->getId()) {
+                return;
+            }
+            $row->setData(\Weline\Order\Model\Order::schema_fields_DISCOUNT_AMOUNT, $toMajor($discountAmountMinor));
+            $row->setData(\Weline\Order\Model\Order::schema_fields_GRAND_TOTAL, $toMajor($newGrand));
+            $row->setData(
+                \Weline\Order\Model\Order::schema_fields_MONEY_SNAPSHOT_JSON,
+                json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            );
+            $row->save();
+            $this->orders->mergeTypePayload($order->orderUuid, [
+                'discount_lines' => $lines,
+                'payment_method_incentive_amount_minor' => $incentiveMinor,
+            ]);
+        } catch (\Throwable) {
+            // 支付仍以 paymentContext 金额为准；同步失败不阻断扣款
+        }
     }
 
     private function resolveHangPurpose(OrderReadResult $order, string $hangPurpose): string
