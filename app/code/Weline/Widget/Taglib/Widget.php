@@ -66,6 +66,10 @@ class Widget implements TaglibInterface
             'template' => false,     // 覆盖模板路径（可选）
             'id' => false,           // 部件实例 ID（可选）
             'ref' => false,          // 稳定模板引用（slot 内 CoW 用；缺省自动生成）
+            'layout-source' => false, // 布局关键静态资源 Vendor_Module::path,...
+            'source-postion' => false,
+            'source-position' => false,
+            'source' => false,       // 常用静态资源 Vendor_Module::path,...
         ];
     }
 
@@ -153,8 +157,17 @@ class Widget implements TaglibInterface
                     }
                 }
 
+                foreach (['layout-source' => '_layout_source', 'source' => '_source'] as $attribute => $key) {
+                    if (isset($attributes[$attribute])) { $params[$key] = (string)$attributes[$attribute]; }
+                }
+                if (isset($attributes['source-postion']) || isset($attributes['source-position'])) {
+                    $params['_source_position'] = (string)($attributes['source-postion'] ?? $attributes['source-position']);
+                }
+
                 // 渲染部件
                 $html = self::renderWidget($widget, $params, $blockClass, $template);
+                $assetRenderer = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class);
+                $html = $assetRenderer->wrap($html, $assetRenderer->render($widget, $params, (string)$template));
 
                 // 如果有 ID，包裹容器（用于编辑模式）
                 if (!empty($widgetId)) {

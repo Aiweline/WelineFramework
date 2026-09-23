@@ -29,6 +29,24 @@ class WidgetScanner
 {
     private ?WidgetTemplateParser $templateParser = null;
 
+    /** @var array{complete:bool,modules:list<string>,identities:list<array>,errors:list<string>} */
+    private array $scanCoverage = ['complete' => false, 'modules' => [], 'identities' => [], 'errors' => []];
+
+    public function getScanCoverage(): array
+    {
+        return $this->scanCoverage;
+    }
+
+    private function recordScannedIdentity(array $widget): void
+    {
+        $this->scanCoverage['identities'][] = [
+            'area' => (string)($widget['area'] ?? 'frontend'),
+            'module' => (string)($widget['module'] ?? ''),
+            'type' => (string)($widget['type'] ?? ''),
+            'code' => (string)($widget['code'] ?? ''),
+        ];
+    }
+
     /**
      * 获取模板解析器
      */
@@ -246,6 +264,7 @@ class WidgetScanner
      */
     public function scanAllWidgetsGenerator(): \Generator
     {
+        $this->scanCoverage = ['complete' => false, 'modules' => [], 'identities' => [], 'errors' => []];
         if (PHP_SAPI !== 'cli') {
             return;
         }
@@ -255,6 +274,15 @@ class WidgetScanner
         // 1) 从 Extends 信息
         $extendedBy = ExtendsData::getExtendedBy('Weline_Widget');
         $modules = Env::getInstance()->getModuleList();
+        foreach ($modules as $moduleName => $module) {
+            if (!($module['status'] ?? false)) { continue; }
+            $basePath = (string)($module['base_path'] ?? '');
+            if ($basePath === '' || !is_dir($basePath) || !is_readable($basePath)) {
+                $this->scanCoverage['errors'][] = 'Unreadable module: ' . $moduleName;
+                continue;
+            }
+            $this->scanCoverage['modules'][] = (string)$moduleName;
+        }
         foreach ($extendedBy as $sourceModule => $extensions) {
             $module = $modules[$sourceModule] ?? null;
             if (!$module || !($module['status'] ?? false)) {
@@ -283,11 +311,13 @@ class WidgetScanner
                 try {
                     $widgets = include $widgetFile;
                     if (!is_array($widgets)) {
+                        $this->scanCoverage['errors'][] = 'Invalid definitions: ' . $widgetFile;
                         continue;
                     }
                     foreach ($widgets as $k => $widgetConfig) {
                         $config = $this->processWidgetEntry($widgetConfig, $sourceModule, $basePath, $k);
                         if (!$config) {
+                            $this->scanCoverage['errors'][] = 'Invalid entry: ' . $widgetFile . ':' . $k;
                             continue;
                         }
                         $type = $config['type'] ?? '';
@@ -295,13 +325,15 @@ class WidgetScanner
                         if ($type === '' || $name === '' || !in_array($type, self::ALLOWED_TYPES, true)) {
                             continue;
                         }
+                        $this->recordScannedIdentity($config);
                         if (isset($seen[$key($type, $name)])) {
                             continue;
                         }
                         $seen[$key($type, $name)] = true;
                         yield [$type, $name, $config];
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    $this->scanCoverage['errors'][] = $e->getMessage();
                     w_log_error("读取模块 {$sourceModule} 的集中部件配置文件时出错: " . $e->getMessage(), [], 'WidgetScanner');
                 }
             }
@@ -320,15 +352,18 @@ class WidgetScanner
             try {
                 $widgets = include $widgetFile;
                 if (!is_array($widgets)) {
+                    $this->scanCoverage['errors'][] = 'Invalid definitions: ' . $widgetFile;
                     continue;
                 }
                 foreach ($widgets as $k => $widgetConfig) {
                     $config = $this->processWidgetEntry($widgetConfig, $moduleName, $basePath, $k);
                     if (!$config) {
+                        $this->scanCoverage['errors'][] = 'Invalid entry: ' . $widgetFile . ':' . $k;
                         continue;
                     }
                     $type = $config['type'] ?? '';
                     $name = $config['code'] ?? '';
+                    $this->recordScannedIdentity($config);
                     if (isset($seen[$key($type, $name)])) {
                         continue;
                     }
@@ -338,7 +373,8 @@ class WidgetScanner
                     $seen[$key($type, $name)] = true;
                     yield [$type, $name, $config];
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                $this->scanCoverage['errors'][] = $e->getMessage();
                 w_log_error("读取模块 {$moduleName} 的集中部件配置文件时出错: " . $e->getMessage(), [], 'WidgetScanner');
             }
         }
@@ -353,6 +389,7 @@ class WidgetScanner
             foreach ($widgets as $widget) {
                 $type = $widget['type'] ?? '';
                 $name = $widget['code'] ?? '';
+                $this->recordScannedIdentity($widget);
                 if ($type === '' || $name === '' || isset($seen[$key($type, $name)])) {
                     continue;
                 }
@@ -360,6 +397,7 @@ class WidgetScanner
                 yield [$type, $name, $widget];
             }
         }
+        $this->scanCoverage['complete'] = $this->scanCoverage['errors'] === [];
     }
 
     /**
@@ -434,9 +472,12 @@ class WidgetScanner
                     $config = $this->readWidgetConfig($widgetFile, $moduleName, $type, $name, $dirPath, $basePath);
                     if ($config) {
                         $result[] = $config;
+                    } else {
+                        $this->scanCoverage['errors'][] = 'Invalid legacy definition: ' . $widgetFile;
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                $this->scanCoverage['errors'][] = $e->getMessage();
                 w_log_error("扫描模块 {$moduleName} 的部件时出错: " . $e->getMessage(), [], 'WidgetScanner');
             }
         }
@@ -667,7 +708,7 @@ class WidgetScanner
             }
             
             // 构建部件信息
-            return [
+            $built = [
                 'name' => $translatedName ?: ($widgetConfig['name'] ?? ''),
                 'description' => $translatedDescription ?: ($widgetConfig['description'] ?? ''),
                 'original_name' => $widgetConfig['name'] ?? '',
@@ -702,8 +743,16 @@ class WidgetScanner
                 'doc_path' => $docPath,
                 'has_doc' => $hasDoc,
                 'disabled' => !empty($widgetConfig['disabled']), // 保留禁用状态
+                'layout_source' => \is_string($widgetConfig['layout_source'] ?? null)
+                    ? \trim((string)$widgetConfig['layout_source'])
+                    : '',
+                'source' => \is_string($widgetConfig['source'] ?? null)
+                    ? \trim((string)$widgetConfig['source'])
+                    : '',
                 'config' => $widgetConfig
             ];
+
+            return $this->mergeAssetAttrsFromTemplate($built, $basePath);
         } catch (\Exception $e) {
             w_log_error("读取部件配置数组时出错: " . $e->getMessage(), [], 'WidgetScanner');
             return null;
@@ -837,7 +886,7 @@ class WidgetScanner
             }
             
             // 构建部件信息
-            return [
+            $built = [
                 'name' => $translatedName ?: $config['name'],
                 'description' => $translatedDescription ?: ($config['description'] ?? ''),
                 'original_name' => $config['name'], // 保留原始名称
@@ -869,12 +918,69 @@ class WidgetScanner
                 'disabled' => !empty($config['disabled']), // 保留禁用状态
                 'doc_path' => $docPath,
                 'has_doc' => $hasDoc,
+                'layout_source' => \is_string($config['layout_source'] ?? null)
+                    ? \trim((string)$config['layout_source'])
+                    : '',
+                'source' => \is_string($config['source'] ?? null)
+                    ? \trim((string)$config['source'])
+                    : '',
                 'config' => $config
             ];
+
+            return $this->mergeAssetAttrsFromTemplate($built, $basePath);
         } catch (\Exception $e) {
             w_log_error("读取部件配置文件 {$widgetFile} 时出错: " . $e->getMessage(), [], 'WidgetScanner');
             return null;
         }
+    }
+
+
+    /**
+     * When widget.php omits source/layout_source, inherit from template @widget.* docblock.
+     *
+     * @param array<string, mixed> $info
+     * @return array<string, mixed>
+     */
+    private function mergeAssetAttrsFromTemplate(array $info, string $basePath): array
+    {
+        $layout = \trim((string)($info['layout_source'] ?? ''));
+        $source = \trim((string)($info['source'] ?? ''));
+        $position = (string)($info['config']['source-postion'] ?? $info['config']['source-position'] ?? $info['config']['source_position'] ?? $info['source_position'] ?? '');
+        if ($position !== '') { $info['source_position'] = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector::normalizePosition($position); }
+        $template = \trim((string)($info['template'] ?? ''));
+        if ($template === '' || !\str_contains($template, '::')) {
+            return $info;
+        }
+        [, $rel] = \explode('::', $template, 2);
+        $file = \rtrim($basePath, '/\\') . \DIRECTORY_SEPARATOR . 'view' . \DIRECTORY_SEPARATOR
+            . \ltrim(\str_replace(['\\', '/'], \DIRECTORY_SEPARATOR, $rel), '/\\');
+        if (!\is_file($file)) {
+            return $info;
+        }
+        $head = (string)@\file_get_contents($file, false, null, 0, 8192);
+        if ($head === '') {
+            return $info;
+        }
+        if (\preg_match('/@widget\.source\s*\{([^}]+)\}/', $head, $m) === 1) {
+            $source = implode(',', array_unique(array_filter(array_map('trim', explode(',', trim($m[1]) . ',' . $source)))));
+            $info['source'] = $source;
+            if (\is_array($info['config'] ?? null)) {
+                $info['config']['source'] = $source;
+            }
+        }
+        if (\preg_match('/@widget\.layout_source\s*\{([^}]+)\}/', $head, $m) === 1) {
+            $layout = implode(',', array_unique(array_filter(array_map('trim', explode(',', trim($m[1]) . ',' . $layout)))));
+            $info['layout_source'] = $layout;
+            if (\is_array($info['config'] ?? null)) {
+                $info['config']['layout_source'] = $layout;
+            }
+        }
+
+        if ($position === '' && preg_match('/@widget\.source[_-](?:position|postion)\s*\{([^}]+)\}/', $head, $m) === 1) {
+            $info['source_position'] = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector::normalizePosition(trim($m[1]));
+            $info['config']['source_position'] = $info['source_position'];
+        }
+        return $info;
     }
 
 
