@@ -304,6 +304,40 @@ final class OrderFacadeTest extends TestCase
         self::assertSame('Ship User', $read->shipping['address']['name'] ?? null);
     }
 
+    public function testPlanAndCreateHonorDiscountAmountMinorFromOptions(): void
+    {
+        $facade = OrderFacade::forTesting();
+        $cmd = new CreateCheckoutGroupCommand(
+            idempotencyKey: 'discount-incentive-1',
+            requestHash: hash('sha256', 'discount-incentive-1'),
+            websiteId: 0,
+            storeId: 1,
+            currency: 'USD',
+            lines: [['name' => 'A', 'qty_minor' => 1, 'unit_price_minor' => 1013, 'sku' => 'A']],
+            shippingAmountMinor: 879,
+            options: [
+                'discount_amount_minor' => 500,
+                'type_payload' => [
+                    'discount_lines' => [[
+                        'key' => 'pmi:fake_card:v1',
+                        'amount_minor' => -500,
+                        'source_type' => 'payment_method_incentive',
+                    ]],
+                    'payment_method_incentive_amount_minor' => -500,
+                ],
+            ],
+        );
+        $plan = $facade->plan($cmd);
+        self::assertSame(500, (int)$plan->totals['discount_amount_minor']);
+        self::assertSame(1392, (int)$plan->totals['grand_total_minor']);
+
+        $created = $facade->create($cmd);
+        $read = $facade->get($created->orderUuids[0]);
+        self::assertSame(1392, (int)($read->money['grand_total_minor'] ?? 0));
+        self::assertSame(500, (int)($read->money['discount_amount_minor'] ?? 0));
+        self::assertSame(-500, (int)($read->typePayload['payment_method_incentive_amount_minor'] ?? 0));
+    }
+
     /**
      * @param list<array<string,mixed>> $lines
      */

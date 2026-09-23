@@ -174,6 +174,7 @@ final class OrderFacade implements OrderFacadeInterface
         }
         $baseBeforeCod = $this->checkedAdd($this->checkedAdd($subtotal, $shipping), $tax);
         $codFee = $this->resolveCodFeeMinor($command, $baseBeforeCod);
+        $discountMinor = max(0, (int)($command->options['discount_amount_minor'] ?? 0));
         $orders = $planned['orders'];
         if ($codFee > 0 && $orders !== []) {
             $ownerIdx = $planned['owner_index'];
@@ -186,7 +187,18 @@ final class OrderFacade implements OrderFacadeInterface
                 $codFee,
             );
         }
-        $grandTotal = $this->checkedAdd($baseBeforeCod, $codFee);
+        if ($discountMinor > 0 && $orders !== []) {
+            $ownerIdx = $planned['owner_index'];
+            if ($ownerIdx === null || !isset($orders[$ownerIdx])) {
+                $ownerIdx = 0;
+            }
+            $orders[$ownerIdx]['discount_amount_minor'] = $discountMinor;
+            $orders[$ownerIdx]['grand_total_minor'] = max(
+                0,
+                (int)$orders[$ownerIdx]['grand_total_minor'] - $discountMinor,
+            );
+        }
+        $grandTotal = max(0, $this->checkedAdd($baseBeforeCod, $codFee) - $discountMinor);
 
         return new OrderPlan(
             currency: $command->currency,
@@ -197,6 +209,7 @@ final class OrderFacade implements OrderFacadeInterface
                 'subtotal_minor' => $subtotal,
                 'shipping_amount_minor' => $shipping,
                 'tax_amount_minor' => $tax,
+                'discount_amount_minor' => $discountMinor,
                 'grand_total_minor' => $grandTotal,
                 'cod_fee_amount_minor' => $codFee,
                 'order_count' => count($orders),
@@ -264,6 +277,7 @@ final class OrderFacade implements OrderFacadeInterface
                     subtotalMinor: (int)$planned['subtotal_minor'],
                     shippingAmountMinor: (int)$planned['shipping_amount_minor'],
                     taxAmountMinor: (int)$planned['tax_amount_minor'],
+                    discountAmountMinor: (int)($planned['discount_amount_minor'] ?? 0),
                     grandTotalMinor: (int)$planned['grand_total_minor'],
                     codFeeAmountMinor: (int)($planned['cod_fee_amount_minor'] ?? 0),
                 ))->withComputedGrandTotal();
@@ -465,6 +479,7 @@ final class OrderFacade implements OrderFacadeInterface
                     subtotalMinor: (int)$planned['subtotal_minor'],
                     shippingAmountMinor: (int)$planned['shipping_amount_minor'],
                     taxAmountMinor: (int)$planned['tax_amount_minor'],
+                    discountAmountMinor: (int)($planned['discount_amount_minor'] ?? 0),
                     grandTotalMinor: (int)$planned['grand_total_minor'],
                     codFeeAmountMinor: (int)($planned['cod_fee_amount_minor'] ?? 0),
                 ))->withComputedGrandTotal();

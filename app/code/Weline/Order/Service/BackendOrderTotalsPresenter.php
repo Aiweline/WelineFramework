@@ -232,7 +232,7 @@ final class BackendOrderTotalsPresenter
         }
         $label = trim($catalog->resolveLabel($code, $websiteId, $storeId));
 
-        return $label !== '' ? $label : $code;
+        return $label !== '' ? (string)__($label) : $code;
     }
 
     private function moneyMajor(mixed $major, mixed $minor, float $fallback): float
