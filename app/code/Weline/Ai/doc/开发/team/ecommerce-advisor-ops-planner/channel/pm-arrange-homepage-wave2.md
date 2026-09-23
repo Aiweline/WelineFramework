@@ -95,6 +95,6 @@
 ## 状态
 
 - [x] PM 已拆工单并写入本文件
-- [ ] 顾问 Wave-2 定档 brief
-- [ ] WO-HP-P1-04 / P2-05 / P2-06 / P2-07 施工 closed（P2-08 依赖 brief）
-- [ ] 测试 + 顾问复审 + PM 汇审
+- [x] 顾问 Wave-2 定档 brief
+- [x] WO-HP-P1-04 / P2-05 / P2-06 / P2-07 / P2-08 施工 closed
+- [x] 测试口径（各席自验）+ 顾问复审 + PM 汇审（`meetings/汇审-wave2.md` PASS）

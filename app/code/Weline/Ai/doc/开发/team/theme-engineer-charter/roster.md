@@ -8,7 +8,8 @@
 | 架构师 | 4a77ce6b-a76e-40eb-ac05-eb86f6f11da4 | closed | 升格方案+MCP落点 |
 | 文档 | pending | idle | 收口波对齐索引 |
 | 提示词优化 | pending | idle | 技能镜/指令落地后 |
+| 席位底线补钉 | parent | closed | 2026-09-23 硬规则+提示词；汇审见 meetings/汇审-席位底线补钉.md |
 
 slug: `theme-engineer-charter`  
-通道: `channel/align-freeze.md`  
-日期: 2026-09-22
+通道: `channel/align-freeze.md`；补钉 `channel/席位底线补钉.md`  
+日期: 2026-09-22；补钉 2026-09-23
