@@ -138,11 +138,14 @@ class WidgetTemplateParser
         // 因此不能简单用正则截取，改为手动扫描，按花括号计数来匹配结束位置。
 
         $offset = 0;
+        $positionPriority = 0;
         $len = strlen($content);
-        $pattern = '/@widget\.([a-z_]+)\s*\{/i';
+        $pattern = '/@widget\.([a-z_-]+)\s*\{/i';
 
         while ($offset < $len && preg_match($pattern, $content, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $key = $match[1][0];
+            $priority = $key === 'source-postion' ? 3 : ($key === 'source-position' ? 2 : 1);
+            if (in_array($key, ['source-postion', 'source-position', 'source_postion'], true)) { $key = 'source_position'; }
             $matchPos = $match[0][1];
 
             // 找到当前 key 后面的第一个 '{'
@@ -196,7 +199,14 @@ class WidgetTemplateParser
                 $valueForParse = $rawValue;
             }
 
-            $result[$key] = $this->parseValue($valueForParse);
+            if ($key !== 'source_position' || $priority >= $positionPriority) {
+                $result[$key] = $this->parseValue($valueForParse);
+                if ($key === 'source_position') {
+                    $positionPriority = $priority;
+                    $value = strtolower(trim((string)$result[$key]));
+                    $result[$key] = in_array($value, ['body', 'end-body'], true) ? 'body' : ($value === 'footer' ? 'footer' : 'head');
+                }
+            }
 
             // 更新 offset，继续向后搜索
             $offset = $i + 1;

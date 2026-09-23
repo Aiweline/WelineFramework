@@ -1,0 +1,16 @@
+.widget-header {
+    background-color: #fff;
+    border-bottom: 1px solid #dee2e6;
+}
+.widget-header .logo--asset img {
+    display: block;
+    max-height: 50px;
+    width: auto;
+}
+.widget-header .main-nav .nav {
+    margin-bottom: 0;
+}
+
+[data-widget-style-class="e07ee34edb085290"] {--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);}
+[data-widget-style-class="eb5de580cd4bcc92"] {max-height: 50px;}
+[data-widget-style-class="afae7267af8c5154"] {--w-mb:0;}

@@ -1,5 +1,7 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/**
+ * @widget.source {Weline_Widget::css/widgets/widget-header-default.css}
+ * @widget.layout_source {Weline_Widget::css/widgets/widget-header-default.css} @var \Weline\Framework\View\Template $this */
 
 use Weline\Theme\Helper\LegacyMediaUrl;
 
@@ -11,14 +13,14 @@ $navItems = $this->getData('nav_items') ?? [];
 ?>
 <header class="widget-header widget-header-default">
     <div class="w-container">
-        <div class="w-grid" data-align="center" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+        <div class="w-grid" data-align="center" data-widget-style-class="e07ee34edb085290">
             <div>
                 <?php if ($logoFileHtml !== ''): ?>
                     <span class="logo logo--asset"><?= $logoFileHtml ?></span>
                 <?php elseif ($logo !== ''): ?>
-                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= htmlspecialchars($title) ?>" class="logo" style="max-height: 50px;">
+                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= htmlspecialchars($title) ?>" class="logo" data-widget-style-class="eb5de580cd4bcc92">
                 <?php else: ?>
-                    <h4 style="--w-mb:0;"><?= htmlspecialchars($title) ?></h4>
+                    <h4 data-widget-style-class="afae7267af8c5154"><?= htmlspecialchars($title) ?></h4>
                 <?php endif; ?>
             </div>
             <div>
@@ -49,17 +51,3 @@ $navItems = $this->getData('nav_items') ?? [];
         </div>
     </div>
 </header>
-<style>
-.widget-header {
-    background-color: #fff;
-    border-bottom: 1px solid #dee2e6;
-}
-.widget-header .logo--asset img {
-    display: block;
-    max-height: 50px;
-    width: auto;
-}
-.widget-header .main-nav .nav {
-    margin-bottom: 0;
-}
-</style>

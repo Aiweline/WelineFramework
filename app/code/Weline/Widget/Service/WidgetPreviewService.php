@@ -35,11 +35,12 @@ class WidgetPreviewService
         }
         $finalConfig = $this->mergeWithParamDefaults($widget, $config);
         $finalConfig['preview_mode'] = true;
+        $assets = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class)->render($widget, $finalConfig);
         $templateContent = (string)($widget['template_content'] ?? '');
         if ($templateContent !== '') {
             try {
                 $renderer = $this->runtimeTemplateRenderer ?? ObjectManager::getInstance(WidgetRuntimeTemplateRenderer::class);
-                return $this->sanitizePreviewHtml($renderer->renderContent($templateContent, $finalConfig));
+                return $this->finishPreview($renderer->renderContent($templateContent, $finalConfig), $assets, $area);
             } catch (\Throwable $e) {
                 return '<div class="widget-preview-error">' . htmlspecialchars($e->getMessage()) . '</div>';
             }
@@ -55,7 +56,7 @@ class WidgetPreviewService
             // WLS 下 Template 单例 _data 会跨请求残留，渲染前清空，避免上一请求（如社媒）的数据污染当前部件预览
             $templateObj->unsetData();
             $html = $templateObj->fetchHtml($template, $finalConfig);
-            return $this->sanitizePreviewHtml(is_string($html) ? $html : '');
+            return $this->finishPreview(is_string($html) ? $html : '', $assets, $area);
         } catch (\Throwable $e) {
             return '<div class="widget-preview-error">' . htmlspecialchars($e->getMessage()) . '</div>';
         }
@@ -110,6 +111,16 @@ class WidgetPreviewService
     /**
      * 预览用 HTML 清理：deny-by-default，仅保留安全展示所需标签与属性。
      */
+    private function finishPreview(string $html, string $assets, string $area): string
+    {
+        $renderer = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class);
+        $placement = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetHtmlPlacement::class);
+        $options = ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceConfig::class)->resolve(null, $area);
+        $options['_area'] = $area;
+        $fragment = $placement->optimizeFragment($renderer->wrap($html, $assets), $options);
+        return $this->sanitizePreviewHtml($fragment) . $renderer->descriptor($fragment);
+    }
+
     public function sanitizePreviewHtml(string $html): string
     {
         if (trim($html) === '') {
@@ -132,7 +143,7 @@ class WidgetPreviewService
                 'header', 'hr', 'i', 'iframe', 'img', 'input', 'ins', 'label', 'legend', 'li', 'main', 'mark',
                 'nav', 'ol', 'option', 'p', 'picture', 'pre', 'progress', 's', 'section', 'select',
                 'small', 'source', 'span', 'strong', 'style', 'sub', 'summary', 'sup', 'table', 'tbody', 'td',
-                'textarea', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'video',
+                'template', 'textarea', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'video',
             ];
             $allowedAttr = [
                 'abbr', 'accept', 'action', 'allow', 'allowfullscreen', 'alt', 'aria-label', 'aria-labelledby', 'aria-describedby',
