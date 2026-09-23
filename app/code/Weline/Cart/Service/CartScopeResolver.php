@@ -50,7 +50,7 @@ final class CartScopeResolver implements CartScopeResolverInterface
         if (array_intersect_key($params, array_flip($explicitScopeKeys)) === []) {
             $currentScope = $this->trustedRequestScope();
             if ($currentScope instanceof ScopeIdentity && !$currentScope->isGlobal()) {
-                return $currentScope;
+                return $this->normalizeCartScope($currentScope);
             }
         }
 
@@ -86,10 +86,10 @@ final class CartScopeResolver implements CartScopeResolverInterface
     {
         $trusted = $this->trustedRequestScope();
         if ($trusted === null || $trusted->isGlobal() || $trusted->equals($candidate)) {
-            return $candidate;
+            return $this->normalizeCartScope($candidate);
         }
         if ($this->canRefineWebsiteScope($candidate, $trusted)) {
-            return $trusted;
+            return $this->normalizeCartScope($trusted);
         }
 
         throw new CartConflictException(
@@ -109,6 +109,10 @@ final class CartScopeResolver implements CartScopeResolverInterface
      * Website/global scope. Its execution context nevertheless carries the
      * already signed and gateway-revalidated Channel binding; Cart must use
      * that binding instead of silently creating a different Website cart.
+     *
+     * When Scope-kernel rollout is off (no worker binding) and RequestContext
+     * stays at Website projection, Cart still must not key rows under
+     * `website|…` — storefront carts are persisted at Channel scope.
      */
     private function trustedRequestScope(): ?ScopeIdentity
     {
@@ -123,18 +127,18 @@ final class CartScopeResolver implements CartScopeResolverInterface
             && $binding->tokenExpiresAt > \time()) {
             $bound = $binding->scope;
             if (!$current instanceof ScopeIdentity || $current->isGlobal() || $current->equals($bound)) {
-                return $bound;
+                return $this->normalizeCartScope($bound);
             }
 
             if ($this->canRefineWebsiteScope($current, $bound)) {
-                return $bound;
+                return $this->normalizeCartScope($bound);
             }
         }
 
         if ($current instanceof ScopeIdentity
             && !$current->isGlobal()
             && $current->scopeKind !== ScopeIdentity::KIND_WEBSITE) {
-            return $current;
+            return $this->normalizeCartScope($current);
         }
 
         $default = $this->serverResolvedDefaultScope();
@@ -143,10 +147,40 @@ final class CartScopeResolver implements CartScopeResolverInterface
                 || $current->isGlobal()
                 || $current->equals($default)
                 || $this->canRefineWebsiteScope($current, $default))) {
+            return $this->normalizeCartScope($default);
+        }
+
+        return $current instanceof ScopeIdentity ? $this->normalizeCartScope($current) : null;
+    }
+
+    /**
+     * Commerce cart rows are Channel-keyed. A Website RequestContext projection
+     * (common on QueryBin while Scope-kernel rollout is off / installer miss)
+     * must refine to the website's default Channel instead of opening an empty
+     * parallel `website|…` cart namespace.
+     */
+    private function normalizeCartScope(ScopeIdentity $scope): ScopeIdentity
+    {
+        if ($scope->isGlobal() || $scope->scopeKind !== ScopeIdentity::KIND_WEBSITE) {
+            return $scope;
+        }
+
+        $default = $this->serverResolvedDefaultScope();
+        if ($default instanceof ScopeIdentity
+            && !$default->isGlobal()
+            && $this->canRefineWebsiteScope($scope, $default)) {
             return $default;
         }
 
-        return $current;
+        $websiteCode = \trim((string)($scope->websiteCode ?? '')) ?: 'default';
+
+        return ScopeIdentity::channel(
+            (int)$scope->websiteId,
+            $websiteCode,
+            'default',
+            'default',
+            ScopeIdentity::MODE_NORMAL,
+        );
     }
 
     private function canRefineWebsiteScope(ScopeIdentity $current, ScopeIdentity $candidate): bool
