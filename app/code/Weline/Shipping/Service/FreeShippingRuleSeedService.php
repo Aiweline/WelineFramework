@@ -13,7 +13,8 @@ use Weline\Shipping\Model\FreeShippingRule;
 final class FreeShippingRuleSeedService
 {
     /**
-     * 默认仅启用 SEED_FREE_99，避免多档同时启用时低门槛覆盖高门槛。
+     * Default only SEED_FREE_49 active (homepage Wave-1/2 ops lock: free shipping at $49).
+     * Avoid enabling multiple amount tiers so a lower threshold always wins.
      *
      * @var list<array{
      *   rule_code:string,
@@ -31,7 +32,7 @@ final class FreeShippingRuleSeedService
             'condition_type' => FreeShippingRule::CONDITION_ORDER_AMOUNT,
             'min_order_amount' => 49.00,
             'priority' => 10,
-            'is_active' => 0,
+            'is_active' => 1,
         ],
         [
             'rule_code' => 'SEED_FREE_99',
@@ -39,7 +40,7 @@ final class FreeShippingRuleSeedService
             'condition_type' => FreeShippingRule::CONDITION_ORDER_AMOUNT,
             'min_order_amount' => 99.00,
             'priority' => 20,
-            'is_active' => 1,
+            'is_active' => 0,
         ],
         [
             'rule_code' => 'SEED_FREE_149',
@@ -146,6 +147,40 @@ final class FreeShippingRuleSeedService
         }
 
         return $n;
+    }
+
+    /**
+     * Homepage Wave-1/2 ops: lock active amount-tier seed to SEED_FREE_49 ($49).
+     * Deactivates other SEED_FREE_* amount seeds on the same scope; never deletes.
+     */
+    public function alignHomepageWave2Threshold49(
+        string $scopeType = FreeShippingRule::SCOPE_WEBSITE,
+        int $scopeId = 0,
+    ): int {
+        $this->seedDefaults($scopeType, $scopeId);
+        $scopeType = strtolower(trim($scopeType)) ?: FreeShippingRule::SCOPE_WEBSITE;
+        $scopeId = max(0, $scopeId);
+        $now = date('Y-m-d H:i:s');
+        $changed = 0;
+
+        foreach (self::DEFAULT_SEEDS as $seed) {
+            $code = strtoupper(trim((string)$seed['rule_code']));
+            $row = $this->findByScopeCode($scopeType, $scopeId, $code);
+            if (!$row instanceof FreeShippingRule || (int)$row->getId() <= 0) {
+                continue;
+            }
+            $wantActive = $code === 'SEED_FREE_49' ? 1 : 0;
+            $current = (int)$row->getData(FreeShippingRule::schema_fields_IS_ACTIVE) ? 1 : 0;
+            if ($current === $wantActive) {
+                continue;
+            }
+            $row->setData(FreeShippingRule::schema_fields_IS_ACTIVE, $wantActive);
+            $row->setData(FreeShippingRule::schema_fields_UPDATED_AT, $now);
+            $row->save();
+            ++$changed;
+        }
+
+        return $changed;
     }
 
     public function findSeedId(string $ruleCode, string $scopeType = FreeShippingRule::SCOPE_WEBSITE, int $scopeId = 0): int

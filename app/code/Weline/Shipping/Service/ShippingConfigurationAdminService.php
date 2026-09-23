@@ -498,6 +498,7 @@ final class ShippingConfigurationAdminService
                 RateTemplate::schema_fields_SCOPE_ID => $scope['scope_id'],
             ]);
         }
+        $data['mixed_config'] ??= $model->getMixedConfig();
         $model->setData($this->rateTemplatePayload($data, $scope, $name, $code, $type))->save();
         return $model;
     }
@@ -537,6 +538,9 @@ final class ShippingConfigurationAdminService
         /** @var CurrencyRateService $rates */
         $rates = $this->objectManager->getInstance(CurrencyRateService::class);
         $baseCurrency = strtoupper(trim($rates->getBaseCurrency())) ?: 'CNY';
+        if (isset($data['mixed_config']['public_tariff']) && ($baseCurrency !== 'CNY' || ($data['currency_code'] ?? 'CNY') !== 'CNY')) {
+            throw new \InvalidArgumentException('public_tariff_source_currency_mismatch');
+        }
         $maxWeight = isset($data['max_weight_kg']) && $data['max_weight_kg'] !== ''
             ? max(0, (float)$data['max_weight_kg'])
             : null;
@@ -570,6 +574,9 @@ final class ShippingConfigurationAdminService
             RateTemplate::schema_fields_VOLUME_RATE => isset($data['volume_rate']) ? max(0, (float)$data['volume_rate']) : null,
             RateTemplate::schema_fields_QUANTITY_RATE => isset($data['quantity_rate']) ? max(0, (float)$data['quantity_rate']) : null,
             RateTemplate::schema_fields_RATE_BRACKETS => $bracketsJson,
+            RateTemplate::schema_fields_MIXED_CONFIG => isset($data['mixed_config'])
+                ? (is_array($data['mixed_config']) ? json_encode($data['mixed_config'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE) : $data['mixed_config'])
+                : null,
             RateTemplate::schema_fields_MAX_WEIGHT_KG => $maxWeight,
             RateTemplate::schema_fields_CURRENCY_CODE => $baseCurrency,
             RateTemplate::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,

@@ -31,6 +31,7 @@ use Weline\Shipping\Service\ShippingProviderManager;
 use Weline\Shipping\Service\SystemEmbargoAdminService;
 
 /**
+ * 2.9.30：默认站公开标快安装/升级一次性迁移；保留人工配置，不再回写满49免邮。
  * 2.9.7：全球可达市场种子扩至 ~243 国（中国发运经济小包价）+ 目的地/承运商覆盖增量并入。
  * 2.9.1：DeliveryAddress purpose_checkout / purpose_receiving；存量双标回填。
  * 2.9.0：第4章履约周边（incoterm + 退货模板/策略 + 同单分批发策略）。
@@ -92,18 +93,29 @@ final class Upgrade implements UpgradeInterface
             $model->setup($runner, $context);
         }
 
-        $this->migrateDeliveryAddressPurposeFlags();
-        $this->dropLegacyZoneSchema();
-        $this->migrateConfigScopeColumns();
-        $this->seedCarrierCoverageDefaults();
-        $this->seedRegionLocals();
-        $this->seedSystemEmbargo();
-        $this->seedEmbargoReasons();
-        $this->seedDefaultLanes();
-        $this->seedFreeShippingRules();
-        $this->seedFreeShippingConditionTypes();
-        $this->seedCountrySortOrders();
-        $this->seedProviderCodesAndDefaultApiCarriers();
+        $from = $context->getFromSetupVersion();
+        if (version_compare($from, '2.9.29', '<')) {
+            $this->migrateDeliveryAddressPurposeFlags();
+            $this->dropLegacyZoneSchema();
+            $this->migrateConfigScopeColumns();
+            $this->seedCarrierCoverageDefaults();
+            $this->seedRegionLocals();
+            $this->seedEmbargoReasons();
+            $this->seedFreeShippingConditionTypes();
+            $this->seedCountrySortOrders();
+            $this->seedProviderCodesAndDefaultApiCarriers();
+        }
+        if (version_compare($from, '2.9.30', '<')) {
+            $this->seedSystemEmbargo();
+            $this->seedFreeShippingRules();
+            $this->seedDefaultLanes();
+            $seeder = ObjectManager::getInstance(FreeShippingRuleSeedService::class);
+            $admin = ObjectManager::getInstance(\Weline\Shipping\Service\ShippingConfigurationAdminService::class);
+            foreach (FreeShippingRuleSeedService::canonicalCodes() as $code) {
+                $id = $seeder->findSeedId($code, 'website', 0);
+                if ($id > 0) { $admin->setFreeShippingRuleActive($id, false); }
+            }
+        }
     }
 
     /**
@@ -214,13 +226,7 @@ final class Upgrade implements UpgradeInterface
 
     private function seedFreeShippingRules(): void
     {
-        try {
-            /** @var FreeShippingRuleSeedService $seeder */
-            $seeder = ObjectManager::getInstance(FreeShippingRuleSeedService::class);
-            $seeder->seedDefaults(\Weline\Shipping\Model\FreeShippingRule::SCOPE_WEBSITE, 0);
-        } catch (\Throwable) {
-            // Seed must not block module upgrade.
-        }
+        ObjectManager::getInstance(FreeShippingRuleSeedService::class)->seedDefaults('website', 0);
     }
 
     private function seedEmbargoReasons(): void
@@ -238,11 +244,11 @@ final class Upgrade implements UpgradeInterface
     {
         $path = BP . 'app/code/Weline/Shipping/data/system-embargo/countries.tsv';
         if (!is_file($path)) {
-            return;
+            throw new \RuntimeException('System embargo seed source missing.');
         }
         $raw = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if (!is_array($raw)) {
-            return;
+            throw new \RuntimeException('System embargo seed source unreadable.');
         }
         $rows = [];
         foreach ($raw as $i => $line) {
@@ -258,14 +264,16 @@ final class Upgrade implements UpgradeInterface
             }
             $rows[] = ['country_code' => $cc, 'reason_code' => $reason !== '' ? $reason : 'no_commerce'];
         }
-        try {
-            /** @var SystemEmbargoAdminService $admin */
-            $admin = ObjectManager::getInstance(SystemEmbargoAdminService::class);
-            $admin->seedFromRows($rows);
-            // seedFromRows 内已 purge；再显式一次以防仅有旧伪种子、TSV 未变时漏清。
-            $admin->purgeNonCanonicalSeeds(array_column($rows, 'country_code'));
-        } catch (\Throwable) {
-            // Seed must not block module upgrade.
+        /** Existing system rules, including merchant-deactivated ones, are not reset. */
+        $admin = ObjectManager::getInstance(SystemEmbargoAdminService::class);
+        $existing = [];
+        foreach ($admin->listAll() as $row) {
+            if (($row['region_type'] ?? '') === 'country') { $existing[(string)$row['country_code']] = true; }
+        }
+        foreach ($rows as $row) {
+            if (!isset($existing[$row['country_code']])) {
+                $admin->addRegion('country', $row['country_code'], 0, '', $row['reason_code'], EmbargoRegion::ORIGIN_SEED);
+            }
         }
     }
 
@@ -403,12 +411,6 @@ final class Upgrade implements UpgradeInterface
 
     private function seedDefaultLanes(): void
     {
-        try {
-            /** @var DefaultShippingLaneSeedService $seeder */
-            $seeder = ObjectManager::getInstance(DefaultShippingLaneSeedService::class);
-            $seeder->seedDefaultWebsite(0);
-        } catch (\Throwable) {
-            // Seed must not block module upgrade.
-        }
+        ObjectManager::getInstance(DefaultShippingLaneSeedService::class)->seedDefaultWebsite(0);
     }
 }
