@@ -146,7 +146,7 @@ final class FaqSitemapUrlProvider extends AbstractSitemapUrlProvider
 
     private function pageProviders(): FaqPageProviderRegistry
     {
-        return $this->pageProviders ??= ObjectManager::getInstance(FaqPageProviderRegistry::class);
+        return $this->pageProviders ?? ObjectManager::getInstance(FaqPageProviderRegistry::class);
     }
 
     private function cmsAvailable(): bool
