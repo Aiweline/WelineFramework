@@ -265,6 +265,13 @@
     legal: "legal",
     privacy: "legal",
     terms: "legal",
+    policy: "legal",
+    accessibility: "legal",
+    cookie: "legal",
+    shipping: "legal",
+    refund: "legal",
+    disclaimer: "legal",
+    term_condition: "legal",
     home: "home",
     homepage: "home",
     index: "home",
@@ -883,6 +890,12 @@
 
   function normalizeSeoType(value) {
     return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  }
+
+  /** page-type 事实别名 → inspector 规则键（policy/accessibility → legal） */
+  function aliasSeoType(value) {
+    var normalized = normalizeSeoType(value);
+    return PAGE_JSONLD_RULE_ALIASES[normalized] || normalized;
   }
 
   function normalizeLangFromHreflang(code) {
@@ -3570,6 +3583,251 @@
   }
 
   var latestEeatStrictReport = null;
+  var latestAccessibilityCompletenessReport = null;
+
+  /**
+   * 无障碍声明（/policy/accessibility）完整度：只读 DOM/head/JSON-LD，不写页内 SEO。
+   * 任意页可查「导航是否可发现」；声明页额外查 legal 管线事实。
+   */
+  function a11yCollectStatementAnchors() {
+    return Array.from(document.querySelectorAll("a[href]")).filter(function (a) {
+      if (isIgnoredSeoAuditNode(a)) return false;
+      var href = String(a.getAttribute("href") || "").toLowerCase();
+      var text = String(a.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+      if (/\/policy\/accessibility(?:\/|$|\?|#)/.test(href)) return true;
+      return /无障碍|accessibility\s*statement|accessibility\s*policy|barrierefreiheit|accessibilit/.test(text + " " + href);
+    });
+  }
+
+  function a11yIsOnStatementPage() {
+    try {
+      var path = String((window.location && window.location.pathname) || "").toLowerCase();
+      return /\/policy\/accessibility(?:\/|$)/.test(path);
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function a11yStatementPageUrl() {
+    try {
+      return new URL("/policy/accessibility", window.location.href).href;
+    } catch (_e2) {
+      return "/policy/accessibility";
+    }
+  }
+
+  function auditAccessibilityStatementCompleteness(add) {
+    var onPage = a11yIsOnStatementPage();
+    var anchors = a11yCollectStatementAnchors();
+    var navOk = anchors.length > 0;
+    add(
+      navOk ? "pass" : "warn",
+      "无障碍声明入口",
+      navOk
+        ? ("导航/页脚已发现声明链接 ×" + anchors.length + "（示例：" + (anchors[0].getAttribute("href") || "") + "）。")
+        : "全页未见 /policy/accessibility 或「无障碍声明」链。请确认 Theme 页脚/政策菜单已启用该项。",
+      "accessibility"
+    );
+
+    if (!onPage) {
+      add(
+        "info",
+        "声明页专项检测",
+        "当前不在声明页。打开「无障碍」Tab 内链接前往声明页后，可复查 content-category / legal 管线。",
+        "accessibility"
+      );
+      return;
+    }
+
+    var pageType = String(metaContent('meta[name="page-type"]') || "").trim().toLowerCase();
+    var contentCategory = String(metaContent('meta[name="content-category"]') || "").trim().toLowerCase();
+    var robots = String(metaContent('meta[name="robots"]') || "").trim().toLowerCase();
+    var seoType = aliasSeoType(inferSeoTypeFromPage());
+    if (seoType !== "legal") {
+      var fromUrl = inferSeoTypeFromUrlPath(window.location.href);
+      if (fromUrl === "legal") seoType = "legal";
+    }
+    var jsonTypes = extractJsonLdTypes();
+    var hasMain = Boolean(document.querySelector("main, [role='main'], #main-content"));
+    var hasSkip = Boolean(
+      document.querySelector(
+        'a[href="#main-content"], a[href*="#main-content"], .skip-to-content, [data-skip-to-content]'
+      )
+    );
+    var h1 = getMainH1Text();
+    var h2Count = Array.from(document.querySelectorAll("main h2, article h2, .amazon-policy__article h2")).filter(function (n) {
+      return !isIgnoredSeoAuditNode(n);
+    }).length;
+    var hasWebPage = jsonLdTypesInclude(jsonTypes, "WebPage");
+    var hasBreadcrumb = jsonLdTypesInclude(jsonTypes, "BreadcrumbList");
+    var hasBadType = jsonLdTypesInclude(jsonTypes, "AccessibilityPage");
+    var robotsOk = !robots || !/noindex|none/i.test(robots);
+
+    add(
+      pageType === "policy" ? "pass" : "warn",
+      "声明页 page-type 事实",
+      pageType === "policy"
+        ? "page-type=policy（Theme 事实层正确，未伪装成 legal）。"
+        : ("期望 page-type=policy，实际：" + (pageType || "missing") + "。"),
+      "accessibility"
+    );
+    add(
+      contentCategory === "legal" ? "pass" : "fail",
+      "声明页 content-category",
+      contentCategory === "legal"
+        ? "content-category=legal（Seo HeadRenderer 归一层）。"
+        : ("期望 content-category=legal，实际：" + (contentCategory || "missing") + "。须走 Seo 管线别名，禁止页内手写。"),
+      "accessibility"
+    );
+    add(
+      seoType === "legal" ? "pass" : "warn",
+      "Inspector 归类 legal",
+      seoType === "legal"
+        ? "当前页 seoType=legal（page-type 别名或 /policy URL 启发式）。"
+        : ("期望 seoType=legal，实际：" + (seoType || "unknown") + "。"),
+      "accessibility"
+    );
+    add(
+      robotsOk ? "pass" : "fail",
+      "声明页可索引",
+      robotsOk ? (robots ? ("robots=" + robots) : "未写 robots（Google 默认 index,follow）。") : ("阻断索引：" + robots),
+      "accessibility"
+    );
+    add(
+      hasMain ? "pass" : "warn",
+      "主内容地标",
+      hasMain ? "存在 main / #main-content。" : "缺少 main 地标，辅助技术难跳到正文。",
+      "accessibility"
+    );
+    add(
+      hasSkip ? "pass" : "tip",
+      "跳到主内容",
+      hasSkip ? "存在 Skip to main / #main-content 链。" : "建议提供「跳到主内容」链（非 SEO 硬门槛）。",
+      "accessibility"
+    );
+    add(
+      h1 ? "pass" : "warn",
+      "声明页 H1",
+      h1 ? ("H1：" + h1) : "缺少可见 H1。",
+      "accessibility"
+    );
+    add(
+      h2Count >= 3 ? "pass" : "tip",
+      "声明章节结构",
+      h2Count >= 3
+        ? ("正文区 H2 ×" + h2Count + "（承诺/范围/限制等章节可见）。")
+        : ("正文 H2 仅 " + h2Count + " 个；声明页通常应有多节。"),
+      "accessibility"
+    );
+    add(
+      hasWebPage && !hasBadType ? "pass" : "warn",
+      "声明页 JSON-LD 壳",
+      hasBadType
+        ? "禁止 AccessibilityPage；请保持 WebPage。"
+        : (hasWebPage ? "JSON-LD 含 WebPage。" : "缺少 WebPage（应由 Seo 组装，勿在 phtml 手写）。"),
+      "accessibility"
+    );
+    add(
+      hasBreadcrumb ? "pass" : "warn",
+      "声明页 BreadcrumbList",
+      hasBreadcrumb ? "JSON-LD 含 BreadcrumbList。" : "缺少 BreadcrumbList（Theme bag + Seo 组装）。",
+      "accessibility"
+    );
+  }
+
+  function buildAccessibilityCompletenessReport(checks) {
+    var items = (checks || []).filter(function (c) { return c && c.group === "accessibility"; });
+    var pass = items.filter(function (c) { return c.level === "pass"; }).length;
+    var fail = items.filter(function (c) { return c.level === "fail"; }).length;
+    var warn = items.filter(function (c) { return c.level === "warn"; }).length;
+    var tip = items.filter(function (c) { return c.level === "tip" || c.level === "info"; }).length;
+    var status = fail ? "fail" : warn ? "warn" : tip && pass === 0 ? "tip" : "pass";
+    var complete = fail === 0 && warn === 0;
+    return {
+      status: status,
+      complete: complete,
+      onStatementPage: a11yIsOnStatementPage(),
+      statementUrl: a11yStatementPageUrl(),
+      summary: { pass: pass, fail: fail, warn: warn, tip: tip, total: items.length },
+      items: items
+    };
+  }
+
+  function renderAccessibilityCompletenessSection(report) {
+    if (!report) return "";
+    var tone = report.complete ? "pass" : report.status === "fail" ? "fail" : report.status === "warn" ? "warn" : "tip";
+    var title = report.complete
+      ? "无障碍声明 · 完整"
+      : (report.status === "fail" ? "无障碍声明 · 不完整（有失败项）" : "无障碍声明 · 有缺口");
+    var gaps = (report.items || []).filter(function (c) { return c.level !== "pass"; });
+    var passes = (report.items || []).filter(function (c) { return c.level === "pass"; });
+    var listHtml = gaps.length
+      ? "<ul>" +
+        gaps
+          .map(function (c) {
+            return (
+              '<li class="weline-seo-panel__eeat-item weline-seo-panel__eeat-item--' +
+              escapeHtml(c.level) +
+              '"><span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+              escapeHtml(c.level === "tip" || c.level === "info" ? "tip" : c.level) +
+              '">' +
+              escapeHtml(formatCheckLevel(c.level)) +
+              "</span> " +
+              escapeHtml(c.label) +
+              (c.detail ? '<p class="weline-seo-panel__hint">' + escapeHtml(c.detail) + "</p>" : "") +
+              "</li>"
+            );
+          })
+          .join("") +
+        "</ul>"
+      : '<p class="weline-seo-panel__issue-ok">关键项均已通过。</p>';
+    var passSummary = passes.length
+      ? '<p class="weline-seo-panel__eeat-pass-summary">' +
+        escapeHtml("已通过 " + passes.length + " 项：" + passes.map(function (c) { return c.label; }).join(" · ")) +
+        "</p>"
+      : "";
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__section--a11y" data-weline-a11y-completeness>' +
+      "<h3>" +
+      escapeHtml(title) +
+      ' <span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+      escapeHtml(tone === "tip" ? "tip" : tone) +
+      '">' +
+      escapeHtml(report.complete ? "完整" : formatCheckLevel(report.status)) +
+      "</span></h3>" +
+      '<p class="weline-seo-panel__hint">检查 Theme 声明入口 + Seo 管线（page-type 事实 / content-category=legal / legal 归类）。<b>禁止</b>在政策 phtml 手写 meta/JSON-LD。</p>' +
+      '<p class="weline-seo-panel__hint">通过 ' +
+      escapeHtml(String((report.summary && report.summary.pass) || 0)) +
+      " · 失败 " +
+      escapeHtml(String((report.summary && report.summary.fail) || 0)) +
+      " · 警告 " +
+      escapeHtml(String((report.summary && report.summary.warn) || 0)) +
+      " · 提示 " +
+      escapeHtml(String((report.summary && report.summary.tip) || 0)) +
+      "</p>" +
+      '<p class="weline-seo-panel__a11y-open"><a class="weline-seo-panel__publish-btn" href="' +
+      escapeHtml(report.statementUrl || "/policy/accessibility") +
+      '">打开无障碍声明页</a>' +
+      (report.onStatementPage ? " <span class=\"weline-seo-panel__hint\">（当前已在声明页）</span>" : "") +
+      "</p>" +
+      listHtml +
+      passSummary +
+      "</section>"
+    );
+  }
+
+  function renderAccessibilityTab(report) {
+    var a11yReport =
+      latestAccessibilityCompletenessReport ||
+      buildAccessibilityCompletenessReport((report && report.checks) || []);
+    return (
+      renderAccessibilityCompletenessSection(a11yReport) +
+      '<section class="weline-seo-panel__section"><h3>说明</h3>' +
+      '<p class="weline-seo-panel__hint">「完整」= 无 fail/warn：站点可发现声明入口；在声明页上 Seo 输出 content-category=legal、page-type=policy、seoType=legal，且 JSON-LD 为 WebPage+BreadcrumbList。</p>' +
+      '<p class="weline-seo-panel__hint">页内无障碍体验（对比度/键盘陷阱等）不在本 Tab 全量 WCAG 扫描范围内；本 Tab 聚焦<strong>无障碍声明页 SEO/发现完整度</strong>。</p>' +
+      "</section>"
+    );
+  }
 
   function renderEeatStrictSection(report) {
     if (!report) return "";
@@ -4222,7 +4480,7 @@
     var siteDomain = inferSiteDomain();
     var lang = inferLang();
     var slug = inferSlug();
-    var seoType = normalizeSeoType(inferSeoTypeFromPage());
+    var seoType = aliasSeoType(inferSeoTypeFromPage());
     var defaultLang = inferDefaultLanguage();
     var title = (document.title || "").trim();
     var description = metaContent('meta[name="description"]');
@@ -4400,10 +4658,14 @@
       add
     );
 
+    auditAccessibilityStatementCompleteness(add);
+
     var seoSummary = summarizeChecks(checks);
     latestEeatStrictReport = buildEeatStrictReport(checks);
+    latestAccessibilityCompletenessReport = buildAccessibilityCompletenessReport(checks);
     try {
       window.__WELINE_PANEL_SEO_EEAT_REPORT__ = latestEeatStrictReport;
+      window.__WELINE_PANEL_SEO_A11Y_REPORT__ = latestAccessibilityCompletenessReport;
     } catch (_e) {}
 
     var result = {
@@ -5830,6 +6092,7 @@
     return (
       '<div class="weline-seo-panel__tabs" role="tablist" aria-label="Inspector sections">' +
       '<button type="button" class="weline-seo-panel__tab is-active" data-weline-tab="seo" role="tab" aria-selected="true">SEO 校验</button>' +
+      '<button type="button" class="weline-seo-panel__tab" data-weline-tab="a11y" role="tab" aria-selected="false">无障碍</button>' +
       '<button type="button" class="weline-seo-panel__tab" data-weline-tab="engines" role="tab" aria-selected="false">搜索平台</button>' +
       '<button type="button" class="weline-seo-panel__tab" data-weline-tab="crawl" role="tab" aria-selected="false">全站审计</button>' +
       '<button type="button" class="weline-seo-panel__tab" data-weline-tab="page" role="tab" aria-selected="false">当前页检测</button>' +
@@ -6129,6 +6392,8 @@
     if (/\/review(?:\/|$)/.test(path)) return "review";
     if (/\/contact(?:\/|$)/.test(path)) return "contact";
     if (/\/about(?:\/|$)/.test(path)) return "about";
+    // 政策壳 /policy、/policy/* → legal（与 PAGE_JSONLD_RULE_ALIASES.policy 一致）
+    if (/\/policy(?:\/|$)/.test(path)) return "legal";
     if (/\/categor|\/collection|\/products(?:\/|$)|\/search(?:\/|$)|\/tag(?:\/|$)|\/best-sellers|\/new-arrivals/.test(path)) {
       return "collection";
     }
@@ -7514,8 +7779,25 @@
   }
 
   function renderSeoTab(report) {
+    var a11yTeaser =
+      latestAccessibilityCompletenessReport ||
+      buildAccessibilityCompletenessReport((report && report.checks) || []);
+    var teaserTone = a11yTeaser.complete ? "pass" : a11yTeaser.status === "fail" ? "fail" : "warn";
     return (
       renderSummary(report.seoSummary) +
+      '<section class="weline-seo-panel__section weline-seo-panel__section--a11y-teaser">' +
+      "<h3>无障碍声明完整度</h3>" +
+      '<p class="weline-seo-panel__hint">快捷查看：' +
+      '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+      escapeHtml(teaserTone === "tip" ? "tip" : teaserTone) +
+      '">' +
+      escapeHtml(a11yTeaser.complete ? "完整" : formatCheckLevel(a11yTeaser.status)) +
+      "</span> · 通过 " +
+      escapeHtml(String((a11yTeaser.summary && a11yTeaser.summary.pass) || 0)) +
+      " / 共 " +
+      escapeHtml(String((a11yTeaser.summary && a11yTeaser.summary.total) || 0)) +
+      ' · <button type="button" class="weline-seo-panel__btn" data-weline-tab="a11y">打开「无障碍」Tab</button></p>' +
+      "</section>" +
       renderIssueAuditBlock(report) +
       '<section class="weline-seo-panel__section"><h3>页面快照</h3><dl class="weline-seo-panel__grid">' +
       '<div class="weline-seo-panel__field"><dt>Title</dt><dd>' +
@@ -7633,7 +7915,7 @@
   var SEO_PANEL_STATE_KEY = "weline-seo-panel-state-v1";
 
   function normalizePanelTab(tabId) {
-    return ["seo", "engines", "crawl", "page", "rich"].indexOf(tabId) !== -1 ? tabId : "seo";
+    return ["seo", "a11y", "engines", "crawl", "page", "rich"].indexOf(tabId) !== -1 ? tabId : "seo";
   }
 
   function readPanelState() {
@@ -8281,6 +8563,9 @@
       (options.externalToolbar ? "" : renderPanelToolbar(report)) +
       '<div class="weline-seo-panel__tab-panel is-active" data-weline-panel="seo" role="tabpanel">' +
       renderSeoTab(report) +
+      "</div>" +
+      '<div class="weline-seo-panel__tab-panel" data-weline-panel="a11y" role="tabpanel" hidden>' +
+      renderAccessibilityTab(report) +
       "</div>" +
       '<div class="weline-seo-panel__tab-panel" data-weline-panel="engines" role="tabpanel" hidden>' +
       renderEngineTab(report) +

@@ -220,15 +220,14 @@ class Account extends BackendController
                 ]);
             }
 
-            $enableCronPushUrls = (int)($data['enable_cron_push_urls'] ?? 0);
-            $enableCronSitemap = (int)($data['enable_cron_sitemap'] ?? 0);
             $platformCapability = $this->getPlatformCapabilityService()->getCapability($platform) ?? [];
-            if (empty($platformCapability['supports_url_push'])) {
-                $enableCronPushUrls = 0;
-            }
-            if (empty($platformCapability['supports_sitemap_submit'])) {
-                $enableCronSitemap = 0;
-            }
+            // 平台支持时默认开启；表单 hidden+checkbox 会显式传 0/1，省略字段时按默认开
+            $enableCronPushUrls = !empty($platformCapability['supports_url_push'])
+                ? (int)(array_key_exists('enable_cron_push_urls', $data) ? !empty($data['enable_cron_push_urls']) : 1)
+                : 0;
+            $enableCronSitemap = !empty($platformCapability['supports_sitemap_submit'])
+                ? (int)(array_key_exists('enable_cron_sitemap', $data) ? !empty($data['enable_cron_sitemap']) : 1)
+                : 0;
 
             $platformDisplayName = trim((string)($platformCapability['name'] ?? $platform));
             $expectedPrefix = $platformDisplayName !== '' ? ($platformDisplayName . '-') : '';

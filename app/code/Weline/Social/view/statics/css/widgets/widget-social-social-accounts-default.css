@@ -1,0 +1,87 @@
+.wc-theme_widget_social_accounts {
+    display: block;
+    color: var(--weline-theme-text);
+}
+
+.wc-theme_widget_social_accounts .social-title {
+    margin: 0 0 var(--weline-space-3, 12px);
+    font-size: var(--weline-font-size-base, 16px);
+    line-height: 1.3;
+    font-weight: 600;
+    color: var(--weline-theme-text);
+}
+
+.wc-theme_widget_social_accounts .social-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-3, 10px);
+}
+
+.wc-theme_widget_social_accounts.layout-vertical .social-list {
+    align-items: flex-start;
+    flex-direction: column;
+}
+
+.wc-theme_widget_social_accounts .social-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-2, 8px);
+    color: inherit;
+    text-decoration: none;
+    transition: opacity var(--weline-theme-transition-base, 0.2s ease);
+}
+
+.wc-theme_widget_social_accounts .social-link:hover {
+    opacity: 0.85;
+}
+
+.wc-theme_widget_social_accounts .social-icon {
+    width: var(--wc-social-size, 38px);
+    height: var(--wc-social-size, 38px);
+    display: inline-grid;
+    place-items: center;
+    border-radius: var(--weline-radius-md, 8px);
+}
+
+.wc-theme_widget_social_accounts .social-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.wc-theme_widget_social_accounts.style-mono .social-icon svg rect {
+    fill: var(--weline-theme-text);
+}
+
+.wc-theme_widget_social_accounts.style-outline .social-icon {
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+        color-mix(in srgb, var(--weline-theme-text-muted) 45%, transparent);
+    background: transparent;
+}
+
+.wc-theme_widget_social_accounts.style-outline .social-icon svg rect {
+    fill: transparent;
+}
+
+.wc-theme_widget_social_accounts.style-outline .social-icon svg text {
+    fill: var(--wc-social-brand, var(--weline-theme-text));
+}
+
+.wc-theme_widget_social_accounts .social-label {
+    font-size: var(--weline-font-size-sm, 14px);
+    line-height: 1.3;
+    white-space: nowrap;
+    color: var(--weline-theme-text-muted);
+}
+
+.wc-theme_widget_social_accounts .social-placeholder {
+    font-size: var(--weline-font-size-sm, 13px);
+    color: var(--weline-theme-text-muted);
+    font-style: italic;
+}
+
+.widget-preview-canvas .wc-theme_widget_social_accounts,
+.wc-theme_widget_social_accounts.is-preview {
+    min-height: 40px;
+}

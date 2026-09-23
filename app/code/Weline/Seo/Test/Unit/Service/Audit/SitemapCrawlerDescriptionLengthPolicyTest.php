@@ -67,7 +67,7 @@ final class SitemapCrawlerDescriptionLengthPolicyTest extends TestCase
         $pageIssueIds = [];
         $facts = [
             'url' => 'https://example.test/',
-            'title' => '长安汉服 · Hanfu Atelier | 水墨汉服商城首页',
+            'title' => '长安汉服 | 水墨汉服商城首页',
             'description' => $description,
         ];
         $args = [$facts, &$issues, &$pageIssueIds];
