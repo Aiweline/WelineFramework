@@ -51,8 +51,8 @@ class Auth extends FrontendRestController
      * - Content-Type: application/json
      * Body:
      * {
-     *   "username": "admin",
-     *   "password": "password123",
+     *   "username": "weline",
+     *   "password": "weline",
      *   "expire_time": 604800
      * }
      * Response:
@@ -65,8 +65,8 @@ class Auth extends FrontendRestController
      *     "expire_time": 1735689600,
      *     "user": {
      *       "id": 1,
-     *       "username": "admin",
-     *       "email": "admin@example.com"
+     *       "username": "weline",
+     *       "email": "weline@local.test"
      *     }
      *   }
      * }

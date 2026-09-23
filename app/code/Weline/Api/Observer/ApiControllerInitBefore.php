@@ -277,6 +277,10 @@ class ApiControllerInitBefore implements ObserverInterface
                     return;
                 }
 
+                if ($this->bindBackendAdminActor($token, $event)) {
+                    return;
+                }
+
                 $this->returnError(401, __('Token is invalid or expired.'));
                 return;
             }
@@ -559,6 +563,62 @@ class ApiControllerInitBefore implements ObserverInterface
         $event->setData('user', $actor);
         $event->setData('role', null);
         $event->setData('access_sources', $context->getAccessSources());
+        return true;
+    }
+
+    /**
+     * Backend Auth login tokens (BackendTokenService) — used by Admin REST demos.
+     */
+    private function bindBackendAdminActor(string $token, Event &$event): bool
+    {
+        if ($token === '') {
+            return false;
+        }
+
+        try {
+            $provider = $this->runtimeProviders->resolve(BackendApiAuthenticationInterface::class);
+        } catch (\Throwable $e) {
+            w_log_warning('Backend API auth provider resolve skipped: ' . $e->getMessage(), [], 'api');
+            return false;
+        }
+        if (!$provider instanceof BackendApiAuthenticationInterface) {
+            return false;
+        }
+
+        $backendUser = $provider->getUserByToken($token);
+        if ($backendUser === null) {
+            return false;
+        }
+
+        $actor = $provider->loadActor((int)$backendUser->getId());
+        if ($actor === null) {
+            $this->returnError(401, __('Token is invalid or expired.'));
+            return true;
+        }
+        if (!$actor->isEnabled() || $actor->isDeleted()) {
+            $this->returnError(403, __('User has been disabled.'));
+            return true;
+        }
+
+        $user = $actor->getUser();
+        $role = $actor->getRole();
+        $event->setData('user', $user);
+        if ($role) {
+            $event->setData('role', $role);
+        }
+        $this->applySandboxMode($user);
+
+        // BackendRestController gates on rest_backend session; mirror Bearer admin into it.
+        try {
+            /** @var AuthenticatedSessionInterface $backendSession */
+            $backendSession = SessionFactory::getInstance()->createAuthenticatedSession('rest_backend');
+            if (!$backendSession->isLoggedIn() && $user instanceof \Weline\Framework\Session\Auth\AuthenticableInterface) {
+                $backendSession->login($user);
+            }
+        } catch (\Throwable $e) {
+            w_log_warning('Backend admin token session mirror skipped: ' . $e->getMessage(), [], 'api');
+        }
+
         return true;
     }
 
