@@ -309,7 +309,11 @@ class App
             'origin' => RequestLifecycleTrace::isEnabled() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
         $rawRequestUri = Url::decode_url($this->normalizeParsedUri(
-            $server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? $this->getCurrentRequestUri()
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI']
+            ?? $server['WELINE_ORIGIN_REQUEST_URI']
+            ?? $_SERVER['REQUEST_URI']
+            ?? $server['REQUEST_URI']
+            ?? $this->getCurrentRequestUri()
         ));
         if ($rawRequestUri === '') {
             $rawRequestUri = '/';
@@ -579,38 +583,15 @@ class App
         }
         $target = $targetPath . ($query !== '' ? '?' . $query : '');
 
-        // Identity guard: never 301 to the same visitor path (mount remount bugs
-        // or trailing-slash-only noise must not create ERR_TOO_MANY_REDIRECTS).
+        // Identity guard: never 301 to the same visitor path (duplicate
+        // default-currency segments or mount remount bugs must not loop).
         $currentPath = $path === '' ? '/' : $path;
         if ($targetPath === $currentPath
             || $target === $rawRequestUri
             || \rtrim($targetPath, '/') === \rtrim($currentPath, '/')
         ) {
-            \w_log_warning('[App localization 301 skipped identity]', [
-                'raw' => $rawRequestUri,
-                'path' => $path,
-                'website_url' => $websiteUrl,
-                'relative' => $relative,
-                'canonical' => $canonicalRelative,
-                'mount' => $mount,
-                'default_language' => $defaultLanguage,
-                'default_currency' => $defaultCurrency,
-                'target' => $target,
-            ], 'url');
             return;
         }
-
-        \w_log_warning('[App localization 301]', [
-            'raw' => $rawRequestUri,
-            'path' => $path,
-            'website_url' => $websiteUrl,
-            'relative' => $relative,
-            'canonical' => $canonicalRelative,
-            'mount' => $mount,
-            'default_language' => $defaultLanguage,
-            'default_currency' => $defaultCurrency,
-            'target' => $target,
-        ], 'url');
 
         throw new RedirectException($target, 301);
     }

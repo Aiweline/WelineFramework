@@ -142,6 +142,8 @@ final class AllMenuNavTreeContractTest extends TestCase
             self::assertNotSame('', (string)$node['name']);
             self::assertNotSame('', (string)$node['url']);
             self::assertArrayNotHasKey('name_i18n', $node);
+            // SaaS leftover shells have no Theme layouts — must not appear in default seed.
+            self::assertNotContains((string)$node['url'], ['/support', '/solutions', '/docs']);
         }
         $about = null;
         foreach ($pages as $node) {

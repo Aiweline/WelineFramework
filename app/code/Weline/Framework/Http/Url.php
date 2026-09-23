@@ -1627,6 +1627,13 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_WEBSITE_CODE'] = self::$parserServer['WELINE_WEBSITE_CODE'] ?? '';
             self::$parserServer['WELINE_WEBSITE_URL'] = self::$parserServer['WELINE_WEBSITE_URL'] ?? '';
         }
+        // Current-request parses must reseal visitor URI from the transport
+        // snapshot ($_SERVER). Context/parserServer leftovers can carry a
+        // duplicated currency segment (/mount/USD/USD) from an earlier Fiber
+        // parse and would otherwise 301-loop.
+        if ($isCurrentRequestParse) {
+            self::resealVisitorUriFromWire();
+        }
         $perfMark('server_init');
         
         if ($url) {
@@ -1636,7 +1643,13 @@ class Url implements UrlInterface
         } else {
             // 1) 百分号解码：REQUEST_URI 先 rawurldecode（%2F→/ 等），便于后续网站匹配与重写查找
             $currentServer = self::currentServer();
-            $request_uri = (string)($currentServer['REQUEST_URI'] ?? '/');
+            $request_uri = (string)(
+                self::$parserServer['WELINE_ORIGIN_REQUEST_URI']
+                ?? self::$parserServer['REQUEST_URI']
+                ?? $currentServer['WELINE_ORIGIN_REQUEST_URI']
+                ?? $currentServer['REQUEST_URI']
+                ?? '/'
+            );
             $request_uri = rawurldecode($request_uri);
             $uri = $request_uri;
             if (!str_starts_with($request_uri, '/')) {
@@ -3012,6 +3025,32 @@ class Url implements UrlInterface
         }
 
         return \Weline\Framework\Env\WelineEnv::serverAll();
+    }
+
+    /**
+     * Prefer the transport snapshot for the visitor-facing path. Context and
+     * fiber-local parserServer can retain a previous parse that duplicated the
+     * default currency segment under a website mount (/daocharms/USD/USD).
+     */
+    private static function resealVisitorUriFromWire(): void
+    {
+        $wireOrigin = \trim((string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''));
+        $wireRequest = \trim((string)($_SERVER['REQUEST_URI'] ?? ''));
+        $wire = $wireOrigin !== '' ? $wireOrigin : $wireRequest;
+        if ($wire === '') {
+            return;
+        }
+        if ($wire[0] !== '/') {
+            $wire = '/' . $wire;
+        }
+        $path = (string)(\parse_url($wire, \PHP_URL_PATH) ?: $wire);
+        if ($path === '' || \str_contains(\strtolower($path), 'pagebuilder/frontend/page')) {
+            return;
+        }
+
+        self::$parserServer['REQUEST_URI'] = $wire;
+        self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] = $wire;
+        self::$parserServer['ORIGIN_REQUEST_URI'] = $wire;
     }
 
     private static function updateCurrentServerVar(string $key, mixed $value): void

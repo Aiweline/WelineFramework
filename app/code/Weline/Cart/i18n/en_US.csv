@@ -35,6 +35,7 @@ search,search
 加入购物车失败,"Failed to add to cart"
 已加入,"Added to cart"
 前往购物车,"Go to Cart"
+当前货币暂不可用,"This currency is temporarily unavailable"
 迷你购物车,"Mini cart"
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,"Line items are rendered from live cart data; edit only the footer extras area here."
 小计,Subtotal
@@ -73,7 +74,6 @@ search,search
 购物车批发信用,"Cart wholesale credit"
 商品小计,"Items subtotal"
 购物车帮我付,"Cart pay-for-me"
-当前货币暂不可用,"This currency is temporarily unavailable"
 "Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。","Inspection queries real persistence by scope_key and/or guest_token (full or last 4+ chars); compare storefront Cookie weline_cart_guest_token."
 "完整 scope key（可选）","Full scope key (optional)"
 "guest_token 完整或末 4+ 位","guest_token full value or last 4+ characters"

@@ -46,7 +46,7 @@ cp deploy.env-map.php.example deploy.env-map.php
 
 ## 支付示例
 
-见根目录 `deploy.env-map.php.example`：把 `payment/method/paypal/environment` 在 `dev` 写成 `sandbox`、`prod` 写成 `live`。PayPal live 凭据不要写进映射文件。
+见根目录 `deploy.env-map.php.example`：PayPal `dev/staging→sandbox`、`prod→live`；Fake Card `dev/staging→启用`、`prod→关闭`。密钥不要写进映射文件。
 
 ## SMTP 示例
 

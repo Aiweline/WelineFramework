@@ -52,8 +52,6 @@ chart,chart
 "非法 search shard key：%{1}","Illegal search shard key: %{1}"
 "非法 search shard 实体名：%{1}","Illegal search shard entity name: %{1}"
 搜索筛选,"Search Filters"
-展开/收起,"Expand / collapse"
-搜索类型,"Search type"
 全部,All
 商品,Products
 博客,Blog
@@ -64,6 +62,8 @@ chart,chart
 "商品 0 条","0 products"
 暂无匹配商品，可换词或浏览分类,"No matching products — try another keyword or browse categories"
 查看更多%{1}结果,"View more %{1} results"
+展开/收起,"Expand / collapse"
+搜索类型,"Search type"
 是,yes
 否,no
 只读诊断,"Read-only diagnostics"

@@ -174,4 +174,21 @@ final class PublishedStorefrontSolidifiedShellContractTest extends TestCase
         self::assertStringContainsString('function shellPhtml', $src);
         self::assertStringContainsString('wave8-8s5', $src);
     }
+
+    public function testLoadPublishedChromeBakeHtmlDirectEnsuresThenLogs(): void
+    {
+        $src = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php'
+        );
+        $start = \strpos($src, 'function loadPublishedChromeBakeHtmlDirect');
+        self::assertNotFalse($start);
+        $end = \strpos($src, 'function chromeSlotIdsFromRenderedHtml', $start);
+        self::assertNotFalse($end);
+        $body = \substr($src, $start, $end - $start);
+        self::assertStringContainsString('ensurePublishedChromeForScope(', $body);
+        self::assertStringContainsString('w_log_warning', $body);
+        self::assertStringContainsString('theme_layout_entity_chrome_bake_html_miss', $body);
+        // Must not bare-swallow without ensure/retry/log.
+        self::assertStringNotContainsString("catch (\\Throwable) {\n            return '';\n        }", $body);
+    }
 }

@@ -21,7 +21,7 @@ final class WebsiteBrandIdentitySeedService
     /** 演示默认站中文源站名（只写入 Website 配置，不作运行时回退字面量） */
     public const SEED_NAME = '长安汉服';
 
-    public const SEED_DESCRIPTION = '长安汉服水墨中国风独立站，精选明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合；提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。';
+    public const SEED_DESCRIPTION = '长安汉服是面向全球的大型汉服售卖平台，汇聚明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合。平台同时支持单件零售与批量批发，服务个人买家与全球经销商；并提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。';
 
     /** @var list<string> */
     private const PLACEHOLDER_NAMES = [
@@ -33,6 +33,15 @@ final class WebsiteBrandIdentitySeedService
         'Weline Framework',
         '韦林',
         '系统默认站点',
+    ];
+
+    /**
+     * 演示站历史简介（可幂等改回现行 SEED_DESCRIPTION）。
+     *
+     * @var list<string>
+     */
+    private const LEGACY_DESCRIPTIONS = [
+        '长安汉服水墨中国风独立站，精选明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合；提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。',
     ];
 
     /**
@@ -69,7 +78,9 @@ final class WebsiteBrandIdentitySeedService
         $nameIsPlaceholder = $this->isPlaceholderName($currentName);
         $nameIsLegacyDemo = $this->isLegacyDemoName($currentName);
         $needsName = ($nameIsPlaceholder || $nameIsLegacyDemo) && $currentName !== self::SEED_NAME;
-        $needsDescription = $currentDescription === '' && self::SEED_DESCRIPTION !== '';
+        $needsDescription = self::SEED_DESCRIPTION !== ''
+            && $currentDescription !== self::SEED_DESCRIPTION
+            && ($currentDescription === '' || $this->isLegacyDescription($currentDescription));
 
         if (!$needsName && !$needsDescription) {
             return $this->ensureDefaultWebsiteLocalBrandCopy()['upserted'] > 0;
@@ -287,5 +298,10 @@ final class WebsiteBrandIdentitySeedService
     public function isLegacyDemoName(string $name): bool
     {
         return in_array(trim($name), self::LEGACY_DEMO_NAMES, true);
+    }
+
+    public function isLegacyDescription(string $description): bool
+    {
+        return in_array(trim($description), self::LEGACY_DESCRIPTIONS, true);
     }
 }

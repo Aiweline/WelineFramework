@@ -16,14 +16,12 @@ final class PageCandidateService
      */
     public static function shellPageMap(): array
     {
+        // Only paths that resolve on storefront (Theme layouts / Faq / policy aliases).
+        // Do not seed SaaS leftovers (/support|/solutions|/docs) — no layouts → 404.
         return [
             'about' => '关于我们',
             'contact' => '联系我们',
-            'faq' => 'FAQ/常见问题',
-            'support' => '支持',
             'faq' => '常见问题',
-            'solutions' => '解决方案',
-            'docs' => '文档',
             'privacy' => '隐私政策',
             'terms' => '服务条款',
             'customer/account/index' => '我的订单',

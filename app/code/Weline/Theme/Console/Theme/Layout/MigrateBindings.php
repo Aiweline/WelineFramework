@@ -20,6 +20,19 @@ final class MigrateBindings extends CommandAbstract
         $this->printer->success('主题布局绑定迁移完成，处理数量：' . $count);
 
         $report = $coordinator->getLastRebakeReport();
+        $chromeBootstrapped = (int)($report['chrome_bootstrapped'] ?? 0);
+        if ($chromeBootstrapped > 0) {
+            $this->printer->success('缺失共享 chrome 已 bootstrap：' . $chromeBootstrapped);
+        } else {
+            // Explicit pass even when rebake already bootstrapped (idempotent).
+            $extra = $coordinator->bootstrapMissingChromeScopes(null);
+            if ($extra > 0) {
+                $this->printer->success('额外 bootstrap 共享 chrome：' . $extra);
+            } else {
+                $this->printer->note('共享 chrome 已齐全（无额外 bootstrap）。');
+            }
+        }
+
         $unmapped = $report['unmapped'] ?? [];
         $this->printer->note('无法映射的历史身份数量：' . count($unmapped));
         foreach ($unmapped as $identity) {
