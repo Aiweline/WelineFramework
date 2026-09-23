@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 
@@ -39,27 +40,19 @@ final class ThemeLayoutEntityMaterializer
         $bySlot = $this->slotTree->organizeWidgetsBySlot($layout);
         $configByUid = $this->extractConfigByUid($nodes);
 
-        $scopeKey = $this->paths->scopeKey($scope);
-        $versionKey = (string)$versionId;
-        $phtml = $this->buildSlotPhtml($bySlot, 'chrome', $themeId, $scopeKey, $versionKey);
-
-        $path = $this->paths->chromePhtml($themeId, $scope, $versionId);
-        $this->writePhtml($path, $phtml);
-        $this->configStore->writeChromeConfig($themeId, $scope, $versionId, $configByUid);
-        $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
-        $this->configStore->writeChromeAssets(
-            $themeId,
-            $scope,
-            $versionId,
-            $collector->collectFromNodes($collector->withChromeRegistryBaseline($nodes), true),
-        );
-        // Drop stale request-time snapshots (legacy bare + every locale variant)
-        // so the next storefront hit re-renders under the request language.
-        foreach ($this->paths->chromeRenderedHtmlSnapshots($themeId, $scope, $versionId) as $rendered) {
-            @\unlink($rendered);
+        $document = $this->structureDocument($bySlot);
+        $structureKey = 's' . hash('sha256', json_encode($document, JSON_THROW_ON_ERROR));
+        $dir = $this->paths->chromeStructureDir($themeId, $scope, $structureKey);
+        $path = $dir . 'chrome.phtml';
+        if (!is_file($path)) {
+            $this->writePhtml($path, $this->buildSlotPhtml($bySlot, 'chrome'));
+            $this->opcacheCompile($path);
         }
-        $this->opcacheCompile($path);
-
+        $this->writeStructureJson($dir . 'structure.json', $bySlot);
+        $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
+        $this->bindingStore()->publishChromeBinding($themeId, $scope, $versionId, $structureKey,
+            $configByUid, $collector->collectFromNodes($collector->withChromeRegistryBaseline($nodes), true));
+        // 快照以配置/结构摘要隔离；保留旧快照供正在运行的请求使用。
         return $path;
     }
 
@@ -97,6 +90,7 @@ final class ThemeLayoutEntityMaterializer
         bool $published,
         ?int $releaseId,
         string $pageType = '',
+        int $draftRevisionId = 0,
     ): string {
         if ($themeId < 1 || \trim($scope) === '' || \trim($identityKey) === '') {
             throw new \InvalidArgumentException('Invalid page materialize identity.');
@@ -114,29 +108,35 @@ final class ThemeLayoutEntityMaterializer
             ? $pageConfigByUid
             : $this->extractConfigByUid($nodes);
 
-        $structureOrRelease = $this->paths->pageStructureOrRelease($structureKey, $published, $releaseId);
-        $scopeKey = $this->paths->scopeKey($scope);
-        $versionKey = $identityKey . '/' . $structureOrRelease;
-        $phtml = $this->buildSlotPhtml($bySlot, 'page', $themeId, $scopeKey, $versionKey);
-
-        $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $structureOrRelease);
-        $this->writePhtml($path, $phtml);
-        $this->configStore->writePageConfig($themeId, $scope, $identityKey, $structureOrRelease, $configByUid);
-        $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
-        $this->configStore->writePageAssets(
-            $themeId,
-            $scope,
-            $identityKey,
-            $structureOrRelease,
-            $collector->collectFromNodes($nodes, true),
-        );
+        // 输入 structureKey 是上游结构/源布局指纹，最终槽树必须同时参与摘要。
+        $structureKey = 's' . hash('sha256', json_encode([
+            'source' => $structureKey,
+            'structure' => $this->structureDocument($bySlot, $pageType),
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $entityKey = $published && $releaseId !== null && $releaseId > 0
+            ? 'r' . $releaseId : 'd' . $draftRevisionId;
+        $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $structureKey);
+        if (!is_file($path)) {
+            $phtml = $this->buildSlotPhtml($bySlot, 'page');
+            $this->writePhtml($path, $phtml);
+            $this->opcacheCompile($path);
+        }
         $this->writeStructureJson(
-            $this->paths->pageStructureJson($themeId, $scope, $identityKey, $structureOrRelease),
-            $bySlot,
-            $pageType,
-        );
-        $this->opcacheCompile($path);
-
+            $this->paths->pageStructureJson($themeId, $scope, $identityKey, $structureKey), $bySlot, $pageType);
+        $shellPath = $this->paths->shellPhtml($themeId, $scope, $identityKey, $structureKey);
+        if (!is_file($shellPath)) {
+            $phtml = $phtml ?? (string)file_get_contents($path);
+            // 整壳仍保留公共壳渲染，模板只绑定本次请求身份，不固化发布/配置版本。
+            $pageBody = preg_replace('/^\s*<\?php\s+declare\(strict_types=1\);\s*\/\*\*.*?\*\/\s*\?>\s*/s', '', $phtml) ?? $phtml;
+            $shell = "<?php\ndeclare(strict_types=1);\n"
+                . "echo \\Weline\\Framework\\Manager\\ObjectManager::getInstance("
+                . "\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityChrome::class)"
+                . "->renderCurrent(\$entityBinding->themeId, \$entityBinding->scope);\n?>\n" . $pageBody;
+            $this->writePhtml($shellPath, $shell);
+        }
+        $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
+        $this->bindingStore()->publishPageBinding($themeId, $scope, $identityKey, $entityKey, $structureKey,
+            $configByUid, $collector->collectFromNodes($nodes, true));
         return $path;
     }
 
@@ -145,7 +145,7 @@ final class ThemeLayoutEntityMaterializer
      *
      * @param array<string, list<array<string, mixed>>> $bySlot
      */
-    private function writeStructureJson(string $path, array $bySlot, string $pageType = ''): void
+    private function structureDocument(array $bySlot, string $pageType = ''): array
     {
         $slots = [];
         \ksort($bySlot);
@@ -163,6 +163,9 @@ final class ThemeLayoutEntityMaterializer
                     'widget_module' => (string)($widget['widget_module'] ?? ''),
                     'widget_code' => (string)($widget['widget_code'] ?? ''),
                     'widget_type' => (string)($widget['widget_type'] ?? ''),
+                    'layout_source' => (string)($widget['layout_source'] ?? $widget['config']['_layout_source'] ?? ''),
+                    'source' => (string)($widget['source'] ?? $widget['config']['_source'] ?? ''),
+                    'source_position' => (string)($widget['source_position'] ?? $widget['config']['_source_position'] ?? 'head'),
                     'sort_order' => (int)($widget['sort_order'] ?? 0),
                     'is_active' => (bool)($widget['is_active'] ?? true),
                     'area' => (string)($widget['area'] ?? ''),
@@ -172,20 +175,17 @@ final class ThemeLayoutEntityMaterializer
             $slots[(string)$slotId] = $list;
         }
 
-        $dir = \dirname($path);
-        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
-            throw new \RuntimeException('Failed to create layout entity structure dir: ' . $dir);
+        return ['page_type' => trim($pageType), 'slots' => $slots];
+    }
+
+    private function writeStructureJson(string $path, array $bySlot, string $pageType = ''): void
+    {
+        if (is_file($path)) {
+            return;
         }
-        $json = \json_encode(
-            [
-                'page_type' => \trim($pageType),
-                'slots' => $slots,
-            ],
-            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT,
-        );
-        if ($json === false || @\file_put_contents($path, $json . "\n") === false) {
-            throw new \RuntimeException('Failed to write layout entity structure.json: ' . $path);
-        }
+        $json = json_encode($this->structureDocument($bySlot, $pageType),
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $this->writePhtml($path, $json . "\n");
     }
 
     /**
@@ -194,9 +194,9 @@ final class ThemeLayoutEntityMaterializer
     private function buildSlotPhtml(
         array $bySlot,
         string $configSource,
-        int $themeId,
-        string $scopeKey,
-        string $versionKey,
+        int $themeId = 0,
+        string $scopeKey = '',
+        string $versionKey = '',
     ): string {
         $rendererClass = ThemeLayoutEntityWidgetRenderer::class;
         $lines = [];
@@ -233,12 +233,10 @@ final class ThemeLayoutEntityMaterializer
                     continue;
                 }
                 $lines[] = '<?= \\Weline\\Framework\\Manager\\ObjectManager::getInstance('
-                    . '\\' . $rendererClass . '::class)->render('
+                    . '\\' . $rendererClass . '::class)->renderBound('
                     . \var_export($uid, true) . ', '
                     . \var_export($configSource, true) . ', '
-                    . (int)$themeId . ', '
-                    . \var_export($scopeKey, true) . ', '
-                    . \var_export($versionKey, true)
+                    . '$entityBinding'
                     . ') ?>';
             }
 
@@ -272,13 +270,14 @@ final class ThemeLayoutEntityMaterializer
 
     private function writePhtml(string $path, string $contents): void
     {
-        $dir = \dirname($path);
-        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
-            throw new \RuntimeException('Failed to create layout entity dir: ' . $dir);
+        if (!is_file($path)) {
+            (new AtomicCompiledFilePublisher())->publish($path, $contents);
         }
-        if (@\file_put_contents($path, $contents) === false) {
-            throw new \RuntimeException('Failed to write layout entity phtml: ' . $path);
-        }
+    }
+
+    private function bindingStore(): ThemeLayoutEntityBindingStore
+    {
+        return new ThemeLayoutEntityBindingStore($this->paths);
     }
 
     private function opcacheCompile(string $path): void

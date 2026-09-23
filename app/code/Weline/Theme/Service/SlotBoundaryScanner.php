@@ -31,13 +31,19 @@ final class SlotBoundaryScanner
      */
     public function enumerateRegions(string $html, ?string $onlySlotId = null, ?array $targetSlotIds = null): array
     {
-        if ($html === '' || !SlotBoundaryMarkers::hasMarkers($html)) {
+        if ($html === '') {
             return [];
+        }
+
+        // required-default-always-present: published stripped HTML may only carry
+        // data-slot-id / data-wslot wrappers (no <!--@weline-slot--> markers).
+        if (!SlotBoundaryMarkers::hasMarkers($html)) {
+            return $this->enumerateRegionsByAttributes($html, $onlySlotId, $targetSlotIds);
         }
 
         $markerMatches = [];
         if (preg_match_all(self::MARKER_PATTERN, $html, $markerMatches, PREG_OFFSET_CAPTURE) === 0) {
-            return [];
+            return $this->enumerateRegionsByAttributes($html, $onlySlotId, $targetSlotIds);
         }
 
         /** @var list<array{id:string,open_start:int,open_end:int,depth:int}> $stack */
@@ -129,6 +135,103 @@ final class SlotBoundaryScanner
             $regions,
             static fn(array $a, array $b): int => ($b['depth'] <=> $a['depth'])
                 ?: ($a['region_start'] <=> $b['region_start']),
+        );
+
+        // Page may keep a few content markers (cart-summary-*) while chrome nested
+        // slots are attribute-only. Marker path would return [] for those ids —
+        // fall back to data-slot-id / data-wslot enumeration.
+        if ($regions === [] && $onlySlotId !== null) {
+            return $this->enumerateRegionsByAttributes($html, $onlySlotId, $targetSlotIds);
+        }
+
+        return $regions;
+    }
+
+    /**
+     * Attribute-only regions when HTML has no <!--@weline-slot--> markers
+     * (published outbound after strip / bake shells with data-slot-id only).
+     *
+     * @param array<string, true>|null $targetSlotIds
+     * @return list<array{
+     *     id: string,
+     *     depth: int,
+     *     region_start: int,
+     *     region_end: int,
+     *     wrapper_open_start: int,
+     *     wrapper_open_end: int,
+     *     inner_start: int,
+     *     inner_end: int,
+     *     wrapper_close_end: int
+     * }>
+     */
+    private function enumerateRegionsByAttributes(
+        string $html,
+        ?string $onlySlotId = null,
+        ?array $targetSlotIds = null,
+    ): array {
+        if ($onlySlotId !== null) {
+            if ($targetSlotIds !== null && !isset($targetSlotIds[$onlySlotId])) {
+                return [];
+            }
+            $bounds = $this->findSlotWrapperBounds($html, $onlySlotId);
+            if ($bounds === null) {
+                return [];
+            }
+
+            return [[
+                'id' => $onlySlotId,
+                'depth' => 0,
+                'region_start' => $bounds['open_start'],
+                'region_end' => $bounds['close_end'],
+                'wrapper_open_start' => $bounds['open_start'],
+                'wrapper_open_end' => $bounds['open_end'],
+                'inner_start' => $bounds['inner_start'],
+                'inner_end' => $bounds['inner_end'],
+                'wrapper_close_end' => $bounds['close_end'],
+            ]];
+        }
+
+        $regions = [];
+        $seen = [];
+        foreach ($this->scanTags($html) as $tag) {
+            if ($tag['closing'] || $tag['self_closing']) {
+                continue;
+            }
+            $slotId = null;
+            foreach (['data-slot-id', 'data-wslot', 'data-preview-slot'] as $attribute) {
+                $value = $this->attributeValue($tag['html'], $attribute);
+                if ($value !== null && $value !== '') {
+                    $slotId = $value;
+                    break;
+                }
+            }
+            if ($slotId === null || isset($seen[$slotId])) {
+                continue;
+            }
+            if ($targetSlotIds !== null && !isset($targetSlotIds[$slotId])) {
+                continue;
+            }
+            $bounds = $this->findElementBounds($html, $tag['start']);
+            if ($bounds === null) {
+                continue;
+            }
+            $seen[$slotId] = true;
+            $regions[] = [
+                'id' => $slotId,
+                'depth' => 0,
+                'region_start' => $bounds['open_start'],
+                'region_end' => $bounds['close_end'],
+                'wrapper_open_start' => $bounds['open_start'],
+                'wrapper_open_end' => $bounds['open_end'],
+                'inner_start' => $bounds['open_end'],
+                'inner_end' => $bounds['close_start'],
+                'wrapper_close_end' => $bounds['close_end'],
+            ];
+        }
+
+        usort(
+            $regions,
+            static fn(array $a, array $b): int => ($a['region_start'] <=> $b['region_start']),
         );
 
         return $regions;

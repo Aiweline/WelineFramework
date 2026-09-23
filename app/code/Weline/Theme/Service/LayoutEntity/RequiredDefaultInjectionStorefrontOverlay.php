@@ -11,9 +11,9 @@ use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Theme\Service\SlotBoundaryScanner;
-use Weline\Theme\Service\ThemeComponentCatalog;
 use Weline\Theme\Service\ThemePublishedVersionRuntimeResolver;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
+use Weline\Widget\Service\DefaultInjectionPlanRepository;
 
 /**
  * Published storefront overlay: required default injections by plan.
@@ -50,7 +50,14 @@ final class RequiredDefaultInjectionStorefrontOverlay
         if ($status !== ThemeLayout::STATUS_PUBLISHED || $themeId < 1 || \trim($pageType) === '') {
             return $rendered;
         }
-        if ($rendered === '' || !\str_contains($rendered, '<!--@weline-slot:')) {
+        // Published Taglib shells may only carry data-slot-id (no <!--@weline-slot-->).
+        // Still allow overlay when wrapper destinations exist.
+        if ($rendered === ''
+            || (!\str_contains($rendered, '<!--@weline-slot:')
+                && !\str_contains($rendered, 'data-wslot=')
+                && !\str_contains($rendered, 'data-slot-id=')
+                && !\str_contains($rendered, 'widget-slot-area'))
+        ) {
             return $rendered;
         }
 
@@ -71,7 +78,21 @@ final class RequiredDefaultInjectionStorefrontOverlay
                 if ((int)($item['depth'] ?? 0) !== $depth) {
                     continue;
                 }
-                $rendered = $this->executeOne($rendered, $item, $themeId, $scopeKey, $versionKey);
+                try {
+                    $rendered = $this->executeOne($rendered, $item, $themeId, $scopeKey, $versionKey);
+                } catch (\Throwable $e) {
+                    // Soft: one widget render miss must not abort sibling chrome inherits
+                    // (footer-*-links on cart/checkout when pageType was empty).
+                    if (\function_exists('w_log_warning')) {
+                        w_log_warning(sprintf(
+                            '[RequiredDefaultInjection] execute soft-skip %s|%s slot=%s: %s',
+                            (string)($item['widget_module'] ?? ''),
+                            (string)($item['widget_code'] ?? ''),
+                            (string)($item['slot_id'] ?? ''),
+                            $e->getMessage(),
+                        ));
+                    }
+                }
             }
         }
 
@@ -120,10 +141,17 @@ final class RequiredDefaultInjectionStorefrontOverlay
         }
         $html = $this->renderNode($item['node'], $themeId, $scopeKey, $versionKey);
         if ($html === '' || \str_starts_with(\trim($html), '<!--')) {
-            throw new \RuntimeException(
-                'required_default_injection_render_failed: '
-                . $module . '|' . $code . ' slot=' . $slotId
-            );
+            // Soft: missing bake config / render miss — assertFilled logs; do not abort plan.
+            if (\function_exists('w_log_warning')) {
+                w_log_warning(sprintf(
+                    '[RequiredDefaultInjection] render soft-skip %s|%s slot=%s',
+                    $module,
+                    $code,
+                    $slotId,
+                ));
+            }
+
+            return $rendered;
         }
         if (!RequiredDefaultInjectionContract::slotInnerHasWidgetCode($html, $module, $code)) {
             $safe = \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
@@ -134,11 +162,14 @@ final class RequiredDefaultInjectionStorefrontOverlay
         $existingInner = (string)($target['inner'] ?? '');
         // Exclusive / wrong-bake: replace. Multiple slot with sibling widgets: append.
         // Homepage content nesting: never replace away homepage-* slot markers.
+        // missing-config / comment-only inners are blank — replace, do not append stubs.
+        $blankExisting = ThemeLayoutEntityPublishedSlotHost::isEffectivelyBlankSlotInner($existingInner);
         $preserveHomepageNest = $slotId === 'content'
             && \str_contains($existingInner, '<!--@weline-slot:homepage-');
-        $allowMultipleAppend = !RequiredDefaultInjectionContract::slotInnerHasWidgetCode($existingInner, $module, $code)
+        $allowMultipleAppend = !$blankExisting
+            && !RequiredDefaultInjectionContract::slotInnerHasWidgetCode($existingInner, $module, $code)
             && $this->slotAllowsMultiple($rendered, $slotId, $target);
-        if ($existingInner !== '' && ($preserveHomepageNest || $allowMultipleAppend)) {
+        if ($existingInner !== '' && !$blankExisting && ($preserveHomepageNest || $allowMultipleAppend)) {
             $html = $existingInner . $html;
         }
 
@@ -259,25 +290,9 @@ final class RequiredDefaultInjectionStorefrontOverlay
     private function loadPlan(int $themeId, string $pageType): array
     {
         try {
-            /** @var ThemeComponentCatalog $catalog */
-            $catalog = ObjectManager::getInstance(ThemeComponentCatalog::class);
-            $declarations = [];
-            foreach ($catalog->getDefinitions('frontend', null) as $definition) {
-                if (!\is_object($definition)) {
-                    continue;
-                }
-                $slots = [];
-                if (isset($definition->slots) && \is_array($definition->slots)) {
-                    $slots = $definition->slots;
-                }
-                $declarations[] = [
-                    'module' => (string)($definition->module ?? ''),
-                    'type' => (string)($definition->type ?? ''),
-                    'code' => (string)($definition->code ?? ''),
-                    'default_injections' => $definition->defaultInjections ?? [],
-                    'slots' => $slots,
-                ];
-            }
+            /** @var DefaultInjectionPlanRepository $plans */
+            $plans = ObjectManager::getInstance(DefaultInjectionPlanRepository::class);
+            $declarations = $plans->listDeclarations('frontend');
 
             /** @var ThemePublishedVersionRuntimeResolver $versions */
             $versions = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
@@ -411,6 +426,37 @@ final class RequiredDefaultInjectionStorefrontOverlay
             return $out;
         }
 
+        // required-default-always-present: published / stripped shells often have
+        // only data-slot-id (or leftover data-wslot) — no <!--@weline-slot--> markers.
+        // enumerateRegions returns [] without markers; findSlotWrapperBounds still works.
+        $attrBounds = $this->boundaryScanner->findSlotWrapperBounds($html, $slotId);
+        if ($attrBounds !== null) {
+            $innerStart = (int)$attrBounds['inner_start'];
+            $innerEnd = (int)$attrBounds['inner_end'];
+            $openStart = (int)$attrBounds['open_start'];
+            $closeEnd = (int)$attrBounds['close_end'];
+
+            return [[
+                'inner' => \substr($html, $innerStart, $innerEnd - $innerStart),
+                'region_start' => $openStart,
+                'inner_start' => $innerStart,
+                'inner_end' => $innerEnd,
+                'depth' => 0,
+                'via' => 'attr-wrapper',
+                'raw' => [
+                    'id' => $slotId,
+                    'depth' => 0,
+                    'region_start' => $openStart,
+                    'region_end' => $closeEnd,
+                    'wrapper_open_start' => $openStart,
+                    'wrapper_open_end' => (int)$attrBounds['open_end'],
+                    'inner_start' => $innerStart,
+                    'inner_end' => $innerEnd,
+                    'wrapper_close_end' => $closeEnd,
+                ],
+            ]];
+        }
+
         try {
             $open = SlotBoundaryMarkers::open($slotId);
             $close = SlotBoundaryMarkers::close($slotId);
@@ -458,7 +504,8 @@ final class RequiredDefaultInjectionStorefrontOverlay
      */
     private function replaceRegionInner(string $html, array $region, string $newInner): string
     {
-        if (($region['via'] ?? '') === 'scanner' && \is_array($region['raw'] ?? null)) {
+        $via = (string)($region['via'] ?? '');
+        if (($via === 'scanner' || $via === 'attr-wrapper') && \is_array($region['raw'] ?? null)) {
             return $this->boundaryScanner->replaceWrapperInner($html, $region['raw'], $newInner);
         }
         $innerStart = (int)($region['inner_start'] ?? -1);

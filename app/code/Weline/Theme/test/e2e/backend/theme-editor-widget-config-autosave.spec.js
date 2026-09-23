@@ -148,6 +148,9 @@ moduleDescribe(test, MODULE, 'theme editor widget config autosave', () => {
         const nodeUid = String(saveWidget.node_uid || saveWidget.data?.node_uid || '').trim();
         expect(nodeUid).toMatch(/^[a-f0-9]{32}$/);
 
+        const beforeBinding = runFixture('binding_snapshot', { theme_id: themeId, page_type: pageType }).bindings;
+        expect(Object.keys(beforeBinding).length).toBeGreaterThan(0);
+
         const patchResult = await page.evaluate(async ({ nodeUid: uid, themeId: tid }) => {
           const editor = window.Weline?.Theme?.Editor || window.ThemeEditor;
           if (Number(editor.state?.themeId || 0) !== Number(tid)) {
@@ -168,6 +171,15 @@ moduleDescribe(test, MODULE, 'theme editor widget config autosave', () => {
         expect(Number(patchResult.themeId)).toBe(themeId);
         expect(Number(patchResult.revision || 0)).toBeGreaterThan(0);
         expect(patchResult.content).toBe('autosave-dirty-only');
+        const afterBinding = runFixture('binding_snapshot', { theme_id: themeId, page_type: pageType }).bindings;
+        expect(Object.keys(afterBinding)).toEqual(Object.keys(beforeBinding));
+        for (const key of Object.keys(beforeBinding)) {
+          expect(afterBinding[key].structure_key).toBe(beforeBinding[key].structure_key);
+          expect(afterBinding[key].template_hash).toBe(beforeBinding[key].template_hash);
+          expect(afterBinding[key].template_mtime).toBe(beforeBinding[key].template_mtime);
+          expect(afterBinding[key].config_key).not.toBe(beforeBinding[key].config_key);
+        }
+
 
         await page.evaluate(async ({ nodeUid: uid }) => {
           const editor = window.Weline?.Theme?.Editor || window.ThemeEditor;

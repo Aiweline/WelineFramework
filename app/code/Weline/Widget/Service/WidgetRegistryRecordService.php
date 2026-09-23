@@ -25,6 +25,7 @@ class WidgetRegistryRecordService
             'created_widgets' => [],
             'updated_widgets' => [],
             'created_default_injection_widgets' => [],
+            'injection_structure_changes' => [],
             'created_count' => 0,
             'updated_count' => 0,
             'created_default_injection_count' => 0,
@@ -36,6 +37,9 @@ class WidgetRegistryRecordService
                 $entry = $this->syncWidget($widget, $context);
                 if ($entry === null) {
                     continue;
+                }
+                if ($entry['injection_structure_change'] !== null) {
+                    $report['injection_structure_changes'][] = $entry['injection_structure_change'];
                 }
 
                 if (!empty($entry['created'])) {
@@ -122,6 +126,8 @@ class WidgetRegistryRecordService
         $previousHash = (string)($existingRow[WidgetRegistryEntry::schema_fields_CONFIG_HASH] ?? '');
         $created = $registryId <= 0;
         $updated = !$created && $previousHash !== $hash;
+        $before = json_decode((string)($existingRow[WidgetRegistryEntry::schema_fields_REGISTRY_JSON] ?? '{}'), true);
+        $injectionChange = DefaultInjectionStructureChanges::between(is_array($before) ? $before : [], $widget);
 
         $model = clone $this->registryEntry;
         if (!$created) {
@@ -155,6 +161,7 @@ class WidgetRegistryRecordService
             'created' => $created,
             'updated' => $updated,
             'has_default_injections' => $defaultInjections !== [],
+            'injection_structure_change' => $injectionChange,
             'widget' => [
                 'registry_id' => $registryId,
                 'area' => $area,

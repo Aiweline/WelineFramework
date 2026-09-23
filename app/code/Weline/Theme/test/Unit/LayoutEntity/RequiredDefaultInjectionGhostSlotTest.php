@@ -50,11 +50,35 @@ final class RequiredDefaultInjectionGhostSlotTest extends TestCase
         self::assertStringContainsString('required_default_injection_render_failed', $src);
         self::assertStringContainsString('InjectionPlanner', $src);
         self::assertStringContainsString('Do not create ghost slots', $src);
+        self::assertStringContainsString('findSlotWrapperBounds', $src);
+        self::assertStringContainsString('attr-wrapper', $src);
         self::assertStringNotContainsString(
             "\$rendered .= SlotBoundaryMarkers::open(\$slotId)",
             $src,
         );
         self::assertStringNotContainsString("error_log('[RequiredDefaultInjection]", $src);
         self::assertStringNotContainsString('有槽才注', $src);
+    }
+
+    public function testListSlotRegionsFindsDataSlotIdWithoutMarkers(): void
+    {
+        $overlay = new RequiredDefaultInjectionStorefrontOverlay(new SlotBoundaryScanner());
+        $list = new \ReflectionMethod($overlay, 'listSlotRegions');
+        $list->setAccessible(true);
+
+        $html = '<div class="theme-published-slot w-auth-login__social-slot"'
+            . ' data-slot-id="account-login-social-providers"></div>';
+        $regions = $list->invoke($overlay, $html, 'account-login-social-providers');
+
+        self::assertCount(1, $regions);
+        self::assertContains($regions[0]['via'], ['attr-wrapper', 'scanner']);
+        self::assertSame('', \trim((string)$regions[0]['inner']));
+
+        $scanner = new SlotBoundaryScanner();
+        self::assertCount(1, $scanner->enumerateRegions($html, 'account-login-social-providers'));
+        self::assertSame(
+            'account-login-social-providers',
+            $scanner->enumerateRegions($html)[0]['id'] ?? null,
+        );
     }
 }

@@ -13,8 +13,11 @@ namespace Weline\Theme\Service\LayoutEntity;
  *
  * Page:
  *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/layout.phtml
+ *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/shell.phtml  (wave8-8s5: chrome+page 整壳)
  *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/page-config.json
+ *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/page-assets.json
  *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/structure.json
+ *   {theme_id}/{scope_key}/tv{theme_version_id}/chrome/chrome-assets.json
  */
 final class ThemeLayoutEntityPaths
 {
@@ -74,6 +77,11 @@ final class ThemeLayoutEntityPaths
     public function chromeConfigJson(int $themeId, string $scope, int $themeVersionId): string
     {
         return $this->chromeDir($themeId, $scope, $themeVersionId) . 'chrome-config.json';
+    }
+
+    public function chromeAssetsJson(int $themeId, string $scope, int $themeVersionId): string
+    {
+        return $this->chromeDir($themeId, $scope, $themeVersionId) . 'chrome-assets.json';
     }
 
     /**
@@ -159,6 +167,19 @@ final class ThemeLayoutEntityPaths
         return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'layout.phtml';
     }
 
+    /**
+     * wave8-8s5: published whole-shell bake (chrome.phtml source + layout.phtml source).
+     * Storefront includes this file once — header/chrome already in the shell.
+     */
+    public function shellPhtml(
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+    ): string {
+        return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'shell.phtml';
+    }
+
     public function pageConfigJson(
         int $themeId,
         string $scope,
@@ -166,6 +187,15 @@ final class ThemeLayoutEntityPaths
         string $structureOrRelease,
     ): string {
         return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'page-config.json';
+    }
+
+    public function pageAssetsJson(
+        int $themeId,
+        string $scope,
+        string $identityKey,
+        string $structureOrRelease,
+    ): string {
+        return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'page-assets.json';
     }
 
     public function pageStructureJson(
@@ -188,6 +218,35 @@ final class ThemeLayoutEntityPaths
         }
 
         return 's' . $structureKey;
+    }
+
+    /** 结构模板保留 s 身份；草稿与发布实体只保存绑定。 */
+    public function pageBindingJson(int $themeId, string $scope, string $identityKey, string $entityKey): string
+    {
+        return $this->pageDir($themeId, $scope, $identityKey, $entityKey) . 'binding.json';
+    }
+
+    public function pageConfigBundleDir(int $themeId, string $scope, string $identityKey, string $configKey): string
+    {
+        return $this->pageIdentityDir($themeId, $scope, $identityKey)
+            . 'configs/' . $this->normalizePathSegment($configKey, 'config') . '/';
+    }
+
+    public function chromeStructureDir(int $themeId, string $scope, string $structureKey): string
+    {
+        return $this->themeScopeDir($themeId, $scope) . 'chrome/'
+            . $this->normalizePathSegment($structureKey, 'structure') . '/';
+    }
+
+    public function chromeConfigBundleDir(int $themeId, string $scope, string $configKey): string
+    {
+        return $this->themeScopeDir($themeId, $scope) . 'chrome/configs/'
+            . $this->normalizePathSegment($configKey, 'config') . '/';
+    }
+
+    public function chromeBindingJson(int $themeId, string $scope, int $versionId): string
+    {
+        return $this->chromeDir($themeId, $scope, $versionId) . 'binding.json';
     }
 
     private function normalizePathSegment(string $segment, string $fallback): string
