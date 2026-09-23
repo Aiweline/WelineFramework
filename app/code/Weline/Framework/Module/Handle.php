@@ -294,10 +294,15 @@ class Handle implements HandleInterface, RegisterInterface
             } else {
                 $oldEntry = $this->modules[$module->getName()] ?? [];
                 $old_version = (string)($oldEntry['version'] ?? '1.0.0');
+                $pendingInstall = !empty($oldEntry['installing']);
+                if ($pendingInstall) {
+                    // Registration may run twice before ModuleSetupStage commits Install.
+                    $module['installing'] = true;
+                }
                 // setup_version：上次脚本成功完成的版本；缺省时回退为旧 version（历史兼容）
-                $setup_version = (string)($oldEntry['setup_version'] ?? $old_version);
-                $needsUpgrade = $this->helper->isUpgrade($setup_version, $module->getVersion())
-                    || $this->helper->isUpgrade($old_version, $module->getVersion());
+                $setup_version = (string)($oldEntry['setup_version'] ?? ($pendingInstall ? '0.0.0' : $old_version));
+                $needsUpgrade = !$pendingInstall && ($this->helper->isUpgrade($setup_version, $module->getVersion())
+                    || $this->helper->isUpgrade($old_version, $module->getVersion()));
                 $module['upgrading'] = $needsUpgrade;
                 $module['setup_version'] = $setup_version;
                 if ($needsUpgrade) {

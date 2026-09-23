@@ -10,8 +10,8 @@ use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Pool\CachePool;
 
 /**
- * Prove CachePool routes getMultiple/setMultiple through BatchCacheAdapterInterface
- * instead of N× get/set (pseudo-batch / RPC N+1 regression).
+ * Prove CachePool routes getMultiple/setMultiple/deleteMultiple through BatchCacheAdapterInterface
+ * instead of N× get/set/delete (pseudo-batch / RPC N+1 regression).
  */
 final class CachePoolBatchAdapterContractTest extends TestCase
 {
@@ -45,6 +45,22 @@ final class CachePoolBatchAdapterContractTest extends TestCase
         self::assertSame(1, $stats['misses']);
     }
 
+    public function testDeleteMultiplePreferBatchAdapterOnce(): void
+    {
+        $adapter = new CachePoolBatchSpyAdapter();
+        $pool = new CachePool('unit_batch_del', $adapter, 'batch delete', false, 300, true, 0.0);
+        self::assertTrue($pool->setMultiple(['a' => 1, 'b' => 2, 'c' => 3]));
+        $adapter->setMultipleCalls = 0;
+
+        self::assertTrue($pool->deleteMultiple(['a', 'b', 'missing']));
+        self::assertSame(1, $adapter->deleteMultipleCalls);
+        self::assertSame(0, $adapter->deleteCalls);
+        self::assertCount(3, $adapter->lastDeleteMultipleKeys);
+        self::assertNull($pool->get('a'));
+        self::assertNull($pool->get('b'));
+        self::assertSame(3, $pool->get('c'));
+    }
+
     public function testNonBatchAdapterFallsBackToPerKeyLoop(): void
     {
         $adapter = new CachePoolSingleKeySpyAdapter();
@@ -58,6 +74,10 @@ final class CachePoolBatchAdapterContractTest extends TestCase
         self::assertSame(1, $result['x']);
         self::assertSame(2, $result['y']);
         self::assertNull($result['z']);
+
+        self::assertTrue($pool->deleteMultiple(['x', 'y']));
+        self::assertSame(2, $adapter->deleteCalls);
+        self::assertNull($pool->get('x'));
     }
 
     public function testDisabledPoolSkipsBatchAdapterAndCountsMisses(): void
@@ -85,18 +105,33 @@ final class CachePoolBatchAdapterContractTest extends TestCase
         self::assertGreaterThanOrEqual(50, $adapter->lastSetMultipleTtl);
         self::assertLessThanOrEqual(150, $adapter->lastSetMultipleTtl);
     }
+
+    public function testEmptyDeleteMultipleDoesNotTouchAdapter(): void
+    {
+        $adapter = new CachePoolBatchSpyAdapter();
+        $pool = new CachePool('unit_empty_del', $adapter, 'empty', false, 300, true, 0.0);
+
+        self::assertTrue($pool->deleteMultiple([]));
+        self::assertSame(0, $adapter->deleteMultipleCalls);
+        self::assertSame(0, $adapter->deleteCalls);
+    }
 }
 
 final class CachePoolBatchSpyAdapter implements BatchCacheAdapterInterface
 {
     public int $getCalls = 0;
     public int $setCalls = 0;
+    public int $deleteCalls = 0;
     public int $getMultipleCalls = 0;
     public int $setMultipleCalls = 0;
+    public int $deleteMultipleCalls = 0;
     public int $lastSetMultipleTtl = 0;
 
     /** @var array<string, mixed> */
     public array $lastSetMultipleValues = [];
+
+    /** @var list<string> */
+    public array $lastDeleteMultipleKeys = [];
 
     /** @var array<string, mixed> */
     private array $storage = [];
@@ -116,6 +151,7 @@ final class CachePoolBatchSpyAdapter implements BatchCacheAdapterInterface
 
     public function delete(string $key): bool
     {
+        $this->deleteCalls++;
         unset($this->storage[$key]);
         return true;
     }
@@ -153,12 +189,24 @@ final class CachePoolBatchSpyAdapter implements BatchCacheAdapterInterface
 
         return true;
     }
+
+    public function deleteMultiple(array $keys): bool
+    {
+        $this->deleteMultipleCalls++;
+        $this->lastDeleteMultipleKeys = \array_values(\array_map(static fn($key): string => (string) $key, $keys));
+        foreach ($keys as $key) {
+            unset($this->storage[(string) $key]);
+        }
+
+        return true;
+    }
 }
 
 final class CachePoolSingleKeySpyAdapter implements CacheAdapterInterface
 {
     public int $getCalls = 0;
     public int $setCalls = 0;
+    public int $deleteCalls = 0;
 
     /** @var array<string, mixed> */
     private array $storage = [];
@@ -178,6 +226,7 @@ final class CachePoolSingleKeySpyAdapter implements CacheAdapterInterface
 
     public function delete(string $key): bool
     {
+        $this->deleteCalls++;
         unset($this->storage[$key]);
         return true;
     }

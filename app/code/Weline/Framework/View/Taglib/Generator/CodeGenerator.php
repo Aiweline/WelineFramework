@@ -564,11 +564,15 @@ final class CodeGenerator
     }
 
     /**
-     * 解析变量表达式
+     * 解析变量表达式（if/elseif/while/switch 等 condition）
      *
-     * 将点分表达式转换为 PHP 数组访问语法
-     * 例如：meta.showHeader => ($meta['showHeader'] ?? null)
-     *       $user.name => $user['name']
+     * 契约：裸标识 / 点分路径与 {{ident}} / parseSingleVariablePath 同语义
+     * （局部 $var ?? $this->getData('var')），禁止只加 `$` 导致 Undefined variable。
+     *
+     * 例如：
+     * - content => ($content ?? $this->getData('content'))
+     * - meta.showHeader => (($meta ?? $this->getData('meta') ?? [])['showHeader'] ?? null)
+     * - $user.name => ($user ?? [])['name']   // 已写 $ 则保持显式 PHP 变量
      *
      * @param string $expr 表达式
      * @return string 解析后的 PHP 表达式
@@ -580,54 +584,42 @@ final class CodeGenerator
             return $expr;
         }
 
-        // 保留的 PHP 关键字和常量，不应该添加 $ 前缀
+        // 保留的 PHP 关键字和常量，不应该当作模板变量路径
         $reserved = ['true', 'false', 'null', 'and', 'or', 'xor', 'not', 'empty', 'isset', 'array', 'new', 'instanceof'];
 
-        // 首先处理带点号的表达式（如 meta.showHeader => ($meta['showHeader'] ?? null)）
-        // 使用 null 合并运算符确保安全访问，避免 undefined array key 警告
-        $pattern = '/\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_.]*)\b/';
-        $expr = preg_replace_callback($pattern, function ($matches) {
-            $var = $matches[1];
-            $path = $matches[2];
+        $trimmed = trim($expr);
+        // 整段即简单标识 / 点分路径：直接与 {{ident}} 对齐
+        if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$/', $trimmed) === 1) {
+            return $this->parseSingleVariablePath($trimmed);
+        }
 
-            // 分割路径
-            $parts = explode('.', $path);
-            $result = '$' . $var;
-
-            foreach ($parts as $part) {
-                $result .= "['{$part}']";
-            }
-
-            // 添加 null 合并运算符，确保安全访问
-            return '(' . $result . ' ?? null)';
-        }, $expr);
-
-        // 然后处理简单变量名（不带 $ 的标识符）
-        // 匹配：非 $ 开头的独立标识符，但排除在引号内的标识符（数组键）
-        // 使用负向回顾断言排除紧跟在 [' 或 [" 后面的标识符
+        // 复合表达式内的点分路径（如 user.role === 'admin'）
         $expr = preg_replace_callback(
-            '/(?<![\'"\[])\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?![\'"\]])/',
-            function ($matches) use ($reserved) {
-                $var = $matches[1];
-                
-                // 跳过保留关键字
-                if (in_array(strtolower($var), $reserved, true)) {
-                    return $var;
-                }
-                
-                // 跳过纯数字
-                if (is_numeric($var)) {
-                    return $var;
-                }
-                
-                // 添加 $ 前缀
-                return '$' . $var;
+            '/(?<![\$\'"\[])\b([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)\b/',
+            function (array $matches): string {
+                return $this->parseSingleVariablePath($matches[1]);
             },
             $expr
         );
 
-        // 修复可能产生的 $$ 问题
-        $expr = preg_replace('/\$\$+/', '$', $expr);
+        // 复合表达式内的裸标识（排除已写 $、引号/数组键、函数名）
+        $expr = preg_replace_callback(
+            '/(?<![\$\'"\[])\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?![\'"\]\.(])/',
+            function (array $matches) use ($reserved): string {
+                $var = $matches[1];
+
+                if (in_array(strtolower($var), $reserved, true)) {
+                    return $var;
+                }
+
+                if (is_numeric($var)) {
+                    return $var;
+                }
+
+                return $this->parseSingleVariablePath($var);
+            },
+            $expr
+        );
 
         return $expr;
     }

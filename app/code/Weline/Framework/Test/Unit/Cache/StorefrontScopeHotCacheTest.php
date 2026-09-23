@@ -81,6 +81,38 @@ final class StorefrontScopeHotCacheTest extends TestCase
         self::assertSame('fresh', $service->remember('unit_scope_hot_contended', 'demo.key', 60, static fn(): string => 'fresh', []));
         self::assertSame(0, $flight->lastTimeoutMs);
     }
+
+    public function testPeekPolicyReturnsWarmPayloadWithoutRunningBuilder(): void
+    {
+        $adapter = new InMemoryAdapter();
+        $pool = new CachePool('unit_scope_hot_peek', $adapter, jitterRatio: 0.0);
+        $cacheManager = $this->createMock(CacheManager::class);
+        $cacheManager->method('pool')->willReturn($pool);
+        $cacheManager->method('registerPolicy')->willReturnArgument(0);
+        $service = new StorefrontScopeHotCache($cacheManager, null, new ImmediateSingleFlight());
+        $policy = new \Weline\Framework\Cache\CachePolicy(
+            resource: 'unit.peek',
+            pool: 'unit_scope_hot_peek',
+            scope: 'global',
+            freshTtlSeconds: 60,
+            staleTtlSeconds: 120,
+        );
+
+        self::assertNull($service->peekPolicy($policy, 'demo.key'));
+        $builds = 0;
+        self::assertSame('warm', $service->rememberPolicy($policy, 'demo.key', static function () use (&$builds): string {
+            $builds++;
+
+            return 'warm';
+        }));
+        self::assertSame(1, $builds);
+        self::assertSame('warm', $service->peekPolicy($policy, 'demo.key'));
+        StorefrontScopeHotCache::resetProcessCache();
+        self::assertSame('warm', $service->peekPolicy($policy, 'demo.key'));
+        self::assertSame(1, $builds);
+        // peek(miss) + remember(shared_read+recheck) + peek(L2 after L1 reset)
+        self::assertSame(['read', 'read', 'read', 'read'], $adapter->events);
+    }
 }
 
 final class InMemoryAdapter implements CacheAdapterInterface

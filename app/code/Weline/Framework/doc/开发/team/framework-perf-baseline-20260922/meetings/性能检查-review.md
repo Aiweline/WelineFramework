@@ -641,6 +641,24 @@ Host：`https://p05113ef3.test.weline.com:9555`
 | 公网 `/` HIT | pass |
 | 公网 `/products` #2 HIT | pass |
 | paths `/`→`/products` | pass |
-| status=adopted（尽量） | **残留 fail** |
+| status=adopted（尽量） | **残留 fail**（已由 wave2 B6 关闭，见下节） |
 | R1 真批量 | pass |
 | **wave1** | **pass** |
+
+---
+
+## wave2 B6 抽检（status overlay · 2026-09-22）
+
+- channel: `channel/pm-arrange-wave2-status.md` msg-2/3/4
+- Server **2.0.66**；PM `server:reload` 后本席只读抽检
+- **verdict: pass**
+
+| 项 | 结果 |
+|----|------|
+| Worker#1（warmup owner 62830） | **pass** `state=hot, hit=true, source=process, fpc=HIT, reason=homepage-fpc:deferred-warmup:adopted` |
+| Worker#2（62858） | **pass/expected** `fail-open`（非 deferred storefront warmup owner；禁为对齐而假 HIT） |
+| warmup | adopted + done warmed=6 failed=0；`/`+`/products` probe HIT；paths `/`→`/products`→locales |
+| 公网 `/` #1/#2 | **HIT** |
+| 公网 `/products` #1/#2 | **HIT** |
+
+→ wave1「status 与 adopted 不一致」残留 **关闭**（owner Worker）；peer Worker fail-open **接受为预期**。
