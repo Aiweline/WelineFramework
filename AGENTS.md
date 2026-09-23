@@ -41,7 +41,7 @@ ensure 会写出 MCP 生成的 Cursor alwaysApply 门禁：`.cursor/rules/weline
 
 ## Git 策略
 
-**脏改不可丢弃（严重，`preserve_dirty_workspace`）**：宿主 Agent Shell **禁止**为对齐 HEAD 或「清场」而 `git checkout --`、`git restore`、`git clean`、`git stash` 擦未提交修改。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
+**脏改不可丢弃（严重，`preserve_dirty_workspace`）**：宿主 Agent Shell **禁止**为对齐 HEAD 或「清场」而 `git checkout --`、`git restore`、`git clean`、`git stash` 擦未提交修改。编辑须 **dirty-load** 当前磁盘脏改再改；**禁止**用对话/其它会话的旧版本写回（会话间相互覆盖）。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
 
 **智能编辑器协议只提交本文件 `AGENTS.md`。** 不要提交各编辑器私有协议或 MCP 注册文件（如 `.cursor/`、`.cursorrules`、`.cursorignore`、`CLAUDE.md`、`.mcp.json`、`.codex/`、`.vscode/mcp.json`、`.github/copilot-instructions.md` 等）。MCP 挂载与 `.cursor/rules` 冷启动门禁由 Agent 在本机按 ensure 指引生成。
 

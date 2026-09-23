@@ -173,6 +173,17 @@ tests/e2e/.smoke-publish-last.log
 # Accidental local file
 /NUL
 
+# Mail templates: only zh_Hans_CN entities + shell/samples in git; other locales live in DB
+**/view/email/**/*.html
+**/view/email/**/*.subject.txt
+!**/view/email/**/zh_Hans_CN.html
+!**/view/email/**/zh_Hans_CN.subject.txt
+!**/view/email/shell.phtml
+!**/view/email/trust-shell-sample.html
+!**/view/email/ink-harbor-preview.html
+!**/view/email/edit-workspace-redesign.html
+!**/view/email/_prototype/**
+
 # Local agent/debug workspaces (do not commit)
 .superpowers/
 /evidence/
@@ -182,3 +193,7 @@ tests/e2e/.smoke-publish-last.log
 
 # local private notes / secrets (never commit)
 .local/
+
+# Per-website local ops vault (credentials / brand assets; never commit)
+# 例：websites/changanhanfu.com/
+/websites/
