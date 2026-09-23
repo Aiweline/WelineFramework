@@ -13,12 +13,20 @@ use Weline\Search\Model\SearchShardKey;
  * Production Product current reader.
  *
  * 跨模块数据只通过 Product 已发布的 product_search_projection Query 契约读取。
+ * 店面直读必须走 snapshotScope，禁止整站 snapshotWebsite（改一品扫整站）。
  */
 final class ProductProjectionDirectCatalogReader implements ProductDirectCatalogReaderInterface
 {
     public function __construct(
         private readonly ProductSearchProjectionSourceInterface $source,
     ) {
+    }
+
+    public function currentSourceWatermark(int $websiteId): int
+    {
+        SearchShardKey::fromWebsiteId($websiteId);
+
+        return $this->source->currentWatermark($websiteId);
     }
 
     public function searchPublished(array $query): ProductDirectCatalogRead
@@ -45,7 +53,7 @@ final class ProductProjectionDirectCatalogReader implements ProductDirectCatalog
         }
 
         try {
-            $snapshot = $this->source->snapshotWebsite($websiteId);
+            $snapshot = $this->source->snapshotScope($websiteId, $storeId, $channelId);
         } catch (\Throwable $exception) {
             throw new SearchQueryException(
                 SearchQueryException::ERROR_DIRECT_READER_DOWN,
@@ -65,6 +73,8 @@ final class ProductProjectionDirectCatalogReader implements ProductDirectCatalog
             || !\is_int($documentCount)
             || $documentCount !== \count($documents)
             || \preg_match('/^[a-f0-9]{64}$/D', $snapshotHash) !== 1
+            || (int)($snapshot['store_id'] ?? -1) !== $storeId
+            || (int)($snapshot['channel_id'] ?? -1) !== $channelId
         ) {
             throw new SearchQueryException(
                 SearchQueryException::ERROR_DIRECT_CONTRACT,

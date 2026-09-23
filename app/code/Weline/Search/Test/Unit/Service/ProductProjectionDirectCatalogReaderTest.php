@@ -34,7 +34,8 @@ final class ProductProjectionDirectCatalogReaderTest extends TestCase
         ]);
 
         self::assertSame(12, $read->sourceWatermark);
-        self::assertSame(5, $read->sourceDocumentCount);
+        // Scope snapshot excludes other store/channel rows before filter.
+        self::assertSame(3, $read->sourceDocumentCount);
         self::assertSame(['1', '2'], \array_column($read->hits, 'entity_id'));
         self::assertSame('neutral', $read->hits[0]['dimension_source']);
         self::assertSame('exact', $read->hits[1]['dimension_source']);
@@ -117,6 +118,35 @@ final class ProductProjectionSourceStub implements ProductSearchProjectionSource
             'documents' => $this->documents,
             'snapshot_hash' => \hash('sha256', (string)\json_encode(
                 $this->documents,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            )),
+        ];
+    }
+
+    public function snapshotScope(int $websiteId, int $storeId, int $channelId): array
+    {
+        $documents = [];
+        foreach ($this->documents as $document) {
+            if ((int)($document['store_id'] ?? -1) !== $storeId
+                || (int)($document['channel_id'] ?? -1) !== $channelId
+            ) {
+                continue;
+            }
+            $documents[] = $document;
+        }
+
+        return [
+            'contract' => 'product.search_projection_snapshot.v1',
+            'scope_contract' => 'product.search_projection_scope_snapshot.v1',
+            'website_id' => $websiteId,
+            'store_id' => $storeId,
+            'channel_id' => $channelId,
+            'source_watermark' => $this->watermark,
+            'scope_count' => 1,
+            'document_count' => \count($documents),
+            'documents' => $documents,
+            'snapshot_hash' => \hash('sha256', (string)\json_encode(
+                $documents,
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
             )),
         ];

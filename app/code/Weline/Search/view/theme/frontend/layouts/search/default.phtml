@@ -872,6 +872,13 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         text-decoration: underline;
     }
 
+    .storefront-search__section-empty {
+        margin: 0;
+        padding: var(--weline-space-3, 0.75rem) 0;
+        color: var(--weline-theme-body-muted, var(--color-text-secondary, #666));
+        font-size: var(--weline-font-size-sm, 0.875rem);
+    }
+
     @media (max-width: 900px) {
         .search-layout__body--with-sidebar {
             grid-template-columns: 1fr;
