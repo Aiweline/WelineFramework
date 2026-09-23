@@ -11,7 +11,6 @@ use Weline\Smtp\Model\SmtpMailTemplate;
 use Weline\Smtp\Service\MailChannelCollector;
 use Weline\Smtp\Service\MailTemplateRenderer;
 use Weline\Smtp\Service\MailTemplateResolver;
-use Weline\Smtp\Service\MailTemplateSeedCopyCatalog;
 use Weline\Smtp\Service\MailTemplateSeeder;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
@@ -31,7 +30,6 @@ class Template extends BackendController
         $workScope = $this->resolveWorkScope(true);
         $storageScope = (string)$workScope['storage_scope'];
 
-        MailTemplateSeedCopyCatalog::materializeFiles();
         /** @var MailTemplateSeeder $seeder */
         $seeder = ObjectManager::getInstance(MailTemplateSeeder::class);
         $seeder->syncAll(SystemConfig::SCOPE_GLOBAL);
@@ -352,6 +350,11 @@ class Template extends BackendController
             $seeder = ObjectManager::getInstance(MailTemplateSeeder::class);
             $seeder->syncChannel($meta, $storageScope);
         }
+
+        // UC-1：重置正文后清空当前 storage_scope 壳区，预览回落 shell.phtml
+        /** @var \Weline\Smtp\Service\MailShellRegionStore $shellRegionStore */
+        $shellRegionStore = ObjectManager::getInstance(\Weline\Smtp\Service\MailShellRegionStore::class);
+        $shellRegionStore->clear($storageScope);
 
         $this->getMessageManager()->addSuccess(__('已重置为默认模板'));
         $returnState = $this->listingReturnState(true);

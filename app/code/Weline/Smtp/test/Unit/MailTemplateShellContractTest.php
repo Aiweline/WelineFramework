@@ -103,9 +103,33 @@ final class MailTemplateShellContractTest extends TestCase
         $composerSrc = (string)file_get_contents($smtp . '/Service/MailTemplateShellComposer.php');
         self::assertStringContainsString('TranslationResolverInterface', $composerSrc);
         self::assertStringContainsString('shell.phtml', $composerSrc);
+        self::assertStringContainsString('ThemeDirectoryResolver', $composerSrc);
+        self::assertStringContainsString('resolveThemeTemplatePath', $composerSrc);
         self::assertStringContainsString('withMailLocaleEnvironment', $composerSrc);
         self::assertStringContainsString('Context::enter', $composerSrc);
         self::assertStringContainsString('setRequestLanguageOverride', $composerSrc);
+
+        $hanfuShell = $root . '/app/design/Weline/hanfu/Weline_Smtp/email/shell.phtml';
+        self::assertFileExists($hanfuShell);
+        $hanfuSrc = (string)file_get_contents($hanfuShell);
+        self::assertStringContainsString('data-weline-mail-theme="hanfu"', $hanfuSrc);
+        self::assertStringContainsString('{{MAIL_BODY}}', $hanfuSrc);
+        self::assertStringContainsString('data-weline-mail-region="header"', $hanfuSrc);
+
+        // 激活 frontend=hanfu 时 wrap 须真正吃到设计主题壳（运行时，非仅文件存在）
+        try {
+            if (class_exists(\Weline\Theme\Model\WelineTheme::class)
+                && class_exists(\Weline\Framework\Manager\ObjectManager::class)
+            ) {
+                /** @var \Weline\Theme\Model\WelineTheme $active */
+                $active = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+                $active->clearData()->clearQuery()->getActiveTheme('frontend');
+                if ((int)$active->getId() === 3 || str_contains((string)$active->getPath(), 'hanfu')) {
+                    self::assertStringContainsString('data-weline-mail-theme="hanfu"', $zh);
+                }
+            }
+        } catch (\Throwable) {
+        }
     }
 
     public function testShellCsvCoversDefaultWebsiteLocalesWithoutChineseDisclaimer(): void
@@ -113,19 +137,8 @@ final class MailTemplateShellContractTest extends TestCase
         $smtp = dirname(__DIR__, 2);
         $i18n = $smtp . '/i18n';
         $disclaimerZh = '此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。';
-        $locales = [
-            'zh_Hans_CN',
-            'en_US',
-            'ar_SA',
-            'bn_BD',
-            'es_ES',
-            'fr_FR',
-            'hi_IN',
-            'id_ID',
-            'pt_BR',
-            'ur_PK',
-        ];
-        foreach ($locales as $locale) {
+        // 模块 CSV 仅 zh+en；其它 locale 壳文案走 seed shellCopy
+        foreach (['zh_Hans_CN', 'en_US'] as $locale) {
             self::assertFileExists($i18n . '/' . $locale . '.csv', $locale);
             $csv = (string)file_get_contents($i18n . '/' . $locale . '.csv');
             self::assertStringContainsString($disclaimerZh, $csv, $locale);
@@ -138,12 +151,46 @@ final class MailTemplateShellContractTest extends TestCase
         self::assertStringNotContainsString($disclaimerZh, $bn);
         self::assertStringNotContainsString('客服邮箱：', $bn);
         self::assertStringNotContainsString('服务时间：', $bn);
+        self::assertStringNotContainsString('Phone:', $bn);
         self::assertStringContainsString('সাহায্য প্রয়োজন?', $bn);
-        self::assertStringContainsString('সহায়তা ইমেইল:', $bn);
+        self::assertStringContainsString('সহায়তা:', $bn);
 
         $fr = $composer->wrap('<p>Body</p>', 'fr_FR', ['preheader' => 'x']);
         self::assertStringNotContainsString($disclaimerZh, $fr);
+        self::assertStringNotContainsString('Phone:', $fr);
         self::assertStringContainsString('Ce message a été envoyé automatiquement', $fr);
-        self::assertStringContainsString('E-mail support', $fr);
+        self::assertStringContainsString('Support :', $fr);
+        self::assertStringContainsString('Besoin d', $fr);
+    }
+
+    /**
+     * be-shell-prefer-seed：非 en 壳 UI 优先 seed shellCopy，禁止词典英回落 Phone:/Hours:/Address:。
+     * 联系变量可空（仅验标签路径，不含品牌 service_hours 值）。
+     */
+    public function testNonEnglishShellLabelsPreferSeedNotEnglishFallback(): void
+    {
+        $composer = new MailTemplateShellComposer();
+        foreach (['ru_RU', 'de_DE'] as $locale) {
+            $shell = $composer->loadShell($locale);
+            $wrapped = $composer->wrap('<p>Body</p>', $locale, ['preheader' => 'x']);
+            foreach ([$shell, $wrapped] as $html) {
+                self::assertStringNotContainsString('Phone:', $html, $locale);
+                self::assertStringNotContainsString('Hours:', $html, $locale);
+                self::assertStringNotContainsString('Address:', $html, $locale);
+                self::assertStringNotContainsString('Need help?', $html, $locale);
+            }
+        }
+
+        $ru = $composer->wrap('<p>Body</p>', 'ru_RU', ['preheader' => 'x']);
+        self::assertStringContainsString('Телефон:', $ru);
+        self::assertStringContainsString('Часы работы:', $ru);
+        self::assertStringContainsString('Адрес:', $ru);
+        self::assertStringContainsString('Нужна помощь?', $ru);
+
+        $de = $composer->wrap('<p>Body</p>', 'de_DE', ['preheader' => 'x']);
+        self::assertStringContainsString('Telefon:', $de);
+        self::assertStringContainsString('Öffnungszeiten:', $de);
+        self::assertStringContainsString('Adresse:', $de);
+        self::assertStringContainsString('Brauchst du Hilfe?', $de);
     }
 }

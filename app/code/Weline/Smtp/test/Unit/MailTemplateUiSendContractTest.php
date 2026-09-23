@@ -44,6 +44,13 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('function getEdit', $controller);
         self::assertStringContainsString('postSave', $controller);
         self::assertStringContainsString('postReset', $controller);
+        // UC-1：postReset 须清空当前 storage_scope 壳区
+        self::assertMatchesRegularExpression(
+            '/function postReset\(\): string\s*\{.*?->clear\(\$storageScope\)/s',
+            $controller
+        );
+        self::assertStringContainsString('MailShellRegionStore', $controller);
+        self::assertStringContainsString('shellRegionStore->clear', $controller);
         self::assertStringContainsString('postCopy', $controller);
         self::assertStringContainsString('SOURCE_CUSTOM', $controller);
         self::assertStringContainsString('normalizeEmailHtml', $controller);
@@ -191,6 +198,9 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('form="smtp-template-reset-form"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-copy"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-reset"', $edit);
+        self::assertStringContainsString('onsubmit="return confirm(', $edit);
+        self::assertStringContainsString('确定重置为默认模板？将丢失自定义正文以及页头/页尾改动。', $edit);
+        self::assertStringContainsString('data-testid="smtp-template-reset-form"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-save"', $edit);
         self::assertStringNotContainsString('view/templates/Backend/Template/edit.phtml', $edit);
         self::assertDoesNotMatchRegularExpression('/<textarea[^>]*\seditor\b/', $edit);
@@ -254,14 +264,10 @@ final class MailTemplateUiSendContractTest extends TestCase
 
     public function testUnpaidOrderReminderTemplateIfCleared(): void
     {
-        $root = dirname(__DIR__, 2);
-        $file = $root . '/view/email/unpaid_order_reminder/en_US.html';
-        if (!is_file($file)) {
-            // 模块种子在 Marketing；Smtp catalog 同步同语法
-            $file = dirname($root) . '/Marketing/view/email/unpaid_order_reminder/en_US.html';
-        }
-        self::assertFileExists($file);
-        $tpl = (string)file_get_contents($file);
+        $copy = \Weline\Smtp\Service\MailTemplateSeedCopyCatalog::forSlug('unpaid_order_reminder', 'en_US');
+        self::assertNotNull($copy);
+        $tpl = (string)($copy['body'] ?? '');
+        self::assertNotSame('', $tpl);
         $renderer = new \Weline\Smtp\Service\MailTemplateRenderer();
         $out = $renderer->render($tpl, [
             'customer_name' => 'Buyer',

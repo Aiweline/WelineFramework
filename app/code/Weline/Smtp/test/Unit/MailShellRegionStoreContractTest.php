@@ -68,4 +68,14 @@ final class MailShellRegionStoreContractTest extends TestCase
         self::assertStringContainsString('<p>DISCLAIMER</p>', $out);
         self::assertStringNotContainsString('OLD', $out);
     }
+
+    public function testClearMethodPersistsEmptyRegionsViaSave(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/MailShellRegionStore.php');
+        self::assertStringContainsString('function clear(string $storageScope)', $src);
+        self::assertMatchesRegularExpression(
+            '/function clear\(string \$storageScope\): void\s*\{[^}]*\$this->save\(\$storageScope,\s*\'\',\s*\[\]\)/s',
+            $src
+        );
+    }
 }

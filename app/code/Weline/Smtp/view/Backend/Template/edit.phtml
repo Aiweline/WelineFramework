@@ -500,7 +500,8 @@ $renderVarButtons = static function (array $list) use ($h): void {
         </details>
     </form>
 
-    <form id="smtp-template-reset-form" method="post" action="<?= $h($resetUrl) ?>" data-testid="smtp-template-reset-form" hidden>
+    <form id="smtp-template-reset-form" method="post" action="<?= $h($resetUrl) ?>" data-testid="smtp-template-reset-form" hidden
+          onsubmit="return confirm(<?= json_encode((string)__('确定重置为默认模板？将丢失自定义正文以及页头/页尾改动。'), $jsonFlags) ?>);">
         <input type="hidden" name="mail_channel" value="<?= $h($channel) ?>"/>
         <input type="hidden" name="locale" value="<?= $h($locale) ?>"/>
         <input type="hidden" name="storage_scope" value="<?= $h($selectedScope) ?>"/>

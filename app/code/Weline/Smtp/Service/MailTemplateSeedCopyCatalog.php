@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Weline\Smtp\Service;
 
 /**
- * Explicit mail-template seed copy for default-website locales beyond zh/en files.
- * Source of truth for generated locale files; do not rely on CLI __() locale.
+ * Explicit mail-template seed copy for default-website locales beyond zh disk files.
+ * Non-zh locales render from JSON packs into DB via Seeder — never write view/email/{locale}.* .
  *
  * @phpstan-type CopyRow array{subject:string,body:string}
  */
@@ -28,12 +28,33 @@ final class MailTemplateSeedCopyCatalog
 
     /**
      * Locales with maintained seed copy (must cover default-website languages).
+     * Union of zh/en baseline + JSON packs + WebsiteLanguage default-site set.
      *
      * @return list<string>
      */
     public static function maintainedLocales(): array
     {
-        return array_merge(self::baselineLocales(), array_keys(self::json()));
+        $codes = array_merge(self::baselineLocales(), array_keys(self::json()));
+        try {
+            foreach (MailTemplateSeedLocaleResolver::forDefaultWebsite() as $code) {
+                $codes[] = $code;
+            }
+        } catch (\Throwable) {
+            // Unit tests / no websites runtime: keep baseline + JSON.
+        }
+
+        $seen = [];
+        $out = [];
+        foreach ($codes as $code) {
+            $code = trim((string)$code);
+            if ($code === '' || isset($seen[$code])) {
+                continue;
+            }
+            $seen[$code] = true;
+            $out[] = $code;
+        }
+
+        return $out;
     }
 
     /**
@@ -46,8 +67,8 @@ final class MailTemplateSeedCopyCatalog
         if ($locale === '' || $slug === '') {
             return null;
         }
-        if ($locale === self::LOCALE_ZH || $locale === self::LOCALE_EN) {
-            return null; // file-backed
+        if ($locale === self::LOCALE_ZH) {
+            return null; // zh_Hans_CN remains module disk files only
         }
         $pack = self::json()[$locale] ?? null;
         if (!is_array($pack)) {
@@ -87,63 +108,42 @@ final class MailTemplateSeedCopyCatalog
     }
 
     /**
-     * Materialize locale HTML/subject (+ shells) under module view/email trees.
+     * Channel template slugs known to the seed catalog (for contracts / tooling).
      *
+     * @return list<string>
+     */
+    public static function seedSlugs(): array
+    {
+        return [
+            'notification',
+            'password_reset',
+            'email_binding',
+            'fulfillment_consolation',
+            'unpaid_order_reminder',
+            'checkout_abandon_reminder',
+            'cart_abandon_reminder',
+            'welcome_customer',
+            'subscribe_welcome',
+            'subscribe_gift',
+            'order_created',
+            'order_paid',
+            'order_status_changed',
+            'order_shipped',
+            'order_refund',
+            'product_update',
+            'quote_reply',
+        ];
+    }
+
+    /**
+     * @deprecated 2026-09-23 禁止写盘；留空实现以免旧调用点炸。请只走 Seeder::syncAll。
+     *
+     * @param list<string>|null $locales
      * @return array{written:int,skipped:int}
      */
-    public static function materializeFiles(?string $repoRoot = null): array
+    public static function materializeFiles(?string $repoRoot = null, ?array $locales = null): array
     {
-        // Service → Smtp → Weline → code → app → repo
-        $repoRoot = $repoRoot !== null && $repoRoot !== ''
-            ? $repoRoot
-            : dirname(__DIR__, 5);
-        $written = 0;
-        $skipped = 0;
-        $targets = [
-            ['Weline/Backend/view/email/notification', 'notification'],
-            ['Weline/Visitor/view/email/notification', 'notification'],
-            ['Weline/Websites/view/email/notification', 'notification'],
-            ['Weline/Customer/view/email/password_reset', 'password_reset'],
-            ['Weline/CustomerService/view/email/email_binding', 'email_binding'],
-            ['Weline/Dropship/view/email/fulfillment_consolation', 'fulfillment_consolation'],
-            ['Weline/Marketing/view/email/unpaid_order_reminder', 'unpaid_order_reminder'],
-            ['Weline/Order/view/email/order_created', 'order_created'],
-            ['Weline/Order/view/email/order_paid', 'order_paid'],
-            ['Weline/Order/view/email/order_status_changed', 'order_status_changed'],
-            ['Weline/Order/view/email/order_shipped', 'order_shipped'],
-            ['Weline/Order/view/email/order_refund', 'order_refund'],
-            ['Weline/Product/view/email/product_update', 'product_update'],
-            ['Weline/Product/view/email/quote_reply', 'quote_reply'],
-        ];
-        foreach (array_keys(self::json()) as $locale) {
-            foreach ($targets as [$rel, $slug]) {
-                $copy = self::forSlug($slug, $locale);
-                if ($copy === null) {
-                    ++$skipped;
-                    continue;
-                }
-                $dir = rtrim($repoRoot, '/\\') . '/app/code/' . $rel;
-                if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
-                    ++$skipped;
-                    continue;
-                }
-                $bodyPath = $dir . '/' . $locale . '.html';
-                $subjPath = $dir . '/' . $locale . '.subject.txt';
-                if (@file_put_contents($bodyPath, $copy['body']) !== false) {
-                    ++$written;
-                } else {
-                    ++$skipped;
-                }
-                if (@file_put_contents($subjPath, $copy['subject'] . "\n") !== false) {
-                    ++$written;
-                } else {
-                    ++$skipped;
-                }
-            }
-            // 壳已改 shell.phtml + <lang>；不再物化多语言静态 shell/*.html
-        }
-
-        return compact('written', 'skipped');
+        return ['written' => 0, 'skipped' => 0];
     }
 
     /**
@@ -182,6 +182,11 @@ final class MailTemplateSeedCopyCatalog
             'email_binding' => self::emailBindingBody($row, $h1Style, $divStyle),
             'fulfillment_consolation' => self::fulfillmentBody($row, $shared, $h1Style, $divStyle, $tdL, $tdR),
             'unpaid_order_reminder' => self::unpaidBody($row, $shared, $h1Style, $divStyle, $tdL, $tdR),
+            'cart_abandon_reminder' => self::cartAbandonBody($row, $h1Style, $divStyle, $tdL, $tdR),
+            'checkout_abandon_reminder' => self::checkoutAbandonBody($row, $h1Style, $divStyle, $tdL, $tdR),
+            'welcome_customer' => self::welcomeCustomerBody($row, $h1Style, $divStyle),
+            'subscribe_welcome' => self::subscribeWelcomeBody($row),
+            'subscribe_gift' => self::subscribeGiftBody($row),
             'order_created', 'order_paid', 'order_status_changed', 'order_shipped', 'order_refund'
                 => self::orderBody($row, $shared, $h1Style, $divStyle, $tdL, $tdR),
             'product_update', 'quote_reply' => self::simpleMessageBody($row, $h1Style, $divStyle),
@@ -317,6 +322,137 @@ HTML;
             </div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;"><tr><td style="{$tdL}">{$orderNo}</td><td style="{$tdR}">{{var.order_number}}</td></tr><tr><td style="{$tdL}">{$total}</td><td style="{$tdR}">{{var.currency}} {{var.grand_total}}</td></tr><tr><td style="{$tdL}">{$placed}</td><td style="{$tdR}">{{var.created_at}}</td></tr></table>
 <p style="margin:24px 0 0;">{{#if var.continue_pay_url}}<a href="{{var.continue_pay_url}}" style="display:inline-block;padding:12px 20px;background:#16333f;color:#fff;text-decoration:none;border-radius:4px;">{$cta}</a>{{/if}}</p>
+
+HTML;
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function cartAbandonBody(array $row, string $h1, string $div, string $tdL, string $tdR): string
+    {
+        $pre = htmlspecialchars((string)($row['preheader'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $title = htmlspecialchars((string)($row['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $hello = htmlspecialchars((string)($row['hello'] ?? 'Hello {{var.customer_name}},'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $p2 = htmlspecialchars((string)($row['p2'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $coupon = htmlspecialchars((string)($row['coupon'] ?? 'Coupon code:'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $items = htmlspecialchars((string)($row['items'] ?? 'Items'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $total = htmlspecialchars((string)($row['total'] ?? 'Total'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $updated = htmlspecialchars((string)($row['updated_at'] ?? 'Updated at'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $cta = htmlspecialchars((string)($row['cta'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return <<<HTML
+<!-- mail:preheader: {$pre} -->
+<h1 style="{$h1}">{$title}</h1>
+            <div style="{$div}">
+<p style="margin:0 0 12px;">{$hello}</p>
+<p style="margin:0 0 12px;">{$p2}</p>
+            </div>
+{{#if var.coupon_code}}
+<div style="margin:16px 0;padding:12px 14px;border:1px dashed #c5d4da;border-radius:8px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16333f;">{$coupon} <strong>{{var.coupon_code}}</strong></div>
+{{/if}}
+{{#if var.items_html}}
+<div style="margin:18px 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.02em;color:#5c6b74;">{$items}</div>
+{{var.items_html|raw}}
+{{/if}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;"><tr><td style="{$tdL}">{$total}</td><td style="{$tdR}">{{var.currency}} {{var.grand_total}}</td></tr><tr><td style="{$tdL}">{$updated}</td><td style="{$tdR}">{{var.created_at}}</td></tr></table>
+<p style="margin:24px 0 0;">{{#if var.continue_cart_url}}<a href="{{var.continue_cart_url}}" style="display:inline-block;padding:12px 20px;background:#16333f;color:#fff;text-decoration:none;border-radius:4px;">{$cta}</a>{{/if}}</p>
+
+HTML;
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function checkoutAbandonBody(array $row, string $h1, string $div, string $tdL, string $tdR): string
+    {
+        $pre = htmlspecialchars((string)($row['preheader'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $title = htmlspecialchars((string)($row['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $hello = htmlspecialchars((string)($row['hello'] ?? 'Hello {{var.customer_name}},'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $p2 = htmlspecialchars((string)($row['p2'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $coupon = htmlspecialchars((string)($row['coupon'] ?? 'Coupon code:'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $items = htmlspecialchars((string)($row['items'] ?? 'Items'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $total = htmlspecialchars((string)($row['total'] ?? 'Total'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $started = htmlspecialchars((string)($row['started_at'] ?? 'Started at'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $cta = htmlspecialchars((string)($row['cta'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return <<<HTML
+<!-- mail:preheader: {$pre} -->
+<h1 style="{$h1}">{$title}</h1>
+            <div style="{$div}">
+<p style="margin:0 0 12px;">{$hello}</p>
+<p style="margin:0 0 12px;">{$p2}</p>
+            </div>
+{{#if var.coupon_code}}
+<div style="margin:16px 0;padding:12px 14px;border:1px dashed #c5d4da;border-radius:8px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16333f;">{$coupon} <strong>{{var.coupon_code}}</strong></div>
+{{/if}}
+{{#if var.items_html}}
+<div style="margin:18px 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.02em;color:#5c6b74;">{$items}</div>
+{{var.items_html|raw}}
+{{/if}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;"><tr><td style="{$tdL}">{$total}</td><td style="{$tdR}">{{var.currency}} {{var.grand_total}}</td></tr><tr><td style="{$tdL}">{$started}</td><td style="{$tdR}">{{var.created_at}}</td></tr></table>
+<p style="margin:24px 0 0;">{{#if var.continue_checkout_url}}<a href="{{var.continue_checkout_url}}" style="display:inline-block;padding:12px 20px;background:#16333f;color:#fff;text-decoration:none;border-radius:4px;">{$cta}</a>{{/if}}</p>
+
+HTML;
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function welcomeCustomerBody(array $row, string $h1, string $div): string
+    {
+        $pre = htmlspecialchars((string)($row['preheader'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $title = htmlspecialchars((string)($row['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $p1 = htmlspecialchars((string)($row['p1'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $p2 = htmlspecialchars((string)($row['p2'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $coupon = htmlspecialchars((string)($row['coupon'] ?? 'Your welcome coupon:'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return <<<HTML
+<!-- mail:preheader: {$pre} -->
+<h1 style="{$h1}">{$title}</h1>
+<div style="{$div}">
+<p style="margin:0 0 12px;">{$p1}</p>
+<p style="margin:0 0 12px;">{$p2}</p>
+</div>
+{{#if var.coupon_code}}
+<div style="margin:16px 0;padding:12px 14px;border:1px dashed #c5d4da;border-radius:8px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16333f;">{$coupon}<strong>{{var.coupon_code}}</strong></div>
+{{/if}}
+
+HTML;
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function subscribeWelcomeBody(array $row): string
+    {
+        $pre = htmlspecialchars((string)($row['preheader'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $title = htmlspecialchars((string)($row['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $p1 = (string)($row['p1'] ?? '');
+        $p2 = (string)($row['p2'] ?? '');
+
+        return <<<HTML
+<!-- mail:preheader: {$pre} -->
+<h1 style="margin:0 0 14px;font-size:22px;line-height:1.35;font-weight:700;color:#16333f;">{$title}</h1>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#33434c;">{$p1}</p>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#33434c;">{$p2}</p>
+
+HTML;
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function subscribeGiftBody(array $row): string
+    {
+        $pre = htmlspecialchars((string)($row['preheader'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $title = htmlspecialchars((string)($row['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $p1 = (string)($row['p1'] ?? '');
+        $p2 = (string)($row['p2'] ?? '');
+        $cta = htmlspecialchars((string)($row['cta'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return <<<HTML
+<!-- mail:preheader: {$pre} -->
+<h1 style="margin:0 0 14px;font-size:22px;line-height:1.35;font-weight:700;color:#16333f;">{$title}</h1>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#33434c;">{$p1}</p>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#33434c;">{$p2}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 10px;">
+  <tr>
+    <td align="center" bgcolor="#e8a14a" style="background:#e8a14a;border:1px solid #d48f3a;">
+      <a href="{{var.shop_url}}" target="_blank" style="display:inline-block;padding:14px 26px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#16333f;text-decoration:none;border:0;">{$cta}</a>
+    </td>
+  </tr>
+</table>
 
 HTML;
     }

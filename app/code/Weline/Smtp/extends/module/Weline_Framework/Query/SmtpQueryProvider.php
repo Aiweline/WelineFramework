@@ -217,6 +217,16 @@ class SmtpQueryProvider implements QueryProviderInterface
             $bodyTpl = $shellComposer->extractBodyFragment($bodyTpl);
             $subject = $renderer->render($subjectTpl, $vars, $allowed);
             $content = $renderer->render($bodyTpl, $vars, $allowed);
+            $overrideSubject = trim((string)($params['override_subject'] ?? ''));
+            $overrideContent = (string)($params['override_content'] ?? '');
+            if ($overrideSubject !== '') {
+                $subject = $overrideSubject;
+            }
+            if ($overrideContent !== '') {
+                $content = $overrideContent;
+            }
+            // 架构契约：Subject 先补品牌，再作为壳 preheader（收件箱与页头一致）
+            $subject = $brandContext->ensureBrandedSubject($subject, $vars);
             $content = $shellComposer->wrap($content, $resolvedLocale !== '' ? $resolvedLocale : $ctx['locale'], [
                 'preheader' => $subject,
                 'storage_scope' => $storageScope,
@@ -228,14 +238,6 @@ class SmtpQueryProvider implements QueryProviderInterface
             } elseif ($alt === '') {
                 $alt = $renderer->htmlToText($content);
             }
-            $overrideSubject = trim((string)($params['override_subject'] ?? ''));
-            $overrideContent = (string)($params['override_content'] ?? '');
-            if ($overrideSubject !== '') {
-                $subject = $overrideSubject;
-            }
-            if ($overrideContent !== '') {
-                $content = $overrideContent;
-            }
             $params['scope'] = $storageScope;
             $params['locale'] = $resolvedLocale;
         }
@@ -246,6 +248,16 @@ class SmtpQueryProvider implements QueryProviderInterface
 
         $scope = $this->resolveScopeParam($params);
         $storageScope = $data->resolveScope($scope);
+
+        /** @var MailBrandContextService $brandContext */
+        $brandContext = ObjectManager::getInstance(MailBrandContextService::class);
+        $brandVars = $brandContext->mergeInto(
+            is_array($params['vars'] ?? null) ? $params['vars'] : [],
+            $storageScope,
+            $resolvedLocale !== '' ? $resolvedLocale : trim((string)($params['locale'] ?? ''))
+        );
+        // 架构契约：所有渠道 Subject 必须可见品牌（模板已含则不重复前缀）
+        $subject = $brandContext->ensureBrandedSubject($subject, $brandVars);
 
         if ($channel !== '') {
             $bound = $data->resolveTransportIdForChannel($channel, $module, $scope);
@@ -295,9 +307,35 @@ class SmtpQueryProvider implements QueryProviderInterface
             $username = trim((string)($senderConfig['smtp_username'] ?? ''));
             $fromResolved = $from;
             if (empty($fromResolved)) {
-                $fromResolved = ['email' => $username, 'name' => (string)($senderConfig['name'] ?? __('系统'))];
+                $fromResolved = [
+                    'email' => $username,
+                    'name' => $this->resolveFromDisplayName(
+                        (string)($senderConfig['name'] ?? ''),
+                        (string)$senderCode,
+                        $username,
+                        $storageScope,
+                        $resolvedLocale
+                    ),
+                ];
             } elseif (is_string($fromResolved)) {
-                $fromResolved = ['email' => $fromResolved, 'name' => __('系统')];
+                $fromResolved = [
+                    'email' => $fromResolved,
+                    'name' => $this->resolveFromDisplayName(
+                        '',
+                        (string)$senderCode,
+                        $fromResolved,
+                        $storageScope,
+                        $resolvedLocale
+                    ),
+                ];
+            } elseif (is_array($fromResolved)) {
+                $fromResolved['name'] = $this->resolveFromDisplayName(
+                    (string)($fromResolved['name'] ?? ''),
+                    (string)$senderCode,
+                    (string)($fromResolved['email'] ?? $username),
+                    $storageScope,
+                    $resolvedLocale
+                );
             }
             try {
                 $senderConfig['__channel'] = $channel;
@@ -329,9 +367,35 @@ class SmtpQueryProvider implements QueryProviderInterface
         }
         $fromResolved = $from;
         if (empty($fromResolved)) {
-            $fromResolved = ['email' => $username, 'name' => __('系统')];
+            $fromResolved = [
+                'email' => $username,
+                'name' => $this->resolveFromDisplayName(
+                    '',
+                    is_scalar($senderCode) ? (string)$senderCode : '',
+                    (string)$username,
+                    $storageScope,
+                    $resolvedLocale
+                ),
+            ];
         } elseif (is_string($fromResolved)) {
-            $fromResolved = ['email' => $fromResolved, 'name' => __('系统')];
+            $fromResolved = [
+                'email' => $fromResolved,
+                'name' => $this->resolveFromDisplayName(
+                    '',
+                    is_scalar($senderCode) ? (string)$senderCode : '',
+                    $fromResolved,
+                    $storageScope,
+                    $resolvedLocale
+                ),
+            ];
+        } elseif (is_array($fromResolved)) {
+            $fromResolved['name'] = $this->resolveFromDisplayName(
+                (string)($fromResolved['name'] ?? ''),
+                is_scalar($senderCode) ? (string)$senderCode : '',
+                (string)($fromResolved['email'] ?? $username),
+                $storageScope,
+                $resolvedLocale
+            );
         }
         $legacyConfig = [
             'smtp_host' => (string)$data->get(Data::smtp_host, $module, $scope),
@@ -395,10 +459,39 @@ class SmtpQueryProvider implements QueryProviderInterface
 
         $mailEmail = trim((string)($mailConfig['email'] ?? ''));
         $fromResolved = $from;
+        $configuredName = trim((string)($senderConfig['name'] ?? $mailConfig['display_name'] ?? ''));
         if (empty($fromResolved)) {
-            $fromResolved = ['email' => $mailEmail, 'name' => (string)($senderConfig['name'] ?? $mailConfig['display_name'] ?? __('系统'))];
+            $fromResolved = [
+                'email' => $mailEmail,
+                'name' => $this->resolveFromDisplayName(
+                    $configuredName,
+                    $senderCode,
+                    $mailEmail,
+                    $storageScope,
+                    (string)($senderConfig['__locale'] ?? '')
+                ),
+            ];
         } elseif (is_string($fromResolved)) {
-            $fromResolved = ['email' => $fromResolved, 'name' => __('系统')];
+            $fromResolved = [
+                'email' => $fromResolved,
+                'name' => $this->resolveFromDisplayName(
+                    $configuredName,
+                    $senderCode,
+                    $fromResolved,
+                    $storageScope,
+                    (string)($senderConfig['__locale'] ?? '')
+                ),
+            ];
+        } elseif (is_array($fromResolved)) {
+            $fromResolved['name'] = $this->resolveFromDisplayName(
+                trim((string)($fromResolved['name'] ?? '')) !== ''
+                    ? (string)$fromResolved['name']
+                    : $configuredName,
+                $senderCode,
+                (string)($fromResolved['email'] ?? $mailEmail),
+                $storageScope,
+                (string)($senderConfig['__locale'] ?? '')
+            );
         }
 
         if (!empty($mailConfig['is_fake'])) {
@@ -536,6 +629,28 @@ class SmtpQueryProvider implements QueryProviderInterface
             $sendLog->save();
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * 发件人显示名：委托 MailBrandContextService（全渠道架构契约）。
+     */
+    private function resolveFromDisplayName(
+        string $configuredName,
+        string $senderCode,
+        string $emailOrUsername,
+        string $storageScope,
+        string $locale = ''
+    ): string {
+        /** @var MailBrandContextService $brand */
+        $brand = ObjectManager::getInstance(MailBrandContextService::class);
+
+        return $brand->resolveFromDisplayName(
+            $configuredName,
+            $senderCode,
+            $emailOrUsername,
+            $storageScope,
+            $locale
+        );
     }
 
     private function normalizeSingleEmailEntry(string|array $entry): array
