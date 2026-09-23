@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     newsletterSubscribe: {
         paths: [
-            "Weline_Newsletter::js/newsletter-subscribe.js?v=20260922-scroll-lock"
+            "Weline_Newsletter::js/newsletter-subscribe.js?v=20260922-deferred-p206"
         ],
         globalVar: "WelineNewsletterSubscribe",
         load: "defer",

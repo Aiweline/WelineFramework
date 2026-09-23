@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_StoreMusic::js/widgets/widget-store-music-0.js,Weline_StoreMusic::js/widgets/widget-store-music-1.js,Weline_StoreMusic::css/widgets/widget-store-music.css,Weline_StoreMusic::css/store-music.css}
  * StoreMusic float — required default_injection + Hook share this template.
  *
  * @widget.code {store-music}
@@ -11,9 +12,9 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {content}
  * @widget.supports {["store-music","layout-homepage-content","content"]}
- * @widget.default_injections {[{ "layout_type":"homepage", "slot":"content", "area":"content", "sort_order":900, "required":true, "reason":"店面默认进店音乐浮层；恢复原始布局后 required 回填", "config":{"enabled":true,"tracks":[],"delay_seconds":3,"try_autoplay":true,"loop":true,"default_volume":8,"avatar_spin":false,"waveform_default":false} }]}
+ * @widget.default_injections {[{ "layout_type":"homepage", "slot":"content", "area":"content", "sort_order":900, "required":true, "reason":"店面默认进店音乐浮层；恢复原始布局后 required 回填", "config":{"enabled":false,"tracks":[],"delay_seconds":3,"try_autoplay":true,"loop":true,"default_volume":8,"avatar_spin":false,"waveform_default":false} }]}
  *
- * @param enabled {default=true,type="bool",label="启用进店音乐",i18n=false}
+ * @param enabled {default=false,type="bool",label="启用进店音乐",i18n=false}
  * @param tracks {default=[],type="array",label="进店曲目",i18n=false}
  * @param delay_seconds {default=3,type="range",label="延迟秒数",min=1,max=15,i18n=false}
  * @param try_autoplay {default=true,type="bool",label="尝试自动播放",i18n=false}
@@ -39,6 +40,12 @@ $presenceStub = static function (string $reason): void {
         . ' data-store-music-skipped="' . $escReason . '"'
         . ' aria-hidden="true"></span>';
 };
+// Layout / default_injection placement: emit presence only. Body-end Hook owns
+// the audible float (avoids discarded-SSR gate claims starving the player).
+if (empty($GLOBALS['__weline_store_music_from_hook'])) {
+    $presenceStub('hook-owned');
+    return;
+}
 if (!$settings->isWidgetActive($widgetConfig)) {
     $presenceStub('inactive');
     return;
@@ -87,55 +94,9 @@ try {
 $cssUrl = $esc($cssUrl);
 $faceUrl = $esc($faceUrl);
 ?>
-<script data-weline-store-music-purge="1">
-/* Immediate cold purge: stop orphan StoreMusic decoders before deferred module boots. */
-(function () {
-    try {
-        var reg = window.__WelineStoreMusicAudioRegistry;
-        if (reg && reg.length) {
-            for (var i = 0; i < reg.length; i++) {
-                var a = reg[i];
-                if (!a) continue;
-                try { a.pause(); } catch (e0) {}
-                try { a.muted = true; a.volume = 0; a.removeAttribute('src'); a.src = ''; a.load(); } catch (e1) {}
-            }
-        }
-        window.__WelineStoreMusicAudioRegistry = [];
-        var shared = window.__WelineStoreMusicSharedAudio;
-        if (shared) {
-            try { shared.pause(); shared.muted = true; shared.src = ''; shared.load(); } catch (e2) {}
-        }
-        window.__WelineStoreMusicSharedAudio = null;
-        if (window.__WelineStoreMusicSharedCtx && window.__WelineStoreMusicSharedCtx.close) {
-            try { window.__WelineStoreMusicSharedCtx.close(); } catch (e3) {}
-        }
-        window.__WelineStoreMusicSharedCtx = null;
-        window.__WelineStoreMusicSharedAnalyser = null;
-        window.__WelineStoreMusicSharedSource = null;
-        window.__WelineStoreMusicLive = null;
-        var nodes = document.querySelectorAll('audio,video');
-        for (var j = 0; j < nodes.length; j++) {
-            var el = nodes[j];
-            var src = '';
-            try {
-                src = String(el.currentSrc || el.src || '') + String(el.getAttribute('data-store-music-src') || '');
-            } catch (e4) { src = ''; }
-            if (src.indexOf('store-music') !== -1 || el.getAttribute('data-store-music-audio') === '1') {
-                try { el.pause(); el.muted = true; el.removeAttribute('src'); el.src = ''; el.load(); } catch (e5) {}
-            }
-        }
-        if (navigator.mediaSession) {
-            try { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; } catch (e6) {}
-        }
-    } catch (e) {}
-})();
-</script>
-<div class="w-store-music-host" data-store-music-host aria-hidden="false" style="position:static;display:block;width:0;height:0;margin:0;padding:0;border:0;overflow:visible;">
+<span hidden data-widget-script="storemusic-store-music-0"></span>
+<div class="w-store-music-host" data-store-music-host aria-hidden="false" data-widget-style-class="077587d4f9d73a11">
 
-<link rel="stylesheet"
-      href="<?= $cssUrl ?>"
-      data-no-extract="true"
-      data-weline-store-music="1">
 <canvas id="weline-store-music-wave"
         class="w-store-music-wave"
         data-store-music-wave
@@ -316,3 +277,4 @@ $faceUrl = $esc($faceUrl);
 </aside>
 
 </div>
+<span hidden data-widget-script="storemusic-store-music-1"></span>

@@ -64,6 +64,9 @@ final class SubscribeServiceContractTest extends TestCase
         self::assertSame('Weline_Newsletter::subscribe_welcome', NewsletterMailSender::CHANNEL_WELCOME);
         self::assertSame('Weline_Newsletter::subscribe_gift', NewsletterMailSender::CHANNEL_GIFT);
 
+        $mailSrc = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/NewsletterMailSender.php');
+        self::assertStringContainsString("result['success']", $mailSrc);
+
         $serviceSrc = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/SubscribeService.php');
         self::assertStringContainsString('sendGift', $serviceSrc);
         self::assertStringContainsString('sendWelcome', $serviceSrc);
@@ -84,6 +87,11 @@ final class SubscribeServiceContractTest extends TestCase
         self::assertFileExists(\dirname(__DIR__, 3) . '/view/email/subscribe_welcome/en_US.html');
         self::assertFileExists(\dirname(__DIR__, 3) . '/view/email/subscribe_gift/zh_Hans_CN.html');
         self::assertFileExists(\dirname(__DIR__, 3) . '/view/email/subscribe_gift/en_US.html');
+
+        $giftSubject = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/email/subscribe_gift/zh_Hans_CN.subject.txt');
+        $giftBody = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/email/subscribe_gift/zh_Hans_CN.html');
+        self::assertStringContainsString('{{var.brand_display_name}}', $giftSubject);
+        self::assertStringContainsString('{{var.brand_display_name}}', $giftBody);
     }
 
     public function testQueryProviderSubscribeOperation(): void

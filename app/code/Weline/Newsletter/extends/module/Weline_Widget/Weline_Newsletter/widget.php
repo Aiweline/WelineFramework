@@ -95,8 +95,10 @@ return [
             'required' => true,
             'reason' => '店面默认订阅弹窗；恢复原始布局后 required 回填',
             'config' => [
-                'trigger' => 'delay',
-                'delay_seconds' => 5,
+                'trigger' => 'deferred',
+                'delay_seconds' => 15,
+                'scroll_percent' => 40,
+                'min_open_seconds' => 3,
                 'show_once' => true,
                 'cookie_days' => 14,
             ],
@@ -115,8 +117,8 @@ return [
             'image' => [
                 'default' => '',
                 'type' => 'media_image',
-                'label' => '信笺信封图',
-                'description' => '可选自定义透明 WebP/PNG；空则用模块默认信封信笺壳（statics/images/newsletter-letter-envelope-shell.webp）',
+                'label' => '信笺图',
+                'description' => '可选自定义古风宣纸信笺（建议透明 WebP）；空则用模块默认 newsletter-xinjian-gufeng.webp',
             ],
             'button_text' => [
                 'default' => '立即订阅',
@@ -124,24 +126,31 @@ return [
                 'label' => '按钮文字',
             ],
             'trigger' => [
-                'default' => 'delay',
+                'default' => 'deferred',
                 'type' => 'select',
                 'label' => '触发方式',
                 'options' => [
+                    'deferred' => '组合延后（停留/滚动/退出意向）',
                     'delay' => '延迟显示',
                     'scroll' => '滚动触发',
                     'exit' => '退出意图',
                 ],
             ],
             'delay_seconds' => [
-                'default' => 5,
+                'default' => 15,
                 'type' => 'number',
                 'label' => '延迟秒数',
             ],
             'scroll_percent' => [
-                'default' => 50,
+                'default' => 40,
                 'type' => 'number',
                 'label' => '滚动百分比',
+            ],
+            'min_open_seconds' => [
+                'default' => 3,
+                'type' => 'number',
+                'label' => '最早弹出秒数',
+                'description' => '任意触发源在此秒数内禁止弹出（默认 3，首访首屏不立即弹）',
             ],
             'show_once' => [
                 'default' => true,

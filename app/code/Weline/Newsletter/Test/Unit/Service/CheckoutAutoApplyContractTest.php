@@ -66,7 +66,7 @@ final class CheckoutAutoApplyContractTest extends TestCase
     {
         $module = include \dirname(__DIR__, 3) . '/etc/module.php';
         self::assertIsArray($module);
-        self::assertSame('1.0.9', $module['version'] ?? '');
+        self::assertSame('1.0.11', $module['version'] ?? '');
         $provides = $module['provides'] ?? [];
         self::assertSame(
             CheckoutAutoApplyService::class,

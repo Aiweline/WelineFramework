@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Newsletter::css/widgets/widget-sidebar-newsletter-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 邮件订阅（侧栏）部件 — 自 Theme 迁入，避免残留双注册
  *
  * @var \Weline\Framework\View\Template $this
@@ -47,7 +48,7 @@ $textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--w
          data-source-surface="footer"
          data-testid="newsletter-sidebar"
          data-weline-load="newsletterSubscribe"
-         style="--wc-newsletter-bg: <?= $esc($bgColor) ?>;--wc-newsletter-text: <?= $esc($textColor) ?>;">
+         data-widget-style="--wc-newsletter-bg: <?= $esc($bgColor) ?>;--wc-newsletter-text: <?= $esc($textColor) ?>;">
     <div class="newsletter-icon">
         <w:icon name="mail" size="sm"></w:icon>
     </div>
@@ -86,85 +87,3 @@ $textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--w
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    background: var(--wc-newsletter-bg);
-    border-radius: var(--weline-radius-lg);
-    padding: var(--weline-space-6);
-    text-align: center;
-    color: var(--wc-newsletter-text);
-}
-
-.<?= $wc ?> .newsletter-icon {
-    width: var(--spacing-15);
-    height: var(--spacing-15);
-    background: color-mix(in srgb, var(--wc-newsletter-text) 20%, transparent);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto var(--weline-space-4);
-}
-
-.<?= $wc ?> .widget-title {
-    margin: 0 0 var(--weline-space-2);
-    font-size: var(--weline-font-size-lg);
-    color: var(--wc-newsletter-text);
-}
-
-.<?= $wc ?> .widget-description {
-    margin: 0 0 var(--weline-space-4);
-    font-size: var(--weline-font-size-sm);
-    opacity: 0.85;
-}
-
-.<?= $wc ?> .newsletter-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--weline-space-3);
-}
-
-.<?= $wc ?> .newsletter-input {
-    padding: var(--weline-space-3);
-    border: none;
-    border-radius: var(--weline-radius-md);
-    background: var(--weline-theme-surface-raised);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .newsletter-topics {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--weline-space-3);
-    font-size: var(--weline-font-size-xs);
-}
-
-.<?= $wc ?> .newsletter-topic {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--weline-space-1);
-    cursor: pointer;
-}
-
-.<?= $wc ?> .newsletter-submit {
-    padding: var(--weline-space-3);
-    border: none;
-    border-radius: var(--weline-radius-md);
-    background: color-mix(in srgb, var(--wc-newsletter-text) 18%, transparent);
-    color: var(--wc-newsletter-text);
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.<?= $wc ?> .newsletter-privacy {
-    margin: var(--weline-space-3) 0 0;
-    font-size: var(--weline-font-size-xs);
-    opacity: 0.8;
-}
-
-.<?= $wc ?> .newsletter-success {
-    margin-top: var(--weline-space-3);
-    font-size: var(--weline-font-size-sm);
-}
-</style>

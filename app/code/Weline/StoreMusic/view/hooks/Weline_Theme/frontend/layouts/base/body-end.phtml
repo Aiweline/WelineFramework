@@ -11,8 +11,6 @@
  * @hook-solo false
  */
 
-use Weline\StoreMusic\Service\StoreMusicLayoutPresence;
-
 $requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
 $requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
 $requestPath = strtolower((string)(is_string($requestPathParsed) && $requestPathParsed !== '' ? $requestPathParsed : $requestPathRaw));
@@ -24,11 +22,9 @@ if ($isAccountRoute || $isBackend) {
     return;
 }
 
-// Layout already places store-music → Hook yields (widget owns the float).
-// Applies equally to storefront publish and theme-preview/editor drafts.
-if (StoreMusicLayoutPresence::layoutPlacesWidget($this->request)) {
-    return;
-}
-
-// Use BP — compiled hook tpl changes its directory and would break a relative include.
+// Hook owns the audible float. Layout/default_injection may still place a
+// presence stub so required-injection health stays green.
+$GLOBALS['__weline_store_music_from_hook'] = true;
+\Weline\StoreMusic\Service\StoreMusicRenderGate::reset();
 include BP . '/app/code/Weline/StoreMusic/view/templates/frontend/widgets/store-music.phtml';
+$GLOBALS['__weline_store_music_from_hook'] = false;
