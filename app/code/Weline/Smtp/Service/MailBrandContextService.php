@@ -17,6 +17,7 @@ use Weline\Theme\Service\ThemeBrandResolver;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\Website\LocalDescription as WebsiteLocalDescription;
 use Weline\Websites\Model\WebsiteDomain;
 
 /**
@@ -121,6 +122,8 @@ class MailBrandContextService
         $names = $this->resolveScopeNames($storageScope);
         $siteUrl = $names['site_url'];
         $logoUrl = $this->resolveLogoAbsoluteUrl($storageScope, $siteUrl);
+        $locale = trim($locale);
+        $websiteLocal = $this->resolveWebsiteLocalFields((int)($names['website_id'] ?? -1), $locale);
 
         $siteName = $names['site_name'];
         if ($siteName === '' || preg_match('/^默认网站$|^Default(\s+Website)?$/iu', $siteName) === 1) {
@@ -128,15 +131,28 @@ class MailBrandContextService
                 $siteName = trim((string)$contact['site_name']);
             }
         }
+        if ($websiteLocal['name'] !== '') {
+            $siteName = $websiteLocal['name'];
+        }
         $storeName = $names['store_name'];
         $channelName = $names['channel_name'];
+        // 非中文邮件：店铺名若仍含汉字，优先用该语种站名作展示品牌，避免壳头/主题露中文
         $brandDisplay = $storeName !== '' ? $storeName : $siteName;
+        if ($locale !== '' && !$this->isChineseLocale($locale)
+            && $websiteLocal['name'] !== ''
+            && ($storeName === '' || preg_match('/[\x{4e00}-\x{9fff}]/u', $storeName) === 1)
+        ) {
+            $brandDisplay = $websiteLocal['name'];
+        }
         if ($brandDisplay === '' || preg_match('/默认网站|默认店铺/u', $brandDisplay) === 1) {
             if (trim((string)$contact['site_name']) !== '') {
                 $brandDisplay = trim((string)$contact['site_name']);
             }
         }
         $description = trim((string)$contact['site_description']);
+        if ($websiteLocal['description'] !== '') {
+            $description = $websiteLocal['description'];
+        }
         if ($description === '') {
             $description = '官方商城客户服务';
         }
@@ -153,6 +169,22 @@ class MailBrandContextService
         $contactEmail = $this->normalizeContactEmail((string)$contact['contact_email'], $siteUrl);
         $shellBg = $this->resolveMailShellBackgrounds($storageScope, $siteUrl, $palette);
 
+        $serviceHours = (string)$contact['service_hours'];
+        // 品牌 service_hours：优先 website-brand-local-copy 真译，禁止英文化后词典无法再译
+        $hoursFromPack = '';
+        try {
+            $hoursFromPack = \Weline\Websites\Service\WebsiteBrandIdentitySeedService::serviceHoursForLocale(
+                $locale !== '' ? $locale : 'zh_Hans_CN'
+            );
+        } catch (\Throwable) {
+            $hoursFromPack = '';
+        }
+        if ($hoursFromPack !== '') {
+            $serviceHours = $hoursFromPack;
+        } elseif ($locale !== '' && $this->isChineseLocale($locale)) {
+            $serviceHours = '周一至周五 9:00 - 18:00（法定节假日除外）';
+        }
+
         $brand = array_merge([
             'site_name' => $siteName,
             'store_name' => $storeName,
@@ -165,10 +197,25 @@ class MailBrandContextService
             'contact_email' => $contactEmail,
             'contact_phone' => (string)$contact['contact_phone'],
             'contact_address' => (string)$contact['contact_address'],
-            'service_hours' => (string)$contact['service_hours'],
+            'service_hours' => $serviceHours,
         ], $palette, $shellBg);
 
-        return $this->localizeBrandStrings($brand, $locale);
+        // LocalDescription / 品牌种子已按邮件 locale 落好时，勿再被词典回落成中文或英占位
+        $skipLocalize = [];
+        if ($websiteLocal['name'] !== '') {
+            $skipLocalize['site_name'] = true;
+            if ($brandDisplay === $websiteLocal['name']) {
+                $skipLocalize['brand_display_name'] = true;
+            }
+        }
+        if ($websiteLocal['description'] !== '') {
+            $skipLocalize['site_description'] = true;
+        }
+        if ($hoursFromPack !== '' || ($locale !== '' && $this->isChineseLocale($locale))) {
+            $skipLocalize['service_hours'] = true;
+        }
+
+        return $this->localizeBrandStrings($brand, $locale, $skipLocalize);
     }
 
     /**
@@ -193,20 +240,21 @@ class MailBrandContextService
         };
 
         // 兜底对齐 Theme frontend ink / variables/_colors（朱砂·宣纸），勿回 Ink Harbor
+        // Hanfu design 可用 --mail-header-* 覆盖邮件页头字色（店面 --color-text-on-dark 仍可保持浅墨）
         $primary = $pick($tokens, ['--color-primary', '--weline-theme-primary'], '#b84a3c');
         $primaryDark = $pick($tokens, ['--color-primary-dark', '--color-primary-hover'], '#963b30');
         $onPrimary = $pick($tokens, ['--color-on-primary', '--color-text-inverse'], '#f7f4ef');
-        $headerBg = $pick($tokens, ['--color-bg-dark-secondary', '--weline-chrome-bg-dark', '--color-bg-dark'], '#16181a');
-        $headerText = $pick($tokens, ['--color-text-inverse', '--color-text-on-dark', '--color-on-primary'], '#f7f4ef');
-        $headerMuted = $pick($tokens, ['--color-text-on-dark-muted', '--color-text-light-secondary'], '#d4cfc5');
-        $canvas = $pick($tokens, ['--color-bg-canvas', '--color-bg-secondary'], '#f7f4ef');
-        $surface = $pick($tokens, ['--color-bg-primary', '--color-surface'], '#fffefa');
+        $headerBg = $pick($tokens, ['--mail-header-bg', '--color-bg-dark-secondary', '--weline-chrome-bg-dark', '--color-bg-dark'], '#16181a');
+        $headerText = $pick($tokens, ['--mail-header-text', '--color-text-inverse', '--color-text-on-dark', '--color-on-primary'], '#f7f4ef');
+        $headerMuted = $pick($tokens, ['--mail-header-muted', '--color-text-on-dark-muted', '--color-text-light-secondary'], '#d4cfc5');
+        $canvas = $pick($tokens, ['--mail-canvas', '--color-bg-canvas', '--color-bg-secondary'], '#f7f4ef');
+        $surface = $pick($tokens, ['--mail-surface', '--color-bg-primary', '--color-surface'], '#fffefa');
         $border = $pick($tokens, ['--color-border-default', '--color-border-subtle'], '#d4cfc5');
         $text = $pick($tokens, ['--color-text', '--color-text-primary'], '#1c1c1c');
         $muted = $pick($tokens, ['--color-text-muted', '--color-text-secondary'], '#5c5a56');
         $link = $pick($tokens, ['--color-link', '--color-primary'], $primary);
-        $footerHeading = $pick($tokens, ['--color-primary-text-emphasis', '--color-primary-dark'], '#7a3028');
-        $footerBg = $pick($tokens, ['--color-primary-bg-subtle', '--color-bg-secondary'], '#f8ede9');
+        $footerHeading = $pick($tokens, ['--mail-footer-heading', '--color-primary-text-emphasis', '--color-primary-dark'], '#7a3028');
+        $footerBg = $pick($tokens, ['--mail-footer-bg', '--color-primary-bg-subtle', '--color-bg-secondary'], '#f8ede9');
 
         return [
             'brand_primary' => $primary,
@@ -261,6 +309,27 @@ class MailBrandContextService
 
     private function themeFrontendRoot(): string
     {
+        // 优先激活 design/模块主题 frontend（如 app/design/Weline/hanfu/frontend），再回落 Theme 模块默认盘
+        try {
+            if (class_exists(\Weline\Theme\Model\WelineTheme::class)) {
+                /** @var \Weline\Theme\Model\WelineTheme $theme */
+                $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+                $theme->clearData()->clearQuery()->getActiveTheme('frontend');
+                $rel = trim(str_replace('\\', '/', (string)$theme->getData('path')));
+                if ($rel !== '' && !str_contains($rel, '..') && preg_match('#^[A-Za-z0-9_./-]+$#', $rel) === 1) {
+                    $design = rtrim((string)BP, '/\\') . '/app/design/' . $rel . '/frontend';
+                    if (is_dir($design)) {
+                        return $design;
+                    }
+                    $moduleTheme = rtrim((string)BP, '/\\') . '/app/code/' . $rel . '/view/theme/frontend';
+                    if (is_dir($moduleTheme)) {
+                        return $moduleTheme;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         try {
             $ref = new \ReflectionClass(ThemeBrandResolver::class);
             $themeModule = dirname($ref->getFileName() ?: '', 2);
@@ -286,6 +355,16 @@ class MailBrandContextService
                 }
             }
         } catch (\Throwable) {
+        }
+
+        // 激活 design 主题若带品牌叶（如 hanfu-paper），优先于模块 ink 默认
+        $themeRoot = $this->themeFrontendRoot();
+        if ($themeRoot !== '') {
+            foreach (['hanfu-paper', 'ink', 'default'] as $candidate) {
+                if (is_file($themeRoot . '/colors/_' . $candidate . '.css')) {
+                    return $candidate;
+                }
+            }
         }
 
         // 前台品牌叶默认 ink（朱砂/宣纸），与 ThemeColorMode 契约一致
@@ -323,6 +402,112 @@ class MailBrandContextService
     }
 
     /**
+     * 架构契约：从品牌变量中取出可用于 From/主题的展示名（排除「默认网站」占位）。
+     *
+     * @param array<string, mixed> $brandOrVars
+     */
+    public function pickBrandDisplayName(array $brandOrVars): string
+    {
+        foreach (['brand_display_name', 'store_name', 'site_name'] as $key) {
+            $name = trim((string)($brandOrVars[$key] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            if (preg_match('/默认网站|默认店铺|^Default(\s+Website)?$/iu', $name) === 1) {
+                continue;
+            }
+
+            return $name;
+        }
+
+        return '';
+    }
+
+    /**
+     * 架构契约：发件人显示名弱名称（空 / default / 账户 code / 邮箱本地部分 /「系统」）→ 站点品牌。
+     * 所有 smtp/send 路径必须走此方法，禁止业务模块各自拼 From 名。
+     */
+    public function resolveFromDisplayName(
+        string $configuredName,
+        string $senderCode,
+        string $emailOrUsername,
+        string $storageScope,
+        string $locale = ''
+    ): string {
+        $name = trim($configuredName);
+        $code = trim($senderCode);
+        $localPart = '';
+        $email = trim($emailOrUsername);
+        if ($email !== '' && str_contains($email, '@')) {
+            $localPart = strtolower((string)strtok($email, '@'));
+        } elseif ($email !== '') {
+            $localPart = strtolower($email);
+        }
+
+        $systemLabel = '系统';
+        if (\function_exists('\\__')) {
+            $translated = trim((string)\__('系统'));
+            if ($translated !== '') {
+                $systemLabel = $translated;
+            }
+        }
+        $weak = $name === ''
+            || strcasecmp($name, 'default') === 0
+            || strcasecmp($name, 'system') === 0
+            || ($systemLabel !== '' && $name === $systemLabel)
+            || ($code !== '' && strcasecmp($name, $code) === 0)
+            || ($localPart !== '' && strcasecmp($name, $localPart) === 0);
+
+        if (!$weak) {
+            return $name;
+        }
+
+        try {
+            $resolved = $this->resolve(
+                $storageScope !== '' ? $storageScope : 'default.default.default',
+                $locale
+            );
+            $brandName = $this->pickBrandDisplayName($resolved);
+            if ($brandName !== '') {
+                return $brandName;
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        return $systemLabel !== '' ? $systemLabel : 'Weline';
+    }
+
+    /**
+     * 架构契约：主题行必须可见品牌。已含品牌则不重复；否则前缀「品牌 · 原主题」。
+     * 壳页头已展示品牌；本方法约束收件箱列表可见的 Subject，对所有渠道生效。
+     *
+     * @param array<string, mixed> $brandOrVars mergeInto 后的变量或 resolve() 结果
+     */
+    public function ensureBrandedSubject(string $subject, array $brandOrVars): string
+    {
+        $subject = trim($subject);
+        if ($subject === '') {
+            return $subject;
+        }
+        // 主题行不应残留 HTML 实体（如 Chang&#039;an），否则与品牌明文比对失败会重复前缀
+        $subject = html_entity_decode($subject, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $brand = $this->pickBrandDisplayName($brandOrVars);
+        if ($brand === '') {
+            return $subject;
+        }
+        $brand = html_entity_decode($brand, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if (mb_stripos($subject, $brand) !== false) {
+            return $subject;
+        }
+
+        return $brand . ' · ' . $subject;
+    }
+
+    /**
      * 后台编辑页实时预览样本：站店渠已解析值优先；渠道 sample 中的占位主机（example.com）改写为当前范围 site_url。
      * 传入邮件 locale 时，渠道 sample 文案与可译品牌字段按该语种译写。
      *
@@ -346,6 +531,20 @@ class MailBrandContextService
                 $samples[$code] = (string)$brand[$code];
                 continue;
             }
+            // topics_label：品牌本地包真译样例，禁止非 en 预览注入 Offers / New arrivals
+            if ($code === 'topics_label') {
+                try {
+                    $topics = \Weline\Websites\Service\WebsiteBrandIdentitySeedService::topicsLabelForLocale(
+                        $locale !== '' ? $locale : 'zh_Hans_CN'
+                    );
+                    if ($topics !== '') {
+                        $samples[$code] = $topics;
+                        continue;
+                    }
+                } catch (\Throwable) {
+                    // fall through
+                }
+            }
             $sample = (string)($var['sample'] ?? '');
             $samples[$code] = $this->localizePreviewText(
                 $this->scopeLockPreviewSample($sample, $siteUrl, $brand),
@@ -358,15 +557,19 @@ class MailBrandContextService
 
     /**
      * @param array<string, string> $brand
+     * @param array<string, bool> $skipKeys
      * @return array<string, string>
      */
-    private function localizeBrandStrings(array $brand, string $locale): array
+    private function localizeBrandStrings(array $brand, string $locale, array $skipKeys = []): array
     {
         $locale = trim($locale);
         if ($locale === '') {
             return $brand;
         }
-        foreach (['site_name', 'store_name', 'channel_name', 'site_description', 'service_hours', 'contact_address'] as $key) {
+        foreach (['site_name', 'store_name', 'channel_name', 'brand_display_name', 'site_description', 'service_hours', 'contact_address'] as $key) {
+            if (!empty($skipKeys[$key])) {
+                continue;
+            }
             if (!isset($brand[$key]) || !is_string($brand[$key])) {
                 continue;
             }
@@ -374,6 +577,47 @@ class MailBrandContextService
         }
 
         return $brand;
+    }
+
+    private function isChineseLocale(string $locale): bool
+    {
+        $normalized = strtolower(str_replace('_', '-', trim($locale)));
+
+        return $normalized === '' || str_starts_with($normalized, 'zh');
+    }
+
+    /**
+     * @return array{name:string,description:string}
+     */
+    private function resolveWebsiteLocalFields(int $websiteId, string $locale): array
+    {
+        $out = ['name' => '', 'description' => ''];
+        $locale = trim($locale);
+        if ($websiteId < 0 || $locale === '' || $this->isChineseLocale($locale)) {
+            return $out;
+        }
+        try {
+            /** @var WebsiteLocalDescription $local */
+            $local = ObjectManager::getInstance(WebsiteLocalDescription::class);
+            $items = $local->reset()
+                ->where(WebsiteLocalDescription::schema_fields_ID, $websiteId)
+                ->where(WebsiteLocalDescription::schema_fields_local_code, $locale)
+                ->select()
+                ->fetch()
+                ->getItems();
+            foreach ($items as $item) {
+                if (!$item instanceof WebsiteLocalDescription) {
+                    continue;
+                }
+                $out['name'] = trim((string)$item->getData(WebsiteLocalDescription::schema_fields_NAME));
+                $out['description'] = trim((string)$item->getData(WebsiteLocalDescription::schema_fields_DESCRIPTION));
+                break;
+            }
+        } catch (\Throwable) {
+            // Local 表未就绪时回退主表 + 词典
+        }
+
+        return $out;
     }
 
     private function localizePreviewText(string $text, string $locale): string
@@ -515,7 +759,7 @@ class MailBrandContextService
     }
 
     /**
-     * @return array{site_name:string,store_name:string,channel_name:string,site_url:string}
+     * @return array{site_name:string,store_name:string,channel_name:string,site_url:string,website_id:int}
      */
     private function resolveScopeNames(string $storageScope): array
     {
@@ -524,6 +768,7 @@ class MailBrandContextService
             'store_name' => '',
             'channel_name' => '',
             'site_url' => '',
+            'website_id' => -1,
         ];
         $scope = trim($storageScope) !== '' ? trim($storageScope) : SystemConfig::SCOPE_GLOBAL;
         $parts = explode('.', $scope);
@@ -543,6 +788,7 @@ class MailBrandContextService
             if ($row && $row->getId() !== null && $row->getId() !== '') {
                 $out['site_name'] = trim((string)$row->getData(Website::schema_fields_NAME));
                 $websiteId = (int)$row->getData(Website::schema_fields_ID);
+                $out['website_id'] = $websiteId;
                 $fallbackUrl = $this->normalizeAbsoluteUrl((string)$row->getData(Website::schema_fields_URL));
                 $out['site_url'] = $this->resolvePublicSiteUrl($websiteId, $fallbackUrl);
 

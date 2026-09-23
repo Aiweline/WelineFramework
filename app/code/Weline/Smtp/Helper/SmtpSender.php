@@ -142,11 +142,12 @@ class SmtpSender extends \Weline\Framework\App\Helper implements MailSenderInter
     private function createMailer(): PHPMailer
     {
         $mail = new PHPMailer(true);
-        $mail->addCustomHeader('charset', 'UTF-8');
-        $mail->addCustomHeader('Content-Transfer-Encoding', '8Bit');
         $mail->SMTPDebug = SMTP::DEBUG_OFF;
         $mail->isSMTP();
-        $mail->CharSet = 'UTF-8';
+        // 中文发件人显示名 / 主题必须 UTF-8；禁止默认 iso-8859-1（QQ 会乱码并退化成账号本地部分）
+        $mail->CharSet = PHPMailer::CHARSET_UTF8;
+        $mail->Encoding = PHPMailer::ENCODING_BASE64;
+
         return $mail;
     }
 
@@ -230,6 +231,8 @@ class SmtpSender extends \Weline\Framework\App\Helper implements MailSenderInter
 
     private function applyFrom(PHPMailer $mail, string|array $from): void
     {
+        // 确保 setFrom 前 CharSet 已是 UTF-8（Encoded-Word 用 UTF-8）
+        $mail->CharSet = PHPMailer::CHARSET_UTF8;
         if (is_string($from)) {
             if (trim($from) === '') {
                 throw new Exception(__('发送者邮箱为空：请正确设置发件邮箱！'));
@@ -242,7 +245,8 @@ class SmtpSender extends \Weline\Framework\App\Helper implements MailSenderInter
         if ($fromEmail === '') {
             throw new Exception(__('发送者邮箱为空：请正确设置发件邮箱！'));
         }
-        $mail->setFrom($fromEmail, (string) ($from['name'] ?? ''));
+        $fromName = trim((string) ($from['name'] ?? ''));
+        $mail->setFrom($fromEmail, $fromName, false);
     }
 
     private function addEmailEntries(PHPMailer $mail, string|array $emails, callable $adder): void

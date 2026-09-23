@@ -58,11 +58,7 @@ class MailTemplateResolver
 
         foreach ($channels as $tryChannel) {
             foreach ($scopeChain as $scope) {
-                $locales = [$locale];
-                if ($siteDefault !== '' && $siteDefault !== $locale) {
-                    $locales[] = $siteDefault;
-                }
-                foreach ($locales as $tryLocale) {
+                foreach (self::localeFallbackChain($locale, $siteDefault) as $tryLocale) {
                     $row = $this->loadRow($tryChannel, $scope, $tryLocale);
                     if ($row !== null) {
                         return [
@@ -78,6 +74,49 @@ class MailTemplateResolver
         }
 
         return null;
+    }
+
+    /**
+     * 模板行 locale 尝试顺序（同 scope 内）。
+     * 非中文：locale → en_US → siteDefault → zh_Hans_CN（去重）；禁止非中文直接落到 zh。
+     * 中文：locale → siteDefault（若不同）。
+     *
+     * @return list<string>
+     */
+    public static function localeFallbackChain(string $locale, string $siteDefault = ''): array
+    {
+        $locale = trim($locale);
+        $siteDefault = trim($siteDefault);
+        if ($locale === '' || $locale === 'default') {
+            return [];
+        }
+
+        $chain = [$locale];
+        $isChinese = self::isChineseLocale($locale);
+        if (!$isChinese) {
+            $en = MailTemplateSeedCopyCatalog::LOCALE_EN;
+            if ($locale !== $en) {
+                $chain[] = $en;
+            }
+        }
+        if ($siteDefault !== '' && $siteDefault !== 'default' && !in_array($siteDefault, $chain, true)) {
+            $chain[] = $siteDefault;
+        }
+        if (!$isChinese) {
+            $zh = MailTemplateSeedCopyCatalog::LOCALE_ZH;
+            if (!in_array($zh, $chain, true)) {
+                $chain[] = $zh;
+            }
+        }
+
+        return $chain;
+    }
+
+    private static function isChineseLocale(string $locale): bool
+    {
+        $normalized = strtolower(str_replace('_', '-', trim($locale)));
+
+        return $normalized === '' || str_starts_with($normalized, 'zh');
     }
 
     /**
@@ -158,6 +197,10 @@ class MailTemplateResolver
         if (!$row || !$row->getId()) {
             return null;
         }
-        return $row;
+        // Detach: OM singleton is reused; callers must not see later loads overwrite data.
+        /** @var SmtpMailTemplate $copy */
+        $copy = clone $row;
+
+        return $copy;
     }
 }

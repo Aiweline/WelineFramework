@@ -13,6 +13,7 @@ use Weline\I18n\Api\Translation\TranslationResolverInterface;
  * 固定邮件页头/页尾壳：业务模板只提供正文片段，发信时组装。
  * 协议：table + 内联样式；禁止 JS。
  * 壳源：view/email/shell.phtml（&lt;lang&gt; 进 I18n collect/AI）；按邮件 locale 实时译。
+ * 壳固定短语优先 MailTemplateSeedCopyCatalog::shellCopy，再 TranslationResolver；非 en 禁英标回落。
  * CLI/队列发信：wrap/loadShell 会临时进入 Context 并强制邮件 locale（无 Web 请求时）。
  */
 class MailTemplateShellComposer
@@ -154,13 +155,13 @@ class MailTemplateShellComposer
     private function loadShellRaw(string $locale, string $storageScope = ''): string
     {
         $locale = trim($locale) !== '' ? trim($locale) : 'zh_Hans_CN';
-        $phtml = dirname(__DIR__) . '/view/email/shell.phtml';
+        $phtml = $this->resolveShellPhtmlPath();
         if (is_file($phtml)) {
             $raw = @file_get_contents($phtml);
             if (is_string($raw) && $raw !== '') {
                 $shell = $this->renderShellPhtml($raw, $locale);
 
-                return $this->applyShellRegionOverrides($shell, $storageScope);
+                return $this->applyShellRegionOverrides($shell, $storageScope, $locale);
             }
         }
 
@@ -176,18 +177,51 @@ class MailTemplateShellComposer
             if (is_file($path)) {
                 $html = file_get_contents($path);
                 if (is_string($html) && $html !== '') {
-                    return $this->applyShellRegionOverrides($html, $storageScope);
+                    return $this->applyShellRegionOverrides($html, $storageScope, $locale);
                 }
             }
         }
 
         return $this->applyShellRegionOverrides(
             '<!DOCTYPE html><html><body data-weline-mail-shell="1">{{MAIL_BODY}}</body></html>',
-            $storageScope
+            $storageScope,
+            $locale
         );
     }
 
-    private function applyShellRegionOverrides(string $shell, string $storageScope): string
+    /**
+     * 模块默认 shell + Theme 设计主题覆盖（与店面 templates 同一套继承）：
+     * app/code/Weline/Smtp/view/email/shell.phtml
+     * → app/design/{Vendor}/{theme}/Weline_Smtp/email/shell.phtml
+     */
+    private function resolveShellPhtmlPath(): string
+    {
+        $modulePath = dirname(__DIR__) . '/view/email/shell.phtml';
+        try {
+            if (!class_exists(\Weline\Theme\Service\ThemeDirectoryResolver::class)
+                || !class_exists(\Weline\Theme\Model\WelineTheme::class)
+            ) {
+                return $modulePath;
+            }
+            /** @var \Weline\Theme\Model\WelineTheme $theme */
+            $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+            $theme->clearData()->clearQuery()->getActiveTheme('frontend');
+            if (!$theme->getId()) {
+                return $modulePath;
+            }
+            /** @var \Weline\Theme\Service\ThemeDirectoryResolver $resolver */
+            $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemeDirectoryResolver::class);
+            $resolved = $resolver->resolveThemeTemplatePath($modulePath, $theme);
+            if (is_string($resolved) && $resolved !== '' && is_file($resolved)) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $modulePath;
+    }
+
+    private function applyShellRegionOverrides(string $shell, string $storageScope, string $locale = ''): string
     {
         $storageScope = trim($storageScope);
         if ($storageScope === '') {
@@ -196,11 +230,68 @@ class MailTemplateShellComposer
         try {
             /** @var MailShellRegionStore $store */
             $store = ObjectManager::getInstance(MailShellRegionStore::class);
+            $regions = $store->get($storageScope);
+            $regions = $this->localizeShellRegions($regions, $locale);
+            $shell = $store->applyRegions($shell, $regions);
 
-            return $store->applyToShell($shell, $storageScope);
+            return $shell;
         } catch (\Throwable) {
             return $shell;
         }
+    }
+
+    /**
+     * @param array{header:string,footer:list<string>} $regions
+     * @return array{header:string,footer:list<string>}
+     */
+    private function localizeShellRegions(array $regions, string $locale): array
+    {
+        $locale = trim($locale);
+        if ($locale === '' || str_starts_with(strtolower(str_replace('_', '-', $locale)), 'zh')) {
+            return $regions;
+        }
+        $header = (string)($regions['header'] ?? '');
+        if ($header !== '') {
+            $regions['header'] = $this->localizeShellCopyHtml($header, $locale);
+        }
+        $footer = [];
+        foreach (($regions['footer'] ?? []) as $row) {
+            $footer[] = $this->localizeShellCopyHtml((string)$row, $locale);
+        }
+        $regions['footer'] = $footer;
+
+        return $regions;
+    }
+
+    /**
+     * 可视化壳 override 常以中文源串落库（LOCALE_DEFAULT）；发非中文邮件时把壳 UI 源串译到目标语。
+     */
+    private function localizeShellCopyHtml(string $html, string $locale): string
+    {
+        if ($html === '' || !preg_match('/[\x{4e00}-\x{9fff}]/u', $html)) {
+            return $html;
+        }
+        // 长句优先，避免短词「访问」误伤
+        $phrases = [
+            '此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。',
+            '需要帮助？',
+            '客服邮箱：',
+            '客服电话：',
+            '服务时间：',
+            '地址：',
+            '访问',
+        ];
+        foreach ($phrases as $phrase) {
+            if (!str_contains($html, $phrase)) {
+                continue;
+            }
+            $translated = $this->translateShellWord($phrase, $locale);
+            if ($translated !== '' && $translated !== $phrase) {
+                $html = str_replace($phrase, $translated, $html);
+            }
+        }
+
+        return $html;
     }
 
     /**
@@ -257,20 +348,121 @@ class MailTemplateShellComposer
         );
     }
 
+    /**
+     * 壳固定中文源短语 → seed shellCopy 键。
+     *
+     * @var array<string, string>
+     */
+    private const SHELL_PHRASE_SEED_KEYS = [
+        '需要帮助？' => 'need_help',
+        '访问' => 'visit',
+        '客服邮箱：' => 'support',
+        '客服电话：' => 'phone',
+        '服务时间：' => 'hours',
+        '地址：' => 'address',
+        '此邮件由系统自动发送，请勿直接回复。如非本人操作，请忽略本邮件。' => 'auto_footer',
+    ];
+
+    /**
+     * 非 en_* 时禁止回落的英标壳 UI（词典缺译常落到 en_US）。
+     *
+     * @var list<string>
+     */
+    private const SHELL_ENGLISH_LABEL_REJECT = [
+        'Need help?',
+        'Visit',
+        'Support:',
+        'Phone:',
+        'Hours:',
+        'Address:',
+        'Phone',
+        'Hours',
+        'Address',
+        'Support',
+    ];
+
     private function translateShellWord(string $word, string $locale): string
+    {
+        $locale = trim($locale) !== '' ? trim($locale) : 'zh_Hans_CN';
+        $word = trim($word);
+        if ($word === '') {
+            return '';
+        }
+
+        $candidates = [];
+        $seedKey = self::SHELL_PHRASE_SEED_KEYS[$word] ?? null;
+        if ($seedKey !== null) {
+            $fromSeed = $this->lookupShellSeedPhrase($locale, $seedKey);
+            if ($fromSeed !== null) {
+                $candidates[] = $fromSeed;
+            }
+        }
+
+        $fromI18n = $this->resolveShellViaI18n($word, $locale);
+        if ($fromI18n !== null && $fromI18n !== '') {
+            $candidates[] = $fromI18n;
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($this->isRejectedEnglishShellLabel($candidate, $locale)) {
+                continue;
+            }
+
+            return $candidate;
+        }
+
+        // 非 en 且仅有英回落时：保留中文源，禁止 Phone:/Hours: 等英标漏出
+        return $word;
+    }
+
+    private function lookupShellSeedPhrase(string $locale, string $seedKey): ?string
+    {
+        try {
+            $shell = MailTemplateSeedCopyCatalog::shellCopy($locale);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($shell === null) {
+            return null;
+        }
+        $value = trim((string)($shell[$seedKey] ?? ''));
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function resolveShellViaI18n(string $word, string $locale): ?string
     {
         try {
             /** @var TranslationResolverInterface $resolver */
             $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
             $translated = trim($resolver->translate($word, $locale, ['Weline_Smtp', 'Weline_Framework', 'Weline_Theme']));
-            if ($translated !== '') {
-                return $translated;
-            }
+
+            return $translated !== '' ? $translated : null;
         } catch (\Throwable) {
-            // CLI/单测无容器时回落源文
+            return null;
+        }
+    }
+
+    private function isRejectedEnglishShellLabel(string $text, string $locale): bool
+    {
+        if ($this->isEnglishMailLocale($locale)) {
+            return false;
+        }
+        $normalized = trim($text);
+        foreach (self::SHELL_ENGLISH_LABEL_REJECT as $label) {
+            if (strcasecmp($normalized, $label) === 0) {
+                return true;
+            }
         }
 
-        return $word;
+        return false;
+    }
+
+    private function isEnglishMailLocale(string $locale): bool
+    {
+        $norm = strtolower(str_replace('-', '_', trim($locale)));
+
+        return $norm === 'en' || str_starts_with($norm, 'en_');
     }
 
     /**

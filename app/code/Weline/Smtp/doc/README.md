@@ -52,6 +52,7 @@
 - 通知域：`Module::notify_*` 回退 `Weline_Backend::notification_email`
 - **硬规则：邮件正文禁止 JavaScript**（无 `<script>` / 事件处理器 / `javascript:`）；仅 table + 内联样式
 - **固定页头/页尾**：`Smtp/view/email/shell.phtml`（`<lang>` + Theme `brand_*`）；业务 `view/email/**` 只写正文；发信按 locale 组装
+- **品牌发信架构（全渠道）**：From 显示名与 Subject 必须带站点品牌，见 [`邮件品牌发信架构.md`](%E9%82%AE%E4%BB%B6%E5%93%81%E7%89%8C%E5%8F%91%E4%BF%A1%E6%9E%B6%E6%9E%84.md)（`REQ-SMTP-0035`）
 - **编辑工作区**：顶栏 CTA；变量分组；左编辑右 sticky 实时预览；**预览站址取 WebsiteDomain；Logo 上溯 Website appearance brand（`/pub/media/websites/...`，非 Theme 默认标）**
 - 发信自动注入站店渠信任变量：`site_name` / `store_name` / `channel_name` / `site_logo_img` / `contact_*` / `brand_primary` 等（`MailBrandContextService`）
 

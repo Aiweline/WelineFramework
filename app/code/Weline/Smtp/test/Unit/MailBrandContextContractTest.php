@@ -147,10 +147,36 @@ final class MailBrandContextContractTest extends TestCase
         self::assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $palette['brand_primary']);
         self::assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $palette['brand_header_bg']);
         self::assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $palette['brand_canvas']);
-        // 对齐 Theme ink/朱砂，而非历史 Ink Harbor 蓝绿琥珀
+        // 对齐 Theme ink/朱砂或激活 design（hanfu-paper），而非历史 Ink Harbor 蓝绿琥珀
         self::assertNotSame('#16333f', $palette['brand_header_bg']);
         self::assertNotSame('#e8a14a', $palette['brand_accent']);
-        self::assertSame('#b84a3c', $palette['brand_primary']);
+        self::assertContains($palette['brand_primary'], ['#b84a3c', '#a44535']);
+    }
+
+    public function testThemeFrontendRootPrefersActiveDesignTheme(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/MailBrandContextService.php');
+        self::assertStringContainsString("app/design/", $src);
+        self::assertStringContainsString('--mail-header-text', $src);
+        self::assertStringContainsString('hanfu-paper', $src);
+
+        $svc = new MailBrandContextService();
+        $palette = $svc->resolvePalette('default.default.default');
+        // 本机激活 hanfu 时页头字取 --mail-header-text 朱砂橙
+        if (is_dir(dirname(__DIR__, 5) . '/design/Weline/hanfu/frontend')) {
+            $themePath = '';
+            try {
+                $theme = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+                $theme->clearData()->clearQuery()->getActiveTheme('frontend');
+                $themePath = (string)$theme->getData('path');
+            } catch (\Throwable) {
+            }
+            if (str_contains(strtolower($themePath), 'hanfu')) {
+                self::assertSame('#ff5d05', $palette['brand_header_text']);
+                self::assertSame('#e91b0c', $palette['brand_header_muted']);
+                self::assertSame('#16181a', $palette['brand_header_bg']);
+            }
+        }
     }
 
     public function testRendererStripsScriptAndEvents(): void
@@ -239,8 +265,79 @@ final class MailBrandContextContractTest extends TestCase
         self::assertStringContainsString('MailBrandContextService', $provider);
         self::assertStringContainsString('mergeInto', $provider);
         self::assertStringContainsString('variableCodes', $provider);
+        self::assertStringContainsString('resolveFromDisplayName', $provider);
+        self::assertStringContainsString('ensureBrandedSubject', $provider);
+
+        $brandSrc = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/MailBrandContextService.php');
+        self::assertStringContainsString('brand_display_name', $brandSrc);
+        self::assertStringContainsString('function ensureBrandedSubject', $brandSrc);
+        self::assertStringContainsString('function resolveFromDisplayName', $brandSrc);
 
         $controller = (string)file_get_contents(dirname(__DIR__, 2) . '/Controller/Backend/Template.php');
         self::assertStringContainsString('variableDefinitions', $controller);
+    }
+
+    public function testResolveUsesWebsiteLocalDescriptionForMailLocale(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/MailBrandContextService.php');
+        self::assertStringContainsString('resolveWebsiteLocalFields', $src);
+        self::assertStringContainsString('WebsiteLocalDescription', $src);
+        self::assertStringContainsString('isChineseLocale', $src);
+
+        $dataSrc = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Websites/Data/WebsiteData.php'
+        );
+        self::assertStringContainsString('function getDescriptionForLocale', $dataSrc);
+
+        $seedSrc = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Websites/Service/WebsiteBrandIdentitySeedService.php'
+        );
+        self::assertStringContainsString('ensureDefaultWebsiteLocalBrandCopy', $seedSrc);
+        self::assertFileExists(
+            dirname(__DIR__, 3) . '/Websites/Service/data/website-brand-local-copy.v1.php'
+        );
+    }
+
+    public function testArchitectureBrandFromAndSubjectPolicy(): void
+    {
+        $svc = new class extends MailBrandContextService {
+            public function resolve(string $storageScope, string $locale = ''): array
+            {
+                return [
+                    'site_name' => '长安汉服',
+                    'store_name' => '长安汉服 · Hanfu Atelier',
+                    'channel_name' => '',
+                    'brand_display_name' => '长安汉服 · Hanfu Atelier',
+                    'site_url' => 'https://example.com',
+                    'site_logo_url' => '',
+                    'site_logo_img' => '',
+                    'site_description' => '',
+                    'contact_email' => '',
+                    'contact_phone' => '',
+                    'contact_address' => '',
+                    'service_hours' => '',
+                ];
+            }
+        };
+
+        self::assertSame(
+            '长安汉服 · Hanfu Atelier',
+            $svc->resolveFromDisplayName('default', 'default', 'aiweline@qq.com', 'default.default.default')
+        );
+        self::assertSame(
+            '自定义店',
+            $svc->resolveFromDisplayName('自定义店', 'default', 'aiweline@qq.com', 'default.default.default')
+        );
+
+        $brand = ['brand_display_name' => '长安汉服 · Hanfu Atelier'];
+        self::assertSame(
+            '长安汉服 · Hanfu Atelier · 订单已支付',
+            $svc->ensureBrandedSubject('订单已支付', $brand)
+        );
+        self::assertSame(
+            '长安汉服 · Hanfu Atelier · 订阅礼遇',
+            $svc->ensureBrandedSubject('长安汉服 · Hanfu Atelier · 订阅礼遇', $brand)
+        );
+        self::assertSame('', $svc->ensureBrandedSubject('', $brand));
     }
 }

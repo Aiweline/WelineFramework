@@ -85,13 +85,13 @@ final class MailTemplateMigrateContractTest extends TestCase
         $root = $this->repoRoot();
         $files = [
             '/app/code/Weline/Order/view/email/order_created/zh_Hans_CN.html',
-            '/app/code/Weline/Order/view/email/order_paid/en_US.html',
+            '/app/code/Weline/Order/view/email/order_paid/zh_Hans_CN.html',
             '/app/code/Weline/Order/view/email/order_shipped/zh_Hans_CN.subject.txt',
-            '/app/code/Weline/Order/view/email/order_refund/en_US.subject.txt',
+            '/app/code/Weline/Order/view/email/order_refund/zh_Hans_CN.subject.txt',
             '/app/code/Weline/Product/view/email/product_update/zh_Hans_CN.html',
-            '/app/code/Weline/Product/view/email/quote_reply/en_US.html',
+            '/app/code/Weline/Product/view/email/quote_reply/zh_Hans_CN.html',
             '/app/code/Weline/Websites/view/email/notification/zh_Hans_CN.html',
-            '/app/code/Weline/Visitor/view/email/notification/en_US.html',
+            '/app/code/Weline/Visitor/view/email/notification/zh_Hans_CN.html',
             '/app/code/Weline/Dropship/view/email/fulfillment_consolation/zh_Hans_CN.html',
             '/app/code/Weline/Customer/view/email/password_reset/zh_Hans_CN.html',
             '/app/code/Weline/CustomerService/view/email/email_binding/zh_Hans_CN.html',
@@ -129,13 +129,12 @@ final class MailTemplateMigrateContractTest extends TestCase
         $src = (string)file_get_contents($root . '/app/code/Weline/Smtp/Setup/Upgrade.php');
         self::assertStringContainsString('MailTemplateSeeder', $src);
         self::assertStringContainsString('syncAll', $src);
-        self::assertStringContainsString('MailTemplateSeedCopyCatalog', $src);
-        self::assertStringContainsString('materializeFiles', $src);
+        self::assertStringNotContainsString('materializeFiles', $src);
         $module = include $root . '/app/code/Weline/Smtp/etc/module.php';
         self::assertIsArray($module);
         self::assertTrue(
-            version_compare((string)($module['version'] ?? '0'), '1.4.25', '>='),
-            'Smtp module must be >= 1.4.25 for mail template seed upgrade'
+            version_compare((string)($module['version'] ?? '0'), '1.4.61', '>='),
+            'Smtp module must be >= 1.4.61 for zh-only disk mail template seed'
         );
     }
 }
