@@ -1056,6 +1056,31 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         );
     }
 
+    public function testServingSnapshotRejectsRevocationBetweenItsTwoReads(): void
+    {
+        $domain = 'serving-race.example.test';
+        $writer = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'serving-race');
+        self::activateForTest($writer, $domain, $source['cert'], $source['key']);
+        $reads = 0;
+        $reader = new ProjectCertificateGenerationStore(
+            $this->root,
+            snapshotMonotonicClock: static function () use (&$reads, $writer, $domain): float {
+                if (++$reads === 2) {
+                    $writer->deactivate($domain);
+                }
+                return \hrtime(true) / 1_000_000_000;
+            },
+        );
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Certificate authority changed during serving validation.');
+        $reader->servingAuthoritySnapshot(
+            [$domain],
+            (\hrtime(true) / 1_000_000_000) + 5.0,
+            ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+        );
+    }
+
     public function testLifecycleReentrancyDoesNotAuthorizeAnotherFiber(): void
     {
         if (!\class_exists(\Fiber::class)) {

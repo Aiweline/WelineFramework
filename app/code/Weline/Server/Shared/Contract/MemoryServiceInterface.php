@@ -32,5 +32,10 @@ interface MemoryServiceInterface
      */
     public function mset(string $ns, array $kv, int $ttl = 0): bool;
 
+    /**
+     * @param array<int, string> $keys
+     */
+    public function mdel(string $ns, array $keys): bool;
+
     public function clearNamespace(string $ns): bool;
 }

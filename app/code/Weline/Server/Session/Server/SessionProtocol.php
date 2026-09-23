@@ -103,6 +103,9 @@ final class SessionProtocol
     /** 批量设置多个键 */
     public const CMD_MSET = 'mset';
 
+    /** 批量删除多个键 */
+    public const CMD_MDEL = 'mdel';
+
     /** 垃圾回收 */
     public const CMD_GC = 'gc';
 
@@ -576,6 +579,19 @@ final class SessionProtocol
             'sid' => $sessionId,
             'data' => $data,
             'ttl' => $ttl,
+        ]);
+    }
+
+    /**
+     * 构建 MDEL 请求
+     *
+     * @param string[] $keys
+     */
+    public static function buildMdel(string $sessionId, array $keys): string
+    {
+        return self::encodeRequest(self::CMD_MDEL, [
+            'sid' => $sessionId,
+            'keys' => $keys,
         ]);
     }
 

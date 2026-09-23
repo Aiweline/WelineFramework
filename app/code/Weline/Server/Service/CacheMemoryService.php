@@ -36,6 +36,11 @@ class CacheMemoryService
         return $this->memoryService->mset($this->ns($poolIdentity), $values, $ttl);
     }
 
+    public function deleteMultiple(string $poolIdentity, array $keys): bool
+    {
+        return $this->memoryService->mdel($this->ns($poolIdentity), $keys);
+    }
+
     public function delete(string $poolIdentity, string $key): bool
     {
         return $this->memoryService->delete($this->ns($poolIdentity), $key);

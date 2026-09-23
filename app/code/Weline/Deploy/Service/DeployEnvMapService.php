@@ -294,7 +294,16 @@ class DeployEnvMapService
 
         $store = $this->configStore ?? new ConfigStore();
 
-        return $store->setScopedConfig($key, $value, $module, $area, $scope);
+        // 必须显式 default：normalizeLocale(null) 会落到当前用户语种，
+        // 而 ConfigReader / Smtp Helper 按 LOCALE_DEFAULT 读取，会读不到。
+        return $store->setScopedConfig(
+            $key,
+            $value,
+            $module,
+            $area,
+            $scope,
+            ConfigReader::LOCALE_DEFAULT,
+        );
     }
 
     private function readDeployModeFromEnvFile(): string

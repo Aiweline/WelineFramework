@@ -100,6 +100,7 @@ final class PureWlsServingManifestRecoveryContractTest extends TestCase
             "hasCliArgvToken(['--clean', '-clean'])",
             $execute,
         );
+        self::assertStringContainsString('prepareForcedCleanStart', $execute);
         self::assertMatchesRegularExpression(
             '/if \(\$cleanRequested && !\$masterOnly\).*cleanupInactiveInstance\(\$instanceName\)/s',
             $execute,
@@ -111,8 +112,13 @@ final class PureWlsServingManifestRecoveryContractTest extends TestCase
             $execute,
         );
 
+        $forcedClean = $this->methodSource(Start::class, 'prepareForcedCleanStart');
+        self::assertStringContainsString('forceCleanupInstance', $forcedClean);
+        self::assertStringContainsString('stopExistingServer', $forcedClean);
+
         $help = $this->methodSource(Start::class, 'help');
         self::assertStringContainsString("'-clean, --clean'", $help);
+        self::assertStringContainsString('-clean -f', $help);
     }
 
     public function testMonotonicRebuildUsesWholeProjectAuthorityAndPreservesSiblingDomain(): void

@@ -40,6 +40,7 @@ class ServerInstanceManager
     private const MAX_VALIDATED_JSON_RECOVERY_ARTIFACTS = 128;
     private const MAX_VALIDATED_JSON_DIRECTORY_ENTRIES = 16384;
     private const INACTIVE_CLEANUP_LOCK_WAIT_SECONDS = 0.05;
+    private const FORCE_CLEANUP_LOCK_WAIT_SECONDS = 2.0;
     private const MAX_INACTIVE_CLEANUP_SELECTED_PIDS = 512;
     private const MAX_INACTIVE_CLEANUP_EXCEPTION_BYTES = 1_048_576;
     public const GATEWAY_ENDPOINT_NAMESPACE_LOCK = '.wls-endpoint-capacity.lock';
@@ -377,6 +378,36 @@ class ServerInstanceManager
             && $this->purgeInactiveInstanceTransaction($name, $selected);
     }
 
+    /**
+     * Operator-forced retirement for one named instance after an explicit
+     * `-clean -f` (or equivalent). Tries the safe offline transaction first;
+     * only then retires corrupt/unparseable endpoints and indeterminate lock
+     * probes. Still never signals processes and still refuses a provably held
+     * lifecycle/start flock or a live tracked process for this instance.
+     */
+    public function forceCleanupInstance(string $name): bool
+    {
+        self::assertGatewayEndpointName($name);
+        if ($this->cleanupInactiveInstance($name)) {
+            return true;
+        }
+
+        $endpointPath = $this->getInstanceFile($name);
+        $pidPath = $this->getPidFile($name);
+        $exceptionPath = MasterProcess::getServiceExceptionFile($name);
+        $hasResidue = \is_file($endpointPath)
+            || \is_link($endpointPath)
+            || \is_file($pidPath)
+            || \is_link($pidPath)
+            || \is_file($exceptionPath)
+            || \is_link($exceptionPath);
+        if (!$hasResidue) {
+            return true;
+        }
+
+        return $this->purgeForcedInstanceArtifacts($name);
+    }
+
     private function shouldPurgeStoppedInstanceRecord(array $rawData): bool
     {
         $lifecycleState = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
@@ -615,6 +646,213 @@ class ServerInstanceManager
             @\flock($startLock, LOCK_UN);
             @\fclose($startLock);
             $lifecycleLock->release();
+        }
+    }
+
+    /**
+     * Forced artifact retirement after the safe offline transaction failed.
+     * Provably held flocks and live tracked processes still veto; corrupt JSON
+     * and indeterminate lock probes do not.
+     */
+    private function purgeForcedInstanceArtifacts(string $name): bool
+    {
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $lifecyclePath = ServerLifecycleOperationLock::pathForInstance($name);
+        $startPath = $lockDir . 'start_' . $name . '.lock';
+        if (VerifiedPersistentFileLock::isHeld($lifecyclePath) === true
+            || VerifiedPersistentFileLock::isHeld($startPath) === true
+        ) {
+            return false;
+        }
+
+        $lifecycleLock = new ServerLifecycleOperationLock();
+        if (!$lifecycleLock->acquire(
+            $name,
+            'force-clean',
+            self::FORCE_CLEANUP_LOCK_WAIT_SECONDS,
+        )) {
+            return false;
+        }
+
+        if (!\is_dir($lockDir)
+            && !@\mkdir($lockDir, 0755, true)
+            && !\is_dir($lockDir)
+        ) {
+            $lifecycleLock->release();
+            return false;
+        }
+        $startLock = VerifiedPersistentFileLock::acquire(
+            $startPath,
+            self::FORCE_CLEANUP_LOCK_WAIT_SECONDS,
+            static fn(): array => [
+                'pid' => \getmypid(),
+                'instance' => $name,
+                'purpose' => 'force_clean_forced',
+                'started_at' => \date('Y-m-d H:i:s'),
+            ],
+        );
+        if (!\is_resource($startLock)) {
+            $lifecycleLock->release();
+            return false;
+        }
+
+        try {
+            $rawData = null;
+            try {
+                $rawData = $this->getRawInstanceData($name);
+            } catch (\Throwable) {
+                $rawData = null;
+            }
+            if (\is_array($rawData)
+                && $this->hasTrackedRunningProcess($name, $rawData, null)
+            ) {
+                return false;
+            }
+            if ($this->readLiveMasterLease($name, \is_array($rawData) ? $rawData : [])
+                !== null
+            ) {
+                return false;
+            }
+
+            if (\is_array($rawData)) {
+                try {
+                    $this->retireInactiveServingManifestReferences($name, $rawData);
+                } catch (\Throwable) {
+                    // Serving residue is best-effort under forced cleanup.
+                }
+            }
+
+            if (!$this->forceRemoveNamedInstanceEndpoint($name)) {
+                return false;
+            }
+
+            $this->forceRemoveNamedRegularFile(
+                $this->getPidFile($name),
+                'WLS instance PID sidecar',
+            );
+            $this->forceRemoveNamedRegularFile(
+                MasterProcess::getServiceExceptionFile($name),
+                'WLS instance exception sidecar',
+            );
+
+            if (\is_array($rawData)) {
+                $managedLeases = $this->selectInactiveCleanupManagedLeases(
+                    $name,
+                    $rawData,
+                );
+                if (\is_array($managedLeases)) {
+                    foreach ($managedLeases as $lease) {
+                        if (Processer::probeProcessState($lease['pid'], true)
+                            !== Processer::PROCESS_STATE_EXITED
+                        ) {
+                            continue;
+                        }
+                        Processer::removeManagedProcessLeaseRecord(
+                            $lease['pid'],
+                            $lease['process_name'],
+                            $lease['launch_id'],
+                        );
+                    }
+                }
+            }
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            @\flock($startLock, LOCK_UN);
+            @\fclose($startLock);
+            $lifecycleLock->release();
+        }
+    }
+
+    private function forceRemoveNamedInstanceEndpoint(string $name): bool
+    {
+        $file = $this->getInstanceFile($name);
+        if (!\is_file($file) && !\is_link($file)) {
+            return true;
+        }
+        if (\is_link($file)) {
+            return false;
+        }
+
+        $selected = $this->selectInactiveCleanupEndpoint($name);
+        $validator = self::inactiveCleanupEndpointValidator($name);
+
+        return (bool) GatewayProjectStateFilesystem::withExclusiveLock(
+            \rtrim($this->getInstanceDir(), '/\\') . DIRECTORY_SEPARATOR
+                . self::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
+            function () use ($file, $selected, $validator, $name): bool {
+                if ($selected !== null) {
+                    $lockedIdentity = @\lstat($file);
+                    if (\is_array($lockedIdentity)
+                        && self::sameValidatedJsonFileState(
+                            $selected['identity'],
+                            $lockedIdentity,
+                        )
+                    ) {
+                        $removed = self::removeValidatedJsonFileIf(
+                            $file,
+                            static fn(array $candidate): bool => \hash_equals(
+                                $selected['digest'],
+                                self::inactiveCleanupEndpointDigest($candidate),
+                            ),
+                            $validator,
+                            'WLS forced inactive instance endpoint',
+                            GatewayProjectEndpointReader::MAX_ENDPOINT_BYTES,
+                            self::FORCE_CLEANUP_LOCK_WAIT_SECONDS,
+                        );
+                        if ($removed) {
+                            return true;
+                        }
+                    }
+                }
+
+                $identity = @\lstat($file);
+                if (!\is_array($identity)) {
+                    return !\file_exists($file) && !\is_link($file);
+                }
+                if (\is_link($file)
+                    || ((((int)($identity['mode'] ?? 0)) & 0170000) !== 0100000)
+                ) {
+                    return false;
+                }
+
+                try {
+                    return GatewayProjectStateFilesystem::removeRegular(
+                        $file,
+                        'WLS forced inactive instance endpoint [' . $name . ']',
+                        $identity,
+                    );
+                } catch (\Throwable) {
+                    return false;
+                }
+            },
+            waitTimeoutSeconds: self::FORCE_CLEANUP_LOCK_WAIT_SECONDS,
+        );
+    }
+
+    private function forceRemoveNamedRegularFile(string $path, string $label): void
+    {
+        if ($path === '' || \str_contains($path, "\0")) {
+            return;
+        }
+        if (!\is_file($path) && !\is_link($path)) {
+            return;
+        }
+        if (\is_link($path)) {
+            return;
+        }
+        try {
+            $identity = @\lstat($path);
+            if (!\is_array($identity)
+                || ((((int)($identity['mode'] ?? 0)) & 0170000) !== 0100000)
+            ) {
+                return;
+            }
+            GatewayProjectStateFilesystem::removeRegular($path, $label, $identity);
+        } catch (\Throwable) {
+            // Sidecar residue after endpoint commit remains diagnostic evidence.
         }
     }
 
@@ -2054,6 +2292,10 @@ class ServerInstanceManager
                 $instance['role'] = (string)($instance['role'] ?? $role);
                 $instance['display_name'] = (string)($instance['display_name'] ?? $displayName);
                 $instance['priority'] = (int)($instance['priority'] ?? $priority);
+                $metadata = \is_array($instance['metadata'] ?? null) ? $instance['metadata'] : [];
+                $instance['metadata'] = \Weline\Server\Service\Runtime\WorkerReadinessState::overlayHomepageFpcMetaFromLastStatusReport(
+                    $metadata
+                );
                 $services[] = ServiceInfo::fromArray($instance);
             }
         }

@@ -382,6 +382,73 @@ final class WorkerReadinessState
     }
 
     /**
+     * Rebuild homepage_fpc (+ optional warmup_state) from flat status_report fields.
+     * Returns null when the message does not carry homepage_fpc_hit (legacy Master
+     * / older Workers). Prefer this over READY-time homepage_fpc when present —
+     * deferred adopt lands in status_report while READY meta can stay fail-open.
+     *
+     * @param array<string, mixed> $msg
+     * @return array{
+     *     homepage_fpc:array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int},
+     *     warmup_state:?string
+     * }|null
+     */
+    public static function homepageMetaFromStatusReportFields(array $msg): ?array
+    {
+        if (!\array_key_exists('homepage_fpc_hit', $msg)) {
+            return null;
+        }
+
+        $homepageFpc = [
+            'hit' => ((int)($msg['homepage_fpc_hit'] ?? 0)) === 1
+                || $msg['homepage_fpc_hit'] === true
+                || $msg['homepage_fpc_hit'] === '1',
+            'fpc_status' => \strtoupper(\trim((string)($msg['homepage_fpc_status'] ?? ''))),
+            'source' => \strtolower(\trim((string)($msg['homepage_fpc_source'] ?? ''))),
+            'full_uri' => \trim((string)($msg['homepage_fpc_full_uri'] ?? '')),
+            'reason' => \trim((string)($msg['homepage_fpc_reason'] ?? '')),
+            'http_status' => (int)($msg['homepage_fpc_http_status'] ?? 0),
+        ];
+        $warmupState = \strtolower(\trim((string)($msg['warmup_state'] ?? '')));
+        if ($warmupState === ''
+            && $homepageFpc['hit']
+            && $homepageFpc['fpc_status'] === 'HIT'
+            && \str_starts_with($homepageFpc['source'], 'process')
+        ) {
+            $warmupState = 'hot';
+        }
+
+        return [
+            'homepage_fpc' => $homepageFpc,
+            'warmup_state' => $warmupState !== '' ? $warmupState : null,
+        ];
+    }
+
+    /**
+     * Prefer live last_status_report homepage fields over READY-time homepage_fpc.
+     *
+     * @param array<string, mixed> $metadata
+     * @return array<string, mixed>
+     */
+    public static function overlayHomepageFpcMetaFromLastStatusReport(array $metadata): array
+    {
+        $report = $metadata['last_status_report'] ?? null;
+        if (!\is_array($report)) {
+            return $metadata;
+        }
+        $overlay = self::homepageMetaFromStatusReportFields($report);
+        if ($overlay === null) {
+            return $metadata;
+        }
+        $metadata['homepage_fpc'] = $overlay['homepage_fpc'];
+        if ($overlay['warmup_state'] !== null) {
+            $metadata['warmup_state'] = $overlay['warmup_state'];
+        }
+
+        return $metadata;
+    }
+
+    /**
      * Preserve the exact dynamic-render receipt for Master-side admission.
      * Normalization happens here; trust and threshold validation remain the
      * Orchestrator's responsibility so a rejected proof retains diagnostics.

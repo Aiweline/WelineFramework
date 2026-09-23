@@ -837,6 +837,45 @@ final class SessionStore
     }
 
     /**
+     * 批量删除多个键，单次请求仅标记一次 dirty。
+     * 缺键/缺 Session 视为已达成（幂等），与缓存失效语义一致。
+     *
+     * @param string[] $keys
+     */
+    public function mdel(string $sessionId, array $keys): bool
+    {
+        if ($keys === []) {
+            return true;
+        }
+
+        if (!isset($this->store[$sessionId])) {
+            return true;
+        }
+
+        $entry = $this->store[$sessionId];
+        if ($entry['expire'] > 0 && $entry['expire'] < \time()) {
+            $this->destroy($sessionId);
+            return true;
+        }
+
+        $changed = false;
+        foreach ($keys as $key) {
+            $key = (string)$key;
+            if (\array_key_exists($key, $this->store[$sessionId]['data'])) {
+                unset($this->store[$sessionId]['data'][$key]);
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->markDirty();
+        }
+        $this->touch($sessionId);
+
+        return true;
+    }
+
+    /**
      * 刷新 Session 过期时间（滑动 TTL）
      * 默认不 markDirty，避免每次 get 刷盘；每隔一段时间落一次 expire，避免进程重启丢续期。
      */

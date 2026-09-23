@@ -10,8 +10,25 @@
   `wls` 不发现、不建立也不修改宿主网关。
 - `server:stop name-a name-b`、`server:stop --prefix <prefix>` 与 `server:stop --all` 都只在外层枚举多个实例；每个实例仍复用同一关闭协议并单独获取 stop lock。
 - `server:start [name] -clean` 仅针对当前命名实例：普通启动绝不自动删除旧资料；显式 clean 只在实例离线且全部代际证明成立时退役旧端点，再进入完整新代启动。
+- `server:start [name] -clean -f`：操作者强制路径——若本实例仍在线则先 `server:stop -f`，再强制退役本实例损坏/不确定的旧运行资料，最后完整新代启动；仍不得误杀他实例进程。
 
 ## 启动链路图
+
+READY 与证书重载的清单校验使用 `servingAuthoritySnapshot()`：对单调代际的
+selector/tombstone 连续读取两次，仅在完整结果一致时接受，并保留证书有效期、
+信任档案、文件完整性与撤销校验。Master 不争用发布者持有的证书生命周期锁，
+避免发布者持锁等待 IPC 确认、Master 等锁的循环等待。证书写入和冷恢复的
+互斥事务不变。TLS 重载进程集合只包含实际终止 TLS 的角色，不能把已认证的
+watchdog 或 gateway agent 当作新增 TLS Worker。
+
+Supervisor 桥接必须转发 Worker/maintenance 的 `SSL_CERT_RELOAD_ACK`，
+按已认证会话绑定 Worker 身份，并将其作为关键控制消息排队；否则 Worker
+已完成切换也会被 Master 误判超时。重载提交的运行时 fence 必须携带已校验
+清单中的 `certificate_trust_profile`，不能在更新 context 时丢失信任档案。
+
+Gateway Agent 的单端点读取与完整端点枚举一样，必须和原子写入共用 endpoint
+namespace lock，并在锁内刷新目标文件状态；批量枚举在已持锁上下文中调用内部
+读取，避免嵌套加锁。正常端点更新不应被误判为文件替换攻击而反复退出代理。
 
 ```mermaid
 flowchart TB
@@ -22,7 +39,10 @@ flowchart TB
     C -->|默认 WLS| D["getServerConfig()<br/>先保留旧实例配置"]
     D --> D0{"显式 -clean / --clean?"}
     D0 -->|否| E["acquireStartLock(instance)"]
-    D0 -->|是| D1["cleanupInactiveInstance(instance)<br/>lifecycle/start lock + endpoint inode/content CAS<br/>authority-last 退役 serving 引用；不发送进程信号"]
+    D0 -->|"是且带 -f"| D1F["prepareForcedCleanStart<br/>在线则 stop -f；再 forceCleanupInstance"]
+    D0 -->|"是且无 -f"| D1["cleanupInactiveInstance(instance)<br/>lifecycle/start lock + endpoint inode/content CAS<br/>authority-last 退役 serving 引用；不发送进程信号"]
+    D1F -->|锁仍被占用/本实例进程仍存活| C1
+    D1F -->|强制清理成功| E
     D1 -->|在线/锁占用/身份变化| C1
     D1 -->|离线且证明通过| E
     E --> E0["ProjectIdentityStore<br/>UUIDv4 + desired/certificate generation CAS"]

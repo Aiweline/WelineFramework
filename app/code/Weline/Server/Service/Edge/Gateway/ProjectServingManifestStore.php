@@ -2912,7 +2912,7 @@ final class ProjectServingManifestStore
             ));
             $domains[] = $domain;
         }
-        $authorities = $generations->authoritySnapshot(
+        $authorities = $generations->servingAuthoritySnapshot(
             $domains,
             $deadlineMonotonic,
             $requiredTrustProfile,

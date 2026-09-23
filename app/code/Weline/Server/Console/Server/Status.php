@@ -27,6 +27,7 @@ use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
 use Weline\Server\Service\Runtime\RuntimeSelection;
+use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -1100,14 +1101,18 @@ class Status extends CommandAbstract
         }
 
         if ($service->role === ControlMessage::ROLE_WORKER) {
-            $homepageFpc = \is_array($service->metadata['homepage_fpc'] ?? null)
-                ? $service->metadata['homepage_fpc']
+            $metadata = WorkerReadinessState::overlayHomepageFpcMetaFromLastStatusReport(
+                \is_array($service->metadata) ? $service->metadata : []
+            );
+            $homepageFpc = \is_array($metadata['homepage_fpc'] ?? null)
+                ? $metadata['homepage_fpc']
                 : [];
-            $warmupState = (string)($service->metadata['warmup_state'] ?? '');
+            $warmupState = (string)($metadata['warmup_state'] ?? '');
             if ($homepageFpc !== [] || $warmupState !== '') {
+                $hit = !empty($homepageFpc['hit']);
                 $runtimeDetails[] = __('首页预热：')
                     . 'state=' . ($warmupState !== '' ? $warmupState : '-')
-                    . ', hit=' . (($homepageFpc['hit'] ?? false) === true ? 'true' : 'false')
+                    . ', hit=' . ($hit ? 'true' : 'false')
                     . ', source=' . (string)($homepageFpc['source'] ?? '-')
                     . ', status=' . (int)($homepageFpc['http_status'] ?? 0)
                     . ', fpc=' . (string)($homepageFpc['fpc_status'] ?? '-')

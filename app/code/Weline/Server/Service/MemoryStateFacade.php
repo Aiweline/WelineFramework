@@ -244,6 +244,11 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchS
         return $this->traceOperation('wls.memory.cache_mset', ['operation' => 'cache_mset', 'pool' => $poolIdentity, 'keys' => \count($values)], fn(): bool => $this->cacheMemoryService->setMultiple($poolIdentity, $values, $ttl));
     }
 
+    public function deleteCacheMultiple(string $poolIdentity, array $keys): bool
+    {
+        return $this->traceOperation('wls.memory.cache_mdel', ['operation' => 'cache_mdel', 'pool' => $poolIdentity, 'keys' => \count($keys)], fn(): bool => $this->cacheMemoryService->deleteMultiple($poolIdentity, $keys));
+    }
+
     public function deleteCache(string $poolIdentity, string $key): bool
     {
         return $this->traceOperation('wls.memory.cache_delete', ['operation' => 'cache_delete', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->delete($poolIdentity, $key));
