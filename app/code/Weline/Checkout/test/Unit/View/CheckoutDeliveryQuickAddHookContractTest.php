@@ -26,7 +26,7 @@ final class CheckoutDeliveryQuickAddHookContractTest extends TestCase
         $this->assertStringContainsString('@widget.default_injections', $content);
         $this->assertStringContainsString('"layout_type":"homepage"', $content);
         $this->assertStringContainsString('"slot":"delivery"', $content);
-        $this->assertStringContainsString("(string)__(trim((string)(\$this->getData('title') ?? '配送至')))", $content);
+        $this->assertStringContainsString("WidgetI18n::label(trim((string)(\$this->getData('title') ?? '')), '配送至')", $content);
     }
 
     public function testAddressListScrollsWhenExceedingFiveItems(): void

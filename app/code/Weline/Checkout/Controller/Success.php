@@ -232,6 +232,7 @@ class Success extends FrontendController
     /**
      * Soft success for paid orders when quote-token capability is missing (express/popup boundary).
      * Shows paid confirmation without dumping the shopper to /cart.
+     * Must still carry line items for checkout_success pixel (align payment_success).
      */
     private function renderPaidAcknowledgement(object $order): string
     {
@@ -243,6 +244,18 @@ class Success extends FrontendController
         $currency = trim((string) ($order->currency ?? $arr['currency'] ?? 'CNY'));
         $money = is_array($order->money ?? null) ? $order->money : (is_array($arr['money'] ?? null) ? $arr['money'] : []);
         $totalLabel = $currency . ' ' . number_format(((int) ($money['grand_total_minor'] ?? 0)) / 100, 2, '.', ',');
+        $items = is_array($order->items ?? null) ? $order->items : (is_array($arr['items'] ?? null) ? $arr['items'] : []);
+        $presentation = $this->successPresentation->present(
+            items: $items,
+            shippingMethodCode: (string)($order->shipping['method'] ?? $arr['shipping']['method'] ?? ''),
+            websiteId: (int)($order->websiteId ?? $arr['website_id'] ?? 0),
+            storeId: (int)($order->storeId ?? $arr['store_id'] ?? 0),
+        );
+        $shippingLabel = (string)($presentation['shipping_method_label'] ?? '');
+        $shipping = is_array($arr['shipping'] ?? null) ? $arr['shipping'] : [];
+        if ($shippingLabel !== '' && $shipping !== []) {
+            $shipping['method_label'] = $shippingLabel;
+        }
 
         $title = (string) __('订单已支付');
         $this->request->setGet('theme_page_title', $title);
@@ -258,10 +271,12 @@ class Success extends FrontendController
             'status' => 'paid',
             'currency' => $currency,
             'money' => $money,
-            'items' => [],
-            'shipping' => is_array($arr['shipping'] ?? null) ? $arr['shipping'] : [],
+            'items' => $items,
+            'shipping' => $shipping,
             'billing_address' => is_array($arr['billing_address'] ?? null) ? $arr['billing_address'] : [],
         ]);
+        $this->assign('order_v2_items_display', $presentation['items_display'] ?? []);
+        $this->assign('shipping_method_label', $shippingLabel);
         $this->assign('order_v2_display_number', $display !== '' ? $display : (string) ($order->orderUuid ?? ''));
         $this->assign('order_v2_status', 'paid');
         $this->assign('order_v2_total_label', $totalLabel);

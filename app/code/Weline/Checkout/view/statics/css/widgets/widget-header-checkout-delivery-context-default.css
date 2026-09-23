@@ -1,0 +1,94 @@
+/* 入口按钮外观由主题 Theme UI：.w-header-delivery-entry / .location-link / .delivery-entry 提供 */
+.wc-theme_widget_checkout_delivery_context { position: relative; }
+.wc-theme_widget_checkout_delivery_context .delivery-panel {
+    position: absolute;
+    left: 0;
+    top: calc(100% + var(--weline-space-2));
+    width: min(var(--size-content-640, 42.5rem), 92vw);
+    min-width: min(22.5rem, 92vw);
+    box-sizing: border-box;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-body-border, var(--weline-theme-border));
+    border-radius: var(--weline-theme-radius-lg);
+    padding: var(--weline-space-4, 1rem);
+    box-shadow: var(--weline-theme-shadow-md);
+    z-index: var(--z-index-dropdown);
+    overflow: visible;
+}
+.wc-theme_widget_checkout_delivery_context .delivery-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+    margin-bottom: var(--weline-space-4);
+}
+.wc-theme_widget_checkout_delivery_context .delivery-panel-head strong {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--weline-layout-font-size-base, 1rem);
+    line-height: 1.35;
+    white-space: nowrap;
+}
+.wc-theme_widget_checkout_delivery_context .country-picker { display: grid; gap: var(--weline-space-2); margin-bottom: var(--weline-space-3); }
+.wc-theme_widget_checkout_delivery_context .country-results {
+    max-height: var(--size-panel-180, 11.25rem);
+    overflow: auto;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-body-border, var(--weline-theme-border));
+    border-radius: var(--weline-theme-radius-md);
+    background: var(--weline-chrome-bg-primary, #ffffff);
+}
+.wc-theme_widget_checkout_delivery_context .country-results button {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: var(--weline-space-2) var(--weline-space-3);
+    cursor: pointer;
+}
+.wc-theme_widget_checkout_delivery_context .country-results button:hover { background: var(--weline-theme-surface-muted); }
+.wc-theme_widget_checkout_delivery_context .address-list {
+    display: grid;
+    gap: var(--weline-space-2);
+    margin-bottom: var(--weline-space-3);
+    /* 约 5 条地址卡高度；超出后垂直滚动，避免弹层过长 */
+    --address-item-pad-y: calc(var(--weline-space-2) * 2);
+    --address-item-text: calc(
+        (var(--weline-layout-font-size-sm, 0.875rem) * 1.35)
+        + (var(--weline-layout-font-size-xs, 0.75rem) * 1.35)
+    );
+    --address-item-h: calc(var(--address-item-pad-y) + var(--address-item-text));
+    max-height: calc((var(--address-item-h) * 5) + (var(--weline-space-2) * 4));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.wc-theme_widget_checkout_delivery_context .address-item {
+    text-align: left;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    background: transparent;
+    color: inherit;
+    border-radius: var(--weline-theme-radius-md);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    cursor: pointer;
+}
+.wc-theme_widget_checkout_delivery_context .address-item.is-selected {
+    border-color: var(--weline-theme-primary);
+    background: var(--weline-theme-primary-surface);
+}
+.wc-theme_widget_checkout_delivery_context .address-item strong { display: block; font-size: var(--weline-layout-font-size-sm); }
+.wc-theme_widget_checkout_delivery_context .address-item small { font-size: var(--weline-layout-font-size-xs); color: var(--weline-theme-text-muted); }
+.wc-theme_widget_checkout_delivery_context .address-empty { font-size: var(--weline-layout-font-size-sm); color: var(--weline-theme-text-muted); margin: 0; line-height: 1.5; }
+.wc-theme_widget_checkout_delivery_context .quick-add { margin-bottom: var(--weline-space-3); overflow: visible; }
+.wc-theme_widget_checkout_delivery_context .quick-add summary { cursor: pointer; margin-bottom: var(--weline-space-2); font-weight: var(--weline-layout-font-weight-semibold); }
+.wc-theme_widget_checkout_delivery_context .field-grid {
+    display: grid;
+    gap: var(--weline-space-3);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: var(--weline-space-3);
+}
+.wc-theme_widget_checkout_delivery_context .field-grid .w-field { margin: 0; }
+.wc-theme_widget_checkout_delivery_context .field-grid .span-full { grid-column: 1 / -1; }
+.wc-theme_widget_checkout_delivery_context .delivery-panel .w-address { margin: 0; }
+.wc-theme_widget_checkout_delivery_context .message { margin: var(--weline-space-2) 0 0; font-size: var(--weline-layout-font-size-xs); }
+.wc-theme_widget_checkout_delivery_context .message[data-tone="error"] { color: var(--weline-theme-danger); }
+.wc-theme_widget_checkout_delivery_context .message[data-tone="success"] { color: var(--weline-theme-success); }

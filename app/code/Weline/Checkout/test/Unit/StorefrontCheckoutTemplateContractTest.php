@@ -98,20 +98,20 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString("@url{'products'}", $template);
         self::assertStringContainsString('data-checkout-empty hidden', $template);
         self::assertStringContainsString('weline-code="checkout.checkout.empty.section_1"', $template);
+        self::assertStringContainsString('data-checkout-form-host hidden', $template);
         self::assertStringContainsString('data-checkout-form hidden', $template);
         self::assertStringContainsString("const emptyState = root.querySelector('[data-checkout-empty]');", $template);
+        self::assertStringContainsString('function showCheckoutShell(mode)', $template);
+        self::assertStringContainsString('function setFormVisible(visible)', $template);
         self::assertStringContainsString('const hangPurpose = (function () {', $template);
         self::assertStringContainsString("params.get('purpose')", $template);
         self::assertStringContainsString("params.get('order_uuid')", $template);
         self::assertStringContainsString('const cartIsEmpty = Boolean(checkoutState.cart.is_empty);', $template);
-        self::assertStringContainsString(
-            'form.hidden = isContinuePayMode() ? false : (cartIsEmpty || hangPurpose);',
-            $template
-        );
-        self::assertStringContainsString(
-            'emptyState.hidden = hangPurpose || isContinuePayMode() ? true : !cartIsEmpty;',
-            $template
-        );
+        self::assertStringContainsString("showCheckoutShell('empty')", $template);
+        self::assertStringContainsString("showCheckoutShell('ready')", $template);
+        self::assertStringContainsString('guest_cart_mismatch', $template);
+        self::assertStringContainsString('localCartClaimsItems', $template);
+        self::assertStringContainsString('guestTokenAligned', $template);
         self::assertStringContainsString('--checkout-text: var(--color-text-primary);', $template);
         self::assertStringContainsString('--checkout-link: var(--color-link);', $template);
         self::assertStringContainsString('--checkout-cta-bg: var(--color-primary);', $template);
@@ -235,10 +235,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('class="weline-checkout__express-slot"', $template);
         self::assertStringContainsString('weline:checkout:express-pay', $template);
         self::assertStringContainsString('submitCheckoutPayment', $template);
-        self::assertStringContainsString(
-            'expressHost.hidden = isContinuePayMode()',
-            $template
-        );
+        self::assertStringContainsString('setShellHidden(', $template);
+        self::assertStringContainsString('isContinuePayMode()', $template);
         self::assertStringContainsString('function checkoutCartType()', $template);
         self::assertStringContainsString('cart_type: checkoutCartType()', $template);
         self::assertStringNotContainsString('Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml', $template);
@@ -339,6 +337,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('order_v2_items_display', $template);
         self::assertStringContainsString("getData('shipping_method_label')", $template);
         self::assertStringContainsString("\$shipping['method_label']", $template);
+        self::assertStringContainsString('__($shippingMethod)', $template);
         self::assertStringNotContainsString(
             "\$shipping['method'] ?? \$shipping['method_label']",
             $template,

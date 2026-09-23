@@ -76,11 +76,18 @@ final class ContinuePayBindingService implements ContinuePayBindingInterface
         // Prefer order address; if incomplete, fall back to submitted checkout session address.
         $orderSnapshot = $this->enrichSnapshotAddressFromSession($orderSnapshot, $session);
         $status = strtolower(trim((string)($orderSnapshot['status'] ?? '')));
-        if (in_array($status, ['paid', 'fulfilled', 'completed', 'refunded', 'cancelled', 'canceled'], true)) {
+        if (in_array($status, ['paid', 'fulfilled', 'completed', 'refunded', 'cancelled', 'canceled'], true)
+            || $this->orderHasSuccessfulPayment($orderUuid)
+        ) {
             return [
                 'success' => false,
                 'message' => (string)__('订单已不可继续支付'),
                 'error_code' => 'continue_pay_order_not_pending',
+                'already_paid' => in_array($status, ['paid', 'fulfilled', 'completed'], true)
+                    || $this->orderHasSuccessfulPayment($orderUuid),
+                'order_uuid' => $orderUuid,
+                'checkout_group_uuid' => (string)($orderSnapshot['checkout_group_uuid'] ?? ''),
+                'quote_token' => $quoteToken,
             ];
         }
 
@@ -633,6 +640,32 @@ final class ContinuePayBindingService implements ContinuePayBindingInterface
         }
 
         return $out;
+    }
+
+    private function orderHasSuccessfulPayment(string $orderUuid): bool
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '' || !class_exists(\Weline\Payment\Model\PaymentTransaction::class)) {
+            return false;
+        }
+        try {
+            /** @var \Weline\Payment\Model\PaymentTransaction $tx */
+            $tx = ObjectManager::getInstance(\Weline\Payment\Model\PaymentTransaction::class);
+            $rows = $tx->clear()
+                ->where(\Weline\Payment\Model\PaymentTransaction::schema_fields_ORDER_ID, $orderUuid)
+                ->where(
+                    \Weline\Payment\Model\PaymentTransaction::schema_fields_STATUS,
+                    \Weline\Payment\Model\PaymentTransaction::STATUS_SUCCESS,
+                )
+                ->limit(1)
+                ->select()
+                ->fetch()
+                ->getItems();
+
+            return is_array($rows) && $rows !== [];
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function readActiveBucketId(): string

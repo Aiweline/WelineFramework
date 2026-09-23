@@ -256,6 +256,8 @@ final class CheckoutHtmlRenderer
         foreach ($methods as $index => $method) {
             $code = (string)($method['code'] ?? '');
             $label = (string)($method['label'] ?? $method['title'] ?? $code);
+            // Prefer already-translated payload; __() no-ops when key is target locale.
+            $label = $label !== '' ? (string)__($label) : $code;
             $desc = (string)($method['description'] ?? $method['eta_label'] ?? $method['source'] ?? '');
             $amount = (float)($method['amount'] ?? $method['fee'] ?? 0);
             $checked = $index === 0 ? ' checked' : '';
@@ -335,6 +337,22 @@ final class CheckoutHtmlRenderer
                     . $this->e($detailsLabel) . '</a>'
                 : '';
 
+            $incentiveSavings = max(0, (int) ($method['incentive_savings_minor'] ?? 0));
+            $incentiveAvailable = !empty($method['incentive_available']) && $incentiveSavings > 0;
+            $incentiveDisplay = $incentiveAvailable
+                ? trim((string) ($method['incentive_display'] ?? ''))
+                : '';
+            $incentiveHtml = '';
+            if ($incentiveAvailable && $incentiveDisplay !== '') {
+                $incentiveHtml = '<span class="weline-checkout__payment-incentive"'
+                    . ' data-payment-incentive'
+                    . ' data-incentive-savings-minor="' . $this->e((string) $incentiveSavings) . '"'
+                    . ' data-incentive-available="1"'
+                    . ' data-testid="checkout-payment-incentive-' . $this->e($code) . '">'
+                    . $this->e($incentiveDisplay)
+                    . '</span>';
+            }
+
             $introHtml = '';
             if ($desc !== '') {
                 $desc = (string)__($desc);
@@ -365,9 +383,21 @@ final class CheckoutHtmlRenderer
             if ($testidPrefix !== '') {
                 $inputExtra .= ' data-testid="' . $this->e($testidPrefix . $code) . '"';
             }
+            if ($incentiveAvailable) {
+                $inputExtra .= ' data-incentive-savings-minor="' . $this->e((string) $incentiveSavings) . '"';
+            }
 
-            $html .= '<label class="weline-checkout__option weline-checkout__option--payment"'
-                . ' data-payment-method="' . $this->e($code) . '">'
+            $titleMetaHtml = '';
+            if ($detailsHtml !== '' || $incentiveHtml !== '') {
+                $titleMetaHtml = '<span class="weline-checkout__payment-title-meta">'
+                    . $incentiveHtml
+                    . $detailsHtml
+                    . '</span>';
+            }
+
+            $html .= '<label class="weline-checkout__option weline-checkout__option--payment'
+                . ($incentiveAvailable ? ' weline-checkout__option--has-incentive' : '')
+                . '" data-payment-method="' . $this->e($code) . '">'
                 . '<input type="radio" name="' . $this->e($inputName) . '" value="' . $this->e($code) . '"'
                 . ($checked ? ' checked' : '')
                 . $inputExtra
@@ -376,7 +406,7 @@ final class CheckoutHtmlRenderer
                 . '<span class="weline-checkout__payment-body">'
                 . '<span class="weline-checkout__payment-title-row">'
                 . '<strong>' . $this->e($label) . '</strong>'
-                . $detailsHtml
+                . $titleMetaHtml
                 . '</span>'
                 . $introHtml
                 . '</span>'

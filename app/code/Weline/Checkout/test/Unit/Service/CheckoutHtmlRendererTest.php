@@ -238,6 +238,42 @@ final class CheckoutHtmlRendererTest extends TestCase
         );
     }
 
+    public function testPaymentMethodOptionsRenderIncentiveBadgeFromServerDisplay(): void
+    {
+        $r = $this->renderer();
+        $html = $r->renderPaymentMethodOptions([
+            [
+                'code' => 'paypal',
+                'label' => 'PayPal',
+                'description' => 'PayPal',
+                'icon_url' => '/Weline/Payment/view/statics/img/payment/paypal.svg',
+                'incentive_savings_minor' => 500,
+                'incentive_display' => '减 ¥5',
+                'incentive_available' => true,
+                'incentive_type' => 'fixed_amount',
+            ],
+            [
+                'code' => 'fake_card',
+                'label' => '本地测试支付',
+                'incentive_savings_minor' => 0,
+                'incentive_display' => '减 ¥9',
+                'incentive_available' => false,
+            ],
+        ]);
+        self::assertStringContainsString('data-payment-incentive', $html);
+        self::assertStringContainsString('data-incentive-savings-minor="500"', $html);
+        self::assertStringContainsString('减 ¥5', $html);
+        self::assertStringContainsString('weline-checkout__payment-incentive', $html);
+        self::assertStringContainsString('weline-checkout__option--has-incentive', $html);
+        self::assertStringContainsString('data-testid="checkout-payment-incentive-paypal"', $html);
+        // Unavailable / zero savings: never render misleading badge text.
+        self::assertStringNotContainsString('减 ¥9', $html);
+        self::assertDoesNotMatchRegularExpression(
+            '/data-payment-method="fake_card"[\s\S]*data-payment-incentive/',
+            $html
+        );
+    }
+
     public function testCheckoutIndexPhtmlDoesNotCreateElementForItems(): void
     {
         $path = dirname(__DIR__, 3) . '/view/frontend/checkout/index.phtml';
@@ -245,6 +281,11 @@ final class CheckoutHtmlRendererTest extends TestCase
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('applyServerHtml', $src);
         self::assertStringContainsString('enhancePaymentMethodIntros', $src);
+        self::assertStringContainsString('data-checkout-payment-incentive-row', $src);
+        self::assertStringContainsString('selectedIncentiveSavingsMajor', $src);
+        self::assertStringContainsString('schedulePaymentIncentiveReconcile', $src);
+        self::assertStringContainsString('支付方式优惠', $src);
+        self::assertStringContainsString('weline-checkout__payment-incentive', $src);
         self::assertMatchesRegularExpression(
             '/payment-intro-text\s*\{[^}]*unicode-bidi:\s*isolate/s',
             $src
@@ -261,6 +302,7 @@ final class CheckoutHtmlRendererTest extends TestCase
             '/paymentBox\.innerHTML\s*=\s*[\'"]<label[^>]*weline-checkout__method/',
             $src
         );
+        self::assertStringNotContainsString('document.createElement(\'span\')', $src);
         self::assertStringNotContainsString('window.fetch', $src);
         self::assertStringNotContainsString("fetch('/", $src);
         self::assertStringNotContainsString('fetch("/', $src);
@@ -289,6 +331,8 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('requires_billing', $providerSrc);
         self::assertStringContainsString('function findMethod', $providerSrc);
         self::assertStringContainsString('function ensureMethodPresent', $providerSrc);
+        self::assertStringContainsString('normalizeIncentiveFields', $providerSrc);
+        self::assertStringContainsString('incentive_savings_minor', $providerSrc);
         self::assertStringContainsString('本地测试支付', $providerSrc);
         self::assertStringContainsString('staticMethodChrome($code)', $providerSrc);
     }

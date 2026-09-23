@@ -182,5 +182,15 @@ final class CheckoutContinuePayAdoptContractTest extends TestCase
             '/checkoutState\.cart\s*=\s*isContinuePayMode\(\)/',
             $template
         );
+        // 混币门禁：amend 订单币种权威；已付 adopt 失败不得 fallback 成可续付。
+        self::assertStringContainsString('schema_fields_CURRENCY', $amend);
+        self::assertStringContainsString('resolveOrderGrandTotalMinor', $provider);
+        self::assertStringContainsString('claimPaidRecoveryIfSettled', $provider);
+        self::assertStringContainsString('continue_pay_order_not_pending', $binding);
+        self::assertStringContainsString('orderHasSuccessfulPayment', $binding);
+        self::assertStringContainsString('navigateToSuccess', $template);
+        self::assertStringContainsString("errCode === 'continue_pay_order_not_pending'", $template);
+        self::assertStringContainsString('can no longer', $template);
+        self::assertStringContainsString('continuePayBinding.order.currency', $template);
     }
 }

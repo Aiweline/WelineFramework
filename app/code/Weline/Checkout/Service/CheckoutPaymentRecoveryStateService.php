@@ -271,6 +271,51 @@ final class CheckoutPaymentRecoveryStateService
     }
 
     /**
+     * Browser/webhook success: lock recovery to paid so continue-pay cannot retry.
+     *
+     * @param array<string, mixed> $extra
+     */
+    public function markPaid(string $quoteToken, ?string $orderIdempotencyKey = null, array $extra = []): bool
+    {
+        $quoteToken = trim($quoteToken);
+        if ($quoteToken === '') {
+            return false;
+        }
+        $session = $this->sessions->get($quoteToken);
+        if (!is_array($session)) {
+            return false;
+        }
+        $idempotencyKey = trim((string)($orderIdempotencyKey ?? ($session['idempotency_key'] ?? '')));
+        if ($idempotencyKey === '' || !$this->matchesSubmittedSession($session, $idempotencyKey)) {
+            return false;
+        }
+        $payment = is_array($session['payment_result'] ?? null) ? $session['payment_result'] : [];
+        $txs = is_array($extra['transactions'] ?? null)
+            ? $extra['transactions']
+            : (is_array($payment['transactions'] ?? null) ? $payment['transactions'] : []);
+
+        try {
+            $this->record($quoteToken, $idempotencyKey, array_replace([
+                'paid' => true,
+                'outcome' => 'paid',
+                'status' => 'success',
+                'requires_action' => false,
+                'recoverable' => false,
+                'redirect_url' => null,
+                'transactions' => $txs,
+            ], $extra, [
+                'paid' => true,
+                'outcome' => 'paid',
+                'recoverable' => false,
+            ]));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Atomically convert a retryable failure into a non-retryable in-progress
      * claim before the external payment provider is called.
      */
