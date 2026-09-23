@@ -179,6 +179,8 @@ function readUrlDocsParams() {
 }
 
 const urlDocsParams = readUrlDocsParams();
+/** 用户点过前后端 Tab 后钉死当前区；深链首屏仍可按筛选自动切区。 */
+let areaPinnedByUser = false;
 const state = {
     area: selectedFromConfig?.route?.is_backend
         ? 'backend'
@@ -219,32 +221,75 @@ function apiSearchText(api) {
     ].filter(Boolean).join(' ').toLocaleLowerCase();
 }
 
+function queryTokens(value) {
+    return String(value || '')
+        .trim()
+        .toLocaleLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+}
+
+/** 空格分词常见中英别名，避免 `website list` 打不中「网站列表」。 */
+const QUERY_TOKEN_ALIASES = {
+    list: ['list', 'lists', '列表', '清单'],
+    lists: ['lists', 'list', '列表', '清单'],
+    website: ['website', 'websites', '网站'],
+    websites: ['websites', 'website', '网站'],
+    auth: ['auth', 'login', '登录', '认证'],
+    login: ['login', 'auth', '登录'],
+    token: ['token', '令牌'],
+    user: ['user', '用户'],
+    remote: ['remote', '远程'],
+    translation: ['translation', 'translate', '翻译']
+};
+
+function tokenVariants(token) {
+    const key = String(token || '').toLocaleLowerCase();
+    return QUERY_TOKEN_ALIASES[key] || [key];
+}
+
+/** 空格分词：每个词（含别名）都要命中 haystack（AND）。 */
+function haystackMatchesTokens(haystack, tokens) {
+    if (!tokens.length) return true;
+    const text = String(haystack || '').toLocaleLowerCase();
+    return tokens.every((token) => tokenVariants(token).some((variant) => text.includes(variant)));
+}
+
 function matchesModule(api) {
-    const filter = String(state.moduleFilter || '').trim().toLocaleLowerCase();
-    if (!filter) return true;
+    const tokens = queryTokens(state.moduleFilter);
+    if (!tokens.length) return true;
     const haystack = [
         api.moduleName,
         config.moduleDisplayNames?.[api.moduleName],
         api.className,
         String(api.className || '').split('\\').pop()
-    ].filter(Boolean).join(' ').toLocaleLowerCase();
-    return haystack.includes(filter);
+    ].filter(Boolean).join(' ');
+    if (haystackMatchesTokens(haystack, tokens)) return true;
+    // 模块名较短：多词 AND 全失时退化为任一词命中（如 `website list` → Weline_Websites）
+    if (tokens.length > 1) {
+        const text = haystack.toLocaleLowerCase();
+        return tokens.some((token) => tokenVariants(token).some((variant) => text.includes(variant)));
+    }
+    return false;
 }
 
 function matchesAreaQuery(api, area) {
     const backend = Boolean(api.route?.is_backend);
     if ((area === 'backend') !== backend) return false;
     if (!matchesModule(api)) return false;
-    const query = state.query.trim().toLocaleLowerCase();
-    return !query || apiSearchText(api).includes(query);
+    return haystackMatchesTokens(apiSearchText(api), queryTokens(state.query));
 }
 
 function matches(api) {
     return matchesAreaQuery(api, state.area);
 }
 
-/** 当前 Tab 无命中、另一 Tab 有命中时自动切换（后台 REST 常被默认「前端 API」挡住）。 */
+/**
+ * 仅在「初始深链 / 用户改筛选且未钉区」时调用：当前 Tab 无命中、另一 Tab 有命中则切区。
+ * 用户点过前后端 Tab 后不再自动切区，避免搜索框一改就被拽回另一侧。
+ */
 function ensureAreaForCurrentFilters() {
+    if (areaPinnedByUser) return false;
     const hasFilters = Boolean(String(state.moduleFilter || '').trim() || String(state.query || '').trim());
     if (!hasFilters) return false;
     if (apis.some((api) => matchesAreaQuery(api, state.area))) return false;
@@ -256,6 +301,33 @@ function ensureAreaForCurrentFilters() {
     updateLoginButton();
     updateDocsUrl({replace: true});
     return true;
+}
+
+/** 深链/首屏：在筛选结果中选中最匹配的一条（有 api_id / 服务端选中则优先）。 */
+function resolveInitialApi() {
+    if (selectedFromConfig) return selectedFromConfig;
+    const fromUrlId = String(urlDocsParams.apiId || '').trim();
+    if (fromUrlId) {
+        const byId = apis.find((api) => String(api.id || '') === fromUrlId);
+        if (byId) return byId;
+    }
+    const hasFilters = Boolean(String(state.moduleFilter || '').trim() || String(state.query || '').trim());
+    if (!hasFilters) return null;
+    ensureAreaForCurrentFilters();
+    const filtered = apis.filter(matches);
+    if (!filtered.length) return null;
+    if (filtered.length === 1) return filtered[0];
+    const query = String(state.query || '').trim().toLocaleLowerCase().replace(/^\/+/, '');
+    if (query) {
+        const exactPath = filtered.find((api) => {
+            const path = String(api.route?.path || '').toLocaleLowerCase().replace(/^\/+/, '');
+            return path === query || path.endsWith('/' + query) || path.endsWith(query);
+        });
+        if (exactPath) return exactPath;
+        const pathHit = filtered.find((api) => String(api.route?.path || '').toLocaleLowerCase().includes(query));
+        if (pathHit) return pathHit;
+    }
+    return filtered[0];
 }
 
 function groupedApis(rows) {
@@ -271,13 +343,31 @@ function groupedApis(rows) {
     return modules;
 }
 
+/** REST 模块优先，Worker / BinQuery SDK 沉底，避免前端 Tab 被 Worker 海量条目淹没。 */
+function moduleListRank(moduleItems) {
+    if (moduleItems.some((api) => isWorker(api))) return 2;
+    if (moduleItems.some((api) => isSdk(api))) return 3;
+    return 1;
+}
+
+function sortedGroupedApis(rows) {
+    return [...groupedApis(rows).entries()].sort((left, right) => {
+        const leftItems = [];
+        left[1].forEach((classes) => classes.forEach((items) => leftItems.push(...items)));
+        const rightItems = [];
+        right[1].forEach((classes) => classes.forEach((items) => rightItems.push(...items)));
+        const rankDiff = moduleListRank(leftItems) - moduleListRank(rightItems);
+        if (rankDiff !== 0) return rankDiff;
+        return String(left[0]).localeCompare(String(right[0]));
+    });
+}
+
 function containsSelected(items) {
     return items.some((api) => String(api.id || '') === state.selectedId);
 }
 
 function renderList() {
     if (!listRoot) return;
-    ensureAreaForCurrentFilters();
     const filtered = apis.filter(matches);
     if (!filtered.length) {
         const emptyKey = String(state.moduleFilter || '').trim() && !String(state.query || '').trim()
@@ -289,25 +379,51 @@ function renderList() {
     }
     const fragment = document.createDocumentFragment();
     const hasFilter = Boolean(state.query.trim() || state.moduleFilter.trim());
-    groupedApis(filtered).forEach((versions, moduleName) => {
+    if (hasFilter) {
+        const chips = [];
+        if (String(state.moduleFilter || '').trim()) {
+            chips.push(create('span', {className: 'w-badge', text: t('moduleFilterChip', '模块') + ': ' + state.moduleFilter.trim(), dataset: {tone: 'quiet'}}));
+        }
+        if (String(state.query || '').trim()) {
+            chips.push(create('span', {className: 'w-badge', text: t('queryFilterChip', '搜索') + ': ' + state.query.trim(), dataset: {tone: 'quiet'}}));
+        }
+        chips.push(button(t('clearFilters', '清除筛选'), 'clear-docs-filters', 'quiet', 'close'));
+        fragment.append(create('div', {
+            className: 'w-api-docs__filter-status w-cluster',
+            attrs: {'data-api-filter-status': '', 'data-justify': 'between'}
+        }, chips));
+    }
+    sortedGroupedApis(filtered).forEach(([moduleName, versions]) => {
         const moduleItems = [];
         versions.forEach((classes) => classes.forEach((items) => moduleItems.push(...items)));
+        const auxModule = moduleItems.length > 0 && moduleItems.every((api) => isWorker(api) || isSdk(api));
         const moduleDetails = create('details', {className: 'w-api-tree__module'});
-        moduleDetails.open = hasFilter || containsSelected(moduleItems) || versions.size < 3;
-        const moduleSummary = create('summary', {}, [
+        // Worker/SDK 默认折叠；REST 模块保持可浏览
+        moduleDetails.open = hasFilter || containsSelected(moduleItems) || (!auxModule && versions.size < 3);
+        const summaryChildren = [
             create('span', {text: String(config.moduleDisplayNames?.[moduleName] || moduleName)}),
             create('span', {className: 'w-badge', text: moduleItems.length, dataset: {tone: 'quiet'}})
-        ]);
+        ];
+        if (auxModule) {
+            summaryChildren.splice(1, 0, create('span', {
+                className: 'w-badge',
+                text: moduleItems.some((api) => isWorker(api)) ? 'Worker' : 'SDK',
+                dataset: {tone: 'neutral'}
+            }));
+        } else if (state.area === 'frontend') {
+            summaryChildren.splice(1, 0, create('span', {className: 'w-badge', text: 'REST', dataset: {tone: 'neutral'}}));
+        }
+        const moduleSummary = create('summary', {}, summaryChildren);
         moduleDetails.append(moduleSummary);
         versions.forEach((classes, version) => {
             const versionItems = [];
             classes.forEach((items) => versionItems.push(...items));
             const versionDetails = create('details', {className: 'w-api-tree__version'});
-            versionDetails.open = hasFilter || containsSelected(versionItems) || classes.size < 3;
+            versionDetails.open = hasFilter || containsSelected(versionItems) || (!auxModule && classes.size < 3);
             versionDetails.append(create('summary', {text: version}));
             classes.forEach((items, className) => {
                 const classDetails = create('details', {className: 'w-api-tree__class'});
-                classDetails.open = hasFilter || containsSelected(items);
+                classDetails.open = hasFilter || containsSelected(items) || !auxModule;
                 classDetails.append(create('summary', {text: String(className).split('\\').pop() || className}));
                 const list = create('ul', {className: 'w-api-tree__list'});
                 items.forEach((api) => {
@@ -460,6 +576,11 @@ function isSdk(api) {
     return Boolean(api && (api.binquery || example.package || example.download || example.install || example.protocol));
 }
 
+function hasDemos(api) {
+    const demos = api?.example?.demos;
+    return Array.isArray(demos) && demos.some((item) => item && item.url);
+}
+
 function workerDescriptor(api) {
     const example = api?.example || {};
     const worker = api?.worker || {};
@@ -525,7 +646,7 @@ function safeActionUrl(value) {
 }
 
 function renderSdk(api, article) {
-    if (!isWorker(api) && !isSdk(api)) return;
+    if (!isWorker(api) && !isSdk(api) && !hasDemos(api)) return;
     const example = api.example || {};
     const actions = [];
     const add = (label, url, download = false) => {
@@ -536,6 +657,9 @@ function renderSdk(api, article) {
         example.downloads.forEach((item) => item?.url && add(String(item.label || t('sdkDownload')), item.url, true));
     }
     if (example.download_url) add(t('sdkDownload'), example.download_url, true);
+    if (Array.isArray(example.demos)) {
+        example.demos.forEach((item) => item?.url && add(String(item.label || t('demoDownload', 'Demo 下载')), item.url, true));
+    }
     if (isWorker(api)) {
         add('PHP SDK', '/dev/tool/docs/api/sdk-download?sdk=php', true);
         add('JS SDK', '/dev/tool/docs/api/sdk-download?sdk=js', true);
@@ -555,6 +679,12 @@ function renderSdk(api, article) {
             cluster.append(link);
         });
         sdkSection.append(cluster);
+        if (example.demo_auth_hint) {
+            sdkSection.append(create('p', {
+                className: 'w-muted',
+                text: String(example.demo_auth_hint)
+            }));
+        }
         article.append(sdkSection);
     }
     const rows = [
@@ -586,7 +716,17 @@ function buildRestUrl(path, isBackend = false, settings = {}) {
     const apiArea = String(config.apiArea || 'api').replace(/^\/+|\/+$/g, '');
     const adminArea = String(config.apiAdminArea || 'api_admin').replace(/^\/+|\/+$/g, '');
     const area = isBackend ? adminArea : apiArea;
-    let segments = value.replace(/^\/+/, '').split('/').filter(Boolean);
+    let segments = value.replace(/^\/+/, '').split('/').filter(Boolean)
+        // Doc examples often use /{api_admin}/… or /{api}/… — never send placeholders.
+        .filter((segment) => !/^\{[^}]+\}$/.test(segment));
+    // Drop stale literal placeholders that are not the live area key.
+    while (
+        segments.length
+        && ['api_admin', 'api_area', 'rest_backend', 'rest_frontend'].includes(String(segments[0]).toLowerCase())
+        && String(segments[0]) !== area
+    ) {
+        segments.shift();
+    }
     const hasAreaPrefix = segments[0] === area;
     if (hasAreaPrefix) {
         if (!isBackend && /^[A-Z]{3}$/.test(segments[1] || '') && isLocaleSegment(segments[2])) segments = segments.slice(3);
@@ -614,6 +754,14 @@ function buildRestUrl(path, isBackend = false, settings = {}) {
     return url.href;
 }
 
+/** Prefer registered route.path over doc example.path (examples may contain {api_admin}). */
+function restRequestPath(api) {
+    const routePath = String(api?.route?.path || '').trim();
+    if (routePath && !/\{[^}]+\}/.test(routePath)) return routePath;
+    const examplePath = String(api?.example?.path || api?.example?.Path || '').trim();
+    return examplePath || routePath;
+}
+
 function isLocaleSegment(value) {
     return /^[a-z]{2}_[A-Z]{2}$/.test(value || '') || /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/.test(value || '');
 }
@@ -621,7 +769,7 @@ function isLocaleSegment(value) {
 function exampleCall(api) {
     if (isWorker(api)) return workerCall(api);
     if (isSdk(api)) return String(api.example?.code || api.example?.install || api.example?.docs || 'https://{domain}/bin/query');
-    return buildRestUrl(api.example?.path || api.route?.path || '', Boolean(api.route?.is_backend));
+    return buildRestUrl(restRequestPath(api), Boolean(api.route?.is_backend));
 }
 
 function renderExamples(api, article) {
@@ -1111,7 +1259,7 @@ function renderRestTest(api) {
     });
     methodSelect.value = method;
     const urlInput = create('input', {className: 'w-input', attrs: {type: 'url'}, dataset: {restUrl: ''}});
-    urlInput.value = buildRestUrl(api.example?.path || api.route?.path, Boolean(api.route?.is_backend));
+    urlInput.value = buildRestUrl(restRequestPath(api), Boolean(api.route?.is_backend));
     request.append(create('div', {className: 'w-api-request-line'}, [
         create('label', {className: 'w-field'}, [create('span', {className: 'w-field__label', text: t('method')}), methodSelect]),
         create('label', {className: 'w-field'}, [create('span', {className: 'w-field__label', text: t('url')}), urlInput])
@@ -1131,7 +1279,7 @@ function renderRestTest(api) {
         ]),
         pairEditor('headers', headerPairs(api, method))
     ]);
-    const bodyValue = api.example?.body ?? api.example?.Body ?? {};
+    const bodyValue = resolveRestBody(api);
     const bodyField = create('div', {className: 'w-api-request-group', dataset: {restBodyGroup: ''}}, [
         create('div', {className: 'w-api-request-group__header w-cluster', attrs: {'data-justify': 'between'}}, [
             create('h3', {text: t('body')}),
@@ -1761,7 +1909,30 @@ async function runRest() {
     }
     let body;
     if (['POST', 'PUT', 'PATCH'].includes(method)) {
-        const rawBody = testRoot.querySelector('[data-rest-body]')?.value.trim() || '';
+        const bodyInput = testRoot.querySelector('[data-rest-body]');
+        let rawBody = bodyInput?.value.trim() || '';
+        // 登录接口：发送前再用会话账号覆盖示例/占位凭据，避免「右上角已登录、Body 仍是 admin/password123 → 401」。
+        if (isAuthLoginApi(api)) {
+            let payload = {};
+            if (rawBody) {
+                try {
+                    payload = JSON.parse(rawBody);
+                } catch (_error) {
+                    toast(t('invalidJson'), 'danger');
+                    return;
+                }
+            }
+            const resolved = resolveRestBody(api);
+            if (resolved.username) payload.username = resolved.username;
+            if (resolved.password) payload.password = resolved.password;
+            if (isPlaceholderCredential(payload.username) || isPlaceholderCredential(payload.password) || !payload.username || !payload.password) {
+                openLogin();
+                toast(t('loginFailed', 'Login failed'), 'danger');
+                return;
+            }
+            rawBody = stringify(payload);
+            if (bodyInput) bodyInput.value = rawBody;
+        }
         if (rawBody) {
             try {
                 JSON.parse(rawBody);
@@ -1776,7 +1947,18 @@ async function runRest() {
     const started = performance.now();
     try {
         const result = await sendHttp(url.href, {method, headers, body});
-        renderResponse(normalizeTransport(result), Math.round(performance.now() - started));
+        const transport = normalizeTransport(result);
+        renderResponse(transport, Math.round(performance.now() - started));
+        if (isAuthLoginApi(api) && transport.ok) {
+            const business = transport.body || {};
+            const data = business.data || {};
+            if (business.code === undefined || Number(business.code) < 400) {
+                let payload = {};
+                try { payload = body ? JSON.parse(body) : {}; } catch (_error) { payload = {}; }
+                persistLoginSession(Boolean(api.route?.is_backend), payload, data);
+                updateLoginButton();
+            }
+        }
     } catch (error) {
         renderResponse(normalizeTransport(null, error), Math.round(performance.now() - started));
     } finally {
@@ -1801,7 +1983,7 @@ function updateRestUrl() {
     const mode = testRoot.querySelector('[data-api-i18n-mode]:checked')?.value || state.i18nMode;
     state.i18nMode = mode;
     writeStore(storageKeys.i18nMode, mode);
-    input.value = buildRestUrl(api.example?.path || api.route?.path, Boolean(api.route?.is_backend), {locale, currency, mode});
+    input.value = buildRestUrl(restRequestPath(api), Boolean(api.route?.is_backend), {locale, currency, mode});
 }
 
 async function copyText(value) {
@@ -1855,6 +2037,61 @@ function authKeys(backend) {
     return backend
         ? {token: storageKeys.backendToken, refresh: storageKeys.backendRefresh, user: storageKeys.backendUser}
         : {token: storageKeys.token, refresh: storageKeys.refresh, user: storageKeys.user};
+}
+
+function writeSession(key, value) {
+    try {
+        window.sessionStorage.setItem(key, String(value));
+    } catch (_error) {
+    }
+}
+
+function readSession(key, fallback = '') {
+    try {
+        const value = window.sessionStorage.getItem(key);
+        return value === null ? fallback : value;
+    } catch (_error) {
+        return fallback;
+    }
+}
+
+function isAuthLoginApi(api) {
+    const method = String(api?.method || '').toLocaleLowerCase();
+    const path = String(api?.route?.path || '').toLocaleLowerCase();
+    return method === 'postlogin' || /\/auth\/login\/?$/.test(path);
+}
+
+function isPlaceholderCredential(value) {
+    return ['', 'admin', 'password', 'password123', 'your_username', 'your_password', '123456'].includes(String(value || '').trim());
+}
+
+/** 登录类接口：优先用弹窗登录成功留下的账号，避免示例 admin/password123 造成「已登录却 401」。 */
+function resolveRestBody(api) {
+    const raw = api?.example?.body ?? api?.example?.Body ?? {};
+    const body = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? {...raw} : {};
+    if (!isAuthLoginApi(api)) return body;
+    const backend = Boolean(api.route?.is_backend);
+    const user = authUser(backend);
+    const userKey = backend ? 'api_doc_backend_last_login_user' : 'api_doc_last_login_user';
+    const passKey = backend ? 'api_doc_backend_last_login_pass' : 'api_doc_last_login_pass';
+    const username = String(user.username || readSession(userKey, '') || '').trim();
+    const password = String(readSession(passKey, '') || '').trim();
+    if (username) body.username = username;
+    else if (isPlaceholderCredential(body.username)) body.username = '';
+    if (password) body.password = password;
+    else if (isPlaceholderCredential(body.password)) body.password = '';
+    return body;
+}
+
+function persistLoginSession(backend, payload, data) {
+    const keys = authKeys(backend);
+    writeStore(keys.token, data.token || data.access_token || '');
+    if (data.refresh_token) writeStore(keys.refresh, data.refresh_token);
+    writeStore(keys.user, JSON.stringify(data.user || {username: payload?.username || ''}));
+    const userKey = backend ? 'api_doc_backend_last_login_user' : 'api_doc_last_login_user';
+    const passKey = backend ? 'api_doc_backend_last_login_pass' : 'api_doc_last_login_pass';
+    if (payload?.username) writeSession(userKey, payload.username);
+    if (payload?.password) writeSession(passKey, payload.password);
 }
 
 function authUser(backend) {
@@ -1914,10 +2151,7 @@ async function login(event) {
         if (!transport.ok || (business.code !== undefined && Number(business.code) >= 400)) {
             throw new Error(business.msg || business.message || t('loginFailed'));
         }
-        const keys = authKeys(backend);
-        writeStore(keys.token, data.token || data.access_token || '');
-        if (data.refresh_token) writeStore(keys.refresh, data.refresh_token);
-        writeStore(keys.user, JSON.stringify(data.user || {}));
+        persistLoginSession(backend, payload, data);
         closeDialog(form.closest('dialog'));
         form.reset();
         updateLoginButton();
@@ -2078,7 +2312,12 @@ document.addEventListener('click', async (event) => {
     else if (action === 'import-headers') replacePairs('headers', headerPairs(selectedApi(), testRoot.querySelector('[data-rest-method]')?.value || 'GET'));
     else if (action === 'import-body') {
         const body = testRoot.querySelector('[data-rest-body]');
-        if (body) body.value = stringify(selectedApi()?.example?.body ?? selectedApi()?.example?.Body ?? {});
+        if (body) body.value = stringify(resolveRestBody(selectedApi() || {}));
+    } else if (action === 'clear-docs-filters') {
+        clearDocsFilters();
+        renderList();
+        syncSelectionToFilter();
+        updateDocsUrl({replace: true});
     } else if (action === 'toggle-sidebar') {
         root.dataset.sidebarCollapsed = root.dataset.sidebarCollapsed === 'true' ? 'false' : 'true';
         writeStore(storageKeys.collapsed, root.dataset.sidebarCollapsed);
@@ -2114,19 +2353,39 @@ document.addEventListener('change', async (event) => {
     } else if (target.matches('[data-api-i18n-mode], [data-rest-locale], [data-rest-currency]')) updateRestUrl();
 });
 
-document.querySelectorAll('[data-api-area]').forEach((tab) => {
-    tab.addEventListener('click', () => {
-        state.area = tab.dataset.apiArea;
-        writeStore(storageKeys.area, state.area);
-        const current = selectedApi();
-        if (current && Boolean(current.route?.is_backend) !== (state.area === 'backend')) {
+function syncSelectionToFilter() {
+    const filtered = apis.filter(matches);
+    if (!filtered.length) {
+        if (state.selectedId) {
             state.selectedId = '';
-            updateDocsUrl({apiId: '', replace: false});
             renderDetail(null);
             renderTest(null);
-        } else {
-            updateDocsUrl({replace: true});
+            updateDocsUrl({apiId: '', replace: true});
+            updateLoginButton();
         }
+        return;
+    }
+    if (filtered.some((api) => String(api.id || '') === state.selectedId)) return;
+    selectApi(filtered[0], {history: true, replace: true});
+}
+
+function clearDocsFilters() {
+    state.query = '';
+    state.moduleFilter = '';
+    syncFilterInputsFromState();
+}
+
+document.querySelectorAll('[data-api-area]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+        areaPinnedByUser = true;
+        state.area = tab.dataset.apiArea;
+        writeStore(storageKeys.area, state.area);
+        // 切区时清掉深链残留筛选，否则 q/module 会让新 Tab 永远空列表，搜索像「没变化」。
+        clearDocsFilters();
+        state.selectedId = '';
+        updateDocsUrl({apiId: '', replace: true});
+        renderDetail(null);
+        renderTest(null);
         updateAreaTabs();
         renderList();
         updateLoginButton();
@@ -2138,7 +2397,9 @@ searchInput?.addEventListener('input', () => {
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => {
         state.query = searchInput.value;
+        ensureAreaForCurrentFilters();
         renderList();
+        syncSelectionToFilter();
         updateDocsUrl({replace: true});
     }, 180);
 });
@@ -2147,8 +2408,17 @@ let moduleFilterTimer = 0;
 moduleFilterInput?.addEventListener('input', () => {
     window.clearTimeout(moduleFilterTimer);
     moduleFilterTimer = window.setTimeout(() => {
-        state.moduleFilter = moduleFilterInput.value;
+        const nextModule = moduleFilterInput.value;
+        const clearedModule = !String(nextModule || '').trim() && Boolean(String(state.moduleFilter || '').trim());
+        state.moduleFilter = nextModule;
+        // 侧栏模块筛选清空 = 期望「恢复全部」。深链残留的 q（接口搜索在主区）否则会继续把列表钉在一条上。
+        if (clearedModule && String(state.query || '').trim()) {
+            state.query = '';
+            syncFilterInputsFromState();
+        }
+        ensureAreaForCurrentFilters();
         renderList();
+        syncSelectionToFilter();
         updateDocsUrl({replace: true});
     }, 160);
 });
@@ -2179,6 +2449,7 @@ document.querySelectorAll('dialog[data-api-dialog]').forEach((dialog) => {
 });
 
 window.addEventListener('popstate', () => {
+    areaPinnedByUser = false;
     state.demoId = new URL(window.location.href).searchParams.get('demo') || '';
     applyDocsParamsFromUrl();
     const apiId = new URL(window.location.href).searchParams.get('api_id') || '';
@@ -2205,10 +2476,11 @@ if (themeSelect) {
 }
 syncFilterInputsFromState();
 updateAreaTabs();
+const initialApi = resolveInitialApi();
 renderList();
 updateDocsUrl({replace: true});
 updateLoginButton();
-if (selectedFromConfig) selectApi(selectedFromConfig, {history: false, replace: true});
+if (initialApi) selectApi(initialApi, {history: false, replace: true});
 else if (config.error) {
     detailRoot?.replaceChildren(emptyState(config.error, 'warning'));
     testRoot?.replaceChildren(emptyState(t('chooseApi'), 'play'));

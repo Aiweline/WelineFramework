@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_DeveloperWorkspace',
-    "version" => '1.3.19',
+    "version" => '1.3.28',
     "requires" => [
         'Weline_Ai' => '*',
         'Weline_Backend' => '*',
