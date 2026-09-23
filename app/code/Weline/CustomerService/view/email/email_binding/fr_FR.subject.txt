@@ -1,1 +1,0 @@
-Vérifiez la liaison de votre e-mail · {{var.email}}

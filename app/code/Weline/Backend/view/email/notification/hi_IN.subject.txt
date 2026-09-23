@@ -1,1 +1,0 @@
-[{{var.type_label}}] {{var.title}}

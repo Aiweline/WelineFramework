@@ -1,1 +1,0 @@
-Pedido não pode ser atendido — reembolso iniciado · {{var.order_uuid}}

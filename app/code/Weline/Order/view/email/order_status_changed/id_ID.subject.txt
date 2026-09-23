@@ -1,1 +1,0 @@
-Status pesanan diperbarui · {{var.order_number}}

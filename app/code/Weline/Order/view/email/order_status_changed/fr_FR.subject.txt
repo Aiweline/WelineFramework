@@ -1,1 +1,0 @@
-Statut de commande mis à jour · {{var.order_number}}

@@ -1,1 +1,0 @@
-Lembrete de checkout · {{var.customer_name}}

@@ -1,1 +1,0 @@
-Hadiah berlangganan · {{var.coupon_code}}

@@ -1,1 +1,0 @@
-Cadeau d'abonnement · {{var.coupon_code}}

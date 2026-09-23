@@ -1,1 +1,0 @@
-Recordatorio de pago · {{var.customer_name}}
