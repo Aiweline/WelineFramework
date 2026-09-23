@@ -14,6 +14,13 @@ final class WelineApiWorkerNonceContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/statics/js/weline-api-worker.js',
         );
         self::assertStringContainsString('signedRequestChain', $script);
+        self::assertStringContainsString('signedTelemetryChain', $script);
+        self::assertStringContainsString('TELEMETRY_CAPABILITIES', $script);
+        self::assertStringContainsString("'visitor.trackPixel': true", $script);
+        self::assertStringContainsString('isTelemetryCapability', $script);
+        self::assertStringContainsString("lane === 'telemetry'", $script);
+        self::assertStringContainsString('const sessionSnapshot = workerSession;', $script);
+        self::assertStringContainsString('workerSession === sessionSnapshot', $script);
         self::assertStringContainsString('enqueueSignedRequest', $script);
         self::assertStringContainsString('await ensureSession(config);', $script);
         self::assertStringContainsString('Weline worker session is unavailable.', $script);
@@ -34,6 +41,9 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         );
         self::assertStringContainsString('nonce has already been used', $script);
         self::assertStringContainsString('worker session is unavailable', $script);
+        self::assertStringContainsString('isWorkerHandshakeCooldownNoise', $script);
+        self::assertStringContainsString('shouldDedupeDefaultErrorToast', $script);
+        self::assertStringContainsString('cooling down after capacity', $script);
         self::assertStringContainsString('createDedicatedWorkerFromScriptUrl', $script);
         self::assertStringContainsString('URL.createObjectURL', $script);
         self::assertStringContainsString('new Worker(blobUrl)', $script);
@@ -42,6 +52,20 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         self::assertStringContainsString('same-origin Worker blocked', $script);
         self::assertStringContainsString('recoverWorkerAfterTimeout', $script);
         self::assertStringContainsString('workerRecoverPromise', $script);
+    }
+
+    public function testWorkerWaitsHandshakeCooldownInsteadOfSyntheticThrow(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/weline-api-worker.js',
+        );
+        self::assertStringContainsString('function sleepMs(ms)', $script);
+        self::assertStringContainsString('noteHandshakeSoftBackoff', $script);
+        self::assertStringContainsString('Math.min(waitMs, 4000)', $script);
+        self::assertStringNotContainsString(
+            "throw Object.assign(new Error('Weline worker handshake is cooling down after capacity/auth pressure.')",
+            $script,
+        );
     }
 
     public function testWorkerRejectsQueryBinRedirectsAndSurfacesNonBinaryHeads(): void

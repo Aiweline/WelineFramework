@@ -512,6 +512,35 @@
     const BACKEND_ACL_DENIED_CODE = 'backend_acl_denied';
     const BACKEND_ACL_EXCEPTION_MARK = 'FrontendWorkerBackendAuthorizationException';
     const BACKEND_ACL_DEFAULT_MESSAGE = '当前后台账号无权执行该操作。';
+    const DEFAULT_ERROR_TOAST_DEDUPE_MS = 3000;
+    let lastDefaultErrorToastKey = '';
+    let lastDefaultErrorToastAt = 0;
+
+    const isWorkerHandshakeCooldownNoise = (error) => {
+        if (!error) {
+            return false;
+        }
+        const code = String(error.code || '').trim().toLowerCase();
+        const message = String(error.message || '');
+        if (/cooling down after capacity\/auth pressure/i.test(message)) {
+            return true;
+        }
+        return code === 'worker_capacity_exhausted' && /cooling down/i.test(message);
+    };
+
+    const shouldDedupeDefaultErrorToast = (code, message) => {
+        const key = `${String(code || '').trim()}|${String(message || '').trim()}`;
+        if (!key || key === '|') {
+            return false;
+        }
+        const now = Date.now();
+        if (key === lastDefaultErrorToastKey && (now - lastDefaultErrorToastAt) < DEFAULT_ERROR_TOAST_DEDUPE_MS) {
+            return true;
+        }
+        lastDefaultErrorToastKey = key;
+        lastDefaultErrorToastAt = now;
+        return false;
+    };
 
     const readErrorEnvelope = (error) => {
         const responseData = error && error.response && error.response.data
@@ -2151,6 +2180,10 @@
                 if (code === 'auth_error' && /worker session is unavailable/i.test(message)) {
                     return;
                 }
+                // Client-side handshake backoff is not a site incident worth GA4 site_error.
+                if (isWorkerHandshakeCooldownNoise(error)) {
+                    return;
+                }
                 if (typeof window.dispatchEvent !== 'function' || typeof window.CustomEvent !== 'function') {
                     return;
                 }
@@ -2263,6 +2296,12 @@
                 return;
             }
             if (code === 'auth_error' && /worker session is unavailable/i.test(message)) {
+                return;
+            }
+            if (isWorkerHandshakeCooldownNoise(error)) {
+                return;
+            }
+            if (shouldDedupeDefaultErrorToast(code, message)) {
                 return;
             }
             try {

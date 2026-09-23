@@ -39,8 +39,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260915-sibling-i18n2"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260915-sibling-i18n2"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
@@ -63,6 +63,13 @@
             globalVar: null,
             load: "defer",
             description: "店面购物者 Toast 区域"
+        },
+        footerSocialFloat: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/footer-social-float.js"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/footer-social-float.js"],
+            globalVar: "WelineFooterSocialFloat",
+            async: true,
+            description: "页脚侧边悬浮社媒贴边收起"
         },
         currency: {
             origin_paths: ["app/code/Weline/Currency/view/statics/js/currency.js"],
@@ -218,6 +225,12 @@
             globalVar: null,
             description: "PDP 主加购滚出视野后的悬浮代理加购条"
         },
+        productDetailReveal: {
+            origin_paths: ["app/code/Weline/Product/view/statics/js/widgets/product-detail-reveal.js?v=20260923-detail-reveal4"],
+            paths: ["/Weline/Product/view/statics/js/widgets/product-detail-reveal.js?v=20260923-detail-reveal4"],
+            globalVar: null,
+            description: "PDP 详情杂志楼层滚轮入场（§5.4）"
+        },
         recentlyViewed: {
             origin_paths: ["app/code/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],
             paths: ["/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],
@@ -255,11 +268,11 @@
             description: "账户中心发货/收货地址维护"
         },
         cart: {
-            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20260910-payment-lifecycle-listen3", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260914-affiliate-panel-show"],
-            paths: ["/Weline/Cart/view/statics/js/cart.js?v=20260910-payment-lifecycle-listen3", "/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260914-affiliate-panel-show"],
+            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20260923-remove-from-cart-pixel1", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260922-purchase-panel-binquery"],
+            paths: ["/Weline/Cart/view/statics/js/cart.js?v=20260923-remove-from-cart-pixel1", "/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260922-purchase-panel-binquery"],
             globalVar: "WelineCartPurchaseActions",
             load: "defer",
-            description: "万能购物车：优惠券事件 / 游客续期 / 加购交互"
+            description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记"
         },
         checkoutLifecycle: {
             origin_paths: ["app/code/Weline/Checkout/view/statics/js/checkout-lifecycle.js?v=20260910-checkout-lifecycle3"],
@@ -351,8 +364,8 @@
             description: "进店音乐"
         },
         newsletterSubscribe: {
-            origin_paths: ["app/code/Weline/Newsletter/view/statics/js/newsletter-subscribe.js?v=20260922-scroll-lock"],
-            paths: ["/Weline/Newsletter/view/statics/js/newsletter-subscribe.js?v=20260922-scroll-lock"],
+            origin_paths: ["app/code/Weline/Newsletter/view/statics/js/newsletter-subscribe.js?v=20260922-deferred-p206"],
+            paths: ["/Weline/Newsletter/view/statics/js/newsletter-subscribe.js?v=20260922-deferred-p206"],
             globalVar: "WelineNewsletterSubscribe",
             load: "defer",
             description: "邮件订阅表单（BinQuery / 弹窗 cookie）"
