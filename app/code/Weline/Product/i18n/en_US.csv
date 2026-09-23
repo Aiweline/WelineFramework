@@ -376,24 +376,6 @@ check,check
 精选好物，为你推荐,"Curated products, recommended for you."
 上一组,"Previous Group"
 下一组,"Next Group"
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
-面包屑,Breadcrumb
-"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
-"0 件结果","0 results"
-“%{1}”,“%{1}”
-该分类下暂无已发布商品。,"No products have been published in this category yet."
-新作入藏,"New to the Collection"
-"订阅 RSS","Subscribe to RSS"
-甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
-"共 %{1} 件新品","%{1} new arrivals"
-新品汉服,"New Hanfu Arrivals"
-新品,New
-查看商品,"View product"
-新品正在整理,"New arrivals are being curated"
-浏览全部商品,"Browse all products"
 "筛选器区域 - 由 Filters 部件默认注入","Filter area - injected by default from the Filters component"
 筛选,Filter
 当前网站暂无已发布商品,"No published products on this website yet"
@@ -404,6 +386,10 @@ Category,Category
 "Custom category layout","Custom category layout"
 "分类筛选区域 - 由 Filters 部件默认注入","Category filter area - injected by default from the Filters component"
 "分类产品区域 - 展示该分类下的产品","Product listing area - displays products within this category"
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
 "Scheduled category layout","Scheduled category layout"
 "分类导航 slot，可由分类模块或导航部件接管。","Category navigation slot, which can be taken over by the category module or navigation component."
 "筛选 slot，可由筛选模块或筛选部件接管。","Filter slot, which can be taken over by the filter module or filter component."
@@ -425,6 +411,20 @@ SKU,SKU
 沟通,Communication
 查看沟通,"View chat"
 "询价沟通 #%{1}","Inquiry chat #%{1}"
+面包屑,Breadcrumb
+"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
+"0 件结果","0 results"
+“%{1}”,“%{1}”
+该分类下暂无已发布商品。,"No products have been published in this category yet."
+新作入藏,"New to the Collection"
+"订阅 RSS","Subscribe to RSS"
+甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
+"共 %{1} 件新品","%{1} new arrivals"
+新品汉服,"New Hanfu Arrivals"
+新品,New
+查看商品,"View product"
+新品正在整理,"New arrivals are being curated"
+浏览全部商品,"Browse all products"
 当前网站暂无已发布的热销商品。,"This storefront has no published best sellers yet."
 热销商品,"Best sellers"
 排名,Ranking

@@ -82,7 +82,8 @@ final class AllMenuNavTreeContractTest extends TestCase
         // Relative urls are rebuilt via getFrontendUrl (default locale keeps bare path).
         self::assertNotSame('', $nav[0]['url']);
         self::assertStringContainsString('c', $nav[0]['url']);
-        self::assertArrayNotHasKey('tag', $nav[0]);
+        self::assertSame('custom', $nav[0]['tag']);
+        self::assertSame('page', $nav[0]['children'][0]['tag']);
         self::assertSame('帮助中心', $nav[0]['children'][0]['text']);
         // Optional visual fields are preserved when present on source nodes.
         self::assertSame('secret', $nav[0]['description']);

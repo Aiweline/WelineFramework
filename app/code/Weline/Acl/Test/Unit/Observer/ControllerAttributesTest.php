@@ -5,6 +5,7 @@ namespace Weline\Acl\Test\Unit\Observer;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use ReflectionProperty;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Observer\ControllerAttributes;
 
@@ -57,24 +58,38 @@ final class ControllerAttributesTest extends TestCase
         self::assertSame('', $method->invoke($observer, 'Demo_Module::config'));
     }
 
-    public function testDeduplicateAclsBySourceIdKeepsLastRow(): void
+    public function testSetParentSourceRejectsSelfReferencingLoadedClassAcl(): void
     {
         $observer = new ControllerAttributes($this->createMock(Acl::class));
-        $method = new ReflectionMethod($observer, 'deduplicateAclsBySourceId');
-        $method->setAccessible(true);
-
-        $deduped = $method->invoke($observer, [
-            ['source_id' => 'A::x', 'route' => 'old'],
-            ['source_id' => 'A::y', 'route' => 'y'],
-            ['source_id' => 'A::x', 'route' => 'new'],
+        $loaded = new \ReflectionProperty($observer, 'loaded_controller_acl_names');
+        $loaded->setAccessible(true);
+        $loaded->setValue($observer, [
+            'Weline_Widget' => [
+                'Weline\\Widget\\Controller\\Backend\\Preview' => 'Weline_Widget::preview_page',
+            ],
         ]);
 
-        self::assertCount(2, $deduped);
-        $byId = [];
-        foreach ($deduped as $row) {
-            $byId[$row['source_id']] = $row['route'];
-        }
-        self::assertSame('new', $byId['A::x']);
-        self::assertSame('y', $byId['A::y']);
+        $acl = new \Weline\Framework\Acl\Acl(
+            'Weline_Widget::preview_page',
+            '预览页面',
+            'eye',
+            '预览页面'
+        );
+
+        $setParent = new ReflectionMethod($observer, 'setParentSource');
+        $setParent->setAccessible(true);
+        $data = new \Weline\Framework\DataObject\DataObject(['module' => 'Weline_Widget']);
+        $setParent->invoke(
+            $observer,
+            $acl,
+            'Weline\\Widget\\Controller\\Backend\\Preview',
+            $data
+        );
+
+        self::assertNotSame('Weline_Widget::preview_page', $acl->getParentSource());
+
+        $validate = new ReflectionMethod($observer, 'validateParentSource');
+        $validate->setAccessible(true);
+        $validate->invoke($observer, $acl);
     }
 }

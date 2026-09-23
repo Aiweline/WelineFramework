@@ -634,35 +634,23 @@ class BroadcastControlDispatchService
         $instances = [];
         foreach ($this->serverInstanceManager->listPersistedInstanceNames() as $name) {
             $instance = $this->serverInstanceManager->getRawInstanceData($name);
-            if ($instance === null) {
-                if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {
-                    $instances[] = $name;
-                    continue;
-                }
-                if ($this->serverInstanceManager->hasInstance($name)) {
-                    $skippedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
-                }
+            if ($instance !== null && $this->isStoppedInstanceRecord($instance)) {
                 continue;
             }
-            if ($this->isStoppedInstanceRecord($instance)) {
-                continue;
-            }
-            if ($this->mayAcceptControlCommand($instance)) {
+
+            // 以控制口可达为准：残留 lifecycle=running 但 control_port 已死的记录
+            // 不得进入广播目标，否则 cache:clear 等会 Connection refused。
+            if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {
                 $instances[] = $name;
                 continue;
             }
 
-            $skippedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
+            if ($instance !== null || $this->serverInstanceManager->hasInstance($name)) {
+                $skippedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
+            }
         }
 
         return $instances;
-    }
-
-    /** @param array<string, mixed> $instance */
-    private function mayAcceptControlCommand(array $instance): bool
-    {
-        return !$this->isStoppedInstanceRecord($instance)
-            && (int)($instance['control_port'] ?? 0) > 0;
     }
 
     /** @param array<string, mixed> $instance */

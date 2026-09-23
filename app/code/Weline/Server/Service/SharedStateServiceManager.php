@@ -1493,13 +1493,24 @@ class SharedStateServiceManager
         } catch (\Throwable) {
             return false;
         }
-        return SharedStateServiceRegistry::hasExactLifecycleBinding($role, $authority)
-            && (int)($authority['lifecycle_generation'] ?? 0)
-                === (int)($selected['lifecycle_generation'] ?? 0)
-            && \hash_equals(
-                (string)($authority['lifecycle_identity_digest'] ?? ''),
-                (string)($selected['lifecycle_identity_digest'] ?? ''),
-            );
+        if (!SharedStateServiceRegistry::hasExactLifecycleBinding($role, $authority)) {
+            return false;
+        }
+
+        $selectedDigest = (string)($selected['lifecycle_identity_digest'] ?? '');
+        $authorityDigest = (string)($authority['lifecycle_identity_digest'] ?? '');
+        if ($selectedDigest === ''
+            || $authorityDigest === ''
+            || !\hash_equals($authorityDigest, $selectedDigest)
+        ) {
+            return false;
+        }
+
+        // Registry/runtime generation numbers can drift while still describing the
+        // same live sidecar (same digest + endpoint). Generation equality alone
+        // must not block operator `server:shared:stop` / rotate.
+        return (int)($authority['pid'] ?? 0) === (int)($selected['pid'] ?? 0)
+            && (int)($authority['port'] ?? 0) === (int)($selected['port'] ?? 0);
     }
 
     private function waitForSharedServicePortRelease(string $host, int $port, float $timeoutSec): bool
@@ -2458,12 +2469,43 @@ class SharedStateServiceManager
 
         $published = $this->publishRuntimeRecord($role, $selected, $registry);
         if ($published !== []) {
-            $selected = \array_merge($selected, $published);
+            $selected = $this->mergePublishedLifecycleWithoutRegression($selected, $published);
         }
         if (SharedStateServiceRegistry::hasExactLifecycleBinding($role, $selected)) {
             $this->writeRuntimeFile($role, $selected);
         }
         return $selected;
+    }
+
+    /**
+     * Registry publish may rebind from a lower local generation. When digests
+     * still describe the same identity, keep the higher generation so stop /
+     * rotate does not see a false lifecycle_identity_mismatch.
+     *
+     * @param array<string,mixed> $selected
+     * @param array<string,mixed> $published
+     * @return array<string,mixed>
+     */
+    private function mergePublishedLifecycleWithoutRegression(array $selected, array $published): array
+    {
+        $merged = \array_merge($selected, $published);
+        $selectedDigest = (string)($selected['lifecycle_identity_digest'] ?? '');
+        $publishedDigest = (string)($published['lifecycle_identity_digest'] ?? '');
+        $selectedGeneration = (int)($selected['lifecycle_generation'] ?? 0);
+        $publishedGeneration = (int)($published['lifecycle_generation'] ?? 0);
+        if ($selectedDigest !== ''
+            && $publishedDigest !== ''
+            && \hash_equals($selectedDigest, $publishedDigest)
+            && $selectedGeneration > $publishedGeneration
+        ) {
+            $merged['lifecycle_generation'] = $selectedGeneration;
+            $merged['lifecycle_identity_digest'] = $selectedDigest;
+            if (isset($selected['lifecycle_schema'])) {
+                $merged['lifecycle_schema'] = $selected['lifecycle_schema'];
+            }
+        }
+
+        return $merged;
     }
 
     /**

@@ -362,4 +362,57 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         $this->assertStringContainsString('可控 WLS 实例', $result['message']);
         $this->assertStringContainsString('跳过', $result['message']);
     }
+
+    public function testRawRunningRecordWithDeadControlPortIsSkipped(): void
+    {
+        $gateway = new class extends IpcControlGateway {
+            public array $instances = [];
+
+            public function cacheClear(string $instanceName, float $timeout = 3.0): array
+            {
+                $this->instances[] = $instanceName;
+                return ['success' => true, 'message' => 'ok', 'data' => []];
+            }
+        };
+
+        $manager = new class extends ServerInstanceManager {
+            public function listPersistedInstanceNames(): array
+            {
+                return ['default', 'widget-assets-http-9568'];
+            }
+
+            public function hasInstance(string $name): bool
+            {
+                return true;
+            }
+
+            public function isInstanceIpcControllable(string $name): bool
+            {
+                return $name === 'default';
+            }
+
+            public function getRawInstanceData(string $name): ?array
+            {
+                // 模拟残留：lifecycle 仍为 running，且登记了 control_port，但口已死。
+                return [
+                    'name' => $name,
+                    'lifecycle_state' => 'running',
+                    'startup_phase' => 'running',
+                    'control_port' => $name === 'widget-assets-http-9568' ? 35875 : 35900,
+                    'pid' => 54605,
+                ];
+            }
+        };
+
+        $service = new BroadcastControlDispatchService($gateway, $manager);
+        $result = $service->cacheClear();
+
+        $this->assertSame(['default'], $gateway->instances);
+        $this->assertTrue($result['success']);
+        $this->assertSame(['default'], $result['attempted']);
+        $this->assertSame(['default'], $result['succeeded']);
+        $this->assertSame([], $result['failed_by_instance']);
+        $this->assertArrayHasKey('widget-assets-http-9568', $result['skipped_by_instance']);
+        $this->assertStringContainsString('跳过', $result['message']);
+    }
 }

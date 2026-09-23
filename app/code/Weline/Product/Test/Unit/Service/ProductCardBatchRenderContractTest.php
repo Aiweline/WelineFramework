@@ -21,6 +21,8 @@ final class ProductCardBatchRenderContractTest extends TestCase
         self::assertStringContainsString('renderCachedBody', $src);
         self::assertStringContainsString('StorefrontProductCardFragmentCache', $src);
         self::assertStringContainsString("'batch' => true", $src);
+        self::assertStringContainsString('hydrateReviewAggregates', $src);
+        self::assertStringContainsString('aggregatesForExternalUuids', $src);
         self::assertStringNotContainsString('static $cardHtml', $src);
     }
 
@@ -63,6 +65,7 @@ final class ProductCardBatchRenderContractTest extends TestCase
 
         foreach ([$catalog, $category] as $tpl) {
             self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $tpl);
+            self::assertStringContainsString("'show_rating' => true", $tpl);
             self::assertStringNotContainsString('<w:product:card', $tpl);
             self::assertStringNotContainsString('fromStorefrontOffer(', $tpl);
         }

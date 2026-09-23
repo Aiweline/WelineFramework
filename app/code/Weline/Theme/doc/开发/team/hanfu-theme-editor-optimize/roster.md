@@ -23,6 +23,10 @@
 | 店面契约（QA-10/12/13） | [73c14199-5ce1-4abb-94e9-35ac76c6dd96](73c14199-5ce1-4abb-94e9-35ac76c6dd96) | **closed**（`qa10-12-13-fix.md`） |
 | 汇审复验 | [58ab6824-5a58-4939-9e8b-9eb3a240522c](58ab6824-5a58-4939-9e8b-9eb3a240522c) | **closed**（高优 8/8 pass；`sitewide-qa-reverify.md`） |
 | 电商顾问（买家秀） | [b559456a-8040-40a0-aa13-380d15a06e58](b559456a-8040-40a0-aa13-380d15a06e58) | **closed pass**（`buyer-show-ops-acceptance.md`；P0 01/02） |
+| Review+部件（BUYER-SHOW P1-03） | [7ed7377f-231e-4a7b-ad9c-c0fc65e1b03e](7ed7377f-231e-4a7b-ad9c-c0fc65e1b03e) | **closed**（`buyer-show-p1-03-done.md`；含 05 星级） |
+| 内容种子（BUYER-SHOW P1-04） | [9c53620b-6762-4c93-b984-543cf1dc2ae4](9c53620b-6762-4c93-b984-543cf1dc2ae4) | **closed**（`buyer-show-p1-04-seed-done.md`；543/542/245） |
+| 电商顾问（买家秀 P1 复审） | [b559456a-8040-40a0-aa13-380d15a06e58](b559456a-8040-40a0-aa13-380d15a06e58) | **fail**（`buyer-show-p1-ops-acceptance.md`；待返工） |
+| P1 现网返工 | [3b078256-5326-4460-91ff-63c615e6b99c](3b078256-5326-4460-91ff-63c615e6b99c) | active |
 | 主题/部件（BUYER-SHOW P0） | [0f697589-3ad7-4bdb-834f-784f85d1abe3](0f697589-3ad7-4bdb-834f-784f85d1abe3) | **closed**（`buyer-show-p0-done.md`） |
 
 波次：全站点击 QA 修复（`sitewide-qa-fix-plan.md`）。Go-live 已激活 Frontend=hanfu。

@@ -2265,3 +2265,46 @@ html.has-product-sticky-purchase body {
         transform: none !important;
     }
 }
+
+/* Apple-style hue diffusion: floor wash derived from image background (DaoCharms / 1688) */
+.product-native-detail__description-body:has([data-dc-hue-root="1"]) {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
+}
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor {
+    margin: 0 0 clamp(0.75rem, 1.5vw, 1.5rem);
+    padding: clamp(1.5rem, 3vw, 2.75rem) clamp(1rem, 3vw, 2rem);
+    border: 0;
+    border-radius: 0;
+    background: var(--dc-floor-bg, transparent);
+}
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor[data-dc-hue="bleed"] {
+    --dc-floor-bg: #ffffff;
+    background: #ffffff;
+}
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor[data-dc-hue="diffuse"] {
+    background: var(--dc-floor-bg);
+}
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor .weline-detail-feature,
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor .weline-detail-prose,
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor .weline-detail-figure-stack,
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor .weline-detail-figure {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor .weline-detail-feature {
+    margin: 0;
+    padding: 0;
+    border-top: 0;
+}
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor .weline-detail-prose {
+    border-top: 0;
+    padding-inline: 0;
+}
+.product-native-detail__description-body [data-dc-hue-root="1"] .dc-hue-floor img {
+    background: transparent !important;
+}

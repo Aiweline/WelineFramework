@@ -36,6 +36,31 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame([], $modules);
     }
 
+    public function testNamedThemeFlagFromAssociativeArgs(): void
+    {
+        [$themeName, $modules] = ThemeUpgradeCommand::parseArguments([
+            'command' => 'theme:upgrade',
+            't' => 'daocharms',
+        ]);
+
+        self::assertSame('daocharms', $themeName);
+        self::assertSame([], $modules);
+    }
+
+    public function testNamespacedModuleThemeRequestPathIncludesThemeIdentity(): void
+    {
+        self::assertSame(
+            '/static/Weline/daocharms/Weline/Theme/view/theme/frontend/assets/css/theme.css',
+            ThemeUpgradeCommand::buildNamespacedModuleThemeRequestPath(
+                'Weline/daocharms',
+                'Weline',
+                'Theme',
+                'frontend',
+                'assets/css/theme.css',
+            )
+        );
+    }
+
     public function testPublisherCreatesMissingDestinationDirectories(): void
     {
         $workspace = sys_get_temp_dir() . '/weline-theme-upgrade-' . bin2hex(random_bytes(6));

@@ -175,7 +175,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
         <div class="amz-plp__grid weline-product-card-shelf" data-testid="storefront-category-grid">
             <?= ProductCardRenderer::projectFromOffers($offers, [
                 'show_price' => true,
-                'show_rating' => false,
+                'show_rating' => true,
                 'show_add_to_cart' => true,
                 'show_wishlist' => true,
                 'show_compare' => true,

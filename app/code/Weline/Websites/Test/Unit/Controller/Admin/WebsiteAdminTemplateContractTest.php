@@ -203,6 +203,26 @@ final class WebsiteAdminTemplateContractTest extends TestCase
         self::assertStringContainsString("editorKind === 'website'", $panel);
     }
 
+    public function testWebsiteFormKeepsWFormContiguousForFiberCapture(): void
+    {
+        $form = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/templates/Admin/Website/form.phtml',
+        );
+        self::assertStringContainsString('$websiteFormAction', $form);
+        self::assertStringContainsString('<w:form action="<?= $websiteFormAction ?>"', $form);
+        self::assertStringContainsString('</w:form>', $form);
+        // Anti-pattern: open native <form> / <w:form> on opposite if/else branches then endif
+        // before the shared body — Fiber try{ capture cannot cross endif.
+        self::assertDoesNotMatchRegularExpression(
+            '/<\?php if \(\$useTreeFormAction\):\s*\?>\s*<form[\s\S]*?<\?php else:\s*\?>\s*<w:form/',
+            $form,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/<\?php if \(\$useTreeFormAction\):\s*\?>\s*<\/form>\s*<\?php else:\s*\?>\s*<\/w:form>/',
+            $form,
+        );
+    }
+
     public function testEditSaveUsesSnapshotCodeForStartPageConfig(): void
     {
         $source = (string)file_get_contents(
