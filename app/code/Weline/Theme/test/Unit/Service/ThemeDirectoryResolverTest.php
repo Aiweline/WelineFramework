@@ -383,4 +383,82 @@ class ThemeDirectoryResolverTest extends TestCore
         $this->assertStringContainsString('layouts', $resolvedPath);
         $this->assertStringContainsString('homepage', $resolvedPath);
     }
+
+    /**
+     * view/email 与 templates 同一套主题继承：Weline_Smtp::email/shell → design/hanfu 覆盖
+     */
+    public function testResolveThemeTemplatePathSmtpEmailShellToHanfu(): void
+    {
+        $theme = $this->loadTheme(3); // hanfu
+
+        if (!$theme->getId()) {
+            $this->markTestSkipped('Theme 3 (hanfu) not found.');
+        }
+
+        $modulePath = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Smtp'
+            . DS . 'view' . DS . 'email' . DS . 'shell.phtml';
+        $resolvedPath = $this->resolver->resolveThemeTemplatePath($modulePath, $theme);
+
+        $this->assertFileExists($resolvedPath);
+        $this->assertStringContainsString('Weline' . DS . 'hanfu', $resolvedPath);
+        $this->assertStringContainsString('Weline_Smtp' . DS . 'email' . DS . 'shell.phtml', $resolvedPath);
+
+        $byModuleId = $this->resolver->resolveThemeTemplatePath(
+            'Weline_Smtp::email/shell.phtml',
+            $theme
+        );
+        $this->assertSame($resolvedPath, $byModuleId);
+    }
+
+    /**
+     * 模块覆盖走主题继承链：子主题无文件时回落父主题覆盖，再回落模块默认
+     */
+    public function testResolveThemeTemplatePathModuleOverrideWalksParentChain(): void
+    {
+        $theme = $this->loadTheme(3); // hanfu → parent Default
+        if (!$theme->getId()) {
+            $this->markTestSkipped('Theme 3 (hanfu) not found.');
+        }
+
+        $chain = $this->resolver->getThemeChain($theme, 'frontend');
+        if (count($chain) < 2) {
+            $this->markTestSkipped('hanfu has no parent theme in chain.');
+        }
+
+        $parent = $chain[1];
+        $parentBase = rtrim($parent->getPath(), '\\/');
+        $probeRel = 'Weline_Smtp' . DS . 'email' . DS . '_chain_probe_shell.phtml';
+        $parentProbe = $parentBase . DS . $probeRel;
+        $childProbe = rtrim($theme->getPath(), '\\/') . DS . $probeRel;
+        $this->assertFileDoesNotExist($childProbe, 'probe must not exist on child');
+
+        $marker = '<!-- theme-chain-probe-parent -->';
+        $dir = dirname($parentProbe);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+        file_put_contents($parentProbe, $marker);
+        try {
+            $resolved = $this->resolver->resolveThemeTemplatePath(
+                'Weline_Smtp::email/_chain_probe_shell.phtml',
+                $theme
+            );
+            $this->assertSame($parentProbe, $resolved);
+            $this->assertSame($marker, (string)file_get_contents($resolved));
+
+            // 无任何主题覆盖 → 回落调用方传入的模块路径
+            $moduleFallback = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Smtp'
+                . DS . 'view' . DS . 'email' . DS . 'shell.phtml';
+            $noOverride = $this->resolver->resolveThemeTemplatePath(
+                'Weline_Smtp::email/_definitely_missing_shell.phtml',
+                $theme
+            );
+            $this->assertSame('Weline_Smtp::email/_definitely_missing_shell.phtml', $noOverride);
+            unset($moduleFallback);
+        } finally {
+            if (is_file($parentProbe)) {
+                unlink($parentProbe);
+            }
+        }
+    }
 }

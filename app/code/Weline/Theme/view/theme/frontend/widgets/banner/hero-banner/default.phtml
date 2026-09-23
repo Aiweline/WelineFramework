@@ -9,6 +9,7 @@
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
  * @widget.supports {["layout-homepage-hero","layout-homepage-content","layout-cms-hero","layout-default-content","banner","hero"]}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="主视觉标题",type="string",label="标题"}
  * @param subtitle {default="",type="textarea",label="说明"}
  * @param image {default="",type="media_image",label="背景图片"}
@@ -35,10 +36,9 @@ $height = Block::length($this->getData('height'), 'var(--size-hero-height)');
 $buttonText = Block::text($this->getData('button_text'));
 $buttonLink = Block::link($this->getData('button_link'));
 ?>
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block sb-hero align-<?= $esc($alignment) ?>"
          weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="--sb-hero-height:<?= $esc($height) ?>">
+         data-widget-style="--sb-hero-height:<?= $esc($height) ?>">
     <?php if ($imageHtml !== '' || $image !== ''): ?>
         <div class="sb-hero-media">
             <?php if ($imageHtml !== ''): ?><?= $imageHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($this->getData('alt_text')) ?>" decoding="async"><?php endif; ?>

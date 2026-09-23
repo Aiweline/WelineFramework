@@ -79,11 +79,11 @@ final class FooterDefaultLinksHelperTest extends TestCase
         $items = FooterDefaultLinksHelper::defaultSocialItems();
 
         $this->assertSame(
-            ['Instagram', 'Pinterest', 'TikTok', 'YouTube'],
+            ['YouTube', 'X', 'Instagram', 'TikTok'],
             array_column($items, 'name'),
         );
         $this->assertSame(
-            ['fab fa-instagram', 'fab fa-pinterest', 'fab fa-tiktok', 'fab fa-youtube'],
+            ['fab fa-youtube', 'fab fa-twitter', 'fab fa-instagram', 'fab fa-tiktok'],
             array_column($items, 'icon'),
         );
         foreach ($items as $item) {
@@ -91,13 +91,35 @@ final class FooterDefaultLinksHelperTest extends TestCase
         }
         $this->assertSame(
             [
-                'https://www.instagram.com/changan.hanfu',
-                'https://www.pinterest.com/changanhanfu',
-                'https://www.tiktok.com/@changan.hanfu',
                 'https://www.youtube.com/@changanhanfu',
+                'https://x.com/changanhanfu',
+                'https://www.instagram.com/changanhanfu/',
+                'https://www.tiktok.com/@changanhanfu_hq',
             ],
             FooterDefaultLinksHelper::defaultSameAsUrls(),
         );
+    }
+
+    public function testResolveSocialPlatformCodeMapsOfficialProfiles(): void
+    {
+        self::assertSame('youtube', FooterDefaultLinksHelper::resolveSocialPlatformCode([
+            'name' => 'YouTube',
+            'icon' => 'fab fa-youtube',
+            'url' => 'https://www.youtube.com/@changanhanfu',
+        ]));
+        self::assertSame('x', FooterDefaultLinksHelper::resolveSocialPlatformCode([
+            'name' => 'X',
+            'icon' => 'fab fa-twitter',
+            'url' => 'https://x.com/changanhanfu',
+        ]));
+        self::assertSame('instagram', FooterDefaultLinksHelper::resolveSocialPlatformCode([
+            'name' => 'Instagram',
+            'url' => 'https://www.instagram.com/changanhanfu/',
+        ]));
+        self::assertSame('tiktok', FooterDefaultLinksHelper::resolveSocialPlatformCode([
+            'name' => 'TikTok',
+            'url' => 'https://www.tiktok.com/@changanhanfu_hq',
+        ]));
     }
 
     public function testNormalizeSocialItemsOnlyReturnsActionableProfileLinks(): void

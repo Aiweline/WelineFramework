@@ -663,6 +663,48 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
     margin-bottom: var(--weline-space-3, 0.75rem);
 }
 
+.header-cart .mini-cart-drawer__fs-progress {
+    margin: 0 0 var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-3, 0.75rem);
+    border-radius: var(--weline-radius-md, 8px);
+    background: var(--weline-theme-surface-muted, #f3f4f6);
+}
+
+.header-cart .mini-cart-drawer__fs-progress.is-qualified {
+    background: color-mix(in srgb, #007600 12%, #ffffff);
+}
+
+.header-cart .mini-cart-drawer__fs-progress-track {
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, #0f1111 12%, #ffffff);
+    overflow: hidden;
+}
+
+.header-cart .mini-cart-drawer__fs-progress-bar {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: var(--weline-theme-primary, #c45c26);
+    transition: width 0.28s ease;
+}
+
+.header-cart .mini-cart-drawer__fs-progress.is-qualified .mini-cart-drawer__fs-progress-bar {
+    background: #007600;
+}
+
+.header-cart .mini-cart-drawer__fs-progress-text {
+    margin: var(--weline-space-2, 0.5rem) 0 0;
+    font-size: var(--weline-font-size-sm, 0.875rem);
+    font-weight: 600;
+    color: var(--weline-theme-text, #0f1111);
+    line-height: 1.35;
+}
+
+.header-cart .mini-cart-drawer__fs-progress.is-qualified .mini-cart-drawer__fs-progress-text {
+    color: #007600;
+}
+
 .header-cart .mini-cart-drawer__subtotal--goods {
     margin-bottom: var(--weline-space-2, 0.5rem);
     color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #6b7280));

@@ -61,6 +61,26 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertNotSame($first, $second);
     }
 
+    public function testHorizontalNavLogicalKeyVariesByBannerAndList(): void
+    {
+        $service = $this->service();
+        $items = [
+            ['text' => 'A', 'url' => '/a', 'children' => [['text' => 'A1', 'url' => '/a1']]],
+        ];
+
+        $bannerOn = $service->horizontalNavLogicalKey($items, true);
+        $bannerOff = $service->horizontalNavLogicalKey($items, false);
+        $other = $service->horizontalNavLogicalKey([
+            ['text' => 'B', 'url' => '/b', 'children' => []],
+        ], true);
+
+        self::assertStringStartsWith('theme.header.horizontal_nav.v1.', $bannerOn);
+        self::assertStringContainsString('.banner1.', $bannerOn);
+        self::assertStringContainsString('.banner0.', $bannerOff);
+        self::assertNotSame($bannerOn, $bannerOff);
+        self::assertNotSame($bannerOn, $other);
+    }
+
     public function testNavigationPolicyUsesChannelScopeAndLocalizedVariants(): void
     {
         $policy = StorefrontHeaderNavFragmentCache::cachePolicy();

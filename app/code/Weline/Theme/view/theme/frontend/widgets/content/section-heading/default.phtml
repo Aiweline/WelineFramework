@@ -8,6 +8,7 @@
  * @widget.position {["content","sidebar","footer"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css}
  * @param title {default="内容标题",type="string",label="标题"}
  * @param subtitle {default="",type="textarea",label="副标题"}
  * @param eyebrow {default="",type="string",label="眉题"}
@@ -28,8 +29,6 @@ $level = Block::choice($this->getData('level'), ['h1','h2','h3','h4'], 'h2');
 $alignment = Block::choice($this->getData('alignment'), ['left','center','right'], 'left');
 $eyebrow = Block::text($this->getData('eyebrow'));
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block sb-heading align-<?= $esc($alignment) ?>" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
     <?php if ($eyebrow !== ''): ?><p class="sb-eyebrow"><?= $t($eyebrow) ?></p><?php endif; ?>
     <<?= $level ?> class="sb-title"><?= $t($title) ?></<?= $level ?>>

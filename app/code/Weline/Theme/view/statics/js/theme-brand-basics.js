@@ -603,6 +603,14 @@
         if (!root || root.dataset.brandBasicsBound === '1') return;
         root.dataset.brandBasicsBound = '1';
 
+        const refreshResources = () => {
+            const editor = editorApi();
+            if (typeof editor?.refreshResourceConfigurationPreview !== 'function') return;
+            editor.refreshResourceConfigurationPreview().catch(err => toast(err?.message || String(err), 'error'));
+        };
+        document.getElementById('themeBrandResourcesTab')?.addEventListener('click', refreshResources);
+        document.getElementById('themeResourceFilesConfig')?.addEventListener('weline:config-saved', refreshResources);
+
         document.getElementById('btnThemeBrandBasics')?.addEventListener('click', openDrawer);
         document.getElementById('btnThemeBrandBasicsStrip')?.addEventListener('click', openDrawer);
         document.getElementById('btnThemeBrandBasicsClose')?.addEventListener('click', closeDrawer);

@@ -13,6 +13,7 @@
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-homepage-hero","layout-homepage-content","layout-homepage-promo","layout-default-content","banner"]}
  *
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css,Weline_Theme::css/widgets/widget-banner-ad-banner-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param image {default="",type="media_image",label="广告图片",description="从媒体库选择广告图片",media_options={default_directory:"banner",aspect_ratio:"1920/150",recommend_width:"1920",recommend_height:"150",aspect_ratio_tolerance:"0.1"}}
  * @param link {default="",type="string",label="链接地址"}
  * @param alt_text {default="广告",type="string",label="替代文字"}
@@ -37,13 +38,11 @@ $openNewTab = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('open
 $borderRadius = \Weline\Theme\Helper\SiteBlockConfig::length($this->getData('border_radius'), 'var(--weline-radius-md)');
 $rootStyle = 'border-radius:' . $borderRadius . ';';
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="weline-site-block <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="<?= $esc($rootStyle) ?>">
+         data-widget-style="<?= $esc($rootStyle) ?>">
     <?php if ($link): ?>
         <a href="<?= $esc($link) ?>"
            class="ad-link"
@@ -70,65 +69,3 @@ $rootStyle = 'border-radius:' . $borderRadius . ';';
     <?php endif; ?>
 </section>
 
-<style>
-.<?= $wc ?> {
-    position: relative;
-    overflow: hidden;
-    display: block;
-    width: 100%;
-    height: auto;
-    min-height: 0;
-    line-height: 0;
-    background: transparent;
-}
-
-.<?= $wc ?> .ad-link {
-    display: block;
-    width: 100%;
-    height: auto;
-    text-decoration: none;
-    line-height: 0;
-}
-
-.<?= $wc ?> .ad-image,
-.<?= $wc ?> .ad-image--asset {
-    width: 100%;
-    max-width: 100%;
-    height: auto;
-    min-height: 0;
-    display: block;
-    aspect-ratio: auto;
-    transition: transform var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .ad-image--asset :is(img, picture, .w-file-image) {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    height: auto;
-    min-height: 0;
-    vertical-align: top;
-    object-fit: unset;
-}
-
-.<?= $wc ?>:hover .ad-image,
-.<?= $wc ?>:hover .ad-image--asset {
-    transform: scale(1.02);
-}
-
-.<?= $wc ?> .ad-label {
-    position: absolute;
-    top: var(--weline-space-2);
-    right: var(--weline-space-2);
-    z-index: 1;
-    line-height: var(--line-height-normal);
-    padding: var(--spacing-0_5) var(--weline-space-2);
-    background: color-mix(in srgb, var(--weline-theme-overlay) 60%, transparent);
-    color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-xs);
-    border-radius: var(--weline-radius-sm);
-    text-transform: uppercase;
-    letter-spacing: var(--token-size-0-5px);
-}
-
-</style>

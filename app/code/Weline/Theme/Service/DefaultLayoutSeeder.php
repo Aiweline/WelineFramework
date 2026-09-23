@@ -231,7 +231,8 @@ class DefaultLayoutSeeder
                     'widget_type' => 'banner',
                     'config' => [
                         'title' => $this->resolveWebsiteBrandTitle(),
-                        'subtitle' => '为日常与仪式感而作 · Made for everyday rituals',
+                        // 布局存简中源串；英文靠 CSV / WidgetI18n（WO-HP-P1-04 禁中英并写）
+                        'subtitle' => '为日常与仪式感而作',
                         'auto_play' => true,
                         'interval' => 5000,
                     ],
@@ -245,8 +246,8 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '本季精选 · Seasonal Edit',
-                        'limit' => 8,
+                        'title' => '本季精选',
+                        'limit' => 4,
                         'columns' => 4,
                     ],
                     'sort_order' => 0,
@@ -259,8 +260,8 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '新品上市 · New Arrivals',
-                        'limit' => 8,
+                        'title' => '新品上市',
+                        'limit' => 4,
                         'columns' => 4,
                     ],
                     'sort_order' => 1,
@@ -305,7 +306,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '同风格推荐 · You May Also Like',
+                        'title' => '同风格推荐',
                         'limit' => 4,
                         'columns' => 4,
                     ],
@@ -334,7 +335,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_RecentlyViewed',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '最近浏览 · Recently Viewed',
+                        'title' => '最近浏览',
                         'limit' => 24,
                         'columns' => 4,
                     ],
@@ -348,7 +349,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '热卖精选 · Best Sellers',
+                        'title' => '热卖精选',
                         'limit' => 4,
                         'columns' => 4,
                         'layout' => 'carousel',
@@ -366,7 +367,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '为你推荐 · Recommended',
+                        'title' => '为你推荐',
                         'limit' => 8,
                         'columns' => '4',
                         'layout' => 'grid',
@@ -385,7 +386,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '继续探索 · Explore More',
+                        'title' => '继续探索',
                         'limit' => 8,
                         'columns' => '4',
                         'layout' => 'grid',
@@ -404,7 +405,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '搭配成套 · Complete the Look',
+                        'title' => '搭配成套',
                         'limit' => 4,
                         'columns' => 4,
                     ],
@@ -422,7 +423,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '人气商品 · Popular Picks',
+                        'title' => '人气商品',
                         'limit' => 8,
                         'columns' => 4,
                     ],

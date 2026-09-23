@@ -88,6 +88,25 @@ final class SlotHtmlBoundaryBehaviorTest extends TestCase
         self::assertSame($new, $this->replace('<div class="widget-wrapper" data-widget-code="price">old</div>', 'price', $new));
     }
 
+    public function testSameWidgetCodeKeepsDistinctInstancesAndUpdatesOnlyMatchingUid(): void
+    {
+        $firstUid = str_repeat('a', 32);
+        $secondUid = str_repeat('b', 32);
+        $first = '<div class="widget-wrapper" data-widget-code="faq-accordion" data-node-uid="' . $firstUid . '">First</div>';
+        $second = '<div class="widget-wrapper" data-widget-code="faq-accordion" data-node-uid="' . $secondUid . '">Second</div>';
+        $html = $this->replace($first, 'faq-accordion', $second, $secondUid);
+        self::assertStringContainsString($first, $html);
+        self::assertStringContainsString($second, $html);
+        $updated = str_replace('First', 'Updated', $first);
+        $html = $this->replace($html, 'faq-accordion', $updated, $firstUid);
+        self::assertStringContainsString($updated, $html);
+        self::assertStringContainsString($second, $html);
+        self::assertSame(1, substr_count($html, $firstUid));
+        self::assertSame(1, substr_count($html, $secondUid));
+        $legacy = '<div class="widget-wrapper" data-widget-code="faq-accordion">Legacy</div>';
+        self::assertSame($first, $this->replace($legacy, 'faq-accordion', $first, $firstUid));
+    }
+
     public function testWishlistReplacementConsumesNestedSections(): void
     {
         $old = '<section class="header-wishlist"><section>old</section><span>tail</span></section>';
@@ -202,11 +221,11 @@ final class SlotHtmlBoundaryBehaviorTest extends TestCase
             . '<section data-wslot=demo>not a real tag</section>';
         self::assertNull((new SlotBoundaryScanner())->findSlotWrapperBounds($html, 'demo'));
     }
-    private function replace(string $html, string $code, string $replacement): string
+    private function replace(string $html, string $code, string $replacement, string $nodeUid = ''): string
     {
         $class = new \ReflectionClass(SlotRendererService::class);
         return $class->getMethod('insertCowLayoutAdditionIntoMultipleSlotInner')->invoke(
-            $class->newInstanceWithoutConstructor(), $html, [], ['widget_code' => $code], $replacement,
+            $class->newInstanceWithoutConstructor(), $html, [], ['widget_code' => $code, 'node_uid' => $nodeUid], $replacement,
         );
     }
 }

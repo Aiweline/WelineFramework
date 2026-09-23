@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-search-search-bar-default.css}
  * 搜索栏部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -61,98 +62,3 @@ if (!in_array($style, ['default', 'rounded', 'minimal'], true)) {
     </w:form>
 </section>
 
-<style>
-.<?= $wc ?> .search-form {
-    width: 100%;
-}
-
-.<?= $wc ?> .search-input-group {
-    display: flex;
-    position: relative;
-}
-
-.<?= $wc ?> .search-input {
-    flex: 1;
-    padding: var(--weline-space-3) var(--weline-space-4);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    font-size: var(--weline-font-size-sm);
-    outline: none;
-    transition: border-color var(--weline-theme-transition-base);
-    background: var(--weline-theme-surface);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .search-input:focus {
-    border-color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?> .search-button {
-    padding: var(--weline-space-3) var(--weline-space-5);
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    font-size: var(--weline-font-size-sm);
-    transition: background-color var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .search-button:hover {
-    background: var(--weline-theme-primary-hover);
-}
-
-.<?= $wc ?>.style-default .search-input {
-    border-radius: var(--weline-radius-md) 0 0 var(--weline-radius-md);
-}
-
-.<?= $wc ?>.style-default .search-button {
-    border-radius: 0 var(--weline-radius-md) var(--weline-radius-md) 0;
-}
-
-.<?= $wc ?>.style-rounded .search-input {
-    border-radius: var(--weline-radius-round) 0 0 var(--weline-radius-round);
-    padding-left: var(--weline-space-5);
-}
-
-.<?= $wc ?>.style-rounded .search-button {
-    border-radius: 0 var(--weline-radius-round) var(--weline-radius-round) 0;
-    padding: var(--weline-space-3) var(--weline-space-6);
-}
-
-.<?= $wc ?>.style-minimal .search-input-group {
-    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    transition: border-color var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?>.style-minimal .search-input-group:focus-within {
-    border-color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?>.style-minimal .search-input {
-    border: none;
-    border-radius: 0;
-    background: transparent;
-}
-
-.<?= $wc ?>.style-minimal .search-button {
-    background: transparent;
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?>.style-minimal .search-button:hover {
-    color: var(--weline-theme-primary);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    max-width: 100%;
-}
-
-.widget-preview-canvas .<?= $wc ?> .search-input,
-.<?= $wc ?>.is-preview .search-input {
-    padding: var(--weline-space-2) var(--weline-space-3);
-    font-size: var(--weline-font-size-xs);
-}
-</style>

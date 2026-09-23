@@ -33,10 +33,11 @@ final class ThemeShellLayoutDefaultWidgetsContractTest extends TestCase
     public function testHomepageTrustAndMinimalEmbedWidgets(): void
     {
         $home = $this->layout('homepage/default.phtml');
-        self::assertStringContainsString('layouts::homepage::trust', $home);
-        // trust-badges 默认只在 footer-above；homepage-trust 不内嵌，避免与页脚双渲
-        self::assertStringNotContainsString('<w:widget type="content" name="trust-badges" />', $home);
-        self::assertStringNotContainsString('layouts::homepage::trust<else/>', $home);
+        self::assertStringContainsString('layouts::homepage::trust<else/>', $home);
+        // WO-HP-P2-05：首屏二折内嵌紧凑 trust-badges；页底 footer-above 另留精简版
+        self::assertStringContainsString('name="trust-badges"', $home);
+        self::assertStringContainsString('free-shipping', $home);
+        self::assertStringContainsString('homepage-section--trust-strip', $home);
 
         $minimal = $this->layout('homepage/minimal.phtml');
         self::assertStringContainsString('<w:widget type="banner" name="hero-slider" />', $minimal);

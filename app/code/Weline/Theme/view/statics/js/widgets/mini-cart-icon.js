@@ -525,6 +525,45 @@
         return symbol + n.toFixed(2);
     }
 
+    function resolveFreeShippingProgress(summary) {
+        var fromApi = summary && summary.free_shipping_progress;
+        // 仅展示后台实际启用的免邮规则，不在前端自行推算活动。
+        return fromApi && typeof fromApi === 'object' && fromApi.enabled === true
+            ? fromApi
+            : null;
+    }
+
+    function renderFreeShippingProgress(root, summary) {
+        var box = root.querySelector('[data-mini-cart-fs-progress]');
+        if (!box) {
+            return;
+        }
+        var count = Number((summary && (summary.cart_count || summary.item_count)) || 0);
+        if (!summary || summary.is_empty || count <= 0) {
+            box.hidden = true;
+            box.classList.remove('is-qualified');
+            return;
+        }
+        var progress = resolveFreeShippingProgress(summary, root);
+        if (!progress || progress.enabled === false) {
+            box.hidden = true;
+            return;
+        }
+        box.hidden = false;
+        box.classList.toggle('is-qualified', !!progress.qualified);
+        var bar = box.querySelector('[data-mini-cart-fs-bar]');
+        if (bar) {
+            var pct = Math.max(0, Math.min(100, Number(progress.progress_percent || 0)));
+            bar.style.width = pct + '%';
+        }
+        var textEl = box.querySelector('[data-mini-cart-fs-text]');
+        if (textEl) {
+            textEl.textContent = progress.qualified
+                ? String(progress.message_qualified || progress.message || attr(root, 'data-i18n-fs-qualified', '已享包邮'))
+                : String(progress.message || '');
+        }
+    }
+
     function text(el, value) {
         if (el) el.textContent = value == null ? '' : String(value);
     }
@@ -1061,12 +1100,16 @@
         var payable = Math.max(0, subtotal - discountMajor);
         var formatted = formatMoney(payable, currency);
         var goodsFormatted = formatMoney(subtotal, currency);
+        // WO-BUILD-OPS-02-HOME：空车不展示 $0.00 价签噪声
+        var emptyCart = count <= 0 || !!summary.is_empty;
+        var visibleFormatted = emptyCart ? '' : formatted;
+        var visibleGoodsFormatted = emptyCart ? '' : goodsFormatted;
         var items = Array.isArray(summary.items) ? summary.items : [];
         var cartType = normalizeCartType(summary.cart_type || summary.selling_mode || preferredCartType());
         var gate = String(summary.gate_reason || '').toLowerCase();
 
         root.setAttribute('data-cart-count', String(count));
-        root.setAttribute('data-cart-subtotal', formatted);
+        root.setAttribute('data-cart-subtotal', emptyCart ? '' : formatted);
         // Authoritative goods base (major) for B2B deposit/credit — must stay in sync even when
         // the discount breakdown row is hidden (otherwise credit keeps a stale larger total).
         root.setAttribute('data-cart-goods-subtotal-major', String(isFinite(subtotal) && subtotal > 0 ? subtotal : 0));
@@ -1076,7 +1119,7 @@
         } else {
             root.removeAttribute('data-cart-gate');
         }
-        root.classList.toggle('is-empty', count <= 0 || !!summary.is_empty);
+        root.classList.toggle('is-empty', emptyCart);
         root.classList.toggle('is-demo', !!summary.is_demo);
         applyCartTypeAttr(root, summary);
 
@@ -1085,12 +1128,13 @@
             badge.hidden = count <= 0;
             badge.textContent = count > 99 ? '99+' : String(count);
         }
-        text(root.querySelector('[data-cart-subtotal-text]'), formatted);
+        text(root.querySelector('[data-cart-subtotal-text]'), visibleFormatted);
         text(root.querySelector('[data-cart-item-count]'), String(count));
-        text(root.querySelector('[data-cart-total-amount]'), formatted);
+        text(root.querySelector('[data-cart-total-amount]'), visibleFormatted);
         // Always refresh goods node text — do not wait for discount lines to appear.
-        text(root.querySelector('[data-cart-goods-subtotal]'), goodsFormatted);
+        text(root.querySelector('[data-cart-goods-subtotal]'), visibleGoodsFormatted);
         renderDiscountBreakdown(root, summary, currency);
+        renderFreeShippingProgress(root, summary);
         renderItems(root, items.slice(0, 20), currency);
     }
 

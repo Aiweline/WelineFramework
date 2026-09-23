@@ -1,0 +1,92 @@
+.wc-theme_widget_new_arrivals {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+    padding-block: var(--weline-space-3);
+    padding-inline: 0;
+    box-sizing: border-box;
+}
+
+.wc-theme_widget_new_arrivals .widget-header { margin-bottom: var(--weline-space-3); }
+.wc-theme_widget_new_arrivals .widget-title {
+    margin: 0;
+    color: var(--weline-theme-text);
+    font-size: clamp(var(--font-size-xl), 2vw, var(--font-size-2xl));
+    font-weight: var(--weline-font-weight-bold);
+    line-height: 1.2;
+}
+.wc-theme_widget_new_arrivals .widget-subtitle { margin: var(--weline-space-2) 0 0; color: var(--weline-theme-text-muted); }
+.wc-theme_widget_new_arrivals .products-container { width: 100%; }
+.wc-theme_widget_new_arrivals .products-wrapper { width: 100%; overflow: visible; }
+.wc-theme_widget_new_arrivals .layout-carousel .products-wrapper { overflow: hidden; }
+.wc-theme_widget_new_arrivals .products-grid {
+    display: grid;
+    gap: var(--weline-space-4);
+    width: 100%;
+    box-sizing: border-box;
+    align-items: stretch;
+}
+.wc-theme_widget_new_arrivals .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wc-theme_widget_new_arrivals .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wc-theme_widget_new_arrivals .products-grid.columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wc-theme_widget_new_arrivals .products-grid.columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.wc-theme_widget_new_arrivals .products-grid.columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.wc-theme_widget_new_arrivals .layout-carousel .products-grid {
+    display: flex;
+    gap: var(--weline-space-4);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+}
+.wc-theme_widget_new_arrivals .layout-carousel .product-card {
+    flex: 0 0 auto;
+    width: min(var(--layout-sidebar-width), calc((100% - var(--spacing-2xl)) / 4));
+    scroll-snap-align: start;
+}
+.wc-theme_widget_new_arrivals .widget-footer { text-align: center; margin-top: var(--weline-space-4); }
+.wc-theme_widget_new_arrivals .btn-view-all {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--weline-space-2) var(--weline-space-6);
+    border: var(--border-width-medium) solid var(--weline-theme-primary);
+    color: var(--weline-theme-primary);
+    text-decoration: none;
+    border-radius: var(--token-size-30px);
+    font-weight: 600;
+    transition: all 0.3s;
+}
+.wc-theme_widget_new_arrivals .btn-view-all:hover {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+}
+
+/*
+ * UC-P1-03：columns-4 在编辑器 ≈700px 须保持 4 列；禁止 980→2。
+ * 仅 <560 降 2 列；真窄屏 ≤480 降 1 列。
+ */
+@media (max-width: 980px) {
+    .wc-theme_widget_new_arrivals .products-grid.columns-4,
+    .wc-theme_widget_new_arrivals .products-grid.columns-5,
+    .wc-theme_widget_new_arrivals .products-grid.columns-6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 559px) {
+    .wc-theme_widget_new_arrivals .products-grid.columns-4,
+    .wc-theme_widget_new_arrivals .products-grid.columns-5,
+    .wc-theme_widget_new_arrivals .products-grid.columns-6 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .wc-theme_widget_new_arrivals .products-grid,
+    .wc-theme_widget_new_arrivals .products-grid.columns-2,
+    .wc-theme_widget_new_arrivals .products-grid.columns-3,
+    .wc-theme_widget_new_arrivals .products-grid.columns-4,
+    .wc-theme_widget_new_arrivals .products-grid.columns-5,
+    .wc-theme_widget_new_arrivals .products-grid.columns-6 {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

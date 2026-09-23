@@ -6,6 +6,7 @@ namespace Weline\Theme\Helper;
 
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Template;
+use Weline\Framework\View\Data\DataInterface;
 
 /**
  * 商品卡片购买操作参数（Cart 加购 + Checkout 立即购买）。
@@ -109,19 +110,20 @@ final class ProductCardAddToCartParams
     }
 
     /**
-     * Inline CSS owned by the product-card purchase partial (Cart add + Checkout buy-now).
+     * External CSS owned by the product-card purchase partial (Cart add + Checkout buy-now).
      */
     public static function buildPurchaseActionsStyleTag(): string
     {
-        $cssPath = dirname(__DIR__) . '/view/statics/css/partials/product-card-purchase-actions.css';
-        $css = is_file($cssPath) ? (string)file_get_contents($cssPath) : '';
-        if ($css === '') {
+        $url = (string)Template::getInstance()->fetchTagSource(
+            DataInterface::dir_type_STATICS,
+            'Weline_Theme::css/partials/product-card-purchase-actions.css'
+        );
+        if ($url === '') {
             return '';
         }
-
-        return '<style ' . self::PURCHASE_ACTIONS_STYLE_MARKER . '="1" data-no-extract="true">'
-            . $css
-            . '</style>';
+        return '<link rel="stylesheet" ' . self::PURCHASE_ACTIONS_STYLE_MARKER . '="1" '
+            . 'data-weline-widget-asset="source" data-weline-source-position="head" '
+            . 'href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">';
     }
 
     /**

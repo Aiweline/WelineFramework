@@ -20,6 +20,8 @@
  * @widget.slots {"footer-about-links":{"name":"了解我们扩展","accept":["footer-blog-link","footer-news-link","layout-footer-about-links"],"multiple":true},"footer-partner-links":{"name":"合作信息扩展","accept":["footer-publish-link","footer-promote-link","layout-footer-partner-links"],"multiple":true},"footer-payment-account-links":{"name":"支付与账户扩展","accept":["footer-payment-methods-link","footer-social-login-link","footer-currency-rates-link","footer-campaign-link","layout-footer-payment-account-links"],"multiple":true},"footer-help-links":{"name":"帮助中心扩展","accept":["footer-my-account-link","footer-my-orders-link","footer-shipping-info-link","footer-returns-policy-link","footer-faq-link","footer-contact-service-link","layout-footer-help-links"],"multiple":true},"footer-language":{"name":"语言","accept":["language-switcher","language"],"max":1},"footer-currency":{"name":"货币","accept":["currency-switcher","currency"],"max":1},"footer-social":{"name":"社交媒体","accept":["footer-social","social"],"max":1},"footer-copyright":{"name":"版权信息","accept":["footer-copyright","copyright"],"max":1}}
  * @widget.default_injections {[{ "layout_type":"homepage", "slot":"footer", "area":"footer", "sort_order":0, "required":true, "exclusive":true, "reason":"整页脚主部件默认安装到全局 chrome 载体（homepage），非首页继承合并" }]}
  *
+ * @widget.layout_source {Weline_Theme::css/widgets/footer-chrome-amazon.css,Weline_Theme::css/widgets/widget-container-footer-default.css}
+ * @widget.source {Weline_Theme::css/widgets/footer-chrome-amazon.css,Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Theme::js/widgets/widget-container-footer-default-0.js}
  * @param link_groups {default=[],type="footer_link_groups",label="链接分组",description="默认四组；enabled=false 时不渲染该列及扩展槽；自定义分组不带新槽"}
  * @param link_items {default=[],type="footer_link_items",label="链接分项",description="group_key 对应分组键；先于扩展槽渲染"}
  * @param columns {default="4",type="select",label="链接列数",options={2:"2列",3:"3列",4:"4列"}}
@@ -27,6 +29,8 @@
  * @param show_locale {default=true,type="bool",label="显示语言/货币条"}
  * @param show_social {default=true,type="bool",label="显示社交媒体"}
  * @param social_items {default=[],type="footer_social_items",label="社交媒体"}
+ * @param float_social {default=true,type="bool",label="侧边悬浮社媒",description="与底部社媒同源链接；关闭则不显示屏幕边缘竖条"}
+ * @param float_social_side {default="left",type="select",label="悬浮位置",options={left:"左侧",right:"右侧"}}
  * @param show_legal {default=true,type="bool",label="显示法律链接与版权"}
  * @param legal_links {default=[],type="footer_legal_links",label="法律与政策链接"}
  * @param copyright_text {default="",type="string",label="版权文字",description="留空使用主题默认；可用 year 占位符"}
@@ -51,6 +55,26 @@ $label = static function (mixed $value) use ($esc): string {
 
     return $esc(WidgetI18n::label($raw));
 };
+$toBool = static function (mixed $value, bool $default): bool {
+    if ($value === null) {
+        return $default;
+    }
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value) || is_float($value)) {
+        return ((int)$value) !== 0;
+    }
+    $normalized = strtolower(trim((string)$value));
+    if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+        return true;
+    }
+    if (in_array($normalized, ['0', 'false', 'no', 'off', ''], true)) {
+        return false;
+    }
+
+    return $default;
+};
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $linkGroups = FooterDefaultLinksHelper::normalizeRenderableGroups(
@@ -61,17 +85,22 @@ $columns = (string)($this->getData('columns') ?? '4');
 if (!in_array($columns, ['2', '3', '4'], true)) {
     $columns = '4';
 }
-$showBackToTop = (bool)($this->getData('show_back_to_top') ?? true);
-$showLocale = (bool)($this->getData('show_locale') ?? true);
-$showSocial = (bool)($this->getData('show_social') ?? true);
-$showLegal = (bool)($this->getData('show_legal') ?? true);
+$showBackToTop = $toBool($this->getData('show_back_to_top'), true);
+$showLocale = $toBool($this->getData('show_locale'), true);
+$showSocial = $toBool($this->getData('show_social'), true);
+$floatSocial = $toBool($this->getData('float_social'), true);
+$floatSocialSide = strtolower(trim((string)($this->getData('float_social_side') ?? 'left')));
+if (!in_array($floatSocialSide, ['left', 'right'], true)) {
+    $floatSocialSide = 'left';
+}
+$showLegal = $toBool($this->getData('show_legal'), true);
 $socialItems = FooterDefaultLinksHelper::normalizeSocialItems($this->getData('social_items'));
 $legalLinks = FooterDefaultLinksHelper::normalizeLegalLinks($this->getData('legal_links'));
 $themeFallbackSiteLogoText = '';
 /** @var SiteBrand $siteBrand */
 $siteBrand = ObjectManager::getInstance(SiteBrand::class);
 $siteLogoText = $siteBrand instanceof SiteBrand
-    ? $siteBrand->resolveFrontendSiteName(
+    ? $siteBrand->resolveFrontendWordmark(
         trim((string)($this->getData('site_logo_text') ?? '')),
     )
     : WidgetI18n::label(
@@ -92,10 +121,6 @@ if ($rawCopyright === null || trim((string)$rawCopyright) === '') {
 }
 $gridClass = 'footer-content footer-content--cols-' . $columns;
 ?>
-
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/footer-chrome-amazon.css)">
-
 <footer id="footer"
         class="weline-footer <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
         weline-code="<?= $esc($scope->code) ?>"
@@ -110,36 +135,11 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
     <w:hook>footer</w:hook>
 
     <?php if ($showBackToTop): ?>
-        <button type="button" class="footer-back-to-top" id="navBackToTop" title="<?= $esc((string)__('回到顶部')) ?>">
+        <button type="button" class="footer-back-to-top" id="navBackToTop" title="<?= $esc((string)__("回到顶部")) ?>">
             <i class="fas fa-arrow-up footer-back-to-top__icon" aria-hidden="true"></i>
             <span class="footer-back-to-top__text"><lang>回到顶部</lang></span>
         </button>
-        <script>
-        (function () {
-            var btn = document.getElementById('navBackToTop');
-            if (!btn || btn.getAttribute('data-weline-back-to-top-bound') === '1') {
-                return;
-            }
-            btn.setAttribute('data-weline-back-to-top-bound', '1');
-            btn.addEventListener('click', function () {
-                var reduce = false;
-                try {
-                    reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                } catch (e) {}
-                try {
-                    window.scrollTo({ top: 0, left: 0, behavior: reduce ? 'auto' : 'smooth' });
-                } catch (e2) {
-                    window.scrollTo(0, 0);
-                }
-                if (document.documentElement) {
-                    document.documentElement.scrollTop = 0;
-                }
-                if (document.body) {
-                    document.body.scrollTop = 0;
-                }
-            });
-        })();
-        </script>
+        <span hidden data-widget-script="theme-container-footer-default-0"></span>
     <?php endif; ?>
 
     <div class="footer-nav">
@@ -218,7 +218,7 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
     </div>
 
     <?php if ($showLocale): ?>
-        <div class="footer-locale w-surface-inverse" data-surface="inverse" role="navigation" aria-label="<?= $esc((string)__('站点偏好')) ?>">
+        <div class="footer-locale w-surface-inverse" data-surface="inverse" role="navigation" aria-label="<?= $esc((string)__("站点偏好")) ?>">
             <div class="footer-container footer-locale__inner">
                 <a class="footer-locale__logo" href="@url{'/'}" title="<?= $esc($siteLogoText) ?>">
                     <span class="footer-locale__logo-mark" aria-hidden="true"><?= $esc(mb_substr($siteLogoText, 0, 1)) ?></span>
@@ -264,16 +264,12 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                     position="footer"
                     class="footer-social-media">
                 <div class="footer-container footer-social-media__inner">
-                    <?php foreach ($socialItems as $social): ?>
-                        <a class="footer-social-link"
-                           href="<?= $esc((string)($social['url'] ?? '#')) ?>"
-                           title="<?= $label($social['name'] ?? '') ?>">
-                            <?php if (!empty($social['icon'])): ?>
-                                <i class="<?= $esc((string)$social['icon']) ?>" aria-hidden="true"></i>
-                            <?php endif; ?>
-                            <span><?= $label($social['name'] ?? '') ?></span>
-                        </a>
-                    <?php endforeach; ?>
+                    <?= $this->fetch('Weline_Theme::theme/frontend/components/social-profile-links.phtml', [
+                        'items' => $socialItems,
+                        'link_class' => 'footer-social-link',
+                        'icon_class' => 'footer-social-icon',
+                        'icon_size' => '20',
+                    ]) ?>
                 </div>
             </w:slot>
         <?php endif; ?>
@@ -288,7 +284,7 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                     class="footer-legal">
                 <div class="footer-container">
                     <w:hook>Weline_Theme::frontend::partials::footer::copyright-before</w:hook>
-                    <nav class="footer-legal__links" aria-label="<?= $esc((string)__('法律与政策')) ?>">
+                    <nav class="footer-legal__links" aria-label="<?= $esc((string)__("法律与政策")) ?>">
                         <?php foreach ($legalLinks as $legal):
                             $openNew = !empty($legal['open_in_new']);
                             $legalUrl = FooterDefaultLinksHelper::splitUrlForTaglib((string)($legal['url'] ?? '#'));
@@ -305,37 +301,40 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
         <?php endif; ?>
     </div>
 
+    <?php if ($floatSocial && $socialItems !== []):
+        $floatPanelId = 'footer-social-float-panel-' . $esc($scope->uid);
+        ?>
+        <nav class="footer-social-float"
+             data-side="<?= $esc($floatSocialSide) ?>"
+             data-testid="footer-social-float"
+             data-weline-load="footerSocialFloat"
+             data-collapsed-label="<?= $esc((string)__('展开社交媒体')) ?>"
+             data-expanded-label="<?= $esc((string)__('收起社交媒体')) ?>"
+             aria-label="<?= $esc((string)__('官方社交媒体')) ?>">
+            <div class="footer-social-float__panel"
+                 id="<?= $floatPanelId ?>"
+                 data-float-panel>
+                <?= $this->fetch('Weline_Theme::theme/frontend/components/social-profile-links.phtml', [
+                    'items' => $socialItems,
+                    'link_class' => 'footer-social-link footer-social-float__link',
+                    'icon_class' => 'footer-social-icon',
+                    'icon_size' => '14',
+                ]) ?>
+            </div>
+            <button type="button"
+                    class="footer-social-float__toggle"
+                    data-float-toggle
+                    data-testid="footer-social-float-toggle"
+                    aria-expanded="true"
+                    aria-controls="<?= $floatPanelId ?>"
+                    aria-label="<?= $esc((string)__('收起社交媒体')) ?>">
+                <span class="footer-social-float__toggle-icon" aria-hidden="true">
+                    <w:icon name="chevron-left" size="xs"></w:icon>
+                </span>
+            </button>
+        </nav>
+    <?php endif; ?>
+
     <w:hook>Weline_Theme::frontend::partials::footer::after</w:hook>
 </footer>
 
-<style>
-.<?= $wc ?> .footer-content {
-    display: grid;
-    gap: var(--weline-space-8, 2rem) var(--weline-space-6, 1.5rem);
-}
-.<?= $wc ?> .footer-content--cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.<?= $wc ?> .footer-content--cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.<?= $wc ?> .footer-content--cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.<?= $wc ?> .footer-section__links {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-3_5, 0.875rem);
-}
-.<?= $wc ?> .footer-section__extras {
-    margin-top: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-3_5, 0.875rem);
-}
-@media (max-width: 992px) {
-    .<?= $wc ?> .footer-content--cols-3,
-    .<?= $wc ?> .footer-content--cols-4 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-@media (max-width: 576px) {
-    .<?= $wc ?> .footer-content {
-        grid-template-columns: 1fr !important;
-    }
-}
-</style>

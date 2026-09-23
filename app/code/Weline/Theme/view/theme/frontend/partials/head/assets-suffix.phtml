@@ -1,0 +1,36 @@
+<?php
+/**
+ * Route-invariant head suffix (theme CSS / UI / module declarations).
+ * wave9-9s: nested under storefrontHeadAssetsPolicy — shared across URLs.
+ *
+ * @meta.name {default="Storefront head assets suffix",name="店面 head 资源后缀"}
+ * @meta.cache.mode {default="chrome",name="缓存模式"}
+ * @meta.cache.auth {default="guest",name="鉴权维度"}
+ * @meta.cache.ttl {default="300",name="新鲜期秒"}
+ */
+$diskOverrideHtml = (string)($this->getData('__head_disk_override_html') ?? '');
+if ($diskOverrideHtml === '') {
+    try {
+        $diskOverrideHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\Disk\ThemeDiskHeadService::class
+        )->buildOverrideLinkHtml('frontend');
+    } catch (\Throwable $e) {
+        $diskOverrideHtml = '';
+    }
+}
+?>
+<theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
+<w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
+<theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
+<?php echo $diskOverrideHtml; ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<?php // site-blocks.css：由部件 @widget.source bake→head（page.phtml HeadAssets），禁止此处 @static 重复 ?>
+<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
+<?php // weline.js 已由 Frontend header/base 注入；此后声明业务模块（含 i18n） ?>
+<w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

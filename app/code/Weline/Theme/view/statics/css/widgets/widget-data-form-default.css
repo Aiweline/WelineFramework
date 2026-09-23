@@ -1,0 +1,280 @@
+/* ============================================
+   组件：Backend Data Form
+   模块：Weline_Theme
+   前缀：backend-data-form- / backend-form-
+   ============================================ */
+
+.backend-data-form-container {
+    background: var(--backend-color-card-bg);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius-md);
+    box-shadow: var(--backend-card-shadow);
+    overflow: hidden;
+}
+
+/* 头部 */
+.backend-data-form-header {
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+}
+
+.backend-data-form-title {
+    margin: 0;
+    font-size: var(--token-size-1-1rem);
+    font-weight: 600;
+    color: var(--backend-color-text-primary);
+}
+
+/* 表单主体 */
+.backend-data-form-body {
+    padding: var(--backend-spacing-lg);
+}
+
+/* 表单组 */
+.backend-form-group {
+    margin-bottom: var(--backend-spacing-md);
+}
+
+.backend-form-group--horizontal {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--backend-spacing-md);
+}
+
+.backend-form-group--horizontal .backend-form-label {
+    flex: 0 0 var(--size-panel-150);
+    padding-top: var(--spacing-sm);
+    text-align: right;
+}
+
+.backend-form-group--horizontal .backend-form-control-wrapper {
+    flex: 1;
+}
+
+/* 标签 */
+.backend-form-label {
+    display: block;
+    margin-bottom: var(--backend-spacing-xs);
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-primary);
+}
+
+.backend-form-required {
+    color: var(--backend-color-danger);
+    margin-left: var(--spacing-0_5);
+}
+
+/* 控件容器 */
+.backend-form-control-wrapper {
+    position: relative;
+}
+
+/* 输入控件 */
+.backend-form-control {
+    width: 100%;
+    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius);
+    background: var(--backend-color-input-bg);
+    color: var(--backend-color-text-primary);
+    font-size: var(--font-size-sm);
+    transition: all 0.2s ease;
+}
+
+.backend-form-control:focus {
+    outline: none;
+    border-color: var(--backend-color-primary);
+    box-shadow: var(--backend-focus-ring);
+}
+
+.backend-form-control:disabled {
+    background: var(--backend-color-bg-secondary);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.backend-form-control::placeholder {
+    color: var(--backend-color-text-tertiary);
+}
+
+/* 文本域 */
+.backend-form-textarea {
+    min-height: var(--token-size-100px);
+    resize: vertical;
+}
+
+/* 下拉框 */
+.backend-form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--weline-space-3) center;
+    padding-right: var(--size-control-md);
+}
+
+/* 复选框 & 单选框 */
+.backend-form-checkbox,
+.backend-form-radio {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-primary);
+}
+
+.backend-form-checkbox input,
+.backend-form-radio input {
+    width: var(--font-size-lg);
+    height: var(--font-size-lg);
+    accent-color: var(--backend-color-primary);
+}
+
+.backend-form-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-md);
+}
+
+/* 提示文字 */
+.backend-form-hint {
+    margin-top: var(--backend-spacing-xs);
+    font-size: var(--font-size-13);
+    color: var(--backend-color-text-tertiary);
+}
+
+/* 错误信息 */
+.backend-form-error {
+    margin-top: var(--backend-spacing-xs);
+    font-size: var(--font-size-13);
+    color: var(--backend-color-danger);
+    display: none;
+}
+
+.backend-form-error:not(:empty) {
+    display: block;
+}
+
+.backend-form-control.is-invalid {
+    border-color: var(--backend-color-danger);
+}
+
+/* 字段集 */
+.backend-form-fieldset {
+    margin: 0 0 var(--backend-spacing-lg);
+    padding: 0;
+    border: none;
+}
+
+.backend-form-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm);
+    width: 100%;
+    padding: var(--backend-spacing-sm) 0;
+    margin-bottom: var(--backend-spacing-md);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--backend-color-text-primary);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+}
+
+.backend-form-fieldset--collapsible .backend-form-legend {
+    cursor: pointer;
+}
+
+.backend-form-fieldset--collapsible .backend-form-legend:hover {
+    color: var(--backend-color-primary);
+}
+
+.backend-form-fieldset-icon {
+    margin-left: auto;
+    transition: transform 0.2s;
+}
+
+.backend-form-fieldset--collapsed .backend-form-fieldset-icon {
+    transform: rotate(-90deg);
+}
+
+.backend-form-fieldset--collapsed .backend-form-fieldset-content {
+    display: none;
+}
+
+/* 表单底部 */
+.backend-data-form-footer {
+    display: flex;
+    gap: var(--backend-spacing-sm);
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-top: var(--border-width-thin) solid var(--backend-color-border-light);
+    background: var(--backend-color-bg-secondary);
+}
+
+/* 按钮 */
+.backend-form-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--backend-spacing-xs);
+    padding: var(--backend-spacing-sm) var(--backend-spacing-lg);
+    border: none;
+    border-radius: var(--backend-border-radius);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.backend-form-btn--primary {
+    background: var(--backend-color-primary);
+    color: var(--backend-color-text-inverse);
+}
+
+.backend-form-btn--primary:hover {
+    background: var(--backend-color-primary-hover);
+}
+
+.backend-form-btn--secondary {
+    background: var(--backend-color-card-bg);
+    color: var(--backend-color-text-secondary);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+}
+
+.backend-form-btn--secondary:hover {
+    background: var(--backend-color-bg-tertiary);
+    color: var(--backend-color-text-primary);
+}
+
+/* 内联布局 */
+.backend-data-form--inline .backend-data-form-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--backend-spacing-md);
+}
+
+.backend-data-form--inline .backend-form-group {
+    margin-bottom: 0;
+    flex: 0 0 auto;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .backend-form-group--horizontal {
+        flex-direction: column;
+    }
+    
+    .backend-form-group--horizontal .backend-form-label {
+        text-align: left;
+        flex: none;
+    }
+    
+    .backend-data-form-footer {
+        flex-direction: column;
+    }
+    
+    .backend-form-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}

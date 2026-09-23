@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-product-up-sell-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js,Weline_Product::css/frontend/product-card.css}
  * 向上销售部件
  * 
  * @var \Weline\Framework\View\Template $this
@@ -66,7 +67,7 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
+         data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' data-widget-style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
     <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <div class="widget-header">
         <h2 class="widget-title">
@@ -104,119 +105,3 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    width: 100%;
-    max-width: none;
-    margin-inline: 0;
-    padding-block: var(--weline-space-8);
-    padding-inline: 0;
-    box-sizing: border-box;
-}
-
-.<?= $wc ?> .widget-header { margin-bottom: var(--weline-space-5); }
-.<?= $wc ?> .widget-title {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    margin: 0;
-    color: var(--weline-theme-text);
-    font-size: clamp(var(--font-size-xl), 1.8vw, var(--font-size-3xl));
-    font-weight: var(--weline-font-weight-bold);
-}
-.<?= $wc ?> .products-container { width: 100%; position: relative; }
-.<?= $wc ?> .products-wrapper { width: 100%; overflow: visible; }
-.<?= $wc ?> .layout-carousel .products-wrapper { overflow: hidden; }
-.<?= $wc ?> .products-grid {
-    display: grid;
-    gap: var(--weline-space-4);
-    width: 100%;
-    box-sizing: border-box;
-}
-.<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.<?= $wc ?> .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.<?= $wc ?> .layout-carousel .products-grid {
-    display: flex;
-    gap: var(--weline-space-4);
-    overflow-x: auto;
-}
-.<?= $wc ?> .layout-carousel .product-card {
-    flex: 0 0 auto;
-    width: min(var(--layout-sidebar-width), calc((100% - var(--spacing-2xl)) / 4));
-}
-.<?= $wc ?> .product-card {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    overflow: hidden;
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg);
-    background: var(--weline-theme-surface-raised);
-    box-shadow: var(--weline-theme-shadow-sm);
-    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-}
-.<?= $wc ?> .product-card:hover {
-    transform: translateY(var(--spacing-neg-0_5));
-    border-color: var(--weline-theme-primary);
-    box-shadow: var(--shadow-md);
-}
-.<?= $wc ?> .product-image-wrapper { position: relative; overflow: hidden; background: var(--weline-theme-surface-muted); }
-.<?= $wc ?> .product-image-link { display: block; aspect-ratio: 1 / 1; }
-.<?= $wc ?> .product-image { display: block; width: 100%; height: 100%; object-fit: cover; }
-.<?= $wc ?> .product-actions { position: absolute; top: var(--weline-space-3); right: var(--weline-space-3); display: flex; gap: var(--spacing-sm); z-index: 2; }
-.<?= $wc ?> .action-btn {
-    display: inline-flex;
-    width: var(--spacing-2_25);
-    height: var(--spacing-2_25);
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    border-radius: var(--border-radius-full);
-    background: var(--color-on-dark-92);
-    color: var(--weline-theme-text);
-    cursor: pointer;
-    box-shadow: 0 var(--spacing-sm) var(--weline-space-5) var(--color-overlay-12);
-}
-.<?= $wc ?> .product-info {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: var(--weline-space-2);
-    padding: var(--weline-space-4);
-    box-sizing: border-box;
-}
-.<?= $wc ?> .product-name { margin: 0; font-size: var(--font-size-base); line-height: 1.35; }
-.<?= $wc ?> .product-name a { color: var(--weline-theme-text); text-decoration: none; }
-.<?= $wc ?> .product-name a:hover { color: var(--weline-theme-primary); }
-.<?= $wc ?> .product-highlight {
-    font-size: var(--font-size-xs);
-    color: var(--weline-theme-success);
-    margin: 0 0 var(--spacing-sm);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-1_5);
-}
-.<?= $wc ?> .product-rating { display: flex; align-items: center; gap: var(--spacing-0_45); color: var(--weline-theme-text-muted); font-size: var(--font-size-sm); }
-.<?= $wc ?> .stars { display: flex; align-items: center; gap: var(--spacing-0_5); }
-.<?= $wc ?> .product-rating .stars .w-rating-star { color: var(--weline-theme-warning); }
-.<?= $wc ?> .product-rating .stars .w-rating-star[data-state="empty"] { color: var(--weline-theme-border); }
-.<?= $wc ?> .product-price { display: flex; align-items: baseline; gap: var(--spacing-sm); margin-top: auto; }
-.<?= $wc ?> .price-original { color: var(--weline-theme-text-muted); text-decoration: line-through; }
-.<?= $wc ?> .price-current { color: var(--weline-theme-primary); font-weight: 800; }
-/* CTA 由 canonical product-card.css 拥有 */
-
-@media (max-width: 980px) {
-    .<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-/* Align with featured/bestsellers: editor iframe (~618px) stays 2-col; 1-col only ≤480px. */
-@media (max-width: 480px) {
-    .<?= $wc ?> .products-grid,
-    .<?= $wc ?> .products-grid.columns-2,
-    .<?= $wc ?> .products-grid.columns-3,
-    .<?= $wc ?> .products-grid.columns-4 {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-</style>

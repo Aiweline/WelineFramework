@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-banner-promo-banner-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 促销横幅部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -15,7 +16,7 @@
  *
  * @param background_image {default="",type="media_image",label="背景图片",description="从媒体库选择背景图"}
  * @param background_color {default="var(--weline-theme-primary-subtle)",type="color",label="背景颜色"}
- * @param text {default="满 $49 包邮 · 新品上架",type="string",label="促销文字"}
+ * @param text {default="运费以结算页为准",type="string",label="促销文字"}
  * @param text_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="文字颜色"}
  * @param text_show_background {default=false,type="bool",label="促销文字显示背景"}
  * @param text_background_color {default="var(--weline-theme-primary-surface)",type="color",label="促销文字背景色"}
@@ -46,11 +47,19 @@ $backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
     true,
 );
 $backgroundImageFileHtml = (string)($this->getData('background_image_file_html') ?? '');
+if ($backgroundImageFileHtml !== '') {
+    // file-image 常带英文 figcaption；促销主文案已在 .promo-text，剥离避免串语（WO-HP-P1-04）
+    $backgroundImageFileHtml = (string)preg_replace(
+        '#<figcaption\b[^>]*>.*?</figcaption>#is',
+        '',
+        $backgroundImageFileHtml
+    );
+}
 $backgroundColor = ThemeUiColor::sanitize(
     $this->getData('background_color') ?? '',
     'var(--weline-theme-primary-subtle)'
 );
-$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '满 $49 包邮 · 新品上架');
+$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '运费以结算页为准');
 $textColor = ThemeUiColor::sanitize(
     $this->getData('text_color') ?? '',
     'var(--weline-theme-primary-text-emphasis)'
@@ -108,7 +117,7 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-weline-load="siteBlocks" data-site-block="promo"
-         style="<?= $esc($rootStyle) ?>">
+         data-widget-style="<?= $esc($rootStyle) ?>">
     <?php if ($backgroundImageFileHtml !== ''): ?>
         <div class="promo-background"><?= $backgroundImageFileHtml ?></div>
     <?php endif; ?>
@@ -145,180 +154,3 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     <?php endif; ?>
 </section>
 
-<style>
-.<?= $wc ?> {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    max-width: none;
-    padding: var(--spacing-sm) 0;
-    background-color: var(--wc-promo-bg);
-    background-size: cover;
-    background-position: center;
-    color: var(--wc-promo-text);
-    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-}
-
-.<?= $wc ?> .promo-content {
-    position: relative;
-    min-width: 0;
-    padding-inline: var(--spacing-lg) var(--spacing-3xl);
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--weline-space-4);
-    flex-wrap: wrap;
-}
-
-.<?= $wc ?> .promo-background,
-.<?= $wc ?> .promo-background figure,
-.<?= $wc ?> .promo-background img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-}
-
-.<?= $wc ?> .promo-background img {
-    object-fit: cover;
-}
-
-.<?= $wc ?> .promo-link {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-4);
-    flex-wrap: wrap;
-    color: inherit;
-    text-decoration: none;
-    transition: opacity var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .promo-link:hover {
-    opacity: 0.85;
-}
-
-.<?= $wc ?> .promo-text {
-    font-size: var(--weline-font-size-base);
-    font-weight: 600;
-    border-radius: var(--weline-radius-round);
-    border: 0 solid transparent;
-    background: transparent;
-}
-
-.<?= $wc ?> .promo-text.has-bg,
-.<?= $wc ?> .promo-text.has-border,
-.<?= $wc ?> .promo-text.has-shadow {
-    padding: var(--weline-space-1) var(--weline-space-3);
-}
-
-.<?= $wc ?> .promo-text.has-bg {
-    background: var(--wc-promo-text-bg);
-}
-
-.<?= $wc ?> .promo-text.has-border {
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--wc-promo-text-border);
-}
-
-.<?= $wc ?> .promo-text.has-shadow {
-    box-shadow: var(--weline-theme-shadow-sm);
-}
-
-.<?= $wc ?> .promo-arrow {
-    display: flex;
-    align-items: center;
-}
-
-.<?= $wc ?> .promo-countdown {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    border-radius: var(--weline-radius-round);
-    border: 0 solid transparent;
-    background: transparent;
-}
-
-.<?= $wc ?> .promo-countdown.has-bg,
-.<?= $wc ?> .promo-countdown.has-border,
-.<?= $wc ?> .promo-countdown.has-shadow {
-    padding: var(--weline-space-1) var(--weline-space-3);
-}
-
-.<?= $wc ?> .promo-countdown.has-bg {
-    background: var(--wc-promo-countdown-bg, color-mix(in srgb, var(--wc-promo-text) 12%, transparent));
-}
-
-.<?= $wc ?> .promo-countdown.has-border {
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--wc-promo-countdown-border);
-}
-
-.<?= $wc ?> .promo-countdown.has-shadow {
-    box-shadow: var(--weline-theme-shadow-sm);
-}
-
-.<?= $wc ?> .countdown-label {
-    font-size: var(--weline-font-size-sm);
-}
-
-.<?= $wc ?> .countdown-timer {
-    display: flex;
-    gap: var(--weline-space-1);
-}
-
-.<?= $wc ?> .time-part {
-    display: flex;
-    align-items: baseline;
-    gap: var(--spacing-0_5);
-}
-
-.<?= $wc ?> .time-value {
-    font-weight: 700;
-    font-size: var(--weline-font-size-base);
-    font-family: var(--weline-font-mono);
-}
-
-.<?= $wc ?> .time-label {
-    font-size: var(--weline-font-size-xs);
-}
-
-.<?= $wc ?> .promo-close {
-    position: absolute;
-    right: var(--weline-space-4);
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 0;
-    color: inherit;
-    cursor: pointer;
-    padding: var(--weline-space-1);
-    opacity: 0.65;
-    transition: opacity var(--weline-theme-transition-base);
-    z-index: 3;
-}
-
-.<?= $wc ?> .promo-close:hover {
-    opacity: 1;
-}
-
-.<?= $wc ?> [hidden],
-.<?= $wc ?>[hidden],
-.<?= $wc ?>.is-hidden {
-    display: none;
-}
-
-@media (max-width: 768px) {
-    .<?= $wc ?> {
-        padding-block: var(--spacing-sm);
-    }
-
-    .<?= $wc ?> .promo-text {
-        font-size: var(--weline-font-size-sm);
-    }
-}
-</style>

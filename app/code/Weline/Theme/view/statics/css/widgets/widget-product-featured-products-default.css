@@ -1,0 +1,168 @@
+/* 部件容器 */
+.wc-theme_widget_featured_products {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+    padding-block: var(--weline-space-3);
+    padding-inline: 0;
+    box-sizing: border-box;
+}
+
+.wc-theme_widget_featured_products .widget-header {
+    text-align: center;
+    margin-bottom: var(--weline-space-3);
+    /* 覆盖 theme.css 面板式 .widget-header，避免推荐区再叠一层卡片头 padding */
+    padding: 0;
+    border-bottom: none;
+    background: transparent;
+}
+
+.wc-theme_widget_featured_products .widget-title {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    margin: 0 0 var(--spacing-2_5);
+    color: var(--weline-theme-text);
+}
+
+.wc-theme_widget_featured_products .widget-subtitle {
+    font-size: var(--font-size-base);
+    color: var(--weline-theme-text-muted);
+    margin: 0;
+}
+
+.wc-theme_widget_featured_products .products-container {
+    position: relative;
+}
+
+.wc-theme_widget_featured_products .products-wrapper {
+    overflow: visible;
+}
+
+.wc-theme_widget_featured_products .layout-carousel .products-wrapper {
+    overflow: hidden;
+}
+
+.wc-theme_widget_featured_products .products-grid {
+    display: grid;
+    gap: var(--weline-space-4);
+    align-items: stretch;
+}
+
+.wc-theme_widget_featured_products .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wc-theme_widget_featured_products .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wc-theme_widget_featured_products .products-grid.columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wc-theme_widget_featured_products .products-grid.columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.wc-theme_widget_featured_products .products-grid.columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+.wc-theme_widget_featured_products .layout-carousel .products-grid {
+    display: flex;
+    gap: var(--weline-space-4);
+    transition: transform 0.3s ease;
+}
+
+.wc-theme_widget_featured_products .layout-carousel .product-card {
+    flex: 0 0 auto;
+    width: calc((100% - var(--spacing-15)) / 4);
+}
+
+.wc-theme_widget_featured_products .carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
+    background: var(--weline-theme-surface-raised);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 var(--spacing-xs) var(--spacing-3_5) var(--token-color-rgba-0-0-0-0-15);
+    z-index: 10;
+    transition: all 0.3s;
+}
+
+.wc-theme_widget_featured_products .carousel-arrow:hover {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+}
+
+.wc-theme_widget_featured_products .carousel-prev { left: var(--token-size-22px); }
+.wc-theme_widget_featured_products .carousel-next { right: var(--token-size-22px); }
+
+.wc-theme_widget_featured_products .widget-footer {
+    text-align: center;
+    margin-top: var(--weline-space-4);
+}
+
+.wc-theme_widget_featured_products .btn-view-all {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--weline-space-2) var(--weline-space-6);
+    border: var(--border-width-medium) solid var(--weline-theme-primary);
+    color: var(--weline-theme-primary);
+    text-decoration: none;
+    border-radius: var(--token-size-30px);
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.wc-theme_widget_featured_products .btn-view-all:hover {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+}
+
+/* CTA 色/圆角由 canonical .weline-product-card / product-card.css 拥有；此处禁止第三套按钮皮 */
+
+@media (max-width: 1200px) {
+    .wc-theme_widget_featured_products .products-grid.columns-5,
+    .wc-theme_widget_featured_products .products-grid.columns-6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+/*
+ * UC-P1-03 / HF-ED-P1-REWORK：编辑器预览 iframe 常见 CSS 宽 ≈700px。
+ * 旧规则在 max-width:768 把任意 products-grid（含 columns-4）打成 2 列 → 实渲 344×2。
+ * columns-4 保持到 ≥560；仅真窄屏（<560）降 2 列。!important 压过布局内联 MQ。
+ */
+@media (max-width: 992px) {
+    .wc-theme_widget_featured_products .products-grid.columns-5,
+    .wc-theme_widget_featured_products .products-grid.columns-6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .wc-theme_widget_featured_products .products-grid.columns-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    /* 禁止在此档把 columns-4 打成 2：700px 编辑器预览必须仍 4 列 */
+    .wc-theme_widget_featured_products .products-grid.columns-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    .wc-theme_widget_featured_products .products-grid.columns-5,
+    .wc-theme_widget_featured_products .products-grid.columns-6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    .wc-theme_widget_featured_products .widget-title {
+        font-size: var(--font-size-2_5xl);
+    }
+
+    .wc-theme_widget_featured_products .carousel-arrow {
+        display: none;
+    }
+}
+
+@media (max-width: 559px) {
+    .wc-theme_widget_featured_products .products-grid.columns-4,
+    .wc-theme_widget_featured_products .products-grid.columns-5,
+    .wc-theme_widget_featured_products .products-grid.columns-6 {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}

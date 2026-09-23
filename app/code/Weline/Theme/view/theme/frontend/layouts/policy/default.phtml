@@ -94,20 +94,20 @@ $meta = $this->getData('meta') ?? [];
                                         </if>
                                     </h1>
                                     <p class="policy-description">
-                                        <?= $escape(WidgetI18n::label('本页面用于展示网站的隐私政策、服务条款、退款政策等重要法律文本，请在使用本网站前仔细阅读。')) ?>
+                                        <?= $escape(WidgetI18n::label('本页汇总隐私、条款、退款等规则说明。逛店下单前，建议花一两分钟了解与您相关的部分。')) ?>
                                     </p>
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_2">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('一、总则')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('1 / 总则')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('1.1 本政策适用于您在本网站的访问和使用行为，旨在保护您的合法权益并说明我们的责任与义务。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('1.2 在使用本网站服务前，请您仔细阅读本政策的全部内容。如您不同意本政策的任何内容，或无法准确理解相关条款的含义，请不要进行后续操作。')) ?>
+                                        <?= $escape(WidgetI18n::label('1.2 建议先了解本页中与账户安全、购物和售后相关的说明。如有不清楚之处，可通过帮助中心或联系我们询问后再继续。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('1.3 当您使用本网站提供的服务时，即表示您已充分理解并同意接受本政策的全部内容。')) ?>
+                                        <?= $escape(WidgetI18n::label('1.3 注册、下单或开启非必要 Cookie 等需要单独确认的场景，我们会按页面提示征求同意；浏览本页本身不视为您已同意全部条款。')) ?>
                                     </p>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('1.4 我们有权根据法律法规的变化及业务发展需要，对本政策进行修订。修订后的政策将在本网站公布，自公布之日起生效。')) ?>
@@ -115,7 +115,7 @@ $meta = $this->getData('meta') ?? [];
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_3">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('二、信息收集与使用')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('2 / 信息收集与使用')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('2.1 我们会在合法、正当、必要的前提下收集和使用您的个人信息，并采取合理的安全措施予以保护。')) ?>
                                     </p>
@@ -138,7 +138,7 @@ $meta = $this->getData('meta') ?? [];
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_4">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('三、用户权利与义务')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('3 / 用户权利与义务')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('3.1 您在使用本网站服务时应遵守相关法律法规，不得利用本网站从事违法违规活动。')) ?>
                                     </p>
@@ -164,7 +164,7 @@ $meta = $this->getData('meta') ?? [];
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_5">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('四、服务条款')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('4 / 服务条款')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('4.1 本网站提供的服务包括但不限于：商品展示、在线交易、订单管理、客户服务等。')) ?>
                                     </p>
@@ -183,23 +183,23 @@ $meta = $this->getData('meta') ?? [];
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_6">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('五、退款政策')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('5 / 退款政策')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('5.1 退货、换货条件与期限以「退换政策」为准；本段说明退款办理与到账。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('5.2 可申请退款的情形包括：符合退换或法定无理由条件且验收通过；质量问题、错发漏发；未收到或运输严重损坏；因缺货等取消订单；以及其他依法应退款的情形。')) ?>
+                                        <?= $escape(WidgetI18n::label('5.2 可申请退款的情形包括：符合退换政策（质量/错发/运输损坏等）且验收通过；未收到或运输严重损坏；因缺货等取消订单；以及其他依法应退款的情形。发出后，个人原因的退换通常难以安排。')) ?>
                                     </p>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('5.3 退款流程：您需要在订单管理页面提交退款申请，我们将在收到申请后7个工作日内完成审核。审核通过后，退款将在3-15个工作日内原路退回。')) ?>
                                     </p>
                                     <p class="section-text">
-                                        <?= $escape(WidgetI18n::label('5.4 在不减损法定权利的前提下，超过期限且无质量问题、已使用无法二次销售、定制/数字/明示不支持无理由的品类等，可能无法办理无理由退款。无理由期限内因尺码/颜色选错等个人原因退货，按退换政策办理。')) ?>
+                                        <?= $escape(WidgetI18n::label('5.4 发出后，个人原因的退换通常难以安排。已使用无法二次销售、定制/数字等品类在无质量问题时通常难以办理退换。法定例外仅在强制范围内依法办理，不同于日常店内无理由服务。')) ?>
                                     </p>
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_7">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('六、知识产权')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('6 / 知识产权')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('6.1 本网站的所有内容，包括但不限于文字、图片、音频、视频、软件、程序、版面设计等，均受知识产权法律法规保护。')) ?>
                                     </p>
@@ -215,7 +215,7 @@ $meta = $this->getData('meta') ?? [];
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_8">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('七、免责声明')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('7 / 免责声明')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('7.1 本网站不对因以下原因导致的任何损失承担责任：')) ?>
                                     </p>
@@ -238,7 +238,7 @@ $meta = $this->getData('meta') ?? [];
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_9">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('八、争议解决')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('8 / 争议解决')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('8.1 因本政策引起的或与本政策有关的任何争议，双方应友好协商解决。')) ?>
                                     </p>
@@ -251,7 +251,7 @@ $meta = $this->getData('meta') ?? [];
                                 </section>
                                 
                                 <section class="policy-section" weline-code="theme.policy.section_10">
-                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('九、其他条款')) ?></h2>
+                                    <h2 class="section-title"><?= $escape(WidgetI18n::label('9 / 其他条款')) ?></h2>
                                     <p class="section-text">
                                         <?= $escape(WidgetI18n::label('9.1 本政策自发布之日起生效，并持续有效，直至被修订或终止。')) ?>
                                     </p>

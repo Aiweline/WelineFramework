@@ -8,6 +8,7 @@
  * @widget.position {["content","sidebar","footer"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param size {default="md",type="select",label="垂直留白",options={none:"无",sm:"小",md:"中",lg:"大",xl:"加大"}}
  * @param show_line {default=true,type="bool",label="显示分隔线"}
  */
@@ -23,8 +24,6 @@ $size = Block::choice($this->getData('size'), ['none','sm','md','lg','xl'], 'md'
 $space = $size === 'none' ? '0' : 'var(--spacing-' . $size . ')';
 $line = Block::boolean($this->getData('show_line'), true);
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
-<div class="<?= $esc($scope->cssClass) ?> weline-site-block sb-spacer" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>" style="--sb-space:<?= $esc($space) ?>">
+<div class="<?= $esc($scope->cssClass) ?> weline-site-block sb-spacer" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>" data-widget-style="--sb-space:<?= $esc($space) ?>">
     <?php if ($line): ?><hr><?php endif; ?>
 </div>

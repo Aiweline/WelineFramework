@@ -35,12 +35,12 @@ $updatedAt = date('Y-m-d');
 $ariaNav = (string)WidgetI18n::label('无障碍声明目录');
 $ariaArticle = (string)WidgetI18n::label('无障碍声明正文');
 $toc = [
-    ['id' => 'a11y-s1', 'label' => WidgetI18n::label('一、我们的承诺')],
-    ['id' => 'a11y-s2', 'label' => WidgetI18n::label('二、适用范围')],
-    ['id' => 'a11y-s3', 'label' => WidgetI18n::label('三、已知限制')],
-    ['id' => 'a11y-s4', 'label' => WidgetI18n::label('四、兼容性说明')],
-    ['id' => 'a11y-s5', 'label' => WidgetI18n::label('五、反馈与协助')],
-    ['id' => 'a11y-s6', 'label' => WidgetI18n::label('六、声明更新')],
+    ['id' => 'a11y-s1', 'label' => WidgetI18n::label('1 / 我们的承诺')],
+    ['id' => 'a11y-s2', 'label' => WidgetI18n::label('2 / 适用范围')],
+    ['id' => 'a11y-s3', 'label' => WidgetI18n::label('3 / 已知限制')],
+    ['id' => 'a11y-s4', 'label' => WidgetI18n::label('4 / 兼容性说明')],
+    ['id' => 'a11y-s5', 'label' => WidgetI18n::label('5 / 反馈与协助')],
+    ['id' => 'a11y-s6', 'label' => WidgetI18n::label('6 / 声明更新')],
 ];
 $tocFallbackPath = '/policy/accessibility';
 ?>
@@ -149,7 +149,8 @@ $tocFallbackPath = '/policy/accessibility';
             border-right: 1px solid #e3e6e6;
             background: #fafafa;
             position: sticky;
-            top: 12rem;
+            top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem));
+            align-self: start;
         }
         .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
         .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
@@ -178,7 +179,7 @@ $tocFallbackPath = '/policy/accessibility';
             color: #565959;
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 12rem; }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem)); }
         .amazon-policy__section h2 {
             margin: 0 0 0.75rem;
             font-size: 1.2rem;
@@ -286,7 +287,7 @@ $tocFallbackPath = '/policy/accessibility';
                         <header class="amazon-policy__hero" aria-labelledby="policy-accessibility-title" weline-code="theme.policy.hero">
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
                                 <h1 id="policy-accessibility-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('无障碍声明')) ?><?php endif; ?></h1>
-                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('我们致力于让更多访客能够访问与使用本站核心购物与帮助功能，并持续改进体验。')) ?></p>
+                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('我们希望更多朋友能顺利逛店下单。若您用辅助功能遇到障碍，请告诉我们页面和设备，我们会尽量协助。')) ?></p>
                                 <div class="amazon-policy__meta">
                                     <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
                                     <a href="/contact"><?= $escape(WidgetI18n::label('联系我们')) ?></a>
@@ -306,40 +307,40 @@ $tocFallbackPath = '/policy/accessibility';
                                     </aside>
 
                                     <article class="amazon-policy__article" aria-label="<?= $escape($ariaArticle) ?>">
-                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('本声明说明无障碍目标、已知限制与反馈渠道。若您在使用中遇到障碍，欢迎联系我们协助。')) ?></p>
+                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('下面说明我们在无障碍方面的目标、已知限制和反馈渠道。遇到障碍时，欢迎告诉我们，我们会尽量协助。')) ?></p>
 
                                         <section class="amazon-policy__section" id="a11y-s1" weline-code="theme.policy.section_a11y_1">
-                                            <h2><?= $escape(WidgetI18n::label('一、我们的承诺')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('1 / 我们的承诺')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('1.1 我们以业界常见无障碍实践为目标，持续改进键盘可达性、可读性与辅助技术兼容性。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('1.2 本站并非对所有页面声称完全符合某一特定标准级别；我们将按优先级改进核心路径。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="a11y-s2" weline-code="theme.policy.section_a11y_2">
-                                            <h2><?= $escape(WidgetI18n::label('二、适用范围')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('2 / 适用范围')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('2.1 本声明主要覆盖默认店面主题下的浏览、搜索、账户与帮助相关页面。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('2.2 第三方嵌入内容（支付、地图、客服组件等）可能遵循其自身无障碍实践。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="a11y-s3" weline-code="theme.policy.section_a11y_3">
-                                            <h2><?= $escape(WidgetI18n::label('三、已知限制')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('3 / 已知限制')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('3.1 部分历史页面、富媒体或复杂交互可能存在对比度、焦点顺序或屏幕阅读提示不足。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('3.2 我们收到反馈后会评估影响范围并安排修复，紧急场景可提供替代协助渠道。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="a11y-s4" weline-code="theme.policy.section_a11y_4">
-                                            <h2><?= $escape(WidgetI18n::label('四、兼容性说明')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('4 / 兼容性说明')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('4.1 建议使用较新版本的主流浏览器，并开启系统或浏览器自带的辅助功能。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.2 若辅助技术与页面冲突，请告知所用设备、浏览器与具体页面链接，便于排查。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="a11y-s5" weline-code="theme.policy.section_a11y_5">
-                                            <h2><?= $escape(WidgetI18n::label('五、反馈与协助')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('5 / 反馈与协助')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('5.1 请通过「联系我们」提交问题描述、页面地址与您使用的辅助方式。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('5.2 我们将尽力在合理时间内回复，并在能力范围内提供替代访问方式。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="a11y-s6" weline-code="theme.policy.section_a11y_6">
-                                            <h2><?= $escape(WidgetI18n::label('六、声明更新')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('6 / 声明更新')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('6.1 本声明可能随产品迭代更新，以本页最新版本为准。')) ?></p>
                                         </section>
 

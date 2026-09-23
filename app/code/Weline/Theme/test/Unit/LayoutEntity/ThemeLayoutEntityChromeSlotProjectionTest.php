@@ -27,6 +27,36 @@ final class ThemeLayoutEntityChromeSlotProjectionTest extends TestCase
         self::assertStringContainsString('Website', $projection['footer']);
     }
 
+    public function testExplicitlyEmptyLocalSlotDoesNotFallBackToAncestorHtml(): void
+    {
+        $class = new \ReflectionClass(ThemeLayoutEntitySlotFiller::class);
+        $filler = $class->newInstanceWithoutConstructor();
+        $class->getProperty('boundaryScanner')->setValue($filler, new SlotBoundaryScanner());
+        $class->getProperty('sharedChrome')->setValue($filler, (new \ReflectionClass(SharedChromeService::class))->newInstanceWithoutConstructor());
+        $old = '<!--@weline-slot:footer-help-links--><div data-slot-id="footer-help-links"><a>Retired help</a></div><!--@/weline-slot:footer-help-links-->';
+        $projection = $class->getMethod('projectRenderedChromeScopes')->invoke($filler,
+            ['channel' => '', 'website' => $old], ['channel' => ['footer-help-links']]);
+        self::assertArrayHasKey('footer-help-links', $projection);
+        self::assertSame('', $projection['footer-help-links']);
+    }
+
+    public function testSelectedChildIsComposedIntoInheritedParent(): void
+    {
+        $class = new \ReflectionClass(ThemeLayoutEntitySlotFiller::class);
+        $filler = $class->newInstanceWithoutConstructor();
+        $class->getProperty('boundaryScanner')->setValue($filler, new SlotBoundaryScanner());
+        $class->getProperty('sharedChrome')->setValue($filler, (new \ReflectionClass(SharedChromeService::class))->newInstanceWithoutConstructor());
+        $slot = static fn(string $id, string $inner): string => '<!--@weline-slot:'.$id.'--><div data-slot-id="'.$id.'">'.$inner.'</div><!--@/weline-slot:'.$id.'-->';
+        foreach (['<a>Current FAQ</a>', ''] as $current) {
+            $projection = $class->getMethod('projectRenderedChromeScopes')->invoke($filler, [
+                'channel' => $slot('footer-help-links', $current),
+                'website' => $slot('footer', '<footer>'.$slot('footer-help-links', '<a>Retired help</a>').'</footer>'),
+            ], ['channel' => ['footer-help-links']]);
+            self::assertStringNotContainsString('Retired help', $projection['footer']);
+            self::assertSame($current, (new SlotBoundaryScanner())->extractSlotInner($projection['footer'], 'footer-help-links'));
+        }
+    }
+
     public function testChromeOwnedNestedSlotDoesNotRequireAHeaderNamePrefix(): void
     {
         $class = new \ReflectionClass(ThemeLayoutEntitySlotFiller::class);

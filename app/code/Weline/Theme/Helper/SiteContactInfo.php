@@ -105,6 +105,29 @@ class SiteContactInfo
         ];
     }
 
+    /** 当前网站的法定资料独立于品牌与客服地址，不回退到全局商户。 */
+    public function resolveLegalContact(?\Weline\Framework\Runtime\ScopeIdentity $identity): array
+    {
+        $values = ['legal_name' => '', 'registered_address' => '', 'legal_contact_email' => ''];
+        if ($identity === null || $identity->websiteId === null || $identity->websiteCode === null) {
+            return $values;
+        }
+        $hierarchy = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+        $websiteScope = $hierarchy->toStorageScope(\Weline\Framework\Runtime\ScopeIdentity::website(
+            $identity->websiteId,
+            $identity->websiteCode,
+        ));
+        $config = ObjectManager::getInstance(SystemConfig::class);
+        foreach ($values as $field => $_) {
+            $resolved = $config->resolveConfig('website/legal/' . $field, SiteContactSeedService::CONFIG_MODULE,
+                SiteContactSeedService::CONFIG_AREA, $websiteScope, SystemConfig::LOCALE_DEFAULT, null);
+            if (!empty($resolved['found']) && ($resolved['source']['scope'] ?? '') === $websiteScope) {
+                $values[$field] = trim((string)($resolved['value'] ?? ''));
+            }
+        }
+        return $values;
+    }
+
     private function normalizeScope(?string $storageScope): string
     {
         $scope = trim((string)$storageScope);

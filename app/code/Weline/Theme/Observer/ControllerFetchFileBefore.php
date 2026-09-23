@@ -168,13 +168,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             $meta['__force_register_stage'] = true;
         }
         // Default storefront chrome on; preserve explicit controller meta.
-        if (!\array_key_exists('showHeader', $meta)) {
-            $meta['showHeader'] = true;
-        }
-        if (!\array_key_exists('showFooter', $meta)) {
-            $meta['showFooter'] = (($meta['showHeader'] ?? true) !== false);
-        }
-        $template->setData('meta', $meta);
+        $template->setData('meta', $this->ensureStorefrontChromeVisibilityDefaults($meta));
 
         // Match the regular layout context so nested Partials retain the selected theme.
         $template->setData('theme', [
@@ -206,13 +200,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
         $meta['layoutType'] = 'account';
         $meta['layoutOption'] = 'challenge';
-        if (!\array_key_exists('showHeader', $meta)) {
-            $meta['showHeader'] = true;
-        }
-        if (!\array_key_exists('showFooter', $meta)) {
-            $meta['showFooter'] = (($meta['showHeader'] ?? true) !== false);
-        }
-        $template->setData('meta', $meta);
+        $template->setData('meta', $this->ensureStorefrontChromeVisibilityDefaults($meta));
     }
 
     public function execute(Event &$event): void
@@ -367,6 +355,24 @@ class ControllerFetchFileBefore implements ObserverInterface
                 }
             }
 
+            // wave8-8s2: prime PublishedSlotHost BEFORE any layout/partial w:slot runs.
+            // Must happen as soon as theme_id + layout_type are known (not only after
+            // resolvedLayoutPath), otherwise useReactiveMarkers sticky-falls to reactive.
+            if ($area === 'frontend' && (int)$themeId > 0 && \trim((string)$layoutType) !== '') {
+                try {
+                    if (!$didPerformanceLoad) {
+                        ThemeData::setCurrentTheme($theme);
+                        ThemeData::setCurrentArea($area);
+                    }
+                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::primeStorefront(
+                        (int)$themeId,
+                        (string)$layoutType,
+                    );
+                } catch (\Throwable) {
+                    // Host falls back to temporary reactive until bake resolves.
+                }
+            }
+
             // 配置来自元数据配置的布局：仅当控制器未显式传入「类型.选项」时才用 theme 的 layoutConfig 同步 option。
             // 否则会把 default.blank 强行改回 layoutConfig['default']（多为 default），导致 iframe/offcanvas 仍套 default.default。
             $hadExplicitLayoutSpec = str_contains((string)$originalLayoutType, '.') || $explicitLayoutOption !== '';
@@ -443,7 +449,17 @@ class ControllerFetchFileBefore implements ObserverInterface
                             \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime::class,
                         );
                         // Hard cut: storefront LayoutSlotRenderer fills from entities.
+                        // wave8-8s2: re-prime after layoutType finalized (option sync may
+                        // have adjusted type); fragments must be ready before w:slot.
                         $entityRuntime->markSkipSlotProcessing(true);
+                        try {
+                            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::primeStorefront(
+                                (int)$themeId,
+                                (string)$layoutType,
+                            );
+                        } catch (\Throwable) {
+                            // best-effort; Host falls back to temporary reactive
+                        }
                     } catch (\Throwable) {
                         // Runtime mark is best-effort; storefront still hard-cuts in LayoutSlotRenderer.
                     }
@@ -503,9 +519,20 @@ class ControllerFetchFileBefore implements ObserverInterface
                     }
                     $existingMeta = $this->preserveAssignedTitleInMeta($existingMeta, $template, $request);
                     $existingMeta = $this->sanitizeRuntimeLayoutParams($existingMeta);
-                    $template->setData('meta', array_merge(
-                        $cachedLayoutParams,
-                        $existingMeta
+                    // wave9-9s4: drop leaked showHeader/showFooter=false from Template bag on
+                    // chrome-on storefront layouts (anonymous `/` + `/products` 丢壳).
+                    $existingMeta = $this->stripLeakedStorefrontChromeFlags(
+                        $existingMeta,
+                        (string)$layoutType,
+                    );
+                    // wave9-9s3: DB/cache layout params may omit showHeader — Taglib
+                    // `if(($meta['showHeader'] ?? null))` treats missing as false → 丢顶栏.
+                    $template->setData('meta', $this->ensureStorefrontChromeOnForLayout(
+                        $this->ensureStorefrontChromeVisibilityDefaults(array_merge(
+                            $cachedLayoutParams,
+                            $existingMeta
+                        )),
+                        (string)$layoutType,
                     ));
                     $eventData->setData('contentTemplate', $fileName);
                     $eventData->setData('layoutTemplate', $resolvedLayoutPath);
@@ -607,6 +634,11 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // WLS Template singleton can leak prior-request meta.content into the next
                 // layout. That suppresses homepage nested w:slot trees (homepage-hero etc.).
                 $existingMeta = $this->sanitizeRuntimeLayoutParams($existingMeta);
+                // wave9-9s4: same leak can carry showHeader/showFooter=false onto homepage/products.
+                $existingMeta = $this->stripLeakedStorefrontChromeFlags(
+                    $existingMeta,
+                    (string)$layoutType,
+                );
                 $layoutStaticMeta = array_merge($layoutMetaIdentity, $layoutParams);
                 // 关于主题的元数据传递给模板数据（performanceLoad 已在前面统一调用）
                 // 注意：必须使用 getMeta() 而不是 get()
@@ -634,7 +666,12 @@ class ControllerFetchFileBefore implements ObserverInterface
                     );
                 }
                 $layoutStaticMeta = $this->sanitizeRuntimeLayoutParams($layoutStaticMeta);
-                $metaData = array_merge($layoutStaticMeta, $existingMeta);
+                $metaData = $this->ensureStorefrontChromeOnForLayout(
+                    $this->ensureStorefrontChromeVisibilityDefaults(
+                        array_merge($layoutStaticMeta, $existingMeta)
+                    ),
+                    (string)$layoutType,
+                );
                 
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
                 $template->setData('meta', $metaData);
@@ -1040,6 +1077,114 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
 
         return $params;
+    }
+
+    /**
+     * wave9-9s3: storefront layouts gate Partials via `<if condition="meta.showHeader">`.
+     * Compiled Taglib is `if(($meta['showHeader'] ?? null))` — a missing key is falsy, so
+     * header/footer never render even when @param default=true. DB/cache layout params that
+     * omit the keys (or leave empty strings) must not strip chrome. Explicit false/0/"false"
+     * still wins (auth blank / chrome-off layouts).
+     *
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private function ensureStorefrontChromeVisibilityDefaults(array $meta): array
+    {
+        $meta['showHeader'] = $this->coerceStorefrontChromeFlag($meta['showHeader'] ?? null, true);
+        $meta['showFooter'] = $this->coerceStorefrontChromeFlag(
+            $meta['showFooter'] ?? null,
+            $meta['showHeader'] !== false,
+        );
+
+        return $meta;
+    }
+
+    /**
+     * wave9-9s4: Template bag / prior-request meta may keep showHeader=false (auth blank,
+     * Multipass, embed). On chrome-on storefront layouts (homepage / products / category …)
+     * that leak must not win over layout @param defaults — otherwise anonymous `/` and
+     * `/products` render wrapper→main with zero chrome while panel probes look fine.
+     * Auth / blank / embed layout types keep existingMeta chrome flags intact.
+     *
+     * @param array<string, mixed> $existingMeta
+     * @return array<string, mixed>
+     */
+    private function stripLeakedStorefrontChromeFlags(array $existingMeta, string $layoutType): array
+    {
+        if ($this->isStorefrontChromeOffLayoutType($layoutType)) {
+            return $existingMeta;
+        }
+        unset($existingMeta['showHeader'], $existingMeta['showFooter']);
+
+        return $existingMeta;
+    }
+
+    /**
+     * wave9-9s4: chrome-on storefront layouts must keep Partials header/footer even when
+     * layoutStaticMeta / target overrides carry showHeader=false (products listing) or
+     * Template bag leaks chrome-off. Auth/blank/embed layouts are spared.
+     *
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private function ensureStorefrontChromeOnForLayout(array $meta, string $layoutType): array
+    {
+        if ($this->isStorefrontChromeOffLayoutType($layoutType)) {
+            return $meta;
+        }
+        $meta['showHeader'] = true;
+        $meta['showFooter'] = true;
+
+        return $meta;
+    }
+
+    /**
+     * Layouts that intentionally gate chrome off via controller/meta (not storefront shell).
+     */
+    private function isStorefrontChromeOffLayoutType(string $layoutType): bool
+    {
+        $type = \strtolower(\trim($layoutType));
+        if ($type === '') {
+            return false;
+        }
+        if (\str_starts_with($type, 'account')) {
+            return true;
+        }
+        foreach (['auth', 'challenge', 'blank', 'embed', 'fullscreen', 'identity'] as $needle) {
+            if (\str_contains($type, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function coerceStorefrontChromeFlag(mixed $value, bool $defaultWhenAbsent): bool
+    {
+        if ($value === null) {
+            return $defaultWhenAbsent;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value !== 0;
+        }
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if ($normalized === '') {
+                return $defaultWhenAbsent;
+            }
+            if (\in_array($normalized, ['0', 'false', 'no', 'off', 'null'], true)) {
+                return false;
+            }
+            if (\in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+        }
+
+        return (bool)$value;
     }
 
     /**

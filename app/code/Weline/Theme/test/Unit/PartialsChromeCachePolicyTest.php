@@ -139,7 +139,7 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertStringContainsString('菜单常带 …/index，当前路由常省略 /index', $jsUi);
     }
 
-    public function testFrontendHeadDeclaresCacheOffNotChrome(): void
+    public function testFrontendHeadDeclaresPageScopedChromeNotOff(): void
     {
         $file = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml';
         self::assertFileExists($file);
@@ -148,8 +148,9 @@ final class PartialsChromeCachePolicyTest extends TestCase
         $cache = $parsed['meta']['cache'] ?? [];
 
         self::assertIsArray($cache);
-        // Head embeds page SEO/JSON-LD — must never be chrome-shared across URLs.
-        self::assertSame('off', (string)($cache['mode']['default'] ?? ''));
+        // wave6-6a：页级 Policy（request_path+seo_fp）；禁 off 绕过，亦禁跨 URL 共享。
+        self::assertSame('chrome', (string)($cache['mode']['default'] ?? ''));
+        self::assertSame('guest', (string)($cache['auth']['default'] ?? ''));
     }
 
     public function testTopbarChromeAuthDefaultsToUser(): void
@@ -230,31 +231,61 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertStringNotContainsString("['website' => true, 'lang' => true]", $source);
     }
 
-    public function testFrontendHeadIsExcludedFromSharedStorefrontChromeCache(): void
+    public function testFrontendHeadUsesPageScopedSharedStorefrontCache(): void
     {
         $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
         $method = new ReflectionMethod(Partials::class, 'shouldUseSharedStorefrontChromeCache');
         $method->setAccessible(true);
 
-        // Head embeds page SEO/JSON-LD — never share chrome cache across URLs.
-        self::assertFalse($method->invoke($partials, 'frontend', 'head'));
+        // Head rides shared cache only with page-scoped keys (seo_fp/path).
+        self::assertTrue($method->invoke($partials, 'frontend', 'head'));
         self::assertTrue($method->invoke($partials, 'frontend', 'header'));
         self::assertTrue($method->invoke($partials, 'frontend', 'footer'));
         self::assertFalse($method->invoke($partials, 'backend', 'head'));
     }
 
-    public function testFrontendHeadBypassesPartialOutputCachePath(): void
+    public function testSolidifiedShellBypassesStorefrontChromePolicyForHeaderFooter(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("strtolower(\$type) === 'head'", $source);
-        self::assertStringContainsString('Product head can never be replayed', $source);
-        self::assertStringContainsString("['header', 'footer']", $source);
+        self::assertStringContainsString('shouldBypassStorefrontChromePolicyForSolidifiedShell', $source);
+        self::assertStringContainsString('wave9-9s2 P1', $source);
+
+        $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(Partials::class, 'shouldBypassStorefrontChromePolicyForSolidifiedShell');
+        $method->setAccessible(true);
+
+        \Weline\Framework\Runtime\RequestContext::remove(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE
+        );
+        self::assertFalse($method->invoke($partials, 'header'));
+        self::assertFalse($method->invoke($partials, 'head'));
+
+        \Weline\Framework\Runtime\RequestContext::set(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE,
+            false
+        );
+        self::assertTrue($method->invoke($partials, 'header'));
+        self::assertTrue($method->invoke($partials, 'footer'));
+        self::assertFalse($method->invoke($partials, 'head'));
+
+        \Weline\Framework\Runtime\RequestContext::remove(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE
+        );
+    }
+
+    public function testFrontendHeadUsesStorefrontHeadPolicyNotChromeBypass(): void
+    {
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
+        self::assertStringContainsString('storefrontHeadPolicy', $source);
+        self::assertStringContainsString("'theme.head.'", $source);
+        self::assertStringContainsString("['header', 'footer', 'head']", $source);
+        self::assertStringNotContainsString('Product head can never be replayed', $source);
     }
 
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("'schema' => 'chrome-partial-v14-guest-chrome-scope'", $source);
+        self::assertStringContainsString("'schema' => 'chrome-partial-v17-head-website-slim'", $source);
         self::assertStringContainsString("return 'frontend-auth:0';", $source);
         self::assertStringContainsString('always guest-SSR', $source);
         self::assertStringContainsString("'i18n_switcher_markup'", $source);
@@ -264,6 +295,16 @@ final class PartialsChromeCachePolicyTest extends TestCase
             'Theme-preview request language override must win over storefront',
             $source,
         );
+        // wave8-8c8: guest header key must not partition on cart_* (bag-prime vs probe).
+        self::assertStringContainsString('do NOT partition on cart_*', $source);
+        $headerDataStart = \strpos($source, "if (\$type === 'header')");
+        self::assertNotFalse($headerDataStart);
+        $headerDataChunk = \substr($source, (int)$headerDataStart, 900);
+        self::assertStringNotContainsString("'cart_count'", $headerDataChunk);
+        self::assertStringNotContainsString("'cart_total'", $headerDataChunk);
+
+        $chromePolicy = \Weline\Theme\Service\StorefrontThemeCacheCoordinator::storefrontChromePolicy();
+        self::assertSame('website', $chromePolicy->scope);
     }
 
     public function testFrontendHeaderFingerprintIncludesNestedNavigationTemplates(): void

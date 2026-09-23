@@ -1,0 +1,21 @@
+<?php
+/**
+ * Page-scoped head middle (SEO / geo / fonts / Frontend Base).
+ * wave9-9s: stays under storefrontHeadPolicy (request_path + seo_fp).
+ *
+ * @meta.name {default="Storefront head page shell",name="店面 head 页级壳"}
+ * @meta.cache.mode {default="chrome",name="缓存模式"}
+ * @meta.cache.auth {default="guest",name="鉴权维度"}
+ * @meta.cache.ttl {default="300",name="新鲜期秒"}
+ */
+?>
+<?php
+try {
+    echo \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\LayoutEntity\ThemeLayoutStorefrontHeadAssets::class
+    )->renderHtmlForCurrentRequest();
+} catch (\Throwable $e) {
+    // Head assets are best-effort; never break page SEO shell.
+}
+?>
+<w:template>Weline_Frontend::templates/public/head.phtml</w:template>

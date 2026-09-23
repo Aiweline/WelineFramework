@@ -5,18 +5,21 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\WelineTheme;
 
 class ThemeDirectoryResolver
 {
     private const THEME_DEFAULT_MODULE = 'Weline_Theme';
 
+    /** Theme-chain hydrate assist only (WelineTheme objects; never shared Policy payload). */
     private array $themeChainCache = [];
-    private array $areaDirectoriesCache = [];
 
     public function __construct(
         private readonly WelineTheme $welineTheme,
         private readonly ?ThemeContextService $themeContextService = null,
+        private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -58,12 +61,27 @@ class ThemeDirectoryResolver
         $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
         $theme = $this->getResolvedTheme($theme, $area);
         $themeId = $theme?->getId() ?: 0;
-        $cacheKey = $themeId . ':' . $area;
+        $logicalKey = $themeId . '|' . $area;
 
-        if (isset($this->areaDirectoriesCache[$cacheKey])) {
-            return $this->areaDirectoriesCache[$cacheKey];
+        $hotCache = $this->resolveHotCache();
+        if ($hotCache instanceof StorefrontScopeHotCache) {
+            $cached = $hotCache->rememberPolicy(
+                StorefrontThemeCacheCoordinator::themeAreaDirectoriesPolicy(),
+                $logicalKey,
+                fn(): array => $this->buildAreaDirectories($area, $theme),
+            );
+
+            return is_array($cached) ? $cached : $this->buildAreaDirectories($area, $theme);
         }
 
+        return $this->buildAreaDirectories($area, $theme);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildAreaDirectories(string $area, ?WelineTheme $theme): array
+    {
         $directories = [];
         $seen = [];
         foreach ($this->getThemeChain($theme, $area) as $layerTheme) {
@@ -124,9 +142,21 @@ class ThemeDirectoryResolver
             $directories[] = $moduleDirectory;
         }
 
-        $this->areaDirectoriesCache[$cacheKey] = $directories;
-
         return $directories;
+    }
+
+    private function resolveHotCache(): ?StorefrontScopeHotCache
+    {
+        if ($this->hotCache instanceof StorefrontScopeHotCache) {
+            return $this->hotCache;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+
+            return $resolved instanceof StorefrontScopeHotCache ? $resolved : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function getModuleThemeAreaDirectories(array $modules, string $area, array &$seen): array
@@ -260,30 +290,36 @@ class ThemeDirectoryResolver
                 }
             }
 
-            // 构建主题模块覆盖路径
+            // 构建主题模块覆盖路径（与 area 资源同一继承链：当前主题 → 父主题 → …）
             // app/design/WeShop/motor/Weline_Customer/templates/frontend/account/login.phtml
-            $themePath = rtrim($theme->getPath(), '\\/');
+            // app/design/Weline/hanfu/Weline_Smtp/email/shell.phtml
+            $modulePath1 = str_replace('_', DS, $moduleName);
+            $modulePath2 = str_replace('_', '/', $moduleName);
+            $relativeDs = str_replace('/', DS, $relativePath);
+            // email 等非 area 资源也走 frontend 继承链（店面发信）
+            $overrideArea = 'frontend';
+            if (preg_match('#^(?:view/)?templates/(frontend|backend)/#', $relativeNormalized, $areaMatch) === 1) {
+                $overrideArea = $areaMatch[1];
+            }
 
-            if ($themePath !== '') {
-                // 模块名中的下划线对应目录中的反斜杠或正斜杠
-                // Weline_Customer -> Weline\Customer 或 Weline/Customer
-                $modulePath1 = str_replace('_', DS, $moduleName);
-                $modulePath2 = str_replace('_', '/', $moduleName);
+            foreach ($this->getThemeChain($theme, $overrideArea) as $layerTheme) {
+                $themePath = rtrim($layerTheme->getPath(), '\\/');
+                if ($themePath === '') {
+                    continue;
+                }
 
-                // 尝试两种路径格式（优先不带 view 的格式）
-                // 格式1: .../Weline_Customer/templates/frontend/... （标准模块路径，下划线格式）
-                $overridePath1 = $themePath . DS . $moduleName . DS . str_replace('/', DS, $relativePath);
-                // 格式2: .../Weline\Customer/templates/frontend/... （反斜杠格式）
-                $overridePath2 = $themePath . DS . $modulePath1 . DS . str_replace('/', DS, $relativePath);
-                // 格式3: .../Weline/Customer/templates/frontend/... （正斜杠格式）
-                $overridePath3 = $themePath . DS . $modulePath2 . DS . str_replace('/', DS, $relativePath);
-
-                // 格式4-6: 带 view 前缀的变体
-                $overridePath4 = $themePath . DS . $moduleName . DS . 'view' . DS . str_replace('/', DS, $relativePath);
-                $overridePath5 = $themePath . DS . $modulePath1 . DS . 'view' . DS . str_replace('/', DS, $relativePath);
-                $overridePath6 = $themePath . DS . $modulePath2 . DS . 'view' . DS . str_replace('/', DS, $relativePath);
-
-                foreach ([$overridePath1, $overridePath2, $overridePath3, $overridePath4, $overridePath5, $overridePath6] as $overridePath) {
+                // 格式1: .../Weline_Customer/templates/... （模块名下划线）
+                // 格式2-3: Vendor/Module 或 Vendor\Module
+                // 格式4-6: 带 view 前缀
+                $candidates = [
+                    $themePath . DS . $moduleName . DS . $relativeDs,
+                    $themePath . DS . $modulePath1 . DS . $relativeDs,
+                    $themePath . DS . $modulePath2 . DS . $relativeDs,
+                    $themePath . DS . $moduleName . DS . 'view' . DS . $relativeDs,
+                    $themePath . DS . $modulePath1 . DS . 'view' . DS . $relativeDs,
+                    $themePath . DS . $modulePath2 . DS . 'view' . DS . $relativeDs,
+                ];
+                foreach ($candidates as $overridePath) {
                     if (is_file($overridePath)) {
                         return $overridePath;
                     }
@@ -334,6 +370,14 @@ class ThemeDirectoryResolver
             return $moduleName . '::' . $templatePath;
         }
 
+        // 处理 app\code\Vendor\Module\view\email\... → Vendor_Module::email/...
+        // 与 templates 同继承：design/{theme}/Weline_Smtp/email/shell.phtml
+        if (preg_match('/app[\\\\\/]code[\\\\\/]([A-Za-z0-9_]+[\\\\\/][A-Za-z0-9_]+)[\\\\\/]view[\\\\\/](email[\\\\\/].+)$/i', $absolutePath, $matches)) {
+            $moduleName = str_replace(DS, '_', $matches[1]);
+            $templatePath = str_replace(DS, '/', $matches[2]);
+            return $moduleName . '::' . $templatePath;
+        }
+
         // 处理 app\code\Vendor\Module\templates\... 格式（无 view 目录）
         if (preg_match('/app[\\\\\/]code[\\\\\/]([A-Za-z0-9_]+[\\\\\/][A-Za-z0-9_]+)[\\\\\/](templates[\\\\\/].+)$/i', $absolutePath, $matches)) {
             $moduleName = str_replace(DS, '_', $matches[1]);
@@ -347,7 +391,11 @@ class ThemeDirectoryResolver
     public function clearCache(): void
     {
         $this->themeChainCache = [];
-        $this->areaDirectoriesCache = [];
+        // Directory facts live in CachePolicy pools; drop process L1 so tests / publish
+        // see fresh is_dir without inventing a parallel static bag.
+        if (\class_exists(StorefrontScopeHotCache::class)) {
+            StorefrontScopeHotCache::resetProcessCache();
+        }
     }
 
     private function getResolvedTheme(?WelineTheme $theme = null, ?string $area = null): ?WelineTheme

@@ -11,6 +11,7 @@
  * @widget.is_container {true}
  * @widget.exclusive {false}
  * @widget.slots {"columns-left":{"name":"左栏","position":"content","accept":["*"],"max":20},"columns-right":{"name":"右栏","position":"content","accept":["*"],"max":20}}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css}
  * @param layout {default="equal",type="select",label="列宽",options={equal:"等宽",wide-left:"左宽右窄",wide-right:"左窄右宽"}}
  * @param slot_key {default="",type="string",label="固定插槽标识",description="手写模板重复放置时填写不同标识；可视化编辑器自动使用实例 ID"}
  */
@@ -34,8 +35,6 @@ $slotSuffix = $identity !== '' ? substr(hash('sha256', $identity), 0, 20) : $sco
 $leftSlot = 'columns-left-' . $slotSuffix;
 $rightSlot = 'columns-right-' . $slotSuffix;
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="sb-grid columns-<?= $layout === 'equal' ? '2' : $esc($layout) ?>">
         <w:slot id="<?= $esc($leftSlot) ?>" name="左栏" accept="*" multiple="true" position="content" wrapper="div" class="sb-column" weline-code="theme.widgets.columns_left">

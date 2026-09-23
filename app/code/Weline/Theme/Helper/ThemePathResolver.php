@@ -12,11 +12,11 @@ namespace Weline\Theme\Helper;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
-use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
  * 主题路径解析器
@@ -26,8 +26,8 @@ use Weline\Theme\Model\WelineTheme;
  */
 class ThemePathResolver implements ThemePathResolverInterface
 {
-    /** Request-scoped memo resource; never a cross-worker shared pool key. */
-    public const REQUEST_MEMO_RESOURCE = 'theme.path.resolve';
+    /** CachePolicy resource for path resolve facts (deps=theme). */
+    public const PATH_RESOLVE_RESOURCE = 'theme.path.resolve';
 
     /**
      * @var ThemeChainResolverInterface
@@ -52,8 +52,8 @@ class ThemePathResolver implements ThemePathResolverInterface
     /**
      * 解析主题文件路径（支持多级继承链）
      *
-     * 同请求内：themeId + 规范化 modulePath → rememberForRequest（仅 RequestContext memo）。
-     * 无 Request Context / 无 themeId：直接走原解析，不升格为跨请求/进程袋。
+     * 有 themeId 时走 CachePolicy HotCache（global / deps=theme），跨 Worker 复用路径事实。
+     * 无 themeId 或 HotCache 不可用：直接走原解析。禁止平行 static / 无 Policy 进程袋。
      * 
      * @param string $modulePath 模块文件路径
      * @param WelineTheme $theme 当前主题
@@ -66,7 +66,7 @@ class ThemePathResolver implements ThemePathResolverInterface
         }
 
         $themeId = $theme->getId();
-        if (!$themeId || !Context::hasCurrent()) {
+        if (!$themeId) {
             return $this->resolveThemeFileUncached($modulePath, $theme);
         }
 
@@ -77,8 +77,8 @@ class ThemePathResolver implements ThemePathResolverInterface
 
         $logicalKey = (string)$themeId . '|' . str_replace(['/', '\\'], DS, $modulePath);
 
-        return (string)$hotCache->rememberForRequest(
-            self::REQUEST_MEMO_RESOURCE,
+        return (string)$hotCache->rememberPolicy(
+            StorefrontThemeCacheCoordinator::themePathResolvePolicy(),
             $logicalKey,
             fn(): string => $this->resolveThemeFileUncached($modulePath, $theme),
         );

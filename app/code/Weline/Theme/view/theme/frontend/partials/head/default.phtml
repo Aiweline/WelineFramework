@@ -2,9 +2,13 @@
 /**
  * @meta.name {default="Weline UI 2.0 Frontend Head",name="Weline UI 2.0 前台头部"}
  * @meta.description {default="Frontend foundation, light/dark color palettes, and theme runtime via css/js tags.",name="前台 UI/主题资源入口"}
- * @meta.cache.mode {default="off",name="缓存模式"}
+ * @meta.cache.mode {default="chrome",name="缓存模式"}
  * @meta.cache.auth {default="guest",name="鉴权维度"}
+ * @meta.cache.ttl {default="300",name="新鲜期秒"}
  * @meta.assets.ui {default="module",name="UI JS 以 ES module 加载"}
+ *
+ * wave9-9s: Partials prefers composed assets-prefix + page + assets-suffix when present.
+ * This monolithic file remains the meta/chrome policy source and legacy fallback.
  */
 $diskOverrideHtml = '';
 try {
@@ -28,7 +32,7 @@ try {
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<?php // site-blocks.css：由部件 @widget.source bake→head（page.phtml HeadAssets），禁止此处 @static 重复 ?>
 <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
 <?php // weline.js 已由 Frontend header/base 注入；此后声明业务模块（含 i18n） ?>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

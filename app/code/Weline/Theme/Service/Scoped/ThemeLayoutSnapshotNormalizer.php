@@ -62,6 +62,9 @@ final class ThemeLayoutSnapshotNormalizer
                     'config' => $config,
                     'sort_order' => (int)($widget['sort_order'] ?? 0),
                     'is_active' => (bool)($widget['is_active'] ?? true),
+                    'layout_source' => \trim((string)($widget['layout_source'] ?? $widget['layout-source'] ?? '')),
+                    'source' => \trim((string)($widget['source'] ?? '')),
+                    'source_position' => \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector::normalizePosition((string)($widget['source-postion'] ?? $widget['source-position'] ?? $widget['source_position'] ?? $config['_source_position'] ?? 'head')),
                 ];
             }
         }
@@ -111,6 +114,9 @@ final class ThemeLayoutSnapshotNormalizer
                 'config' => \is_array($node['config'] ?? null) ? $node['config'] : [],
                 'sort_order' => (int)($node['sort_order'] ?? 0),
                 'is_active' => (bool)($node['is_active'] ?? true),
+                'layout_source' => (string)($node['layout_source'] ?? ''),
+                'source' => (string)($node['source'] ?? ''),
+                'source_position' => (string)($node['source_position'] ?? 'head'),
                 'status' => ThemeLayout::STATUS_DRAFT,
             ];
         }

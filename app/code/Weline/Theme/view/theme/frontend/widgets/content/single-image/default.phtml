@@ -8,6 +8,7 @@
  * @widget.position {["content","sidebar","footer"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param image {default="",type="media_image",label="图片"}
  * @param alt_text {default="",type="string",label="替代文字"}
  * @param caption {default="",type="textarea",label="图片说明"}
@@ -31,9 +32,7 @@ $ratio = Block::choice($this->getData('ratio'), ['natural','wide','landscape','s
 $ratios = ['natural'=>'auto','wide'=>'16 / 9','landscape'=>'4 / 3','square'=>'1 / 1'];
 $fit = Block::choice($this->getData('fit'), ['cover','contain'], 'cover');
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
-<figure class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>" style="--sb-ratio:<?= $esc($ratios[$ratio]) ?>;--sb-fit:<?= $esc($fit) ?>">
+<figure class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>" data-widget-style="--sb-ratio:<?= $esc($ratios[$ratio]) ?>;--sb-fit:<?= $esc($fit) ?>">
     <?php if ($mediaHtml !== '' || $image !== ''): ?>
         <?php if ($link !== ''): ?><a href="<?= $esc($link) ?>"><?php endif; ?>
         <div class="sb-media<?= $ratio === 'natural' ? ' is-natural' : '' ?>">

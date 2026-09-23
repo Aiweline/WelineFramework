@@ -105,7 +105,20 @@ final class ThemeScopedLayoutWriteService
             'config' => $config,
             'sort_order' => $sortOrder,
             'is_active' => (bool)($data['is_active'] ?? true),
+            'layout_source' => \trim((string)($data['layout_source'] ?? $data['layout-source'] ?? '')),
+            'source' => \trim((string)($data['source'] ?? '')),
+            'source_position' => \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector::normalizePosition((string)($data['source-postion'] ?? $data['source-position'] ?? $data['source_position'] ?? 'head')),
         ];
+        $config['_source_position'] = $node['source_position'];
+        $node['config'] = $config;
+        if ($node['layout_source'] !== '') {
+            $config['_layout_source'] = $node['layout_source'];
+            $node['config'] = $config;
+        }
+        if ($node['source'] !== '') {
+            $config['_source'] = $node['source'];
+            $node['config'] = $config;
+        }
         $commands[] = ThemePatchCommand::fromArray([
             'op' => ThemePatchCommand::OP_ADD_NODE,
             'path' => '/nodes/' . $nodeUid,

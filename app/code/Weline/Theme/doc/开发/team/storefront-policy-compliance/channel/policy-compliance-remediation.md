@@ -86,3 +86,7 @@ Hub×40 落库 + FPC 清后抽检：`/ru_RU/faq` 八条问答为俄语（非 How
 ## msg-012 · from:项目经理 · kind=依赖唤醒 · 2026-09-22
 
 全站再扫遗漏：`/guide/returns` 1.1 仍绝对 7 日；trust-badges「无忧退款/30天无理由」。已拉 [合规翻译](55d39fd7-c825-4641-897c-776ea90e535e) 先合规后默认站全语种。
+
+## msg-013 · from:项目经理 · kind=closed · 2026-09-22
+
+[合规翻译](55d39fd7-c825-4641-897c-776ea90e535e) closed：returns 1.1 + trust-badges 合规；词典 8×39 publish OK；`/guide/returns` 与 `/ru_RU/guide/returns` 无 within 7 days 绝对宣称。

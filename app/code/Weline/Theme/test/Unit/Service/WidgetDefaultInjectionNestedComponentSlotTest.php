@@ -82,6 +82,7 @@ final class WidgetDefaultInjectionNestedComponentSlotTest extends TestCase
 
         $service = new WidgetDefaultInjectionService(
             $catalog,
+            $this->withoutConstructor(\Weline\Widget\Service\DefaultInjectionPlanRepository::class),
             $this->withoutConstructor(ThemeLayoutService::class),
             $theme,
             $this->withoutConstructor(ThemeLayout::class),

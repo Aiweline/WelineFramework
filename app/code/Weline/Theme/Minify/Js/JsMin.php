@@ -99,6 +99,13 @@ class JsMin {
      */
     public function min()
     {
+        // This legacy scanner does not parse template interpolation or nested/tagged templates.
+        // Preserve any input containing a backtick rather than silently changing cooked/raw text.
+        // This deliberately also skips files with backticks only in comments or quoted strings.
+        if (str_contains($this->input, '`')) {
+            return $this->input;
+        }
+
         if ($this->output !== '') { // min already run
             return $this->output;
         }

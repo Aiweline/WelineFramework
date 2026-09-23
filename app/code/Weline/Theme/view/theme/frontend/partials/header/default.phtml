@@ -33,14 +33,17 @@ $logoText = '';
 try {
     $siteBrandForName = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
     if ($siteBrandForName instanceof \Weline\Theme\Helper\SiteBrand) {
-        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText);
+        $logoText = $siteBrandForName->resolveFrontendWordmark($configuredLogoText);
     } else {
         $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText);
     }
 } catch (\Throwable) {
     $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText);
 }
-$logoWordmarkParts = preg_split('/\s+/u', trim($logoText), 2) ?: [];
+$logoWordmarkParts = preg_split('/\s*·\s*/u', trim($logoText), 2) ?: [];
+if (count($logoWordmarkParts) < 2) {
+    $logoWordmarkParts = preg_split('/\s+/u', trim($logoText), 2) ?: [];
+}
 $logoWordmarkPrimary = (string)($logoWordmarkParts[0] ?? $logoText);
 $logoWordmarkSecondary = (string)($logoWordmarkParts[1] ?? '');
 $logoHeight = $meta['logoHeight'] ?? 64; // Logo高度，默认64px（深色顶栏可读性）
@@ -205,23 +208,18 @@ $headerEscDesc = static function ($value) use ($headerDesc): string {
 
 // 注意：navItems 可能在 hook (Weline_Theme::frontend::partials::header::categories-before) 中被设置
 // 默认导航由 active theme 链上的 partials/header/nav-defaults.phtml 提供（design 可覆盖）。
+// 禁平行 static 袋：每次经 HeaderDefaultNavItems / ThemeDirectoryResolver（已 Policy）解析。
 $defaultNavItemsFactory = static function (): array {
-    static $defaultNavItems = null;
-    if ($defaultNavItems !== null) {
-        return $defaultNavItems;
-    }
-
     try {
         /** @var \Weline\Theme\Helper\HeaderDefaultNavItems $resolver */
         $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
             \Weline\Theme\Helper\HeaderDefaultNavItems::class
         );
-        $defaultNavItems = $resolver->resolve();
-    } catch (\Throwable) {
-        $defaultNavItems = \Weline\Theme\Helper\HeaderDefaultNavItems::genericDefaults();
-    }
 
-    return $defaultNavItems;
+        return $resolver->resolve();
+    } catch (\Throwable) {
+        return \Weline\Theme\Helper\HeaderDefaultNavItems::genericDefaults();
+    }
 };
 
 // 在 hook 执行前，navItems 为 null
@@ -247,10 +245,10 @@ $defaultNavItemsFactory = static function (): array {
 })();
 </script>
 <!-- theme-partial:header option=default -->
+<?php // header chrome/search CSS：由 header-container @widget.layout-source bake→head，禁止 @static 直引 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)">
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)">
+      href="@static(Weline_Theme::css/partials/header-default.css)&v=20260923-guide-hdr1"
+      data-no-extract="true">
 <!-- Skip to content link for accessibility -->
 <a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 <div hidden data-weline-load="headerSearch" data-w-header-search-loader="true" aria-hidden="true"></div>
@@ -810,8 +808,6 @@ $defaultNavItemsFactory = static function (): array {
     </div>
 </div>
 
-<link rel="stylesheet" href="@static(Weline_Theme::css/partials/header-default.css)?v=20260919-pdp-shell1" data-no-extract="true">
-
 <script>
 window.__welineHeaderLabels = {
     moreCategories: <?= json_encode($headerLabel('更多分类'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
@@ -820,5 +816,5 @@ window.__welineHeaderLabels = {
     browse: <?= json_encode($headerLabel('浏览 %{1} 相关商品与配件'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>
 };
 </script>
-<script src="@static(Weline_Theme::js/partials/header-default.js)?v=20260919-pdp-shell1"></script>
+<script src="@static(Weline_Theme::js/partials/header-default.js)&v=20260923-guide-hdr1"></script>
 

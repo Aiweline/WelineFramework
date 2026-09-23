@@ -32,6 +32,10 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringContainsString('type="footer_link_items"', $src);
         self::assertStringContainsString('type="footer_legal_links"', $src);
         self::assertStringContainsString('type="footer_social_items"', $src);
+        self::assertStringContainsString('float_social', $src);
+        self::assertStringContainsString('float_social_side', $src);
+        self::assertStringContainsString('footer-social-float', $src);
+        self::assertStringContainsString('social-profile-links.phtml', $src);
         self::assertStringContainsString('<w:slot id="footer-about-links"', $src);
         self::assertStringContainsString('<w:slot id="footer-partner-links"', $src);
         self::assertStringContainsString('<w:slot id="footer-payment-account-links"', $src);
@@ -41,9 +45,13 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringNotContainsString('footer-newsletter-slot', $src);
         self::assertStringContainsString('footer-section__links', $src);
         self::assertStringContainsString('footer-section__link', $src);
-        self::assertStringContainsString('resolveFrontendSiteName', $src);
+        self::assertStringContainsString('resolveFrontendWordmark', $src);
         self::assertStringContainsString('留空使用当前网站名称', $src);
         self::assertStringContainsString('if ($showSocial && $socialItems !== [])', $src);
+        self::assertStringContainsString('social-profile-links.phtml', $src);
+        self::assertStringContainsString('target="_blank"', $src);
+        self::assertStringContainsString('rel="noopener noreferrer"', $src);
+        self::assertStringContainsString('footer-social-float', $src);
         self::assertStringNotContainsString('<ul class="footer-section__list">', $src);
         self::assertStringNotContainsString('<li>', $src);
         self::assertStringNotContainsString('getFooter()->getHtml()', $src);
@@ -103,6 +111,20 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringContainsString('var(--weline-chrome-bg-dark)', $css);
         self::assertStringContainsString('var(--weline-chrome-bg-dark-secondary)', $css);
         self::assertStringContainsString('var(--weline-layout-content-max-width)', $css);
+        self::assertStringContainsString('.footer-social-float', $css);
+        self::assertStringContainsString('position: fixed', $css);
+        self::assertStringContainsString('[data-side="left"]', $css);
+        self::assertStringContainsString('[data-side="right"]', $css);
+        self::assertStringContainsString('var(--color-primary', $css);
+        self::assertStringContainsString('linear-gradient(', $css);
+        self::assertMatchesRegularExpression(
+            '/\.footer-social-float\s*\{[^}]*linear-gradient\(/s',
+            $css,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/\.footer-social-float\s*\{[^}]*weline-chrome-bg-dark-secondary/s',
+            $css,
+        );
         self::assertDoesNotMatchRegularExpression('/#[0-9a-fA-F]{3,8}/', $css);
         self::assertStringNotContainsString('rgba(', $css);
         self::assertStringNotContainsString('1440px', $css);

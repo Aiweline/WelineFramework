@@ -21,7 +21,7 @@ final class HeaderCommerceData
      */
     public static function defaultHotWords(): array
     {
-        return ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '汉服配饰'];
+        return ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '披帛'];
     }
 
     /**
@@ -42,7 +42,46 @@ final class HeaderCommerceData
             : AllMenuTreeRegistry::allProductsEnabled();
         $label = trim((string)($options['all_products_label'] ?? AllMenuTreeRegistry::allProductsLabel()));
         $url = trim((string)($options['all_products_url'] ?? AllMenuTreeRegistry::allProductsUrl()));
+        $label = $label !== '' ? $label : '全部商品';
+        $url = $url !== '' && $url !== '#' ? $url : '/products';
 
+        $requestKey = ($include ? 'all1' : 'all0')
+            . '|' . $label
+            . '|' . $url;
+        $sharedKey = 'theme.header.category_nav.v1.'
+            . self::storefrontLocaleSegment()
+            . '.'
+            . ($include ? 'all1' : 'all0')
+            . '.'
+            . \substr(\sha1($label . '|' . $url), 0, 12);
+
+        $resolved = self::rememberRequestMemo(
+            'theme.header.category_nav',
+            $requestKey,
+            static fn(): array => self::resolveCategoryNavItemsUncached($include, $label, $url),
+            StorefrontThemeCacheCoordinator::headerNavigationPolicy(),
+            $sharedKey,
+        );
+
+        return \is_array($resolved) ? $resolved : [
+            'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
+            'source' => 'error',
+            'is_demo' => false,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   items:list<array<string,mixed>>,
+     *   source:string,
+     *   is_demo:bool
+     * }
+     */
+    private static function resolveCategoryNavItemsUncached(
+        bool $include,
+        string $label,
+        string $url,
+    ): array {
         try {
             if (!\class_exists(\Weline\Product\Service\StorefrontAllMenuCategoryTreeService::class)) {
                 return [
@@ -87,6 +126,22 @@ final class HeaderCommerceData
         }
     }
 
+    private static function storefrontLocaleSegment(): string
+    {
+        try {
+            $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+        $pathLocale = WidgetI18n::localeFromRequestUri($requestUri);
+        if ($pathLocale !== null) {
+            $locale = $pathLocale;
+        }
+
+        return $locale !== '' ? $locale : 'zh_Hans_CN';
+    }
+
     /**
      * Storefront category names already resolved from category locale rows.
      * Callers must not run these labels through WidgetI18n / __().
@@ -104,7 +159,9 @@ final class HeaderCommerceData
                 $url = (string)($item['url'] ?? '');
                 $path = \parse_url($url, \PHP_URL_PATH);
                 $path = \is_string($path) && $path !== '' ? $path : $url;
-                if (\preg_match('#(?:^|/)category/([^/?#]+)/?$#', $path, $matches) === 1) {
+                // Use ~ delimiter: # inside [^/?#] would end a #-delimited pattern early
+                // and yield "Unknown modifier ']'".
+                if (\preg_match('~(?:^|/)category/([^/?#]+)/?$~', $path, $matches) === 1) {
                     $code = \rawurldecode((string)$matches[1]);
                     $text = \trim((string)($item['text'] ?? $item['name'] ?? ''));
                     if ($code !== '' && $text !== '') {
@@ -284,13 +341,18 @@ final class HeaderCommerceData
                         return self::demoCartSummary();
                     }
 
+                    // WO-BUILD-HOME-ZERO：空车禁预格式化 $0.00 / ¥0.00（真小计由 JS 水合）
+                    $formatted = $isEmpty
+                        ? ''
+                        : self::formatMoney($subtotal, $currency);
+
                     return [
                         'available' => true,
                         'is_demo' => false,
                         'is_empty' => $isEmpty,
                         'cart_count' => $count,
-                        'subtotal' => $subtotal,
-                        'subtotal_formatted' => self::formatMoney($subtotal, $currency),
+                        'subtotal' => $isEmpty ? 0.0 : $subtotal,
+                        'subtotal_formatted' => $formatted,
                         'currency' => $currency,
                         'items' => $items,
                     ];
@@ -310,7 +372,8 @@ final class HeaderCommerceData
             'is_empty' => true,
             'cart_count' => 0,
             'subtotal' => 0.0,
-            'subtotal_formatted' => self::formatMoney(0, 'CNY'),
+            // WO-BUILD-HOME-ZERO：空车共享摘要不得带 $0.00 价签噪声
+            'subtotal_formatted' => '',
             'currency' => 'CNY',
             'items' => [],
         ];

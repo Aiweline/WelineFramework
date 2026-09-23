@@ -8,6 +8,7 @@
  * @widget.position {["content","sidebar","footer"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css}
  * @param title {default="功能与服务",type="string",label="标题"}
  * @param subtitle {default="",type="textarea",label="副标题"}
  * @param columns {default="3",type="select",label="每行列数",options={1:"1列",2:"2列",3:"3列",4:"4列"}}
@@ -26,8 +27,6 @@ $subtitle = Block::text($this->getData('subtitle'));
 $columns = Block::choice($this->getData('columns'), ['1','2','3','4'], '3');
 $items = Block::items($this->getData('items'));
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
     <?php if ($title !== '' || $subtitle !== ''): ?>
         <header class="sb-header">

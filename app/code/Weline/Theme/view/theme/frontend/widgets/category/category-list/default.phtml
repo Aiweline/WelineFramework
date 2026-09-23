@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-category-category-list-default.css,Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Theme::js/widgets/widget-category-category-list-default-0.js}
  * 分类列表部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -69,7 +70,8 @@ $categories = [
     [
         'id' => 4,
         'name' => __('汉服配饰'),
-        'url' => $searchHref('汉服配饰'),
+        // 分类页有货；勿链 /search?q=汉服配饰（QA-03：仅 blog/FAQ）
+        'url' => '/category/accessories',
         'children' => [
             ['id' => 41, 'name' => __('发簪与发冠'), 'url' => $searchHref('发簪 发冠')],
             ['id' => 42, 'name' => __('腰带与禁步'), 'url' => $searchHref('腰带 禁步')],
@@ -154,156 +156,4 @@ $renderCategoryList = static function (
     <?php $renderCategoryList($categories, 0, $maxDepth, $showCount, $showImage, $collapsed); ?>
 </section>
 
-<style>
-.<?= $wc ?> {
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg);
-    padding: var(--weline-space-5);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .list-title {
-    font-size: var(--weline-font-size-base);
-    font-weight: 600;
-    margin: 0 0 var(--weline-space-4);
-    padding-bottom: var(--weline-space-4);
-    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .list-title w-icon,
-.<?= $wc ?> .list-title [class*="icon"] {
-    color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?> .category-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.<?= $wc ?> .category-list[hidden] {
-    display: none;
-}
-
-.<?= $wc ?> .category-list.depth-1,
-.<?= $wc ?> .category-list.depth-2 {
-    padding-left: var(--weline-space-4);
-    margin-top: var(--weline-space-1);
-}
-
-.<?= $wc ?> .category-item {
-    position: relative;
-}
-
-.<?= $wc ?> .category-link {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-3);
-    padding: var(--weline-space-3) var(--weline-space-8) var(--weline-space-3) 0;
-    color: var(--weline-theme-text);
-    text-decoration: none;
-    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style)
-        color-mix(in srgb, var(--weline-theme-border) 50%, transparent);
-    transition: all var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .category-item:last-child > .category-link {
-    border-bottom: none;
-}
-
-.<?= $wc ?> .category-link:hover {
-    color: var(--weline-theme-primary);
-    padding-left: var(--weline-space-1);
-}
-
-.<?= $wc ?> .category-image {
-    width: var(--spacing-7);
-    height: var(--spacing-7);
-    border-radius: var(--weline-radius-md);
-    object-fit: cover;
-}
-
-.<?= $wc ?> .category-name {
-    flex: 1;
-    font-size: var(--weline-font-size-sm);
-}
-
-.<?= $wc ?> .category-count {
-    font-size: var(--weline-font-size-xs);
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?> .toggle-btn {
-    position: absolute;
-    right: 0;
-    top: var(--spacing-sm);
-    width: var(--spacing-lg);
-    height: var(--spacing-lg);
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--weline-theme-text-muted);
-    transition: all var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .toggle-btn:hover {
-    color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?> .toggle-btn.is-collapsed {
-    transform: rotate(0deg);
-}
-
-.<?= $wc ?> .toggle-btn:not(.is-collapsed) {
-    transform: rotate(90deg);
-}
-
-.<?= $wc ?> .depth-1 .category-link {
-    padding: var(--weline-space-2) var(--weline-space-8) var(--weline-space-2) 0;
-    font-size: var(--weline-font-size-sm);
-}
-
-.<?= $wc ?> .depth-2 .category-link {
-    padding: var(--weline-space-1) var(--weline-space-8) var(--weline-space-1) 0;
-    font-size: var(--weline-font-size-xs);
-    color: var(--weline-theme-text-muted);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    min-height: var(--sidebar-collapsed-width);
-}
-</style>
-
-<script>
-(function () {
-    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
-    if (!root) return;
-
-    root.querySelectorAll('.toggle-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var item = btn.closest('.category-item');
-            if (!item) return;
-            var subList = item.querySelector(':scope > .category-list');
-            if (!subList) return;
-
-            var isHidden = subList.hasAttribute('hidden');
-            if (isHidden) {
-                subList.removeAttribute('hidden');
-            } else {
-                subList.setAttribute('hidden', '');
-            }
-            btn.classList.toggle('is-collapsed', !isHidden);
-            btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-        });
-    });
-})();
-</script>
+<span hidden data-widget-script="theme-category-category-list-default-0" data-v0="<?= htmlspecialchars((string)($esc($scope->uid)), ENT_QUOTES, 'UTF-8') ?>"></span>

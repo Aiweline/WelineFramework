@@ -80,19 +80,36 @@ HTML;
         );
     }
 
-    public function testProdStripRemovesBoundaryCommentsOnly(): void
+    public function testProdStripRemovesBoundaryCommentsAndReactiveAttrs(): void
     {
         $html = <<<'HTML'
 <!--@weline-slot:content-->
-<div data-wslot="content"><style>.x{}</style><span>ok</span></div>
+<div data-wslot="content" data-wslot-name="主内容" class="theme-published-slot" data-slot-id="content"><style>.x{}</style><span>ok</span></div>
 <!--@/weline-slot:content-->
 HTML;
 
         $stripped = SlotBoundaryMarkers::strip($html);
 
         $this->assertStringNotContainsString('@weline-slot', $stripped);
-        $this->assertStringContainsString('data-wslot="content"', $stripped);
+        // wave8-8s3: reactive attrs must leave published outbound HTML.
+        $this->assertStringNotContainsString('data-wslot=', $stripped);
+        $this->assertStringNotContainsString('data-wslot-name', $stripped);
+        $this->assertStringContainsString('data-slot-id="content"', $stripped);
         $this->assertStringContainsString('<style>.x{}</style>', $stripped);
+    }
+
+    public function testStripReactiveSlotAttributesKeepsPublishedWrappers(): void
+    {
+        $html = '<div class="theme-published-slot" data-slot-id="logo" data-wslot="logo" data-wslot-exclusive="true">x</div>'
+            . '<section widget-slot-area="legacy">y</section>';
+
+        $stripped = SlotBoundaryMarkers::stripReactiveSlotAttributes($html);
+
+        $this->assertStringNotContainsString('data-wslot=', $stripped);
+        $this->assertStringNotContainsString('data-wslot-exclusive', $stripped);
+        $this->assertStringNotContainsString('widget-slot-area', $stripped);
+        $this->assertStringContainsString('data-slot-id="logo"', $stripped);
+        $this->assertStringContainsString('theme-published-slot', $stripped);
     }
 
     public function testOpaqueParkerPreservesScriptLessThan(): void

@@ -182,6 +182,30 @@ class SiteBrand
         return '';
     }
 
+    /**
+     * Logo / 页脚字标：仅用部件配置或 Website 站名（后台配置），禁止品牌字面量回退。
+     */
+    public function resolveFrontendWordmark(string $configured = '', string $themeFallback = ''): string
+    {
+        return $this->resolveFrontendSiteName($configured, $themeFallback);
+    }
+
+    /**
+     * Organization.alternateName：来自 Website LocalDescription 其它语种站名（配置数据），非硬编码。
+     */
+    public function resolveOrganizationAlternateName(string $displayName = ''): string
+    {
+        try {
+            if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                return '';
+            }
+
+            return trim((string)(\Weline\Websites\Data\WebsiteData::getOrganizationAlternateName($displayName) ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
     public function resolveFrontendSiteDescription(string $fallback = ''): string
     {
         $fromWebsite = $this->resolveWebsiteDescription();

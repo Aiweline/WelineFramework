@@ -1,0 +1,38 @@
+.wc-theme_widget_footer_payment {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-4);
+    flex-wrap: wrap;
+}
+
+.wc-theme_widget_footer_payment .payment-label {
+    font-size: var(--weline-font-size-sm);
+    color: color-mix(in srgb, var(--weline-theme-on-primary) 70%, transparent);
+}
+
+.wc-theme_widget_footer_payment .payment-icons {
+    display: flex;
+    gap: var(--weline-space-3);
+    flex-wrap: wrap;
+}
+
+.wc-theme_widget_footer_payment .payment-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--token-size-45px);
+    height: var(--spacing-7);
+    background: color-mix(in srgb, var(--weline-theme-on-primary) 10%, transparent);
+    border-radius: var(--weline-radius-sm);
+    transition: background var(--weline-theme-transition-base);
+    color: color-mix(in srgb, var(--weline-theme-on-primary) 80%, transparent);
+}
+
+.wc-theme_widget_footer_payment .payment-icon:hover {
+    background: color-mix(in srgb, var(--weline-theme-on-primary) 20%, transparent);
+}
+
+.widget-preview-canvas .wc-theme_widget_footer_payment,
+.wc-theme_widget_footer_payment.is-preview {
+    gap: var(--weline-space-2);
+}

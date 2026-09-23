@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '2.2.608',
+    "version" => '2.2.609',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '>=2.5.0',
@@ -30,6 +30,8 @@ return [
         \Weline\Backend\Api\View\ThemePreviewModeProviderInterface::class => \Weline\Theme\Integration\Backend\ThemePreviewModeProvider::class,
         \Weline\Framework\Runtime\ThemeContextProviderInterface::class => \Weline\Theme\Service\ThemeContextService::class,
         \Weline\Framework\Runtime\FpcWarmupProviderInterface::class => \Weline\Theme\Api\Runtime\FpcWarmupProvider::class,
+        'storefront_hot_cache_bag_warmup.Weline_Theme'
+            => \Weline\Theme\Api\Runtime\StorefrontHotCacheBagWarmupProvider::class,
         \Weline\Framework\View\FrontendLayoutProviderInterface::class => \Weline\Theme\Api\View\FrontendLayoutProvider::class,
         \Weline\Framework\View\BackendLayoutProviderInterface::class => \Weline\Theme\Api\View\BackendLayoutProvider::class,
         \Weline\Theme\Api\Asset\StaticAssetPublisherInterface::class => \Weline\Theme\Api\Asset\StaticAssetPublisher::class,
