@@ -39,9 +39,33 @@ $title = (string)($meta['title'] ?? __('指南'));
             display: flex;
             flex-direction: column;
             background: transparent;
+            /* 禁止 flex 子项默认 shrink 把粘性顶栏裁成「只剩配送至/扩展链」 */
+            overflow: visible;
+        }
+        /* 顶栏槽/壳：不可被主列 flex 挤压；保留 sticky 全宽深色铬 */
+        .amazon-policy-doc.weline-page-wrapper > .weline-header-slot,
+        .amazon-policy-doc.weline-page-wrapper > .weline-header {
+            flex: 0 0 auto;
+            width: 100%;
+            min-width: 0;
+            overflow: visible;
+            align-self: stretch;
+        }
+        .amazon-policy-doc.weline-page-wrapper .weline-header {
+            background-color: var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary, #16181a));
+            color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, #f7f4ef));
+        }
+        .amazon-policy-doc.weline-page-wrapper .weline-header :is(.header-belt, .header-site-notice, .header-main-nav, .header-container) {
+            background-color: var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary, #16181a));
+            color: inherit;
+        }
+        .amazon-policy-doc.weline-page-wrapper .weline-header .header-site-notice,
+        .amazon-policy-doc.weline-page-wrapper .weline-header .header-main-nav {
+            background-color: var(--weline-chrome-bg-dark-secondary, var(--color-bg-dark, #1f2124));
         }
         .amazon-policy-doc__main {
-            flex: 1 0 auto;
+            flex: 1 1 auto;
+            min-height: 0;
             width: 100%;
             background:
                 linear-gradient(180deg, var(--color-bg-secondary, #eaeded) 0, var(--color-bg-muted, #f3f3f3) 12rem);

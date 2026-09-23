@@ -30,7 +30,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     miniCartIcon: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20260915-sibling-i18n2"
+            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"
         ],
         globalVar: "WelineMiniCartIcon",
         description: "迷你购物车图标与抽屉"
@@ -57,5 +57,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: null,
         load: "defer",
         description: "店面购物者 Toast 区域"
+    },
+    footerSocialFloat: {
+        paths: [
+            "Weline_Theme::js/widgets/footer-social-float.js"
+        ],
+        globalVar: "WelineFooterSocialFloat",
+        async: true,
+        description: "页脚侧边悬浮社媒贴边收起"
     }
 });

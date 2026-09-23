@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-video-video-player-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 视频播放器部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -254,7 +255,7 @@ if ($videoType === 'embed') {
             <h2 class="video-player-title"><?= $esc($sectionTitle) ?></h2>
         </header>
     <?php endif; ?>
-    <div class="video-container" style="--wc-aspect-padding: <?= $esc($paddingTop) ?>">
+    <div class="video-container" data-widget-style="--wc-aspect-padding: <?= $esc($paddingTop) ?>">
         <?php if ($videoType === 'youtube' && $videoId): ?>
             <iframe src="https://www.youtube.com/embed/<?= $esc($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $playbackMuted ? 'mute=1&' : '' ?><?= $loop ? 'loop=1&playlist=' . $esc($videoId) : '' ?>"
                     class="video-iframe"
@@ -302,76 +303,3 @@ if ($videoType === 'embed') {
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    margin: var(--weline-space-5) 0;
-}
-
-.<?= $wc ?> .video-player-header {
-    margin-bottom: var(--weline-space-4);
-}
-
-.<?= $wc ?> .video-player-title {
-    margin: 0;
-    font-size: var(--weline-font-size-xl, 1.25rem);
-    font-weight: 600;
-    line-height: 1.3;
-}
-
-.<?= $wc ?> .video-container {
-    position: relative;
-    width: 100%;
-    padding-top: var(--wc-aspect-padding);
-    background: var(--weline-theme-overlay);
-    border-radius: var(--weline-radius-lg);
-    overflow: hidden;
-}
-
-.<?= $wc ?> .video-iframe,
-.<?= $wc ?> .video-native {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-}
-
-.<?= $wc ?> .video-placeholder {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--weline-space-2);
-    padding: var(--weline-space-4);
-    text-align: center;
-    color: var(--weline-theme-on-primary);
-}
-
-.<?= $wc ?> .video-placeholder i {
-    font-size: var(--spacing-15);
-    opacity: 0.8;
-}
-
-.<?= $wc ?> .video-placeholder p {
-    margin: 0;
-    opacity: 0.85;
-    font-size: var(--weline-font-size-sm);
-    line-height: 1.4;
-}
-
-.<?= $wc ?> .video-placeholder-hint {
-    opacity: 0.55;
-    font-size: var(--weline-font-size-xs);
-    max-width: 22rem;
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    margin: var(--weline-space-3) 0;
-}
-</style>

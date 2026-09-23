@@ -22,7 +22,8 @@
         position="content"
         class="weline-footer-above-slot">
     <w:hook>Weline_Theme::frontend::partials::footer::above<else/>
-        <w:widget type="content" name="trust-badges" />
+        <?php /* WO-HP-P2-05：页底精简版三枚（包邮门槛 + 退换 + 安全支付），与首屏条同口径 */ ?>
+        <w:widget type="content" name="trust-badges" params='{"preset_badges":["free-shipping","money-back","secure-payment"],"columns":"3","style":"icon-text"}' />
     </w:hook>
 </w:slot>
 

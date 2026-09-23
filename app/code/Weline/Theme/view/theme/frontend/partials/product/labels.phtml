@@ -3,17 +3,21 @@
  * 片段：商品标签组
  *
  * @meta.name {default="商品标签组",name="商品标签组",description="商品卡片角标标签组"}
- * @meta.description {default="统一渲染 NEW / SALE / DEMO 等商品标签，全局主题色盘 + 部件级覆盖",name="统一商品标签渲染",description="商品标签组片段用途"}
+ * @meta.description {default="统一渲染 NEW / SALE / DEMO / 热销 / 包邮 等商品标签，全局主题色盘 + 部件级覆盖",name="统一商品标签渲染",description="商品标签组片段用途"}
  * @param is_new {default=false,type=bool,name="显示新品标签",description="是否显示新品标签"}
  * @param is_sale {default=false,type=bool,name="显示促销标签",description="是否显示促销标签"}
  * @param is_demo {default=false,type=bool,name="显示演示标签",description="是否显示演示商品标签"}
+ * @param is_hot {default=false,type=bool,name="显示热销标签",description="是否显示热销角标"}
+ * @param is_free_shipping {default=false,type=bool,name="显示包邮标签",description="是否显示包邮角标"}
  * @param overrides {default=[],name="配色覆盖",description="部件级配色覆盖：new_bg/new_text/sale_bg/sale_text/demo_bg/demo_text"}
  * @param class {default="product-badges",name="容器类名",description="标签容器额外类名"}
  * @param placement {default="top-start",name="标签位置",description="top-start 或 bottom-start"}
  * @param bare {default=false,type=bool,name="仅输出标签",description="为 true 时不包裹 w-product-labels 容器"}
  * @param new_text {default="",name="新品文案",description="留空使用默认 NEW"}
- * @param sale_text {default="",name="促销文案",description="留空使用默认 SALE"}
+ * @param sale_text {default="",name="促销文案",description="留空：有折扣显示 -N%，否则「特价」"}
  * @param demo_text {default="",name="演示文案",description="留空使用默认 DEMO"}
+ * @param hot_text {default="",name="热销文案",description="留空使用「热销」"}
+ * @param ship_text {default="",name="包邮文案",description="留空使用「包邮」"}
  */
 
 use Weline\Theme\Helper\ProductLabelStyle;
@@ -23,6 +27,8 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isNew = (bool)($this->getData('is_new') ?? $this->getData('meta.is_new') ?? false);
 $isSale = (bool)($this->getData('is_sale') ?? $this->getData('meta.is_sale') ?? false);
 $isDemo = (bool)($this->getData('is_demo') ?? $this->getData('meta.is_demo') ?? false);
+$isHot = (bool)($this->getData('is_hot') ?? $this->getData('meta.is_hot') ?? false);
+$isFreeShipping = (bool)($this->getData('is_free_shipping') ?? $this->getData('meta.is_free_shipping') ?? false);
 $overrides = $this->getData('overrides') ?? $this->getData('meta.overrides') ?? [];
 if (!is_array($overrides)) {
     $overrides = [];
@@ -32,14 +38,16 @@ $placement = trim((string)($this->getData('placement') ?? $this->getData('meta.p
 $newText = trim((string)($this->getData('new_text') ?? $this->getData('meta.new_text') ?? ''));
 $saleText = trim((string)($this->getData('sale_text') ?? $this->getData('meta.sale_text') ?? ''));
 $demoText = trim((string)($this->getData('demo_text') ?? $this->getData('meta.demo_text') ?? ''));
+$hotText = trim((string)($this->getData('hot_text') ?? $this->getData('meta.hot_text') ?? ''));
+$shipText = trim((string)($this->getData('ship_text') ?? $this->getData('meta.ship_text') ?? ''));
 $bare = (bool)($this->getData('bare') ?? $this->getData('meta.bare') ?? false);
 
-if (!$isNew && !$isSale && !$isDemo) {
+if (!$isNew && !$isSale && !$isDemo && !$isHot && !$isFreeShipping) {
     return;
 }
 
 $renderLabel = function (string $kind, string $text) {
-    // 显式清空 class：父级容器的 class（如 wpc-badges）会经 Template 临时字典泄漏到子片段，
+    // 显式清空 class：父级容器的 class（如 wpc-badges）会经 Template 赋值字典泄漏到子片段，
     // 导致 .w-product-label 误吃容器布局（absolute + column），粉胶囊宽度塌缩、文字溢出。
     return $this->fetch('Weline_Theme::theme/frontend/components/product-label.phtml', [
         'kind' => $kind,
@@ -49,15 +57,25 @@ $renderLabel = function (string $kind, string $text) {
     ]);
 };
 
+$saleLabel = $saleText !== '' ? $saleText : (string)__('特价');
+$hotLabel = $hotText !== '' ? $hotText : (string)__('热销');
+$shipLabel = $shipText !== '' ? $shipText : (string)__('包邮');
+
 if ($bare) {
     if ($isDemo) {
         echo $renderLabel(ProductLabelStyle::KIND_DEMO, $demoText !== '' ? $demoText : (string)__('DEMO'));
     }
+    if ($isSale) {
+        echo $renderLabel(ProductLabelStyle::KIND_SALE, $saleLabel);
+    }
+    if ($isHot) {
+        echo $renderLabel(ProductLabelStyle::KIND_HOT, $hotLabel);
+    }
+    if ($isFreeShipping) {
+        echo $renderLabel(ProductLabelStyle::KIND_SHIP, $shipLabel);
+    }
     if ($isNew) {
         echo $renderLabel(ProductLabelStyle::KIND_NEW, $newText !== '' ? $newText : (string)__('NEW'));
-    }
-    if ($isSale) {
-        echo $renderLabel(ProductLabelStyle::KIND_SALE, $saleText !== '' ? $saleText : (string)__('SALE'));
     }
     return;
 }
@@ -66,14 +84,20 @@ $scopeStyle = ProductLabelStyle::scopeStyleAttribute($overrides);
 $placementClass = $placement === 'bottom-start' ? ' w-product-labels--bottom-start' : '';
 $containerClass = trim('w-product-labels ' . $class . $placementClass);
 ?>
-<div class="<?= $esc($containerClass) ?>"<?= $scopeStyle !== '' ? ' style="' . $esc($scopeStyle) . '"' : '' ?>>
+<div class="<?= $esc($containerClass) ?>"<?= $scopeStyle !== '' ? ' data-widget-style="' . $esc($scopeStyle) . '"' : '' ?>>
     <?php if ($isDemo): ?>
         <?= $renderLabel(ProductLabelStyle::KIND_DEMO, $demoText !== '' ? $demoText : (string)__('DEMO')) ?>
     <?php endif; ?>
+    <?php if ($isSale): ?>
+        <?= $renderLabel(ProductLabelStyle::KIND_SALE, $saleLabel) ?>
+    <?php endif; ?>
+    <?php if ($isHot): ?>
+        <?= $renderLabel(ProductLabelStyle::KIND_HOT, $hotLabel) ?>
+    <?php endif; ?>
+    <?php if ($isFreeShipping): ?>
+        <?= $renderLabel(ProductLabelStyle::KIND_SHIP, $shipLabel) ?>
+    <?php endif; ?>
     <?php if ($isNew): ?>
         <?= $renderLabel(ProductLabelStyle::KIND_NEW, $newText !== '' ? $newText : (string)__('NEW')) ?>
-    <?php endif; ?>
-    <?php if ($isSale): ?>
-        <?= $renderLabel(ProductLabelStyle::KIND_SALE, $saleText !== '' ? $saleText : (string)__('SALE')) ?>
     <?php endif; ?>
 </div>

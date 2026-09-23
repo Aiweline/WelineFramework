@@ -40,20 +40,6 @@ final class ThemeRuntimeCacheCleaner
         FullPageCacheCoordinator::clearProcessCache();
     }
 
-    private static function purgeLayoutEntityPublishedProjectionHotCachePool(): void
-    {
-        if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
-            return;
-        }
-        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
-        try {
-            ObjectManager::getInstance(CacheManager::class)
-                ->pool(StorefrontThemeCacheCoordinator::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL)
-                ->clear();
-        } catch (\Throwable) {
-        }
-    }
-
     /**
      * Full theme-related invalidation for publish / resource_changed.
      * Clears theme namespace generations (all recorded theme scopes), WLS FPC,
@@ -150,11 +136,17 @@ final class ThemeRuntimeCacheCleaner
         $this->runStep($result, 'storefront_chrome_hot_cache', static function (): void {
             self::purgeStorefrontChromeHotCachePool();
         });
+        $this->runStep($result, 'product_card_html_hot_cache', static function (): void {
+            self::purgeProductCardHtmlHotCachePool();
+        });
         $this->runStep($result, 'published_layout_structure_hot_cache', static function (): void {
             self::purgePublishedLayoutStructureHotCachePool();
         });
         $this->runStep($result, 'layout_entity_published_projection_hot_cache', static function (): void {
             self::purgeLayoutEntityPublishedProjectionHotCachePool();
+        });
+        $this->runStep($result, 'theme_path_directory_hot_cache', static function (): void {
+            self::purgeThemePathDirectoryHotCachePools();
         });
         foreach ($this->themeCacheServices() as $step => $serviceClass) {
             $this->runStep($result, $step, static function () use ($serviceClass): void {
@@ -308,11 +300,20 @@ final class ThemeRuntimeCacheCleaner
             self::purgeStorefrontChromeHotCachePool();
         });
 
+        $this->runStep($result, 'product_card_html_hot_cache', static function (): void {
+            self::purgeProductCardHtmlHotCachePool();
+        });
+
         $this->runStep($result, 'published_layout_structure_hot_cache', static function (): void {
             self::purgePublishedLayoutStructureHotCachePool();
         });
+
         $this->runStep($result, 'layout_entity_published_projection_hot_cache', static function (): void {
             self::purgeLayoutEntityPublishedProjectionHotCachePool();
+        });
+
+        $this->runStep($result, 'theme_path_directory_hot_cache', static function (): void {
+            self::purgeThemePathDirectoryHotCachePools();
         });
 
         $this->runStep($result, 'runtime_cache_broadcast', function (): void {
@@ -331,8 +332,9 @@ final class ThemeRuntimeCacheCleaner
     }
 
     /**
-     * Drop every storefront chrome envelope. Keys are theme.chrome.{type}.{sha1}, so
-     * forget(theme.chrome.header) alone leaves nested widget HTML (e.g. account avatar) stale.
+     * Drop every storefront chrome/head envelope. Keys are theme.chrome.{type}.{sha1}
+     * or theme.head.{type}.{sha1}, so forget(theme.chrome.header) alone leaves nested
+     * widget HTML (e.g. account avatar) and page-scoped head stale.
      */
     private static function purgeStorefrontChromeHotCachePool(): void
     {
@@ -341,10 +343,28 @@ final class ThemeRuntimeCacheCleaner
         }
         $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
         $hotCache->purgeProcessCacheForLogicalKey('theme.chrome.');
+        $hotCache->purgeProcessCacheForLogicalKey('theme.head.');
         \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
         try {
             ObjectManager::getInstance(CacheManager::class)
                 ->pool('weline_theme_storefront_chrome')
+                ->clear();
+        } catch (\Throwable) {
+        }
+    }
+
+    /** Drop product-card HTML fragment HotCache (wave6-6a A-axis). */
+    private static function purgeProductCardHtmlHotCachePool(): void
+    {
+        if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+            return;
+        }
+        $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+        $hotCache->purgeProcessCacheForLogicalKey('theme.product_card.html.');
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        try {
+            ObjectManager::getInstance(CacheManager::class)
+                ->pool(StorefrontThemeCacheCoordinator::PRODUCT_CARD_HTML_POOL)
                 ->clear();
         } catch (\Throwable) {
         }
@@ -362,6 +382,43 @@ final class ThemeRuntimeCacheCleaner
             ObjectManager::getInstance(CacheManager::class)
                 ->pool(StorefrontThemeCacheCoordinator::PUBLISHED_LAYOUT_STRUCTURE_POOL)
                 ->clear();
+        } catch (\Throwable) {
+        }
+    }
+
+    /** Drop layout-entity published chrome/page projection HotCache (wave6-6s). */
+    private static function purgeLayoutEntityPublishedProjectionHotCachePool(): void
+    {
+        if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+            return;
+        }
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        try {
+            ObjectManager::getInstance(CacheManager::class)
+                ->pool(StorefrontThemeCacheCoordinator::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL)
+                ->clear();
+        } catch (\Throwable) {
+        }
+    }
+
+    /** Drop path-resolve + area-directory HotCache pools (wave4-4b B-axis). */
+    private static function purgeThemePathDirectoryHotCachePools(): void
+    {
+        if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+            return;
+        }
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        try {
+            $manager = ObjectManager::getInstance(CacheManager::class);
+            foreach ([
+                StorefrontThemeCacheCoordinator::THEME_PATH_RESOLVE_POOL,
+                StorefrontThemeCacheCoordinator::THEME_AREA_DIRECTORIES_POOL,
+            ] as $pool) {
+                try {
+                    $manager->pool($pool)->clear();
+                } catch (\Throwable) {
+                }
+            }
         } catch (\Throwable) {
         }
     }

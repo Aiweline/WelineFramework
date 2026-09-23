@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-container-content-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * Content 容器部件模板
  *
  * @var array $config 部件配置
@@ -61,7 +62,7 @@ $rootStyle = '--wc-sidebar-width:' . $sidebarWidth . '%;';
       data-uid="<?= $esc($scope->uid) ?>"
       data-js-ns="<?= $esc($scope->jsNs) ?>"
       data-layout="<?= $esc($layout) ?>"
-      style="<?= $esc($rootStyle) ?>">
+      data-widget-style="<?= $esc($rootStyle) ?>">
 
     <div class="content-shell <?= $esc($containerWidth) ?>">
 
@@ -210,96 +211,3 @@ $rootStyle = '--wc-sidebar-width:' . $sidebarWidth . '%;';
     </div>
 </main>
 
-<style>
-.<?= $wc ?> {
-    width: 100%;
-    padding: var(--weline-space-5) 0;
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .content-shell.container,
-.<?= $wc ?> .content-shell.container-lg {
-    max-width: var(--weline-theme-container-max);
-    margin: 0 auto;
-    padding: 0 var(--weline-space-5);
-}
-
-.<?= $wc ?> .content-shell.container-fluid {
-    max-width: 100%;
-    padding: 0 var(--weline-space-5);
-}
-
-.<?= $wc ?> .slot-hero {
-    margin-bottom: var(--weline-space-8);
-}
-
-.<?= $wc ?> .slot-featured {
-    margin-bottom: var(--weline-space-8);
-}
-
-.<?= $wc ?> .content-body {
-    display: flex;
-    gap: var(--weline-space-8);
-    margin-bottom: var(--weline-space-8);
-}
-
-.<?= $wc ?> .slot-sidebar-left,
-.<?= $wc ?> .slot-sidebar-right {
-    flex: 0 0 var(--wc-sidebar-width);
-}
-
-.<?= $wc ?> .slot-main {
-    flex: 1;
-    min-height: var(--size-panel-400);
-}
-
-.<?= $wc ?> .slot-bottom {
-    margin-top: var(--weline-space-8);
-    padding-top: var(--weline-space-8);
-    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-}
-
-.<?= $wc ?> .content-slot {
-    position: relative;
-    min-height: var(--size-control-50);
-}
-
-.<?= $wc ?> .content-slot.slot-selected,
-.<?= $wc ?> [data-slot].slot-selected,
-.<?= $wc ?> [data-wslot].slot-selected {
-    outline: var(--spacing-1_5) solid var(--weline-theme-primary) !important;
-    outline-offset: var(--spacing-0_5);
-    background: color-mix(in srgb, var(--weline-theme-primary) 5%, transparent) !important;
-}
-
-.<?= $wc ?> .slot-widget {
-    position: relative;
-    margin-bottom: var(--weline-space-5);
-}
-
-.<?= $wc ?> .slot-widget:last-child {
-    margin-bottom: 0;
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    min-height: var(--size-panel-120);
-}
-
-@media (max-width: 992px) {
-    .<?= $wc ?> .content-body {
-        flex-wrap: wrap;
-    }
-
-    .<?= $wc ?> .slot-sidebar-left,
-    .<?= $wc ?> .slot-sidebar-right {
-        flex: 0 0 100% !important;
-        order: 2;
-    }
-
-    .<?= $wc ?> .slot-main {
-        order: 1;
-        flex: 0 0 100% !important;
-    }
-}
-</style>

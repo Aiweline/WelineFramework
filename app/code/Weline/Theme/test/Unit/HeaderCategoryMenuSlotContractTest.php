@@ -46,7 +46,8 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
 
         self::assertStringContainsString('@widget.slot {category-menu}', $widget);
         self::assertStringNotContainsString('@widget.default_injections', $widget);
-        self::assertStringContainsString('categories-horizontal-nav.phtml', $widget);
+        self::assertStringContainsString('fetchCategoriesHorizontalNav', $widget);
+        self::assertStringContainsString('HeaderNavFragment', $widget);
         self::assertStringContainsString('id="categories-list"', $partial);
         self::assertStringContainsString('categories-overflow-wrapper', $partial);
         self::assertStringContainsString('fetchMegaMenuPanel', $partial);

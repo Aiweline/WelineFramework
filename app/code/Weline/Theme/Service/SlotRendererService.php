@@ -890,7 +890,7 @@ class SlotRendererService
         }
 
         foreach ($globalChromeSlotWidgets as $slotId => $widgets) {
-            if ($widgets === [] || !$this->slotWidgetsBelongToSharedChrome((string)$slotId, $widgets)) {
+            if ($widgets !== [] && !$this->slotWidgetsBelongToSharedChrome((string)$slotId, $widgets)) {
                 continue;
             }
             // Homepage carrier: prefer entity chrome inject for root header/footer to
@@ -952,51 +952,38 @@ class SlotRendererService
      */
     private function loadSharedChromeSlotWidgetsFromEntity(int $themeId, string $area): array
     {
-        unset($area);
         try {
-            /** @var \Weline\Theme\Service\ThemeScopeVersionService $scopeVersions */
-            $scopeVersions = ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class);
-            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder $slotTree */
-            $slotTree = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder::class);
-            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore $configStore */
+            // The head or an inherited shell may have rendered an ancestor first.
+            // Select the chain for this layout identity, rather than treating that
+            // last same-theme binding as the owner of the current scope's slots.
+            // resolveRenderSources already caches the exact scope/preview selection.
+            $sources = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityChrome::class,
+            )->resolveRenderSources($themeId, $this->resolveStorageScopeForSharedChrome($area), $this->isEditorPreviewRequest());
+            $bindings = array_column($sources, 'binding');
             $configStore = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore::class);
-
-            $scope = $this->resolveStorageScopeForSharedChrome(
-                $this->renderArea === 'backend' ? 'backend' : 'frontend',
-            );
-            if ($scope === '') {
-                return [];
-            }
-
-            $version = $scopeVersions->getPublished($themeId, $scope)
-                ?? $scopeVersions->getCurrent($themeId, $scope);
-            if ($version === null || $version->getVersionId() < 1) {
-                return [];
-            }
-
-            $nodes = $version->getChromePayload();
-            if ($nodes === []) {
-                return [];
-            }
-
-            $layout = $slotTree->nodesToAreaLayout($nodes);
-            $configByUid = $configStore->readChromeConfig($themeId, $scope, $version->getVersionId());
-            foreach ($layout as $areaKey => $areaData) {
-                if (!\is_array($areaData['widgets'] ?? null)) {
+            $slotTree = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder::class);
+            $slots = [];
+            foreach ($bindings as $binding) {
+                if (!$binding instanceof \Weline\Theme\Service\LayoutEntity\EntityRenderBinding || $binding->themeId !== $themeId) {
                     continue;
                 }
-                foreach ($areaData['widgets'] as $index => $widget) {
-                    if (!\is_array($widget)) {
+                $nodes = $configStore->readBoundConfig($binding);
+                $bySlot = $this->organizeWidgetsBySlot($slotTree->nodesToAreaLayout($nodes));
+                foreach ($bySlot as $slotId => $widgets) {
+                    if (array_key_exists($slotId, $slots)) {
                         continue;
                     }
-                    $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
-                    if ($uid !== '' && isset($configByUid[$uid]) && \is_array($configByUid[$uid])) {
-                        $layout[$areaKey]['widgets'][$index] = \array_replace($widget, $configByUid[$uid]);
-                    }
+                    // Keep an empty slot decision when all its nodes were explicitly
+                    // removed, so an ancestor cannot resurrect those nodes.
+                    $slots[$slotId] = array_values(array_filter($widgets, static fn($node): bool => is_array($node)
+                        && (!array_key_exists('is_active', $node) || !empty($node['is_active']))));
+                }
+                if ($nodes === []) {
+                    break;
                 }
             }
-
-            return $this->organizeWidgetsBySlot($layout);
+            return $slots;
         } catch (\Throwable) {
             return [];
         }
@@ -1794,7 +1781,9 @@ class SlotRendererService
 
         $widgetCode = \trim((string)($widget['widget_code'] ?? ''));
         if ($widgetCode !== '') {
-            $replaced = $this->replaceExistingSlotWidgetMarkupByCode($inner, $widgetCode, $renderedHtml);
+            $replaced = $this->replaceExistingSlotWidgetMarkupByCode(
+                $inner, $widgetCode, $renderedHtml, \trim((string)($widget['node_uid'] ?? '')),
+            );
             if ($replaced !== null) {
                 return $replaced;
             }
@@ -1974,6 +1963,7 @@ class SlotRendererService
         string $inner,
         string $widgetCode,
         string $renderedHtml,
+        string $nodeUid = '',
     ): ?string {
         $widgetCode = \trim($widgetCode);
         if ($widgetCode === '') {
@@ -1990,6 +1980,12 @@ class SlotRendererService
                     || \preg_match('/(?:^|\s)' . \preg_quote($className, '/') . '(?:\s|$)/', $scanner->attributeValue($tag['html'], 'class') ?? '') !== 1
                     || ($tagName === 'div' && $scanner->attributeValue($tag['html'], 'data-widget-code') !== $widgetCode)
                 ) {
+                    continue;
+                }
+                $existingUid = \trim((string)$scanner->attributeValue($tag['html'], 'data-node-uid'));
+                // Code identifies a widget type, not an instance. Keep legacy
+                // unbound markup replaceable, but never consume another instance.
+                if ($existingUid !== '' && $existingUid !== $nodeUid) {
                     continue;
                 }
                 $bounds = $scanner->findElementBounds($inner, $tag['start']);
@@ -3025,6 +3021,9 @@ class SlotRendererService
         $layoutId = $widget['layout_id'] ?? '';
         $config = $widget['config'] ?? [];
         $config = \is_array($config) ? $config : [];
+        foreach (['layout_source', 'source', 'source_position'] as $assetKey) {
+            if (isset($widget[$assetKey]) && $widget[$assetKey] !== '') { $config['_' . $assetKey] = $widget[$assetKey]; }
+        }
         $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
 
         // Uninstalled modules must not abort slot/layout seeding: DEV tip in place, PROD empty.
@@ -3353,45 +3352,40 @@ HTML;
             return;
         }
 
-        if (\preg_match_all(
-            '/<div\b([^>]*\bwidget-wrapper\b[^>]*)>[\s\S]{0,4000}?widget-unavailable-tip/i',
-            $html,
-            $matches
-        )) {
-            foreach ($matches[1] as $attrChunk) {
-                $openTag = '<div ' . \trim((string)$attrChunk) . '>';
-                $nodeUid = \strtolower(\trim($this->attrFromTag($openTag, 'data-node-uid')));
-                if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
-                    $nodeUid = '';
+        // Inspect real element ancestry only. A following sibling's tip must not
+        // turn an account link (or a containing widget) into a missing widget.
+        $document = new \DOMDocument();
+        $previousErrors = \libxml_use_internal_errors(true);
+        try {
+            $loaded = $document->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+            if (!$loaded) {
+                return;
+            }
+            $xpath = new \DOMXPath($document);
+            $tips = $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " widget-unavailable-tip ")]');
+            foreach ($tips ?: [] as $tip) {
+                $wrapper = $tip->parentNode;
+                while ($wrapper instanceof \DOMElement
+                    && !\in_array('widget-wrapper', \preg_split('/\s+/', $wrapper->getAttribute('class')) ?: [], true)
+                ) {
+                    $wrapper = $wrapper->parentNode;
                 }
+                if (!$wrapper instanceof \DOMElement || $wrapper->getAttribute('data-unavailable') !== '1') {
+                    continue;
+                }
+                $reason = \trim($tip->getAttribute('data-unavailable-reason'));
                 $this->recordUnavailableWidget([
-                    'node_uid' => $nodeUid,
-                    'layout_id' => (int)$this->attrFromTag($openTag, 'data-layout-id'),
-                    'slot_id' => $this->attrFromTag($openTag, 'data-slot-id'),
-                    'widget_code' => $this->attrFromTag($openTag, 'data-widget-code'),
-                    'widget_module' => $this->attrFromTag($openTag, 'data-widget-module'),
-                    'meta' => ['name' => $this->attrFromTag($openTag, 'data-widget-name')],
-                ], 'missing_template', (string)__('部件已不可用（定义/模板缺失）'));
+                    'node_uid' => $wrapper->getAttribute('data-node-uid'),
+                    'layout_id' => (int)$wrapper->getAttribute('data-layout-id'),
+                    'slot_id' => $wrapper->getAttribute('data-slot-id'),
+                    'widget_code' => $wrapper->getAttribute('data-widget-code'),
+                    'widget_module' => $wrapper->getAttribute('data-widget-module'),
+                    'meta' => ['name' => $wrapper->getAttribute('data-widget-name') ?: $wrapper->getAttribute('data-widget-code')],
+                ], $reason !== '' ? $reason : 'missing_template', \trim($tip->textContent));
             }
-        }
-
-        if ($this->unavailableWidgets !== []) {
-            return;
-        }
-
-        if (\preg_match_all(
-            '/data-action="remove-unavailable-widget"[^>]*data-node-uid="([a-f0-9]{32})"/i',
-            $html,
-            $tips
-        )) {
-            foreach ($tips[1] as $uid) {
-                $this->recordUnavailableWidget([
-                    'node_uid' => \strtolower((string)$uid),
-                    'widget_code' => '',
-                    'slot_id' => '',
-                    'meta' => ['name' => 'unavailable'],
-                ], 'missing_template', (string)__('部件已不可用（定义/模板缺失）'));
-            }
+        } finally {
+            \libxml_clear_errors();
+            \libxml_use_internal_errors($previousErrors);
         }
     }
 

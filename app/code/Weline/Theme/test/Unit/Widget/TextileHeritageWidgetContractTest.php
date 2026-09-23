@@ -109,15 +109,18 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertIsInt($testimonialsPosition);
         self::assertIsInt($reviewsPosition);
         self::assertIsInt($videosPosition);
+        $trustPosition = strpos($homepage, 'id="homepage-trust"');
+        self::assertIsInt($trustPosition);
         self::assertTrue(
-            $heroPosition < $categoriesPosition
-            && $categoriesPosition < $featuredPosition
-            && $featuredPosition < $dealsPosition
+            $heroPosition < $trustPosition
+            && $trustPosition < $featuredPosition
+            && $featuredPosition < $categoriesPosition
+            && $categoriesPosition < $dealsPosition
             && $dealsPosition < $promoPosition
             && $promoPosition < $newArrivalsPosition
             && $newArrivalsPosition < $bestsellersPosition
             && $bestsellersPosition < $brandsPosition,
-            '电商节奏：Hero → 品类 → 精选 → 特价 → 促销 → 新品 → 畅销 → 品牌；品牌不得插在货架之前。'
+            'Wave-3 商城节奏：Hero → 信任条 → 精选 → 品类磁贴 → 特价 → 促销 → 新品 → 畅销 → 品牌；品牌不得插在货架之前。'
         );
         self::assertTrue(
             $brandsPosition < $testimonialsPosition

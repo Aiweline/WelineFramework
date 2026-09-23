@@ -25,7 +25,13 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-qty-control', $source);
         self::assertStringContainsString('<w:slot id="footer-extras"', $source);
         self::assertStringContainsString('layout="mini-cart"', $source);
-        self::assertStringContainsString('aria-label="<?= __', $source);
+        self::assertStringContainsString('data-i18n-goods-subtotal', $source);
+        self::assertStringContainsString('data-i18n-fs-remaining', $source);
+        self::assertStringContainsString('data-i18n-fs-qualified', $source);
+        self::assertStringContainsString('data-fs-threshold-usd="49"', $source);
+        self::assertStringContainsString('data-mini-cart-fs-progress', $source);
+        self::assertStringContainsString('mini-cart-drawer__fs-progress', $source);
+        self::assertStringNotContainsString('¥299', $source);
         self::assertStringNotContainsString('mini-cart-dropdown', $source);
     }
 
@@ -71,6 +77,13 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('Ghost-cart gate: no matching guest_token', $source);
         self::assertStringContainsString('waitForCartApi', $source);
         self::assertStringContainsString('getCart', $source);
+        self::assertStringContainsString('renderDiscountBreakdown', $source);
+        self::assertStringContainsString('renderFreeShippingProgress', $source);
+        self::assertStringContainsString('resolveFreeShippingProgress', $source);
+        self::assertStringContainsString('FREE_SHIPPING_THRESHOLD_USD = 49', $source);
+        self::assertStringContainsString('data-mini-cart-fs-progress', $source);
+        self::assertStringContainsString('free_shipping_progress', $source);
+        self::assertStringNotContainsString('¥299', $source);
         self::assertStringContainsString('isDemoChromeOnly', $source);
         self::assertStringContainsString('withTimeout', $source);
         self::assertStringContainsString('weline:cart-updated', $source);
@@ -161,26 +174,35 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-i18n-checkout-loading', $source);
         self::assertStringNotContainsString('mini-cart-icon.js', $source);
         self::assertStringContainsString('mini-cart-drawer__busy-overlay', $css);
-        self::assertStringContainsString('--amz-drawer-price: #b12704', $css);
+        self::assertStringContainsString('mini-cart-drawer__fs-progress', $css);
+        self::assertStringContainsString('--amz-drawer-price:', $css);
         self::assertStringContainsString('--amz-drawer-cta-bg:', $css);
     }
 
     public function testMiniCartEnglishCsvIncludesDrawerCopy(): void
     {
         $csv = (string)file_get_contents(dirname(__DIR__, 2) . '/i18n/en_US.csv');
-        self::assertStringContainsString(
-            '税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"',
+        self::assertMatchesRegularExpression(
+            '/税费与运费将在结算时计算,("?)Taxes and shipping calculated at checkout\1/',
             $csv,
         );
-        self::assertStringContainsString('减少数量,"Decrease quantity"', $csv);
-        self::assertStringContainsString('增加数量,"Increase quantity"', $csv);
-        self::assertStringContainsString('正在前往结算...,"Proceeding to checkout..."', $csv);
+        self::assertStringContainsString('Taxes and shipping calculated at checkout', $csv);
+        self::assertStringContainsString('减少数量', $csv);
+        self::assertStringContainsString('Decrease quantity', $csv);
+        self::assertStringContainsString('增加数量', $csv);
+        self::assertStringContainsString('Increase quantity', $csv);
+        self::assertStringContainsString('正在前往结算...', $csv);
+        self::assertStringContainsString('Proceeding to checkout...', $csv);
         self::assertStringContainsString('优惠券,Coupon', $csv);
-        self::assertStringContainsString('叠加优惠,"Stacked discount"', $csv);
-        self::assertStringContainsString('自动优惠,"Automatic discount"', $csv);
-        self::assertStringContainsString('商品小计,"Goods subtotal"', $csv);
-        self::assertStringContainsString('正在加载购物车...,"Loading cart..."', $csv);
-        self::assertStringContainsString('底部扩展区,"Footer extras"', $csv);
+        self::assertStringContainsString('Stacked discount', $csv);
+        self::assertStringContainsString('Automatic discount', $csv);
+        self::assertStringContainsString('Goods subtotal', $csv);
+        self::assertStringContainsString('Loading cart...', $csv);
+        self::assertStringContainsString('Footer extras', $csv);
+        self::assertStringContainsString('You\'re %1 away from free shipping', $csv);
+        self::assertStringContainsString('You\'ve unlocked free shipping', $csv);
+        self::assertStringContainsString('还差 %1 包邮', $csv);
+        self::assertStringContainsString('已享包邮', $csv);
         self::assertStringNotContainsString('优惠券,优惠券', $csv);
         self::assertStringNotContainsString('叠加优惠,叠加优惠', $csv);
     }

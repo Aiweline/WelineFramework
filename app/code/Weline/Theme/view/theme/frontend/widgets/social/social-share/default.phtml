@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-social-social-share-default.css,Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Theme::js/widgets/widget-social-social-share-default-0.js,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 社交分享部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -66,7 +67,7 @@ $platformConfig = [
                     data-platform="<?= $esc((string)$platform) ?>"
                     data-url="<?= $esc($config['url']) ?>"
                     data-action="<?= $esc($config['action'] ?? 'share') ?>"
-                    style="--btn-color: <?= $esc($config['color']) ?>;"
+                    data-widget-style="--btn-color: <?= $esc($config['color']) ?>;"
                     title="<?= $esc($config['name']) ?>">
                 <w:icon name="config.icon|share" size="sm"></w:icon>
                 <?php if ($style !== 'icon'): ?>
@@ -78,121 +79,4 @@ $platformConfig = [
     <span class="share-status" role="status" aria-live="polite"></span>
 </section>
 
-<style>
-.<?= $wc ?> {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-3);
-}
-
-.<?= $wc ?>.layout-vertical {
-    flex-direction: column;
-    align-items: flex-start;
-}
-
-.<?= $wc ?> .share-title {
-    font-size: var(--weline-font-size-sm);
-    color: var(--weline-theme-text-muted);
-    white-space: nowrap;
-}
-
-.<?= $wc ?> .share-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--weline-space-2);
-}
-
-.<?= $wc ?>.layout-vertical .share-buttons {
-    flex-direction: column;
-}
-
-.<?= $wc ?> .share-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--weline-space-2);
-    border: none;
-    cursor: pointer;
-    transition: all var(--weline-theme-transition-base);
-    background: var(--btn-color);
-    color: var(--weline-theme-on-primary);
-}
-
-.<?= $wc ?>.style-icon .share-btn {
-    width: var(--size-control-sm);
-    height: var(--size-control-sm);
-    border-radius: 50%;
-    padding: 0;
-}
-
-.<?= $wc ?>.style-icon-text .share-btn,
-.<?= $wc ?>.style-button .share-btn {
-    padding: var(--weline-space-2) var(--weline-space-4);
-    border-radius: var(--weline-radius-sm);
-}
-
-.<?= $wc ?> .share-btn:hover {
-    transform: translateY(var(--spacing-neg-0_5));
-    box-shadow: var(--weline-theme-shadow-md);
-}
-
-.<?= $wc ?> .share-status {
-    font-size: var(--weline-font-size-sm);
-    color: var(--weline-theme-text-muted);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    flex-wrap: wrap;
-}
-</style>
-
-<script>
-(function () {
-    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
-    if (!root) return;
-
-    var shareMessages = {
-        wechatQr: <?= json_encode((string)__('请使用微信扫描二维码分享'), $jsonForScriptFlags) ?>
-    };
-
-    var pageUrl = encodeURIComponent(window.location.href);
-    var pageTitle = encodeURIComponent(document.title);
-
-    function showShareNotice(message, type) {
-        if (window.Weline && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
-            window.Weline.UI.toast.show(message, {tone: type || 'info'});
-            return;
-        }
-        var status = root.querySelector('.share-status');
-        if (status) {
-            status.textContent = message;
-            return;
-        }
-        console.info(message);
-    }
-
-    root.querySelectorAll('.share-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var action = this.dataset.action;
-            var url = this.dataset.url;
-
-            if (action === 'copy') {
-                navigator.clipboard.writeText(window.location.href).then(function () {
-                    btn.dataset.state = 'copied';
-                    setTimeout(function () { btn.dataset.state = 'idle'; }, 2000);
-                });
-                return;
-            }
-
-            if (action === 'qrcode') {
-                showShareNotice(shareMessages.wechatQr, 'info');
-                return;
-            }
-
-            url = url.replace('{url}', pageUrl).replace('{title}', pageTitle);
-            window.open(url, '_blank', 'width=600,height=400');
-        });
-    });
-})();
-</script>
+<span hidden data-widget-script="theme-social-social-share-default-0" data-v0="<?= htmlspecialchars((string)($esc($scope->uid)), ENT_QUOTES, 'UTF-8') ?>" data-v1="<?= htmlspecialchars((string)(json_encode((string)__('请使用微信扫描二维码分享'), $jsonForScriptFlags)), ENT_QUOTES, 'UTF-8') ?>"></span>

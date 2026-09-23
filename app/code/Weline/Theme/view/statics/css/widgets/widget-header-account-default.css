@@ -1,0 +1,296 @@
+.wc-theme_widget_account {
+    position: relative;
+}
+
+.wc-theme_widget_account .account-link {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2);
+    text-decoration: none;
+    color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, inherit));
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border-radius: var(--weline-radius-md);
+    border: var(--border-width-thin, 1px) solid transparent;
+    transition: background-color var(--weline-theme-transition-base), border-color var(--weline-theme-transition-base);
+}
+
+.wc-theme_widget_account .account-link:hover {
+    background-color: var(--color-on-dark-soft, var(--weline-theme-surface-muted));
+    border-color: var(--weline-chrome-text-light, transparent);
+}
+
+.wc-theme_widget_account .account-avatar {
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.wc-theme_widget_account .account-avatar img,
+.wc-theme_widget_account .account-avatar__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.wc-theme_widget_account .account-avatar__img[hidden],
+.wc-theme_widget_account .account-avatar__fallback[hidden] {
+    display: none !important;
+}
+
+.wc-theme_widget_account .account-avatar__fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.wc-theme_widget_account .account-name {
+    font-weight: 500;
+    max-width: var(--token-size-100px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wc-theme_widget_account .account-text {
+    display: flex;
+    flex-direction: column;
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.3;
+}
+
+.wc-theme_widget_account .account-menu-signal-badge,
+.account-menu-signal-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    margin-left: 0.35rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: #b12704;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.wc-theme_widget_account .account-menu-signal-badge[hidden],
+.account-menu-signal-badge[hidden] {
+    display: none !important;
+}
+
+.wc-theme_widget_account .login-text {
+    font-weight: 400;
+    font-size: var(--weline-font-size-xs);
+    color: var(--weline-chrome-text-light-secondary, var(--weline-theme-text-muted));
+    max-width: var(--token-size-100px, 7.5rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wc-theme_widget_account .register-text {
+    color: var(--weline-chrome-text-light, var(--weline-theme-text));
+    font-size: var(--weline-font-size-sm);
+    font-weight: 700;
+}
+
+.wc-theme_widget_account .account-logged-in {
+    position: relative;
+}
+
+.wc-theme_widget_account .account-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: var(--size-panel-220);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-lg);
+    box-shadow: var(--weline-theme-shadow-lg);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(var(--spacing-2_5));
+    transition: opacity var(--weline-theme-transition-base),
+        visibility var(--weline-theme-transition-base),
+        transform var(--weline-theme-transition-base);
+    z-index: 1000;
+    /* Visual gap only; ::before keeps :hover while the pointer crosses it. */
+    margin-top: var(--weline-space-3);
+    /* Isolate from header chrome light text (inherit white on dark). */
+    color: var(--weline-theme-text);
+}
+
+/* Invisible hit bridge across margin-top so the menu does not dismiss mid-move. */
+.wc-theme_widget_account .account-dropdown::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--weline-space-3);
+}
+
+.wc-theme_widget_account .account-logged-in:hover .account-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.wc-theme_widget_account .dropdown-header {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-4) var(--weline-space-5);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    background: var(--weline-theme-surface-muted);
+    border-radius: var(--weline-radius-lg) var(--weline-radius-lg) 0 0;
+}
+
+.wc-theme_widget_account .dropdown-header .account-avatar--menu {
+    flex: 0 0 auto;
+    width: var(--size-control-md, 2.5rem);
+    height: var(--size-control-md, 2.5rem);
+    color: var(--weline-theme-text-muted);
+    background: var(--weline-theme-surface-raised);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+}
+
+.wc-theme_widget_account .dropdown-header__copy {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.wc-theme_widget_account .welcome-text {
+    display: block;
+    font-size: var(--weline-font-size-xs);
+    color: var(--weline-theme-text-muted);
+}
+
+.wc-theme_widget_account .user-name {
+    display: block;
+    font-weight: 600;
+    font-size: var(--weline-font-size-base);
+    color: var(--weline-theme-text);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/*
+ * theme.css 全局 .dropdown-menu { display:none } 面向 .dropdown/.w-dropdown 触发器。
+ * 本部件由 .account-logged-in:hover 展开外层面板，内层 ul 必须常显，否则只剩「欢迎回来」头。
+ */
+.wc-theme_widget_account .account-dropdown .dropdown-menu,
+.wc-theme_widget_account .account-dropdown .account-dropdown-menu {
+    display: block;
+    position: static;
+    inset: auto;
+    top: auto;
+    z-index: auto;
+    list-style: none;
+    margin: 0;
+    min-width: 0;
+    width: 100%;
+    padding: var(--weline-space-2) 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* Beat .weline-header .header-user-area a/:visited { color: inherit } (chrome light). */
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a,
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a:link,
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a:visited {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-5);
+    color: var(--weline-theme-text);
+    text-decoration: none;
+    transition: background-color var(--weline-theme-transition-base),
+        color var(--weline-theme-transition-base);
+}
+
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a:hover {
+    background-color: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-primary);
+}
+
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a.logout-link,
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a.logout-link:link,
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a.logout-link:visited,
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm],
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:link,
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:visited {
+    color: var(--weline-theme-danger);
+}
+
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a.logout-link:hover,
+.wc-theme_widget_account .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:hover {
+    background-color: var(--weline-theme-danger-surface);
+    color: var(--weline-theme-danger-hover);
+}
+
+.wc-theme_widget_account .dropdown-menu .divider {
+    height: var(--spacing-px);
+    background: var(--weline-theme-border);
+    margin: var(--weline-space-2) 0;
+}
+
+.wc-theme_widget_account [data-account-menu-auth][hidden],
+.wc-theme_widget_account [data-account-menu-auth].is-account-menu-hidden {
+    display: none !important;
+}
+
+/* 仅部件库小画布压缩；整页 theme-preview 必须保留 hover 下拉（与店面一致）。 */
+.widget-preview-canvas .wc-theme_widget_account .account-dropdown {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .wc-theme_widget_account .account-link {
+        color: inherit;
+        padding: var(--spacing-1_5) var(--spacing-0_4);
+        min-height: var(--size-control-lg);
+        gap: var(--spacing-0_4);
+    }
+
+    .wc-theme_widget_account .account-avatar {
+        width: var(--size-control-xs);
+        height: var(--size-control-xs);
+        background: transparent;
+        color: inherit;
+    }
+
+    .wc-theme_widget_account .account-text {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--token-size-0-15rem);
+    }
+
+    .wc-theme_widget_account .register-text {
+        display: none;
+    }
+
+    .wc-theme_widget_account .login-text::after {
+        content: " ›";
+        font-weight: 700;
+    }
+
+    .wc-theme_widget_account .account-dropdown {
+        display: none;
+    }
+}

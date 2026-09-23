@@ -5,6 +5,16 @@ use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector;
 final class WidgetAssetPositionTest extends TestCase
 {
+    public function testSelectedDesignTemplateKeepsItsAssetsAlongsideExplicitSources(): void
+    {
+        $path = BP . 'app/design/Weline/hanfu/frontend/widgets/container/footer/default.phtml';
+        $html = (new \Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer())->render(
+            ['type' => 'container', 'code' => 'footer'],
+            ['_source' => 'Weline_Theme::js/widgets/widget-assets-runtime.js'], $path,
+        );
+        self::assertStringContainsString('widget-hanfu-container-footer-default-0.js', $html);
+        self::assertStringContainsString('widget-assets-runtime.js', $html);
+    }
     public function testLayoutWinsEvenWhenSourceWasSeenFirst(): void
     {
         $c = new ThemeLayoutEntityAssetCollector(null);

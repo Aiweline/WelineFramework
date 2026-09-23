@@ -74,6 +74,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'function handleClearThemeCache(',
             'function openResetDraftModal(',
             'function executeResetDraftResources(',
+            'function setEditorBusy(',
             'function publishTheme(',
             'function initializeEditorLock(',
         ] as $capability) {

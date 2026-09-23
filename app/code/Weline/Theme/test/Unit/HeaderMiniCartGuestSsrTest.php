@@ -84,7 +84,9 @@ final class HeaderMiniCartGuestSsrTest extends TestCase
     private function assertNeutralLiveMarkup(string $html): void
     {
         self::assertStringContainsString('data-cart-count="0"', $html);
-        self::assertStringContainsString('data-cart-subtotal="$0.00"', $html);
+        // WO-BUILD-OPS-02-HOME：空车共享 SSR 不得露出 $0.00 价签噪声
+        self::assertStringContainsString('data-cart-subtotal=""', $html);
+        self::assertStringNotContainsString('$0.00', $html);
         self::assertStringNotContainsString('$182.00', $html);
         self::assertStringNotContainsString('private-cart-line', $html);
         self::assertStringContainsString('data-demo-chrome="0"', $html);

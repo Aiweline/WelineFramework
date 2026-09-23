@@ -17,6 +17,52 @@ final class HeaderNavFragment
 {
     private const MEGA_PANEL_TEMPLATE = 'Weline_Theme::theme/frontend/partials/header/mega-menu-panel.phtml';
     private const SIDEBAR_NAV_TEMPLATE = 'Weline_Theme::theme/frontend/partials/header/categories-sidebar-nav.phtml';
+    private const HORIZONTAL_NAV_TEMPLATE = 'Weline_Theme::theme/frontend/partials/header/categories-horizontal-nav.phtml';
+
+    /**
+     * Cached full horizontal category strip (links + mega panels). Collapses the
+     * serial mega-panel waterfall into one headerNavigationPolicy bag.
+     *
+     * @param array<string, mixed> $params
+     */
+    public static function fetchCategoriesHorizontalNav(Template $template, array $params): string
+    {
+        $items = \is_array($params['items'] ?? null) ? $params['items'] : [];
+        $showBannerWithChildren = self::coerceBool($params['show_banner_with_children'] ?? true, true);
+        if ($items === [] || self::shouldBypass($template)) {
+            return (string)RequestLifecycleTrace::measurePhase(
+                'theme.header.horizontal.render',
+                static fn(): string => (string)$template->fetch(self::HORIZONTAL_NAV_TEMPLATE, $params),
+                [
+                    'items' => \count($items),
+                    'cache' => 'bypass',
+                ],
+            );
+        }
+
+        /** @var StorefrontHeaderNavFragmentCache $cache */
+        $cache = ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class);
+
+        return (string)RequestLifecycleTrace::measurePhase(
+            'theme.header.horizontal.cache',
+            static fn(): string => $cache->rememberCategoriesHorizontalNav(
+                $items,
+                $showBannerWithChildren,
+                static fn(): string => (string)RequestLifecycleTrace::measurePhase(
+                    'theme.header.horizontal.render',
+                    static fn(): string => (string)$template->fetch(self::HORIZONTAL_NAV_TEMPLATE, $params),
+                    [
+                        'items' => \count($items),
+                        'cache' => 'miss',
+                    ],
+                ),
+            ),
+            [
+                'items' => \count($items),
+                'banner' => $showBannerWithChildren,
+            ],
+        );
+    }
 
     /**
      * @param array<string, mixed> $params

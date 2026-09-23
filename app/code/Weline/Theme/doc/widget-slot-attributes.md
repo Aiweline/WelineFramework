@@ -147,3 +147,7 @@
          data-wslot-multiple="true">
 </section>
 ```
+
+## 部件资源属性
+
+`w:widget` 的 `layout-source` / `source` 与资源位置属性 `source-postion`（优先）/ `source-position` 不属于槽放置属性；注册元数据位置为 `@widget.source_position`。默认 head，body/end-body 为 body 末尾，footer 为 footer 结束前（无 footer 落 body 末尾）；layout-source 固定提前 head。完整契约与禁止内联要求见 [部件静态资源固化规范.md](./部件静态资源固化规范.md)。

@@ -1,0 +1,17 @@
+{
+  "checked_at": "2026-09-23T09:20:51.727Z",
+  "template_count": 187,
+  "changed_templates": [
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/category/category-list/default.phtml",
+      "sha256": "ee73f69f586ec4703311b39f37e0b31d0d41670edc8d4b4e093b4efc957fe1d4"
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/navigation/category-menu/default.phtml",
+      "sha256": "2e241af13bf584af7228799b4b1a8630236843f62aac34ba6405fab08aa402e6"
+    }
+  ],
+  "missing_templates": [],
+  "missing_assets": [],
+  "inline_findings": []
+}

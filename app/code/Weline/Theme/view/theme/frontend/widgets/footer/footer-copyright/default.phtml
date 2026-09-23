@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-footer-footer-copyright-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 页脚版权部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -51,7 +52,7 @@ $copyrightText = str_replace(['{year}', '{site_name}'], [date('Y'), $siteName], 
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="--wc-copyright-text: <?= $esc($textColor) ?>;">
+         data-widget-style="--wc-copyright-text: <?= $esc($textColor) ?>;">
     <div class="copyright-text"><?= $esc($copyrightText) ?></div>
     <?php if ($icpNumber !== '' || $policeNumber !== '' || $additionalText !== ''): ?>
         <div class="copyright-links">
@@ -71,50 +72,3 @@ $copyrightText = str_replace(['{year}', '{site_name}'], [date('Y'), $siteName], 
     <?php endif; ?>
 </section>
 
-<style>
-.<?= $wc ?> {
-    text-align: center;
-    padding: var(--weline-space-5) 0;
-    font-size: var(--weline-font-size-sm);
-    color: var(--wc-copyright-text);
-}
-
-.<?= $wc ?> .copyright-text {
-    margin-bottom: var(--weline-space-3);
-}
-
-.<?= $wc ?> .copyright-links {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: var(--weline-space-5);
-}
-
-.<?= $wc ?> .copyright-links a {
-    color: var(--wc-copyright-text);
-    text-decoration: none;
-    transition: color var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .copyright-links a:hover,
-.<?= $wc ?> .copyright-links a:focus-visible {
-    color: var(--weline-theme-text-on-dark);
-}
-
-.<?= $wc ?> .police-link {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-1);
-}
-
-.<?= $wc ?> .police-icon {
-    width: var(--spacing-md);
-    height: var(--spacing-md);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3) 0;
-    font-size: var(--weline-font-size-xs);
-}
-</style>

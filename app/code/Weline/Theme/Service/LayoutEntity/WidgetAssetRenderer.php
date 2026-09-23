@@ -11,10 +11,11 @@ final class WidgetAssetRenderer
     public function render(array $widget, array $config = [], string $templatePath = ''): string
     {
         $meta = array_merge(is_array($widget['config'] ?? null) ? $widget['config'] : [], $widget);
+        $selectedAssets = [];
         $path = $templatePath ?: (string)($widget['template'] ?? $widget['template_path'] ?? '');
         if ($path !== '') {
             try {
-                $file = is_file($path) ? $path : ObjectManager::getInstance(Template::class)->getTemplateRealPath($path);
+                $file = is_file($path) ? $path : (ObjectManager::getInstance(Template::class)->convertFetchFileName($path)[1] ?? '');
                 if (is_string($file) && is_file($file)) {
                     // Read the selected template, so design overrides keep their own dependencies.
                     $head = (string)file_get_contents($file, false, null, 0, 16384);
@@ -22,6 +23,7 @@ final class WidgetAssetRenderer
                         $pattern = $key === 'source_position' ? 'source[_-](?:postion|position)' : $key;
                         if (preg_match('/@widget\.' . $pattern . '\s*\{([^}]+)\}/', $head, $m) === 1) {
                             $meta[$key] = trim($m[1]);
+                            $selectedAssets[$key] = $meta[$key];
                         }
                     }
                 }
@@ -32,14 +34,19 @@ final class WidgetAssetRenderer
         $node = [
             'widget_type' => $widget['type'] ?? '',
             'widget_code' => $widget['code'] ?? '',
-            'layout_source' => $config['_layout_source'] ?? $meta['layout_source'] ?? '',
-            'source' => $config['_source'] ?? $meta['source'] ?? '',
+            'layout_source' => implode(',', array_filter([$selectedAssets['layout_source'] ?? '', $config['_layout_source'] ?? $meta['layout_source'] ?? ''])),
+            'source' => implode(',', array_filter([$selectedAssets['source'] ?? '', $config['_source'] ?? $meta['source'] ?? ''])),
             'source_position' => $config['_source_position'] ?? $meta['source-postion'] ?? $meta['source-position'] ?? $meta['source_position'] ?? 'head',
         ];
         $collector = new ThemeLayoutEntityAssetCollector(null);
         $html = $collector->emitHtml($collector->collectFromNodes([$node]));
         return $html . $this->descriptor($html);
     }
+    public function wrap(string $html, string $assets): string
+    {
+        return '<!--weline-widget:start-->' . $assets . $html . '<!--weline-widget:end-->';
+    }
+
     public function descriptor(string $html): string
     {
         $items = [];

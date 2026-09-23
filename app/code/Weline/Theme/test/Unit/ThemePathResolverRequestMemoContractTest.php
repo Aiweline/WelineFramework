@@ -6,21 +6,31 @@ namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
-use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Helper\ThemePathResolver;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Observer\TemplateFetchFile;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\ThemeDirectoryResolver;
 
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+\defined('BP') || \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
+\defined('APP_PATH') || \define('APP_PATH', BP . 'app' . DS);
+\defined('APP_CODE_PATH') || \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
+
 /**
- * P1：模板路径解析仅请求内 rememberForRequest memo，禁止平行私袋升格为跨请求永久 static。
+ * wave4-4b：模板路径解析升格 CachePolicy rememberPolicy(deps=theme)；禁平行 static。
  */
 final class ThemePathResolverRequestMemoContractTest extends TestCase
 {
     private mixed $originalDirectoryResolver = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        StorefrontScopeHotCache::resetProcessCache();
+    }
 
     protected function tearDown(): void
     {
@@ -30,25 +40,29 @@ final class ThemePathResolverRequestMemoContractTest extends TestCase
         } else {
             ObjectManager::removeInstance(ThemeDirectoryResolver::class);
         }
-        if (Context::hasCurrent()) {
-            RequestContext::cleanup();
-            Context::leave();
-        }
+        StorefrontScopeHotCache::resetProcessCache();
         parent::tearDown();
     }
 
-    public function testSourceUsesRememberForRequestOnly(): void
+    public function testSourceUsesRememberPolicyWithThemeDeps(): void
     {
         $src = (string)file_get_contents(
             dirname(__DIR__, 2) . '/Helper/ThemePathResolver.php'
         );
 
-        self::assertStringContainsString('rememberForRequest', $src);
+        self::assertStringContainsString('rememberPolicy(', $src);
+        self::assertStringContainsString('themePathResolvePolicy()', $src);
         self::assertStringContainsString('theme.path.resolve', $src);
         self::assertStringContainsString('StorefrontScopeHotCache', $src);
-        self::assertStringContainsString('Context::hasCurrent()', $src);
         self::assertStringNotContainsString('private static array $', $src);
-        self::assertStringNotContainsString('rememberPolicy(', $src);
+        self::assertStringNotContainsString('rememberForRequest(', $src);
+
+        $policy = StorefrontThemeCacheCoordinator::themePathResolvePolicy();
+        self::assertSame('theme.path.resolve', $policy->resource);
+        self::assertSame(StorefrontThemeCacheCoordinator::THEME_PATH_RESOLVE_POOL, $policy->pool);
+        self::assertSame('global', $policy->scope);
+        self::assertSame([], $policy->vary);
+        self::assertSame(['theme'], $policy->dependencies);
     }
 
     public function testTemplateFetchFileReusesPathResolver(): void
@@ -67,15 +81,8 @@ final class ThemePathResolverRequestMemoContractTest extends TestCase
         self::assertTrue(class_exists(TemplateFetchFile::class));
     }
 
-    public function testSameRequestSecondResolveDoesNotRescanDirectoryResolver(): void
+    public function testSecondResolveHitsPolicyWithoutRescan(): void
     {
-        if (Context::hasCurrent()) {
-            RequestContext::cleanup();
-            Context::leave();
-        }
-        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]));
-        RequestContext::setId('theme-path-memo-contract');
-
         $counter = new ThemePathResolverDirectoryResolveCounter();
         $instances = ObjectManager::getInstances();
         $this->originalDirectoryResolver = $instances[ThemeDirectoryResolver::class] ?? null;
@@ -87,7 +94,7 @@ final class ThemePathResolverRequestMemoContractTest extends TestCase
 
         $theme = new WelineTheme();
         $theme->setData(WelineTheme::schema_fields_ID, 42);
-        $theme->setData(WelineTheme::schema_fields_PATH, sys_get_temp_dir() . DS . 'weline-theme-path-memo' . DS);
+        $theme->setData(WelineTheme::schema_fields_PATH, sys_get_temp_dir() . DS . 'weline-theme-path-policy' . DS);
 
         $modulePath = APP_CODE_PATH . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS
             . 'frontend' . DS . 'partials' . DS . 'header' . DS . 'default.phtml';
@@ -96,16 +103,11 @@ final class ThemePathResolverRequestMemoContractTest extends TestCase
         $second = $resolver->resolveThemeFile($modulePath, $theme);
 
         self::assertSame($first, $second);
-        self::assertSame(1, $counter->calls, 'Second resolve in the same request must hit rememberForRequest memo.');
+        self::assertSame(1, $counter->calls, 'Second resolve must hit rememberPolicy L1/L2.');
     }
 
-    public function testWithoutContextSkipsRequestMemoAndRescans(): void
+    public function testWithoutThemeIdSkipsPolicyAndRescans(): void
     {
-        if (Context::hasCurrent()) {
-            RequestContext::cleanup();
-            Context::leave();
-        }
-
         $counter = new ThemePathResolverDirectoryResolveCounter();
         $instances = ObjectManager::getInstances();
         $this->originalDirectoryResolver = $instances[ThemeDirectoryResolver::class] ?? null;
@@ -116,8 +118,7 @@ final class ThemePathResolverRequestMemoContractTest extends TestCase
         $resolver = new ThemePathResolver($chain, $hotCache);
 
         $theme = new WelineTheme();
-        $theme->setData(WelineTheme::schema_fields_ID, 7);
-        $theme->setData(WelineTheme::schema_fields_PATH, sys_get_temp_dir() . DS . 'weline-theme-path-memo' . DS);
+        $theme->setData(WelineTheme::schema_fields_PATH, sys_get_temp_dir() . DS . 'weline-theme-path-policy' . DS);
 
         $modulePath = APP_CODE_PATH . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS
             . 'frontend' . DS . 'partials' . DS . 'header' . DS . 'default.phtml';
@@ -126,7 +127,7 @@ final class ThemePathResolverRequestMemoContractTest extends TestCase
         $resolver->resolveThemeFile($modulePath, $theme);
 
         self::assertSame(2, $counter->calls);
-        self::assertFalse(Context::hasCurrent());
+        self::assertFalse((bool)$theme->getId());
     }
 }
 

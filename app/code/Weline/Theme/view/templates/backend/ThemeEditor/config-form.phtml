@@ -228,12 +228,19 @@ $legacyImagePreview = static function (mixed $raw) use ($normalizeFileImageNode)
                         if ($imageTolerance !== '') {
                             $block['aspect_ratio_tolerance'] = $imageTolerance;
                         }
-                        $obLevel = ob_get_level();
+                        $obLevel = \ob_get_level();
                         try {
                             $renderedPicker = (string)framework_view_process_block($block);
                         } catch (\Throwable) {
-                            while (ob_get_level() > $obLevel) {
-                                ob_end_clean();
+                            // WLS: never while-drain past Fiber installed handler (cross-fiber truncation).
+                            if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
+                                if (\Weline\Framework\Runtime\FiberOutputBuffer::hasActiveCapture()) {
+                                    \Weline\Framework\Runtime\FiberOutputBuffer::resetCurrent();
+                                }
+                            } else {
+                                while (\ob_get_level() > $obLevel) {
+                                    \ob_end_clean();
+                                }
                             }
                             $renderedPicker = '';
                         }

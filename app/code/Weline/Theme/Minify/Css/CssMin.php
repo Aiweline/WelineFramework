@@ -111,8 +111,10 @@ final class CssMin
                 }
                 $following = $j < $length ? $css[$j] : '';
                 if ($prev !== '' && $following !== ''
-                    && !self::isSafeCollapseBoundary($prev)
-                    && !self::isSafeCollapseBoundary($following)
+                    // CSS math requires whitespace around binary + and -, even beside parentheses.
+                    && (str_contains('+-', $prev) || str_contains('+-', $following)
+                        || (!self::isSafeCollapseBoundary($prev)
+                            && !self::isSafeCollapseBoundary($following)))
                 ) {
                     $out .= ' ';
                 }

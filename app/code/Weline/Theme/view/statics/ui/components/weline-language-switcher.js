@@ -1214,7 +1214,10 @@ export function register(UI) {
             listen(requestButton, 'click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                UI.get(root, 'menu')?.close(false, 'language-request');
+                const menu = UI.get(root, 'menu');
+                if (typeof menu?.close === 'function') {
+                    menu.close(false, 'language-request');
+                }
                 UI.dialog.open(requestDialog);
                 loadRequestForm();
             });

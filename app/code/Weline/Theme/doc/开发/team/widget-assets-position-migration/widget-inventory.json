@@ -1,0 +1,3667 @@
+{
+  "schema": "widget-assets-migration-inventory.v1",
+  "scope": {
+    "module_widget_templates": 166,
+    "active_design_overrides": 8,
+    "indirect_partials": 13,
+    "historical_doc_templates_excluded": true
+  },
+  "remaining_inline": [],
+  "templates": [
+    {
+      "template": "app/code/Weline/Affiliate/view/templates/frontend/widgets/affiliate-center.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Affiliate/view/templates/frontend/widgets/footer-promote-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/B2B/view/templates/Backend/widgets/backend-order-chat.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_B2B::css/b2b-storefront.css",
+          "Weline_B2B::css/widgets/widget-backend-order-chat.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_B2B::css/widgets/widget-backend-order-chat.css",
+          "path": "app/code/Weline/B2B/view/statics/css/widgets/widget-backend-order-chat.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/B2B/view/templates/frontend/partials/qty-tiers.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/B2B/view/templates/frontend/widgets/checkout-tob-deposit-note.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_B2B::css/b2b-storefront.css",
+          "Weline_B2B::css/widgets/widget-checkout-tob-deposit-note.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_B2B::css/widgets/widget-checkout-tob-deposit-note.css",
+          "path": "app/code/Weline/B2B/view/statics/css/widgets/widget-checkout-tob-deposit-note.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/B2B/view/templates/frontend/widgets/checkout-tob-order-note.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_B2B::css/b2b-storefront.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_B2B::css/widgets/widget-selling-mode-switcher.css",
+          "Weline_B2B::css/b2b-storefront.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_B2B::css/widgets/widget-selling-mode-switcher.css",
+          "path": "app/code/Weline/B2B/view/statics/css/widgets/widget-selling-mode-switcher.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Blog/view/templates/frontend/widgets/blog-reviews.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Review::css/widgets/product-reviews.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Blog/view/templates/frontend/widgets/footer-blog-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Blog/view/templates/frontend/widgets/footer-news-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Blog/view/templates/frontend/widgets/header-blog-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Cart/view/templates/frontend/widgets/cart-storefront-slots.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Cart/view/templates/frontend/widgets/product-add-to-cart.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Cart/view/templates/frontend/widgets/product-card-add-to-cart.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Checkout/view/templates/frontend/widgets/checkout-storefront-slots.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Checkout/view/templates/frontend/widgets/product-buy-now.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Checkout/view/templates/frontend/widgets/product-card-buy-now.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Checkout/view/theme/frontend/widgets/header/checkout-delivery-context/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Checkout::js/widgets/widget-header-checkout-delivery-context-default-0.js"
+        ],
+        "layout_source": [
+          "Weline_Checkout::css/widgets/widget-header-checkout-delivery-context-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Checkout::js/widgets/widget-header-checkout-delivery-context-default-0.js",
+          "path": "app/code/Weline/Checkout/view/statics/js/widgets/widget-header-checkout-delivery-context-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Checkout::css/widgets/widget-header-checkout-delivery-context-default.css",
+          "path": "app/code/Weline/Checkout/view/statics/css/widgets/widget-header-checkout-delivery-context-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Currency/view/templates/Frontend/widgets/footer-currency-rates-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/account/challenge.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/account/login.phtml",
+      "kind": "indirect-partial",
+      "declarations": {
+        "source": [
+          "Weline_Customer::css/widgets/widget-account-login.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Customer::css/widgets/widget-account-login.css",
+          "path": "app/code/Weline/Customer/view/statics/css/widgets/widget-account-login.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/account/register.phtml",
+      "kind": "indirect-partial",
+      "declarations": {
+        "source": [
+          "Weline_Customer::css/widgets/widget-account-register.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Customer::js/widgets/widget-account-register-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Customer::css/widgets/widget-account-register.css",
+          "path": "app/code/Weline/Customer/view/statics/css/widgets/widget-account-register.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Customer::js/widgets/widget-account-register-0.js",
+          "path": "app/code/Weline/Customer/view/statics/js/widgets/widget-account-register-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/widgets/account-social-login.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Customer::css/widgets/widget-account-social-login.css",
+          "Weline_Customer::js/account-social-quick.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Customer::css/widgets/widget-account-social-login.css",
+          "path": "app/code/Weline/Customer/view/statics/css/widgets/widget-account-social-login.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/widgets/checkout-success-guest-convert.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Customer::css/widgets/widget-checkout-success-guest-convert.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Customer::js/widgets/widget-checkout-success-guest-convert-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Customer::css/widgets/widget-checkout-success-guest-convert.css",
+          "path": "app/code/Weline/Customer/view/statics/css/widgets/widget-checkout-success-guest-convert.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Customer::js/widgets/widget-checkout-success-guest-convert-0.js",
+          "path": "app/code/Weline/Customer/view/statics/js/widgets/widget-checkout-success-guest-convert-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/widgets/footer-my-account-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/widgets/footer-my-orders-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Customer/view/templates/frontend/widgets/footer-social-login-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/CustomerService/view/templates/Frontend/widgets/footer-contact-service-link.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_CustomerService::js/widgets/widget-footer-contact-service-link-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_CustomerService::js/widgets/widget-footer-contact-service-link-0.js",
+          "path": "app/code/Weline/CustomerService/view/statics/js/widgets/widget-footer-contact-service-link-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/CustomerService/view/templates/Frontend/widgets/header-contact-service-link.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_CustomerService::js/widgets/widget-header-contact-service-link-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_CustomerService::js/widgets/widget-header-contact-service-link-0.js",
+          "path": "app/code/Weline/CustomerService/view/statics/js/widgets/widget-header-contact-service-link-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Dashboard/view/templates/dashboard/widgets/activity-trend.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Dashboard/view/templates/dashboard/widgets/detail-snapshot.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Dashboard::css/widgets/widget-detail-snapshot.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Dashboard::css/widgets/widget-detail-snapshot.css",
+          "path": "app/code/Weline/Dashboard/view/statics/css/widgets/widget-detail-snapshot.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Dashboard/view/templates/dashboard/widgets/overview-kpi.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Dashboard::css/widgets/widget-overview-kpi.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Dashboard::css/widgets/widget-overview-kpi.css",
+          "path": "app/code/Weline/Dashboard/view/statics/css/widgets/widget-overview-kpi.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Dashboard/view/templates/dashboard/widgets/system-status.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Dashboard::css/widgets/widget-system-status.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Dashboard::css/widgets/widget-system-status.css",
+          "path": "app/code/Weline/Dashboard/view/statics/css/widgets/widget-system-status.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Dropship/view/templates/dashboard/widgets/dropship-overview.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Faq/view/templates/frontend/widgets/product-faq.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Faq::css/widgets/widget-product-faq.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Faq::css/widgets/widget-product-faq.css",
+          "path": "app/code/Weline/Faq/view/statics/css/widgets/widget-product-faq.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Filters/view/templates/frontend/widgets/category-filters.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Filters::css/widgets/widget-category-filters.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Filters::css/widgets/widget-category-filters.css",
+          "path": "app/code/Weline/Filters/view/statics/css/widgets/widget-category-filters.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/HelpPay/view/templates/frontend/widgets/cart-summary-help-pay.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/HelpPay/view/templates/frontend/widgets/checkout-summary-help-pay.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/HelpPay/view/templates/frontend/widgets/help-pay-share-result.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/HelpPay/view/templates/frontend/widgets/product-help-pay.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/HelpPay/view/templates/frontend/widgets/product-quick-pay.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/HelpPay/view/templates/frontend/widgets/product-selection-share.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Inquiry/view/templates/widgets/inquiry-form.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Mail/view/templates/frontend/widgets/account-mail-register.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Mail::js/widgets/widget-account-mail-register-0.js",
+          "Weline_Mail::css/widgets/widget-account-mail-register.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Mail::js/widgets/widget-account-mail-register-0.js",
+          "path": "app/code/Weline/Mail/view/statics/js/widgets/widget-account-mail-register-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Mail::css/widgets/widget-account-mail-register.css",
+          "path": "app/code/Weline/Mail/view/statics/css/widgets/widget-account-mail-register.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Marketing/view/templates/frontend/widgets/cart-progress.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Marketing::css/widgets/widget-cart-progress.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Marketing::css/widgets/widget-cart-progress.css",
+          "path": "app/code/Weline/Marketing/view/statics/css/widgets/widget-cart-progress.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Marketing/view/templates/frontend/widgets/checkout-coupon.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Marketing::css/widgets/checkout-coupon.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Marketing/view/templates/frontend/widgets/footer-campaign-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Marketing/view/templates/frontend/widgets/mini-cart-coupon.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Marketing::css/widgets/checkout-coupon.css",
+          "Weline_Marketing::css/widgets/mini-cart-coupon.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Marketing/view/templates/frontend/widgets/welcome-gift.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Newsletter/view/templates/frontend/widgets/footer-newsletter/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Newsletter::css/widgets/widget-footer-newsletter-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Newsletter::css/widgets/widget-footer-newsletter-default.css",
+          "path": "app/code/Weline/Newsletter/view/statics/css/widgets/widget-footer-newsletter-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Newsletter/view/templates/frontend/widgets/newsletter-popup/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Newsletter::css/widgets/widget-newsletter-popup-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Newsletter::css/widgets/widget-newsletter-popup-default.css",
+          "path": "app/code/Weline/Newsletter/view/statics/css/widgets/widget-newsletter-popup-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Newsletter/view/templates/frontend/widgets/sidebar-newsletter/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Newsletter::css/widgets/widget-sidebar-newsletter-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Newsletter::css/widgets/widget-sidebar-newsletter-default.css",
+          "path": "app/code/Weline/Newsletter/view/statics/css/widgets/widget-sidebar-newsletter-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Order/view/templates/frontend/widgets/order-notice.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Order::css/widgets/order-notice.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Payment/view/templates/Backend/partials/outcome-chip.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Payment/view/templates/Backend/widgets/backend-order-payment-records.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Payment::css/widgets/widget-backend-order-payment-records.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Payment::css/widgets/widget-backend-order-payment-records.css",
+          "path": "app/code/Weline/Payment/view/statics/css/widgets/widget-backend-order-payment-records.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/checkout-express-payment.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Payment::css/widgets/widget-checkout-express-payment.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Payment::js/widgets/widget-checkout-express-payment-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Payment::css/widgets/widget-checkout-express-payment.css",
+          "path": "app/code/Weline/Payment/view/statics/css/widgets/widget-checkout-express-payment.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Payment::js/widgets/widget-checkout-express-payment-0.js",
+          "path": "app/code/Weline/Payment/view/statics/js/widgets/widget-checkout-express-payment-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/footer-payment-methods-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/product-express-payment.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Payment::css/widgets/widget-product-express-payment.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Payment::css/widgets/widget-product-express-payment.css",
+          "path": "app/code/Weline/Payment/view/statics/css/widgets/widget-product-express-payment.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/partials/product-card.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/widgets/best-sellers-hero.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Product::css/widgets/widget-best-sellers-hero.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Product::css/widgets/widget-best-sellers-hero.css",
+          "path": "app/code/Weline/Product/view/statics/css/widgets/widget-best-sellers-hero.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/widgets/cross-sell.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Product::css/widgets/cross-sell.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Product::css/widgets/product-native-detail.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Product::js/widgets/widget-product-info-0.js",
+          "Weline_Product::js/widgets/widget-product-info-1.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Product::js/widgets/widget-product-info-0.js",
+          "path": "app/code/Weline/Product/view/statics/js/widgets/widget-product-info-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Product::js/widgets/widget-product-info-1.js",
+          "path": "app/code/Weline/Product/view/statics/js/widgets/widget-product-info-1.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/widgets/recommended-products.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Product::css/widgets/recommended-products.css",
+          "Weline_Product::css/frontend/product-card.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/widgets/related-products.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Product::css/widgets/related-products.css",
+          "Weline_Product::css/frontend/product-card.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/widgets/textile-heritage.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Product/view/templates/frontend/widgets/you-may-like.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Product::css/widgets/you-may-like.css",
+          "Weline_Product::css/frontend/product-card.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Promotion/view/templates/frontend/widgets/header-deals-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/RecentlyViewed/view/templates/frontend/widgets/recently-viewed.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_RecentlyViewed::css/widgets/recently-viewed.css",
+          "Weline_Product::css/frontend/product-card.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Review/view/templates/frontend/widgets/product-reviews.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Review::css/widgets/product-reviews.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Shipping/view/hooks/Weline_Checkout/frontend/widgets/checkout-delivery-context/quick-add.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Shipping::css/widgets/widget-checkout-delivery-context-quick-add.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Shipping::css/widgets/widget-checkout-delivery-context-quick-add.css",
+          "path": "app/code/Weline/Shipping/view/statics/css/widgets/widget-checkout-delivery-context-quick-add.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Shipping/view/templates/Backend/widgets/backend-order-list-shipping.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Shipping::css/widgets/widget-backend-order-list-shipping.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Shipping::css/widgets/widget-backend-order-list-shipping.css",
+          "path": "app/code/Weline/Shipping/view/statics/css/widgets/widget-backend-order-list-shipping.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Shipping/view/templates/Backend/widgets/backend-order-shipments.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Shipping::css/widgets/widget-backend-order-shipments.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Shipping::css/widgets/widget-backend-order-shipments.css",
+          "path": "app/code/Weline/Shipping/view/statics/css/widgets/widget-backend-order-shipments.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Shipping/view/templates/frontend/widgets/checkout-shipping-address.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Shipping::css/widgets/checkout-shipping-address.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Shipping/view/templates/frontend/widgets/footer-returns-policy-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Shipping/view/templates/frontend/widgets/footer-shipping-info-link.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/SiteSetupAssistant/view/templates/backend/widgets/site-setup-assistant-float.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_SiteSetupAssistant::css/widgets/widget-site-setup-assistant-float.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_SiteSetupAssistant::js/widgets/widget-site-setup-assistant-float-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_SiteSetupAssistant::css/widgets/widget-site-setup-assistant-float.css",
+          "path": "app/code/Weline/SiteSetupAssistant/view/statics/css/widgets/widget-site-setup-assistant-float.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_SiteSetupAssistant::js/widgets/widget-site-setup-assistant-float-0.js",
+          "path": "app/code/Weline/SiteSetupAssistant/view/statics/js/widgets/widget-site-setup-assistant-float-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Social/view/theme/frontend/widgets/social/social-accounts/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Social::css/widgets/widget-social-social-accounts-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Social::css/widgets/widget-social-social-accounts-default.css",
+          "path": "app/code/Weline/Social/view/statics/css/widgets/widget-social-social-accounts-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/StoreMusic/view/templates/frontend/widgets/store-music.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_StoreMusic::js/widgets/widget-store-music-0.js",
+          "Weline_StoreMusic::js/widgets/widget-store-music-1.js",
+          "Weline_StoreMusic::css/widgets/widget-store-music.css",
+          "Weline_StoreMusic::css/store-music.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_StoreMusic::js/widgets/widget-store-music-0.js",
+          "path": "app/code/Weline/StoreMusic/view/statics/js/widgets/widget-store-music-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_StoreMusic::js/widgets/widget-store-music-1.js",
+          "path": "app/code/Weline/StoreMusic/view/statics/js/widgets/widget-store-music-1.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_StoreMusic::css/widgets/widget-store-music.css",
+          "path": "app/code/Weline/StoreMusic/view/statics/css/widgets/widget-store-music.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Tax/view/templates/frontend/widgets/checkout-tax-identity.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Tax::css/widgets/widget-checkout-tax-identity.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Tax::js/widgets/widget-checkout-tax-identity-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Tax::css/widgets/widget-checkout-tax-identity.css",
+          "path": "app/code/Weline/Tax/view/statics/css/widgets/widget-checkout-tax-identity.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Tax::js/widgets/widget-checkout-tax-identity-0.js",
+          "path": "app/code/Weline/Tax/view/statics/js/widgets/widget-checkout-tax-identity-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/backend/widgets/data/form/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-data-form-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-data-form-default-0.js",
+          "Weline_Theme::js/widgets/widget-data-form-default-1.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-data-form-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-data-form-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-data-form-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-data-form-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-data-form-default-1.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-data-form-default-1.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/backend/widgets/data/list/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-data-list-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-data-list-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-data-list-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-data-list-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-data-list-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-data-list-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/components/product-label.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/components/social-profile-links.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/partials/product/add-to-cart.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/partials/product/labels.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/partials/product/shopper-actions.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/partials/search/header-bar.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/partials/search/type-dropdown.phtml",
+      "kind": "indirect-partial",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/banner/ad-banner/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css",
+          "Weline_Theme::css/widgets/widget-banner-ad-banner-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-banner-ad-banner-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-banner-ad-banner-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/banner/hero-banner/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/banner/hero-slider/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css",
+          "Weline_Theme::css/widgets/widget-banner-hero-slider-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-banner-hero-slider-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-banner-hero-slider-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/banner/promo-banner/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-banner-promo-banner-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-banner-promo-banner-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-banner-promo-banner-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/breadcrumb/breadcrumb/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-breadcrumb-breadcrumb-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-breadcrumb-breadcrumb-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-breadcrumb-breadcrumb-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/carousel/product-carousel/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-carousel-product-carousel-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-carousel-product-carousel-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-carousel-product-carousel-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-carousel-product-carousel-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-carousel-product-carousel-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-carousel-product-carousel-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/category/category-grid/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-category-category-grid-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-category-category-grid-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-category-category-grid-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/category/category-list/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-category-category-list-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-category-category-list-default-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-category-category-list-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-category-category-list-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-category-category-list-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-category-category-list-default-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/container/columns/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/container/content/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-container-content-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-container-content-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-container-content-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/container/footer/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/footer-chrome-amazon.css",
+          "Weline_Theme::css/widgets/widget-container-footer-default.css"
+        ],
+        "source": [
+          "Weline_Theme::css/widgets/footer-chrome-amazon.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-container-footer-default-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-container-footer-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-container-footer-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-container-footer-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-container-footer-default-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/container/header/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-container-header-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ],
+        "layout_source": [
+          "Weline_Theme::css/widgets/header-chrome-amazon.css",
+          "Weline_Theme::css/widgets/header-search-amazon.css",
+          "Weline_Theme::css/widgets/widget-container-header-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-container-header-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-container-header-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-container-header-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-container-header-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/brand-logos/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-content-brand-logos-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-content-brand-logos-default-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-content-brand-logos-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-content-brand-logos-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-content-brand-logos-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-content-brand-logos-default-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/button-group/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/card-grid/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/contact-info/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/countdown/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-content-countdown-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-content-countdown-default-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-content-countdown-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-content-countdown-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-content-countdown-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-content-countdown-default-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/feature-list/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/image-gallery/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/image-text/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-content-image-text-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-content-image-text-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-content-image-text-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/pricing-table/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/section-heading/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/single-image/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/spacer-divider/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/stat-grid/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/step-list/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/team-grid/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/text-block/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-content-text-block-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-content-text-block-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-content-text-block-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/textile-heritage/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/textile-heritage.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/content/trust-badges/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-content-trust-badges-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-content-trust-badges-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-content-trust-badges-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/faq/faq-accordion/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/footer/footer-copyright/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-footer-footer-copyright-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-footer-footer-copyright-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-footer-footer-copyright-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/footer/footer-faq-link/default.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/footer/footer-links/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-footer-footer-links-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-footer-footer-links-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-footer-footer-links-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/footer/footer-payment/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-footer-footer-payment-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-footer-footer-payment-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-footer-footer-payment-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/form/account-challenge/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/form/account-login/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Customer::css/widgets/widget-account-login.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Customer::css/widgets/widget-account-login.css",
+          "path": "app/code/Weline/Customer/view/statics/css/widgets/widget-account-login.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/form/account-register/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Customer::css/widgets/widget-account-register.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Customer::js/widgets/widget-account-register-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Customer::css/widgets/widget-account-register.css",
+          "path": "app/code/Weline/Customer/view/statics/css/widgets/widget-account-register.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Customer::js/widgets/widget-account-register-0.js",
+          "path": "app/code/Weline/Customer/view/statics/js/widgets/widget-account-register-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/account/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-account-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-account-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-account-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/currency-switcher/default.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/full-header/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-header-full-header-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ],
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-full-header-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-header-full-header-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-header-full-header-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-full-header-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-full-header-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/header-policy-links/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-header-policy-links-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-header-policy-links-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-header-policy-links-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/help-center-link/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-help-center-link-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-help-center-link-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-help-center-link-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/language-switcher/default.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/logo/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-header-logo-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Theme::js/widgets/widget-logo-fallback.js"
+        ],
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-logo-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-logo-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-logo-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-logo-fallback.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-logo-fallback.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-logo-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-logo-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/mini-cart-drawer.css",
+          "Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css"
+        ],
+        "source": [
+          "Weline_Theme::css/widgets/mini-cart-drawer.css",
+          "Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-mini-cart-icon-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-mini-cart-icon-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/notice-right-link/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-notice-right-link-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-notice-right-link-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-notice-right-link-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/order-tracking-link/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-order-tracking-link-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-order-tracking-link-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-order-tracking-link-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/header/top-bar/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-header-top-bar-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ],
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-header-top-bar-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-header-top-bar-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-header-top-bar-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-header-top-bar-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-header-top-bar-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/navigation/all-menu/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-navigation-all-menu-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-navigation-all-menu-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-navigation-all-menu-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/navigation/category-menu/default.phtml",
+      "kind": "widget-root",
+      "declarations": {},
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/navigation/main-nav/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Theme::css/widgets/widget-navigation-main-nav-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-navigation-main-nav-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-navigation-main-nav-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/pagination/pagination/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-pagination-pagination-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-pagination-pagination-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-pagination-pagination-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/product/bestsellers/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-product-bestsellers-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-product-bestsellers-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-product-bestsellers-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/product/cross-sell/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-product-cross-sell-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-product-cross-sell-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-product-cross-sell-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-product-cross-sell-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-product-cross-sell-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-product-cross-sell-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/product/deals-of-day/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-product-deals-of-day-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-product-deals-of-day-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-product-deals-of-day-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-product-deals-of-day-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-product-deals-of-day-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-product-deals-of-day-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/product/featured-products/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-product-featured-products-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-product-featured-products-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-product-featured-products-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-product-featured-products-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-product-featured-products-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-product-featured-products-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/product/new-arrivals/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-product-new-arrivals-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-product-new-arrivals-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-product-new-arrivals-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/product/related-products/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-product-related-products-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-product-related-products-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-product-related-products-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/product/up-sell/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-product-up-sell-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-product-up-sell-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-product-up-sell-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/search/header-search/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/header-chrome-amazon.css",
+          "Weline_Theme::css/widgets/header-search-amazon.css",
+          "Weline_Theme::css/widgets/widget-search-header-search-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-search-header-search-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-search-header-search-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/search/search-bar/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-search-search-bar-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-search-search-bar-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-search-search-bar-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/sidebar/mini-cart/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-sidebar-mini-cart-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-sidebar-mini-cart-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-sidebar-mini-cart-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/sidebar/sidebar-ads/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-sidebar-sidebar-ads-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-sidebar-sidebar-ads-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-sidebar-sidebar-ads-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/sidebar/sidebar-menu/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-sidebar-sidebar-menu-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-sidebar-sidebar-menu-default-0.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-sidebar-sidebar-menu-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-sidebar-sidebar-menu-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-sidebar-sidebar-menu-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-sidebar-sidebar-menu-default-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/sidebar/sidebar-social/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-sidebar-sidebar-social-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-sidebar-sidebar-social-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-sidebar-sidebar-social-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/sidebar/tags-cloud/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-sidebar-tags-cloud-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-sidebar-tags-cloud-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-sidebar-tags-cloud-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/social/footer-social/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-social-footer-social-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-social-footer-social-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-social-footer-social-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/social/social-share/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-social-social-share-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-social-social-share-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-social-social-share-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-social-social-share-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-social-social-share-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-social-social-share-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/testimonial/testimonials/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/video/video-carousel/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-video-video-carousel-default.css",
+          "Weline_Product::css/frontend/product-card.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-video-video-carousel-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-video-video-carousel-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Theme/view/theme/frontend/widgets/video/video-player/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-video-video-player-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-video-video-player-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-video-video-player-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-channels.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-channels.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-channels.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-channels.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-ecommerce-funnel.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-ecommerce-funnel.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-ecommerce-funnel.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-ecommerce-funnel.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-ecommerce-items.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-ecommerce-items.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-ecommerce-items.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-ecommerce-items.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-ecommerce-revenue.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-ecommerce-revenue.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-ecommerce-revenue.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-ecommerce-revenue.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-engagement.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-engagement.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-engagement.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-engagement.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-event-trend.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-event-trend.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-event-trend.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-event-trend.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-event-value.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-event-value.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-event-value.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-event-value.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-overview.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-overview.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-overview.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-overview.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-pages.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-pages.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-pages.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-pages.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-paid.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-paid.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-paid.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-paid.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-realtime.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-realtime.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-realtime.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-realtime.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-social.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-social.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-social.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-social.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-top-events.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-top-events.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-top-events.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-top-events.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-traffic-type.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-traffic-type.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-traffic-type.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-traffic-type.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/dashboard/widgets/pixel-value-by-channel.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-pixel-value-by-channel.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-pixel-value-by-channel.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-pixel-value-by-channel.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Visitor/view/templates/frontend/widgets/storefront-pixel-bootstrap.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Visitor::css/widgets/widget-storefront-pixel-bootstrap.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Visitor::css/widgets/widget-storefront-pixel-bootstrap.css",
+          "path": "app/code/Weline/Visitor/view/statics/css/widgets/widget-storefront-pixel-bootstrap.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Widget/view/templates/widgets/header/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Widget::css/widgets/widget-header-default.css"
+        ],
+        "layout_source": [
+          "Weline_Widget::css/widgets/widget-header-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Widget::css/widgets/widget-header-default.css",
+          "path": "app/code/Weline/Widget/view/statics/css/widgets/widget-header-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Widget::css/widgets/widget-header-default.css",
+          "path": "app/code/Weline/Widget/view/statics/css/widgets/widget-header-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/code/Weline/WidgetDemo/view/templates/dashboard/widgets/install-default-card.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_WidgetDemo::css/widgets/widget-install-default-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_WidgetDemo::css/widgets/widget-install-default-card.css",
+          "path": "app/code/Weline/WidgetDemo/view/statics/css/widgets/widget-install-default-card.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/code/Weline/Wishlist/view/theme/frontend/widgets/header/wishlist-icon/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "layout_source": [
+          "Weline_Wishlist::css/widgets/widget-header-wishlist-icon-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Wishlist::css/widgets/widget-header-wishlist-icon-default.css",
+          "path": "app/code/Weline/Wishlist/view/statics/css/widgets/widget-header-wishlist-icon-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/design/Weline/hanfu/Weline_Customer/templates/frontend/widgets/account-social-login.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-hanfu-account-social-login.css",
+          "Weline_Customer::js/account-social-quick.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-hanfu-account-social-login.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-hanfu-account-social-login.css",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/design/Weline/hanfu/Weline_Product/templates/frontend/widgets/cross-sell.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Product::css/widgets/cross-sell.css"
+        ]
+      },
+      "extracted_resources": [],
+      "instance_data": false
+    },
+    {
+      "template": "app/design/Weline/hanfu/frontend/widgets/banner/hero-slider/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-hanfu-banner-hero-slider-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Theme::css/widgets/site-blocks.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-hanfu-banner-hero-slider-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-hanfu-banner-hero-slider-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/design/Weline/hanfu/frontend/widgets/banner/promo-banner/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-hanfu-banner-promo-banner-default.css",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-hanfu-banner-promo-banner-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-hanfu-banner-promo-banner-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/design/Weline/hanfu/frontend/widgets/container/footer/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-hanfu-container-footer-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-hanfu-container-footer-default-0.js",
+          "Weline_Theme::css/widgets/footer-chrome-amazon.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-hanfu-container-footer-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-hanfu-container-footer-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-hanfu-container-footer-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-hanfu-container-footer-default-0.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/design/Weline/hanfu/frontend/widgets/header/full-header/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    },
+    {
+      "template": "app/design/Weline/hanfu/frontend/widgets/header/wishlist-icon/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-hanfu-header-wishlist-icon-default.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-hanfu-header-wishlist-icon-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-hanfu-header-wishlist-icon-default.css",
+          "exists": true
+        }
+      ],
+      "instance_data": false
+    },
+    {
+      "template": "app/design/Weline/hanfu/frontend/widgets/product/featured-products/default.phtml",
+      "kind": "widget-root",
+      "declarations": {
+        "source": [
+          "Weline_Theme::css/widgets/widget-hanfu-product-featured-products-default.css",
+          "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "Weline_Theme::js/widgets/widget-hanfu-product-featured-products-default-0.js",
+          "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "Weline_Product::css/frontend/product-card.css"
+        ]
+      },
+      "extracted_resources": [
+        {
+          "asset": "Weline_Theme::css/widgets/widget-hanfu-product-featured-products-default.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-hanfu-product-featured-products-default.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-assets-runtime.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-assets-runtime.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-hanfu-product-featured-products-default-0.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-hanfu-product-featured-products-default-0.js",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::css/widgets/widget-instance-styles.css",
+          "path": "app/code/Weline/Theme/view/statics/css/widgets/widget-instance-styles.css",
+          "exists": true
+        },
+        {
+          "asset": "Weline_Theme::js/widgets/widget-instance-styles.js",
+          "path": "app/code/Weline/Theme/view/statics/js/widgets/widget-instance-styles.js",
+          "exists": true
+        }
+      ],
+      "instance_data": true
+    }
+  ],
+  "shared_renderers": [
+    "app/code/Weline/Product/Service/ProductCardRenderer.php",
+    "app/code/Weline/Theme/Helper/ProductCardAddToCartParams.php"
+  ],
+  "verification_note": "Source scan plus PHP/JS syntax and targeted PHPUnit only; live runtime acceptance is owned by PM and still required.",
+  "validation": {
+    "scoped_template_php_syntax_files": 122,
+    "resource_files_checked": 139,
+    "remaining_inline": 0,
+    "errors": []
+  },
+  "initializer_anchor": {
+    "element": "span",
+    "hidden": true,
+    "attribute": "data-widget-script",
+    "count": 31,
+    "templates": [
+      "app/code/Weline/Checkout/view/theme/frontend/widgets/header/checkout-delivery-context/default.phtml",
+      "app/code/Weline/Customer/view/templates/frontend/account/register.phtml",
+      "app/code/Weline/Customer/view/templates/frontend/widgets/checkout-success-guest-convert.phtml",
+      "app/code/Weline/CustomerService/view/templates/Frontend/widgets/footer-contact-service-link.phtml",
+      "app/code/Weline/CustomerService/view/templates/Frontend/widgets/header-contact-service-link.phtml",
+      "app/code/Weline/Mail/view/templates/frontend/widgets/account-mail-register.phtml",
+      "app/code/Weline/Payment/view/templates/Frontend/widgets/checkout-express-payment.phtml",
+      "app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml",
+      "app/code/Weline/SiteSetupAssistant/view/templates/backend/widgets/site-setup-assistant-float.phtml",
+      "app/code/Weline/StoreMusic/view/templates/frontend/widgets/store-music.phtml",
+      "app/code/Weline/Tax/view/templates/frontend/widgets/checkout-tax-identity.phtml",
+      "app/code/Weline/Theme/view/theme/backend/widgets/data/form/default.phtml",
+      "app/code/Weline/Theme/view/theme/backend/widgets/data/list/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/carousel/product-carousel/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/category/category-list/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/container/footer/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/container/header/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/content/brand-logos/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/content/countdown/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/header/full-header/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/header/top-bar/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/product/cross-sell/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/product/deals-of-day/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/product/featured-products/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/sidebar/sidebar-menu/default.phtml",
+      "app/code/Weline/Theme/view/theme/frontend/widgets/social/social-share/default.phtml",
+      "app/design/Weline/hanfu/frontend/widgets/container/footer/default.phtml",
+      "app/design/Weline/hanfu/frontend/widgets/product/featured-products/default.phtml"
+    ]
+  }
+}

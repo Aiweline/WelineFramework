@@ -51,6 +51,18 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
             $hero
         );
         self::assertStringContainsString(
+            '\'button_text\' => $translateDefaultCopy(\'浏览精选\', \'Shop Featured\')',
+            $hero
+        );
+        self::assertStringContainsString(
+            '\'secondary_button_text\' => $translateDefaultCopy(\'按场景选\', \'Shop by Occasion\')',
+            $hero
+        );
+        self::assertStringContainsString("'link' => '#homepage-featured'", $hero);
+        self::assertStringContainsString("'secondary_link' => '/category/hanfu/occasion'", $hero);
+        self::assertStringContainsString('data-hero-cta="primary"', $hero);
+        self::assertStringContainsString('data-hero-cta="secondary"', $hero);
+        self::assertStringNotContainsString(
             '\'button_text\' => $translateDefaultCopy(\'浏览系列\', \'Explore collection\')',
             $hero
         );
@@ -82,34 +94,47 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
             self::assertStringNotContainsString($missingProductUrl, $hero);
         }
 
-        self::assertSame(3, substr_count($hero, "'link' => '/products'"));
-        self::assertStringContainsString('ProductCardUrl::splitForTaglib($slideLink)', $hero);
-        self::assertStringContainsString('$this->getUrl($slideLinkParts[\'url_path\'])', $hero);
+        self::assertSame(3, substr_count($hero, "'link' => '#homepage-featured'"));
+        self::assertStringContainsString('ProductCardUrl::splitForTaglib($href)', $hero);
+        self::assertStringContainsString('$this->getUrl($parts[\'url_path\'])', $hero);
         self::assertStringContainsString("'kicker' => \$translateDefaultCopy(\$default['kicker_zh'], \$default['kicker_en'])", $hero);
         self::assertStringContainsString('data-tone="<?= $esc($tone) ?>"', $hero);
         self::assertStringContainsString('.slide.active .slide-subtitle', $hero);
         self::assertStringNotContainsString('backdrop-filter: blur', $hero);
     }
 
-    public function testLayoutSeederUsesNeutralBilingualCommerceCopy(): void
+    public function testLayoutSeederUsesChineseSourceCommerceCopy(): void
     {
         $seeder = $this->readProjectFile('Service/DefaultLayoutSeeder.php');
 
         foreach ([
             'resolveWebsiteBrandTitle()',
-            '为日常与仪式感而作 · Made for everyday rituals',
-            '本季精选 · Seasonal Edit',
-            '新品上市 · New Arrivals',
-            '同风格推荐 · You May Also Like',
-            '最近浏览 · Recently Viewed',
-            '热卖精选 · Best Sellers',
-            '为你推荐 · Recommended',
-            '继续探索 · Explore More',
-            '搭配成套 · Complete the Look',
-            '人气商品 · Popular Picks',
+            '为日常与仪式感而作',
+            '本季精选',
+            '新品上市',
+            '同风格推荐',
+            '最近浏览',
+            '热卖精选',
+            '为你推荐',
+            '继续探索',
+            '搭配成套',
+            '人气商品',
         ] as $copy) {
             self::assertStringContainsString($copy, $seeder);
         }
+
+        // WO-HP-P1-04：禁止布局种子中英并写；英文靠模块 CSV
+        self::assertStringNotContainsString(' · ', $seeder);
+        self::assertStringNotContainsString('Seasonal Edit', $seeder);
+        self::assertStringNotContainsString('New Arrivals', $seeder);
+        self::assertStringNotContainsString('Best Sellers', $seeder);
+        self::assertStringNotContainsString('You May Also Like', $seeder);
+        self::assertStringNotContainsString('Recently Viewed', $seeder);
+        self::assertStringNotContainsString('Recommended', $seeder);
+        self::assertStringNotContainsString('Explore More', $seeder);
+        self::assertStringNotContainsString('Complete the Look', $seeder);
+        self::assertStringNotContainsString('Popular Picks', $seeder);
+        self::assertStringNotContainsString('Made for everyday rituals', $seeder);
 
         self::assertStringNotContainsString('东方衣冠', $seeder);
         self::assertStringNotContainsString('新裳入藏', $seeder);
@@ -139,6 +164,9 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         self::assertStringContainsString('<w:widget type="content" name="image-gallery"', $homepage);
         self::assertStringContainsString('"variant":"looks"', $homepage);
         self::assertStringContainsString('"title":"买家秀"', $homepage);
+        self::assertStringContainsString('"cta_link":"/product/543#product-reviews"', $homepage);
+        self::assertStringContainsString('detail-03-c2e91b039ebb.jpg', $homepage);
+        self::assertStringNotContainsString('"items":[]', $homepage);
         self::assertStringNotContainsString('穿后感言', $homepage);
         self::assertStringContainsString('<w:widget type="testimonial" name="testimonials"', $homepage);
         self::assertStringContainsString('"title":"买家评价"', $homepage);
@@ -150,18 +178,21 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         self::assertStringContainsString('Weline_Theme::frontend::layouts::homepage::brands', $homepage);
 
         $heroPosition = strpos($homepage, 'id="homepage-hero"');
-        $categoriesPosition = strpos($homepage, 'id="homepage-categories"');
+        $trustPosition = strpos($homepage, 'id="homepage-trust"');
         $featuredPosition = strpos($homepage, 'id="homepage-featured"');
+        $categoriesPosition = strpos($homepage, 'id="homepage-categories"');
         $brandsPosition = strpos($homepage, 'id="homepage-brands"');
         self::assertIsInt($heroPosition);
-        self::assertIsInt($categoriesPosition);
+        self::assertIsInt($trustPosition);
         self::assertIsInt($featuredPosition);
+        self::assertIsInt($categoriesPosition);
         self::assertIsInt($brandsPosition);
         self::assertTrue(
-            $heroPosition < $categoriesPosition
-            && $categoriesPosition < $featuredPosition
-            && $featuredPosition < $brandsPosition,
-            '默认主题首页应按电商节奏：品类/货架先于品牌区。'
+            $heroPosition < $trustPosition
+            && $trustPosition < $featuredPosition
+            && $featuredPosition < $categoriesPosition
+            && $categoriesPosition < $brandsPosition,
+            'Wave-3 商城节奏：Hero → 信任条 → 精选 → 品类磁贴 → … → 品牌；品牌不得插在货架之前。'
         );
     }
 
@@ -169,7 +200,7 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
     {
         $footer = $this->readProjectFile('view/theme/frontend/widgets/container/footer/default.phtml');
 
-        self::assertStringContainsString('resolveFrontendSiteName(', $footer);
+        self::assertStringContainsString('resolveFrontendWordmark', $footer);
         self::assertStringContainsString('SiteBrand', $footer);
         self::assertStringContainsString("\$localizedRights = WidgetI18n::label('保留所有权利')", $footer);
         self::assertStringContainsString("\$localizedSiteLogoText . '. ' . \$localizedRights", $footer);

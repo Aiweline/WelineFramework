@@ -117,6 +117,7 @@
         在控制器渲染完成后可靠触发
     -->
     <event name="Weline_Framework_Controller::fetch_file_after">
+        <observer name="Weline_Theme::place_widget_assets" instance="Weline\Theme\Observer\PlaceWidgetAssets" disabled="false" shared="true" sort="120"/>
         <observer name="Weline_Theme::controller_fetch_file_after"
                   instance="Weline\Theme\Observer\ControllerFetchFileAfter"
                   disabled="false"

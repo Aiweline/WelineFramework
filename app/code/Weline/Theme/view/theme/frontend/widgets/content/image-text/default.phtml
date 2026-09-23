@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-content-image-text-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 图文组合部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -57,7 +58,7 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="<?= $esc($rootStyle) ?>">
+         data-widget-style="<?= $esc($rootStyle) ?>">
 
     <?php if ($layout === 'image-bg'): ?>
         <div class="bg-container">
@@ -120,169 +121,3 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
     <?php endif; ?>
 </section>
 
-<style>
-.<?= $wc ?> {
-    width: 100%;
-    max-width: none;
-    padding-inline: 0;
-    margin: var(--spacing-section-margin) 0;
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .content-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-grid-gap);
-}
-
-.<?= $wc ?>.layout-image-right .content-row {
-    flex-direction: row-reverse;
-}
-
-.<?= $wc ?> .image-section {
-    overflow: hidden;
-    border-radius: var(--weline-radius-md);
-}
-
-.<?= $wc ?>.layout-image-left .image-section,
-.<?= $wc ?>.layout-image-right .image-section {
-    flex: 0 0 var(--wc-image-width);
-}
-
-.<?= $wc ?> .content-image {
-    width: 100%;
-    height: auto;
-    display: block;
-    transition: transform var(--weline-theme-transition-slow);
-}
-
-.<?= $wc ?> .content-image--asset img {
-    display: block;
-    width: 100%;
-    height: auto;
-}
-
-.<?= $wc ?>:hover .content-image {
-    transform: scale(1.03);
-}
-
-.<?= $wc ?> .text-section {
-    flex: 1;
-    min-width: 0;
-}
-
-.<?= $wc ?> .content-title {
-    font-size: var(--weline-font-size-3xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0 0 var(--weline-space-4);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .content-text {
-    font-size: var(--weline-font-size-base);
-    line-height: var(--line-height-relaxed);
-    color: var(--weline-theme-text-muted);
-    margin-bottom: var(--weline-space-5);
-}
-
-.<?= $wc ?> .content-button {
-    display: inline-block;
-    padding: var(--weline-space-3) var(--weline-space-8);
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-    text-decoration: none;
-    border-radius: var(--weline-radius-lg);
-    font-weight: 600;
-    transition: all var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .content-button:hover {
-    background: var(--weline-theme-primary-hover);
-    transform: translateY(var(--spacing-neg-0_5));
-    box-shadow: var(--weline-theme-shadow-md);
-}
-
-.<?= $wc ?>.layout-image-top .text-section {
-    text-align: center;
-    padding: var(--weline-space-8) 0;
-}
-
-.<?= $wc ?>.layout-image-bg .bg-container {
-    position: relative;
-    min-height: var(--size-panel-400);
-    background-size: cover;
-    background-position: center;
-    background-image: var(--wc-image-bg, none);
-    border-radius: var(--weline-radius-md);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.<?= $wc ?>.layout-image-bg .bg-overlay {
-    position: absolute;
-    inset: 0;
-    background: color-mix(in srgb, var(--weline-theme-overlay) 50%, transparent);
-    z-index: 1;
-}
-
-.<?= $wc ?>.layout-image-bg .bg-media,
-.<?= $wc ?>.layout-image-bg .bg-media figure,
-.<?= $wc ?>.layout-image-bg .bg-media img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-}
-
-.<?= $wc ?>.layout-image-bg .bg-media img {
-    object-fit: cover;
-}
-
-.<?= $wc ?>.layout-image-bg .text-content {
-    position: relative;
-    z-index: 2;
-    text-align: center;
-    padding: var(--weline-space-10);
-    max-width: var(--token-size-700px);
-}
-
-.<?= $wc ?>.layout-image-bg .content-title {
-    color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-4xl);
-}
-
-.<?= $wc ?>.layout-image-bg .content-text {
-    color: color-mix(in srgb, var(--weline-theme-on-primary) 90%, transparent);
-}
-
-.<?= $wc ?>.layout-image-bg .content-button {
-    background: var(--weline-theme-surface-raised);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?>.layout-image-bg .content-button:hover {
-    background: var(--weline-theme-surface);
-}
-
-@media (max-width: 768px) {
-    .<?= $wc ?> .content-row {
-        flex-direction: column;
-    }
-
-    .<?= $wc ?>.layout-image-right .content-row {
-        flex-direction: column;
-    }
-
-    .<?= $wc ?> .image-section {
-        flex: none !important;
-        width: 100%;
-    }
-
-    .<?= $wc ?> .content-title {
-        font-size: var(--weline-font-size-xl);
-    }
-}
-</style>

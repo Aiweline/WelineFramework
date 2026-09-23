@@ -12,6 +12,7 @@
  * @widget.page_layouts {["homepage", "cms_page"]}
  * @widget.supports {["layout-homepage-brands","layout-cms-content","layout-default-content","brand-list","brands","textile-heritage"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/textile-heritage.css}
  * @param title {default="织艺谱系 · Textile Heritage",type="string",label="标题"}
  * @param brands {default=[],type="brand_logo_items",label="谱系项",description="每项包含名称、说明、真实图片、文章链接与素材来源；主链默认由 Theme Catalog 指向 blog/textile-*（@url / base 带语言货币）"}
  * @param columns {default="6",type="select",label="每行列数",options={4:"4列",5:"5列",6:"6列",8:"8列"}}
@@ -70,9 +71,6 @@ if ($brands === []) {
     $brands = TextileHeritageCatalog::items();
 }
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/textile-heritage.css)">
-
 <section class="<?= $esc($wc) ?> weline-textile-heritage<?= $grayscale ? ' is-grayscale' : '' ?> layout-<?= $esc($layout) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"

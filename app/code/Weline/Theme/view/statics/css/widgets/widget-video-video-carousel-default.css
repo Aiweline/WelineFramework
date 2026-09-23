@@ -1,0 +1,153 @@
+.wc-theme_widget_video_carousel {
+    margin: var(--weline-space-5) 0;
+    color: var(--weline-theme-on-surface, var(--color-text));
+}
+
+.wc-theme_widget_video_carousel .video-carousel__header {
+    margin-bottom: var(--weline-space-4);
+}
+
+.wc-theme_widget_video_carousel .video-carousel__title {
+    margin: 0;
+    font-size: var(--weline-font-size-xl, 1.25rem);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.wc-theme_widget_video_carousel .video-carousel__subtitle {
+    margin: var(--weline-space-2) 0 0;
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-on-surface-muted, var(--color-text-muted));
+}
+
+.wc-theme_widget_video_carousel .video-carousel__stage {
+    position: relative;
+}
+
+.wc-theme_widget_video_carousel .video-carousel__slide {
+    display: none;
+    gap: var(--weline-space-4);
+}
+
+.wc-theme_widget_video_carousel .video-carousel__slide.is-active {
+    display: grid;
+}
+
+.wc-theme_widget_video_carousel .video-carousel__media {
+    position: relative;
+    width: 100%;
+    padding-top: var(--wc-aspect-padding);
+    background: var(--weline-theme-overlay, var(--color-surface-muted));
+    border-radius: var(--weline-radius-lg);
+    overflow: hidden;
+}
+
+.wc-theme_widget_video_carousel .video-carousel__iframe,
+.wc-theme_widget_video_carousel .video-carousel__native,
+.wc-theme_widget_video_carousel .video-carousel__media > iframe,
+.wc-theme_widget_video_carousel .video-carousel__media > video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.wc-theme_widget_video_carousel .video-carousel__placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-4);
+    text-align: center;
+    color: var(--weline-theme-on-primary, var(--color-on-primary));
+}
+
+.wc-theme_widget_video_carousel .video-carousel__meta {
+    display: grid;
+    gap: var(--weline-space-2);
+}
+
+.wc-theme_widget_video_carousel .video-carousel__item-title {
+    margin: 0;
+    font-size: var(--weline-font-size-lg, 1.125rem);
+    font-weight: 600;
+}
+
+.wc-theme_widget_video_carousel .video-carousel__author {
+    margin: 0;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 600;
+    color: var(--weline-theme-primary, var(--color-primary));
+}
+
+.wc-theme_widget_video_carousel .video-carousel__description {
+    margin: 0;
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.5;
+    color: var(--weline-theme-on-surface-muted, var(--color-text-muted));
+}
+
+.wc-theme_widget_video_carousel .video-carousel__cta {
+    justify-self: start;
+    margin-top: var(--weline-space-2);
+}
+
+.wc-theme_widget_video_carousel .video-carousel__controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-3);
+    margin-top: var(--weline-space-4);
+}
+
+.wc-theme_widget_video_carousel .video-carousel__dots {
+    display: flex;
+    gap: var(--weline-space-2);
+}
+
+.wc-theme_widget_video_carousel .video-carousel__dot {
+    width: var(--weline-space-3);
+    height: var(--weline-space-3);
+    border-radius: 999px;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    background: var(--weline-theme-border, var(--color-border));
+}
+
+.wc-theme_widget_video_carousel .video-carousel__dot.is-active {
+    background: var(--weline-theme-primary, var(--color-primary));
+}
+
+.wc-theme_widget_video_carousel .video-carousel__products {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--weline-space-3);
+}
+
+.wc-theme_widget_video_carousel .video-carousel__dialog[hidden],
+.wc-theme_widget_video_carousel .video-carousel__dialog[data-state="closed"] {
+    display: none;
+}
+
+.wc-theme_widget_video_carousel .video-carousel__dialog[data-state="open"] {
+    display: flex;
+}
+
+@media (min-width: 768px) {
+    .wc-theme_widget_video_carousel .video-carousel__slide.is-active {
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        align-items: start;
+    }
+}
+
+.widget-preview-canvas .wc-theme_widget_video_carousel,
+.wc-theme_widget_video_carousel.is-preview {
+    margin: var(--weline-space-3) 0;
+}
+
+[data-widget-style-class="b13778d86169d546"] {--wc-aspect-padding: 56.25%}

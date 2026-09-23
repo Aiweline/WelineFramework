@@ -59,7 +59,7 @@ app/code/Weline/Theme/view/theme/frontend/partials/header/amazon.phtml
 `frontend/header/default.phtml` 与 `frontend/footer/default.phtml` 是默认 Theme 的公共商城壳，保留完整独立站商务信息架构，并以水墨中国风作为默认视觉：
 
 - Header：宣纸暖白、墨黑文字、黛青层次与朱砂强调色；保留配送、搜索、语言、货币、账户、收藏、购物车和分类导航入口。
-- 默认搜索热词聚焦马面裙、明制汉服、宋制汉服、齐胸襦裙与汉服配饰；业务 Query 有真实热词时仍优先使用真实数据。
+- 默认搜索热词聚焦马面裙、明制汉服、宋制汉服、齐胸襦裙与披帛（有货配饰向词；「汉服配饰」索引无商品）；业务 Query 有真实热词时仍优先使用真实数据。
 - Header 响应式：视口不超过 `1280px` 时，语言入口仅保留当前国旗，搜索框收起为放大镜按钮；点击后搜索框在主栏下一行全宽展开，支持 `Esc` 或点击外部关闭。
 - Footer：以墨色信息区承载多栏帮助/政策链接、订阅、社交与支付信息，并保持可读对比度。
 - 颜色可通过 `--weline-theme-header-*` / `--weline-theme-footer-*` 变量覆盖；子主题无需复制完整 partial。

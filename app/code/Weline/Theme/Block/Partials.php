@@ -161,11 +161,9 @@ class Partials extends Block
         string $type,
         string $defaultOption
     ): string {
-        // Page-specific SEO lives in frontend head. Skip all output caches so one
-        // Product head can never be replayed onto listing/search/locale routes.
-        if (\strtolower($area) === 'frontend' && \strtolower($type) === 'head') {
-            return $this->renderCompiledPartial($fileName, $dictionary);
-        }
+        // Frontend head is page-scoped (request_path + seo_fp in cache data context).
+        // wave6-6a: allow CachePolicy / process L1 + shared head Policy — never share
+        // one blob across URLs (seo_fp/path still partition keys).
 
         $policy = $this->resolveChromeCachePolicy($fileName, \is_array($dictionary['meta'] ?? null) ? (array)$dictionary['meta'] : [], $type);
         if ($policy === null) {
@@ -213,17 +211,37 @@ class Partials extends Block
         // Frontend head/header/footer: L1 miss → scope hot cache (cross-worker SWR).
         // Backend chrome stays process-local; historical theme_runtime IPC was too
         // expensive under pool pressure, so shared writes stay on the storefront path only.
-        if ($this->shouldUseSharedStorefrontChromeCache($area, $type)) {
+        // Head uses storefrontHeadPolicy + theme.head.* keys (page-scoped via seo_fp).
+        // wave9-9s2 P1: solidified complete shell must not re-enter theme.storefront_chrome
+        // Policy builder for header/footer (布局再生回潮). Head assets Policy stays (9s).
+        if ($this->shouldUseSharedStorefrontChromeCache($area, $type)
+            && !$this->shouldBypassStorefrontChromePolicyForSolidifiedShell($type)
+        ) {
             try {
                 /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
                 $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
-                $html = $hotCache->rememberPolicy(
-                    StorefrontThemeCacheCoordinator::storefrontChromePolicy(
+                $typeLc = \strtolower($type);
+                $sharedPolicy = $typeLc === 'head'
+                    ? StorefrontThemeCacheCoordinator::storefrontHeadPolicy(
                         \max(60, (int)$policy['ttl']),
                         $this->partialOutputStaleTtl(),
-                    ),
-                    'theme.chrome.' . \strtolower($type) . '.' . $cacheKey,
-                    fn(): string => $this->renderCompiledPartial($fileName, $dictionary),
+                    )
+                    : StorefrontThemeCacheCoordinator::storefrontChromePolicy(
+                        \max(60, (int)$policy['ttl']),
+                        $this->partialOutputStaleTtl(),
+                    );
+                $logicalPrefix = $typeLc === 'head' ? 'theme.head.' : 'theme.chrome.';
+                $html = $hotCache->rememberPolicy(
+                    $sharedPolicy,
+                    $logicalPrefix . $typeLc . '.' . $cacheKey,
+                    $typeLc === 'head'
+                        ? fn(): string => $this->renderStorefrontHeadComposedOrMonolithic(
+                            $fileName,
+                            $dictionary,
+                            $area,
+                            \max(60, (int)$policy['ttl']),
+                        )
+                        : fn(): string => $this->renderCompiledPartial($fileName, $dictionary),
                 );
                 if (\is_string($html) && !$this->isEmptyPartialHtml($html)) {
                     $this->rememberPartialOutput($cacheKey, $html, 'fresh', $policy['ttl']);
@@ -254,10 +272,199 @@ class Partials extends Block
 
     private function shouldUseSharedStorefrontChromeCache(string $area, string $type): bool
     {
-        // Frontend head embeds page SEO/JSON-LD and must never ride the shared chrome
-        // cache — a single warm Product head would otherwise pollute /products, /search, etc.
+        // Head is included only with page-scoped keys (request_path + seo_fp).
+        // Header/footer remain route-independent chrome; head must never collapse
+        // Product vs listing SEO into one bag.
         return \strtolower($area) === 'frontend'
-            && \in_array(\strtolower($type), ['header', 'footer'], true);
+            && \in_array(\strtolower($type), ['header', 'footer', 'head'], true);
+    }
+
+    /**
+     * wave9-9s2 P1: when PublishedSlotHost already solidified (CTX_USE_REACTIVE=false)
+     * and the request is not in the incomplete-shell safety-net window, skip
+     * storefrontChromePolicy remember for header/footer so theme.storefront_chrome
+     * builder does not reappear as layout regeneration. Head keeps website Policy.
+     */
+    private function shouldBypassStorefrontChromePolicyForSolidifiedShell(string $type): bool
+    {
+        $typeLc = \strtolower(\trim($type));
+        if ($typeLc !== 'header' && $typeLc !== 'footer') {
+            return false;
+        }
+        try {
+            $reactive = \Weline\Framework\Runtime\RequestContext::get(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE
+            );
+            if ($reactive !== false) {
+                return false;
+            }
+            // Safety-net window still needs live Partial render (may be incomplete).
+            // Do not bypass Policy solely on reactive=false when fragments miss chrome —
+            // process L1 / direct render is enough to avoid shared chrome builder tax.
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * wave9-9s: compose head as assets-prefix + page + assets-suffix when all three
+     * resolve; nest assets under storefrontHeadAssetsPolicy so CSS/JS HIT across URLs
+     * while page (SEO/geo/Base) stays page-scoped. Legacy monolithic default remains fallback.
+     *
+     * @param array<string, mixed> $dictionary
+     */
+    private function renderStorefrontHeadComposedOrMonolithic(
+        string $fileName,
+        array $dictionary,
+        string $area,
+        int $freshTtlSeconds,
+    ): string {
+        $prefixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-prefix');
+        $pagePath = $this->resolveForcedPartialsOption($area, 'head', 'page');
+        $suffixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-suffix');
+        if ($prefixPath === null || $pagePath === null || $suffixPath === null) {
+            return $this->renderCompiledPartial($fileName, $dictionary);
+        }
+
+        try {
+            /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
+            $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+            $assetsPolicy = StorefrontThemeCacheCoordinator::storefrontHeadAssetsPolicy(
+                $freshTtlSeconds,
+                $this->partialOutputStaleTtl(),
+            );
+            $assetsKey = $this->resolveStorefrontHeadAssetsCacheKey($area, $dictionary, $prefixPath, $suffixPath);
+            $prefixHtml = $hotCache->rememberPolicy(
+                $assetsPolicy,
+                'theme.head.assets.prefix.' . $assetsKey,
+                fn(): string => $this->renderCompiledPartial($prefixPath, $dictionary),
+            );
+            if (!\is_string($prefixHtml)) {
+                $prefixHtml = '';
+            }
+            // Prefix assigns disk-override HTML into the Template bag for suffix reuse.
+            $suffixDictionary = $dictionary;
+            $diskOverride = '';
+            try {
+                $diskOverride = (string)(Template::getInstance()->getData('__head_disk_override_html') ?? '');
+            } catch (\Throwable) {
+                $diskOverride = '';
+            }
+            if ($diskOverride !== '') {
+                $suffixDictionary['__head_disk_override_html'] = $diskOverride;
+            }
+            $suffixHtml = $hotCache->rememberPolicy(
+                $assetsPolicy,
+                'theme.head.assets.suffix.' . $assetsKey,
+                fn(): string => $this->renderCompiledPartial($suffixPath, $suffixDictionary),
+            );
+            if (!\is_string($suffixHtml)) {
+                $suffixHtml = '';
+            }
+            $pageHtml = $this->renderCompiledPartial($pagePath, $dictionary);
+            $composed = $prefixHtml . $pageHtml . $suffixHtml;
+            if (!$this->isEmptyPartialHtml($composed)) {
+                return $composed;
+            }
+        } catch (\Throwable $e) {
+            $this->logPartialCacheDiagnostic('storefront_head_compose_fallback', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $this->renderCompiledPartial($fileName, $dictionary);
+    }
+
+    /**
+     * Resolve a partials option path without ThemeData config[$type] override
+     * (config would collapse assets-suffix back to "default").
+     */
+    private function resolveForcedPartialsOption(string $area, string $type, string $option): ?string
+    {
+        /** @var ThemeContextService $ctx */
+        $ctx = ObjectManager::getInstance(ThemeContextService::class);
+        $normalizedArea = $ctx->normalizeArea($area);
+        $theme = $this->resolvePartialsTheme($normalizedArea);
+        $option = \trim($option);
+        if ($option === '') {
+            return null;
+        }
+
+        if (!$theme || !$theme->getId()) {
+            $modulePath = 'Weline_Theme::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
+            $absolute = $this->resolveModulePath($modulePath);
+
+            return (\is_string($absolute) && \is_file($absolute)) ? $modulePath : null;
+        }
+
+        ThemeData::setCurrentTheme($theme);
+        ThemeData::setCurrentArea($normalizedArea);
+        /** @var ThemeDirectoryResolver $dirResolver */
+        $dirResolver = ObjectManager::getInstance(ThemeDirectoryResolver::class);
+        $partialPath = 'theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
+        $resolvedPath = $dirResolver->resolveThemeTemplatePath($partialPath, $theme);
+        if ($resolvedPath !== $partialPath) {
+            $isAbsolutePath = \strpos($resolvedPath, '://') === false
+                && (\preg_match('/^[A-Z]:/i', $resolvedPath)
+                    || \strpos($resolvedPath, '/') === 0
+                    || \strpos($resolvedPath, '\\') === 0);
+            if ($isAbsolutePath && \is_file($resolvedPath)) {
+                return 'Weline_Theme::' . $partialPath;
+            }
+            if (\is_string($resolvedPath) && $resolvedPath !== '' && \is_file($resolvedPath)) {
+                return $resolvedPath;
+            }
+        }
+
+        $modulePath = 'Weline_Theme::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
+        $absolute = $this->resolveModulePath($modulePath);
+
+        return (\is_string($absolute) && \is_file($absolute)) ? $modulePath : null;
+    }
+
+    /**
+     * @param array<string, mixed> $dictionary
+     */
+    private function resolveStorefrontHeadAssetsCacheKey(
+        string $area,
+        array $dictionary,
+        string $prefixPath,
+        string $suffixPath,
+    ): string {
+        $themeData = \is_array($dictionary['theme'] ?? null) ? (array)$dictionary['theme'] : [];
+        $theme = $themeData['theme'] ?? null;
+        $themeId = \is_object($theme) && \method_exists($theme, 'getId') ? (string)$theme->getId() : '';
+        $fingerprints = [];
+        foreach ([$prefixPath, $suffixPath] as $modulePath) {
+            $sourceFile = $this->resolveModulePath($modulePath);
+            if ((!(\is_string($sourceFile) && $sourceFile !== '' && \is_file($sourceFile)))
+                && \is_string($modulePath)
+                && \is_file($modulePath)
+            ) {
+                $sourceFile = $modulePath;
+            }
+            $stat = \is_string($sourceFile) ? @\stat($sourceFile) : false;
+            $fingerprints[] = \is_array($stat)
+                ? (int)$stat['mtime'] . '|' . (int)$stat['size']
+                : '0|0';
+        }
+        $colorsFp = \is_array($dictionary['colors'] ?? null)
+            ? \sha1((string)\json_encode(
+                $this->normalizePartialCacheData($dictionary['colors']),
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ))
+            : '';
+
+        return \sha1(\implode('|', [
+            $area,
+            $themeId,
+            (string)($themeData['area'] ?? ''),
+            (string)($themeData['colorMode'] ?? ''),
+            $colorsFp,
+            (string)State::getLang(),
+            \implode(';', $fingerprints),
+        ]));
     }
 
     /**
@@ -470,8 +677,11 @@ class Partials extends Block
                 // v12：账户与购物车共享中性首屏，旧编译时固化的购物车摘要必须失效。
                 // v13：CJK identity 不再挡住词典后，旧 header/footer 中文壳必须失效。
                 // v14：前台 chrome 按 website/storage scope 分桶，避免静态 404 多站串行串 header logo。
+                // v15：frontend head 升格页级 Policy（request_path+seo_fp）；禁跨 URL 串 SEO。
+                // v16：guest header 键去掉 cart_count/total（种袋 0 vs 探针车导致 846ms miss）。
+                // v17：head Policy website + 瘦键 + assets 片段复用（wave9-9s）。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v14-guest-chrome-scope',
+                'schema' => 'chrome-partial-v17-head-website-slim',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -549,7 +759,7 @@ class Partials extends Block
         array $data,
     ): mixed {
         if ($area === 'backend' && $type === 'head') {
-            return $this->normalizeHeadPartialCacheData($data);
+            return $this->normalizeBackendHeadPartialCacheData($data);
         }
         if ($area === 'backend') {
             return $this->normalizeChromePartialCacheData($data);
@@ -597,8 +807,8 @@ class Partials extends Block
                 'category' => \trim((string)($_GET['category'] ?? $this->request->getParam('category', '') ?? '')),
                 'lang' => (string)State::getLang(),
                 'lang_local' => (string)State::getLangLocal(),
-                'cart_count' => $data['cart_count'] ?? 0,
-                'cart_total' => $data['cart_total'] ?? 0,
+                // wave8-8c8: guest-neutral header key — do NOT partition on cart_*
+                // (deferred bag-prime is always 0; panel probe carts caused header 846ms miss).
                 'logo' => $data['logo'] ?? null,
                 'logoText' => $data['logoText'] ?? null,
                 'navItems' => $data['navItems'] ?? null,
@@ -729,6 +939,34 @@ class Partials extends Block
 
     private function normalizeHeadPartialCacheData(array $data): mixed
     {
+        // wave9-9s storefront: slim page key — theme/colors + path/seo_fp only.
+        // Full meta/layout bags were redundant with seo_fp and could thrash keys.
+        $themeData = \is_array($data['theme'] ?? null) ? (array)$data['theme'] : [];
+        $theme = $themeData['theme'] ?? null;
+        $themeId = \is_object($theme) && \method_exists($theme, 'getId') ? (string)$theme->getId() : '';
+
+        return $this->normalizePartialCacheData([
+            'theme_id' => $themeId,
+            'theme_area' => (string)($themeData['area'] ?? ''),
+            'theme_color_mode' => (string)($themeData['colorMode'] ?? ''),
+            'colors_fp' => \is_array($data['colors'] ?? null)
+                ? \sha1((string)\json_encode(
+                    $this->normalizePartialCacheData($data['colors']),
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                ))
+                : '',
+            // Head embeds page SEO/JSON-LD; never share one chrome blob across URLs.
+            'request_path' => \class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)
+                ? \Weline\Seo\Service\Head\SeoPageProfileBag::currentRequestPath()
+                : (string)(\parse_url((string)(\w_env_request_uri() ?? ''), \PHP_URL_PATH) ?: ''),
+            'seo_fp' => \class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)
+                ? \Weline\Seo\Service\Head\SeoPageProfileBag::fingerprint()
+                : '',
+        ]);
+    }
+
+    private function normalizeBackendHeadPartialCacheData(array $data): mixed
+    {
         $meta = \is_array($data['meta'] ?? null) ? $data['meta'] : [];
         unset(
             $meta['content'],
@@ -757,13 +995,6 @@ class Partials extends Block
             'theme' => $data['theme'] ?? null,
             'colors' => $data['colors'] ?? null,
             'site_name' => $data['site_name'] ?? null,
-            // Head embeds page SEO/JSON-LD; never share one chrome blob across URLs.
-            'request_path' => \class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)
-                ? \Weline\Seo\Service\Head\SeoPageProfileBag::currentRequestPath()
-                : (string)(\parse_url((string)(\w_env_request_uri() ?? ''), \PHP_URL_PATH) ?: ''),
-            'seo_fp' => \class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)
-                ? \Weline\Seo\Service\Head\SeoPageProfileBag::fingerprint()
-                : '',
         ]);
     }
 

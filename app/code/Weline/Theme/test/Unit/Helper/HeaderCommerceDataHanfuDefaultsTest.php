@@ -13,7 +13,7 @@ final class HeaderCommerceDataHanfuDefaultsTest extends TestCase
     {
         // else-fill demo keywords remain allowed on the Theme shell.
         self::assertSame(
-            ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '汉服配饰'],
+            ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '披帛'],
             HeaderCommerceData::defaultHotWords(),
         );
     }

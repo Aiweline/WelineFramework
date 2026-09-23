@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.layout_source {Weline_Theme::css/widgets/widget-navigation-all-menu-default.css}
  * 全部菜单部件：桌面「全部」触发器 + 向抽屉发布 menu_tree
  *
  * @var \Weline\Framework\View\Template $this
@@ -81,31 +82,3 @@ AllMenuTreeRegistry::publish($menuTree);
     <span class="hamburger-label"><?= $esc($label) ?></span>
 </button>
 
-<style>
-.<?= $wc ?> {
-    display: inline-flex;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--spacing-sm, 0.5rem);
-    white-space: nowrap;
-    text-decoration: none;
-    color: inherit;
-    border: 0;
-    background: transparent;
-    padding: 0;
-    font: inherit;
-    cursor: pointer;
-}
-
-.<?= $wc ?> .hamburger-label {
-    white-space: nowrap;
-    writing-mode: horizontal-tb;
-    line-height: 1.4;
-}
-
-.<?= $wc ?> .hamburger-menu-icon {
-    width: var(--spacing-5_5, 1.375rem);
-    height: var(--spacing-5_5, 1.375rem);
-    flex-shrink: 0;
-}
-</style>

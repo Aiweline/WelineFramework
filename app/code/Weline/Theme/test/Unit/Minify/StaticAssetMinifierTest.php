@@ -38,6 +38,33 @@ final class StaticAssetMinifierTest extends TestCase
         self::assertStringContainsString('return', $min);
     }
 
+    public function testCssMathKeepsRequiredWhitespaceAroundAddition(): void
+    {
+        $css = '.card { width: calc(100% + 2px); z-index: calc(var(--overlay, 900) + 1); padding: calc(1rem + env(safe-area-inset-bottom, 0px)); margin: calc(var(--gap) - (2px)); }';
+        $min = (new StaticAssetMinifier())->minifyFileContent($css, 'widget.css');
+        self::assertStringContainsString('calc(100% + 2px)', $min);
+        self::assertStringContainsString('calc(var(--overlay,900) + 1)', $min);
+        self::assertStringContainsString('calc(1rem + env(safe-area-inset-bottom,0px))', $min);
+        self::assertStringContainsString('calc(var(--gap) - (2px))', $min);
+        self::assertLessThan(strlen($css), strlen($min));
+    }
+
+    public function testTemplateLiteralsRetainTheirExactCookedAndRawText(): void
+    {
+        // The legacy scanner cannot distinguish a nested template from the end of its parent.
+        $sources = [
+            'const x = `outer ${`inner  text`} tail`;',
+            'const x = String.raw`outer ${String.raw`a  b\\n`} tail`;',
+            "const x = `first\n  second`;\n",
+        ];
+        $minifier = new StaticAssetMinifier();
+        foreach ($sources as $source) {
+            self::assertSame($source, JsMin::minify($source));
+            self::assertSame($source, $minifier->minifyFileContent($source, 'widget.js'));
+            self::assertSame($source, $minifier->minifyFileContent($source, 'widget.mjs'));
+        }
+    }
+
     public function testShouldMinifySkipsAlreadyMinFiles(): void
     {
         $minifier = new StaticAssetMinifier();

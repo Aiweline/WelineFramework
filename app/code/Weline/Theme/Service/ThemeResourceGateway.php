@@ -17,6 +17,19 @@ final class ThemeResourceGateway
     ) {
     }
 
+    /** Immutable generated resources use the same namespace and URL builder as layout assets. */
+    public function buildWidgetAssetArtifact(string $hash, string $extension, string $area = 'frontend'): ?array
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/', $hash) || !in_array($extension, ['css', 'js'], true)) { return null; }
+        $area = $this->themeContext->normalizeArea($area);
+        $theme = $this->resolveTheme($area, null);
+        if (!$theme || !$theme->getId()) { return null; }
+        $namespace = $this->themeStaticNamespaceService->resolvePublicThemePath($theme);
+        if ($namespace === '') { return null; }
+        $relative = trim($namespace, '/') . '/Weline/Theme/widget-assets/' . $hash . '.' . $extension;
+        return ['path' => rtrim(BP, '/\\') . '/pub/static/' . $relative, 'url' => $this->buildStaticUrl($relative, false)];
+    }
+
     public function publishForRequestPath(string $requestPath, ?WelineTheme $theme = null): ?string
     {
         $requestPath = $this->normalizeRequestPath($requestPath);
@@ -52,7 +65,21 @@ final class ThemeResourceGateway
             . $resource['area'] . DIRECTORY_SEPARATOR
             . $relativePath;
 
-        $resolvedTheme = $this->resolveTheme($resource['area'], $theme);
+        // Prefer theme identity from namespaced /static/{theme}/... URLs so multi-site
+        // CSS/JS requests do not fall back to the global active theme (e.g. hanfu)
+        // when the page was rendered under a Website-scoped theme_binding (daocharms).
+        // If the URL carries an explicit namespace, never fail-open onto another theme
+        // (that would publish the wrong site's bytes under the requested namespace).
+        $resolvedTheme = $theme;
+        $namespacedPath = trim((string)($resource['public_theme_path'] ?? ''));
+        if ((!$resolvedTheme || !$resolvedTheme->getId()) && $namespacedPath !== '') {
+            $resolvedTheme = $this->resolveThemeFromPublicPath($namespacedPath);
+            if (!$resolvedTheme || !$resolvedTheme->getId()) {
+                return null;
+            }
+        } elseif (!$resolvedTheme || !$resolvedTheme->getId()) {
+            $resolvedTheme = $this->resolveTheme($resource['area'], $theme);
+        }
         if (!$resolvedTheme || !$resolvedTheme->getId()) {
             return null;
         }
@@ -165,45 +192,32 @@ final class ThemeResourceGateway
             return '';
         }
 
-        if (defined('PROD') && PROD) {
-            $resolvedTheme = $this->resolveTheme($area, $theme);
-            if (!$resolvedTheme || !$resolvedTheme->getId()) {
-                return '';
-            }
-
-            $publicThemePath = $this->themeStaticNamespaceService->resolvePublicThemePath($resolvedTheme);
-            if ($publicThemePath === '') {
-                return '';
-            }
-
-            return $this->buildStaticUrl(
-                $this->buildThemeModulePublicPath(
-                    $publicThemePath,
-                    $module['vendor'],
-                    $module['module']
-                )
-                . '/'
-                . $area
-                . '/'
-                . $relativePath,
-                $absolute
-            );
+        // Always emit theme-namespaced /static/{theme}/... URLs (DEV and PROD).
+        // Un-namespaced /Vendor/Module/view/theme/... loses Website-scoped theme_binding
+        // identity on the subsequent static request and resolves against the global
+        // active frontend theme, so design-theme-only assets 404 (multi-site).
+        $resolvedTheme = $this->resolveTheme($area, $theme);
+        if (!$resolvedTheme || !$resolvedTheme->getId()) {
+            return '';
         }
 
-        $url = '/'
-            . $module['vendor']
+        $publicThemePath = $this->themeStaticNamespaceService->resolvePublicThemePath($resolvedTheme);
+        if ($publicThemePath === '') {
+            return '';
+        }
+
+        return $this->buildStaticUrl(
+            $this->buildThemeModulePublicPath(
+                $publicThemePath,
+                $module['vendor'],
+                $module['module']
+            )
             . '/'
-            . $module['module']
-            . '/view/theme/'
             . $area
             . '/'
-            . $relativePath;
-
-        if ($absolute) {
-            $url = $this->buildAbsoluteUrl($url);
-        }
-
-        return $this->themeStaticNamespaceService->appendPreviewContextQuery($url);
+            . $relativePath,
+            $absolute
+        );
     }
 
     public function buildLayoutAssetDiskPath(
@@ -489,6 +503,42 @@ final class ThemeResourceGateway
         }
 
         return $this->themeContext->resolveTheme($area);
+    }
+
+    /**
+     * Resolve a Theme from a public static namespace (e.g. Weline/daocharms),
+     * including preview namespaces (__preview/token_…/Weline/daocharms).
+     */
+    private function resolveThemeFromPublicPath(string $publicThemePath): ?WelineTheme
+    {
+        $path = trim(str_replace('\\', '/', $publicThemePath), '/');
+        if ($path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, '__preview/')) {
+            $segments = explode('/', $path);
+            // __preview / {key} / {vendor} / {theme} [/ …]
+            if (count($segments) < 4) {
+                return null;
+            }
+            $path = implode('/', array_slice($segments, 2));
+        }
+
+        $path = trim($path, '/');
+        if ($path === '' || str_contains($path, '..')) {
+            return null;
+        }
+
+        /** @var WelineTheme $theme */
+        $theme = \Weline\Framework\Manager\ObjectManager::getInstance(WelineTheme::class);
+        $loaded = clone $theme;
+        $loaded->clear()->load(WelineTheme::schema_fields_PATH, $path);
+        if ($loaded->getId()) {
+            return $loaded;
+        }
+
+        return null;
     }
 
     private function splitModuleName(string $moduleName): ?array

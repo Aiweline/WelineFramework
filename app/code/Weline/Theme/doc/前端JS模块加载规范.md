@@ -1,6 +1,7 @@
 # 前端 JS 模块加载规范（硬约束）
 
-> 权威：前台主题/部件/布局相关 JS **只能**走本规范。MCP `hard-constraints.v1` 规则 id：`theme_js_module_declare_only`。  
+> 权威：前台主题/部件/布局相关 **业务模块 JS** 只能走本规范。MCP `hard-constraints.v1` 规则 id：`theme_js_module_declare_only`。  
+> 部件**静态文件** CSS/JS（`Vendor_Module::path`）走 [部件静态资源固化规范.md](./部件静态资源固化规范.md)（`layout-source` / `source` → bake → 指定位置）。  
 > 配套：`Theme.js使用指南.md`、`hook/frontend/partials/head/module-declarations.md`、`部件开发指南.md`。
 
 ## 1. 原则
@@ -8,9 +9,10 @@
 1. **`weline.js` 只做框架加载引擎（强制，MCP `weline_js_loader_framework_only`）**：提供 `Weline.declare` / `Weline.load` / `data-weline-load|declare` 扫描与并发/延后策略、**声明式 UI 挂载编排**（`data-weline-mount` + `Weline.mount.provide/scan/waitFor`）、以及**维护场景下懒加载** Maintenance 模块 JS（如 `maintenanceAsyncWait`）——**禁止**路径启发式 URL 预载；**禁止**在 `weline.js` 内嵌维护 UI 或任何业务逻辑 / **业务挂载面名**。**禁止**在默认配置、`nameMap` 或 `Weline.*` 业务代理里写死业务模块名（`cart` / `account` / `compareShopper` / `wishlist` / `miniCart*` / `storefront*` / `customer*` / `currency` 等）或业务能力。业务一律由归属模块 `weline.modules.js` + 部件 `data-weline-load` / `declare` 完成；挂载面由提供方 `Weline.mount.provide(surface, handler)` 自注册。允许的非业务传输别名仅 `api` / `dom`（及 `welineApi` / `welineDom`）——**明确禁止 `account`**。**核心国际化**由 `Weline_Framework` 登记模组 `i18n`（`Weline_Framework::js/i18n.js`，与 `Phrase` 同属框架能力面；**不**重命名 Phrase，以免与小写 `i18n/` CSV 目录冲突）；主题 head / 语言部件 `declare`/`data-weline-load="i18n"` 加载。外置 `Weline_I18n` 只做增强（语言切换器 UI、国旗、AI 翻译等）。
 2. **主题 head 提供加载器底座**（`theme.js` / 前台等价入口 `Weline`）：提供 `Weline.declare` / `Weline.load` / `data-weline-load` / `Weline.mount`。
 3. **业务模块用 `weline.modules.js` 注册** JS 模块与别名（含 `paths` / `globalVar`），禁止在部件/布局里手写 `<script src>` / `@static(...js)` / 裸 `<js>` 去拉「模块级」脚本。
-4. **部件只声明依赖**：在部件根节点挂 `data-weline-load="cart"` 或 `data-weline-declare="account"`；加载器扫描属性后自动加载。延后策略由 `runtimeConfig.modulesLoad.deferByDefault`（默认 `true` → 空闲延后）控制；需要立刻加载的模块由**站点运行时** `eagerModules` 覆盖，或部件侧显式 `Weline.declare(name, { load: 'eager' })`——**不要**把业务名单写回 `weline.js` 默认值。
-5. **布局有 slot 就用 slot**：模块提供部件注入已有 slot；不要为同一能力再造平行挂载点。
-6. **PHP 可扫描**：声明必须可被 `Weline\I18n\Helper\JsModuleParser` 识别（`Weline.declare(...)` / `data-weline-load`）。
+4. **部件业务模块依赖**：在部件根节点挂 `data-weline-load="cart"` 或 `data-weline-declare="account"`；加载器扫描属性后自动加载。延后策略由 `runtimeConfig.modulesLoad.deferByDefault`（默认 `true` → 空闲延后）控制；需要立刻加载的模块由**站点运行时** `eagerModules` 覆盖，或部件侧显式 `Weline.declare(name, { load: 'eager' })`——**不要**把业务名单写回 `weline.js` 默认值。
+5. **部件静态文件（硬 · 书面例外）**：`w:widget` 的 `layout-source` / `source`（或 `@widget.layout_source` / `@widget.source`）列出的 `Vendor_Module::…js|css`，由布局 **bake** 写入资源闭包，按声明位置统一去重排放（见 [部件静态资源固化规范.md](./部件静态资源固化规范.md)、MCP `widget_static_assets_bake_to_head`）。此通道的外部 `<script src>` **不等于**允许模板手搓业务模块脚本。
+6. **布局有 slot 就用 slot**：模块提供部件注入已有 slot；不要为同一能力再造平行挂载点。
+7. **PHP 可扫描**：业务模块声明必须可被 `Weline\I18n\Helper\JsModuleParser` 识别（`Weline.declare(...)` / `data-weline-load`）。
 
 ### 1.0 声明式 UI 挂载（`Weline.mount`）
 
@@ -44,14 +46,15 @@
 
 提供方清单写在各模块 `doc/挂载面.md`（如 Customer）；协议正文以本节为准。
 
-### 1.1 两套加载通道（仅此两种）
+### 1.1 加载通道
 
 | 通道 | 触发条件 | 典型日志 |
 |------|----------|----------|
 | **申明加载** | `Weline.declare(...)` / head `module-declarations` | 声明延后 / 立即加载 |
 | **属性申明加载** | DOM 上 `data-weline-load` / `data-weline-declare` | `部件属性模块加载` |
+| **Bake 静态资产** | `layout-source` / `source` 固化闭包 | 按声明位置输出外部 link/script 一次 |
 
-**禁止路径启发式**：不再按 URL 路径自动预载模块（易与模板声明重复插 script）。需要模块时在模板 / 部件 / head 自行声明。
+业务模块仍只有前两行；第三行是部件静态文件专用，**禁止**用路径启发式预载业务模块名。
 
 属性通道对「已加载 / 加载中」的模块跳过；开发日志写「已跳过（已加载/加载中）」。同一模块不会双插 script。
 
@@ -171,7 +174,7 @@ Hook：`Weline_Theme::frontend::partials::head::module-declarations`
 
 - 部件/布局/body-end **直接** `<script src="@static(Module::js/....js)">` 加载已登记或应登记的模块脚本
 - 用裸 `<js>Module::js/....js</js>` 替代 `data-weline-load` / `declare`（模块级能力）
-- 在部件模板内写带 `<?=` 的内联业务 `<script>`（布局提取会泄漏文本）
+- 在部件模板内写任何可执行内联 `<script>` 或 `on*=` 事件代码
 - 业务请求绕过 `Weline.Api.*`（仍遵守 Frontend Api 规范）
 - 在 `Weline_Frontend::js/weline.js` 默认配置 / `getGlobalVarName` 回退表 / **路径启发式** / `Weline.Account` 等业务代理中**写死业务模块名或业务逻辑**（路径启发式已移除；含 `account`/`cart` 必须放归属模块的 `weline.modules.js` + 部件声明）
 - 在 `weline.js` **内嵌**维护弹层/兑礼 UI（只允许懒加载 Maintenance 模块 JS）
@@ -209,3 +212,5 @@ Hook：`Weline_Theme::frontend::partials::head::module-declarations`
 - 页面 Network 中模块脚本由加载器发起，部件 DOM 上可见 `data-weline-load` / `data-weline-declare`
 - 无重复的「同路径手写 script + 属性双加载」残留（手写 script 必须删除）
 - `JsModuleParser` / 主题相关契约测试通过
+
+部件资源位置完整契约见 [部件静态资源固化规范.md](./部件静态资源固化规范.md)：`source-postion` 优先于别名 `source-position`，内部 `source_position`；默认 head，body/end-body 同义，footer 结束前（无 footer 落 body 末尾）；layout-source 始终提前 head，同 URL layout 优先去重。

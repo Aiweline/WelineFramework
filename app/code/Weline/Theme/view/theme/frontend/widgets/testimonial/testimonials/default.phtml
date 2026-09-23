@@ -8,6 +8,7 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css}
  * @param title {default="评价与引言",type="string",label="标题"}
  * @param subtitle {default="",type="string",label="副标题"}
  * @param testimonials {default=[],type="testimonial_items",label="评价列表"}
@@ -77,7 +78,6 @@ if ($items === []) {
     ];
 }
 ?>
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-weline-load="siteBlocks" data-site-block="testimonials">

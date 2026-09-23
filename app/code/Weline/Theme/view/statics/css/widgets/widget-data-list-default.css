@@ -1,0 +1,246 @@
+/* ============================================
+   组件：Backend Data List
+   模块：Weline_Theme
+   前缀：backend-data-list-
+   ============================================ */
+
+.backend-data-list {
+    background: var(--backend-color-card-bg);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius-md);
+    box-shadow: var(--backend-card-shadow);
+    overflow: hidden;
+}
+
+/* 头部 */
+.backend-data-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-sm);
+}
+
+.backend-data-list-title {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm);
+}
+
+.backend-data-list-title h4 {
+    margin: 0;
+    font-size: var(--token-size-1-1rem);
+    font-weight: 600;
+    color: var(--backend-color-text-primary);
+}
+
+.backend-data-list-count {
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-secondary);
+}
+
+.backend-data-list-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md);
+}
+
+/* 搜索框 */
+.backend-data-list-search {
+    position: relative;
+}
+
+.backend-data-list-search-input {
+    width: var(--size-panel-220);
+    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
+    padding-left: var(--spacing-9);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius);
+    background: var(--backend-color-input-bg);
+    color: var(--backend-color-text-primary);
+    font-size: var(--font-size-sm);
+    transition: all 0.2s ease;
+}
+
+.backend-data-list-search-input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary);
+    box-shadow: var(--backend-focus-ring);
+}
+
+.backend-data-list-search-input::placeholder {
+    color: var(--backend-color-text-tertiary);
+}
+
+.backend-data-list-search-icon {
+    position: absolute;
+    left: var(--weline-space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--backend-color-text-tertiary);
+    pointer-events: none;
+}
+
+/* 批量操作栏 */
+.backend-data-list-batch-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md);
+    padding: var(--backend-spacing-sm) var(--backend-spacing-lg);
+    background: var(--backend-color-primary-bg-subtle);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-primary);
+}
+
+.backend-data-list-batch-info {
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-primary);
+    font-weight: 500;
+}
+
+.backend-data-list-batch-cancel {
+    margin-left: auto;
+    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
+    border: none;
+    background: transparent;
+    color: var(--backend-color-text-secondary);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+}
+
+.backend-data-list-batch-cancel:hover {
+    color: var(--backend-color-text-primary);
+}
+
+/* 表格 */
+.backend-data-list-body {
+    overflow-x: auto;
+}
+
+.backend-data-list-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.backend-data-list-table th {
+    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
+    text-align: left;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-primary);
+    background: var(--backend-color-bg-secondary);
+    border-bottom: var(--border-width-medium) solid var(--backend-color-border-default);
+    white-space: nowrap;
+}
+
+.backend-data-list-table td {
+    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
+    color: var(--backend-color-text-primary);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+    font-size: var(--font-size-sm);
+}
+
+/* 表格变体 */
+.backend-data-list-table--striped tbody tr:nth-child(even) {
+    background: var(--backend-color-bg-tertiary);
+}
+
+.backend-data-list-table--hover tbody tr:hover {
+    background: var(--backend-color-table-bg-hover);
+}
+
+.backend-data-list-table--bordered td,
+.backend-data-list-table--bordered th {
+    border: var(--border-width-thin) solid var(--backend-color-border-light);
+}
+
+/* 复选框列 */
+.backend-data-list-checkbox-col {
+    width: var(--size-control-md);
+    text-align: center;
+}
+
+/* 排序图标 */
+.backend-data-list-sort-icon {
+    margin-left: var(--backend-spacing-xs);
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.backend-data-list-sort-icon:hover {
+    opacity: 1;
+}
+
+/* 空状态 */
+.backend-data-list-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl) var(--backend-spacing-md);
+    color: var(--backend-color-text-tertiary);
+}
+
+.backend-data-list-empty i {
+    font-size: var(--spacing-2xl);
+    opacity: 0.4;
+    margin-bottom: var(--backend-spacing-md);
+    display: block;
+}
+
+.backend-data-list-empty p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+/* 分页 */
+.backend-data-list-footer {
+    display: flex;
+    justify-content: center;
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-top: var(--border-width-thin) solid var(--backend-color-border-light);
+}
+
+.backend-data-list-pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm);
+}
+
+.backend-data-list-page-btn {
+    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius);
+    background: var(--backend-color-card-bg);
+    color: var(--backend-color-text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.backend-data-list-page-btn:hover:not(:disabled) {
+    border-color: var(--backend-color-primary);
+    color: var(--backend-color-primary);
+}
+
+.backend-data-list-page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.backend-data-list-page-info {
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-secondary);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .backend-data-list-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .backend-data-list-search-input {
+        width: 100%;
+    }
+}
+
+[data-widget-style-class="ea84be82abab993a"] {display: none;}

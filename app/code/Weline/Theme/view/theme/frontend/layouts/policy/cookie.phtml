@@ -35,13 +35,13 @@ $updatedAt = date('Y-m-d');
 $ariaNav = (string)WidgetI18n::label('Cookie 政策目录');
 $ariaArticle = (string)WidgetI18n::label('Cookie 政策正文');
 $toc = [
-    ['id' => 'cookie-s1', 'label' => WidgetI18n::label('一、什么是 Cookie？')],
-    ['id' => 'cookie-s2', 'label' => WidgetI18n::label('二、我们如何使用 Cookie？')],
-    ['id' => 'cookie-s3', 'label' => WidgetI18n::label('三、我们使用的 Cookie 类型')],
-    ['id' => 'cookie-s4', 'label' => WidgetI18n::label('四、第三方 Cookie')],
-    ['id' => 'cookie-s5', 'label' => WidgetI18n::label('五、您如何管理 Cookie？')],
-    ['id' => 'cookie-s6', 'label' => WidgetI18n::label('六、本站典型 Cookie 用途示例')],
-    ['id' => 'cookie-s7', 'label' => WidgetI18n::label('七、与隐私政策的关系')],
+    ['id' => 'cookie-s1', 'label' => WidgetI18n::label('1 / 什么是 Cookie？')],
+    ['id' => 'cookie-s2', 'label' => WidgetI18n::label('2 / 我们如何使用 Cookie？')],
+    ['id' => 'cookie-s3', 'label' => WidgetI18n::label('3 / Cookie 有哪些类型')],
+    ['id' => 'cookie-s4', 'label' => WidgetI18n::label('4 / 第三方 Cookie')],
+    ['id' => 'cookie-s5', 'label' => WidgetI18n::label('5 / 您如何管理 Cookie？')],
+    ['id' => 'cookie-s6', 'label' => WidgetI18n::label('6 / 本站典型用途示例')],
+    ['id' => 'cookie-s7', 'label' => WidgetI18n::label('7 / 与隐私政策的关系')],
 ];
 $tocFallbackPath = '/policy/cookie';
 ?>
@@ -150,7 +150,8 @@ $tocFallbackPath = '/policy/cookie';
             border-right: 1px solid #e3e6e6;
             background: #fafafa;
             position: sticky;
-            top: 12rem;
+            top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem));
+            align-self: start;
         }
         .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
         .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
@@ -179,7 +180,7 @@ $tocFallbackPath = '/policy/cookie';
             color: #565959;
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 12rem; }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem)); }
         .amazon-policy__section h2 {
             margin: 0 0 0.75rem;
             font-size: 1.2rem;
@@ -288,10 +289,10 @@ $tocFallbackPath = '/policy/cookie';
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
                                 <h1 id="policy-cookie-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('Cookie 政策')) ?><?php endif; ?></h1>
-                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。')) ?></p>
+                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('必要 Cookie 让登录、购物车、结账能正常工作。统计或营销类 Cookie，我们会先征得您的同意再开启；您也可以随时在浏览器里清理。')) ?></p>
                                 <div class="amazon-policy__meta">
                                     <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
-                                    <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                    <a href="@url"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
                                     <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                         </div>
                         </header>
@@ -307,15 +308,15 @@ $tocFallbackPath = '/policy/cookie';
                                     </aside>
 
                                     <article class="amazon-policy__article" aria-label="<?= $escape($ariaNav) ?>">
-                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('Cookie 是提升网站可用性与安全的重要技术。请结合目录了解用途、类型与管理方式；完整个人信息说明请参阅隐私政策。')) ?></p>
+                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('下面说明我们用哪些 Cookie、各自做什么，以及您如何管理。完整的个人信息说明请参阅隐私政策。')) ?></p>
 
                                         <section class="amazon-policy__section" id="cookie-s1" weline-code="theme.policy.section_2">
-                                            <h2><?= $escape(WidgetI18n::label('一、什么是 Cookie？')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('1 / 什么是 Cookie？')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('Cookie 是当您访问网站时，由网站服务器存储在您设备上的小型文本文件。Cookie 有助于网站识别您的设备，记住您的偏好设置，并改进服务体验。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="cookie-s2" weline-code="theme.policy.section_3">
-                                            <h2><?= $escape(WidgetI18n::label('二、我们如何使用 Cookie？')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('2 / 我们如何使用 Cookie？')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('我们使用 Cookie 和类似技术（如 LocalStorage、SessionStorage 等），主要用于以下目的：')) ?></p>
                                             <ul>
                                                 <li><?= $escape(WidgetI18n::label('（1）身份识别与登录状态维护：用于识别您的账户身份，保持登录状态，避免频繁重复登录。')) ?></li>
@@ -326,7 +327,7 @@ $tocFallbackPath = '/policy/cookie';
                                         </section>
 
                                         <section class="amazon-policy__section" id="cookie-s3" weline-code="theme.policy.section_4">
-                                            <h2><?= $escape(WidgetI18n::label('三、我们使用的 Cookie 类型')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('3 / Cookie 有哪些类型')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('根据用途不同，我们可能会使用以下类型的 Cookie：')) ?></p>
                                             <ul>
                                                 <li><?= $escape(WidgetI18n::label('（1）严格必要类 Cookie：用于实现网站基本功能，例如账号登录、购物车、订单结算等。若缺少此类 Cookie，网站功能将无法正常运行。')) ?></li>
@@ -337,13 +338,13 @@ $tocFallbackPath = '/policy/cookie';
                                         </section>
 
                                         <section class="amazon-policy__section" id="cookie-s4" weline-code="theme.policy.section_5">
-                                            <h2><?= $escape(WidgetI18n::label('四、第三方 Cookie')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('4 / 第三方 Cookie')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('在某些情况下，我们可能会使用第三方提供的服务（例如统计分析工具、支付服务、社交媒体插件等），这些第三方也可能在您的设备上设置或读取 Cookie。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('第三方 Cookie 的使用受其各自的隐私政策约束，我们建议您查阅相关第三方的隐私政策以了解详细信息。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="cookie-s5" weline-code="theme.policy.section_6">
-                                            <h2><?= $escape(WidgetI18n::label('五、您如何管理 Cookie？')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('5 / 您如何管理 Cookie？')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('非必要统计/营销类 Cookie 将在获得同意后再启用；必要 Cookie 除外。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('您可以通过以下方式管理或删除 Cookie：')) ?></p>
                                             <ul>
@@ -355,7 +356,7 @@ $tocFallbackPath = '/policy/cookie';
                                         </section>
 
                                         <section class="amazon-policy__section" id="cookie-s6" weline-code="theme.policy.section_7">
-                                            <h2><?= $escape(WidgetI18n::label('六、本站典型 Cookie 用途示例')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('6 / 本站典型用途示例')) ?></h2>
                                             <ul>
                                                 <li><?= $escape(WidgetI18n::label('（1）会话与登录：维持登录态、防范 CSRF 与异常会话；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（2）购物与结账：记住购物车、结账步骤中的必要上下文；')) ?></li>
@@ -366,14 +367,14 @@ $tocFallbackPath = '/policy/cookie';
                                         </section>
 
                                         <section class="amazon-policy__section" id="cookie-s7" weline-code="theme.policy.section_8">
-                                            <h2><?= $escape(WidgetI18n::label('七、与隐私政策的关系')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('7 / 与隐私政策的关系')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('Cookie 及相关技术属于个人信息处理的一部分，补充说明见「隐私政策」。若本页与隐私政策就同一事项表述不一致，以对您权益保护更有利且符合现行法律的解释为准。')) ?></p>
                                         </section>
 
                                         <div class="amazon-policy__footer-note">
                                             <p><?= $escape(WidgetI18n::label('如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。')) ?></p>
                                             <div class="amazon-policy__related">
-                                                <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                                <a href="@url"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
                                                 <a href="@url{'terms'}"><?= $escape(WidgetI18n::label('服务条款')) ?></a>
                                                 <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                                             </div>

@@ -48,6 +48,22 @@ final class ThemeEditorDraftResetContractTest extends TestCase
         );
     }
 
+    public function testEditorCssRaisesBusyOverlayAboveFloatingPanels(): void
+    {
+        foreach ([
+            'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css',
+            'app/code/Weline/Theme/view/ui/css/pages/theme-editor.css',
+        ] as $relative) {
+            $css = $this->read($relative);
+            self::assertStringContainsString(
+                '.theme-editor-container.w-busy[data-w-busy="true"] > [data-w-busy-overlay]',
+                $css,
+                $relative,
+            );
+            self::assertStringContainsString('z-index: 2147483600', $css, $relative);
+        }
+    }
+
     public function testDualEditorsExposeResetDraftApiAndHandlers(): void
     {
         foreach ([
@@ -57,6 +73,10 @@ final class ThemeEditorDraftResetContractTest extends TestCase
             self::assertStringContainsString('apiResetDraftResources', $source, $relative);
             self::assertStringContainsString('function openResetDraftModal(', $source, $relative);
             self::assertStringContainsString('function executeResetDraftResources(', $source, $relative);
+            self::assertStringContainsString('function setEditorBusy(', $source, $relative);
+            self::assertStringContainsString('setEditorBusy(true, busyMessage)', $source, $relative);
+            self::assertStringContainsString('setEditorBusy(false)', $source, $relative);
+            self::assertStringContainsString('ui.setBusy(host', $source, $relative);
             self::assertStringContainsString("resources: selection.resources", $source, $relative);
             self::assertStringContainsString("layout_scope: selection.layout_scope", $source, $relative);
             self::assertStringContainsString("selection.resources.includes('layout')", $source, $relative);

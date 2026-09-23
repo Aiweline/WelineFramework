@@ -1,0 +1,15 @@
+.wc-theme_widget_header_search {
+    width: 100%;
+    max-width: none;
+    font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
+}
+
+.wc-theme_widget_header_search .header-search-form,
+.wc-theme_widget_header_search .w-search-form {
+    position: relative;
+}
+
+.widget-preview-canvas .wc-theme_widget_header_search,
+.wc-theme_widget_header_search.is-preview {
+    max-width: 100%;
+}

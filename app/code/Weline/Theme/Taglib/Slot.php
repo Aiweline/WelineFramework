@@ -136,6 +136,34 @@ class Slot implements TaglibInterface
             return '';
         };
     }
+
+    /** Dynamic attributes are resolved after template execution: return HTML, not PHP source. */
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            \Weline\Framework\View\Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            SlotValidator::validate($attributes, 'unknown', 0);
+            $id = (string)$attributes['id'];
+            self::registerSlot($id, 'unknown', 0);
+            $wrapper = htmlspecialchars((string)($attributes['wrapper'] ?? 'div'), ENT_QUOTES, 'UTF-8');
+
+            if (\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()) {
+                return SlotBoundaryMarkers::open($id)
+                    . '<' . $wrapper . self::buildHtmlAttributes($attributes) . '>'
+                    . $content . '</' . $wrapper . '>' . SlotBoundaryMarkers::close($id);
+            }
+
+            $class = htmlspecialchars(trim('theme-published-slot ' . (string)($attributes['class'] ?? '')), ENT_QUOTES, 'UTF-8');
+            $safeId = htmlspecialchars($id, ENT_QUOTES, 'UTF-8');
+            return '<' . $wrapper . ' class="' . $class . '" data-slot-id="' . $safeId . '">'
+                . \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::publishedInner($id, $content)
+                . '</' . $wrapper . '>';
+        };
+    }
     
     /**
      * 处理开始标签

@@ -179,7 +179,7 @@ final class ThemeBrandBasicsContractTest extends TestCase
         $footer = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/theme/frontend/widgets/container/footer/default.phtml'
         );
-        self::assertStringContainsString('resolveFrontendSiteName', $footer);
+        self::assertStringContainsString('resolveFrontendWordmark', $footer);
         self::assertStringContainsString('footer-locale__logo-text', $footer);
         self::assertStringContainsString('留空使用当前网站名称', $footer);
         self::assertStringNotContainsString(
@@ -190,12 +190,12 @@ final class ThemeBrandBasicsContractTest extends TestCase
         $logoWidget = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/theme/frontend/widgets/header/logo/default.phtml'
         );
-        self::assertStringContainsString('resolveFrontendSiteName', $logoWidget);
+        self::assertStringContainsString('resolveFrontendWordmark', $logoWidget);
         self::assertStringNotContainsString('@param logo_text {default="Weline"', $logoWidget);
 
         $header = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/theme/frontend/partials/header/default.phtml'
         );
-        self::assertStringContainsString('resolveFrontendSiteName', $header);
+        self::assertStringContainsString('resolveFrontendWordmark', $header);
     }
 }

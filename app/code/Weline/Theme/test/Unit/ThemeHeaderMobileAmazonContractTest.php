@@ -221,6 +221,9 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('data-account-avatar', $accountSource);
         self::assertStringContainsString('data-account-avatar-fallback', $accountSource);
         self::assertStringContainsString('account-avatar__img', $accountSource);
+        self::assertStringContainsString('account-avatar--menu', $accountSource);
+        self::assertStringContainsString('dropdown-header__copy', $accountSource);
+        self::assertSame(2, substr_count($accountSource, 'data-account-avatar-wrap'), 'Trigger + dropdown welcome both need avatar wraps');
         self::assertGreaterThan($hookClose, $logoutAction, 'Logout must render after header-account-links, not as a hook menu item');
         self::assertStringContainsString('display: block', $accountSource);
         self::assertStringContainsString('.account-dropdown .dropdown-menu', $accountSource);

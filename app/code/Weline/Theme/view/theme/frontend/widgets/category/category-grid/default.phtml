@@ -1,12 +1,13 @@
 <?php
 /**
- * 分类网格部件
+ * @widget.source {Weline_Theme::css/widgets/widget-category-category-grid-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
+ * 分类网格 / 磁贴条部件
  *
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {category-grid}
  * @widget.name {分类网格}
- * @widget.description {以网格形式展示商品分类}
+ * @widget.description {以网格或矮磁贴条展示商品分类}
  * @widget.type {category}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -16,9 +17,11 @@
  * @param title {default="热门分类",type="string",label="标题"}
  * @param subtitle {default="浏览我们的商品分类",type="string",label="副标题"}
  * @param category_ids {default="",type="string",label="指定分类ID",description="逗号分隔，留空自动获取"}
- * @param limit {default=8,type="number",label="显示数量"}
- * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
- * @param show_count {default=true,type="bool",label="显示产品数量"}
+ * @param limit {default=7,type="number",label="显示数量",description="磁贴条建议 5–8（不含「全部」）"}
+ * @param columns {default="7",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列",7:"7列",8:"8列"}}
+ * @param display_mode {default="strip",type="select",label="展示形态",options={strip:"矮磁贴条",grid:"画廊网格"}}
+ * @param show_count {default=false,type="bool",label="显示产品数量"}
+ * @param show_all_link {default=true,type="bool",label="显示「全部」入口"}
  * @param image_ratio {default="square",type="select",label="图片比例",options={square:"正方形",portrait:"竖向",landscape:"横向"}}
  */
 
@@ -52,16 +55,21 @@ $title = in_array($titleSource, ['', '热门分类', '按汉服品类选购'], t
     ? $translateDefaultCopy('按汉服品类选购', 'Shop Hanfu by Category')
     : WidgetI18n::label($titleSource);
 $subtitle = in_array($subtitleSource, ['', '浏览我们的商品分类', '从准确形制开始选择'], true)
-    ? $translateDefaultCopy('从准确形制开始选择', 'Start with the garment form that matches your needs')
+    ? ''
     : WidgetI18n::label($subtitleSource);
 $categoryIds = (string)($this->getData('category_ids') ?? '');
-$limit = max(1, min(5, (int)($this->getData('limit') ?? 5)));
-$columns = (string)($this->getData('columns') ?? '5');
+$limit = max(1, min(8, (int)($this->getData('limit') ?? 7)));
+$columns = (string)($this->getData('columns') ?? '7');
+$displayMode = strtolower(trim((string)($this->getData('display_mode') ?? 'strip')));
+if (!in_array($displayMode, ['strip', 'grid'], true)) {
+    $displayMode = 'strip';
+}
 $showCount = (bool)($this->getData('show_count') ?? false);
+$showAllLink = (bool)($this->getData('show_all_link') ?? true);
 $imageRatio = (string)($this->getData('image_ratio') ?? 'square');
 
-if (!in_array($columns, ['2', '3', '4', '5', '6'], true)) {
-    $columns = '5';
+if (!in_array($columns, ['2', '3', '4', '5', '6', '7', '8'], true)) {
+    $columns = $displayMode === 'strip' ? '7' : '4';
 }
 
 $ratioMap = [
@@ -69,7 +77,7 @@ $ratioMap = [
     'landscape' => '56.25%',
     'portrait'  => '133.33%',
 ];
-$paddingTop = $ratioMap[$imageRatio] ?? '100%';
+$paddingTop = $displayMode === 'strip' ? '100%' : ($ratioMap[$imageRatio] ?? '100%');
 
 $categoryNames = [
     [
@@ -112,6 +120,30 @@ $categoryNames = [
         'alt_zh' => '汉服套装分类图，展示完整上下装搭配',
         'alt_en' => 'Hanfu sets category image showing a complete coordinated outfit',
     ],
+    [
+        'id' => 190,
+        'code' => 'women/mamian',
+        'name_zh' => '马面裙',
+        'name_en' => 'Mamian Skirt',
+        'alt_zh' => '马面裙分类图',
+        'alt_en' => 'Mamian skirt category image',
+    ],
+    [
+        'id' => 191,
+        'code' => 'women/ruqun',
+        'name_zh' => '襦裙',
+        'name_en' => 'Ruqun',
+        'alt_zh' => '襦裙分类图',
+        'alt_en' => 'Ruqun category image',
+    ],
+    [
+        'id' => 192,
+        'code' => 'women/aoqun',
+        'name_zh' => '袄裙',
+        'name_en' => 'Aoqun',
+        'alt_zh' => '袄裙分类图',
+        'alt_en' => 'Aoqun category image',
+    ],
 ];
 $categoryDisplayNames = [];
 try {
@@ -123,6 +155,7 @@ $categories = [];
 foreach (array_slice($categoryNames, 0, $limit) as $category) {
     $code = (string)$category['code'];
     $localizedName = trim((string)($categoryDisplayNames[$code] ?? ''));
+    $iconCode = explode('/', $code)[0];
     $categories[] = [
         'id' => (int)$category['id'],
         'name' => $localizedName !== ''
@@ -130,21 +163,25 @@ foreach (array_slice($categoryNames, 0, $limit) as $category) {
             : ($isChineseLocale ? (string)$category['name_zh'] : (string)$category['name_en']),
         'alt' => $translateDefaultCopy($category['alt_zh'], $category['alt_en']),
         'url' => '/category/' . $code,
-        'image' => '/pub/media/catalog/hanfu/r2/categories/icons/' . $code . '.webp',
+        'image' => '/pub/media/catalog/hanfu/r2/categories/icons/' . $iconCode . '.webp',
         'count' => 0,
     ];
 }
+$allLabel = $translateDefaultCopy('全部', 'All');
+$allUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref('/products');
 $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
+$isStrip = $displayMode === 'strip';
 ?>
 
-<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+<section class="<?= $esc($wc) ?><?= $isStrip ? ' is-strip' : ' is-grid' ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="<?= $esc($rootStyle) ?>">
+         data-display-mode="<?= $esc($displayMode) ?>"
+         data-widget-style="<?= $esc($rootStyle) ?>">
 
     <?php if ($title !== '' || $subtitle !== ''): ?>
-        <div class="grid-header">
+        <div class="grid-header<?= $isStrip ? ' grid-header--strip' : '' ?>">
             <?php if ($title !== ''): ?>
                 <h2 class="grid-title"><?= $esc($title) ?></h2>
             <?php endif; ?>
@@ -154,15 +191,17 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
         </div>
     <?php endif; ?>
 
-    <div class="category-grid columns-<?= $esc($columns) ?>">
+    <div class="category-grid columns-<?= $esc($columns) ?><?= $isStrip ? ' category-grid--strip' : '' ?>" role="list">
         <?php foreach ($categories as $category): ?>
             <?php
             $categoryImage = trim((string)($category['image'] ?? ''));
             $categoryImageIsBanner = str_contains($categoryImage, '/banners/');
-            $categoryImageWidth = $categoryImageIsBanner ? 1500 : 800;
-            $categoryImageHeight = $categoryImageIsBanner ? 300 : 800;
+            $categoryImageWidth = $isStrip ? 96 : ($categoryImageIsBanner ? 1500 : 800);
+            $categoryImageHeight = $isStrip ? 96 : ($categoryImageIsBanner ? 300 : 800);
             ?>
-            <a href="<?= $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) ?>" class="category-card">
+            <a href="<?= $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) ?>"
+               class="category-card<?= $isStrip ? ' category-card--tile' : '' ?>"
+               role="listitem">
                 <div class="category-image-wrapper">
                     <img src="<?= $esc($categoryImage) ?>"
                          alt="<?= $esc((string)($category['alt'] ?? $category['name'] ?? '')) ?>"
@@ -171,7 +210,9 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
                          height="<?= (int)$categoryImageHeight ?>"
                          loading="lazy"
                          decoding="async">
-                    <div class="category-overlay"></div>
+                    <?php if (!$isStrip): ?>
+                        <div class="category-overlay"></div>
+                    <?php endif; ?>
                 </div>
 
                 <div class="category-info">
@@ -182,137 +223,20 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
                 </div>
             </a>
         <?php endforeach; ?>
+
+        <?php if ($showAllLink): ?>
+            <a href="<?= $esc($allUrl) ?>"
+               class="category-card category-card--all<?= $isStrip ? ' category-card--tile' : '' ?>"
+               role="listitem"
+               aria-label="<?= $esc($allLabel) ?>">
+                <div class="category-image-wrapper category-image-wrapper--all" aria-hidden="true">
+                    <span class="category-all-glyph">+</span>
+                </div>
+                <div class="category-info">
+                    <h3 class="category-name"><?= $esc($allLabel) ?></h3>
+                </div>
+            </a>
+        <?php endif; ?>
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    width: 100%;
-    max-width: none;
-    margin-inline: 0;
-    padding-block: var(--weline-space-8);
-    padding-inline: 0;
-    box-sizing: border-box;
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .grid-header {
-    text-align: center;
-    margin-bottom: var(--weline-space-8);
-}
-
-.<?= $wc ?> .grid-title {
-    font-size: var(--weline-font-size-3xl);
-    font-weight: 700;
-    margin: 0 0 var(--weline-space-3);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .grid-subtitle {
-    font-size: var(--weline-font-size-base);
-    color: var(--weline-theme-text-muted);
-    margin: 0;
-}
-
-.<?= $wc ?> .category-grid {
-    display: grid;
-    gap: var(--weline-space-5);
-}
-
-.<?= $wc ?> .category-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
-.<?= $wc ?> .category-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
-.<?= $wc ?> .category-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
-.<?= $wc ?> .category-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
-.<?= $wc ?> .category-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
-
-.<?= $wc ?> .category-card {
-    display: block;
-    text-decoration: none;
-    border-radius: var(--weline-radius-xl);
-    overflow: hidden;
-    background: var(--weline-theme-surface-raised);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    box-shadow: var(--weline-theme-shadow-sm);
-    transition: all var(--weline-theme-transition-base);
-    color: inherit;
-}
-
-.<?= $wc ?> .category-card:hover {
-    box-shadow: var(--weline-theme-shadow-md);
-    transform: translateY(var(--token-size-5px));
-}
-
-.<?= $wc ?> .category-image-wrapper {
-    position: relative;
-    overflow: hidden;
-    padding-top: var(--wc-category-ratio);
-}
-
-.<?= $wc ?> .category-image {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform var(--weline-theme-transition-slow);
-}
-
-.<?= $wc ?> .category-card:hover .category-image {
-    transform: scale(1.1);
-}
-
-.<?= $wc ?> .category-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        to bottom,
-        transparent 0%,
-        color-mix(in srgb, var(--weline-theme-overlay) 40%, transparent) 100%
-    );
-    opacity: 0;
-    transition: opacity var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .category-card:hover .category-overlay {
-    opacity: 1;
-}
-
-.<?= $wc ?> .category-info {
-    padding: var(--weline-space-4);
-    text-align: center;
-}
-
-.<?= $wc ?> .category-name {
-    margin: 0 0 var(--weline-space-1);
-    font-size: var(--weline-font-size-base);
-    font-weight: 600;
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .category-count {
-    font-size: var(--weline-font-size-sm);
-    color: var(--weline-theme-text-muted);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    padding: var(--weline-space-5) 0;
-}
-
-@media (max-width: 992px) {
-    .<?= $wc ?> .category-grid.columns-5,
-    .<?= $wc ?> .category-grid.columns-6 {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-@media (max-width: 768px) {
-    .<?= $wc ?> .category-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
-    }
-
-    .<?= $wc ?> .grid-title {
-        font-size: var(--weline-font-size-xl);
-    }
-}
-</style>

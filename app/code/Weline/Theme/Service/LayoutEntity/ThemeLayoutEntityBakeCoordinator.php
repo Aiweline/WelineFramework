@@ -34,6 +34,73 @@ final class ThemeLayoutEntityBakeCoordinator
     ) {
     }
 
+    /** Rebuild the selected editor artifacts without changing a release or draft payload. */
+    public function refreshResourceArtifacts(\Weline\Theme\Api\Scoped\ThemeEditorContext $context, string $status, int $versionId = 0): array
+    {
+        $scope = $context->scope->storageScope;
+        $published = $status === 'published';
+        $chromeVersion = 0;
+        $chromeScope = $scope;
+        if ($versionId > 0) {
+            $selection = ObjectManager::getInstance(\Weline\Theme\Service\ThemeVersionPreviewResolver::class)->resolve(
+                $context->themeId, $context->layoutType, $context->area,
+                ['scope' => $scope, 'layout_option' => $context->layoutOption, 'target_type' => $context->targetType, 'target_id' => $context->targetId], $versionId,
+            );
+            if (empty($selection['resolved'])) { throw new \RuntimeException((string)($selection['reason'] ?? 'preview_version_unresolved')); }
+            $nodes = $selection['nodes'];
+            $entityKey = $selection['entity_key'];
+            $published = str_starts_with($entityKey, 'r');
+            $releaseId = $published ? (int)substr($entityKey, 1) : null;
+            $revisionId = $published ? 0 : (int)substr($entityKey, 1);
+            $chromeVersion = (int)$selection['chrome_version_id'];
+            $chromeScope = (string)$selection['chrome_scope'];
+        } else {
+            $workspace = ObjectManager::getInstance(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class)->load($context, true);
+            $payload = $workspace[$published ? 'published_payload' : 'draft_payload'] ?? [];
+            $nodes = is_array($payload['nodes'] ?? null) ? $payload['nodes'] : $payload;
+            $releaseId = $published ? (int)($workspace['effective_release_id'] ?? $workspace['published_release_id'] ?? 0) : null;
+            $revisionId = $published ? 0 : (int)($workspace['draft_revision_id'] ?? 0);
+            if ($published && !empty($workspace['published_source_scope']) && $workspace['published_source_scope'] !== $scope) {
+                $hierarchy = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+                $identity = $hierarchy->fromStorageScope($workspace['published_source_scope'], true);
+                if ($identity !== null) { $context = $context->withScope($hierarchy->contextFromIdentity($identity)); $scope = $context->scope->storageScope; }
+            }
+            $entityKey = $published && $releaseId > 0 ? 'r' . $releaseId : 'd' . $revisionId;
+            $chrome = $published ? $this->pointers->resolvePublishedChrome($context->themeId, $scope) : $this->pointers->resolveCurrentChrome($context->themeId, $scope);
+            $chromeVersion = (int)($chrome['version_id'] ?? 0);
+            $chromeScope = (string)($chrome['scope'] ?? $scope);
+        }
+        // Workspace payloads need the same required-injection projection as ordinary bakes.
+        // Pass the selected layout version so its explicit uninstall records still win.
+        $path = $this->bakePageFromNodes($context->themeId, $scope, $context->identityHash(), $context->layoutType,
+            $nodes, $published, $releaseId, $revisionId, $versionId ?: null, [], false, $context->layoutOption, $context->area);
+        $artifacts = [$this->resourceArtifactReceipt('page', $path)];
+        if ($chromeVersion > 0) {
+            $version = clone ObjectManager::getInstance(\Weline\Theme\Model\ThemeScopeVersion::class);
+            $version->load($chromeVersion);
+            if ($version->getThemeId() !== $context->themeId || $version->getScope() !== $chromeScope) { throw new \RuntimeException('preview_chrome_identity_mismatch'); }
+            $chromePath = $this->materializer->materializeChrome($version);
+            $artifacts[] = $this->resourceArtifactReceipt('chrome', $chromePath);
+        }
+        $this->bustPresentationCaches($context->themeId, $scope);
+        return ['status' => $status, 'version_id' => $versionId ?: null, 'entity_key' => $entityKey, 'artifacts' => $artifacts];
+    }
+
+    /** Return verifiable output evidence without exposing a host filesystem path. */
+    private function resourceArtifactReceipt(string $type, string $path): array
+    {
+        $digest = is_file($path) ? hash_file('sha256', $path) : false;
+        if ($digest === false) {
+            throw new \RuntimeException('theme_layout_entity_' . $type . '_bake_failed');
+        }
+        $receipt = ['type' => $type, 'artifact_id' => $digest, 'exists' => true];
+        $root = defined('BP') ? rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR : '';
+        if ($root !== '' && str_starts_with($path, $root)) {
+            $receipt['relative_path'] = substr($path, strlen($root));
+        }
+        return $receipt;
+    }
+
     /**
      * @param list<\Weline\Theme\Api\Scoped\ThemePatchCommand>|list<array<string,mixed>> $commands
      */
@@ -83,6 +150,7 @@ final class ThemeLayoutEntityBakeCoordinator
             // 配置提交合并完整节点，不能截掉默认注入或未出现在局部提交中的节点。
             $chromeNodes = $this->mergeChromePayloadNodes($version->getChromePayload(), $chromeNodes);
         } else {
+            $chromeNodes = $this->preserveChromeUserRemovals($chromeNodes, $version->getChromePayload());
             $chromeNodes = $this->mergeRequiredDefaultsIntoNodes($chromeNodes, $themeId, 'homepage', $versionId);
             $chromeNodes = $this->slotTree->filterChromeNodes($chromeNodes);
         }
@@ -104,6 +172,41 @@ final class ThemeLayoutEntityBakeCoordinator
             $this->bustPresentationCaches($themeId, $scope);
         }
         return $path;
+    }
+
+    /** Keep explicit draft removals when automatic/workspace projections are rebuilt. */
+    private function preserveChromeUserRemovals(array $incoming, array $current): array
+    {
+        foreach ($current as $uid => $removed) {
+            if (!is_array($removed) || ($removed['source'] ?? '') !== 'user_deleted'
+                || !array_key_exists('is_active', $removed) || !empty($removed['is_active'])) {
+                continue;
+            }
+            $matches = [];
+            foreach ($incoming as $key => $node) {
+                if (!is_array($node)) {
+                    continue;
+                }
+                $samePlacement = true;
+                foreach (['widget_module', 'widget_type', 'widget_code', 'area', 'slot_id'] as $field) {
+                    if ((string)($node[$field] ?? '') !== (string)($removed[$field] ?? '')) {
+                        $samePlacement = false;
+                        break;
+                    }
+                }
+                if (!$samePlacement && (string)($node['node_uid'] ?? $key) !== (string)($removed['node_uid'] ?? $uid)) {
+                    continue;
+                }
+                $matches[] = $key;
+            }
+            // Input payloads may be stale workspace projections. An active flag
+            // (regardless of source) is not evidence of an explicit restore command.
+            foreach ($matches as $key) {
+                unset($incoming[$key]);
+            }
+            $incoming[$uid] = $removed;
+        }
+        return $incoming;
     }
 
     /**
@@ -189,6 +292,10 @@ final class ThemeLayoutEntityBakeCoordinator
      */
     public function rebakeAfterInjectionCollect(?int $themeId = null, array $changes = []): int
     {
+        // A disappeared definition changes future draft defaults, not saved
+        // publications/history. Ordinary declaration migrations keep their reach.
+        $changesForDraft = static fn(bool $currentDraft): array => $currentDraft ? $changes
+            : array_values(array_filter($changes, static fn(array $change): bool => empty($change['definition_retired'])));
         $enumerator = ObjectManager::getInstance(ThemeLayoutEntityInjectionTargets::class);
         $targets = $enumerator->resolve($changes, $themeId);
         $report = $enumerator->reportForTargets($targets);
@@ -196,6 +303,10 @@ final class ThemeLayoutEntityBakeCoordinator
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
         $seen = $scopes = [];
         foreach ($targets as $target) {
+            $targetChanges = $changesForDraft(!empty($target['current']) && empty($target['published']));
+            if ($changes !== [] && $targetChanges === []) {
+                continue;
+            }
             if (empty($target['version_resolved'])
                 && ($changes !== [] || ($target['reason'] ?? '') === 'historical_draft_baseline_missing')) {
                 continue;
@@ -206,12 +317,12 @@ final class ThemeLayoutEntityBakeCoordinator
                 continue;
             }
             $seen[$key] = true;
-            foreach ($merger->unresolvedRetiredNodes($target['nodes'], $target['layout_type'], $changes) as $unresolved) {
+            foreach ($merger->unresolvedRetiredNodes($target['nodes'], $target['layout_type'], $targetChanges) as $unresolved) {
                 $this->lastRebakeReport['unmapped'][] = ['identity' => $key] + $unresolved;
             }
             $this->bakePageFromNodes($target['theme_id'], $target['scope'], $target['identity_hash'],
                 $target['layout_type'], $target['nodes'], $target['published'], $target['release_id'],
-                $target['draft_revision_id'], $target['version_id'], $changes, $target['current'],
+                $target['draft_revision_id'], $target['version_id'], $targetChanges, $target['current'],
                 $target['layout_option'], $target['area'], !empty($target['version_resolved']));
             ++$this->lastRebakeReport['migrated'];
             $scopes[$target['theme_id'] . '|' . $target['scope']] = [$target['theme_id'], $target['scope']];
@@ -233,6 +344,10 @@ final class ThemeLayoutEntityBakeCoordinator
             foreach ($rows as $row) {
                 $version = clone ObjectManager::getInstance(ThemeScopeVersion::class);
                 $version->load((int)$row['version_id']);
+                $versionChanges = $changesForDraft($version->isCurrent() && !$version->isPublished());
+                if ($changes !== [] && $versionChanges === []) {
+                    continue;
+                }
                 $tid = $version->getThemeId();
                 $scope = $version->getScope();
                 // Scope-version 与布局版本分别拥有身份，按快照映射人工卸载决定。
@@ -250,7 +365,7 @@ final class ThemeLayoutEntityBakeCoordinator
                 // 迁移可原样绑定自身权威快照；只有重放注入差异才需要卸载版本映射。
                 $nodes = empty($omissionBinding['resolved']) ? $version->getChromePayload()
                     : $merger->mergeIntoNodes($version->getChromePayload(), $tid, 'homepage', 0,
-                        $changes, $omissionBinding['omissions']);
+                        $versionChanges, $omissionBinding['omissions']);
                 $nodes = $this->slotTree->filterChromeNodes($nodes);
                 if ($nodes !== $version->getChromePayload()) {
                     $this->scopeVersions->setChromePayload($version, $nodes);

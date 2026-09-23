@@ -1,0 +1,448 @@
+.wc-theme_widget_hero_slider {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    /* 高度由当前激活帧图片自然撑开，禁止定高/强比例导致 cover 裁左右文案 */
+    overflow: hidden;
+}
+
+.wc-theme_widget_hero_slider .slider-container {
+    position: relative;
+    width: 100%;
+    height: auto;
+}
+
+.wc-theme_widget_hero_slider .slider-wrapper {
+    position: relative;
+    width: 100%;
+    height: auto;
+}
+
+.wc-theme_widget_hero_slider .slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.7s ease;
+    z-index: 1;
+}
+
+.wc-theme_widget_hero_slider .slide.active {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    opacity: 1;
+    z-index: 2;
+}
+
+/* 无图渐变帧：用宽高比兜底，避免塌成一条线 */
+.wc-theme_widget_hero_slider .slide.active:not(:has(.slide-media)) {
+    aspect-ratio: var(--wc-hero-aspect, 1920 / 600);
+    min-height: 0;
+}
+
+.wc-theme_widget_hero_slider .slide-media {
+    position: relative;
+    inset: auto;
+    display: block;
+    width: 100%;
+    height: auto;
+    line-height: 0;
+    z-index: 1;
+}
+
+.wc-theme_widget_hero_slider .slide-media figure {
+    margin: 0;
+}
+
+/* file-image 出图带 figcaption；Hero 文案已在 slide-text，避免图下再露一行英文 */
+.wc-theme_widget_hero_slider .slide-media figcaption {
+    display: none;
+}
+
+.wc-theme_widget_hero_slider .slide-media :is(picture, img) {
+    position: static;
+    inset: auto;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    object-fit: unset;
+    object-position: center center;
+}
+
+/* Slide效果 */
+.wc-theme_widget_hero_slider .effect-slide .slide {
+    transform: translateX(100%);
+    transition: transform 0.7s ease, opacity 0.7s ease;
+}
+
+.wc-theme_widget_hero_slider .effect-slide .slide.active {
+    transform: translateX(0);
+}
+
+.wc-theme_widget_hero_slider .effect-slide .slide.prev {
+    transform: translateX(-100%);
+}
+
+/* 遮罩：纸色/墨色轻罩，露出山水画远峰，不挡右侧人物 */
+.wc-theme_widget_hero_slider .slide-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+        to right,
+        color-mix(in srgb, var(--color-bg-canvas) 72%, transparent) 0%,
+        color-mix(in srgb, var(--color-bg-canvas) 36%, transparent) 32%,
+        color-mix(in srgb, var(--color-bg-canvas) 8%, transparent) 55%,
+        transparent 72%
+    );
+}
+
+.wc-theme_widget_hero_slider .slide[data-tone="dark"] .slide-overlay {
+    background: linear-gradient(
+        to right,
+        color-mix(in srgb, var(--color-bg-dark) 68%, transparent) 0%,
+        color-mix(in srgb, var(--color-bg-dark) 38%, transparent) 34%,
+        color-mix(in srgb, var(--color-bg-dark) 10%, transparent) 58%,
+        transparent 76%
+    );
+}
+
+/* 内容：叠在 slide-media 之上（勿 relative 流式跟在图后，否则下半截只剩渐变红底） */
+.wc-theme_widget_hero_slider .slide-content {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    padding: 0 clamp(var(--weline-space-5), 8vw, 10%);
+    pointer-events: none;
+}
+
+.wc-theme_widget_hero_slider .slide-content .slide-text,
+.wc-theme_widget_hero_slider .slide-content .slide-button {
+    pointer-events: auto;
+}
+
+.wc-theme_widget_hero_slider .slide-text {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--size-content-640);
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.wc-theme_widget_hero_slider .text-left .slide-text {
+    text-align: left;
+}
+
+.wc-theme_widget_hero_slider .text-center {
+    justify-content: center;
+}
+
+.wc-theme_widget_hero_slider .text-center .slide-text {
+    text-align: center;
+}
+
+.wc-theme_widget_hero_slider .text-right {
+    justify-content: flex-end;
+}
+
+.wc-theme_widget_hero_slider .text-right .slide-text {
+    text-align: right;
+}
+
+.wc-theme_widget_hero_slider .slide-kicker {
+    margin: 0 0 var(--weline-space-3);
+    font-size: var(--weline-layout-font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: var(--weline-theme-primary);
+    opacity: 0;
+}
+
+.wc-theme_widget_hero_slider .slide[data-tone="dark"] .slide-kicker {
+    color: var(--color-primary-light);
+}
+
+.wc-theme_widget_hero_slider .slide-title {
+    font-family: var(--font-family-serif), var(--font-family-base);
+    font-size: clamp(var(--weline-layout-font-size-2xl), 3.2vw, var(--weline-layout-font-size-4xl));
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    color: var(--weline-theme-text);
+    margin: 0 0 var(--spacing-3_5);
+    text-shadow: none;
+    opacity: 0;
+}
+
+.wc-theme_widget_hero_slider .slide[data-tone="dark"] .slide-title {
+    color: var(--color-text-on-dark);
+}
+
+.wc-theme_widget_hero_slider .slide-subtitle {
+    font-size: var(--weline-layout-font-size-lg);
+    line-height: 1.6;
+    color: var(--weline-theme-text-secondary);
+    margin: 0 0 var(--weline-space-8);
+    max-width: 28em;
+    text-shadow: none;
+    opacity: 0;
+}
+
+.wc-theme_widget_hero_slider .slide[data-tone="dark"] .slide-subtitle {
+    color: var(--color-text-on-dark-muted);
+}
+
+.wc-theme_widget_hero_slider .slide-cta-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-3);
+    opacity: 0;
+}
+
+.wc-theme_widget_hero_slider .slide-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-3_5) var(--size-control-md);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+    text-decoration: none;
+    border-radius: var(--weline-theme-radius-md);
+    font-weight: 600;
+    font-size: var(--weline-layout-font-size-base);
+    letter-spacing: 0.06em;
+    transition: background var(--weline-theme-transition-base),
+                transform var(--weline-theme-transition-base),
+                box-shadow var(--weline-theme-transition-base);
+}
+
+.wc-theme_widget_hero_slider .slide-button:hover {
+    background: var(--weline-theme-primary-hover);
+    transform: translateY(var(--spacing-neg-1_5));
+    box-shadow: var(--weline-theme-shadow-md);
+}
+
+.wc-theme_widget_hero_slider .slide-button-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-3_5) var(--size-control-md);
+    background: transparent;
+    color: var(--weline-theme-text);
+    text-decoration: none;
+    border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-primary);
+    border-radius: var(--weline-theme-radius-md);
+    font-weight: 600;
+    font-size: var(--weline-layout-font-size-base);
+    letter-spacing: 0.06em;
+    transition: background var(--weline-theme-transition-base),
+                color var(--weline-theme-transition-base),
+                border-color var(--weline-theme-transition-base),
+                transform var(--weline-theme-transition-base);
+}
+
+.wc-theme_widget_hero_slider .slide[data-tone="dark"] .slide-button-secondary {
+    color: var(--color-text-on-dark);
+    border-color: color-mix(in srgb, var(--color-text-on-dark) 70%, transparent);
+}
+
+.wc-theme_widget_hero_slider .slide-button-secondary:hover {
+    background: color-mix(in srgb, var(--weline-theme-primary) 12%, transparent);
+    transform: translateY(var(--spacing-neg-1_5));
+}
+
+/* 仅激活帧播入场，避免非激活 slide 永久 opacity:0 */
+.wc-theme_widget_hero_slider .slide.active .slide-kicker,
+.wc-theme_widget_hero_slider .slide.active .slide-title,
+.wc-theme_widget_hero_slider .slide.active .slide-subtitle,
+.wc-theme_widget_hero_slider .slide.active .slide-cta-group {
+    animation: heroSlideUp 0.65s ease forwards;
+}
+
+.wc-theme_widget_hero_slider .slide.active .slide-title {
+    animation-delay: 0.08s;
+}
+
+.wc-theme_widget_hero_slider .slide.active .slide-subtitle {
+    animation-delay: 0.18s;
+}
+
+.wc-theme_widget_hero_slider .slide.active .slide-cta-group {
+    animation-delay: 0.3s;
+}
+
+@keyframes heroSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(var(--weline-space-5));
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wc-theme_widget_hero_slider .slide,
+    .wc-theme_widget_hero_slider .effect-slide .slide {
+        transition: none;
+    }
+
+    .wc-theme_widget_hero_slider .slide.active .slide-kicker,
+    .wc-theme_widget_hero_slider .slide.active .slide-title,
+    .wc-theme_widget_hero_slider .slide.active .slide-subtitle,
+    .wc-theme_widget_hero_slider .slide.active .slide-cta-group {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* 箭头 */
+.wc-theme_widget_hero_slider .slider-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: var(--size-control-50);
+    height: var(--size-control-50);
+    background: color-mix(in srgb, var(--weline-theme-surface-raised) 88%, transparent);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: all var(--weline-theme-transition-base);
+    opacity: 0;
+    color: var(--weline-theme-text);
+}
+
+.wc-theme_widget_hero_slider:hover .slider-arrow,
+.wc-theme_widget_hero_slider:focus-within .slider-arrow {
+    opacity: 1;
+}
+
+.wc-theme_widget_hero_slider .slider-arrow:hover {
+    background: var(--weline-theme-surface-raised);
+    box-shadow: var(--weline-theme-shadow-md);
+}
+
+.wc-theme_widget_hero_slider .slider-prev {
+    left: var(--weline-space-5);
+}
+
+.wc-theme_widget_hero_slider .slider-next {
+    right: var(--weline-space-5);
+}
+
+.wc-theme_widget_hero_slider .slider-pause {
+    position: absolute;
+    bottom: var(--spacing-md);
+    inset-inline-end: var(--spacing-md);
+    z-index: 10;
+}
+
+/* 指示点 */
+.wc-theme_widget_hero_slider .slider-dots {
+    position: absolute;
+    bottom: var(--weline-space-8);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--spacing-2_5);
+    z-index: 10;
+}
+
+.wc-theme_widget_hero_slider .dot {
+    width: var(--font-size-xs);
+    height: var(--font-size-xs);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--weline-theme-on-primary) 45%, transparent);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.wc-theme_widget_hero_slider .dot:hover,
+.wc-theme_widget_hero_slider .dot.active {
+    background: var(--weline-theme-primary);
+    transform: scale(1.25);
+}
+
+/* 响应式：文案与控件适配；高度继续跟随图片，不再用竖比例强裁横图 */
+@media (max-width: 768px) {
+    .wc-theme_widget_hero_slider .slide-media :is(picture, img) {
+        object-position: center center;
+    }
+
+    .wc-theme_widget_hero_slider .slide-overlay,
+    .wc-theme_widget_hero_slider .slide[data-tone="dark"] .slide-overlay {
+        background: linear-gradient(
+            to top,
+            color-mix(in srgb, var(--color-bg-dark) 72%, transparent) 0%,
+            color-mix(in srgb, var(--color-bg-dark) 28%, transparent) 42%,
+            transparent 72%
+        );
+    }
+
+    .wc-theme_widget_hero_slider .slide-content {
+        align-items: flex-end;
+        padding: var(--weline-space-8) var(--weline-space-5) var(--weline-space-12);
+    }
+
+    .wc-theme_widget_hero_slider .slide-text {
+        max-width: none;
+    }
+
+    .wc-theme_widget_hero_slider .slide-kicker,
+    .wc-theme_widget_hero_slider .slide[data-tone="light"] .slide-kicker {
+        color: var(--color-primary-light);
+    }
+
+    .wc-theme_widget_hero_slider .slide-title,
+    .wc-theme_widget_hero_slider .slide[data-tone="light"] .slide-title {
+        font-size: var(--weline-layout-font-size-2xl);
+        color: var(--color-text-on-dark);
+    }
+
+    .wc-theme_widget_hero_slider .slide-subtitle,
+    .wc-theme_widget_hero_slider .slide[data-tone="light"] .slide-subtitle {
+        font-size: var(--weline-layout-font-size-base);
+        color: var(--color-text-on-dark-muted);
+        margin-bottom: var(--weline-space-5);
+    }
+
+    .wc-theme_widget_hero_slider .slide-button,
+    .wc-theme_widget_hero_slider .slide-button-secondary {
+        padding: var(--weline-space-3) var(--weline-space-8);
+        font-size: var(--weline-layout-font-size-sm);
+    }
+
+    .wc-theme_widget_hero_slider .slide[data-tone="light"] .slide-button-secondary {
+        color: var(--color-text-on-dark);
+        border-color: color-mix(in srgb, var(--color-text-on-dark) 70%, transparent);
+    }
+
+    .wc-theme_widget_hero_slider .slider-arrow {
+        top: var(--weline-space-8);
+        width: var(--size-control-md);
+        height: var(--size-control-md);
+        transform: none;
+    }
+}

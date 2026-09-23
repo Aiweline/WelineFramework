@@ -32,8 +32,10 @@ if (!in_array($kind, ProductLabelStyle::KINDS, true)) {
 $text = trim((string)($this->getData('text') ?? $this->getData('meta.text') ?? ''));
 if ($text === '') {
     $text = match ($kind) {
-        ProductLabelStyle::KIND_SALE => (string)__('SALE'),
+        ProductLabelStyle::KIND_SALE => (string)__('特价'),
         ProductLabelStyle::KIND_DEMO => (string)__('DEMO'),
+        ProductLabelStyle::KIND_HOT => (string)__('热销'),
+        ProductLabelStyle::KIND_SHIP => (string)__('包邮'),
         default => (string)__('NEW'),
     };
 } elseif (preg_match('/\p{Han}/u', $text) === 1) {
@@ -47,11 +49,15 @@ $rootClass = trim('w-product-label ' . $wc . ($class !== '' ? ' ' . $class : '')
 $backgroundColor = match ($kind) {
     ProductLabelStyle::KIND_SALE => 'var(--w-product-label-sale-bg, var(--weline-product-label-sale-bg, var(--color-product-label-sale-bg)))',
     ProductLabelStyle::KIND_DEMO => 'var(--w-product-label-demo-bg, var(--weline-product-label-demo-bg, var(--color-product-label-demo-bg)))',
+    ProductLabelStyle::KIND_HOT => ProductLabelStyle::globalBgToken(ProductLabelStyle::KIND_HOT),
+    ProductLabelStyle::KIND_SHIP => ProductLabelStyle::globalBgToken(ProductLabelStyle::KIND_SHIP),
     default => 'var(--w-product-label-new-bg, var(--weline-product-label-new-bg, var(--color-product-label-new-bg)))',
 };
 $textColor = match ($kind) {
     ProductLabelStyle::KIND_SALE => 'var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text)))',
     ProductLabelStyle::KIND_DEMO => 'var(--w-product-label-demo-text, var(--weline-product-label-demo-text, var(--color-product-label-demo-text)))',
+    ProductLabelStyle::KIND_HOT => ProductLabelStyle::globalTextToken(ProductLabelStyle::KIND_HOT),
+    ProductLabelStyle::KIND_SHIP => ProductLabelStyle::globalTextToken(ProductLabelStyle::KIND_SHIP),
     default => 'var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text)))',
 };
 $inlineStyle = 'background: ' . $backgroundColor
@@ -61,7 +67,7 @@ $inlineStyle = 'background: ' . $backgroundColor
 
 <span class="<?= $esc($rootClass) ?>"
       data-kind="<?= $esc($kind) ?>"
-      style="<?= $esc($inlineStyle) ?>"
+      data-widget-style="<?= $esc($inlineStyle) ?>"
       weline-code="<?= $esc($scope->code) ?>"
       data-uid="<?= $esc($scope->uid) ?>"
       data-js-ns="<?= $esc($scope->jsNs) ?>">

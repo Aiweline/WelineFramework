@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.layout_source {Weline_Theme::css/widgets/widget-header-account-default.css}
  * Header 用户账户部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -98,8 +99,24 @@ if (empty($dropdownItems)) {
         </a>
         <div class="account-dropdown">
             <div class="dropdown-header">
-                <span class="welcome-text"><?= $esc($label('欢迎回来')) ?></span>
-                <span class="user-name" data-account-menu-name><?= $esc($label('我的账户')) ?></span>
+                <?php if ($showAvatar): ?>
+                    <span class="account-avatar account-avatar--menu" data-account-avatar-wrap>
+                        <img<?= $userAvatar !== '' ? ' src="' . $esc($userAvatar) . '"' : '' ?>
+                             alt="<?= $esc($userName) ?>"
+                             width="40"
+                             height="40"
+                             data-account-avatar
+                             class="account-avatar__img"
+                             <?= $userAvatar === '' ? 'hidden' : '' ?>>
+                        <span class="account-avatar__fallback" data-account-avatar-fallback<?= $userAvatar !== '' ? ' hidden' : '' ?> aria-hidden="true">
+                            <w:icon name="user" size="sm"></w:icon>
+                        </span>
+                    </span>
+                <?php endif; ?>
+                <div class="dropdown-header__copy">
+                    <span class="welcome-text"><?= $esc($label('欢迎回来')) ?></span>
+                    <span class="user-name" data-account-menu-name><?= $esc($label('我的账户')) ?></span>
+                </div>
             </div>
             <ul class="dropdown-menu account-dropdown-menu" role="menu" data-account-menu>
                 <?php if ($dropdownItems === null): ?>
@@ -159,280 +176,3 @@ if (empty($dropdownItems)) {
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    position: relative;
-}
-
-.<?= $wc ?> .account-link {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    text-decoration: none;
-    color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, inherit));
-    padding: var(--weline-space-2) var(--weline-space-3);
-    border-radius: var(--weline-radius-md);
-    border: var(--border-width-thin, 1px) solid transparent;
-    transition: background-color var(--weline-theme-transition-base), border-color var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .account-link:hover {
-    background-color: var(--color-on-dark-soft, var(--weline-theme-surface-muted));
-    border-color: var(--weline-chrome-text-light, transparent);
-}
-
-.<?= $wc ?> .account-avatar {
-    width: var(--size-control-sm);
-    height: var(--size-control-sm);
-    border-radius: 50%;
-    background: transparent;
-    color: inherit;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.<?= $wc ?> .account-avatar img,
-.<?= $wc ?> .account-avatar__img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.<?= $wc ?> .account-avatar__img[hidden],
-.<?= $wc ?> .account-avatar__fallback[hidden] {
-    display: none !important;
-}
-
-.<?= $wc ?> .account-avatar__fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-}
-
-.<?= $wc ?> .account-name {
-    font-weight: 500;
-    max-width: var(--token-size-100px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.<?= $wc ?> .account-text {
-    display: flex;
-    flex-direction: column;
-    font-size: var(--weline-font-size-sm);
-    line-height: 1.3;
-}
-
-.<?= $wc ?> .account-menu-signal-badge,
-.account-menu-signal-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    margin-left: 0.35rem;
-    padding: 0 0.3rem;
-    border-radius: 999px;
-    background: #b12704;
-    color: #fff;
-    font-size: 0.7rem;
-    font-weight: 700;
-    line-height: 1;
-    vertical-align: middle;
-}
-
-.<?= $wc ?> .account-menu-signal-badge[hidden],
-.account-menu-signal-badge[hidden] {
-    display: none !important;
-}
-
-.<?= $wc ?> .login-text {
-    font-weight: 400;
-    font-size: var(--weline-font-size-xs);
-    color: var(--weline-chrome-text-light-secondary, var(--weline-theme-text-muted));
-    max-width: var(--token-size-100px, 7.5rem);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.<?= $wc ?> .register-text {
-    color: var(--weline-chrome-text-light, var(--weline-theme-text));
-    font-size: var(--weline-font-size-sm);
-    font-weight: 700;
-}
-
-.<?= $wc ?> .account-logged-in {
-    position: relative;
-}
-
-.<?= $wc ?> .account-dropdown {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    min-width: var(--size-panel-220);
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg);
-    box-shadow: var(--weline-theme-shadow-lg);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(var(--spacing-2_5));
-    transition: opacity var(--weline-theme-transition-base),
-        visibility var(--weline-theme-transition-base),
-        transform var(--weline-theme-transition-base);
-    z-index: 1000;
-    /* Visual gap only; ::before keeps :hover while the pointer crosses it. */
-    margin-top: var(--weline-space-3);
-    /* Isolate from header chrome light text (inherit white on dark). */
-    color: var(--weline-theme-text);
-}
-
-/* Invisible hit bridge across margin-top so the menu does not dismiss mid-move. */
-.<?= $wc ?> .account-dropdown::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 100%;
-    height: var(--weline-space-3);
-}
-
-.<?= $wc ?> .account-logged-in:hover .account-dropdown {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.<?= $wc ?> .dropdown-header {
-    padding: var(--weline-space-4) var(--weline-space-5);
-    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    background: var(--weline-theme-surface-muted);
-    border-radius: var(--weline-radius-lg) var(--weline-radius-lg) 0 0;
-}
-
-.<?= $wc ?> .welcome-text {
-    display: block;
-    font-size: var(--weline-font-size-xs);
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?> .user-name {
-    display: block;
-    font-weight: 600;
-    font-size: var(--weline-font-size-base);
-    color: var(--weline-theme-text);
-}
-
-/*
- * theme.css 全局 .dropdown-menu { display:none } 面向 .dropdown/.w-dropdown 触发器。
- * 本部件由 .account-logged-in:hover 展开外层面板，内层 ul 必须常显，否则只剩「欢迎回来」头。
- */
-.<?= $wc ?> .account-dropdown .dropdown-menu,
-.<?= $wc ?> .account-dropdown .account-dropdown-menu {
-    display: block;
-    position: static;
-    inset: auto;
-    top: auto;
-    z-index: auto;
-    list-style: none;
-    margin: 0;
-    min-width: 0;
-    width: 100%;
-    padding: var(--weline-space-2) 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-}
-
-/* Beat .weline-header .header-user-area a/:visited { color: inherit } (chrome light). */
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a,
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a:link,
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a:visited {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-3);
-    padding: var(--weline-space-3) var(--weline-space-5);
-    color: var(--weline-theme-text);
-    text-decoration: none;
-    transition: background-color var(--weline-theme-transition-base),
-        color var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a:hover {
-    background-color: var(--weline-theme-surface-muted);
-    color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link,
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link:link,
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link:visited,
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm],
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:link,
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:visited {
-    color: var(--weline-theme-danger);
-}
-
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link:hover,
-.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:hover {
-    background-color: var(--weline-theme-danger-surface);
-    color: var(--weline-theme-danger-hover);
-}
-
-.<?= $wc ?> .dropdown-menu .divider {
-    height: var(--spacing-px);
-    background: var(--weline-theme-border);
-    margin: var(--weline-space-2) 0;
-}
-
-.<?= $wc ?> [data-account-menu-auth][hidden],
-.<?= $wc ?> [data-account-menu-auth].is-account-menu-hidden {
-    display: none !important;
-}
-
-/* 仅部件库小画布压缩；整页 theme-preview 必须保留 hover 下拉（与店面一致）。 */
-.widget-preview-canvas .<?= $wc ?> .account-dropdown {
-    display: none;
-}
-
-@media (max-width: 768px) {
-    .<?= $wc ?> .account-link {
-        color: inherit;
-        padding: var(--spacing-1_5) var(--spacing-0_4);
-        min-height: var(--size-control-lg);
-        gap: var(--spacing-0_4);
-    }
-
-    .<?= $wc ?> .account-avatar {
-        width: var(--size-control-xs);
-        height: var(--size-control-xs);
-        background: transparent;
-        color: inherit;
-    }
-
-    .<?= $wc ?> .account-text {
-        flex-direction: row;
-        align-items: center;
-        gap: var(--token-size-0-15rem);
-    }
-
-    .<?= $wc ?> .register-text {
-        display: none;
-    }
-
-    .<?= $wc ?> .login-text::after {
-        content: " ›";
-        font-weight: 700;
-    }
-
-    .<?= $wc ?> .account-dropdown {
-        display: none;
-    }
-}
-</style>

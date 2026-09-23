@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-sidebar-sidebar-social-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 社交链接（侧栏）部件
  *
  * @widget.code {sidebar-social}
@@ -101,7 +102,7 @@ if ($socials === [] && $wechatQr === '' && $wechatQrFileHtml === '' && !$isPrevi
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-style="<?= $esc($iconStyle) ?>"
-         style="--wc-social-gap: <?= $esc((string)$gap) ?>;">
+         data-widget-style="--wc-social-gap: <?= $esc((string)$gap) ?>;">
     <?php if ($title !== ''): ?>
         <h3 class="widget-title"><?= $esc((string)$title) ?></h3>
     <?php endif; ?>
@@ -112,7 +113,7 @@ if ($socials === [] && $wechatQr === '' && $wechatQrFileHtml === '' && !$isPrevi
                title="<?= $esc((string)$social['name']) ?>"
                target="_blank"
                rel="noopener noreferrer"
-               style="--brand-color: <?= $esc((string)$social['color']) ?>;">
+               data-widget-style="--brand-color: <?= $esc((string)$social['color']) ?>;">
                 <?= SocialIconHelper::renderIcon($social['platform'], ['class' => 'social-icon', 'width' => '20', 'height' => '20']) ?>
             </a>
         <?php endforeach; ?>
@@ -132,105 +133,3 @@ if ($socials === [] && $wechatQr === '' && $wechatQrFileHtml === '' && !$isPrevi
     <?php endif; ?>
 </section>
 
-<style>
-.<?= $wc ?> {
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg);
-    padding: var(--weline-space-5);
-    box-sizing: border-box;
-}
-
-.<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-base);
-    font-weight: 600;
-    margin: 0 0 var(--weline-space-4);
-    text-align: center;
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .social-links {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: var(--wc-social-gap);
-}
-
-.<?= $wc ?> .social-link {
-    width: var(--size-control-lg);
-    height: var(--size-control-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    text-decoration: none;
-    transition: all var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?>[data-style="colored"] .social-link {
-    background: var(--brand-color);
-    color: var(--weline-theme-on-primary);
-}
-
-.<?= $wc ?>[data-style="colored"] .social-link:hover {
-    transform: translateY(var(--spacing-neg-1_5));
-    box-shadow: var(--weline-theme-shadow-md);
-}
-
-.<?= $wc ?>[data-style="mono"] .social-link {
-    background: var(--weline-theme-surface-muted);
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?>[data-style="mono"] .social-link:hover {
-    background: var(--brand-color);
-    color: var(--weline-theme-on-primary);
-}
-
-.<?= $wc ?>[data-style="outline"] .social-link {
-    background: transparent;
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?>[data-style="outline"] .social-link:hover {
-    border-color: var(--brand-color);
-    color: var(--brand-color);
-}
-
-.<?= $wc ?> .wechat-qr {
-    margin-top: var(--weline-space-5);
-    padding-top: var(--weline-space-5);
-    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-    text-align: center;
-}
-
-.<?= $wc ?> .qr-label {
-    font-size: var(--weline-font-size-sm);
-    color: var(--weline-theme-success);
-    margin: 0 0 var(--weline-space-3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--weline-space-1);
-}
-
-.<?= $wc ?> .qr-image {
-    max-width: var(--size-panel-150);
-    border-radius: var(--weline-radius-md);
-    display: block;
-    margin: 0 auto;
-}
-
-.<?= $wc ?> .qr-image--asset :is(img, picture, .w-file-image) {
-    max-width: 100%;
-    width: 100%;
-    height: auto;
-    border-radius: inherit;
-    display: block;
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3);
-}
-</style>

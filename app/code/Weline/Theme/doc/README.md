@@ -11,6 +11,7 @@
 5. [`../view/theme/README.md`](../view/theme/README.md)
 6. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
+   - **布局固化与应用部件默认注入（权威）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — JSON 默认注入固化进布局模板；无模板则激活主题运行期动态固化；插件注入变更则全主题重固化涉及布局；仅 `user_deleted` 可省略
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
    - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：[`theme-css-variables-only.md`](./theme-css-variables-only.md) — 禁止硬编码颜色/尺寸，须用主题 Token；待改清单见 [`theme-hardcoded-visual-audit.md`](./theme-hardcoded-visual-audit.md)

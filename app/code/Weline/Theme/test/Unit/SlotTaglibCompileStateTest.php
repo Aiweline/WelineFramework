@@ -10,6 +10,8 @@ use Weline\Framework\View\Exception\TemplateException;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
 use Weline\Theme\Taglib\Slot;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost;
 
 class SlotTaglibCompileStateTest extends TestCore
 {
@@ -17,11 +19,14 @@ class SlotTaglibCompileStateTest extends TestCore
     {
         parent::setUp();
         Slot::clearRegisteredSlots();
+        RequestContext::set(ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE, true);
     }
 
     public function tearDown(): void
     {
         Slot::clearRegisteredSlots();
+        RequestContext::remove(ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE);
+        RequestContext::remove(ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS);
         parent::tearDown();
     }
 
@@ -120,10 +125,33 @@ class SlotTaglibCompileStateTest extends TestCore
         $this->assertStringContainsString('data-wslot="product-purchase-actions"', $rendered);
         $this->assertStringContainsString('<span>Preview</span>', $rendered);
         $this->assertStringContainsString('<p class="after-slot">After</p>', $rendered);
-        $this->assertMatchesRegularExpression(
-            '/<!--@weline-slot:product-purchase-actions-->.*?data-wslot="product-purchase-actions"[^>]*>\s*<span>Preview<\/span>\s*<\/div>\s*<!--@\/weline-slot:product-purchase-actions-->\s*<p class="after-slot">After<\/p>/s',
-            $rendered,
+        $this->assertStringNotContainsString('<?php', $rendered, 'Runtime callbacks must return final HTML, never compiled PHP.');
+        $this->assertStringContainsString('<!--@weline-slot:product-purchase-actions-->', $rendered);
+        $this->assertStringContainsString('<!--@/weline-slot:product-purchase-actions-->', $rendered);
+        $closePos = \strpos($rendered, '<!--@/weline-slot:product-purchase-actions-->');
+        $afterPos = \strpos($rendered, '<p class="after-slot">After</p>');
+        $this->assertNotFalse($closePos);
+        $this->assertNotFalse($afterPos);
+        $this->assertGreaterThan($closePos, $afterPos);
+    }
+
+    public function testRuntimeSlotResolvesPublishedNestedActions(): void
+    {
+        RequestContext::set(ThemeLayoutEntityPublishedSlotHost::CTX_USE_REACTIVE, false);
+        RequestContext::set(ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS, [
+            'page_html' => '<div data-slot-id="product-purchase-actions" class="theme-published-slot"><button>Buy now</button></div>',
+            'chrome_by_slot' => [],
+        ]);
+
+        $rendered = ObjectManager::getInstance(Taglib::class)->renderRuntimeTag(
+            ObjectManager::getInstance(Template::class),
+            'w:slot',
+            'tag-start',
+            ['id' => 'product-purchase-actions', 'wrapper' => 'div', 'class' => 'actions'],
+            '',
         );
+
+        $this->assertSame('<div class="theme-published-slot actions" data-slot-id="product-purchase-actions"><button>Buy now</button></div>', $rendered);
     }
 
     public function testDuplicateSlotErrorReportsTemplateSource(): void

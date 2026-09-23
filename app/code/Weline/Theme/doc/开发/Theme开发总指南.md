@@ -21,6 +21,7 @@
 6. 按任务命中以下专项文档：
    - 主题继承/文件落点：`app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
    - 布局：`app/code/Weline/Theme/doc/layout-discovery-guide.md`
+   - **布局固化与应用部件默认注入（权威）**：`app/code/Weline/Theme/doc/布局固化与默认注入.md`
    - 部件：`app/code/Weline/Theme/doc/部件开发指南.md`
    - Slot 属性：`app/code/Weline/Theme/doc/widget-slot-attributes.md`
    - **前台 section `weline-code`（强约束）**：`app/code/Weline/Theme/doc/frontend-section-weline-code.md`
@@ -199,13 +200,17 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 
 #### 前端 JS 模块加载（硬约束）
 
-前台主题/部件/布局 **禁止** 用 `<script src="@static(...js)">`、裸 `<js>` 或自造 loader 拉取模块级脚本。必须：
+前台主题/部件/布局 **禁止** 用 `<script src="@static(...js)">`、裸 `<js>` 或自造 loader 拉取**业务模块级**脚本。必须：
 
 1. 在模块 `view/statics/frontend/weline.modules.js`（或 `backend/`）注册；
 2. 部件根节点 `data-weline-load` / `data-weline-declare`，或 head hook `module-declarations` 内 `Weline.declare(...)`；
 3. **改完登记 / 新增 / 迁移模块后必须收集**：`php bin/w resource:compile welineModules`（或全量 `resource:compile`）。只改源 `weline.modules.js`、不 compile → 运行时 `Frontend|Backend/.../statics/base/weline.modules.js` 不会更新，店面仍读旧配置。
 
-完整规范见 [前端JS模块加载规范.md](../前端JS模块加载规范.md)、[Theme.js使用指南.md](../Theme.js使用指南.md)。MCP 规则 id：`theme_js_module_declare_only`。
+#### 部件静态资源固化（硬约束）
+
+部件 CSS/JS **静态文件**须在 `<w:widget layout-source="…" source="…">`（或 `@widget.layout_source` / `@widget.source`）声明；布局固化写入 sidecar，按声明位置统一去重排放。禁止所有部件内联 CSS/可执行 JS（含 style= 与 on*=）及模板裸资源标签。详见 [部件静态资源固化规范.md](../部件静态资源固化规范.md)、[部件开发指南.md](../部件开发指南.md)。MCP：`widget_static_assets_bake_to_head`。
+
+完整规范见 [前端JS模块加载规范.md](../前端JS模块加载规范.md)、[Theme.js使用指南.md](../Theme.js使用指南.md)。MCP 规则 id：`theme_js_module_declare_only`（含 bake head 静态 `.js` 书面例外）。
 
 主题运行时会读取服务端唯一的 opaque meta 并立即预热 Scope/Backend Worker bootstrap。业务代码不得手工构造、复制或持久化 bootstrap ID，也不得在 Worker/身份失效后绕过刷新流程。
 
@@ -358,9 +363,10 @@ component 负责：
 - **硬规则（本模块才可标签内嵌）**：`<w:widget>` / `fetch(.../widgets/...)` **只能**引用**本模块**部件。Theme 布局仅可内嵌 `Weline_Theme`；Customer/Product 等自有布局亦同理——禁止布局标签拉第三方部件。
 - **硬规则（同模块 XOR，禁止运行时去重补丁）**：同一模块下，布局/宿主已用标签内嵌某部件 ↔ **禁止**再在该部件 JSON 写 `default_injections`（二选一，否则会重复出现两个）。布局已提供 → 清空 JSON 并标 `placement=layout`；走注入 → 布局只留空 `<w:slot>` + `placement=injection`。禁止用页级 presence / 槽内 count 等运行时「只留一份」打补丁。门禁：`php bin/w frontend:check-required-injection-sibling-fetch`（`setup:upgrade` 致命）。
 - **硬规则（跨模块禁布局互调 · 只走 JSON）**：不同模块之间 **禁止**在布局/partial 里互相 `<w:widget>` / `fetch` 调用对方部件；外国部件**只能**经拥有模块的 JSON `default_injections`（应用部件默认注入）+ 空槽进入。门禁：`php bin/w frontend:check-theme-layout-widgets`。
+- **硬规则（默认注入 · 固化进布局模板 · 必须记住）**：JSON 应用部件默认注入在**固化布局模板**时写入；只要目标槽存在且无 `user_deleted@{versionId}`，就必须固化进去——**与主题是否激活、主题版本无关**。唯一省略=人工卸载。店面遗漏默认部件 → **固化方案/触发出问题**，不是「可选 overlay」。无固化模板时：对**当前激活主题**运行期动态固化；已有模板：仅主题**新增/移除**部件再固化；插件安装/变更 JSON 默认注入：重固化**所有主题**下涉及的对应布局。权威：[布局固化与默认注入.md](../布局固化与默认注入.md)。MCP：`required_default_always_present_without_user_deleted`；短规格：`doc/开发/spec/required-default-always-present.md`。
 - **工程团队**：部件相关施工/复审分配给专席 **部件开发工程师**（MCP `widget_development` / `工程团队.md`）。
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
-- `default_injections`：跨模块开箱进槽的**唯一合法路径**；同模块若已布局内嵌则不得再写
+- `default_injections`：跨模块开箱进槽的**唯一合法路径**（经布局固化写入模板）；同模块若已布局内嵌则不得再写
 - Dashboard 注入可选 `default_view`（`DashboardView.code`）：声明后才在对应视图身份就绪时自动挂载；删除后写 `user_deleted`，手动“应用”可恢复
 - Theme 监听 `Weline_Dashboard::layout_identity_ready`，只匹配 `default_view === view_code` 做一次性补齐
 - `accept="*"` 表示接受所有部件
@@ -369,6 +375,7 @@ component 负责：
 
 规范文档：
 
+- `app/code/Weline/Theme/doc/布局固化与默认注入.md`
 - `app/code/Weline/Theme/doc/部件开发指南.md`
 - `app/code/Weline/Theme/doc/widget-slot-attributes.md`
 - `app/code/Weline/Theme/doc/widget-rules.md`

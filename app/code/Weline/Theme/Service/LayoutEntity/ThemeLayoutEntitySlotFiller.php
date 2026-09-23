@@ -1236,7 +1236,10 @@ final class ThemeLayoutEntitySlotFiller
             $locale = 'zh_Hans_CN';
         }
 
-        return 'chrome.slot.projection.v3|' . $themeId . '|' . \trim($scope) . '|' . $locale;
+        $sources = $this->chrome->resolveRenderSources($themeId, $scope, false);
+        $bindings = array_map(static fn(array $source): string => $source['binding']?->cacheKey() ?? $source['path'], $sources);
+        return 'chrome.slot.projection.v4|' . $themeId . '|' . \trim($scope) . '|' . $locale
+            . '|' . hash('sha256', json_encode($bindings, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -1245,42 +1248,30 @@ final class ThemeLayoutEntitySlotFiller
     private function buildChromeSlotProjection(int $themeId, string $scope, bool $preview): array
     {
         $chromeByScope = [];
-        $renderedBindings = [];
-        $lastError = null;
-        foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
-            try {
-                $candidateHtml = $this->chrome->renderCurrent($themeId, $candidateScope, null, $preview);
-            } catch (\Throwable $e) {
-                $lastError = $e;
-                continue;
-            }
-            if ($candidateHtml === '') {
-                continue;
-            }
-            $chromeByScope[$candidateScope] = $candidateHtml;
-            $renderedBinding = RequestContext::get('theme.layout_entity.rendered_chrome_binding');
-            if ($renderedBinding instanceof EntityRenderBinding && $renderedBinding->themeId === $themeId) {
-                $renderedBindings[$renderedBinding->cacheKey()] = $renderedBinding;
+        $ownedSlots = [];
+        $sources = $this->chrome->resolveRenderSources($themeId, $scope, $preview);
+        foreach ($sources as $source) {
+            $candidateHtml = $this->chrome->renderCurrent($themeId, $source['scope'], $source['version_id'], $source['preview']);
+            $chromeByScope[$source['scope']] = $candidateHtml;
+            if ($source['binding'] instanceof EntityRenderBinding) {
+                $nodes = $this->configStore->readBoundConfig($source['binding']);
+                foreach ($nodes as $node) {
+                    if (is_array($node) && (string)($node['slot_id'] ?? '') !== '') {
+                        $ownedSlots[$source['scope']][] = (string)$node['slot_id'];
+                    }
+                }
+                // An explicitly empty version is a decision, not an absent source.
+                if ($nodes === []) {
+                    break;
+                }
             }
         }
-        if ($chromeByScope === []) {
-            if ($lastError instanceof \Throwable) {
-                throw new \RuntimeException(
-                    'theme_layout_entity_chrome_fill_failed: ' . $lastError->getMessage(),
-                    0,
-                    $lastError,
-                );
-            }
-
-            return [];
-        }
-
-        RequestContext::set('theme.layout_entity.rendered_chrome_bindings', array_values($renderedBindings));
-        return $this->projectRenderedChromeScopes($chromeByScope);
+        RequestContext::set('theme.layout_entity.rendered_chrome_bindings', array_values(array_filter(array_column($sources, 'binding'))));
+        return $this->projectRenderedChromeScopes($chromeByScope, $ownedSlots);
     }
 
     /** @param array<string,string> $chromeByScope Nearest scope first. */
-    private function projectRenderedChromeScopes(array $chromeByScope): array
+    private function projectRenderedChromeScopes(array $chromeByScope, array $ownedSlotsByScope = []): array
     {
         $slotIds = SharedChromeService::CHROME_SLOTS;
         foreach ($chromeByScope as $chromeHtml) {
@@ -1290,8 +1281,11 @@ final class ThemeLayoutEntitySlotFiller
                 }
             }
         }
+        foreach ($ownedSlotsByScope as $ownedSlots) {
+            $slotIds = array_values(array_unique(array_merge($slotIds, $ownedSlots)));
+        }
         $bestInnerBySlot = [];
-        foreach ($chromeByScope as $chromeHtml) {
+        foreach ($chromeByScope as $ownerScope => $chromeHtml) {
             $chromeHtml = $this->composeChromeSlotTree($chromeHtml, $slotIds);
             foreach ($slotIds as $slotId) {
                 if (isset($bestInnerBySlot[$slotId])) {
@@ -1299,13 +1293,45 @@ final class ThemeLayoutEntitySlotFiller
                 }
                 $inner = $this->boundaryScanner->extractSlotInner($chromeHtml, $slotId);
                 if ($inner === null || $this->isBlankChromeInner($inner)) {
+                    if (in_array($slotId, $ownedSlotsByScope[$ownerScope] ?? [], true)) {
+                        $bestInnerBySlot[$slotId] = '';
+                    }
                     continue;
                 }
                 $bestInnerBySlot[$slotId] = $inner;
             }
         }
 
-        return $bestInnerBySlot;
+        // An inherited root may still contain its own older child HTML. Compose
+        // the selected child projections into each parent before root replacement,
+        // otherwise replacing the root would undo the nearer scope's decision.
+        $composed = [];
+        $compose = function (string $slotId, array $ancestors = []) use (&$compose, &$composed, $bestInnerBySlot): string {
+            if (array_key_exists($slotId, $composed)) {
+                return $composed[$slotId];
+            }
+            $inner = $bestInnerBySlot[$slotId];
+            $ancestors[$slotId] = true;
+            foreach ($bestInnerBySlot as $childId => $_childInner) {
+                if (isset($ancestors[$childId])) {
+                    continue;
+                }
+                $regions = $this->boundaryScanner->enumerateRegions($inner, $childId);
+                if ($regions === []) {
+                    continue;
+                }
+                $childInner = $compose($childId, $ancestors);
+                usort($regions, static fn(array $a, array $b): int => $b['inner_start'] <=> $a['inner_start']);
+                foreach ($regions as $region) {
+                    $inner = $this->boundaryScanner->replaceWrapperInner($inner, $region, $childInner);
+                }
+            }
+            return $composed[$slotId] = $inner;
+        };
+        foreach (array_keys($bestInnerBySlot) as $slotId) {
+            $compose($slotId);
+        }
+        return $composed;
     }
 
     private function isBlankChromeInner(string $inner): bool
@@ -2486,29 +2512,7 @@ $this->entityIdentityForScope($overlayScope),
      */
     private function scopeFallbackChain(string $scope): array
     {
-        $scope = \trim($scope);
-        $chain = [];
-        try {
-            $identity = $this->scopes->fromStorageScope($scope, true);
-            if ($identity !== null) {
-                foreach ($this->scopes->chainFromIdentity($identity) as $candidate) {
-                    $candidate = \trim((string)$candidate);
-                    if ($candidate !== '' && !\in_array($candidate, $chain, true)) {
-                        $chain[] = $candidate;
-                    }
-                }
-            }
-        } catch (\Throwable) {
-            // fall through
-        }
-        if ($chain === [] && $scope !== '') {
-            $chain[] = $scope;
-        }
-        if (!\in_array('default.default.default', $chain, true)) {
-            $chain[] = 'default.default.default';
-        }
-
-        return $chain;
+        return $this->chrome->scopeFallbackChain($scope);
     }
 
     /**

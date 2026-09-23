@@ -196,7 +196,21 @@ final class WidgetI18n
         }
 
         $lang = trim(State::getLangLocal());
+        if ($lang !== '') {
+            return $lang;
+        }
 
-        return $lang !== '' ? $lang : 'zh_Hans_CN';
+        // 无 path / RequestContext 时回落到网站默认语（默认站可能是 en_US），禁止硬编码 zh。
+        try {
+            $websiteDefault = trim(State::resolveWebsiteDefaultLanguage());
+            if ($websiteDefault !== ''
+                && preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $websiteDefault)
+            ) {
+                return $websiteDefault;
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'zh_Hans_CN';
     }
 }

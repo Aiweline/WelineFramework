@@ -195,6 +195,11 @@ $initialPreviewTokenSafe = $escape($initialPreviewToken);
 $themeOptionsHtml = (string)$this->getData('theme_options_html');
 $scopeIdentity = $this->getData('scope_identity');
 $scopeIdentity = is_array($scopeIdentity) ? $scopeIdentity : [];
+$resourceConfigKind = (string)($scopeIdentity['scope_kind'] ?? 'global');
+$resourceConfigWebsite = (string)($scopeIdentity['website_code'] ?? '');
+$resourceConfigStore = (string)($scopeIdentity['store_code'] ?? '');
+$resourceConfigChannel = (string)($scopeIdentity['channel_code'] ?? '');
+$resourceConfigScope = $selected_scope !== '' ? $selected_scope : ($resourceConfigWebsite . '.' . $resourceConfigStore . '.' . $resourceConfigChannel);
 $scope_identity_json = json_encode($scopeIdentity, $jsonForScriptFlags) ?: '{}';
 $scope_identity_json_safe = $escape($scope_identity_json);
 $scope_control_disabled = $layout_editor_locked || $scope_legacy_readonly;
@@ -1019,6 +1024,15 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             <span data-w-brand-ownership>@lang{继承自主题包默认值}</span>
         </div>
 
+        <div class="w-tabs" id="themeBrandBasicsTabs" data-w-component="tabs">
+            <div class="w-tabs__list" role="tablist" aria-label="@lang{基础信息}">
+                <button class="w-tabs__tab" id="themeBrandBaseTab" type="button" role="tab"
+                        aria-controls="themeBrandBasePanel" aria-selected="true">@lang{基础配置}</button>
+                <button class="w-tabs__tab" id="themeBrandResourcesTab" type="button" role="tab"
+                        aria-controls="themeBrandResourcesPanel" aria-selected="false">@lang{资源文件配置}</button>
+            </div>
+            <div class="w-tabs__content">
+                <div class="w-tabs__panel w-stack" id="themeBrandBasePanel" role="tabpanel" aria-labelledby="themeBrandBaseTab">
         <section class="w-theme-brand-identity" id="themeBrandIdentitySlot"
                  data-w-brand-identity-slot
                  hidden>
@@ -1123,7 +1137,6 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                 </div>
             </div>
         </section>
-    </div>
     <div class="w-drawer__footer w-theme-brand-basics-footer">
         <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-w-brand-action="inherit">
             <w:icon name="refresh" size="sm"></w:icon><span>@lang{恢复品牌图片继承}</span>
@@ -1131,6 +1144,27 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
         <button type="button" class="w-button" data-tone="primary" data-w-brand-action="save">
             <w:icon name="save" size="sm"></w:icon><span>@lang{保存}</span>
         </button>
+    </div>
+                </div>
+                <div class="w-tabs__panel" id="themeBrandResourcesPanel" role="tabpanel" aria-labelledby="themeBrandResourcesTab" hidden>
+        <section class="w-theme-brand-field w-stack" id="themeResourceFilesConfig" aria-labelledby="themeResourceFilesTitle">
+            <h6 class="w-theme-brand-field__title" id="themeResourceFilesTitle">@lang{资源文件配置}</h6>
+            <p class="w-text" data-tone="muted" data-size="sm">
+                <?php if (defined('PROD') && PROD): ?>
+                    @lang{当前生产环境：自动模式会开启压缩与合并。}
+                <?php else: ?>
+                    @lang{当前开发环境：自动模式会关闭压缩与合并。}
+                <?php endif; ?>
+                @lang{选择开启或关闭可覆盖环境默认行为。}
+            </p>
+            <p class="w-text" data-tone="muted" data-size="sm">@lang{修改后自动保存到当前作用范围；未设置时按渠道、店铺、网站、全局逐级继承。}</p>
+            <w:config:embed module="Weline_Theme" area="editor_area" group="theme_resource_files"
+                locale="default" layout="vertical" target_scope="resourceConfigScope"
+                scope_kind="resourceConfigKind" website_code="resourceConfigWebsite" store_code="resourceConfigStore" channel_code="resourceConfigChannel" />
+        </section>
+                </div>
+            </div>
+        </div>
     </div>
 </aside>
 

@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-footer-footer-payment-default.css}
  * 页脚支付图标部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -64,43 +65,3 @@ $paymentIcons = [
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-4);
-    flex-wrap: wrap;
-}
-
-.<?= $wc ?> .payment-label {
-    font-size: var(--weline-font-size-sm);
-    color: color-mix(in srgb, var(--weline-theme-on-primary) 70%, transparent);
-}
-
-.<?= $wc ?> .payment-icons {
-    display: flex;
-    gap: var(--weline-space-3);
-    flex-wrap: wrap;
-}
-
-.<?= $wc ?> .payment-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--token-size-45px);
-    height: var(--spacing-7);
-    background: color-mix(in srgb, var(--weline-theme-on-primary) 10%, transparent);
-    border-radius: var(--weline-radius-sm);
-    transition: background var(--weline-theme-transition-base);
-    color: color-mix(in srgb, var(--weline-theme-on-primary) 80%, transparent);
-}
-
-.<?= $wc ?> .payment-icon:hover {
-    background: color-mix(in srgb, var(--weline-theme-on-primary) 20%, transparent);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    gap: var(--weline-space-2);
-}
-</style>

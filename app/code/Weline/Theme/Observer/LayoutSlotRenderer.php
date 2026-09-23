@@ -132,7 +132,7 @@ class LayoutSlotRenderer implements ObserverInterface
             // Editor canvas (editor_mode=1) must not inherit start-preview Token identity
             // (same rule as ThemePreview\Content) — install typed editor_context instead.
             if ($this->isEditorCanvasRequest()) {
-                $this->bootstrapEditorCanvasIdentity();
+                $this->bootstrapEditorCanvasIdentity($template);
             } else {
                 // Align processSlots identity with start-preview Token (scope/layout_option/target),
                 // same as storefront editor_mode canvas — otherwise storefront falls back to RequestContext
@@ -150,7 +150,7 @@ class LayoutSlotRenderer implements ObserverInterface
             }
         } elseif ($this->isEditorCanvasRequest()) {
             \Weline\Framework\Cache\SharedResponseCachePolicy::forbid('theme_editor_canvas');
-            $this->bootstrapEditorCanvasIdentity();
+            $this->bootstrapEditorCanvasIdentity($template);
         }
 
         $allowBackendSlots = $area === 'backend' && $this->isBackendDashboardSlotRequest($template);
@@ -609,17 +609,21 @@ class LayoutSlotRenderer implements ObserverInterface
     /**
      * Install draft LayoutIdentity from typed editor_context on the real storefront route.
      */
-    private function bootstrapEditorCanvasIdentity(): void
+    private function bootstrapEditorCanvasIdentity(string $template = ''): void
     {
-        try {
-            if (RequestContext::get(LayoutIdentity::REQUEST_CONTEXT_KEY) instanceof LayoutIdentity) {
-                return;
-            }
-        } catch (\Throwable) {
+        if (!$this->isEditorCanvasRequest()) {
+            return;
         }
 
         $raw = $this->request->getParam('editor_context', null);
         $decoded = $this->decodeEditorContextValue($raw);
+        if ($decoded === null) {
+            $themeId = (int)$this->request->getParam('theme_id', $this->request->getParam('frontend_theme_id', 0));
+            if ($themeId < 1) {
+                $themeId = $this->resolveThemeId('frontend');
+            }
+            $decoded = $this->resolveOrphanDeleteEditorContext($themeId, $this->detectPageType($template));
+        }
         if ($decoded === null) {
             return;
         }

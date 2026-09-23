@@ -9,6 +9,7 @@
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-contact-faq","layout-contact-content","layout-cms-content","layout-default-content","faq"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css}
  * @param title {default="常见问题",type="string",label="标题"}
  * @param subtitle {default="",type="string",label="副标题"}
  * @param faqs {default=[],type="site_faq_items",label="FAQ列表"}
@@ -31,7 +32,6 @@ $expandFirst = Block::boolean($this->getData('expand_first'), true);
 $allowMultiple = Block::boolean($this->getData('allow_multiple'));
 $searchEnabled = Block::boolean($this->getData('search_enabled'));
 ?>
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-weline-load="siteBlocks" data-site-block="faq" data-allow-multiple="<?= $allowMultiple ? 'true' : 'false' ?>">

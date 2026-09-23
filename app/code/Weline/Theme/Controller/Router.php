@@ -6,6 +6,8 @@ namespace Weline\Theme\Controller;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
 use Weline\Theme\Service\PreviewContextService;
@@ -19,6 +21,22 @@ use Weline\Theme\Service\ThemePageTypeResolver;
  */
 class Router implements RouterInterface
 {
+    /**
+     * Legacy short policy paths → canonical /policy/* (301). Layout_resolve is 1:1;
+     * these aliases are redirects, not a revived defaultPublicRouteMap (QA-13).
+     *
+     * @var array<string, string>
+     */
+    private const LEGACY_POLICY_REDIRECTS = [
+        'privacy' => 'policy/privacy',
+        'privacy-policy' => 'policy/privacy',
+        'cookie' => 'policy/cookie',
+        'cookies' => 'policy/cookie',
+        'cookie-policy' => 'policy/cookie',
+        'refund' => 'policy/refund',
+        'refund-policy' => 'policy/refund',
+    ];
+
     public static function rewritePreviewThemeQuery(string &$path, array &$rule): void
     {
         if (!empty($rule['module'])) {
@@ -144,6 +162,14 @@ class Router implements RouterInterface
         }
 
         $normalizedPath = self::normalizePublicPath($path);
+
+        if (isset(self::LEGACY_POLICY_REDIRECTS[$normalizedPath])) {
+            $rule['module'] = 'Weline_Theme';
+            throw new ResponseTerminateException(301, '', [
+                'Location' => self::buildLegacyPolicyLocation(self::LEGACY_POLICY_REDIRECTS[$normalizedPath]),
+            ]);
+        }
+
         if ($normalizedPath === ''
             || str_starts_with($normalizedPath, 'theme/frontend/')
             || self::shouldSkipPreviewRewrite($normalizedPath)
@@ -183,6 +209,13 @@ class Router implements RouterInterface
                 \Weline\Promotion\Controller\Router::process($path, $rule);
             }
             return;
+        }
+
+        if (class_exists('Weline\\Customer\\Controller\\Router')) {
+            \Weline\Customer\Controller\Router::process($path, $rule);
+            if (!empty($rule['module'])) {
+                return;
+            }
         }
 
         if (class_exists('Weline\\Order\\Controller\\Router')) {
@@ -410,6 +443,9 @@ class Router implements RouterInterface
         }
 
         if (class_exists('Weline\\Customer\\Controller\\Router')) {
+            if ($normalizedPath === 'customer/account/create') {
+                return true;
+            }
             if ($normalizedPath === 'guide/social-login') {
                 return true;
             }
@@ -437,6 +473,34 @@ class Router implements RouterInterface
         }
 
         return false;
+    }
+
+    private static function buildLegacyPolicyLocation(string $canonicalRelative): string
+    {
+        $canonicalRelative = trim(str_replace('\\', '/', $canonicalRelative), '/');
+        try {
+            /** @var Url $url */
+            $url = ObjectManager::getInstance(Url::class);
+            $built = (string)$url->getUrl($canonicalRelative);
+            if ($built !== '') {
+                return $built;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $base = rtrim((string)$request->getOriginBaseUrl(), '/');
+            if ($base !== '') {
+                return $base . '/' . $canonicalRelative;
+            }
+        } catch (\Throwable) {
+            // keep relative fallback
+        }
+
+        return '/' . $canonicalRelative;
     }
 
     private static function generatedFrontendRouteExists(string $normalizedPath, Request $request): bool
