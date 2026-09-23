@@ -79,9 +79,7 @@ final class GatewayStartupDecision
                 $portExplicit ? $exactPort : null,
                 $deadlineMonotonic,
             );
-            $fallbackPort = (string)($lease['allocation_scope'] ?? '') === 'stable_range'
-                ? (int)($lease['port'] ?? 0)
-                : 0;
+            $fallbackPort = self::publicFallbackPortFromLease($lease);
             return new EdgeRuntimeDecision(
                 adapter: \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS,
                 requestedMode: $requested,
@@ -107,6 +105,10 @@ final class GatewayStartupDecision
         // Startup discovers a trusted gateway first. Only a host classified
         // INSTALL_REQUIRED may enter the signed-package bootstrap election;
         // upgrade and repair remain explicit administrator commands.
+        // When auto cannot join and falls back to pure WLS, an explicit `-p`
+        // is honored as the degraded public listen port. Successful gateway
+        // join still treats `-p` as backend intent in Start.php and never
+        // reaches this reservation.
         try {
             $statusDeadline = \min(
                 $deadlineMonotonic,
@@ -239,12 +241,10 @@ final class GatewayStartupDecision
         $lease = $this->reservePublicPort(
             $instanceName,
             $bindHost,
-            null,
+            $portExplicit ? $exactPort : null,
             $deadlineMonotonic,
         );
-        $fallbackPort = (string)($lease['allocation_scope'] ?? '') === 'stable_range'
-            ? (int)($lease['port'] ?? 0)
-            : 0;
+        $fallbackPort = self::publicFallbackPortFromLease($lease);
         return new EdgeRuntimeDecision(
             adapter: \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS,
             requestedMode: $requested,
@@ -285,12 +285,10 @@ final class GatewayStartupDecision
         $lease = $this->reservePublicPort(
             $instanceName,
             $bindHost,
-            $decision->requestedMode === self::MODE_AUTO ? null : $exactPort,
+            $exactPort,
             $deadlineMonotonic,
         );
-        $fallbackPort = (string)($lease['allocation_scope'] ?? '') === 'stable_range'
-            ? (int)($lease['port'] ?? 0)
-            : 0;
+        $fallbackPort = self::publicFallbackPortFromLease($lease);
         return new EdgeRuntimeDecision(
             adapter: $decision->adapter,
             requestedMode: $decision->requestedMode,
@@ -389,6 +387,18 @@ final class GatewayStartupDecision
     {
         $port = \is_int($value) ? $value : 0;
         return $port >= 1 && $port <= 65535 ? $port : 0;
+    }
+
+    /** @param array<string,mixed> $lease */
+    private static function publicFallbackPortFromLease(array $lease): int
+    {
+        // EdgeRuntimeDecision.fallbackPort only advertises stable_range
+        // (20000–29999). Exact `-p` reservations live in port_lease + Start
+        // config.port and must keep fallbackPort=0.
+        if ((string)($lease['allocation_scope'] ?? '') !== 'stable_range') {
+            return 0;
+        }
+        return self::boundedPort($lease['port'] ?? 0);
     }
 
     /** @return array<string,mixed> */

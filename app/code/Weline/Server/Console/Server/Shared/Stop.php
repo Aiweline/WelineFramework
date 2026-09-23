@@ -20,25 +20,21 @@ class Stop extends CommandAbstract
         }
 
         $failed = false;
-        $sessionStopped = $manager->stop(ControlMessage::ROLE_SESSION_SERVER, [], $envConfig);
-        if ($sessionStopped) {
+        $sessionReport = $manager->stopWithReport(ControlMessage::ROLE_SESSION_SERVER, [], $envConfig);
+        if ((bool)($sessionReport['stopped'] ?? false)) {
             $this->printer->success(__('Session Server stopped'));
         } else {
             $failed = true;
-            $this->printer->warning(
-                __('Session Server stop was not confirmed; runtime identity was retained for retry/repair.')
-            );
+            $this->printer->warning($this->formatUnconfirmedStop('Session Server', $sessionReport));
         }
 
         if ($this->isMemoryEnabled($envConfig)) {
-            $memoryStopped = $manager->stop(ControlMessage::ROLE_MEMORY_SERVER, [], $envConfig);
-            if ($memoryStopped) {
+            $memoryReport = $manager->stopWithReport(ControlMessage::ROLE_MEMORY_SERVER, [], $envConfig);
+            if ((bool)($memoryReport['stopped'] ?? false)) {
                 $this->printer->success(__('Memory Service stopped'));
             } else {
                 $failed = true;
-                $this->printer->warning(
-                    __('Memory Service stop was not confirmed; runtime identity was retained for retry/repair.')
-                );
+                $this->printer->warning($this->formatUnconfirmedStop('Memory Service', $memoryReport));
             }
         } else {
             $this->printer->note(__('Memory Service disabled by configuration.'));
@@ -82,5 +78,34 @@ class Stop extends CommandAbstract
             : [];
 
         return (bool) ($memory['enabled'] ?? true);
+    }
+
+    /**
+     * @param array{reason?:string,host?:string,port?:int,pid?:int} $report
+     */
+    private function formatUnconfirmedStop(string $label, array $report): string
+    {
+        $reason = \trim((string)($report['reason'] ?? 'unconfirmed'));
+        $host = \trim((string)($report['host'] ?? ''));
+        $port = (int)($report['port'] ?? 0);
+        $pid = (int)($report['pid'] ?? 0);
+        $details = [];
+        if ($reason !== '') {
+            $details[] = 'reason=' . $reason;
+        }
+        if ($host !== '' && $port > 0) {
+            $details[] = 'endpoint=' . $host . ':' . $port;
+        }
+        if ($pid > 0) {
+            $details[] = 'pid=' . $pid;
+        }
+
+        return (string) __(
+            '%{1} stop was not confirmed; runtime identity was retained for retry/repair%{2}.',
+            [
+                $label,
+                $details !== [] ? ' (' . \implode(', ', $details) . ')' : '',
+            ],
+        );
     }
 }

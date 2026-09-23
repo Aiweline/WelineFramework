@@ -443,6 +443,16 @@ class ServiceOrchestrator
     /** 启动后冷却期（秒）- 在此期间忽略 reload_all:code 请求，避免 FileWatcher 误触发 */
     private float $startupReloadCooldown = 10.0;
 
+    /**
+     * Automatic (FileWatcher) code-reload failure circuit.
+     * Opened when a Worker reload batch/surge fails; blocks non-waiting
+     * reload_all:code until desired canonical Workers are accepting again.
+     * Explicit reload_wait / force / operator recovery bypasses it.
+     */
+    private bool $automaticCodeReloadCircuitOpen = false;
+
+    private float $automaticCodeReloadFailedAt = 0.0;
+
     /** 总启动超时时间（秒）- 超过此时间未完成启动则强制退出 Master */
     private float $startupMaxDuration = 120.0;
 
@@ -9770,6 +9780,22 @@ class ServiceOrchestrator
             }
         }
 
+        // Failure circuit: after a broken Worker reload, do not let FileWatcher
+        // keep draining acceptors while canonical capacity is still down.
+        // Explicit waiting / force reloads remain the operator recovery path.
+        if ($type === 'code'
+            && $this->rollingRestartClientId === null
+            && $this->shouldBlockAutomaticCodeReload()
+        ) {
+            WlsLogger::warning_(
+                '[Orchestrator] 忽略自动 reload_all:code：上一次 Worker 重载失败后的熔断仍开启'
+                . '（failed_at_monotonic=' . \round($this->automaticCodeReloadFailedAt, 3)
+                . '；显式等待重载 / force 不受此限）'
+            );
+
+            return;
+        }
+
         $configuredRoles = $this->context?->getConfig('wls.orchestrator.reload_roles', ['worker']);
         $reloadRoles = \is_array($configuredRoles) ? $configuredRoles : ['worker'];
         if (empty($reloadRoles)) {
@@ -9979,17 +10005,18 @@ class ServiceOrchestrator
         $savedFullRestartOnFailure = $this->fullRestartOnFailure;
         $this->fullRestartOnFailure = false;
         $startTime = self::monotonicSeconds();
-        $directNewFirst = $this->context !== null
-            && $this->context->isDirect()
-            && !$this->isWindowsRuntime()
-            && $this->context->runtimeSelection->listenerMode === 'reuseport';
+        $forceReload = ($type === ControlMessage::RELOAD_TYPE_FORCE);
+        // Direct new-first: reuseport AND shared_fd. Both can accept on the same
+        // public listener while a hot surge proves READY before any canonical
+        // Worker is drained. Explicit force is a documented downtime batch —
+        // skip surge so recovery does not double the pool on low-memory hosts.
+        $directNewFirst = !$forceReload && $this->supportsDirectNewFirstReload();
         $directSurgeWorkerIds = [];
         $directTargetWorkerIds = [];
         $previousWorkerReloadCapacityTransition = $this->workerReloadCapacityTransitionInProgress;
         $this->workerReloadCapacityTransitionInProgress = true;
 
         try {
-            $forceReload = ($type === ControlMessage::RELOAD_TYPE_FORCE);
             $orderedIds = [];
             $canonicalInstances = [];
             foreach ($instances as $inst) {
@@ -10011,24 +10038,21 @@ class ServiceOrchestrator
                 $this->sendReloadWaitTerminalOutcome(ControlMessage::reloadCompleted(0.0, 0));
                 return;
             }
-            // Per-Worker SO_REUSEPORT listeners need a side-by-side hot surge
-            // before canonical admission is removed. shared_fd instead keeps
-            // one Master-owned accept queue and uses ordinary bounded batches,
-            // so it never creates temporary surge slots that must be retired.
-            // Direct new-first needs only enough hot side-by-side capacity to
-            // cover the largest bounded replacement batch. Doubling the whole
-            // pool can itself trigger host memory pressure, after which the
-            // fixed surge READY target becomes impossible to satisfy.
+            // Per-Worker SO_REUSEPORT and Master-owned shared_fd both support a
+            // side-by-side hot surge before canonical admission is removed.
+            // Surge size covers only the largest bounded replacement batch —
+            // doubling the whole pool can trip host memory pressure.
             $singleGenerationBatch = $forceReload;
             if ($forceReload) {
                 WlsLogger::warning_(
                     '[Orchestrator][WorkerBatchPlan] explicit force reload accepted; '
-                    . 'rebuilding all Worker slots in one downtime batch'
+                    . 'rebuilding all Worker slots in one downtime batch (no new-first surge)'
                 );
             } elseif ($directNewFirst) {
                 WlsLogger::info_(
-                    '[Orchestrator][WorkerBatchPlan] Direct new-first uses bounded canonical '
-                    . 'batches after an equivalent hot surge batch is ready'
+                    '[Orchestrator][WorkerBatchPlan] Direct new-first ('
+                    . ($this->context?->runtimeSelection->listenerMode ?? 'unknown')
+                    . ') uses bounded canonical batches after an equivalent hot surge batch is ready'
                 );
             }
             $batches = $this->getWorkerRestartBatches($ids, $singleGenerationBatch);
@@ -10108,6 +10132,7 @@ class ServiceOrchestrator
 
             $elapsedMs = (self::monotonicSeconds() - $startTime) * 1000;
             $this->sendReloadWaitTerminalOutcome(ControlMessage::reloadCompleted($elapsedMs, $done));
+            $this->clearAutomaticCodeReloadCircuit('reload_completed');
             $this->rollingRestartStabilizingUntil = self::monotonicSeconds() + $this->stabilizationSec;
         } finally {
             try {
@@ -12027,6 +12052,28 @@ class ServiceOrchestrator
     }
 
     /**
+     * Pre-drain capacity fence for one replacement batch.
+     * Without verified alternate capacity, keep at least one accepting Worker
+     * so Master LISTEN never becomes a SYN blackhole.
+     */
+    private function resolveWorkerReloadBatchMinReady(
+        int $totalWorkers,
+        bool $explicitDowntimeFullPool,
+        bool $hasConfirmedAlternateCapacity,
+    ): int {
+        if ($explicitDowntimeFullPool) {
+            return 0;
+        }
+
+        $batchMinReady = $this->resolveWorkerReloadMinReady($totalWorkers);
+        if (!$hasConfirmedAlternateCapacity) {
+            $batchMinReady = \max(1, $batchMinReady);
+        }
+
+        return $batchMinReady;
+    }
+
+    /**
      * A full-pool batch is safe only while all connected Dispatchers have
      * confirmed a non-business maintenance pool with live READY capacity.
      */
@@ -12859,9 +12906,11 @@ class ServiceOrchestrator
         // same capacity fence as an ordinary rolling replacement.
         $explicitDowntimeFullPool = $skipDrain
             && \count($instanceIds) >= $totalWorkers;
-        $batchMinReady = $explicitDowntimeFullPool
-            ? 0
-            : $this->resolveWorkerReloadMinReady($totalWorkers);
+        $batchMinReady = $this->resolveWorkerReloadBatchMinReady(
+            $totalWorkers,
+            $explicitDowntimeFullPool,
+            $hasConfirmedAlternateCapacity,
+        );
         $batchMeta = [
             'batch_index' => $batchIndex,
             'batch_total' => $batchTotal,
@@ -12879,17 +12928,18 @@ class ServiceOrchestrator
         );
 
         $oldRoutePorts = $this->collectReadyWorkerPortsSorted();
-        $batchReadyCount = 0;
+        // Count live accepting Workers (READY + live IPC), not stale registry
+        // rows. A surge that died after READY proof must not authorize draining
+        // the last canonical acceptor.
+        $currentAccepting = $this->countLiveAcceptingWorkers();
+        $batchAccepting = 0;
         foreach ($instanceIds as $instanceId) {
             $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
-            if ($worker !== null
-                && $worker->state === ServiceInstance::STATE_READY
-                && $worker->port !== null
-                && $worker->port > 0) {
-                $batchReadyCount++;
+            if ($worker !== null && $this->isLiveAcceptingWorker($worker)) {
+                $batchAccepting++;
             }
         }
-        $remainingReady = \count($oldRoutePorts) - $batchReadyCount;
+        $remainingReady = $currentAccepting - $batchAccepting;
         $minReady = (int)$batchMeta['min_ready'];
         if (!$hasConfirmedAlternateCapacity && $remainingReady < $minReady) {
             $reason = 'runtime_min_ready_guard';
@@ -12898,8 +12948,8 @@ class ServiceOrchestrator
                 . ', batch=' . $batchIndex . '/' . $batchTotal
                 . ', batch_ids=' . $batchList
                 . ', min_ready=' . $minReady
-                . ', current_ready=' . \count($oldRoutePorts)
-                . ', batch_ready=' . $batchReadyCount
+                . ', current_ready=' . $currentAccepting
+                . ', batch_ready=' . $batchAccepting
                 . ', remaining_ready=' . $remainingReady
                 . ', route_old=[' . \implode(',', $oldRoutePorts) . ']'
                 . ', route_new=[' . \implode(',', $oldRoutePorts) . ']'
@@ -13517,11 +13567,122 @@ class ServiceOrchestrator
     private function failWorkerBatchNotify(string $rollingOrReload, string $message): void
     {
         WlsLogger::error_('[Orchestrator] ' . $message);
+        if ($rollingOrReload === 'reload') {
+            $this->noteAutomaticCodeReloadFailure();
+        }
         if ($rollingOrReload === 'rolling') {
             $this->finishRollingRestart(false, $message);
         } elseif ($this->rollingRestartClientId !== null && $this->controlServer !== null) {
             $this->sendReloadWaitTerminalOutcome(ControlMessage::reloadFailed($message));
         }
+    }
+
+    /**
+     * Direct new-first (surge before drain) is safe whenever Workers can share
+     * the public listener with the still-accepting canonical generation:
+     * SO_REUSEPORT or Master-owned shared_fd. Windows Direct and worker_ports
+     * keep drain-then-start / maintenance takeover paths.
+     */
+    private function supportsDirectNewFirstReload(): bool
+    {
+        if ($this->context === null || !$this->context->isDirect() || $this->isWindowsRuntime()) {
+            return false;
+        }
+
+        $listenerMode = $this->context->runtimeSelection->listenerMode;
+
+        return $listenerMode === 'reuseport' || $listenerMode === 'shared_fd';
+    }
+
+    private function noteAutomaticCodeReloadFailure(): void
+    {
+        $this->automaticCodeReloadCircuitOpen = true;
+        $this->automaticCodeReloadFailedAt = self::monotonicSeconds();
+        WlsLogger::warning_(
+            '[Orchestrator] automatic code-reload circuit opened after Worker reload failure'
+            . ' (failed_at_monotonic=' . \round($this->automaticCodeReloadFailedAt, 3) . ')'
+        );
+    }
+
+    private function clearAutomaticCodeReloadCircuit(string $reason): void
+    {
+        if (!$this->automaticCodeReloadCircuitOpen) {
+            return;
+        }
+        $this->automaticCodeReloadCircuitOpen = false;
+        $this->automaticCodeReloadFailedAt = 0.0;
+        WlsLogger::info_('[Orchestrator] automatic code-reload circuit cleared: ' . $reason);
+    }
+
+    /**
+     * Block FileWatcher reload storms while canonical accepting capacity is down.
+     * Clears automatically once desired non-surge Workers are READY again.
+     */
+    private function shouldBlockAutomaticCodeReload(): bool
+    {
+        if (!$this->automaticCodeReloadCircuitOpen) {
+            return false;
+        }
+        if ($this->desiredCanonicalWorkersAcceptingReady()) {
+            $this->clearAutomaticCodeReloadCircuit('canonical_capacity_recovered');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Desired canonical (non-surge) Workers that still accept public traffic.
+     */
+    private function desiredCanonicalWorkersAcceptingReady(): bool
+    {
+        $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
+        if ($desired <= 0) {
+            return true;
+        }
+
+        $ready = 0;
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
+            if ($this->isDirectReloadSurgeWorker($worker)) {
+                continue;
+            }
+            if ($this->isLiveAcceptingWorker($worker)) {
+                $ready++;
+            }
+        }
+
+        return $ready >= $desired;
+    }
+
+    private function countLiveAcceptingWorkers(): int
+    {
+        $count = 0;
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
+            if ($this->isLiveAcceptingWorker($worker)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    private function isLiveAcceptingWorker(ServiceInstance $worker): bool
+    {
+        if ($worker->role !== ControlMessage::ROLE_WORKER
+            && $worker->role !== ControlMessage::ROLE_MAINTENANCE
+        ) {
+            return false;
+        }
+        if ($worker->state !== ServiceInstance::STATE_READY
+            || $worker->port === null
+            || $worker->port <= 0
+            || $worker->ipcClientId === null
+        ) {
+            return false;
+        }
+
+        return $this->hasLiveDirectReloadSurgeIpc($worker);
     }
 
     /**
@@ -17198,9 +17359,24 @@ class ServiceOrchestrator
                             $servingManifestReadyRejection =
                                 'serving_manifest_ready_fence_mismatch';
                         }
-                    } catch (\Throwable) {
+                    } catch (\Throwable $fenceError) {
                         $servingManifestReadyRejection =
                             'serving_manifest_ready_fence_unavailable';
+                        WlsLogger::error_(
+                            '[Orchestrator] serving_manifest_ready_fence_unavailable detail: '
+                            . $fenceError->getMessage()
+                            . ' @' . $fenceError->getFile() . ':' . $fenceError->getLine()
+                            . ' reported_generation=' . $reportedServingManifestGeneration
+                            . ' reported_digest=' . $reportedServingManifestDigest
+                            . ' reported_route_count=' . $reportedServingManifestRouteCount
+                            . ' context_master_pid=' . (int)($this->context?->masterPid ?? 0)
+                            . ' context_epoch=' . (int)($this->context?->epoch ?? 0)
+                            . ' context_serving_instance_generation='
+                            . (int)($this->context?->getConfig(
+                                'wls.serving_instance_generation',
+                                0,
+                            ) ?? 0)
+                        );
                     }
                 }
             }
@@ -26130,24 +26306,11 @@ class ServiceOrchestrator
                 'last_status_report_monotonic',
                 self::monotonicSeconds(),
             );
-            if (\array_key_exists('homepage_fpc_hit', $msg)) {
-                $homepageFpc = [
-                    'hit' => ((int)($msg['homepage_fpc_hit'] ?? 0)) === 1,
-                    'fpc_status' => \strtoupper(\trim((string)($msg['homepage_fpc_status'] ?? ''))),
-                    'source' => \strtolower(\trim((string)($msg['homepage_fpc_source'] ?? ''))),
-                    'full_uri' => \trim((string)($msg['homepage_fpc_full_uri'] ?? '')),
-                    'reason' => \trim((string)($msg['homepage_fpc_reason'] ?? '')),
-                    'http_status' => (int)($msg['homepage_fpc_http_status'] ?? 0),
-                ];
-                $instance->setMeta('homepage_fpc', $homepageFpc);
-                $warmupState = \strtolower(\trim((string)($msg['warmup_state'] ?? '')));
-                if ($warmupState !== '') {
-                    $instance->setMeta('warmup_state', $warmupState);
-                } elseif ($homepageFpc['hit']
-                    && $homepageFpc['fpc_status'] === 'HIT'
-                    && \str_starts_with($homepageFpc['source'], 'process')
-                ) {
-                    $instance->setMeta('warmup_state', 'hot');
+            $homepageOverlay = WorkerReadinessState::homepageMetaFromStatusReportFields($msg);
+            if ($homepageOverlay !== null) {
+                $instance->setMeta('homepage_fpc', $homepageOverlay['homepage_fpc']);
+                if ($homepageOverlay['warmup_state'] !== null) {
+                    $instance->setMeta('warmup_state', $homepageOverlay['warmup_state']);
                 }
             }
             $this->registry->updateInstance($instance);
@@ -29264,6 +29427,9 @@ class ServiceOrchestrator
         // child already loaded its immutable launch manifest and a DRAINING
         // child may still own established TLS sessions.
         foreach ($this->registry->getAllInstances() as $instance) {
+            if (!$this->isSslCertReloadTarget($instance)) {
+                continue;
+            }
             $clientId = $instance->ipcClientId;
             $authenticated = $clientId !== null
                 && $this->controlServer->clientExists($clientId);
@@ -29383,6 +29549,9 @@ class ServiceOrchestrator
             'generation' => $expectedManifestGeneration,
             'digest' => $expectedManifestDigest,
             'instance_generation' => $instanceGeneration,
+            'certificate_trust_profile' => (string)(
+                $current['payload']['certificate_trust_profile'] ?? ''
+            ),
         ];
         $manifestPayload = \is_array($current['payload'] ?? null)
             ? $current['payload']

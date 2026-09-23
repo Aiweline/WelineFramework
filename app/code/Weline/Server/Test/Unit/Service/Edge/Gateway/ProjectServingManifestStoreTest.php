@@ -101,6 +101,53 @@ final class ProjectServingManifestStoreTest extends TestCase
         );
     }
 
+    public function testReadyFenceCanValidateWhilePublisherWaitsWithLifecycleLock(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $publication = $store->publishFromRegistration($this->registration(
+            'primary',
+            [$this->route('example.test')],
+        ));
+        $certificates = new ProjectCertificateGenerationStore($this->root);
+        $publisher = new \Fiber(static function () use ($certificates): void {
+            $certificates->withCertificateLifecycleLock(static function (): void {
+                \Fiber::suspend();
+            });
+        });
+        $publisher->start();
+        try {
+            self::assertSame(
+                $publication['digest'],
+                $store->currentForFence($this->fence('primary'))['digest'],
+            );
+        } finally {
+            $publisher->resume();
+        }
+    }
+
+    public function testReadyFenceRejectsRevokedCertificateWhilePublisherHoldsLock(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $store->publishFromRegistration($this->registration(
+            'primary',
+            [$this->route('example.test')],
+        ));
+        $certificates = new ProjectCertificateGenerationStore($this->root);
+        $publisher = new \Fiber(static function () use ($certificates): void {
+            $certificates->withCertificateLifecycleLock(static function () use ($certificates): void {
+                $certificates->deactivate('example.test');
+                \Fiber::suspend();
+            });
+        });
+        $publisher->start();
+        try {
+            $this->expectException(\RuntimeException::class);
+            $store->currentForFence($this->fence('primary'));
+        } finally {
+            $publisher->resume();
+        }
+    }
+
     public function testFallbackBootstrapSelectsActiveSiblingWhenPrimaryIsInactive(): void
     {
         $store = new ProjectServingManifestStore($this->root);

@@ -40,14 +40,68 @@ final class WorkerReadinessHomepageStatusReportContractTest extends TestCase
         self::assertSame('hot', $fields['warmup_state']);
     }
 
+    public function testOverlayPrefersLastStatusReportAdoptedProofOverFailOpenMeta(): void
+    {
+        $metadata = WorkerReadinessState::overlayHomepageFpcMetaFromLastStatusReport([
+            'warmup_state' => 'warm',
+            'homepage_fpc' => [
+                'hit' => false,
+                'fpc_status' => '',
+                'source' => '',
+                'full_uri' => '',
+                'reason' => 'homepage-fpc:deferred-after-ready:fail-open',
+                'http_status' => 0,
+            ],
+            'last_status_report' => [
+                'warmup_state' => 'hot',
+                'homepage_fpc_hit' => 1,
+                'homepage_fpc_status' => 'HIT',
+                'homepage_fpc_source' => 'process',
+                'homepage_fpc_reason' => 'homepage-fpc:deferred-warmup:adopted',
+                'homepage_fpc_full_uri' => 'https://p05113ef3.test.weline.com:9555/',
+                'homepage_fpc_http_status' => 200,
+            ],
+        ]);
+
+        self::assertTrue($metadata['homepage_fpc']['hit']);
+        self::assertSame('HIT', $metadata['homepage_fpc']['fpc_status']);
+        self::assertSame('process', $metadata['homepage_fpc']['source']);
+        self::assertSame('homepage-fpc:deferred-warmup:adopted', $metadata['homepage_fpc']['reason']);
+        self::assertSame('hot', $metadata['warmup_state']);
+    }
+
+    public function testHomepageMetaFromStatusReportFieldsReturnsNullWithoutHitKey(): void
+    {
+        self::assertNull(WorkerReadinessState::homepageMetaFromStatusReportFields([
+            'connections' => 0,
+            'memory' => 1,
+        ]));
+    }
+
     public function testOrchestratorAuditAppliesHomepageFpcFromStatusReport(): void
     {
         $source = \file_get_contents(
             BP . 'app/code/Weline/Server/Service/ServiceOrchestrator.php'
         );
         self::assertIsString($source);
-        self::assertStringContainsString("array_key_exists('homepage_fpc_hit', \$msg)", $source);
-        self::assertStringContainsString("setMeta('homepage_fpc', \$homepageFpc)", $source);
+        self::assertStringContainsString('homepageMetaFromStatusReportFields', $source);
+        self::assertStringContainsString("setMeta('homepage_fpc', \$homepageOverlay['homepage_fpc'])", $source);
+    }
+
+    public function testStatusSnapshotAndCliOverlayLastStatusReport(): void
+    {
+        $registrySource = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/Service/ServiceRegistry.php'
+        );
+        $statusSource = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/Console/Server/Status.php'
+        );
+        $managerSource = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/Service/ServerInstanceManager.php'
+        );
+        self::assertStringContainsString('overlayHomepageFpcMetaFromLastStatusReport', $registrySource);
+        self::assertStringContainsString('overlayHomepageFpcMetaFromLastStatusReport', $statusSource);
+        self::assertStringContainsString('overlayHomepageFpcMetaFromLastStatusReport', $managerSource);
     }
 
     public function testWorkersPushHomepageFieldsOnDeferredWarmupSuccess(): void

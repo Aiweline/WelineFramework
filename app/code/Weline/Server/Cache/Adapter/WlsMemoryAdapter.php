@@ -240,6 +240,39 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
         return $result;
     }
 
+    public function deleteMultiple(array $keys): bool
+    {
+        if ($keys === []) {
+            return true;
+        }
+        $this->syncLocalEpoch();
+        $uniqueKeys = \array_values(\array_unique(\array_map(static fn($key): string => (string)$key, $keys)));
+        foreach ($uniqueKeys as $key) {
+            unset($this->localCache[$key]);
+        }
+        if ($this->isRemoteUnavailable()) {
+            return true;
+        }
+        try {
+            $facade = $this->memoryFacade();
+            if (!$facade instanceof SharedCacheBatchStateInterface) {
+                $success = true;
+                foreach ($uniqueKeys as $key) {
+                    if (!$this->delete($key)) {
+                        $success = false;
+                    }
+                }
+                return $success;
+            }
+            return $this->remoteCall(
+                fn(): bool => $facade->deleteCacheMultiple($this->identity, $uniqueKeys)
+            );
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            return true;
+        }
+    }
+
     public function delete(string $key): bool
     {
         $this->syncLocalEpoch();

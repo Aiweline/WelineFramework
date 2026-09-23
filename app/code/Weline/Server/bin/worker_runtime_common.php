@@ -35,17 +35,18 @@ if (!\function_exists('wlsWorkerDeferredWarmupMayStart')) {
 
 if (!\function_exists('wlsWorkerDeferredWarmupNotBefore')) {
     /**
-     * Leave the first few seconds after the first event-loop turn to real
-     * storefront traffic. A deferred warmup Fiber still executes synchronously
-     * until its first suspension, so a zero-delay start can contend with the
-     * first request even when the listener was checked immediately beforehand.
+     * Leave a short idle after the first event-loop turn so a just-arrived
+     * accept is not starved by the deferred Fiber's first synchronous stretch.
+     * Keep this well under 1s: a multi-second grace lets near-virgin probes
+     * SSR `/`+`/products` before Shared HotCache/FPC are stocked (B回流).
+     * Zero-delay still contends; ~350ms + per-worker stagger is the tradeoff.
      */
     function wlsWorkerDeferredWarmupNotBefore(float $now, int $workerId): float
     {
         $workerId = max(1, $workerId);
         $staggerSeconds = (($workerId * 53) % 700) / 1000;
 
-        return $now + 3.0 + $staggerSeconds;
+        return $now + 0.35 + $staggerSeconds;
     }
 }
 

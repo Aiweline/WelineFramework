@@ -46,12 +46,18 @@ class Disable implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         Env::getInstance()->setConfig('system.maintenance', false);
-        $wave = (new UpgradeWaveService())->markRecovered();
+        $waves = new UpgradeWaveService();
+        $wave = $waves->markRecovered();
         if ($wave !== null) {
             $deadline = (int)($wave['redeem_deadline_at'] ?? 0);
             $this->printing->note(__('维护礼金兑礼窗口已开启，截止时间戳：%{1}', [(string)$deadline]));
         }
+        $closed = $waves->closeExpiredWave();
+        if ($closed !== null && (string)($closed['status'] ?? '') === 'closed') {
+            $this->printing->note(__('已过期的兑礼波次状态已关闭（status=closed）。'));
+        }
         $this->printing->success(__('维护模式已关闭！'));
+        $this->printing->note(__('本机店面验收一键关维护：php bin/w maintenance:disable（会同步本机 WLS Worker；禁止用于假关生产）。'));
         WlsMaintenanceSync::syncAfterCliToggle($this->printing, false, $args);
     }
 

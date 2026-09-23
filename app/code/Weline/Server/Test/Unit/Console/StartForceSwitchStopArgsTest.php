@@ -138,6 +138,106 @@ final class StartForceSwitchStopArgsTest extends TestCase
         );
     }
 
+    public function testForceSwitchFinalizeSkipsRequiredIpcWhenMaintenanceWasNeverEnabled(): void
+    {
+        $printer = new \Weline\Framework\Output\Cli\Printing();
+        $start = new class ($printer) extends Start {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function __construct(\Weline\Framework\Output\Cli\Printing $printer)
+            {
+                $this->printer = $printer;
+            }
+
+            public function seedDisabledSnapshot(string $instanceName): void
+            {
+                $ref = new \ReflectionProperty(Start::class, 'restartMaintenanceSnapshot');
+                $ref->setAccessible(true);
+                $ref->setValue($this, [
+                    'instance_name' => $instanceName,
+                    'enabled' => false,
+                ]);
+            }
+
+            protected function restoreRestartMaintenanceConfigurationOnly(string $instanceName): void
+            {
+                $this->calls[] = 'restore_only:' . $instanceName;
+                $ref = new \ReflectionProperty(Start::class, 'restartMaintenanceSnapshot');
+                $ref->setAccessible(true);
+                $ref->setValue($this, null);
+            }
+
+            protected function disableMaintenanceMode(string $instanceName, bool $requireRuntimeSync = false): void
+            {
+                $this->calls[] = 'disable_ipc:' . $instanceName . ':' . ($requireRuntimeSync ? '1' : '0');
+            }
+        };
+
+        $start->seedDisabledSnapshot('default');
+        $this->invokeProtected(
+            $start,
+            'finalizeMaintenanceModeAfterStartup',
+            'default',
+            false,
+            true,
+            true,
+            true,
+        );
+
+        self::assertSame(['restore_only:default'], $start->calls);
+    }
+
+    public function testForceSwitchFinalizeStillRequiresIpcWhenOriginalMaintenanceWasEnabled(): void
+    {
+        $printer = new \Weline\Framework\Output\Cli\Printing();
+        $start = new class ($printer) extends Start {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function __construct(\Weline\Framework\Output\Cli\Printing $printer)
+            {
+                $this->printer = $printer;
+            }
+
+            public function seedEnabledSnapshot(string $instanceName): void
+            {
+                $ref = new \ReflectionProperty(Start::class, 'restartMaintenanceSnapshot');
+                $ref->setAccessible(true);
+                $ref->setValue($this, [
+                    'instance_name' => $instanceName,
+                    'enabled' => true,
+                ]);
+            }
+
+            protected function restoreRestartMaintenanceConfigurationOnly(string $instanceName): void
+            {
+                $this->calls[] = 'restore_only:' . $instanceName;
+            }
+
+            protected function disableMaintenanceMode(string $instanceName, bool $requireRuntimeSync = false): void
+            {
+                $this->calls[] = 'disable_ipc:' . $instanceName . ':' . ($requireRuntimeSync ? '1' : '0');
+                $ref = new \ReflectionProperty(Start::class, 'restartMaintenanceSnapshot');
+                $ref->setAccessible(true);
+                $ref->setValue($this, null);
+            }
+        };
+
+        $start->seedEnabledSnapshot('default');
+        $this->invokeProtected(
+            $start,
+            'finalizeMaintenanceModeAfterStartup',
+            'default',
+            false,
+            true,
+            true,
+            true,
+        );
+
+        self::assertSame(['disable_ipc:default:1'], $start->calls);
+    }
+
     public function testHelpMentionsForceFullRestartSemantics(): void
     {
         $start = new Start();

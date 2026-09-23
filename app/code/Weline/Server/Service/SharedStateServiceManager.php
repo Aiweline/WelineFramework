@@ -24,6 +24,10 @@ class SharedStateServiceManager
     private const RUNTIME_SCHEMA = 'wls-shared-runtime/2';
     private const DEFAULT_LIFECYCLE_LOCK_WAIT_SECONDS = 30.0;
     private const CONSUMER_RENEW_TRANSACTION_BUDGET_SECONDS = 0.025;
+
+    /** @var array{stopped:bool,role:string,reason:string,host:string,port:int,pid:int}|null */
+    private ?array $lastStopReport = null;
+
     private const LIFECYCLE_IDENTITY_FIELDS = [
         'role',
         'host',
@@ -765,11 +769,51 @@ class SharedStateServiceManager
      */
     public function stop(string $role, array $config = [], array $envConfig = []): bool
     {
+        return (bool)($this->stopWithReport($role, $config, $envConfig)['stopped'] ?? false);
+    }
+
+    /**
+     * @return array{
+     *   stopped:bool,
+     *   role:string,
+     *   reason:string,
+     *   host:string,
+     *   port:int,
+     *   pid:int
+     * }
+     */
+    public function stopWithReport(string $role, array $config = [], array $envConfig = []): array
+    {
         $role = $this->normalizeRoleName($role);
-        return $this->withRoleLifecycleLocks(
+        $this->lastStopReport = [
+            'stopped' => false,
+            'role' => $role,
+            'reason' => 'not_started',
+            'host' => '',
+            'port' => 0,
+            'pid' => 0,
+        ];
+        $stopped = $this->withRoleLifecycleLocks(
             [$role],
             fn(): bool => $this->stopUnlocked($role, $config, $envConfig),
         );
+        $report = $this->lastStopReport ?? [
+            'stopped' => $stopped,
+            'role' => $role,
+            'reason' => $stopped ? 'stopped' : 'unconfirmed',
+            'host' => '',
+            'port' => 0,
+            'pid' => 0,
+        ];
+        $report['stopped'] = $stopped;
+        $report['role'] = $role;
+        if ($stopped && ($report['reason'] === 'not_started' || $report['reason'] === '')) {
+            $report['reason'] = 'stopped';
+        }
+        if (!$stopped && ($report['reason'] === 'not_started' || $report['reason'] === '')) {
+            $report['reason'] = 'unconfirmed';
+        }
+        return $report;
     }
 
     private function stopUnlocked(
@@ -786,6 +830,7 @@ class SharedStateServiceManager
             $this->readRuntimeFile((string)$definition['role']),
             $registry,
         );
+        $this->rememberStopContext($role, $selected, $definition);
         $stopped = $this->forceStopReusedService($definition, $selected);
         if ($stopped) {
             $this->removeSelectedLifecycleGeneration(
@@ -793,9 +838,52 @@ class SharedStateServiceManager
                 $selected,
                 $registry,
             );
+            $this->noteStopReason('stopped');
         }
 
         return $stopped;
+    }
+
+    /**
+     * @return array{
+     *   required_generation:int,
+     *   requires_rotation:bool,
+     *   roles: list<array{
+     *     role:string,
+     *     wire_generation:int,
+     *     pid:int,
+     *     port:int,
+     *     needs_rotation:bool
+     *   }>
+     * }
+     */
+    public function sharedSidecarWireCompliance(): array
+    {
+        $roles = [];
+        $requiresRotation = false;
+        foreach ([
+            ControlMessage::ROLE_SESSION_SERVER,
+            ControlMessage::ROLE_MEMORY_SERVER,
+        ] as $role) {
+            $runtime = $this->readRuntimeFile($role);
+            $needs = SharedSidecarWireContract::runtimeNeedsRotation($runtime);
+            if ($needs) {
+                $requiresRotation = true;
+            }
+            $roles[] = [
+                'role' => $role,
+                'wire_generation' => (int)($runtime['wire_generation'] ?? 0),
+                'pid' => (int)($runtime['pid'] ?? 0),
+                'port' => (int)($runtime['port'] ?? 0),
+                'needs_rotation' => $needs,
+            ];
+        }
+
+        return [
+            'required_generation' => SharedSidecarWireContract::WIRE_GENERATION,
+            'requires_rotation' => $requiresRotation,
+            'roles' => $roles,
+        ];
     }
 
     /**
@@ -1192,6 +1280,7 @@ class SharedStateServiceManager
             WlsLogger::warning_(
                 '[SharedStateServiceManager] retaining runtime identity after failed stop: '
                 . 'role=' . $role . ', host=' . $host . ', port=' . $port
+                . ', reason=' . (string)($this->lastStopReport['reason'] ?? 'unconfirmed')
             );
         }
 
@@ -1210,8 +1299,11 @@ class SharedStateServiceManager
         $host = \trim((string) ($record['host'] ?? '127.0.0.1'));
         $port = (int) ($record['port'] ?? 0);
         $tokenFileName = \trim((string) ($record['token_file_name'] ?? $this->defaultTokenForRole($role)));
+        $pid = (int)($record['pid'] ?? 0);
+        $this->rememberStopContext($role, $record, ['host' => $host, 'port' => $port]);
 
         if ($host === '' || $port <= 0) {
+            $this->noteStopReason('invalid_endpoint');
             return false;
         }
 
@@ -1222,6 +1314,12 @@ class SharedStateServiceManager
             'port' => $port,
         ], $tokenFileName);
         if (!$protocolHealthy || !(bool)($inspection['in_use'] ?? false)) {
+            $this->noteStopReason(
+                !$protocolHealthy ? 'protocol_unhealthy_or_absent' : 'listener_not_in_use',
+                $host,
+                $port,
+                (int)($inspection['pid'] ?? $pid),
+            );
             return false;
         }
         if (!$this->inspectionMatchesSelectedLifecycle($role, $record, $inspection)
@@ -1234,11 +1332,18 @@ class SharedStateServiceManager
                 . ', selected_pid=' . (int)($record['pid'] ?? 0)
                 . ', observed_pid=' . (int)($inspection['pid'] ?? 0)
             );
+            $this->noteStopReason(
+                'lifecycle_identity_mismatch',
+                $host,
+                $port,
+                (int)($inspection['pid'] ?? $pid),
+            );
             return false;
         }
 
         $shutdownRequested = $this->sendSharedServiceServerShutdown($record);
         if ($shutdownRequested && $this->waitForSharedServicePortRelease($host, $port, 2.0)) {
+            $this->noteStopReason('graceful_shutdown', $host, $port, (int)($inspection['pid'] ?? $pid));
             return true;
         }
 
@@ -1257,7 +1362,63 @@ class SharedStateServiceManager
             );
         }
 
-        return !$this->probeTcpPortInUse($host, $port);
+        $portReleased = !$this->probeTcpPortInUse($host, $port);
+        $this->noteStopReason(
+            $portReleased
+                ? 'port_released_after_unconfirmed_shutdown'
+                : ($shutdownRequested
+                    ? 'graceful_shutdown_sent_but_port_still_held'
+                    : 'graceful_shutdown_request_failed_port_held'),
+            $host,
+            $port,
+            (int)($inspection['pid'] ?? $pid),
+        );
+        return $portReleased;
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     * @param array<string, mixed> $definition
+     */
+    private function rememberStopContext(string $role, array $runtime, array $definition): void
+    {
+        $this->lastStopReport = [
+            'stopped' => false,
+            'role' => $this->normalizeRoleName($role),
+            'reason' => (string)($this->lastStopReport['reason'] ?? 'pending'),
+            'host' => (string)($runtime['host'] ?? $definition['host'] ?? '127.0.0.1'),
+            'port' => (int)($runtime['port'] ?? $definition['port'] ?? 0),
+            'pid' => (int)($runtime['pid'] ?? 0),
+        ];
+    }
+
+    private function noteStopReason(
+        string $reason,
+        ?string $host = null,
+        ?int $port = null,
+        ?int $pid = null,
+    ): void {
+        if ($this->lastStopReport === null) {
+            $this->lastStopReport = [
+                'stopped' => false,
+                'role' => '',
+                'reason' => $reason,
+                'host' => $host ?? '',
+                'port' => $port ?? 0,
+                'pid' => $pid ?? 0,
+            ];
+            return;
+        }
+        $this->lastStopReport['reason'] = $reason;
+        if ($host !== null) {
+            $this->lastStopReport['host'] = $host;
+        }
+        if ($port !== null) {
+            $this->lastStopReport['port'] = $port;
+        }
+        if ($pid !== null) {
+            $this->lastStopReport['pid'] = $pid;
+        }
     }
 
     /**
@@ -1947,6 +2108,11 @@ class SharedStateServiceManager
             'consumer_count' => (int) ($runtime['consumer_count'] ?? 0),
             'shutdown_due_at' => $runtime['shutdown_due_at'] ?? null,
         ];
+        if ((bool)($runtime['created_now'] ?? false)) {
+            $payload['wire_generation'] = SharedSidecarWireContract::WIRE_GENERATION;
+        } elseif (\array_key_exists('wire_generation', $runtime)) {
+            $payload['wire_generation'] = (int)$runtime['wire_generation'];
+        }
         foreach ([
             'lifecycle_schema',
             'lifecycle_generation',

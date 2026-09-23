@@ -794,6 +794,12 @@ final class SessionServer
                 $response = $ok ? SessionProtocol::encodeSuccess() : SessionProtocol::encodeError('MSet failed');
                 break;
 
+            case SessionProtocol::CMD_MDEL:
+                $keys = \is_array($msg['keys'] ?? null) ? $msg['keys'] : [];
+                $ok = $this->store->mdel($sessionId, $keys);
+                $response = $ok ? SessionProtocol::encodeSuccess() : SessionProtocol::encodeError('MDel failed');
+                break;
+
             case SessionProtocol::CMD_GC:
                 $maxLifetime = (int)($msg['max_lifetime'] ?? 3600);
                 $domain = (string)($msg['domain'] ?? '');

@@ -138,7 +138,7 @@ final class GatewayProjectEndpointReader
         $endpoints = [];
         foreach (\array_keys($names) as $name) {
             self::assertDeadline($deadlineMonotonic);
-            $endpoint = $this->read($name, $deadlineMonotonic);
+            $endpoint = $this->readLocked($name, $deadlineMonotonic);
             self::assertDeadline($deadlineMonotonic);
             if (!\is_array($endpoint)) {
                 throw new \RuntimeException(
@@ -173,6 +173,29 @@ final class GatewayProjectEndpointReader
     {
         self::assertDeadline($deadlineMonotonic);
         self::assertInstanceName($instanceName);
+        $directory = $this->instances->getInstanceDir();
+        if (!is_dir($directory)) {
+            return $this->readLocked($instanceName, $deadlineMonotonic);
+        }
+        // Single-endpoint observations must serialize with the same atomic
+        // writers as complete discovery, including long-running Agent ticks.
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            rtrim($directory, '/\\') . DIRECTORY_SEPARATOR
+                . ServerInstanceManager::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
+            fn (): ?array => $this->readLocked($instanceName, $deadlineMonotonic),
+            waitTimeoutSeconds: 300.0,
+            deadlineMonotonic: $deadlineMonotonic,
+        );
+    }
+
+    private function readLocked(
+        string $instanceName,
+        ?float $deadlineMonotonic,
+    ): ?array
+    {
+        self::assertDeadline($deadlineMonotonic);
+        self::assertInstanceName($instanceName);
+        clearstatcache(true, $this->instances->getInstanceFile($instanceName));
         $encoded = GatewayProjectStateFilesystem::readOptional(
             $this->instances->getInstanceFile($instanceName),
             self::MAX_ENDPOINT_BYTES,

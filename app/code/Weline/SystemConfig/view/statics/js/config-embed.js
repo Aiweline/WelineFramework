@@ -145,6 +145,10 @@
                     throw new Error((data && (data.message || data.msg)) || 'set_scoped_config_failed');
                 }
                 control.dataset.lastValue = next;
+                root.dispatchEvent(new CustomEvent('weline:config-saved', {
+                    bubbles: true,
+                    detail: { module: payload.module, area: payload.area, key: payload.key, scope: payload.target_scope, result: data },
+                }));
                 var msg = '';
                 if (data && typeof data === 'object') {
                     msg = String(data.message || (data.cache_invalidation && data.cache_invalidation.summary) || '').trim();

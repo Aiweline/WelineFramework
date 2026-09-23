@@ -45,6 +45,30 @@ final class GatewayProjectEndpointReaderTest extends TestCase
         self::assertSame($instance, $endpoints[$instance]['instance_id']);
     }
 
+    public function testSingleEndpointReadWaitsForNamespaceWriter(): void
+    {
+        $path = $this->directory . '/primary.json';
+        file_put_contents($path, '{"generation":1}');
+        chmod($path, 0600);
+        $reader = new GatewayProjectEndpointReader($this->manager());
+        self::assertSame(1, $reader->read('primary')['generation']);
+        $process = proc_open([
+            PHP_BINARY, '-r',
+            '$p=$argv[1]; $h=fopen($argv[2],"c+b"); flock($h,LOCK_EX); echo "locked\n"; fflush(STDOUT); usleep(300000); file_put_contents($p.".next", "{\"generation\":2}"); chmod($p.".next",0600); rename($p.".next",$p); flock($h,LOCK_UN); fclose($h);',
+            $path,
+            $this->directory . '/' . ServerInstanceManager::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
+        ], [1 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        self::assertSame("locked\n", fgets($pipes[1]));
+        try {
+            $observed = $reader->read('primary');
+        } finally {
+            fclose($pipes[1]);
+        }
+        self::assertSame(0, proc_close($process));
+        self::assertSame(2, $observed['generation']);
+    }
+
     public function testWindowsListenerHandoffStateIsNotParsedAsAProjectEndpoint(): void
     {
         $instance = 'windows-handoff-project';

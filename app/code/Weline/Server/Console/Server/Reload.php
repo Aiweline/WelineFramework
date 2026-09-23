@@ -142,6 +142,7 @@ class Reload extends CommandAbstract
             // ManagedNginxConfigWriter::write + nginx -s reload run after Workers are up.
             if ($exitCode === 0) {
                 $this->refreshManagedNginxAfterWorkerReload();
+                $this->adviseSharedSidecarWireRotationIfNeeded();
             }
         } else {
             $exitCode = $this->executeReloadAsync($instanceName, $reloadType, $forceMode);
@@ -149,6 +150,7 @@ class Reload extends CommandAbstract
                 $this->printer->note(__(
                     '异步重载未刷新托管 Nginx；若改了 Edge 配置请另执行：php bin/w server:nginx:reload'
                 ));
+                $this->adviseSharedSidecarWireRotationIfNeeded();
             }
         }
         
@@ -311,17 +313,31 @@ class Reload extends CommandAbstract
     /**
      * Rewrite + reload managed nginx so Edge conf changes (e.g. |fpc2) take effect.
      * Fail-open: Worker reload already succeeded; nginx issues are reported, not fatal.
+     *
+     * Must NOT call doctorSnapshot — that builds a giant nested array (install
+     * manifest + TLS evidence) and was observed thrashing in zend_array_dup for
+     * minutes after Workers already printed「滚动重启完成」.
      */
     protected function refreshManagedNginxAfterWorkerReload(): void
     {
+        /** Worker-reload Edge refresh budget (seconds); fail-open on exhaustion. */
+        $refreshBudgetSeconds = 45.0;
         try {
             $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
-            $snapshot = $service->doctorSnapshot();
-            if (!(bool)($snapshot['running'] ?? false)) {
+            $deadline = self::monotonicSeconds() + $refreshBudgetSeconds;
+            $running = $service->runtimeRunningSnapshot($deadline);
+            if (!(bool)($running['ok'] ?? false)) {
+                $this->printer->warning(__(
+                    'Worker 已重载，但托管 Nginx 运行态探针失败：%{1}。请项目经理另批：php bin/w server:nginx:reload',
+                    [(string)($running['message'] ?? 'unsafe identity')],
+                ));
+                return;
+            }
+            if (!(bool)($running['running'] ?? false)) {
                 $this->printer->note(__('托管 Nginx 未运行，跳过 Edge 配置刷新'));
                 return;
             }
-            $result = $service->reload();
+            $result = $service->reload($deadline, ['light_verification' => true]);
             if (!($result['ok'] ?? false)) {
                 $this->printer->warning(__(
                     'Worker 已重载，但托管 Nginx 配置刷新失败：%{1}。请项目经理另批：php bin/w server:nginx:reload',
@@ -330,7 +346,7 @@ class Reload extends CommandAbstract
                 return;
             }
             $this->printer->success(__(
-                '✓ 托管 Nginx 已重写并 reload（Edge 配置含当前源码代次）'
+                '✓ 托管 Nginx 已重写并 reload（Edge 配置含当前源码代次；轻量校验）'
             ));
         } catch (\Throwable $e) {
             $this->printer->warning(__(
@@ -339,6 +355,42 @@ class Reload extends CommandAbstract
             ));
         }
     }
+
+    /**
+     * Worker reload never rotates Session/Memory sidecars. When the Server wire
+     * generation advanced (e.g. mdel), operators MUST rotate shared services.
+     */
+    protected function adviseSharedSidecarWireRotationIfNeeded(): void
+    {
+        try {
+            $manager = new \Weline\Server\Service\SharedStateServiceManager();
+            $compliance = $manager->sharedSidecarWireCompliance();
+            if (!(bool)($compliance['requires_rotation'] ?? false)) {
+                return;
+            }
+            $roles = [];
+            foreach ((array)($compliance['roles'] ?? []) as $roleReport) {
+                if (!\is_array($roleReport) || !(bool)($roleReport['needs_rotation'] ?? false)) {
+                    continue;
+                }
+                $roles[] = (string)($roleReport['role'] ?? '');
+            }
+            $roleList = \implode(', ', \array_filter($roles));
+            $required = (int)($compliance['required_generation'] ?? 0);
+            $this->printer->warning(__(
+                'Worker 已重载，但 Session/Memory sidecar 未轮换；当前共享协议代次要求 wire_generation≥%{1}（角色：%{2}）。'
+                . '旧 sidecar 可能不认 mdel 等新命令。必须执行：php bin/w server:shared:stop && php bin/w server:shared:start'
+                . '（勿在每次 reload 无条件杀 sidecar，以免清空共享 FPC）。',
+                [$required, $roleList !== '' ? $roleList : 'shared'],
+            ));
+        } catch (\Throwable $e) {
+            $this->printer->note(__(
+                '无法检查共享 sidecar 协议代次：%{1}。若本波含 mdel 等协议变更，请项目经理批 server:shared:stop && server:shared:start。',
+                [$e->getMessage()],
+            ));
+        }
+    }
+
     
     /**
      * 处理重载失败事件

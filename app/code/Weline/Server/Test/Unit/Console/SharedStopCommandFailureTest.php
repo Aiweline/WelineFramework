@@ -13,12 +13,26 @@ final class SharedStopCommandFailureTest extends TestCase
     public function testUnconfirmedStopIsReportedAsFailureInsteadOfAlreadyStopped(): void
     {
         $manager = new class extends SharedStateServiceManager {
-            /** @var list<bool> */
-            public array $results = [false, true];
+            /** @var list<array{stopped:bool,reason:string}> */
+            public array $results = [
+                ['stopped' => false, 'reason' => 'graceful_shutdown_sent_but_port_still_held'],
+                ['stopped' => true, 'reason' => 'stopped'],
+            ];
 
-            public function stop(string $role, array $config = [], array $envConfig = []): bool
+            public function stopWithReport(string $role, array $config = [], array $envConfig = []): array
             {
-                return \array_shift($this->results) ?? false;
+                $next = \array_shift($this->results) ?? [
+                    'stopped' => false,
+                    'reason' => 'unconfirmed',
+                ];
+                return [
+                    'stopped' => (bool)$next['stopped'],
+                    'role' => $role,
+                    'reason' => (string)$next['reason'],
+                    'host' => '127.0.0.1',
+                    'port' => 9502,
+                    'pid' => 4242,
+                ];
             }
         };
         $printer = new class extends Printing {
@@ -61,6 +75,8 @@ final class SharedStopCommandFailureTest extends TestCase
         self::assertCount(1, $printer->warnings);
         self::assertStringContainsString('Session Server', $printer->warnings[0]);
         self::assertStringContainsString('not confirmed', $printer->warnings[0]);
+        self::assertStringContainsString('graceful_shutdown_sent_but_port_still_held', $printer->warnings[0]);
+        self::assertStringContainsString('pid=4242', $printer->warnings[0]);
         self::assertSame(['Memory Service stopped'], $printer->successes);
         self::assertStringNotContainsString(
             'already stopped',

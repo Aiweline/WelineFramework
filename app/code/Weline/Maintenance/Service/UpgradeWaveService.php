@@ -147,6 +147,33 @@ final class UpgradeWaveService
         return $now <= $deadline;
     }
 
+    /**
+     * Close stale redeem_window after deadline (acceptance hosts must not keep
+     * a lingering wave status that confuses ops). Does not touch production
+     * remote — local var/maintenance only.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function closeExpiredWave(?int $now = null): ?array
+    {
+        $wave = $this->readWave();
+        if ($wave === null) {
+            return null;
+        }
+        $now ??= \time();
+        $status = (string)($wave['status'] ?? '');
+        if ($status !== 'redeem_window') {
+            return $wave;
+        }
+        if ($this->isRedeemWindowOpen($wave, $now)) {
+            return $wave;
+        }
+        $wave['status'] = 'closed';
+        $this->writeWave($wave);
+
+        return $wave;
+    }
+
     public function resolveFrameworkVersion(): string
     {
         $file = $this->root() . 'app/code/Weline/Framework/etc/module.php';

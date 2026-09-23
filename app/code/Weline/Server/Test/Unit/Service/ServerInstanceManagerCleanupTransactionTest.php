@@ -330,6 +330,40 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
         self::assertStringNotContainsString('@\\unlink(', $transaction);
     }
 
+    public function testForceCleanupRemovesCorruptEndpointWhenSafeCleanupCannotSelect(): void
+    {
+        $name = $this->newInstanceName('corrupt-force');
+        $path = $this->directory . $name . '.json';
+        self::assertNotFalse(\file_put_contents($path, "{not-json\n"));
+        @\chmod($path, 0600);
+        $manager = $this->manager();
+
+        self::assertFalse($manager->cleanupInactiveInstance($name));
+        self::assertFileExists($path);
+        self::assertTrue($manager->forceCleanupInstance($name));
+        self::assertFileDoesNotExist($path);
+    }
+
+    public function testForceCleanupStillDefersWhenLifecycleLockIsProvablyHeld(): void
+    {
+        $name = $this->newInstanceName('force-held');
+        $this->writeEndpoint($name, $this->stoppedEndpoint($name, 51, 5_100));
+        $manager = $this->manager();
+        $lockPath = ServerLifecycleOperationLock::pathForInstance($name);
+        [$process, $pipes] = $this->holdLockInChildProcess($lockPath);
+        try {
+            self::assertTrue(VerifiedPersistentFileLock::isHeld($lockPath));
+            self::assertFalse($manager->forceCleanupInstance($name));
+            self::assertFileExists($manager->getInstanceFile($name));
+        } finally {
+            @\fwrite($pipes[0], "\n");
+            @\fclose($pipes[0]);
+            @\fclose($pipes[1]);
+            @\fclose($pipes[2]);
+            @\proc_close($process);
+        }
+    }
+
     private function manager(): ServerInstanceManager
     {
         return new class($this->directory) extends ServerInstanceManager {

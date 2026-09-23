@@ -703,18 +703,39 @@ final class ManagedNginxService
     }
 
     /**
+     * Lightweight running probe for control-plane paths that must not build
+     * doctorSnapshot()'s giant nested arrays (manifest + TLS evidence spreads).
+     *
+     * @return array{ok:bool,running:bool,pid:int|null,message:string}
+     */
+    public function runtimeRunningSnapshot(?float $deadlineMonotonic = null): array
+    {
+        $status = $this->processManager->status($deadlineMonotonic);
+        return [
+            'ok' => (bool)($status['ok'] ?? false),
+            'running' => (bool)($status['running'] ?? false),
+            'pid' => isset($status['pid']) ? (int)$status['pid'] : null,
+            'message' => (string)($status['message'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array{light_verification?:bool}|null $options
+     *        light_verification: skip TLS session-resumption / HTTP/3 proof loops
+     *        (used after Worker reload to land Edge conf without CLI array thrash).
      * @return array{ok:bool,message:string,exit_code?:int|null}
      */
-    public function reload(?float $deadlineMonotonic = null): array
+    public function reload(?float $deadlineMonotonic = null, ?array $options = null): array
     {
+        $lightVerification = (bool)($options['light_verification'] ?? false);
         return $this->withLifecycleLock(
-            fn(): array => $this->reloadUnlocked(),
+            fn(): array => $this->reloadUnlocked($lightVerification),
             $deadlineMonotonic,
         );
     }
 
     /** @return array{ok:bool,message:string,exit_code?:int|null} */
-    private function reloadUnlocked(): array
+    private function reloadUnlocked(bool $lightVerification = false): array
     {
         $identity = $this->installedBinaryIdentity();
         if (!($identity['ok'] ?? false)) {
@@ -818,7 +839,8 @@ final class ManagedNginxService
             $nextCertificateSha256 = \strtolower(
                 \trim((string)($refreshed['ssl_certificate_sha256'] ?? ''))
             );
-            if (\preg_match('/\A[a-f0-9]{64}\z/D', $previousCertificateSha256) === 1
+            if (!$lightVerification
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $previousCertificateSha256) === 1
                 && \hash_equals($previousCertificateSha256, $nextCertificateSha256)
             ) {
                 $reloadContinuityProbe = $this->tlsSessionResumptionVerifier
@@ -995,54 +1017,60 @@ final class ManagedNginxService
                     'exit_code' => 1,
                 ];
             }
-            $http3 = $this->verifyHttp3Runtime(
-                (bool)($refreshed['http3_enabled'] ?? false),
-                (bool)($capabilities['http3_module'] ?? false),
-                (int)$refreshed['https'],
-                (int)$currentStatus['pid'],
-                (string)$refreshed['config_generation'],
-                (string)$refreshed['config_sha256'],
-                (string)($refreshed['ssl_certificate_sha256'] ?? ''),
-                (array)($refreshed['server_names'] ?? []),
-                (string)$owner['instance_name'],
-                (int)$owner['upstream_port'],
-            );
-            if (!($http3['ok'] ?? false)) {
-                if (!$this->http3FailureCanDegrade($refreshed, $http3)) {
-                    $recovery = $this->restorePublishedConfig(
-                        $rollback,
-                        true,
-                        false,
-                        $refreshedOwner,
-                    );
-                    return [
-                        'ok' => false,
-                        'message' => 'managed nginx reload HTTP/3 runtime verification failed: '
-                            . (string)($http3['message'] ?? 'unknown') . $recovery,
-                        'exit_code' => 1,
-                    ];
-                }
-                $degraded = $this->degradeFailedHttp3Publication(
-                    $refreshed,
-                    $http3,
-                    $capabilities,
-                    $refreshedOwner,
-                    $transactionId,
-                    $rollback,
-                    (int)$owner['upstream_port'],
-                    (string)$owner['upstream_host'],
-                    $upstreamPorts,
-                    (string)$owner['instance_name'],
-                    $certificateGeneration,
+            $http3 = [
+                'ok' => true,
+                'evidence' => [],
+            ];
+            if (!$lightVerification) {
+                $http3 = $this->verifyHttp3Runtime(
+                    (bool)($refreshed['http3_enabled'] ?? false),
+                    (bool)($capabilities['http3_module'] ?? false),
+                    (int)$refreshed['https'],
                     (int)$currentStatus['pid'],
+                    (string)$refreshed['config_generation'],
+                    (string)$refreshed['config_sha256'],
+                    (string)($refreshed['ssl_certificate_sha256'] ?? ''),
+                    (array)($refreshed['server_names'] ?? []),
+                    (string)$owner['instance_name'],
+                    (int)$owner['upstream_port'],
                 );
-                $refreshed = $degraded['config'];
-                $refreshedOwner = $degraded['owner_intent'];
-                $currentStatus = $degraded['status'];
-                $httpRuntimeEvidence = $degraded['http_runtime_evidence'];
-                $http3 = $degraded['http3'];
+                if (!($http3['ok'] ?? false)) {
+                    if (!$this->http3FailureCanDegrade($refreshed, $http3)) {
+                        $recovery = $this->restorePublishedConfig(
+                            $rollback,
+                            true,
+                            false,
+                            $refreshedOwner,
+                        );
+                        return [
+                            'ok' => false,
+                            'message' => 'managed nginx reload HTTP/3 runtime verification failed: '
+                                . (string)($http3['message'] ?? 'unknown') . $recovery,
+                            'exit_code' => 1,
+                        ];
+                    }
+                    $degraded = $this->degradeFailedHttp3Publication(
+                        $refreshed,
+                        $http3,
+                        $capabilities,
+                        $refreshedOwner,
+                        $transactionId,
+                        $rollback,
+                        (int)$owner['upstream_port'],
+                        (string)$owner['upstream_host'],
+                        $upstreamPorts,
+                        (string)$owner['instance_name'],
+                        $certificateGeneration,
+                        (int)$currentStatus['pid'],
+                    );
+                    $refreshed = $degraded['config'];
+                    $refreshedOwner = $degraded['owner_intent'];
+                    $currentStatus = $degraded['status'];
+                    $httpRuntimeEvidence = $degraded['http_runtime_evidence'];
+                    $http3 = $degraded['http3'];
+                }
             }
-            if (\is_array($reloadContinuityProbe)) {
+            if (!$lightVerification && \is_array($reloadContinuityProbe)) {
                 $reloadContinuity = $this->tlsSessionResumptionVerifier
                     ->completeReloadContinuityProbe(
                         $reloadContinuityProbe,
@@ -1067,27 +1095,30 @@ final class ManagedNginxService
                 }
                 $reloadContinuityEvidence = (array)($reloadContinuity['evidence'] ?? []);
             }
-            $resumption = $this->tlsSessionResumptionVerifier->verify(
-                (int)$refreshed['https'],
-                (array)($refreshed['server_names'] ?? []),
-                (int)$currentStatus['pid'],
-                (string)$refreshed['config_generation'],
-                (string)$refreshed['config_sha256'],
-                (string)($refreshed['ssl_certificate_sha256'] ?? ''),
-            );
-            if (!($resumption['ok'] ?? false)) {
-                $recovery = $this->restorePublishedConfig(
-                    $rollback,
-                    true,
-                    false,
-                    $refreshedOwner,
+            $resumption = ['ok' => true, 'evidence' => []];
+            if (!$lightVerification) {
+                $resumption = $this->tlsSessionResumptionVerifier->verify(
+                    (int)$refreshed['https'],
+                    (array)($refreshed['server_names'] ?? []),
+                    (int)$currentStatus['pid'],
+                    (string)$refreshed['config_generation'],
+                    (string)$refreshed['config_sha256'],
+                    (string)($refreshed['ssl_certificate_sha256'] ?? ''),
                 );
-                return [
-                    'ok' => false,
-                    'message' => 'managed nginx reload TLS session resumption verification failed: '
-                        . (string)($resumption['message'] ?? 'unknown') . $recovery,
-                    'exit_code' => 1,
-                ];
+                if (!($resumption['ok'] ?? false)) {
+                    $recovery = $this->restorePublishedConfig(
+                        $rollback,
+                        true,
+                        false,
+                        $refreshedOwner,
+                    );
+                    return [
+                        'ok' => false,
+                        'message' => 'managed nginx reload TLS session resumption verification failed: '
+                            . (string)($resumption['message'] ?? 'unknown') . $recovery,
+                        'exit_code' => 1,
+                    ];
+                }
             }
             $verifiedStatus = $this->processManager->status(
                 $this->activeLifecycleDeadlineMonotonic,
@@ -1117,6 +1148,17 @@ final class ManagedNginxService
                 ...$reloadContinuityEvidence,
                 'updated_at' => \date('c'),
             ];
+            if ($lightVerification) {
+                foreach ([
+                    'http3_runtime_verified',
+                    'tls_session_resumption_runtime_verified',
+                    'tls_session_resumption_same_worker_runtime_verified',
+                    'tls_session_resumption_cross_worker_runtime_verified',
+                    'tls_session_resumption_reload_continuity_verified',
+                ] as $staleHeavyProofKey) {
+                    unset($refreshedOwner[$staleHeavyProofKey]);
+                }
+            }
             $this->writeOwnerIntent($refreshedOwner);
             $currentStatus = $verifiedStatus;
             $commit = $this->commitVerifiedPublication(
@@ -1138,6 +1180,7 @@ final class ManagedNginxService
             return [
                 'ok' => true,
                 'message' => 'configuration candidate tested, activated, and verified'
+                    . ($lightVerification ? ' (light verification after Worker reload)' : '')
                     . ($cleanupWarning !== '' ? '; ' . $cleanupWarning : ''),
                 'exit_code' => $reloaded['exit_code'] ?? 0,
             ];

@@ -137,6 +137,17 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
         return \is_array($resp) && SessionProtocol::isSuccess($resp);
     }
 
+    public function mdel(string $ns, array $keys): bool
+    {
+        $normalizedKeys = \array_map(static fn($key): string => (string)$key, $keys);
+        $resp = $this->client->request(SessionProtocol::CMD_MDEL, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'keys' => $normalizedKeys,
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
+    }
+
     public function clearNamespace(string $ns): bool
     {
         $resp = $this->client->request(SessionProtocol::CMD_DESTROY, [

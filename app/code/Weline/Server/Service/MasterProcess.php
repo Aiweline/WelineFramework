@@ -1165,18 +1165,11 @@ class MasterProcess
             return;
         }
 
+        // SIGCHLD 可以打断持锁、数据库或 Fiber 操作；这里只做非阻塞回收。
+        // 翻译和日志会重新进入这些运行时，退出原因由正常 IPC 生命周期记录。
         do {
             $status = 0;
             $pid = \pcntl_waitpid(-1, $status, WNOHANG);
-            if ($pid > 0) {
-                $detail = 'unknown';
-                if (\function_exists('pcntl_wifexited') && \pcntl_wifexited($status) && \function_exists('pcntl_wexitstatus')) {
-                    $detail = 'exit=' . \pcntl_wexitstatus($status);
-                } elseif (\function_exists('pcntl_wifsignaled') && \pcntl_wifsignaled($status) && \function_exists('pcntl_wtermsig')) {
-                    $detail = 'signal=' . \pcntl_wtermsig($status);
-                }
-                $this->log(__('已回收子进程 PID %{1} (%{2})', [$pid, $detail]));
-            }
         } while ($pid > 0);
     }
 

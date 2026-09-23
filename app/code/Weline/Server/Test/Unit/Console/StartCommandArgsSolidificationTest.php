@@ -1346,6 +1346,15 @@ final class StartCommandArgsSolidificationTest extends TestCase
         );
     }
 
+    public function testMaintenanceSyncAbsoluteDeadlineIsDoubledForForceRestartBudget(): void
+    {
+        $class = new \ReflectionClass(Start::class);
+        $posix = $class->getConstant('MAINTENANCE_SYNC_TIMEOUT_SEC');
+        $windows = $class->getConstant('WINDOWS_MAINTENANCE_SYNC_TIMEOUT_SEC');
+        self::assertSame(24.0, $posix);
+        self::assertSame(60.0, $windows);
+    }
+
     private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);

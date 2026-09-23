@@ -144,6 +144,59 @@ final class GatewayStartupAutoBootstrapTest extends TestCase
         self::assertStringContainsString('PORT_TAKEN', $decision->fallbackReason);
     }
 
+    public function testAutoFallbackHonorsExplicitPublicPortInsteadOfStableRange(): void
+    {
+        $probe = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($probe, $error !== '' ? $error : (string)$errno);
+        $address = \stream_socket_get_name($probe, false);
+        self::assertIsString($address);
+        $separator = \strrpos($address, ':');
+        self::assertNotFalse($separator);
+        $exactPort = (int)\substr($address, $separator + 1);
+        @\fclose($probe);
+
+        $host = new FakeGatewayStartupHost();
+        $host->prepared = [
+            'ok' => false,
+            'ready' => false,
+            'state' => 'PACKAGE_UNAVAILABLE',
+            'reason' => 'No signed project gateway release package.',
+            'data_plane' => ['running' => false],
+        ];
+        $startup = new GatewayStartupDecision(
+            $host,
+            null,
+            new FakeGatewayStartupBootstrapper(self::trustedStatus()),
+        );
+        $decision = $startup->decide(
+            GatewayStartupDecision::MODE_AUTO,
+            'explicit-fallback-port',
+            true,
+            'runtime',
+            '127.0.0.1',
+            $exactPort,
+            true,
+            self::deadline(),
+        );
+        $listener = $startup->takeReservedListener();
+        try {
+            self::assertSame(GatewayStartupDecision::MODE_WLS, $decision->mode);
+            self::assertSame(0, $decision->fallbackPort);
+            self::assertSame('exact', $decision->portLease['allocation_scope'] ?? null);
+            self::assertSame($exactPort, (int)($decision->portLease['port'] ?? 0));
+            self::assertIsResource($listener);
+        } finally {
+            if (\is_resource($listener)) {
+                @\fclose($listener);
+            }
+        }
+    }
+
     /** @return array<string,mixed> */
     private static function trustedStatus(): array
     {

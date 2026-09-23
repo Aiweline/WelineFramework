@@ -520,6 +520,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         $allowed = match ($role) {
             ControlMessage::ROLE_WORKER => [
                 ...$policyAcks,
+                ControlMessage::TYPE_SSL_CERT_RELOAD_ACK,
                 ControlMessage::TYPE_CACHE_CLEAR_ACK,
                 ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1,
                 ControlMessage::TYPE_POLICY_STATE_DELTA,
@@ -538,6 +539,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ],
             ControlMessage::ROLE_MAINTENANCE => [
                 ...$policyAcks,
+                ControlMessage::TYPE_SSL_CERT_RELOAD_ACK,
                 ControlMessage::TYPE_CACHE_CLEAR_ACK,
                 ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1,
                 ControlMessage::TYPE_POLICY_STATE_DELTA,
@@ -607,6 +609,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     private function isCriticalSupervisorPassthroughType(string $type): bool
     {
         return \in_array($type, [
+            ControlMessage::TYPE_SSL_CERT_RELOAD_ACK,
             ControlMessage::TYPE_POLICY_PREPARED_ACK,
             ControlMessage::TYPE_POLICY_ACTIVATED_ACK,
             ControlMessage::TYPE_POLICY_COMMITTED_ACK,
@@ -712,6 +715,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             $message['port'] = $session->port;
             $message['worker_id'] = $session->workerId;
         } elseif (\in_array($type, [
+            ControlMessage::TYPE_SSL_CERT_RELOAD_ACK,
             ControlMessage::TYPE_FIBER_POOL_STATS,
             ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
             ControlMessage::TYPE_CACHE_CLEAR_ACK,

@@ -5,6 +5,7 @@ namespace Weline\Server\Service;
 
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Contract\ServiceProviderInterface;
+use Weline\Server\Service\Runtime\WorkerReadinessState;
 
 /**
  * 服务注册表
@@ -365,7 +366,10 @@ class ServiceRegistry
         foreach ($this->providers as $role => $provider) {
             $instances = [];
             foreach ($this->instances[$role] ?? [] as $instance) {
-                $instances[$instance->instanceId] = $instance->toArray();
+                $row = $instance->toArray();
+                $metadata = \is_array($row['metadata'] ?? null) ? $row['metadata'] : [];
+                $row['metadata'] = WorkerReadinessState::overlayHomepageFpcMetaFromLastStatusReport($metadata);
+                $instances[$instance->instanceId] = $row;
             }
             $status[$role] = [
                 'display_name' => $provider->getDisplayName(),

@@ -25,10 +25,12 @@ use Weline\Server\Service\Edge\Gateway\GatewayAcmeChallengePublisher;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectEndpointReader;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxChildProcessProbe;
+use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 
 /**
  * SSL 证书管理服务
@@ -11485,8 +11487,23 @@ CNF;
                 'Certificate retirement replay deadline was exhausted.',
             );
         }
-        $store = new ProjectCertificateGenerationStore();
+        $lifecycleLocks = [];
         try {
+            // 后台退役重试与启动、停止、滚动重载共用生命周期锁。
+            // 先取得全部实例锁再进入证书事务，避免把重载中的 busy 误当成 TLS 失效而停服。
+            $instanceNames = \array_keys((new GatewayProjectEndpointReader())->all($deadline));
+            \sort($instanceNames, SORT_STRING);
+            foreach ($instanceNames as $instanceName) {
+                $lock = new ServerLifecycleOperationLock();
+                $remaining = $deadline - (\hrtime(true) / 1_000_000_000);
+                if ($remaining <= 0.0
+                    || !$lock->acquire((string)$instanceName, 'certificate_retirement_replay', \min(0.1, $remaining))
+                ) {
+                    return ['attempted' => 0, 'completed' => 0, 'failures' => [], 'deferred' => true];
+                }
+                $lifecycleLocks[] = $lock;
+            }
+            $store = new ProjectCertificateGenerationStore();
             return $store->withRetirementReplayLease(function () use (
                 $store,
                 $maximumIntents,
@@ -11567,6 +11584,10 @@ CNF;
                 ];
             }
             throw $throwable;
+        } finally {
+            foreach (\array_reverse($lifecycleLocks) as $lock) {
+                $lock->release();
+            }
         }
     }
 
