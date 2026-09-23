@@ -186,13 +186,13 @@ class AccountQueryProvider implements QueryProviderInterface
         $session = $this->sessionFactory->createFrontendSession();
         $user = $session->getUser();
         if (!$session->isLoggedIn() || !$user instanceof Customer || !$user->getId()) {
-            return [
-                'success' => false,
+            // Guest is a valid account.current outcome — return success so BinQuery / DevConsole
+            // do not treat anonymous storefront chrome as business_error.
+            return $this->success('Not signed in.', [
                 'isLogin' => false,
                 'logged_in' => false,
                 'user' => null,
-                'message' => 'Not signed in.',
-            ];
+            ]);
         }
 
         return $this->success('Signed in.', [

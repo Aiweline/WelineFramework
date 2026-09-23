@@ -41,7 +41,9 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
                 'redirect' => 1,
             ]);
             $currentUrl = $this->request->getUrlBuilder()->getCurrentUrl();
-            $this->redirect('/customer/account/login?referer=' . urlencode($currentUrl));
+            // Pass referer via params — getFrontendUrl/http_build_query encodes once.
+            // Pre-urlencode in the path string causes %253A/%252F double encoding (QA-12).
+            $this->redirect('/customer/account/login', ['referer' => $currentUrl]);
             return;
         }
         $loginMs = $this->elapsedMs($loginStartedAt);
@@ -66,7 +68,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
                 'redirect' => 1,
             ]);
             $currentUrl = $this->request->getUrlBuilder()->getCurrentUrl();
-            $this->redirect('/customer/account/login?referer=' . urlencode($currentUrl));
+            $this->redirect('/customer/account/login', ['referer' => $currentUrl]);
             return;
         }
         // 设置用户数据
