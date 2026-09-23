@@ -1,0 +1,11 @@
+{
+  "name": "weline-i18n-remote-translation-api-demo-php",
+  "description": "Minimal Admin REST CLI demo for i18n_remote_translation (no real tokens committed)",
+  "type": "project",
+  "require": {
+    "php": ">=8.1"
+  },
+  "bin": [
+    "run.php"
+  ]
+}

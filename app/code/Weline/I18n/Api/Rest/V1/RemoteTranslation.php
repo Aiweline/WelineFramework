@@ -21,11 +21,11 @@ class RemoteTranslation extends BackendRestController
 {
     /**
      * @return string JSON
-     * @Document(summary='远程取未译词条', description='按网站语种分页返回未译条目。', tags=['I18n','远程翻译'], category='远程协助翻译')
+     * @Document(summary='远程取未译词条', description='按网站语种分页返回未译条目；type=phrase|meta|local_model。', tags=['I18n','远程翻译'], category='远程协助翻译')
      * @example
      * Method: POST
      * Path: /{api_admin}/weline_i18n/rest/v1/RemoteTranslation/postPending
-     * Body: {"website_id":0,"locales":["en_US"],"limit":50,"cursor":null}
+     * Body: {"website_id":0,"locales":["en_US"],"limit":50,"cursor":null,"type":"phrase"}
      * @example-end
      */
     #[Acl('Weline_I18n::rest_v1_remote_translation_pending', '远程取未译', 'list')]
@@ -43,6 +43,7 @@ class RemoteTranslation extends BackendRestController
                 'locales' => $locales,
                 'limit' => (int)($body['limit'] ?? 50),
                 'cursor' => \is_string($cursor) ? $cursor : null,
+                'type' => (string)($body['type'] ?? ''),
             ]);
 
             return $this->success((string)__('获取未译成功'), \is_array($result) ? $result : []);
@@ -53,11 +54,11 @@ class RemoteTranslation extends BackendRestController
 
     /**
      * @return string JSON
-     * @Document(summary='远程录入译文', description='冲突跳过；成功写入后 publishLocale。', tags=['I18n','远程翻译'], category='远程协助翻译')
+     * @Document(summary='远程录入译文', description='冲突跳过；phrase/meta 成功写入后 publishLocale；local_model 写 Local 表。', tags=['I18n','远程翻译'], category='远程协助翻译')
      * @example
      * Method: POST
      * Path: /{api_admin}/weline_i18n/rest/v1/RemoteTranslation/postIngest
-     * Body: {"website_id":0,"items":[{"source":"你好","locale":"en_US","translation":"Hello"}]}
+     * Body: {"website_id":0,"type":"phrase","items":[{"source":"你好","locale":"en_US","translation":"Hello"}]}
      * @example-end
      */
     #[Acl('Weline_I18n::rest_v1_remote_translation_ingest', '远程录入译文', 'upload')]
@@ -72,6 +73,7 @@ class RemoteTranslation extends BackendRestController
             $result = $this->executeQuery('remoteTranslationIngest', [
                 'website_id' => (int)($body['website_id'] ?? -1),
                 'items' => $items,
+                'type' => (string)($body['type'] ?? ''),
             ]);
 
             return $this->success((string)__('录入完成'), \is_array($result) ? $result : []);
@@ -82,11 +84,11 @@ class RemoteTranslation extends BackendRestController
 
     /**
      * @return string JSON
-     * @Document(summary='启动远程词典收集', description='返回 task_id；不入队站内 AI。', tags=['I18n','远程翻译'], category='远程协助翻译')
+     * @Document(summary='启动远程词典收集', description='返回 task_id；不入队站内 AI。type=local_model→422。', tags=['I18n','远程翻译'], category='远程协助翻译')
      * @example
      * Method: POST
      * Path: /{api_admin}/weline_i18n/rest/v1/RemoteTranslation/postCollectStart
-     * Body: {"website_id":0}
+     * Body: {"website_id":0,"type":"phrase"}
      * @example-end
      */
     #[Acl('Weline_I18n::rest_v1_remote_translation_collect_start', '启动远程收集', 'play')]
@@ -97,6 +99,7 @@ class RemoteTranslation extends BackendRestController
             $result = $this->executeQuery('remoteTranslationCollectStart', [
                 'owner_key' => $this->ownerKey(),
                 'website_id' => (int)($body['website_id'] ?? 0),
+                'type' => (string)($body['type'] ?? ''),
             ]);
 
             return $this->success((string)__('收集任务已启动'), \is_array($result) ? $result : []);

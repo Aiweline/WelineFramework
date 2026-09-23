@@ -10,6 +10,7 @@ use Weline\Websites\Model\Website;
 
 /**
  * 远程协助翻译：取未译 / 录入（冲突跳过）+ publish。
+ * type=phrase|meta；local_model 由 LocalModelTranslationService 处理。
  */
 final class RemoteDictionaryAssistService
 {
@@ -18,6 +19,13 @@ final class RemoteDictionaryAssistService
     public const ITEMS_MAX = 100;
     public const FIELD_MAX_LEN = 8000;
 
+    public const TYPE_PHRASE = 'phrase';
+    public const TYPE_META = 'meta';
+    public const TYPE_LOCAL_MODEL = 'local_model';
+
+    /** @var list<string> */
+    public const TYPES = [self::TYPE_PHRASE, self::TYPE_META, self::TYPE_LOCAL_MODEL];
+
     public function __construct(
         private readonly WordDictionary $dictionary,
         private readonly LocaleDictionary $localeDictionary,
@@ -25,17 +33,40 @@ final class RemoteDictionaryAssistService
     ) {
     }
 
+    public static function normalizeType(mixed $type): string
+    {
+        $normalized = strtolower(trim((string)($type ?? '')));
+        if ($normalized === '') {
+            return self::TYPE_PHRASE;
+        }
+        if (!in_array($normalized, self::TYPES, true)) {
+            throw new \InvalidArgumentException((string)__('非法 type：%{1}', [$normalized]), 422);
+        }
+
+        return $normalized;
+    }
+
     /**
      * @param list<string> $locales
-     * @return array{items:list<array{source:string,module:string,locale:string}>,next_cursor:?string,has_more:bool,limit:int}
+     * @return array{items:list<array{source:string,module:string,locale:string}>,next_cursor:?string,has_more:bool,limit:int,type:string}
      */
-    public function pending(int $websiteId, array $locales, int $limit, ?string $cursor): array
-    {
+    public function pending(
+        int $websiteId,
+        array $locales,
+        int $limit,
+        ?string $cursor,
+        string $type = self::TYPE_PHRASE,
+    ): array {
+        $type = self::normalizeType($type);
+        if ($type === self::TYPE_LOCAL_MODEL) {
+            throw new \InvalidArgumentException((string)__('local_model pending 须由 LocalModel 协助服务处理'), 422);
+        }
+
         $allowed = $this->assertWebsiteLocales($websiteId, $locales);
         $limit = max(1, min(self::LIMIT_MAX, $limit > 0 ? $limit : self::LIMIT_DEFAULT));
         $offset = $this->decodeCursor($cursor);
 
-        $items = $this->queryPendingUnion($allowed, $limit + 1, $offset);
+        $items = $this->queryPendingUnion($allowed, $limit + 1, $offset, $type);
         $hasMore = count($items) > $limit;
         if ($hasMore) {
             $items = array_slice($items, 0, $limit);
@@ -46,17 +77,23 @@ final class RemoteDictionaryAssistService
             'next_cursor' => $hasMore ? $this->encodeCursor($offset + count($items)) : null,
             'has_more' => $hasMore,
             'limit' => $limit,
+            'type' => $type,
         ];
     }
 
     /**
      * @param list<array<string,mixed>> $items
-     * @return array{written:int,skipped:int,invalid:int,invalid_items:list<array{index:int,reason:string}>}
+     * @return array{written:int,skipped:int,invalid:int,invalid_items:list<array{index:int,reason:string}>,type:string}
      */
-    public function ingest(int $websiteId, array $items): array
+    public function ingest(int $websiteId, array $items, string $type = self::TYPE_PHRASE): array
     {
+        $type = self::normalizeType($type);
+        if ($type === self::TYPE_LOCAL_MODEL) {
+            throw new \InvalidArgumentException((string)__('local_model ingest 须由 LocalModel 协助服务处理'), 422);
+        }
+
         if (count($items) > self::ITEMS_MAX) {
-            throw new \InvalidArgumentException((string)__('items 超过上限 %{1}', [self::ITEMS_MAX]));
+            throw new \InvalidArgumentException((string)__('items 超过上限 %{1}', [self::ITEMS_MAX]), 422);
         }
 
         $allowedCodes = $this->websiteLanguageCodes($websiteId);
@@ -82,6 +119,17 @@ final class RemoteDictionaryAssistService
             if ($source === '') {
                 $invalid++;
                 $invalidItems[] = ['index' => (int)$index, 'reason' => 'empty_source'];
+                continue;
+            }
+            $isMetaKey = str_starts_with($source, '@meta::');
+            if ($type === self::TYPE_PHRASE && $isMetaKey) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'wrong_shape_for_type'];
+                continue;
+            }
+            if ($type === self::TYPE_META && !$isMetaKey) {
+                $invalid++;
+                $invalidItems[] = ['index' => (int)$index, 'reason' => 'wrong_shape_for_type'];
                 continue;
             }
             if ($locale === '' || !isset($allowedMap[$locale])) {
@@ -129,6 +177,7 @@ final class RemoteDictionaryAssistService
 
         w_log_info('remote dictionary ingest', [
             'website_id' => $websiteId,
+            'type' => $type,
             'written' => $written,
             'skipped' => $skipped,
             'invalid' => $invalid,
@@ -139,6 +188,7 @@ final class RemoteDictionaryAssistService
             'skipped' => $skipped,
             'invalid' => $invalid,
             'invalid_items' => $invalidItems,
+            'type' => $type,
         ];
     }
 
@@ -150,7 +200,7 @@ final class RemoteDictionaryAssistService
     {
         $allowed = $this->websiteLanguageCodes($websiteId);
         if ($allowed === [] && $locales !== []) {
-            throw new \InvalidArgumentException((string)__('网站未配置语种'));
+            throw new \InvalidArgumentException((string)__('网站未配置语种'), 422);
         }
         $allowedMap = array_fill_keys($allowed, true);
         $normalized = [];
@@ -160,12 +210,12 @@ final class RemoteDictionaryAssistService
                 continue;
             }
             if (!isset($allowedMap[$locale])) {
-                throw new \InvalidArgumentException((string)__('locale 不在网站语种内：%{1}', [$locale]));
+                throw new \InvalidArgumentException((string)__('locale 不在网站语种内：%{1}', [$locale]), 422);
             }
             $normalized[] = $locale;
         }
         if ($normalized === []) {
-            throw new \InvalidArgumentException((string)__('locales 不能为空'));
+            throw new \InvalidArgumentException((string)__('locales 不能为空'), 422);
         }
 
         return array_values(array_unique($normalized));
@@ -177,7 +227,7 @@ final class RemoteDictionaryAssistService
     public function websiteLanguageCodes(int $websiteId): array
     {
         if ($websiteId < Website::ID_DEFAULT) {
-            throw new \InvalidArgumentException((string)__('website_id 无效'));
+            throw new \InvalidArgumentException((string)__('website_id 无效'), 422);
         }
         $site = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
         if (!is_array($site) || !isset($site['website_id'])) {
@@ -198,7 +248,7 @@ final class RemoteDictionaryAssistService
      * @param list<string> $locales
      * @return list<array{source:string,module:string,locale:string}>
      */
-    private function queryPendingUnion(array $locales, int $limit, int $offset): array
+    private function queryPendingUnion(array $locales, int $limit, int $offset, string $type): array
     {
         $limit = max(1, $limit);
         $offset = max(0, $offset);
@@ -208,7 +258,7 @@ final class RemoteDictionaryAssistService
                 . $this->sqlQuote($locale) . ' AS locale FROM '
                 . $this->dictionary->getTable()
                 . ' d WHERE '
-                . $this->pendingWhereSql($locale);
+                . $this->pendingWhereSql($locale, $type);
         }
         if ($parts === []) {
             return [];
@@ -233,11 +283,14 @@ final class RemoteDictionaryAssistService
         return $out;
     }
 
-    private function pendingWhereSql(string $targetLocale): string
+    private function pendingWhereSql(string $targetLocale, string $type): string
     {
         $locale = $this->sqlQuote($targetLocale);
+        $metaFilter = $type === self::TYPE_META
+            ? 'd.word LIKE ' . $this->sqlQuote('@meta::%')
+            : 'd.word NOT LIKE ' . $this->sqlQuote('@meta::%');
 
-        return 'd.word NOT LIKE ' . $this->sqlQuote('@meta::%')
+        return $metaFilter
             . ' AND NOT EXISTS (SELECT 1 FROM '
             . $this->localeDictionary->getTable()
             . ' l WHERE l.locale_code = ' . $locale
@@ -298,11 +351,11 @@ final class RemoteDictionaryAssistService
         }
         $raw = base64_decode(strtr($cursor, '-_', '+/'), true);
         if (!is_string($raw) || $raw === '') {
-            throw new \InvalidArgumentException((string)__('cursor 无效'));
+            throw new \InvalidArgumentException((string)__('cursor 无效'), 422);
         }
         $data = json_decode($raw, true);
         if (!is_array($data)) {
-            throw new \InvalidArgumentException((string)__('cursor 无效'));
+            throw new \InvalidArgumentException((string)__('cursor 无效'), 422);
         }
 
         return max(0, (int)($data['o'] ?? 0));

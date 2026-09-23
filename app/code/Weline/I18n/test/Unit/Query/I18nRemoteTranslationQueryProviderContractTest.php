@@ -16,6 +16,7 @@ namespace Weline\I18n\Test\Unit\Query {
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Weline\I18n\Extends\Module\Weline_Framework\Query\I18nRemoteTranslationQueryProvider;
+use Weline\I18n\Service\RemoteDictionaryAssistService;
 
 final class I18nRemoteTranslationQueryProviderContractTest extends TestCase
 {
@@ -26,6 +27,7 @@ final class I18nRemoteTranslationQueryProviderContractTest extends TestCase
         self::assertSame('i18n_remote_translation', $provider->getProviderName());
 
         $descriptor = $provider->getDescriptor();
+        self::assertTrue((bool)($descriptor['demo'] ?? false));
         $ops = array_column(is_array($descriptor['operations'] ?? null) ? $descriptor['operations'] : [], 'name');
         self::assertSame([
             'remoteTranslationPending',
@@ -42,11 +44,22 @@ final class I18nRemoteTranslationQueryProviderContractTest extends TestCase
         ];
         foreach ($descriptor['operations'] as $operation) {
             $name = (string)($operation['name'] ?? '');
-            self::assertFalse((bool)($operation['frontend'] ?? true));
+            self::assertTrue((bool)($operation['frontend'] ?? false));
             self::assertFalse((bool)($operation['external'] ?? true));
             self::assertSame('backend', $operation['auth'] ?? null);
             self::assertSame('source', $operation['backend_acl']['kind'] ?? null);
             self::assertSame($expectedAcl[$name] ?? '', (string)($operation['backend_acl']['source_id'] ?? ''));
+            $paramNames = array_column(
+                is_array($operation['params'] ?? null) ? $operation['params'] : [],
+                'name'
+            );
+            if (in_array($name, [
+                'remoteTranslationPending',
+                'remoteTranslationIngest',
+                'remoteTranslationCollectStart',
+            ], true)) {
+                self::assertContains('type', $paramNames, $name . ' must document type');
+            }
         }
     }
 
@@ -74,6 +87,7 @@ final class I18nRemoteTranslationQueryProviderContractTest extends TestCase
         self::assertStringContainsString('Weline_I18n::rest_v1_remote_translation_ingest', $src);
         self::assertStringContainsString('Weline_I18n::rest_v1_remote_translation_collect_start', $src);
         self::assertStringContainsString('Weline_I18n::rest_v1_remote_translation_collect_status', $src);
+        self::assertStringContainsString("'type' => (string)(\$body['type'] ?? '')", $src);
         self::assertStringNotContainsString('DictionaryCollectService', $src);
     }
 
@@ -86,6 +100,74 @@ final class I18nRemoteTranslationQueryProviderContractTest extends TestCase
         self::assertStringContainsString('publishLocale', $src);
         self::assertStringContainsString('locale_not_allowed', $src);
         self::assertStringContainsString('duplicate_in_batch', $src);
+        self::assertStringContainsString('TYPE_PHRASE', $src);
+        self::assertStringContainsString('TYPE_META', $src);
+        self::assertStringContainsString('TYPE_LOCAL_MODEL', $src);
+        self::assertStringContainsString('wrong_shape_for_type', $src);
+        self::assertStringContainsString("NOT LIKE ", $src);
+        self::assertStringContainsString("LIKE ", $src);
+        self::assertStringContainsString('@meta::%', $src);
+    }
+
+    public function testNormalizeTypeDefaultsAndRejectsUnknown(): void
+    {
+        self::assertSame(
+            RemoteDictionaryAssistService::TYPE_PHRASE,
+            RemoteDictionaryAssistService::normalizeType(null)
+        );
+        self::assertSame(
+            RemoteDictionaryAssistService::TYPE_META,
+            RemoteDictionaryAssistService::normalizeType('META')
+        );
+        self::assertSame(
+            RemoteDictionaryAssistService::TYPE_LOCAL_MODEL,
+            RemoteDictionaryAssistService::normalizeType('local_model')
+        );
+        $this->expectException(\InvalidArgumentException::class);
+        RemoteDictionaryAssistService::normalizeType('widgets');
+    }
+
+    public function testQueryProviderRoutesLocalModelAndCollectGate(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/I18nRemoteTranslationQueryProvider.php'
+        );
+        self::assertStringContainsString('TYPE_LOCAL_MODEL', $src);
+        self::assertStringContainsString('remotePending', $src);
+        self::assertStringContainsString('remoteIngest', $src);
+        self::assertStringContainsString('local_model 不支持词典 collect', $src);
+    }
+
+    public function testLocalModelRemoteAssistSurface(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/LocalModelTranslation/LocalModelTranslationService.php'
+        );
+        self::assertStringContainsString('function remotePending', $src);
+        self::assertStringContainsString('function remoteIngest', $src);
+        self::assertStringContainsString('locale_not_allowed', $src);
+        self::assertStringContainsString('TYPE_LOCAL_MODEL', $src);
+        self::assertStringContainsString('upsertLocalValue', $src);
+    }
+
+    public function testDemoScriptsDocumentRemoteType(): void
+    {
+        $readme = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/source/api-demo/i18n_remote_translation/README.md'
+        );
+        $php = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/source/api-demo/i18n_remote_translation/php/run.php'
+        );
+        $js = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/source/api-demo/i18n_remote_translation/js/index.js'
+        );
+        self::assertStringContainsString('WELINE_REMOTE_TYPE', $readme);
+        self::assertStringContainsString('local_model', $readme);
+        self::assertStringContainsString('WidgetI18n', $readme);
+        self::assertStringContainsString('WELINE_REMOTE_TYPE', $php);
+        self::assertStringContainsString("'type' => \$type", $php);
+        self::assertStringContainsString('WELINE_REMOTE_TYPE', $js);
+        self::assertStringContainsString('type,', $js);
     }
 }
 }

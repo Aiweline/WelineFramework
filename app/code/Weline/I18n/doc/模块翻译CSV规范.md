@@ -12,7 +12,7 @@
 | 双语载体 | 模块 `i18n/zh_Hans_CN.csv` + `i18n/en_US.csv`（禁止其它 locale CSV） |
 | zh 第二列 | 中文身份译（通常与 source 同字；禁止塞英文） |
 | en 第二列 | **真实英文**（禁止留空、禁止把中文 source 原样当英文） |
-| 改后必做 | `php bin/w i18n:collect` + 抽检当前后台/前台 locale |
+| 改后必做 | `php bin/w i18n:collect` + 抽检当前后台/前台 locale（**单飞**：同机同时只允许一路 collect；重复拉起立即 BUSY / 退出码 75） |
 
 MCP：`module_i18n_chinese_source_default` / `frontend_ui_requires_zh_en_csv` / `module_i18n_csv_collect`；表面 `frontend_development` + `template_i18n` + `module_i18n_csv`。工程团队前端席开工前必须 `get_skill` 上述技能并 Read 本文。
 
