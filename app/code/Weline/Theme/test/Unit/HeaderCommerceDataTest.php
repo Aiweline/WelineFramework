@@ -17,9 +17,14 @@ final class HeaderCommerceDataTest extends TestCase
     }
     public function testDefaultHotWordsAreNonEmpty(): void
     {
-        $words = HeaderCommerceData::defaultHotWords();
+        $words = HeaderCommerceData::defaultHotWords('default');
         self::assertNotEmpty($words);
         self::assertContains('马面裙', $words);
+
+        $dao = HeaderCommerceData::defaultHotWords('daocharms');
+        self::assertNotEmpty($dao);
+        self::assertContains('黑曜石', $dao);
+        self::assertNotContains('马面裙', $dao);
     }
 
     public function testRepeatedHeaderQueriesUseRequestMemo(): void

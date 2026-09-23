@@ -13,15 +13,41 @@ use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
  * 页头商务数据：优先 Query 真实数据；仅在无数据/不可用时回落主题演示默认值。
+ * Demo 热搜按当前 website code 分流，禁止 DaoCharms 等非汉服站回落马面裙/明制汉服。
  */
 final class HeaderCommerceData
 {
     /**
      * @return list<string>
      */
-    public static function defaultHotWords(): array
+    public static function defaultHotWords(?string $websiteCode = null): array
+    {
+        $code = \strtolower(\trim($websiteCode ?? self::resolveWebsiteCode()));
+        if ($code === 'daocharms') {
+            return self::daocharmsDefaultHotWords();
+        }
+
+        return self::hanfuDefaultHotWords();
+    }
+
+    /**
+     * Default-website / Hanfu storefront demo keywords (Chinese sources).
+     *
+     * @return list<string>
+     */
+    public static function hanfuDefaultHotWords(): array
     {
         return ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '披帛'];
+    }
+
+    /**
+     * DaoCharms ritual-pendant storefront demo keywords (Chinese sources).
+     *
+     * @return list<string>
+     */
+    public static function daocharmsDefaultHotWords(): array
+    {
+        return ['黑曜石', '阴阳', '八卦', '平安扣', '玉石'];
     }
 
     /**
@@ -251,6 +277,23 @@ final class HeaderCommerceData
         }
 
         return 0;
+    }
+
+    private static function resolveWebsiteCode(): string
+    {
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                $code = \strtolower(\trim(
+                    (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode()
+                ));
+                if ($code !== '') {
+                    return $code;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'default';
     }
 
     /**

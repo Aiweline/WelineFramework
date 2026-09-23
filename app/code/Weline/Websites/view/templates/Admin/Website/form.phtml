@@ -138,22 +138,18 @@ $treeReturnUrl = trim((string)($tree_return_url ?? $this->getData('tree_return_u
             }
         }
         $useTreeFormAction = $treeFormAction !== '';
+        // 预解析 action，保持 <w:form>…</w:form> 连续：OwnsChildCompilation/Fiber
+        // 会编译成 try{…}，不可被中间的 if/else/endif 拆开（否则 unexpected endif）。
+        $websiteFormAction = $useTreeFormAction
+            ? $treeFormAction
+            : (string)$this->getUrl($formAction, $formParams);
         ?>
-        <?php if ($useTreeFormAction): ?>
-        <form action="<?= htmlspecialchars($treeFormAction, ENT_QUOTES, 'UTF-8') ?>"
-              method="post"
-              class="w-form"
-              id="website-admin-edit-form"
-              data-testid="website-admin-edit-form"
-              novalidate>
-        <?php else: ?>
-        <w:form action="@url{$formAction|$formParams}"
+        <w:form action="<?= $websiteFormAction ?>"
                 method="post"
                 class="w-form"
                 id="website-admin-edit-form"
                 data-testid="website-admin-edit-form"
                 novalidate>
-        <?php endif; ?>
             <!-- 手风琴折叠面板 -->
             <div class="w-website-form__sections" id="websiteFormAccordion">
                 <!-- 基本信息（默认展开） -->
@@ -518,11 +514,7 @@ $treeReturnUrl = trim((string)($tree_return_url ?? $this->getData('tree_return_u
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-        <?php if ($useTreeFormAction): ?>
-        </form>
-        <?php else: ?>
         </w:form>
-        <?php endif; ?>
     </div>
 </div>
 

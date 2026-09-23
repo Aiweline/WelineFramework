@@ -129,9 +129,18 @@ if ($showTypeSelect && $searchType === 'all' && $searchCategoryId > 0) {
     <?php if ($showHotWords && $hotWords !== []): ?>
         <div class="header-search-hot-words w-search-hot-words<?= $hotIsDemo ? ' is-hot-demo' : '' ?>" data-hot-words>
             <span class="header-search-hot-label w-search-hot-label"><?= $esc($localize('热搜')) ?>:</span>
-            <?php foreach ($hotWords as $word): ?>
-                <a href="@url{'search'}?q=<?= rawurlencode((string)$word) ?>"
-                   class="header-search-hot-word w-search-hot-word"><?= $esc($localize($word)) ?></a>
+            <?php foreach ($hotWords as $word):
+                // q must match the visible label locale — never Chinese source while UI shows EN.
+                $hotLabel = $localize($word);
+                if ($hotLabel === '') {
+                    $hotLabel = trim((string)$word);
+                }
+                if ($hotLabel === '') {
+                    continue;
+                }
+                ?>
+                <a href="@url{'search'}?q=<?= rawurlencode($hotLabel) ?>"
+                   class="header-search-hot-word w-search-hot-word"><?= $esc($hotLabel) ?></a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>

@@ -68,7 +68,9 @@ class WidgetScanner
         'blog', 'product', 'category', 'search', 'filter', 'map',
         'video', 'audio', 'social', 'newsletter', 'faq', 'timeline',
         'stats', 'counter', 'progress', 'chart', 'table', 'calendar',
-        'chat', 'comment', 'container', 'notice', 'notice-rights'  // notice：页头店铺通知；notice-rights：通知条右侧入口
+        'chat', 'comment', 'container', 'notice', 'notice-rights',  // notice：页头店铺通知；notice-rights：通知条右侧入口
+        'marketing', // Affiliate 等营销位
+        'float',     // 后台/前台悬浮层（建站助手等）
     ];
 
     /**

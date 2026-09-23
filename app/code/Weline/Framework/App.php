@@ -579,6 +579,39 @@ class App
         }
         $target = $targetPath . ($query !== '' ? '?' . $query : '');
 
+        // Identity guard: never 301 to the same visitor path (mount remount bugs
+        // or trailing-slash-only noise must not create ERR_TOO_MANY_REDIRECTS).
+        $currentPath = $path === '' ? '/' : $path;
+        if ($targetPath === $currentPath
+            || $target === $rawRequestUri
+            || \rtrim($targetPath, '/') === \rtrim($currentPath, '/')
+        ) {
+            \w_log_warning('[App localization 301 skipped identity]', [
+                'raw' => $rawRequestUri,
+                'path' => $path,
+                'website_url' => $websiteUrl,
+                'relative' => $relative,
+                'canonical' => $canonicalRelative,
+                'mount' => $mount,
+                'default_language' => $defaultLanguage,
+                'default_currency' => $defaultCurrency,
+                'target' => $target,
+            ], 'url');
+            return;
+        }
+
+        \w_log_warning('[App localization 301]', [
+            'raw' => $rawRequestUri,
+            'path' => $path,
+            'website_url' => $websiteUrl,
+            'relative' => $relative,
+            'canonical' => $canonicalRelative,
+            'mount' => $mount,
+            'default_language' => $defaultLanguage,
+            'default_currency' => $defaultCurrency,
+            'target' => $target,
+        ], 'url');
+
         throw new RedirectException($target, 301);
     }
 

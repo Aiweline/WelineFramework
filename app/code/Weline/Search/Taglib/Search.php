@@ -149,9 +149,17 @@ final class Search implements TaglibInterface
     <?php if ($showHot && $words !== []): ?>
         <div class="header-search-hot-words hot-words w-search-hot-words" data-hot-words>
             <span class="header-search-hot-label hot-label w-search-hot-label"><?= $esc((string)__('热搜')) ?>:</span>
-            <?php foreach ($words as $word): ?>
-                <a href="/search?q=<?= rawurlencode($word) ?>"
-                   class="header-search-hot-word hot-word w-search-hot-word"><?= $esc($word) ?></a>
+            <?php foreach ($words as $word):
+                $hotLabel = trim((string)__($word));
+                if ($hotLabel === '') {
+                    $hotLabel = trim((string)$word);
+                }
+                if ($hotLabel === '') {
+                    continue;
+                }
+                ?>
+                <a href="/search?q=<?= rawurlencode($hotLabel) ?>"
+                   class="header-search-hot-word hot-word w-search-hot-word"><?= $esc($hotLabel) ?></a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>

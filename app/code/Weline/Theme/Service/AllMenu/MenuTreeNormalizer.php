@@ -81,6 +81,11 @@ final class MenuTreeNormalizer
             if ($nodeId !== '') {
                 $item['id'] = $nodeId;
             }
+            $tag = strtolower(trim((string)($node['tag'] ?? '')));
+            if (in_array($tag, self::ALLOWED_TAGS, true)) {
+                // Storefront sidebar needs tag to pick page/menu icons vs catalog product thumbs.
+                $item['tag'] = $tag;
+            }
             $imageRaw = $node['image'] ?? $node['img'] ?? $node['icon_url'] ?? null;
             if (is_array($imageRaw) && ($imageRaw['type'] ?? '') === 'file-image') {
                 $item['image'] = $imageRaw;

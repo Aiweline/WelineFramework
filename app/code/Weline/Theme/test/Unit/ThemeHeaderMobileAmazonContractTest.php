@@ -124,6 +124,8 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('data-sidebar-mega-deferred', $sidebarNav);
         self::assertStringContainsString('data-sidebar-mega-deferred="1"', $sidebarNav);
         self::assertStringContainsString('sidebar-category-card__media', $sidebarNav);
+        self::assertStringContainsString('sidebar-category-card__media--icon', $sidebarNav);
+        self::assertStringContainsString('打开 %{1} 页面', $sidebarNav);
         self::assertStringNotContainsString('sidebar-category-children', $sidebarNav);
         self::assertStringContainsString('bindHeaderMegaMenu(categoriesSidebar)', $source);
         self::assertStringContainsString('hydrateSidebarMegaPanels(categoriesSidebar)', $source);
@@ -230,5 +232,18 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringNotContainsString('data-weline-load="api,account"', (string)file_get_contents(
             dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml'
         ));
+    }
+
+    public function testHotSearchQueryUsesLocalizedLabelNotChineseSource(): void
+    {
+        $headerBar = dirname(__DIR__, 2) . '/view/theme/frontend/partials/search/header-bar.phtml';
+        $headerBarSource = (string)file_get_contents($headerBar);
+        self::assertStringContainsString('$hotLabel = $localize($word)', $headerBarSource);
+        self::assertStringContainsString('rawurlencode($hotLabel)', $headerBarSource);
+        self::assertStringNotContainsString(
+            'rawurlencode((string)$word)',
+            $headerBarSource,
+            'Hot-search q must use locale label, not Chinese source while UI shows EN'
+        );
     }
 }

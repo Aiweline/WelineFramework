@@ -247,7 +247,7 @@ $resolveName = static function (array $node) use ($resolveLocale, $esc): string 
                 $contentId = $panelId . '-panel-' . $index;
                 $isActive = $index === 0;
                 $bannerAltBase = $childTextPlain !== '' ? $childTextPlain : strip_tags($childTextHtml);
-                $bannerAlt = trim($bannerAltBase . ' — ' . (string)__('汉服分类展示图'));
+                $bannerAlt = trim($bannerAltBase . ' — ' . (string)__('分类展示图'));
 
                 // Inactive panels: omit card grids/banners from live HTML; hydrate on first tab open.
                 $lazyCards = [];

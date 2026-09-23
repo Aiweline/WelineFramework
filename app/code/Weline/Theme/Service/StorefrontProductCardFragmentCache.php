@@ -75,6 +75,9 @@ final class StorefrontProductCardFragmentCache
             (string)($product['global_offer_uuid'] ?? ''),
             (string)($product['campaign_label'] ?? ''),
             (string)($product['campaign_url'] ?? ''),
+            // WO-BUYER-SHOW-05：评分变化必须换 key，否则列表星级被旧 HTML 片段钉死
+            (string)($product['rating'] ?? '0'),
+            (string)($product['review_count'] ?? '0'),
             // Product buckets eager(0)/lazy(INITIAL) so list positions share keys.
             (string)($product['card_index'] ?? ''),
             (string)($flags['density'] ?? 'standard'),
@@ -93,7 +96,7 @@ final class StorefrontProductCardFragmentCache
             $this->storefrontOriginSegment(),
         ];
 
-        return 'theme.product_card.html.v2.'
+        return 'theme.product_card.html.v3.'
             . $this->storefrontLocaleSegment()
             . '.'
             . $productId

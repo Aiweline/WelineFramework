@@ -81,6 +81,8 @@ settings,settings
 "Save affiliate data","Save affiliate data"
 "Open affiliate save route","Open affiliate save route"
 "mdi mdi-content-save-outline","mdi mdi-content-save-outline"
+我的分销,"My Affiliate"
+分享、转化与佣金,"Shares, conversions, and commission"
 加载中,Loading
 去登录,"Sign in"
 分享好物，赚取佣金,"Share finds, earn commission"
@@ -98,8 +100,6 @@ settings,settings
 复制,Copy
 分享,Share
 分享到社交平台,"Share to social platforms"
-我的分销,"My Affiliate"
-分享、转化与佣金,"Shares, conversions, and commission"
 当前访问范围,"Current scope"
 账户范围,"Account scope"
 分销数据暂时无法加载，请稍后重试。,"Affiliate data is temporarily unavailable. Please try again later."

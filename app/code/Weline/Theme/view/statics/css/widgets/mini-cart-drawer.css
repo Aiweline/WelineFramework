@@ -39,7 +39,7 @@
 }
 
 .header-cart .mini-cart-drawer {
-    position: fixed;
+    position: fixed !important;
     inset-block: 0;
     inset-inline-end: 0;
     width: min(var(--size-panel-400, 25rem), 100vw);
@@ -56,12 +56,15 @@
     transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.32s ease;
     overflow: hidden;
     isolation: isolate;
+    /* Never inflate header-actions when closed — even if a late stylesheet races */
+    contain: layout style;
 }
 
 /* Closed by default: never occupy header flow even if transform is overridden */
 .header-cart .mini-cart-drawer[aria-hidden="true"] {
-    visibility: hidden;
-    pointer-events: none;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transform: translateX(100%) !important;
 }
 
 .header-cart .mini-cart-drawer__busy-overlay {

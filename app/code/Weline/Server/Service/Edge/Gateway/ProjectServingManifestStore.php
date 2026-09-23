@@ -55,7 +55,7 @@ final class ProjectServingManifestStore
     ) {
         $requested = $projectRoot ?? (string)BP;
         if ($requested === '' || \str_contains($requested, "\0") || \is_link($requested)) {
-            throw new \RuntimeException('WLS serving manifest project root is unsafe.');
+            throw new \RuntimeException('WLS serving manifest 项目根路径不安全。');
         }
         $canonical = \realpath($requested);
         $status = \is_string($canonical) ? @\lstat($canonical) : false;
@@ -66,7 +66,7 @@ final class ProjectServingManifestStore
             || (((int)($status['mode'] ?? 0) & 0170000) !== 0040000)
             || $this->isFilesystemRoot($canonical)
         ) {
-            throw new \RuntimeException('WLS serving manifest project root is unavailable.');
+            throw new \RuntimeException('WLS serving manifest 项目根路径不可用。');
         }
         $this->projectRoot = \rtrim($canonical, '/\\');
         $this->storeRoot = $this->projectRoot . DIRECTORY_SEPARATOR . 'var'
@@ -160,11 +160,11 @@ final class ProjectServingManifestStore
             return 300.0;
         }
         if (!\is_finite($deadlineMonotonic)) {
-            throw new \RuntimeException('Serving manifest deadline is invalid.');
+            throw new \RuntimeException('serving manifest 截止时间无效。');
         }
         $remaining = $deadlineMonotonic - $this->publicationMonotonicNow();
         if ($remaining <= 0.0) {
-            throw new \RuntimeException('Serving manifest deadline was exhausted.');
+            throw new \RuntimeException('serving manifest 截止时间已耗尽。');
         }
         return $remaining;
     }
@@ -179,7 +179,7 @@ final class ProjectServingManifestStore
             || (float)$monotonic < 0.0
         ) {
             throw new \RuntimeException(
-                'Serving manifest monotonic clock is invalid.',
+                'serving manifest 单调时钟无效。',
             );
         }
         return (float)$monotonic;
@@ -206,7 +206,7 @@ final class ProjectServingManifestStore
         if ($this->publicationTransactionDepth > 0) {
             if (!\hash_equals($this->publicationTransactionInstance, $instanceId)) {
                 throw new \RuntimeException(
-                    'A serving manifest transaction cannot nest a different instance.',
+                    'serving manifest 事务不能嵌套不同实例。',
                 );
             }
             ++$this->publicationTransactionDepth;
@@ -347,7 +347,7 @@ final class ProjectServingManifestStore
                 && \preg_match('/\A[a-f0-9]{64}\z/D', $expectedRequestDigest) !== 1)
         ) {
             throw new \RuntimeException(
-                'Native WLS startup manifest expectation is invalid.',
+                '纯 WLS 启动 manifest 期望无效。',
             );
         }
 
@@ -389,7 +389,7 @@ final class ProjectServingManifestStore
                         ))
                 ) {
                     throw new \RuntimeException(
-                        'Native WLS startup manifest binding is stale or inconsistent.',
+                        '纯 WLS 启动 manifest 绑定已过期或不一致。',
                     );
                 }
                 $this->assertPublicationDeadline($deadlineMonotonic);
@@ -443,7 +443,7 @@ final class ProjectServingManifestStore
             || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
         ) {
             throw new \RuntimeException(
-                'Gateway fallback serving manifest expectation is invalid.',
+                '网关回退 serving manifest 期望无效。',
             );
         }
 
@@ -457,14 +457,14 @@ final class ProjectServingManifestStore
             || $routeCount !== $expectedRouteCount
         ) {
             throw new \RuntimeException(
-                'Gateway fallback serving manifest changed before listener activation.',
+                '监听器激活前，网关回退 serving manifest 已变化。',
             );
         }
 
         $routes = (array)($manifest['payload']['routes'] ?? []);
         if ($routeCount < 1 || \count($routes) !== $routeCount) {
             throw new \RuntimeException(
-                'Gateway fallback requires at least one ACTIVE serving route.',
+                '网关回退至少需要一条 ACTIVE serving 路由。',
             );
         }
 
@@ -482,7 +482,7 @@ final class ProjectServingManifestStore
         foreach ($routes as $route) {
             if (!\is_array($route)) {
                 throw new \RuntimeException(
-                    'Gateway fallback serving route is malformed.',
+                    '网关回退 serving 路由格式错误。',
                 );
             }
             $activeDomains[] = (string)$route['domain'];
@@ -546,7 +546,7 @@ final class ProjectServingManifestStore
             || \count($routes) !== $routeCount
         ) {
             throw new \RuntimeException(
-                'Gateway startup fallback serving manifest has no exact ACTIVE route set.',
+                '网关启动回退 serving manifest 没有精确的 ACTIVE 路由集合。',
             );
         }
         foreach ($routes as $route) {
@@ -598,7 +598,7 @@ final class ProjectServingManifestStore
                 || \preg_match('/\A[a-f0-9]{64}\z/D', $fingerprint) !== 1
             ) {
                 throw new \RuntimeException(
-                    'Gateway startup fallback certificate fence is malformed.',
+                    '网关启动回退证书栅栏格式错误。',
                 );
             }
             return [
@@ -616,7 +616,7 @@ final class ProjectServingManifestStore
         }
 
         throw new \RuntimeException(
-            'Gateway startup fallback certificate is absent from the exact serving manifest.',
+            '网关启动回退证书不在精确 serving manifest 中。',
         );
     }
 
@@ -641,7 +641,7 @@ final class ProjectServingManifestStore
         if (!\is_array($status)) {
             if (\file_exists($this->storeRoot) || \is_link($this->storeRoot)) {
                 throw new \RuntimeException(
-                    'WLS serving manifest reference store is unsafe.',
+                    'WLS serving manifest 引用存储不安全。',
                 );
             }
             // A publisher validates immutable certificate snapshots before it
@@ -665,7 +665,7 @@ final class ProjectServingManifestStore
                         && (int)($status['uid'] ?? -1) !== $this->projectOwner)))
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest reference store is unsafe.',
+                'WLS serving manifest 引用存储不安全。',
             );
         }
         return GatewayProjectStateFilesystem::withExclusiveLock(
@@ -714,7 +714,7 @@ final class ProjectServingManifestStore
             || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
         ) {
             throw new \InvalidArgumentException(
-                'Inactive endpoint serving manifest proof is invalid.',
+                '未活动端点的 serving manifest 证明无效。',
             );
         }
         $this->assertPublicationDeadline($deadlineMonotonic);
@@ -775,7 +775,7 @@ final class ProjectServingManifestStore
         if (!\is_array($authorityStatus)) {
             if (\file_exists($authorityPath) || \is_link($authorityPath)) {
                 throw new \RuntimeException(
-                    'Inactive serving manifest authority path is unsafe.',
+                    '未活动 serving manifest 权威路径不安全。',
                 );
             }
             foreach ([$lkgPath, $pointerPath, $generationPath] as $earlierPath) {
@@ -784,7 +784,7 @@ final class ProjectServingManifestStore
                     || \is_link($earlierPath)
                 ) {
                     throw new \RuntimeException(
-                        'Inactive serving manifest retirement lost its authority commit marker.',
+                        '未活动 serving manifest 退役丢失了权威提交标记。',
                     );
                 }
             }
@@ -794,7 +794,7 @@ final class ProjectServingManifestStore
         $authority = $this->readPublicationAuthority($instanceId);
         if (!\is_array($authority)) {
             throw new \RuntimeException(
-                'Inactive serving manifest authority is missing.',
+                '未活动 serving manifest 权威记录缺失。',
             );
         }
         $this->assertRetirementAuthorityManifestBinding($authority, $instanceId);
@@ -821,7 +821,7 @@ final class ProjectServingManifestStore
             )
         ) {
             throw new \RuntimeException(
-                'Serving manifest authority does not match the selected inactive endpoint.',
+                'serving manifest 权威记录与所选未活动端点不匹配。',
             );
         }
 
@@ -844,12 +844,12 @@ final class ProjectServingManifestStore
                 )
             ) {
                 throw new \RuntimeException(
-                    'Serving manifest pointer does not match the selected inactive endpoint.',
+                    'serving manifest 指针与所选未活动端点不匹配。',
                 );
             }
         } elseif (\file_exists($pointerPath) || \is_link($pointerPath)) {
             throw new \RuntimeException(
-                'Inactive serving manifest pointer path is unsafe.',
+                '未活动 serving manifest 指针路径不安全。',
             );
         }
 
@@ -858,12 +858,12 @@ final class ProjectServingManifestStore
             $floor = $this->readGenerationFloor($instanceId);
             if ($floor < 1 || $floor > $expectedGeneration) {
                 throw new \RuntimeException(
-                    'Inactive serving manifest generation floor is unbound.',
+                    '未活动 serving manifest 代际下限未绑定。',
                 );
             }
         } elseif (\file_exists($generationPath) || \is_link($generationPath)) {
             throw new \RuntimeException(
-                'Inactive serving manifest generation path is unsafe.',
+                '未活动 serving manifest 代际路径不安全。',
             );
         }
 
@@ -875,21 +875,21 @@ final class ProjectServingManifestStore
             ) as $reference) {
                 if ((int)$reference['generation'] >= $expectedGeneration) {
                     throw new \RuntimeException(
-                        'Inactive serving manifest LKG generation is unbound.',
+                        '未活动 serving manifest LKG 代际未绑定。',
                     );
                 }
             }
         } elseif (\file_exists($lkgPath) || \is_link($lkgPath)) {
             throw new \RuntimeException(
-                'Inactive serving manifest LKG path is unsafe.',
+                '未活动 serving manifest LKG 路径不安全。',
             );
         }
 
         foreach ([
-            [$lkgPath, 'inactive WLS serving manifest LKG reference', $lkgStatus],
-            [$pointerPath, 'inactive WLS serving manifest pointer', $pointerStatus],
-            [$generationPath, 'inactive WLS serving manifest generation floor', $generationStatus],
-            [$authorityPath, 'inactive WLS serving manifest authority', $authorityStatus],
+            [$lkgPath, '未活动实例的 WLS serving manifest LKG 引用', $lkgStatus],
+            [$pointerPath, '未活动实例的 WLS serving manifest 当前指针', $pointerStatus],
+            [$generationPath, '未活动实例的 WLS serving manifest 代际下限', $generationStatus],
+            [$authorityPath, '未活动实例的 WLS serving manifest 权威记录', $authorityStatus],
         ] as [$path, $label, $identity]) {
             $this->assertPublicationDeadline($deadlineMonotonic);
             if (\is_array($identity)) {
@@ -920,7 +920,7 @@ final class ProjectServingManifestStore
             || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
             || !$this->canonicalManifestPathMatches($path, $generation, $digest)
         ) {
-            throw new \RuntimeException('WLS serving manifest launch binding is invalid.');
+            throw new \RuntimeException('WLS serving manifest 启动绑定无效。');
         }
         $this->assertPrivateStateFile($path, 'WLS serving manifest');
         $encoded = GatewayProjectStateFilesystem::read(
@@ -948,7 +948,7 @@ final class ProjectServingManifestStore
                 \hash('sha256', GatewayClient::canonicalJson($unsigned)),
             )
         ) {
-            throw new \RuntimeException('WLS serving manifest envelope integrity failed.');
+            throw new \RuntimeException('WLS serving manifest 信封完整性校验失败。');
         }
         $this->assertPayload($payload, true);
         if ($fence !== []) {
@@ -983,14 +983,14 @@ final class ProjectServingManifestStore
             || !$this->canonicalManifestPathMatches($path, $generation, $digest)
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest retirement binding is invalid.',
+                'WLS serving manifest 退役绑定无效。',
             );
         }
-        $this->assertPrivateStateFile($path, 'WLS serving manifest retirement evidence');
+        $this->assertPrivateStateFile($path, 'WLS serving manifest 退役证据');
         $encoded = GatewayProjectStateFilesystem::read(
             $path,
             self::MAX_MANIFEST_BYTES,
-            'WLS serving manifest retirement evidence',
+            'WLS serving manifest 退役证据',
         );
         $envelope = \json_decode($encoded, true);
         $payload = \is_array($envelope) && \is_array($envelope['payload'] ?? null)
@@ -1016,7 +1016,7 @@ final class ProjectServingManifestStore
             )
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest retirement envelope integrity failed.',
+                'WLS serving manifest 退役信封完整性校验失败。',
             );
         }
         if (\hash_equals(self::SCHEMA, $schema)) {
@@ -1031,7 +1031,7 @@ final class ProjectServingManifestStore
                 ) !== 1
             ) {
                 throw new \RuntimeException(
-                    'Legacy WLS serving manifest retirement identity is invalid.',
+                    '旧版 WLS serving manifest 退役身份无效。',
                 );
             }
         }
@@ -1049,7 +1049,7 @@ final class ProjectServingManifestStore
     {
         $host = \strtolower(\rtrim(\trim($host), '.'));
         if (\str_contains($host, "\0") || $host === '') {
-            throw new \InvalidArgumentException('Serving manifest host is empty or unsafe.');
+            throw new \InvalidArgumentException('serving manifest 主机名为空或不安全。');
         }
         $wildcard = $allowWildcard && \str_starts_with($host, '*.');
         $body = $wildcard ? \substr($host, 2) : $host;
@@ -1060,7 +1060,7 @@ final class ProjectServingManifestStore
             $ascii = @\idn_to_ascii($body, IDNA_DEFAULT, $variant);
             if (!\is_string($ascii) || $ascii === '') {
                 throw new \InvalidArgumentException(
-                    'Serving manifest host IDNA conversion failed: ' . $host,
+                    'serving manifest 主机名 IDNA 转换失败：' . $host,
                 );
             }
             $body = \strtolower($ascii);
@@ -1077,7 +1077,7 @@ final class ProjectServingManifestStore
             )) {
                 return self::canonicalLoopbackIpLiteral($body);
             }
-            throw new \InvalidArgumentException('Serving manifest host is invalid: ' . $host);
+            throw new \InvalidArgumentException('serving manifest 主机名无效：' . $host);
         }
         if (\strlen($body) > 253
             || \preg_match(
@@ -1086,7 +1086,7 @@ final class ProjectServingManifestStore
                 $body,
             ) !== 1
         ) {
-            throw new \InvalidArgumentException('Serving manifest host is invalid: ' . $host);
+            throw new \InvalidArgumentException('serving manifest 主机名无效：' . $host);
         }
         return $wildcard ? '*.' . $body : $body;
     }
@@ -1151,7 +1151,7 @@ final class ProjectServingManifestStore
         $packed = @\inet_pton($ip);
         $canonical = \is_string($packed) ? @\inet_ntop($packed) : false;
         if (!\is_string($canonical) || $canonical === '') {
-            throw new \InvalidArgumentException('Serving manifest host is invalid: ' . $ip);
+            throw new \InvalidArgumentException('serving manifest 主机名无效：' . $ip);
         }
 
         return \strtolower($canonical);
@@ -1197,19 +1197,19 @@ final class ProjectServingManifestStore
             || \preg_match('/\A[a-f0-9]{64}\z/D', $requestDigest) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $desiredDigest) !== 1
         ) {
-            throw new \RuntimeException('Serving manifest registration fence is invalid.');
+            throw new \RuntimeException('serving manifest 注册栅栏无效。');
         }
         $desiredRoutes = \is_array($registration['routes'] ?? null)
             && \array_is_list($registration['routes'])
                 ? $registration['routes']
                 : [];
         if ($desiredRoutes === [] || \count($desiredRoutes) > self::MAX_ROUTES) {
-            throw new \RuntimeException('Serving manifest desired route set is outside bounds.');
+            throw new \RuntimeException('serving manifest 期望路由集合超出边界。');
         }
         $selected = null;
         if ($servingRouteIds !== null) {
             if (!\array_is_list($servingRouteIds) || \count($servingRouteIds) > self::MAX_ROUTES) {
-                throw new \RuntimeException('Serving manifest selected route set is outside bounds.');
+                throw new \RuntimeException('serving manifest 已选路由集合超出边界。');
             }
             $selected = [];
             foreach ($servingRouteIds as $routeId) {
@@ -1218,14 +1218,14 @@ final class ProjectServingManifestStore
                 if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
                     || isset($selected[$routeId])
                 ) {
-                    throw new \RuntimeException('Serving manifest selected route set is malformed.');
+                    throw new \RuntimeException('serving manifest 已选路由集合格式错误。');
                 }
                 $selected[$routeId] = true;
             }
             \ksort($selected, SORT_STRING);
         }
         if (\count($routeGenerations) > self::MAX_ROUTES) {
-            throw new \RuntimeException('Serving route generation set is outside bounds.');
+            throw new \RuntimeException('serving 路由代际集合超出边界。');
         }
         $normalizedRouteGenerations = [];
         foreach ($routeGenerations as $routeId => $routeGeneration) {
@@ -1236,7 +1236,7 @@ final class ProjectServingManifestStore
                 || $routeGeneration < 1
                 || isset($normalizedRouteGenerations[$routeId])
             ) {
-                throw new \RuntimeException('Serving route generation set is malformed.');
+                throw new \RuntimeException('serving 路由代际集合格式错误。');
             }
             $normalizedRouteGenerations[$routeId] = $routeGeneration;
         }
@@ -1246,7 +1246,7 @@ final class ProjectServingManifestStore
                 && \array_keys($normalizedRouteGenerations) !== \array_keys($selected))
         ) {
             throw new \RuntimeException(
-                'Serving route generations do not exactly cover the selected route set.',
+                'serving 路由代际未能精确覆盖已选路由集合。',
             );
         }
         $routeGenerations = $normalizedRouteGenerations;
@@ -1256,13 +1256,13 @@ final class ProjectServingManifestStore
         foreach ($desiredRoutes as $route) {
             $this->assertPublicationDeadline($deadlineMonotonic);
             if (!\is_array($route)) {
-                throw new \RuntimeException('Serving manifest desired route is malformed.');
+                throw new \RuntimeException('serving manifest 期望路由格式错误。');
             }
             $routeId = \strtolower(\trim((string)($route['route_id'] ?? '')));
             $domain = self::normalizeHost((string)($route['domain'] ?? ''));
             $expectedRouteId = \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32);
             if (!\hash_equals($expectedRouteId, $routeId) || isset($desiredRouteIds[$routeId])) {
-                throw new \RuntimeException('Serving manifest route identity is invalid.');
+                throw new \RuntimeException('serving manifest 路由身份无效。');
             }
             $desiredRouteIds[$routeId] = true;
             $certificate = \is_array($route['certificate'] ?? null)
@@ -1349,7 +1349,7 @@ final class ProjectServingManifestStore
                         )))
             ) {
                 throw new \RuntimeException(
-                    'Serving manifest certificate lifecycle envelope is inconsistent.',
+                    'serving manifest 证书生命周期信封不一致。',
                 );
             }
             if ($certificateState !== 'active'
@@ -1359,19 +1359,19 @@ final class ProjectServingManifestStore
                     || ($certificate['chain'] ?? null) !== null)
             ) {
                 throw new \RuntimeException(
-                    'Inactive serving certificate state contains material or a wildcard.',
+                    '未活动 serving 证书状态含有材料或通配符。',
                 );
             }
             $forceHttps = $route['force_https'] ?? null;
             $forceRootToWww = $route['force_root_to_www'] ?? null;
             if (!\is_bool($forceHttps) || !\is_bool($forceRootToWww)) {
-                throw new \RuntimeException('Serving route policy is not canonical.');
+                throw new \RuntimeException('serving 路由策略不是规范形式。');
             }
             if ($certificateState === 'disabled'
                 && ($forceHttps !== false || $forceRootToWww !== false)
             ) {
                 throw new \RuntimeException(
-                    'Disabled certificate routes must retain HTTP without HTTPS redirects.',
+                    '已禁用证书的路由必须保留 HTTP，且不得带 HTTPS 跳转。',
                 );
             }
             $rootTarget = (string)($route['root_to_www_target'] ?? '');
@@ -1379,7 +1379,7 @@ final class ProjectServingManifestStore
                 || ($forceRootToWww && !\hash_equals('www.' . $domain, $rootTarget))
                 || (!$forceRootToWww && $rootTarget !== '')
             ) {
-                throw new \RuntimeException('Serving root-to-www target is not fixed by desired state.');
+                throw new \RuntimeException('root 到 www 的 serving 目标未被期望状态固定。');
             }
             $desiredRouteFacts[$routeId] = [
                 'route_id' => $routeId,
@@ -1405,7 +1405,7 @@ final class ProjectServingManifestStore
                 continue;
             }
             if ($certificateState !== 'active') {
-                throw new \RuntimeException('Selected serving route has no active certificate generation.');
+                throw new \RuntimeException('所选 serving 路由没有可用的活动证书代际。');
             }
             $certificatePath = $this->resolveProjectCertificateReference(
                 (array)($certificate['cert'] ?? []),
@@ -1441,8 +1441,8 @@ final class ProjectServingManifestStore
                 || !$this->samePath((string)$activeAuthority['key_path'], $keyPath)
             ) {
                 throw new CertificateTrustProvenanceException(
-                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving registration does not '
-                        . 'match the active project certificate provenance authority.',
+                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving 注册与当前活动的'
+                        . '项目证书 provenance 权威不匹配。',
                 );
             }
             $snapshot = $this->verifiedCertificateSnapshot(
@@ -1457,7 +1457,7 @@ final class ProjectServingManifestStore
             )));
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $snapshotFingerprint) !== 1) {
                 throw new \RuntimeException(
-                    'Serving certificate snapshot leaf fingerprint is inconsistent.',
+                    'serving 证书快照叶子指纹不一致。',
                 );
             }
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $leafFingerprint) !== 1
@@ -1472,7 +1472,7 @@ final class ProjectServingManifestStore
                 || $routeGeneration < 0
                 || ($selected !== null && $routeGeneration < 1)
             ) {
-                throw new \RuntimeException('Serving route generation is invalid.');
+                throw new \RuntimeException('serving 路由代际无效。');
             }
             $routes[$routeId] = [
                 'route_id' => $routeId,
@@ -1513,13 +1513,13 @@ final class ProjectServingManifestStore
             ), 0, 32);
             if (!isset($desiredRouteFacts[$targetRouteId])) {
                 throw new \RuntimeException(
-                    'Serving desired HTTP root-to-www target is absent.',
+                    '期望的 HTTP root-to-www 目标缺失。',
                 );
             }
             $desiredRouteFacts[$routeId]['root_to_www_target_ready'] = true;
         }
         if ($selected !== null && \count($routes) !== \count($selected)) {
-            throw new \RuntimeException('Serving route selection is not a subset of current desired state.');
+            throw new \RuntimeException('serving 路由选择不是当前期望状态的子集。');
         }
         foreach ($routes as $routeId => $route) {
             $this->assertPublicationDeadline($deadlineMonotonic);
@@ -1534,7 +1534,7 @@ final class ProjectServingManifestStore
             $targetReady = isset($routes[$targetRouteId]);
             if (!$targetReady && $selected !== null) {
                 throw new \RuntimeException(
-                    'Serving root-to-www target is outside the exact serving subset.',
+                    'root-to-www 目标不在精确 serving 子集内。',
                 );
             }
             // Pure WLS keeps the apex certificate serviceable even while the
@@ -1548,7 +1548,7 @@ final class ProjectServingManifestStore
         $exactConverged = \count($routes) === \count($desiredRouteIds);
         $converged ??= $exactConverged;
         if ($converged && !$exactConverged) {
-            throw new \RuntimeException('Serving manifest cannot mark a partial route subset converged.');
+            throw new \RuntimeException('serving manifest 不能把部分路由子集标记为已收敛。');
         }
         $this->assertPublicationDeadline($deadlineMonotonic);
         return [
@@ -1606,7 +1606,7 @@ final class ProjectServingManifestStore
                 || \file_exists($this->currentPointerPath($instanceId))
                 || \is_link($this->currentPointerPath($instanceId))
             ) {
-                throw new \RuntimeException('Current WLS serving manifest pointer is corrupt.');
+                throw new \RuntimeException('当前 WLS serving manifest 指针已损坏。');
             }
         }
         if (\is_array($current)) {
@@ -1656,7 +1656,7 @@ final class ProjectServingManifestStore
             $floor = \max($floor, (int)$authority['generation']);
         } elseif ($floor > 0) {
             throw new \RuntimeException(
-                'WLS serving manifest authority is missing behind its generation floor.',
+                'WLS serving manifest 权威记录缺失，但代际下限已存在。',
             );
         }
         if ($authority !== null
@@ -1703,7 +1703,7 @@ final class ProjectServingManifestStore
             return $current;
         }
         if ($floor >= PHP_INT_MAX) {
-            throw new \RuntimeException('WLS serving manifest generation is exhausted.');
+            throw new \RuntimeException('WLS serving manifest 代际号已耗尽。');
         }
         $generation = $floor + 1;
         $unsigned = [
@@ -1719,7 +1719,7 @@ final class ProjectServingManifestStore
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
         if (!\is_string($encoded) || \strlen($encoded) > self::MAX_MANIFEST_BYTES) {
-            throw new \RuntimeException('Unable to encode bounded WLS serving manifest.');
+            throw new \RuntimeException('无法编码有界 WLS serving manifest。');
         }
         $path = $this->manifestPath($generation, $digest);
         if (@\lstat($path) !== false || \file_exists($path) || \is_link($path)) {
@@ -1732,7 +1732,7 @@ final class ProjectServingManifestStore
                 \hash('sha256', GatewayClient::canonicalJson($verified['payload'])),
             )) {
                 throw new \RuntimeException(
-                    'Existing WLS serving manifest path belongs to different facts.',
+                    '已有 WLS serving manifest 路径对应的内容与当前事实不一致。',
                 );
             }
         } else {
@@ -1778,31 +1778,31 @@ final class ProjectServingManifestStore
                 'type' => 'generation',
                 'path' => $this->generationFile($instanceId),
                 'maximum_bytes' => 32,
-                'label' => 'WLS serving manifest generation floor',
+                'label' => 'WLS serving manifest 代际下限',
             ],
             [
                 'type' => 'authority',
                 'path' => $this->publicationAuthorityFile($instanceId),
                 'maximum_bytes' => 16_384,
-                'label' => 'WLS serving manifest authority',
+                'label' => 'WLS serving manifest 权威记录',
             ],
             [
                 'type' => 'pointer',
                 'path' => $this->currentPointerPath($instanceId),
                 'maximum_bytes' => 16_384,
-                'label' => 'WLS serving manifest pointer',
+                'label' => 'WLS serving manifest 指针',
             ],
             [
                 'type' => 'lkg',
                 'path' => $this->recentLkgFile($instanceId),
                 'maximum_bytes' => 32_768,
-                'label' => 'WLS serving manifest LKG reference',
+                'label' => 'WLS serving manifest LKG 引用',
             ],
             [
                 'type' => 'retirement',
                 'path' => $this->manifestRetirementStateFile(),
                 'maximum_bytes' => self::MAX_RETIREMENT_STATE_BYTES,
-                'label' => 'WLS serving manifest retirement state',
+                'label' => 'WLS serving manifest 退役状态',
             ],
         ];
         $retained = [];
@@ -1862,7 +1862,7 @@ final class ProjectServingManifestStore
                 $state['host_boot_id'],
             )) {
                 throw new \RuntimeException(
-                    'WLS serving manifest retirement recovery target is corrupt.',
+                    'WLS serving manifest 退役恢复目标已损坏。',
                 );
             }
             return;
@@ -1871,7 +1871,7 @@ final class ProjectServingManifestStore
         $authority = $this->readPublicationAuthority($instanceId);
         if (!\is_array($authority)) {
             throw new \RuntimeException(
-                'WLS serving manifest recovery authority is missing.',
+                'WLS serving manifest 恢复权威记录缺失。',
             );
         }
         $this->assertPublicationAuthorityManifestBinding(
@@ -1886,7 +1886,7 @@ final class ProjectServingManifestStore
             $floor = $this->readGenerationFloor($instanceId);
             if ($floor < 1 || $floor > (int)$authority['generation']) {
                 throw new \RuntimeException(
-                    'WLS serving manifest recovery generation floor is unbound.',
+                    'WLS serving manifest 恢复代际下限未绑定。',
                 );
             }
             return;
@@ -1922,13 +1922,13 @@ final class ProjectServingManifestStore
                 );
                 if ((int)$publication['generation'] >= (int)$authority['generation']) {
                     throw new \RuntimeException(
-                        'WLS serving manifest recovery LKG generation is unbound.',
+                        'WLS serving manifest 恢复 LKG 代际未绑定。',
                     );
                 }
             }
             return;
         }
-        throw new \LogicException('Unknown WLS serving manifest recovery target.');
+        throw new \LogicException('未知的 WLS serving manifest 恢复目标。');
     }
 
     /** @param array<string,mixed> $authority */
@@ -1952,7 +1952,7 @@ final class ProjectServingManifestStore
             ),
         )) {
             throw new \RuntimeException(
-                'WLS serving manifest recovery authority is unbound.',
+                'WLS serving manifest 恢复权威记录未绑定。',
             );
         }
     }
@@ -1976,7 +1976,7 @@ final class ProjectServingManifestStore
     ): array {
         if ($terminalEndpointFence === null) {
             throw new \RuntimeException(
-                'Serving manifest authority does not match the selected inactive endpoint.',
+                'serving manifest 权威记录与所选未活动端点不匹配。',
             );
         }
         $projectUuid = \strtolower(\trim((string)(
@@ -1998,7 +1998,7 @@ final class ProjectServingManifestStore
             || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
         ) {
             throw new \RuntimeException(
-                'Inactive endpoint serving manifest supersession fence is invalid.',
+                '未活动端点 serving manifest 替代栅栏无效。',
             );
         }
 
@@ -2010,7 +2010,7 @@ final class ProjectServingManifestStore
             || \preg_match('/\A[a-f0-9]{64}\z/D', $currentDigest) !== 1
         ) {
             throw new \RuntimeException(
-                'Serving manifest authority does not match the selected inactive endpoint.',
+                'serving manifest 权威记录与所选未活动端点不匹配。',
             );
         }
 
@@ -2063,7 +2063,7 @@ final class ProjectServingManifestStore
                 < $endpointProjectGeneration
         ) {
             throw new \RuntimeException(
-                'Current serving manifest belongs to another inactive endpoint generation.',
+                '当前 serving manifest 属于另一个未活动端点代际。',
             );
         }
 
@@ -2091,7 +2091,7 @@ final class ProjectServingManifestStore
             ),
         )) {
             throw new \RuntimeException(
-                'WLS serving manifest retirement authority is unbound.',
+                'WLS serving manifest 退役权威记录未绑定。',
             );
         }
     }
@@ -2113,7 +2113,7 @@ final class ProjectServingManifestStore
                 ))
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest recovery target belongs to another instance.',
+                'WLS serving manifest 恢复目标属于其他实例。',
             );
         }
     }
@@ -2168,7 +2168,7 @@ final class ProjectServingManifestStore
                 )))
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest authority conflicts with its current pointer.',
+                'WLS serving manifest 权威记录与当前指针冲突。',
             );
         }
     }
@@ -2180,15 +2180,15 @@ final class ProjectServingManifestStore
         $status = @\lstat($path);
         if (!\is_array($status)) {
             if (\file_exists($path) || \is_link($path)) {
-                throw new \RuntimeException('WLS serving manifest authority is unsafe.');
+                throw new \RuntimeException('WLS serving manifest 权威记录不安全。');
             }
             return null;
         }
-        $this->assertPrivateStateFile($path, 'WLS serving manifest authority');
+        $this->assertPrivateStateFile($path, 'WLS serving manifest 权威记录');
         $encoded = GatewayProjectStateFilesystem::read(
             $path,
             16_384,
-            'WLS serving manifest authority',
+            'WLS serving manifest 权威记录',
         );
         $authority = \json_decode($encoded, true);
         $unsigned = \is_array($authority) ? $authority : [];
@@ -2201,12 +2201,12 @@ final class ProjectServingManifestStore
                 \hash('sha256', GatewayClient::canonicalJson($unsigned)),
             )
         ) {
-            throw new \RuntimeException('WLS serving manifest authority integrity failed.');
+            throw new \RuntimeException('WLS serving manifest 权威记录完整性校验失败。');
         }
         $this->assertPublicationAuthority($unsigned);
         if (!\hash_equals($instanceId, (string)$unsigned['instance_id'])) {
             throw new \RuntimeException(
-                'WLS serving manifest authority belongs to another instance.',
+                'WLS serving manifest 权威记录 belongs to another instance.',
             );
         }
         return $unsigned;
@@ -2218,7 +2218,7 @@ final class ProjectServingManifestStore
         $this->assertPublicationAuthority($authority);
         if (!\hash_equals($instanceId, (string)$authority['instance_id'])) {
             throw new \RuntimeException(
-                'WLS serving manifest authority publication targets another instance.',
+                'WLS serving manifest 权威记录 publication targets another instance.',
             );
         }
         $envelope = $authority;
@@ -2231,7 +2231,7 @@ final class ProjectServingManifestStore
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
         if (!\is_string($encoded) || \strlen($encoded) > 16_384) {
-            throw new \RuntimeException('Unable to encode WLS serving manifest authority.');
+            throw new \RuntimeException('无法编码 WLS serving manifest 权威记录。');
         }
         $this->atomicWrite($this->publicationAuthorityFile($instanceId), $encoded, 0600);
     }
@@ -2268,7 +2268,7 @@ final class ProjectServingManifestStore
                 $authority['non_certificate_desired_digest'] ?? ''
             )) !== 1
         ) {
-            throw new \RuntimeException('WLS serving manifest authority is invalid.');
+            throw new \RuntimeException('WLS serving manifest 权威记录无效。');
         }
     }
 
@@ -2282,7 +2282,7 @@ final class ProjectServingManifestStore
             || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
             || !$this->canonicalManifestPathMatches($path, $generation, $digest)
         ) {
-            throw new \RuntimeException('WLS serving manifest pointer publication is invalid.');
+            throw new \RuntimeException('WLS serving manifest 指针发布无效。');
         }
         $pointer = [
             'schema' => self::POINTER_SCHEMA,
@@ -2296,7 +2296,7 @@ final class ProjectServingManifestStore
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
         if (!\is_string($encoded)) {
-            throw new \RuntimeException('Unable to encode WLS serving manifest pointer.');
+            throw new \RuntimeException('无法编码 WLS serving manifest 指针。');
         }
         $this->atomicWrite($this->currentPointerPath($instanceId), $encoded, 0600);
     }
@@ -2360,7 +2360,7 @@ final class ProjectServingManifestStore
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
         if (!\is_string($encoded) || \strlen($encoded) > 32_768) {
-            throw new \RuntimeException('Unable to encode WLS serving manifest LKG references.');
+            throw new \RuntimeException('无法编码 WLS serving manifest LKG 引用。');
         }
         $this->atomicWrite($path, $encoded, 0600);
     }
@@ -2383,7 +2383,7 @@ final class ProjectServingManifestStore
         $currentInstanceGeneration = (int)($current['instance_generation'] ?? 0);
         if ($incomingInstanceGeneration < $currentInstanceGeneration) {
             throw new \RuntimeException(
-                'WLS serving manifest cannot publish a stale instance generation.',
+                'WLS serving manifest 不能发布过期的实例代际。',
             );
         }
         if ($incomingInstanceGeneration === $currentInstanceGeneration) {
@@ -2402,7 +2402,7 @@ final class ProjectServingManifestStore
             // always stale/foreign.
             if (!$sameMasterLaunch || $incomingMasterEpoch < $currentMasterEpoch) {
                 throw new \RuntimeException(
-                    'WLS serving manifest instance generation belongs to another or stale Master launch.',
+                    'WLS serving manifest 实例代际属于另一个或已过期的 Master 启动。',
                 );
             }
         }
@@ -2411,7 +2411,7 @@ final class ProjectServingManifestStore
         $currentProjectGeneration = (int)($current['project_generation'] ?? 0);
         if ($incomingProjectGeneration < $currentProjectGeneration) {
             throw new \RuntimeException(
-                'WLS serving manifest cannot publish a stale project generation.',
+                'WLS serving manifest 不能发布过期的项目代际。',
             );
         }
         if ($incomingProjectGeneration === $currentProjectGeneration
@@ -2424,7 +2424,7 @@ final class ProjectServingManifestStore
             ))
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest project generation has conflicting desired-state digests.',
+                'WLS serving manifest 项目代际存在冲突的期望状态摘要。',
             );
         }
     }
@@ -2434,12 +2434,12 @@ final class ProjectServingManifestStore
     {
         $this->assertPrivateStateFile(
             $this->currentPointerPath($instanceId),
-            'WLS serving manifest pointer',
+            'WLS serving manifest 指针',
         );
         $encoded = GatewayProjectStateFilesystem::read(
             $this->currentPointerPath($instanceId),
             16_384,
-            'WLS serving manifest pointer',
+            'WLS serving manifest 指针',
         );
         $pointer = \json_decode($encoded, true);
         $unsigned = \is_array($pointer) ? $pointer : [];
@@ -2457,7 +2457,7 @@ final class ProjectServingManifestStore
                 (string)$pointer['digest'],
             )
         ) {
-            throw new \RuntimeException('WLS serving manifest pointer integrity failed.');
+            throw new \RuntimeException('WLS serving manifest 指针完整性校验失败。');
         }
         return $pointer;
     }
@@ -2469,30 +2469,30 @@ final class ProjectServingManifestStore
         if (!\is_array($status)) {
             if (\file_exists($path) || \is_link($path)) {
                 throw new \RuntimeException(
-                    'WLS serving manifest generation floor is unsafe.',
+                    'WLS serving manifest 代际下限 is unsafe.',
                 );
             }
             return 0;
         }
         $this->assertPrivateStateFile(
             $path,
-            'WLS serving manifest generation floor',
+            'WLS serving manifest 代际下限',
         );
         $raw = GatewayProjectStateFilesystem::readOptional(
             $path,
             32,
-            'WLS serving manifest generation floor',
+            'WLS serving manifest 代际下限',
         );
         if ($raw === null) {
-            throw new \RuntimeException('WLS serving manifest generation floor disappeared.');
+            throw new \RuntimeException('WLS serving manifest 代际下限已消失。');
         }
         $raw = \trim($raw);
         if (\preg_match('/\A[1-9][0-9]{0,18}\z/D', $raw) !== 1) {
-            throw new \RuntimeException('WLS serving manifest generation floor is corrupt.');
+            throw new \RuntimeException('WLS serving manifest 代际下限已损坏。');
         }
         $generation = (int)$raw;
         if ($generation < 1 || (string)$generation !== $raw) {
-            throw new \RuntimeException('WLS serving manifest generation floor is out of range.');
+            throw new \RuntimeException('WLS serving manifest 代际下限超出范围。');
         }
         return $generation;
     }
@@ -2521,14 +2521,14 @@ final class ProjectServingManifestStore
                     || \count($desiredRoutes)
                         !== (int)($payload['desired_route_count'] ?? -1)))
         ) {
-            throw new \RuntimeException('WLS serving manifest route envelope is invalid.');
+            throw new \RuntimeException('WLS serving manifest 路由信封无效。');
         }
         foreach ([
             'request_digest',
             'non_certificate_desired_digest',
         ] as $field) {
             if (\preg_match('/\A[a-f0-9]{64}\z/D', (string)($payload[$field] ?? '')) !== 1) {
-                throw new \RuntimeException('WLS serving manifest desired-state digest is invalid.');
+                throw new \RuntimeException('WLS serving manifest 期望状态摘要无效。');
             }
         }
         if (\preg_match(
@@ -2545,7 +2545,7 @@ final class ProjectServingManifestStore
             || (int)($payload['project_generation'] ?? 0) < 1
             || !$this->samePath((string)($payload['project_root'] ?? ''), $this->projectRoot)
         ) {
-            throw new \RuntimeException('WLS serving manifest launch fence is invalid.');
+            throw new \RuntimeException('WLS serving manifest 启动栅栏无效。');
         }
         $desiredFacts = [];
         if ($requireLifecycleFacts) {
@@ -2709,7 +2709,7 @@ final class ProjectServingManifestStore
         $previousRouteId = '';
         foreach ($routes as $route) {
             if (!\is_array($route)) {
-                throw new \RuntimeException('WLS serving manifest route is malformed.');
+                throw new \RuntimeException('WLS serving manifest 路由格式错误。');
             }
             $routeId = (string)($route['route_id'] ?? '');
             $domain = self::normalizeHost((string)($route['domain'] ?? ''));
@@ -2793,7 +2793,7 @@ final class ProjectServingManifestStore
                 || (($policy['force_root_to_www'] ?? false) === false
                     && ($policy['root_to_www_target_ready'] ?? false) !== true)
             ) {
-                throw new \RuntimeException('WLS serving manifest route identity or policy is invalid.');
+                throw new \RuntimeException('WLS serving manifest 路由身份或策略无效。');
             }
             $certificateFact = \is_array($route['certificate'] ?? null)
                 ? $route['certificate']
@@ -2876,7 +2876,7 @@ final class ProjectServingManifestStore
         if (($payload['converged'] ?? false) === true
             && \count($routes) !== (int)$payload['desired_route_count']
         ) {
-            throw new \RuntimeException('Partial WLS serving manifest is incorrectly converged.');
+            throw new \RuntimeException('部分 WLS serving manifest 被错误标记为已收敛。');
         }
     }
 
@@ -3161,7 +3161,11 @@ final class ProjectServingManifestStore
     private function assertManifestStoreCapacity(int $prospectiveBytes): void
     {
         if ($prospectiveBytes < 1 || $prospectiveBytes > self::MAX_MANIFEST_BYTES) {
-            throw new \RuntimeException('WLS serving manifest size is outside its quota.');
+            throw new \RuntimeException(
+                'WLS serving manifest 单文件大小超出配额（不是内存不足）：'
+                . '待写入=' . $prospectiveBytes
+                . ' 字节，单文件上限=' . self::MAX_MANIFEST_BYTES . ' 字节。'
+            );
         }
         $entries = $this->storedManifestInventory();
         $count = \count($entries);
@@ -3172,32 +3176,46 @@ final class ProjectServingManifestStore
             return;
         }
 
-        $collectable = $this->collectableManifestRetirementEntries(
-            $entries,
-            $this->referencedManifestPathKeys(),
-        );
+        // Capacity pressure: immediately clear every unreferenced generation.
+        // The 7-day retirement grace still applies to idle post-commit GC, but
+        // must not block publication/startup once the fixed disk quota is full.
+        $referenced = $this->referencedManifestPathKeys();
+        $victims = [];
+        foreach ($entries as $entry) {
+            if (!isset($referenced[$this->pathKey((string)$entry['path'])])) {
+                $victims[] = $entry;
+            }
+        }
+        \usort($victims, static function (array $left, array $right): int {
+            $order = (int)($left['generation'] ?? 0)
+                <=> (int)($right['generation'] ?? 0);
+            return $order !== 0
+                ? $order
+                : ((string)($left['path'] ?? '') <=> (string)($right['path'] ?? ''));
+        });
         $removedDigests = [];
-        foreach ($collectable as $entry) {
+        foreach ($victims as $entry) {
             GatewayProjectStateFilesystem::removeRegular(
                 (string)$entry['path'],
-                'expired unreferenced WLS serving manifest',
+                '容量压力下未引用的 WLS serving manifest',
             );
             $removedDigests[] = (string)$entry['digest'];
             --$count;
             $bytes -= (int)$entry['size'];
-            if ($count < self::MAX_STORED_MANIFESTS
-                && $bytes + $prospectiveBytes
-                    <= self::MAX_STORED_MANIFEST_BYTES
-            ) {
-                break;
-            }
         }
         $this->forgetManifestRetirementDigests($removedDigests);
         if ($count >= self::MAX_STORED_MANIFESTS
             || $bytes + $prospectiveBytes > self::MAX_STORED_MANIFEST_BYTES
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest store has no capacity for another generation.',
+                'WLS serving manifest 磁盘代际库已满，无法再发布新代际'
+                . '（这是磁盘文件数/字节配额，不是内存不足）。'
+                . ' 路径=' . $this->manifestRoot
+                . '；当前文件数=' . $count . '/' . self::MAX_STORED_MANIFESTS
+                . '；已占用字节=' . $bytes . '/' . self::MAX_STORED_MANIFEST_BYTES
+                . '；仍被 current/authority/LKG 引用=' . \count($referenced)
+                . '。请先退役无用实例引用后重试：'
+                . 'php bin/w server:start -clean -f'
             );
         }
     }
@@ -3209,7 +3227,7 @@ final class ProjectServingManifestStore
     {
         $handle = @\opendir($this->manifestRoot);
         if (!\is_resource($handle)) {
-            throw new \RuntimeException('Unable to enumerate the WLS serving manifest store.');
+            throw new \RuntimeException('无法枚举 WLS serving manifest 存储。');
         }
         $rawCount = 0;
         $manifestCount = 0;
@@ -3223,7 +3241,7 @@ final class ProjectServingManifestStore
                 }
                 if (++$rawCount > self::MAX_RAW_MANIFEST_DIRECTORY_ENTRIES) {
                     throw new \RuntimeException(
-                        'WLS serving manifest store exceeds its fixed raw entry limit.',
+                        'WLS serving manifest 存储超出固定原始条目上限。',
                     );
                 }
                 $path = $this->manifestRoot . DIRECTORY_SEPARATOR . $leaf;
@@ -3240,7 +3258,7 @@ final class ProjectServingManifestStore
                         >= self::MAX_ORPHANED_MANIFEST_CANDIDATES
                     ) {
                         throw new \RuntimeException(
-                            'WLS serving manifest store contains too many orphaned candidates.',
+                            'WLS serving manifest 存储中的孤儿候选过多。',
                         );
                     }
                     $status = @\lstat($path);
@@ -3250,7 +3268,7 @@ final class ProjectServingManifestStore
                         || (int)$status['nlink'] !== 1
                     ) {
                         throw new \RuntimeException(
-                            'WLS serving manifest store contains an unsafe orphaned candidate.',
+                            'WLS serving manifest 存储含有不安全的孤儿候选。',
                         );
                     }
                     $orphanedCandidates[] = [
@@ -3268,7 +3286,7 @@ final class ProjectServingManifestStore
                     || isset($digests[(string)($matches[2] ?? '')])
                 ) {
                     throw new \RuntimeException(
-                        'WLS serving manifest store entry quota or identity is invalid.',
+                        'WLS serving manifest 存储条目配额或身份无效。',
                     );
                 }
                 $status = @\lstat($path);
@@ -3285,7 +3303,7 @@ final class ProjectServingManifestStore
                                     !== $this->projectOwner)))
                 ) {
                     throw new \RuntimeException(
-                        'WLS serving manifest store contains an unsafe entry.',
+                        'WLS serving manifest 存储含有不安全条目。',
                     );
                 }
                 $digest = (string)$matches[2];
@@ -3304,7 +3322,7 @@ final class ProjectServingManifestStore
         foreach ($orphanedCandidates as $candidate) {
             GatewayProjectStateFilesystem::removeRegular(
                 (string)$candidate['path'],
-                'orphaned WLS serving manifest candidate',
+                '孤儿 WLS serving manifest 候选',
                 (array)$candidate['identity'],
             );
         }
@@ -3325,7 +3343,7 @@ final class ProjectServingManifestStore
         $this->ensureStoreDirectories();
         if (\count($entries) > self::MAX_STORED_MANIFESTS) {
             throw new \RuntimeException(
-                'WLS serving manifest retirement inventory exceeds its bound.',
+                'WLS serving manifest 退役清单超出边界。',
             );
         }
         $inventory = [];
@@ -3346,7 +3364,7 @@ final class ProjectServingManifestStore
                 || (int)$entry['size'] > self::MAX_MANIFEST_BYTES
             ) {
                 throw new \RuntimeException(
-                    'WLS serving manifest retirement inventory is malformed.',
+                    'WLS serving manifest 退役清单格式错误。',
                 );
             }
             $inventory[$digest] = $entry;
@@ -3420,7 +3438,7 @@ final class ProjectServingManifestStore
             : GatewayHostBootIdentity::current();
         if (!\is_int($wall) || $wall < 1 || !\is_string($bootIdentity)) {
             throw new \RuntimeException(
-                'WLS serving manifest retirement clock is invalid.',
+                'WLS serving manifest 退役时钟无效。',
             );
         }
         return [
@@ -3517,20 +3535,20 @@ final class ProjectServingManifestStore
         if (!\is_array($status)) {
             if (\file_exists($path) || \is_link($path)) {
                 throw new \RuntimeException(
-                    'WLS serving manifest retirement state path is unsafe.',
+                    'WLS serving manifest 退役状态路径不安全。',
                 );
             }
             return $empty;
         }
         $this->assertPrivateStateFile(
             $path,
-            'WLS serving manifest retirement state',
+            'WLS serving manifest 退役状态',
         );
         try {
             $encoded = GatewayProjectStateFilesystem::read(
                 $path,
                 self::MAX_RETIREMENT_STATE_BYTES,
-                'WLS serving manifest retirement state',
+                'WLS serving manifest 退役状态',
             );
             $envelope = \json_decode($encoded, true, 32, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
@@ -3612,7 +3630,7 @@ final class ProjectServingManifestStore
     ): void {
         if (\count($markers) > self::MAX_STORED_MANIFESTS) {
             throw new \RuntimeException(
-                'WLS serving manifest retirement marker set exceeds its bound.',
+                'WLS serving manifest 退役标记集合超出边界。',
             );
         }
         $payload = [
@@ -3639,7 +3657,7 @@ final class ProjectServingManifestStore
         ) . "\n";
         if (\strlen($encoded) > self::MAX_RETIREMENT_STATE_BYTES) {
             throw new \RuntimeException(
-                'WLS serving manifest retirement state exceeds its bound.',
+                'WLS serving manifest 退役状态超出边界。',
             );
         }
         $this->atomicWrite($this->manifestRetirementStateFile(), $encoded, 0600);
@@ -3692,14 +3710,14 @@ final class ProjectServingManifestStore
         if (!\is_array($status)) {
             if (\file_exists($path) || \is_link($path)) {
                 throw new \RuntimeException(
-                    'WLS serving manifest retirement state path is unsafe.',
+                    'WLS serving manifest 退役状态路径不安全。',
                 );
             }
             return;
         }
         GatewayProjectStateFilesystem::removeRegular(
             $path,
-            'WLS serving manifest retirement state',
+            'WLS serving manifest 退役状态',
         );
         GatewayProjectStateFilesystem::syncDirectory(\dirname($path));
     }
@@ -3721,7 +3739,7 @@ final class ProjectServingManifestStore
         $handle = @\opendir($this->storeRoot);
         if (!\is_resource($handle)) {
             throw new \RuntimeException(
-                'Unable to enumerate WLS serving manifest references.',
+                '无法枚举 WLS serving manifest 引用。',
             );
         }
         $referenced = [];
@@ -3733,7 +3751,7 @@ final class ProjectServingManifestStore
                 }
                 if (++$rawEntries > self::MAX_STORE_ROOT_ENTRIES) {
                     throw new \RuntimeException(
-                        'WLS serving manifest reference store exceeds its bound.',
+                        'WLS serving manifest 引用存储超出边界。',
                     );
                 }
                 $path = $this->storeRoot . DIRECTORY_SEPARATOR . $leaf;
@@ -3763,7 +3781,7 @@ final class ProjectServingManifestStore
                     || \str_ends_with($leaf, '.json')
                 ) {
                     throw new \RuntimeException(
-                        'WLS serving manifest reference filename is corrupt.',
+                        'WLS serving manifest 引用文件名已损坏。',
                     );
                 } else {
                     continue;
@@ -3798,7 +3816,7 @@ final class ProjectServingManifestStore
             if (!\is_array($status)) {
                 if (\file_exists($referenceFile) || \is_link($referenceFile)) {
                     throw new \RuntimeException(
-                        'WLS serving manifest reference path is unsafe.',
+                        'WLS serving manifest 引用路径不安全。',
                     );
                 }
                 continue;
@@ -3876,7 +3894,7 @@ final class ProjectServingManifestStore
             )));
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1) {
                 throw new \RuntimeException(
-                    'WLS serving candidate certificate snapshot reference is corrupt.',
+                    'WLS serving 候选证书快照引用已损坏。',
                 );
             }
             $references[$digest] = true;
@@ -3983,15 +4001,15 @@ final class ProjectServingManifestStore
         $status = @\lstat($path);
         if (!\is_array($status)) {
             if (\file_exists($path) || \is_link($path) || !$missingAllowed) {
-                throw new \RuntimeException('WLS serving manifest LKG reference is unsafe.');
+                throw new \RuntimeException('WLS serving manifest LKG 引用不安全。');
             }
             return [];
         }
-        $this->assertPrivateStateFile($path, 'WLS serving manifest LKG reference');
+        $this->assertPrivateStateFile($path, 'WLS serving manifest LKG 引用');
         $encoded = GatewayProjectStateFilesystem::read(
             $path,
             32_768,
-            'WLS serving manifest LKG reference',
+            'WLS serving manifest LKG 引用',
         );
         $envelope = \json_decode($encoded, true);
         $unsigned = \is_array($envelope) ? $envelope : [];
@@ -4022,7 +4040,7 @@ final class ProjectServingManifestStore
                 \hash('sha256', GatewayClient::canonicalJson($unsigned)),
             )
         ) {
-            throw new \RuntimeException('WLS serving manifest LKG reference is corrupt.');
+            throw new \RuntimeException('WLS serving manifest LKG 引用已损坏。');
         }
         $validated = [];
         $seen = [];
@@ -4046,7 +4064,7 @@ final class ProjectServingManifestStore
                 )
                 || isset($seen[$key])
             ) {
-                throw new \RuntimeException('WLS serving manifest LKG reference is corrupt.');
+                throw new \RuntimeException('WLS serving manifest LKG 引用已损坏。');
             }
             $seen[$key] = true;
             $validated[] = [
@@ -4060,11 +4078,11 @@ final class ProjectServingManifestStore
 
     private function readPointerReference(string $path): string
     {
-        $this->assertPrivateStateFile($path, 'WLS serving manifest pointer');
+        $this->assertPrivateStateFile($path, 'WLS serving manifest 指针');
         $encoded = GatewayProjectStateFilesystem::read(
             $path,
             16_384,
-            'WLS serving manifest pointer',
+            'WLS serving manifest 指针',
         );
         $pointer = \json_decode($encoded, true);
         $unsigned = \is_array($pointer) ? $pointer : [];
@@ -4097,11 +4115,11 @@ final class ProjectServingManifestStore
 
     private function readAuthorityReference(string $path): string
     {
-        $this->assertPrivateStateFile($path, 'WLS serving manifest authority');
+        $this->assertPrivateStateFile($path, 'WLS serving manifest 权威记录');
         $encoded = GatewayProjectStateFilesystem::read(
             $path,
             16_384,
-            'WLS serving manifest authority',
+            'WLS serving manifest 权威记录',
         );
         $authority = \json_decode($encoded, true);
         $unsigned = \is_array($authority) ? $authority : [];
@@ -4115,7 +4133,7 @@ final class ProjectServingManifestStore
             )
         ) {
             throw new \RuntimeException(
-                'WLS serving manifest authority reference is corrupt.',
+                'WLS serving manifest 权威记录 reference is corrupt.',
             );
         }
         $this->assertPublicationAuthority($unsigned);
@@ -4129,7 +4147,7 @@ final class ProjectServingManifestStore
             (string)$unsigned['manifest_digest'],
         )) {
             throw new \RuntimeException(
-                'WLS serving manifest authority references a missing generation.',
+                'WLS serving manifest 权威记录 references a missing generation.',
             );
         }
         return $reference;
@@ -4160,7 +4178,7 @@ final class ProjectServingManifestStore
     private function stableFileRead(string $path, bool $private): array
     {
         if ($path === '' || \str_contains($path, "\0") || \is_link($path)) {
-            throw new \RuntimeException('WLS serving material path is unsafe.');
+            throw new \RuntimeException('WLS serving 材料路径不安全。');
         }
         $real = \realpath($path);
         if (!\is_string($real)
@@ -4168,12 +4186,12 @@ final class ProjectServingManifestStore
             || !$this->pathInside($real, $this->projectRoot)
             || \is_link($real)
         ) {
-            throw new \RuntimeException('WLS serving material escaped the project.');
+            throw new \RuntimeException('WLS serving 材料路径逃逸出项目根。');
         }
         $before = @\lstat($real);
         $handle = @\fopen($real, 'rb');
         if (!\is_array($before) || !\is_resource($handle)) {
-            throw new \RuntimeException('Unable to open WLS serving material safely.');
+            throw new \RuntimeException('无法安全打开 WLS serving 材料。');
         }
         try {
             $opened = @\fstat($handle);
@@ -4201,14 +4219,14 @@ final class ProjectServingManifestStore
                 && $this->projectOwner >= 0
                 && (int)($opened['uid'] ?? -1) !== $this->projectOwner)
         ) {
-            throw new \RuntimeException('WLS serving material type, size, owner or mode is invalid.');
+            throw new \RuntimeException('WLS serving 材料的类型、大小、所有者或权限无效。');
         }
         foreach (['dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'size', 'mtime', 'ctime'] as $field) {
             if ((int)($before[$field] ?? -1) !== (int)($opened[$field] ?? -2)
                 || (int)($opened[$field] ?? -1) !== (int)($after[$field] ?? -2)
                 || (int)($after[$field] ?? -1) !== (int)($latest[$field] ?? -2)
             ) {
-                throw new \RuntimeException('WLS serving material changed while being read.');
+                throw new \RuntimeException('读取过程中 WLS serving 材料发生变化。');
             }
         }
         return [
@@ -4246,7 +4264,7 @@ final class ProjectServingManifestStore
         string $privateKeyPath,
     ): array {
         if (\preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1) {
-            throw new \RuntimeException('WLS serving certificate snapshot digest is invalid.');
+            throw new \RuntimeException('WLS serving 证书快照摘要无效。');
         }
         $directory = $this->projectRoot . DIRECTORY_SEPARATOR . 'app'
             . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl'
@@ -4275,7 +4293,7 @@ final class ProjectServingManifestStore
                     || ($this->projectOwner >= 0
                         && (int)($directoryStatus['uid'] ?? -1) !== $this->projectOwner)))
         ) {
-            throw new \RuntimeException('WLS serving certificate snapshot directory is unsafe.');
+            throw new \RuntimeException('WLS serving 证书快照目录不安全。');
         }
         $certificate = $this->stableFileRead($expectedCertificate, false);
         $privateKey = $this->stableFileRead($expectedPrivateKey, true);
@@ -4312,7 +4330,7 @@ final class ProjectServingManifestStore
             )
         ) {
             throw new \RuntimeException(
-                'WLS serving certificate snapshot manifest integrity failed.',
+                'WLS serving 证书快照清单完整性校验失败。',
             );
         }
         $leafFingerprint = \strtolower(\trim((string)(
@@ -4320,7 +4338,7 @@ final class ProjectServingManifestStore
         )));
         if (\preg_match('/\A[a-f0-9]{64}\z/D', $leafFingerprint) !== 1) {
             throw new \RuntimeException(
-                'WLS serving certificate snapshot leaf fingerprint is invalid.',
+                'WLS serving 证书快照叶子指纹无效。',
             );
         }
         $chainHash = \strtolower(\trim((string)($payload['chain_sha256'] ?? '')));
@@ -4329,13 +4347,13 @@ final class ProjectServingManifestStore
         if ($chainHash !== '') {
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $chainHash) !== 1) {
                 throw new \RuntimeException(
-                    'WLS serving certificate snapshot chain digest is invalid.',
+                    'WLS serving 证书快照链摘要无效。',
                 );
             }
             $chainRead = $this->stableFileRead($chainPath, false);
             if (!\hash_equals($chainHash, (string)$chainRead['fact']['sha256'])) {
                 throw new \RuntimeException(
-                    'WLS serving certificate snapshot chain integrity failed.',
+                    'WLS serving 证书快照链完整性校验失败。',
                 );
             }
             $chain = $chainRead['fact'];
@@ -4344,7 +4362,7 @@ final class ProjectServingManifestStore
             || \is_link($chainPath)
         ) {
             throw new \RuntimeException(
-                'WLS serving certificate snapshot has an unbound chain file.',
+                'WLS serving 证书快照存在未绑定的链文件。',
             );
         }
         return [
@@ -4363,7 +4381,7 @@ final class ProjectServingManifestStore
             (string)($payload['instance_id'] ?? ''),
             (string)($fence['instance_id'] ?? ''),
         )) {
-            throw new \RuntimeException('WLS serving manifest launch identity is stale.');
+            throw new \RuntimeException('WLS serving manifest 启动身份已过期。');
         }
         // Project endpoint observers know the stable instance launch ID and
         // must verify it. Worker --launch-id is a different per-child IPC
@@ -4375,11 +4393,11 @@ final class ProjectServingManifestStore
                 (string)$fence['launch_id'],
             )
         ) {
-            throw new \RuntimeException('WLS serving manifest instance launch is stale.');
+            throw new \RuntimeException('WLS serving manifest 实例启动已过期。');
         }
         foreach (['instance_generation', 'master_pid', 'master_epoch'] as $field) {
             if ((int)($payload[$field] ?? 0) !== (int)($fence[$field] ?? -1)) {
-                throw new \RuntimeException('WLS serving manifest Master fence is stale.');
+                throw new \RuntimeException('WLS serving manifest Master 栅栏已过期。');
             }
         }
     }
@@ -4387,13 +4405,13 @@ final class ProjectServingManifestStore
     private function resolveProjectCertificateReference(array $reference): string
     {
         if (!\hash_equals('project_ssl', (string)($reference['root_alias'] ?? ''))) {
-            throw new \RuntimeException('Serving manifest requires project-owned certificate snapshots.');
+            throw new \RuntimeException('serving manifest 需要项目自有的证书快照。');
         }
         $relative = \str_replace('\\', '/', \trim((string)(
             $reference['relative_path'] ?? ''
         )));
         if ($relative === '' || \strlen($relative) > 4096 || \str_starts_with($relative, '/')) {
-            throw new \RuntimeException('Serving manifest certificate reference is invalid.');
+            throw new \RuntimeException('serving manifest 证书引用无效。');
         }
         $candidate = $this->projectRoot . DIRECTORY_SEPARATOR . 'app'
             . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl';
@@ -4404,16 +4422,16 @@ final class ProjectServingManifestStore
                 || \strlen($segment) > 255
                 || \str_contains($segment, "\0")
             ) {
-                throw new \RuntimeException('Serving manifest certificate reference is unsafe.');
+                throw new \RuntimeException('serving manifest 证书引用不安全。');
             }
             $candidate .= DIRECTORY_SEPARATOR . $segment;
             if (\is_link($candidate)) {
-                throw new \RuntimeException('Serving manifest certificate reference crosses a link.');
+                throw new \RuntimeException('serving manifest 证书引用穿越了符号链接。');
             }
         }
         $real = \realpath($candidate);
         if (!\is_string($real) || !$this->pathInside($real, $this->projectRoot)) {
-            throw new \RuntimeException('Serving manifest certificate reference is unavailable.');
+            throw new \RuntimeException('serving manifest 证书引用不可用。');
         }
         return $real;
     }
@@ -4426,7 +4444,7 @@ final class ProjectServingManifestStore
             $status = @\lstat($path);
             if (!\is_array($status)) {
                 if (\file_exists($path) || \is_link($path) || !@\mkdir($path, $index >= 2 ? 0700 : 0755)) {
-                    throw new \RuntimeException('Unable to create WLS serving manifest directory.');
+                    throw new \RuntimeException('无法创建 WLS serving manifest 目录。');
                 }
             }
             $status = @\lstat($path);
@@ -4441,7 +4459,7 @@ final class ProjectServingManifestStore
                     && (!@\chmod($path, 0700)
                         || (((int)(@\fileperms($path) ?: 0) & 0777) !== 0700)))
             ) {
-                throw new \RuntimeException('WLS serving manifest directory is unsafe.');
+                throw new \RuntimeException('WLS serving manifest 目录不安全。');
             }
             $current = \rtrim($real, '/\\');
             if ($index >= 2) {
@@ -4519,7 +4537,7 @@ final class ProjectServingManifestStore
     private function assertInstanceId(string $instanceId): void
     {
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceId) !== 1) {
-            throw new \InvalidArgumentException('WLS serving manifest instance ID is invalid.');
+            throw new \InvalidArgumentException('WLS serving manifest 实例 ID 无效。');
         }
     }
 
@@ -4535,7 +4553,7 @@ final class ProjectServingManifestStore
                     || ($this->projectOwner >= 0
                         && (int)($status['uid'] ?? -1) !== $this->projectOwner)))
         ) {
-            throw new \RuntimeException($label . ' owner, mode or identity is unsafe.');
+            throw new \RuntimeException($label . ' 的所有者、权限模式或身份不安全。');
         }
     }
 
@@ -4554,7 +4572,7 @@ final class ProjectServingManifestStore
             || !$this->pathInside($real, $this->storeRoot)
             || \is_link($path)
         ) {
-            throw new \RuntimeException('WLS serving manifest ownership target is unsafe.');
+            throw new \RuntimeException('WLS serving manifest 所有权目标不安全。');
         }
         $owner = \is_resource($handle) && \function_exists('fchown')
             ? @\fchown($handle, $this->projectOwner)
@@ -4573,7 +4591,7 @@ final class ProjectServingManifestStore
                 : @\chgrp($path, $this->projectGroup);
         }
         if (!$owner || !$group) {
-            throw new \RuntimeException('Unable to preserve WLS serving manifest ownership.');
+            throw new \RuntimeException('无法保留 WLS serving manifest 所有权。');
         }
     }
 

@@ -66,6 +66,7 @@ class Scanner
                 'identity' => $identity,
                 'tip' => $stats['tip'] ?? '',
                 'permanent' => $stats['permanent'] ?? false,
+                'enabled' => $stats['enabled'] ?? true,
                 'default_ttl' => $stats['default_ttl'] ?? 1800,
                 'hits' => $stats['hits'] ?? 0,
                 'misses' => $stats['misses'] ?? 0,

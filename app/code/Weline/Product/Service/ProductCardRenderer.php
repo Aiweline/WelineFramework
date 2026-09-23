@@ -74,7 +74,7 @@ final class ProductCardRenderer
         $html = (string)RequestLifecycleTrace::measurePhase(
             'product.card.render',
             static function () use ($offers, $flags): string {
-                $parts = [];
+                $products = [];
                 $index = 0;
                 foreach ($offers as $offer) {
                     if (!\is_array($offer)) {
@@ -90,9 +90,18 @@ final class ProductCardRenderer
                         ++$index;
                         continue;
                     }
-                    $product = self::bucketCardIndexForFragmentReuse($product);
-                    $parts[] = self::renderCachedBody($product, $flags);
+                    $products[] = self::bucketCardIndexForFragmentReuse($product);
                     ++$index;
+                }
+
+                // WO-BUYER-SHOW-05：列表卡批量回填真实评分；无评论保持 0 → 模板不显假星
+                if (!empty($flags['show_rating']) && $products !== []) {
+                    $products = self::hydrateReviewAggregates($products);
+                }
+
+                $parts = [];
+                foreach ($products as $product) {
+                    $parts[] = self::renderCachedBody($product, $flags);
                 }
 
                 return \implode('', $parts);
@@ -224,14 +233,11 @@ final class ProductCardRenderer
             if ($path === '') {
                 $product['url'] = '';
                 $product['url_path'] = '';
-            } elseif ($querySuffix !== '') {
-                $prefix = rtrim(Url::getPrefix(), '/');
-                $product['url'] = ($prefix !== '' ? $prefix : '') . '/' . ltrim($path, '/') . $querySuffix;
-                $product['url_path'] = '';
             } else {
+                // Keep route path for consumers; bake href with website mount + locale
+                // (Url::getPrefix alone omits /daocharms-style mounts and breaks cards).
                 $product['url_path'] = $path;
-                $prefix = rtrim(Url::getPrefix(), '/');
-                $product['url'] = ($prefix !== '' ? $prefix : '') . '/' . ltrim($path, '/');
+                $product['url'] = self::buildStorefrontCardHref($path, $querySuffix);
             }
         }
 
@@ -433,6 +439,65 @@ final class ProductCardRenderer
         ];
     }
 
+    /**
+     * Build a storefront card href that includes the website mount path
+     * (e.g. /daocharms) plus any non-default locale/currency prefix.
+     *
+     * Prefer Template::getUrl when a request is available; fall back to
+     * mount + Url::getPrefix so CLI/unit still produce site-rooted paths.
+     */
+    public static function buildStorefrontCardHref(string $path, string $querySuffix = ''): string
+    {
+        $path = ltrim(trim($path), '/');
+        if ($path === '') {
+            return '';
+        }
+
+        $queryParams = [];
+        if ($querySuffix !== '') {
+            parse_str(ltrim($querySuffix, '?'), $queryParams);
+            if (!\is_array($queryParams)) {
+                $queryParams = [];
+            }
+        }
+
+        try {
+            $href = (string)Template::getInstance()->getUrl($path, $queryParams);
+            if ($href !== '') {
+                return $href;
+            }
+        } catch (\Throwable) {
+            // Template / request unavailable (CLI, isolated unit) → static fallback.
+        }
+
+        $mount = '';
+        try {
+            $mount = trim(Url::resolveCurrentWebsiteMountPath(), '/');
+        } catch (\Throwable) {
+            $mount = '';
+        }
+        $locale = '';
+        try {
+            $locale = trim(Url::getPrefix(), '/');
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        $segments = [];
+        if ($mount !== '') {
+            $segments[] = $mount;
+        }
+        if ($locale !== '') {
+            $segments[] = $locale;
+        }
+        $segments[] = $path;
+        $href = '/' . implode('/', $segments);
+        if ($queryParams !== []) {
+            $href .= '?' . http_build_query($queryParams);
+        }
+
+        return $href;
+    }
+
     public static function toBool(mixed $value, bool $default): bool
     {
         if ($value === null || $value === '') {
@@ -519,5 +584,58 @@ final class ProductCardRenderer
             . 'data-weline-widget-asset="source" data-weline-source-position="head" '
             . 'data-weline-product-card-version="' . htmlspecialchars(self::CSS_VERSION, ENT_QUOTES, 'UTF-8') . '" '
             . 'href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . "\n" . $instanceStyles;
+    }
+
+    /**
+     * Fill rating/review_count from approved Review aggregates (optional soft dep).
+     *
+     * @param list<array<string, mixed>> $products
+     * @return list<array<string, mixed>>
+     */
+    private static function hydrateReviewAggregates(array $products): array
+    {
+        if ($products === [] || !interface_exists(\Weline\Review\Api\ReviewSeoFactsInterface::class)) {
+            return $products;
+        }
+
+        $uuids = [];
+        foreach ($products as $product) {
+            $uuid = trim((string)($product['global_offer_uuid'] ?? ''));
+            if ($uuid !== '') {
+                $uuids[$uuid] = true;
+            }
+        }
+        if ($uuids === []) {
+            return $products;
+        }
+
+        try {
+            $reviews = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Review\Api\ReviewSeoFactsInterface::class
+            );
+            if (!\is_object($reviews) || !method_exists($reviews, 'aggregatesForExternalUuids')) {
+                return $products;
+            }
+            /** @var array<string, array{review_count?:int, average_rating?:float}> $aggregates */
+            $aggregates = $reviews->aggregatesForExternalUuids('product', array_keys($uuids));
+        } catch (\Throwable) {
+            return $products;
+        }
+
+        foreach ($products as &$product) {
+            $uuid = trim((string)($product['global_offer_uuid'] ?? ''));
+            if ($uuid === '' || !isset($aggregates[$uuid]) || !\is_array($aggregates[$uuid])) {
+                $product['rating'] = 0.0;
+                $product['review_count'] = 0;
+                continue;
+            }
+            $count = max(0, (int)($aggregates[$uuid]['review_count'] ?? 0));
+            $rating = $count > 0 ? max(0.0, (float)($aggregates[$uuid]['average_rating'] ?? 0)) : 0.0;
+            $product['rating'] = $rating;
+            $product['review_count'] = $count;
+        }
+        unset($product);
+
+        return $products;
     }
 }

@@ -19,6 +19,7 @@
 - Product、Customer、Msg、Cron、Ai、Seo、Theme、Widget 均为可选依赖，缺失时核心评论能力不得形成硬依赖。
 - 向 Seo 只提交结构化评分事实；作者/标签名按当前请求语言翻译，不打包多语言全量。
 - 产品卡片架可通过 `aggregatesForExternalUuids` 批量读取已通过评论的评分与条数（与 SEO `seoFacts` 同源）。
+- 首页买家秀（Theme `image-gallery` `variant=looks`）可通过 `BuyerLooksGalleryInterface` 读取已通过含图评论媒体；买家秀是展示面，评论是生产与审核源。详见 [买家秀与评论](买家秀与评论.md)。
 - 前台默认样式跟随主题 CSS 变量，不内嵌行业定制皮肤。
 
 ## 文档

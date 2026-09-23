@@ -204,7 +204,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertFileExists($fence['key_path']);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('absent from the exact serving manifest');
+        $this->expectExceptionMessage('不在精确 serving manifest 中');
         ProjectServingManifestStore::activeCertificateFenceForDomain(
             $publication,
             'missing.example.test',
@@ -224,7 +224,7 @@ final class ProjectServingManifestStoreTest extends TestCase
 
         self::assertSame(0, $publication['route_count']);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('at least one ACTIVE serving route');
+        $this->expectExceptionMessage('至少需要一条 ACTIVE serving 路由');
         $store->activeTlsSelectionForFence(
             $this->fence('all-pending'),
             $publication['generation'],
@@ -252,7 +252,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertGreaterThan($first['generation'], $next['generation']);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage(
-            'serving manifest changed before listener activation',
+            '监听器激活前，网关回退 serving manifest 已变化',
         );
         $store->activeTlsSelectionForFence(
             $this->fence('racing-primary'),
@@ -369,7 +369,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertFalse($partial['converged']);
         self::assertSame(1, $partial['route_count']);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('cannot mark a partial route subset converged');
+        $this->expectExceptionMessage('不能把部分路由子集标记为已收敛');
         $store->publishFromRegistration(
             $registration,
             [(string)$first['route_id']],
@@ -386,7 +386,7 @@ final class ProjectServingManifestStoreTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage(
-            'route generations do not exactly cover the selected route set',
+            '未能精确覆盖已选路由集合',
         );
         (new ProjectServingManifestStore($this->root))->publishFromRegistration(
             $registration,
@@ -406,7 +406,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         $registration = $this->registration('primary', [$root, $target]);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('target is outside the exact serving subset');
+        $this->expectExceptionMessage('不在精确 serving 子集内');
         (new ProjectServingManifestStore($this->root))->publishFromRegistration(
             $registration,
             [(string)$root['route_id']],
@@ -432,7 +432,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             $store->publishFromRegistration($registration);
             self::fail('Mutated material must be rejected.');
         } catch (\RuntimeException $exception) {
-            self::assertStringContainsString('snapshot integrity', $exception->getMessage());
+            self::assertStringContainsString('活动证书快照完整性校验失败', $exception->getMessage());
         }
         $pointerAfter = \json_decode((string)\file_get_contents($pointerPath), true);
         self::assertIsArray($pointerBefore);
@@ -545,7 +545,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             self::fail('Another Master launch must not authorize superseded cleanup.');
         } catch (\RuntimeException $exception) {
             self::assertStringContainsString(
-                'another inactive endpoint generation',
+                '属于另一个未活动端点代际',
                 $exception->getMessage(),
             );
         }
@@ -656,7 +656,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             self::fail('A referenced corrupt historical manifest must fail closed.');
         } catch (\RuntimeException $exception) {
             self::assertStringContainsString(
-                'envelope integrity failed',
+                '信封完整性校验失败',
                 $exception->getMessage(),
             );
         }
@@ -670,7 +670,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             self::fail('A mismatched endpoint serving proof must not retire references.');
         } catch (\RuntimeException $exception) {
             self::assertStringContainsString(
-                'does not match the selected inactive endpoint',
+                '与所选未活动端点不匹配',
                 $exception->getMessage(),
             );
         }
@@ -769,7 +769,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             $store->publishFromRegistration($registration);
             self::fail('A damaged paired target must fail the complete recovery closure.');
         } catch (\RuntimeException $exception) {
-            self::assertStringContainsString('LKG reference is corrupt', $exception->getMessage());
+            self::assertStringContainsString('LKG 引用已损坏', $exception->getMessage());
         }
         self::assertFileExists($pointerBackup);
         self::assertFileExists($lkgBackup);
@@ -778,7 +778,7 @@ final class ProjectServingManifestStoreTest extends TestCase
     public function testServingManifestStoreRejectsFilesystemProjectRoot(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('project root is unavailable');
+        $this->expectExceptionMessage('项目根路径不可用');
         new ProjectServingManifestStore($this->filesystemRoot());
     }
 
@@ -844,7 +844,7 @@ final class ProjectServingManifestStoreTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage(
-            'does not match the active project certificate provenance authority',
+            '项目证书 provenance 权威不匹配',
         );
         (new ProjectServingManifestStore($this->root))->publishFromRegistration(
             $this->registration('primary', [$route]),
@@ -882,7 +882,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         );
     }
 
-    public function testManifestStoreFailsClosedAtItsGenerationCountQuota(): void
+    public function testManifestStoreReclaimsUnreferencedUnderCapacityPressure(): void
     {
         $store = new ProjectServingManifestStore($this->root);
         $manifestRoot = \dirname($store->currentPointerPath('primary'))
@@ -897,11 +897,21 @@ final class ProjectServingManifestStoreTest extends TestCase
             }
         }
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('no capacity for another generation');
-        $store->publishFromRegistration($this->registration('primary', [
+        $published = $store->publishFromRegistration($this->registration('primary', [
             $this->route('quota.example.test'),
         ]));
+
+        self::assertSame(1, $published['generation']);
+        self::assertFileExists($published['path']);
+        // Capacity pressure clears every unreferenced generation, then writes one.
+        self::assertSame(
+            1,
+            \count(\glob($manifestRoot . DIRECTORY_SEPARATOR . '*.json') ?: []),
+        );
+        self::assertFileDoesNotExist(
+            $manifestRoot . DIRECTORY_SEPARATOR . '1-'
+                . \hash('sha256', 'quota-1') . '.json',
+        );
     }
 
     public function testCrashOrphanedImmutableManifestCandidateIsRecovered(): void
@@ -927,7 +937,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertFileDoesNotExist($orphan);
     }
 
-    public function testManifestStoreGraceStartsWhenAnOldGenerationBecomesUnreferenced(): void
+    public function testManifestStoreCapacityPressureClearsUnreferencedWithoutWaitingGrace(): void
     {
         $wall = 1_900_000_000;
         $monotonic = 50_000.0;
@@ -958,22 +968,6 @@ final class ProjectServingManifestStoreTest extends TestCase
             }
         }
 
-        try {
-            $store->publishFromRegistration($this->registration('primary', [
-                $this->route('reclaimed-quota.example.test'),
-            ]));
-            self::fail('Ancient file metadata must not shorten the retirement grace.');
-        } catch (\RuntimeException $exception) {
-            self::assertStringContainsString(
-                'no capacity for another generation',
-                $exception->getMessage(),
-            );
-        }
-        self::assertCount(128, \glob($manifestRoot . DIRECTORY_SEPARATOR . '*.json') ?: []);
-
-        $wall += 604_800;
-        $monotonic += 604_800.0;
-
         $published = $store->publishFromRegistration($this->registration('primary', [
             $this->route('reclaimed-quota.example.test'),
         ]));
@@ -981,6 +975,14 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertSame(1, $published['generation']);
         self::assertSame(1, $published['route_count']);
         self::assertFileExists($published['path']);
+        self::assertFileDoesNotExist(
+            $manifestRoot . DIRECTORY_SEPARATOR . '1-'
+                . \hash('sha256', 'expired-quota-1') . '.json',
+        );
+        self::assertSame(
+            1,
+            \count(\glob($manifestRoot . DIRECTORY_SEPARATOR . '*.json') ?: []),
+        );
     }
 
     public function testManifestRetirementStateDamageRebootAndFutureClockRestartGrace(): void
@@ -1101,16 +1103,16 @@ final class ProjectServingManifestStoreTest extends TestCase
         $first = $store->publishFromRegistration($registration);
 
         $rejected = [
-            [[...$registration, 'instance_generation' => 10], 'stale instance generation'],
-            [[...$registration, 'master_pid' => 12346], 'another or stale Master launch'],
-            [[...$registration, 'master_epoch' => 21], 'another or stale Master launch'],
+            [[...$registration, 'instance_generation' => 10], '过期的实例代际'],
+            [[...$registration, 'master_pid' => 12346], '另一个或已过期的 Master 启动'],
+            [[...$registration, 'master_epoch' => 21], '另一个或已过期的 Master 启动'],
             [[...$registration, 'launch_id' => \str_repeat('f', 32)],
-                'another or stale Master launch'],
-            [[...$registration, 'project_generation' => 4], 'stale project generation'],
+                '另一个或已过期的 Master 启动'],
+            [[...$registration, 'project_generation' => 4], '过期的项目代际'],
             [[...$registration, 'request_digest' => \str_repeat('d', 64)],
-                'conflicting desired-state digests'],
+                '冲突的期望状态摘要'],
             [[...$registration, 'non_certificate_desired_digest' => \str_repeat('e', 64)],
-                'conflicting desired-state digests'],
+                '冲突的期望状态摘要'],
         ];
         foreach ($rejected as [$candidate, $message]) {
             try {
@@ -1138,7 +1140,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             $store->publishFromRegistration($registration);
             self::fail('The retired launch reacquired current serving authority.');
         } catch (\RuntimeException $exception) {
-            self::assertStringContainsString('stale instance generation', $exception->getMessage());
+            self::assertStringContainsString('过期的实例代际', $exception->getMessage());
         }
         self::assertSame($next['digest'], $store->current('primary')['digest']);
     }
@@ -1166,7 +1168,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             self::fail('A retired launch must not reacquire a deleted current pointer.');
         } catch (\RuntimeException $exception) {
             self::assertStringContainsString(
-                'stale instance generation',
+                '过期的实例代际',
                 $exception->getMessage(),
             );
         }

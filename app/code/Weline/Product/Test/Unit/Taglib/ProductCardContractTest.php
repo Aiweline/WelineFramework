@@ -55,6 +55,53 @@ final class ProductCardContractTest extends TestCase
         self::assertSame('今日精选', $product['campaign_label']);
     }
 
+    public function testCardHrefIncludesWebsiteMountPathAndOfferQuery(): void
+    {
+        $renderer = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ProductCardRenderer.php'
+        );
+        $partial = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/partials/product-card.phtml'
+        );
+        self::assertStringContainsString('buildStorefrontCardHref', $renderer);
+        self::assertStringContainsString('resolveCurrentWebsiteMountPath', $renderer);
+        self::assertStringContainsString('self::buildStorefrontCardHref($path, $querySuffix)', $renderer);
+        self::assertStringNotContainsString('href="@url{', $partial);
+        self::assertStringContainsString('buildStorefrontCardHref', $partial);
+
+        $prevServer = $_SERVER['WELINE_WEBSITE_URL'] ?? null;
+        $_SERVER['WELINE_WEBSITE_URL'] = 'https://shop.test:9555/daocharms';
+        try {
+            if (class_exists(\Weline\Framework\Env\WelineEnv::class)
+                && method_exists(\Weline\Framework\Env\WelineEnv::class, 'set')
+            ) {
+                \Weline\Framework\Env\WelineEnv::set(
+                    'website_url',
+                    'https://shop.test:9555/daocharms',
+                    'product-card-url-unit'
+                );
+            }
+
+            $href = ProductCardRenderer::buildStorefrontCardHref(
+                'product/obsidian-yinyang-pendant',
+                '?offer=c044a0cb-b63b-59e7-a9c4-b26639a2aeb6'
+            );
+            self::assertStringContainsString('/daocharms/product/obsidian-yinyang-pendant', $href);
+            self::assertStringContainsString('offer=c044a0cb-b63b-59e7-a9c4-b26639a2aeb6', $href);
+        } finally {
+            if ($prevServer === null) {
+                unset($_SERVER['WELINE_WEBSITE_URL']);
+            } else {
+                $_SERVER['WELINE_WEBSITE_URL'] = $prevServer;
+            }
+            if (class_exists(\Weline\Framework\Env\WelineEnv::class)
+                && method_exists(\Weline\Framework\Env\WelineEnv::class, 'set')
+            ) {
+                \Weline\Framework\Env\WelineEnv::set('website_url', '', 'product-card-url-unit-cleanup');
+            }
+        }
+    }
+
     public function testZeroUnitPriceBecomesQuoteOnlyNotSellable(): void
     {
         $product = ProductCardRenderer::fromStorefrontOffer([

@@ -426,11 +426,16 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             // 但保留属性中指定的父级权限，可能在后续批量保存时父级权限会被保存
         }
         
-        // 优先使用控制器级别的acl资源作为子方法的父级资源
+        // 优先使用控制器级别的acl资源作为子方法的父级资源。
+        // 防御：DB 中 method='' 的方法级脏数据会被 findClassLevelParent 误当成类级，
+        // 导致 loaded 映射等于当前 source_id，进而 parent===source。
         $parent_acl_source = $this->loaded_controller_acl_names[$module][$className] ?? '';
-        if (!empty($parent_acl_source)) {
+        if (!empty($parent_acl_source) && $parent_acl_source !== $acl->getSourceId()) {
             $acl->setParentSource($parent_acl_source);
             return;
+        }
+        if ($parent_acl_source === $acl->getSourceId()) {
+            unset($this->loaded_controller_acl_names[$module][$className]);
         }
         
         // 如果控制器没有类级别的权限，尝试通过权限ID模式推断父级权限
@@ -1148,8 +1153,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             }
             
             return '';
-        } catch (\Exception $e) {
-            // 如果查询出错，返回空字符串
+        } catch (\Throwable $e) {
+            // 如果查询出错（含 mock/无查询链），返回空字符串
             return '';
         }
     }

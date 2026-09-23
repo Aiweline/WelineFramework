@@ -35,21 +35,27 @@ search,search
 加入购物车失败,"Failed to add to cart"
 已加入,"Added to cart"
 前往购物车,"Go to Cart"
-正在加载购物车...,"Loading cart..."
+迷你购物车,"Mini cart"
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,"Line items are rendered from live cart data; edit only the footer extras area here."
+小计,Subtotal
+税费与运费将在结算时计算,"Tax and shipping calculated at checkout"
+去结算,"Proceed to checkout"
+查看购物车,"Go to Cart"
 购物车是空的,"Your cart is empty"
+您的购物车是空的,"Your cart is empty"
+继续购物,"Continue shopping"
+正在加载购物车...,"Loading cart..."
 浏览商品，把喜欢的加入购物车吧。,"Browse products and add your favorites to the cart."
 购物车加载失败，请重试。,"Failed to load cart. Please try again."
 商品,Product
 价格,Price
 数量,Quantity
-小计,Subtotal
 更新,Update
 删除,Delete
 减少数量,"Decrease quantity"
 增加数量,"Increase quantity"
 购物车更新失败，请重试。,"Failed to update cart. Please try again."
 无法创建游客购物车会话,"Unable to create a guest cart session"
-税费与运费将在结算时计算,"Tax and shipping calculated at checkout"
 "小计（%1 件商品）","Subtotal (%1 items)"
 单价,"Unit price"
 "浏览%1 %2件商品","Browse %1 · %2 items"
@@ -66,14 +72,8 @@ search,search
 购物车订单留言,"Cart order note"
 购物车批发信用,"Cart wholesale credit"
 商品小计,"Items subtotal"
-去结算,"Proceed to checkout"
 购物车帮我付,"Cart pay-for-me"
-继续购物,"Continue shopping"
 当前货币暂不可用,"This currency is temporarily unavailable"
-迷你购物车,"Mini cart"
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,"Line items are rendered from live cart data; edit only the footer extras area here."
-查看购物车,"Go to Cart"
-您的购物车是空的,"Your cart is empty"
 "Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。","Inspection queries real persistence by scope_key and/or guest_token (full or last 4+ chars); compare storefront Cookie weline_cart_guest_token."
 "完整 scope key（可选）","Full scope key (optional)"
 "guest_token 完整或末 4+ 位","guest_token full value or last 4+ characters"

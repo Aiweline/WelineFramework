@@ -27,6 +27,10 @@ final class WebsiteAccountEnablementThemeContractTest extends TestCase
         self::assertStringContainsString('w-card seo-widget-shell', $templateSrc);
         self::assertStringContainsString('w-empty seo-empty', $templateSrc);
         self::assertStringContainsString('w-badge seo-chip', $templateSrc);
+        // Fiber capture: do not wrap shared body with split <w:form>…endif…</w:form>
+        self::assertStringNotContainsString('<w:form', $templateSrc);
+        self::assertStringContainsString('<form class="seo-widget-form"', $templateSrc);
+        self::assertStringNotContainsString('</w:form>', $templateSrc);
         self::assertStringNotContainsString('<style>', $templateSrc);
         self::assertStringNotContainsString('ms-2', $templateSrc);
         self::assertStringNotContainsString('--seo-widget-bg: #fff', $templateSrc);

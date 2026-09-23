@@ -1046,21 +1046,16 @@ DEMO,DEMO
 热销,Hot
 包邮,"Free shipping"
 NEW,NEW
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 加入收藏,"Add to Favorites"
 加入对比,"Add to Compare"
 快速查看,"Quick View"
+面包屑,"bread crumbs"
 分类,Classification
-汉服分类展示图,"Hanfu category showcase image"
+分类展示图,"Category showcase image"
 查看全部,"View all"
 搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
 商品,Products
 查看规格图,"View spec images"
 减少数量,"Decrease quantity"
@@ -1083,26 +1078,6 @@ NEW,NEW
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
-登录品牌文案,"Sign-in brand copy"
-注册品牌文案,"Registration brand copy"
-合作品牌,"Partner brands"
-"织艺谱系 · Textile Heritage","Textile Heritage"
-上一组,"Previous group"
-下一组,"Next group"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-展开社交媒体,"Expand social media"
-收起社交媒体,"Collapse social media"
-官方社交媒体,"Official social media"
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-面包屑,"bread crumbs"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1214,6 +1189,8 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1224,6 +1201,7 @@ Weline,Weline
 欢迎回来,"Welcome back"
 登录后继续浏览优惠与订单,"Continue browsing deals and orders after signing in"
 "安全登录 · 订单与优惠同步","Secure sign-in · Orders and offers stay in sync"
+登录品牌文案,"Sign-in brand copy"
 "Weline Account","Weline Account"
 安全验证,"Security verification"
 完成两步验证后继续购物与订单,"Complete two-factor verification to continue shopping and orders"
@@ -1232,6 +1210,7 @@ Weline,Weline
 加入我们,"Join Us"
 创建账户，同步订单与优惠,"Create an account to sync orders and offers"
 "安全注册 · 隐私受保护","Secure registration · Privacy protected"
+注册品牌文案,"Registration brand copy"
 商品分类,"Product classification"
 女士汉服,"Women's Hanfu"
 明制汉服,"Ming Dynasty Hanfu"
@@ -1253,6 +1232,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1263,11 +1243,19 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
+合作品牌,"Partner brands"
+"织艺谱系 · Textile Heritage","Textile Heritage"
+上一组,"Previous group"
+下一组,"Next group"
 您可能还喜欢,"You may also like"
 更大容量,"Larger capacity"
 更多功能,"More features"
@@ -1276,7 +1264,15 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+查看更多,"View more"
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+展开社交媒体,"Expand social media"
+收起社交媒体,"Collapse social media"
+官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1311,6 +1307,10 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -2276,14 +2276,22 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 系统未安装任何主题！,"No theme installed in the system!"
 【已激活】,【Activated】
 查看主题列表,"View theme list"
+主题不存在：,主题不存在：
+"未找到激活主题，请用 -t/--theme 指定主题名。","未找到激活主题，请用 -t/--theme 指定主题名。"
+无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
 收集,Collect
 主题文件...,"Theme files..."
-开始搬迁文件...,"Start moving files..."
+静态命名空间：,静态命名空间：
+开始搬迁设计主题覆盖文件...,开始搬迁设计主题覆盖文件...
+设计主题覆盖：,设计主题覆盖：
+个文件,个文件
+"开始发布模块 view/theme 资源到主题命名空间（含继承回退）...","开始发布模块 view/theme 资源到主题命名空间（含继承回退）..."
+模块主题资源：,模块主题资源：
+"个文件已发布到 /static/","个文件已发布到 /static/"
 "设置了 -t 参数，但却没有-t参数值！","The -t parameter was set, but no -t parameter value was provided!"
 无法创建主题静态资源目录：,"Unable to create theme static resource directory:"
 无法发布主题静态资源：,"Unable to publish theme static resources:"
-更新主题文件！,"Update theme file!"
-无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
+"更新主题静态资源（设计覆盖 + 模块 view/theme 继承发布到 /static/{主题}/...）","更新主题静态资源（设计覆盖 + 模块 view/theme 继承发布到 /static/{主题}/...）"
 主题文件不在允许的主题目录内：,"The theme file is not in the allowed theme directory:"
 "=== 批量生成主题预览图 ===","=== Generate theme previews in batches ==="
 "并发数量: %{1}","Concurrency Count: %{1}"
@@ -2338,6 +2346,9 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+汉服分类展示图,"Hanfu category showcase image"
+开始搬迁文件...,"Start moving files..."
+更新主题文件！,"Update theme file!"
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
@@ -2943,6 +2954,7 @@ Product,Product
 "Cookie 及相关技术属于个人信息处理的一部分，补充说明见「隐私政策」。若本页与隐私政策就同一事项表述不一致，以对您权益保护更有利且符合现行法律的解释为准。","Cookies and related technologies are part of personal-information processing; see the “Privacy Policy” for more. If this page conflicts with the privacy policy on the same matter, the interpretation that better protects your rights and complies with applicable law prevails."
 "如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。","If you have questions about Cookie use, read the privacy policy first or contact support via the help center."
 "浏览 %{1} 相关商品与配件","Browse %{1} products and accessories"
+"打开 %{1} 页面","Open the %{1} page"
 "在商品详情常显区渲染猜你喜欢内容。默认由 Theme you-may-like 经 default_injections 注入 product-you-may-like。","Renders you-may-like content in the product-detail always-on area. Default injected by Theme you-may-like via default_injections as product-you-may-like."
 根据您的浏览记录推荐,"Recommended based on your browsing history"
 在产品推荐区渲染最近浏览内容。,"Render recently viewed content in the product recommendation area."
@@ -4327,3 +4339,39 @@ Chiffon,Chiffon
 运费以结算页为准,"Shipping calculated at checkout"
 "3.2 本站订单不提供包邮，运费以结算页为准。","3.2 We do not offer free shipping. Shipping charges are shown at checkout."
 "3.1 运费按目的地、重量/体积、国际航线方案计算，以结算页最终金额为准；币种换算以结算展示为准。","3.1 Shipping charges are calculated by destination, weight/volume, and international shipping service. The final amount and currency conversion are shown at checkout."
+黑曜石,"Black Obsidian"
+阴阳,Yin-Yang
+八卦,Bagua
+平安扣,"Peace Disc"
+玉石,Jade
+古老智慧。现代仪式。,"Ancient wisdom. Modern rituals."
+黑曜石外圈，阴阳流转——佩戴一件小小的平衡。,"Obsidian rim, yin and yang in motion — wear a quiet balance."
+选购仪式物件,"Shop Ritual Objects"
+发现你的五行平衡,"Discover Your Elemental Balance"
+阴阳、八卦与平安扣——真实吊坠在雾与光中缓缓回转，佩一件小小的持中。,"Yin-Yang, Bagua, and peace discs — real pendants turning slowly in mist and light. Wear a quiet center."
+黑曜石阴阳吊坠,"Obsidian Yin-Yang Pendant"
+八卦吊坠,"Bagua Pendant"
+平安扣吊坠,"Peace Disc Pendant"
+玉石吊坠,"Jade Pendant"
+五行吊坠,"Five Elements Pendant"
+黑曜石外圈，阴阳缓转——吊坠悬于雾光一侧，佩一件小小的持中。,"Obsidian rim, yin and yang turning slowly — the pendant hangs beside the mist and light. Wear a quiet center."
+明制短袄马面很合身,"Ming-style short jacket & horse-face skirt fit perfectly"
+刺绣大袖衫质感在线,"Heavy embroidery wide sleeves look premium"
+长乐公主试穿很惊艳,"Princess Changle try-on looks stunning"
+做工细致,"Fine craftsmanship"
+多规格好选,"Easy to pick the right option"
+回购同店,"Bought from this shop again"
+秋冬套装很暖和,"Warm autumn–winter set"
+做工扎实,"Solid workmanship"
+飞天款式很惊艳,"Flying-Apsaras style looks stunning"
+回购同系列,"Bought the same series again"
+款式清爽好搭配,"Fresh look, easy to style"
+发货快，包装完整,"Fast shipping, intact packaging"
+面料舒服，尺码建议对照表,"Soft fabric — check the size chart"
+绣工细致，襦裙版型好看,"Fine embroidery, flattering ruqun cut"
+长乐公主试穿,"Princess Changle try-on"
+刺绣大袖试穿,"Embroidered wide-sleeve try-on"
+明制马面试穿,"Ming horse-face skirt try-on"
+方领短袄试穿,"Square-collar jacket try-on"
+魏晋大袖试穿,"Wei–Jin wide-sleeve try-on"
+礼宴雅集留影,"Banquet gathering snapshot"

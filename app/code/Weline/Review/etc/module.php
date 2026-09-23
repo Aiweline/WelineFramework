@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Review',
-    'version' => '1.0.11',
+    'version' => '1.0.12',
     'requires' => [
         'Weline_Framework' => '*',
     ],
@@ -20,5 +20,6 @@ return [
     ],
     'provides' => [
         \Weline\Review\Api\ReviewSeoFactsInterface::class => \Weline\Review\Service\ReviewService::class,
+        \Weline\Review\Api\BuyerLooksGalleryInterface::class => \Weline\Review\Service\BuyerLooksGalleryService::class,
     ],
 ];
