@@ -36,6 +36,10 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         self::assertStringContainsString('product.catalog.offers.request', $source);
         self::assertStringContainsString('catalogTargetedOffersPolicy()', $source);
         self::assertStringContainsString('catalogTargetedOffersLogicalKey', $source);
+        self::assertStringContainsString('buildTargetedPublishedOffers(', $source);
+        self::assertStringContainsString('product.catalog.targeted_reuse', $source);
+        self::assertStringContainsString('peekPolicy(', $source);
+        self::assertStringContainsString('sliceTargetedOffersFromWarmCatalog(', $source);
         self::assertStringContainsString('public function facetCountsForProductIds(', $source);
         self::assertStringContainsString('product.catalog.facet_counts.request', $source);
         self::assertStringContainsString('product.catalog.facet_counts', $source);
@@ -71,7 +75,7 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         $returnPos = strpos($source, 'return \\array_slice($rows, 0, $limit);', (int)$filteredBlockStart);
         self::assertNotFalse($returnPos);
         $filteredBlock = substr($source, (int)$filteredBlockStart, (int)$returnPos - (int)$filteredBlockStart + 40);
-        self::assertStringContainsString('buildPublishedOffers', $filteredBlock);
+        self::assertStringContainsString('buildTargetedPublishedOffers', $filteredBlock);
         self::assertStringContainsString('product.catalog.resolve_filtered', $filteredBlock);
         self::assertStringNotContainsString('rememberPublishedOffers()', $filteredBlock);
     }
@@ -83,6 +87,7 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         self::assertSame('channel', $policy->scope);
         self::assertSame(['currency', 'lang'], $policy->vary);
         self::assertSame(['catalog', 'config', 'global/i18n', 'price'], $policy->dependencies);
+        self::assertSame(1200, $policy->singleFlightWaitMs);
 
         $service = (new \ReflectionClass(StorefrontCatalogCacheCoordinator::class))
             ->newInstanceWithoutConstructor();

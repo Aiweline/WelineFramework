@@ -14,6 +14,7 @@
  * @widget.supports {["layout-category-recommendations","layout-products-recommendations","recommended-products","featured-products"]}
  * @widget.default_injections {[{ "layout_type":"category", "layout_option":"default", "slot":"category-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"分类页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} },{ "layout_type":"products", "layout_option":"default", "slot":"list-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"产品列表页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} }]}
  *
+ * @widget.source {Weline_Product::css/widgets/recommended-products.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="推荐产品",type="string",label="标题"}
  * @param limit {default=8,type="number",label="显示数量"}
  * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
@@ -89,6 +90,7 @@ if ($products === []) {
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-widget-code="recommended-products"
          data-testid="recommended-products-empty"
          hidden
          aria-hidden="true"></section>
@@ -100,15 +102,13 @@ if ($products === []) {
 
 <section class="<?= $esc($wc) ?> weline-product-recommended<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
+         data-widget-code="recommended-products"
          data-testid="storefront-recommended-products"
          data-weline-load="recommendedProducts"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-layout="<?= $esc($layout) ?>"
          data-columns="<?= $esc($columns) ?>">
-    <link rel="stylesheet"
-          href="@static(Weline_Product::css/widgets/recommended-products.css)?v=20260906-wpr-chrome1"
-          data-no-extract="true">
     <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="wpr-header">
         <h2 class="wpr-title"><?= $esc($widgetTitle) ?></h2>

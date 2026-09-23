@@ -66,14 +66,23 @@ final class ProductSearchProjectionChangedType implements ChangedTypeInterface
 
     private function isPreview(ResourceChange $change): bool
     {
-        $after = $change->toArray()['after'] ?? [];
+        $data = $change->toArray();
+        $after = $data['after'] ?? [];
         if (!is_array($after)) {
             return false;
         }
         $status = strtolower((string)($after['status'] ?? $after['visibility'] ?? ''));
-        return in_array($status, ['draft', 'preview'], true)
+        if (in_array($status, ['draft', 'preview'], true)
             || !empty($after['preview'])
-            || !empty($after['is_preview']);
+            || !empty($after['is_preview'])
+        ) {
+            return true;
+        }
+        // Draft create/save has no public loc yet; Recipe still must not demand FPC/CDN purge urls.
+        $impact = is_array($data['impact'] ?? null) ? $data['impact'] : [];
+        $urls = $this->stringList($impact['urls'] ?? ($after['urls'] ?? []));
+        $previous = $this->stringList($impact['previous_urls'] ?? []);
+        return $urls === [] && $previous === [];
     }
 
     /** @param mixed $values @return list<string> */

@@ -53,17 +53,33 @@ $isDemo = !empty($product['is_demo']);
 $sellable = !empty($product['sellable']);
 $quoteOnly = !empty($product['quote_only']);
 $currencyUnavailable = !empty($product['currency_unavailable']);
+// WO-BUILD-OPS-02-HOME / HOME-ZERO：缺价/真零价/格式化后仍为 0.00 不得当售价（禁 $0.00）
+$priceFormatted = number_format(max(0.0, $price), 2, '.', '');
+$missingSellPrice = !$currencyUnavailable && ($price <= 0 || $priceFormatted === '0.00');
+if ($missingSellPrice) {
+    $quoteOnly = true;
+    $sellable = false;
+}
 $offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
 $campaignLabel = WidgetI18n::label(trim((string)($product['campaign_label'] ?? '')));
 $campaignUrl = trim((string)($product['campaign_url'] ?? ''));
 $imageLoading = ProductCardRenderer::imageLoadingAttributes($product);
+$labelFlags = \Weline\Theme\Helper\ProductLabelStyle::resolveFlags($product);
+$isNew = !empty($labelFlags['is_new']);
+$isSale = !empty($labelFlags['is_sale']);
+$isDemo = !empty($labelFlags['is_demo']);
+$isHot = !empty($labelFlags['is_hot']);
+$isFreeShipping = !empty($labelFlags['is_free_shipping']);
+$saleBadgeText = (string)($labelFlags['sale_text'] ?? '');
 
 $classes = trim('weline-product-card product-card density-' . $density . ($extraClass !== '' ? ' ' . $extraClass : ''));
 $hrefAttr = $productUrl !== ''
     ? 'href="' . $esc($productUrl) . '"'
     : ($productUrlPath !== '' ? 'href="@url{' . $productUrlPath . '}"' : 'href="#"');
 ?>
+<?php if (!(bool)($this->getData('defer_card_css') ?? false)): ?>
 <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
+<?php endif; ?>
 <article class="<?= $esc($classes) ?>"
          data-testid="weline-product-card"
          data-product-id="<?= $productId ?>"
@@ -82,11 +98,14 @@ $hrefAttr = $productUrl !== ''
                  data-fallback="<?= $esc($imageFallback) ?>">
         </a>
 
-        <?php if ($showLabels && ($isDemo || $isNew || $isSale)): ?>
+        <?php if ($showLabels && ($isDemo || $isNew || $isSale || $isHot || $isFreeShipping)): ?>
             <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
                 'is_demo' => $isDemo,
                 'is_new' => $isNew,
                 'is_sale' => $isSale,
+                'is_hot' => $isHot,
+                'is_free_shipping' => $isFreeShipping,
+                'sale_text' => $saleBadgeText,
                 'class' => 'wpc-badges',
             ]) ?>
         <?php endif; ?>
@@ -112,7 +131,7 @@ $hrefAttr = $productUrl !== ''
 
         <?php if ($showRating && $rating > 0): ?>
             <div class="wpc-rating" aria-label="<?= $esc(number_format($rating, 1)) ?>">
-                <span class="wpc-stars" style="--rating: <?= $esc(number_format(min(5, max(0, $rating)), 2)) ?>"></span>
+                <span class="wpc-stars" data-widget-style="--rating: <?= $esc(number_format(min(5, max(0, $rating)), 2)) ?>"></span>
                 <?php if ($reviewCount > 0): ?>
                     <span class="wpc-reviews">(<?= $reviewCount ?>)</span>
                 <?php endif; ?>
@@ -123,14 +142,15 @@ $hrefAttr = $productUrl !== ''
             <div class="wpc-price">
                 <?php if ($currencyUnavailable): ?>
                     <span class="wpc-price-quote">@lang{当前货币暂不可用}</span>
-                <?php elseif ($quoteOnly): ?>
+                <?php elseif ($quoteOnly || $price <= 0 || $priceFormatted === '0.00'): ?>
+                    <?php /* WO-BUILD-HOME-ZERO：禁渲染 $0.00；无价走询价文案（货架侧已过滤，此处兜底） */ ?>
                     <span class="wpc-price-quote">@lang{联系询价}</span>
                 <?php else: ?>
                     <span class="wpc-price-now weline-pixel::add_to_cart:value"
                           data-pixel-value="<?= $esc((string)$price) ?>">
-                        <?= $esc($currencyGlyph) ?><?= number_format($price, 2) ?>
+                        <?= $esc($currencyGlyph) ?><?= $esc($priceFormatted) ?>
                     </span>
-                    <?php if ($originalPrice > $price && $price > 0): ?>
+                    <?php if ($originalPrice > $price && $price > 0 && number_format($originalPrice, 2, '.', '') !== '0.00'): ?>
                         <span class="wpc-price-was"><?= $esc($currencyGlyph) ?><?= number_format($originalPrice, 2) ?></span>
                         <?php if ($campaignLabel !== ''): ?>
                             <?php if ($campaignUrl !== ''): ?>

@@ -83,6 +83,33 @@ final class HomepageShelfStaggerContractTest extends TestCase
         self::assertSame([99], $this->ids($plan['deals']));
     }
 
+    public function testZeroPriceCardsAreExcludedFromAllShelves(): void
+    {
+        $featured = [
+            $this->card(1, 0.0, 0.0),
+            $this->card(2, 88.0, 88.0),
+            $this->card(3, 0.0, 120.0),
+            $this->card(4, 66.0, 66.0),
+        ];
+        $deals = [
+            $this->card(10, 0.0, 100.0),
+            $this->card(11, 70.0, 100.0),
+        ];
+        $hot = [
+            $this->card(20, 0.0, 0.0),
+            $this->card(21, 55.0, 55.0),
+        ];
+
+        $plan = HomepageShelfStagger::select($featured, $deals, $hot, 4, 4, 4);
+
+        self::assertSame([2, 4], $this->ids($plan['featured']));
+        self::assertSame([11], $this->ids($plan['deals']));
+        self::assertSame([21], $this->ids($plan['hot']));
+        foreach (array_merge($plan['featured'], $plan['deals'], $plan['hot']) as $card) {
+            self::assertGreaterThan(0.0, (float)($card['price'] ?? 0));
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */

@@ -15,10 +15,11 @@ final class ProductCatalogTemplateContractTest extends TestCase
             BP . 'app/code/Weline/Product/view/templates/frontend/catalog/index.phtml',
         );
 
-        self::assertStringContainsString('<w:product:card', $source);
-        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $source);
-        self::assertStringContainsString('show-sku="true"', $source);
+        self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $source);
+        self::assertStringContainsString("'show_sku' => true", $source);
         self::assertStringContainsString('weline-product-card-shelf', $source);
+        self::assertStringContainsString("'class' => 'wpc-listing-card'", $source);
+        self::assertStringNotContainsString('<w:product:card', $source);
         self::assertStringNotContainsString('product-storefront__card product-card', $source);
         self::assertStringNotContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $source);
     }

@@ -74,7 +74,8 @@
 }
 
 .weline-product-card .wpc-image {
-  position: absolute;
+  /* Survive design/search overrides that reset img to static (pad-lock square media). */
+  position: absolute !important;
   inset: 0;
   display: block;
   width: 100%;
@@ -266,6 +267,12 @@
   gap: var(--weline-space-2, 0.5rem) var(--weline-space-2, 0.5rem);
   /* 不把 auto 放在价格上：等高校时会在价与按钮间再撕出第二种间距 */
   margin-top: 0;
+  /* FE-01：价签保持在媒体角标/收藏层之上，禁被 pointer-events 死区挡住 */
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  visibility: visible;
+  opacity: 1;
 }
 
 .weline-product-card .wpc-price-now {
@@ -273,6 +280,8 @@
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  visibility: visible;
+  opacity: 1;
 }
 
 /* shelf/compact：仍强调成交价色，仅放宽字号；禁止回落墨色导致「弱价格」 */
@@ -322,6 +331,22 @@
   /* 唯一吸底：等高校时只在正文块与 CTA 之间留白；价→钮与钮→钮共用 body/cta 的 space-2 */
   margin-top: auto;
   padding-top: 0;
+  /* FE-01：集合/搜索主 CTA 永远可点（抗媒体层 absolute 角标/收藏叠层误伤） */
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  visibility: visible;
+  opacity: 1;
+}
+
+.weline-product-card .wpc-cta .btn-add-to-cart:not(:disabled):not([aria-disabled="true"]),
+.weline-product-card .wpc-cta .btn-buy-now:not(:disabled),
+.weline-product-card .wpc-cta .wpc-cart-btn:not(:disabled):not([aria-disabled="true"]),
+.weline-product-card .wpc-cta .wpc-detail-link {
+  pointer-events: auto;
+  visibility: visible;
+  /* disabled 态仍走下方 .72 opacity；可达钮保持实色 */
+  opacity: 1;
 }
 
 .weline-product-card .wpc-cta .wpc-cart-wrap,

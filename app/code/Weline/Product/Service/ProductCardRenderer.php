@@ -8,6 +8,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
+use Weline\Framework\View\Data\DataInterface;
 use Weline\Theme\Helper\ProductCardUrl;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 
@@ -18,9 +19,9 @@ final class ProductCardRenderer
 {
     private const CSS_FLAG = 'product.product_card_css_emitted';
     private const CSS_DISCARD_HOOK = 'product.product_card_css_discard';
-    /** Kept for contracts / call sites; emission is now an inline <style> (body <link> is unreliable + ThemeEditor strips //link). */
+    /** Marker consumed by the shared widget asset placement pipeline. */
     public const CSS_LINK_MARKER = 'data-weline-product-card-css';
-    private const CSS_VERSION = '20260921-product-card-css-emission-heal';
+    private const CSS_VERSION = '20260923-fe01-cta-reach';
     /** Keep the first two desktop rows available without flooding the network. */
     private const INITIAL_VIEWPORT_IMAGE_COUNT = 8;
 
@@ -34,12 +35,114 @@ final class ProductCardRenderer
         if ((int)($normalized['id'] ?? 0) <= 0) {
             return '';
         }
-
+        // WO-BUILD-HOME-ZERO：货架密度禁渲零价卡（避免 SSR 出 $0.00；询价品走 PDP）
         $flags = self::normalizeOptions($options);
-        $template = Template::getInstance();
+        if (($flags['density'] ?? 'standard') === 'shelf'
+            && empty($normalized['currency_unavailable'])
+            && ((float)($normalized['price'] ?? 0) <= 0 || !empty($normalized['quote_only']))
+        ) {
+            return '';
+        }
+        $normalized = self::bucketCardIndexForFragmentReuse($normalized);
         $html = (string)RequestLifecycleTrace::measurePhase(
             'product.card.render',
-            fn(): string => (string)$template->fetch(
+            static fn (): string => self::renderCachedBody($normalized, $flags),
+            [
+                'density' => $flags['density'],
+                'show_price' => $flags['show_price'],
+                'show_add_to_cart' => $flags['show_add_to_cart'],
+                'show_sku' => $flags['show_sku'],
+                'batch' => false,
+            ],
+        );
+
+        // CSS：宿主 emit + 卡 partial 兜底 emitStylesheetLinkOnce()（once）；禁止 link 注入。
+        // Renderer owns emission when defer_card_css=true so Policy HIT bodies stay CSS-free.
+        return self::emitStylesheetLinkOnce() . $html;
+    }
+
+    /**
+     * Listing batch path: map offers → card HTML in one measurePhase (wave9-9p).
+     * Skips per-card Taglib; still SSR each card via StorefrontProductCardFragmentCache.
+     *
+     * @param list<mixed> $offers
+     * @param array<string, mixed> $options
+     */
+    public static function projectFromOffers(array $offers, array $options = []): string
+    {
+        $flags = self::normalizeOptions($options);
+        $html = (string)RequestLifecycleTrace::measurePhase(
+            'product.card.render',
+            static function () use ($offers, $flags): string {
+                $parts = [];
+                $index = 0;
+                foreach ($offers as $offer) {
+                    if (!\is_array($offer)) {
+                        continue;
+                    }
+                    $product = self::fromStorefrontOffer($offer, $index);
+                    if ((int)($product['id'] ?? 0) <= 0) {
+                        ++$index;
+                        continue;
+                    }
+                    // 集合/列表同源：缺价 offer 不进卡面（优先真实价；询价走 PDP）
+                    if (empty($product['currency_unavailable']) && (float)($product['price'] ?? 0) <= 0) {
+                        ++$index;
+                        continue;
+                    }
+                    $product = self::bucketCardIndexForFragmentReuse($product);
+                    $parts[] = self::renderCachedBody($product, $flags);
+                    ++$index;
+                }
+
+                return \implode('', $parts);
+            },
+            [
+                'density' => $flags['density'],
+                'show_price' => $flags['show_price'],
+                'show_add_to_cart' => $flags['show_add_to_cart'],
+                'show_sku' => $flags['show_sku'],
+                'batch' => true,
+                'offer_count' => \count($offers),
+            ],
+        );
+
+        return self::emitStylesheetLinkOnce() . $html;
+    }
+
+    /**
+     * Collapse card_index into eager/lazy buckets so fragment Policy keys reuse
+     * across list positions (same product+flags; loading attrs stay correct).
+     *
+     * @param array<string, mixed> $product
+     * @return array<string, mixed>
+     */
+    private static function bucketCardIndexForFragmentReuse(array $product): array
+    {
+        if (!\array_key_exists('card_index', $product)) {
+            return $product;
+        }
+        $index = max(0, (int)$product['card_index']);
+        $product['card_index'] = $index < self::INITIAL_VIEWPORT_IMAGE_COUNT
+            ? 0
+            : self::INITIAL_VIEWPORT_IMAGE_COUNT;
+
+        return $product;
+    }
+
+    /**
+     * Fragment-cached card body (no CSS wrapper; caller owns emitStylesheetLinkOnce).
+     *
+     * @param array<string, mixed> $normalized
+     * @param array<string, mixed> $flags
+     */
+    private static function renderCachedBody(array $normalized, array $flags): string
+    {
+        $template = Template::getInstance();
+        $build = static function () use ($normalized, $flags, $template): string {
+            // CSS is request-once outside the Policy bag so HIT bodies never
+            // embed/omit a stale <style> relative to emitStylesheetLinkOnce().
+            return (string)$template->fetch(
                 'Weline_Product::templates/frontend/partials/product-card.phtml',
                 [
                     'product' => $normalized,
@@ -54,18 +157,25 @@ final class ProductCardRenderer
                     'density' => $flags['density'],
                     'class' => $flags['class'],
                     'wishlist_pixel' => $flags['wishlist_pixel'],
+                    'defer_card_css' => true,
                 ]
-            ),
-            [
-                'density' => $flags['density'],
-                'show_price' => $flags['show_price'],
-                'show_add_to_cart' => $flags['show_add_to_cart'],
-                'show_sku' => $flags['show_sku'],
-            ],
-        );
+            );
+        };
 
-        // CSS：宿主 emit + 卡 partial 兜底 emitStylesheetLinkOnce()（once）；禁止 link 注入。
-        return $html;
+        try {
+            if (\class_exists(\Weline\Theme\Service\StorefrontProductCardFragmentCache::class)) {
+                /** @var \Weline\Theme\Service\StorefrontProductCardFragmentCache $cardCache */
+                $cardCache = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Theme\Service\StorefrontProductCardFragmentCache::class
+                );
+
+                return $cardCache->rememberCardHtml($normalized, $flags, $build);
+            }
+        } catch (\Throwable) {
+            // Theme optional / Policy unavailable → plain render.
+        }
+
+        return $build();
     }
 
     /**
@@ -140,9 +250,27 @@ final class ProductCardRenderer
         $product['is_new'] = !empty($product['is_new']);
         $product['is_sale'] = !empty($product['is_sale']);
         $product['is_demo'] = !empty($product['is_demo']);
+        $product['is_hot'] = !empty($product['is_hot']) || !empty($product['is_bestseller']);
+        $product['free_shipping'] = !empty($product['free_shipping']) || !empty($product['is_free_shipping']);
+        $product['discount_percent'] = max(0, min(90, (int)($product['discount_percent'] ?? 0)));
+        if ($product['discount_percent'] <= 0) {
+            $price = (float)$product['price'];
+            $original = (float)$product['original_price'];
+            if ($original > $price && $price > 0) {
+                $product['discount_percent'] = max(0, min(90, (int)round((1 - ($price / $original)) * 100)));
+            }
+        }
+        if ($product['discount_percent'] > 0) {
+            $product['is_sale'] = true;
+        }
         $product['sellable'] = !empty($product['sellable']);
         $product['quote_only'] = !empty($product['quote_only']);
         $product['needs_selection'] = !empty($product['needs_selection']);
+        // WO-BUILD-OPS-02-HOME：零价/缺价不得当正常售价；归一为询价不可购
+        if (!$product['currency_unavailable'] && (float)$product['price'] <= 0) {
+            $product['quote_only'] = true;
+            $product['sellable'] = false;
+        }
         $product['global_offer_uuid'] = trim((string)($product['global_offer_uuid'] ?? ''));
         $product['campaign_label'] = trim((string)($product['campaign_label'] ?? ''));
         $product['campaign_url'] = trim((string)($product['campaign_url'] ?? ''));
@@ -266,9 +394,13 @@ final class ProductCardRenderer
             'is_sale' => $hasDeal,
             'is_new' => !empty($offer['is_new']),
             'is_demo' => !empty($offer['is_demo']),
-            'sellable' => !empty($offer['sellable']),
+            'is_hot' => !empty($offer['is_hot']) || !empty($offer['is_bestseller']),
+            'discount_percent' => $hasDeal && $originalPrice > $price && $price > 0
+                ? max(0, min(90, (int)round((1 - ($price / $originalPrice)) * 100)))
+                : 0,
+            'sellable' => !empty($offer['sellable']) && $priceMinor > 0 && empty($offer['quote_only']),
             'currency_unavailable' => !empty($offer['currency_unavailable']),
-            'quote_only' => !empty($offer['quote_only']),
+            'quote_only' => !empty($offer['quote_only']) || $priceMinor <= 0,
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
             'campaign_label' => trim((string)($offer['campaign_label'] ?? '')),
             'campaign_url' => trim((string)($offer['campaign_url'] ?? '')),
@@ -361,20 +493,31 @@ final class ProductCardRenderer
     }
 
     /**
-     * Inline CSS owned by the canonical product card (title/price/media/shopper chrome).
+     * External CSS owned by the canonical product card.
      */
     public static function buildProductCardStyleTag(): string
     {
-        $cssPath = dirname(__DIR__) . '/view/statics/css/frontend/product-card.css';
-        $css = is_file($cssPath) ? (string)file_get_contents($cssPath) : '';
-        if ($css === '') {
+        $url = (string)Template::getInstance()->fetchTagSource(
+            DataInterface::dir_type_STATICS,
+            'Weline_Product::css/frontend/product-card.css'
+        );
+        if ($url === '') {
             return '';
         }
 
-        return '<style ' . self::CSS_LINK_MARKER . '="1" '
+        $instanceStyles = '';
+        foreach (['css/widgets/widget-instance-styles.css', 'js/widgets/widget-instance-styles.js'] as $asset) {
+            $assetUrl = htmlspecialchars((string)Template::getInstance()->fetchTagSource(
+                DataInterface::dir_type_STATICS, 'Weline_Theme::' . $asset
+            ), ENT_QUOTES, 'UTF-8');
+            $instanceStyles .= str_ends_with($asset, '.css')
+                ? '<link rel="stylesheet" data-weline-widget-asset="source" data-weline-source-position="head" href="' . $assetUrl . '">'
+                : '<script defer data-weline-widget-asset="source" data-weline-source-position="head" src="' . $assetUrl . '"></script>';
+        }
+
+        return '<link rel="stylesheet" ' . self::CSS_LINK_MARKER . '="1" '
+            . 'data-weline-widget-asset="source" data-weline-source-position="head" '
             . 'data-weline-product-card-version="' . htmlspecialchars(self::CSS_VERSION, ENT_QUOTES, 'UTF-8') . '" '
-            . 'data-no-extract="true">'
-            . $css
-            . '</style>' . "\n";
+            . 'href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . "\n" . $instanceStyles;
     }
 }

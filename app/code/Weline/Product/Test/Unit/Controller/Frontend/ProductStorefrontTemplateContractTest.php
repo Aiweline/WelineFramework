@@ -60,9 +60,8 @@ final class ProductStorefrontTemplateContractTest extends TestCase
             BP . 'app/code/Weline/Product/view/templates/frontend/catalog/index.phtml',
         );
 
-        self::assertStringContainsString('<w:product:card', $template);
-        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $template);
-        self::assertStringContainsString('show-add-to-cart="true"', $template);
+        self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $template);
+        self::assertStringContainsString("'show_add_to_cart' => true", $template);
     }
 
     public function testCartLinkKeepsTheActiveCurrencyAndLocaleRoute(): void
@@ -81,10 +80,10 @@ final class ProductStorefrontTemplateContractTest extends TestCase
             BP . 'app/code/Weline/Product/view/templates/frontend/catalog/index.phtml',
         );
 
-        self::assertStringContainsString('<w:product:card', $template);
-        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $template);
-        self::assertStringContainsString('show-sku="true"', $template);
+        self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $template);
+        self::assertStringContainsString("'show_sku' => true", $template);
         self::assertStringContainsString('weline-product-card-shelf', $template);
+        self::assertStringNotContainsString('<w:product:card', $template);
         self::assertStringNotContainsString('class="product-storefront__card-hit"', $template);
         self::assertStringNotContainsString('product-storefront__card product-card', $template);
     }

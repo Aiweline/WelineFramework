@@ -14,6 +14,7 @@
  * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-products-recommendations","layout-search-recommendations","recently-viewed"]}
  * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-recently-viewed", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认最近浏览槽", "config":{"title":"最近浏览","limit":24,"columns":"6","layout":"carousel"} }]}
  *
+ * @widget.source {Weline_RecentlyViewed::css/widgets/recently-viewed.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="最近浏览",type="string",label="标题"}
  * @param limit {default=24,type="number",label="显示数量"}
  * @param columns {default="6",type="select",label="每行列数",options={3:"3列",4:"4列",5:"5列",6:"6列"}}
@@ -136,11 +137,6 @@ if ($products === []) {
     return;
 }
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_RecentlyViewed::css/widgets/recently-viewed.css)?v=20260912-bg-transparent"
-      data-no-extract="true">
-
-
 <section class="<?= $esc($wc) ?> weline-recently-viewed<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-recently-viewed"
