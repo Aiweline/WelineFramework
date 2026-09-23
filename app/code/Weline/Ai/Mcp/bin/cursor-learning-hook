@@ -1,0 +1,121 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require dirname(__DIR__) . '/src/bootstrap.php';
+
+use LearningMcp\Collector;
+use LearningMcp\Config;
+use LearningMcp\CursorLearningHookAdapter;
+use LearningMcp\Json;
+use LearningMcp\Redactor;
+use LearningMcp\Store;
+use LearningMcp\Text;
+use LearningMcp\Worker;
+
+$options = [
+    'config' => null,
+    'data-dir' => null,
+    'event' => 'beforeSubmitPrompt',
+];
+$args = array_slice($argv, 1);
+while ($args !== []) {
+    $token = array_shift($args);
+    if ($token === '--config' && $args !== []) {
+        $options['config'] = (string) array_shift($args);
+        continue;
+    }
+    if ($token === '--data-dir' && $args !== []) {
+        $options['data-dir'] = (string) array_shift($args);
+        continue;
+    }
+    if ($token === '--event' && $args !== []) {
+        $options['event'] = (string) array_shift($args);
+        continue;
+    }
+    if (!str_starts_with((string) $token, '-')) {
+        $options['event'] = (string) $token;
+    }
+}
+
+$rawBody = stream_get_contents(STDIN);
+if ($rawBody === false || trim($rawBody) === '') {
+    $rawBody = '{}';
+}
+
+try {
+    $raw = Json::object($rawBody, 'Cursor hook payload');
+} catch (Throwable) {
+    fwrite(STDOUT, Json::encode(['continue' => true]) . "\n");
+    exit(0);
+}
+
+$adapted = CursorLearningHookAdapter::adapt((string) $options['event'], $raw);
+$response = $adapted['cursor_response'];
+$payload = $adapted['payload'];
+
+if (trim((string) ($payload['session_id'] ?? '')) === '' || trim((string) ($payload['cwd'] ?? '')) === '') {
+    fwrite(STDOUT, Json::encode(cursorNormalizeResponse($response)) . "\n");
+    exit(0);
+}
+
+$config = null;
+$store = null;
+try {
+    $config = Config::load($options['config'], $options['data-dir']);
+    $store = new Store($config);
+    $tmp = fopen('php://temp', 'w+b');
+    if ($tmp === false) {
+        throw new RuntimeException('Unable to open temp stream for Collector');
+    }
+    fwrite($tmp, Json::encode($payload));
+    rewind($tmp);
+    $result = (new Collector($store, $config))->ingest($adapted['event'], $tmp);
+    fclose($tmp);
+
+    if ($adapted['event'] === 'SessionStart' && is_array($response)) {
+        try {
+            $report = $store->learningConflictReport((string) ($result['project_id'] ?? ''));
+            if (($report['open_conflict_count'] ?? 0) > 0 || ($report['contested_count'] ?? 0) > 0) {
+                $prior = trim((string) ($response['additional_context'] ?? ''));
+                $note = 'Weline learning conflicts pending user decision: contested='
+                    . (int) ($report['contested_count'] ?? 0)
+                    . ', open_contradictions=' . (int) ($report['open_conflict_count'] ?? 0)
+                    . '. Report conflicts before overriding prior knowledge.';
+                $response['additional_context'] = trim($prior . "\n" . $note);
+            }
+        } catch (Throwable) {
+        }
+    }
+
+    $shouldDrain = isset($result['job_id'])
+        && (bool) $config->get('scheduler.auto_process_on_stop', true);
+    $store->close();
+    $store = null;
+    if ($shouldDrain) {
+        Worker::spawnDrain($config->sourcePath, $config->dataDir());
+    }
+} catch (Throwable $exception) {
+    if ($store instanceof Store) {
+        $store->close();
+    }
+    [$message] = Redactor::string($exception->getMessage());
+    fwrite(STDERR, 'cursor-learning-hook: ' . Text::truncate($message, 400) . "\n");
+}
+
+fwrite(STDOUT, Json::encode(cursorNormalizeResponse($response)) . "\n");
+exit(0);
+
+/** @param mixed $response */
+function cursorNormalizeResponse(mixed $response): mixed
+{
+    if ($response instanceof stdClass) {
+        return $response;
+    }
+    if (is_array($response) && $response === []) {
+        return new stdClass();
+    }
+
+    return $response;
+}

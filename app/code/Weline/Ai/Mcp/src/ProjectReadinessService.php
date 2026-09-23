@@ -385,6 +385,8 @@ final class ProjectReadinessService
             'agent_guidance' => [
                 'session_startup_notices' => GuidanceWorkflowCatalog::sessionStartupNotices(),
                 'hard_constraints' => HardConstraintsCatalog::package(),
+                'host_codex_delegation' => HardConstraintsCatalog::hostCodexDelegation(),
+                'learning_conflicts' => $this->learningConflicts($index->projectId()),
                 'feature_delivery_urls' => GuidanceWorkflowCatalog::featureDeliveryUrls(),
                 'closeout_delivery_reminder' => GuidanceWorkflowCatalog::closeoutDeliveryReminder(),
                 'mcp_skills' => McpSkillCatalog::policy($index->root()),
@@ -392,6 +394,8 @@ final class ProjectReadinessService
                 'hard_rules_index' => HardConstraintsCatalog::AUTHORITATIVE_DOC,
                 'read_next' => [
                     'agent_guidance.hard_constraints',
+                    'agent_guidance.host_codex_delegation',
+                    'agent_guidance.learning_conflicts',
                     'agent_guidance.mcp_skills',
                     'resolve_task_context',
                     'resolve_skill',
@@ -400,6 +404,40 @@ final class ProjectReadinessService
                 ],
             ],
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function learningConflicts(string $projectId): array
+    {
+        $store = null;
+        try {
+            $store = new Store($this->config);
+            $report = $store->learningConflictReport($projectId);
+            $report['schema_version'] = 'learning-conflicts.v1';
+            $report['policy'] = 'session_learning_knowledge_conflict_gate';
+            $report['agent_action'] = $report['user_decision_required']
+                ? 'STOP_AND_REPORT_FOR_USER_DECISION'
+                : 'none';
+
+            return $report;
+        } catch (Throwable) {
+            return [
+                'schema_version' => 'learning-conflicts.v1',
+                'project_id' => $projectId,
+                'contested_count' => 0,
+                'open_conflict_count' => 0,
+                'contested' => [],
+                'contradictions' => [],
+                'user_decision_required' => false,
+                'policy' => 'session_learning_knowledge_conflict_gate',
+                'agent_action' => 'none',
+                'unavailable' => true,
+            ];
+        } finally {
+            if ($store instanceof Store) {
+                $store->close();
+            }
+        }
     }
 
     /** @return array<string,mixed> */
