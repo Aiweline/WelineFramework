@@ -1,15 +1,15 @@
-参数 identity 不能为空,参数 identity 不能为空
-缓存池 %{1} 已清理,缓存池 %{1} 已清理
-WLS 共享命名空间已同步清理,WLS 共享命名空间已同步清理
+﻿"参数 identity 不能为空","参数 identity 不能为空"
+"缓存池 %{1} 已清理","缓存池 %{1} 已清理"
+"WLS 共享命名空间已同步清理","WLS 共享命名空间已同步清理"
 已强制清理所有缓存池（包括持久缓存）,已强制清理所有缓存池（包括持久缓存）
 已清理所有非持久缓存池,已清理所有非持久缓存池
-并额外清理 %{1} 个 WLS 共享缓存命名空间,并额外清理 %{1} 个 WLS 共享缓存命名空间
+"并额外清理 %{1} 个 WLS 共享缓存命名空间","并额外清理 %{1} 个 WLS 共享缓存命名空间"
 请先选择要清理的缓存,请先选择要清理的缓存
 清理中...,清理中...
 所选缓存已清理完成,所选缓存已清理完成
 部分缓存清理失败，请查看提示后重试,部分缓存清理失败，请查看提示后重试
 请求失败,请求失败
-bin-query 接口不可用，请刷新页面后重试,bin-query 接口不可用，请刷新页面后重试
+"bin-query 接口不可用，请刷新页面后重试","bin-query 接口不可用，请刷新页面后重试"
 确定要清理所选缓存池吗？,确定要清理所选缓存池吗？
 所选缓存里包含持久缓存，将以强制模式清理。是否继续？,所选缓存里包含持久缓存，将以强制模式清理。是否继续？
 确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。,确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。
@@ -20,17 +20,17 @@ bin-query 接口不可用，请刷新页面后重试,bin-query 接口不可用�
 清理缓存,清理缓存
 弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。,弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。
 关闭,关闭
-搜索缓存类型（identity / 名称 / 模块）,搜索缓存类型（identity / 名称 / 模块）
+"搜索缓存类型（identity / 名称 / 模块）","搜索缓存类型（identity / 名称 / 模块）"
 全选当前结果,全选当前结果
 个已选,个已选
 持久,持久
 全部清理（非持久）,全部清理（非持久）
 清理所选,清理所选
-后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。,后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。
+"后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。","后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。"
 缓存策略已保存，非持久缓存已清理,缓存策略已保存，非持久缓存已清理
 缓存策略,缓存策略
 settings,设置
-运行时缓存 TTL 与共享 Memory 策略,运行时缓存 TTL 与共享 Memory 策略
+"运行时缓存 TTL 与共享 Memory 策略","运行时缓存 TTL 与共享 Memory 策略"
 缓存策略设置,缓存策略设置
 查看运行时缓存策略,查看运行时缓存策略
 保存缓存策略,保存缓存策略
@@ -40,7 +40,7 @@ save,节省
 请至少选择一个缓存项,请至少选择一个缓存项
 批量缓存状态已更新,批量缓存状态已更新
 定时任务执行完成！已清理过期缓存文件。,定时任务执行完成！已清理过期缓存文件。
-定时任务执行失败: %{1}。请检查 Cron 配置和日志。,定时任务执行失败: %{1}。请检查 Cron 配置和日志。
+"定时任务执行失败: %{1}。请检查 Cron 配置和日志。","定时任务执行失败: %{1}。请检查 Cron 配置和日志。"
 缓存管理,缓存管理
 系统缓存状态管理,系统缓存状态管理
 缓存列表,缓存列表
@@ -66,36 +66,36 @@ play,玩
 查看单个缓存池统计,查看单个缓存池统计
 默认值：%{1},默认值：%{1}
 运行时缓存策略,运行时缓存策略
-这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。,这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。
+"这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。","这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。"
 页面片段缓存,页面片段缓存
 控制首页、分类页、商品页主内容旁路缓存时间。,控制首页、分类页、商品页主内容旁路缓存时间。
 搜索与筛选缓存,搜索与筛选缓存
 控制目录浏览和筛选聚合结果的旁路缓存。,控制目录浏览和筛选聚合结果的旁路缓存。
 主题渲染缓存,主题渲染缓存
-控制 header/footer/head、插槽布局和可缓存组件输出。,控制 header/footer/head、插槽布局和可缓存组件输出。
+"控制 header/footer/head、插槽布局和可缓存组件输出。","控制 header/footer/head、插槽布局和可缓存组件输出。"
 开发工具缓存,开发工具缓存
-控制 Dev Panel 旁路数据保留时间。,控制 Dev Panel 旁路数据保留时间。
+"控制 Dev Panel 旁路数据保留时间。","控制 Dev Panel 旁路数据保留时间。"
 站点数据缓存,站点数据缓存
 控制店铺、货币、语言和分类树等全站通用数据的内存缓存时间。,控制店铺、货币、语言和分类树等全站通用数据的内存缓存时间。
-共享 Memory 超时,共享 Memory 超时
-控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。,控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。
+"共享 Memory 超时","共享 Memory 超时"
+"控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。","控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。"
 保存策略并清理缓存,保存策略并清理缓存
 正在保存...,正在保存...
 保存失败,保存失败
 保存成功,保存成功
-cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限,cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限
-缓存池 %{1} 不存在,缓存池 %{1} 不存在
-env 配置写入失败，请检查 app/etc/env.php 权限,env 配置写入失败，请检查 app/etc/env.php 权限
-缓存池 %{1} 为持久缓存，需要强制清理（force=1）,缓存池 %{1} 为持久缓存，需要强制清理（force=1）
+"cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限","cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限"
+"缓存池 %{1} 不存在","缓存池 %{1} 不存在"
+"env 配置写入失败，请检查 app/etc/env.php 权限","env 配置写入失败，请检查 app/etc/env.php 权限"
+"缓存池 %{1} 为持久缓存，需要强制清理（force=1）","缓存池 %{1} 为持久缓存，需要强制清理（force=1）"
 应用,应用
 系统,系统
-WLS 常驻内存,WLS 常驻内存
-FPM 请求隔离,FPM 请求隔离
+"WLS 常驻内存","WLS 常驻内存"
+"FPM 请求隔离","FPM 请求隔离"
 CLI,命令行界面
-缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。,缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。
+"缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。","缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。"
 缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。,缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。
 未知适配器,未知适配器
-WLS 共享内存,WLS 共享内存
+"WLS 共享内存","WLS 共享内存"
 文件缓存,文件缓存
 Redis,雷迪斯
 Memcached,内存缓存
@@ -103,18 +103,18 @@ APCu,磷酸铜
 缓存清理任务,缓存清理任务
 自动清理过期的缓存文件，防止缓存目录过大,自动清理过期的缓存文件，防止缓存目录过大
 缓存清理完成,缓存清理完成
-缓存清理任务执行失败: %{1},缓存清理任务执行失败: %{1}
-缓存清理失败: %{1},缓存清理失败: %{1}
+"缓存清理任务执行失败: %{1}","缓存清理任务执行失败: %{1}"
+"缓存清理失败: %{1}","缓存清理失败: %{1}"
 """参数 identity 不能为空""","""参数 identity 不能为空"""
-mdi mdi-tune-variant,mdi mdi-tune-variant
-mdi mdi-content-save,MDI MDI 内容保存
-mdi mdi-database-cog-outline,mdi mdi-database-cog-outline
-mdi mdi-view-list,MDI MDI 视图列表
-mdi mdi-toggle-switch,mdi mdi-toggle-switch
-mdi mdi-toggle-switch-off-outline,mdi mdi-toggle-switch-off-outline
-mdi mdi-delete,mdi mdi-删除
-mdi mdi-delete-sweep,mdi mdi-delete-sweep
-mdi mdi-chart-bar,mdi mdi-chart-bar
-mdi mdi-play,MDI MDI 播放
-mdi mdi-chart-pie,mdi mdi-chart-pie
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-content-save","MDI MDI 内容保存"
+"mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
+"mdi mdi-view-list","MDI MDI 视图列表"
+"mdi mdi-toggle-switch","mdi mdi-toggle-switch"
+"mdi mdi-toggle-switch-off-outline","mdi mdi-toggle-switch-off-outline"
+"mdi mdi-delete","mdi mdi-删除"
+"mdi mdi-delete-sweep","mdi mdi-delete-sweep"
+"mdi mdi-chart-bar","mdi mdi-chart-bar"
+"mdi mdi-play","MDI MDI 播放"
+"mdi mdi-chart-pie","mdi mdi-chart-pie"
 缓存服务,缓存服务

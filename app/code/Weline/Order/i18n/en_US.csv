@@ -1,822 +1,822 @@
-订单创建后,After order creation
+﻿订单创建后,"After order creation"
 订单创建后触发，可用于处理订单创建后的相关操作。,"Triggered after order creation, can be used to handle related operations after order creation."
-订单更新后,After order update
+订单更新后,"After order update"
 订单更新后触发，可用于处理订单更新后的相关操作。,"Triggered after order update, can be used to handle related operations after order update."
-订单状态变更前,Before Changing Order Status
+订单状态变更前,"Before Changing Order Status"
 订单状态变更前触发，可用于验证或阻止状态变更。,"Triggered before changing the order status, can be used to validate or prevent the change."
-订单状态变更后,After Changing Order Status
+订单状态变更后,"After Changing Order Status"
 订单状态变更后触发，可用于处理状态变更后的相关操作。,"Triggered after changing the order status, can be used to handle post-change operations."
-订单状态转换规则检查,Order Status Transition Rule Check
+订单状态转换规则检查,"Order Status Transition Rule Check"
 检查订单状态是否可以转换，允许其他模块扩展转换规则。,"Checking if order status can be transitioned, allowing other modules to extend transition rules."
-订单状态保存前,Before Saving Order Status
+订单状态保存前,"Before Saving Order Status"
 订单状态保存前触发，允许其他模块在状态保存前进行验证或修改。,"Triggered before saving the order status, allowing other modules to validate or modify it before saving."
-订单状态保存后,After Saving Order Status
+订单状态保存后,"After Saving Order Status"
 订单状态保存后触发，可用于处理状态保存后的相关操作。,"Triggered after saving the order status, can be used to handle post-save operations."
-订单状态删除前,Before Deleting Order Status
+订单状态删除前,"Before Deleting Order Status"
 订单状态删除前触发，允许其他模块在状态删除前进行验证或阻止。,"Triggered before deleting the order status, allowing other modules to validate or prevent deletion."
-订单状态删除后,After Deleting Order Status
+订单状态删除后,"After Deleting Order Status"
 订单状态删除后触发，可用于处理状态删除后的相关操作。,"Triggered after deleting the order status, can be used to handle post-deletion operations."
-订单支付后,After order payment
+订单支付后,"After order payment"
 订单支付后触发，可用于处理支付后的相关操作。,"Triggered after order payment, can be used to handle related operations after payment."
-订单发货后,After order shipment
+订单发货后,"After order shipment"
 订单发货后触发，可用于处理发货后的相关操作。,"Triggered after order shipment, can be used to handle related operations after shipment."
-订单完成后,After order completion
+订单完成后,"After order completion"
 订单完成后触发，可用于处理完成后的相关操作。,"Triggered after order completion, can be used to handle related operations after completion."
-订单取消后,After order cancellation
+订单取消后,"After order cancellation"
 订单取消后触发，可用于处理取消后的相关操作。,"Triggered after order cancellation, can be used to handle related operations after cancellation."
-订单退款后,After Order Refund
+订单退款后,"After Order Refund"
 订单退款后触发，可用于处理退款后的相关操作。,"Triggered after an order refund, can be used to handle post-refund operations."
-物流反馈写入 Inbox 后,After writing logistics feedback to the Inbox
-跟踪壳在验签/解析并持久化反馈 Inbox 后触发；可用于异步应用状态、通知或开发中继观察。Provider 不得在 verify/parse 内推进订单状态。,"The tracking shell triggers after signing/parsing and persisting feedback to the Inbox; this can be used for asynchronous application state, notifications, or development relays. The provider must not advance the order status within verify/parse."
-获取订单状态标签,Fetch order status label
+"物流反馈写入 Inbox 后","After writing logistics feedback to the Inbox"
+"跟踪壳在验签/解析并持久化反馈 Inbox 后触发；可用于异步应用状态、通知或开发中继观察。Provider 不得在 verify/parse 内推进订单状态。","The tracking shell triggers after signing/parsing and persisting feedback to the Inbox; this can be used for asynchronous application state, notifications, or development relays. The provider must not advance the order status within verify/parse."
+获取订单状态标签,"Fetch order status label"
 获取订单状态标签，允许其他模块扩展状态标签。,"Fetch order status label, allowing other modules to extend status labels."
-获取订单状态CSS类,Fetch order status CSS class
+获取订单状态CSS类,"Fetch order status CSS class"
 获取订单状态CSS类，允许其他模块扩展状态样式。,"Fetch order status CSS class, allowing other modules to extend status styles."
-获取支付状态标签,Get Payment Status Label
+获取支付状态标签,"Get Payment Status Label"
 获取支付状态标签，允许其他模块扩展支付状态标签。,"Get Payment Status Label, allowing other modules to extend payment status labels."
-获取发货状态标签,Shipping status label retrieved
+获取发货状态标签,"Shipping status label retrieved"
 获取发货状态标签，允许其他模块扩展发货状态标签。,"Shipping status label retrieved, allowing other modules to extend shipping status labels."
-解析完整状态信息,Parse full status information
+解析完整状态信息,"Parse full status information"
 解析完整状态信息，允许其他模块扩展状态信息解析。,"Parse full status information, allowing other modules to extend status information parsing."
-订单 ID,Order ID
-订单 UUID,Order UUID
-订单号,Order Number
-客户邮箱,Customer Email
+"订单 ID","Order ID"
+"订单 UUID","Order UUID"
+订单号,"Order Number"
+客户邮箱,"Customer Email"
 状态,Status
-原状态,Original status
-订单金额,Order amount
+原状态,"Original status"
+订单金额,"Order amount"
 货币,currency
-商品明细 HTML（|raw）,Product detail HTML (|raw)
+"商品明细 HTML（|raw）","Product detail HTML (|raw)"
 备注,Comment
-附加说明,Additional notes
-订单创建通知,Order created notice
-新订单创建后的客户/运营邮件通知,Customer/ops email notice after new order created
-订单支付通知,Order paid notice
-订单支付成功邮件通知,Order paid success email notice
-订单状态变更通知,Order status change notice
-订单状态变更邮件通知,Order status change email notice
-订单发货通知,Order shipped notice
-订单发货/物流邮件通知,Order shipping/logistics email notice
-订单退款通知,Order refund notice
-订单退款相关邮件通知,Order refund related email notice
-订单接口不支持操作：%{1},Unsupported operation for the order interface: %{1}
-订单服务暂时不可用，请稍后再试。,The order service is temporarily unavailable. Please try again later.
-订单前台,Order frontend
-订单留言等前台会话能力。,Order message and other frontend conversation capabilities
-Weline_Order typed admin operations,Weline_Order typed admin operations
-按类型与 Scope 查询订单对象展示号,Query order object display number by type and scope
-订单状态后台类型化操作,Order status background typed operation
-页面读取到的对象授权版本,The authorized version of the object read by the page
-未付订单信号,Unpaid order signal
-只读未付订单事实，供营销挽回使用（无遗弃 TTL、无触达）。,"Read-only unpaid order facts for marketing win-back (no abandonment TTL, no outreach)."
-列出未付零售订单事实供营销挽回,List unpaid retail order facts for marketing win-back
-发信前再验订单是否仍未付,Re-check order still unpaid before send
-客户已付订单计数与最近活跃时间,Paid order count and last active time
-退款接口不支持该操作：%{1},The refund interface does not support this operation: %{1}
-系统订单追踪,System order tracking
-暂无第三方物流商时，按订单履约状态展示系统追踪。,Shows system tracking from fulfillment status when no carrier provider is bound.
+附加说明,"Additional notes"
+订单创建通知,"Order created notice"
+新订单创建后的客户/运营邮件通知,"Customer/ops email notice after new order created"
+订单支付通知,"Order paid notice"
+订单支付成功邮件通知,"Order paid success email notice"
+订单状态变更通知,"Order status change notice"
+订单状态变更邮件通知,"Order status change email notice"
+订单发货通知,"Order shipped notice"
+订单发货/物流邮件通知,"Order shipping/logistics email notice"
+订单退款通知,"Order refund notice"
+订单退款相关邮件通知,"Order refund related email notice"
+订单接口不支持操作：%{1},"Unsupported operation for the order interface: %{1}"
+订单服务暂时不可用，请稍后再试。,"The order service is temporarily unavailable. Please try again later."
+订单前台,"Order frontend"
+订单留言等前台会话能力。,"Order message and other frontend conversation capabilities"
+"Weline_Order typed admin operations","Weline_Order typed admin operations"
+"按类型与 Scope 查询订单对象展示号","Query order object display number by type and scope"
+订单状态后台类型化操作,"Order status background typed operation"
+页面读取到的对象授权版本,"The authorized version of the object read by the page"
+未付订单信号,"Unpaid order signal"
+"只读未付订单事实，供营销挽回使用（无遗弃 TTL、无触达）。","Read-only unpaid order facts for marketing win-back (no abandonment TTL, no outreach)."
+列出未付零售订单事实供营销挽回,"List unpaid retail order facts for marketing win-back"
+发信前再验订单是否仍未付,"Re-check order still unpaid before send"
+客户已付订单计数与最近活跃时间,"Paid order count and last active time"
+退款接口不支持该操作：%{1},"The refund interface does not support this operation: %{1}"
+系统订单追踪,"System order tracking"
+暂无第三方物流商时，按订单履约状态展示系统追踪。,"Shows system tracking from fulfillment status when no carrier provider is bound."
 已下单,Ordered
 已支付,Paid
 已发货,Fulfilled
-发往目的地,In transit to destination
+发往目的地,"In transit to destination"
 已送达,Delivered
-订单已送达,Order delivered
-已发货，发往目的地,Shipped — in transit to destination
+订单已送达,"Order delivered"
+已发货，发往目的地,"Shipped — in transit to destination"
 订单已支付，等待发货,"Order paid, awaiting shipment"
-订单处理中,Order processing
-系统追踪不接收外部物流反馈,System tracking does not accept external carrier feedback
-系统追踪无需外部连接,System tracking requires no external connection
-订单已创建,Order created
+订单处理中,"Order processing"
+系统追踪不接收外部物流反馈,"System tracking does not accept external carrier feedback"
+系统追踪无需外部连接,"System tracking requires no external connection"
+订单已创建,"Order created"
 支付完成，仓库备货中,"Payment completed, preparing in warehouse"
 目的地,Destination
-发往目的地：%{1},In transit to destination: %{1}
-演示物流,Demo carrier
-仅用于本地开发验证正式物流轨迹与反馈中转，不连接真实承运商。,Local demo carrier for formal tracking and feedback relay; not a real carrier.
-已揽收,Picked up
-运输中,In transit
-派送中,Out for delivery
-已签收,Signed for
-【演示】快递员正在派送,[Demo] Courier is out for delivery
-【演示】包裹已到达目的地转运中心,[Demo] Package arrived at destination hub
-【演示】承运商已揽收,[Demo] Carrier picked up the package
-【演示】包裹派送中,[Demo] Package out for delivery
-空反馈体,Empty feedback body
-演示反馈签名无效,Invalid demo feedback signature
-演示反馈验签通过,Demo feedback signature verified
-演示反馈 JSON 无效,Invalid demo feedback JSON
-【演示】物流状态已更新,[Demo] Tracking status updated
-演示物流连接正常,Demo carrier connection OK
-账户首页订单分区,Account Homepage Orders Section
+发往目的地：%{1},"In transit to destination: %{1}"
+演示物流,"Demo carrier"
+仅用于本地开发验证正式物流轨迹与反馈中转，不连接真实承运商。,"Local demo carrier for formal tracking and feedback relay; not a real carrier."
+已揽收,"Picked up"
+运输中,"In transit"
+派送中,"Out for delivery"
+已签收,"Signed for"
+【演示】快递员正在派送,"[Demo] Courier is out for delivery"
+【演示】包裹已到达目的地转运中心,"[Demo] Package arrived at destination hub"
+【演示】承运商已揽收,"[Demo] Carrier picked up the package"
+【演示】包裹派送中,"[Demo] Package out for delivery"
+空反馈体,"Empty feedback body"
+演示反馈签名无效,"Invalid demo feedback signature"
+演示反馈验签通过,"Demo feedback signature verified"
+"演示反馈 JSON 无效","Invalid demo feedback JSON"
+【演示】物流状态已更新,"[Demo] Tracking status updated"
+演示物流连接正常,"Demo carrier connection OK"
+账户首页订单分区,"Account Homepage Orders Section"
 在顾客账户首页「我的订单」分区注入订单列表、订单状态与售后入口等内容。,"Inject order lists, order states, and after-sales entries into the My Orders section on the customer account homepage."
-订单详情页之前,Before Order Details Page
+订单详情页之前,"Before Order Details Page"
 在订单详情页内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before the order details page content, allowing other modules to add custom content at the top of the order details page."
-订单详情页之后,After Order Details Page
+订单详情页之后,"After Order Details Page"
 在订单详情页内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the order details page content, allowing other modules to add custom content at the bottom of the order details page."
-订单详情支付记录槽,Order details payment record slot
-订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。,"Default extension point for the order details ""payment record"" slot; the universal payment module injects Attempt records, and Order should not directly read the Payment table."
-订单详情发货记录槽,Order detail shipping log slot
-订单详情「发货记录」空槽内的默认扩展点；由配送模块注入发货/物流记录，禁止 Order 硬编码发货表 UI。,"Default extension point inside order-detail ""Shipment log"" empty slot; Shipping module injects shipment/logistics records—Order must not hardcode shipment table UI."
-订单详情批发沟通槽,Order detail wholesale chat slot
-订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。,"Default extension point inside order-detail ""Wholesale order chat"" empty slot; B2B widget injects merchant negotiation messages—Order must not render chat UI directly."
-订单列表筛选器,Order List Filters
+订单详情支付记录槽,"Order details payment record slot"
+"订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。","Default extension point for the order details ""payment record"" slot; the universal payment module injects Attempt records, and Order should not directly read the Payment table."
+订单详情发货记录槽,"Order detail shipping log slot"
+"订单详情「发货记录」空槽内的默认扩展点；由配送模块注入发货/物流记录，禁止 Order 硬编码发货表 UI。","Default extension point inside order-detail ""Shipment log"" empty slot; Shipping module injects shipment/logistics records—Order must not hardcode shipment table UI."
+订单详情批发沟通槽,"Order detail wholesale chat slot"
+"订单详情「批发订单沟通」空槽内的默认扩展点；由 B2B 部件注入商家侧协商消息，禁止 Order 直出聊天 UI。","Default extension point inside order-detail ""Wholesale order chat"" empty slot; B2B widget injects merchant negotiation messages—Order must not render chat UI directly."
+订单列表筛选器,"Order List Filters"
 在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content in the filter area of the order list page, allowing other modules to add custom filter conditions."
-订单列表发货槽,Order-list shipping slot
-订单列表页发货工作台空槽；由配送模块默认注入发货入口与待发货摘要，禁止 Order 硬编码配送运营 UI。,Order-list shipping workbench empty slot; Shipping module injects shipping entry and pending-ship summary by default—Order must not hardcode shipping ops UI.
-前端订单创建前,Before Frontend Order Creation
+订单列表发货槽,"Order-list shipping slot"
+"订单列表页发货工作台空槽；由配送模块默认注入发货入口与待发货摘要，禁止 Order 硬编码配送运营 UI。","Order-list shipping workbench empty slot; Shipping module injects shipping entry and pending-ship summary by default—Order must not hardcode shipping ops UI."
+前端订单创建前,"Before Frontend Order Creation"
 在前端订单创建之前注入内容，允许其他模块在订单创建前执行自定义逻辑。,"Inject content before frontend order creation, allowing other modules to execute custom logic before order creation."
-前端订单创建后,After Frontend Order Creation
+前端订单创建后,"After Frontend Order Creation"
 在前端订单创建之后注入内容，允许其他模块在订单创建后执行自定义逻辑。,"Inject content after frontend order creation, allowing other modules to execute custom logic after order creation."
-订单管理模块安装完成,Order Management Module Installed
+订单管理模块安装完成,"Order Management Module Installed"
 "已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","The following data tables have been created: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
-安装失败: %{1},Installation failed: %{1}
-订单留言槽默认部件迁移失败（%{1}）：%{2},Default component migration failed for order message slot (%{1}): %{2}
-您的订单已发货,Your order has shipped
-开发物流中继未启用,Logistics relay development is not enabled
-【演示】开发中继探针,【Demo】Development relay probe
-【演示】中继探针节点,【Demo】Relay probe node
+"安装失败: %{1}","Installation failed: %{1}"
+订单留言槽默认部件迁移失败（%{1}）：%{2},"Default component migration failed for order message slot (%{1}): %{2}"
+您的订单已发货,"Your order has shipped"
+开发物流中继未启用,"Logistics relay development is not enabled"
+【演示】开发中继探针,"【Demo】Development relay probe"
+【演示】中继探针节点,"【Demo】Relay probe node"
 发货操作失败，请稍后重试。,"The shipping operation failed, please try again later."
-物流单号已更新，并已尝试通知客户,Tracking updated; tried notifying customer
-物流单号已更新,Tracking number updated
-更新物流单号失败,Update tracking failed
-已交由物流商履约（发货通道已锁定）,Handed to carrier for fulfill (shipping channel locked)
-已改回商家自履约,Switched back to merchant fulfill
-切换履约通道失败,Switch fulfillment channel failed
-发货命令已幂等重放,Ship command idempotently replayed
+物流单号已更新，并已尝试通知客户,"Tracking updated; tried notifying customer"
+物流单号已更新,"Tracking number updated"
+更新物流单号失败,"Update tracking failed"
+已交由物流商履约（发货通道已锁定）,"Handed to carrier for fulfill (shipping channel locked)"
+已改回商家自履约,"Switched back to merchant fulfill"
+切换履约通道失败,"Switch fulfillment channel failed"
+发货命令已幂等重放,"Ship command idempotently replayed"
 发货已提交；已按勾选尝试发送「已发货」邮件给客户,"Shipment submitted; tried sending ""shipped"" email to customer per checkbox"
-发货已提交（无运单号，未发送发货邮件；可稍后补充）,Shipment submitted (no tracking; shipped email not sent; you can add later)
-发货已提交（无客户邮箱，未发信）,Shipment submitted (no customer email; not sent)
-发货已提交（未勾选或未能发送通知邮件）,Shipment submitted (notify unchecked or email failed)
-发货已提交（未勾选通知客户，未发邮件）,Shipment submitted (customer notify unchecked; no email)
-请填写物流单号,Please enter tracking number
-物流单号过长，请控制在 100 字以内,Tracking number too long; keep within 100 chars
-请选择有效的承运商,Please select a valid carrier
-订单已交由物流商履约，请使用打单发货,Order handed to carrier; use label printing to ship
+发货已提交（无运单号，未发送发货邮件；可稍后补充）,"Shipment submitted (no tracking; shipped email not sent; you can add later)"
+发货已提交（无客户邮箱，未发信）,"Shipment submitted (no customer email; not sent)"
+发货已提交（未勾选或未能发送通知邮件）,"Shipment submitted (notify unchecked or email failed)"
+发货已提交（未勾选通知客户，未发邮件）,"Shipment submitted (customer notify unchecked; no email)"
+请填写物流单号,"Please enter tracking number"
+"物流单号过长，请控制在 100 字以内","Tracking number too long; keep within 100 chars"
+请选择有效的承运商,"Please select a valid carrier"
+订单已交由物流商履约，请使用打单发货,"Order handed to carrier; use label printing to ship"
 打单需要包裹重量（克），或先维护商品重量,"Label printing needs package weight (g), or maintain product weight first"
-收货地址不完整，无法打单,Incomplete shipping address; cannot print label
-缺少发货明细，无法打单,Missing shipment details; cannot print label
-没有可用的物流商打单服务,No carrier label services available
-履约失败且取消运单未确认，已进入补偿队列,Fulfillment failed and cancel waybill unconfirmed; entered compensation queue
-物流商打单失败，请稍后重试或改用手工登记,Carrier label failed; retry later or register manually
-发货记录不存在,Shipment record does not exist
-订单发货控制器,Order Shipping Controller
+收货地址不完整，无法打单,"Incomplete shipping address; cannot print label"
+缺少发货明细，无法打单,"Missing shipment details; cannot print label"
+没有可用的物流商打单服务,"No carrier label services available"
+履约失败且取消运单未确认，已进入补偿队列,"Fulfillment failed and cancel waybill unconfirmed; entered compensation queue"
+物流商打单失败，请稍后重试或改用手工登记,"Carrier label failed; retry later or register manually"
+发货记录不存在,"Shipment record does not exist"
+订单发货控制器,"Order Shipping Controller"
 truck,truck
-订单仓维履约管理,Order warehouse maintenance and fulfillment management
-查看订单发货,View order shipment
+订单仓维履约管理,"Order warehouse maintenance and fulfillment management"
+查看订单发货,"View order shipment"
 list,list
-查看可履约单元和进度,View fulfillable units and progress
-提交发货,Submit shipment
-按仓维 CAS 提交部分或全部发货,Submit partial or complete shipments according to warehouse CAS
-补充物流单号,Add tracking number
-后补运单号,Add tracking later
-切换履约通道,Switch fulfillment channel
-商家自履约或物流商履约,Merchant self-fulfill or carrier fulfill
+查看可履约单元和进度,"View fulfillable units and progress"
+提交发货,"Submit shipment"
+"按仓维 CAS 提交部分或全部发货","Submit partial or complete shipments according to warehouse CAS"
+补充物流单号,"Add tracking number"
+后补运单号,"Add tracking later"
+切换履约通道,"Switch fulfillment channel"
+商家自履约或物流商履约,"Merchant self-fulfill or carrier fulfill"
 退款操作失败，请稍后重试。,"The refund operation failed, please try again later."
-订单退款控制器,Order Refund Controller
+订单退款控制器,"Order Refund Controller"
 cash,cash
-订单并发安全退款管理,Order concurrent safe refund management
-查看订单退款,View order refunds
-查看可退款订单项和退款案例,View refundable line items and refund cases
-提交退款,Submit a refund
-锁内占用可退金额和数量并生成退款 outbox,The refundable amount and quantity are occupied in the lock and a refund is generated outbox
-万能结账,Universal checkout
-快捷支付,Express checkout
-快捷购买,Quick buy
-找朋友代付,Ask a friend to pay
+订单并发安全退款管理,"Order concurrent safe refund management"
+查看订单退款,"View order refunds"
+查看可退款订单项和退款案例,"View refundable line items and refund cases"
+提交退款,"Submit a refund"
+"锁内占用可退金额和数量并生成退款 outbox","The refundable amount and quantity are occupied in the lock and a refund is generated outbox"
+万能结账,"Universal checkout"
+快捷支付,"Express checkout"
+快捷购买,"Quick buy"
+找朋友代付,"Ask a friend to pay"
 未标记,Unmarked
-客户调整已保存,Customer adjustment saved
-订单创建成功,Order created successfully
-备注已添加,Note added
-订单取消成功,Order cancelled successfully
-参数错误,Invalid parameters
-订单状态更新成功,Order status updated successfully
-订单管理,Order Management
+客户调整已保存,"Customer adjustment saved"
+订单创建成功,"Order created successfully"
+备注已添加,"Note added"
+订单取消成功,"Order cancelled successfully"
+参数错误,"Invalid parameters"
+订单状态更新成功,"Order status updated successfully"
+订单管理,"Order Management"
 cart,cart
-查看订单列表,View order list
-查看订单详情,View order details
+查看订单列表,"View order list"
+查看订单详情,"View order details"
 eye,eye
-编辑订单,Edit Order
+编辑订单,"Edit Order"
 edit,edit
-保存订单,Save order
+保存订单,"Save order"
 save,save
-更新订单状态,Update order status
+更新订单状态,"Update order status"
 refresh,refresh
-取消订单,Cancel order
+取消订单,"Cancel order"
 close,close
-订单收款记录,Order collection record
-支付 ID,Payment ID
-支付方式,Payment Method
+订单收款记录,"Order collection record"
+"支付 ID","Payment ID"
+支付方式,"Payment Method"
 金额,Amount
-交易号,Transaction number
-创建时间,Created At
-订单异常与补偿,Order exceptions and compensation
-记录 ID,Record ID
-补偿编号,Compensation number
-退款案例,Refund case
+交易号,"Transaction number"
+创建时间,"Created At"
+订单异常与补偿,"Order exceptions and compensation"
+"记录 ID","Record ID"
+补偿编号,"Compensation number"
+退款案例,"Refund case"
 操作,Actions
-错误码,error code
-尝试次数,number of attempts
-订单业务记录,Order business records
-订单关联业务记录,Order related business records
+错误码,"error code"
+尝试次数,"number of attempts"
+订单业务记录,"Order business records"
+订单关联业务记录,"Order related business records"
 warning,warning
-查看订单退款补偿异常,View order refund compensation exceptions
-支付处理成功,Payment processed successfully
-退款成功,Refund successful
-处理支付,Process payments
+查看订单退款补偿异常,"View order refund compensation exceptions"
+支付处理成功,"Payment processed successfully"
+退款成功,"Refund successful"
+处理支付,"Process payments"
 circle,circle
-退款支付,Refund payment
+退款支付,"Refund payment"
 开票操作失败，请稍后重试。,"The invoicing operation failed, please try again later."
-订单发票控制器,Order Invoice Controller
+订单发票控制器,"Order Invoice Controller"
 file,file
-支付 effect 驱动的订单发票管理,Payment effect-driven order invoice management
-查看订单发票,View order invoice
-查看支付 effect 和最小发票,View payment effects and minimum invoices
-处理开票 effect,Processing the invoicing effect
+"支付 effect 驱动的订单发票管理","Payment effect-driven order invoice management"
+查看订单发票,"View order invoice"
+"查看支付 effect 和最小发票","View payment effects and minimum invoices"
+"处理开票 effect","Processing the invoicing effect"
 plus,plus
-在 Payment outbox 事务内幂等生成最小发票,Generate minimum invoice idempotently within Payment outbox transaction
-状态不存在,Status does not exist
-状态代码和名称不能为空,Status code and name cannot be empty
-状态代码已存在,Status code already exists
-状态保存成功,Status saved successfully
-缺少状态ID,Status ID is required
-系统状态不能删除,System status cannot be deleted
-该状态正在被使用，不能删除,This status is in use and cannot be deleted
-状态删除成功,Status deleted successfully
-状态状态已更新,Status updated successfully
-订单状态控制器,Order status controller
-订单状态管理,Order Status Management
-查看订单状态,Check order status
-查看订单状态列表,View order status list
-编辑订单状态,Edit order status
-保存订单状态,Save order status
-删除订单状态,Delete order status
+"在 Payment outbox 事务内幂等生成最小发票","Generate minimum invoice idempotently within Payment outbox transaction"
+状态不存在,"Status does not exist"
+状态代码和名称不能为空,"Status code and name cannot be empty"
+状态代码已存在,"Status code already exists"
+状态保存成功,"Status saved successfully"
+缺少状态ID,"Status ID is required"
+系统状态不能删除,"System status cannot be deleted"
+该状态正在被使用，不能删除,"This status is in use and cannot be deleted"
+状态删除成功,"Status deleted successfully"
+状态状态已更新,"Status updated successfully"
+订单状态控制器,"Order status controller"
+订单状态管理,"Order Status Management"
+查看订单状态,"Check order status"
+查看订单状态列表,"View order status list"
+编辑订单状态,"Edit order status"
+保存订单状态,"Save order status"
+删除订单状态,"Delete order status"
 trash,trash
-切换订单状态,Switch order status
+切换订单状态,"Switch order status"
 switch,switch
-切换订单状态启用状态,Toggle order status enabled
-获取订单列表成功,Successfully fetched order list
-订单ID不能为空,Order ID cannot be empty
-获取订单详情成功,Order details retrieved successfully
-订单数据不能为空,Order data cannot be empty
-更新数据不能为空,Update data cannot be empty
-订单更新成功,Order updated successfully
-发货记录创建成功,Shipment record created successfully
-退款申请创建成功,Refund request created successfully
-发票生成成功,Invoice generated successfully
+切换订单状态启用状态,"Toggle order status enabled"
+获取订单列表成功,"Successfully fetched order list"
+订单ID不能为空,"Order ID cannot be empty"
+获取订单详情成功,"Order details retrieved successfully"
+订单数据不能为空,"Order data cannot be empty"
+更新数据不能为空,"Update data cannot be empty"
+订单更新成功,"Order updated successfully"
+发货记录创建成功,"Shipment record created successfully"
+退款申请创建成功,"Refund request created successfully"
+发票生成成功,"Invoice generated successfully"
 待处理,Pending
 处理中,Processing
 已完成,Completed
 已取消,Cancelled
 已退款,Refunded
-待支付,Pending Payment
-部分支付,Partial Payment
-待发货,Pending Shipment
-部分发货,Partial Shipment
-Order asset snapshot 必填字段为空：%{1},Order asset snapshot required fields are empty: %{1}
-Order asset snapshot 数值/hash 非法,Order asset snapshot value/hash is illegal
-我的订单,My Orders
-订单留言,Order note
-如有特殊要求请留言,Leave a message if you have special requirements
-查看订单进度与支付状态,View order progress and payment status
+待支付,"Pending Payment"
+部分支付,"Partial Payment"
+待发货,"Pending Shipment"
+部分发货,"Partial Shipment"
+"Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
+"Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
+我的订单,"My Orders"
+查看订单进度与支付状态,"View order progress and payment status"
 已关闭,Closed
-未知状态,unknown status
-默认按结账组汇总；部分退款或状态分叉时展开明细,Orders are grouped by checkout by default; details expand for partial refunds or split statuses
-订单详情,Order Details
-订单商品,Order items
+未知状态,"unknown status"
+默认按结账组汇总；部分退款或状态分叉时展开明细,"Orders are grouped by checkout by default; details expand for partial refunds or split statuses"
+订单详情,"Order Details"
+订单商品,"Order items"
 商品,Products
 SKU,SKU
 数量,Quantity
 单价,Price
 小计,Subtotal
-收货信息,Receiving information
+收货信息,"Receiving information"
 帮我付订单在店面不展示收货地址。如需更正，请撤销后重新发起。,"Pay-for-me orders hide shipping address on storefront. To correct, cancel and re-initiate."
-物流方式,Shipping method
-物流追踪,Logistics tracking
+物流方式,"Shipping method"
+物流追踪,"Logistics tracking"
 商品小计,Subtotal
-运费,Shipping Amount
-税费,Tax Amount
-订单总额,Grand Total
-返回订单列表,Return to order list
-暂无订单,No orders yet
-继续支付,Continue payment
-查看详情,View Details
-订单明细,Order details
+运费,"Shipping Amount"
+税费,"Tax Amount"
+订单总额,"Grand Total"
+返回订单列表,"Return to order list"
+暂无订单,"No orders yet"
+继续支付,"Continue payment"
+查看详情,"View Details"
+订单明细,"Order details"
 退货,Return
-与我的订单,And My Orders
-查询失败,Query failed
-物流单号,Tracking Number
+与我的订单,"And My Orders"
+查询失败,"Query failed"
+物流单号,"Tracking Number"
 当前,Current
-结账配送（参考）,Checkout shipping (reference)
-未指定,Not specified
-对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。,"Aligned with Shopify: register shipment first; tracking can be added later; no ""shipped"" email without tracking."
-物流商履约（已锁定打单通道）,Carrier fulfill (label channel locked)
-改回商家自履约,Switch back to merchant fulfill
-商家自履约,Merchant self-fulfill
-交由物流商履约,Fulfill via carrier
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
+结账配送（参考）,"Checkout shipping (reference)"
+未指定,"Not specified"
+"对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。","Aligned with Shopify: register shipment first; tracking can be added later; no ""shipped"" email without tracking."
+物流商履约（已锁定打单通道）,"Carrier fulfill (label channel locked)"
+改回商家自履约,"Switch back to merchant fulfill"
+商家自履约,"Merchant self-fulfill"
+交由物流商履约,"Fulfill via carrier"
 本单暂无可发货履约单元（可能已全部发出，或尚未生成履约单元）。,"No shippable fulfillment units on this order (maybe all shipped, or units not generated yet)."
-待发货包裹,Packages to ship
-发货仓,Shipping warehouse
-平台履约（未绑仓库）,Platform fulfill (no WH bound)
+待发货包裹,"Packages to ship"
+发货仓,"Shipping warehouse"
+平台履约（未绑仓库）,"Platform fulfill (no WH bound)"
 进度,Progress
 承运商,Carrier
-其他（手填名称）,Other (enter name)
-其他承运商名称,Other carrier name
-选「其他」时填写,Fill when selecting Other
+其他（手填名称）,"Other (enter name)"
+其他承运商名称,"Other carrier name"
+选「其他」时填写,"Fill when selecting Other"
 可选，可后补,"Optional, can add later"
-留空则不发送发货邮件,Leave blank to skip shipping email
-本次数量,This quantity
-有运单号时发送「已发货」邮件,Send shipped email when tracking exists
-确认发货,Confirm shipment
-通过物流商打单,Print label via carrier
-打单服务,Label printing
-重量（克）,Weight (g)
-缺商品重时必填,Required when product weight missing
-打单成功后通知客户,Notify customer after label success
-确认打单并发货,Confirm label and ship
-订单发货记录,Order shipment log
-履约进度账本,Fulfillment progress ledger
-履约单元,fulfillment unit
+留空则不发送发货邮件,"Leave blank to skip shipping email"
+本次数量,"This quantity"
+有运单号时发送「已发货」邮件,"Send shipped email when tracking exists"
+确认发货,"Confirm shipment"
+通过物流商打单,"Print label via carrier"
+打单服务,"Label printing"
+重量（克）,"Weight (g)"
+缺商品重时必填,"Required when product weight missing"
+打单成功后通知客户,"Notify customer after label success"
+确认打单并发货,"Confirm label and ship"
+订单发货记录,"Order shipment log"
+履约进度账本,"Fulfillment progress ledger"
+履约单元,"fulfillment unit"
 版本,Version
 时间,Time
-本单可退项；占额由服务端重算。,Refundable items on this order; holds recalculated server-side.
-可退数量,Refundable qty
+本单可退项；占额由服务端重算。,"Refundable items on this order; holds recalculated server-side."
+可退数量,"Refundable qty"
 提交,Submit
-本单暂无可退款订单项,No refundable items on this order
-退款数量,Refund quantity
-后台退款,Backstage refund
-退款原因,Reason for refund
+本单暂无可退款订单项,"No refundable items on this order"
+退款数量,"Refund quantity"
+后台退款,"Backstage refund"
+退款原因,"Reason for refund"
 退款,Refund
-案例,Case study
-渠道退款号,Channel refund ID
+案例,"Case study"
+渠道退款号,"Channel refund ID"
 原因,Reason
-顾客视图,customer view
-支付记录与批发沟通（插件槽位）。,Payment records & wholesale chat (plugin slots).
-订单支付记录,Order payment records
-批发订单沟通,Wholesale order chat
-打开完整详情,Open full details
-状态流转,Status flow
-选择客户,Select customer
-当前为访客结账，可改为注册客户,Guest checkout now; can switch to registered customer
-客户姓名（展示）,Customer name (display)
-客户电话,Customer Phone
-收货地址,Shipping address
+顾客视图,"customer view"
+支付记录与批发沟通（插件槽位）。,"Payment records & wholesale chat (plugin slots)."
+订单支付记录,"Order payment records"
+批发订单沟通,"Wholesale order chat"
+打开完整详情,"Open full details"
+状态流转,"Status flow"
+选择客户,"Select customer"
+当前为访客结账，可改为注册客户,"Guest checkout now; can switch to registered customer"
+客户姓名（展示）,"Customer name (display)"
+客户电话,"Customer Phone"
+收货地址,"Shipping address"
 收货人,Consignee
 电话,Phone
 邮箱,Email
-邮编,Postal code
-详细地址,Detailed address
-门牌号 / 楼栋单元等,"Building / unit number, etc."
-账单地址,Billing address
-账单姓名,Billing name
-国家代码,Country code
+邮编,"Postal code"
+详细地址,"Detailed address"
+"门牌号 / 楼栋单元等","Building / unit number, etc."
+账单地址,"Billing address"
+账单姓名,"Billing name"
+国家代码,"Country code"
 省/州,Province/State
 城市,City
-区县,District / county
-当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。,No billing address snapshot; fill then save. Avoid competing with shipping cascade on same page; empty billing uses text fields.
-选择支付方式,Select payment method
+区县,"District / county"
+当前无账单地址快照；填写后可保存。避免与收货级联同页争用，空账单使用文本字段。,"No billing address snapshot; fill then save. Avoid competing with shipping cascade on same page; empty billing uses text fields."
+选择支付方式,"Select payment method"
 订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。,"When order has no payment method yet, summary shows ""Unspecified"" with payment status; select an available method here then save."
-配送方式,Shipping Method
-运输方式,Shipping method
-未指定配送方式,Shipping method not specified
-系统代码,System code
+配送方式,"Shipping Method"
+运输方式,"Shipping method"
+未指定配送方式,"Shipping method not specified"
+系统代码,"System code"
 未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。,"When shipping service catalog is not loaded, enter code directly; summary prefers readable names."
-订单备注,Order Notes
-订单项,Order Items
-添加订单项,Add Order Item
-返回列表,Back to list
-保存客户调整,Save customer adjustment
-订单列表,Order List
-新建订单,Create Order
-搜索订单号、分组号 G-xxx、UUID、客户,"Search order No., group G-xxx, UUID, customer"
-全部状态,All Status
-全部支付状态,All Payment Status
-全部发货状态,All Fulfillment Status
-全部类型,All types
-结账来源,Checkout source
-全部来源,All sources
+订单备注,"Order Notes"
+订单项,"Order Items"
+添加订单项,"Add Order Item"
+返回列表,"Back to list"
+保存客户调整,"Save customer adjustment"
+订单列表,"Order List"
+新建订单,"Create Order"
+"搜索订单号、分组号 G-xxx、UUID、客户","Search order No., group G-xxx, UUID, customer"
+全部状态,"All Status"
+全部支付状态,"All Payment Status"
+全部发货状态,"All Fulfillment Status"
+全部类型,"All types"
+结账来源,"Checkout source"
+全部来源,"All sources"
 搜索,Search
 重置,Reset
-订单列表发货,Ship from order list
+订单列表发货,"Ship from order list"
 类型,Type
 来源,Source
 客户,Customer
-订单状态,Order Status
-支付状态,Payment Status
-发货状态,Fulfillment Status
-暂无数据,No Data
+订单状态,"Order Status"
+支付状态,"Payment Status"
+发货状态,"Fulfillment Status"
+暂无数据,"No Data"
 匿名,Anonymous
 编辑,Edit
-上一页,Previous Page
-下一页,Next Page
+上一页,"Previous Page"
+下一页,"Next Page"
 系统,System
-订单基本信息,Order Information
-客户姓名,Customer Name
+订单基本信息,"Order Information"
+客户姓名,"Customer Name"
 折扣,Discount
-批发信用优惠,Wholesale credit discount
-汇率快照,Exchange rate snapshot
-现金定金,Cash deposit
-状态操作,Status Actions
-更新状态,Update Status
-暂无收货地址,No shipping addresses
-暂无账单地址,No billing addresses
-配送服务,Shipping services.
-备注与履约方式,Notes & fulfillment method
-点击复制服务码,Click to copy service code
-（无备注）,(No notes)
-已复制服务码,Service code copied
+批发信用优惠,"Wholesale credit discount"
+汇率快照,"Exchange rate snapshot"
+现金定金,"Cash deposit"
+状态操作,"Status Actions"
+更新状态,"Update Status"
+暂无收货地址,"No shipping addresses"
+暂无账单地址,"No billing addresses"
+配送服务,"Shipping services."
+备注与履约方式,"Notes & fulfillment method"
+点击复制服务码,"Click to copy service code"
+（无备注）,"(No notes)"
+已复制服务码,"Service code copied"
 复制失败，请手动选择,"Copy failed, please select manually"
-结账快照,Checkout snapshot
-价格快照,Price snapshot
-行优惠,Line discount
-行总计,Row Total
+结账快照,"Checkout snapshot"
+价格快照,"Price snapshot"
+行优惠,"Line discount"
+行总计,"Row Total"
 活动,Campaign
-暂无订单项,No Order Items
+暂无订单项,"No Order Items"
 成交,Deal
-原价,Original price
-原价未记录,Original price not recorded
-活动价,Promo price
-无活动记录,No campaign records
-订单历史,Order History
-是否通知客户,Customer Notified
-暂无历史记录,No History Records
+原价,"Original price"
+原价未记录,"Original price not recorded"
+活动价,"Promo price"
+无活动记录,"No campaign records"
+订单历史,"Order History"
+是否通知客户,"Customer Notified"
+暂无历史记录,"No History Records"
 是,Yes
 否,No
-管理订单,Manage orders
-订单摘要,Order summary
-结账组号,Checkout group ID
-商品行数,Product line count
-商品数量累计,Product qty total
-商品行累计,Product line total
-优惠项目,Discount items
-无优惠项目,No discount items
-累计校验：行累计与商品小计不一致，请核对快照,Cumulative check: line totals mismatch product subtotal; please verify snapshot
-状态调整,Status adjustment
-状态备注,Status note
-通知客户,Notify customer
-订单办理,Process order
+管理订单,"Manage orders"
+订单摘要,"Order summary"
+结账组号,"Checkout group ID"
+商品行数,"Product line count"
+商品数量累计,"Product qty total"
+商品行累计,"Product line total"
+优惠项目,"Discount items"
+无优惠项目,"No discount items"
+累计校验：行累计与商品小计不一致，请核对快照,"Cumulative check: line totals mismatch product subtotal; please verify snapshot"
+状态调整,"Status adjustment"
+状态备注,"Status note"
+通知客户,"Notify customer"
+订单办理,"Process order"
 加载中…,Loading...
 加载失败，请重试,"Failed to load, please retry"
 发货,Ship
-支付与沟通,Payment & chat
-客户调整,Customer adjustment
-切换到此页签时异步加载本单发货。,Async-load this order shipments when switching to tab.
-切换到此页签时异步加载本单退款。,Async-load this order refunds when switching to tab.
-切换到此页签时异步加载支付与沟通。,Async-load payment & chat when switching to this tab.
-结账快照不可改行,Checkout snapshot lines immutable
+支付与沟通,"Payment & chat"
+客户调整,"Customer adjustment"
+切换到此页签时异步加载本单发货。,"Async-load this order shipments when switching to tab."
+切换到此页签时异步加载本单退款。,"Async-load this order refunds when switching to tab."
+切换到此页签时异步加载支付与沟通。,"Async-load payment & chat when switching to this tab."
+结账快照不可改行,"Checkout snapshot lines immutable"
 点击展开编辑客户、地址与备注,"Click to expand edit customer, address & notes"
 更多,More
-沟通备注 · 取消 · 历史,Chat notes · cancel · history
-追加沟通备注,Append chat note
-写入订单历史，可选通知客户,Write to order history; optionally notify customer
-添加备注,Add note
-取消原因,Cancel reason
-确认取消,Confirm cancel
-支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。,"Payment records and chat can also async-load under ""Order processing → Payment & chat"" tab above."
-商品名称,Product Name
+"沟通备注 · 取消 · 历史","Chat notes · cancel · history"
+追加沟通备注,"Append chat note"
+写入订单历史，可选通知客户,"Write to order history; optionally notify customer"
+添加备注,"Add note"
+取消原因,"Cancel reason"
+确认取消,"Confirm cancel"
+"支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。","Payment records and chat can also async-load under ""Order processing → Payment & chat"" tab above."
+商品名称,"Product Name"
 删除,Delete
-按状态筛选,Filter by status
+按状态筛选,"Filter by status"
 筛选,filter
-暂无记录,No record yet
-新建状态,Create Status
-状态代码,Status Code
-状态名称,Status Name
+暂无记录,"No record yet"
+新建状态,"Create Status"
+状态代码,"Status Code"
+状态名称,"Status Name"
 颜色,Color
 图标,Icon
-是否系统,Is system
+是否系统,"Is system"
 是否启用,Enable
 排序,Sort
-暂无状态,No Status
+暂无状态,"No Status"
 启用,Enabled
 禁用,Disabled
-状态已删除,Status Deleted
-删除失败,Deletion failed
+状态已删除,"Status Deleted"
+删除失败,"Deletion failed"
 删除失败，请重试,"Deletion failed, please retry"
-操作失败,Operation failed
+操作失败,"Operation failed"
 操作失败，请重试,"Operation failed, please retry"
-确定要删除状态,Are you sure you want to delete the status
+确定要删除状态,"Are you sure you want to delete the status"
 吗？,?
-确认删除,Confirm deletion
-确定删除,Confirm deletion
+确认删除,"Confirm deletion"
+确定删除,"Confirm deletion"
 取消,Cancel
-编辑状态,Edit Status
+编辑状态,"Edit Status"
 "只能包含小写字母和下划线，如：pending, processing","Can only contain lowercase letters and underscores, e.g., pending, processing"
-默认语言（中文）的状态名称,Status Name of Default Language (Chinese)
-状态颜色,Status Color
-状态图标,Status Icon
-Material Design Icons 类名，如：check,"Material Design Icons class name, such as: check"
-状态描述,Status Description
-是否系统状态,Is System Status
-多语言翻译,Multilingual Translation
-英文 (en_US),English (en_US)
-英文状态名称,English Status Name
-英文状态描述,English Status Description
+默认语言（中文）的状态名称,"Status Name of Default Language (Chinese)"
+状态颜色,"Status Color"
+状态图标,"Status Icon"
+"Material Design Icons 类名，如：check","Material Design Icons class name, such as: check"
+状态描述,"Status Description"
+是否系统状态,"Is System Status"
+多语言翻译,"Multilingual Translation"
+"英文 (en_US)","English (en_US)"
+英文状态名称,"English Status Name"
+英文状态描述,"English Status Description"
 状态名称会通过翻译系统自动翻译。如果在此处填写了翻译，将优先使用数据库中的翻译；否则使用翻译文件中的翻译。,"Status names are automatically translated through the translation system. If a translation is provided here, the database translation will be used first; otherwise, the translation from the translation file will be used."
 保存,Save
 返回,Back
-保存成功,Saved successfully
-保存失败,Save Failed
-保存失败，请重试,Save failed. Please try again
-订单发货管理,Order delivery management
-对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。结账配送仅作参考。,"Aligned with Shopify: register shipment first; tracking can be added later; no ""shipped"" email without tracking. Checkout shipping is reference only."
-待发货履约单元,Fulfillment unit to be shipped
-暂无可发货履约单元,There is currently no delivery fulfillment unit
+保存成功,"Saved successfully"
+保存失败,"Save Failed"
+保存失败，请重试,"Save failed. Please try again"
+订单发货管理,"Order delivery management"
+"对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。结账配送仅作参考。","Aligned with Shopify: register shipment first; tracking can be added later; no ""shipped"" email without tracking. Checkout shipping is reference only."
+待发货履约单元,"Fulfillment unit to be shipped"
+暂无可发货履约单元,"There is currently no delivery fulfillment unit"
 包裹,Package
-已发/总量,Issued/total amount
+已发/总量,"Issued/total amount"
 可选,Optional
-发货数量,Shipment quantity
-仓维发货进度账本,Warehouse delivery progress ledger
+发货数量,"Shipment quantity"
+仓维发货进度账本,"Warehouse delivery progress ledger"
 订单,Order
-幂等键,idempotent keys
-暂无进度记录,No progress record yet
-订单退款管理,Order refund management
-退款金额由服务端按冻结订单项重算；提交会在同一事务内占用可退数量与金额，并生成 PaymentRefund 和确定性 outbox。,"The refund amount is recalculated by the server based on frozen order items; submission will occupy the refundable quantity and amount in the same transaction, and generate PaymentRefund and deterministic outbox."
-可退款订单项,Refundable line items
-可申请数量,Available quantity
-暂无可退款订单项,There are currently no refundable line items
-退款案例与占额状态,Refund cases and balance status
-金额（minor）,Amount (minor)
-暂无退款案例,No refund cases yet
-订单发票管理,Order invoice management
-只处理 Payment 已生成的确定性 invoice effect；页面不能绕过支付事实手工创建发票。每张已支付订单最多生成一张最小发票。,Only handles the deterministic invoice effect for which Payment has been generated; the page cannot bypass the payment fact to manually create an invoice. A maximum of one minimum invoice will be generated for each paid order.
-开票 effect,Invoicing effect
+幂等键,"idempotent keys"
+暂无进度记录,"No progress record yet"
+订单退款管理,"Order refund management"
+"退款金额由服务端按冻结订单项重算；提交会在同一事务内占用可退数量与金额，并生成 PaymentRefund 和确定性 outbox。","The refund amount is recalculated by the server based on frozen order items; submission will occupy the refundable quantity and amount in the same transaction, and generate PaymentRefund and deterministic outbox."
+可退款订单项,"Refundable line items"
+可申请数量,"Available quantity"
+暂无可退款订单项,"There are currently no refundable line items"
+退款案例与占额状态,"Refund cases and balance status"
+金额（minor）,"Amount (minor)"
+暂无退款案例,"No refund cases yet"
+订单发票管理,"Order invoice management"
+"只处理 Payment 已生成的确定性 invoice effect；页面不能绕过支付事实手工创建发票。每张已支付订单最多生成一张最小发票。","Only handles the deterministic invoice effect for which Payment has been generated; the page cannot bypass the payment fact to manually create an invoice. A maximum of one minimum invoice will be generated for each paid order."
+"开票 effect","Invoicing effect"
 Outbox,Outbox
-Effect Key,Effect Key
-暂无开票 effect,No invoicing effect yet
-验证幂等结果,Verify idempotent results
-处理开票,Process invoicing
-已生成发票,Invoice generated
-发票号,Invoice number
-税额（minor）,Tax amount (minor)
-暂无发票,No invoice yet
-订单退款 Outbox 消费,Order Refund Outbox Purchase
+"Effect Key","Effect Key"
+"暂无开票 effect","No invoicing effect yet"
+验证幂等结果,"Verify idempotent results"
+处理开票,"Process invoicing"
+已生成发票,"Invoice generated"
+发票号,"Invoice number"
+税额（minor）,"Tax amount (minor)"
+暂无发票,"No invoice yet"
+"订单退款 Outbox 消费","Order Refund Outbox Purchase"
 幂等处理退款渠道提交、状态对账及到账后的库存和通知任务,"Idempotent processing of refund channel submission, status reconciliation, and post-account inventory and notification tasks"
-订单支付后副作用消费,Post-payment order effect consumer
-幂等生成最小发票并准备履约动作,Idempotently create the minimal invoice and prepare fulfillment
-Order Facade idempotency 冲突：key=%{1},Order Facade idempotency conflict: key=%{1}
-CheckoutGroup 提交失败并已回滚：%{1},CheckoutGroup commit failed and rolled back: %{1}
-order_uuid 不能为空,order_uuid cannot be empty
-customer_id 须 > 0,customer_id must be > 0
-Order 不存在：%{1},Order does not exist: %{1}
-订单已绑定其他账户,The order is already linked to another account
-CheckoutGroup 不存在：%{1},CheckoutGroup does not exist: %{1}
-website_id/store_id 超出有效范围,website_id/store_id exceeds the valid range
-idempotency_key 长度须为 1..128,idempotency_key length must be 1..128
-request_hash 必须为小写 SHA-256,request_hash must be lowercase SHA-256
-currency 必须为三位大写货币代码,currency must be a three-digit uppercase currency code
-customer_id 须 >=0,customer_id must >=0
-shipping_amount_minor 须 >=0,shipping_amount_minor must be >=0
-订单行不能为空,Order line cannot be empty
-订单行超过上限 %{1},Order line exceeds limit %{1}
-tax_amount_minor 须为非负整数,tax_amount_minor must be a non-negative integer
-行 %{1} 缺少 name/qty_minor/unit_price_minor,Row %{1} is missing name/qty_minor/unit_price_minor
-行 %{1} 名称、数量或单价非法,"Row %{1} illegal name, quantity or unit price"
-行 %{1} SKU 非法,Row %{1} SKU is illegal
-行 %{1} split_key 非法,Row %{1} split_key is illegal
-行 %{1} provider_code 非法,Line %{1}: Invalid provider code.
-行 %{1} global_offer_uuid 非法,Line %{1}: Invalid global_offer_uuid.
-行 %{1} fulfillment_metadata 必须为数组,"The field ""%{1} fulfillment_metadata"" must be an array."
-行 %{1} fulfillment_metadata 非法,Invalid value for fulfillment metadata field: %{1}.
-税额不能为负数,Tax amount cannot be negative
-Tax 快照总额与订单命令不一致,The Tax snapshot total does not match the order command
-Tax 引擎快照的规则或 Scope 元数据无效,The Tax engine snapshot has invalid rule or Scope metadata
-Tax 快照行标识或税额无效,The Tax snapshot line ID or amount is invalid
-Tax 逐行税额与 Group 税额不守恒,Tax line amounts do not conserve the Checkout Group total
-none Tax 快照必须为零税且不得包含引擎行,A none Tax snapshot must be zero and contain no engine lines
-订单行与 Tax 快照行无法一一对应,Order lines and Tax snapshot lines do not match one-to-one
-Tax 快照包含订单中不存在的行,The Tax snapshot contains a line not present in the order
-Order Tax 分配与 Group 税额不守恒,Allocated Order Tax does not conserve the Checkout Group total
-订单金额乘法溢出,Order amount multiplication overflow
-订单金额加法溢出,Order amount addition overflows
-Order Tax 快照与已分配税额不一致,The Order Tax snapshot does not match its allocated Tax amount
-非零税额必须提供完整 Tax 快照,A non-zero Tax amount requires a complete Tax snapshot
-订单冻结快照不可修改,Order frozen snapshot cannot be modified
-新订单拓扑的冻结字段不可修改,The frozen fields of the new order topology cannot be modified.
-订单已更新,Order updated
-订单当前状态不允许取消,Order cannot be cancelled in current status
-订单不存在,Order does not exist
-备注不能为空,Note cannot be empty
-%{1}不能为空,%{1} cannot be empty
-订单项不能为空,Order items cannot be empty
-商品名称不能为空,Product name cannot be empty
-商品数量不能为空,Product quantity cannot be empty
-商品价格不能为空,Product price cannot be empty
-混合业务订单,Mixed business orders
-订单兼容读取来源无效：%{1},Invalid order compatibility read source: %{1}
-支付金额不能为空,Payment amount cannot be empty
-支付方式不能为空,Payment method cannot be empty
-支付金额不能超过订单总额,Payment amount cannot exceed order total
-订单已支付,Order paid
-支付记录不存在,Payment record does not exist
-只有已支付的记录才能退款,Only paid records can be refunded
-退款金额不能超过支付金额,Refund amount cannot exceed payment amount
-只有已支付的订单才能发货,Only paid orders can be shipped
-订单已发货,Order shipped
-订单已完成,Order completed
-订单留言过长，请控制在 1000 字以内,Order note is too long. Please keep it within 1000 characters.
-订单留言已保存，将在结账时带入,Order note saved; it will be applied at checkout
-已清除订单留言,Order note cleared
-CheckoutGroup 不能无 Order,CheckoutGroup cannot be without Order
-CheckoutGroup 金额不守恒,CheckoutGroup amount is not conserved
-shipping owner 必须承载组运费 100%,The shipping owner must carry 100% of the group shipping cost
-非 owner Order 运费必须为 0,Non-owner Order shipping fee must be 0
-必须恰好一个 shipping charge owner,There must be exactly one shipping charge owner
-运费合计不守恒,Total freight charges are not conserved
-MoneySnapshot 不可变,MoneySnapshot is immutable
-entity_uuid 不能为空,entity_uuid cannot be empty
-website_id/store_id 须 >=0,website_id/store_id must >=0
-展示号分配冲突耗尽（最多 %{1} 次）,Display number allocation conflicts exhausted (up to %{1} times)
-展示号已被占用,Display number has been occupied
-非法 number_kind：%{1},Illegal number_kind:%{1}
-展示号随机源返回值越界,The return value of the display number random source is out of bounds
-展示号原子占位失败,Failed to occupy display number atom
-数据库标识符不能为空,Database identifier cannot be empty
-display_number 必须是 10 位数字,display_number must be 10 digits
-entity_uuid 不能为空且不能超过 36 字符,entity_uuid cannot be empty and cannot exceed 36 characters
-DisplayNumberAllocator all 仅 memory 模式,DisplayNumberAllocator all memory only mode
-DisplayNumberAllocator replaceMemory 仅 memory 模式,DisplayNumberAllocator replaceMemory memory only mode
-支付方式不支持优惠方式：%s,The payment method does not support the preferential method: %s
-无法唯一证明退款行的原 Warehouse,Unable to uniquely prove the original Warehouse of the refund line
-查号必须携带 number_kind,Directory lookup must carry number_kind
-display_number 不能为空,display_number cannot be empty
-展示号未找到：%{1}/%{2},Display number not found: %{1}/%{2}
-退款已到账,Refund has been received
-订单 %{1} 的退款已到账,Refund for order %{1} has been received
-退款迟到成功需要人工对账,Late and successful refunds require manual reconciliation
-订单 %{1} 的失败退款出现迟到成功，已冻结新退款,"The failed refund of order %{1} appeared late and successful, and the new refund has been frozen"
-订单退款 Outbox %{1},Order Refund Outbox %{1}
+订单支付后副作用消费,"Post-payment order effect consumer"
+幂等生成最小发票并准备履约动作,"Idempotently create the minimal invoice and prepare fulfillment"
+"Order Facade idempotency 冲突：key=%{1}","Order Facade idempotency conflict: key=%{1}"
+"CheckoutGroup 提交失败并已回滚：%{1}","CheckoutGroup commit failed and rolled back: %{1}"
+"order_uuid 不能为空","order_uuid cannot be empty"
+"customer_id 须 > 0","customer_id must be > 0"
+"Order 不存在：%{1}","Order does not exist: %{1}"
+订单已绑定其他账户,"The order is already linked to another account"
+"CheckoutGroup 不存在：%{1}","CheckoutGroup does not exist: %{1}"
+"website_id/store_id 超出有效范围","website_id/store_id exceeds the valid range"
+"idempotency_key 长度须为 1..128","idempotency_key length must be 1..128"
+"request_hash 必须为小写 SHA-256","request_hash must be lowercase SHA-256"
+"currency 必须为三位大写货币代码","currency must be a three-digit uppercase currency code"
+"customer_id 须 >=0","customer_id must >=0"
+"shipping_amount_minor 须 >=0","shipping_amount_minor must be >=0"
+订单行不能为空,"Order line cannot be empty"
+"订单行超过上限 %{1}","Order line exceeds limit %{1}"
+"tax_amount_minor 须为非负整数","tax_amount_minor must be a non-negative integer"
+"行 %{1} 缺少 name/qty_minor/unit_price_minor","Row %{1} is missing name/qty_minor/unit_price_minor"
+"行 %{1} 名称、数量或单价非法","Row %{1} illegal name, quantity or unit price"
+"行 %{1} SKU 非法","Row %{1} SKU is illegal"
+"行 %{1} split_key 非法","Row %{1} split_key is illegal"
+"行 %{1} provider_code 非法","Line %{1}: Invalid provider code."
+"行 %{1} global_offer_uuid 非法","Line %{1}: Invalid global_offer_uuid."
+"行 %{1} fulfillment_metadata 必须为数组","The field ""%{1} fulfillment_metadata"" must be an array."
+"行 %{1} fulfillment_metadata 非法","Invalid value for fulfillment metadata field: %{1}."
+税额不能为负数,"Tax amount cannot be negative"
+"Tax 快照总额与订单命令不一致","The Tax snapshot total does not match the order command"
+"Tax 引擎快照的规则或 Scope 元数据无效","The Tax engine snapshot has invalid rule or Scope metadata"
+"Tax 快照行标识或税额无效","The Tax snapshot line ID or amount is invalid"
+"Tax 逐行税额与 Group 税额不守恒","Tax line amounts do not conserve the Checkout Group total"
+"none Tax 快照必须为零税且不得包含引擎行","A none Tax snapshot must be zero and contain no engine lines"
+"订单行与 Tax 快照行无法一一对应","Order lines and Tax snapshot lines do not match one-to-one"
+"Tax 快照包含订单中不存在的行","The Tax snapshot contains a line not present in the order"
+"Order Tax 分配与 Group 税额不守恒","Allocated Order Tax does not conserve the Checkout Group total"
+订单金额乘法溢出,"Order amount multiplication overflow"
+订单金额加法溢出,"Order amount addition overflows"
+"Order Tax 快照与已分配税额不一致","The Order Tax snapshot does not match its allocated Tax amount"
+"非零税额必须提供完整 Tax 快照","A non-zero Tax amount requires a complete Tax snapshot"
+订单冻结快照不可修改,"Order frozen snapshot cannot be modified"
+新订单拓扑的冻结字段不可修改,"The frozen fields of the new order topology cannot be modified."
+订单已更新,"Order updated"
+订单当前状态不允许取消,"Order cannot be cancelled in current status"
+订单不存在,"Order does not exist"
+备注不能为空,"Note cannot be empty"
+%{1}不能为空,"%{1} cannot be empty"
+订单项不能为空,"Order items cannot be empty"
+商品名称不能为空,"Product name cannot be empty"
+商品数量不能为空,"Product quantity cannot be empty"
+商品价格不能为空,"Product price cannot be empty"
+混合业务订单,"Mixed business orders"
+订单兼容读取来源无效：%{1},"Invalid order compatibility read source: %{1}"
+支付金额不能为空,"Payment amount cannot be empty"
+支付方式不能为空,"Payment method cannot be empty"
+支付金额不能超过订单总额,"Payment amount cannot exceed order total"
+订单已支付,"Order paid"
+支付记录不存在,"Payment record does not exist"
+只有已支付的记录才能退款,"Only paid records can be refunded"
+退款金额不能超过支付金额,"Refund amount cannot exceed payment amount"
+只有已支付的订单才能发货,"Only paid orders can be shipped"
+订单已发货,"Order shipped"
+订单已完成,"Order completed"
+"订单留言过长，请控制在 1000 字以内","Order note is too long. Please keep it within 1000 characters."
+订单留言已保存，将在结账时带入,"Order note saved; it will be applied at checkout"
+已清除订单留言,"Order note cleared"
+"CheckoutGroup 不能无 Order","CheckoutGroup cannot be without Order"
+"CheckoutGroup 金额不守恒","CheckoutGroup amount is not conserved"
+"shipping owner 必须承载组运费 100%","The shipping owner must carry 100% of the group shipping cost"
+"非 owner Order 运费必须为 0","Non-owner Order shipping fee must be 0"
+"必须恰好一个 shipping charge owner","There must be exactly one shipping charge owner"
+运费合计不守恒,"Total freight charges are not conserved"
+"MoneySnapshot 不可变","MoneySnapshot is immutable"
+"entity_uuid 不能为空","entity_uuid cannot be empty"
+"website_id/store_id 须 >=0","website_id/store_id must >=0"
+"展示号分配冲突耗尽（最多 %{1} 次）","Display number allocation conflicts exhausted (up to %{1} times)"
+展示号已被占用,"Display number has been occupied"
+"非法 number_kind：%{1}","Illegal number_kind:%{1}"
+展示号随机源返回值越界,"The return value of the display number random source is out of bounds"
+展示号原子占位失败,"Failed to occupy display number atom"
+数据库标识符不能为空,"Database identifier cannot be empty"
+"display_number 必须是 10 位数字","display_number must be 10 digits"
+"entity_uuid 不能为空且不能超过 36 字符","entity_uuid cannot be empty and cannot exceed 36 characters"
+"DisplayNumberAllocator all 仅 memory 模式","DisplayNumberAllocator all memory only mode"
+"DisplayNumberAllocator replaceMemory 仅 memory 模式","DisplayNumberAllocator replaceMemory memory only mode"
+支付方式不支持优惠方式：%s,"The payment method does not support the preferential method: %s"
+"无法唯一证明退款行的原 Warehouse","Unable to uniquely prove the original Warehouse of the refund line"
+"查号必须携带 number_kind","Directory lookup must carry number_kind"
+"display_number 不能为空","display_number cannot be empty"
+展示号未找到：%{1}/%{2},"Display number not found: %{1}/%{2}"
+退款已到账,"Refund has been received"
+"订单 %{1} 的退款已到账","Refund for order %{1} has been received"
+退款迟到成功需要人工对账,"Late and successful refunds require manual reconciliation"
+"订单 %{1} 的失败退款出现迟到成功，已冻结新退款","The failed refund of order %{1} appeared late and successful, and the new refund has been frozen"
+"订单退款 Outbox %{1}","Order Refund Outbox %{1}"
 笔订单,orders
-部分状态不同，已展开,Some statuses are different and have been expanded.
-混合类型,Mixed type
-批发订单,Wholesale order
-零售订单,Retail order
-状态不一致,Inconsistent status
-状态待确认,Status awaiting confirmation
-退款处理中,Refund in progress
-退款失败,Refund failed
-退款对账中,Refund reconciliation in progress
-无退款,No refund
-退款状态待确认,Refund status pending confirmation
+部分状态不同，已展开,"Some statuses are different and have been expanded."
+混合类型,"Mixed type"
+批发订单,"Wholesale order"
+零售订单,"Retail order"
+状态不一致,"Inconsistent status"
+状态待确认,"Status awaiting confirmation"
+退款处理中,"Refund in progress"
+退款失败,"Refund failed"
+退款对账中,"Refund reconciliation in progress"
+无退款,"No refund"
+退款状态待确认,"Refund status pending confirmation"
 已开票,Invoiced
-发票处理中,Invoice is being processed
-无发票,No invoice
-发票状态待确认,Invoice status pending confirmation
-部分履约,Partially fulfilled
-履约未开始,Performance has not started
-履约状态待确认,Fulfillment status pending confirmation
-物流状态不一致,Inconsistent logistics status
-订单支付状态提交后无法重新读取,The order payment status cannot be re-read after submission.
-Order 持久化快照无效,Order persistence snapshot is invalid
-支付通知与 Order 持久化事实不一致,Payment notification is inconsistent with Order persistence facts
-当前订单状态不能接受支付成功通知,The current order status cannot accept payment success notification
-订单支付状态已被并发修改,The order payment status has been modified concurrently
-支付成功，订单进入处理,The payment is successful and the order is processed
+发票处理中,"Invoice is being processed"
+无发票,"No invoice"
+发票状态待确认,"Invoice status pending confirmation"
+部分履约,"Partially fulfilled"
+履约未开始,"Performance has not started"
+履约状态待确认,"Fulfillment status pending confirmation"
+物流状态不一致,"Inconsistent logistics status"
+订单支付状态提交后无法重新读取,"The order payment status cannot be re-read after submission."
+"Order 持久化快照无效","Order persistence snapshot is invalid"
+"支付通知与 Order 持久化事实不一致","Payment notification is inconsistent with Order persistence facts"
+当前订单状态不能接受支付成功通知,"The current order status cannot accept payment success notification"
+订单支付状态已被并发修改,"The order payment status has been modified concurrently"
+支付成功，订单进入处理,"The payment is successful and the order is processed"
 其他,Other
-承运商 #%{1},Carrier #%{1}
-仓库 #%{1},Warehouse #%{1}
-仓库 #%{1}（默认）,Warehouse #%{1} (default)
-已发完,Fully issued
+"承运商 #%{1}","Carrier #%{1}"
+"仓库 #%{1}","Warehouse #%{1}"
+"仓库 #%{1}（默认）","Warehouse #%{1} (default)"
+已发完,"Fully issued"
 未知,Unknown
-未知 cutover mode：%{1},Unknown cutover mode: %{1}
-生产 on 必须显式授权令牌,Production on must explicitly authorize the token
-实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token,The actual cutover must be carried by TASK-MIG-P2-ORDER production_on_token
-rollback 不得直接设为 on,rollback cannot be directly set to on
-已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer,"When there is a new Order, unsafe rollback that would confuse the source of truth is rejected; shadow can be cut, and the old writer will never be restored."
-禁止回滚恢复旧 Checkout writer,Disable rollback to restore old Checkout writer
+"未知 cutover mode：%{1}","Unknown cutover mode: %{1}"
+"生产 on 必须显式授权令牌","Production on must explicitly authorize the token"
+"实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token","The actual cutover must be carried by TASK-MIG-P2-ORDER production_on_token"
+"rollback 不得直接设为 on","rollback cannot be directly set to on"
+"已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer","When there is a new Order, unsafe rollback that would confuse the source of truth is rejected; shadow can be cut, and the old writer will never be restored."
+"禁止回滚恢复旧 Checkout writer","Disable rollback to restore old Checkout writer"
 成功,Success
 失败,Failed
-Order 售卖类型 code 不能为空,The Order sales type code is required
-重复的 Order 售卖类型 code：%{1},Duplicate Order sales type code: %{1}
-未注册的订单售卖类型：%{1},Unregistered order sales type: %{1}
-历史批发订单,Historical wholesale order
-订单当前状态不允许退款,Order cannot be refunded in current status
-退款金额不能为空,Refund amount cannot be empty
-退款金额不能超过订单总额,Refund amount cannot exceed order total
-退款总额不能超过订单总额,Total refund amount cannot exceed order total
-退款记录不存在,Refund record does not exist
-只有待处理的退款才能处理,Only pending refunds can be processed
-订单已退款,Order refunded
-订单状态不能从 %{1} 转换到 %{2},Order status cannot transition from %{1} to %{2}
-状态转换被阻止,Status Transition Blocked
-订单状态已被并发修改,The order status has been modified concurrently
-endpoint_code 无效,endpoint_code is invalid
-跟踪 Provider 不存在,The tracking provider does not exist
-物流反馈验签失败,Logistics feedback verification failed
-物流反馈解析失败,Logistics feedback parsing failed
-同源事件载荷冲突,Same-origin event payload conflict
-物流反馈已接收（幂等）,Logistics feedback received (idempotent)
-物流反馈已写入 Inbox,Tracking feedback stored in inbox
-请填写订单号与下单邮箱或手机号,Enter order number and email or phone used at checkout
-未找到匹配的订单,No matching order found
-联系方式与订单不匹配,Contact does not match this order
-订单标识不能为空,Order identifier cannot be empty
+"Order 售卖类型 code 不能为空","The Order sales type code is required"
+"重复的 Order 售卖类型 code：%{1}","Duplicate Order sales type code: %{1}"
+未注册的订单售卖类型：%{1},"Unregistered order sales type: %{1}"
+历史批发订单,"Historical wholesale order"
+订单当前状态不允许退款,"Order cannot be refunded in current status"
+退款金额不能为空,"Refund amount cannot be empty"
+退款金额不能超过订单总额,"Refund amount cannot exceed order total"
+退款总额不能超过订单总额,"Total refund amount cannot exceed order total"
+退款记录不存在,"Refund record does not exist"
+只有待处理的退款才能处理,"Only pending refunds can be processed"
+订单已退款,"Order refunded"
+"订单状态不能从 %{1} 转换到 %{2}","Order status cannot transition from %{1} to %{2}"
+状态转换被阻止,"Status Transition Blocked"
+订单状态已被并发修改,"The order status has been modified concurrently"
+"endpoint_code 无效","endpoint_code is invalid"
+"跟踪 Provider 不存在","The tracking provider does not exist"
+物流反馈验签失败,"Logistics feedback verification failed"
+物流反馈解析失败,"Logistics feedback parsing failed"
+同源事件载荷冲突,"Same-origin event payload conflict"
+物流反馈已接收（幂等）,"Logistics feedback received (idempotent)"
+"物流反馈已写入 Inbox","Tracking feedback stored in inbox"
+请填写订单号与下单邮箱或手机号,"Enter order number and email or phone used at checkout"
+未找到匹配的订单,"No matching order found"
+联系方式与订单不匹配,"Contact does not match this order"
+订单标识不能为空,"Order identifier cannot be empty"
 选项,Options
-OrderPlan 影子比对只允许在 shadow mode 执行,OrderPlan shadow comparison is only allowed in shadow mode
-影子计划字段 %{1} 必须是数组,Shadow plan field %{1} must be an array
-影子副作用快照必须返回数组,Shadow side-effect snapshot must return an array
-影子副作用快照字段 %{1} 必须是非负整数,Shadow side-effect snapshot field %{1} must be a non-negative integer
-Order 不存在,Order does not exist
-发货数量或版本无效,Invalid shipping quantity or version
-FulfillmentUnit 不存在,FulfillmentUnit does not exist
-FulfillmentUnit 缺少 Warehouse,FulfillmentUnit is missing Warehouse
-履约 CAS 版本冲突,Fulfillment CAS version conflict
-累计发货数量超过可发数量,The cumulative quantity shipped exceeds the quantity that can be shipped
-履约 CAS 写入冲突,Fulfillment CAS write conflict
-履约进度 ledger 唯一约束冲突,Fulfillment progress ledger unique constraint conflict
-履约进度 idempotency payload 冲突,Performance progress idempotency payload conflict
-履约 idempotency identity 无效,Fulfillment idempotency identity is invalid
-%{1} 无效,%{1} is invalid
-订单已生成发票,Invoice already generated for this order
-发票不存在,Invoice does not exist
-旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）,The old Checkout writer has been disabled by the cutover gate (mode=%{1})
-新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）,The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)
-MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）,MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)
+"OrderPlan 影子比对只允许在 shadow mode 执行","OrderPlan shadow comparison is only allowed in shadow mode"
+"影子计划字段 %{1} 必须是数组","Shadow plan field %{1} must be an array"
+影子副作用快照必须返回数组,"Shadow side-effect snapshot must return an array"
+"影子副作用快照字段 %{1} 必须是非负整数","Shadow side-effect snapshot field %{1} must be a non-negative integer"
+"Order 不存在","Order does not exist"
+发货数量或版本无效,"Invalid shipping quantity or version"
+"FulfillmentUnit 不存在","FulfillmentUnit does not exist"
+"FulfillmentUnit 缺少 Warehouse","FulfillmentUnit is missing Warehouse"
+"履约 CAS 版本冲突","Fulfillment CAS version conflict"
+累计发货数量超过可发数量,"The cumulative quantity shipped exceeds the quantity that can be shipped"
+"履约 CAS 写入冲突","Fulfillment CAS write conflict"
+"履约进度 ledger 唯一约束冲突","Fulfillment progress ledger unique constraint conflict"
+"履约进度 idempotency payload 冲突","Performance progress idempotency payload conflict"
+"履约 idempotency identity 无效","Fulfillment idempotency identity is invalid"
+"%{1} 无效","%{1} is invalid"
+订单已生成发票,"Invoice already generated for this order"
+发票不存在,"Invoice does not exist"
+"旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","The old Checkout writer has been disabled by the cutover gate (mode=%{1})"
+"新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)"
+"MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)"
 联系人、地址与备注在下方「客户调整」区编辑。,"Edit contact, address and notes in the ""Customer adjustment"" section below."
-前往客户调整,Go to customer adjustment
-本单发货进度,Order shipping progress
-沟通备注 · 取消 · 发货记录 · 历史,Chat notes · Cancel · Shipment log · History
-发货记录,Shipment Records
-发货时间,Shipped At
-暂无发货记录,No Shipment Records
-发货记录 / 补充运单号,Shipment log / add tracking
-待补运单号,Tracking pending
+前往客户调整,"Go to customer adjustment"
+本单发货进度,"Order shipping progress"
+"沟通备注 · 取消 · 发货记录 · 历史","Chat notes · Cancel · Shipment log · History"
+发货记录,"Shipment Records"
+发货时间,"Shipped At"
+暂无发货记录,"No Shipment Records"
+"发货记录 / 补充运单号","Shipment log / add tracking"
+待补运单号,"Tracking pending"
 通知,Notifications
 补充,Supplement
 发货须填写平台物流单号；勾选通知时向客户发送「已发货」邮件。成功后写入发货记录、履约进度与不可变账本。,"Shipping requires platform tracking; when notify checked, send ""shipped"" email. Success writes shipment log, fulfillment progress and immutable ledger."
-例如：顺丰 / UPS,e.g. SF Express / UPS
-平台物流单号,Platform tracking No.
-运单号,Tracking number
-发送「已发货」邮件,Send shipped email
-请填写平台物流单号后再发货,Enter platform tracking before shipping
-承运商名称过长，请控制在 100 字以内,Carrier name too long; keep within 100 chars
+"例如：顺丰 / UPS","e.g. SF Express / UPS"
+平台物流单号,"Platform tracking No."
+运单号,"Tracking number"
+发送「已发货」邮件,"Send shipped email"
+请填写平台物流单号后再发货,"Enter platform tracking before shipping"
+"承运商名称过长，请控制在 100 字以内","Carrier name too long; keep within 100 chars"
 填写承运商与平台物流单号后提交发货；勾选通知时会向客户邮箱发送「已发货」邮件。,"Enter carrier and platform tracking then submit shipment; when notify is checked, send ""shipped"" email to customer."
-数量按履约单元扣减；成功后写入发货记录与仓维进度账本。,Qty deducted by fulfillment unit; success writes shipment log and warehouse progress ledger.
-例如：顺丰 / UPS / DHL,e.g. SF Express / UPS / DHL
-填写对外给客户的运单号,Enter customer-facing tracking number
-本次发货数量,This shipment qty
-发货后发送「已发货」邮件给客户,Send shipped email to customer after shipping
-本单待发履约单元；提交后写入仓维进度账本。,Pending fulfillment units for this order; submitting writes warehouse progress ledger.
+数量按履约单元扣减；成功后写入发货记录与仓维进度账本。,"Qty deducted by fulfillment unit; success writes shipment log and warehouse progress ledger."
+"例如：顺丰 / UPS / DHL","e.g. SF Express / UPS / DHL"
+填写对外给客户的运单号,"Enter customer-facing tracking number"
+本次发货数量,"This shipment qty"
+发货后发送「已发货」邮件给客户,"Send shipped email to customer after shipping"
+本单待发履约单元；提交后写入仓维进度账本。,"Pending fulfillment units for this order; submitting writes warehouse progress ledger."
 仓库,storehouse
-本单暂无可发货履约单元,No shippable fulfillment units on this order
-发货动作写入仓维 FulfillmentUnit 与不可变进度账本；相同幂等键和载荷不会重复扣减可发数量。,The shipping action is written into the warehouse FulfillmentUnit and the immutable progress ledger; the same idempotent key and load will not repeatedly deduct the deliverable quantity.
-CAS 版本,CAS version
-送达时间,Delivered At
-订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。,"Default extension point for the order details payment record slot; the universal payment module injects Attempt records, and Order should not directly read and assemble the payment table."
-配送方式代码,Shipping method code
-为客户调整（联系 / 地址 / 备注）,Customer adjustment (contact / address / notes)
-客户留言与运营备注；地址与客户选择保存后写入订单,Customer messages and ops notes; address and customer selection write to order on save
-为客户调整入口,Customer adjustment entry
-发货管理,Shipping management
-退款管理,Refund management
-支付与沟通（详情）,Payment & chat (details)
-支付记录与订单沟通请在,Payment records and order chat are in
-中查看与操作,view and manage in
-累计校验,Cumulative check
-行累计与商品小计不一致，请核对快照,Line totals mismatch product subtotal; check snapshot
-收货地址（当前）,Shipping address (current)
-账单地址（当前）,Billing address (current)
-收货地址调整,Shipping address adjust
-账单地址调整,Billing address adjustment
-可编辑字段,Editable fields
-客户ID,Customer ID
-访客结账（无注册客户）,Guest checkout (no registered customer)
-客户留言与运营备注，保存后写入订单记录,Customer messages and ops notes; saved into order records
+本单暂无可发货履约单元,"No shippable fulfillment units on this order"
+"发货动作写入仓维 FulfillmentUnit 与不可变进度账本；相同幂等键和载荷不会重复扣减可发数量。","The shipping action is written into the warehouse FulfillmentUnit and the immutable progress ledger; the same idempotent key and load will not repeatedly deduct the deliverable quantity."
+"CAS 版本","CAS version"
+送达时间,"Delivered At"
+"订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。","Default extension point for the order details payment record slot; the universal payment module injects Attempt records, and Order should not directly read and assemble the payment table."
+配送方式代码,"Shipping method code"
+"为客户调整（联系 / 地址 / 备注）","Customer adjustment (contact / address / notes)"
+客户留言与运营备注；地址与客户选择保存后写入订单,"Customer messages and ops notes; address and customer selection write to order on save"
+为客户调整入口,"Customer adjustment entry"
+发货管理,"Shipping management"
+退款管理,"Refund management"
+支付与沟通（详情）,"Payment & chat (details)"
+支付记录与订单沟通请在,"Payment records and order chat are in"
+中查看与操作,"view and manage in"
+累计校验,"Cumulative check"
+行累计与商品小计不一致，请核对快照,"Line totals mismatch product subtotal; check snapshot"
+收货地址（当前）,"Shipping address (current)"
+账单地址（当前）,"Billing address (current)"
+收货地址调整,"Shipping address adjust"
+账单地址调整,"Billing address adjustment"
+可编辑字段,"Editable fields"
+客户ID,"Customer ID"
+访客结账（无注册客户）,"Guest checkout (no registered customer)"
+客户留言与运营备注，保存后写入订单记录,"Customer messages and ops notes; saved into order records"
 搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
 零售,Retail
-历史批发,Historical wholesale
-支付记录,Payment Records
-支付金额,Payment Amount
-交易ID,Transaction ID
-支付时间,Paid At
-暂无支付记录,No Payment Records
-Material Design Icons 类名，如：mdi-check-circle,"Material Design Icons class name, such as: mdi-check-circle"
-支付已确认，订单进入处理中,Payment has been confirmed and the order is being processed
-支付已完成,Payment completed
-物流单号更新成功,Tracking number updated successfully
-发货ID不能为空,Shipment ID cannot be empty
-标记成功,Marked successfully
-创建发货,Create shipment
-创建发货记录,Create shipping record
-更新物流单号,Update logistics order number
-标记已送达,Mark delivered
-标记为已送达,Mark as delivered
-退款ID不能为空,Refund ID cannot be empty
-退款处理成功,Refund processed successfully
-创建退款,Create a refund
-创建退款记录,Create a refund record
-处理退款,Process a refund
-处理退款申请,Process refund request
-支付管理,Payment management
-发票ID不能为空,Invoice ID cannot be empty
-发票管理,Invoice management
-生成发票,Generate invoice
-打印发票,Print invoice
+历史批发,"Historical wholesale"
+支付记录,"Payment Records"
+支付金额,"Payment Amount"
+交易ID,"Transaction ID"
+支付时间,"Paid At"
+暂无支付记录,"No Payment Records"
+"Material Design Icons 类名，如：mdi-check-circle","Material Design Icons class name, such as: mdi-check-circle"
+支付已确认，订单进入处理中,"Payment has been confirmed and the order is being processed"
+支付已完成,"Payment completed"
+物流单号更新成功,"Tracking number updated successfully"
+发货ID不能为空,"Shipment ID cannot be empty"
+标记成功,"Marked successfully"
+创建发货,"Create shipment"
+创建发货记录,"Create shipping record"
+更新物流单号,"Update logistics order number"
+标记已送达,"Mark delivered"
+标记为已送达,"Mark as delivered"
+退款ID不能为空,"Refund ID cannot be empty"
+退款处理成功,"Refund processed successfully"
+创建退款,"Create a refund"
+创建退款记录,"Create a refund record"
+处理退款,"Process a refund"
+处理退款申请,"Process refund request"
+支付管理,"Payment management"
+发票ID不能为空,"Invoice ID cannot be empty"
+发票管理,"Invoice management"
+生成发票,"Generate invoice"
+打印发票,"Print invoice"
 发票,bill
-MIG-P2-ORDER：Checkout→Order 单写切流（apply 必须 --database=mig_clone_*）,MIG-P2-ORDER: Checkout→Order single write flow (apply must --database=mig_clone_*)
+"MIG-P2-ORDER：Checkout→Order 单写切流（apply 必须 --database=mig_clone_*）","MIG-P2-ORDER: Checkout→Order single write flow (apply must --database=mig_clone_*)"
 "已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","The following data tables have been created: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
 "已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","Created the following data tables: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
-idempotency_key/request_hash 不能为空,idempotency_key/request_hash cannot be empty
-行 %{1} 数量/单价非法,Row %{1} illegal quantity/unit price
-OrderFacade create 当前仅 memory/harness；请在集成环境挂 DB writer 适配器,OrderFacade create currently only has memory/harness; please install the DB writer adapter in the integrated environment
-OrderFacade get 当前仅 memory/harness,OrderFacade get currently only memory/harness
-OrderFacade getGroup 当前仅 memory/harness,OrderFacade getGroup currently only has memory/harness
-DisplayNumberAllocator 当前仅 memory/harness；请挂 Registry writer,DisplayNumberAllocator currently only has memory/harness; please hang Registry writer
+"idempotency_key/request_hash 不能为空","idempotency_key/request_hash cannot be empty"
+"行 %{1} 数量/单价非法","Row %{1} illegal quantity/unit price"
+"OrderFacade create 当前仅 memory/harness；请在集成环境挂 DB writer 适配器","OrderFacade create currently only has memory/harness; please install the DB writer adapter in the integrated environment"
+"OrderFacade get 当前仅 memory/harness","OrderFacade get currently only memory/harness"
+"OrderFacade getGroup 当前仅 memory/harness","OrderFacade getGroup currently only has memory/harness"
+"DisplayNumberAllocator 当前仅 memory/harness；请挂 Registry writer","DisplayNumberAllocator currently only has memory/harness; please hang Registry writer"
 批发,Wholesale

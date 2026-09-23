@@ -1,330 +1,329 @@
-id属性不能为空,id attribute cannot be empty
-在手库存（件）,On-hand stock (pcs)
+﻿id属性不能为空,"id attribute cannot be empty"
+在手库存（件）,"On-hand stock (pcs)"
 单位为件，不是金额,"Unit is pieces, not amount"
-命令 ID,Command ID
-幂等键，重复提交同 ID 不会重复改库存,Idempotency key; resubmitting same ID won't change stock twice
+"命令 ID","Command ID"
+"幂等键，重复提交同 ID 不会重复改库存","Idempotency key; resubmitting same ID won't change stock twice"
 生成,Generate
-搜索本地仓库代码或名称,Search local warehouse code or name
-默认仓库树已同步（新建 %{1}，跳过 %{2}）,"Default warehouse tree synced (created %{1}, skipped %{2})"
-码别名种子已同步（%{1}）,Code alias seeds synced (%{1})
-默认站店授权已同步（挂载 %{1} 条种子授权）,Default site-store auth synced (mounted %{1} seed authorizations)
+搜索本地仓库代码或名称,"Search local warehouse code or name"
+"默认仓库树已同步（新建 %{1}，跳过 %{2}）","Default warehouse tree synced (created %{1}, skipped %{2})"
+码别名种子已同步（%{1}）,"Code alias seeds synced (%{1})"
+"默认站店授权已同步（挂载 %{1} 条种子授权）","Default site-store auth synced (mounted %{1} seed authorizations)"
 数据读取失败，请检查库存模块状态与数据库连接,"Data reading failed, please check the inventory module status and database connection"
-操作失败：%{1},Operation failed: %{1}
-%{1} 不能为空且最多 %{2} 字符,%{1} cannot be empty and must be at most %{2} characters
-%{1} 必须是正整数,%{1} must be a positive integer
-%{1} 必须是非负整数,%{1} must be a non-negative integer
-库存,in stock
+操作失败：%{1},"Operation failed: %{1}"
+"%{1} 不能为空且最多 %{2} 字符","%{1} cannot be empty and must be at most %{2} characters"
+"%{1} 必须是正整数","%{1} must be a positive integer"
+"%{1} 必须是非负整数","%{1} must be a non-negative integer"
+库存,"in stock"
 circle,circle
-查看库存投影,View stock projection
-库存调整,inventory adjustment
+查看库存投影,"View stock projection"
+库存调整,"inventory adjustment"
 settings,settings
-查看库存调整事件,View inventory adjustment events
+查看库存调整事件,"View inventory adjustment events"
 仓库,Warehouse
 home,home
-查看仓库,View warehouse
-仓库授权,Warehouse authorization
+查看仓库,"View warehouse"
+仓库授权,"Warehouse authorization"
 user,user
-查看仓库授权,View warehouse authorization
-库存预占,inventory preemption
+查看仓库授权,"View warehouse authorization"
+库存预占,"inventory preemption"
 clock,clock
-查看库存预占,View inventory pre-emption
-预占租约,Preemption lease
-查看预占租约,View preemption leases
-库存账本,Inventory ledger
+查看库存预占,"View inventory pre-emption"
+预占租约,"Preemption lease"
+查看预占租约,"View preemption leases"
+库存账本,"Inventory ledger"
 book,book
-查看库存不可变账本,View the inventory immutable ledger
-库存迁移,Inventory migration
+查看库存不可变账本,"View the inventory immutable ledger"
+库存迁移,"Inventory migration"
 refresh,refresh
-查看库存迁移状态,View inventory migration status
-创建仓库,Create warehouse
-树内创建仓库,Create warehouse in tree
-在国家/省份节点下快速创建仓库,Quick-create warehouse under country/province node
-初始化默认仓库树,Initialize default warehouse tree
-按全球电商履约国种子仓库树,Seed warehouse tree by global fulfill countries
-删除仓库,Delete warehouse
-删除无库存仓库,Delete empty warehouses
-保存仓码别名,Save warehouse alias
-保存层级/模式/类型码别名,Save level/mode/type code aliases
-删除仓码别名,Delete warehouse alias
-删除自建仓码别名,Delete custom warehouse alias
-同步仓码别名种子,Sync warehouse alias seeds
-同步默认层级/模式/类型码别名,Sync default level/mode/type code aliases
-创建仓库授权,Create warehouse authorization
-删除仓库授权,Delete warehouse auth
-同步默认站店授权种子,Sync default site store auth seeds
-提交库存调整,Submit inventory adjustment
-设置商品可用库存,Set product available inventory
-仓库选择搜索,Warehouse picker search
-搜索本地仓库,Search local warehouse
-Website ID 不能为负,Website ID cannot be negative
-仓代码不能为空,Warehouse code is required
-仓库码一旦确定不可修改，请删除后重建,Warehouse code is immutable; delete and recreate instead
-仓模式无效：%{1},Invalid warehouse mode: %{1}
-仓类型无效：%{1},Invalid warehouse type: %{1}
-仓节点类型无效：%{1},Invalid warehouse node type: %{1}
-父仓库 ID 不能为负,Parent warehouse ID cannot be negative
-国家码无效,Invalid country code
-仓授权 Scope 无效,Invalid warehouse authorization scope
-库存管理,Inventory management
+查看库存迁移状态,"View inventory migration status"
+创建仓库,"Create warehouse"
+树内创建仓库,"Create warehouse in tree"
+在国家/省份节点下快速创建仓库,"Quick-create warehouse under country/province node"
+初始化默认仓库树,"Initialize default warehouse tree"
+按全球电商履约国种子仓库树,"Seed warehouse tree by global fulfill countries"
+删除仓库,"Delete warehouse"
+删除无库存仓库,"Delete empty warehouses"
+保存仓码别名,"Save warehouse alias"
+保存层级/模式/类型码别名,"Save level/mode/type code aliases"
+删除仓码别名,"Delete warehouse alias"
+删除自建仓码别名,"Delete custom warehouse alias"
+同步仓码别名种子,"Sync warehouse alias seeds"
+同步默认层级/模式/类型码别名,"Sync default level/mode/type code aliases"
+创建仓库授权,"Create warehouse authorization"
+删除仓库授权,"Delete warehouse auth"
+同步默认站店授权种子,"Sync default site store auth seeds"
+提交库存调整,"Submit inventory adjustment"
+设置商品可用库存,"Set product available inventory"
+仓库选择搜索,"Warehouse picker search"
+搜索本地仓库,"Search local warehouse"
+"Website ID 不能为负","Website ID cannot be negative"
+仓代码不能为空,"Warehouse code is required"
+仓库码一旦确定不可修改，请删除后重建,"Warehouse code is immutable; delete and recreate instead"
+仓模式无效：%{1},"Invalid warehouse mode: %{1}"
+仓类型无效：%{1},"Invalid warehouse type: %{1}"
+仓节点类型无效：%{1},"Invalid warehouse node type: %{1}"
+"父仓库 ID 不能为负","Parent warehouse ID cannot be negative"
+国家码无效,"Invalid country code"
+"仓授权 Scope 无效","Invalid warehouse authorization scope"
+库存管理,"Inventory management"
 网站,website
-切换网站,Switch website
-仓库树,Warehouse tree
-码别名,Code aliases
-按国家→省份→仓库分级展示。仓码以父级前缀累接（国家码+省份码），创建后不可修改；系统种子不可删除；有库存或预占时不可删除。名称可点翻译；层级/模式/类型显示中文别名（在「码别名」Tab 管理）。,"Show by country→province→warehouse. Warehouse codes accumulate parent prefixes (country+province), immutable after create; system seeds undeletable; cannot delete with stock or reserved. Names clickable for translate; level/mode/type show Chinese aliases (manage on ""Code aliases"" Tab)."
-同步默认全球仓,Sync default global warehouses
+切换网站,"Switch website"
+仓库树,"Warehouse tree"
+码别名,"Code aliases"
+"按国家→省份→仓库分级展示。仓码以父级前缀累接（国家码+省份码），创建后不可修改；系统种子不可删除；有库存或预占时不可删除。名称可点翻译；层级/模式/类型显示中文别名（在「码别名」Tab 管理）。","Show by country→province→warehouse. Warehouse codes accumulate parent prefixes (country+province), immutable after create; system seeds undeletable; cannot delete with stock or reserved. Names clickable for translate; level/mode/type show Chinese aliases (manage on ""Code aliases"" Tab)."
+同步默认全球仓,"Sync default global warehouses"
 名称,Name
-仓码,Warehouse code
+仓码,"Warehouse code"
 层级,Level
 模式,model
 类型,type
 操作,Actions
 系统,System
-加省,Add province
-加仓,Add warehouse
-系统种子不可删除,System seed cannot be deleted
+加省,"Add province"
+加仓,"Add warehouse"
+系统种子不可删除,"System seed cannot be deleted"
 删除,Delete
-完整仓码,Full warehouse code
-仓码创建后不可修改,Warehouse code immutable after create
-父级前缀,Parent prefix
-码片段,Code snippet
+完整仓码,"Full warehouse code"
+仓码创建后不可修改,"Warehouse code immutable after create"
+父级前缀,"Parent prefix"
+码片段,"Code snippet"
 创建,create
-管理树表「层级 / 模式 / 类型」列的英文码与展示名映射。名称可点翻译；系统种子不可删除。,Manage English code ↔ display name for Level/Mode/Type. Names are click-to-translate; system seeds cannot be deleted.
-同步默认别名,Sync default aliases
+"管理树表「层级 / 模式 / 类型」列的英文码与展示名映射。名称可点翻译；系统种子不可删除。","Manage English code ↔ display name for Level/Mode/Type. Names are click-to-translate; system seeds cannot be deleted."
+同步默认别名,"Sync default aliases"
 分组,Group
-英文码,English code
-展示名,Display name
+英文码,"English code"
+展示名,"Display name"
 排序,Sort
-保存别名,Save alias
-暂无码别名，请同步默认别名或手动添加。,No aliases yet. Sync defaults or add manually.
+保存别名,"Save alias"
+暂无码别名，请同步默认别名或手动添加。,"No aliases yet. Sync defaults or add manually."
 来源,Origin
 自建,Custom
-仓库列表,Warehouse list
-按仓库展开查看已授权店铺。国家/省只是目录。,Expand warehouses to view authorized stores. Country/province are directories only.
-同步默认站店挂载,Sync default site store mounts
-搜索仓库,Search warehouses
-每页,Per page
+仓库列表,"Warehouse list"
+按仓库展开查看已授权店铺。国家/省只是目录。,"Expand warehouses to view authorized stores. Country/province are directories only."
+同步默认站店挂载,"Sync default site store mounts"
+搜索仓库,"Search warehouses"
+每页,"Per page"
 搜索,Search
 重置,Reset
 共,Total
-个叶子仓,leaf warehouses
+个叶子仓,"leaf warehouses"
 第,#
 页,Page
 关键词,Keywords
-上一页,Previous page
-下一页,Next page
-没有匹配的仓库。请调整关键词或重置搜索。,No matching warehouses. Adjust keywords or reset search.
+上一页,"Previous page"
+下一页,"Next page"
+没有匹配的仓库。请调整关键词或重置搜索。,"No matching warehouses. Adjust keywords or reset search."
 暂无叶子仓库。请先同步全球仓树或点击「同步默认站店挂载」。,"No leaf warehouses. Sync global WH tree first or click ""Sync default site-store mounts""."
-已授权店铺,Authorized store
-含默认逻辑仓,Includes default logical WH
-系统种子,System seed
-尚未授权任何店铺。用下方「授权 / 改绑」挂店铺。,"No stores authorized yet. Use ""Authorize / rebind"" below to attach stores."
+已授权店铺,"Authorized store"
+含默认逻辑仓,"Includes default logical WH"
+系统种子,"System seed"
+"尚未授权任何店铺。用下方「授权 / 改绑」挂店铺。","No stores authorized yet. Use ""Authorize / rebind"" below to attach stores."
 店铺,Store
-默认逻辑仓,Default logical bin
-系统种子不可删除，可改绑,System seeds cannot be deleted; can rebind
-授权 / 改绑,Authorize / rebind
+默认逻辑仓,"Default logical bin"
+系统种子不可删除，可改绑,"System seeds cannot be deleted; can rebind"
+"授权 / 改绑","Authorize / rebind"
 把店铺挂到叶子仓。站点沿用上方「切换网站」。,"Attach stores to leaf warehouses. Site follows ""Switch website"" above."
 提交,submit
-默认店铺可选 #0,Default store optional #0
-商品 Offer,Product Offer
-商品 SKU 对应的 Offer 编号,Offer ID for product SKU
+"默认店铺可选 #0","Default store optional #0"
+"商品 Offer","Product Offer"
+"商品 SKU 对应的 Offer 编号","Offer ID for product SKU"
 策略,Strategy
 严格,Strict
-允许超卖,Allow oversell
+允许超卖,"Allow oversell"
 预售,Pre-sale
 不限量,Unlimited
-提交调整,Submit adjustment
-暂无仓库，请同步默认全球仓或添加国家节点,No warehouses; sync default global WH or add country nodes
-暂无授权，请同步默认站店授权或手动授权,No auth yet; sync default site-store auth or authorize manually
-暂无数据,No data yet
+提交调整,"Submit adjustment"
+暂无仓库，请同步默认全球仓或添加国家节点,"No warehouses; sync default global WH or add country nodes"
+暂无授权，请同步默认站店授权或手动授权,"No auth yet; sync default site-store auth or authorize manually"
+暂无数据,"No data yet"
 按商品查看当前在手、预占与可售件数。数量单位均为「件」。,"View on-hand, reserved and sellable qty by product. All quantities are in pieces."
-库存设置/调整事件流水。变动列为件数增减。,Inventory setup/adjust event stream. Change column is qty delta.
-仓库管理分区,Warehouse sections
+库存设置/调整事件流水。变动列为件数增减。,"Inventory setup/adjust event stream. Change column is qty delta."
+仓库管理分区,"Warehouse sections"
 翻译,Translate
-仓码不可修改,Warehouse code is immutable
-确认删除该仓库？仓码不可恢复。,Confirm delete this warehouse? Code cannot be restored.
-例如：国家,e.g. country
-确认删除该自建别名？,Delete this custom alias?
-仓库名 / 仓码 / 国家 / 店铺名,WH name / code / country / store name
-仓库授权分页,Warehouse auth pagination
+仓码不可修改,"Warehouse code is immutable"
+确认删除该仓库？仓码不可恢复。,"Confirm delete this warehouse? Code cannot be restored."
+例如：国家,"e.g. country"
+确认删除该自建别名？,"Delete this custom alias?"
+"仓库名 / 仓码 / 国家 / 店铺名","WH name / code / country / store name"
+仓库授权分页,"Warehouse auth pagination"
 是,Yes
 否,No
-确认删除该授权？,Confirm delete this auth?
-attempt_started_at 不能晚于当前 UTC 时间,attempt_started_at cannot be later than the current UTC time
-Attempt 已达 lease 硬上限，禁止新增预占并需 reconcile,Attempt The lease hard limit has been reached. New reservations are prohibited and require reconciliation.
-Lease assign CAS 失败,Lease assign CAS failed
-Lease 重放 owner/queued 负载冲突,Lease replay owner/queued load conflict
-Lease 重放 attempt_started_at 冲突,Lease replay attempt_started_at conflict
-Lease 持久化时间或版本不满足硬上限不变量,Lease persistence time or version does not meet the hard upper limit invariant
-仅 lease owner Attempt 可续租,Only lease owner Attempt can renew the lease
-排队 Order 不续租，须重新 availability/reserve,The queued Order will not be renewed and must be re-available/reserve.
-expected lease_version 必须 >= 1,expected lease_version must >= 1
-Lease version 冲突,Lease version conflict
-已达 lease 硬上限，停止续租并需 reconcile,The lease hard limit has been reached. Lease renewal is stopped and reconciliation is required.
-Lease 已过期，禁止复活,Lease has expired and is not allowed to be revived
-Lease renew CAS 失败,Lease renew CAS failed
-Lease queued 标记 CAS 失败,Lease queued marks CAS failure
-lease_owner_attempt_code 不能为空,lease_owner_attempt_code cannot be empty
-lease_owner_attempt_code 超出 64 字符限制,lease_owner_attempt_code exceeds 64 character limit
-Lease 时间字段无效：%{1},Lease time field is invalid: %{1}
-Reservation 不存在：%{1},Reservation does not exist: %{1}
-禁止对非 reserved 续租/复活：%{1},Renewal/resurrection of non-reserved items is prohibited: %{1}
-website_id 不能小于 0,website_id cannot be less than 0
-store_id 不能小于 0,store_id cannot be less than 0
-未知库存管理区段：%{1},Unknown inventory management section: %{1}
+确认删除该授权？,"Confirm delete this auth?"
+"attempt_started_at 不能晚于当前 UTC 时间","attempt_started_at cannot be later than the current UTC time"
+"Attempt 已达 lease 硬上限，禁止新增预占并需 reconcile","Attempt The lease hard limit has been reached. New reservations are prohibited and require reconciliation."
+"Lease assign CAS 失败","Lease assign CAS failed"
+"Lease 重放 owner/queued 负载冲突","Lease replay owner/queued load conflict"
+"Lease 重放 attempt_started_at 冲突","Lease replay attempt_started_at conflict"
+"Lease 持久化时间或版本不满足硬上限不变量","Lease persistence time or version does not meet the hard upper limit invariant"
+"仅 lease owner Attempt 可续租","Only lease owner Attempt can renew the lease"
+"排队 Order 不续租，须重新 availability/reserve","The queued Order will not be renewed and must be re-available/reserve."
+"expected lease_version 必须 >= 1","expected lease_version must >= 1"
+"Lease version 冲突","Lease version conflict"
+"已达 lease 硬上限，停止续租并需 reconcile","The lease hard limit has been reached. Lease renewal is stopped and reconciliation is required."
+"Lease 已过期，禁止复活","Lease has expired and is not allowed to be revived"
+"Lease renew CAS 失败","Lease renew CAS failed"
+"Lease queued 标记 CAS 失败","Lease queued marks CAS failure"
+"lease_owner_attempt_code 不能为空","lease_owner_attempt_code cannot be empty"
+"lease_owner_attempt_code 超出 64 字符限制","lease_owner_attempt_code exceeds 64 character limit"
+"Lease 时间字段无效：%{1}","Lease time field is invalid: %{1}"
+"Reservation 不存在：%{1}","Reservation does not exist: %{1}"
+"禁止对非 reserved 续租/复活：%{1}","Renewal/resurrection of non-reserved items is prohibited: %{1}"
+"website_id 不能小于 0","website_id cannot be less than 0"
+"store_id 不能小于 0","store_id cannot be less than 0"
+未知库存管理区段：%{1},"Unknown inventory management section: %{1}"
 商品,Products
-在手（件）,On hand (pcs)
-预占（件）,Reserved (pcs)
-可售（件）,Sellable (pcs)
-超卖额度,Oversell limit
-预售额度,Pre-sale quota
-库存 ID,Inventory ID
+在手（件）,"On hand (pcs)"
+预占（件）,"Reserved (pcs)"
+可售（件）,"Sellable (pcs)"
+超卖额度,"Oversell limit"
+预售额度,"Pre-sale quota"
+"库存 ID","Inventory ID"
 版本,Version
 时间,Time
-变动（件）,Change (pcs)
-仓库 ID,Warehouse ID
-账本 ID,Ledger ID
-未知商品,Unknown product
-未知店铺,Unknown store
-未知仓库,Unknown warehouse
-on_hand 不能为负,on_hand cannot be negative
-allowance 不能为负,allowance cannot be negative
-Ledger 重放竞争需要回滚,Ledger replay contention requires rollback
-库存设置 CAS 重试耗尽,Inventory settings CAS retry exhaustion
-库存行不存在,Inventory line does not exist
-可售库存不足：offer=%{1} need=%{2},Insufficient available inventory: offer=%{1} need=%{2}
-库存预占 minor 累加溢出,Inventory pre-emption minor cumulative overflow
-库存预占 CAS 重试耗尽,Inventory preemption CAS retries exhausted
-Commit ledger 已存在但 Reservation 状态不一致,Commit ledger already exists but Reservation status is inconsistent
-Reservation 已 committed 但缺少 commit ledger,Reservation committed but missing commit ledger
-只能 commit reserved 状态：%{1},Only commit reserved status: %{1}
-Reservation quantity_minor 必须为正,Reservation quantity_minor must be positive
-reserved_minor 小于待 commit 数量,reserved_minor is less than the number of commits to be committed
-Commit ledger 重放竞争需要回滚,Commit ledger replay contention requires rollback
-Commit Reservation 状态 CAS 失败,Commit Reservation Status CAS Failed
-库存 commit CAS 重试耗尽,Inventory commit CAS retries exhausted
-退款回库数量必须为正数,The refund quantity must be a positive number
-退款回库重放数量与原请求不一致,The number of refunds returned to the database for replay is inconsistent with the original request.
-退款回库 ledger 重放竞争需要回滚,Refunding the ledger to the library replays the competition and needs to be rolled back
-退款回库库存 CAS 重试耗尽,Refund back to inventory CAS retry exhausted
-Reservation patch 字段为空或不受支持：%{1},Reservation patch field is empty or not supported: %{1}
-expiry batch limit 必须在 1..1000,expiry batch limit must be between 1..1000
-Reservation 终态缺少对应 immutable ledger,Reservation final state lacks corresponding immutable ledger
-reserved_minor 小于待释放数量,reserved_minor is less than the number to be released
-释放/过期 ledger 重放竞争需要回滚,Release/expiration ledger replay contention requires rollback
-释放/过期 Reservation 状态 CAS 失败,Release/Expiration Reservation Status CAS Failed
-库存释放/过期 CAS 重试耗尽,Inventory Release/Expiration CAS Retry Exhaustion
-website_id/store_id 须 >=0 且 offer_id>0：%{1}/%{2}/%{3},website_id/store_id must be >=0 and offer_id>0: %{1}/%{2}/%{3}
-Ledger 唯一约束冲突：%{1},Ledger unique constraint violation: %{1}
-idempotency_key/request_hash 不能为空,idempotency_key/request_hash cannot be empty
-idempotency_key/request_hash 超出 128/64 字符限制,idempotency_key/request_hash exceeds 128/64 character limit
-reservation_uuid 不能为空且最多 36 字符,reservation_uuid cannot be empty and can be up to 36 characters
-Initial lease 字段必须完整且不得扩展,Initial lease field must be complete and must not be extended
-lease_owner_attempt_code 不能为空且最多 64 字符,lease_owner_attempt_code cannot be empty and can be up to 64 characters
-Initial lease version/queued_order 无效,Initial lease version/queued_order is invalid
-Initial lease 时间不满足 2h 硬上限,Initial lease time does not meet the 2h hard upper limit
-Reservation 重放 lease owner/queued 负载冲突,Reservation replay lease owner/queued load conflict
-UTC datetime 格式无效：%{1},Invalid UTC datetime format: %{1}
-Ledger idempotency payload 冲突,Ledger idempotency payload conflict
-库存 transition idempotency hash 冲突,Inventory transition idempotency hash conflict
-库存 transition 重放 reservation/quantity 负载冲突,Inventory transition replay reservation/quantity load conflict
-库存预占 idempotency hash 冲突：key=%{1},Inventory preemption idempotency hash conflict: key=%{1}
-库存预占 idempotency payload 冲突：key=%{1},Inventory pre-emption idempotency payload conflict: key=%{1}
-库存 Reservation 不存在,Inventory Reservation does not exist
-Reservation 已绑定不同 Warehouse,Reservation has been bound to different Warehouses
-原 Warehouse/Offer 库存入口不存在,The original Warehouse/Offer inventory entry does not exist
-WarehouseQuota CAS 重试耗尽,WarehouseQuota CAS retry exhausted
-reservation_uuid 无效,reservation_uuid is invalid
-仓代码/名称不能为空且不得超过字段长度,Warehouse code/name cannot be empty and must not exceed the field length
-仓模式或类型无效,Invalid bin mode or type
-仓名称不能为空且不得超过字段长度,Warehouse name required and within field length
-仓模式无效,Invalid warehouse mode
-store_id 不能为负数，warehouse_id 必须是正整数,store_id cannot be negative; warehouse_id must be a positive integer
-authorization_id 必须是正整数,authorization_id must be a positive integer
-库存调整 Scope 或数量无效,Inventory adjustment scope or quantity is invalid
-command_id 格式无效,command_id format is invalid
-website_id 不能为负,website_id cannot be negative
-仓库码片段无效,Invalid warehouse code snippet
-仓库节点类型无效,Invalid warehouse node type
-父仓库不存在,Parent warehouse not found
-省份只能挂在国家节点下,Provinces can only hang under country nodes
-仓库只能挂在国家或省份节点下,Warehouses can only hang under country/province nodes
-国家节点必须是顶级,Country node must be top-level
-非国家节点必须指定父仓库,Non-country nodes must specify parent warehouse
-删除仓库参数无效,Invalid delete warehouse params
-仓库不存在,Warehouse not found
-系统种子仓不允许删除,System seed warehouses cannot be deleted
-请先删除子仓库,Delete child warehouses first
-仓库仍有库存或预占，不能删除,Cannot delete a warehouse that still has inventory or reservations
-预占完成后缺少可分配 lease 的 reserved 行,Missing reserved row to allocate lease after preemption completes
-未知库存策略：%{1},Unknown inventory policy: %{1}
-库存数量必须为正整数 minor：%{1},Inventory quantity must be a positive integer minor: %{1}
-on_hand/reserved 不能为负,on_hand/reserved cannot be negative
-库存 minor 加法溢出,Inventory minor addition overflow
-MIG-P3A：P2 库存迁到默认逻辑仓（仅登记的隔离 clone）,MIG-P3A: migrate P2 inventory to default logical Warehouses (registered isolated clones only)
-打印帮助,Print help
-只读清点历史、映射冲突、Schema 与逐 Offer 守恒,"Read-only inventory of history, mapping conflicts, schema, and per-Offer conservation"
-checkpoint 后在登记 clone 上锁表事务映射；写入模式保持 off,"After checkpointing, map transactionally under table locks on a registered clone; keep writer mode off"
-新进程复核 checkpoint、历史摘要、映射计划与逐 Offer 守恒,"Verify checkpoint, history digests, mapping plans, and per-Offer conservation in a fresh process"
-verify 成功后按 website 开启新写路径,Enable the new writer by Website only after verification succeeds
-按 checkpoint 关闭新写路径；保留历史与已映射事实,Disable the new writer by checkpoint while retaining history and mapped facts
-migration registry 已登记的 mig_clone_*,A mig_clone_* registered in the migration registry
-apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）,Checkpoint ID returned by apply (required for verify/allowlist/rollback)
-allowlist 网站 ID；可重复或逗号分隔,Allowlisted Website ID; repeat or use comma-separated values
-显示本帮助,Show this help
-仓库授权（按仓库展开店铺）,Warehouse auth (expand stores by WH)
-点击仓库展开，查看该仓已授权的店铺。国家/省只是目录；履约授权在叶子仓上。,Expand a warehouse to view authorized stores. Country/province are directories only; fulfill auth is on leaf WHs.
-尚未授权任何店铺。用上方表单把店铺挂到此仓。,No stores authorized yet. Use the form above to attach a store to this warehouse.
-绑定店铺可用仓库；默认站(#0)/默认店(#0) 的种子授权不可删除，但可改绑仓库。设为默认逻辑仓时须指向逻辑仓。,Bind stores to available warehouses; default site(#0)/default store(#0) seed auth cannot be deleted but can rebind WH. Default logical WH must point to a logical WH.
-同步默认站店授权,Sync default site store auth
-授权ID,Auth ID
+变动（件）,"Change (pcs)"
+"仓库 ID","Warehouse ID"
+"账本 ID","Ledger ID"
+未知商品,"Unknown product"
+未知店铺,"Unknown store"
+未知仓库,"Unknown warehouse"
+"on_hand 不能为负","on_hand cannot be negative"
+"allowance 不能为负","allowance cannot be negative"
+"Ledger 重放竞争需要回滚","Ledger replay contention requires rollback"
+"库存设置 CAS 重试耗尽","Inventory settings CAS retry exhaustion"
+库存行不存在,"Inventory line does not exist"
+"可售库存不足：offer=%{1} need=%{2}","Insufficient available inventory: offer=%{1} need=%{2}"
+"库存预占 minor 累加溢出","Inventory pre-emption minor cumulative overflow"
+"库存预占 CAS 重试耗尽","Inventory preemption CAS retries exhausted"
+"Commit ledger 已存在但 Reservation 状态不一致","Commit ledger already exists but Reservation status is inconsistent"
+"Reservation 已 committed 但缺少 commit ledger","Reservation committed but missing commit ledger"
+"只能 commit reserved 状态：%{1}","Only commit reserved status: %{1}"
+"Reservation quantity_minor 必须为正","Reservation quantity_minor must be positive"
+"reserved_minor 小于待 commit 数量","reserved_minor is less than the number of commits to be committed"
+"Commit ledger 重放竞争需要回滚","Commit ledger replay contention requires rollback"
+"Commit Reservation 状态 CAS 失败","Commit Reservation Status CAS Failed"
+"库存 commit CAS 重试耗尽","Inventory commit CAS retries exhausted"
+退款回库数量必须为正数,"The refund quantity must be a positive number"
+退款回库重放数量与原请求不一致,"The number of refunds returned to the database for replay is inconsistent with the original request."
+"退款回库 ledger 重放竞争需要回滚","Refunding the ledger to the library replays the competition and needs to be rolled back"
+"退款回库库存 CAS 重试耗尽","Refund back to inventory CAS retry exhausted"
+"Reservation patch 字段为空或不受支持：%{1}","Reservation patch field is empty or not supported: %{1}"
+"expiry batch limit 必须在 1..1000","expiry batch limit must be between 1..1000"
+"Reservation 终态缺少对应 immutable ledger","Reservation final state lacks corresponding immutable ledger"
+"reserved_minor 小于待释放数量","reserved_minor is less than the number to be released"
+"释放/过期 ledger 重放竞争需要回滚","Release/expiration ledger replay contention requires rollback"
+"释放/过期 Reservation 状态 CAS 失败","Release/Expiration Reservation Status CAS Failed"
+"库存释放/过期 CAS 重试耗尽","Inventory Release/Expiration CAS Retry Exhaustion"
+"website_id/store_id 须 >=0 且 offer_id>0：%{1}/%{2}/%{3}","website_id/store_id must be >=0 and offer_id>0: %{1}/%{2}/%{3}"
+"Ledger 唯一约束冲突：%{1}","Ledger unique constraint violation: %{1}"
+"idempotency_key/request_hash 不能为空","idempotency_key/request_hash cannot be empty"
+"idempotency_key/request_hash 超出 128/64 字符限制","idempotency_key/request_hash exceeds 128/64 character limit"
+"reservation_uuid 不能为空且最多 36 字符","reservation_uuid cannot be empty and can be up to 36 characters"
+"Initial lease 字段必须完整且不得扩展","Initial lease field must be complete and must not be extended"
+"lease_owner_attempt_code 不能为空且最多 64 字符","lease_owner_attempt_code cannot be empty and can be up to 64 characters"
+"Initial lease version/queued_order 无效","Initial lease version/queued_order is invalid"
+"Initial lease 时间不满足 2h 硬上限","Initial lease time does not meet the 2h hard upper limit"
+"Reservation 重放 lease owner/queued 负载冲突","Reservation replay lease owner/queued load conflict"
+"UTC datetime 格式无效：%{1}","Invalid UTC datetime format: %{1}"
+"Ledger idempotency payload 冲突","Ledger idempotency payload conflict"
+"库存 transition idempotency hash 冲突","Inventory transition idempotency hash conflict"
+"库存 transition 重放 reservation/quantity 负载冲突","Inventory transition replay reservation/quantity load conflict"
+"库存预占 idempotency hash 冲突：key=%{1}","Inventory preemption idempotency hash conflict: key=%{1}"
+"库存预占 idempotency payload 冲突：key=%{1}","Inventory pre-emption idempotency payload conflict: key=%{1}"
+"库存 Reservation 不存在","Inventory Reservation does not exist"
+"Reservation 已绑定不同 Warehouse","Reservation has been bound to different Warehouses"
+"原 Warehouse/Offer 库存入口不存在","The original Warehouse/Offer inventory entry does not exist"
+"WarehouseQuota CAS 重试耗尽","WarehouseQuota CAS retry exhausted"
+"reservation_uuid 无效","reservation_uuid is invalid"
+仓代码/名称不能为空且不得超过字段长度,"Warehouse code/name cannot be empty and must not exceed the field length"
+仓模式或类型无效,"Invalid bin mode or type"
+仓名称不能为空且不得超过字段长度,"Warehouse name required and within field length"
+仓模式无效,"Invalid warehouse mode"
+"store_id 不能为负数，warehouse_id 必须是正整数","store_id cannot be negative; warehouse_id must be a positive integer"
+"authorization_id 必须是正整数","authorization_id must be a positive integer"
+"库存调整 Scope 或数量无效","Inventory adjustment scope or quantity is invalid"
+"command_id 格式无效","command_id format is invalid"
+"website_id 不能为负","website_id cannot be negative"
+仓库码片段无效,"Invalid warehouse code snippet"
+仓库节点类型无效,"Invalid warehouse node type"
+父仓库不存在,"Parent warehouse not found"
+省份只能挂在国家节点下,"Provinces can only hang under country nodes"
+仓库只能挂在国家或省份节点下,"Warehouses can only hang under country/province nodes"
+国家节点必须是顶级,"Country node must be top-level"
+非国家节点必须指定父仓库,"Non-country nodes must specify parent warehouse"
+删除仓库参数无效,"Invalid delete warehouse params"
+仓库不存在,"Warehouse not found"
+系统种子仓不允许删除,"System seed warehouses cannot be deleted"
+请先删除子仓库,"Delete child warehouses first"
+仓库仍有库存或预占，不能删除,"Cannot delete a warehouse that still has inventory or reservations"
+"预占完成后缺少可分配 lease 的 reserved 行","Missing reserved row to allocate lease after preemption completes"
+未知库存策略：%{1},"Unknown inventory policy: %{1}"
+"库存数量必须为正整数 minor：%{1}","Inventory quantity must be a positive integer minor: %{1}"
+"on_hand/reserved 不能为负","on_hand/reserved cannot be negative"
+"库存 minor 加法溢出","Inventory minor addition overflow"
+"MIG-P3A：P2 库存迁到默认逻辑仓（仅登记的隔离 clone）","MIG-P3A: migrate P2 inventory to default logical Warehouses (registered isolated clones only)"
+打印帮助,"Print help"
+"只读清点历史、映射冲突、Schema 与逐 Offer 守恒","Read-only inventory of history, mapping conflicts, schema, and per-Offer conservation"
+"checkpoint 后在登记 clone 上锁表事务映射；写入模式保持 off","After checkpointing, map transactionally under table locks on a registered clone; keep writer mode off"
+"新进程复核 checkpoint、历史摘要、映射计划与逐 Offer 守恒","Verify checkpoint, history digests, mapping plans, and per-Offer conservation in a fresh process"
+"verify 成功后按 website 开启新写路径","Enable the new writer by Website only after verification succeeds"
+"按 checkpoint 关闭新写路径；保留历史与已映射事实","Disable the new writer by checkpoint while retaining history and mapped facts"
+"migration registry 已登记的 mig_clone_*","A mig_clone_* registered in the migration registry"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify/allowlist/rollback)"
+"allowlist 网站 ID；可重复或逗号分隔","Allowlisted Website ID; repeat or use comma-separated values"
+显示本帮助,"Show this help"
+仓库授权（按仓库展开店铺）,"Warehouse auth (expand stores by WH)"
+点击仓库展开，查看该仓已授权的店铺。国家/省只是目录；履约授权在叶子仓上。,"Expand a warehouse to view authorized stores. Country/province are directories only; fulfill auth is on leaf WHs."
+尚未授权任何店铺。用上方表单把店铺挂到此仓。,"No stores authorized yet. Use the form above to attach a store to this warehouse."
+"绑定店铺可用仓库；默认站(#0)/默认店(#0) 的种子授权不可删除，但可改绑仓库。设为默认逻辑仓时须指向逻辑仓。","Bind stores to available warehouses; default site(#0)/default store(#0) seed auth cannot be deleted but can rebind WH. Default logical WH must point to a logical WH."
+同步默认站店授权,"Sync default site store auth"
+授权ID,"Auth ID"
 默认,Default
 授权,Authorize
-仓 website_id、代码和名称不能为空,"Repository website_id, code and name cannot be empty"
-仓写入后无法回读：%{1},Unable to read back after writing to bin: %{1}
-仓授权被拒绝,Warehouse authorization was rejected
-Store 不存在：%{1},Store does not exist: %{1}
-Store 与仓不属于同一 Website,Store and warehouse do not belong to the same Website
-Store %{1} 已停用或不在 active 生命周期,Store %{1} is disabled or is not active
-仓授权请求与既有绑定冲突,Warehouse authorization conflicts with the existing binding
-Store 已存在不同的默认逻辑仓,Store already has a different default logical warehouse
-仓不存在,Warehouse does not exist
-仓已停用,Warehouse is disabled
-Store 环境与仓模式不兼容,Store environment is incompatible with warehouse mode
-默认仓必须是逻辑仓,The default warehouse must be logical
-Store mode 不受支持：%{1},Unsupported Store mode: %{1}
-仓授权写入冲突,Warehouse authorization write conflict
-Store %{1}/%{2} 默认仓缺失,Default warehouse is missing for Store %{1}/%{2}
-Store %{1}/%{2} 默认逻辑仓不唯一,Default logical warehouse is ambiguous for Store %{1}/%{2}
-Website %{1} 无 mode=%{2} 默认逻辑仓,Website %{1} has no default logical warehouse for mode=%{2}
-Website %{1} 默认逻辑仓不唯一（mode=%{2}）,Website %{1} has multiple default logical warehouses for mode=%{2}
-库存内核管理工作台,Inventory Kernel Management Workbench
-Store ID,Store ID
-Offer ID,Offer ID
-在手库存,Inventory on hand
-按国家→省份→仓库分级展示。仓码以父级前缀累接（国家码+省份码），创建后不可修改；系统种子不可删除；有库存或预占时不可删除。名称可点翻译；层级/模式/类型显示中文别名。,Tree by country→province→warehouse. Codes accumulate parent prefixes and cannot change after create; system seeds cannot be deleted; stock/reservations block delete. Names are click-to-translate; level/mode/type show aliases.
+"仓 website_id、代码和名称不能为空","Repository website_id, code and name cannot be empty"
+仓写入后无法回读：%{1},"Unable to read back after writing to bin: %{1}"
+仓授权被拒绝,"Warehouse authorization was rejected"
+"Store 不存在：%{1}","Store does not exist: %{1}"
+"Store 与仓不属于同一 Website","Store and warehouse do not belong to the same Website"
+"Store %{1} 已停用或不在 active 生命周期","Store %{1} is disabled or is not active"
+仓授权请求与既有绑定冲突,"Warehouse authorization conflicts with the existing binding"
+"Store 已存在不同的默认逻辑仓","Store already has a different default logical warehouse"
+仓不存在,"Warehouse does not exist"
+仓已停用,"Warehouse is disabled"
+"Store 环境与仓模式不兼容","Store environment is incompatible with warehouse mode"
+默认仓必须是逻辑仓,"The default warehouse must be logical"
+"Store mode 不受支持：%{1}","Unsupported Store mode: %{1}"
+仓授权写入冲突,"Warehouse authorization write conflict"
+"Store %{1}/%{2} 默认仓缺失","Default warehouse is missing for Store %{1}/%{2}"
+"Store %{1}/%{2} 默认逻辑仓不唯一","Default logical warehouse is ambiguous for Store %{1}/%{2}"
+"Website %{1} 无 mode=%{2} 默认逻辑仓","Website %{1} has no default logical warehouse for mode=%{2}"
+"Website %{1} 默认逻辑仓不唯一（mode=%{2}）","Website %{1} has multiple default logical warehouses for mode=%{2}"
+库存内核管理工作台,"Inventory Kernel Management Workbench"
+"Store ID","Store ID"
+"Offer ID","Offer ID"
+在手库存,"Inventory on hand"
+按国家→省份→仓库分级展示。仓码以父级前缀累接（国家码+省份码），创建后不可修改；系统种子不可删除；有库存或预占时不可删除。名称可点翻译；层级/模式/类型显示中文别名。,"Tree by country→province→warehouse. Codes accumulate parent prefixes and cannot change after create; system seeds cannot be deleted; stock/reservations block delete. Names are click-to-translate; level/mode/type show aliases."
 按国家→省份→仓库分级展示。仓码以父级前缀累接（国家码+省份码），创建后不可修改；有库存或预占时不可删除。,"Show by country→province→warehouse. Warehouse codes accumulate parent prefixes (country+province codes), immutable after create; cannot delete when stock or reserved exists."
-新增国家节点（地址目录选码，禁止手填 ISO）,Add country node (pick code from address directory; no hand-typed ISO)
-国家码,Country code
-国家名称,Country name
-添加国家,Add country
-仓代码,warehouse code
-仓名称,Warehouse name
-store_id 与 warehouse_id 必须是正整数,store_id and warehouse_id must be positive integers
-网站 ID,Website ID
-"""Website ID 不能为负""",Website ID must not be negative
-normal 库存不得映到 test 仓,Normal inventory must not be mapped to the test warehouse
-test 库存不得映到 normal 真仓,Test inventory must not be mapped to normal real warehouse
-发货数量必须为正,Shipping quantity must be positive
-履约单元不存在,The fulfillment unit does not exist
-履约 CAS 冲突,Fulfillment CAS conflicts
-累计发货超过可发数量,The cumulative shipment exceeds the quantity that can be shipped
-仓维 writer 在当前 rollout 不可写,Cangwei writer is not writable in the current rollout
+"新增国家节点（地址目录选码，禁止手填 ISO）","Add country node (pick code from address directory; no hand-typed ISO)"
+国家码,"Country code"
+国家名称,"Country name"
+添加国家,"Add country"
+仓代码,"warehouse code"
+仓名称,"Warehouse name"
+"store_id 与 warehouse_id 必须是正整数","store_id and warehouse_id must be positive integers"
+"网站 ID","Website ID"
+"""Website ID 不能为负""","Website ID must not be negative"
+"normal 库存不得映到 test 仓","Normal inventory must not be mapped to the test warehouse"
+"test 库存不得映到 normal 真仓","Test inventory must not be mapped to normal real warehouse"
+发货数量必须为正,"Shipping quantity must be positive"
+履约单元不存在,"The fulfillment unit does not exist"
+"履约 CAS 冲突","Fulfillment CAS conflicts"
+累计发货超过可发数量,"The cumulative shipment exceeds the quantity that can be shipped"
+"仓维 writer 在当前 rollout 不可写","Cangwei writer is not writable in the current rollout"
 国家,Country
 省份,Province
 正式,Live
 测试,Test
-逻辑仓,Logical warehouse
-物理仓,Physical warehouse
-码别名已保存,Code alias saved
-码别名已删除,Code alias deleted
-﻿id属性不能为空,The id attribute cannot be empty
+逻辑仓,"Logical warehouse"
+物理仓,"Physical warehouse"
+码别名已保存,"Code alias saved"
+码别名已删除,"Code alias deleted"

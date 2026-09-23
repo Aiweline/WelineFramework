@@ -1,90 +1,90 @@
-前端账户登录后（已废弃·迁 Customer）,After frontend account login (deprecated · moved to Customer)
-前端账户注册后,After Frontend Account Registration
-前端用户注册成功后触发（现由 CustomerAccountService 派发本事件名），允许其他模块监听注册事件并执行相应操作。,Triggered after a user successfully registers on the frontend (now handled by CustomerAccountService). Allows other modules to listen for registration events and perform corresponding actions.
-前端头部,Frontend Header
-在前端页面的 <head> 标签内注入内容，允许其他模块在前端页面头部注入额外的 CSS、JavaScript 或其他资源。,"Injects content into the <head> tag of frontend pages, allowing other modules to inject additional CSS, JavaScript, or other resources into the frontend page head."
+﻿"前端账户登录后（已废弃·迁 Customer）","After frontend account login (deprecated · moved to Customer)"
+前端账户注册后,"After Frontend Account Registration"
+"前端用户注册成功后触发（现由 CustomerAccountService 派发本事件名），允许其他模块监听注册事件并执行相应操作。","Triggered after a user successfully registers on the frontend (now handled by CustomerAccountService). Allows other modules to listen for registration events and perform corresponding actions."
+前端头部,"Frontend Header"
+"在前端页面的 <head> 标签内注入内容，允许其他模块在前端页面头部注入额外的 CSS、JavaScript 或其他资源。","Injects content into the <head> tag of frontend pages, allowing other modules to inject additional CSS, JavaScript, or other resources into the frontend page head."
 首页,Homepage
 欢迎访问,Welcome
-这是 WelineFramework 的默认首页,This is the default homepage of WelineFramework
+"这是 WelineFramework 的默认首页","This is the default homepage of WelineFramework"
 模块不存在，请检查模块名称!,"Module does not exist, please check the module name!"
 通知,Notification
-暂无通知,No notification yet
+暂无通知,"No notification yet"
 关闭,closure
 确定,Sure
 取消,Cancel
-请重试,Please try again
-模块 %{1} 加载超时：%{2},Module %{1} load timed out: %{2}
-模块 %{1} 加载失败：未找到 %{2},Module %{1} failed to load: %{2} not found.
-模块 %{1} 加载失败：无法加载 %{2},Module %{1} failed to load: unable to load %{2}
-预加载模块 %{1} 失败,Preloading module %{1} failed
-按需加载 Dom 微核失败,On-demand loading of the DOM microkernel failed.
-延迟部件模块加载完成,Delayed component module loading complete.
+请重试,"Please try again"
+"模块 %{1} 加载超时：%{2}","Module %{1} load timed out: %{2}"
+"模块 %{1} 加载失败：未找到 %{2}","Module %{1} failed to load: %{2} not found."
+"模块 %{1} 加载失败：无法加载 %{2}","Module %{1} failed to load: unable to load %{2}"
+"预加载模块 %{1} 失败","Preloading module %{1} failed"
+"按需加载 Dom 微核失败","On-demand loading of the DOM microkernel failed."
+延迟部件模块加载完成,"Delayed component module loading complete."
 模块,Module.
-部件属性模块加载,Component attribute module loading.
+部件属性模块加载,"Component attribute module loading."
 页面,Page
-立即加载,Load immediately.
-空闲延迟,Idle delay.
-已跳过（已加载/加载中）,Skipped (already loaded/loading).
-声明延后,Deferred declaration.
+立即加载,"Load immediately."
+空闲延迟,"Idle delay."
+已跳过（已加载/加载中）,"Skipped (already loaded/loading)."
+声明延后,"Deferred declaration."
 时间,Time
-本页 DOM 无 data-weline-load / data-weline-declare,"This page's DOM does not contain the attributes ""data-weline-load"" or ""data-weline-declare""."
-WLS 已启动,WLS is started
-模板加载正常,Template loads normally
-网站维护中…,The website is under maintenance...
-网站正在维护中…,The website is under maintenance…
+"本页 DOM 无 data-weline-load / data-weline-declare","This page's DOM does not contain the attributes ""data-weline-load"" or ""data-weline-declare""."
+"WLS 已启动","WLS is started"
+模板加载正常,"Template loads normally"
+网站维护中…,"The website is under maintenance..."
+网站正在维护中…,"The website is under maintenance…"
 我们正在升级系统与数据，请稍后再试。,"We are upgrading the system and data, please try again later."
-刷新页面,refresh page
-返回首页,Return to home page
+刷新页面,"refresh page"
+返回首页,"Return to home page"
 切换,Toggle
 用户不存在，请先在系统中注册,"The user does not exist, please register in the system first"
-用户头像,User Avatar
-前端账户登录后,After Frontend Account Login
+用户头像,"User Avatar"
+前端账户登录后,"After Frontend Account Login"
 前端用户登录成功后触发，允许其他模块监听登录事件并执行相应操作。,"Triggered after a frontend user logs in successfully, allowing other modules to listen for the login event and perform corresponding actions."
 前端用户注册成功后触发，允许其他模块监听注册事件并执行相应操作。,"Triggered after a frontend user registers successfully, allowing other modules to listen for the registration event and perform corresponding actions."
-维护补偿礼金,Maintenance compensation gift
-不过也要恭喜您——若您耐心等到升级完成，我们将发放补偿礼金。请先不要关闭。,Good news: wait until upgrade finishes and we'll issue a compensation gift. Please keep this page open.
-恢复后约 10 分钟内自动领取，请勿关闭本页。,Auto-claim within ~10 minutes after recovery. Please keep this page open.
-非常抱歉，给您带来不便。,We're sorry for the inconvenience.
-耐心等待,Wait patiently
-抱歉，网站正在升级维护,Sorry — the site is upgrading
-请稍候片刻，恢复后即可继续。,Please wait a moment; you can continue after recovery.
-稍后再来,Come back later
-正在等待恢复…,Waiting for recovery…
-登录/注册页面,Login/Register page
-用户中心/账户相关页面,User center/account-related pages
-API相关页面,API related pages
-购物车相关页面,Cart-related pages
-路径启发式预加载,Path-based preloading
+维护补偿礼金,"Maintenance compensation gift"
+不过也要恭喜您——若您耐心等到升级完成，我们将发放补偿礼金。请先不要关闭。,"Good news: wait until upgrade finishes and we'll issue a compensation gift. Please keep this page open."
+"恢复后约 10 分钟内自动领取，请勿关闭本页。","Auto-claim within ~10 minutes after recovery. Please keep this page open."
+非常抱歉，给您带来不便。,"We're sorry for the inconvenience."
+耐心等待,"Wait patiently"
+抱歉，网站正在升级维护,"Sorry — the site is upgrading"
+请稍候片刻，恢复后即可继续。,"Please wait a moment; you can continue after recovery."
+稍后再来,"Come back later"
+正在等待恢复…,"Waiting for recovery…"
+登录/注册页面,"Login/Register page"
+用户中心/账户相关页面,"User center/account-related pages"
+API相关页面,"API related pages"
+购物车相关页面,"Cart-related pages"
+路径启发式预加载,"Path-based preloading"
 原因,Reason
-路径启发式预加载完成,Path heuristic preloading complete.
-路径启发式预加载失败,Path heuristic preloading failed.
+路径启发式预加载完成,"Path heuristic preloading complete."
+路径启发式预加载失败,"Path heuristic preloading failed."
 错误,Error
-路径启发式：本页无匹配路由（部件模块见 data-weline-load）,Path heuristic: No matching route found on this page (module details can be found in data-weline-load).
-已跳过（路径启发式/已加载）,Skipped (path heuristic / already loaded)
-仅声明,Declaration only.
-自动预加载模块,Auto-preload modules
-模块预加载完成,Module preload complete
-模块预加载失败,Module preload failed
-当前页面无需预加载模块,No preload module is needed for the current page
-查看全部,View all
-查看更多,View More
-JS: inject_path函数path路径不允许为空！,JS: The inject_path function path is not allowed to be empty!
-Weline.Account.%{1} 已弃用，请使用 %{2},"Weline.Account.%{1} is deprecated, please use %{2}"
-网站维护,Website maintenance
-请稍等片刻...,Please wait a moment...
-系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。,The system will automatically check the recovery status and refresh this page when service is restored. You do not need to keep clicking refresh.
-返回首页重试,Return to Homepage and Retry
+"路径启发式：本页无匹配路由（部件模块见 data-weline-load）","Path heuristic: No matching route found on this page (module details can be found in data-weline-load)."
+已跳过（路径启发式/已加载）,"Skipped (path heuristic / already loaded)"
+仅声明,"Declaration only."
+自动预加载模块,"Auto-preload modules"
+模块预加载完成,"Module preload complete"
+模块预加载失败,"Module preload failed"
+当前页面无需预加载模块,"No preload module is needed for the current page"
+查看全部,"View all"
+查看更多,"View More"
+"JS: inject_path函数path路径不允许为空！","JS: The inject_path function path is not allowed to be empty!"
+"Weline.Account.%{1} 已弃用，请使用 %{2}","Weline.Account.%{1} is deprecated, please use %{2}"
+网站维护,"Website maintenance"
+请稍等片刻...,"Please wait a moment..."
+系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。,"The system will automatically check the recovery status and refresh this page when service is restored. You do not need to keep clicking refresh."
+返回首页重试,"Return to Homepage and Retry"
 刷新,Refresh
-为什么网站会处于维护模式？,Why is the website in maintenance mode?
+为什么网站会处于维护模式？,"Why is the website in maintenance mode?"
 网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The site may be undergoing a system upgrade, or most of the content has changed. Developers are maintaining or upgrading data to provide better service."
-多久能够恢复？,How long until recovery?
-大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,Most website upgrade activities only last a few minutes or even seconds.
-需要帮助吗？,Need help?
+多久能够恢复？,"How long until recovery?"
+大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only last a few minutes or even seconds."
+需要帮助吗？,"Need help?"
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have doubts about the website, please contact:"
-网站Logo,Site Logo
+网站Logo,"Site Logo"
 Weline,Weline
-搜索商品...,Search products...
+搜索商品...,"Search products..."
 搜索,Search
-我的账户,My Account
+我的账户,"My Account"
 账户,Account
-前端模板库,Frontend template library
+前端模板库,"Frontend template library"

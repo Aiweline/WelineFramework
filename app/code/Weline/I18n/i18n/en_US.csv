@@ -1,589 +1,590 @@
-收集翻译词（已废弃）,Collect translation phrases (deprecated)
-机器翻译请求,Machine translation request
-I18n 发布的中立机器翻译契约；AI 等可选模块可提供实现。,Neutral machine translation contract released by I18n; optional modules such as AI can provide implementation.
-语言目录变更,Language catalog changed
+﻿收集翻译词（已废弃）,"Collect translation phrases (deprecated)"
+机器翻译请求,"Machine translation request"
+"I18n 发布的中立机器翻译契约；AI 等可选模块可提供实现。","Neutral machine translation contract released by I18n; optional modules such as AI can provide implementation."
+语言目录变更,"Language catalog changed"
 后台安装、激活、停用或卸载语言，以及国家语言批量同步后触发。维护模块等可据此刷新零依赖静态页。,"Fires after admin install/activate/deactivate/uninstall of languages, and after country-language bulk sync. Maintenance modules can refresh zero-dependency static pages."
-I18n 后台查询器不支持的操作：%{1},I18n Operation not supported by background query: %{1}
-I18n 后台操作不能为空,I18n background operation cannot be empty
-I18n 后台操作参数必须是对象,I18n background operation parameters must be objects
-加载翻译表单失败,Failed to load translation form
-加载成功,Loaded successfully
-AI翻译调用失败,AI translation call failed
-AI 翻译完成,AI translation completed
-AI 批量翻译完成,AI batch translation completed
-I18n 后台管理查询器,I18n background management query
-通过 bin-query 异步执行国家、区域、词典和翻译管理动作。,"Asynchronously execute country, region, dictionary and translation management actions via bin-query."
-不支持的 I18n 后台操作：%{1},Unsupported I18n background operation: %{1}
-操作成功,Operation successful
-无法构造 I18n 后台操作依赖：%{1},Unable to construct I18n background operation dependency: %{1}
-语言申请查询器不支持的操作：%{1},Operation not supported by language request query: %{1}
+"I18n 后台查询器不支持的操作：%{1}","I18n Operation not supported by background query: %{1}"
+"I18n 后台操作不能为空","I18n background operation cannot be empty"
+"I18n 后台操作参数必须是对象","I18n background operation parameters must be objects"
+加载翻译表单失败,"Failed to load translation form"
+加载成功,"Loaded successfully"
+AI翻译调用失败,"AI translation call failed"
+"AI 翻译完成","AI translation completed"
+"AI 批量翻译完成","AI batch translation completed"
+"I18n 后台管理查询器","I18n background management query"
+"通过 bin-query 异步执行国家、区域、词典和翻译管理动作。","Asynchronously execute country, region, dictionary and translation management actions via bin-query."
+"不支持的 I18n 后台操作：%{1}","Unsupported I18n background operation: %{1}"
+操作成功,"Operation successful"
+"无法构造 I18n 后台操作依赖：%{1}","Unable to construct I18n background operation dependency: %{1}"
+语言申请查询器不支持的操作：%{1},"Operation not supported by language request query: %{1}"
 提交失败，请稍后重试,"Submission failed, please try again later"
-语言支持申请,Language support request
-异步加载全球语言申请表，并提交经过人机验证的站点语言支持请求。,Asynchronously load global language request forms and submit human-verified site language support requests.
-首次打开申请弹层时加载编译后的 w:form、全球语言目录与验证码资源，并签发一次性本地挑战。,"When the application popup is opened for the first time, the compiled w:form, global language directory and verification code resources are loaded, and a one-time local challenge is issued."
-提交当前网站的多语言支持申请；服务端重新解析站点并验证 CAPTCHA。,Submit a multi-language support request for the current website; the server re-parses the site and verifies the CAPTCHA.
-语言申请状态已更新,Language application status has been updated
-语言就绪状态已同步,Language readiness status synchronized
-语言申请后台查询器不支持的操作：%{1},Operations not supported by the language application background query: %{1}
-语言申请后台管理,Language application background management
-筛选、审核、重新打开语言申请，并按运行时语言包同步 ready 状态。,"Filter, review, and reopen language requests, and synchronize ready status by runtime language pack."
-请先登录后台,Please log in to the backend first
-Unsupported i18n operation: %{1},Unsupported i18n operation: %{1}
-翻译原文不能为空,Translation original text cannot be empty
-当前请求没有可用的商城 Scope,There is no available mall scope for the current request
-No frontend translation words to collect.,No frontend translation words to collect.
-Collected frontend translation words.,Collected frontend translation words.
-I18n query provider,I18n query provider
-Provides locale and frontend translation operations.,Provides locale and frontend translation operations.
-Get installed locales.,Get installed locales.
-Batch country flag SVG payloads for storefront lazy load.,Batch country flag SVG payloads for storefront lazy load.
-Get locale by code.,Get locale by code.
-Get locale display name.,Get locale display name.
-Get frontend translation dictionary.,Get frontend translation dictionary.
-按可信请求 Scope 解析一条前台翻译。,Parse a front-end translation according to the trusted request scope.
-Collect frontend translation words.,Collect frontend translation words.
-Unsupported i18n_remote_translation operation: %{1},Unsupported i18n_remote_translation operation: %{1}
-远程协助翻译,Remote assisted translation
+语言支持申请,"Language support request"
+异步加载全球语言申请表，并提交经过人机验证的站点语言支持请求。,"Asynchronously load global language request forms and submit human-verified site language support requests."
+"首次打开申请弹层时加载编译后的 w:form、全球语言目录与验证码资源，并签发一次性本地挑战。","When the application popup is opened for the first time, the compiled w:form, global language directory and verification code resources are loaded, and a one-time local challenge is issued."
+"提交当前网站的多语言支持申请；服务端重新解析站点并验证 CAPTCHA。","Submit a multi-language support request for the current website; the server re-parses the site and verifies the CAPTCHA."
+语言申请状态已更新,"Language application status has been updated"
+语言就绪状态已同步,"Language readiness status synchronized"
+语言申请后台查询器不支持的操作：%{1},"Operations not supported by the language application background query: %{1}"
+语言申请后台管理,"Language application background management"
+"筛选、审核、重新打开语言申请，并按运行时语言包同步 ready 状态。","Filter, review, and reopen language requests, and synchronize ready status by runtime language pack."
+请先登录后台,"Please log in to the backend first"
+"Unsupported i18n operation: %{1}","Unsupported i18n operation: %{1}"
+翻译原文不能为空,"Translation original text cannot be empty"
+"当前请求没有可用的商城 Scope","There is no available mall scope for the current request"
+"No frontend translation words to collect.","No frontend translation words to collect."
+"Collected frontend translation words.","Collected frontend translation words."
+"I18n query provider","I18n query provider"
+"Provides locale and frontend translation operations.","Provides locale and frontend translation operations."
+"Get installed locales.","Get installed locales."
+"Batch country flag SVG payloads for storefront lazy load.","Batch country flag SVG payloads for storefront lazy load."
+"Get locale by code.","Get locale by code."
+"Get locale display name.","Get locale display name."
+"Get frontend translation dictionary.","Get frontend translation dictionary."
+"按可信请求 Scope 解析一条前台翻译。","Parse a front-end translation according to the trusted request scope."
+"Collect frontend translation words.","Collect frontend translation words."
+"Unsupported i18n_remote_translation operation: %{1}","Unsupported i18n_remote_translation operation: %{1}"
+远程协助翻译,"Remote assisted translation"
 远程取未译、录入译文、触发词典收集与状态轮询,"Remotely fetch untranslated phrases, ingest translations, trigger dictionary collect, and poll status"
-分页取未译词条,Paginate untranslated phrases
-录入译文（冲突跳过）并 publish,Ingest translations (skip conflicts) and publish
-启动远程词典收集（禁 AI 入队）,Start remote dictionary collect (AI enqueue disabled)
-轮询远程词典收集状态,Poll remote dictionary collect status
-id属性不能为空,The id attribute cannot be empty
-点击选择语言（可多选）,Click to select a language (multiple selection allowed).
-点击选择语言,Click to select a language.
+分页取未译词条（type=phrase|meta|local_model）,分页取未译词条（type=phrase|meta|local_model）
+"录入译文（冲突跳过）；phrase/meta 会 publish","录入译文（冲突跳过）；phrase/meta 会 publish"
+"启动远程词典收集（禁 AI 入队；local_model→422）","启动远程词典收集（禁 AI 入队；local_model→422）"
+轮询远程词典收集状态,"Poll remote dictionary collect status"
+"local_model 不支持词典 collect","local_model 不支持词典 collect"
+id属性不能为空,"The id attribute cannot be empty"
+点击选择语言（可多选）,"Click to select a language (multiple selection allowed)."
+点击选择语言,"Click to select a language."
 搜索国家、语言或代码...,"Search country, language, or code..."
-未分组国家,Ungrouped countries
-全球语言,global language
-一键 AI 翻译,One-click AI Translation
-一键 AI 批量翻译,One-click AI Batch Translation
-翻译进度,Translation Progress
+未分组国家,"Ungrouped countries"
+全球语言,"global language"
+"一键 AI 翻译","One-click AI Translation"
+"一键 AI 批量翻译","One-click AI Batch Translation"
+翻译进度,"Translation Progress"
 关闭,Close
-请先保存后再翻译,Please save before translating
-没有可翻译的字段，请先填写文案,No translatable fields. Add copy first.
-准备开始…,Getting ready…
-翻译进行中,Translation in progress
-请选择一个字段！,Please select a field!
-多语言翻译,Multilingual Translation
+请先保存后再翻译,"Please save before translating"
+没有可翻译的字段，请先填写文案,"No translatable fields. Add copy first."
+准备开始…,"Getting ready…"
+翻译进行中,"Translation in progress"
+请选择一个字段！,"Please select a field!"
+多语言翻译,"Multilingual Translation"
 刷新,Refresh
 保存,Save
 取消,Cancel
 搜索语言、语言码或翻译,"Search language, language code, or translation"
-正在加载语言…,Loading languages…
-已译 %{filled} / 共 %{total} 种语言,Translated %{filled} / %{total} languages
-原文,Source Text
+正在加载语言…,"Loading languages…"
+"已译 %{filled} / 共 %{total} 种语言","Translated %{filled} / %{total} languages"
+原文,"Source Text"
 语言,Language
-译文,Translated Text
+译文,"Translated Text"
 状态,Status
-没有找到已启用的语言,No enabled languages found
-没有匹配的语言,No matching languages
+没有找到已启用的语言,"No enabled languages found"
+没有匹配的语言,"No matching languages"
 已填写,Filled
 待填写,Pending
-母本语言,Base language
-母本为空，当前以 %{locale} 为翻译源,Base is empty; currently using %{locale} as the translation source
-AI翻译,AI Translation
-已有翻译内容，是否重新翻译？,Translations already exist. Retranslate?
+母本语言,"Base language"
+"母本为空，当前以 %{locale} 为翻译源","Base is empty; currently using %{locale} as the translation source"
+AI翻译,"AI Translation"
+已有翻译内容，是否重新翻译？,"Translations already exist. Retranslate?"
 重新翻译,Retranslate
-参数错误：words 必须是非空数组,Invalid parameter: words must be a non-empty array
-参数错误：target_locale 不能为空,Invalid parameter: target_locale cannot be empty
-目标语言：%{locale}\n词数：%{count}\n错误信息：%{error},Target locale: %{locale}\nPhrase count: %{count}\nError: %{error}
-AI翻译异常,AI translation exception
-目标语言：%{locale}\n词数：%{count}\n异常信息：%{error}\n异常位置：%{file}:%{line},Target locale: %{locale}\nPhrase count: %{count}\nException: %{error}\nLocation: %{file}:%{line}
-事件处理异常: %{1},Event handling exception: %{1}
-语言申请就绪同步只接受 resource_change.v1 契约,Language application ready sync only accepts resource_change.v1 contract
-I18n ResourceChange Observer 只接受 v1 契约,I18n ResourceChange Observer only accepts v1 contracts
-没有开启实时翻译，不能访问！,Real-time translation is not enabled
-请设置local标签model属性！,Please set the model attribute of the local tag!
-请传输local标签值！,Please pass the local tag value!
-请设置local标签id属性！,Please set the id attribute of the local tag!
-翻译完成!,Translation completed!
-没有需要收集的翻译词,No translation words need to be collected
-收集成功！一共收集更新词条：%{1} 个,Collection successful! Total collected and updated entries: %{1}
-请指定要导出的语言代码,Please specify the language code to export
-没有找到可导出的翻译数据,No exportable translation data found
-导出翻译包失败: %{1},Export translation package failed: %{1}
-缺少必要的参数,Missing required parameters
-翻译删除成功！,Translation deleted successfully!
-删除失败: %{1},Delete failed: %{1}
-缺少目标语言参数,Missing target language parameter
-已清理目标语言 %{1} 的译文：%{2} 条,Cleaned translations for target language %{1}: %{2}
-清理目标语言失败: %{1},Clean target language failed: %{1}
-已清理全部词典：词条 %{1} 条，译文 %{2} 条,"All dictionaries have been cleared: %{1} entries, %{2} translations"
-清理全部词典失败: %{1},Failed to clear all dictionaries: %{1}
-请填写完整的翻译信息,Please fill in complete translation information
-翻译添加成功！,Translation added successfully!
-添加失败: %{1},Add failed: %{1}
-翻译不存在,Translation does not exist
-翻译更新成功！,Translation updated successfully!
-更新失败: %{1},Update failed: %{1}
-请选择要导出的语言,Please select the language to export
-该语言没有翻译数据,This language has no translation data
-导出失败: %{1},Export failed: %{1}
-请选择要导入的CSV文件,Please select a CSV file to import
+"参数错误：words 必须是非空数组","Invalid parameter: words must be a non-empty array"
+"参数错误：target_locale 不能为空","Invalid parameter: target_locale cannot be empty"
+"目标语言：%{locale}\n词数：%{count}\n错误信息：%{error}","Target locale: %{locale}\nPhrase count: %{count}\nError: %{error}"
+AI翻译异常,"AI translation exception"
+"目标语言：%{locale}\n词数：%{count}\n异常信息：%{error}\n异常位置：%{file}:%{line}","Target locale: %{locale}\nPhrase count: %{count}\nException: %{error}\nLocation: %{file}:%{line}"
+"事件处理异常: %{1}","Event handling exception: %{1}"
+"语言申请就绪同步只接受 resource_change.v1 契约","Language application ready sync only accepts resource_change.v1 contract"
+"I18n ResourceChange Observer 只接受 v1 契约","I18n ResourceChange Observer only accepts v1 contracts"
+没有开启实时翻译，不能访问！,"Real-time translation is not enabled"
+请设置local标签model属性！,"Please set the model attribute of the local tag!"
+请传输local标签值！,"Please pass the local tag value!"
+请设置local标签id属性！,"Please set the id attribute of the local tag!"
+翻译完成!,"Translation completed!"
+没有需要收集的翻译词,"No translation words need to be collected"
+"收集成功！一共收集更新词条：%{1} 个","Collection successful! Total collected and updated entries: %{1}"
+请指定要导出的语言代码,"Please specify the language code to export"
+没有找到可导出的翻译数据,"No exportable translation data found"
+"导出翻译包失败: %{1}","Export translation package failed: %{1}"
+缺少必要的参数,"Missing required parameters"
+翻译删除成功！,"Translation deleted successfully!"
+"删除失败: %{1}","Delete failed: %{1}"
+缺少目标语言参数,"Missing target language parameter"
+"已清理目标语言 %{1} 的译文：%{2} 条","Cleaned translations for target language %{1}: %{2}"
+"清理目标语言失败: %{1}","Clean target language failed: %{1}"
+"已清理全部词典：词条 %{1} 条，译文 %{2} 条","All dictionaries have been cleared: %{1} entries, %{2} translations"
+"清理全部词典失败: %{1}","Failed to clear all dictionaries: %{1}"
+请填写完整的翻译信息,"Please fill in complete translation information"
+翻译添加成功！,"Translation added successfully!"
+"添加失败: %{1}","Add failed: %{1}"
+翻译不存在,"Translation does not exist"
+翻译更新成功！,"Translation updated successfully!"
+"更新失败: %{1}","Update failed: %{1}"
+请选择要导出的语言,"Please select the language to export"
+该语言没有翻译数据,"This language has no translation data"
+"导出失败: %{1}","Export failed: %{1}"
+请选择要导入的CSV文件,"Please select a CSV file to import"
 文件名必须是有效的locale_code，如：zh_Hans_CN、en_US等,"File name must be a valid locale_code, such as: zh_Hans_CN, en_US, etc."
-CSV文件为空或格式不正确,CSV file is empty or format is incorrect
-导入成功！新增 %{1} 条，更新 %{2} 条,"Import successful! Added %{1} records, updated %{2} records"
-导入失败: %{1},Import failed: %{1}
-无法读取CSV文件,Unable to read CSV file
-参数不完整,Parameters incomplete
-保存成功,Save successful
-保存失败: %{1},Save failed: %{1}
-获取数据失败: %{1},Failed to get data: %{1}
-收集失败,Collect failed
-CSRF 验证失败,CSRF validation failed
-自动词汇注册已启用,Auto vocabulary registration enabled
-自动词汇注册已禁用,Auto vocabulary registration disabled
-无效的翻译模式,Invalid translation mode
-翻译模式设置成功,Translation mode set successfully
-配置文件不存在,Configuration file does not exist
-写入配置文件失败,Failed to write configuration file
-缺少目标语言或模块,Missing target language or module
-模块 %{1} 本批翻译 %{2} 条，剩余 %{3} 条,Module %{1} translated %{2} in this batch; %{3} remaining
-缺少目标语言,Missing target language
-批量翻译任务已提交,Batch translation task submitted
-请填写翻译内容,Please enter translation content
-后台默认语言,Admin default language
-请选择一个有效的后台默认语言,Please select a valid admin default language
-后台默认语言保存失败,Failed to save admin default language
+CSV文件为空或格式不正确,"CSV file is empty or format is incorrect"
+"导入成功！新增 %{1} 条，更新 %{2} 条","Import successful! Added %{1} records, updated %{2} records"
+"导入失败: %{1}","Import failed: %{1}"
+无法读取CSV文件,"Unable to read CSV file"
+参数不完整,"Parameters incomplete"
+保存成功,"Save successful"
+"保存失败: %{1}","Save failed: %{1}"
+"获取数据失败: %{1}","Failed to get data: %{1}"
+收集失败,"Collect failed"
+"CSRF 验证失败","CSRF validation failed"
+自动词汇注册已启用,"Auto vocabulary registration enabled"
+自动词汇注册已禁用,"Auto vocabulary registration disabled"
+无效的翻译模式,"Invalid translation mode"
+翻译模式设置成功,"Translation mode set successfully"
+配置文件不存在,"Configuration file does not exist"
+写入配置文件失败,"Failed to write configuration file"
+缺少目标语言或模块,"Missing target language or module"
+"模块 %{1} 本批翻译 %{2} 条，剩余 %{3} 条","Module %{1} translated %{2} in this batch; %{3} remaining"
+缺少目标语言,"Missing target language"
+批量翻译任务已提交,"Batch translation task submitted"
+请填写翻译内容,"Please enter translation content"
+后台默认语言,"Admin default language"
+请选择一个有效的后台默认语言,"Please select a valid admin default language"
+后台默认语言保存失败,"Failed to save admin default language"
 后台默认语言已保存。地址里没有写语言时，后台使用这个语言，与网站前台默认语言无关。,"Admin default language saved. When the URL has no language, admin uses this language; it is independent of the storefront default language."
 language,language
 国际化,internationalization
-查看后台默认语言,View admin default language
-配置 I18n AI 自动翻译语言和队列任务。,Configure I18n AI auto-translation languages and queue tasks.
-缺少模块名,Module name is required
-请求方式错误。,Invalid request method.
-请使用 SSE（Accept: text/event-stream 或 ?sse=1）,Please use SSE (Accept: text/event-stream or ?sse=1)
-操作完成,Operation completed
-模块一键翻译并写回失败：%{1},Module translate-and-writeback failed: %{1}
-AI翻译配置已保存，词典已入队 %{1} 个语言，LocalModel 队列：%{2}。,AI translation settings saved; dictionary queued for %{1} language(s); LocalModel queue: %{2}.
-无需入队,No enqueue needed
-保存 AI翻译配置失败：%{1},Failed to save AI translation configuration: %{1}
-已为 %{1} 个启用语言创建 AI 翻译队列，LocalModel 队列：%{2}。,Created AI translation queues for %{1} enabled language(s); LocalModel queue: %{2}.
-AI 翻译队列已创建：#%{1},AI translation queue created: #%{1}
-语言 %{1} 未安装启用或为源语言，未创建队列。,"Language %{1} is not installed and enabled, or it is the source language. No queue was created."
-创建 AI 翻译队列失败：%{1},Failed to create AI translation queue: %{1}
-模块 %{1} 已写回 %{2} 条到 CSV，跳过 %{3} 条。,Module %{1} wrote back %{2} rows to CSV; skipped %{3}.
-已增量导出 %{1} 条 AI 译文到 %{2} 个模块语言包，跳过 %{3} 条。,"Incrementally exported %{1} AI translations to %{2} module language pack(s), skipped %{3}."
-涉及模块：%{1},Modules: %{1}
-导出 AI 译文到模块失败：%{1},Failed to export AI translations to modules: %{1}
-导出全局语言包失败：%{1},Failed to export global language pack: %{1}
-区域管理,Locale Management
+查看后台默认语言,"View admin default language"
+"配置 I18n AI 自动翻译语言和队列任务。","Configure I18n AI auto-translation languages and queue tasks."
+缺少模块名,"Module name is required"
+请求方式错误。,"Invalid request method."
+"请使用 SSE（Accept: text/event-stream 或 ?sse=1）","Please use SSE (Accept: text/event-stream or ?sse=1)"
+操作完成,"Operation completed"
+模块一键翻译并写回失败：%{1},"Module translate-and-writeback failed: %{1}"
+"AI翻译配置已保存，词典已入队 %{1} 个语言，LocalModel 队列：%{2}。","AI translation settings saved; dictionary queued for %{1} language(s); LocalModel queue: %{2}."
+无需入队,"No enqueue needed"
+"保存 AI翻译配置失败：%{1}","Failed to save AI translation configuration: %{1}"
+"已为 %{1} 个启用语言创建 AI 翻译队列，LocalModel 队列：%{2}。","Created AI translation queues for %{1} enabled language(s); LocalModel queue: %{2}."
+"AI 翻译队列已创建：#%{1}","AI translation queue created: #%{1}"
+"语言 %{1} 未安装启用或为源语言，未创建队列。","Language %{1} is not installed and enabled, or it is the source language. No queue was created."
+"创建 AI 翻译队列失败：%{1}","Failed to create AI translation queue: %{1}"
+"模块 %{1} 已写回 %{2} 条到 CSV，跳过 %{3} 条。","Module %{1} wrote back %{2} rows to CSV; skipped %{3}."
+"已增量导出 %{1} 条 AI 译文到 %{2} 个模块语言包，跳过 %{3} 条。","Incrementally exported %{1} AI translations to %{2} module language pack(s), skipped %{3}."
+涉及模块：%{1},"Modules: %{1}"
+"导出 AI 译文到模块失败：%{1}","Failed to export AI translations to modules: %{1}"
+导出全局语言包失败：%{1},"Failed to export global language pack: %{1}"
+区域管理,"Locale Management"
 管理系统的区域设置，包括区域激活、安装、词典管理等,"Manage system locale settings, including locale activation, installation, dictionary management, etc."
-清理区域数据失败: %{1},Failed to clean locale data: %{1}
-清理孤立区域名称数据失败: %{1},Failed to clean orphaned locale name data: %{1}
-检测到缺少 %{1} 个区域数据（基于已安装国家），开始自动同步,"Detected missing %{1} locale records (based on installed countries), starting automatic sync"
-自动更新区域数据失败: %{1},Failed to auto-update locale data: %{1}
-已自动添加 %{1} 个区域数据,Automatically added %{1} locale records
-批量更新区域数据失败: %{1},Failed to batch update locale data: %{1}
-批量插入区域数据失败: %{1},Failed to batch insert locale data: %{1}
-获取已安装国家失败: %{1},Failed to get installed countries: %{1}
-计算期望区域数量失败: %{1},Failed to calculate expected locale count: %{1}
-处理国家 %{1} 的区域数据失败: %{2},Failed to process locale data for country %{1}: %{2}
-已自动添加 %{1} 个区域数据（基于已安装国家）,Automatically added %{1} locale records (based on installed countries)
-批量更新已安装国家的区域数据失败: %{1},Failed to batch update locale data for installed countries: %{1}
+"清理区域数据失败: %{1}","Failed to clean locale data: %{1}"
+"清理孤立区域名称数据失败: %{1}","Failed to clean orphaned locale name data: %{1}"
+"检测到缺少 %{1} 个区域数据（基于已安装国家），开始自动同步","Detected missing %{1} locale records (based on installed countries), starting automatic sync"
+"自动更新区域数据失败: %{1}","Failed to auto-update locale data: %{1}"
+"已自动添加 %{1} 个区域数据","Automatically added %{1} locale records"
+"批量更新区域数据失败: %{1}","Failed to batch update locale data: %{1}"
+"批量插入区域数据失败: %{1}","Failed to batch insert locale data: %{1}"
+"获取已安装国家失败: %{1}","Failed to get installed countries: %{1}"
+"计算期望区域数量失败: %{1}","Failed to calculate expected locale count: %{1}"
+"处理国家 %{1} 的区域数据失败: %{2}","Failed to process locale data for country %{1}: %{2}"
+"已自动添加 %{1} 个区域数据（基于已安装国家）","Automatically added %{1} locale records (based on installed countries)"
+"批量更新已安装国家的区域数据失败: %{1}","Failed to batch update locale data for installed countries: %{1}"
 检测到强制更新请求，开始更新当前语言(%{1})的区域名称数据,"Force update detected, starting to update locale name data for current language (%{1})"
-检测到语言切换：%{1} -> %{2}，开始检查数据完整性,"Language switch detected: %{1} -> %{2}, starting data integrity check"
-语言切换后检测到缺少 %{1} 个区域名称数据（基于已安装国家），开始自动同步,"After language switch, detected missing %{1} locale name records (based on installed countries), starting automatic sync"
-检查语言切换失败: %{1},Failed to check language switch: %{1}
-开始检查当前语言(%{1})的区域名称数据,Starting to check locale name data for current language (%{1})
-当前语言(%{1})已有 %{2} 个区域名称数据，期望 %{3} 个,"Current language (%{1}) has %{2} locale name records, expected %{3}"
-检测到当前语言(%{1})缺少 %{2} 个区域名称数据（基于已安装国家），开始自动同步,"Detected missing %{2} locale name records for current language (%{1}) (based on installed countries), starting automatic sync"
-自动更新区域名称数据失败: %{1},Failed to auto-update locale name data: %{1}
-开始同步语言(%{1})的区域名称数据,Starting to sync locale name data for language (%{1})
-没有找到已安装的国家,No installed countries found
-没有找到任何区域数据,No locale data found
-找到 %{1} 个区域数据，开始处理,"Found %{1} locale records, starting processing"
-已自动更新 %{1} 个区域名称数据,Automatically updated %{1} locale name records
-所有区域名称数据已是最新,All locale name data is up to date
-同步区域名称数据失败: %{1},Failed to sync locale name data: %{1}
-成功插入 %{1} 条区域名称数据,Successfully inserted %{1} locale name records
-批量插入区域名称数据失败: %{1},Failed to batch insert locale name data: %{1}
-请选择要激活的区域,Please select locales to activate
-地区 %{1} 已安装并启用，所属国家 %{2} 已同步启用,"Region %{1} has been installed and enabled, and the country %{2} has been synced and enabled."
-请选择要停用的区域,Please select locales to deactivate
-地区 %{1} 已停用，所属国家状态已自动同步,"Region %{1} has been disabled, and the country status has been automatically synced."
-请选择要安装的区域,Please select locales to install
-地区 %{1} 已安装并激活，所属国家 %{2} 已同步启用,"Region %{1} has been installed and activated, and country %{2} has been activated simultaneously."
-请选择要卸载的区域,Please select locales to uninstall
-地区 %{1} 已卸载，语言包和缓存已同步清理,"Region %{1} has been uninstalled, and the language pack and cache have been synced and cleaned."
-正在跳转到 %{1} 的词典管理页面,Redirecting to dictionary management page for %{1}
-无法处理区域代码 %{1}: %{2},Unable to process locale code %{1}: %{2}
+"检测到语言切换：%{1} -> %{2}，开始检查数据完整性","Language switch detected: %{1} -> %{2}, starting data integrity check"
+"语言切换后检测到缺少 %{1} 个区域名称数据（基于已安装国家），开始自动同步","After language switch, detected missing %{1} locale name records (based on installed countries), starting automatic sync"
+"检查语言切换失败: %{1}","Failed to check language switch: %{1}"
+开始检查当前语言(%{1})的区域名称数据,"Starting to check locale name data for current language (%{1})"
+"当前语言(%{1})已有 %{2} 个区域名称数据，期望 %{3} 个","Current language (%{1}) has %{2} locale name records, expected %{3}"
+"检测到当前语言(%{1})缺少 %{2} 个区域名称数据（基于已安装国家），开始自动同步","Detected missing %{2} locale name records for current language (%{1}) (based on installed countries), starting automatic sync"
+"自动更新区域名称数据失败: %{1}","Failed to auto-update locale name data: %{1}"
+开始同步语言(%{1})的区域名称数据,"Starting to sync locale name data for language (%{1})"
+没有找到已安装的国家,"No installed countries found"
+没有找到任何区域数据,"No locale data found"
+"找到 %{1} 个区域数据，开始处理","Found %{1} locale records, starting processing"
+"已自动更新 %{1} 个区域名称数据","Automatically updated %{1} locale name records"
+所有区域名称数据已是最新,"All locale name data is up to date"
+"同步区域名称数据失败: %{1}","Failed to sync locale name data: %{1}"
+"成功插入 %{1} 条区域名称数据","Successfully inserted %{1} locale name records"
+"批量插入区域名称数据失败: %{1}","Failed to batch insert locale name data: %{1}"
+请选择要激活的区域,"Please select locales to activate"
+"地区 %{1} 已安装并启用，所属国家 %{2} 已同步启用","Region %{1} has been installed and enabled, and the country %{2} has been synced and enabled."
+请选择要停用的区域,"Please select locales to deactivate"
+"地区 %{1} 已停用，所属国家状态已自动同步","Region %{1} has been disabled, and the country status has been automatically synced."
+请选择要安装的区域,"Please select locales to install"
+"地区 %{1} 已安装并激活，所属国家 %{2} 已同步启用","Region %{1} has been installed and activated, and country %{2} has been activated simultaneously."
+请选择要卸载的区域,"Please select locales to uninstall"
+"地区 %{1} 已卸载，语言包和缓存已同步清理","Region %{1} has been uninstalled, and the language pack and cache have been synced and cleaned."
+"正在跳转到 %{1} 的词典管理页面","Redirecting to dictionary management page for %{1}"
+"无法处理区域代码 %{1}: %{2}","Unable to process locale code %{1}: %{2}"
 已清除现有区域名称数据，开始重新同步,"Cleared existing zone name data, starting resync"
-区域名称数据同步完成,Region Name Data Sync Complete
-同步失败：%{1},Sync failed: %{1}
-清理完成：移除 %{1} 条地区记录，清理 %{2} 条孤立地区名称记录,"Cleanup Complete: Removed %{1} region records, cleared %{2} orphaned region name records"
+区域名称数据同步完成,"Region Name Data Sync Complete"
+同步失败：%{1},"Sync failed: %{1}"
+"清理完成：移除 %{1} 条地区记录，清理 %{2} 条孤立地区名称记录","Cleanup Complete: Removed %{1} region records, cleared %{2} orphaned region name records"
 数据已是最新，无需清理,"Data is already up to date, no cleanup needed"
-清理失败：%{1},Cleanup failed: %{1}
-请选择操作和区域,Select operation and region
-不支持的批量操作：%{1},Unsupported batch operation: %{1}
-已批量安装并启用 %{1} 个地区,Batch installed and enabled %{1} regions
-已批量停用 %{1} 个地区,Batch disabled %{1} regions
-已批量安装 %{1} 个地区,Batch installed %{1} regions
-已批量卸载 %{1} 个地区,Batch uninstalled %{1} regions
-已处理 %{1} 个地区,Processed %{1} regions
-共有 %{1} 个地区处理失败,%{1} regions failed to process
-已自动安装并激活默认区域：%{1},Default locale automatically installed and activated: %{1}
-已自动激活默认区域：%{1},Default locale automatically activated: %{1}
-确保 zh_Hans_CN 安装失败: %{1},Failed to ensure zh_Hans_CN installation: %{1}
-已更新 %{1} 个区域的简码、ISO2、ISO3字段,"Updated short codes, ISO2, and ISO3 fields for %{1} regions"
+清理失败：%{1},"Cleanup failed: %{1}"
+请选择操作和区域,"Select operation and region"
+不支持的批量操作：%{1},"Unsupported batch operation: %{1}"
+"已批量安装并启用 %{1} 个地区","Batch installed and enabled %{1} regions"
+"已批量停用 %{1} 个地区","Batch disabled %{1} regions"
+"已批量安装 %{1} 个地区","Batch installed %{1} regions"
+"已批量卸载 %{1} 个地区","Batch uninstalled %{1} regions"
+"已处理 %{1} 个地区","Processed %{1} regions"
+"共有 %{1} 个地区处理失败","%{1} regions failed to process"
+已自动安装并激活默认区域：%{1},"Default locale automatically installed and activated: %{1}"
+已自动激活默认区域：%{1},"Default locale automatically activated: %{1}"
+"确保 zh_Hans_CN 安装失败: %{1}","Failed to ensure zh_Hans_CN installation: %{1}"
+"已更新 %{1} 个区域的简码、ISO2、ISO3字段","Updated short codes, ISO2, and ISO3 fields for %{1} regions"
 检测到没有国家数据，开始安装默认国家...,"Detected no country data, starting installation of default countries..."
-默认国家数据安装完成,Default Country Data Installation Complete
-安装国家数据失败: %{1},Failed to install country data: %{1}
+默认国家数据安装完成,"Default Country Data Installation Complete"
+"安装国家数据失败: %{1}","Failed to install country data: %{1}"
 检测到没有区域数据，开始安装默认区域...,"Detected no region data, starting installation of default regions..."
-默认区域数据安装完成,Default Region Data Installation Complete
-已安装默认区域：zh_Hans_CN,Installed default locale: zh_Hans_CN
-安装区域数据失败: %{1},Failed to install region data: %{1}
-已安装并启用默认国家：%{1},Installed and enabled default country: %{1}
-已安装默认国家：%{1},Installed default country: %{1}
-已安装并激活默认国家：%{1},Installed and activated default country: %{1}
-已激活默认国家：%{1},Activated default country: %{1}
-安装默认国家失败: %{1},Failed to Install Default Country: %{1}
-语言申请,Language application
-开始异步更新全球数据...,Starting asynchronous global data update...
-启动更新失败：%{1},Failed to start update: %{1}
-未知的更新步骤,Unknown update step
-执行更新失败：%{1},Failed to execute update: %{1}
-正在更新国家数据...,Updating country data...
-没有找到可安装的国家数据！,No installable country data found!
-正在处理国家数据... (%{processed}/%{total}),Processing country data... (%{processed}/%{total})
-国家数据更新完成,Country data update completed
-正在更新区域数据...,Updating locale data...
-无法获取国家 %{1} 的区域信息: %{2},Unable to get locale information for country %{1}: %{2}
-正在收集区域数据... (%{processed}/%{total}),Collecting locale data... (%{processed}/%{total})
-正在插入区域数据... (批次 %{batch}/%{total}),Inserting locale data... (batch %{batch}/%{total})
-区域数据更新完成,Locale data update completed
-正在更新区域名称数据...,Updating locale name data...
-没有找到可更新的区域数据,No locale data found to update
-正在生成区域名称... (%{processed}/%{total}),Generating locale names... (%{processed}/%{total})
-正在插入区域名称数据... (批次 %{batch}/%{total}),Inserting locale name data... (batch %{batch}/%{total})
-区域名称数据更新完成,Locale name data update completed
-任务状态数据无效,Invalid task status data
-正在插入区域数据... (%{processed}/%{total}),Inserting locale data... (%{processed}/%{total})
-正在插入区域名称数据... (%{processed}/%{total}),Inserting locale name data... (%{processed}/%{total})
-全球数据更新完成！,Global data update completed!
-准备开始更新...,Preparing to start update...
-任务不存在,Task does not exist
-任务状态键无效,Invalid task status key
-请求方法错误，请使用 POST 提交,Invalid request method. Please submit with POST.
-缺少任务ID,Missing task ID
-任务ID格式无效,Invalid task ID format
-批次参数无效,Invalid batch parameter
-该区域未激活或者未安装！,This locale is not activated or not installed!
-地方码不存在！,Locale code does not exist!
-词典收集成功！一共更新 %{1} 个词。,Dictionary collection successful! Total updated words: %{1}
-没有需要收集的词。,There are no words to collect.
-地区码不存在！,Region code does not exist!
-国家码不存在！,Country code does not exist!
-成功保存！,Successfully saved!
-恢复成功！,Restore successful!
-地区码未安装或者未激活！地区码：%{1},Region code not installed or not activated! Region code: %{1}
-成功清理i18n缓存！,Successfully cleared i18n cache!
-成功清理系统模板缓存文件！,Successfully cleared system template cache files!
-成功发布！,Successfully published!
-成功开启！,Successfully enabled!
-成功禁用！,Successfully disabled!
-词典管理,Dictionary Management
-词典词条管理,Dictionary entry management
+默认区域数据安装完成,"Default Region Data Installation Complete"
+已安装默认区域：zh_Hans_CN,"Installed default locale: zh_Hans_CN"
+"安装区域数据失败: %{1}","Failed to install region data: %{1}"
+已安装并启用默认国家：%{1},"Installed and enabled default country: %{1}"
+已安装默认国家：%{1},"Installed default country: %{1}"
+已安装并激活默认国家：%{1},"Installed and activated default country: %{1}"
+已激活默认国家：%{1},"Activated default country: %{1}"
+"安装默认国家失败: %{1}","Failed to Install Default Country: %{1}"
+语言申请,"Language application"
+开始异步更新全球数据...,"Starting asynchronous global data update..."
+启动更新失败：%{1},"Failed to start update: %{1}"
+未知的更新步骤,"Unknown update step"
+执行更新失败：%{1},"Failed to execute update: %{1}"
+正在更新国家数据...,"Updating country data..."
+没有找到可安装的国家数据！,"No installable country data found!"
+"正在处理国家数据... (%{processed}/%{total})","Processing country data... (%{processed}/%{total})"
+国家数据更新完成,"Country data update completed"
+正在更新区域数据...,"Updating locale data..."
+"无法获取国家 %{1} 的区域信息: %{2}","Unable to get locale information for country %{1}: %{2}"
+"正在收集区域数据... (%{processed}/%{total})","Collecting locale data... (%{processed}/%{total})"
+"正在插入区域数据... (批次 %{batch}/%{total})","Inserting locale data... (batch %{batch}/%{total})"
+区域数据更新完成,"Locale data update completed"
+正在更新区域名称数据...,"Updating locale name data..."
+没有找到可更新的区域数据,"No locale data found to update"
+"正在生成区域名称... (%{processed}/%{total})","Generating locale names... (%{processed}/%{total})"
+"正在插入区域名称数据... (批次 %{batch}/%{total})","Inserting locale name data... (batch %{batch}/%{total})"
+区域名称数据更新完成,"Locale name data update completed"
+任务状态数据无效,"Invalid task status data"
+"正在插入区域数据... (%{processed}/%{total})","Inserting locale data... (%{processed}/%{total})"
+"正在插入区域名称数据... (%{processed}/%{total})","Inserting locale name data... (%{processed}/%{total})"
+全球数据更新完成！,"Global data update completed!"
+准备开始更新...,"Preparing to start update..."
+任务不存在,"Task does not exist"
+任务状态键无效,"Invalid task status key"
+"请求方法错误，请使用 POST 提交","Invalid request method. Please submit with POST."
+缺少任务ID,"Missing task ID"
+任务ID格式无效,"Invalid task ID format"
+批次参数无效,"Invalid batch parameter"
+该区域未激活或者未安装！,"This locale is not activated or not installed!"
+地方码不存在！,"Locale code does not exist!"
+"词典收集成功！一共更新 %{1} 个词。","Dictionary collection successful! Total updated words: %{1}"
+没有需要收集的词。,"There are no words to collect."
+地区码不存在！,"Region code does not exist!"
+国家码不存在！,"Country code does not exist!"
+成功保存！,"Successfully saved!"
+恢复成功！,"Restore successful!"
+地区码未安装或者未激活！地区码：%{1},"Region code not installed or not activated! Region code: %{1}"
+成功清理i18n缓存！,"Successfully cleared i18n cache!"
+成功清理系统模板缓存文件！,"Successfully cleared system template cache files!"
+成功发布！,"Successfully published!"
+成功开启！,"Successfully enabled!"
+成功禁用！,"Successfully disabled!"
+词典管理,"Dictionary Management"
+词典词条管理,"Dictionary entry management"
 circle,circle
-国家不存在！代码：%{1},Country does not exist! Code: %{1}
-国家地区数据同步完成！共 %{1} 个地区。,National and regional data synchronization completed! There are %{1} regions in total.
-区域已激活！区域代码：%{1},Zone is activated! Area code: %{1}
-地区已经不存在！,Region no longer exists!
-请选择要停用的区域！,Please select a region to deactivate!
-区域已停用！区域代码：%{1},Zone is deactivated! Area code: %{1}
-区域已安装并激活！区域代码：%{1},Zone installed and activated! Area code: %{1}
-请选择要卸载的区域！,Please select the area you want to uninstall!
-区域已卸载！区域代码：%{1},Locale uninstalled! Locale code: %{1}
+国家不存在！代码：%{1},"Country does not exist! Code: %{1}"
+"国家地区数据同步完成！共 %{1} 个地区。","National and regional data synchronization completed! There are %{1} regions in total."
+区域已激活！区域代码：%{1},"Zone is activated! Area code: %{1}"
+地区已经不存在！,"Region no longer exists!"
+请选择要停用的区域！,"Please select a region to deactivate!"
+区域已停用！区域代码：%{1},"Zone is deactivated! Area code: %{1}"
+区域已安装并激活！区域代码：%{1},"Zone installed and activated! Area code: %{1}"
+请选择要卸载的区域！,"Please select the area you want to uninstall!"
+区域已卸载！区域代码：%{1},"Locale uninstalled! Locale code: %{1}"
 准备处理数据：插入%{1}个，更新%{2}个，跳过%{3}个,"Preparing data: insert %{1}, update %{2}, skip %{3}"
-成功插入%{1}个国家数据！,Successfully inserted %{1} country records!
-成功更新%{1}个国家数据！,Successfully updated %{1} country records!
-已为中国安装并激活zh_Hans_CN区域！,zh_Hans_CN locale has been installed and activated for China!
-成功处理%{1}个国家信息！,Successfully processed %{1} country records!
-跳过%{1}个已存在且无需更新的国家。,Skipped %{1} existing countries that do not need updates.
-国家数据同步完成,Country data synchronization completed
+成功插入%{1}个国家数据！,"Successfully inserted %{1} country records!"
+成功更新%{1}个国家数据！,"Successfully updated %{1} country records!"
+已为中国安装并激活zh_Hans_CN区域！,"zh_Hans_CN locale has been installed and activated for China!"
+成功处理%{1}个国家信息！,"Successfully processed %{1} country records!"
+跳过%{1}个已存在且无需更新的国家。,"Skipped %{1} existing countries that do not need updates."
+国家数据同步完成,"Country data synchronization completed"
 国家数据同步失败，请检查日志,"Country data synchronization failed, please check the logs"
-请求错误！,Request error!
-请选择要安装的国家！,Please select countries to install!
-国家 %{1} 已安装并激活，可用地区 %{2} 个,"Country %{1} installed and activated, available regions %{2}"
-请选择国家激活！,Please select a country to activate!
-国家 %{1} 已启用，推荐地区 %{2} 已同步启用,"Country %{1} has been enabled, recommended region %{2} has been enabled synchronously"
-默认地区,Default Region
-请选择国家禁用！,Please select a country to disable!
-国家 %{1} 已停用，关联地区已一并停用,"Country %{1} has been disabled, associated regions have also been disabled"
-请选择要卸载的国家！,Please select the country to uninstall!
-国家 %{1} 已卸载，关联地区 %{2} 个已同步卸载,"Country %{1} has been uninstalled, %{2} associated regions have been uninstalled synchronously"
-请选择要启用的国家！,Please select the country to enable!
-已一键启用 %{1} 个国家,One-click enabled for %{1} countries
-%{1} 个国家启用失败,Failed to activate %{1} countries
-请选择要停用的国家！,Please select the country to disable!
-已停用 %{1} 个国家,Disabled %{1} countries
-%{1} 个国家停用失败,Deactivation failed for %{1} countries
-已安装并激活 %{1} 个国家,Installed and activated in %{1} countries
-%{1} 个国家安装失败,Installation failed for %{1} countries
-已卸载 %{1} 个国家,Unloaded %{1} country/countries
-%{1} 个国家卸载失败,Uninstallation failed for %{1} countries
-获取成功,Successfully got
-语言包(%{1})：%{2} 已安装。,Language pack (%{1}): %{2} has been installed.
-词典写入与资源变更必须使用同一逻辑数据库连接,Dictionary writes and resource changes must use the same logical DB connection
-翻译词必须是字符串或整数,The translation word must be a string or integer
-翻译词不能为空,The translation word cannot be empty
-翻译词必须是有效的 UTF-8 文本,The translation word must be valid UTF-8 text
-翻译词长度不能超过 %{1} 个 Unicode 字符,The translation word cannot exceed %{1} Unicode characters
-语言目录写入与资源变更必须使用同一逻辑数据库连接,Language catalog writes and resource changes must use the same logical DB connection
+请求错误！,"Request error!"
+请选择要安装的国家！,"Please select countries to install!"
+"国家 %{1} 已安装并激活，可用地区 %{2} 个","Country %{1} installed and activated, available regions %{2}"
+请选择国家激活！,"Please select a country to activate!"
+"国家 %{1} 已启用，推荐地区 %{2} 已同步启用","Country %{1} has been enabled, recommended region %{2} has been enabled synchronously"
+默认地区,"Default Region"
+请选择国家禁用！,"Please select a country to disable!"
+"国家 %{1} 已停用，关联地区已一并停用","Country %{1} has been disabled, associated regions have also been disabled"
+请选择要卸载的国家！,"Please select the country to uninstall!"
+"国家 %{1} 已卸载，关联地区 %{2} 个已同步卸载","Country %{1} has been uninstalled, %{2} associated regions have been uninstalled synchronously"
+请选择要启用的国家！,"Please select the country to enable!"
+"已一键启用 %{1} 个国家","One-click enabled for %{1} countries"
+"%{1} 个国家启用失败","Failed to activate %{1} countries"
+请选择要停用的国家！,"Please select the country to disable!"
+"已停用 %{1} 个国家","Disabled %{1} countries"
+"%{1} 个国家停用失败","Deactivation failed for %{1} countries"
+"已安装并激活 %{1} 个国家","Installed and activated in %{1} countries"
+"%{1} 个国家安装失败","Installation failed for %{1} countries"
+"已卸载 %{1} 个国家","Unloaded %{1} country/countries"
+"%{1} 个国家卸载失败","Uninstallation failed for %{1} countries"
+获取成功,"Successfully got"
+"语言包(%{1})：%{2} 已安装。","Language pack (%{1}): %{2} has been installed."
+词典写入与资源变更必须使用同一逻辑数据库连接,"Dictionary writes and resource changes must use the same logical DB connection"
+翻译词必须是字符串或整数,"The translation word must be a string or integer"
+翻译词不能为空,"The translation word cannot be empty"
+"翻译词必须是有效的 UTF-8 文本","The translation word must be valid UTF-8 text"
+"翻译词长度不能超过 %{1} 个 Unicode 字符","The translation word cannot exceed %{1} Unicode characters"
+语言目录写入与资源变更必须使用同一逻辑数据库连接,"Language catalog writes and resource changes must use the same logical DB connection"
 编辑,Edit
-Weline.Api 不可用,Weline.Api is not available
-保存失败,Save failed
+"Weline.Api 不可用","Weline.Api is not available"
+保存失败,"Save failed"
 提示,Tip
-确定恢复该词典么？,Are you sure you want to restore this dictionary?
-确认后，翻译部分将恢复至翻译前！,After confirmation
+确定恢复该词典么？,"Are you sure you want to restore this dictionary?"
+确认后，翻译部分将恢复至翻译前！,"After confirmation"
 确定,OK
-恢复失败,Recovery failed
-恢复结果通知!,Restore Result Notification!
-知道了,Got it
-成功推送收集词汇！推送消息：%{msg},Successfully pushed vocabulary collection! Push message: %{msg}
-推送收集词汇失败！推送消息：%{1},Failed to push vocabulary collection! Push message: %{1}
-用户申请语言,User application language
+恢复失败,"Recovery failed"
+恢复结果通知!,"Restore Result Notification!"
+知道了,"Got it"
+成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
+推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
+用户申请语言,"User application language"
 保存网站后即可查看用户申请并加入语言。,"After saving the website, you can view user applications and add languages."
 仅显示已安装、已启用且语言包可运行的申请语言。,"Only application languages ​​that are installed, enabled, and have language packs running are displayed."
-全部加入,Join all
-展开后加载当前网站的就绪语言。,Loads the current site's ready languages ​​when expanded.
+全部加入,"Join all"
+展开后加载当前网站的就绪语言。,"Loads the current site's ready languages ​​when expanded."
 国家/地区,Country/Region
-申请数,Number of applications
+申请数,"Number of applications"
 操作,Operation
-一键加入,Join with one click
-暂无可加入的申请语言,There is currently no application language to add.
-正在加载语言申请…,Loading language application...
-可将已就绪语言加入当前站点。,Ready languages ​​can be added to the current site.
-当前没有可加入的申请语言。,There are currently no application languages ​​to add.
-正在加入站点语言…,Adding site language...
-站点语言已加入,Site language has been added
-已支持,Already supported
-清空选择,Clear selection
-请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!
-填写正确！,Filled correctly!
+一键加入,"Join with one click"
+暂无可加入的申请语言,"There is currently no application language to add."
+正在加载语言申请…,"Loading language application..."
+可将已就绪语言加入当前站点。,"Ready languages ​​can be added to the current site."
+当前没有可加入的申请语言。,"There are currently no application languages ​​to add."
+正在加入站点语言…,"Adding site language..."
+站点语言已加入,"Site language has been added"
+已支持,"Already supported"
+清空选择,"Clear selection"
+请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
+填写正确！,"Filled correctly!"
 提交,Submit
-请输入关键词,Please enter keywords
-I18n翻译,I18n Translation
-没有找到需要的语言？可一次申请多种语言，我们会在语言资源准备完成后通知网站管理员。,Can't find the language you need? You can request multiple languages at once; we'll notify the site admin when language packs are ready.
-名字,First name
-姓氏,Last name
+请输入关键词,"Please enter keywords"
+I18n翻译,"I18n Translation"
+没有找到需要的语言？可一次申请多种语言，我们会在语言资源准备完成后通知网站管理员。,"Can't find the language you need? You can request multiple languages at once; we'll notify the site admin when language packs are ready."
+名字,"First name"
+姓氏,"Last name"
 邮箱,Email
-希望支持的语言,Languages to request
-当前站点已支持的语言不可重复选择；每次最多申请 20 种。,Languages already supported by this site cannot be selected again. Up to 20 languages per request.
-提交语言申请,Submit language request
-请填写名和姓,Please enter your first and last name
-请选择 1 到 20 种语言,Please select 1 to 20 languages
+希望支持的语言,"Languages to request"
+"当前站点已支持的语言不可重复选择；每次最多申请 20 种。","Languages already supported by this site cannot be selected again. Up to 20 languages per request."
+提交语言申请,"Submit language request"
+请填写名和姓,"Please enter your first and last name"
+"请选择 1 到 20 种语言","Please select 1 to 20 languages"
 正在提交...,Submitting...
-语言支持申请已提交,Language support request submitted
-人机验证加载失败，请稍后重试,Human verification failed to load. Please try again later.
-i18n国际化词典,i18n Internationalization Dictionary
-系统配置,System Configuration
-i18n国际化,i18n Internationalization
-展示语言：,Display Language:
-语言代码,Language Code
-国际化支持：翻译管理多种语言词典,Internationalization Support: Translation management for multiple language dictionaries
+语言支持申请已提交,"Language support request submitted"
+人机验证加载失败，请稍后重试,"Human verification failed to load. Please try again later."
+i18n国际化词典,"i18n Internationalization Dictionary"
+系统配置,"System Configuration"
+i18n国际化,"i18n Internationalization"
+展示语言：,"Display Language:"
+语言代码,"Language Code"
+国际化支持：翻译管理多种语言词典,"Internationalization Support: Translation management for multiple language dictionaries"
 词典,Dictionary
 地区,Region
 总计:,Total:
 已安装,Installed
 已激活,Activated
-未安装,Not installed
-语言选项,Language options
+未安装,"Not installed"
+语言选项,"Language options"
 这里展示当前展示语言下的可用语言列表。已安装语言可以直接进入全局词典，未安装语言建议先在地区管理页完成安装与启用。,"This page shows the languages available under the current display language. Installed languages can go straight to the global dictionary, while uninstalled ones should be installed and activated from locale management first."
 排序,Sort
-国旗,National Flag
-语言名,Language Name
-是否禁用,Is Disabled
-是否安装,Is Installed
+国旗,"National Flag"
+语言名,"Language Name"
+是否禁用,"Is Disabled"
+是否安装,"Is Installed"
 停用,Disable
-查看已安装,View Installed
-暂无翻译数据,No translation data
-AI 翻译只用于补齐缺失翻译。,AI translation is only used to fill missing translations.
-「翻译进度」与「配置与操作」用顶部页签分开；队列状态已简化，不再堆砌原文日志。,“Translation progress” and “Settings & actions” are split into top tabs; queue status is simplified without dumping raw logs.
-配置与操作,Settings & actions
-按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。开关与入队请到「配置与操作」。,"By language × type: dictionary fill, LocalModel (shared queue), module CSV write-back. Use “Settings & actions” for toggles and enqueue."
+查看已安装,"View Installed"
+暂无翻译数据,"No translation data"
+"AI 翻译只用于补齐缺失翻译。","AI translation is only used to fill missing translations."
+「翻译进度」与「配置与操作」用顶部页签分开；队列状态已简化，不再堆砌原文日志。,"“Translation progress” and “Settings & actions” are split into top tabs; queue status is simplified without dumping raw logs."
+配置与操作,"Settings & actions"
+"按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。开关与入队请到「配置与操作」。","By language × type: dictionary fill, LocalModel (shared queue), module CSV write-back. Use “Settings & actions” for toggles and enqueue."
 已开启,Enabled
 已关闭,Disabled
-源词,Source phrase
-启用语言,Enabled languages
-词典完成度,Dictionary completion
-待写回 CSV,Pending CSV write-back
+源词,"Source phrase"
+启用语言,"Enabled languages"
+词典完成度,"Dictionary completion"
+"待写回 CSV","Pending CSV write-back"
 LocalModel,LocalModel
 空闲,Idle
 剩余,Remaining
-模块 CSV,Module CSV
-词典队列,Dictionary queue
-源语言,Source Language
-待补,Pending fill
-CSV 已对齐,CSV aligned
-无队列,No queue
-暂无进度数据。,No progress data yet.
-按语言,By Language
-按模块,By Module
-基础配置,Basic Configuration
-保存配置并入队,Save Configuration And Queue
-开启 AI 翻译,Enable AI Translation
-批量大小,Batch Size
-翻译策略,Translation Strategy
+"模块 CSV","Module CSV"
+词典队列,"Dictionary queue"
+源语言,"Source Language"
+待补,"Pending fill"
+"CSV 已对齐","CSV aligned"
+无队列,"No queue"
+暂无进度数据。,"No progress data yet."
+按语言,"By Language"
+按模块,"By Module"
+基础配置,"Basic Configuration"
+保存配置并入队,"Save Configuration And Queue"
+"开启 AI 翻译","Enable AI Translation"
+批量大小,"Batch Size"
+翻译策略,"Translation Strategy"
 轻量,Light
-高保真,High Fidelity
-自动生效,Auto Publish
-按模块翻译并写回,Translate by module and write back
-列表来自系统活跃模块（含 i18n 目录）。一键写回：先收集并回写源语言（中文）CSV，再按所选语言对照源语言翻译并写回各自 CSV（开发环境）。进度弹窗可跟播；不勾选语言时自动处理有待办语言。,"Active modules with i18n dirs. One-click writeback: collect/write source (Chinese) CSV first, then translate from source into each locale CSV (dev). Progress dialog follows SSE; empty selection auto-picks locales with work."
-搜索模块，例如 Weline_Product,"Search module, e.g. Weline_Product"
+高保真,"High Fidelity"
+自动生效,"Auto Publish"
+按模块翻译并写回,"Translate by module and write back"
+"列表来自系统活跃模块（含 i18n 目录）。一键写回：先收集并回写源语言（中文）CSV，再按所选语言对照源语言翻译并写回各自 CSV（开发环境）。进度弹窗可跟播；不勾选语言时自动处理有待办语言。","Active modules with i18n dirs. One-click writeback: collect/write source (Chinese) CSV first, then translate from source into each locale CSV (dev). Progress dialog follows SSE; empty selection auto-picks locales with work."
+"搜索模块，例如 Weline_Product","Search module, e.g. Weline_Product"
 搜索,Search
 模块,Module
-AI 待写回,AI pending write-back
-待处理 %{1}/%{2} 种语言 · %{3} 词,%{1}/%{2} locales pending · %{3} words
-源语言 %{1} 词 · 各语言已对齐,Source %{1} words · all locales aligned
-有待办,Has work
+"AI 待写回","AI pending write-back"
+"待处理 %{1}/%{2} 种语言 · %{3} 词","%{1}/%{2} locales pending · %{3} words"
+"源语言 %{1} 词 · 各语言已对齐","Source %{1} words · all locales aligned"
+有待办,"Has work"
 已对齐,Aligned
 展开,Expand
 收起,Collapse
-正在加载该模块各语言进度,Loading language progress for this module
-没有可用的目标语言。,No target locales available.
+正在加载该模块各语言进度,"Loading language progress for this module"
+没有可用的目标语言。,"No target locales available."
 勾选语言后点「一键翻译并写回」；不勾选则自动处理有待办的语言。,"Check locales, then click Translate & write back; leave empty to auto-select locales with work."
-有待办 %{1} / 共 %{2} 种语言,%{1} with work / %{2} locales
-源语言 %{1}：%{2} 个词（其他语言需对齐到该词数）,Source %{1}: %{2} words (other locales should align to this count)
-全选有待办,Select all with work
+"有待办 %{1} / 共 %{2} 种语言","%{1} with work / %{2} locales"
+"源语言 %{1}：%{2} 个词（其他语言需对齐到该词数）","Source %{1}: %{2} words (other locales should align to this count)"
+全选有待办,"Select all with work"
 词数,Words
 已译,Translated
 未译,Untranslated
 差额,Gap
-待写回,Pending write-back
-无待办,No work
-语言进度,Language progress
-展开后将先采集并回写源语言 CSV，再对照统计各语言差额。,"On expand: collect and write source CSV first, then compute gaps vs source."
-展开后异步加载：源语言词数 / 词数 / 已译 / 未译 / 差额 / 待写回 / 状态。,After expand: source words / words / translated / untranslated / gap / write-back / status.
-查看进度,View progress
-将仅翻译模块 %{1} 的所选语言（未选则自动有待办语言），并写回该模块 CSV。继续？,"Only translate selected locales for module %{1} (or auto locales with work), then write that module CSV. Continue?"
+待写回,"Pending write-back"
+无待办,"No work"
+语言进度,"Language progress"
+"展开后将先采集并回写源语言 CSV，再对照统计各语言差额。","On expand: collect and write source CSV first, then compute gaps vs source."
+"展开后异步加载：源语言词数 / 词数 / 已译 / 未译 / 差额 / 待写回 / 状态。","After expand: source words / words / translated / untranslated / gap / write-back / status."
+查看进度,"View progress"
+"将仅翻译模块 %{1} 的所选语言（未选则自动有待办语言），并写回该模块 CSV。继续？","Only translate selected locales for module %{1} (or auto locales with work), then write that module CSV. Continue?"
 处理中…,Processing…
-一键翻译并写回,Translate and write back
-点击「展开」后加载。,Click Expand to load.
-没有匹配的模块。,No matching modules.
-系统中暂无带 i18n 目录的活跃模块。,No active modules with an i18n directory.
-源语言固定为基础词库语言，不需要重复选择。,The source language is fixed to the base dictionary language and does not need to be selected again.
-语言配置与操作,Language settings & actions
-进度见「翻译进度」页签；此处只开关语言并触发翻译/导出。,See progress on the “Translation progress” tab; here you only toggle languages and trigger translate/export.
-AI 翻译,AI Translation
-源语言跳过,Source Language Skipped
-网站语言并集，强制翻译,Website language union; force translate
-已不在网站并集，跳过翻译,No longer in website union; skip translate
-立即翻译,Translate Now
-导出 AI 到模块,Export AI to Modules
-导出全局包,Export Global Pack
-没有已安装并启用的语言。,No installed and active languages.
-目标模块,Target module
-全部模块（按来源模块分别写回）,All modules (write back by source module)
-当前语言 %{1} 共有 %{2} 个来源模块含 AI 译文；选全部会分别写回这些模块。,Locale %{1} has %{2} source modules with AI translations; choosing all writes each module separately.
-当前语言 %{1} 暂无带来源模块的 AI 译文可导出。,Locale %{1} has no AI translations with a source module to export.
-词条会写回采集时记录的来源模块 CSV；选全部会覆盖本语言下所有有 AI 译文的模块。,Entries are written back to each source module CSV; choosing all covers every module that has AI translations for this locale.
+一键翻译并写回,"Translate and write back"
+点击「展开」后加载。,"Click Expand to load."
+没有匹配的模块。,"No matching modules."
+"系统中暂无带 i18n 目录的活跃模块。","No active modules with an i18n directory."
+源语言固定为基础词库语言，不需要重复选择。,"The source language is fixed to the base dictionary language and does not need to be selected again."
+语言配置与操作,"Language settings & actions"
+进度见「翻译进度」页签；此处只开关语言并触发翻译/导出。,"See progress on the “Translation progress” tab; here you only toggle languages and trigger translate/export."
+"AI 翻译","AI Translation"
+源语言跳过,"Source Language Skipped"
+网站语言并集，强制翻译,"Website language union; force translate"
+已不在网站并集，跳过翻译,"No longer in website union; skip translate"
+立即翻译,"Translate Now"
+"导出 AI 到模块","Export AI to Modules"
+导出全局包,"Export Global Pack"
+没有已安装并启用的语言。,"No installed and active languages."
+目标模块,"Target module"
+全部模块（按来源模块分别写回）,"All modules (write back by source module)"
+"当前语言 %{1} 共有 %{2} 个来源模块含 AI 译文；选全部会分别写回这些模块。","Locale %{1} has %{2} source modules with AI translations; choosing all writes each module separately."
+"当前语言 %{1} 暂无带来源模块的 AI 译文可导出。","Locale %{1} has no AI translations with a source module to export."
+"词条会写回采集时记录的来源模块 CSV；选全部会覆盖本语言下所有有 AI 译文的模块。","Entries are written back to each source module CSV; choosing all covers every module that has AI translations for this locale."
 导出中…,Exporting…
-确认导出,Confirm export
-入队中…,Joining the team…
-为所有启用语言立即入队,Queue All Enabled Languages Now
-后台系统默认语言,Admin system default language
-未登录或管理员未设置个人语言时，后台使用这里的语言。每位管理员请到「个人中心 → 我的资料」设置自己的语言。网站前台默认语言仍在各自网站里设置。,"When not signed in or the admin has no personal language, admin uses this language. Each admin sets their own under “Account center → My profile”. Storefront default languages remain per website."
-审核用户希望站点支持的语言，并同步语言包就绪状态。,Review the languages ​​users want the site to support and synchronize language pack readiness status.
-同步就绪状态,Sync ready state
-全部状态,All status
+确认导出,"Confirm export"
+入队中…,"Joining the team…"
+为所有启用语言立即入队,"Queue All Enabled Languages Now"
+后台系统默认语言,"Admin system default language"
+"未登录或管理员未设置个人语言时，后台使用这里的语言。每位管理员请到「个人中心 → 我的资料」设置自己的语言。网站前台默认语言仍在各自网站里设置。","When not signed in or the admin has no personal language, admin uses this language. Each admin sets their own under “Account center → My profile”. Storefront default languages remain per website."
+审核用户希望站点支持的语言，并同步语言包就绪状态。,"Review the languages ​​users want the site to support and synchronize language pack readiness status."
+同步就绪状态,"Sync ready state"
+全部状态,"All status"
 网站,website
 筛选,filter
-语言热度,Language popularity
-申请人数,Number of applicants
-请求数,Number of requests
-最近申请,Recently applied
+语言热度,"Language popularity"
+申请人数,"Number of applicants"
+请求数,"Number of requests"
+最近申请,"Recently applied"
 接受,accept
 拒绝,reject
 重新打开,reopen
 申请,Apply
 申请人,applicant
-国家代码,Country Code
-开始日期,start date
-结束日期,end date
-全选,Select all
-暂无申请,No application yet
-请选择语言申请,Please select language to apply
-扫描进度,Scan progress
-点击选择目标语言,Click to select target language
+国家代码,"Country Code"
+开始日期,"start date"
+结束日期,"end date"
+全选,"Select all"
+暂无申请,"No application yet"
+请选择语言申请,"Please select language to apply"
+扫描进度,"Scan progress"
+点击选择目标语言,"Click to select target language"
 搜索语言、国家或代码...,"Search for language, country or code..."
-目标语言,Target Language
-当前目标语言：,Current Target Language:
-国际化支持：管理从源语言到目标语言的翻译词典,Internationalization Support: Manage translation dictionaries from source language to target language
-添加翻译,Add Translation
-收集词典,Collect Dictionary
-导出翻译包,Export Translation Package
-导出CSV,Export CSV
-导入CSV,Import CSV
-清理语言,Clean up the language
-清理全部,clear all
+目标语言,"Target Language"
+当前目标语言：,"Current Target Language:"
+国际化支持：管理从源语言到目标语言的翻译词典,"Internationalization Support: Manage translation dictionaries from source language to target language"
+添加翻译,"Add Translation"
+收集词典,"Collect Dictionary"
+导出翻译包,"Export Translation Package"
+导出CSV,"Export CSV"
+导入CSV,"Import CSV"
+清理语言,"Clean up the language"
+清理全部,"clear all"
 已翻译:,Translated:
 未翻译:,Untranslated:
-当前翻译模式：,Current Translation Mode:
+当前翻译模式：,"Current Translation Mode:"
 未知,Unknown
-智能搜索与筛选,Smart Search and Filter
+智能搜索与筛选,"Smart Search and Filter"
 优先处理未翻译词条，先选目标语言，再结合关键词缩小范围。双击或点击编辑都可以快速进入翻译。,"Prioritize untranslated entries first. Choose the target language, narrow the scope with keywords, and then double-click or tap Edit to translate quickly."
-词典管理视图,Dictionary management view
+词典管理视图,"Dictionary management view"
 所属模块,Module
-全部模块,All modules
+全部模块,"All modules"
 重置,Reset
-翻译模式,Translation Mode
-自动词汇注册,Auto Vocabulary Registration
-在线翻译模式,Online Translation Mode
-缓存模式,Cache Mode
-更新时间,Update time
-翻译已删除，当前位置已保留。,The translation has been removed and the current position has been retained.
-确定删除 %{1} 的译文吗？,Delete the translation for %{1}?
+翻译模式,"Translation Mode"
+自动词汇注册,"Auto Vocabulary Registration"
+在线翻译模式,"Online Translation Mode"
+缓存模式,"Cache Mode"
+更新时间,"Update time"
+翻译已删除，当前位置已保留。,"The translation has been removed and the current position has been retained."
+"确定删除 %{1} 的译文吗？","Delete the translation for %{1}?"
 删除,Delete
 "请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
-模块国际化,Module i18n
-按模块查看词条进度，一键 AI 翻译未译词条；开发环境下可将词典译文写回模块 i18n CSV。,"View phrase progress by module, one-click AI-translate missing phrases; in development, write dictionary translations back to module i18n CSV."
-搜索模块,Search modules
-输入模块名过滤,Filter by module name
-当前非开发环境，「写回 CSV」已禁用；AI 翻译结果仍会写入词典库。,Not a development environment; “Write back CSV” is disabled. AI translations still write to the dictionary DB.
+模块国际化,"Module i18n"
+"按模块查看词条进度，一键 AI 翻译未译词条；开发环境下可将词典译文写回模块 i18n CSV。","View phrase progress by module, one-click AI-translate missing phrases; in development, write dictionary translations back to module i18n CSV."
+搜索模块,"Search modules"
+输入模块名过滤,"Filter by module name"
+"当前非开发环境，「写回 CSV」已禁用；AI 翻译结果仍会写入词典库。","Not a development environment; “Write back CSV” is disabled. AI translations still write to the dictionary DB."
 总计,Total
 已翻译,Translated
 未翻译,Untranslated
 进度,Progress
-写回 CSV,Write back CSV
-暂无模块语言包,No module language packs yet
-未找到带 i18n 目录的活跃模块，或搜索条件无匹配,"No active modules with an i18n directory found, or search matched nothing"
-请输入原文,Please enter the original text
-请输入译文,Please enter translation
-确认操作,Confirm action
+"写回 CSV","Write back CSV"
+暂无模块语言包,"No module language packs yet"
+"未找到带 i18n 目录的活跃模块，或搜索条件无匹配","No active modules with an i18n directory found, or search matched nothing"
+请输入原文,"Please enter the original text"
+请输入译文,"Please enter translation"
+确认操作,"Confirm action"
 将从源码与模块语言包扫描词条，写入词典并刷新统计。继续吗？,"Scan terms from source code and module language packs, write them to the dictionary, and refresh statistics. Continue?"
-开始收集,Start collection
-模块 AI 翻译,Module AI translation
-将为模块 %{1} 翻译一批未译词条（已存在的译文不会重复翻译）。继续吗？,Translate a batch of untranslated phrases for module %{1} (existing translations are not re-translated). Continue?
-写回模块 CSV,Write back module CSV
-将把词典中该模块的 AI 译文增量写回 i18n/{locale}.csv（开发环境）。继续吗？,Incrementally write this module’s AI translations from the dictionary back to i18n/{locale}.csv (development). Continue?
-确认组件不可用，请刷新页面后重试。,Confirm dialog unavailable; refresh and try again.
+开始收集,"Start collection"
+"模块 AI 翻译","Module AI translation"
+"将为模块 %{1} 翻译一批未译词条（已存在的译文不会重复翻译）。继续吗？","Translate a batch of untranslated phrases for module %{1} (existing translations are not re-translated). Continue?"
+"写回模块 CSV","Write back module CSV"
+"将把词典中该模块的 AI 译文增量写回 i18n/{locale}.csv（开发环境）。继续吗？","Incrementally write this module’s AI translations from the dictionary back to i18n/{locale}.csv (development). Continue?"
+确认组件不可用，请刷新页面后重试。,"Confirm dialog unavailable; refresh and try again."
 激活,Activate
-Weline.Api bin-query 不可用,Weline.Api bin-query unavailable
-加载失败,Failed to load
-收集完成,Collection completed
-新增词条,New phrases
-SSE 连接失败，请重试,"SSE connection failed, please retry"
-本批成功,Batch succeeded
-模块 AI 翻译完成,Module AI translation completed
-模块 AI 翻译失败,Module AI translation failed
-已写回,Written back
+"Weline.Api bin-query 不可用","Weline.Api bin-query unavailable"
+加载失败,"Failed to load"
+收集完成,"Collection completed"
+新增词条,"New phrases"
+"SSE 连接失败，请重试","SSE connection failed, please retry"
+本批成功,"Batch succeeded"
+"模块 AI 翻译完成","Module AI translation completed"
+"模块 AI 翻译失败","Module AI translation failed"
+已写回,"Written back"
 条,rows
-写回失败,Write-back failed
-清理完成,Cleanup completed
-清理失败,Cleanup failed
-确定清理当前目标语言 %{1} 的所有译文吗？基础词条会保留。,Are you sure you want to clear all translations for the current target language %{1}? The basic entries will be retained.
-确定清理全部词典和所有语言译文吗？此操作不可撤销。,Are you sure you want to clear all dictionaries and all language translations? This action cannot be undone.
-导入失败!,Import failed!
-导入完成!,Import complete!
-当前词典（语言包）：,Current Dictionary (Language Pack):
+写回失败,"Write-back failed"
+清理完成,"Cleanup completed"
+清理失败,"Cleanup failed"
+"确定清理当前目标语言 %{1} 的所有译文吗？基础词条会保留。","Are you sure you want to clear all translations for the current target language %{1}? The basic entries will be retained."
+确定清理全部词典和所有语言译文吗？此操作不可撤销。,"Are you sure you want to clear all dictionaries and all language translations? This action cannot be undone."
+导入失败!,"Import failed!"
+导入完成!,"Import complete!"
+当前词典（语言包）：,"Current Dictionary (Language Pack):"
 所属国家：,Country:
-根据地区翻译来自前端采集到的词.,Translate words collected from the frontend according to regions.
-词典已更新，当前位置已保留。,The dictionary has been updated and the current position has been retained.
-更新（收集）,Update (Collect)
+根据地区翻译来自前端采集到的词.,"Translate words collected from the frontend according to regions."
+词典已更新，当前位置已保留。,"The dictionary has been updated and the current position has been retained."
+更新（收集）,"Update (Collect)"
 更新,Update
 发布,Publish
-全局词典,Global Dictionary
+全局词典,"Global Dictionary"
 一共,Total
 缓存,Cache
 操作：,Actions:
@@ -591,484 +592,520 @@ SSE 连接失败，请重试,"SSE connection failed, please retry"
 双击表格行或点击编辑按钮即可快速修改译文。恢复按钮会把译文重置为原词，适合误翻或临时实验回滚。,"Double-click a row or use Edit to update the translation quickly. Restore resets the translation back to the source word, which is useful for rollback after a mistaken translation."
 词,Word
 翻译,Translation
-收集时间,Collection Time
-翻译时间,Translation Time
+收集时间,"Collection Time"
+翻译时间,"Translation Time"
 恢复,Restore
-发布失败,Publishing failed
-发布成功,Posted successfully
-操作失败,Operation failed
-国家名称,Country Name
+发布失败,"Publishing failed"
+发布成功,"Posted successfully"
+操作失败,"Operation failed"
+国家名称,"Country Name"
 国家,Country
-地区目录已同步，当前位置已保留。,The regional directory has been synchronized and the current location has been retained.
-地区列表,Region List
+地区目录已同步，当前位置已保留。,"The regional directory has been synchronized and the current location has been retained."
+地区列表,"Region List"
 代码,Code
-简码,Short Code
+简码,"Short Code"
 名称,Name
-激活状态,Activation Status
-未激活,Not activated
+激活状态,"Activation Status"
+未激活,"Not activated"
 区域已安装并激活，已刷新到列表顶部。,"The zone is installed and activated, flushed to the top of the list."
-确定安装 %{1} 吗？安装后将默认激活。,Are you sure you want to install %{1}? It will be activated by default after installation.
+"确定安装 %{1} 吗？安装后将默认激活。","Are you sure you want to install %{1}? It will be activated by default after installation."
 安装中…,Installing…
-已安装并激活,Installed and activated
+已安装并激活,"Installed and activated"
 安装,Install
-区域已激活，当前位置已保留。,The area is activated and the current position is retained.
-确定启用 %{1} 吗？所属国家会同步启用。,Enable %{1}? Its country will be enabled automatically.
+区域已激活，当前位置已保留。,"The area is activated and the current position is retained."
+"确定启用 %{1} 吗？所属国家会同步启用。","Enable %{1}? Its country will be enabled automatically."
 激活中…,Activating…
 已停用,Deactivated
-确定停用 %{1} 吗？所属国家状态会自动同步。,Disable %{1}? Its country status will be synchronized automatically.
+"确定停用 %{1} 吗？所属国家状态会自动同步。","Disable %{1}? Its country status will be synchronized automatically."
 已卸载,Uninstalled
-确定卸载 %{1} 吗？语言包和缓存会同步清理。,Uninstall %{1}? Language packs and cache will be cleaned up as well.
+"确定卸载 %{1} 吗？语言包和缓存会同步清理。","Uninstall %{1}? Language packs and cache will be cleaned up as well."
 卸载,Uninstall
-已安装未激活,Installed but not activated
+已安装未激活,"Installed but not activated"
 全部,All
-搜索国家,Search country
-输入国家名称或代码，例如：印度 / IN,"Enter the country name or code, for example: India / IN"
+搜索国家,"Search country"
+"输入国家名称或代码，例如：印度 / IN","Enter the country name or code, for example: India / IN"
 搜索会自动包含全部状态，未安装的国家可直接安装。,"The search will automatically include all states, and countries that are not installed can be installed directly."
-查找国家,Find a country
-全球国家数据已同步，当前位置已保留。,Global country data has been synchronized and the current location has been retained.
-更新全球数据,Update Global Data
-确定批量安装所选国家吗？,Install the selected countries in batch?
-确定批量启用所选国家吗？,Enable the selected countries in batch?
-确定批量停用所选国家吗？,Disable the selected countries in batch?
-确定批量卸载所选国家吗？相关地区也会同步卸载。,Uninstall the selected countries in batch? Related locales will also be uninstalled.
+查找国家,"Find a country"
+全球国家数据已同步，当前位置已保留。,"Global country data has been synchronized and the current location has been retained."
+更新全球数据,"Update Global Data"
+确定批量安装所选国家吗？,"Install the selected countries in batch?"
+确定批量启用所选国家吗？,"Enable the selected countries in batch?"
+确定批量停用所选国家吗？,"Disable the selected countries in batch?"
+确定批量卸载所选国家吗？相关地区也会同步卸载。,"Uninstall the selected countries in batch? Related locales will also be uninstalled."
 区域,Locale
 国家已安装并激活，已刷新到列表顶部。,"The country is installed and activated, flushed to the top of the list."
-确定安装 %{1} 吗？安装后将默认激活推荐地区。,Are you sure you want to install %{1}? Recommended regions will be activated by default after installation.
-国家已激活，当前位置已保留。,The country is activated and the current location is reserved.
-确定启用 %{1} 吗？推荐地区会同步启用。,Enable %{1}? The recommended locale will be enabled as well.
-确定停用 %{1} 吗？关联地区会一并停用。,Disable %{1}? Related locales will be disabled as well.
-确定卸载 %{1} 吗？相关地区会同步卸载。,Uninstall %{1}? Related locales will also be uninstalled.
-暂无国家数据,No country data
-请选择要操作的国家,Please select countries to operate on
+"确定安装 %{1} 吗？安装后将默认激活推荐地区。","Are you sure you want to install %{1}? Recommended regions will be activated by default after installation."
+国家已激活，当前位置已保留。,"The country is activated and the current location is reserved."
+"确定启用 %{1} 吗？推荐地区会同步启用。","Enable %{1}? The recommended locale will be enabled as well."
+"确定停用 %{1} 吗？关联地区会一并停用。","Disable %{1}? Related locales will be disabled as well."
+"确定卸载 %{1} 吗？相关地区会同步卸载。","Uninstall %{1}? Related locales will also be uninstalled."
+暂无国家数据,"No country data"
+请选择要操作的国家,"Please select countries to operate on"
 操作失败，请重试,"Operation failed, please try again"
 异步组件不可用，请刷新页面后重试,"The asynchronous component is unavailable, please refresh the page and try again"
-确定同步当前语言的区域名称数据吗？,Sync locale display names for the current language?
-同步名称,Sync Names
-确定强制重新同步当前语言的区域名称数据吗？这会先删除当前语言的现有名称记录。,Force re-sync locale display names for the current language? Existing records for this language will be deleted first.
-强制同步,Force Sync
-确定清理不属于已安装国家的区域数据吗？,Clean locale data that no longer belongs to installed countries?
-清理多余区域,Clean Extra Locales
-确定批量安装所选地区吗？,Install the selected locales in batch?
-确定批量启用所选地区吗？所属国家会自动同步。,Enable the selected locales in batch? Their countries will be synchronized automatically.
-确定批量停用所选地区吗？,Disable the selected locales in batch?
-确定批量卸载所选地区吗？语言包和缓存会同步清理。,Uninstall the selected locales in batch? Language packs and cache will be cleaned up as well.
+确定同步当前语言的区域名称数据吗？,"Sync locale display names for the current language?"
+同步名称,"Sync Names"
+确定强制重新同步当前语言的区域名称数据吗？这会先删除当前语言的现有名称记录。,"Force re-sync locale display names for the current language? Existing records for this language will be deleted first."
+强制同步,"Force Sync"
+确定清理不属于已安装国家的区域数据吗？,"Clean locale data that no longer belongs to installed countries?"
+清理多余区域,"Clean Extra Locales"
+确定批量安装所选地区吗？,"Install the selected locales in batch?"
+确定批量启用所选地区吗？所属国家会自动同步。,"Enable the selected locales in batch? Their countries will be synchronized automatically."
+确定批量停用所选地区吗？,"Disable the selected locales in batch?"
+确定批量卸载所选地区吗？语言包和缓存会同步清理。,"Uninstall the selected locales in batch? Language packs and cache will be cleaned up as well."
 地区已安装并激活，已刷新到列表顶部。,"The region is installed and activated, flushed to the top of the list."
-地区已激活，当前位置已保留。,The region is activated and the current location is reserved.
+地区已激活，当前位置已保留。,"The region is activated and the current location is reserved."
 地区已停用，当前位置已保留。,"Region deactivated, current location reserved."
 停用中…,Disabling…
-地区已卸载，当前位置已保留。,The region has been unloaded and the current location has been retained.
+地区已卸载，当前位置已保留。,"The region has been unloaded and the current location has been retained."
 卸载中…,Uninstalling…
-LocalModel 多语言翻译批次完成：本批=%{processed}，翻译=%{translated}，剩余=%{remaining},"LocalModel multilingual batch completed: processed=%{processed}, translated=%{translated}, remaining=%{remaining}"
-AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务。,AI translation busy or errored; ended this batch; will not requeue immediately; wait for the next scheduled run.
-AI翻译失败，已结束本批；不立刻续队，等待下一轮定时任务。,AI translation failed; ended this batch; will not requeue immediately; wait for the next scheduled run.
-保存失败已跳过 %{1} 条，继续后续条目。,Save failed; skipped %{1} row(s) and continued.
-已创建下一批队列：#%{1},Created next batch queue: #%{1}
-LocalModel 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。,LocalModel translation process exited abnormally; Scheduler will auto-recover (attempt %{1}/%{2}).
-验证失败：缺少 locale_code。,Verification failed: missing locale_code.
-验证失败：语言 %{1} 未安装启用或为源语言。,"Verification failed: language %{1} is not installed, enabled, or is the source language."
-验证失败：语言 %{1} 未开启 AI 自动翻译，自动队列已跳过。,"Verification failed: language %{1} does not have AI automatic translation enabled, auto queue skipped."
-验证失败：batch_size 必须在 1-%{1} 之间。,Verification failed: batch_size must be between 1 and %{1}.
-I18n AI翻译完成：语言=%{locale}，本批=%{translated}，失败=%{failed}，剩余=%{remaining}，连续失败=%{streak}/%{max},"I18n AI translation done: locale=%{locale}, batch=%{translated}, failed=%{failed}, remaining=%{remaining}, consecutive failures=%{streak}/%{max}"
-AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务。,AI translation busy; ended this batch; will not requeue immediately; wait for the next scheduled run.
-本批无进展，已停止续队（连续失败 %{1}/%{2}）；等待下一轮定时任务。,No progress this batch; stopped requeue (consecutive failures %{1}/%{2}); wait for the next scheduled run.
-连续失败已达 %{1} 次，已停止自动续跑；请等待下次 cron 或手动入队后再试。,Reached %{1} consecutive failures; auto-continue stopped; wait for next cron or enqueue manually.
-I18n AI 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。,I18n AI translation process exited abnormally; Scheduler will auto-recover (attempt %{1}/%{2}).
-远程词典收集队列,Remote dictionary collect queue
-远程协助翻译触发的词典收集（不入队站内 AI）,Dictionary collect triggered by remote assisted translation (does not enqueue on-site AI)
-远程收集任务 ID 无效,Invalid remote collect task ID
-远程词典收集已执行,Remote dictionary collect executed
-locales 必须是数组,locales must be an array
-获取未译成功,Fetched untranslated phrases successfully
-获取未译失败,Failed to fetch untranslated phrases
-items 必须是数组,items must be an array
-录入完成,Ingest completed
-录入失败,Ingest failed
-收集任务已启动,Collect task started
-启动收集失败,Failed to start collect
-获取状态成功,Fetched status successfully
-获取状态失败,Failed to fetch status
+"LocalModel 多语言翻译批次完成：本批=%{processed}，翻译=%{translated}，剩余=%{remaining}","LocalModel multilingual batch completed: processed=%{processed}, translated=%{translated}, remaining=%{remaining}"
+AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务。,"AI translation busy or errored; ended this batch; will not requeue immediately; wait for the next scheduled run."
+AI翻译失败，已结束本批；不立刻续队，等待下一轮定时任务。,"AI translation failed; ended this batch; will not requeue immediately; wait for the next scheduled run."
+"保存失败已跳过 %{1} 条，继续后续条目。","Save failed; skipped %{1} row(s) and continued."
+已创建下一批队列：#%{1},"Created next batch queue: #%{1}"
+"LocalModel 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。","LocalModel translation process exited abnormally; Scheduler will auto-recover (attempt %{1}/%{2})."
+"验证失败：缺少 locale_code。","Verification failed: missing locale_code."
+"验证失败：语言 %{1} 未安装启用或为源语言。","Verification failed: language %{1} is not installed, enabled, or is the source language."
+"验证失败：语言 %{1} 未开启 AI 自动翻译，自动队列已跳过。","Verification failed: language %{1} does not have AI automatic translation enabled, auto queue skipped."
+"验证失败：batch_size 必须在 1-%{1} 之间。","Verification failed: batch_size must be between 1 and %{1}."
+"I18n AI翻译完成：语言=%{locale}，本批=%{translated}，失败=%{failed}，剩余=%{remaining}，连续失败=%{streak}/%{max}","I18n AI translation done: locale=%{locale}, batch=%{translated}, failed=%{failed}, remaining=%{remaining}, consecutive failures=%{streak}/%{max}"
+AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务。,"AI translation busy; ended this batch; will not requeue immediately; wait for the next scheduled run."
+"本批无进展，已停止续队（连续失败 %{1}/%{2}）；等待下一轮定时任务。","No progress this batch; stopped requeue (consecutive failures %{1}/%{2}); wait for the next scheduled run."
+"连续失败已达 %{1} 次，已停止自动续跑；请等待下次 cron 或手动入队后再试。","Reached %{1} consecutive failures; auto-continue stopped; wait for next cron or enqueue manually."
+"I18n AI 翻译进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。","I18n AI translation process exited abnormally; Scheduler will auto-recover (attempt %{1}/%{2})."
+远程词典收集队列,"Remote dictionary collect queue"
+"远程协助翻译触发的词典收集（不入队站内 AI）","Dictionary collect triggered by remote assisted translation (does not enqueue on-site AI)"
+"远程收集任务 ID 无效","Invalid remote collect task ID"
+远程词典收集已执行,"Remote dictionary collect executed"
+"locales 必须是数组","locales must be an array"
+获取未译成功,"Fetched untranslated phrases successfully"
+获取未译失败,"Failed to fetch untranslated phrases"
+"items 必须是数组","items must be an array"
+录入完成,"Ingest completed"
+录入失败,"Ingest failed"
+收集任务已启动,"Collect task started"
+启动收集失败,"Failed to start collect"
+获取状态成功,"Fetched status successfully"
+获取状态失败,"Failed to fetch status"
 translate,translate
 远程取未译、录入与词典收集,"Remote fetch untranslated, ingest, and dictionary collect"
-远程取未译,Remote fetch untranslated
+远程取未译,"Remote fetch untranslated"
 list,list
-远程录入译文,Remote ingest translations
+远程录入译文,"Remote ingest translations"
 upload,upload
-启动远程收集,Start remote collect
+启动远程收集,"Start remote collect"
 play,play
-远程收集状态,Remote collect status
+远程收集状态,"Remote collect status"
 clock,clock
-国家 %{1} 没有可启用的地区,Country %{1} has no regions that can be enabled
+"国家 %{1} 没有可启用的地区","Country %{1} has no regions that can be enabled"
 不允许停用中国（CN），这是系统默认国家,"Disabling China (CN) is not allowed, this is the system default country"
-国家不存在！国家代码：%{1},Country does not exist! Country code: %{1}
+国家不存在！国家代码：%{1},"Country does not exist! Country code: %{1}"
 不允许卸载中国（CN），这是系统默认国家,"Uninstalling China (CN) is not allowed, this is the system default country"
-不允许停用 zh_Hans_CN 区域，这是系统默认区域,"Disabling zh_Hans_CN locale is not allowed, this is the system default locale"
-该区域不存在！区域代码：%{1},Locale does not exist! Locale code: %{1}
-不允许卸载 zh_Hans_CN 区域，这是系统默认区域,"Uninstalling zh_Hans_CN locale is not allowed, this is the system default locale"
-无法处理区域代码 %{1},Unable to process region code %{1}
-国家信息更新成功！共更新%{1}个国家。,Country information updated successfully! Total updated %{1} countries.
-国家信息更新失败：%{1},Country information update failed: %{1}
-国家信息已完整，无需更新。,Country information is complete
-国家信息检查失败：%{1},Country information check failed: %{1}
-locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。,locale %{1} stays in the system dictionary only and is not written back to module CSV (module CSV allows only zh_Hans_CN / en_US).
-模块 %{1} 不存在，跳过词：%{2},"Module %{1} does not exist, skipping term: %{2}"
-导出 %{1} 到模块 %{2} 失败：%{3},Export %{1} to module %{2} failed: %{3}
-写入 CSV 失败：%{1} — %{2},Failed to write CSV: %{1} — %{2}
-模块名不能为空,Module name cannot be empty
-模块 %{1} 不存在,Module %{1} does not exist
-模块 %{1}/%{2}：差额写回 %{3} 条，剩余差额 %{4}。,"Module %{1}/%{2}: gap write-back %{3}, remaining gap %{4}."
-无法创建目录：%{1},Unable to create directory: %{1}
-无法写入文件：%{1},Unable to write file: %{1}
-items 超过上限 %{1},items exceed limit %{1}
-网站未配置语种,Website has no configured languages
-locale 不在网站语种内：%{1},locale is not in website languages: %{1}
-locales 不能为空,locales cannot be empty
-website_id 无效,Invalid website_id
-网站不存在,Website does not exist
-cursor 无效,Invalid cursor
-不允许将语言申请直接变更为该状态,It is not allowed to change the language application directly to this status
-请选择要审核的语言申请,Please select the language application to be reviewed
-网站 ID 无效,Invalid site ID
-网站语言 %{1} 自动安装失败，仍会尝试纳入 AI 翻译目标：%{2},Auto-install of website language %{1} failed; still trying to include it as an AI translation target: %{2}
-持久化 AI 翻译并集配置失败（运行时并集仍生效）：%{1},Failed to persist AI translation union config (runtime union still applies): %{1}
-网站语言变更后 AI 翻译入队失败：%{1},Failed to enqueue AI translation after website language change: %{1}
-网站语言变更后 LocalModel 翻译入队失败：%{1},Failed to enqueue LocalModel translation after website language change: %{1}
-当前站点未开放语言支持申请,The current site does not open language support applications
-请输入有效的邮箱地址,Please enter a valid email address
-请至少选择一种希望支持的语言,Please select at least one language you wish to support
-每次最多可申请 %{1} 种语言,You can apply for up to %{1} languages ​​at a time
+"不允许停用 zh_Hans_CN 区域，这是系统默认区域","Disabling zh_Hans_CN locale is not allowed, this is the system default locale"
+该区域不存在！区域代码：%{1},"Locale does not exist! Locale code: %{1}"
+"不允许卸载 zh_Hans_CN 区域，这是系统默认区域","Uninstalling zh_Hans_CN locale is not allowed, this is the system default locale"
+"无法处理区域代码 %{1}","Unable to process region code %{1}"
+国家信息更新成功！共更新%{1}个国家。,"Country information updated successfully! Total updated %{1} countries."
+国家信息更新失败：%{1},"Country information update failed: %{1}"
+国家信息已完整，无需更新。,"Country information is complete"
+国家信息检查失败：%{1},"Country information check failed: %{1}"
+"locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。","locale %{1} stays in the system dictionary only and is not written back to module CSV (module CSV allows only zh_Hans_CN / en_US)."
+"模块 %{1} 不存在，跳过词：%{2}","Module %{1} does not exist, skipping term: %{2}"
+"导出 %{1} 到模块 %{2} 失败：%{3}","Export %{1} to module %{2} failed: %{3}"
+"写入 CSV 失败：%{1} — %{2}","Failed to write CSV: %{1} — %{2}"
+模块名不能为空,"Module name cannot be empty"
+"模块 %{1} 不存在","Module %{1} does not exist"
+"模块 %{1}/%{2}：差额写回 %{3} 条，剩余差额 %{4}。","Module %{1}/%{2}: gap write-back %{3}, remaining gap %{4}."
+无法创建目录：%{1},"Unable to create directory: %{1}"
+无法写入文件：%{1},"Unable to write file: %{1}"
+"非法 type：%{1}","非法 type：%{1}"
+"local_model pending 须由 LocalModel 协助服务处理","local_model pending 须由 LocalModel 协助服务处理"
+"local_model ingest 须由 LocalModel 协助服务处理","local_model ingest 须由 LocalModel 协助服务处理"
+"items 超过上限 %{1}","items exceed limit %{1}"
+网站未配置语种,"Website has no configured languages"
+"locale 不在网站语种内：%{1}","locale is not in website languages: %{1}"
+"locales 不能为空","locales cannot be empty"
+"website_id 无效","Invalid website_id"
+网站不存在,"Website does not exist"
+"cursor 无效","Invalid cursor"
+不允许将语言申请直接变更为该状态,"It is not allowed to change the language application directly to this status"
+请选择要审核的语言申请,"Please select the language application to be reviewed"
+"网站 ID 无效","Invalid site ID"
+"网站语言 %{1} 自动安装失败，仍会尝试纳入 AI 翻译目标：%{2}","Auto-install of website language %{1} failed; still trying to include it as an AI translation target: %{2}"
+"持久化 AI 翻译并集配置失败（运行时并集仍生效）：%{1}","Failed to persist AI translation union config (runtime union still applies): %{1}"
+"网站语言变更后 AI 翻译入队失败：%{1}","Failed to enqueue AI translation after website language change: %{1}"
+"网站语言变更后 LocalModel 翻译入队失败：%{1}","Failed to enqueue LocalModel translation after website language change: %{1}"
+远程协助翻译：选站、取未译、录入与可选收集,远程协助翻译：选站、取未译、录入与可选收集
+"使用当前登录后台身份调用真实 Admin REST。先选站与语种，再按 type（phrase/meta/local_model）取未译；在 items 字段填入译文后录入；可选启动词典收集并轮询状态（local_model 不可 collect）。","使用当前登录后台身份调用真实 Admin REST。先选站与语种，再按 type（phrase/meta/local_model）取未译；在 items 字段填入译文后录入；可选启动词典收集并轮询状态（local_model 不可 collect）。"
+"Website ID","Website ID"
+"类型 phrase|meta|local_model","类型 phrase|meta|local_model"
+"目标语种 JSON 数组","目标语种 JSON 数组"
+"未译分页 limit","未译分页 limit"
+未译游标,未译游标
+可选网站列表,可选网站列表
+网站语种列表,网站语种列表
+未译条目（只读预览）,未译条目（只读预览）
+是否还有未译,是否还有未译
+"录入 items JSON（source/locale/translation）","录入 items JSON（source/locale/translation）"
+录入结果,录入结果
+"收集 task_id","收集 task_id"
+收集状态,收集状态
+收集进度,收集进度
+收集消息,收集消息
+选站与语种,选站与语种
+列出可选网站,列出可选网站
+读取网站语种,读取网站语种
+取未译,取未译
+分页取未译词条,"Paginate untranslated phrases"
+录入译文,录入译文
+"录入译文并 publish（local_model 写 Local）","录入译文并 publish（local_model 写 Local）"
+可选：启动收集并查状态,可选：启动收集并查状态
+启动远程词典收集（local_model→422）,启动远程词典收集（local_model→422）
+读取收集状态,读取收集状态
+轮询收集状态,轮询收集状态
+当前站点未开放语言支持申请,"The current site does not open language support applications"
+请输入有效的邮箱地址,"Please enter a valid email address"
+请至少选择一种希望支持的语言,"Please select at least one language you wish to support"
+"每次最多可申请 %{1} 种语言","You can apply for up to %{1} languages ​​at a time"
 所选语言已由当前站点支持，无需重复申请,"The selected language is already supported by the current site, no need to apply again"
 人机验证失败或已过期，请重试,"Human-machine verification failed or has expired, please try again"
 相同语言申请已提交，无需重复发送,"The same language application has been submitted, no need to send it again"
-语言申请保存失败,Language application failed to save
+语言申请保存失败,"Language application failed to save"
 语言支持申请已提交，申请编号：%{1},"Language support application has been submitted, application number: %{1}"
-名或姓长度不能超过 60 个字符,First or last name cannot exceed 60 characters
-姓名长度必须在 2 到 120 个字符之间,Full name must be between 2 and 120 characters
+"名或姓长度不能超过 60 个字符","First or last name cannot exceed 60 characters"
+"姓名长度必须在 2 到 120 个字符之间","Full name must be between 2 and 120 characters"
 提交过于频繁，请稍后再试,"Submit too frequently, please try again later"
-模型忙碌,Model busy
-词典待补约 %{1},Dictionary pending fill ~%{1}
-等待本地模型空闲,Waiting for local model to become idle
+模型忙碌,"Model busy"
+"词典待补约 %{1}","Dictionary pending fill ~%{1}"
+等待本地模型空闲,"Waiting for local model to become idle"
 失败,Failed
-待续跑,Pending continue
-剩余 %{1},%{1} remaining
-本轮完成,Round completed
-本批 %{1},This batch %{1}
+待续跑,"Pending continue"
+"剩余 %{1}","%{1} remaining"
+本轮完成,"Round completed"
+"本批 %{1}","This batch %{1}"
 运行中,Running
-批量翻译请求标识无效,Invalid batch translation request id
-字段为空，已跳过,Field empty; skipped
-开始一键 AI 批量翻译,Start one-click AI batch translation
-字段 %{1} 为空，已跳过,Field %{1} empty; skipped
-字段 %{1} 已翻译，已跳过,Field %{1} already translated; skipped
-正在翻译字段 %{1}（%{2}/%{3}）,Translating field %{1} (%{2}/%{3})
-AI 批量翻译失败,AI batch translation failed
-字段 %{1} 翻译完成,Field %{1} translation completed
-缺少模块或目标语言,Missing module or target language
-目标语言等于源语言，无法 AI 翻译,Target language equals source language; cannot AI-translate
-模块 %{1} 没有待翻译词条,Module %{1} has no phrases pending translation
-模块不存在或无法解析路径,Module not found or path cannot be resolved
-无法创建模块 i18n 目录,Unable to create module i18n directory
-模块 %{1}：模板收集 %{2} 词，源语言 CSV 新增 %{3} 条%{4},"Module %{1}: collected %{2} template words, added %{3} to source CSV%{4}"
-（非开发环境未写盘）,(not written outside development)
-写回模块 CSV 仅允许在开发环境执行,Writing back module CSV is allowed only in development
+批量翻译请求标识无效,"Invalid batch translation request id"
+字段为空，已跳过,"Field empty; skipped"
+"开始一键 AI 批量翻译","Start one-click AI batch translation"
+"字段 %{1} 为空，已跳过","Field %{1} empty; skipped"
+"字段 %{1} 已翻译，已跳过","Field %{1} already translated; skipped"
+"正在翻译字段 %{1}（%{2}/%{3}）","Translating field %{1} (%{2}/%{3})"
+"AI 批量翻译失败","AI batch translation failed"
+"字段 %{1} 翻译完成","Field %{1} translation completed"
+缺少模块或目标语言,"Missing module or target language"
+"目标语言等于源语言，无法 AI 翻译","Target language equals source language; cannot AI-translate"
+"模块 %{1} 没有待翻译词条","Module %{1} has no phrases pending translation"
+模块不存在或无法解析路径,"Module not found or path cannot be resolved"
+"无法创建模块 i18n 目录","Unable to create module i18n directory"
+"模块 %{1}：模板收集 %{2} 词，源语言 CSV 新增 %{3} 条%{4}","Module %{1}: collected %{2} template words, added %{3} to source CSV%{4}"
+（非开发环境未写盘）,"(not written outside development)"
+"写回模块 CSV 仅允许在开发环境执行","Writing back module CSV is allowed only in development"
 ...,...
-源文,Source text
-未启用任何 AI 翻译目标语言，已跳过 LocalModel 批次。,No AI translation target languages enabled; skipped LocalModel batch.
-当前站点未配置可编辑的关联语言。请先在网站管理中配置关联语言，并确保这些语言已在 I18n 中安装启用。,This site has no editable linked languages. Configure linked languages in website admin and ensure they are installed/enabled in I18n.
-暂不支持 config 嵌套字段的 AI 翻译,AI translation of nested config fields is not supported yet
-源文本为空，无法翻译,Source text is empty; cannot translate
-当前站点没有可翻译的目标语言。请先在网站管理中配置关联语言。,This site has no translatable target languages. Configure linked languages in website admin first.
-所有语言均已翻译，无需补充,All languages are already translated; nothing to fill
-AI翻译未返回目标语言结果,AI translation returned no target-language result
-AI 翻译完成：%{1} 个语言,AI translation completed: %{1} language(s)
-所有字段均已翻译或为空，无需补充,All fields are already translated or empty; nothing to add.
-AI 批量翻译完成：%{1} 个字段，%{2} 个语言条目,"Bulk AI translation completed: %{1} fields, %{2} locale entries"
-正在收集并回写源语言 CSV…,Collecting and writing back the source-locale CSV…
-源语言收集失败：%{1},Source locale collection failed: %{1}
-源语言 %{1}：词数 %{2}（本次新增 %{3}）,Source %{1}: %{2} words (added %{3} this run)
-正在对照源语言统计各语言差额…,Computing per-locale gaps against the source locale…
-正在统计 %{1}（%{2}/%{3}）,Counting %{1} (%{2}/%{3})
-语言进度已加载,Language progress loaded
-开始处理模块 %{1}：收集源语言词条…,Start module %{1}: collecting source locale words…
-连接已中断,Connection interrupted
-源语言 %{1} 已写回：词数 %{2}（本次新增 %{3}）,Source %{1} written back: %{2} words (added %{3} this run)
-源语言收集完成,Source locale collection finished
-模块 %{1} 没有待翻译或待写回的语言,Module %{1} has no locales pending translation or write-back
-开始按源语言翻译模块 %{1}（%{2} 种语言）,Translate module %{1} from source locale (%{2} languages)
-翻译阶段：%{1}（%{2}/%{3}）· 差额 %{4},Translate: %{1} (%{2}/%{3}) · gap %{4}
-先写回词典已有译文：%{1}…,Prefill CSV from dictionary for %{1}…
-模块 %{1}/%{2} 翻译失败,Module %{1}/%{2} translation failed
-翻译失败,Translation failed
-翻译 %{1} 第 %{2} 批：本批 %{3}，累计 %{4}，剩余 %{5},"Translate %{1} batch %{2}: batch %{3}, total %{4}, remaining %{5}"
-写回阶段：%{1}（%{2}/%{3}）…,Write-back: %{1} (%{2}/%{3})…
-校验失败：%{1} 仍有差额 %{2},Verify failed: %{1} still has gap %{2}
-校验通过：%{1} 已与源语言对齐,Verified: %{1} is aligned with the source locale
-校验未通过：%{1} 剩余差额 %{2},Verify failed: %{1} remaining gap %{2}
+源文,"Source text"
+"未启用任何 AI 翻译目标语言，已跳过 LocalModel 批次。","No AI translation target languages enabled; skipped LocalModel batch."
+"当前站点未配置可编辑的关联语言。请先在网站管理中配置关联语言，并确保这些语言已在 I18n 中安装启用。","This site has no editable linked languages. Configure linked languages in website admin and ensure they are installed/enabled in I18n."
+"暂不支持 config 嵌套字段的 AI 翻译","AI translation of nested config fields is not supported yet"
+源文本为空，无法翻译,"Source text is empty; cannot translate"
+当前站点没有可翻译的目标语言。请先在网站管理中配置关联语言。,"This site has no translatable target languages. Configure linked languages in website admin first."
+所有语言均已翻译，无需补充,"All languages are already translated; nothing to fill"
+AI翻译未返回目标语言结果,"AI translation returned no target-language result"
+"AI 翻译完成：%{1} 个语言","AI translation completed: %{1} language(s)"
+所有字段均已翻译或为空，无需补充,"All fields are already translated or empty; nothing to add."
+"AI 批量翻译完成：%{1} 个字段，%{2} 个语言条目","Bulk AI translation completed: %{1} fields, %{2} locale entries"
+"正在收集并回写源语言 CSV…","Collecting and writing back the source-locale CSV…"
+源语言收集失败：%{1},"Source locale collection failed: %{1}"
+"源语言 %{1}：词数 %{2}（本次新增 %{3}）","Source %{1}: %{2} words (added %{3} this run)"
+正在对照源语言统计各语言差额…,"Computing per-locale gaps against the source locale…"
+"正在统计 %{1}（%{2}/%{3}）","Counting %{1} (%{2}/%{3})"
+语言进度已加载,"Language progress loaded"
+"开始处理模块 %{1}：收集源语言词条…","Start module %{1}: collecting source locale words…"
+连接已中断,"Connection interrupted"
+"源语言 %{1} 已写回：词数 %{2}（本次新增 %{3}）","Source %{1} written back: %{2} words (added %{3} this run)"
+源语言收集完成,"Source locale collection finished"
+"模块 %{1} 没有待翻译或待写回的语言","Module %{1} has no locales pending translation or write-back"
+"开始按源语言翻译模块 %{1}（%{2} 种语言）","Translate module %{1} from source locale (%{2} languages)"
+"翻译阶段：%{1}（%{2}/%{3}）· 差额 %{4}","Translate: %{1} (%{2}/%{3}) · gap %{4}"
+先写回词典已有译文：%{1}…,"Prefill CSV from dictionary for %{1}…"
+"模块 %{1}/%{2} 翻译失败","Module %{1}/%{2} translation failed"
+翻译失败,"Translation failed"
+"翻译 %{1} 第 %{2} 批：本批 %{3}，累计 %{4}，剩余 %{5}","Translate %{1} batch %{2}: batch %{3}, total %{4}, remaining %{5}"
+写回阶段：%{1}（%{2}/%{3}）…,"Write-back: %{1} (%{2}/%{3})…"
+"校验失败：%{1} 仍有差额 %{2}","Verify failed: %{1} still has gap %{2}"
+"校验通过：%{1} 已与源语言对齐","Verified: %{1} is aligned with the source locale"
+"校验未通过：%{1} 剩余差额 %{2}","Verify failed: %{1} remaining gap %{2}"
 未对齐,Misaligned
 已完成,Completed
-%{1} %{2}：翻译 %{3}，写回 %{4}，差额 %{5},"%{1} %{2}: translated %{3}, wrote back %{4}, gap %{5}"
-模块 %{1}：源语言词数 %{2}（新增 %{3}），翻译 %{4} 条，写回 %{5} 条，覆盖 %{6} 个语言%{7}。,"Module %{1}: source words %{2} (added %{3}), translated %{4}, wrote back %{5}, across %{6} locales%{7}."
-，%{1} 个语言校验未通过,", %{1} locale(s) failed verification"
+"%{1} %{2}：翻译 %{3}，写回 %{4}，差额 %{5}","%{1} %{2}: translated %{3}, wrote back %{4}, gap %{5}"
+"模块 %{1}：源语言词数 %{2}（新增 %{3}），翻译 %{4} 条，写回 %{5} 条，覆盖 %{6} 个语言%{7}。","Module %{1}: source words %{2} (added %{3}), translated %{4}, wrote back %{5}, across %{6} locales%{7}."
+"，%{1} 个语言校验未通过",", %{1} locale(s) failed verification"
 ，校验全部通过,", all locales verified"
-缺少任务所有者,Missing task owner
-已有进行中的远程收集任务,A remote collect task is already in progress
-任务已创建,Task created
-远程词典收集,Remote dictionary collect
-入队失败,Enqueue failed
-任务已过期,Task expired
-目标语言为空，已跳过。,Target language empty; skipped.
-目标语言等于源语言，已跳过。,Target language equals source language; skipped.
-语言 %{1} 已有翻译批次在运行，本批已跳过以避免重复翻译。,Language %{1} already has a translation batch running; this batch skipped to avoid duplicate work.
-没有待翻译词。,No words to translate.
-AI 翻译服务返回失败。,The AI ​​translation service returned failure.
-多次失败已绕过：%{1},Bypassed after repeated failures: %{1}
-译文乱码，已跳过本条（不影响本批其余词）：%{1},Garbled translation; skipped this phrase (other phrases in the batch continue): %{1}
-多次失败已绕过（%{count}次）：%{word}；原因：%{reason},Bypassed after repeated failures (%{count}): %{word}; reason: %{reason}
-保存翻译失败 [%{1}]: %{2},Failed to save translation [%{1}]: %{2}
+缺少任务所有者,"Missing task owner"
+已有进行中的远程收集任务,"A remote collect task is already in progress"
+任务已创建,"Task created"
+远程词典收集,"Remote dictionary collect"
+入队失败,"Enqueue failed"
+任务已过期,"Task expired"
+目标语言为空，已跳过。,"Target language empty; skipped."
+目标语言等于源语言，已跳过。,"Target language equals source language; skipped."
+"语言 %{1} 已有翻译批次在运行，本批已跳过以避免重复翻译。","Language %{1} already has a translation batch running; this batch skipped to avoid duplicate work."
+没有待翻译词。,"No words to translate."
+"AI 翻译服务返回失败。","The AI ​​translation service returned failure."
+多次失败已绕过：%{1},"Bypassed after repeated failures: %{1}"
+译文乱码，已跳过本条（不影响本批其余词）：%{1},"Garbled translation; skipped this phrase (other phrases in the batch continue): %{1}"
+多次失败已绕过（%{count}次）：%{word}；原因：%{reason},"Bypassed after repeated failures (%{count}): %{word}; reason: %{reason}"
+"保存翻译失败 [%{1}]: %{2}","Failed to save translation [%{1}]: %{2}"
 翻译已写入词典库，但发布语言文件失败：%{1},"Translation written to dictionary, but publishing language file failed: %{1}"
-I18n AI翻译完成,I18n AI translation completed
-I18n AI翻译失败,I18n AI translation failed
-目标语言：%{locale}\n本批词数：%{total}\n成功：%{translated}\n跳过：%{skipped}\n失败：%{failed}\n剩余：%{remaining}\n自动发布：%{published}\n耗时：%{duration}s,Target locale: %{locale}\nBatch size: %{total}\nSuccess: %{translated}\nSkipped: %{skipped}\nFailed: %{failed}\nRemaining: %{remaining}\nAuto-published: %{published}\nDuration: %{duration}s
-成功翻译 %{1} 个词，跳过 %{2} 个词（含乱码单条），失败 %{3} 个词。,"Successfully translated %{1} phrase(s), skipped %{2} (including garbled singles), failed %{3}."
-I18n AI翻译异常,I18n AI translation exception
-目标语言：%{1}；错误：%{2},Target language: %{1}; Error: %{2}
-CSV文件不存在：%{1},CSV file does not exist: %{1}
-无法打开CSV文件：%{1},Unable to open CSV file: %{1}
-第 %{1} 行导入失败：%{2},Import failed for row %{1}: %{2}
-成功导入 %{1} 条翻译。,Successfully imported %{1} translations.
-处理 %{1} 个CSV文件，导入 %{2} 条翻译。,"Processing %{1} CSV files, importing %{2} translations."
-词典翻译写入失败,Failed to write dictionary translation
-译文乱码，已跳过本条：%{1},Garbled translation; skipped this phrase: %{1}
+"I18n AI翻译完成","I18n AI translation completed"
+"I18n AI翻译失败","I18n AI translation failed"
+"目标语言：%{locale}\n本批词数：%{total}\n成功：%{translated}\n跳过：%{skipped}\n失败：%{failed}\n剩余：%{remaining}\n自动发布：%{published}\n耗时：%{duration}s","Target locale: %{locale}\nBatch size: %{total}\nSuccess: %{translated}\nSkipped: %{skipped}\nFailed: %{failed}\nRemaining: %{remaining}\nAuto-published: %{published}\nDuration: %{duration}s"
+"成功翻译 %{1} 个词，跳过 %{2} 个词（含乱码单条），失败 %{3} 个词。","Successfully translated %{1} phrase(s), skipped %{2} (including garbled singles), failed %{3}."
+"I18n AI翻译异常","I18n AI translation exception"
+目标语言：%{1}；错误：%{2},"Target language: %{1}; Error: %{2}"
+CSV文件不存在：%{1},"CSV file does not exist: %{1}"
+无法打开CSV文件：%{1},"Unable to open CSV file: %{1}"
+"第 %{1} 行导入失败：%{2}","Import failed for row %{1}: %{2}"
+"成功导入 %{1} 条翻译。","Successfully imported %{1} translations."
+"处理 %{1} 个CSV文件，导入 %{2} 条翻译。","Processing %{1} CSV files, importing %{2} translations."
+词典翻译写入失败,"Failed to write dictionary translation"
+译文乱码，已跳过本条：%{1},"Garbled translation; skipped this phrase: %{1}"
 翻译为空，已跳过：%{1},"Translation is empty, skipped: %{1}"
 翻译结果与原文相同，已跳过：%{1},"Translation result is identical to the original, skipped: %{1}"
 翻译丢失结构化占位符，已跳过：%{1},"Translation lost structured placeholder, skipped: %{1}"
-开始扫描模块 CSV 语言包…,Scanning module CSV language packs…
-扫描源码 __()/lang 词条…,Scanning source __()/lang phrases…
-没有找到需要收集的词汇,No vocabulary found that needs to be collected
-写入词典表，共 %{1} 条待处理…,"Writing dictionary table, %{1} pending…"
-提交 AI 翻译队列…,Submitting AI translation queue…
-开始收集词典,Start dictionary collect
-批量插入新词条…,Batch-inserting new phrases…
-同步默认语言译文…,Syncing default-language translations…
-开始AI翻译...,Starting AI translation...
-目标语言: %{1},Target language: %{1}
-源语言: %{1},Source language: %{1}
-批量大小: %{1},Batch size: %{1}
-翻译数量: %{1},Translation count: %{1}
-跳过数量: %{1},Skipped count: %{1}
-失败数量: %{1},Failure Count: %{1}
-总词数: %{1},Total Words: %{1}
-耗时: %{1}秒,Time taken: %{1} seconds
-错误信息:,Error message:
-翻译失败!,Translation failed!
-错误信息: %{1},Error message: %{1}
-翻译异常: %{1},Translation error: %{1}
-异常位置: %{1}:%{2},Exception location: %{1}:%{2}
-使用AI批量翻译词典,Batch translate dictionary with AI
+"开始扫描模块 CSV 语言包…","Scanning module CSV language packs…"
+"扫描源码 __()/lang 词条…","Scanning source __()/lang phrases…"
+没有找到需要收集的词汇,"No vocabulary found that needs to be collected"
+"写入词典表，共 %{1} 条待处理…","Writing dictionary table, %{1} pending…"
+"提交 AI 翻译队列…","Submitting AI translation queue…"
+开始收集词典,"Start dictionary collect"
+批量插入新词条…,"Batch-inserting new phrases…"
+同步默认语言译文…,"Syncing default-language translations…"
+开始AI翻译...,"Starting AI translation..."
+"目标语言: %{1}","Target language: %{1}"
+"源语言: %{1}","Source language: %{1}"
+"批量大小: %{1}","Batch size: %{1}"
+"翻译数量: %{1}","Translation count: %{1}"
+"跳过数量: %{1}","Skipped count: %{1}"
+"失败数量: %{1}","Failure Count: %{1}"
+"总词数: %{1}","Total Words: %{1}"
+"耗时: %{1}秒","Time taken: %{1} seconds"
+错误信息:,"Error message:"
+翻译失败!,"Translation failed!"
+"错误信息: %{1}","Error message: %{1}"
+"翻译异常: %{1}","Translation error: %{1}"
+"异常位置: %{1}:%{2}","Exception location: %{1}:%{2}"
+使用AI批量翻译词典,"Batch translate dictionary with AI"
 使用AI批量翻译词典（增量翻译，已存在的翻译不会重新翻译）,"Batch translate dictionary with AI (incremental translation, existing translations will not be retranslated)"
 "目标语言代码（如 en_US, ja_JP），默认 en_US","Target language code (e.g., en_US, ja_JP), default en_US"
-源语言代码（如 zh_Hans_CN），默认 zh_Hans_CN,"Source language code (e.g., zh_Hans_CN), default zh_Hans_CN"
-每批翻译数量，默认 1000,"Number of translations per batch, default 1000"
-显示帮助信息,Show help information
-翻译为英文（默认）,Translate to English (default)
-翻译为日文,Translate to Japanese
-翻译500个词,Translate 500 words
-参数错误：--locale 或 -l 参数不能为空,Parameter error: --locale or -l parameter cannot be empty
-开始导入所有模块的CSV翻译文件...,Importing CSV translation files for all modules...
-处理文件数: %{1},Number of files processed: %{1}
-导入数量: %{1},Import count: %{1}
-导入异常: %{1},Import error: %{1}
-参数错误：--file 和 --locale 参数不能为空,Parameter error: --file and --locale parameters cannot be empty
-使用 --help 查看帮助信息,Use --help to view help information
-开始导入CSV翻译文件...,Importing CSV translation file...
-文件路径: %{1},File path: %{1}
-总行数: %{1},Total Lines: %{1}
-从CSV文件导入翻译到词典,Import translations into dictionary from CSV file
-从CSV文件导入翻译到词典（已存在的翻译会自动跳过）,Import translations from CSV file into dictionary (existing translations will be automatically skipped)
-CSV文件路径（导入单个文件时必填）,CSV file path (required when importing a single file)
+"源语言代码（如 zh_Hans_CN），默认 zh_Hans_CN","Source language code (e.g., zh_Hans_CN), default zh_Hans_CN"
+"每批翻译数量，默认 1000","Number of translations per batch, default 1000"
+显示帮助信息,"Show help information"
+翻译为英文（默认）,"Translate to English (default)"
+翻译为日文,"Translate to Japanese"
+翻译500个词,"Translate 500 words"
+"参数错误：--locale 或 -l 参数不能为空","Parameter error: --locale or -l parameter cannot be empty"
+开始导入所有模块的CSV翻译文件...,"Importing CSV translation files for all modules..."
+"处理文件数: %{1}","Number of files processed: %{1}"
+"导入数量: %{1}","Import count: %{1}"
+"导入异常: %{1}","Import error: %{1}"
+"参数错误：--file 和 --locale 参数不能为空","Parameter error: --file and --locale parameters cannot be empty"
+"使用 --help 查看帮助信息","Use --help to view help information"
+开始导入CSV翻译文件...,"Importing CSV translation file..."
+"文件路径: %{1}","File path: %{1}"
+"总行数: %{1}","Total Lines: %{1}"
+从CSV文件导入翻译到词典,"Import translations into dictionary from CSV file"
+从CSV文件导入翻译到词典（已存在的翻译会自动跳过）,"Import translations from CSV file into dictionary (existing translations will be automatically skipped)"
+CSV文件路径（导入单个文件时必填）,"CSV file path (required when importing a single file)"
 "目标语言代码（如 en_US, ja_JP）【必填】","Target language code (e.g., en_US, ja_JP) [Required]"
-导入所有模块的CSV文件（自动扫描所有模块的i18n目录）,Import CSV file for all modules (auto-scan i18n directories of all modules)
-导入指定CSV文件,Import specified CSV file
-导入所有模块的英文翻译,Import English translations for all modules
-导入所有模块的日文翻译,Import Japanese translations for all modules
-是否实时收集翻译词典。[enable/disable],Enable/disable real-time translation dictionary collection
-开始提取并翻译自定义 i18n 词条...,Start extracting and translating custom i18n entries...
-源语言：%{1},Source language: %{1}
-目标语言：%{1},Target language: %{1}
-指定模块：%{1},Specified module: %{1}
-处理所有模块...,Processing all modules...
-翻译完成！,Translation completed!
-处理模块：%{1},Processing module: %{1}
-总计：翻译 %{1} 个词条，跳过 %{2} 个词条,"Total: Translated %{1} entries, Skipped %{2} entries"
-未找到模块：%{1},Module not found: %{1}
-模块 %{1} 没有 i18n 目录,Module %{1} has no i18n directory
-模块 %{1} 没有源语言文件：%{2},Module %{1} has no source language file: %{2}
-模块 %{1} 没有需要翻译的词条,Module %{1} has no entries to translate
-模块 %{1} 需要翻译 %{2} 个词条,Module %{1} needs to translate %{2} entries
-AI 翻译服务不可用,AI translation service is not available
-模块 %{1} 翻译完成：成功 %{2} 个，失败 %{3} 个,"Module %{1} translation complete: %{2} succeeded, %{3} failed"
+导入所有模块的CSV文件（自动扫描所有模块的i18n目录）,"Import CSV file for all modules (auto-scan i18n directories of all modules)"
+导入指定CSV文件,"Import specified CSV file"
+导入所有模块的英文翻译,"Import English translations for all modules"
+导入所有模块的日文翻译,"Import Japanese translations for all modules"
+是否实时收集翻译词典。[enable/disable],"Enable/disable real-time translation dictionary collection"
+"开始提取并翻译自定义 i18n 词条...","Start extracting and translating custom i18n entries..."
+源语言：%{1},"Source language: %{1}"
+目标语言：%{1},"Target language: %{1}"
+指定模块：%{1},"Specified module: %{1}"
+处理所有模块...,"Processing all modules..."
+翻译完成！,"Translation completed!"
+处理模块：%{1},"Processing module: %{1}"
+"总计：翻译 %{1} 个词条，跳过 %{2} 个词条","Total: Translated %{1} entries, Skipped %{2} entries"
+未找到模块：%{1},"Module not found: %{1}"
+"模块 %{1} 没有 i18n 目录","Module %{1} has no i18n directory"
+"模块 %{1} 没有源语言文件：%{2}","Module %{1} has no source language file: %{2}"
+"模块 %{1} 没有需要翻译的词条","Module %{1} has no entries to translate"
+"模块 %{1} 需要翻译 %{2} 个词条","Module %{1} needs to translate %{2} entries"
+"AI 翻译服务不可用","AI translation service is not available"
+"模块 %{1} 翻译完成：成功 %{2} 个，失败 %{3} 个","Module %{1} translation complete: %{2} succeeded, %{3} failed"
 所有翻译都失败了，请检查：,"All translations failed, please check:"
-1. AI 模块是否正确安装和配置,1. Whether the AI module is installed and configured correctly
-2. 是否配置了默认翻译模型,2. Whether the default translation model is configured
-3. AI API 密钥是否正确配置,3. Is the AI API key configured correctly
-4. 网络连接是否正常,4. Is the network connection normal?
-无法创建文件：%{1},Unable to create file: %{1}
-查看本地语言码,View local language code
-词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。,See the overview below for dictionary / LocalModel / module CSV write-back progress; queue status is simplified without dumping raw logs.
-按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。,"By language × type: dictionary fill, LocalModel (shared queue), module CSV write-back."
-进度见上方总览；此处只开关语言并触发翻译/导出。,See the overview above for progress; here you only toggle languages and trigger translate/export.
-词典 / LocalModel / 模块写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。,See the overview below for dictionary / LocalModel / module write-back progress; queue status is simplified without dumping raw logs.
-模块写回,Module write-back
-队列状态,Queue status
-共享队列,Shared queue
-词条总数,Dictionary Words
-AI 启用语言,AI Enabled Languages
-全局状态,Global Status
-语言配置,Language Configuration
-待翻译 = 模块 CSV 与全局词典都没有有效目标译文的词。,Pending translations are phrases with no valid target translation in either module CSV files or the global dictionary.
-词典进度,Dictionary progress
-AI 已译,AI Translated
-待补翻译,Pending Backfill
+"1. AI 模块是否正确安装和配置","1. Whether the AI module is installed and configured correctly"
+"2. 是否配置了默认翻译模型","2. Whether the default translation model is configured"
+"3. AI API 密钥是否正确配置","3. Is the AI API key configured correctly"
+"4. 网络连接是否正常","4. Is the network connection normal?"
+无法创建文件：%{1},"Unable to create file: %{1}"
+查看本地语言码,"View local language code"
+"录入译文（冲突跳过）并 publish","Ingest translations (skip conflicts) and publish"
+"启动远程词典收集（禁 AI 入队）","Start remote dictionary collect (AI enqueue disabled)"
+"使用当前登录后台身份调用真实 Admin REST。先选站与语种，再取未译；在 items 字段填入译文后录入；可选启动词典收集并轮询状态。","使用当前登录后台身份调用真实 Admin REST。先选站与语种，再取未译；在 items 字段填入译文后录入；可选启动词典收集并轮询状态。"
+"录入译文并 publish","录入译文并 publish"
+启动远程词典收集,启动远程词典收集
+"词典 / LocalModel / 模块 CSV 写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。","See the overview below for dictionary / LocalModel / module CSV write-back progress; queue status is simplified without dumping raw logs."
+"按语言 × 类型：词典补齐、LocalModel（共享队列）、模块 CSV 写回。","By language × type: dictionary fill, LocalModel (shared queue), module CSV write-back."
+进度见上方总览；此处只开关语言并触发翻译/导出。,"See the overview above for progress; here you only toggle languages and trigger translate/export."
+"词典 / LocalModel / 模块写回三类进度见下方总览；队列状态已简化，不再堆砌原文日志。","See the overview below for dictionary / LocalModel / module write-back progress; queue status is simplified without dumping raw logs."
+模块写回,"Module write-back"
+队列状态,"Queue status"
+共享队列,"Shared queue"
+词条总数,"Dictionary Words"
+"AI 启用语言","AI Enabled Languages"
+全局状态,"Global Status"
+语言配置,"Language Configuration"
+"待翻译 = 模块 CSV 与全局词典都没有有效目标译文的词。","Pending translations are phrases with no valid target translation in either module CSV files or the global dictionary."
+词典进度,"Dictionary progress"
+"AI 已译","AI Translated"
+待补翻译,"Pending Backfill"
 队列失败，但未返回详细错误信息。,"Queue failed, but no detailed error was returned."
 无,None
-如果目标语言的模块 CSV 或全局语言包中已经存在有效译文，系统会自动跳过，不会再次调用 AI，避免浪费 token。AI 生成的译文会先写入词典并标记为 AI，可再增量导出回模块 CSV。,"If the target language module CSV or global language pack already contains a valid translation, the system skips it and will not call AI again, avoiding token waste. AI-generated translations are written to the dictionary and marked as AI, then can be incrementally exported back to module CSV files."
-「导出 AI 到模块」按词条采集时的来源模块写回各自 i18n/{语言}.csv；可选择全部模块或指定某一个模块。,"""Export AI to modules"" writes each phrase back to its source module i18n/{locale}.csv; choose all modules or one module."
-「按模块」可一键只翻译某个模块并写回该模块 CSV（仅开发环境）。,By Module can translate one module only and write back its CSV (dev environment only).
-AI 已译词,AI Translated Phrases
-全局已译,Global Translated
-最近队列,Latest Queue
-查看队列结果,View queue result
-LocalModel 多语言 AI 翻译,LocalModel multilingual AI translation
-I18n AI翻译 %{1},I18n AI translation %{1}
-I18n AI 自动翻译未启用，cron 已跳过,I18n AI auto-translation is disabled; cron skipped
-没有启用的 AI 翻译语言（含多网站语言并集）,No enabled AI translation languages (including multi-website union)
-所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）,All enabled languages and LocalModel queues already have pending/running tasks; cron did not re-enqueue (took %{1}s)
-词典 %{1}: 队列 #%{2},Dictionary %{1}: queue #%{2}
-LocalModel: 队列 #%{1},LocalModel: queue #%{1}
+"如果目标语言的模块 CSV 或全局语言包中已经存在有效译文，系统会自动跳过，不会再次调用 AI，避免浪费 token。AI 生成的译文会先写入词典并标记为 AI，可再增量导出回模块 CSV。","If the target language module CSV or global language pack already contains a valid translation, the system skips it and will not call AI again, avoiding token waste. AI-generated translations are written to the dictionary and marked as AI, then can be incrementally exported back to module CSV files."
+"「导出 AI 到模块」按词条采集时的来源模块写回各自 i18n/{语言}.csv；可选择全部模块或指定某一个模块。","""Export AI to modules"" writes each phrase back to its source module i18n/{locale}.csv; choose all modules or one module."
+"「按模块」可一键只翻译某个模块并写回该模块 CSV（仅开发环境）。","By Module can translate one module only and write back its CSV (dev environment only)."
+"AI 已译词","AI Translated Phrases"
+全局已译,"Global Translated"
+最近队列,"Latest Queue"
+查看队列结果,"View queue result"
+"LocalModel 多语言 AI 翻译","LocalModel multilingual AI translation"
+"I18n AI翻译 %{1}","I18n AI translation %{1}"
+"I18n AI 自动翻译未启用，cron 已跳过","I18n AI auto-translation is disabled; cron skipped"
+"没有启用的 AI 翻译语言（含多网站语言并集）","No enabled AI translation languages (including multi-website union)"
+"所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）","All enabled languages and LocalModel queues already have pending/running tasks; cron did not re-enqueue (took %{1}s)"
+"词典 %{1}: 队列 #%{2}","Dictionary %{1}: queue #%{2}"
+"LocalModel: 队列 #%{1}","LocalModel: queue #%{1}"
 "AI 翻译 cron 入队完成 - 词典语言数: %{1}, LocalModel: %{2}, 耗时: %{3} 秒\n%{4}","AI translation cron enqueue done - dictionary locales: %{1}, LocalModel: %{2}, took: %{3}s\n%{4}"
-AI批量翻译异常: %{1},AI batch translation exception: %{1}
-没有启用的 AI 翻译语言,No enabled AI translation languages
-AI翻译配置已保存，已入队 %{1} 个语言。,AI translation configuration saved. Queued %{1} language(s).
-已为 %{1} 个启用语言创建 AI 翻译队列。,Created AI translation queues for %{1} enabled language(s).
-本批无进展，已安排重试（%{1}/%{2}）。,No progress this batch; retry scheduled (%{1}/%{2}).
-暂无待写回,No pending write-back
-无法创建导出文件。,Unable to create export file.
-已完成 %{1}：翻译 %{2}，写回 %{3}（跳过 %{4}）,"Done %{1}: translated %{2}, wrote back %{3} (skipped %{4})"
-模块 %{1}：收集补词 %{2}，翻译 %{3} 条，写回 %{4} 条，覆盖 %{5} 个语言。,"Module %{1}: collected %{2} new words, translated %{3}, wrote back %{4}, across %{5} locales."
-目标语言：%{locale}\n本批词数：%{total}\n成功：%{translated}\n失败：%{failed}\n剩余：%{remaining}\n自动发布：%{published}\n耗时：%{duration}s,Target language: %{locale}\nWords in this batch: %{total}\nSuccess: %{translated}\nFailed: %{failed}\nRemaining: %{remaining}\nAuto-publish: %{published}\nTime elapsed: %{duration}s
-成功翻译 %{1} 个词，失败 %{2} 个词。,"Successfully translated %{1} words, failed %{2} words."
-列表来自系统活跃模块（含 i18n 目录）；可搜索过滤。展开/一键时会实时扫描该模块模板词并补进源语言 CSV，再按所选语言翻译写回（开发环境）。不勾选语言时自动处理有待办的语言。,"List comes from active system modules with an i18n directory; search filters. Expand/one-click live-scans template words into the source CSV, then translates and writes back selected locales (dev). Empty locale selection auto-picks locales with work."
+"AI批量翻译异常: %{1}","AI batch translation exception: %{1}"
+"没有启用的 AI 翻译语言","No enabled AI translation languages"
+"AI翻译配置已保存，已入队 %{1} 个语言。","AI translation configuration saved. Queued %{1} language(s)."
+"已为 %{1} 个启用语言创建 AI 翻译队列。","Created AI translation queues for %{1} enabled language(s)."
+本批无进展，已安排重试（%{1}/%{2}）。,"No progress this batch; retry scheduled (%{1}/%{2})."
+暂无待写回,"No pending write-back"
+无法创建导出文件。,"Unable to create export file."
+"已完成 %{1}：翻译 %{2}，写回 %{3}（跳过 %{4}）","Done %{1}: translated %{2}, wrote back %{3} (skipped %{4})"
+"模块 %{1}：收集补词 %{2}，翻译 %{3} 条，写回 %{4} 条，覆盖 %{5} 个语言。","Module %{1}: collected %{2} new words, translated %{3}, wrote back %{4}, across %{5} locales."
+"目标语言：%{locale}\n本批词数：%{total}\n成功：%{translated}\n失败：%{failed}\n剩余：%{remaining}\n自动发布：%{published}\n耗时：%{duration}s","Target language: %{locale}\nWords in this batch: %{total}\nSuccess: %{translated}\nFailed: %{failed}\nRemaining: %{remaining}\nAuto-publish: %{published}\nTime elapsed: %{duration}s"
+"成功翻译 %{1} 个词，失败 %{2} 个词。","Successfully translated %{1} words, failed %{2} words."
+"列表来自系统活跃模块（含 i18n 目录）；可搜索过滤。展开/一键时会实时扫描该模块模板词并补进源语言 CSV，再按所选语言翻译写回（开发环境）。不勾选语言时自动处理有待办的语言。","List comes from active system modules with an i18n directory; search filters. Expand/one-click live-scans template words into the source CSV, then translates and writes back selected locales (dev). Empty locale selection auto-picks locales with work."
 待译,Pending
-展开后异步加载：勾选 / 语言 / 待译 / 待写回 / 状态。,After expand: checkbox / language / pending / write-back / status.
-开始处理模块 %{1}：同步词条…,Processing module %{1}: syncing phrases…
-正在同步模块词条…,Syncing module phrases…
-开始处理模块 %{1}（%{2} 种语言）,Processing module %{1} (%{2} language(s))
-没有找到任何本地化数据！请先在 I18n 中安装并启用语言。,No localization data found! Install and enable languages in I18n first.
-没有找到可翻译的目标语言,No translatable target languages found
-按模块 AI 翻译,AI translate by module
+"展开后异步加载：勾选 / 语言 / 待译 / 待写回 / 状态。","After expand: checkbox / language / pending / write-back / status."
+"开始处理模块 %{1}：同步词条…","Processing module %{1}: syncing phrases…"
+正在同步模块词条…,"Syncing module phrases…"
+"开始处理模块 %{1}（%{2} 种语言）","Processing module %{1} (%{2} language(s))"
+"没有找到任何本地化数据！请先在 I18n 中安装并启用语言。","No localization data found! Install and enable languages in I18n first."
+没有找到可翻译的目标语言,"No translatable target languages found"
+"按模块 AI 翻译","AI translate by module"
 Dictionary,Dictionary
 Modules,Modules
-Module i18n,Module i18n
+"Module i18n","Module i18n"
 "View per-module progress, one-click AI translate, and write back to module i18n CSV in dev.","View per-module progress, one-click AI translate, and write back to module i18n CSV in dev."
-Search modules,Search modules
-Filter by module name,Filter by module name
-Pending export,Pending export
-AI Translate,AI Translate
-Write back CSV,Write back CSV
-No module language packs,No module language packs
-No active modules with i18n directory match your search,No active modules with i18n directory match your search
-Write back CSV is disabled outside dev; AI results still go to the dictionary DB.,Write back CSV is disabled outside dev; AI results still go to the dictionary DB.
-Dictionary admin views,Dictionary admin views
-Module AI translate,Module AI translate
-Translate one batch of untranslated words for module %{1}? Existing translations are skipped.,Translate one batch of untranslated words for module %{1}? Existing translations are skipped.
-Write back module CSV,Write back module CSV
-Incrementally write this module's AI translations to i18n/{locale}.csv (dev only)?,Incrementally write this module's AI translations to i18n/{locale}.csv (dev only)?
-Batch succeeded,Batch succeeded
+"Search modules","Search modules"
+"Filter by module name","Filter by module name"
+"Pending export","Pending export"
+"AI Translate","AI Translate"
+"Write back CSV","Write back CSV"
+"No module language packs","No module language packs"
+"No active modules with i18n directory match your search","No active modules with i18n directory match your search"
+"Write back CSV is disabled outside dev; AI results still go to the dictionary DB.","Write back CSV is disabled outside dev; AI results still go to the dictionary DB."
+"Dictionary admin views","Dictionary admin views"
+"Module AI translate","Module AI translate"
+"Translate one batch of untranslated words for module %{1}? Existing translations are skipped.","Translate one batch of untranslated words for module %{1}? Existing translations are skipped."
+"Write back module CSV","Write back module CSV"
+"Incrementally write this module's AI translations to i18n/{locale}.csv (dev only)?","Incrementally write this module's AI translations to i18n/{locale}.csv (dev only)?"
+"Batch succeeded","Batch succeeded"
 Remaining,Remaining
-Module AI translate failed,Module AI translate failed
-Write back failed,Write back failed
-Written back,Written back
+"Module AI translate failed","Module AI translate failed"
+"Write back failed","Write back failed"
+"Written back","Written back"
 entries,entries
-Missing target locale or module,Missing target locale or module
-Writing back module CSV is only allowed in dev environment,Writing back module CSV is only allowed in dev environment
-No pending words for module %{1},No pending words for module %{1}
+"Missing target locale or module","Missing target locale or module"
+"Writing back module CSV is only allowed in dev environment","Writing back module CSV is only allowed in dev environment"
+"No pending words for module %{1}","No pending words for module %{1}"
 "Module %{1}: translated %{2} in this batch, %{3} remaining","Module %{1}: translated %{2} in this batch, %{3} remaining"
 "Module %{1}: wrote back %{2} entries to CSV, skipped %{3}.","Module %{1}: wrote back %{2} entries to CSV, skipped %{3}."
-将为模块 %{1} 提交 AI 批量翻译任务，已存在的译文不会重复翻译。继续吗？,Submit an AI batch translation task for module %{1}; existing translations will not be retranslated. Continue?
-将为全部模块提交 AI 批量翻译任务，已存在的译文不会重复翻译。继续吗？,Submit an AI batch translation task for all modules; existing translations will not be retranslated. Continue?
-收集翻译词,Collect Translation Words
+"将为模块 %{1} 提交 AI 批量翻译任务，已存在的译文不会重复翻译。继续吗？","Submit an AI batch translation task for module %{1}; existing translations will not be retranslated. Continue?"
+"将为全部模块提交 AI 批量翻译任务，已存在的译文不会重复翻译。继续吗？","Submit an AI batch translation task for all modules; existing translations will not be retranslated. Continue?"
+收集翻译词,"Collect Translation Words"
 "当其他模块需要收集翻译词时触发。事件数据格式：[""translations"" => [[""word"" => ""翻译键"", ""translate"" => ""翻译值""], ...]]。I18n模块的观察者会将翻译词存储到字典表中。","Triggered when other modules need to collect translation words. Event data format: [""translations"" => [[""word"" => ""translation key"", ""translate"" => ""translation value""], ...]]. The I18n module's observer stores translation words in the dictionary table."
-警告：无法创建翻译文件 %{file},Warning: Unable to create translation file %{file}
-警告：无法写入翻译文件 %{file},Warning: Unable to write translation file %{file}
-警告：无法写入语言文件 %{file},Warning: Unable to write language file %{file}
-正在收集模块：%{1},Collecting module: %{1}
-模块 %{1} 语言包收集成功！,Module %{1} language pack collected successfully!
-模块 %{1} 语言包收集失败：%{2},Module %{1} language pack collection failed: %{2}
-正在收集所有模块的翻译词...,Collecting translation words from all modules...
-语言包收集成功！,Language pack collection successful!
-语言包收集失败：%{1},Language pack collection failed: %{1}
-正在清理翻译缓存...,Clearing translation cache...
-翻译缓存清理成功！,Translation cache cleared successfully!
+"警告：无法创建翻译文件 %{file}","Warning: Unable to create translation file %{file}"
+"警告：无法写入翻译文件 %{file}","Warning: Unable to write translation file %{file}"
+"警告：无法写入语言文件 %{file}","Warning: Unable to write language file %{file}"
+正在收集模块：%{1},"Collecting module: %{1}"
+"模块 %{1} 语言包收集成功！","Module %{1} language pack collected successfully!"
+"模块 %{1} 语言包收集失败：%{2}","Module %{1} language pack collection failed: %{2}"
+正在收集所有模块的翻译词...,"Collecting translation words from all modules..."
+语言包收集成功！,"Language pack collection successful!"
+语言包收集失败：%{1},"Language pack collection failed: %{1}"
+正在清理翻译缓存...,"Clearing translation cache..."
+翻译缓存清理成功！,"Translation cache cleared successfully!"
 翻译缓存清理失败：%{1}，但翻译收集已完成,"Translation cache clearing failed: %{1}, but translation collection completed"
-所有启用语言已有待运行/运行中的翻译队列，cron 未重复入队（耗时 %{1} 秒）,All enabled languages already have pending/running translation queues; cron did not re-enqueue (took %{1}s)
-%{1}: 队列 #%{2},%{1}: queue #%{2}
+"所有启用语言已有待运行/运行中的翻译队列，cron 未重复入队（耗时 %{1} 秒）","All enabled languages already have pending/running translation queues; cron did not re-enqueue (took %{1}s)"
+"%{1}: 队列 #%{2}","%{1}: queue #%{2}"
 "AI 翻译 cron 入队完成 - 语言数: %{1}, 耗时: %{2} 秒\n%{3}","AI translation cron enqueue done - locales: %{1}, took: %{2}s\n%{3}"
-已填写 %{filled} / %{total} 种语言,Filled %{filled} / %{total} languages
-翻译窗口,Translation Window
+"已填写 %{filled} / %{total} 种语言","Filled %{filled} / %{total} languages"
+翻译窗口,"Translation Window"
 "没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>","No localization data found! <a target=""_blank"" href=""%{url}"">Go to I18n to install and enable</a> Search local language: %{search} or manually refresh the page: <a href=""%{refresh}"">Refresh</a>"
-AI 翻译失败,AI translation failed
-I18n AI翻译完成：语言=%{locale}，本批=%{translated}，失败=%{failed}，剩余=%{remaining},"I18n AI translation completed: language = %{locale}, current batch = %{translated}, failed = %{failed}, remaining = %{remaining}"
+"AI 翻译失败","AI translation failed"
+"I18n AI翻译完成：语言=%{locale}，本批=%{translated}，失败=%{failed}，剩余=%{remaining}","I18n AI translation completed: language = %{locale}, current batch = %{translated}, failed = %{failed}, remaining = %{remaining}"
 目标语言为空或等于源语言，已跳过。,"Target language is empty or same as source language, skipped."
-没有启用的语言需要翻译,No enabled languages need translation
-%{1}: 成功翻译 %{2} 个词,%{1}: successfully translated %{2} phrase(s)
-%{1}: 翻译失败 - %{2},%{1}: translation failed - %{2}
+没有启用的语言需要翻译,"No enabled languages need translation"
+"%{1}: 成功翻译 %{2} 个词","%{1}: successfully translated %{2} phrase(s)"
+"%{1}: 翻译失败 - %{2}","%{1}: translation failed - %{2}"
 "AI批量翻译完成 - 总计翻译: %{1}, 失败: %{2}, 耗时: %{3}秒\n%{4}","AI batch translation completed - translated: %{1}, failed: %{2}, took: %{3}s\n%{4}"
-所有语言的词典都已完成翻译，无需翻译新词,Dictionaries for all languages are fully translated; no new phrases to translate
-i18n国际化>国家>地区>词典,i18n Internationalization > Countries > Regions > Dictionary
-i18n国际化>国家>地区,i18n Internationalization > Countries > Regions
-i18n国际化>国家,i18n Internationalization > Countries
-切换语言,Switch Language
-申请支持其他语言,Apply to support additional languages
-正在加载语言目录与人机验证...,Loading language catalog and human-machine verification...
-申请表加载失败,Application form loading failed
+所有语言的词典都已完成翻译，无需翻译新词,"Dictionaries for all languages are fully translated; no new phrases to translate"
+i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regions > Dictionary"
+i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
+i18n国际化>国家,"i18n Internationalization > Countries"
+切换语言,"Switch Language"
+申请支持其他语言,"Apply to support additional languages"
+正在加载语言目录与人机验证...,"Loading language catalog and human-machine verification..."
+申请表加载失败,"Application form loading failed"
 重新加载,Reload
 加载失败，请稍后重试,"Loading failed, please try again later"
-申请编号,Application number
-提交时间,Submission time
-网站 ID,Website ID
-仅展示,Display Only
-未找到匹配的语言,No matching language found
+申请编号,"Application number"
+提交时间,"Submission time"
+"网站 ID","Website ID"
+仅展示,"Display Only"
+未找到匹配的语言,"No matching language found"
 移除,Remove
-姓名,Full name
-无匹配语言,No Matching Language
-地区 %{1} 已安装，所属国家 %{2} 已同步安装,"Region %{1} has been installed, and the country %{2} has been synced and installed."
-mdi mdi-translate-variant,mdi mdi-translate-variant
-国际化I18n管理,International I18n management
+姓名,"Full name"
+无匹配语言,"No Matching Language"
+"地区 %{1} 已安装，所属国家 %{2} 已同步安装","Region %{1} has been installed, and the country %{2} has been synced and installed."
+"mdi mdi-translate-variant","mdi mdi-translate-variant"
+国际化I18n管理,"International I18n management"
 ri-translate,ri-translate
-1i8n词典管理,1i8n dictionary management
-mdi mdi-bookshelf,mdi mdi-bookshelf
-区域已安装！区域代码：%{1},Locale installed! Locale code: %{1}
-国家 %{1} 已安装，可用地区 %{2} 个,"Country %{1} has been installed, %{2} available regions"
-已安装 %{1} 个国家,Installed %{1} countries
-区域已安装，当前位置已保留。,The zone is mounted and the current location is retained.
-确定安装 %{1} 吗？,Install %{1}?
+1i8n词典管理,"1i8n dictionary management"
+"mdi mdi-bookshelf","mdi mdi-bookshelf"
+区域已安装！区域代码：%{1},"Locale installed! Locale code: %{1}"
+"国家 %{1} 已安装，可用地区 %{2} 个","Country %{1} has been installed, %{2} available regions"
+"已安装 %{1} 个国家","Installed %{1} countries"
+区域已安装，当前位置已保留。,"The zone is mounted and the current location is retained."
+"确定安装 %{1} 吗？","Install %{1}?"
 确认组件不可用，请刷新页面后重试,"Confirm that the component is unavailable, please refresh the page and try again"
-国家已安装，当前位置已保留。,The country is installed and the current location is reserved.
-地区已安装，当前位置已保留。,The region has been installed and the current location has been retained.
-区域安装状态写入失败：%{1},Failed to write zone installation status: %{1}
-国家安装状态写入失败：%{1},Country installation status write failed: %{1}
-搜索语言,Search language
-加载更多,Load more
-切换货币,Switch Currency
+国家已安装，当前位置已保留。,"The country is installed and the current location is reserved."
+地区已安装，当前位置已保留。,"The region has been installed and the current location has been retained."
+区域安装状态写入失败：%{1},"Failed to write zone installation status: %{1}"
+国家安装状态写入失败：%{1},"Country installation status write failed: %{1}"
+搜索语言,"Search language"
+加载更多,"Load more"
+切换货币,"Switch Currency"
 货币,Currency
-货币选项,Currency Options
+货币选项,"Currency Options"
 搜索货币、货币码、符号或翻译,"Search for currencies, currency codes, symbols or translations"
-搜索货币,Search currency
-无匹配货币,No matching currencies
+搜索货币,"Search currency"
+无匹配货币,"No matching currencies"
 本地化,Localization
-勾选要处理的语言；留空表示自动选择有待办的语言。,Check locales to process; leave empty to auto-select locales with work.
-请先搜索模块名（例如 Weline_Product），再一键翻译并写回。,"Search a module name first (e.g. Weline_Product), then translate and write back."
-搜索模块名后可查看待写回数量；展开可勾选语言，一键只翻译该模块并写回 CSV（开发环境）。不勾选语言时自动处理有待办的语言。,Search a module to see pending write-back; expand to pick locales; one click translates only that module and writes CSV (dev). Empty locale selection auto-picks locales with work.
-模块 %{1}：翻译 %{2} 条，写回 %{3} 条，覆盖 %{4} 个语言。,"Module %{1}: translated %{2}, wrote back %{3}, across %{4} locales."
-列表来自系统活跃模块（含 i18n 目录）；可搜索过滤。展开可勾选语言，一键只翻译该模块并写回 CSV（开发环境）。不勾选语言时自动处理有待办的语言。,List comes from active system modules with an i18n directory; search filters. Expand to pick locales; one click translates only that module and writes CSV (dev). Empty locale selection auto-picks locales with work.
-正在加载该模块各语言进度…,Loading language progress for this module…
-勾选要处理的语言；不勾选则自动处理「有待办」的语言。,Check locales to process; leave empty to auto-select locales with work.
-展开后加载语言进度表。,Expand to load the language progress table.
+勾选要处理的语言；留空表示自动选择有待办的语言。,"Check locales to process; leave empty to auto-select locales with work."
+"请先搜索模块名（例如 Weline_Product），再一键翻译并写回。","Search a module name first (e.g. Weline_Product), then translate and write back."
+"搜索模块名后可查看待写回数量；展开可勾选语言，一键只翻译该模块并写回 CSV（开发环境）。不勾选语言时自动处理有待办的语言。","Search a module to see pending write-back; expand to pick locales; one click translates only that module and writes CSV (dev). Empty locale selection auto-picks locales with work."
+"模块 %{1}：翻译 %{2} 条，写回 %{3} 条，覆盖 %{4} 个语言。","Module %{1}: translated %{2}, wrote back %{3}, across %{4} locales."
+"列表来自系统活跃模块（含 i18n 目录）；可搜索过滤。展开可勾选语言，一键只翻译该模块并写回 CSV（开发环境）。不勾选语言时自动处理有待办的语言。","List comes from active system modules with an i18n directory; search filters. Expand to pick locales; one click translates only that module and writes CSV (dev). Empty locale selection auto-picks locales with work."
+正在加载该模块各语言进度…,"Loading language progress for this module…"
+勾选要处理的语言；不勾选则自动处理「有待办」的语言。,"Check locales to process; leave empty to auto-select locales with work."
+展开后加载语言进度表。,"Expand to load the language progress table."

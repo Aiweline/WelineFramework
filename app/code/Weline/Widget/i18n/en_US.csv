@@ -1,39 +1,39 @@
-未选择图标,No icon selected
-清除图标,clear icon
-搜索图标…,Search icon…
-没有匹配图标,No matching icon
-输入 Weline 图标名称,Enter Weline icon name
+﻿未选择图标,"No icon selected"
+清除图标,"clear icon"
+搜索图标…,"Search icon…"
+没有匹配图标,"No matching icon"
+"输入 Weline 图标名称","Enter Weline icon name"
 应用,Apply
-范围: %s - %s,Range: %s - %s
-最小值: %s,Minimum value: %s
-最大值: %s,Maximum value: %s
+"范围: %s - %s","Range: %s - %s"
+"最小值: %s","Minimum value: %s"
+"最大值: %s","Maximum value: %s"
 搜索,search
-正在加载选项…,Loading options…
-没有匹配选项,No matching options
+正在加载选项…,"Loading options…"
+没有匹配选项,"No matching options"
 选项加载失败，请重试,"Option loading failed, please try again"
 清除,Clear
 今天,Today
 明天,Tomorrow
-下周,next week
-格式: %s,Format: %s
+下周,"next week"
+"格式: %s","Format: %s"
 测试,Test
-在新窗口打开,Open in a new window
-快捷链接:,Quick Links:
-添加项目,Add Project
-暂无项目，点击下方按钮添加,No projects. Click the button below to add one.
-已移动到第 {position} 项，共 {total} 项,Moved to item {position} of {total}
-%d / %d 项,%d / %d items
-选择曲目添加,Select track to add
-选择图片添加,Select and Add Image
-从媒体库选择曲目并添加为一项，可再编辑曲名与简介,Select a track from media library and add as an item; you can edit title and intro
-从媒体库选择图片并添加为一项，可再编辑标题等,Select an image from the media library and add it as an item; the title etc. can be edited later
-拖拽或使用方向键排序,Drag or use arrow keys to sort
+在新窗口打开,"Open in a new window"
+快捷链接:,"Quick Links:"
+添加项目,"Add Project"
+暂无项目，点击下方按钮添加,"No projects. Click the button below to add one."
+"已移动到第 {position} 项，共 {total} 项","Moved to item {position} of {total}"
+"%d / %d 项","%d / %d items"
+选择曲目添加,"Select track to add"
+选择图片添加,"Select and Add Image"
+从媒体库选择曲目并添加为一项，可再编辑曲名与简介,"Select a track from media library and add as an item; you can edit title and intro"
+从媒体库选择图片并添加为一项，可再编辑标题等,"Select an image from the media library and add it as an item; the title etc. can be edited later"
+拖拽或使用方向键排序,"Drag or use arrow keys to sort"
 删除,delete
-设为透明,Set to Transparent
-导航树,Navigation tree
+设为透明,"Set to Transparent"
+导航树,"Navigation tree"
 页面,Page
 分类,Categories
-添加自定义,Add custom.
+添加自定义,"Add custom."
 编辑,Edit
 暂无节点：点击左侧页面/分类添加，或拖入右侧、添加自定义,"No nodes available: Click on the page/category on the left to add, or drag and drop to the right, or add a custom one."
 名称,Name
@@ -45,204 +45,204 @@
 保存,Save
 取消,Cancel
 拖拽行调整顺序与层级：行上缘=前、中间=子项、下缘=后（最多三级）,"Drag and drop rows to adjust their order and hierarchy: The top edge of a row indicates its position as ""before,"" the middle indicates it's a ""child item,"" and the bottom edge indicates its position as ""after"" (up to three levels)."
-点击添加到菜单树,Click to add to the menu tree.
-拖入成为子项,Drag to make a child item.
-拖放到此处追加到末尾,Drag and drop here to append to the end.
+点击添加到菜单树,"Click to add to the menu tree."
+拖入成为子项,"Drag to make a child item."
+拖放到此处追加到末尾,"Drag and drop here to append to the end."
 多语言,Multilingual
-名称翻译,Name translation.
-描述翻译,Description translation.
-从媒体库选择,Select from media library
-已填描述,Description filled.
-已设图片,Image set.
-从媒体库选择曲目,Select track from media library
-从媒体库选择图片,Select image from media library
-选择曲目,Select track
-从图库选择,Choose from gallery
-清除曲目,Clear track
-清除图片,Clear images
+名称翻译,"Name translation."
+描述翻译,"Description translation."
+从媒体库选择,"Select from media library"
+已填描述,"Description filled."
+已设图片,"Image set."
+从媒体库选择曲目,"Select track from media library"
+从媒体库选择图片,"Select image from media library"
+选择曲目,"Select track"
+从图库选择,"Choose from gallery"
+清除曲目,"Clear track"
+清除图片,"Clear images"
 选择,Select
 预览,Preview
-选择媒体,Select Media
-比例 %{1},Ratio %{1}
-编辑多语言,Edit multilingual
-多语言配置,Multilingual Configuration
-AI翻译,AI Translate
-关闭多语言配置,Turn off multi-language configuration
-搜索语言或代码,Search language or code
-搜索语言或代码...,Search language or code...
-保存多语言,Save Multilingual
+选择媒体,"Select Media"
+"比例 %{1}","Ratio %{1}"
+编辑多语言,"Edit multilingual"
+多语言配置,"Multilingual Configuration"
+AI翻译,"AI Translate"
+关闭多语言配置,"Turn off multi-language configuration"
+搜索语言或代码,"Search language or code"
+搜索语言或代码...,"Search language or code..."
+保存多语言,"Save Multilingual"
 启用,Enable
-普通部件首次入库后,After common parts are put into storage for the first time
-普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。,Triggered after the ordinary file Widget is written to the DB registration ledger for the first time and declared default injection. The payload contains the precise Widget identity.
-Widget 查询器不支持的 operation：%{1},Operation not supported by Widget query: %{1}
-Widget 部件查询,Widget component query
+普通部件首次入库后,"After common parts are put into storage for the first time"
+"普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。","Triggered after the ordinary file Widget is written to the DB registration ledger for the first time and declared default injection. The payload contains the precise Widget identity."
+"Widget 查询器不支持的 operation：%{1}","Operation not supported by Widget query: %{1}"
+"Widget 部件查询","Widget component query"
 提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力,"Provides component list, parameter definitions, configuration forms, field rendering, configuration validation, preview, and other query capabilities"
 获取可用部件列表（分组、过滤、i18n）,"Retrieved available parts list (grouped, filtered, i18n)"
-页面类型，null 表示不过滤,"Page type, null means no filter"
-过滤选项，如 slot_id、area、show_exclusive_only,"Filter options, such as slot_id, area, show_exclusive_only"
-获取部件的参数定义（schema）,Fetch widget parameter schema
-部件模块名,Component module name
-部件代码,Component code
-区域，默认 frontend,"Region, Default Frontend"
-获取配置表单 HTML,Fetch configuration form HTML
-布局实例 ID,Layout instance ID
-参数定义,Parameter definition
-当前配置值,Current configuration value
-渲染单个配置字段 HTML,Render single configuration field HTML
-字段键名,Field key name
-字段定义,Field definition
-当前值,Current value
-布局 ID,Layout ID
-额外属性,Extra Attributes
-校验配置值,Validate configuration value
-待校验的提交值,Submitted value to validate
-保存前处理配置,Pre-save Processing Configuration
-原始提交值,Original Submitted Value
-获取部件预览 HTML,Fetch widget preview HTML
-部件配置,Component configuration
-获取已注册的 ParamType 类型名列表,Get registered ParamType type name list
-根据目标 slot 协议生成 AI Widget 并保存为普通 Widget,Generate AI Widget according to the target slot protocol and save it as a normal Widget
-生成要求,Generate requirements
-生成上下文,Generate context
-放置目标,Place target
-期望部件类型,Expected part type
-模型代码,model code
-Widget 生成智能体,Widget generates an agent
-根据 slot 协议生成普通 Widget registry JSON,Generate ordinary Widget registry JSON according to slot protocol
-AI 模型执行契约未注册,AI model execution contract is not registered
-AI Widget 生成调用失败：%{1},AI Widget generation call failed: %{1}
-AI Widget 生成结果为空,AI Widget generates an empty result
-Widget AI 生成,Widget AI generation.
-用于主题编辑器部件库「AI 生成」创建普通 Widget registry，与 widget_builder 智能体配套。,"Creates a regular Widget registry for the theme editor widget library (AI generation), which is used in conjunction with the widget_builder agent."
-部件类型和名称不能为空,Widget type and name cannot be empty
-部件不存在,Widget does not exist
-预览失败: %{1},Preview failed: %{1}
-页面内容不能为空,Page content cannot be empty
-预览部件,Preview widget
-预览页面,Preview page
-可视化编辑器,Visual Editor
-内容管理,Content Management
-标题和标识不能为空,Title and handle cannot be empty
-页面标识已存在,Page handle already exists
-保存成功,Saved successfully
-保存失败: %{1},Save failed: %{1}
-页面ID不能为空,Page ID cannot be empty
-页面不存在,Page does not exist
-加载失败: %{1},Load failed: %{1}
-获取部件列表失败: %{1},Failed to get widget list: %{1}
+"页面类型，null 表示不过滤","Page type, null means no filter"
+"过滤选项，如 slot_id、area、show_exclusive_only","Filter options, such as slot_id, area, show_exclusive_only"
+获取部件的参数定义（schema）,"Fetch widget parameter schema"
+部件模块名,"Component module name"
+部件代码,"Component code"
+"区域，默认 frontend","Region, Default Frontend"
+"获取配置表单 HTML","Fetch configuration form HTML"
+"布局实例 ID","Layout instance ID"
+参数定义,"Parameter definition"
+当前配置值,"Current configuration value"
+"渲染单个配置字段 HTML","Render single configuration field HTML"
+字段键名,"Field key name"
+字段定义,"Field definition"
+当前值,"Current value"
+"布局 ID","Layout ID"
+额外属性,"Extra Attributes"
+校验配置值,"Validate configuration value"
+待校验的提交值,"Submitted value to validate"
+保存前处理配置,"Pre-save Processing Configuration"
+原始提交值,"Original Submitted Value"
+"获取部件预览 HTML","Fetch widget preview HTML"
+部件配置,"Component configuration"
+"获取已注册的 ParamType 类型名列表","Get registered ParamType type name list"
+"根据目标 slot 协议生成 AI Widget 并保存为普通 Widget","Generate AI Widget according to the target slot protocol and save it as a normal Widget"
+生成要求,"Generate requirements"
+生成上下文,"Generate context"
+放置目标,"Place target"
+期望部件类型,"Expected part type"
+模型代码,"model code"
+"Widget 生成智能体","Widget generates an agent"
+"根据 slot 协议生成普通 Widget registry JSON","Generate ordinary Widget registry JSON according to slot protocol"
+"AI 模型执行契约未注册","AI model execution contract is not registered"
+"AI Widget 生成调用失败：%{1}","AI Widget generation call failed: %{1}"
+"AI Widget 生成结果为空","AI Widget generates an empty result"
+"Widget AI 生成","Widget AI generation."
+"用于主题编辑器部件库「AI 生成」创建普通 Widget registry，与 widget_builder 智能体配套。","Creates a regular Widget registry for the theme editor widget library (AI generation), which is used in conjunction with the widget_builder agent."
+部件类型和名称不能为空,"Widget type and name cannot be empty"
+部件不存在,"Widget does not exist"
+"预览失败: %{1}","Preview failed: %{1}"
+页面内容不能为空,"Page content cannot be empty"
+预览部件,"Preview widget"
+预览页面,"Preview page"
+可视化编辑器,"Visual Editor"
+内容管理,"Content Management"
+标题和标识不能为空,"Title and handle cannot be empty"
+页面标识已存在,"Page handle already exists"
+保存成功,"Saved successfully"
+"保存失败: %{1}","Save failed: %{1}"
+页面ID不能为空,"Page ID cannot be empty"
+页面不存在,"Page does not exist"
+"加载失败: %{1}","Load failed: %{1}"
+"获取部件列表失败: %{1}","Failed to get widget list: %{1}"
 edit,edit
-编辑器首页,Editor homepage
-访问编辑器,Visit editor
-保存页面,Save page
-加载页面,Load page
-获取部件列表,Get parts list
-部件管理,Widget Management
-获取部件详情失败: %{1},Failed to get widget details: %{1}
+编辑器首页,"Editor homepage"
+访问编辑器,"Visit editor"
+保存页面,"Save page"
+加载页面,"Load page"
+获取部件列表,"Get parts list"
+部件管理,"Widget Management"
+"获取部件详情失败: %{1}","Failed to get widget details: %{1}"
 puzzle,puzzle
-部件列表,Widget List
-查看部件列表,View parts list
-部件详情,Component details
-查看部件详情,View part details
-确认组件不可用，操作已取消,Confirm that the component is unavailable and the operation has been canceled
-解析部件参数失败,Failed to parse widget parameters
-预览失败,Preview failed
-确定要删除这个部件吗？,Are you sure you want to delete this widget?
-确认删除,Confirm deletion
-选择一个部件进行配置,Select a widget to configure
-请填写页面标题和标识,Please fill in page title and handle
-Page preview,Page preview
-The w:widget tags in this preview need server-side rendering before actual widget content is shown.,The w:widget tags in this preview need server-side rendering before actual widget content is shown.
+部件列表,"Widget List"
+查看部件列表,"View parts list"
+部件详情,"Component details"
+查看部件详情,"View part details"
+确认组件不可用，操作已取消,"Confirm that the component is unavailable and the operation has been canceled"
+解析部件参数失败,"Failed to parse widget parameters"
+预览失败,"Preview failed"
+确定要删除这个部件吗？,"Are you sure you want to delete this widget?"
+确认删除,"Confirm deletion"
+选择一个部件进行配置,"Select a widget to configure"
+请填写页面标题和标识,"Please fill in page title and handle"
+"Page preview","Page preview"
+"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
 快速查看、筛选并预览部件详情,"Quickly view, filter, and preview part details"
 关闭,Close
 加载中...,Loading...
-操作失败,Operation failed
+操作失败,"Operation failed"
 类型,Type
 模块,Module.
 版本,Version
-参数配置,Parameter configuration
-总部件数,Total Parts
-部件类型,Component type
-来源模块,Source Module
+参数配置,"Parameter configuration"
+总部件数,"Total Parts"
+部件类型,"Component type"
+来源模块,"Source Module"
 关键字,Keyword
-搜索部件...,Search widgets...
-所有模块,All Modules
-所有类型,All Types
+搜索部件...,"Search widgets..."
+所有模块,"All Modules"
+所有类型,"All Types"
 筛选,Filter
-重置筛选,Reset Filter
-没有找到部件,No widgets found
-部件名称,Widget Name
+重置筛选,"Reset Filter"
+没有找到部件,"No widgets found"
+部件名称,"Widget Name"
 操作,Actions
 详情,Details
-页面标题,Page Title
-页面标识,Page Handle
-部件库,Widget Library
+页面标题,"Page Title"
+页面标识,"Page Handle"
+部件库,"Widget Library"
 画布,Canvas
-从左侧拖放部件到这里,Drag widgets from left panel here
+从左侧拖放部件到这里,"Drag widgets from left panel here"
 属性配置,Properties
-头部部件,Header Widget
-底部部件,Bottom Widget
-侧栏部件,Sidebar Widget
-内容部件,Content widget
-横幅部件,Banner widget
-轮播部件,Carousel widget
-产品部件,Product Component
-分类部件,Category widget
-导航部件,Navigation widget
-搜索部件,Search widget
-社交部件,Social Widget
-订阅部件,Subscription Widget
-评价部件,Review component
-FAQ部件,FAQ widget
-面包屑部件,Breadcrumb Widget
-分页部件,Pagination widget
-视频部件,Video widget
-其他部件,Other components
-请先填写生成要求,Please fill in the generation requirements first
-AI Widget 生成失败,AI Widget generation failed
-选择的部件类型不受支持：%{1},The selected part type is not supported: %{1}
-AI 返回内容为空,AI returns empty content
-AI 返回的 Widget JSON 无法解析,The Widget JSON returned by AI cannot be parsed
-AI 生成的 Widget 类型不受支持：%{1},AI-generated Widget type is not supported: %{1}
-AI 生成结果缺少 template_content,AI generated results are missing template_content
-AI 生成了不支持的参数类型：%{1},AI generated unsupported parameter type: %{1}
-AI 生成模板包含不允许的逻辑：%{1},AI generated template contains disallowed logic: %{1}
-立即保存,Save now
-基本信息,Basic information
-样式设置,Style settings
-链接配置,Link Configuration
-高级设置,Advanced settings
-该部件无可配置项,This component has no configurable items
+头部部件,"Header Widget"
+底部部件,"Bottom Widget"
+侧栏部件,"Sidebar Widget"
+内容部件,"Content widget"
+横幅部件,"Banner widget"
+轮播部件,"Carousel widget"
+产品部件,"Product Component"
+分类部件,"Category widget"
+导航部件,"Navigation widget"
+搜索部件,"Search widget"
+社交部件,"Social Widget"
+订阅部件,"Subscription Widget"
+评价部件,"Review component"
+FAQ部件,"FAQ widget"
+面包屑部件,"Breadcrumb Widget"
+分页部件,"Pagination widget"
+视频部件,"Video widget"
+其他部件,"Other components"
+请先填写生成要求,"Please fill in the generation requirements first"
+"AI Widget 生成失败","AI Widget generation failed"
+选择的部件类型不受支持：%{1},"The selected part type is not supported: %{1}"
+"AI 返回内容为空","AI returns empty content"
+"AI 返回的 Widget JSON 无法解析","The Widget JSON returned by AI cannot be parsed"
+"AI 生成的 Widget 类型不受支持：%{1}","AI-generated Widget type is not supported: %{1}"
+"AI 生成结果缺少 template_content","AI generated results are missing template_content"
+"AI 生成了不支持的参数类型：%{1}","AI generated unsupported parameter type: %{1}"
+"AI 生成模板包含不允许的逻辑：%{1}","AI generated template contains disallowed logic: %{1}"
+立即保存,"Save now"
+基本信息,"Basic information"
+样式设置,"Style settings"
+链接配置,"Link Configuration"
+高级设置,"Advanced settings"
+该部件无可配置项,"This component has no configurable items"
 "字段 ""%s"" 的值无效","Invalid value for field ""%s"""
-部件注册表：%{1} 个类型，共 %{2} 个部件,"Component registry: %{1} types, %{2} components total"
-文件：generated/widgets.php,File: generated/widgets.php
-查看部件注册表状态,View Component Registry Status
-查看 generated/widgets.php 中的部件类型数与总个数,View widget type count and total in generated/widgets.php
-开始刷新部件注册表...,Refreshing widget registry...
-✓ 部件注册表已刷新完成。,✓ Part registry refresh completed.
-位置：generated/widgets.php,Location: generated/widgets.php
+"部件注册表：%{1} 个类型，共 %{2} 个部件","Component registry: %{1} types, %{2} components total"
+文件：generated/widgets.php,"File: generated/widgets.php"
+查看部件注册表状态,"View Component Registry Status"
+"查看 generated/widgets.php 中的部件类型数与总个数","View widget type count and total in generated/widgets.php"
+开始刷新部件注册表...,"Refreshing widget registry..."
+"✓ 部件注册表已刷新完成。","✓ Part registry refresh completed."
+位置：generated/widgets.php,"Location: generated/widgets.php"
 首次入库：%{1}，更新：%{2}，默认注入事件：%{3},"First storage: %{1}, update: %{2}, default injection event: %{3}"
 已派发,Distributed
-未派发,Not distributed
-✖ 写入部件注册表失败。,✖ Failed to write to the component registry.
-✓ ParamSchema 注册表已刷新完成。,✓ ParamSchema registry has been refreshed.
-位置：generated/param_schemas.php,Location: generated/param_schemas.php
-✖ 写入 ParamSchema 注册表失败。,✖ Writing to ParamSchema registry failed.
-刷新失败：%{1},Refresh Failed: %{1}
-缩略图加载中…,Loading thumbnail...
-保存配置,Save configuration
-添加轮播项,Add Slide
-暂无节点，可从左侧拖入或添加自定义,No nodes available. You can drag and drop from the left or add custom nodes.
-拖拽调整顺序与层级（最多三级）,Drag and drop to adjust the order and hierarchy (up to three levels).
-点击选择图片或输入URL,Click to select an image or enter a URL.
-上传图片,Upload pictures
+未派发,"Not distributed"
+"✖ 写入部件注册表失败。","✖ Failed to write to the component registry."
+"✓ ParamSchema 注册表已刷新完成。","✓ ParamSchema registry has been refreshed."
+位置：generated/param_schemas.php,"Location: generated/param_schemas.php"
+"✖ 写入 ParamSchema 注册表失败。","✖ Writing to ParamSchema registry failed."
+刷新失败：%{1},"Refresh Failed: %{1}"
+缩略图加载中…,"Loading thumbnail..."
+保存配置,"Save configuration"
+添加轮播项,"Add Slide"
+暂无节点，可从左侧拖入或添加自定义,"No nodes available. You can drag and drop from the left or add custom nodes."
+拖拽调整顺序与层级（最多三级）,"Drag and drop to adjust the order and hierarchy (up to three levels)."
+点击选择图片或输入URL,"Click to select an image or enter a URL."
+上传图片,"Upload pictures"
 上传,upload
-图片URL,Image URL
-最大 %s KB,Maximum %s KB
-建议比例 %s,Recommended ratio %s
-选择图标,Select Icon
-搜索图标...,Search icon...
-输入自定义图标类名,Enter a custom icon class name
-拖拽排序,Drag to sort
-mdi mdi-puzzle,mdi mdi-puzzle
-mdi mdi-pencil-box,mdi mdi-pencil-box
-没有匹配的语言,No matching language
+图片URL,"Image URL"
+"最大 %s KB","Maximum %s KB"
+"建议比例 %s","Recommended ratio %s"
+选择图标,"Select Icon"
+搜索图标...,"Search icon..."
+输入自定义图标类名,"Enter a custom icon class name"
+拖拽排序,"Drag to sort"
+"mdi mdi-puzzle","mdi mdi-puzzle"
+"mdi mdi-pencil-box","mdi mdi-pencil-box"
+没有匹配的语言,"No matching language"

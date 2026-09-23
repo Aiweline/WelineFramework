@@ -1,62 +1,62 @@
-组件库,Component Library
-加载组件列表失败: %{1},Failed to load component list: %{1}
-请指定组件类名,Please specify component class name
-组件不存在,Component does not exist
-组件详情,Component Details
-加载组件详情失败: %{1},Failed to load component details: %{1}
-仅支持AJAX请求,Only AJAX requests are supported
-操作提示,Operation tips
-请求成功！,Request succeeded!
-请求失败！,Request failed!
+﻿组件库,"Component Library"
+"加载组件列表失败: %{1}","Failed to load component list: %{1}"
+请指定组件类名,"Please specify component class name"
+组件不存在,"Component does not exist"
+组件详情,"Component Details"
+"加载组件详情失败: %{1}","Failed to load component details: %{1}"
+仅支持AJAX请求,"Only AJAX requests are supported"
+操作提示,"Operation tips"
+请求成功！,"Request succeeded!"
+请求失败！,"Request failed!"
 关闭,closure
-抽屉内容,Drawer contents
-清空条件,Clear Conditions
+抽屉内容,"Drawer contents"
+清空条件,"Clear Conditions"
 搜索,Search
-清除搜索,Clear search
+清除搜索,"Clear search"
 成功提示！,Success!
-倒计时关闭页面...,Countdown closing page...
-页面将在,Page will close in
+倒计时关闭页面...,"Countdown closing page..."
+页面将在,"Page will close in"
 秒后关闭,seconds
-立即完成,Complete now
-操作成功,Operation successful
-操作失败,Operation failed
-%s 秒后完成,Completed in %s seconds
+立即完成,"Complete now"
+操作成功,"Operation successful"
+操作失败,"Operation failed"
+"%s 秒后完成","Completed in %s seconds"
 警告提示！,Warning!
-总组件数,Total Components
-当前显示,Currently Displayed
-模块数,Number of Modules
-分类数,Number of Categories
-快速搜索,Quick Search
+总组件数,"Total Components"
+当前显示,"Currently Displayed"
+模块数,"Number of Modules"
+分类数,"Number of Categories"
+快速搜索,"Quick Search"
 输入组件名、模块名、分类...,"Enter component name, module name, category..."
-模块筛选,Filter by Module
-全部模块,All Modules
-分类筛选,Filter by Category
-全部分类,All Categories
-应用筛选,Apply Filter
+模块筛选,"Filter by Module"
+全部模块,"All Modules"
+分类筛选,"Filter by Category"
+全部分类,"All Categories"
+应用筛选,"Apply Filter"
 重置,Reset
 共找到,Found
 个组件,components
-暂无组件信息,No component information available
-系统中还没有找到任何实现了 ComponentInterface 的组件。,No components implementing ComponentInterface have been found in the system.
-组件名称,Component Name
+暂无组件信息,"No component information available"
+"系统中还没有找到任何实现了 ComponentInterface 的组件。","No components implementing ComponentInterface have been found in the system."
+组件名称,"Component Name"
 模块,Module
 分类,Category
 命名空间,Namespace
 操作,Actions
 其他,Other
-查看详情,View Details
+查看详情,"View Details"
 详情,Details
-加载详情失败,Failed to load details
-暂无文档,No documentation available
-完整类名,Full Class Name
-使用文档,Usage Documentation
-搜索组件：快速构建搜索框,Search Component: Quickly build a search box
-回车搜索,Press Enter to search
-OffCanvas组件：侧边栏弹出窗,OffCanvas Component: Sidebar popup window
-排序组件：快速构建排序按钮,Sort Component: Quickly build sort buttons
-排序点击时请求的地址,URL to request when sort is clicked
-结构说明：参数名=>映射的字段:排序方法 英文逗号隔开每个排序,"Structure: paramName=>mappedField:sortMethod, separate each sort with comma"
-控制器获取对应sorter可以获取这些排序字段,Controller can get these sort fields by getting the corresponding sorter
+加载详情失败,"Failed to load details"
+暂无文档,"No documentation available"
+完整类名,"Full Class Name"
+使用文档,"Usage Documentation"
+搜索组件：快速构建搜索框,"Search Component: Quickly build a search box"
+回车搜索,"Press Enter to search"
+OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
+排序组件：快速构建排序按钮,"Sort Component: Quickly build sort buttons"
+排序点击时请求的地址,"URL to request when sort is clicked"
+"结构说明：参数名=>映射的字段:排序方法 英文逗号隔开每个排序","Structure: paramName=>mappedField:sortMethod, separate each sort with comma"
+控制器获取对应sorter可以获取这些排序字段,"Controller can get these sort fields by getting the corresponding sorter"
 排序器属性sorter不能为空，示例：%{1},"Sorter attribute cannot be empty, example: %{1}"
 "DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Initialization error, please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"
-DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1},DEBUG mode: Save error! Please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}
+"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Save error! Please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"

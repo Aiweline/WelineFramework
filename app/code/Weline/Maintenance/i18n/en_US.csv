@@ -1,151 +1,152 @@
-维护模式,Maintenance Mode
-在系统进入维护模式时触发，允许其他模块添加维护模式白名单URL。可以通过修改 white_urls 字段来添加白名单URL。,"Triggered when the system enters maintenance mode, allowing other modules to add maintenance mode whitelist URLs. You can add whitelist URLs by modifying the white_urls field."
-开始发布维护模式静态页…,Start publishing maintenance static page…
-维护模式静态页发布完成：共 %{count} 个快照,Maintenance static pages published: %{count} snapshots total
-维护模式静态页发布失败：%{msg},Maintenance static page publish failed: %{msg}
-未知操作,Unknown operation
-Maintenance ResourceChange Observer 只接受 v1 契约,Maintenance ResourceChange Observer only accepts v1 contracts
-备份文件不存在：%{1},Backup file does not exist: %{1}
-保存备份文件失败：%{1},Failed to save backup file: %{1}
-缺少等待凭证,Missing waiting credentials
-无效的请求方法,Invalid request method
-不支持的备份类型,Unsupported backup type
-备份创建成功,Backup created successfully
-备份创建失败：%{1},Backup creation failed: %{1}
-无效的备份ID,Invalid backup ID
-备份文件不存在,Backup file does not exist
-下载失败：%{1},Download failed: %{1}
-备份删除成功,Backup deleted successfully
-备份删除失败,Failed to delete backup
-删除失败：%{1},Deletion failed: %{1}
-备份管理,Backup Management
+﻿维护模式,"Maintenance Mode"
+"在系统进入维护模式时触发，允许其他模块添加维护模式白名单URL。可以通过修改 white_urls 字段来添加白名单URL。","Triggered when the system enters maintenance mode, allowing other modules to add maintenance mode whitelist URLs. You can add whitelist URLs by modifying the white_urls field."
+开始发布维护模式静态页…,"Start publishing maintenance static page…"
+"维护模式静态页发布完成：共 %{count} 个快照","Maintenance static pages published: %{count} snapshots total"
+维护模式静态页发布失败：%{msg},"Maintenance static page publish failed: %{msg}"
+未知操作,"Unknown operation"
+"Maintenance ResourceChange Observer 只接受 v1 契约","Maintenance ResourceChange Observer only accepts v1 contracts"
+备份文件不存在：%{1},"Backup file does not exist: %{1}"
+保存备份文件失败：%{1},"Failed to save backup file: %{1}"
+缺少等待凭证,"Missing waiting credentials"
+无效的请求方法,"Invalid request method"
+不支持的备份类型,"Unsupported backup type"
+备份创建成功,"Backup created successfully"
+备份创建失败：%{1},"Backup creation failed: %{1}"
+无效的备份ID,"Invalid backup ID"
+备份文件不存在,"Backup file does not exist"
+下载失败：%{1},"Download failed: %{1}"
+备份删除成功,"Backup deleted successfully"
+备份删除失败,"Failed to delete backup"
+删除失败：%{1},"Deletion failed: %{1}"
+备份管理,"Backup Management"
 store,store
-查看备份列表,View backup list
+查看备份列表,"View backup list"
 list,list
-创建备份,Create Backup
+创建备份,"Create Backup"
 save,save
-下载备份,Download backup
+下载备份,"Download backup"
 download,download
-删除备份,Delete backup
+删除备份,"Delete backup"
 trash,trash
-维护补偿礼金,Maintenance compensation gift
-不过也要恭喜您——若您耐心等到升级完成，我们将发放补偿礼金。请先不要关闭。,Good news: wait until upgrade finishes and we'll issue a compensation gift. Please keep this page open.
-恢复后约 10 分钟内自动领取，请勿关闭本页。,Auto-claim within ~10 minutes after recovery. Please keep this page open.
-非常抱歉，给您带来不便。,We're sorry for the inconvenience.
-耐心等待,Wait patiently
-抱歉，网站正在升级维护,Sorry — the site is upgrading
-请稍候片刻，恢复后即可继续。,Please wait a moment; you can continue after recovery.
-稍后再来,Come back later
-稍候片刻,Please wait a moment.
-正在等待恢复…,Waiting for recovery…
-高级维护,Advanced maintenance
-维护页,Maintenance page
-DEV 维护与连调入口,DEV maintenance and joint debugging entrance
-开发预览：此地址仅在 DEV 环境可用。点击下方链接在新标签页查看维护页，可在预览页内切换语言。,Dev preview only: use the links below to open the maintenance page in a new tab and switch languages there.
-打开维护页预览,Open maintenance preview
-打开 JSON 预览,Open JSON preview
-备份ID,Backup ID
-备份类型,Backup Type
-备份名称,Backup name
-文件大小,File size
+维护补偿礼金,"Maintenance compensation gift"
+不过也要恭喜您——若您耐心等到升级完成，我们将发放补偿礼金。请先不要关闭。,"Good news: wait until upgrade finishes and we'll issue a compensation gift. Please keep this page open."
+"恢复后约 10 分钟内自动领取，请勿关闭本页。","Auto-claim within ~10 minutes after recovery. Please keep this page open."
+非常抱歉，给您带来不便。,"We're sorry for the inconvenience."
+耐心等待,"Wait patiently"
+抱歉，网站正在升级维护,"Sorry — the site is upgrading"
+请稍候片刻，恢复后即可继续。,"Please wait a moment; you can continue after recovery."
+稍后再来,"Come back later"
+稍候片刻,"Please wait a moment."
+正在等待恢复…,"Waiting for recovery…"
+高级维护,"Advanced maintenance"
+维护页,"Maintenance page"
+"DEV 维护与连调入口","DEV maintenance and joint debugging entrance"
+"开发预览：此地址仅在 DEV 环境可用。点击下方链接在新标签页查看维护页，可在预览页内切换语言。","Dev preview only: use the links below to open the maintenance page in a new tab and switch languages there."
+打开维护页预览,"Open maintenance preview"
+"打开 JSON 预览","Open JSON preview"
+备份ID,"Backup ID"
+备份类型,"Backup Type"
+备份名称,"Backup name"
+文件大小,"File size"
 状态,Status
-创建时间,Creation time
+创建时间,"Creation time"
 操作,Operation
-暂无备份记录,No backup records
+暂无备份记录,"No backup records"
 下载,download
 删除,Delete
-完整备份,Full Backup
-数据库备份,Database Backup
-代码备份,Code Backup
-配置文件备份,Config Backup
+完整备份,"Full Backup"
+数据库备份,"Database Backup"
+代码备份,"Code Backup"
+配置文件备份,"Config Backup"
 已完成,Completed
-进行中,In Progress
+进行中,"In Progress"
 失败,Failed
-确定要删除此备份吗？,Are you sure you want to delete this backup?
-操作失败,Operation failed
-备份设置,Backup settings
-完整备份（数据库+代码）,Full Backup (Database + Code)
+确定要删除此备份吗？,"Are you sure you want to delete this backup?"
+操作失败,"Operation failed"
+备份设置,"Backup settings"
+完整备份（数据库+代码）,"Full Backup (Database + Code)"
 创建备份可能需要几分钟时间，请耐心等待。,"Creating a backup may take a few minutes, please wait."
-返回列表,Return to List
+返回列表,"Return to List"
 创建中...,Creating...
-创建备份失败,Failed to create backup
-无法创建备份压缩文件：%{1},Unable to create backup compressed file: %{1}
-配置文件备份失败,Configuration file backup failed
-备份配置文件失败：%{1},Failed to back up configuration file: %{1}
-无法创建压缩文件：%{1},Unable to create compressed file: %{1}
-创建压缩文件失败,Failed to create archive
-压缩文件失败：%{1},Failed to compress file: %{1}
-开始发布维护静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核）,"Start publishing maintenance static pages: %{total} website×locale (Fiber coop concurrency %{c}, not multi-core)"
-维护静态页 [%{done}/%{total}]：%{label},Maintenance static page [%{done}/%{total}]: %{label}
-维护静态页失败 [%{done}/%{total}]：%{label} — %{err},Maintenance static page failed [%{done}/%{total}]: %{label} — %{err}
-维护静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键,"Maintenance static pages published: success %{written}, failed %{failed}, host_map %{keys} keys"
-维护静态页输入未变，跳过全量发布（%{count} 个 website×locale）,Maintenance static page inputs unchanged; skipped full publish (%{count} website×locale)
-无法创建备份文件：%{1},Unable to create backup file: %{1}
-备份数据库失败：%{1},Backup database failed: %{1}
-获取数据库表列表失败：%{1},Failed to get database table list: %{1}
-程序化备份失败：%{1},Programmatic backup failed: %{1}
-维护等待补偿礼金,Maintenance wait gift
-创建完整备份失败：%{1},Failed to create full backup: %{1}
-数据库备份失败：%{1},Database backup failed: %{1}
-代码备份失败：%{1},Code backup failed: %{1}
-配置文件备份失败：%{1},Configuration file backup failed: %{1}
-不支持的备份类型：%{1},Unsupported backup type: %{1}
-WLS 维护模式已同步：%{1},WLS maintenance mode synced: %{1}
-WLS 维护模式同步未完全成功：%{1},WLS maintenance mode sync incomplete: %{1}
-WLS 维护模式同步失败：%{1},WLS maintenance mode sync failed: %{1}
-维护模式自动备份任务,Maintenance Mode Auto Backup Task
+创建备份失败,"Failed to create backup"
+无法创建备份压缩文件：%{1},"Unable to create backup compressed file: %{1}"
+配置文件备份失败,"Configuration file backup failed"
+备份配置文件失败：%{1},"Failed to back up configuration file: %{1}"
+无法创建压缩文件：%{1},"Unable to create compressed file: %{1}"
+创建压缩文件失败,"Failed to create archive"
+压缩文件失败：%{1},"Failed to compress file: %{1}"
+"开始发布维护静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核）","Start publishing maintenance static pages: %{total} website×locale (Fiber coop concurrency %{c}, not multi-core)"
+"维护静态页 [%{done}/%{total}]：%{label}","Maintenance static page [%{done}/%{total}]: %{label}"
+"维护静态页失败 [%{done}/%{total}]：%{label} — %{err}","Maintenance static page failed [%{done}/%{total}]: %{label} — %{err}"
+"维护静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键","Maintenance static pages published: success %{written}, failed %{failed}, host_map %{keys} keys"
+"维护静态页输入未变，跳过全量发布（%{count} 个 website×locale）","Maintenance static page inputs unchanged; skipped full publish (%{count} website×locale)"
+无法创建备份文件：%{1},"Unable to create backup file: %{1}"
+备份数据库失败：%{1},"Backup database failed: %{1}"
+获取数据库表列表失败：%{1},"Failed to get database table list: %{1}"
+程序化备份失败：%{1},"Programmatic backup failed: %{1}"
+维护等待补偿礼金,"Maintenance wait gift"
+创建完整备份失败：%{1},"Failed to create full backup: %{1}"
+数据库备份失败：%{1},"Database backup failed: %{1}"
+代码备份失败：%{1},"Code backup failed: %{1}"
+配置文件备份失败：%{1},"Configuration file backup failed: %{1}"
+不支持的备份类型：%{1},"Unsupported backup type: %{1}"
+"WLS 维护模式已同步：%{1}","WLS maintenance mode synced: %{1}"
+"WLS 维护模式同步未完全成功：%{1}","WLS maintenance mode sync incomplete: %{1}"
+"WLS 维护模式同步失败：%{1}","WLS maintenance mode sync failed: %{1}"
+维护模式自动备份任务,"Maintenance Mode Auto Backup Task"
 定时执行系统备份任务（数据库和代码），自动清理过期备份,"Scheduled system backup task (database and code), automatically clean up expired backups"
-Cron自动备份未启用,Cron auto backup is not enabled
-未配置备份类型,No backup type configured
-%{1}备份成功,%{1} Backup successful
-%{1}备份失败：%{2},%{1} Backup failed: %{2}
-清理过期备份：删除 %{1} 个备份，释放空间 %{2},"Clean expired backups: deleted %{1} backups, freed %{2} space"
-清理过期备份失败：%{1},Failed to clean expired backups: %{1}
-自动备份任务执行失败：%{1},Auto Backup Task Execution Failed: %{1}
-升级波次已固化：%{1}（SYS %{2} · Theme %{3}）,Upgrade wave sealed: %{1} (SYS %{2} · Theme %{3})
-维护静态页已生成：%{1},Maintenance static page generated: %{1}
-维护模式已开启！,Maintenance mode has been enabled!
-指定 WLS 实例名；省略则向当前所有运行中的实例同步维护入口,WLS instance name; omit to sync maintenance routing to all running instances
-维护礼金兑礼窗口已开启，截止时间戳：%{1},Wait-gift redeem window opened; deadline timestamp: %{1}
-维护模式已关闭！,Maintenance mode is off!
-维护模式静态页发布完成：共 %{count} 个语言,Maintenance static pages published: %{count} languages total
-高级系统维护,Advanced System Maintenance
-DEV 维护页预览入口，将在新标签页打开,DEV maintenance preview opens in a new tab
-DEV 维护页实时预览，支持语言切换,Live DEV maintenance page preview with language switching
-刷新预览,Refresh preview
-新窗口打开,Open in new window
-开发预览：此地址仅在 DEV 环境可用；下方 iframe 与独立预览页一致，可直接切换语言。,Dev preview only: the iframe below matches the standalone preview page and supports language switching.
-维护页预览,Maintenance page preview
-HTML 预览,HTML preview
-JSON 预览,JSON preview
-网站维护,Site Maintenance
-页面工具,Page tools
-切换语言,switch language
-系统状态,System status
-系统升级维护中,System Upgrade in Progress
-网站正在维护中...,The site is currently under maintenance...
-请稍等片刻,Please wait a moment
-恢复检测中,Restoring detection
-系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。,The system will automatically check the recovery status and refresh this page when service is restored. You do not need to keep clicking refresh.
-正在尝试现场抢修，恢复后会自动进入，请耐心等待,Emergency repairs are in progress. You will automatically enter the site once it is restored. Please wait patiently.
-刷新当前页面,Refresh this page
-维护说明,Maintenance instructions
-为什么网站会处于维护模式？,Why is the site in maintenance mode?
-网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,The site may be undergoing a system upgrade or a large content update. Our team is maintaining or upgrading data to provide better service.
-多久能够恢复？,How long will recovery take?
+Cron自动备份未启用,"Cron auto backup is not enabled"
+未配置备份类型,"No backup type configured"
+%{1}备份成功,"%{1} Backup successful"
+%{1}备份失败：%{2},"%{1} Backup failed: %{2}"
+"清理过期备份：删除 %{1} 个备份，释放空间 %{2}","Clean expired backups: deleted %{1} backups, freed %{2} space"
+清理过期备份失败：%{1},"Failed to clean expired backups: %{1}"
+自动备份任务执行失败：%{1},"Auto Backup Task Execution Failed: %{1}"
+"升级波次已固化：%{1}（SYS %{2} · Theme %{3}）","Upgrade wave sealed: %{1} (SYS %{2} · Theme %{3})"
+维护静态页已生成：%{1},"Maintenance static page generated: %{1}"
+维护模式已开启！,"Maintenance mode has been enabled!"
+"指定 WLS 实例名；省略则向当前所有运行中的实例同步维护入口","WLS instance name; omit to sync maintenance routing to all running instances"
+维护礼金兑礼窗口已开启，截止时间戳：%{1},"Wait-gift redeem window opened; deadline timestamp: %{1}"
+已过期的兑礼波次状态已关闭（status=closed）。,已过期的兑礼波次状态已关闭（status=closed）。
+维护模式已关闭！,"Maintenance mode is off!"
+"维护模式静态页发布完成：共 %{count} 个语言","Maintenance static pages published: %{count} languages total"
+高级系统维护,"Advanced System Maintenance"
+"DEV 维护页预览入口，将在新标签页打开","DEV maintenance preview opens in a new tab"
+"DEV 维护页实时预览，支持语言切换","Live DEV maintenance page preview with language switching"
+刷新预览,"Refresh preview"
+新窗口打开,"Open in new window"
+"开发预览：此地址仅在 DEV 环境可用；下方 iframe 与独立预览页一致，可直接切换语言。","Dev preview only: the iframe below matches the standalone preview page and supports language switching."
+维护页预览,"Maintenance page preview"
+"HTML 预览","HTML preview"
+"JSON 预览","JSON preview"
+网站维护,"Site Maintenance"
+页面工具,"Page tools"
+切换语言,"switch language"
+系统状态,"System status"
+系统升级维护中,"System Upgrade in Progress"
+网站正在维护中...,"The site is currently under maintenance..."
+请稍等片刻,"Please wait a moment"
+恢复检测中,"Restoring detection"
+系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。,"The system will automatically check the recovery status and refresh this page when service is restored. You do not need to keep clicking refresh."
+正在尝试现场抢修，恢复后会自动进入，请耐心等待,"Emergency repairs are in progress. You will automatically enter the site once it is restored. Please wait patiently."
+刷新当前页面,"Refresh this page"
+维护说明,"Maintenance instructions"
+为什么网站会处于维护模式？,"Why is the site in maintenance mode?"
+网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The site may be undergoing a system upgrade or a large content update. Our team is maintaining or upgrading data to provide better service."
+多久能够恢复？,"How long will recovery take?"
 大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most site upgrades take only a few minutes, or even just a few seconds."
-需要帮助吗？,Need help?
+需要帮助吗？,"Need help?"
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If this page remains visible for an extended time or you have questions about the site, please contact:"
-返回首页,Back to Home
-维护页展示与开发者联系邮箱,Maintenance page contact email
-维护静态页联系邮箱；留空时回退到后台站点联系邮箱或环境配置。,Contact email on maintenance pages; falls back to backend site contact or env when empty.
-维护页联系信息,Maintenance contact info
-前台维护页「需要帮助吗？」卡片中展示的开发者/支持邮箱。,Developer/support email shown in the maintenance page help card.
-开发者联系邮箱,Developer contact email
-保存后维护静态页会自动重新生成；也可在「系统维护模式」页面快速修改。,Static pages regenerate after save; can also be edited on the System Maintenance page.
-开发预览：此地址仅在 DEV 环境可用，上线后不可访问。,Dev preview: this URL is available in DEV only and is removed in production.
-非常抱歉，网站正在升级维护，给您带来不便。,We're sorry — the site is under upgrade maintenance.
-不过也要恭喜您——若您愿意耐心等到升级完成，我们将发放一份补偿礼金。请先不要关闭本页，恢复后 10 分钟内会自动领取。,"Good news: if you wait until the upgrade finishes, we'll issue a compensation gift coupon. Please keep this page open; redeem within 10 minutes after recovery."
-正在升级 · 请勿关闭本页。恢复后将自动为您领取补偿礼金。,Upgrading — please keep this page open. We'll claim your gift automatically after recovery.
+返回首页,"Back to Home"
+维护页展示与开发者联系邮箱,"Maintenance page contact email"
+维护静态页联系邮箱；留空时回退到后台站点联系邮箱或环境配置。,"Contact email on maintenance pages; falls back to backend site contact or env when empty."
+维护页联系信息,"Maintenance contact info"
+前台维护页「需要帮助吗？」卡片中展示的开发者/支持邮箱。,"Developer/support email shown in the maintenance page help card."
+开发者联系邮箱,"Developer contact email"
+保存后维护静态页会自动重新生成；也可在「系统维护模式」页面快速修改。,"Static pages regenerate after save; can also be edited on the System Maintenance page."
+"开发预览：此地址仅在 DEV 环境可用，上线后不可访问。","Dev preview: this URL is available in DEV only and is removed in production."
+非常抱歉，网站正在升级维护，给您带来不便。,"We're sorry — the site is under upgrade maintenance."
+"不过也要恭喜您——若您愿意耐心等到升级完成，我们将发放一份补偿礼金。请先不要关闭本页，恢复后 10 分钟内会自动领取。","Good news: if you wait until the upgrade finishes, we'll issue a compensation gift coupon. Please keep this page open; redeem within 10 minutes after recovery."
+"正在升级 · 请勿关闭本页。恢复后将自动为您领取补偿礼金。","Upgrading — please keep this page open. We'll claim your gift automatically after recovery."
 非常抱歉，网站正在升级维护。若您耐心等待升级完成，我们将发放补偿礼金。,"Sorry, we're upgrading. Wait patiently and we'll issue a compensation gift."
-系统正在升级维护中，请稍后再试。,The system is currently undergoing upgrade maintenance. Please try again later.
+系统正在升级维护中，请稍后再试。,"The system is currently undergoing upgrade maintenance. Please try again later."

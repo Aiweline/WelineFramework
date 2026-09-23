@@ -1,5 +1,5 @@
-DataTable Registered Resource Query,DataTable Registered Resource Query
-Registered DataTable demo resources through the Weline.Api worker channel.,通过 Weline.Api 工作通道访问已注册的数据表格演示资源。
+﻿"DataTable Registered Resource Query","DataTable Registered Resource Query"
+"Registered DataTable demo resources through the Weline.Api worker channel.","通过 Weline.Api 工作通道访问已注册的数据表格演示资源。"
 每页显示,每页显示
 分页,分页
 筛选,筛选
@@ -36,75 +36,75 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 显示字段,显示字段
 筛选字段,筛选字段
 搜索表格,搜索表格
-数据删除失败: %{1},数据删除失败: %{1}
+"数据删除失败: %{1}","数据删除失败: %{1}"
 记录不存在,记录不存在
 记录已永久删除,记录已永久删除
 记录已移至回收站,记录已移至回收站
 数据删除成功,数据删除成功
-删除失败: %{1},删除失败: %{1}
-批量删除完成，成功: %{1}，失败: %{2},批量删除完成，成功: %{1}，失败: %{2}
-主模型类不存在: %{1},主模型类不存在: %{1}
-缺少必需参数: model 和 data,缺少必需参数: model 和 data
-记录创建失败: %{1},记录创建失败: %{1}
+"删除失败: %{1}","删除失败: %{1}"
+"批量删除完成，成功: %{1}，失败: %{2}","批量删除完成，成功: %{1}，失败: %{2}"
+"主模型类不存在: %{1}","主模型类不存在: %{1}"
+"缺少必需参数: model 和 data","缺少必需参数: model 和 data"
+"记录创建失败: %{1}","记录创建失败: %{1}"
 记录创建失败,记录创建失败
-表 %{1} 的记录创建失败,表 %{1} 的记录创建失败
-缺少必需参数: model、id 和 data,缺少必需参数: model、id 和 data
+"表 %{1} 的记录创建失败","表 %{1} 的记录创建失败"
+"缺少必需参数: model、id 和 data","缺少必需参数: model、id 和 data"
 记录更新成功,记录更新成功
 记录更新失败,记录更新失败
-记录更新失败: %{1},记录更新失败: %{1}
-批量更新完成，成功: %{1}，失败: %{2},批量更新完成，成功: %{1}，失败: %{2}
-批量状态变更完成，成功: %{1}，失败: %{2},批量状态变更完成，成功: %{1}，失败: %{2}
-缺少必需参数: model 和 id/ids,缺少必需参数: model 和 id/ids
-成功删除 %{1} 条记录,成功删除 %{1} 条记录
+"记录更新失败: %{1}","记录更新失败: %{1}"
+"批量更新完成，成功: %{1}，失败: %{2}","批量更新完成，成功: %{1}，失败: %{2}"
+"批量状态变更完成，成功: %{1}，失败: %{2}","批量状态变更完成，成功: %{1}，失败: %{2}"
+"缺少必需参数: model 和 id/ids","缺少必需参数: model 和 id/ids"
+"成功删除 %{1} 条记录","成功删除 %{1} 条记录"
 删除失败,删除失败
-记录删除失败: %{1},记录删除失败: %{1}
-ID %{1} 删除失败: %{2},ID %{1} 删除失败: %{2}
-批量移至回收站完成，成功: %{1}，失败: %{2},批量移至回收站完成，成功: %{1}，失败: %{2}
-批量删除失败: %{1},批量删除失败: %{1}
+"记录删除失败: %{1}","记录删除失败: %{1}"
+"ID %{1} 删除失败: %{2}","ID %{1} 删除失败: %{2}"
+"批量移至回收站完成，成功: %{1}，失败: %{2}","批量移至回收站完成，成功: %{1}，失败: %{2}"
+"批量删除失败: %{1}","批量删除失败: %{1}"
 图片删除成功,图片删除成功
 图片删除失败,图片删除失败
-图片删除失败: %{1},图片删除失败: %{1}
-缺少必需参数: model 和 scope,缺少必需参数: model 和 scope
-永久删除失败: %{1},永久删除失败: %{1}
+"图片删除失败: %{1}","图片删除失败: %{1}"
+"缺少必需参数: model 和 scope","缺少必需参数: model 和 scope"
+"永久删除失败: %{1}","永久删除失败: %{1}"
 永久删除失败,永久删除失败
 未找到任何字段,未找到任何字段
-模型 %{1} 没有可用的字段，或者所有字段都被排除了,模型 %{1} 没有可用的字段，或者所有字段都被排除了
+"模型 %{1} 没有可用的字段，或者所有字段都被排除了","模型 %{1} 没有可用的字段，或者所有字段都被排除了"
 获取字段成功,获取字段成功
 启用,启用
 禁用,禁用
 类型1,类型1
 类型2,类型2
-缺少必需参数: model 或 record_id,缺少必需参数: model 或 record_id
+"缺少必需参数: model 或 record_id","缺少必需参数: model 或 record_id"
 获取记录成功,获取记录成功
-获取记录失败: %{1},获取记录失败: %{1}
-DataTable write plan token is invalid.,数据表格写入计划令牌无效。
-DataTable write plan expired or was already used.,数据表格写入计划已过期或已使用。
-DataTable write payload no longer matches the confirmed plan.,数据表格写入载荷与已确认计划不再匹配。
-DataTable write plan cannot proceed until all required fields are complete.,请补全全部必填字段后再执行数据表格写入计划。
-Demo form record loading only supports single-model records.,演示表单记录加载仅支持单模型记录。
-Record does not exist.,记录不存在。
-Joined demo tables do not support delete.,加入的演示表不支持删除。
-Demo export only supports single-model tables.,演示导出仅支持单模型表。
-Demo table model is required.,需要演示表模型。
-Invalid demo join condition: %{1},无效的演示加入条件：%{1}
-Invalid DataTable dependency: %{1}.,无效的数据表格依赖：%{1}。
-DataTable dependency references an unknown model alias.,数据表格依赖引用了未知模型别名。
-Circular DataTable write dependency detected.,检测到数据表格循环写入依赖。
-DataTable write-order must contain every model alias exactly once.,数据表格写入顺序必须且只能包含每个模型别名一次。
-DataTable write-order violates a declared dependency.,数据表格写入顺序违反了已声明依赖。
-DataTable dependency references an unknown or protected field.,数据表格依赖引用了未知或受保护字段。
-DataTable resource is not registered for model %{1}.,模型 %{1} 未注册数据表格资源。
-DataTable write contains unknown or protected fields: %{1}.,数据表格写入包含未知或受保护字段：%{1}。
-DataTable model is invalid: %{1}.,数据表格模型无效：%{1}。
+"获取记录失败: %{1}","获取记录失败: %{1}"
+"DataTable write plan token is invalid.",数据表格写入计划令牌无效。
+"DataTable write plan expired or was already used.",数据表格写入计划已过期或已使用。
+"DataTable write payload no longer matches the confirmed plan.",数据表格写入载荷与已确认计划不再匹配。
+"DataTable write plan cannot proceed until all required fields are complete.",请补全全部必填字段后再执行数据表格写入计划。
+"Demo form record loading only supports single-model records.",演示表单记录加载仅支持单模型记录。
+"Record does not exist.",记录不存在。
+"Joined demo tables do not support delete.",加入的演示表不支持删除。
+"Demo export only supports single-model tables.",演示导出仅支持单模型表。
+"Demo table model is required.",需要演示表模型。
+"Invalid demo join condition: %{1}",无效的演示加入条件：%{1}
+"Invalid DataTable dependency: %{1}.",无效的数据表格依赖：%{1}。
+"DataTable dependency references an unknown model alias.",数据表格依赖引用了未知模型别名。
+"Circular DataTable write dependency detected.",检测到数据表格循环写入依赖。
+"DataTable write-order must contain every model alias exactly once.",数据表格写入顺序必须且只能包含每个模型别名一次。
+"DataTable write-order violates a declared dependency.",数据表格写入顺序违反了已声明依赖。
+"DataTable dependency references an unknown or protected field.",数据表格依赖引用了未知或受保护字段。
+"DataTable resource is not registered for model %{1}.","模型 %{1} 未注册数据表格资源。"
+"DataTable write contains unknown or protected fields: %{1}.",数据表格写入包含未知或受保护字段：%{1}。
+"DataTable model is invalid: %{1}.",数据表格模型无效：%{1}。
 %{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
 未注册的数据表资源：%{1},未注册的数据表资源：%{1}
-Weline UI 编译 bundle 不可用：%{1},Weline UI 编译 bundle 不可用：%{1}
-Weline UI 编译清单不存在，请先运行 resource:compile welineUi,Weline UI 编译清单不存在，请先运行 resource:compile welineUi
-Weline UI 编译清单无效：%{1},Weline UI 编译清单无效：%{1}
+"Weline UI 编译 bundle 不可用：%{1}","Weline UI 编译 bundle 不可用：%{1}"
+"Weline UI 编译清单不存在，请先运行 resource:compile welineUi","Weline UI 编译清单不存在，请先运行 resource:compile welineUi"
+"Weline UI 编译清单无效：%{1}","Weline UI 编译清单无效：%{1}"
 """DataTable Registered Resource Query""",数据表格注册资源查询
 独立显示,独立显示
-合并到 %{1},合并到 %{1}
-将 %{1} 合并到,将 %{1} 合并到
+"合并到 %{1}","合并到 %{1}"
+"将 %{1} 合并到","将 %{1} 合并到"
 当前上下文没有执行此写入操作的权限。,当前上下文没有执行此写入操作的权限。
 记录已更新。,记录已更新。
 记录已创建。,记录已创建。
@@ -113,7 +113,7 @@ Weline UI 编译清单无效：%{1},Weline UI 编译清单无效：%{1}
 未填写,未填写
 事务范围,事务范围
 计划有效期,计划有效期
-%{1} 秒,%{1} 秒
+"%{1} 秒","%{1} 秒"
 请先补全必填字段：%{1},请先补全必填字段：%{1}
 没有符合当前搜索或筛选条件的数据，请调整条件后重试。,没有符合当前搜索或筛选条件的数据，请调整条件后重试。
 暂无数据。可刷新表格，或在有写入权限时新增第一条记录。,暂无数据。可刷新表格，或在有写入权限时新增第一条记录。
@@ -121,17 +121,17 @@ Weline UI 编译清单无效：%{1},Weline UI 编译清单无效：%{1}
 当前上下文不允许修改字段配置。,当前上下文不允许修改字段配置。
 当前上下文不允许导出。,当前上下文不允许导出。
 本地客户端筛选,本地客户端筛选
-此表格完全在浏览器中搜索、筛选、多列排序和分页 JSON，不开放 CRUD 或远程偏好。,此表格完全在浏览器中搜索、筛选、多列排序和分页 JSON，不开放 CRUD 或远程偏好。
+"此表格完全在浏览器中搜索、筛选、多列排序和分页 JSON，不开放 CRUD 或远程偏好。","此表格完全在浏览器中搜索、筛选、多列排序和分页 JSON，不开放 CRUD 或远程偏好。"
 产品名称,产品名称
 品牌,品牌
 价格,价格
 状态,状态
-"""DataTable Frontend Demo Query""",“DataTable 前端演示查询”
-Whitelist-only frontend DataTable demo operations through the worker channel.,通过工作通道进行仅限白名单的前端 DataTable 演示操作。
-模型类不存在: %{1},模型类不存在: %{1}
-Frontend demo access is not allowed for model %{1},模型 %{1} 不允许前端演示访问
+"""DataTable Frontend Demo Query""","“DataTable 前端演示查询”"
+"Whitelist-only frontend DataTable demo operations through the worker channel.","通过工作通道进行仅限白名单的前端 DataTable 演示操作。"
+"模型类不存在: %{1}","模型类不存在: %{1}"
+"Frontend demo access is not allowed for model %{1}","模型 %{1} 不允许前端演示访问"
 "field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。"
-field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。,field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。
+"field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。"
 "field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。"
 field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。
 "field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。","field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。"
@@ -186,20 +186,20 @@ field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该�
 请输入有效的数字,请输入有效的数字
 请输入有效的电话号码,请输入有效的电话号码
 预览图片,预览图片
-输入长度不能超过 %{1},输入长度不能超过 %{1}
+"输入长度不能超过 %{1}","输入长度不能超过 %{1}"
 字段验证失败,字段验证失败
 娑?,娑?
 婢?,婢?
 妞?,妞?
 閸忔娊妫?,閸忔娊妫?
 閸欐牗绉?,閸欐牗绉?
-Confirm deleting selected records: %{1},确认删除所选记录：%{1}
+"Confirm deleting selected records: %{1}",确认删除所选记录：%{1}
 闁插秷鐦?,闁插秷鐦?
 閺勫墽銇?,閺勫墽銇?
 缁涙盯鈧?,缁涙盯鈧?
 闂呮劘妫?,闂呮劘妫?
-Record moved to recycle bin,记录移至回收站
-Delete succeeded,删除成功
+"Record moved to recycle bin",记录移至回收站
+"Delete succeeded",删除成功
 删除,删除
 提示,提示
 重置失败,重置失败
