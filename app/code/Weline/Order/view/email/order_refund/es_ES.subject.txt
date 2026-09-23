@@ -1,1 +1,0 @@
-Aviso de reembolso · {{var.order_number}}

@@ -1,1 +1,0 @@
-Pedido no cumplible — reembolso iniciado · {{var.order_uuid}}

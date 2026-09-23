@@ -1,1 +1,1 @@
-欢迎订阅 · {{var.email}}
+{{var.brand_display_name}} · 欢迎订阅

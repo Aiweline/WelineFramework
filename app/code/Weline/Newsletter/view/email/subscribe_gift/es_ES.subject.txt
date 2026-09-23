@@ -1,1 +1,0 @@
-Regalo de suscripción · {{var.coupon_code}}

@@ -1,1 +1,1 @@
-订阅礼遇 · 优惠券 {{var.coupon_code}}
+{{var.brand_display_name}} · 订阅礼遇 · 优惠券 {{var.coupon_code}}

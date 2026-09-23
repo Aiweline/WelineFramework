@@ -1,1 +1,0 @@
-Pengingat pesanan belum dibayar · {{var.order_number}}

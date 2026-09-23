@@ -1,1 +1,0 @@
-Pembayaran diterima · {{var.order_number}}

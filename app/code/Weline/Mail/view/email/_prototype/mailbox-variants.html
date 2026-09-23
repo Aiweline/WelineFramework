@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <title>PROTOTYPE · 企业邮箱「邮箱」页变体（非生产）</title>
+  <meta name="robots" content="noindex">
+  <!--
+    PROTOTYPE ONLY — throwaway for Team:原型:对照
+    Authority: channel/prototype-mailbox-adjust.md
+    Open file:// or any static server; switch with ?variant=A|B or bottom bar.
+    Uses Weline-ish token names as CSS variables (mock). Do NOT copy into production.
+  -->
+  <style>
+    :root {
+      --weline-theme-bg: #f4f6f8;
+      --weline-theme-surface: #fff;
+      --weline-theme-border: #d8dee6;
+      --weline-theme-text: #1a2332;
+      --weline-theme-text-muted: #5c6b7a;
+      --weline-theme-primary: #2563eb;
+      --weline-theme-primary-fg: #fff;
+      --weline-theme-warning-bg: #fef3c7;
+      --weline-theme-warning-fg: #92400e;
+      --weline-space-2: .5rem;
+      --weline-space-3: .75rem;
+      --weline-space-4: 1rem;
+      --weline-space-5: 1.25rem;
+      --weline-radius-md: .5rem;
+      --weline-radius-lg: .75rem;
+      --weline-control-height: 2.25rem;
+      --weline-font: system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--weline-font);
+      background: var(--weline-theme-bg);
+      color: var(--weline-theme-text);
+      padding: var(--weline-space-5);
+      padding-bottom: 5rem;
+    }
+    .proto-banner {
+      margin-bottom: var(--weline-space-4);
+      padding: var(--weline-space-3) var(--weline-space-4);
+      border: 2px dashed #b45309;
+      border-radius: var(--weline-radius-md);
+      background: #fff7ed;
+      color: #9a3412;
+      font-size: .875rem;
+      font-weight: 650;
+    }
+    .w-backend-page { display: grid; gap: var(--weline-space-5); max-width: 1100px; margin: 0 auto; }
+    .w-backend-page__heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--weline-space-3); }
+    .w-backend-page__title { margin: 0; font-size: 1.35rem; }
+    .w-backend-page__heading p { margin: .35rem 0 0; color: var(--weline-theme-text-muted); font-size: .9rem; }
+    .w-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-2); }
+    .w-badge {
+      display: inline-flex; align-items: center; gap: .35rem;
+      padding: .25rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 650;
+      background: var(--weline-theme-warning-bg); color: var(--weline-theme-warning-fg);
+    }
+    .w-tabs__list[data-variant="soft"] {
+      display: flex; gap: var(--weline-space-1, .25rem); flex-wrap: wrap;
+      padding: .25rem; border-radius: var(--weline-radius-md);
+      background: color-mix(in srgb, var(--weline-theme-border) 45%, transparent);
+      list-style: none; margin: 0;
+    }
+    .w-tabs__tab {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: var(--weline-control-height); padding: 0 1rem;
+      border: 0; border-radius: calc(var(--weline-radius-md) - 2px);
+      background: transparent; color: var(--weline-theme-text-muted);
+      font: inherit; font-weight: 650; text-decoration: none; cursor: pointer;
+    }
+    .w-tabs__tab[aria-current="true"], .w-tabs__tab.active {
+      background: var(--weline-theme-surface); color: var(--weline-theme-primary);
+      box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+    }
+    .w-tabs__list.is-folder { padding: .15rem; }
+    .w-tabs__list.is-folder .w-tabs__tab {
+      min-height: 1.85rem; padding: 0 .75rem; font-size: .8125rem; font-weight: 600;
+    }
+    .w-toolbar {
+      display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
+      gap: var(--weline-space-3);
+      padding: var(--weline-space-4);
+      background: var(--weline-theme-surface);
+      border: 1px solid var(--weline-theme-border);
+      border-radius: var(--weline-radius-lg);
+    }
+    .w-field { display: grid; gap: .35rem; }
+    .w-field__label { font-size: .75rem; font-weight: 650; color: var(--weline-theme-text-muted); }
+    .w-select, .w-input {
+      min-height: var(--weline-control-height); padding: 0 .75rem;
+      border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md);
+      background: var(--weline-theme-surface); font: inherit;
+    }
+    .w-button {
+      display: inline-flex; align-items: center; justify-content: center; gap: .35rem;
+      min-height: var(--weline-control-height); padding: 0 1rem;
+      border: 1px solid transparent; border-radius: var(--weline-radius-md);
+      font: inherit; font-weight: 650; text-decoration: none; cursor: pointer;
+    }
+    .w-button[data-tone="primary"] {
+      background: var(--weline-theme-primary); color: var(--weline-theme-primary-fg);
+    }
+    .w-button[data-variant="outline"] {
+      background: transparent; border-color: var(--weline-theme-border); color: var(--weline-theme-text);
+    }
+    .w-button[data-size="sm"] { min-height: 1.85rem; padding: 0 .75rem; font-size: .8125rem; }
+    .w-card {
+      background: var(--weline-theme-surface);
+      border: 1px solid var(--weline-theme-border);
+      border-radius: var(--weline-radius-lg);
+      overflow: hidden;
+    }
+    .w-empty {
+      display: grid; place-items: center; gap: var(--weline-space-3);
+      min-height: 18rem; padding: var(--weline-space-5); text-align: center;
+      color: var(--weline-theme-text-muted);
+    }
+    .w-empty h2 { margin: 0; color: var(--weline-theme-text); font-size: 1.05rem; }
+    .w-empty p { margin: 0; max-width: 28rem; }
+    .layout-mail { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .layout-mail.has-rail { grid-template-columns: 10rem minmax(0, 1fr); gap: var(--weline-space-4); }
+    .rail {
+      display: grid; gap: .35rem; align-content: start;
+      padding: var(--weline-space-3);
+      background: var(--weline-theme-surface);
+      border: 1px solid var(--weline-theme-border);
+      border-radius: var(--weline-radius-lg);
+    }
+    .rail a {
+      display: block; padding: .55rem .75rem; border-radius: var(--weline-radius-md);
+      color: inherit; text-decoration: none; font-size: .875rem; font-weight: 600;
+    }
+    .rail a[aria-current="true"] {
+      background: color-mix(in srgb, var(--weline-theme-primary) 12%, transparent);
+      color: var(--weline-theme-primary);
+    }
+    .compose-panel {
+      display: none; margin-top: var(--weline-space-4);
+      padding: var(--weline-space-4);
+      border-top: 1px solid var(--weline-theme-border);
+    }
+    .compose-panel.is-open { display: block; }
+    .compose-panel label { display: grid; gap: .35rem; margin-bottom: var(--weline-space-3); font-size: .8rem; font-weight: 650; }
+    .proto-switcher {
+      position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%);
+      z-index: 50; display: flex; align-items: center; gap: .5rem;
+      padding: .5rem .75rem; border-radius: 999px;
+      background: #111827; color: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+      font-size: .8125rem; font-weight: 650;
+    }
+    .proto-switcher button {
+      border: 0; background: #374151; color: #fff; border-radius: 999px;
+      width: 2rem; height: 2rem; cursor: pointer; font-weight: 700;
+    }
+    [hidden] { display: none !important; }
+    @media (max-width: 720px) {
+      .layout-mail.has-rail { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="proto-banner">PROTOTYPE · 非生产 · 仅对照信息架构 · 见 prototype-mailbox-adjust.md</div>
+
+  <div class="w-backend-page" data-proto-root>
+    <header class="w-backend-page__heading">
+      <div>
+        <h1 class="w-backend-page__title">企业邮箱管理</h1>
+        <p>查看真实邮件、管理用户邮箱、代发邮件，并指导每个域名完成 DNS。</p>
+      </div>
+      <div class="w-cluster">
+        <span class="w-badge">Stalwart 管理连接待配置</span>
+        <a class="w-button" data-variant="outline" data-size="sm" href="#domains">去域名与 DNS</a>
+      </div>
+    </header>
+
+    <nav class="w-tabs" aria-label="企业邮箱管理导航">
+      <div class="w-tabs__list" data-variant="soft" role="tablist">
+        <a class="w-tabs__tab" href="#mailbox" aria-current="true">邮箱</a>
+        <a class="w-tabs__tab" href="#accounts">用户与账号</a>
+        <a class="w-tabs__tab" href="#domains">域名与 DNS</a>
+      </div>
+    </nav>
+
+    <!-- Variant A -->
+    <section id="variant-A" data-variant="A">
+      <div class="w-toolbar">
+        <label class="w-field">
+          <span class="w-field__label">当前邮箱</span>
+          <select class="w-select">
+            <option>support@quote-test.invalid</option>
+          </select>
+        </label>
+        <div class="w-tabs__list is-folder" data-variant="soft" role="tablist" aria-label="文件夹">
+          <a class="w-tabs__tab" href="#inbox" aria-current="true">收件箱</a>
+          <a class="w-tabs__tab" href="#sent">已发送</a>
+        </div>
+        <button type="button" class="w-button" data-tone="primary" data-compose>写邮件</button>
+      </div>
+      <div class="w-card" style="margin-top: var(--weline-space-4);">
+        <div class="w-empty">
+          <div aria-hidden="true" style="font-size:1.75rem;opacity:.45">✉</div>
+          <h2>这个文件夹暂无邮件</h2>
+          <p>用当前邮箱写第一封，或到「用户与账号」开通正式域名邮箱。</p>
+          <div class="w-cluster" style="justify-content:center">
+            <button type="button" class="w-button" data-tone="primary" data-compose>写第一封</button>
+            <a class="w-button" data-variant="outline" href="#accounts">去用户与账号</a>
+          </div>
+        </div>
+        <div class="compose-panel" data-compose-panel>
+          <strong>写邮件（mock dialog/panel）</strong>
+          <label>收件人 <input class="w-input" type="text" placeholder="name@example.com"></label>
+          <label>主题 <input class="w-input" type="text"></label>
+          <button type="button" class="w-button" data-tone="primary">发送邮件</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Variant B -->
+    <section id="variant-B" data-variant="B" hidden>
+      <div class="w-toolbar">
+        <label class="w-field">
+          <span class="w-field__label">当前邮箱</span>
+          <select class="w-select">
+            <option>support@quote-test.invalid</option>
+          </select>
+        </label>
+        <button type="button" class="w-button" data-tone="primary" data-compose>写邮件</button>
+      </div>
+      <div class="layout-mail has-rail" style="margin-top: var(--weline-space-4);">
+        <nav class="rail" aria-label="文件夹">
+          <a href="#inbox" aria-current="true">收件箱</a>
+          <a href="#sent">已发送</a>
+        </nav>
+        <div class="w-card">
+          <div class="w-empty">
+            <div aria-hidden="true" style="font-size:1.75rem;opacity:.45">✉</div>
+            <h2>这个文件夹暂无邮件</h2>
+            <p>侧轨放文件夹；顶条只留账号与写邮件。空态仍是单块行动区。</p>
+            <div class="w-cluster" style="justify-content:center">
+              <button type="button" class="w-button" data-tone="primary" data-compose>写第一封</button>
+              <a class="w-button" data-variant="outline" href="#accounts">去用户与账号</a>
+            </div>
+          </div>
+          <div class="compose-panel" data-compose-panel>
+            <strong>写邮件（mock）</strong>
+            <label>收件人 <input class="w-input" type="text"></label>
+            <button type="button" class="w-button" data-tone="primary">发送邮件</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="proto-switcher" role="group" aria-label="原型变体切换">
+    <button type="button" data-prev aria-label="上一个">←</button>
+    <span data-label>A · 工具条三区（推荐）</span>
+    <button type="button" data-next aria-label="下一个">→</button>
+  </div>
+
+  <script>
+    (function () {
+      var variants = [
+        { key: 'A', name: '工具条三区（推荐）' },
+        { key: 'B', name: '文件夹侧轨' }
+      ];
+      function currentKey() {
+        var q = new URLSearchParams(location.search).get('variant');
+        return (q === 'B' || q === 'A') ? q : 'A';
+      }
+      function show(key) {
+        variants.forEach(function (v) {
+          var el = document.getElementById('variant-' + v.key);
+          if (el) el.hidden = v.key !== key;
+        });
+        var meta = variants.find(function (v) { return v.key === key; });
+        var label = document.querySelector('[data-label]');
+        if (label && meta) label.textContent = meta.key + ' · ' + meta.name;
+        var url = new URL(location.href);
+        url.searchParams.set('variant', key);
+        history.replaceState(null, '', url);
+      }
+      function cycle(delta) {
+        var i = variants.findIndex(function (v) { return v.key === currentKey(); });
+        var next = variants[(i + delta + variants.length) % variants.length];
+        show(next.key);
+      }
+      document.querySelector('[data-prev]').addEventListener('click', function () { cycle(-1); });
+      document.querySelector('[data-next]').addEventListener('click', function () { cycle(1); });
+      document.addEventListener('keydown', function (e) {
+        var t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+        if (e.key === 'ArrowLeft') cycle(-1);
+        if (e.key === 'ArrowRight') cycle(1);
+      });
+      document.querySelectorAll('[data-compose]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var root = btn.closest('[data-variant]') || document;
+          var panel = root.querySelector('[data-compose-panel]');
+          if (panel) panel.classList.toggle('is-open', true);
+        });
+      });
+      show(currentKey());
+    })();
+  </script>
+</body>
+</html>
