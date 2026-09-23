@@ -191,6 +191,16 @@ final class DeployEnvMapServiceTest extends TestCase
         self::assertSame('prod', $service->normalizeLevel('production'));
     }
 
+    public function testWritePathPinsLocaleDefault(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/DeployEnvMapService.php');
+        self::assertStringContainsString('ConfigReader::LOCALE_DEFAULT', $src);
+        self::assertMatchesRegularExpression(
+            '/setScopedConfig\(\s*\$key,\s*\$value,\s*\$module,\s*\$area,\s*\$scope,\s*ConfigReader::LOCALE_DEFAULT/s',
+            $src,
+        );
+    }
+
     private function makeTempRoot(): string
     {
         $this->tempRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-env-map-' . bin2hex(random_bytes(4));

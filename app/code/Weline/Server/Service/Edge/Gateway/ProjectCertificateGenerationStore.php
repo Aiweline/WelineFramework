@@ -954,6 +954,43 @@ final class ProjectCertificateGenerationStore
         ?float $deadlineMonotonic = null,
         ?string $requiredTrustProfile = null,
     ): array {
+        $read = $this->authoritySnapshotReader($domains, $deadlineMonotonic, $requiredTrustProfile);
+        return $this->withCertificateLifecycleLock(
+            $read,
+            $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
+            $deadlineMonotonic,
+        );
+    }
+
+    /**
+     * 发布者持锁等待 Master 确认时，Master 不能反过来等待发布者的锁。
+     * 对单调代际的 selector/tombstone 连续完整读取两次；只有结果一致才接受，
+     * 保留每次读取的文件完整性、证书有效期、信任档案及撤销校验。
+     * 写入方和冷恢复仍使用 authoritySnapshot 的互斥快照。
+     *
+     * @param list<string> $domains
+     * @return array<string,array<string,mixed>>
+     */
+    public function servingAuthoritySnapshot(
+        array $domains,
+        ?float $deadlineMonotonic = null,
+        ?string $requiredTrustProfile = null,
+    ): array {
+        $read = $this->authoritySnapshotReader($domains, $deadlineMonotonic, $requiredTrustProfile);
+        $before = $read();
+        $after = $read();
+        $this->retirementDeadlineRemaining($deadlineMonotonic);
+        if (!\hash_equals(GatewayClient::canonicalJson($before), GatewayClient::canonicalJson($after))) {
+            throw new \RuntimeException('Certificate authority changed during serving validation.');
+        }
+        return $after;
+    }
+
+    private function authoritySnapshotReader(
+        array $domains,
+        ?float $deadlineMonotonic,
+        ?string $requiredTrustProfile,
+    ): \Closure {
         if (!\array_is_list($domains)
             || $domains === []
             || \count($domains) > self::MAX_ACTIVE_MANIFESTS
@@ -982,8 +1019,7 @@ final class ProjectCertificateGenerationStore
         }
         \ksort($normalized, SORT_STRING);
         $this->ensureStoreDirectories();
-        return $this->withCertificateLifecycleLock(
-            function () use (
+        return function () use (
                 $normalized,
                 $requiredTrustProfile,
                 $deadlineMonotonic,
@@ -1056,10 +1092,7 @@ final class ProjectCertificateGenerationStore
                     ];
                 }
                 return $snapshot;
-            },
-            $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
-            $deadlineMonotonic,
-        );
+            };
     }
 
     /**

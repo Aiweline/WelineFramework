@@ -11,6 +11,7 @@ use Weline\Framework\Http\StaticErrorPagePublisher;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Php\FiberTaskRunner;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Http\StaticErrorPagePublishFingerprint;
@@ -779,10 +780,15 @@ final class MaintenanceStaticGenerator
                 $template = null;
             }
 
-            \ob_start();
-            include $templateFile;
+            FiberOutputBuffer::beginCapture();
+            try {
+                include $templateFile;
 
-            return (string)\ob_get_clean();
+                return FiberOutputBuffer::endCapture();
+            } catch (\Throwable $e) {
+                FiberOutputBuffer::discardCapture();
+                throw $e;
+            }
         }
 
         return $this->getFallbackHtml($htmlLang, $title, $heading, $message1, $message2, $recoveryNotice, $backHome);

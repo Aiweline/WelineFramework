@@ -188,6 +188,24 @@ class SessionStoreTest extends TestCase
         $this->assertTrue($this->store->get($sessionId, 'enabled'));
     }
 
+    public function testMdelRemovesMultipleKeysIdempotently(): void
+    {
+        $sessionId = 'test_session_mdel';
+        $this->assertTrue($this->store->mset($sessionId, [
+            'keep' => 'yes',
+            'drop_a' => 1,
+            'drop_b' => 2,
+        ]));
+
+        $this->assertTrue($this->store->mdel($sessionId, ['drop_a', 'drop_b', 'missing']));
+        $this->assertSame('yes', $this->store->get($sessionId, 'keep'));
+        $this->assertNull($this->store->get($sessionId, 'drop_a'));
+        $this->assertNull($this->store->get($sessionId, 'drop_b'));
+        $this->assertTrue($this->store->mdel($sessionId, ['drop_a']));
+        $this->assertTrue($this->store->mdel('missing_session', ['any']));
+        $this->assertTrue($this->store->mdel($sessionId, []));
+    }
+
     /**
      * 测试读取触发滑动过期
      */

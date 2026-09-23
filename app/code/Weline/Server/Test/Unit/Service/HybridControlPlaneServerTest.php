@@ -217,6 +217,24 @@ final class HybridControlPlaneServerTest extends TestCase
             ));
             self::assertSame('ut-instance', $telemetryMessages[0][0]['instance'] ?? null);
 
+            self::assertTrue($client->send(ControlMessage::sslCertReloadAck(
+                str_repeat('a', 32), true, 7, str_repeat('b', 64),
+                2, 'routes', 'active', 0, str_repeat('c', 64), 999,
+            )));
+            self::assertTrue($client->flushPendingWrites(0.25));
+            for ($i = 0; $i < 5; $i++) {
+                $hybrid->poll(0, 10000);
+            }
+            $reloadReceipts = array_values(array_filter(
+                $messages,
+                static fn(array $item): bool => ($item[0]['type'] ?? '') === ControlMessage::TYPE_SSL_CERT_RELOAD_ACK,
+            ));
+            self::assertCount(1, $reloadReceipts, 'TLS reload receipts must reach Master through Supervisor');
+            self::assertSame(7, $reloadReceipts[0][0]['applied_manifest_generation']);
+            self::assertSame(str_repeat('b', 64), $reloadReceipts[0][0]['applied_manifest_digest']);
+            self::assertSame(1, $reloadReceipts[0][0]['worker_id']);
+            self::assertSame($readyMessages[0][1], $reloadReceipts[0][1]);
+
             self::assertTrue($client->send(ControlMessage::workerPoolAck(
                 port: 18081,
                 inPool: true,

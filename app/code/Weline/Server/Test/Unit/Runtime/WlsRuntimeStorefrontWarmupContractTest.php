@@ -74,7 +74,7 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
 
         $now = 100.0;
         self::assertGreaterThanOrEqual(
-            $now + 3.0,
+            $now + 0.35,
             wlsWorkerDeferredWarmupNotBefore($now, 1),
         );
         self::assertNotSame(

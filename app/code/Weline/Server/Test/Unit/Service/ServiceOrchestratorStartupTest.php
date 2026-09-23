@@ -71,6 +71,30 @@ class ServiceOrchestratorStartupTest extends TestCase
         WlsLogger::reset();
     }
 
+    public function testTlsPopulationAuditIgnoresAuthenticatedNonTlsSidecars(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public function __construct() {}
+            public function clientExists(int $clientId): bool { return true; }
+        };
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        foreach (['runtime_watchdog', 'gateway_agent'] as $index => $role) {
+            $instance = new ServiceInstance(role: $role, instanceId: 1);
+            $instance->ipcClientId = 100 + $index;
+            $orchestrator->getRegistry()->addInstance($instance);
+        }
+        // 此用例只检查进程集合；清单校验结果由独立测试覆盖。
+        $failures = ['manifest_fence' => ['code' => 'fixture']];
+        $this->writePrivate($orchestrator, 'pendingSslCertReloadAck', [
+            'failures' => $failures, 'expected' => [], 'acked' => [],
+        ]);
+        $this->invokePrivate($orchestrator, 'auditPendingSslCertReloadTargets');
+        self::assertSame($failures, $this->readPrivate(
+            $orchestrator, 'pendingSslCertReloadAck',
+        )['failures']);
+    }
+
     public function testCheckAndNotifyServerReadyRequiresStartupArm(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {};

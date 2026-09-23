@@ -31,6 +31,7 @@ final class WlsMemoryAdapterBatchTest extends TestCase
         $shared = $this->createMock(SharedCacheBatchStateInterface::class);
         $shared->expects(self::never())->method('getCache');
         $shared->expects(self::never())->method('setCache');
+        $shared->expects(self::never())->method('deleteCache');
         $shared->expects(self::once())->method('setCacheMultiple')->willReturnCallback(
             static function (string $pool, array $values, int $ttl) use (&$storage): bool {
                 self::assertSame('batch', $pool);
@@ -63,9 +64,11 @@ final class WlsMemoryAdapterBatchTest extends TestCase
         $shared = $this->createMock(SharedCacheStateInterface::class);
         $shared->expects(self::exactly(2))->method('getCache')->willReturnOnConsecutiveCalls('a', null);
         $shared->expects(self::exactly(2))->method('setCache')->willReturn(true);
+        $shared->expects(self::exactly(2))->method('deleteCache')->willReturn(true);
         $pool = new CachePool('legacy', new WlsMemoryAdapter('legacy', ['local_cache_size' => 0], $shared));
         self::assertTrue($pool->setMultiple(['first' => 'a', 'second' => 'b']));
         self::assertSame(['first' => 'a', 'missing' => null], $pool->getMultiple(['first', 'missing']));
+        self::assertTrue($pool->deleteMultiple(['first', 'second']));
     }
 
     public function testSlowBatchPreservesFalseAndNullWithoutBlockingOtherPools(): void
@@ -98,6 +101,7 @@ final class WlsMemoryAdapterBatchTest extends TestCase
         $shared->expects(self::once())->method('getCacheMultiple')->willThrowException(new \RuntimeException('transport failed'));
         $shared->expects(self::never())->method('getCache');
         $shared->expects(self::never())->method('setCacheMultiple');
+        $shared->expects(self::never())->method('deleteCacheMultiple');
         $first = new WlsMemoryAdapter('failed_batch', ['local_cache_size' => 0], $shared);
         $peer = new WlsMemoryAdapter('failed_peer', ['local_cache_size' => 0], $shared);
 
@@ -110,7 +114,7 @@ final class WlsMemoryAdapterBatchTest extends TestCase
     public function testDisabledAndEmptyBatchesDoNotAccessSharedStorage(): void
     {
         $shared = $this->createMock(SharedCacheBatchStateInterface::class);
-        foreach (['getCache', 'setCache', 'getCacheMultiple', 'setCacheMultiple'] as $method) {
+        foreach (['getCache', 'setCache', 'deleteCache', 'getCacheMultiple', 'setCacheMultiple', 'deleteCacheMultiple'] as $method) {
             $shared->expects(self::never())->method($method);
         }
         $adapter = new WlsMemoryAdapter('disabled', [], $shared);
@@ -121,5 +125,26 @@ final class WlsMemoryAdapterBatchTest extends TestCase
         $enabled = new CachePool('empty', $adapter);
         self::assertSame([], $enabled->getMultiple([]));
         self::assertTrue($enabled->setMultiple([]));
+        self::assertTrue($enabled->deleteMultiple([]));
+    }
+
+    public function testDeleteMultipleUsesSharedBatchOnce(): void
+    {
+        $storage = ['a' => 1, 'b' => 2, 'c' => 3];
+        $shared = $this->createMock(SharedCacheBatchStateInterface::class);
+        $shared->expects(self::never())->method('deleteCache');
+        $shared->expects(self::once())->method('deleteCacheMultiple')
+            ->with('mdel_pool', ['a', 'b', 'c'])
+            ->willReturnCallback(static function (string $pool, array $keys) use (&$storage): bool {
+                foreach ($keys as $key) {
+                    unset($storage[$key]);
+                }
+                return true;
+            });
+        $adapter = new WlsMemoryAdapter('mdel_pool', ['local_cache_size' => 0], $shared);
+
+        self::assertTrue($adapter->deleteMultiple(['a', 'b', 'c', 'a']));
+        self::assertSame([], $storage);
+        self::assertNull($adapter->get('a'));
     }
 }
