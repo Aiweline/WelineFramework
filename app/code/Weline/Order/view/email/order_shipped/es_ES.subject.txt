@@ -1,1 +1,0 @@
-Pedido enviado · {{var.order_number}}

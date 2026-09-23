@@ -1,1 +1,0 @@
-Pesanan dikonfirmasi · {{var.order_number}}
