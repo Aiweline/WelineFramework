@@ -10,6 +10,8 @@ namespace Weline\Search\Api;
  */
 interface ProductDirectCatalogReaderInterface
 {
+    public function currentSourceWatermark(int $websiteId): int;
+
     /**
      * @param array{
      *   website_id:int,

@@ -89,6 +89,21 @@ final class ArrayProductDirectCatalogReader implements ProductDirectCatalogReade
         $this->down = $down;
     }
 
+    public function setSourceWatermark(int $watermark): void
+    {
+        if ($watermark < 0) {
+            throw new \InvalidArgumentException('product_direct_source_watermark_invalid');
+        }
+        $this->sourceWatermark = $watermark;
+    }
+
+    public function currentSourceWatermark(int $websiteId): int
+    {
+        SearchShardKey::fromWebsiteId($websiteId);
+
+        return $this->sourceWatermark;
+    }
+
     public function searchPublished(array $query): ProductDirectCatalogRead
     {
         if ($this->down) {

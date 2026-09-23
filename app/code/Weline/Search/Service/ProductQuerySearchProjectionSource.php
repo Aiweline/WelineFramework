@@ -45,6 +45,35 @@ final class ProductQuerySearchProjectionSource implements ProductSearchProjectio
         return $result;
     }
 
+    public function snapshotScope(int $websiteId, int $storeId, int $channelId): array
+    {
+        SearchShardKey::fromWebsiteId($websiteId);
+        if ($storeId < 0 || $channelId < 0) {
+            throw new \InvalidArgumentException('product_search_scope_ids_invalid');
+        }
+        $result = \w_query(
+            'product_search_projection',
+            'snapshotScope',
+            [
+                'website_id' => $websiteId,
+                'store_id' => $storeId,
+                'channel_id' => $channelId,
+            ],
+            'backend',
+        );
+        $this->assertResult($result, $websiteId);
+        if (($result['contract'] ?? null) !== 'product.search_projection_snapshot.v1'
+            || ($result['scope_contract'] ?? null) !== 'product.search_projection_scope_snapshot.v1'
+            || (int)($result['store_id'] ?? -1) !== $storeId
+            || (int)($result['channel_id'] ?? -1) !== $channelId
+            || !\is_array($result['documents'] ?? null)
+        ) {
+            throw new \UnexpectedValueException('product_search_scope_snapshot_contract_invalid');
+        }
+
+        return $result;
+    }
+
     public function projectChange(array $change): array
     {
         $websiteId = (int)($change['website_id'] ?? -1);

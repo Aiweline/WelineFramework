@@ -14,6 +14,13 @@ interface ProductSearchProjectionSourceInterface
     /** @return array<string,mixed> */
     public function snapshotWebsite(int $websiteId): array;
 
+    /**
+     * Request-scoped Product current snapshot for Search direct/degrade reads.
+     *
+     * @return array<string,mixed>
+     */
+    public function snapshotScope(int $websiteId, int $storeId, int $channelId): array;
+
     /** @param array<string,mixed> $change @return array<string,mixed> */
     public function projectChange(array $change): array;
 }

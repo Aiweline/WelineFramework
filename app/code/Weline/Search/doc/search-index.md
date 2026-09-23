@@ -119,6 +119,11 @@ scope delete/upsert 和连续 watermark 推进。最终投影成功后才在同�
 - serving alias 按 Website 持久化 `direct/index`、generation 与 version；
   apply 后保持 `shadow/direct`，只有 fresh verify 成功后的精确 allowlist
   才 CAS 到已验证 generation。
+- **缺行软默认**：`w_search_serving_alias` 无行时 `state()` 返回
+  `direct/0/0`（不落库）；`isMissingDefault()` 可区分缺行 vs 显式 rollback。
+  **禁止**在无 MIG-P3C G1–G3（fresh verify + CAS + allowlist/on）时自动硬切
+  默认站到 `index`。门禁未齐时店面可继续 direct，但必须走 **scoped**
+  `snapshotScope`（见下），不得整站 `snapshotWebsite`。
 - rollout 默认 `off`；off/shadow 或 alias direct 均保持 Product current
   直读。只有 alias index、generation 等于 active generation 且完整
   Website/Store/Channel rollout 生效时才读取 Search。
@@ -174,7 +179,9 @@ Scope（含非空 locale/currency；`store_id`/`channel_id` 允许为 `0`）也
 fail-closed。
 
 `ProductProjectionDirectCatalogReader` 通过 Search 自有接口消费 Product
-公开的 `snapshotWebsite()`。每次直读结果包含：
+公开的 `snapshotScope(website,store,channel)`（Query 契约）。**禁止**店面
+直读调用全站 `snapshotWebsite()`（改一品水位 bump → 展开全部店铺/渠道）。
+每次直读结果包含：
 
 - `direct_source_watermark`
 - `direct_snapshot_hash`

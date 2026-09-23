@@ -163,20 +163,37 @@ if ($breadcrumb === []) {
         <div class="storefront-search__results">
             <?php if ($type === 'all'): ?>
                 <?php foreach ($sections as $sectionType => $sectionHits): ?>
-                    <?php if (!is_array($sectionHits) || $sectionHits === []) { continue; } ?>
-                    <?php $sectionLabel = $resolveTypeLabel((string)$sectionType); ?>
+                    <?php
+                    if (!is_array($sectionHits)) {
+                        continue;
+                    }
+                    $sectionLabel = $resolveTypeLabel((string)$sectionType);
+                    $isEmptyProduct = (string)$sectionType === 'product' && $sectionHits === [];
+                    if ($sectionHits === [] && !$isEmptyProduct) {
+                        continue;
+                    }
+                    ?>
                     <div class="storefront-search__section" data-section-type="<?= $esc((string)$sectionType) ?>">
                         <h2 class="storefront-search__section-title"><?= $esc($sectionLabel) ?></h2>
-                        <div class="<?= $esc($gridClassForType((string)$sectionType)) ?>">
-                            <?php foreach ($sectionHits as $hit): ?>
-                                <?php $renderHitCard($hit, (string)$sectionType); ?>
-                            <?php endforeach; ?>
-                        </div>
-                        <p class="storefront-search__section-more">
-                            <a href="@url{'search'}?q=<?= rawurlencode($q) ?>&amp;type=<?= rawurlencode((string)$sectionType) ?>">
-                                <?= $esc((string)__('查看更多%{1}结果', [$sectionLabel])) ?> →
-                            </a>
-                        </p>
+                        <?php if ($isEmptyProduct): ?>
+                            <p class="storefront-search__section-empty"
+                               data-testid="storefront-search-product-empty"
+                               role="status">
+                                <?= $esc((string)__('商品 0 条')) ?>
+                                · <?= $esc((string)__('暂无匹配商品，可换词或浏览分类')) ?>
+                            </p>
+                        <?php else: ?>
+                            <div class="<?= $esc($gridClassForType((string)$sectionType)) ?>">
+                                <?php foreach ($sectionHits as $hit): ?>
+                                    <?php $renderHitCard($hit, (string)$sectionType); ?>
+                                <?php endforeach; ?>
+                            </div>
+                            <p class="storefront-search__section-more">
+                                <a href="@url{'search'}?q=<?= rawurlencode($q) ?>&amp;type=<?= rawurlencode((string)$sectionType) ?>">
+                                    <?= $esc((string)__('查看更多%{1}结果', [$sectionLabel])) ?> →
+                                </a>
+                            </p>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>

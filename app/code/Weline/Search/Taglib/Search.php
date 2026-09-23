@@ -112,7 +112,8 @@ final class Search implements TaglibInterface
                 );
             }
 
-            ob_start();
+            \Weline\Framework\Runtime\FiberOutputBuffer::beginCapture();
+            try {
             ?>
 <div class="<?= $esc($panelClass) ?> w-search-root"<?= $panelId !== '' ? ' id="' . $esc($panelId) . '"' : '' ?>
      data-w-search
@@ -156,7 +157,11 @@ final class Search implements TaglibInterface
     <?php endif; ?>
 </div>
             <?php
-            return (string)ob_get_clean();
+                return \Weline\Framework\Runtime\FiberOutputBuffer::endCapture();
+            } catch (\Throwable $e) {
+                \Weline\Framework\Runtime\FiberOutputBuffer::discardCapture();
+                throw $e;
+            }
         };
     }
 

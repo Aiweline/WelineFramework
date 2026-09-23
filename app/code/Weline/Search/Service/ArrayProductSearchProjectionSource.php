@@ -87,6 +87,45 @@ final class ArrayProductSearchProjectionSource implements ProductSearchProjectio
         ];
     }
 
+    public function snapshotScope(int $websiteId, int $storeId, int $channelId): array
+    {
+        SearchShardKey::fromWebsiteId($websiteId);
+        if ($storeId < 0 || $channelId < 0) {
+            throw new \InvalidArgumentException('product_search_scope_ids_invalid');
+        }
+        if ($this->snapshotHook !== null) {
+            ($this->snapshotHook)($this, $websiteId);
+        }
+        $documents = [];
+        foreach ($this->documents[$websiteId] ?? [] as $document) {
+            if (!\is_array($document)) {
+                continue;
+            }
+            if ((int)($document['store_id'] ?? -1) !== $storeId
+                || (int)($document['channel_id'] ?? -1) !== $channelId
+            ) {
+                continue;
+            }
+            $documents[] = $document;
+        }
+
+        return [
+            'contract' => 'product.search_projection_snapshot.v1',
+            'scope_contract' => 'product.search_projection_scope_snapshot.v1',
+            'website_id' => $websiteId,
+            'store_id' => $storeId,
+            'channel_id' => $channelId,
+            'source_watermark' => $this->currentWatermark($websiteId),
+            'scope_count' => 1,
+            'document_count' => \count($documents),
+            'documents' => $documents,
+            'snapshot_hash' => \hash(
+                'sha256',
+                (string)\json_encode($documents, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            ),
+        ];
+    }
+
     public function projectChange(array $change): array
     {
         $websiteId = (int)($change['website_id'] ?? -1);

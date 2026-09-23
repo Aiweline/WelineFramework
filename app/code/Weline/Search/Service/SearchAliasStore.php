@@ -73,6 +73,26 @@ final class SearchAliasStore
         return $this->normalize($stored->getData());
     }
 
+    /**
+     * True when no durable row exists (or testing never wrote one): soft-default
+     * direct/0/0. Not the same as an intentional rollback to ALIAS_DIRECT.
+     */
+    public function isMissingDefault(int $websiteId): bool
+    {
+        $state = $this->state($websiteId);
+        if ($state['alias'] !== self::ALIAS_DIRECT
+            || $state['generation'] !== 0
+            || $state['version'] !== 0
+        ) {
+            return false;
+        }
+        if ($this->testingStates !== null) {
+            return !isset($this->testingStates[$websiteId]);
+        }
+
+        return $this->find($websiteId) === null;
+    }
+
     public function activeAlias(int $websiteId = 0): string
     {
         return $this->state($websiteId)['alias'];
