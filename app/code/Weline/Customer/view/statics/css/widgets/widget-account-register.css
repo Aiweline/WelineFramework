@@ -1,0 +1,5 @@
+.w-auth-login--register .w-auth-login__register-modes{padding-inline:1.25rem;margin-block-end:.35rem}
+.w-auth-login--register .w-auth-login__register-modes .w-tabs__list{margin-block-end:.35rem}
+.w-auth-login--register .w-auth-login__register-modes .w-tabs__panel{padding-block:.35rem 0}
+.w-auth-login--register .w-auth-login__register-modes .w-auth-login__form{padding-inline:0}
+.w-auth-login--register .w-auth-login__mail-panel{display:grid;gap:.75rem}

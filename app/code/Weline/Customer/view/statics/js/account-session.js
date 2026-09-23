@@ -408,8 +408,8 @@
             }
             try {
                 const result = await this.call('current');
-                // Never treat transport success as signed-in — guest current uses success:false,
-                // but other account ops may return success:true with isLogin:false.
+                // Never treat transport success as signed-in — guest current returns
+                // success:true with isLogin:false (same shape as menuSignals).
                 const rawUser = result && (result.user || (result.data && result.data.user)) || null;
                 const loggedIn = !!(result && (result.isLogin || result.logged_in)
                     && this.resolveUserIdentity(rawUser));
@@ -426,8 +426,8 @@
                 console.warn('[WelineApi.Account] frontend session check failed:', error);
                 this.frontendUser = null;
                 const status = { isLogin: false, user: null, fromCache: false };
-                // Worker/API treats guest current (success:false) as a thrown error.
-                // Still write a short-lived negative cache so every page does not re-hit the network.
+                // Transport / auth failures may still surface as thrown errors.
+                // Write a short-lived negative cache so every page does not re-hit the network.
                 const message = String((error && error.message) || error || '');
                 if (!skipGuestNegativeCache
                     && (/not signed in|not logged in|unauthori[sz]ed|未登录|未登入/i.test(message)
@@ -1057,19 +1057,52 @@
             if (displayName) {
                 displayName.textContent = username || fallbackAccount;
             }
-            const avatar = root.querySelector('[data-account-avatar]');
-            const avatarFallback = root.querySelector('[data-account-avatar-fallback]');
             const avatarUrl = this.normalizeAccountAvatarUrl(
                 user && user.avatar ? String(user.avatar).trim() : '',
             );
-            if (avatar instanceof HTMLImageElement) {
-                if (avatarUrl !== '') {
-                    this.applyAccountAvatar(avatar, avatarFallback, avatarUrl, username || '');
-                } else {
-                    this.clearAccountAvatar(avatar, avatarFallback);
-                }
-            }
+            this.paintHeaderAccountAvatars(root, avatarUrl, username || '');
             this.applyHeaderMenuAuth(root, 'signed-in');
+        }
+
+        /**
+         * Paint every avatar slot in the header account widget
+         * (trigger chrome + dropdown welcome header).
+         */
+        paintHeaderAccountAvatars(root, avatarUrl, altText) {
+            if (!(root instanceof Element)) {
+                return;
+            }
+            const url = this.normalizeAccountAvatarUrl(avatarUrl);
+            const wraps = root.querySelectorAll('[data-account-avatar-wrap]');
+            if (wraps.length > 0) {
+                wraps.forEach((wrap) => {
+                    if (!(wrap instanceof Element)) {
+                        return;
+                    }
+                    const avatar = wrap.querySelector('[data-account-avatar]');
+                    const avatarFallback = wrap.querySelector('[data-account-avatar-fallback]');
+                    if (!(avatar instanceof HTMLImageElement)) {
+                        return;
+                    }
+                    if (url !== '') {
+                        this.applyAccountAvatar(avatar, avatarFallback, url, altText || '');
+                    } else {
+                        this.clearAccountAvatar(avatar, avatarFallback);
+                    }
+                });
+                return;
+            }
+            // Legacy single-slot markup without wrap.
+            const avatar = root.querySelector('[data-account-avatar]');
+            const avatarFallback = root.querySelector('[data-account-avatar-fallback]');
+            if (!(avatar instanceof HTMLImageElement)) {
+                return;
+            }
+            if (url !== '') {
+                this.applyAccountAvatar(avatar, avatarFallback, url, altText || '');
+            } else {
+                this.clearAccountAvatar(avatar, avatarFallback);
+            }
         }
 
         /**
@@ -1218,9 +1251,7 @@
                 signedIn.hidden = true;
             }
             root.setAttribute('data-auth-state', 'guest');
-            const avatar = root.querySelector('[data-account-avatar]');
-            const avatarFallback = root.querySelector('[data-account-avatar-fallback]');
-            this.clearAccountAvatar(avatar, avatarFallback);
+            this.paintHeaderAccountAvatars(root, '', '');
             this.applyHeaderMenuAuth(root, 'guest');
         }
 

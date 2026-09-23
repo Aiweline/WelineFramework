@@ -47,6 +47,8 @@ final class AccountSessionModuleContractTest extends TestCase
     {
         $js = $this->accountJs();
         self::assertStringContainsString('data-account-avatar-fallback', $js);
+        self::assertStringContainsString('paintHeaderAccountAvatars', $js);
+        self::assertStringContainsString('data-account-avatar-wrap', $js);
         self::assertStringContainsString('avatar.hidden = false', $js);
         self::assertStringContainsString('avatarFallback.hidden = true', $js);
         self::assertStringContainsString('avatar.removeAttribute(\'src\')', $js);
@@ -83,9 +85,12 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('bindAccountChromeInteraction', $js);
         self::assertStringContainsString('reconcileSignedInChromeNavigation', $js);
         self::assertStringContainsString('resolveUserIdentity(rawUser)', $js);
+        self::assertStringContainsString('guest current returns', $js);
+        self::assertStringContainsString('success:true with isLogin:false', $js);
         self::assertStringContainsString('result.isLogin || result.logged_in', $js);
         self::assertStringContainsString('&& this.resolveUserIdentity(rawUser)', $js);
         self::assertStringNotContainsString('result.isLogin || result.logged_in || result.success', $js);
+        self::assertStringNotContainsString('guest current uses success:false', $js);
     }
 
     public function testAuthPagesForceNetworkAndLeaveWhenSignedIn(): void
