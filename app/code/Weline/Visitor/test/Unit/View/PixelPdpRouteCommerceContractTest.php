@@ -24,7 +24,7 @@ final class PixelPdpRouteCommerceContractTest extends TestCase
             self::assertStringContainsString("return 'view_item'", $src);
             self::assertStringContainsString('__trackRouteScopedCommerceEvents(', $src);
             self::assertStringContainsString('__WelinePixelRouteCommerceDomWait', $src);
-            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.22-param-shell1'", $src);
+            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.23-r2d-param2'", $src);
         }
     }
 
@@ -42,7 +42,7 @@ final class PixelPdpRouteCommerceContractTest extends TestCase
             self::assertStringContainsString('bootstrap_queued', $src);
             self::assertStringContainsString("loadWelinePixel('cta-click')", $src);
         }
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260922-param-shell1'", $bootstrap);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260923-r2d-param2'", $bootstrap);
     }
 
     public function testPdpTemplateHasExactViewItemMarker(): void

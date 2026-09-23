@@ -1,0 +1,11 @@
+.dashboard-widget-pixel-ecommerce-funnel table{width:100%;border-collapse:collapse}
+.dashboard-widget-pixel-ecommerce-funnel th,.dashboard-widget-pixel-ecommerce-funnel td{padding:8px 0;border-bottom:1px solid var(--w-dashboard-border,#e5e7eb);font-size:12px}
+.dashboard-widget-pixel-ecommerce-funnel thead th{color:var(--w-dashboard-muted,#6b7280);font-weight:600}
+.dashboard-widget-pixel-ecommerce-funnel tr:last-child th,.dashboard-widget-pixel-ecommerce-funnel tr:last-child td{border-bottom:0}
+.dashboard-widget-pixel-ecommerce-funnel tbody th{text-align:left;font-weight:500}
+.dashboard-widget-pixel-ecommerce-funnel .text-end{text-align:right}
+.dashboard-widget-pixel-ecommerce-funnel header,.pixel-ecommerce-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.pixel-ecommerce-meta{color:var(--w-dashboard-muted,#6b7280);font-size:12px}
+.pixel-widget-detail{color:var(--bs-primary,#2563eb);text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap}
+.pixel-widget-detail:hover{text-decoration:underline}
+.pixel-empty.compact{min-height:110px;display:flex;align-items:center;color:var(--w-dashboard-muted,#6b7280);font-size:13px}

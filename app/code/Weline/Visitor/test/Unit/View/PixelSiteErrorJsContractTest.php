@@ -21,6 +21,8 @@ class PixelSiteErrorJsContractTest extends TestCore
         self::assertStringContainsString("window.addEventListener('weline:api:error'", $js);
         self::assertStringContainsString('__onWelineApiError', $js);
         self::assertStringContainsString("capture_source: 'api'", $js);
+        self::assertStringContainsString('__isBenignSiteIncident', $js);
+        self::assertStringContainsString('error_message: message', $js);
     }
 
     public function testTaglibPixelSynced(): void
