@@ -113,6 +113,63 @@ final class FiberOutputBufferTest extends TestCase
         $fiber->start();
     }
 
+    public function testRealMemoryHeadroomOverflowsBeforeAppend(): void
+    {
+        $limitProp = new \ReflectionProperty(FiberOutputBuffer::class, 'memoryLimitBytes');
+        $limitProp->setAccessible(true);
+        $previousLimit = $limitProp->getValue();
+        // Fake a tight limit relative to real arena usage so emalloc-only checks would pass.
+        $limitProp->setValue(null, \memory_get_usage(true) + (2 * 1024 * 1024));
+
+        try {
+            $fiber = new \Fiber(static function (): void {
+                FiberOutputBuffer::beginCapture();
+                echo 'x';
+                FiberOutputBuffer::endCapture();
+            });
+
+            $this->expectException(\OverflowException::class);
+            $this->expectExceptionMessage('WLS output capture exceeded safe memory limits');
+            $fiber->start();
+        } finally {
+            $limitProp->setValue(null, $previousLimit);
+        }
+    }
+
+    public function testReentrancyDuringHandlerMarksOverflowWithoutFatal(): void
+    {
+        FiberOutputBuffer::beginCapture();
+
+        $depthProp = new \ReflectionProperty(FiberOutputBuffer::class, 'inHandlerDepth');
+        $depthProp->setAccessible(true);
+        $depthProp->setValue(null, 1);
+
+        try {
+            self::assertSame('', FiberOutputBuffer::handleOutputChunk('reentrant-chunk'));
+        } finally {
+            $depthProp->setValue(null, 0);
+        }
+
+        $this->expectException(\OverflowException::class);
+        $this->expectExceptionMessage('WLS output capture exceeded safe memory limits');
+        FiberOutputBuffer::endCapture();
+    }
+
+    public function testFlushSkippedWhileInsideOutputHandler(): void
+    {
+        $depthProp = new \ReflectionProperty(FiberOutputBuffer::class, 'inHandlerDepth');
+        $depthProp->setAccessible(true);
+        $depthProp->setValue(null, 1);
+
+        try {
+            $flush = new \ReflectionMethod(FiberOutputBuffer::class, 'flushInstalledBufferIntoCurrentFrame');
+            $flush->setAccessible(true);
+            self::assertFalse($flush->invoke(null));
+        } finally {
+            $depthProp->setValue(null, 0);
+        }
+    }
+
     public function testNonPersistentDiscardPreservesCallerOutputBuffer(): void
     {
         FiberOutputBuffer::uninstall();

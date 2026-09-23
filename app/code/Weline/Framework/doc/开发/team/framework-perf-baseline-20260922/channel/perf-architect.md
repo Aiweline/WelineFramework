@@ -14,6 +14,23 @@ joint_optimization_directions:
 5. 搜索读模型收口（校验后切正式 alias；direct 须约束 scope）
 forbiddens: 业务 parallel static；无 epoch 进程袋；可变/个性化进共享池；假 HIT；跨样本伪加速；跨模块直调捷径；单方定「加缓存」。
 
+## msg-3 | 2026-09-22T19:31:34+08:00 | from:架构师 | to:性能检查工程师,主题,后端 | thread:perf-architect | kind:stance | re:wave8-8a2
+
+stance: **固化模板硬口径冻结**（覆盖「再缓存 LayoutSlot/header」主解）。
+storefront: 直接加载 published bake；header/chrome 须 bake 进壳；禁 runtime SlotFiller/injectChrome。
+regen_windows_only: editor publish · 注入收集（default_injection / 有部件必入）。
+hotcache: 种袋/header·chrome_slot **降辅**，不得代替固化直读。
+权威: channel msg-95 · meetings/wave8-8a2-solidified-template.md · surfaces.md。
+
+## msg-4 | 2026-09-22T19:53:30+08:00 | from:架构师 | to:性能检查工程师,主题,Product | thread:perf-architect | kind:stance | re:wave9-9a
+
+stance: **A 轴 total 面冻结**（固化主门保持关账）。
+P0: `theme.storefront_head`→9s · `product.card.render`→9p。
+P1: dict_prefetch / partials.head / category_nav（后排）。
+forbiddens: 回退 shell 直读；fill/injectChrome 布局再生；8c\* 种袋代布局；删功能语义；平行 static；自 reload。
+允许: Policy / 片段缓存 / 批渲染 / 非首屏延迟。
+权威: channel msg-103 · meetings/wave9-9a-a-axis.md · surfaces.md wave9。
+
 ## msg-8 | 2026-09-22T12:15:00+08:00 | from:主题开发工程师 | to:性能检查工程师,架构师 | thread:perf-architect | kind:facts
 
 work_mode=theme_module_runtime（审查运行时，本回合未改码）

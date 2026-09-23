@@ -44,7 +44,8 @@ final class FormRenderer
         'role',
         'style',
     ];
-    private const BOOLEAN_ATTRIBUTES = ['novalidate'];
+    /** HTML boolean attributes accepted on `<w:form>` (emitted as bare flags). */
+    private const BOOLEAN_ATTRIBUTES = ['novalidate', 'hidden'];
     private const RESERVED_DATA_ATTRIBUTES = [
         'data-weline-form',
         'data-weline-form-intent',
@@ -409,7 +410,7 @@ HTML;
         if ($value === '' || $value === true || $value === 1) {
             return true;
         }
-        return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on', 'novalidate'], true);
+        return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on', 'novalidate', 'hidden'], true);
     }
 
     private static function normalizeTarget(string $target): string
@@ -470,6 +471,7 @@ HTML;
             'enctype' => \in_array($normalized, self::ALLOWED_ENCTYPES, true),
             'autocomplete' => \in_array($normalized, self::ALLOWED_AUTOCOMPLETE, true),
             'novalidate' => \in_array($normalized, ['', '1', 'true', 'yes', 'on', 'novalidate'], true),
+            'hidden' => \in_array($normalized, ['', '1', 'true', 'yes', 'on', 'hidden'], true),
             default => false,
         };
     }

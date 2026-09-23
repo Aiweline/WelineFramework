@@ -289,6 +289,23 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesApiDemoDownloadPublicRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        foreach (['api-demo/download', 'api/api-demo/download', 'apidemo/download'] as $path) {
+            $this->assertTrue(
+                $matcher->matches($this->createRequestMock(
+                    $path,
+                    'ApiDemo',
+                    'getDownload',
+                    'Weline\\Api\\Api\\ApiDemo'
+                )),
+                $path
+            );
+        }
+    }
+
     private function createRequestMock(string $routeUrlPath, string $controller, string $action, string $controllerClass): Request
     {
         return new class($routeUrlPath, $controller, $action, $controllerClass) extends Request {

@@ -7,7 +7,7 @@ HTML 的 JavaScript 才保留最终 `<form>` 字符串，并必须声明 `data-w
 支持属性：
 
 - 表单标准属性：`id`、`method`、`action`、`class`、`enctype`、`autocomplete`、`name`、
-  `target`、`rel`、`accept-charset`、`role`、`style`、`novalidate`。
+  `target`、`rel`、`accept-charset`、`role`、`style`、`novalidate`、`hidden`。
 - 框架属性：`intent`、`csrf="auto|on|off"`、`captcha="off|auto|required|lazy"`。
 - 扩展属性：规范命名的 `data-*` 与 `aria-*`；事件处理器属性不会透传。
 - 批量属性：`attributes="变量名"`，变量值必须是属性数组；标签上显式属性覆盖数组同名项。

@@ -1457,7 +1457,10 @@ class Parser
         if (empty($modules)) {
             foreach ($lang_words as $word => $module_words_data) {
                 if (is_string($word) && is_string($module_words_data)) {
-                    $all_words = self::mergePreferTranslatedWords($all_words, [$word => $module_words_data]);
+                    // Keep the merge preference without copying the growing dictionary per flat word.
+                    if (!isset($all_words[$word]) || $all_words[$word] === $word || $module_words_data !== $word) {
+                        $all_words[$word] = $module_words_data;
+                    }
                     continue;
                 }
                 if (is_array($module_words_data)) {
@@ -1469,7 +1472,8 @@ class Parser
 
         foreach ($lang_words as $word => $translate) {
             if (is_string($word) && is_string($translate)) {
-                $all_words = self::mergePreferTranslatedWords($all_words, [$word => $translate]);
+                // Flat keys are unique; selected module layers are merged below in their original order.
+                $all_words[$word] = $translate;
             }
         }
 

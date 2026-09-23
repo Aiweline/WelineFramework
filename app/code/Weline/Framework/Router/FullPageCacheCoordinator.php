@@ -72,6 +72,9 @@ final class FullPageCacheCoordinator
     private const PROCESS_FPC_MAX_ITEMS = 128;
     private const PROCESS_FPC_MAX_BYTES = 33554432;
     private const PROCESS_LOCALIZED_HOMEPAGE_RECEIPT_MAX_ITEMS = 128;
+
+    /** Cookieless `/products` catalog receipts pin Process L1 like homepage. */
+    private const PROCESS_CRITICAL_CATALOG_RECEIPT_MAX_ITEMS = 16;
     private const PROCESS_FORMATTED_FPC_MAX_ITEMS = 192;
     private const PROCESS_FORMATTED_FPC_MAX_BYTES = 16777216;
     private const FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS = 1.0;
@@ -164,6 +167,9 @@ final class FullPageCacheCoordinator
 
     /** @var array<string, array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}> */
     private static array $processLocalizedHomepageReceipts = [];
+
+    /** @var array<string, array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}> */
+    private static array $processCriticalCatalogReceipts = [];
 
     /** @var array<string, string> */
     private static array $processFormattedFpcCache = [];
@@ -567,6 +573,7 @@ final class FullPageCacheCoordinator
         );
         $this->registerLocalizedHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
         $this->registerRootHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
+        $this->registerRootCatalogProcessReceipt($fullUri, $variant, $unifiedCacheKey);
         // Outbound SSR still reports MISS for this request, but the body is now
         // in Process/Shared FPC. Mark the live response no-store so managed Nginx
         // edge must not persist the MISS headers (cookieless probes would otherwise
@@ -846,6 +853,7 @@ final class FullPageCacheCoordinator
         self::$processFpcPayloadBytes = [];
         self::$processFpcPayloadTotalBytes = 0;
         self::$processLocalizedHomepageReceipts = [];
+        self::$processCriticalCatalogReceipts = [];
         self::$processFormattedFpcCache = [];
         self::$processFormattedFpcExpiresAt = [];
         self::$processFormattedFpcBytes = [];
@@ -1299,6 +1307,31 @@ final class FullPageCacheCoordinator
         return \trim($path, '/') === '';
     }
 
+    private function isRootCatalogProductsFullUri(string $fullUri): bool
+    {
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)
+            || $this->isEditorOrPreviewRequest($fullUri)
+        ) {
+            return false;
+        }
+
+        try {
+            $parts = \parse_url($fullUri);
+        } catch (\ValueError) {
+            return false;
+        }
+        if (!\is_array($parts) || \trim((string)($parts['query'] ?? '')) !== '') {
+            return false;
+        }
+
+        $path = (string)($parts['path'] ?? '/');
+        $path = State::stripWebsitePathPrefix($path, $this->currentWebsiteUrlForPathVariant());
+        $normalized = \strtolower(\trim($path, '/'));
+
+        return $normalized === 'products';
+    }
+
     /**
      * Return the exact anonymous FPC identity used by the current homepage
      * prime. Public requests can never obtain this receipt: the predicate
@@ -1422,6 +1455,41 @@ final class FullPageCacheCoordinator
         }
 
         $this->registerHomepageProcessReceipt($fullUri, $variant, $cacheKey);
+    }
+
+    /**
+     * Pin cookieless `/products` Process L1 the same way homepage receipts pin
+     * `/`. Locale multi-MB warmup must not evict the catalog representative and
+     * force a second full SSR before the first public/probe MISS window closes.
+     *
+     * @param array<string, mixed> $variant
+     */
+    private function registerRootCatalogProcessReceipt(
+        string $fullUri,
+        array $variant,
+        string $cacheKey
+    ): void {
+        $fullUri = $this->canonicalizeFullUriForCacheKey($fullUri);
+        if (!$this->isRootCatalogProductsFullUri($fullUri)
+            || $this->currentRequestCookieHeader() !== ''
+            || $this->getProcessCachedPayload($cacheKey) === null
+        ) {
+            return;
+        }
+
+        $receipt = $this->buildInternalHomepageWarmupReceipt($fullUri, $variant, $cacheKey);
+        if ($receipt === null) {
+            return;
+        }
+
+        $receiptIndex = \hash('sha256', $fullUri);
+        unset(self::$processCriticalCatalogReceipts[$receiptIndex]);
+        self::$processCriticalCatalogReceipts[$receiptIndex] = $receipt;
+        while (\count(self::$processCriticalCatalogReceipts)
+            > self::PROCESS_CRITICAL_CATALOG_RECEIPT_MAX_ITEMS
+        ) {
+            \array_shift(self::$processCriticalCatalogReceipts);
+        }
     }
 
     /** @param array<string, mixed> $variant */
@@ -2321,6 +2389,11 @@ final class FullPageCacheCoordinator
                 $cachedVariant,
                 $cacheKey,
             );
+            $this->registerRootCatalogProcessReceipt(
+                $this->getCacheKeyFullUri(),
+                $cachedVariant,
+                $cacheKey,
+            );
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
@@ -3135,7 +3208,94 @@ final class FullPageCacheCoordinator
         }
 
         $payload = self::$processFpcPayloadCache[$cacheKey] ?? null;
-        return \is_array($payload) ? $payload : null;
+        if (!\is_array($payload)) {
+            return null;
+        }
+
+        // LRU touch so hot homepage / catalog HIT stay ahead of later multi-MB
+        // locale warmup inserts under PROCESS_FPC_MAX_* pressure.
+        unset(self::$processFpcPayloadCache[$cacheKey]);
+        self::$processFpcPayloadCache[$cacheKey] = $payload;
+
+        return $payload;
+    }
+
+    /**
+     * Homepage root + cookieless `/products` receipts pin Process L1 entries.
+     * Evicting them for locale SSR forces a second full SSR even when Shared
+     * still holds the body. This is the existing FPC process bag (schema/
+     * namespace on shared keys) — not a parallel epoch-less static bag.
+     */
+    private function isProcessFpcHomepagePinnedKey(string $cacheKey): bool
+    {
+        if ($cacheKey === '') {
+            return false;
+        }
+        foreach (self::$processLocalizedHomepageReceipts as $receipt) {
+            if (!\is_array($receipt)) {
+                continue;
+            }
+            if (\hash_equals((string)($receipt['cache_key'] ?? ''), $cacheKey)) {
+                return true;
+            }
+        }
+        foreach (self::$processCriticalCatalogReceipts as $receipt) {
+            if (!\is_array($receipt)) {
+                continue;
+            }
+            if (\hash_equals((string)($receipt['cache_key'] ?? ''), $cacheKey)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Prefer evicting non-pinned Process L1 entries. When inserting a non-pinned
+     * (locale) payload and only critical-pinned keys remain, refuse the insert
+     * so `/` + `/products` HIT slots survive multi-MB warmup thrash.
+     *
+     * @param bool $incomingPinned Whether the incoming key was critical-pinned
+     *     before any same-key delete (receipt may already be cleared by replace).
+     */
+    private function evictProcessFpcPayloadForIncoming(string $incomingKey, int $bytes, bool $incomingPinned): bool
+    {
+        $guard = 0;
+        $maxGuard = \max(1, \count(self::$processFpcPayloadCache) + 2);
+
+        while ((\count(self::$processFpcPayloadCache) >= self::PROCESS_FPC_MAX_ITEMS
+                || self::$processFpcPayloadTotalBytes + $bytes > self::PROCESS_FPC_MAX_BYTES)
+            && self::$processFpcPayloadCache !== []
+            && $guard < $maxGuard
+        ) {
+            $guard++;
+            $victim = null;
+            foreach (\array_keys(self::$processFpcPayloadCache) as $candidate) {
+                $candidate = (string)$candidate;
+                if ($candidate === $incomingKey) {
+                    continue;
+                }
+                if (!$this->isProcessFpcHomepagePinnedKey($candidate)) {
+                    $victim = $candidate;
+                    break;
+                }
+            }
+            if ($victim === null) {
+                if (!$incomingPinned) {
+                    // Keep homepage/catalog receipt L1; Shared still holds locale bodies.
+                    return false;
+                }
+                $victim = (string)\array_key_first(self::$processFpcPayloadCache);
+                if ($victim === '' || $victim === $incomingKey) {
+                    return false;
+                }
+            }
+            $this->deleteProcessCachedPayload($victim);
+        }
+
+        return !(\count(self::$processFpcPayloadCache) >= self::PROCESS_FPC_MAX_ITEMS
+            || self::$processFpcPayloadTotalBytes + $bytes > self::PROCESS_FPC_MAX_BYTES);
     }
 
     /**
@@ -3157,13 +3317,11 @@ final class FullPageCacheCoordinator
             return;
         }
 
+        // Capture pin before same-key delete clears the homepage receipt.
+        $incomingPinned = $this->isProcessFpcHomepagePinnedKey($cacheKey);
         $this->deleteProcessCachedPayload($cacheKey);
-        while ((\count(self::$processFpcPayloadCache) >= self::PROCESS_FPC_MAX_ITEMS
-                || self::$processFpcPayloadTotalBytes + $bytes > self::PROCESS_FPC_MAX_BYTES)
-            && self::$processFpcPayloadCache !== []
-        ) {
-            $oldestKey = (string)\array_key_first(self::$processFpcPayloadCache);
-            $this->deleteProcessCachedPayload($oldestKey);
+        if (!$this->evictProcessFpcPayloadForIncoming($cacheKey, $bytes, $incomingPinned)) {
+            return;
         }
 
         self::$processFpcPayloadCache[$cacheKey] = $payload;
@@ -3191,6 +3349,11 @@ final class FullPageCacheCoordinator
         foreach (self::$processLocalizedHomepageReceipts as $receiptIndex => $receipt) {
             if (\hash_equals((string)($receipt['cache_key'] ?? ''), $cacheKey)) {
                 unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+            }
+        }
+        foreach (self::$processCriticalCatalogReceipts as $receiptIndex => $receipt) {
+            if (\hash_equals((string)($receipt['cache_key'] ?? ''), $cacheKey)) {
+                unset(self::$processCriticalCatalogReceipts[$receiptIndex]);
             }
         }
         if (!isset(self::$processFpcPayloadCache[$cacheKey])) {

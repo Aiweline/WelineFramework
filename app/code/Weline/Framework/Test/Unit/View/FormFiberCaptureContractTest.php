@@ -18,7 +18,7 @@ final class FormFiberCaptureContractTest extends TestCase
             \dirname(__DIR__, 3) . '/View/Taglib.php'
         );
 
-        self::assertSame('20260918-fiber-form-ob-v2', Taglib::COMPILER_GENERATION);
+        self::assertSame('20260923-if-condition-getdata-form-hidden-v4', Taglib::COMPILER_GENERATION);
         self::assertStringContainsString('FiberOutputBuffer::beginCapture()', $source);
         self::assertStringContainsString('FiberOutputBuffer::endCapture()', $source);
         self::assertStringContainsString('Taglib__form_body', $source);

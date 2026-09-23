@@ -1,0 +1,52 @@
+app/code/Weline/DeveloperWorkspace/Observer/DevToolPanelObserver.php:588:ob_start();
+app/code/Weline/Framework/Setup/Console/Setup/Upgrade.php:1521:@\ob_flush();
+app/code/Weline/Framework/Controller/PcController.php:712:} elseif (\ob_get_level() > 0 && \ob_get_length() > 0) {
+app/code/Weline/Framework/Controller/PcController.php:713:\ob_clean();
+app/code/Weline/Framework/Http/FpmResponseEmitter.php:86:while (\ob_get_level()) {
+app/code/Weline/Framework/Http/FpmResponseEmitter.php:87:\ob_end_clean();
+app/code/Weline/Framework/Http/BinaryOutputGuard.php:42:while (\ob_get_level() > 0) {
+app/code/Weline/Framework/Http/BinaryOutputGuard.php:43:$chunk = \ob_get_clean();
+app/code/Weline/Framework/Http/Sse/SseContext.php:222:if (\ob_get_level() > 0) {
+app/code/Weline/Framework/Http/Sse/SseContext.php:223:\ob_flush();
+app/code/Weline/Framework/Http/Sse/SseContext.php:341:if (\ob_get_level() > 0) {
+app/code/Weline/Framework/Http/Sse/SseContext.php:342:\ob_flush();
+app/code/Weline/Framework/Http/Sse/SseWriter.php:187:while (\ob_get_level() > 0) {
+app/code/Weline/Framework/Http/Sse/SseWriter.php:188:\ob_end_flush();
+app/code/Weline/MediaManager/Observer/RouterRunBefore.php:20:$ob = ob_start();
+app/code/Weline/MediaManager/Controller/Backend/AiDraw.php:223:while (\ob_get_level() > 0) {
+app/code/Weline/MediaManager/Controller/Backend/AiDraw.php:224:\ob_end_clean();
+app/code/Weline/MediaManager/Service/AiDrawService.php:1101:\ob_start();
+app/code/Weline/MediaManager/Service/AiDrawService.php:1110:$bytes = \ob_get_clean();
+app/code/Weline/Admin/Controller/Login.php:795:ob_start();
+app/code/Weline/Product/scripts/remediate-product-image-hd.php:363:ob_start();
+app/code/Weline/Captcha/Service/LocalChallengeImage.php:181:\ob_start();
+app/code/Weline/Captcha/Service/LocalChallengeImage.php:183:$png = \ob_get_clean();
+app/code/Weline/Search/Taglib/Search.php:115:ob_start();
+app/code/Weline/Theme/Taglib/Slot.php:174:. '<?php \\ob_start(); ?>'
+app/code/Weline/Theme/Taglib/Slot.php:191:. '$__welinePublishedSlotDefault = (string)\\ob_get_clean(); '
+app/code/Weline/Theme/Taglib/Slot.php:249:. '<?php \\ob_start(); ?>'
+app/code/Weline/Theme/Taglib/Slot.php:252:. $idExport . ', (string)\\ob_get_clean()); ?>'
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityChrome.php:280:\ob_start();
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityChrome.php:283:return (string)\ob_get_clean();
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityChrome.php:285:if (\ob_get_level() > 0) {
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityChrome.php:286:\ob_end_clean();
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php:1789:\ob_start();
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php:1792:$html = (string)\ob_get_clean();
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php:1794:if (\ob_get_level() > 0) {
+app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php:1795:\ob_end_clean();
+app/code/Weline/Maintenance/Service/MaintenanceStaticGenerator.php:782:\ob_start();
+app/code/Weline/Maintenance/Service/MaintenanceStaticGenerator.php:785:return (string)\ob_get_clean();
+app/code/Weline/I18n/Taglib/LanguageSelect.php:271:ob_start();
+app/code/Weline/I18n/Controller/Backend/Dictionary.php:403:ob_start();
+app/code/Weline/I18n/Controller/Backend/Dictionary.php:1243:ob_start();
+app/code/Weline/I18n/Controller/Backend/Dictionary.php:1595:ob_start();
+app/code/Weline/I18n/Controller/Backend/Dictionary.php:1640:ob_start();
+app/code/Weline/I18n/Controller/Backend/Dictionary.php:1662:ob_start();
+# --- architect supplement 2026-09-23 (漏网) ---
+app/code/Weline/Backend/view/blocks/header/base.phtml:39:ob_start();
+app/code/Weline/Theme/view/theme/backend/widgets/data/form/default.phtml:65:ob_start();
+app/code/Weline/Theme/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml:120:ob_start();
+app/code/Weline/Framework/Event/Event.php:411:@ob_flush();
+app/code/Weline/ElFinderFileManager/view/statics/php/connector.maximal.php-dist:145:ob_start();
+# Widget AbstractParamType: no ob_* (N/A)
+# Many Test/** ob_start → class E (see surfaces.md)

@@ -12,4 +12,7 @@ interface BatchCacheAdapterInterface extends CacheAdapterInterface
 
     /** @param array<string,mixed> $values 整批条目使用相同 TTL。 */
     public function setMultiple(array $values, int $ttl = 0): bool;
+
+    /** @param list<string> $keys 真批量删除（单次驱动往返）；缺键视为已达成。 */
+    public function deleteMultiple(array $keys): bool;
 }

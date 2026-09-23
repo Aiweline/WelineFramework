@@ -77,6 +77,11 @@ class PublicApiAuthRouteMatcher
         'datatable/rest/v1/demo-table/clear-data',
         'datatable/rest/v1/demo-form/fields',
         'datatable/rest/v1/demo-form/record',
+        // Module source/api-demo zip assist (public docs download; no token).
+        'api/api-demo/download',
+        'api-demo/download',
+        'api/apidemo/download',
+        'apidemo/download',
     ];
 
     private const GUEST_FRONTEND_PATH_PATTERNS = [

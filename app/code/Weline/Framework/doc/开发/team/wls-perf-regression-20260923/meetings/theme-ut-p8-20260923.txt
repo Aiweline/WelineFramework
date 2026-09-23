@@ -1,0 +1,24 @@
+[34mRun mode: Command-line output (default)[0m
+[34mRun mode: Specify module - Weline_Theme[0m
+[34mCollecting test suite...[0m
+[34mRun mode: Specify module file - Weline_Theme::StorefrontHotCacheBagWarmupProviderContractTest[0m
+[34mCollection complete, preparing to run...[0m
+[34mRunning module file test: Weline_Theme::StorefrontHotCacheBagWarmupProviderContractTest[0m
+[32m'/opt/homebrew/Cellar/php@8.4/8.4.22/bin/php' /Users/weline/Project/Official/框架/vendor//phpunit/phpunit/phpunit --configuration /Users/weline/Project/Official/框架/tests/phpunit/config.xml --testdox app/code/Weline/Theme/test/Unit/Api/Runtime/StorefrontHotCacheBagWarmupProviderContractTest.php[0m
+[34mPHPUnit 10.5.36 by Sebastian Bergmann and contributors.[0m
+Runtime:       PHP 8.4.22
+Configuration: /Users/weline/Project/Official/框架/tests/phpunit/config.xml
+...                                                                 3 / 3 (100%)
+[34mTime: 00:00.033, Memory: 32.00 MB[0m
+Storefront Hot Cache Bag Warmup Provider Contract (Weline\Theme\Test\Unit\Api\Runtime\StorefrontHotCacheBagWarmupProviderContract)
+✔ Module provides bag warmup capability
+✔ Provider implements framework interface
+✔ Chrome eager seed and slot projection prime exist
+[32mOK, but there were issues![0m
+[34mTests: 3, Assertions: 44, PHPUnit Deprecations: 1.[0m
+[32m────────────────────────────────────────────────────────────────────────────────[0m
+[32m✓ Test completed![0m
+[34mNote: Tests have completed.[0m
+[34m
+[0m
+[34mExecuting command:phpunit:run --module=Weline_Theme[0m
