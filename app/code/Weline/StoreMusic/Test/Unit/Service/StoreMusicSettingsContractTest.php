@@ -29,6 +29,10 @@ final class StoreMusicSettingsContractTest extends TestCase
         $modulesJs = (string)file_get_contents($moduleRoot . '/view/statics/frontend/weline.modules.js');
 
         self::assertStringContainsString('store_music/general/enabled', $template);
+        self::assertMatchesRegularExpression(
+            '/key="store_music\/general\/enabled"[\s\S]*?default="0"/',
+            $template
+        );
         self::assertStringContainsString('store_music/music/playlist', $template);
         self::assertStringContainsString('store_music/music/track', $template);
         self::assertStringContainsString('store_music/music/delay_seconds', $template);
@@ -47,6 +51,10 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('tracksFromWidgetConfig', $settings);
         self::assertStringContainsString('KEY_PLAYLIST', $settings);
         self::assertStringContainsString('KEY_AVATAR_SPIN', $settings);
+        self::assertStringContainsString('boolean(self::KEY_ENABLED, false)', $settings);
+        self::assertStringContainsString('boolean(self::KEY_TRY_AUTOPLAY, true)', $settings);
+        self::assertStringContainsString('"enabled":false', $widget);
+        self::assertStringContainsString('@param enabled {default=false', $widget);
         self::assertStringContainsString('avatarSpin', $settings);
         self::assertStringContainsString("'avatar_spin'", $settings);
         self::assertStringContainsString('parsePlaylistJson', $settings);

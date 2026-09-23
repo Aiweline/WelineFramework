@@ -38,7 +38,7 @@ class StoreMusicSettings
 
     public function isEnabled(): bool
     {
-        return $this->boolean(self::KEY_ENABLED, true);
+        return $this->boolean(self::KEY_ENABLED, false);
     }
 
     public function trackUrl(): string

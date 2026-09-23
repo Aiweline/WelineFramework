@@ -38,12 +38,20 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertSame('newsletter-popup', $popup['code'] ?? null);
         self::assertSame(['*'], $popup['page_layouts'] ?? null);
         self::assertSame(14, (int)(($popup['params']['cookie_days']['default'] ?? 0)));
+        self::assertSame('deferred', (string)(($popup['params']['trigger']['default'] ?? '')));
+        self::assertSame(15, (int)(($popup['params']['delay_seconds']['default'] ?? 0)));
+        self::assertSame(40, (int)(($popup['params']['scroll_percent']['default'] ?? 0)));
+        self::assertSame(3, (int)(($popup['params']['min_open_seconds']['default'] ?? 0)));
         $pinj = $popup['default_injections'][0] ?? [];
         self::assertSame('homepage', $pinj['layout_type'] ?? null);
         self::assertSame('content', $pinj['slot'] ?? null);
         self::assertSame('content', $pinj['area'] ?? null);
         self::assertTrue((bool)($pinj['required'] ?? false));
         self::assertGreaterThanOrEqual(900, (int)($pinj['sort_order'] ?? 0));
+        self::assertSame('deferred', (string)(($pinj['config']['trigger'] ?? '')));
+        self::assertSame(15, (int)(($pinj['config']['delay_seconds'] ?? 0)));
+        self::assertSame(40, (int)(($pinj['config']['scroll_percent'] ?? 0)));
+        self::assertSame(3, (int)(($pinj['config']['min_open_seconds'] ?? 0)));
 
         self::assertArrayHasKey('sidebar-newsletter', $widgets);
     }
@@ -70,11 +78,16 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertStringContainsString('data-testid="newsletter-popup-form"', $popup);
         self::assertStringContainsString('data-testid="newsletter-subscribe-success"', $popup);
         self::assertStringContainsString('data-testid="newsletter-letter-sheet"', $popup);
-        self::assertStringContainsString('newsletter-letter-envelope-shell.webp', $popup);
+        self::assertStringContainsString('newsletter-xinjian-gufeng.webp', $popup);
         self::assertStringNotContainsString('newsletter-popup-mist-bg', $popup);
+        self::assertStringNotContainsString('newsletter-letter-envelope-shell', $popup);
         self::assertStringContainsString('letter-shell', $popup);
         self::assertStringContainsString('data-cookie-days', $popup);
+        self::assertStringContainsString('data-min-open', $popup);
         self::assertStringContainsString("getData('cookie_days') ?? 14", $popup);
+        self::assertStringContainsString("getData('trigger') ?? 'deferred'", $popup);
+        self::assertStringContainsString("getData('delay_seconds') ?? 15", $popup);
+        self::assertStringContainsString("getData('scroll_percent') ?? 40", $popup);
         self::assertStringContainsString('可随时退订', $popup);
         self::assertStringContainsString('data-weline-load="newsletterSubscribe"', $popup);
         self::assertStringContainsString('pointer-events: none', $popup);
@@ -99,9 +112,9 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
     public function testLetterStationeryPngAssetsExist(): void
     {
         $images = dirname(__DIR__, 3) . '/view/statics/images';
-        self::assertFileExists($images . '/newsletter-letter-envelope-shell.webp');
-        self::assertGreaterThan(5_000, filesize($images . '/newsletter-letter-envelope-shell.webp'));
-        self::assertLessThan(200_000, filesize($images . '/newsletter-letter-envelope-shell.webp'));
+        self::assertFileExists($images . '/newsletter-xinjian-gufeng.webp');
+        self::assertGreaterThan(5_000, filesize($images . '/newsletter-xinjian-gufeng.webp'));
+        self::assertLessThan(200_000, filesize($images . '/newsletter-xinjian-gufeng.webp'));
     }
 
     public function testThemeShellNoLongerRegistersNewsletterCodes(): void
@@ -187,5 +200,10 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertStringNotContainsString('fetch(', $js);
         self::assertStringNotContainsString('XMLHttpRequest', $js);
         self::assertStringContainsString('cookieDays', $js);
+        self::assertStringContainsString('requestShow', $js);
+        self::assertStringContainsString('minOpenMs', $js);
+        self::assertStringContainsString('deferred', $js);
+        self::assertStringContainsString('bindExitTrigger', $js);
+        self::assertStringContainsString('bindScrollTrigger', $js);
     }
 }

@@ -25,6 +25,8 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         self::assertSame('homepage', $injection['layout_type'] ?? null);
         self::assertSame('content', $injection['slot'] ?? null);
         self::assertTrue(!empty($injection['required']));
+        self::assertSame(false, $injection['config']['enabled'] ?? null);
+        self::assertSame(true, $injection['config']['try_autoplay'] ?? null);
     }
 
     public function testWidgetDeclaresComponentConfigParams(): void
@@ -45,6 +47,8 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         ] as $key) {
             self::assertArrayHasKey($key, $params, "missing param {$key}");
         }
+        self::assertSame(false, $params['enabled']['default'] ?? null);
+        self::assertSame(true, $params['try_autoplay']['default'] ?? null);
         self::assertSame('array', $params['tracks']['type'] ?? null);
         self::assertSame('media_image', $params['tracks']['item_schema']['url']['type'] ?? null);
         self::assertSame('audio', $params['tracks']['item_schema']['url']['media_options']['kind'] ?? null);
@@ -54,15 +58,16 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         self::assertSame('选择曲目添加', $params['tracks']['add_with_media_label'] ?? null);
     }
 
-    public function testHookDefersToSharedWidgetTemplate(): void
+    public function testHookOwnsAudibleFloatViaSharedTemplate(): void
     {
         $hook = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
         $src = (string)file_get_contents($hook);
         self::assertStringContainsString("BP . '/app/code/Weline/StoreMusic/view/templates/frontend/widgets/store-music.phtml'", $src);
         self::assertStringNotContainsString('data-store-music-config', $src);
         self::assertStringNotContainsString("__DIR__", $src);
-        self::assertStringContainsString('StoreMusicLayoutPresence', $src);
-        self::assertStringContainsString('layoutPlacesWidget', $src);
+        self::assertStringContainsString('__weline_store_music_from_hook', $src);
+        self::assertStringContainsString('StoreMusicRenderGate::reset', $src);
+        self::assertStringNotContainsString('layoutPlacesWidget', $src);
         self::assertStringNotContainsString('isThemeEditorCanvas', $src);
         self::assertStringNotContainsString('visual_editor', $src);
         self::assertStringNotContainsString("getGet('preview'", $src);
@@ -91,6 +96,8 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('data-store-music-skipped', $src);
         self::assertStringContainsString("\$presenceStub('inactive')", $src);
         self::assertStringContainsString("\$presenceStub('already-rendered')", $src);
+        self::assertStringContainsString("\$presenceStub('hook-owned')", $src);
+        self::assertStringContainsString('__weline_store_music_from_hook', $src);
     }
 
     public function testRenderGateClaimsOnce(): void

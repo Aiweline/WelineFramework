@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Newsletter',
-    'version' => '1.0.9',
+    'version' => '1.0.12',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Frontend' => '*',
