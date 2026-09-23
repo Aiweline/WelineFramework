@@ -524,9 +524,33 @@ class State extends DataObject
         }
         foreach ((array)($localized['remaining'] ?? []) as $part) {
             $part = \trim((string)$part);
-            if ($part !== '') {
-                $out[] = $part;
+            if ($part === '') {
+                continue;
             }
+            // Collapse duplicated default localization segments left in remaining
+            // (e.g. /USD/USD or /en_US/en_US after a mount/parser glitch) so 301
+            // targets stay canonical and never self-loop on the visitor path.
+            if ($omitCurrency
+                && $defaultCurrency !== ''
+                && \strtoupper($part) === $defaultCurrency
+                && self::isCurrencySegmentCandidate($part)
+            ) {
+                continue;
+            }
+            $normalizedPartLang = self::normalizeLanguageSegment($part);
+            if ($omitLanguage
+                && $normalizedPartLang !== ''
+                && (
+                    ($defaultLanguage !== '' && \strcasecmp($normalizedPartLang, $defaultLanguage) === 0)
+                    || (
+                        self::isLanguageCodeShape($normalizedPartLang)
+                        && !self::isAllowedLanguageCode($normalizedPartLang)
+                    )
+                )
+            ) {
+                continue;
+            }
+            $out[] = $part;
         }
 
         $canonical = $out === [] ? '/' : '/' . \implode('/', $out);

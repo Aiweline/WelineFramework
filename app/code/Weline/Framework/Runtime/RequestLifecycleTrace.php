@@ -204,8 +204,8 @@ class RequestLifecycleTrace
     public static function isEnabled(): bool
     {
         $state = self::state();
-        if ($state->enabledCache !== null) {
-            return $state->enabledCache;
+        if ($state->enabledCache === true) {
+            return true;
         }
 
         $hasActiveRequestContext = \class_exists(RequestContext::class, false)
@@ -220,7 +220,16 @@ class RequestLifecycleTrace
             return false;
         }
 
-        $enabled = self::isPanelTraceArmed();
+        // false 可能在 URL 解析前被缓存；模板耗时旁路允许稍后武装 DB 埋点。
+        if ($state->enabledCache === false) {
+            if (self::isTemplatePerfOverlayRequested()) {
+                $state->enabledCache = true;
+                return true;
+            }
+            return false;
+        }
+
+        $enabled = self::isPanelTraceArmed() || self::isTemplatePerfOverlayRequested();
 
         if (!$enabled) {
             $state->enabledCache = false;
@@ -238,6 +247,97 @@ class RequestLifecycleTrace
 
         $state->enabledCache = true;
         return true;
+    }
+
+    /**
+     * `wls_tpl_perf=1` 诊断：允许无面板 Cookie 也记录 DB/WLS span，供模板旁路拆分 db/php。
+     */
+    public static function isTemplatePerfOverlayRequested(): bool
+    {
+        try {
+            if (\class_exists(RequestContext::class, false)
+                && RequestContext::isInitialized()
+                && RequestContext::get('view.template.overlay') === true
+            ) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\App\Env::class, false)
+                && (bool)\Weline\Framework\App\Env::get('wls.performance.template_render_overlay_enabled', false)
+            ) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(RequestContext::class, false)
+                && RequestContext::isInitialized()
+                && \class_exists(\Weline\Framework\Manager\ObjectManager::class, false)
+            ) {
+                /** @var \Weline\Framework\Http\Request $request */
+                $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+                $flag = (string)($request->getGet('wls_tpl_perf') ?? $request->getParam('wls_tpl_perf') ?? '');
+                if ($flag === '1' || \strtolower($flag) === 'true') {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $query = (string)WelineEnv::server('QUERY_STRING', '');
+        if ($query === '') {
+            $requestUri = (string)WelineEnv::server('REQUEST_URI', '');
+            if ($requestUri === '' && \function_exists('w_env_request_uri')) {
+                $requestUri = (string)\w_env_request_uri();
+            }
+            $parts = \parse_url($requestUri);
+            $query = \is_array($parts) ? (string)($parts['query'] ?? '') : '';
+        }
+        if ($query === '') {
+            return false;
+        }
+        \parse_str($query, $params);
+        $flag = $params['wls_tpl_perf'] ?? null;
+        if (\is_array($flag)) {
+            return false;
+        }
+        $value = \strtolower((string)$flag);
+
+        return $value === '1' || $value === 'true';
+    }
+
+    /**
+     * @return array{db_duration_ms: float, db_span_count: int, wls_duration_ms: float, wls_span_count: int}
+     */
+    public static function snapshotIoCounters(): array
+    {
+        $state = self::state();
+
+        return [
+            'db_duration_ms' => \round($state->dbDurationMs, 2),
+            'db_span_count' => $state->dbSpanCount,
+            'wls_duration_ms' => \round($state->wlsDurationMs, 2),
+            'wls_span_count' => $state->wlsSpanCount,
+        ];
+    }
+
+    public static function armTemplatePerfOverlayIfRequested(): void
+    {
+        if (!self::isTemplatePerfOverlayRequested()) {
+            return;
+        }
+        try {
+            if (\class_exists(RequestContext::class, false) && RequestContext::isInitialized()) {
+                RequestContext::set('view.template.overlay', true);
+            }
+        } catch (\Throwable) {
+        }
+        $state = self::state();
+        $state->enabledCache = true;
     }
 
     public static function panelTraceCookieName(): string

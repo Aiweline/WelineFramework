@@ -278,6 +278,22 @@ final class AppRequestRuntimeContextTest extends TestCase
                 '/',
                 State::canonicalizeStorefrontLocalizationPath('/zh_Hans_CN/', 'zh_Hans_CN', 'CNY')
             );
+            self::assertSame(
+                '/',
+                State::canonicalizeStorefrontLocalizationPath('/USD/USD', 'zh_Hans_CN', 'USD')
+            );
+            self::assertSame(
+                '/product/x',
+                State::canonicalizeStorefrontLocalizationPath('/USD/USD/product/x', 'zh_Hans_CN', 'USD')
+            );
+            self::assertSame(
+                '/',
+                State::canonicalizeStorefrontLocalizationPath('/en_US/en_US', 'en_US', 'USD')
+            );
+            self::assertSame(
+                '/product/x',
+                State::canonicalizeStorefrontLocalizationPath('/en_US/en_US/product/x', 'en_US', 'USD')
+            );
         } finally {
             $languageMaps->setValue(null, $originalLanguage);
         }

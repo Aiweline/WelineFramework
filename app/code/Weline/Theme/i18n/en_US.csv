@@ -1041,17 +1041,7 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-面包屑,"bread crumbs"
+指南,Guide
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
@@ -1078,6 +1068,42 @@ NEW,NEW
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+查看更多,"View more"
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+面包屑,"bread crumbs"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+官方社交媒体,"Official social media"
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
+7×24,24/7
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1111,16 +1137,7 @@ NEW,NEW
 表单操作,"Form operations"
 栅格内容,"Raster content"
 末页,"Last page"
-指南,Guide
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
 问答,Q&A
-7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
 我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
 您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
@@ -1189,8 +1206,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1232,7 +1247,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1243,10 +1257,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1264,15 +1274,9 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
-官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1307,10 +1311,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -4375,3 +4375,41 @@ Chiffon,Chiffon
 方领短袄试穿,"Square-collar jacket try-on"
 魏晋大袖试穿,"Wei–Jin wide-sleeve try-on"
 礼宴雅集留影,"Banquet gathering snapshot"
+形制顾问,"Form consultant"
+穿搭与形制,"Styling & silhouette"
+工艺与质检,"Craft & QC"
+"面料 · 刺绣 · 成衣","Fabric · embroidery · finished garment"
+"批发 + 单件","Wholesale + single piece"
+去选购,"Shop now"
+了解品牌,"About the brand"
+形制、工艺与履约，陪你选对第一套汉服,"Silhouette, craft, and fulfillment—find your first Hanfu with us"
+购买、尺码、配送与养护,"Buying, sizing, shipping, and care"
+从明制马面裙到唐风襦裙，按场景给出形制与层次建议，帮你选对第一套汉服。,"From Ming mamian skirts to Tang-style ruqun, we suggest silhouettes and layering for your first Hanfu."
+把关织造、刺绣与成衣细节，确保上身气韵与日常穿着兼顾。,"We check weaving, embroidery, and finishing so pieces look refined and wear well day to day."
+支持一件起订与批发拿货，协调国际物流、尺码沟通与售后跟进。,"Order one piece or wholesale—we coordinate international shipping, sizing questions, and after-sales."
+可以批发，也可以只买一件吗？,"Can I buy wholesale or just one piece?"
+可以。長安漢服同时服务一件起订的个人买家与批发客户，商品页可切换零售／批发身份后下单。,"Yes. Chang’an Hanfu serves both single-piece shoppers and wholesale buyers—switch retail/wholesale on the product page before checkout."
+尺码如何选择？,"How do I choose a size?"
+请对照商品页尺码表，按胸围、腰围与身高选号；不确定时可联系客服，我们会按形制给出建议。,"Use the size chart on the product page (bust, waist, height). If unsure, contact support for silhouette-based advice."
+国际配送大概多久？,"How long does international shipping take?"
+视目的地与清关情况，通常在付款后数个工作日内发出；物流单号可在订单中心跟踪。,"Depending on destination and customs, we usually ship within a few business days after payment. Track via order center."
+汉服怎么养护？,"How should I care for Hanfu?"
+建议轻柔手洗或专业干洗，避免暴晒与高温烘干；刺绣与袖缘请单独放置，减少勾丝。,"Prefer gentle hand wash or professional dry cleaning; avoid strong sun and high heat. Store embroidered pieces and sleeves carefully to reduce snags."
+退换货怎么处理？,"How do returns and exchanges work?"
+未穿用且吊牌完整的商品可按退换政策申请；定制款与贴身衣物规则以政策页为准。,"Unworn items with tags intact can follow the returns policy; custom and intimate items follow the policy page."
+选品、质检与履约，陪你买到放心好物,"Curation, QC, and fulfillment—shop with confidence"
+选品顾问,"Buying consultant"
+风格与搭配,"Style & matching"
+质检与品控,"Quality control"
+"面料 · 做工 · 成衣","Fabric · workmanship · finished goods"
+履约服务,Fulfillment
+"零售 + 批发","Retail + wholesale"
+根据场景与偏好给出选品建议，帮你快速找到适合的第一件。,"We suggest picks by occasion and preference so you find the right first item quickly."
+把关面料、做工与成衣细节，确保观感与日常穿着体验。,"We check fabric, workmanship, and finishing for look and everyday wear."
+支持一件起订与批发拿货，协调物流、尺码沟通与售后跟进。,"Order one piece or wholesale—we coordinate shipping, sizing questions, and after-sales."
+购买、配送与售后,"Buying, shipping, and after-sales"
+可以。本店同时服务一件起订的个人买家与批发客户，商品页可切换零售／批发身份后下单。,"Yes. We serve both single-piece shoppers and wholesale buyers—switch retail/wholesale on the product page before checkout."
+请对照商品页尺码表选号；不确定时可联系客服获取建议。,"Use the product size chart; contact support if you need help choosing."
+如何保养商品？,"How do I care for products?"
+请按商品页洗护说明护理；精致刺绣或特殊面料建议轻柔手洗或专业干洗。,"Follow the care guide on the product page; delicate embroidery or specialty fabrics prefer gentle hand wash or professional dry cleaning."
+未穿用且吊牌完整的商品可按退换政策申请；定制款与特殊品类规则以政策页为准。,"Unworn items with tags intact can follow the returns policy; custom and special categories follow the policy page."

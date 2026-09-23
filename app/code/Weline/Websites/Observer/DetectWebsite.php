@@ -598,11 +598,14 @@ class DetectWebsite implements
                 if ($domain === '') {
                     continue;
                 }
-                if ($this->isReservedProjectHost($domain)) {
+                $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''), '/');
+                // Reserved project Host bare bindings (empty sub_path) stay with
+                // the default site. Non-empty sub_path mounts MUST be published
+                // so Url::parser can peel /daocharms before localization 301.
+                if ($this->isReservedProjectHost($domain) && $subPath === '') {
                     continue;
                 }
 
-                $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''), '/');
                 $baseUrl = $scheme . '://' . $domain . $port;
                 if ($subPath !== '') {
                     $baseUrl .= '/' . $subPath;
