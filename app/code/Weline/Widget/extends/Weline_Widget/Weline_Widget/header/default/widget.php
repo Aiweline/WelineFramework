@@ -11,7 +11,7 @@ return [
     'type' => 'header',
     'version' => '1.0.0',
     'author' => 'Weline Team',
-    'template' => 'Weline_Widget::widgets/header/default.phtml',
+    'template' => 'Weline_Widget::templates/widgets/header/default.phtml',
     'params' => [
         'title' => [
             'type' => 'string',

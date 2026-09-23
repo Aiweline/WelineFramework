@@ -552,6 +552,9 @@ final class StorefrontProductMediaUrlResolver
         $orient = trim($element->getAttribute('data-weline-orient'));
         $pad = trim($element->getAttribute('data-weline-pad'));
         $weds = trim($element->getAttribute('data-weds'));
+        $dcHue = trim($element->getAttribute('data-dc-hue'));
+        $dcHueRoot = trim($element->getAttribute('data-dc-hue-root'));
+        $dcFloorStyle = self::safeDcFloorBgStyle(trim($element->getAttribute('style')));
         $hidden = $element->hasAttribute('hidden');
         $ariaHidden = trim($element->getAttribute('aria-hidden'));
         while ($element->attributes->length > 0) {
@@ -579,12 +582,37 @@ final class StorefrontProductMediaUrlResolver
         if ($weds === 'xq') {
             $element->setAttribute('data-weds', 'xq');
         }
+        // DaoCharms / Apple-style hue diffusion floors (背景色融合).
+        if ($dcHue === 'bleed' || $dcHue === 'diffuse') {
+            $element->setAttribute('data-dc-hue', $dcHue);
+        }
+        if ($dcHueRoot === '1') {
+            $element->setAttribute('data-dc-hue-root', '1');
+        }
+        if ($dcFloorStyle !== '') {
+            $element->setAttribute('style', $dcFloorStyle);
+        }
         if ($hidden) {
             $element->setAttribute('hidden', 'hidden');
         }
         if ($ariaHidden === 'true') {
             $element->setAttribute('aria-hidden', 'true');
         }
+    }
+
+    /**
+     * Only custom property --dc-floor-bg:#rrggbb (Apple-style texture wash).
+     */
+    private static function safeDcFloorBgStyle(string $style): string
+    {
+        if ($style === '') {
+            return '';
+        }
+        if (preg_match('/^--dc-floor-bg:\s*(#[0-9a-fA-F]{6})\s*;?\s*$/D', $style, $m) !== 1) {
+            return '';
+        }
+
+        return '--dc-floor-bg:' . strtolower($m[1]);
     }
 
     private static function positiveIntAttr(string $value): ?int
@@ -613,6 +641,11 @@ final class StorefrontProductMediaUrlResolver
             }
             // Aspect-first layout markers (ecommerce-detail-suite §3.1‑B).
             if (preg_match('/^weline-detail-orient--(?:portrait|landscape|squareish|macro)$/D', $token) === 1) {
+                $kept[] = $token;
+                continue;
+            }
+            // DaoCharms hue-diffusion floor wrapper (Apple-style bg bleed).
+            if ($token === 'dc-hue-floor' || $token === 'dc-hue-root') {
                 $kept[] = $token;
             }
         }

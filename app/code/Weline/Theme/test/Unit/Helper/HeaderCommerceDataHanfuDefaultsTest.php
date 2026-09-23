@@ -14,8 +14,25 @@ final class HeaderCommerceDataHanfuDefaultsTest extends TestCase
         // else-fill demo keywords remain allowed on the Theme shell.
         self::assertSame(
             ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '披帛'],
-            HeaderCommerceData::defaultHotWords(),
+            HeaderCommerceData::defaultHotWords('default'),
         );
+        self::assertSame(
+            HeaderCommerceData::hanfuDefaultHotWords(),
+            HeaderCommerceData::defaultHotWords('default'),
+        );
+    }
+
+    public function testFallbackHotWordsDescribeDaoCharmsStorefront(): void
+    {
+        self::assertSame(
+            ['黑曜石', '阴阳', '八卦', '平安扣', '玉石'],
+            HeaderCommerceData::defaultHotWords('daocharms'),
+        );
+        self::assertSame(
+            HeaderCommerceData::daocharmsDefaultHotWords(),
+            HeaderCommerceData::defaultHotWords('daocharms'),
+        );
+        self::assertNotContains('马面裙', HeaderCommerceData::defaultHotWords('daocharms'));
     }
 
     public function testDefaultHeaderKeepsEditorSlotsAndUsesInkPaletteTokens(): void

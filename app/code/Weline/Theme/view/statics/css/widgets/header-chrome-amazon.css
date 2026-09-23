@@ -837,11 +837,20 @@
 
 .weline-header .header-main-nav .categories-list > .category-item > .category-link,
 .weline-header .header-main-nav .categories-list > .category-item > .category-link-wrapper > .category-link {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
     color: var(--weline-chrome-text-light, #ffffff);
     text-decoration: none;
     white-space: nowrap;
     font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.2;
     padding: var(--spacing-sm, 0.5rem);
+}
+
+.weline-header .header-main-nav .categories-list > .category-item > .category-link-wrapper {
+    display: inline-flex;
+    align-items: center;
 }
 
 .weline-header .header-main-nav .categories-list > .category-item > .category-link:hover,

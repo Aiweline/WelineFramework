@@ -16,6 +16,13 @@ final class SearchAreaSlotContractTest extends TestCase
         $registry = (string)\file_get_contents($moduleRoot . '/Service/SearchProviderRegistry.php');
         $guard = (string)\file_get_contents($moduleRoot . '/Service/SearchParamGuard.php');
         $taglib = (string)\file_get_contents($moduleRoot . '/Taglib/Search.php');
+        self::assertStringContainsString("\$hotLabel = trim((string)__(\$word))", $taglib);
+        self::assertStringContainsString('rawurlencode($hotLabel)', $taglib);
+        self::assertStringNotContainsString(
+            'rawurlencode($word)',
+            $taglib,
+            'w:search hot links must encode localized label for q'
+        );
         $query = (string)\file_get_contents($moduleRoot . '/extends/module/Weline_Framework/Query/SearchQueryProvider.php');
 
         self::assertStringContainsString('function areas(): array', $interface);

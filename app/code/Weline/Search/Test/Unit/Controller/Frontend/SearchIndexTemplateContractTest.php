@@ -55,4 +55,25 @@ final class SearchIndexTemplateContractTest extends TestCase
         self::assertStringContainsString("if (\$q === '')", $controller);
         self::assertStringContainsString('skip provider fan-out', $controller);
     }
+
+    public function testSearchLayoutDefaultsChromeOnAndWebsiteBodyClass(): void
+    {
+        $layout = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/theme/frontend/layouts/search/default.phtml',
+        );
+
+        self::assertStringContainsString(
+            "\$showHeader = \$meta['showHeader'] ?? \$this->getData('showHeader') ?? true",
+            $layout,
+        );
+        self::assertStringContainsString(
+            "\$showFooter = \$meta['showFooter'] ?? \$this->getData('showFooter') ?? true",
+            $layout,
+        );
+        self::assertStringContainsString('<?php if ($showHeader): ?>', $layout);
+        self::assertStringContainsString('<?php if ($showFooter): ?>', $layout);
+        self::assertStringNotContainsString('<if condition="meta.showHeader">', $layout);
+        self::assertStringContainsString("\$websiteCode . '-storefront'", $layout);
+        self::assertStringContainsString('search-layout-root', $layout);
+    }
 }

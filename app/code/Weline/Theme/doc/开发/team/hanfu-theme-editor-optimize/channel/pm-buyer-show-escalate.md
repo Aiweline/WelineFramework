@@ -20,4 +20,4 @@
 - 测试：禁缓存抽检 DOM 无 `default.svg`
 - 施工后 resume 电商顾问 ops_acceptance
 
-状态：P0 **ops_acceptance pass**（见 `buyer-show-ops-acceptance.md`）。P1（评论图聚合 / 种子评论）未开。
+状态：P0 pass。P1-03/04/05 **施工齐**，待顾问 ops_acceptance（`pm-buyer-show-p1.md`）。

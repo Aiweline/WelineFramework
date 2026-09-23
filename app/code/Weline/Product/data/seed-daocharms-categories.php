@@ -22,6 +22,7 @@ require dirname(__DIR__, 4) . '/bootstrap.php';
 
 const WEBSITE_CODE = 'daocharms';
 const LOCALES = ['zh_Hans_CN', 'en_US'];
+const MEDIA_BASE = '/pub/media/catalog/daocharms/categories';
 
 $requestedCode = trim((string)($argv[1] ?? WEBSITE_CODE));
 if ($requestedCode === '' || $requestedCode === '0' || $requestedCode === 'default') {
@@ -240,6 +241,8 @@ function seedNodes(
         }
 
         $existingId = (int)($codeIndex[$code] ?? 0);
+        $icon = MEDIA_BASE . '/icons/' . $code . '.webp';
+        $banner = MEDIA_BASE . '/banners/' . $code . '.webp';
         $created = $admin->save(
             $websiteId,
             $existingId,
@@ -249,8 +252,8 @@ function seedNodes(
             $code,
             'en_US',
             null,
-            null,
-            null,
+            is_file(dirname(__DIR__, 4) . $icon) ? $icon : null,
+            is_file(dirname(__DIR__, 4) . $banner) ? $banner : null,
             (string)($en['summary'] ?? ''),
             (string)($en['description'] ?? ''),
         );

@@ -73,9 +73,26 @@ $isFreeShipping = !empty($labelFlags['is_free_shipping']);
 $saleBadgeText = (string)($labelFlags['sale_text'] ?? '');
 
 $classes = trim('weline-product-card product-card density-' . $density . ($extraClass !== '' ? ' ' . $extraClass : ''));
-$hrefAttr = $productUrl !== ''
-    ? 'href="' . $esc($productUrl) . '"'
-    : ($productUrlPath !== '' ? 'href="@url{' . $productUrlPath . '}"' : 'href="#"');
+if ($productUrl !== '') {
+    $resolvedHref = $productUrl;
+} elseif ($productUrlPath !== '') {
+    $pathOnly = $productUrlPath;
+    $hrefParams = [];
+    if (str_contains($productUrlPath, '?')) {
+        [$pathOnly, $queryPart] = explode('?', $productUrlPath, 2);
+        parse_str(trim($queryPart), $hrefParams);
+        if (!is_array($hrefParams)) {
+            $hrefParams = [];
+        }
+    }
+    $resolvedHref = (string)$this->getUrl(ltrim($pathOnly, '/'), $hrefParams);
+    if ($resolvedHref === '') {
+        $resolvedHref = ProductCardRenderer::buildStorefrontCardHref($pathOnly, $hrefParams !== [] ? '?' . http_build_query($hrefParams) : '');
+    }
+} else {
+    $resolvedHref = '#';
+}
+$hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
 ?>
 <?php if (!(bool)($this->getData('defer_card_css') ?? false)): ?>
 <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>

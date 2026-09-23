@@ -33,6 +33,7 @@ $items = Block::items($this->getData('items'));
 $ctaLink = Block::link($this->getData('cta_link') ?? '');
 $isLooks = $variant === 'looks';
 $usingLooksPlaceholders = false;
+$looksSource = 'config';
 // 买家秀默认一行 6 格（WO-HP-P3-MALL-05）；未显式配置 columns 时抬到 6
 if ($isLooks && trim((string)($this->getData('columns') ?? '')) === '') {
     $columns = '6';
@@ -57,27 +58,129 @@ if ($isLooks) {
     if ($subtitle === '') {
         $subtitle = '晒出你的汉服穿搭';
     }
-}
 
-// 买家秀空配置：6 格占位图墙（无星级、无证言短评，禁止回退成评价三卡）
-if ($items === [] && $isLooks) {
-    $usingLooksPlaceholders = true;
-    $placeholder = StorefrontImagePlaceholder::url();
-    $lookScenes = [
-        ['title' => '礼宴试穿', 'title_en' => 'Formal try-on'],
-        ['title' => '日常通勤', 'title_en' => 'Everyday commute'],
-        ['title' => '旅拍街景', 'title_en' => 'Travel street look'],
-        ['title' => '节日聚会', 'title_en' => 'Festival gathering'],
-        ['title' => '校园问候', 'title_en' => 'Campus greeting'],
-        ['title' => '雅集留影', 'title_en' => 'Gathering snapshot'],
-    ];
-    foreach ($lookScenes as $scene) {
-        $items[] = [
-            'image' => $placeholder,
-            'title' => $translateDefaultCopy($scene['title'], $scene['title_en']),
-            'text' => '',
-            'link' => '',
+    // WO-BUYER-SHOW-03：运行时优先已审含图评论；静态 items 仅聚合为空时兜底
+    $configuredItems = $items;
+    $liveItems = [];
+    $looksGallery = null;
+    if (interface_exists(\Weline\Review\Api\BuyerLooksGalleryInterface::class)) {
+        try {
+            /** @var \Weline\Review\Api\BuyerLooksGalleryInterface $looksGallery */
+            $looksGallery = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Review\Api\BuyerLooksGalleryInterface::class
+            );
+        } catch (\Throwable) {
+            $looksGallery = null;
+        }
+    }
+    // DI 兜底：provides 未进 Worker 时直接用具体服务（避免 catch 吞错后整墙回落占位）
+    if ($looksGallery === null && class_exists(\Weline\Review\Service\BuyerLooksGalleryService::class)) {
+        try {
+            $looksGallery = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Review\Service\BuyerLooksGalleryService::class
+            );
+        } catch (\Throwable) {
+            $looksGallery = null;
+        }
+    }
+    if ($looksGallery !== null && method_exists($looksGallery, 'galleryItems')) {
+        try {
+            $liveRaw = $looksGallery->galleryItems(max(1, (int)$columns));
+            if (is_array($liveRaw)) {
+                foreach ($liveRaw as $liveRow) {
+                    if (!is_array($liveRow)) {
+                        continue;
+                    }
+                    $liveImage = trim((string)($liveRow['image'] ?? ''));
+                    if ($liveImage === '') {
+                        continue;
+                    }
+                    $liveItems[] = [
+                        'image' => $liveImage,
+                        'title' => (string)($liveRow['title'] ?? ''),
+                        'text' => (string)($liveRow['text'] ?? ''),
+                        'link' => (string)($liveRow['link'] ?? ''),
+                        'link_label' => (string)($liveRow['link_label'] ?? '查看商品'),
+                    ];
+                }
+            }
+        } catch (\Throwable) {
+            $liveItems = [];
+        }
+    }
+    if ($liveItems !== []) {
+        $items = $liveItems;
+        $looksSource = 'review';
+        // 实况不足一排时，用配置项补齐（跳过无图/重复图），避免半空墙
+        $want = max(1, (int)$columns);
+        if (count($items) < $want && $configuredItems !== []) {
+            $seen = [];
+            $seenProducts = [];
+            foreach ($items as $row) {
+                $img = trim((string)($row['image'] ?? ''));
+                if ($img !== '') {
+                    $seen[$img] = true;
+                }
+                $link = trim((string)($row['link'] ?? ''));
+                if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1) {
+                    $seenProducts[(int)$m[1]] = true;
+                }
+            }
+            foreach ($configuredItems as $cfg) {
+                if (count($items) >= $want) {
+                    break;
+                }
+                if (!is_array($cfg)) {
+                    continue;
+                }
+                $img = trim((string)($cfg['image'] ?? ''));
+                if ($img === '' || isset($seen[$img])) {
+                    continue;
+                }
+                $link = trim((string)($cfg['link'] ?? ''));
+                if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1 && isset($seenProducts[(int)$m[1]])) {
+                    continue;
+                }
+                $seen[$img] = true;
+                if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1) {
+                    $seenProducts[(int)$m[1]] = true;
+                }
+                $items[] = [
+                    'image' => $img,
+                    'title' => (string)($cfg['title'] ?? ''),
+                    'text' => (string)($cfg['text'] ?? ''),
+                    'link' => $link,
+                    'link_label' => (string)($cfg['link_label'] ?? '查看商品'),
+                ];
+            }
+            if (count($items) > count($liveItems)) {
+                $looksSource = 'review+config';
+            }
+        }
+    } elseif ($configuredItems !== []) {
+        $items = $configuredItems;
+        $looksSource = 'config';
+    } else {
+        // 买家秀空配置：6 格占位图墙（无星级、无证言短评，禁止回退成评价三卡）
+        $usingLooksPlaceholders = true;
+        $looksSource = 'placeholder';
+        $placeholder = StorefrontImagePlaceholder::url();
+        $lookScenes = [
+            ['title' => '礼宴试穿', 'title_en' => 'Formal try-on'],
+            ['title' => '日常通勤', 'title_en' => 'Everyday commute'],
+            ['title' => '旅拍街景', 'title_en' => 'Travel street look'],
+            ['title' => '节日聚会', 'title_en' => 'Festival gathering'],
+            ['title' => '校园问候', 'title_en' => 'Campus greeting'],
+            ['title' => '雅集留影', 'title_en' => 'Gathering snapshot'],
         ];
+        foreach ($lookScenes as $scene) {
+            $items[] = [
+                'image' => $placeholder,
+                'title' => $translateDefaultCopy($scene['title'], $scene['title_en']),
+                'text' => '',
+                'link' => '',
+            ];
+        }
     }
 }
 ?>
@@ -86,7 +189,8 @@ if ($items === [] && $isLooks) {
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-site-block="image-gallery"
-         data-variant="<?= $esc($variant) ?>">
+         data-variant="<?= $esc($variant) ?>"
+         <?= $isLooks ? 'data-looks-source="' . $esc($looksSource) . '"' : '' ?>>
     <?php if ($title !== '' || $subtitle !== ''): ?>
         <header class="sb-header">
             <?php if ($title !== ''): ?><h2 class="sb-title"><?= $t($title) ?></h2><?php endif; ?>
@@ -100,11 +204,18 @@ if ($items === [] && $isLooks) {
             $url = Block::link($item['link'] ?? '');
             $itemText = Block::text($item['text'] ?? '');
             $itemTitle = Block::text($item['title'] ?? '');
+            $mediaInner = $mediaHtml !== ''
+                ? $mediaHtml
+                : '<img src="' . $esc($image) . '" alt="' . $t($itemTitle) . '" loading="lazy" decoding="async" width="400" height="533">';
         ?>
             <article class="w-card sb-card<?= $isLooks ? ' sb-looks-tile' : '' ?>">
                 <?php if ($mediaHtml !== '' || $image !== ''): ?>
                     <div class="sb-media">
-                        <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($itemTitle) ?>" loading="lazy" decoding="async" width="400" height="533"><?php endif; ?>
+                        <?php if ($isLooks && $url !== ''): ?>
+                            <a class="sb-looks-media-link" href="<?= $esc($url) ?>"><?= $mediaInner ?></a>
+                        <?php else: ?>
+                            <?= $mediaInner ?>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
                 <?php if ($itemText !== '' || $url !== '' || ($isLooks && $itemTitle !== '')): ?>
@@ -114,7 +225,9 @@ if ($items === [] && $isLooks) {
                         <?php elseif ($itemText !== ''): ?>
                             <p class="sb-copy"><?= $t($itemText) ?></p>
                         <?php endif; ?>
-                        <?php if ($url !== ''): ?><a class="sb-link" href="<?= $esc($url) ?>"><?= $t(Block::text($item['link_label'] ?? '') ?: '了解更多') ?></a><?php endif; ?>
+                        <?php if ($url !== ''): ?>
+                            <a class="sb-link" href="<?= $esc($url) ?>"><?= $t(Block::text($item['link_label'] ?? '') ?: ($isLooks ? '查看商品' : '了解更多')) ?></a>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </article>

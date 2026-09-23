@@ -18,7 +18,12 @@ use Weline\Widget\Taglib\Widget;
 
 /**
  * AJAX 预览控制器
+ *
+ * 必须有类级 #[Acl] 并挂到菜单 ACL（widget_management），
+ * 否则 setup:upgrade 会把 method 为空的方法级 ACL 互相当「类级父级」，
+ * 最终出现 source_id === parent_source（阻断整站路由生成 → 全站 404）。
  */
+#[\Weline\Framework\Acl\Acl('Weline_Widget::preview', '部件预览', 'eye', '部件 AJAX 预览', 'Weline_Widget::widget_management')]
 class Preview extends BackendController
 {
     public function __construct(
@@ -30,7 +35,7 @@ class Preview extends BackendController
     /**
      * 预览单个部件
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Widget::preview_widget', '预览部件', '', '预览部件')]
+    #[\Weline\Framework\Acl\Acl('Weline_Widget::preview_widget', '预览部件', 'eye', '预览部件', 'Weline_Widget::preview')]
     public function widget()
     {
         try {
@@ -86,7 +91,7 @@ class Preview extends BackendController
     /**
      * 预览完整页面
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Widget::preview_page', '预览页面', '', '预览页面')]
+    #[\Weline\Framework\Acl\Acl('Weline_Widget::preview_page', '预览页面', 'eye', '预览页面', 'Weline_Widget::preview')]
     public function page()
     {
         try {

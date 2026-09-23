@@ -3325,7 +3325,9 @@ final class ProjectCertificateGenerationStore
                         > self::MAX_STORED_SNAPSHOT_BYTES
                 ) {
                     throw new \RuntimeException(
-                        'Certificate snapshot store has no capacity for another generation.',
+                        'WLS 证书快照磁盘代际库已满，无法再发布新代际'
+                        . '（这是磁盘快照数/字节配额，不是内存不足）。'
+                        . ' 请清理未引用快照或执行 php bin/w server:start -clean -f 后重试。'
                     );
                 }
             },
@@ -3866,7 +3868,7 @@ final class ProjectCertificateGenerationStore
                 $chain === '' ? '' : \hash('sha256', $chain),
             )
         ) {
-            throw new \RuntimeException('Active certificate snapshot integrity check failed.');
+            throw new \RuntimeException('活动证书快照完整性校验失败。');
         }
         $validated = $this->validateMaterial(
             $domain,
