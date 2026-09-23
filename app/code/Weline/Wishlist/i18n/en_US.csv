@@ -1,22 +1,22 @@
-心愿单接口不支持操作：%{1},Wishlist operation is not supported: %{1}
+﻿心愿单接口不支持操作：%{1},"Wishlist operation is not supported: %{1}"
 心愿单,Wishlist
-产品卡片收藏按钮：添加、移除、列表与计数。,Product card wishlist actions: add
-账户首页收藏分区,Account home favorites section
-在顾客账户首页收藏分区注入愿望清单列表与管理入口。,Inject wishlist list and management into the customer account home favorites section.
-页头收藏夹图标,Header favicon
-在页头 user-area 展示收藏入口；默认店面经 Hook 交付，不走应用 Tab 默认注入。,"Show favorites entry in header user-area; default storefront delivers via Hook, not app Tab default inject."
-我的收藏,My Favorites
-查看已收藏的商品,View saved products
-收藏夹暂无商品,Your wishlist is empty
-去逛逛,Go explore.
+产品卡片收藏按钮：添加、移除、列表与计数。,"Product card wishlist actions: add"
+账户首页收藏分区,"Account home favorites section"
+在顾客账户首页收藏分区注入愿望清单列表与管理入口。,"Inject wishlist list and management into the customer account home favorites section."
+页头收藏夹图标,"Header favicon"
+"在页头 user-area 展示收藏入口；默认店面经 Hook 交付，不走应用 Tab 默认注入。","Show favorites entry in header user-area; default storefront delivers via Hook, not app Tab default inject."
+我的收藏,"My Favorites"
+查看已收藏的商品,"View saved products"
+收藏夹暂无商品,"Your wishlist is empty"
+去逛逛,"Go explore."
 移除,Remove
-共 %{1} 件商品,%{1} item(s) in wishlist
-移除失败，请稍后重试,Could not remove item. Please try again.
-已加入购物车,Added to cart
-无效的商品 ID,Invalid product ID
-已加入收藏,Added to wishlist
-已从收藏移除,Removed from wishlist
-加入购物车,Add to Cart
-在页头 user-area 展示收藏入口；Theme partial 经 Hook 交付，避免内嵌非 Theme 部件。,Show favorites entry in header user-area; Theme partial delivered via Hook to avoid embedding non-Theme widgets.
+"共 %{1} 件商品","%{1} item(s) in wishlist"
+移除失败，请稍后重试,"Could not remove item. Please try again."
+已加入购物车,"Added to cart"
+"无效的商品 ID","Invalid product ID"
+已加入收藏,"Added to wishlist"
+已从收藏移除,"Removed from wishlist"
+加入购物车,"Add to Cart"
+"在页头 user-area 展示收藏入口；Theme partial 经 Hook 交付，避免内嵌非 Theme 部件。","Show favorites entry in header user-area; Theme partial delivered via Hook to avoid embedding non-Theme widgets."
 收藏,Favorites
 加入收藏失败，请稍后重试,"Failed to add to favorites, please try again later"

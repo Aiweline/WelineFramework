@@ -1,173 +1,175 @@
-HelpPay 购物车/结账/商品帮我付槽默认注入失败：%{1},HelpPay failed to seed cart/checkout/product help-pay slots: %{1}
-分享链接无效,Invalid share link
-朋友帮你选好了,A friend picked options for you
-帮我付链接无效,Invalid Help Pay link
-帮他人付款,Pay for someone else
-暂无可用支付方式。,No payment methods available.
-付款账单地址,Billing address
-选择账单地址,Choose billing address
-快捷购买链接已过期,Buy now link expired
-快捷购买链接无效,Invalid buy now link
-链接已过期,Link expired
-链接不可用,Link unavailable
-该快捷购买链接已过期。请回到商品页或订单重新生成链接。,This buy now link has expired. Return to the product or order page to create a new one.
+﻿"HelpPay 购物车/结账/商品帮我付槽默认注入失败：%{1}","HelpPay failed to seed cart/checkout/product help-pay slots: %{1}"
+分享链接无效,"Invalid share link"
+朋友帮你选好了,"A friend picked options for you"
+帮我付链接无效,"Invalid Help Pay link"
+帮他人付款,"Pay for someone else"
+暂无可用支付方式。,"No payment methods available."
+付款账单地址,"Billing address"
+选择账单地址,"Choose billing address"
+快捷购买链接已过期,"Buy now link expired"
+快捷购买链接无效,"Invalid buy now link"
+链接已过期,"Link expired"
+链接不可用,"Link unavailable"
+该快捷购买链接已过期。请回到商品页或订单重新生成链接。,"This buy now link has expired. Return to the product or order page to create a new one."
 该分享或代付链接已过期、撤销或无效。,"This share or Help Pay link has expired, been revoked, or is invalid."
-快捷购买,Buy now
-跨设备支付,Pay on another device
+快捷购买,"Buy now"
+跨设备支付,"Pay on another device"
 复制链接或二维码，在另一台设备上打开并完成支付。,"Copy the link or QR code, open it on another device, and complete payment."
-找朋友代付,Ask a friend to pay
-分享给朋友（帮选规格）,Share with friends (help pick options)
+当前货币暂不可用,"Current currency unavailable"
+找朋友代付,"Ask a friend to pay"
+分享给朋友,"Share with friends"
+分享给朋友（帮选规格）,"Share with friends (help pick options)"
 这与「帮我付」不同：朋友打开分享链接后，规格会进入朋友自己的购物车，由朋友自己填写地址、自己下单付款，订单归朋友。,"Unlike Help Pay: when a friend opens the share link, the options go into their cart. They enter their address, place the order, and own it."
-同样支持复制链接或复制二维码图片分享。,You can also copy the link or QR image to share.
-帮我付隐私与地址,Help Pay privacy and address
+同样支持复制链接或复制二维码图片分享。,"You can also copy the link or QR image to share."
+帮我付隐私与地址,"Help Pay privacy and address"
 为保护隐私，帮付订单在店面（含你自己的订单详情、待付页、成功页与代付页）均不展示收货地址详情。履约地址仅后台授权人员可见。,"For privacy, Help Pay orders never show shipping address details on the storefront (including your order details, unpaid, success, and payer pages). Fulfillment address is visible only to authorized staff."
 卡支付时，代付人填写的是自己的「付款账单地址」，不会写回你的收货地址。,"For card payments, the payer enters their own billing address. It will not overwrite your shipping address."
-代付人如何付款,How the payer pays
-打开朋友发来的链接或扫描二维码。,Open the link from your friend or scan the QR code.
-查看订单摘要，选择物流方式（不展示收货地址）。,Review the order summary and choose shipping (address hidden).
+代付人如何付款,"How the payer pays"
+打开朋友发来的链接或扫描二维码。,"Open the link from your friend or scan the QR code."
+查看订单摘要，选择物流方式（不展示收货地址）。,"Review the order summary and choose shipping (address hidden)."
 选择支付方式；如需卡支付，填写自己的付款账单地址。,"Choose a payment method; for card payments, enter your own billing address."
 完成支付后，提示为他人付款成功。,"After payment, you’ll see a success message that you paid for someone else."
-代付不可使用优惠券或积分。,Coupons and loyalty points cannot be used for Help Pay.
-帮我付是什么,What is Help Pay
-帮我付让你在购物车或结账页生成付款请求，请朋友代付。订单始终归你；朋友只负责付款，不会把订单变成他自己的。,Help Pay lets you create a payment request from cart or checkout so a friend can pay. The order stays yours; your friend only pays and does not take ownership.
-如何出链,How to create a link
+代付不可使用优惠券或积分。,"Coupons and loyalty points cannot be used for Help Pay."
+帮我付是什么,"What is Help Pay"
+帮我付让你在购物车或结账页生成付款请求，请朋友代付。订单始终归你；朋友只负责付款，不会把订单变成他自己的。,"Help Pay lets you create a payment request from cart or checkout so a friend can pay. The order stays yours; your friend only pays and does not take ownership."
+如何出链,"How to create a link"
 填写并确认收货地址、勾选已阅读规则后，可复制链接地址或复制二维码图片发给对方。,"After confirming the shipping address and accepting the rules, copy the link or QR image to send."
-不能做什么,What you cannot do
+不能做什么,"What you cannot do"
 代付人不能使用优惠券/积分，不能修改收货地址，也不能把代付当成自己的购物车。,"The payer cannot use coupons or points, change the shipping address, or treat Help Pay as their own cart."
-帮我付,Help Pay
-付款说明,Payment guide
-隐私说明,Privacy notes
-应付金额,Amount due
-收货地址已由发起人确认。,The shipping address was confirmed by the requester.
-物流方式,Shipping method
-请选择物流（仅影响运费，不展示收货地址）。,Choose shipping (affects shipping cost only; address is hidden).
-配送方式,Delivery method
-标准配送,Standard shipping
-加急配送,Express shipping
-支付方式,Payment method
-请选择适合您的支付方式完成付款。,Choose a payment method that works for you to complete payment.
-选择支付方式,Choose payment method
-暂无可用支付方式,No payment methods available
+帮我付,"Help Pay"
+付款说明,"Payment guide"
+隐私说明,"Privacy notes"
+应付金额,"Amount due"
+收货地址已由发起人确认。,"The shipping address was confirmed by the requester."
+物流方式,"Shipping method"
+请选择物流（仅影响运费，不展示收货地址）。,"Choose shipping (affects shipping cost only; address is hidden)."
+配送方式,"Delivery method"
+标准配送,"Standard shipping"
+加急配送,"Express shipping"
+支付方式,"Payment method"
+请选择适合您的支付方式完成付款。,"Choose a payment method that works for you to complete payment."
+选择支付方式,"Choose payment method"
+暂无可用支付方式,"No payment methods available"
 卡支付时填写付款人自己的账单地址，不会写回收货地址。,"For card payments, enter the payer’s own billing address. It will not overwrite the shipping address."
-账单地址组件暂不可用，请稍后重试。,Billing address is temporarily unavailable. Please try again later.
-确认付款,Confirm payment
-返回首页,Back to home
-本人快捷购买,Buy now for yourself
-订单归属你本人。请在此页完成支付。,This order belongs to you. Complete payment on this page.
-换设备支付（链接 / 二维码）,Pay on another device (link / QR)
-立即支付,Pay now
-付款链接,Payment link
-扫码付款,Scan to pay
-快捷购买付款二维码,Buy now payment QR code
+账单地址组件暂不可用，请稍后重试。,"Billing address is temporarily unavailable. Please try again later."
+确认付款,"Confirm payment"
+返回首页,"Back to home"
+本人快捷购买,"Buy now for yourself"
+订单归属你本人。请在此页完成支付。,"This order belongs to you. Complete payment on this page."
+"本机测试支付将即时完成并进入成功页（Fake result=Paid）。","Local test payment completes immediately and opens the success page (Fake result=Paid)."
+"换设备支付（链接 / 二维码）","Pay on another device (link / QR)"
+立即支付,"Pay now"
+付款链接,"Payment link"
+扫码付款,"Scan to pay"
+快捷购买付款二维码,"Buy now payment QR code"
 复制后在浏览器打开，用你自己的账号完成支付,"After copying, open in a browser and pay with your own account"
-已复制，请自行打开链接付款,Copied. Open the link yourself to pay
-扫码后在本机打开付款页，完成你自己的支付,Scan to open the payment page on this device and pay yourself
-已复制，可粘贴到本机浏览器打开付款,Copied. Paste into a browser on this device to pay
-分享给朋友,Share with friends
-当前货币暂不可用,Current currency unavailable
-分享给付款人,Share with payer
-复制链接或扫码分享当前规格,Copy the link or scan to share the selected options
+已复制，请自行打开链接付款,"Copied. Open the link yourself to pay"
+扫码后在本机打开付款页，完成你自己的支付,"Scan to open the payment page on this device and pay yourself"
+已复制，可粘贴到本机浏览器打开付款,"Copied. Paste into a browser on this device to pay"
+分享给付款人,"Share with payer"
+复制链接或扫码分享当前规格,"Copy the link or scan to share the selected options"
 复制后，粘贴发给朋友即可打开这份规格,"After copying, paste and send to a friend to open these options"
-已复制，可以分发给朋友,Copied. You can share it with friends
+已复制，可以分发给朋友,"Copied. You can share it with friends"
 复制后，可直接把图片粘贴到聊天里发送,"After copying, paste the image into chat to send"
-已复制，可直接粘贴图片到聊天里发送,Copied. Paste the image into chat to send
-链接分享,Share link
-扫码分享,Share via QR
-分享二维码,Share QR code
-链接地址,Link URL
+已复制，可直接粘贴图片到聊天里发送,"Copied. Paste the image into chat to send"
+链接分享,"Share link"
+扫码分享,"Share via QR"
+分享二维码,"Share QR code"
+链接地址,"Link URL"
 已复制,Copied
-复制失败,Copy failed
-复制链接,Copy link
-复制没成功，请再点一次试试,Copy failed. Please try again
-复制二维码图片,Copy QR image
-下载二维码,Download QR code
-复制没成功，请再点一次或改用下载,Copy failed. Try again or download instead
-纯分享,Share only
-朋友帮你选好了规格,A friend selected options for you
-了解分享给朋友,About Share with friends
-将加入你自己的购物车并进入你的结账，订单归你。,Items will be added to your cart and checkout. The order belongs to you.
-加入我的车并结账,Add to my cart and checkout
-分享链接不可用,Share link unavailable
-分享规格给朋友,Share options with friends
-当前规格,Current options
+复制失败,"Copy failed"
+复制链接,"Copy link"
+复制没成功，请再点一次试试,"Copy failed. Please try again"
+复制二维码图片,"Copy QR image"
+下载二维码,"Download QR code"
+复制没成功，请再点一次或改用下载,"Copy failed. Try again or download instead"
+纯分享,"Share only"
+朋友帮你选好了规格,"A friend selected options for you"
+了解分享给朋友,"About Share with friends"
+将加入你自己的购物车并进入你的结账，订单归你。,"Items will be added to your cart and checkout. The order belongs to you."
+加入我的车并结账,"Add to my cart and checkout"
+分享链接不可用,"Share link unavailable"
+分享规格给朋友,"Share options with friends"
+当前规格,"Current options"
 数量（规格）,Qty
-当前环境不支持复制图片，请改用下方下载,This browser cannot copy images. Use download below instead
-正在生成分享链接…,Creating share link…
-正在进入付款…,Entering checkout…
-地址已确认。正在进入付款页，可在本页完成支付。,Address confirmed. Opening the payment page so you can pay now.
-打开支付窗口,Open payment window
-未返回付款入口，请稍后重试。,Payment entry was not returned. Please try again.
-可在支付窗口完成付款。若已支付，可关闭本弹窗。,Complete payment in the payment window. Close this dialog if you already paid.
-已打开支付窗口，请在窗口内完成付款。,Payment window opened. Complete payment there.
-复制链接或扫码，在本机或其它设备打开即可完成付款,Copy the link or scan the QR to open and pay on this or another device
-确认收货地址,Confirm shipping address
+当前环境不支持复制图片，请改用下方下载,"This browser cannot copy images. Use download below instead"
+正在生成分享链接…,"Creating share link…"
+正在进入付款…,"Entering checkout…"
+地址已确认。正在进入付款页，可在本页完成支付。,"Address confirmed. Opening the payment page so you can pay now."
+打开支付窗口,"Open payment window"
+未返回付款入口，请稍后重试。,"Payment entry was not returned. Please try again."
+可在支付窗口完成付款。若已支付，可关闭本弹窗。,"Complete payment in the payment window. Close this dialog if you already paid."
+已打开支付窗口，请在窗口内完成付款。,"Payment window opened. Complete payment there."
+复制链接或扫码，在本机或其它设备打开即可完成付款,"Copy the link or scan the QR to open and pay on this or another device"
+确认收货地址,"Confirm shipping address"
 请填写、选择或更换收货地址；确认后选择物流。,"Add, select, or change a shipping address, then choose shipping."
-确认并付款,Confirm and pay
-下一步：选择物流,Next: choose shipping
+确认并付款,"Confirm and pay"
+下一步：选择物流,"Next: choose shipping"
 请填写、选择或更换收货地址后再生成代付链接。,"Add, select, or change a shipping address before creating the friend-pay link."
-确认并生成代付链接,Confirm and create friend-pay link
-正在生成代付链接…,Creating friend-pay link…
-请先完善收货地址后再生成代付链接。,Complete the shipping address before creating the friend-pay link.
-正在加载收货地址…,Loading shipping address…
-收货地址组件加载失败，请稍后重试。,Failed to load shipping address. Please try again.
-收货地址组件暂不可用，请改用结账流程。,Shipping address is unavailable. Please use checkout instead.
-请先完善收货地址后再付款。,Complete the shipping address before paying.
-无法完成操作,Unable to complete
+确认并生成代付链接,"Confirm and create friend-pay link"
+正在生成代付链接…,"Creating friend-pay link…"
+请先完善收货地址后再生成代付链接。,"Complete the shipping address before creating the friend-pay link."
+正在加载收货地址…,"Loading shipping address…"
+收货地址组件加载失败，请稍后重试。,"Failed to load shipping address. Please try again."
+收货地址组件暂不可用，请改用结账流程。,"Shipping address is unavailable. Please use checkout instead."
+请先完善收货地址后再付款。,"Complete the shipping address before paying."
+无法完成操作,"Unable to complete"
 关闭,Close
 物流,Shipping
-选择配送方式,Choose shipping method
-运费按收货地址报价，仅用于本单快捷购买，不影响结账页。,Shipping is quoted for this address and applies only to this buy-now order—not the checkout page.
-正在计算运费…,Calculating shipping…
-返回地址,Back to address
-下一步：付款,Next: pay
-运费报价失败，请稍后重试。,Shipping quote failed. Please try again.
-该地址暂无可用配送方式，请更换地址后重试。,No shipping methods for this address. Change the address and try again.
+选择配送方式,"Choose shipping method"
+运费按收货地址报价，仅用于本单快捷购买，不影响结账页。,"Shipping is quoted for this address and applies only to this buy-now order—not the checkout page."
+正在计算运费…,"Calculating shipping…"
+返回地址,"Back to address"
+下一步：付款,"Next: pay"
+运费报价失败，请稍后重试。,"Shipping quote failed. Please try again."
+该地址暂无可用配送方式，请更换地址后重试。,"No shipping methods for this address. Change the address and try again."
 购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。,"Cart items are missing weight, so shipping cannot be calculated. Please contact customer service for help."
-请选择配送方式。,Please choose a shipping method.
-确认支付,Confirm payment
-在弹窗内完成支付。支付商可能打开小窗，完成后回到此处。,Complete payment in this dialog. The provider may open a small window; return here when done.
-返回物流,Back to shipping
-换设备支付（链接）,Pay on another device (link)
+请选择配送方式。,"Please choose a shipping method."
+确认支付,"Confirm payment"
+在弹窗内完成支付。支付商可能打开小窗，完成后回到此处。,"Complete payment in this dialog. The provider may open a small window; return here when done."
+返回物流,"Back to shipping"
+换设备支付（链接）,"Pay on another device (link)"
 商品,Items
 运费,Shipping
 应付,Due
-收货,Ship to
-生成付款链接发给朋友。订单仍归你，朋友只负责付款。,Create a payment link for a friend. The order stays yours; they only pay.
-订单与收货信息归你，不会转给付款人,The order and shipping stay yours—not transferred to the payer
-朋友打开链接后完成支付即可,Your friend opens the link and completes payment
-代付不可用优惠券与积分,Coupons and loyalty points cannot be used on Help Pay
-查看完整规则,View full rules
-我已阅读并同意帮我付规则,I have read and agree to the Help Pay rules
-下一步：确认收货地址,Next: confirm shipping address
-出链前请完整核对。仅此弹窗可见，之后店面不再展示收货详情。,Please verify fully before creating the link. Shipping details are only visible in this dialog.
-地址正确，可以生成代付链接,Address is correct — create Help Pay link
-生成代付链接,Create Help Pay link
+收货,"Ship to"
+生成付款链接发给朋友。订单仍归你，朋友只负责付款。,"Create a payment link for a friend. The order stays yours; they only pay."
+订单与收货信息归你，不会转给付款人,"The order and shipping stay yours—not transferred to the payer"
+朋友打开链接后完成支付即可,"Your friend opens the link and completes payment"
+代付不可用优惠券与积分,"Coupons and loyalty points cannot be used on Help Pay"
+查看完整规则,"View full rules"
+我已阅读并同意帮我付规则,"I have read and agree to the Help Pay rules"
+下一步：确认收货地址,"Next: confirm shipping address"
+出链前请完整核对。仅此弹窗可见，之后店面不再展示收货详情。,"Please verify fully before creating the link. Shipping details are only visible in this dialog."
+地址正确，可以生成代付链接,"Address is correct — create Help Pay link"
+生成代付链接,"Create Help Pay link"
 规则,Rules
 地址,Address
 分享,Share
 付款,Pay
-与帮我付不同：朋友自己结账下单,Unlike Help Pay: your friend checks out and places the order
+快捷购买买家,"Express-buy buyer"
+与帮我付不同：朋友自己结账下单,"Unlike Help Pay: your friend checks out and places the order"
 如何请人付款、订单归属与出链方式,"How to ask someone to pay, who owns the order, and how to share links"
-店面不展示收货地址；账单地址说明,Shipping address is hidden on the storefront; billing address notes
+店面不展示收货地址；账单地址说明,"Shipping address is hidden on the storefront; billing address notes"
 打开链接、选物流与支付、不能用优惠,"Open the link, choose shipping and payment; coupons unavailable"
 商品缺少重量，无法计算国际运费。请完善商品重量或更换商品后再试。,"This product is missing weight, so international shipping cannot be calculated. Add a weight or choose another product."
-请选择支付方式。,Please choose a payment method.
-正在跳转支付…,Redirecting to payment…
-付款已完成，感谢您的帮助。,Payment completed. Thank you for helping.
-无法发起支付，请刷新后重试。,Unable to start payment. Please refresh and try again.
+请选择支付方式。,"Please choose a payment method."
+正在跳转支付…,"Redirecting to payment…"
+付款已完成，感谢您的帮助。,"Payment completed. Thank you for helping."
+无法发起支付，请刷新后重试。,"Unable to start payment. Please refresh and try again."
 PayPal,PayPal
-银行卡,Bank card
-优惠券与积分不可用于帮我付。,Coupons and loyalty points cannot be used with Help Pay.
+银行卡,"Bank card"
+优惠券与积分不可用于帮我付。,"Coupons and loyalty points cannot be used with Help Pay."
 存货单位（规格）,SKU
 存货单位,SKU
-立即付款,Pay now
+立即付款,"Pay now"
 请填写、选择或更换收货地址后即可付款。,"Add, select, or change a shipping address, then pay."
-账单地址,Billing address
-请先完善付款账单地址。,Please complete your billing address first.
+账单地址,"Billing address"
+请先完善付款账单地址。,"Please complete your billing address first."
 街道、门牌等,"Street, building number, etc."
-订单归属你本人。可在此页直接支付，或用下方链接 / 二维码在另一台设备完成付款。,"This order belongs to you. Pay on this page, or use the link / QR below on another device."
-正在生成快捷购买链接…,Creating buy now link…
+"订单归属你本人。可在此页直接支付，或用下方链接 / 二维码在另一台设备完成付款。","This order belongs to you. Pay on this page, or use the link / QR below on another device."
+正在生成快捷购买链接…,"Creating buy now link…"
 请填写、选择或更换收货地址后再生成快捷购买链接。,"Add, select, or change a shipping address before creating the buy now link."
-确认并生成快捷购买链接,Confirm and create buy now link
-请先完善收货地址后再生成快捷购买链接。,Complete the shipping address before creating the buy now link.
-HelpPay 购物车/结账帮我付槽默认注入失败：%{1},HelpPay failed to seed cart/checkout help-pay slots: %{1}
+确认并生成快捷购买链接,"Confirm and create buy now link"
+请先完善收货地址后再生成快捷购买链接。,"Complete the shipping address before creating the buy now link."
+"HelpPay 购物车/结账帮我付槽默认注入失败：%{1}","HelpPay failed to seed cart/checkout help-pay slots: %{1}"

@@ -1,238 +1,238 @@
-请指定分支。,Please specify a branch.
-请求方式错误。,Invalid request method.
-发布参数不完整。,Incomplete release parameters.
-请先确认发布操作。,Please confirm the release first.
-发布到更旧版本需要额外确认。,Releasing to an older version requires extra confirmation.
-发布成功：%{1},Release succeeded: %{1}
-发布失败。,Release failed.
-发布管理,Release management
+﻿请指定分支。,"Please specify a branch."
+请求方式错误。,"Invalid request method."
+发布参数不完整。,"Incomplete release parameters."
+请先确认发布操作。,"Please confirm the release first."
+发布到更旧版本需要额外确认。,"Releasing to an older version requires extra confirmation."
+发布成功：%{1},"Release succeeded: %{1}"
+发布失败。,"Release failed."
+发布管理,"Release management"
 circle,circle
 发布控制、历史与核心更新,"Release control, history and core updates"
-发布控制,Release Control
+发布控制,"Release Control"
 refresh,refresh
-查看 Git 历史并手动发布,View Git history and publish manually
-执行发布,Execute release
-从发布控制触发部署,Trigger deployment from release control
-请求方式错误,Wrong request method
-部署配置已保存,Deployment configuration saved
-部署配置保存失败：%{1},Failed to save deployment configuration: %{1}
-当前站点请求域名,Current request site domain
-部署配置,Deployment configuration
-管理部署仓库、Webhook 与缓存清理配置,"Manage deployment repository, webhook and cache cleaning configuration"
-查看部署配置,View deployment configuration
-查看部署信息配置,View deployment information configuration
-保存部署配置,Save deployment configuration
+"查看 Git 历史并手动发布","View Git history and publish manually"
+执行发布,"Execute release"
+从发布控制触发部署,"Trigger deployment from release control"
+请求方式错误,"Wrong request method"
+部署配置已保存,"Deployment configuration saved"
+部署配置保存失败：%{1},"Failed to save deployment configuration: %{1}"
+当前站点请求域名,"Current request site domain"
+部署配置,"Deployment configuration"
+"管理部署仓库、Webhook 与缓存清理配置","Manage deployment repository, webhook and cache cleaning configuration"
+查看部署配置,"View deployment configuration"
+查看部署信息配置,"View deployment information configuration"
+保存部署配置,"Save deployment configuration"
 save,save
-保存部署信息配置,Save deployment information configuration
-请先确认核心更新操作。,Please confirm the core update operation first.
-核心更新完成。,Core update completed.
-备份编号：%{1},Backup ID: %{1}
-核心更新失败。,Core update failed.
-核心更新,Core Update
-Web 执行框架核心更新,Web Execution Framework Core Update
-执行核心更新,Perform core update
-执行 update:core 命令,Execute update:core command
-请先勾选确认框后再执行回滚。,Please check the confirmation box before performing rollback.
-缺少发布记录 ID。,Missing release record ID.
-发布记录不存在。,Release record not found.
-只能回滚成功的发布记录。,Only successful releases can be rolled back.
-当前版本无需回滚。,Current version does not need rollback.
-无法解析回滚参考。,Unable to resolve rollback reference.
-回滚到更旧版本需要额外确认。,Rolling back to an older version requires extra confirmation.
-回滚成功：%{1},Rollback succeeded: %{1}
-回滚失败。,Rollback failed.
-发布历史,Release History
+保存部署信息配置,"Save deployment information configuration"
+请先确认核心更新操作。,"Please confirm the core update operation first."
+核心更新完成。,"Core update completed."
+备份编号：%{1},"Backup ID: %{1}"
+核心更新失败。,"Core update failed."
+核心更新,"Core Update"
+"Web 执行框架核心更新","Web Execution Framework Core Update"
+执行核心更新,"Perform core update"
+"执行 update:core 命令","Execute update:core command"
+请先勾选确认框后再执行回滚。,"Please check the confirmation box before performing rollback."
+"缺少发布记录 ID。","Missing release record ID."
+发布记录不存在。,"Release record not found."
+只能回滚成功的发布记录。,"Only successful releases can be rolled back."
+当前版本无需回滚。,"Current version does not need rollback."
+无法解析回滚参考。,"Unable to resolve rollback reference."
+回滚到更旧版本需要额外确认。,"Rolling back to an older version requires extra confirmation."
+回滚成功：%{1},"Rollback succeeded: %{1}"
+回滚失败。,"Rollback failed."
+发布历史,"Release History"
 history,history
-查看发布历史与版本回滚,View release history and version rollback
-查看发布历史,View release history
-查看发布历史列表,View the release history list
-回滚发布版本,Roll back a release
+查看发布历史与版本回滚,"View release history and version rollback"
+查看发布历史,"View release history"
+查看发布历史列表,"View the release history list"
+回滚发布版本,"Roll back a release"
 store,store
-从历史记录回滚版本,Rollback a version from history
-WLS 部署发布,WLS Deploy
-项目发布 Profile 保存失败。,Project release profile save failed.
-发布预检存在阻断项，请先修正标红项。,Release preflight has blocking items. Fix the red items first.
-请输入需要回放的 Webhook Ref。,Enter the Webhook Ref to replay.
-Invalid request method.,Invalid request method.
-Please enter a Git ref for the manual release.,Please enter a Git ref for the manual release.
-Please enter a Git ref for the manual release plan.,Please enter a Git ref for the manual release plan.
+从历史记录回滚版本,"Rollback a version from history"
+"WLS 部署发布","WLS Deploy"
+"项目发布 Profile 保存失败。","Project release profile save failed."
+发布预检存在阻断项，请先修正标红项。,"Release preflight has blocking items. Fix the red items first."
+"请输入需要回放的 Webhook Ref。","Enter the Webhook Ref to replay."
+"Invalid request method.","Invalid request method."
+"Please enter a Git ref for the manual release.","Please enter a Git ref for the manual release."
+"Please enter a Git ref for the manual release plan.","Please enter a Git ref for the manual release plan."
 "Release preflight has blocking items, so the manual release was not executed.","Release preflight has blocking items, so the manual release was not executed."
 "Release preflight has blocking items, so the manual plan was not built.","Release preflight has blocking items, so the manual plan was not built."
-Confirm the manual release before running it.,Confirm the manual release before running it.
-Manual release failed.,Manual release failed.
-发布预检存在阻断项，不能执行回滚。,There are blocking items in the release preflight and rollback cannot be performed.
-当前项目 Profile 未配置回滚参考。,The current project Profile does not have a rollback reference configured.
-当前项目发布记录,Current Project Releases
-当前域名发布记录,Current Domain Releases
-全局发布记录,Global Releases
-未选择子项目，显示 WLS 主项目发布历史。,"No child project is selected, so WLS host project release history is shown."
-Tag 发布策略,Tag Release Policy
-默认启用,Enabled by Default
+"Confirm the manual release before running it.","Confirm the manual release before running it."
+"Manual release failed.","Manual release failed."
+发布预检存在阻断项，不能执行回滚。,"There are blocking items in the release preflight and rollback cannot be performed."
+"当前项目 Profile 未配置回滚参考。","The current project Profile does not have a rollback reference configured."
+当前项目发布记录,"Current Project Releases"
+当前域名发布记录,"Current Domain Releases"
+全局发布记录,"Global Releases"
+"未选择子项目，显示 WLS 主项目发布历史。","No child project is selected, so WLS host project release history is shown."
+"Tag 发布策略","Tag Release Policy"
+默认启用,"Enabled by Default"
 已调整,Adjusted
-默认仅响应 tag push；需要分支发布时必须在 Deploy 配置中显式开启。,By default only tag pushes are accepted; branch releases must be explicitly enabled in Deploy Config.
-Webhook 随机路径,Webhook Random Path
+"默认仅响应 tag push；需要分支发布时必须在 Deploy 配置中显式开启。","By default only tag pushes are accepted; branch releases must be explicitly enabled in Deploy Config."
+"Webhook 随机路径","Webhook Random Path"
 已生成,Generated
 待生成,Pending
-公网入口使用 ~wh~ 随机路径和密钥鉴权，由 ModuleRouter 转入发布控制器。,"The public endpoint uses a ~wh~ random path plus secret authentication, then ModuleRouter forwards it to the release controller."
-子项目发布档案,Child Project Release Profiles
+"公网入口使用 ~wh~ 随机路径和密钥鉴权，由 ModuleRouter 转入发布控制器。","The public endpoint uses a ~wh~ random path plus secret authentication, then ModuleRouter forwards it to the release controller."
+子项目发布档案,"Child Project Release Profiles"
 已启用,Enabled
 已保存,Saved
-继承全局,Inherits Global
-当前项目已有独立发布 Profile，后续 webhook/manual release 会按项目上下文读取。,This project already has a dedicated release profile; later webhook/manual release flows will read it by project context.
-当前项目暂未保存独立 Profile，发布能力继续读取全局 Deploy 配置。,"This project has no dedicated profile yet, so release capabilities continue to read global Deploy configuration."
-发布日志,Release Logs
+继承全局,"Inherits Global"
+"当前项目已有独立发布 Profile，后续 webhook/manual release 会按项目上下文读取。","This project already has a dedicated release profile; later webhook/manual release flows will read it by project context."
+"当前项目暂未保存独立 Profile，发布能力继续读取全局 Deploy 配置。","This project has no dedicated profile yet, so release capabilities continue to read global Deploy configuration."
+发布日志,"Release Logs"
 已接入,Connected
-Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。,"Webhook and command releases share the release history service, so the panel can show recent release status directly."
-仅分支 Push,Branch Push Only
-分支 + Tag 都生效,Branch + Tag
-仅 Tag Push,Tag Push Only
+"Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。","Webhook and command releases share the release history service, so the panel can show recent release status directly."
+"仅分支 Push","Branch Push Only"
+"分支 + Tag 都生效","Branch + Tag"
+"仅 Tag Push","Tag Push Only"
 成功,Success
 失败,Failed
 运行中,Running
 等待中,Pending
 未知,Unknown
-会触发发布,Would Trigger Release
-不会触发,Will Be Skipped
-待回放,Ready to Replay
-Plan ready,Plan ready
-Policy skipped,Policy skipped
-Waiting for ref,Waiting for ref
-Current WLS project root,Current WLS project root
+会触发发布,"Would Trigger Release"
+不会触发,"Will Be Skipped"
+待回放,"Ready to Replay"
+"Plan ready","Plan ready"
+"Policy skipped","Policy skipped"
+"Waiting for ref","Waiting for ref"
+"Current WLS project root","Current WLS project root"
 Enabled,Enabled
 Disabled,Disabled
 "Enabled, command not configured","Enabled, command not configured"
-No execution plan yet,No execution plan yet
-Enter a matching tag or branch ref to preview the manual release path.,Enter a matching tag or branch ref to preview the manual release path.
+"No execution plan yet","No execution plan yet"
+"Enter a matching tag or branch ref to preview the manual release path.","Enter a matching tag or branch ref to preview the manual release path."
 "Fetch tags from %{1}, then checkout tag %{2}.","Fetch tags from %{1}, then checkout tag %{2}."
 "Fetch %{1}, then %{2} branch %{3}.","Fetch %{1}, then %{2} branch %{3}."
-Preflight gate,Preflight gate
+"Preflight gate","Preflight gate"
 Backup,Backup
-Create a deploy backup before Git changes.,Create a deploy backup before Git changes.
-Git update,Git update
+"Create a deploy backup before Git changes.","Create a deploy backup before Git changes."
+"Git update","Git update"
 Composer,Composer
 "Composer is enabled, but no command is configured yet.","Composer is enabled, but no command is configured yet."
-Composer is disabled for this project.,Composer is disabled for this project.
-Post deploy,Post deploy
-No post-deploy command is configured.,No post-deploy command is configured.
-Runtime stamp and reload,Runtime stamp and reload
+"Composer is disabled for this project.","Composer is disabled for this project."
+"Post deploy","Post deploy"
+"No post-deploy command is configured.","No post-deploy command is configured."
+"Runtime stamp and reload","Runtime stamp and reload"
 "A real release would write current.json, sync env release metadata, record project-scoped history, dispatch release_after, and reload WLS.","A real release would write current.json, sync env release metadata, record project-scoped history, dispatch release_after, and reload WLS."
-Execution gate,Execution gate
-Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution.,Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution.
-Manual release ref contains unsupported shell control characters.,Manual release ref contains unsupported shell control characters.
-Manual release ref is outside the WLS allowlist.,Manual release ref is outside the WLS allowlist.
-策略命中，会进入发布流程。,Policy matched; it would enter the release flow.
-当前为仅 Tag Push，分支事件会被跳过。,"Current mode is Tag Push only, so branch events will be skipped."
-当前为仅分支 Push，Tag 事件会被跳过。,"Current mode is Branch Push only, so tag events will be skipped."
-分支与 Webhook 分支过滤不匹配。,Branch does not match the Webhook branch filter.
-Tag 不符合配置的前缀过滤。,Tag does not match the configured prefix filter.
-Ref 不是可识别的分支或 Tag。,Ref is not a recognizable branch or tag.
-暂无回放结果。,No replay result yet.
-项目发布 Profile 已保存。,Project release profile saved.
-发布预检已完成，未执行真实发布。,Release preflight completed; no real release was executed.
-Webhook 回放预检已完成，未执行真实发布。,Webhook replay preflight completed; no real release was executed.
-项目回滚已完成。,Project rollback completed.
-Manual release plan is ready; no release was executed.,Manual release plan is ready; no release was executed.
-Manual release plan was skipped by the current trigger policy; no release was executed.,Manual release plan was skipped by the current trigger policy; no release was executed.
-Manual release completed.,Manual release completed.
-Manual release was skipped by the current trigger policy; no release was executed.,Manual release was skipped by the current trigger policy; no release was executed.
-WLS 面板部署发布入口,WLS panel deployment release portal
-查看 WLS 部署发布,View WLS deployment releases
-查看 WLS 面板部署发布,View WLS Panel Deployment Release
-View WLS Deploy Overview,View WLS Deploy Overview
+"Execution gate","Execution gate"
+"Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution.","Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution."
+"Manual release ref contains unsupported shell control characters.","Manual release ref contains unsupported shell control characters."
+"Manual release ref is outside the WLS allowlist.","Manual release ref is outside the WLS allowlist."
+策略命中，会进入发布流程。,"Policy matched; it would enter the release flow."
+"当前为仅 Tag Push，分支事件会被跳过。","Current mode is Tag Push only, so branch events will be skipped."
+"当前为仅分支 Push，Tag 事件会被跳过。","Current mode is Branch Push only, so tag events will be skipped."
+"分支与 Webhook 分支过滤不匹配。","Branch does not match the Webhook branch filter."
+"Tag 不符合配置的前缀过滤。","Tag does not match the configured prefix filter."
+"Ref 不是可识别的分支或 Tag。","Ref is not a recognizable branch or tag."
+暂无回放结果。,"No replay result yet."
+"项目发布 Profile 已保存。","Project release profile saved."
+发布预检已完成，未执行真实发布。,"Release preflight completed; no real release was executed."
+"Webhook 回放预检已完成，未执行真实发布。","Webhook replay preflight completed; no real release was executed."
+项目回滚已完成。,"Project rollback completed."
+"Manual release plan is ready; no release was executed.","Manual release plan is ready; no release was executed."
+"Manual release plan was skipped by the current trigger policy; no release was executed.","Manual release plan was skipped by the current trigger policy; no release was executed."
+"Manual release completed.","Manual release completed."
+"Manual release was skipped by the current trigger policy; no release was executed.","Manual release was skipped by the current trigger policy; no release was executed."
+"WLS 面板部署发布入口","WLS panel deployment release portal"
+"查看 WLS 部署发布","View WLS deployment releases"
+"查看 WLS 面板部署发布","View WLS Panel Deployment Release"
+"View WLS Deploy Overview","View WLS Deploy Overview"
 grid,grid
-View WLS Panel deploy overview,View WLS Panel deploy overview
-View WLS Deploy Release Path,View WLS Deploy Release Path
+"View WLS Panel deploy overview","View WLS Panel deploy overview"
+"View WLS Deploy Release Path","View WLS Deploy Release Path"
 branch,branch
-View WLS Panel deploy release path,View WLS Panel deploy release path
-View WLS Deploy Configuration,View WLS Deploy Configuration
+"View WLS Panel deploy release path","View WLS Panel deploy release path"
+"View WLS Deploy Configuration","View WLS Deploy Configuration"
 settings,settings
-View WLS Panel deploy configuration,View WLS Panel deploy configuration
-View WLS Deploy Project Profile,View WLS Deploy Project Profile
+"View WLS Panel deploy configuration","View WLS Panel deploy configuration"
+"View WLS Deploy Project Profile","View WLS Deploy Project Profile"
 edit,edit
-View WLS Panel deploy project profile,View WLS Panel deploy project profile
-View WLS Deploy Preflight,View WLS Deploy Preflight
+"View WLS Panel deploy project profile","View WLS Panel deploy project profile"
+"View WLS Deploy Preflight","View WLS Deploy Preflight"
 check,check
-View WLS Panel deploy preflight,View WLS Panel deploy preflight
-View WLS Deploy Webhooks,View WLS Deploy Webhooks
-View WLS Panel deploy webhooks,View WLS Panel deploy webhooks
-View WLS Deploy Releases,View WLS Deploy Releases
-View WLS Panel deploy releases,View WLS Panel deploy releases
-View WLS Deploy Manual Plan,View WLS Deploy Manual Plan
+"View WLS Panel deploy preflight","View WLS Panel deploy preflight"
+"View WLS Deploy Webhooks","View WLS Deploy Webhooks"
+"View WLS Panel deploy webhooks","View WLS Panel deploy webhooks"
+"View WLS Deploy Releases","View WLS Deploy Releases"
+"View WLS Panel deploy releases","View WLS Panel deploy releases"
+"View WLS Deploy Manual Plan","View WLS Deploy Manual Plan"
 list,list
-View WLS Panel deploy manual plan,View WLS Panel deploy manual plan
-保存 WLS 项目发布 Profile,Save WLS Project Release Profile
-保存 WLS 面板项目发布 Profile,Save WLS Panel Project Release Profile
-执行 WLS 项目发布预检,Perform a WLS project release preflight
-执行 WLS 面板项目发布预检,Perform WLS Panel project release preflight
-回放 WLS 发布 Webhook,Replay WLS publish webhook
-回放 WLS 面板 Webhook 触发策略,Replay WLS Panel Webhook Triggering Policy
-执行 WLS 项目发布回滚,Performing a WLS project release rollback
-执行 WLS 面板项目发布回滚,Performing a WLS panel project release rollback
-Build WLS manual release plan,Build WLS manual release plan
-Build read-only WLS Panel manual release execution plan,Build read-only WLS Panel manual release execution plan
-Run WLS project rollback,Run WLS project rollback
-Run WLS Panel project rollback,Run WLS Panel project rollback
-项目仓库地址不合法。,Project repository URL is invalid.
-Webhook 密钥包含不允许的控制字符。,Webhook secret contains disallowed control characters.
+"View WLS Panel deploy manual plan","View WLS Panel deploy manual plan"
+"保存 WLS 项目发布 Profile","Save WLS Project Release Profile"
+"保存 WLS 面板项目发布 Profile","Save WLS Panel Project Release Profile"
+"执行 WLS 项目发布预检","Perform a WLS project release preflight"
+"执行 WLS 面板项目发布预检","Perform WLS Panel project release preflight"
+"回放 WLS 发布 Webhook","Replay WLS publish webhook"
+"回放 WLS 面板 Webhook 触发策略","Replay WLS Panel Webhook Triggering Policy"
+"执行 WLS 项目发布回滚","Performing a WLS project release rollback"
+"执行 WLS 面板项目发布回滚","Performing a WLS panel project release rollback"
+"Build WLS manual release plan","Build WLS manual release plan"
+"Build read-only WLS Panel manual release execution plan","Build read-only WLS Panel manual release execution plan"
+"Run WLS project rollback","Run WLS project rollback"
+"Run WLS Panel project rollback","Run WLS Panel project rollback"
+项目仓库地址不合法。,"Project repository URL is invalid."
+"Webhook 密钥包含不允许的控制字符。","Webhook secret contains disallowed control characters."
 已配置，留空表示不修改,"Configured, leave blank to not modify"
-未配置,Not Configured
-立即复制,Copy now
-后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。,"After the background configuration is saved, it will take precedence over dev/deploy/.config and .env; only when the field is left blank will it fall back to the server file configuration."
-项目仓库,Project warehouse
-项目仓库地址,Project Repository URL
-项目分支,Project Branch
-Git Remote 名称,GitRemote name
-项目仓库用户名,Project repository username
-项目仓库 Token,Project Warehouse Token
-部署行为,Deployment behavior
-部署根目录,deployment root directory
-Git 更新模式,Git update mode
-Composer 命令,Composer command
-部署后命令,Post Deploy Command
-允许覆盖本地改动,Allow local changes to be overridden
-允许切换分支,Allow switching branches
-更新 Submodule,Update Submodule
-运行 Composer,Run Composer
-核心仓库,core warehouse
-核心仓库地址,Core warehouse address
-核心默认分支,core default branch
-核心仓库用户名,Core warehouse username
-核心仓库 Token,Core Warehouse Token
+未配置,"Not Configured"
+立即复制,"Copy now"
+"后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。","After the background configuration is saved, it will take precedence over dev/deploy/.config and .env; only when the field is left blank will it fall back to the server file configuration."
+项目仓库,"Project warehouse"
+项目仓库地址,"Project Repository URL"
+项目分支,"Project Branch"
+"Git Remote 名称","GitRemote name"
+项目仓库用户名,"Project repository username"
+"项目仓库 Token","Project Warehouse Token"
+部署行为,"Deployment behavior"
+部署根目录,"deployment root directory"
+"Git 更新模式","Git update mode"
+"Composer 命令","Composer command"
+部署后命令,"Post Deploy Command"
+允许覆盖本地改动,"Allow local changes to be overridden"
+允许切换分支,"Allow switching branches"
+"更新 Submodule","Update Submodule"
+"运行 Composer","Run Composer"
+核心仓库,"core warehouse"
+核心仓库地址,"Core warehouse address"
+核心默认分支,"core default branch"
+核心仓库用户名,"Core warehouse username"
+"核心仓库 Token","Core Warehouse Token"
 Webhook,Webhook
-当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。,The current site domain can be used directly for Webhook. Copy the full URL below into your Gitee/GitHub repository Webhook settings.
-域名来源：%{1},Domain source: %{1}
-尚未生成 Webhook 路径。首次生成：,No Webhook path yet. Generate one with:
-；仅轮换路径：,;Rotate paths only:
-Webhook 公网地址（复制到 Git 平台）,Webhook public URL (copy to Git platform)
-尚未生成，请执行 deploy:webhook:setup,"It has not been generated yet, please execute deploy:webhook:setup"
-Webhook 入口挂在站点根域名下，不跟随后台路径前缀；版本探测地址为同路径后加 /version。,The Webhook entry is mounted on the site root domain and does not follow the backend path prefix. Append /version for release probing.
-版本探测地址,Version probe URL
-Webhook 随机路径（只读）,Webhook random path (read-only)
-Webhook 密钥,Webhook key
-即 webhook_secret；留空保存表示不修改已有密钥。,"That is, webhook_secret; leaving it blank to save means not to modify the existing key."
-Bash 命令,Bash commands
-Webhook 配置引导,Webhook Setup Guide
-Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。,Use the Webhook public URL above as the Git platform Webhook URL. Secret/password must match the Webhook secret field.
-其他平台,Other Platforms
-第 1 步：进入 Gitee 仓库设置,Step 1: Open Gitee repository settings
-打开 Gitee 仓库页面，点击顶部「管理」,"Open your Gitee repository page, click \Manage\ at the top"""""""""""""""
-左侧菜单找到「WebHooks」，点击「添加 WebHook」,"Find \WebHooks\ in the left menu"""""""
-第 2 步：填写 Webhook 信息,Step 2: Fill in Webhook details
+"当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。","The current site domain can be used directly for Webhook. Copy the full URL below into your Gitee/GitHub repository Webhook settings."
+域名来源：%{1},"Domain source: %{1}"
+"尚未生成 Webhook 路径。首次生成：","No Webhook path yet. Generate one with:"
+；仅轮换路径：,";Rotate paths only:"
+"Webhook 公网地址（复制到 Git 平台）","Webhook public URL (copy to Git platform)"
+"尚未生成，请执行 deploy:webhook:setup","It has not been generated yet, please execute deploy:webhook:setup"
+"Webhook 入口挂在站点根域名下，不跟随后台路径前缀；版本探测地址为同路径后加 /version。","The Webhook entry is mounted on the site root domain and does not follow the backend path prefix. Append /version for release probing."
+版本探测地址,"Version probe URL"
+"Webhook 随机路径（只读）","Webhook random path (read-only)"
+"Webhook 密钥","Webhook key"
+"即 webhook_secret；留空保存表示不修改已有密钥。","That is, webhook_secret; leaving it blank to save means not to modify the existing key."
+"Bash 命令","Bash commands"
+"Webhook 配置引导","Webhook Setup Guide"
+"Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。","Use the Webhook public URL above as the Git platform Webhook URL. Secret/password must match the Webhook secret field."
+其他平台,"Other Platforms"
+"第 1 步：进入 Gitee 仓库设置","Step 1: Open Gitee repository settings"
+"打开 Gitee 仓库页面，点击顶部「管理」","Open your Gitee repository page, click \Manage\ at the top"""""""""""""""
+"左侧菜单找到「WebHooks」，点击「添加 WebHook」","Find \WebHooks\ in the left menu"""""""
+"第 2 步：填写 Webhook 信息","Step 2: Fill in Webhook details"
 密码,Password
-填写上方「Webhook 密钥」中保存的值,"Enter the value saved in \Webhook Secret\ above"""""""""""""""
-触发事件,Trigger Events
+"填写上方「Webhook 密钥」中保存的值","Enter the value saved in \Webhook Secret\ above"""""""""""""""
+触发事件,"Trigger Events"
 勾选「Push」,"Check \Push\"""""
 数据格式,Data format
 第 3 步：验证,Step 3: Verify.
-"返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""",Return {ok:true} payload
-数据格式,Data format
-第 3 步：验证,Step 3: Verify.
+返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+数据格式,"Data format"
+"第 3 步：验证","Step 3: Verify."
 "返回 {""ok"":true} 即表示 Webhook 入口正常。","Returning {""ok"":true} means that the Webhook entry is normal."
-第 1 步：进入 GitHub 仓库设置,Step 1: Open GitHub repository settings
-打开 GitHub 仓库页面，点击「Settings」,"Open your GitHub repository page, click \Settings\"""""
-左侧菜单找到「Webhooks」，点击「Add webhook」,"On the left-hand menu, find ""Webhooks"" and click ""Add webhook""."
-左侧菜单找到「Webhooks」，点击「Add webhook」,"On the left-hand menu, find ""Webhooks"" and click ""Add webhook""."
-选择「Just the push event」,"Select \Just the push event\"""""
+"第 1 步：进入 GitHub 仓库设置","Step 1: Open GitHub repository settings"
+"打开 GitHub 仓库页面，点击「Settings」","Open your GitHub repository page, click \Settings\"""""
+左侧菜单找到「Webhooks」，点击「Add webhook」,On the left-hand menu"
+"左侧菜单找到「Webhooks」，点击「Add webhook」","On the left-hand menu, find ""Webhooks"" and click ""Add webhook""."
+"选择「Just the push event」","Select \Just the push event\"""""
 支持的 Webhook 协议,Supported Webhook protocols.
 本系统兼容标准 Webhook 协议，支持以下鉴权方式：,This system is compatible with the standard Webhook protocol and supports the following authentication methods:
 通用 HTTP Bearer Token,Generic HTTP Bearer Token
@@ -242,47 +242,45 @@ GitHub 专用（HMAC-SHA256）,GitHub-specific (HMAC-SHA256)
 Payload 要求,Payload requirements.
 请求体为 JSON 格式，必须包含 <code>ref</code> 字段：,The request body must be in JSON format and contain the <code>ref</code> field:
 Nginx 反代示例（WLS）,Nginx Reverse Proxy Example (WLS)
-Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。,"The webhook's random path shares the same WLS reverse proxy as other site paths, eliminating the need for a separate FastCGI entry point."
-手动测试,Manual testing.
-默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。,"By default, only Tag Push is enabled: Branch tests will return ""trigger_mode_tag_only"". When you select a branch or both options, ""branch_mismatch"" indicates a branch mismatch."
-支持的 Webhook 协议,Supported Webhook protocols.
-本系统兼容标准 Webhook 协议，支持以下鉴权方式：,This system is compatible with the standard Webhook protocol and supports the following authentication methods:
-通用 HTTP Bearer Token,Generic HTTP Bearer Token
-URL 参数传递,URL parameter passing.
-Gitee 专用（自动识别）,Gitee-specific (auto-detection).
-GitHub 专用（HMAC-SHA256）,GitHub-specific (HMAC-SHA256)
-Payload 要求,Payload requirements.
-请求体为 JSON 格式，必须包含 <code>ref</code> 字段：,The request body must be in JSON format and contain the <code>ref</code> field:
-Nginx 反代示例（WLS）,Nginx Reverse Proxy Example (WLS)
-Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。,"The webhook's random path shares the same WLS reverse proxy as other site paths, eliminating the need for a separate FastCGI entry point."
-手动测试,Manual testing.
-默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。,"By default, only Tag Push is enabled: Branch tests will return ""trigger_mode_tag_only"". When you select a branch or both options, ""branch_mismatch"" indicates a branch mismatch."
-触发模式,Trigger Mode
-部署触发方式,Deploy Trigger
-默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。,Default is Tag Push only; branch pushes are accepted only when Branch or Both is selected explicitly.
-分支过滤,Branch Filter
-留空匹配所有分支；填写后仅该分支的 push 触发部署,Leave empty to match all branches; set to only trigger on pushes to this branch
-Tag 前缀过滤,Tag Prefix Filter
-留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署,"Leave blank to match all tags; after filling in, only tags matching this prefix will trigger deployment."
-发布探测 Token,Deploy Probe Token
-访问 Webhook 路径后加 /version?token=xxx 可查看详细版本信息,Append /version?token=xxx to the Webhook path to view detailed version info
-版本策略,Version Policy
-分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。,Branch push version = commit short SHA (e.g. a3f5c2d); Tag push version = tag name (e.g. v2.4.1).
-Git 平台配置提示,Git Platform Setup Tips
-「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。,"When trigger mode is \Tag Push Only\"""
-默认「Just the push event」已包含分支和 tag push，无需额外配置。,"By default, ""Just the push event"" includes branch and tag pushes, so no additional configuration is required."
-默认「Just the push event」已包含分支和 tag push，无需额外配置。,"By default, ""Just the push event"" includes branch and tag pushes, so no additional configuration is required."
+Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。,The webhook's random path shares the same WLS reverse proxy as other site paths"
+"支持的 Webhook 协议","Supported Webhook protocols."
+"本系统兼容标准 Webhook 协议，支持以下鉴权方式：","This system is compatible with the standard Webhook protocol and supports the following authentication methods:"
+"通用 HTTP Bearer Token","Generic HTTP Bearer Token"
+"URL 参数传递","URL parameter passing."
+"Gitee 专用（自动识别）","Gitee-specific (auto-detection)."
+"GitHub 专用（HMAC-SHA256）","GitHub-specific (HMAC-SHA256)"
+"Payload 要求","Payload requirements."
+"请求体为 JSON 格式，必须包含 <code>ref</code> 字段：","The request body must be in JSON format and contain the <code>ref</code> field:"
+"Nginx 反代示例（WLS）","Nginx Reverse Proxy Example (WLS)"
+"Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。","The webhook's random path shares the same WLS reverse proxy as other site paths, eliminating the need for a separate FastCGI entry point."
+手动测试,"Manual testing."
+"默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。","By default, only Tag Push is enabled: Branch tests will return ""trigger_mode_tag_only"". When you select a branch or both options, ""branch_mismatch"" indicates a branch mismatch."
+触发模式,"Trigger Mode"
+部署触发方式,"Deploy Trigger"
+"默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。","Default is Tag Push only; branch pushes are accepted only when Branch or Both is selected explicitly."
+分支过滤,"Branch Filter"
+"留空匹配所有分支；填写后仅该分支的 push 触发部署","Leave empty to match all branches; set to only trigger on pushes to this branch"
+"Tag 前缀过滤","Tag Prefix Filter"
+"留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署","Leave blank to match all tags; after filling in, only tags matching this prefix will trigger deployment."
+"发布探测 Token","Deploy Probe Token"
+"访问 Webhook 路径后加 /version?token=xxx 可查看详细版本信息","Append /version?token=xxx to the Webhook path to view detailed version info"
+版本策略,"Version Policy"
+"分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。","Branch push version = commit short SHA (e.g. a3f5c2d); Tag push version = tag name (e.g. v2.4.1)."
+"Git 平台配置提示","Git Platform Setup Tips"
+"「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。","When trigger mode is \Tag Push Only\"""
+默认「Just the push event」已包含分支和 tag push，无需额外配置。,By default"
+"默认「Just the push event」已包含分支和 tag push，无需额外配置。","By default, ""Just the push event"" includes branch and tag pushes, so no additional configuration is required."
 测试：,Test:
 Cloudflare,Cloudflare
-启用缓存清理,Enable cache cleaning
-Cloudflare Zone ID,Cloudflare Zone ID
-Cloudflare API Token,Cloudflare API Token
-保存配置,Save configuration
+启用缓存清理,"Enable cache cleaning"
+"Cloudflare Zone ID","Cloudflare Zone ID"
+"Cloudflare API Token","Cloudflare API Token"
+保存配置,"Save configuration"
 已复制,Copied
-当前版本,Current Version
-尚未发布过,No releases yet
-正式站回滚前将自动整站备份。,Production sites back up automatically before rollback.
-暂无发布记录,No release records yet
+当前版本,"Current Version"
+尚未发布过,"No releases yet"
+正式站回滚前将自动整站备份。,"Production sites back up automatically before rollback."
+暂无发布记录,"No release records yet"
 时间,time
 版本,Version
 类型,Type
@@ -294,601 +292,601 @@ Commit,Commit
 当前,Current
 tag,tag
 全局,Global
-回滚到此版本,Rollback to This Version
-确认回滚,Confirm Rollback
+回滚到此版本,"Rollback to This Version"
+确认回滚,"Confirm Rollback"
 回滚可能导致数据迁移、配置或代码不兼容。,"Rollback may break migrations, config, or code compatibility."
-我确认要回滚到此版本,I confirm rollback to this version
-我确认要回滚到更旧版本,I confirm rollback to an older version
+我确认要回滚到此版本,"I confirm rollback to this version"
+我确认要回滚到更旧版本,"I confirm rollback to an older version"
 取消,Cancel
-执行回滚,Run Rollback
-回滚到版本,Rollback to version
-需要确认,Needs Review
-已配置，留空表示保留当前项目密钥,Configured; leave blank to keep the current project secret.
-未配置，可填写当前项目独立密钥,Not configured; enter a project-specific secret if needed.
-项目密钥,Project Secret
-全局密钥,Global Secret
+执行回滚,"Run Rollback"
+回滚到版本,"Rollback to version"
+需要确认,"Needs Review"
+已配置，留空表示保留当前项目密钥,"Configured; leave blank to keep the current project secret."
+未配置，可填写当前项目独立密钥,"Not configured; enter a project-specific secret if needed."
+项目密钥,"Project Secret"
+全局密钥,"Global Secret"
 已配置,Configured
-当前 WLS,Current WLS
-域名上下文,Domain Context
-本机面板,Local Panel
+"当前 WLS","Current WLS"
+域名上下文,"Domain Context"
+本机面板,"Local Panel"
 已保存未启用,"Saved, Disabled"
-当前 WLS 主项目,Current WLS Host Project
-WLS 部署导航,WLS Deploy Navigation
-WLS 插件面板,WLS Plugin Panel
+"当前 WLS 主项目","Current WLS Host Project"
+"WLS 部署导航","WLS Deploy Navigation"
+"WLS 插件面板","WLS Plugin Panel"
 部署发布,Deploy
-部署发布菜单,Deploy Menu
+部署发布菜单,"Deploy Menu"
 总览,Overview
-发布路径,Release Path
-配置摘要,Configuration Summary
-项目 Profile,Project Profile
-发布预检,Release Preflight
-Webhook 回放,Webhook Replay
-发布记录,Release Records
-插件商城,Plugin Marketplace
-Manual Plan,Manual Plan
+发布路径,"Release Path"
+配置摘要,"Configuration Summary"
+"项目 Profile","Project Profile"
+发布预检,"Release Preflight"
+"Webhook 回放","Webhook Replay"
+发布记录,"Release Records"
+插件商城,"Plugin Marketplace"
+"Manual Plan","Manual Plan"
 深色,Dark
 浅色,Light
-切换明暗色,Toggle Theme
-返回 WLS Panel,Back to WLS Panel
-WLS 独立插件,WLS Standalone Plugin
-集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。,"Review the current WLS project's tag/webhook release policy, redacted configuration status, and recent release results; full editing stays in Deploy Config."
-打开 Deploy 配置,Open Deploy Config
-完整发布历史,Full Release History
-项目后台,Project Admin
-项目上下文,Project Context
+切换明暗色,"Toggle Theme"
+"返回 WLS Panel","Back to WLS Panel"
+"WLS 独立插件","WLS Standalone Plugin"
+"集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。","Review the current WLS project's tag/webhook release policy, redacted configuration status, and recent release results; full editing stays in Deploy Config."
+"打开 Deploy 配置","Open Deploy Config"
+完整发布历史,"Full Release History"
+项目后台,"Project Admin"
+项目上下文,"Project Context"
 项目,Project
 域名,Domain
-未指定,Not Specified
-由项目卡片安全透传,Safely passed from the project card
+未指定,"Not Specified"
+由项目卡片安全透传,"Safely passed from the project card"
 操作,Operation
-来自 WLS capability 链接,From WLS capability link
-触发策略,Trigger Policy
-默认保守发布策略,Default conservative release policy
-项目发布路径,Project Release Path
-从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。,"When opened from a project card, Profile, Webhook Replay, Manual Plan, and release records share the same WLS project context."
-发布 Profile,Release Profile
-继承全局配置,Inherited Global Config
-配置 Profile,Configure Profile
-触发与计划,Trigger and Plan
-默认示例：%{1},Default sample: %{1}
-%{1} 条,%{1} records
-查看当前范围,View Current Scope
-真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。,"A successful release records profile_key, project_id, domain, and project_type; this page refreshes release history by that context."
-项目发布 Profile,Project Release Profile
-为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。,"Save a dedicated repository, tag policy, rollback reference, and release command for the current WLS project; saving still requires a later explicit release action."
-启用项目 Profile,Enable Project Profile
-发布前备份,Backup Before Release
-Tag 前缀,Tag prefix
-例如 v,For example v
-Webhook 分支过滤,Webhook branch filtering
-项目 Webhook 密钥,Project Webhook Secret
-当前验签来源,Current verification source
-命令白名单,Command Allowlist
-Composer 示例,Composer Examples
-部署后命令示例,Post-deploy Command Examples
-回滚参考,Rollback Reference
-回滚示例,Rollback Examples
+"来自 WLS capability 链接","From WLS capability link"
+触发策略,"Trigger Policy"
+默认保守发布策略,"Default conservative release policy"
+项目发布路径,"Project Release Path"
+"从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。","When opened from a project card, Profile, Webhook Replay, Manual Plan, and release records share the same WLS project context."
+"发布 Profile","Release Profile"
+继承全局配置,"Inherited Global Config"
+"配置 Profile","Configure Profile"
+触发与计划,"Trigger and Plan"
+默认示例：%{1},"Default sample: %{1}"
+"%{1} 条","%{1} records"
+查看当前范围,"View Current Scope"
+"真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。","A successful release records profile_key, project_id, domain, and project_type; this page refreshes release history by that context."
+"项目发布 Profile","Project Release Profile"
+"为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。","Save a dedicated repository, tag policy, rollback reference, and release command for the current WLS project; saving still requires a later explicit release action."
+"启用项目 Profile","Enable Project Profile"
+发布前备份,"Backup Before Release"
+"Tag 前缀","Tag prefix"
+"例如 v","For example v"
+"Webhook 分支过滤","Webhook branch filtering"
+"项目 Webhook 密钥","Project Webhook Secret"
+当前验签来源,"Current verification source"
+命令白名单,"Command Allowlist"
+"Composer 示例","Composer Examples"
+部署后命令示例,"Post-deploy Command Examples"
+回滚参考,"Rollback Reference"
+回滚示例,"Rollback Examples"
 说明,Description
-记录该项目发布注意事项,Record release notes for this project
-发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。,The release profile will be read by later webhook/manual release flows using the project context; this button only saves configuration.
-保存 Profile,Save Profile
-仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。,"Checks only the current project release config, trigger policy, and command allowlist; it does not run Git, write files, or reload services."
-执行预检,Run Preflight
-暂无预检结果。,No preflight result yet.
-Rollback Action,Rollback Action
+记录该项目发布注意事项,"Record release notes for this project"
+"发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。","The release profile will be read by later webhook/manual release flows using the project context; this button only saves configuration."
+"保存 Profile","Save Profile"
+"仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。","Checks only the current project release config, trigger policy, and command allowlist; it does not run Git, write files, or reload services."
+执行预检,"Run Preflight"
+暂无预检结果。,"No preflight result yet."
+"Rollback Action","Rollback Action"
 "Only the saved Profile rollback reference is used, and it runs inside the selected project context.","Only the saved Profile rollback reference is used, and it runs inside the selected project context."
-Not configured,Not configured
-Rollback Version,Rollback Version
-Release ID,Release ID
+"Not configured","Not configured"
+"Rollback Version","Rollback Version"
+"Release ID","Release ID"
 Ref,Ref
-Confirm rollback in the selected project context,Confirm rollback in the selected project context
-Run Rollback,Run Rollback
-Webhook 回放预检,Webhook Replay Preflight
-输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。,Enter webhook payload.ref and reuse the current project Tag/Branch policy to check whether a release would trigger.
-Webhook Ref,Webhook Ref
-回放预检,Replay Preflight
-回放示例,Replay Examples
-Tag 示例,Tag Example
-分支示例,Branch Example
+"Confirm rollback in the selected project context","Confirm rollback in the selected project context"
+"Run Rollback","Run Rollback"
+"Webhook 回放预检","Webhook Replay Preflight"
+"输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。","Enter webhook payload.ref and reuse the current project Tag/Branch policy to check whether a release would trigger."
+"Webhook Ref","Webhook Ref"
+回放预检,"Replay Preflight"
+回放示例,"Replay Examples"
+"Tag 示例","Tag Example"
+分支示例,"Branch Example"
 判断结果,Decision
-发布版本,Release Version
-Git Checkout,Git Checkout
+发布版本,"Release Version"
+"Git Checkout","Git Checkout"
 原因,Reason
-还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。,No replay result yet; use the Tag example to confirm the default tag-only policy.
-Manual Release Plan,Manual Release Plan
+"还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。","No replay result yet; use the Tag example to confirm the default tag-only policy."
+"Manual Release Plan","Manual Release Plan"
 "Preview the exact project-scoped release path, then run it only after explicit confirmation. The server re-checks preflight and trigger policy before execution.","Preview the exact project-scoped release path, then run it only after explicit confirmation. The server re-checks preflight and trigger policy before execution."
-Manual release ref,Manual release ref
-Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred.,Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred.
-Build Plan,Build Plan
-Manual release examples,Manual release examples
-Tag sample,Tag sample
-Branch sample,Branch sample
+"Manual release ref","Manual release ref"
+"Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred.","Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred."
+"Build Plan","Build Plan"
+"Manual release examples","Manual release examples"
+"Tag sample","Tag sample"
+"Branch sample","Branch sample"
 "I understand this will run Git, write release metadata, record history, and reload WLS for the selected project context.","I understand this will run Git, write release metadata, record history, and reload WLS for the selected project context."
-Run Release,Run Release
-Plan status,Plan status
+"Run Release","Run Release"
+"Plan status","Plan status"
 Type,Type
-Deploy version,Deploy version
-Git checkout,Git checkout
+"Deploy version","Deploy version"
+"Git checkout","Git checkout"
 Profile,Profile
-Deploy root,Deploy root
-Remote / mode,Remote / mode
+"Deploy root","Deploy root"
+"Remote / mode","Remote / mode"
 Reason,Reason
-No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy.,No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy.
+"No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy.","No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy."
 planned,planned
 pending,pending
-敏感字段只显示是否配置，不显示原值。,Sensitive fields only show whether they are configured; raw values are not displayed.
-Webhook 已生成,Webhook Generated
-Webhook 待生成,Webhook Pending
-仓库地址,Repository URL
-分支 / Remote,Branch / Remote
-Webhook 路径,Webhook Path
-未生成,Not Generated
-Tag 前缀 / 分支过滤,Tag Prefix / Branch Filter
-全部 Tag,All Tags
-全部分支,All Branches
-密钥状态,Secret Status
-仓库 Token,Repository Token
-后置能力,Post Deploy Capabilities
+敏感字段只显示是否配置，不显示原值。,"Sensitive fields only show whether they are configured; raw values are not displayed."
+"Webhook 已生成","Webhook Generated"
+"Webhook 待生成","Webhook Pending"
+仓库地址,"Repository URL"
+"分支 / Remote","Branch / Remote"
+"Webhook 路径","Webhook Path"
+未生成,"Not Generated"
+"Tag 前缀 / 分支过滤","Tag Prefix / Branch Filter"
+"全部 Tag","All Tags"
+全部分支,"All Branches"
+密钥状态,"Secret Status"
+"仓库 Token","Repository Token"
+后置能力,"Post Deploy Capabilities"
 启用,On
 关闭,Off
 命令,Command
-当前运行版本,Current Runtime Version
-读取 var/deploy/current.json，不触发发布动作。,Reads var/deploy/current.json without triggering a release.
+当前运行版本,"Current Runtime Version"
+"读取 var/deploy/current.json，不触发发布动作。","Reads var/deploy/current.json without triggering a release."
 已发布,Released
-暂无版本,No Version
+暂无版本,"No Version"
 引用,Ref
 提交,Commit
-发布时间,Released At
-尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。,"No release yet; after deploy:release or a valid tag webhook, the current version will appear here."
-能力阶段,Capability Stage
-仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。,Only the 12 most recent release records for the current WLS project are shown; failed records keep their error summary.
-显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。,The 12 most recent WLS host project release records are shown; failed records keep their error summary.
-查看完整列表,View Full List
-发布历史暂不可用：%{1},Release history is temporarily unavailable: %{1}
-耗时未知,Duration Unknown
-当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。,No release records for the current project yet. A project-context release or tag webhook will write records here.
-暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。,No release records yet. Command releases or tag webhooks will write release history.
-等价于命令,Equivalent to command
-不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。,"Will not overwrite env.php, .env, dev/deploy/.config, or business module directories."
-正式站执行前将自动整站备份。,Production sites automatically create a full-site backup before core update.
-未配置，将使用默认 GitHub/Gitee 仓库,"If not configured, the default GitHub/Gitee repository will be used"
-默认分支,Default branch
-受保护路径,Protected Paths
-更新分支,Update Branch
-我确认要执行核心更新,I confirm core update
-开始核心更新,Start Core Update
-执行日志,Execution Log
+发布时间,"Released At"
+"尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。","No release yet; after deploy:release or a valid tag webhook, the current version will appear here."
+能力阶段,"Capability Stage"
+"仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。","Only the 12 most recent release records for the current WLS project are shown; failed records keep their error summary."
+"显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。","The 12 most recent WLS host project release records are shown; failed records keep their error summary."
+查看完整列表,"View Full List"
+发布历史暂不可用：%{1},"Release history is temporarily unavailable: %{1}"
+耗时未知,"Duration Unknown"
+"当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。","No release records for the current project yet. A project-context release or tag webhook will write records here."
+"暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。","No release records yet. Command releases or tag webhooks will write release history."
+等价于命令,"Equivalent to command"
+"不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。","Will not overwrite env.php, .env, dev/deploy/.config, or business module directories."
+正式站执行前将自动整站备份。,"Production sites automatically create a full-site backup before core update."
+"未配置，将使用默认 GitHub/Gitee 仓库","If not configured, the default GitHub/Gitee repository will be used"
+默认分支,"Default branch"
+受保护路径,"Protected Paths"
+更新分支,"Update Branch"
+我确认要执行核心更新,"I confirm core update"
+开始核心更新,"Start Core Update"
+执行日志,"Execution Log"
 执行中...,Running...
-请先在部署配置中填写项目仓库信息。,Configure the project repository in Deployment Settings first.
-前往部署配置,Go to Deployment Settings
-正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。,Production sites back up before release; pub/ and generated directories are not overwritten.
-查看分支,View Branch
-刷新提交,Refresh Commits
-刷新 Tags,Refresh Tags
-分支提交,Branch Commits
+请先在部署配置中填写项目仓库信息。,"Configure the project repository in Deployment Settings first."
+前往部署配置,"Go to Deployment Settings"
+"正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。","Production sites back up before release; pub/ and generated directories are not overwritten."
+查看分支,"View Branch"
+刷新提交,"Refresh Commits"
+"刷新 Tags","Refresh Tags"
+分支提交,"Branch Commits"
 作者,author
-确认发布,Confirm Release
+确认发布,"Confirm Release"
 目标版本早于当前版本，回退可能导致数据迁移、配置或代码不兼容。,"The target version is older than the current one; rollback may break migrations, config, or code compatibility."
-我确认要执行发布,I confirm this release
-我确认要发布到更旧版本,I confirm releasing to an older version
-立即发布,Release Now
-加载分支中...,Loading branches...
-加载分支失败,Failed to load branches
-加载提交中...,Loading commits...
-加载提交失败,Failed to load commits
+我确认要执行发布,"I confirm this release"
+我确认要发布到更旧版本,"I confirm releasing to an older version"
+立即发布,"Release Now"
+加载分支中...,"Loading branches..."
+加载分支失败,"Failed to load branches"
+加载提交中...,"Loading commits..."
+加载提交失败,"Failed to load commits"
 更旧,Older
 发布,release
-加载 Tags 中...,Loading tags...
-加载 Tags 失败,Failed to load tags
-发布 commit,Release commit
-发布 tag,Release tag
+"加载 Tags 中...","Loading tags..."
+"加载 Tags 失败","Failed to load tags"
+"发布 commit","Release commit"
+"发布 tag","Release tag"
 发布执行中...,Releasing...
-发布成功,Posted successfully
-发布失败,Publishing failed
-部署根目录不存在，无法创建备份。,Deploy root does not exist; backup cannot be created.
-无法创建备份目录。,Unable to create backup directory.
-整站备份失败：未生成归档文件。,Full-site backup failed: archive was not created.
-PowerShell 备份失败。,PowerShell backup failed.
-tar 备份失败：%{1},tar backup failed: %{1}
-无法创建目录：%{1},Unable to create directory: %{1}
-无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。,"Unable to generate SSH key, please verify that the server has ssh-keygen installed."
-命令行 --base-url,Command line --base-url
-运行环境 website_url,Operating environment website_url
-环境配置 %{1},Environment configuration %{1}
-app/etc/env.php website_url,app/etc/env.php website_url
-app/etc/env.php website.url,app/etc/env.php website.url
-网站管理默认站点 URL,Website management default site URL
-推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）,Recommended: Bearer authentication (GitHub / universal HTTP client)
-兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）,Compatible with: X-Webhook-Token request header (equivalent to some platform password fields)
-兼容：URL 查询参数 token,Compatible with: URL query parameter token
+发布成功,"Posted successfully"
+发布失败,"Publishing failed"
+部署根目录不存在，无法创建备份。,"Deploy root does not exist; backup cannot be created."
+无法创建备份目录。,"Unable to create backup directory."
+整站备份失败：未生成归档文件。,"Full-site backup failed: archive was not created."
+"PowerShell 备份失败。","PowerShell backup failed."
+"tar 备份失败：%{1}","tar backup failed: %{1}"
+无法创建目录：%{1},"Unable to create directory: %{1}"
+"无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。","Unable to generate SSH key, please verify that the server has ssh-keygen installed."
+"命令行 --base-url","Command line --base-url"
+"运行环境 website_url","Operating environment website_url"
+"环境配置 %{1}","Environment configuration %{1}"
+"app/etc/env.php website_url","app/etc/env.php website_url"
+"app/etc/env.php website.url","app/etc/env.php website.url"
+"网站管理默认站点 URL","Website management default site URL"
+"推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）","Recommended: Bearer authentication (GitHub / universal HTTP client)"
+"兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）","Compatible with: X-Webhook-Token request header (equivalent to some platform password fields)"
+"兼容：URL 查询参数 token","Compatible with: URL query parameter token"
 健康检查（GET，无需密钥）,"Health check (GET, no key required)"
-【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。,"[1] The Webhook public network path is randomly generated (~wh~ prefix), and only deploy:webhook:setup can be rotated; the Git platform URL must be exactly the same as the command output."
-【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。,【2】The Git platform Secret/password must be consistent with the webhook_secret below; it is recommended to use Authorization: Bearer.
-【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。,"【3】The version detection address is the Webhook path followed by /version (can be used in conjunction with the background ""publish detection token"")."
-【4】Git 平台 Webhook URL（复制到仓库配置）：%{1},【4】Git platform Webhook URL (copy to warehouse configuration): %{1}
-【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。,[4] The site domain name cannot be automatically inferred. Please add --base-url=https://your domain name and re-run to output the complete deployment address and curl.
-【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。,【5】Only test curl in the dedicated deployment directory to avoid accidentally triggering uncommitted code on the development machine.
-【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。,"【6】This time, a new Webhook key has been generated and written into the background configuration. Please update the key in the Git platform Webhook simultaneously."
-【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。,"【7】Deploy SSH public key: Add the public key to the Git platform ""Deploy Public Key/Deploy Key"" (read-only), and the server private key is located at %{1} (do not submit to Git)."
-【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。,"【8】When using SSH to pull, change the background ""project warehouse address"" to the git@ format, and ensure that the deployment user uses this private key by default (such as configuring GIT_SSH_COMMAND or ~/.ssh/config)."
-无法创建部署版本目录：%{1},Cannot create deploy version directory: %{1}
-无法写入部署版本文件,Cannot write deploy version file
-分支名称无效。,Invalid branch name.
-Git restore commit cannot be empty.,Git restore commit cannot be empty.
-Git working directory does not exist: %{1},Git working directory does not exist: %{1}
-Git process could not be opened.,Git process could not be opened.
-开始发布：%{1},Starting release: %{1}
-备份中...,Backing up...
-Git 更新中...,Updating Git...
-执行后置命令...,Running post-deploy commands...
-版本戳已写入：%{1},Version stamp written: %{1}
-重载服务...,Reloading server...
-发布失败：%{1},Release failed: %{1}
-Rollback reference cannot be empty.,Rollback reference cannot be empty.
-开始回滚：%{1},Starting rollback: %{1}
-回滚前备份中...,Backing up before rollback...
-Git 回滚中...,Git rollback in progress...
-回滚版本已写入：%{1},Rollback version saved: %{1}
-回滚失败：%{1},Rollback failed: %{1}
-开发环境跳过发布失败自动回滚。,Skipped release-failure auto-rollback in non-production.
-发布失败，正在自动回滚到 %{1}...,"Release failed, auto-rolling back to %{1}..."
-自动回滚后服务重载失败：%{1},Server reload after auto-rollback failed: %{1}
-已自动回滚到发布前版本 %{1},Auto-rolled back to pre-release version %{1}
-自动回滚失败：%{1},Auto-rollback failed: %{1}
-部署根目录包含不允许的控制字符。,Deploy root contains disallowed control characters.
-部署根目录必须是绝对路径：%{1},Deploy root must be an absolute path: %{1}
-部署根目录不存在：%{1},Deploy root does not exist: %{1}
-无法创建发布保护快照目录。,Unable to create protected-path snapshot directory.
-部署后命令失败（exit %{1}）：%{2},Post-deploy command failed (exit %{1}): %{2}
-Profile 来源,Profile Source
-当前发布会优先读取该项目的独立 Profile。,The release will prefer this project's dedicated profile.
-该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。,"This project has a profile, but it is disabled; releases still inherit global Deploy config."
-当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。,This project has no dedicated profile yet; releases will use global Deploy config.
-仓库配置,Repository Config
-缺少仓库,Repository Missing
-必须配置项目仓库地址后才能执行发布。,A project repository URL is required before release execution.
-地址不合法,Invalid URL
-项目仓库地址只支持 http(s)、ssh:// 或 git@host:path.git 形式。,"Project repository URL supports only http(s), ssh://, or git@host:path.git formats."
-仓库地址格式可被发布服务识别。,The repository URL format can be recognized by the release service.
-部署目录,Deploy Directory
-未设置部署根目录；后续发布会回退到当前运行项目目录。,Deploy root is not set; later releases will fall back to the current running project directory.
-路径需检查,Path Needs Review
-部署根目录包含不适合发布配置的控制字符。,The deploy root contains control characters unsuitable for release config.
-部署根目录已填写；预检不访问文件系统，也不会创建目录。,Deploy root is configured; preflight does not access the filesystem or create directories.
+"【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。","[1] The Webhook public network path is randomly generated (~wh~ prefix), and only deploy:webhook:setup can be rotated; the Git platform URL must be exactly the same as the command output."
+"【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。","【2】The Git platform Secret/password must be consistent with the webhook_secret below; it is recommended to use Authorization: Bearer."
+"【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。","【3】The version detection address is the Webhook path followed by /version (can be used in conjunction with the background ""publish detection token"")."
+"【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}","【4】Git platform Webhook URL (copy to warehouse configuration): %{1}"
+"【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。","[4] The site domain name cannot be automatically inferred. Please add --base-url=https://your domain name and re-run to output the complete deployment address and curl."
+"【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。","【5】Only test curl in the dedicated deployment directory to avoid accidentally triggering uncommitted code on the development machine."
+"【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。","【6】This time, a new Webhook key has been generated and written into the background configuration. Please update the key in the Git platform Webhook simultaneously."
+"【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。","【7】Deploy SSH public key: Add the public key to the Git platform ""Deploy Public Key/Deploy Key"" (read-only), and the server private key is located at %{1} (do not submit to Git)."
+"【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。","【8】When using SSH to pull, change the background ""project warehouse address"" to the git@ format, and ensure that the deployment user uses this private key by default (such as configuring GIT_SSH_COMMAND or ~/.ssh/config)."
+无法创建部署版本目录：%{1},"Cannot create deploy version directory: %{1}"
+无法写入部署版本文件,"Cannot write deploy version file"
+分支名称无效。,"Invalid branch name."
+"Git restore commit cannot be empty.","Git restore commit cannot be empty."
+"Git working directory does not exist: %{1}","Git working directory does not exist: %{1}"
+"Git process could not be opened.","Git process could not be opened."
+开始发布：%{1},"Starting release: %{1}"
+备份中...,"Backing up..."
+"Git 更新中...","Updating Git..."
+执行后置命令...,"Running post-deploy commands..."
+版本戳已写入：%{1},"Version stamp written: %{1}"
+重载服务...,"Reloading server..."
+发布失败：%{1},"Release failed: %{1}"
+"Rollback reference cannot be empty.","Rollback reference cannot be empty."
+开始回滚：%{1},"Starting rollback: %{1}"
+回滚前备份中...,"Backing up before rollback..."
+"Git 回滚中...","Git rollback in progress..."
+回滚版本已写入：%{1},"Rollback version saved: %{1}"
+回滚失败：%{1},"Rollback failed: %{1}"
+开发环境跳过发布失败自动回滚。,"Skipped release-failure auto-rollback in non-production."
+"发布失败，正在自动回滚到 %{1}...","Release failed, auto-rolling back to %{1}..."
+自动回滚后服务重载失败：%{1},"Server reload after auto-rollback failed: %{1}"
+"已自动回滚到发布前版本 %{1}","Auto-rolled back to pre-release version %{1}"
+自动回滚失败：%{1},"Auto-rollback failed: %{1}"
+部署根目录包含不允许的控制字符。,"Deploy root contains disallowed control characters."
+部署根目录必须是绝对路径：%{1},"Deploy root must be an absolute path: %{1}"
+部署根目录不存在：%{1},"Deploy root does not exist: %{1}"
+无法创建发布保护快照目录。,"Unable to create protected-path snapshot directory."
+"部署后命令失败（exit %{1}）：%{2}","Post-deploy command failed (exit %{1}): %{2}"
+"Profile 来源","Profile Source"
+"当前发布会优先读取该项目的独立 Profile。","The release will prefer this project's dedicated profile."
+"该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。","This project has a profile, but it is disabled; releases still inherit global Deploy config."
+"当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。","This project has no dedicated profile yet; releases will use global Deploy config."
+仓库配置,"Repository Config"
+缺少仓库,"Repository Missing"
+必须配置项目仓库地址后才能执行发布。,"A project repository URL is required before release execution."
+地址不合法,"Invalid URL"
+"项目仓库地址只支持 http(s)、ssh:// 或 git@host:path.git 形式。","Project repository URL supports only http(s), ssh://, or git@host:path.git formats."
+仓库地址格式可被发布服务识别。,"The repository URL format can be recognized by the release service."
+部署目录,"Deploy Directory"
+未设置部署根目录；后续发布会回退到当前运行项目目录。,"Deploy root is not set; later releases will fall back to the current running project directory."
+路径需检查,"Path Needs Review"
+部署根目录包含不适合发布配置的控制字符。,"The deploy root contains control characters unsuitable for release config."
+部署根目录已填写；预检不访问文件系统，也不会创建目录。,"Deploy root is configured; preflight does not access the filesystem or create directories."
 不支持,Unsupported
-部署触发模式不在允许列表内。,Deploy trigger mode is not in the allowlist.
-默认保守策略已生效，分支 Push 不会触发发布。,The conservative default is active; branch pushes will not trigger releases.
-当前项目显式允许分支发布，请确认 Git 平台事件和分支过滤符合预期。,This project explicitly allows branch releases; confirm Git platform events and branch filters.
-Webhook 入口,Webhook Entry
-随机路径已生成，当前项目会使用独立 Webhook 密钥验签。,Random path exists; this project will verify Webhook requests with its own secret.
-尚未生成随机 Webhook 路径；请先执行 deploy:webhook:setup。,No random Webhook path has been generated; run deploy:webhook:setup first.
-路径需轮换,Path Rotation Suggested
-Webhook 路径不是 ~wh~ 随机路径，建议使用 deploy:webhook:setup --rotate-path 轮换。,Webhook path is not a ~wh~ random path; rotate it with deploy:webhook:setup --rotate-path.
-密钥未配置,Secret Missing
-Webhook 路径已生成，但访问密钥为空；请生成或保存 webhook_secret。,"Webhook path exists, but the access secret is empty; generate or save webhook_secret."
+部署触发模式不在允许列表内。,"Deploy trigger mode is not in the allowlist."
+"默认保守策略已生效，分支 Push 不会触发发布。","The conservative default is active; branch pushes will not trigger releases."
+"当前项目显式允许分支发布，请确认 Git 平台事件和分支过滤符合预期。","This project explicitly allows branch releases; confirm Git platform events and branch filters."
+"Webhook 入口","Webhook Entry"
+"随机路径已生成，当前项目会使用独立 Webhook 密钥验签。","Random path exists; this project will verify Webhook requests with its own secret."
+"尚未生成随机 Webhook 路径；请先执行 deploy:webhook:setup。","No random Webhook path has been generated; run deploy:webhook:setup first."
+路径需轮换,"Path Rotation Suggested"
+"Webhook 路径不是 ~wh~ 随机路径，建议使用 deploy:webhook:setup --rotate-path 轮换。","Webhook path is not a ~wh~ random path; rotate it with deploy:webhook:setup --rotate-path."
+密钥未配置,"Secret Missing"
+"Webhook 路径已生成，但访问密钥为空；请生成或保存 webhook_secret。","Webhook path exists, but the access secret is empty; generate or save webhook_secret."
 已就绪,Ready
-随机路径和访问密钥均已配置。,Random path and access secret are both configured.
-需修正,Needs Fix
-Composer 命令为空,Composer Command Empty
-已开启 Composer，但未配置 composer install 命令。,"Composer is enabled, but no composer install command is configured."
+随机路径和访问密钥均已配置。,"Random path and access secret are both configured."
+需修正,"Needs Fix"
+"Composer 命令为空","Composer Command Empty"
+"已开启 Composer，但未配置 composer install 命令。","Composer is enabled, but no composer install command is configured."
 通过,Passed
-Composer 与部署后命令均符合 WLS 发布命令白名单。,Composer and post-deploy commands both satisfy the WLS release command allowlist.
-回滚策略,Rollback Policy
-回滚参考为空；后续不会展示可执行回滚动作。,Rollback reference is empty; executable rollback actions will not be shown later.
-需要修正,Needs Fix
-Tag 回滚,Tag Rollback
-回滚引用已通过 WLS 白名单，将只在当前项目 Profile 下作为后续显式回滚动作的目标。,Rollback reference passed the WLS allowlist and will only be used as a future explicit rollback target under the current project Profile.
-提交回滚,Commit Rollback
-分支回滚,Branch Rollback
-回滚参考已通过白名单，但 commit/branch 回滚需要后续显式动作再次确认。,"Rollback reference passed the allowlist, but commit/branch rollback needs another explicit confirmation in a later action."
+"Composer 与部署后命令均符合 WLS 发布命令白名单。","Composer and post-deploy commands both satisfy the WLS release command allowlist."
+回滚策略,"Rollback Policy"
+回滚参考为空；后续不会展示可执行回滚动作。,"Rollback reference is empty; executable rollback actions will not be shown later."
+需要修正,"Needs Fix"
+"Tag 回滚","Tag Rollback"
+"回滚引用已通过 WLS 白名单，将只在当前项目 Profile 下作为后续显式回滚动作的目标。","Rollback reference passed the WLS allowlist and will only be used as a future explicit rollback target under the current project Profile."
+提交回滚,"Commit Rollback"
+分支回滚,"Branch Rollback"
+"回滚参考已通过白名单，但 commit/branch 回滚需要后续显式动作再次确认。","Rollback reference passed the allowlist, but commit/branch rollback needs another explicit confirmation in a later action."
 存在阻断项,Blocked
-可进入发布流程,Ready for Release Flow
-Composer 命令只允许 composer install。,Composer command only allows composer install.
-Composer 命令包含未允许的参数：%{1},Composer command contains an unsupported option: %{1}
-部署后命令包含空命令片段。,Post-deploy command contains an empty command segment.
-回滚参考包含不允许的 shell 控制字符。,Rollback reference contains disallowed shell control characters.
-回滚参考不能以短横线开头，也不能包含 ..、// 或 @{。,"Rollback reference cannot start with a dash or contain .., //, or @{."
-回滚参考不能以点号或斜杠结尾。,Rollback reference cannot end with a dot or slash.
-回滚参考格式不在 WLS 白名单内。,Rollback reference format is outside the WLS allowlist.
-回滚参考仅支持 tag、refs/tags/name、refs/heads/name 或 7-40 位 commit SHA；禁止 shell 控制字符。,"Rollback reference only supports tag, refs/tags/name, refs/heads/name, or a 7-40 character commit SHA; shell control characters are forbidden."
-禁止管道、重定向、分号、单独 &、引号、命令替换和任意脚本路径。,"Pipes, redirects, semicolons, single ampersands, quotes, command substitution, and arbitrary script paths are blocked."
-部署后命令未在 WLS 维护命令白名单内：%{1},Post-deploy command is not in the WLS maintenance allowlist: %{1}
-部署后命令包含未允许的参数：%{1},Post-deploy command contains an unsupported option: %{1}
-命令包含不允许的 shell 控制字符。,Command contains unsupported shell control characters.
-命令包含不允许的命令替换表达式。,Command contains unsupported command substitution.
-命令包含不允许的 & 控制符。,Command contains unsupported ampersand control tokens.
-从 Git 仓库恢复框架核心文件,Restore framework core files from Git repository
-框架核心文件恢复,Framework Core File Recovery
-步骤 1/4：检查 Git 仓库...,Step 1/4: Checking Git repository...
-目标分支：%{1},Target branch: %{1}
-步骤 2/4：拉取最新代码...,Step 2/4: Pulling latest code...
-步骤 3/4：恢复核心文件...,Step 3/4: Restoring core files...
-步骤 4/4：清理缓存...,Step 4/4: Cleaning cache...
-✓✓✓ 核心文件恢复完成！✓✓✓,✓✓✓ Core file recovery completed! ✓✓✓
-错误：当前目录不是 Git 仓库,Error: The current directory is not a Git repository
-✓ 检测到 Git 仓库,✓ Git repository detected
-⚠ 将强制覆盖所有更改,⚠ Will force overwrite of all changes
-执行: %{1},Execute: %{1}
-命令执行返回码: %{1},Command execution return code: %{1}
-✓ 代码拉取完成,✓ Code pull completed
-恢复: %{1},Restore: %{1}
-✓ %{1},✓ %{1}
-⚠ %{1} 恢复失败,⚠ %{1} Recovery failed
-✓ %{1} 已存在,✓ %{1} already exists
-✓ 共恢复 %{1} 个路径,✓ A total of %{1} paths were restored
-清理: %{1},Clean Up: %{1}
-✓ 缓存清理完成,✓ Cache cleanup completed
-从核心仓库增量更新框架代码（仅 Weline 模块与必要核心路径；不触碰业务代码）,Incrementally update the framework code from the core repository (only Weline modules and necessary core paths; do not touch business code)
-从 Git 仓库增量更新框架核心代码,Incrementally update framework core code from Git repository
-可直接指定分支，如：master；也可使用 -b/--branch,"You can directly specify the branch, such as: master; you can also use -b/--branch"
+可进入发布流程,"Ready for Release Flow"
+"Composer 命令只允许 composer install。","Composer command only allows composer install."
+"Composer 命令包含未允许的参数：%{1}","Composer command contains an unsupported option: %{1}"
+部署后命令包含空命令片段。,"Post-deploy command contains an empty command segment."
+"回滚参考包含不允许的 shell 控制字符。","Rollback reference contains disallowed shell control characters."
+"回滚参考不能以短横线开头，也不能包含 ..、// 或 @{。","Rollback reference cannot start with a dash or contain .., //, or @{."
+回滚参考不能以点号或斜杠结尾。,"Rollback reference cannot end with a dot or slash."
+"回滚参考格式不在 WLS 白名单内。","Rollback reference format is outside the WLS allowlist."
+"回滚参考仅支持 tag、refs/tags/name、refs/heads/name 或 7-40 位 commit SHA；禁止 shell 控制字符。","Rollback reference only supports tag, refs/tags/name, refs/heads/name, or a 7-40 character commit SHA; shell control characters are forbidden."
+"禁止管道、重定向、分号、单独 &、引号、命令替换和任意脚本路径。","Pipes, redirects, semicolons, single ampersands, quotes, command substitution, and arbitrary script paths are blocked."
+"部署后命令未在 WLS 维护命令白名单内：%{1}","Post-deploy command is not in the WLS maintenance allowlist: %{1}"
+部署后命令包含未允许的参数：%{1},"Post-deploy command contains an unsupported option: %{1}"
+"命令包含不允许的 shell 控制字符。","Command contains unsupported shell control characters."
+命令包含不允许的命令替换表达式。,"Command contains unsupported command substitution."
+"命令包含不允许的 & 控制符。","Command contains unsupported ampersand control tokens."
+"从 Git 仓库恢复框架核心文件","Restore framework core files from Git repository"
+框架核心文件恢复,"Framework Core File Recovery"
+"步骤 1/4：检查 Git 仓库...","Step 1/4: Checking Git repository..."
+目标分支：%{1},"Target branch: %{1}"
+"步骤 2/4：拉取最新代码...","Step 2/4: Pulling latest code..."
+"步骤 3/4：恢复核心文件...","Step 3/4: Restoring core files..."
+"步骤 4/4：清理缓存...","Step 4/4: Cleaning cache..."
+"✓✓✓ 核心文件恢复完成！✓✓✓","✓✓✓ Core file recovery completed! ✓✓✓"
+"错误：当前目录不是 Git 仓库","Error: The current directory is not a Git repository"
+"✓ 检测到 Git 仓库","✓ Git repository detected"
+"⚠ 将强制覆盖所有更改","⚠ Will force overwrite of all changes"
+"执行: %{1}","Execute: %{1}"
+"命令执行返回码: %{1}","Command execution return code: %{1}"
+"✓ 代码拉取完成","✓ Code pull completed"
+"恢复: %{1}","Restore: %{1}"
+"✓ %{1}","✓ %{1}"
+"⚠ %{1} 恢复失败","⚠ %{1} Recovery failed"
+"✓ %{1} 已存在","✓ %{1} already exists"
+"✓ 共恢复 %{1} 个路径","✓ A total of %{1} paths were restored"
+"清理: %{1}","Clean Up: %{1}"
+"✓ 缓存清理完成","✓ Cache cleanup completed"
+"从核心仓库增量更新框架代码（仅 Weline 模块与必要核心路径；不触碰业务代码）","Incrementally update the framework code from the core repository (only Weline modules and necessary core paths; do not touch business code)"
+"从 Git 仓库增量更新框架核心代码","Incrementally update framework core code from Git repository"
+"可直接指定分支，如：master；也可使用 -b/--branch","You can directly specify the branch, such as: master; you can also use -b/--branch"
 "指定分支（未配置默认分支时必填，如：main, master, dev）","Specify branch (required when no default branch is configured, e.g., main, master, dev)"
-指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）,Specify Git repository URL (overrides config file; default: public website or configured repository)
-未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库,"When the repository is not specified: If GitHub is reachable, compare the tip of the same branch as GitHub/Gitee; if they are consistent, GitHub will be preferred; if they are inconsistent, Gitee will be used to avoid pulling out backward mirrors; if GitHub is not reachable, Gitee will be used. Incremental update will switch the cache origin to the selected warehouse this time"
-仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换,"The warehouse address, default branch, and key can be configured in the project root directory .env or core_update in app/etc/env.php; they will no longer automatically switch after explicit configuration."
-旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源,"The old cache HEAD is only used to detect ""whether the local core of the project has been modified privately relative to the last synchronization""; after passing the detection, the cache warehouse must be updated to the latest tip online, and then synchronized to the project according to the diff (complement the missing) of the old baseline → new tip. Never use old cached content as the source of this update"
-默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）,"By default, conflict detection is performed against the old baseline first, and then git fetch is updated online; only core files that have changed relative to the old baseline are overwritten into the project, and local missing files are supplemented; local cores that already exist but have different contents are not mistakenly reverted due to inconsistency with the new tip hash (private changes should be intercepted by conflict detection)"
-仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内,Only the core warehouse paths are synchronized: app/code/Weline and necessary startup/samples/bin/dev/pub/setup; business modules are not included in the update scope
-只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略,"Only compare the ""local core file"" with the core commit last synchronized in the tmp/core-update cache warehouse; never read the git status of the business project. The local core will only be rejected if there are private changes relative to the baseline; -f forces overwriting. Business module changes are completely ignored"
-仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线,"Only when -f/--force is explicitly used, local core conflict protection is skipped, the cache is deleted and the core file is overwritten after cloning again; after success, the cache warehouse HEAD becomes the next comparison baseline."
-不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理,"app/code/Aiweline, GuoLaiRen, WeShop will not be copied; these are managed by the target project itself"
-使用自定义仓库（需先配置 .env 或 env.php）,Use a custom repository (requires configuring .env or env.php first)
-框架核心代码更新（强制模式 - 完整重新下载并覆盖）,Framework Core Update (Forced Mode - Full Redownload and Overwrite)
-框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）,Framework core code update (incremental mode - update changed files based on Git diff)
-步骤 1/7：检查 Git...,Step 1/7: Check Git...
-步骤 2/7：验证参数...,Step 2/7: Verify parameters...
-仓库：%{1},Repository: %{1}
-备用仓库：%{1},Backup warehouse: %{1}
-分支：%{1},Branch: %{1}
-标签：%{1},Tag: %{1}
-更新模式：%{1},Update mode: %{1}
-步骤 3/7：准备临时目录...,Step 3/7: Prepare temporary directory...
-步骤 4/7：检查本地核心是否相对上次同步有改动...,Step 4/7: Check whether the local core has changed compared to the last synchronization...
-步骤 5/7：下载框架代码（线上最新）...,Step 5/7: Download the framework code (latest online)...
-步骤 6/7：更新核心文件...,Step 6/7: Update core files...
-步骤 7/7：完成处理...,Step 7/7: Finish processing...
-保留缓存目录：当前 HEAD 仅作为下次冲突检测基线,Keep the cache directory: the current HEAD is only used as the baseline for next conflict detection
-✓ 缓存目录：%{1},✓ Cache directory: %{1}
-✓✓✓ 框架核心更新完成！✓✓✓,✓✓✓ Framework core update completed! ✓✓✓
-更新统计：,Update statistics:
-- 新增文件：%{1} 个,- New files: %{1}
-- 更新文件：%{1} 个,- Update files: %{1}
-- 删除文件：%{1} 个,- Delete files: %{1}
-- 跳过文件：%{1} 个（受保护或排除的文件）,- Skip files: %{1} (protected or excluded files)
-✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）,✓ The next conflict detection baseline has been updated to the cache warehouse commit %{1} (only used to determine whether the local core has been modified privately; the next update will still pull the latest tip online first)
-本次核心已更新到最新 commit：,This core has been updated to the latest commit:
+"指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）","Specify Git repository URL (overrides config file; default: public website or configured repository)"
+"未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库","When the repository is not specified: If GitHub is reachable, compare the tip of the same branch as GitHub/Gitee; if they are consistent, GitHub will be preferred; if they are inconsistent, Gitee will be used to avoid pulling out backward mirrors; if GitHub is not reachable, Gitee will be used. Incremental update will switch the cache origin to the selected warehouse this time"
+"仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换","The warehouse address, default branch, and key can be configured in the project root directory .env or core_update in app/etc/env.php; they will no longer automatically switch after explicit configuration."
+"旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源","The old cache HEAD is only used to detect ""whether the local core of the project has been modified privately relative to the last synchronization""; after passing the detection, the cache warehouse must be updated to the latest tip online, and then synchronized to the project according to the diff (complement the missing) of the old baseline → new tip. Never use old cached content as the source of this update"
+"默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）","By default, conflict detection is performed against the old baseline first, and then git fetch is updated online; only core files that have changed relative to the old baseline are overwritten into the project, and local missing files are supplemented; local cores that already exist but have different contents are not mistakenly reverted due to inconsistency with the new tip hash (private changes should be intercepted by conflict detection)"
+"仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内","Only the core warehouse paths are synchronized: app/code/Weline and necessary startup/samples/bin/dev/pub/setup; business modules are not included in the update scope"
+"只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略","Only compare the ""local core file"" with the core commit last synchronized in the tmp/core-update cache warehouse; never read the git status of the business project. The local core will only be rejected if there are private changes relative to the baseline; -f forces overwriting. Business module changes are completely ignored"
+"仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线","Only when -f/--force is explicitly used, local core conflict protection is skipped, the cache is deleted and the core file is overwritten after cloning again; after success, the cache warehouse HEAD becomes the next comparison baseline."
+"不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理","app/code/Aiweline, GuoLaiRen, WeShop will not be copied; these are managed by the target project itself"
+"使用自定义仓库（需先配置 .env 或 env.php）","Use a custom repository (requires configuring .env or env.php first)"
+"框架核心代码更新（强制模式 - 完整重新下载并覆盖）","Framework Core Update (Forced Mode - Full Redownload and Overwrite)"
+"框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）","Framework core code update (incremental mode - update changed files based on Git diff)"
+"步骤 1/7：检查 Git...","Step 1/7: Check Git..."
+"步骤 2/7：验证参数...","Step 2/7: Verify parameters..."
+仓库：%{1},"Repository: %{1}"
+备用仓库：%{1},"Backup warehouse: %{1}"
+分支：%{1},"Branch: %{1}"
+标签：%{1},"Tag: %{1}"
+更新模式：%{1},"Update mode: %{1}"
+"步骤 3/7：准备临时目录...","Step 3/7: Prepare temporary directory..."
+"步骤 4/7：检查本地核心是否相对上次同步有改动...","Step 4/7: Check whether the local core has changed compared to the last synchronization..."
+"步骤 5/7：下载框架代码（线上最新）...","Step 5/7: Download the framework code (latest online)..."
+"步骤 6/7：更新核心文件...","Step 6/7: Update core files..."
+"步骤 7/7：完成处理...","Step 7/7: Finish processing..."
+"保留缓存目录：当前 HEAD 仅作为下次冲突检测基线","Keep the cache directory: the current HEAD is only used as the baseline for next conflict detection"
+"✓ 缓存目录：%{1}","✓ Cache directory: %{1}"
+"✓✓✓ 框架核心更新完成！✓✓✓","✓✓✓ Framework core update completed! ✓✓✓"
+更新统计：,"Update statistics:"
+"- 新增文件：%{1} 个","- New files: %{1}"
+"- 更新文件：%{1} 个","- Update files: %{1}"
+"- 删除文件：%{1} 个","- Delete files: %{1}"
+"- 跳过文件：%{1} 个（受保护或排除的文件）","- Skip files: %{1} (protected or excluded files)"
+"✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）","✓ The next conflict detection baseline has been updated to the cache warehouse commit %{1} (only used to determine whether the local core has been modified privately; the next update will still pull the latest tip online first)"
+"本次核心已更新到最新 commit：","This core has been updated to the latest commit:"
 commit：%{1}（%{2}）,commit：%{1}（%{2}）
-作者：%{1},Author: %{1}
-时间：%{1},Time: %{1}
-标题：%{1},Title: %{1}
+作者：%{1},"Author: %{1}"
+时间：%{1},"Time: %{1}"
+标题：%{1},"Title: %{1}"
 内容：,content:
-错误：未检测到 Git,Error: Git not detected
-✓ Git 检查通过,✓ Git check passed
-⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）,"⚠ Explicitly enabled -f/--force, skips local core conflict protection (core files will be forced to be overwritten)"
-首次核心更新（尚无上次同步 commit），跳过本地核心冲突检查,"First core update (no last sync commit yet), skipping local core conflict checking"
-冲突检测基线（旧）：核心缓存仓 commit %{1}——仅用于判断本地核心是否被私改，不会作为本次更新源,"Conflict detection baseline (old): core cache warehouse commit %{1} - only used to determine whether the local core has been modified privately, and will not be used as the source of this update"
-✓ 本地核心与上次同步 commit %{1} 一致，可直接更新,✓ The local core is consistent with the last synchronized commit %{1} and can be updated directly
-✓ 本地核心与上次同步内容一致，可直接更新,✓ The local core is consistent with the last synchronized content and can be updated directly
-检测到 %{1} 个核心文件相对上次同步核心 commit%{2} 有本地私自修改，已拒绝更新,"It has been detected that %{1} core files have local private modifications relative to the last synchronized core commit%{2}, and the update has been rejected."
-……另有 %{1} 项未显示,…there are %{1} items not shown
-以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关,"The above is only the content difference between the core path and the cache warehouse, and has nothing to do with the business module git"
-检测 GitHub 连通性（ping github.com）...,Check GitHub connectivity (ping github.com)...
-GitHub 不可达，使用 Gitee 镜像仓库,"GitHub is not reachable, use Gitee mirror repository"
-✓ GitHub 可达,✓ GitHub reachable
-未能探测双源 tip，回退优先 GitHub,"Unable to detect dual-source tip, fallback first GitHub"
-GitHub tip 探测失败，使用 Gitee,"GitHub tip detection failed, use Gitee"
-Gitee tip 探测失败，使用 GitHub,"Gitee tip detection failed, use GitHub"
-✓ GitHub/Gitee %{1} tip 一致（%{2}），优先 GitHub,"✓ GitHub/Gitee %{1} tip is consistent (%{2}), giving priority to GitHub"
+"错误：未检测到 Git","Error: Git not detected"
+"✓ Git 检查通过","✓ Git check passed"
+"⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）","⚠ Explicitly enabled -f/--force, skips local core conflict protection (core files will be forced to be overwritten)"
+"首次核心更新（尚无上次同步 commit），跳过本地核心冲突检查","First core update (no last sync commit yet), skipping local core conflict checking"
+"冲突检测基线（旧）：核心缓存仓 commit %{1}——仅用于判断本地核心是否被私改，不会作为本次更新源","Conflict detection baseline (old): core cache warehouse commit %{1} - only used to determine whether the local core has been modified privately, and will not be used as the source of this update"
+"✓ 本地核心与上次同步 commit %{1} 一致，可直接更新","✓ The local core is consistent with the last synchronized commit %{1} and can be updated directly"
+"✓ 本地核心与上次同步内容一致，可直接更新","✓ The local core is consistent with the last synchronized content and can be updated directly"
+"检测到 %{1} 个核心文件相对上次同步核心 commit%{2} 有本地私自修改，已拒绝更新","It has been detected that %{1} core files have local private modifications relative to the last synchronized core commit%{2}, and the update has been rejected."
+"……另有 %{1} 项未显示","…there are %{1} items not shown"
+"以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关","The above is only the content difference between the core path and the cache warehouse, and has nothing to do with the business module git"
+"检测 GitHub 连通性（ping github.com）...","Check GitHub connectivity (ping github.com)..."
+"GitHub 不可达，使用 Gitee 镜像仓库","GitHub is not reachable, use Gitee mirror repository"
+"✓ GitHub 可达","✓ GitHub reachable"
+"未能探测双源 tip，回退优先 GitHub","Unable to detect dual-source tip, fallback first GitHub"
+"GitHub tip 探测失败，使用 Gitee","GitHub tip detection failed, use Gitee"
+"Gitee tip 探测失败，使用 GitHub","Gitee tip detection failed, use GitHub"
+"✓ GitHub/Gitee %{1} tip 一致（%{2}），优先 GitHub","✓ GitHub/Gitee %{1} tip is consistent (%{2}), giving priority to GitHub"
 "⚠ GitHub 与 Gitee 的 %{1} tip 不一致（GitHub=%{2}, Gitee=%{3}），选用 Gitee 以免拉到落后镜像","⚠ The %{1} tip of GitHub and Gitee are inconsistent (GitHub=%{2}, Gitee=%{3}). Choose Gitee to avoid pulling out backward mirrors."
-缓存仓已添加 origin：%{1},The cache warehouse has been added origin: %{1}
-缓存仓 origin 为 %{1}，切换为本次选用仓库 %{2},"The cache warehouse origin is %{1}, switch to the warehouse selected this time %{2}"
-切换 origin 失败，继续使用原远程,"Failed to switch origin, continue to use the original remote"
-GitHub ping 未响应，但 HTTPS 端口可达,"GitHub ping not responding, but HTTPS port is reachable"
-错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default,Error: You must specify a branch (-b <branch name>) or set branch_default in the configuration
-强制模式：删除旧缓存目录...,Force mode: deleting old cache directory...
-✓ 创建新缓存目录：%{1},✓ Create a new cache directory: %{1}
-✓ 使用现有缓存目录：%{1},✓ Use existing cache directory: %{1}
-冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...,"Conflict detection passed: the old cache is only used as a baseline, and the latest online tips are started to be pulled..."
-旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）,Old baseline commit %{1} (only used for conflict detection and diff; the update source is the latest online)
-fetch 失败，切换备用仓库：%{1},"fetch failed, switch to backup warehouse: %{1}"
-fetch 失败，尝试切换仓库并重新克隆...,"fetch failed, try switching repositories and re-cloning..."
-获取标签...,Getting tags...
-旧基线 → 线上 tip 变更文件：%{1} 个,Old baseline → Online tip change files: %{1}
-标签不存在: %{1},Tag does not exist: %{1}
-✓ 已切换到标签 %{1},✓ Switched to tag %{1}
-将缓存仓重置到线上分支 %{1} 最新 tip...,Reset the cache warehouse to the online branch %{1} Latest tip...
-分支不存在: %{1},Branch does not exist: %{1}
+"缓存仓已添加 origin：%{1}","The cache warehouse has been added origin: %{1}"
+"缓存仓 origin 为 %{1}，切换为本次选用仓库 %{2}","The cache warehouse origin is %{1}, switch to the warehouse selected this time %{2}"
+"切换 origin 失败，继续使用原远程","Failed to switch origin, continue to use the original remote"
+"GitHub ping 未响应，但 HTTPS 端口可达","GitHub ping not responding, but HTTPS port is reachable"
+"错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default","Error: You must specify a branch (-b <branch name>) or set branch_default in the configuration"
+强制模式：删除旧缓存目录...,"Force mode: deleting old cache directory..."
+"✓ 创建新缓存目录：%{1}","✓ Create a new cache directory: %{1}"
+"✓ 使用现有缓存目录：%{1}","✓ Use existing cache directory: %{1}"
+"冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...","Conflict detection passed: the old cache is only used as a baseline, and the latest online tips are started to be pulled..."
+"旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）","Old baseline commit %{1} (only used for conflict detection and diff; the update source is the latest online)"
+"fetch 失败，切换备用仓库：%{1}","fetch failed, switch to backup warehouse: %{1}"
+"fetch 失败，尝试切换仓库并重新克隆...","fetch failed, try switching repositories and re-cloning..."
+获取标签...,"Getting tags..."
+"旧基线 → 线上 tip 变更文件：%{1} 个","Old baseline → Online tip change files: %{1}"
+"标签不存在: %{1}","Tag does not exist: %{1}"
+"✓ 已切换到标签 %{1}","✓ Switched to tag %{1}"
+"将缓存仓重置到线上分支 %{1} 最新 tip...","Reset the cache warehouse to the online branch %{1} Latest tip..."
+"分支不存在: %{1}","Branch does not exist: %{1}"
 重置失败，尝试切换仓库并重新克隆...,"Reset failed, try switching repositories and re-cloning..."
-✓ 缓存仓已从旧基线前进到线上最新 tip %{1}（分支 %{2}）,✓ The cache warehouse has been advanced from the old baseline to the latest online tip %{1} (branch %{2})
-无法获取 Git diff，将使用全量更新,"Unable to get Git diff, will use full update"
-完整克隆仓库...,Cloning Full Repository...
+"✓ 缓存仓已从旧基线前进到线上最新 tip %{1}（分支 %{2}）","✓ The cache warehouse has been advanced from the old baseline to the latest online tip %{1} (branch %{2})"
+"无法获取 Git diff，将使用全量更新","Unable to get Git diff, will use full update"
+完整克隆仓库...,"Cloning Full Repository..."
 主仓库失败，尝试备用仓库：%{1},"The main warehouse failed, try the backup warehouse: %{1}"
-所有仓库均无法克隆或初始化,All repositories cannot be cloned or initialized
-克隆仓库：%{1},Clone repository: %{1}
+所有仓库均无法克隆或初始化,"All repositories cannot be cloned or initialized"
+克隆仓库：%{1},"Clone repository: %{1}"
 克隆失败，尝试初始化仓库...,"Clone failed, attempting to initialize the repository..."
-拉取标签 %{1}...,Fetch tag %{1}...
-拉取分支 %{1}...,Fetch branch %{1}...
-✓ 仓库初始化成功,✓ Warehouse initialized successfully
-✓ 仓库克隆成功,✓ Warehouse cloned successfully
-切换到标签 %{1}...,Switch to tag %{1}...
-最新提交：%{1},Latest Commit: %{1}
-同步目录：%{1},Sync directories: %{1}
-完全覆盖模式：更新所有文件...,Full Overwrite Mode: Updating All Files...
-增量模式：Git 变更覆盖 + 仅补本地缺失文件...,Incremental mode: Git change coverage + only local missing files...
-✓ 已是最新版本，无需更新文件,"✓ Already the latest version, no need to update the file"
-⚠ vendor 目录未更新，保留现有依赖包,⚠ The vendor directory is not updated and existing dependency packages are retained.
+"拉取标签 %{1}...","Fetch tag %{1}..."
+"拉取分支 %{1}...","Fetch branch %{1}..."
+"✓ 仓库初始化成功","✓ Warehouse initialized successfully"
+"✓ 仓库克隆成功","✓ Warehouse cloned successfully"
+"切换到标签 %{1}...","Switch to tag %{1}..."
+最新提交：%{1},"Latest Commit: %{1}"
+同步目录：%{1},"Sync directories: %{1}"
+完全覆盖模式：更新所有文件...,"Full Overwrite Mode: Updating All Files..."
+"增量模式：Git 变更覆盖 + 仅补本地缺失文件...","Incremental mode: Git change coverage + only local missing files..."
+"✓ 已是最新版本，无需更新文件","✓ Already the latest version, no need to update the file"
+"⚠ vendor 目录未更新，保留现有依赖包","⚠ The vendor directory is not updated and existing dependency packages are retained."
 未检测到核心文件变化，跳过反射工厂刷新,"No core file changes detected, reflection factory refresh skipped"
-刷新反射元数据与编译工厂...,Refresh reflection metadata and compilation factory...
-反射工厂刷新完成,Reflection factory refresh completed
-✓ 处理了 %{1} 个变化的文件,✓ %{1} changed files processed
-补缺：同步 %{1} 个本地缺失的核心文件,Backfill: synced %{1} missing core files
-拷贝 %{1}...,Copying %{1}...
-跳过受保护文件：%{1},Skip protected files: %{1}
-⚠ %{1} 处理失败,⚠ %{1} processing failed
-⚠ 源路径不存在: %{1},⚠ Source path does not exist: %{1}
-✓ 共处理 %{1} 个路径,✓ A total of %{1} paths were processed
-⚠ 跳过 %{1} 个路径,⚠ Skip %{1} paths
-生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引,"Generate or update the framework Webhook access key, and output the curl test command and deployment association guidance"
---force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。,"--force will regenerate the Webhook key and random public network path, and the Git platform must be updated simultaneously."
---rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。,"--rotate-path will regenerate a random public network path, and the Git platform Webhook URL must be updated simultaneously."
-添加 -y 跳过确认。,Add -y to skip confirmation.
+刷新反射元数据与编译工厂...,"Refresh reflection metadata and compilation factory..."
+反射工厂刷新完成,"Reflection factory refresh completed"
+"✓ 处理了 %{1} 个变化的文件","✓ %{1} changed files processed"
+"补缺：同步 %{1} 个本地缺失的核心文件","Backfill: synced %{1} missing core files"
+"拷贝 %{1}...","Copying %{1}..."
+跳过受保护文件：%{1},"Skip protected files: %{1}"
+"⚠ %{1} 处理失败","⚠ %{1} processing failed"
+"⚠ 源路径不存在: %{1}","⚠ Source path does not exist: %{1}"
+"✓ 共处理 %{1} 个路径","✓ A total of %{1} paths were processed"
+"⚠ 跳过 %{1} 个路径","⚠ Skip %{1} paths"
+"生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引","Generate or update the framework Webhook access key, and output the curl test command and deployment association guidance"
+"--force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。","--force will regenerate the Webhook key and random public network path, and the Git platform must be updated simultaneously."
+"--rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。","--rotate-path will regenerate a random public network path, and the Git platform Webhook URL must be updated simultaneously."
+"添加 -y 跳过确认。","Add -y to skip confirmation."
 是否继续？,Continue?
-Weline 部署 Webhook 关联助手,Weline deploys Webhook association assistant
-已生成新的随机 Webhook 公网路径。,A new random webhook public network path has been generated.
-沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。,Use the existing webhook path in the background (use --rotate-path or --force to regenerate).
-已生成 Webhook 公网路径。,Webhook public network path has been generated.
-已生成新的 Webhook 访问密钥。,A new webhook access key has been generated.
-沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。,Inherit the existing webhook key in the background (use --force to regenerate).
-已生成 Webhook 访问密钥。,Webhook access key generated.
-随机 Webhook 公网路径已保存到后台部署配置。,The random Webhook public network path has been saved to the background deployment configuration.
-Webhook 路径保存失败。,Webhook path saving failed.
-密钥已保存到后台「部署配置 > Webhook 密钥」。,"The key has been saved to the background ""Deployment Configuration > Webhook Key""."
+"Weline 部署 Webhook 关联助手","Weline deploys Webhook association assistant"
+"已生成新的随机 Webhook 公网路径。","A new random webhook public network path has been generated."
+"沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。","Use the existing webhook path in the background (use --rotate-path or --force to regenerate)."
+"已生成 Webhook 公网路径。","Webhook public network path has been generated."
+"已生成新的 Webhook 访问密钥。","A new webhook access key has been generated."
+"沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。","Inherit the existing webhook key in the background (use --force to regenerate)."
+"已生成 Webhook 访问密钥。","Webhook access key generated."
+"随机 Webhook 公网路径已保存到后台部署配置。","The random Webhook public network path has been saved to the background deployment configuration."
+"Webhook 路径保存失败。","Webhook path saving failed."
+"密钥已保存到后台「部署配置 > Webhook 密钥」。","The key has been saved to the background ""Deployment Configuration > Webhook Key""."
 密钥保存失败，请手动写入后台部署配置。,"Key saving failed, please manually write the background deployment configuration."
 --no-save：未写入后台配置，请自行保存下方密钥与路径。,"--no-save: The background configuration is not written, please save the key and path below."
-Webhook 公网路径（随机，~wh~ 前缀）,"Webhook public network path (random, ~wh~ prefix)"
-Git 平台 Webhook 部署地址（完整 URL）,Git platform Webhook deployment address (full URL)
-站点根 URL 来源：%{1},Site Root URL Source: %{1}
-相对路径（需自行拼接域名）：/%{1},Relative path (you need to splice the domain name yourself): /%{1}
-版本探测 URL,Version detection URL
-Webhook 访问密钥（webhook_secret）,Webhook access key (webhook_secret)
-部署 SSH 密钥,Deploy SSH keys
-SSH 密钥生成失败。,SSH key generation failed.
-SSH 密钥对已生成。,SSH key pair generated.
-沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。,Inherit existing SSH keys (use --ssh-force to regenerate).
-私钥：%{1},Private key: %{1}
-公钥：%{1},Public key: %{1}
-curl 测试命令（专用部署环境执行）,curl test command (dedicated deployment environment execution)
-无法生成 curl 示例：缺少完整 Webhook URL。,Unable to generate curl example: full webhook URL missing.
-配置指引,Configuration Guide
+"Webhook 公网路径（随机，~wh~ 前缀）","Webhook public network path (random, ~wh~ prefix)"
+"Git 平台 Webhook 部署地址（完整 URL）","Git platform Webhook deployment address (full URL)"
+"站点根 URL 来源：%{1}","Site Root URL Source: %{1}"
+相对路径（需自行拼接域名）：/%{1},"Relative path (you need to splice the domain name yourself): /%{1}"
+"版本探测 URL","Version detection URL"
+"Webhook 访问密钥（webhook_secret）","Webhook access key (webhook_secret)"
+"部署 SSH 密钥","Deploy SSH keys"
+"SSH 密钥生成失败。","SSH key generation failed."
+"SSH 密钥对已生成。","SSH key pair generated."
+"沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。","Inherit existing SSH keys (use --ssh-force to regenerate)."
+私钥：%{1},"Private key: %{1}"
+公钥：%{1},"Public key: %{1}"
+"curl 测试命令（专用部署环境执行）","curl test command (dedicated deployment environment execution)"
+"无法生成 curl 示例：缺少完整 Webhook URL。","Unable to generate curl example: full webhook URL missing."
+配置指引,"Configuration Guide"
 完成。,Finish.
-从 Git 仓库拉取代码并更新部署项目,Pull code from Git repository and update deployment project
-Git 部署开始...,Git deployment begins...
-步骤 1/5：读取配置文件...,Step 1/5: Reading configuration file...
-错误：无法读取 .env 配置文件或配置为空！,Error: Unable to read the .env configuration file or the configuration is empty!
-请创建 .env 文件，或从 .env.sample 复制模板并修改配置。,"Please create a .env file, or copy the template from .env.sample and modify the configuration."
-✓ 配置文件读取成功,✓ Configuration file read successfully
-步骤 2/5：验证配置...,Step 2/5: Validating configuration...
-✓ 配置验证通过,✓ Configuration verification passed
-步骤 3/5：备份当前项目...,Step 3/5: Backing up current project...
-✓ 项目备份完成,✓ Project backup completed
-⚠ 跳过备份步骤,⚠ Skip the backup step
-步骤 4/5：执行 Git 拉取更新...,Step 4/5: Executing Git pull update...
-✓ Git 更新完成,✓ Git update completed
-步骤 5/5：执行部署后清理...,Step 5/5: Performing post-deployment cleanup...
-✓ 清理完成,✓ Cleanup is completed
-✓✓✓ 部署完成！✓✓✓,✓✓✓ Deployment completed! ✓✓✓
-.env 文件不存在：%{1},.env file does not exist: %{1}
-缺少必需配置项：%{1},Missing required configuration item: %{1}
-仓库地址：%{1},Repository URL: %{1}
-用户名：%{1},Username: %{1}
-备份目录：%{1},Backup directory: %{1}
-当前平台：%{1},Current platform: %{1}
+"从 Git 仓库拉取代码并更新部署项目","Pull code from Git repository and update deployment project"
+"Git 部署开始...","Git deployment begins..."
+"步骤 1/5：读取配置文件...","Step 1/5: Reading configuration file..."
+"错误：无法读取 .env 配置文件或配置为空！","Error: Unable to read the .env configuration file or the configuration is empty!"
+"请创建 .env 文件，或从 .env.sample 复制模板并修改配置。","Please create a .env file, or copy the template from .env.sample and modify the configuration."
+"✓ 配置文件读取成功","✓ Configuration file read successfully"
+"步骤 2/5：验证配置...","Step 2/5: Validating configuration..."
+"✓ 配置验证通过","✓ Configuration verification passed"
+"步骤 3/5：备份当前项目...","Step 3/5: Backing up current project..."
+"✓ 项目备份完成","✓ Project backup completed"
+"⚠ 跳过备份步骤","⚠ Skip the backup step"
+"步骤 4/5：执行 Git 拉取更新...","Step 4/5: Executing Git pull update..."
+"✓ Git 更新完成","✓ Git update completed"
+"步骤 5/5：执行部署后清理...","Step 5/5: Performing post-deployment cleanup..."
+"✓ 清理完成","✓ Cleanup is completed"
+"✓✓✓ 部署完成！✓✓✓","✓✓✓ Deployment completed! ✓✓✓"
+".env 文件不存在：%{1}",".env file does not exist: %{1}"
+缺少必需配置项：%{1},"Missing required configuration item: %{1}"
+仓库地址：%{1},"Repository URL: %{1}"
+用户名：%{1},"Username: %{1}"
+备份目录：%{1},"Backup directory: %{1}"
+当前平台：%{1},"Current platform: %{1}"
 无法创建压缩备份，将仅创建记录文件,"Unable to create compressed backup, only a record file will be created"
-错误：系统未检测到 Git！,Error: Git not detected on the system!
-请先安装 Git 后才能使用此功能。,Please install Git first to use this feature.
-安装方法：,Installation method:
-Windows 系统：,Windows system:
-1. 访问 https://git-scm.com/download/win,1. Visit https://git-scm.com/download/win
-2. 下载并安装 Git for Windows,2. Download and install Git for Windows
-3. 安装完成后重启终端,3. Restart the terminal after installation
-Linux 系统：,Linux system:
-Ubuntu/Debian: sudo apt-get install git,Ubuntu/Debian: sudo apt-get install git
-CentOS/RHEL: sudo yum install git,CentOS/RHEL: sudo yum install git
-Fedora: sudo dnf install git,Fedora: sudo dnf install git
-macOS 系统：,macOS system:
-brew install git,brew install git
-或者访问 https://git-scm.com/download/mac,or visit https://git-scm.com/download/mac
-初始化 Git 仓库...,Initializing Git repository...
-当前分支：%{1},Current branch: %{1}
-无法获取当前分支信息,Unable to get current branch information
-从 %{1} 分支拉取更新...,Pulling updates from branch %{1}...
-⚠ 强制模式：将丢弃本地修改,⚠ Force mode: local modifications will be discarded
-Git 拉取失败：%{1},Git pull failed: %{1}
-提示：如果有本地修改冲突，可以使用 --force 参数强制更新,"Tip: If there are local modification conflicts, you can use the --force parameter to force an update."
-✓ Git 操作完成,✓ Git operation completed
-已清理缓存目录,Cleaned cache directory
-使用 PowerShell 创建备份...,Creating backup with PowerShell...
-✓ PowerShell 备份创建成功,✓ PowerShell backup created successfully
-PowerShell 备份失败,PowerShell backup failed
-检测可用的备份工具...,Detecting available backup tools...
-使用 tar 创建备份...,Creating backup with tar...
-使用 zip 创建备份...,Creating backup with zip...
-✓ tar 备份创建成功,✓ The tar backup is created successfully
-tar 备份失败,tar backup failed
-✓ zip 备份创建成功,✓ The zip backup is created successfully
-zip 备份失败,zip backup failed
-查看当前部署版本,View current deploy version
-当前部署版本,Current Deploy Version
-版本：%{1},Version: %{1}
-发布 ID：%{1},Release ID: %{1}
-ref 类型：%{1},Ref type: %{1}
-commit：%{1},Commit: %{1}
-tag：%{1},Tag: %{1}
-Worker ID：%{1},Worker ID: %{1}
-部署时间：%{1},Deployed at: %{1}
-部署模式：%{1},Deploy mode: %{1}
-最近发布历史,Recent Release History
-等待指定版本生效（用于 CI 门禁）,Wait for the specified version to take effect (for CI access control)
-缺少 --expect 参数,Missing --expect parameter
-等待版本：%{1}（超时 %{2} 秒）,Waiting for version: %{1} (timeout %{2}s)
-版本已生效：%{1}（第 %{2} 次检测）,Version active: %{1} (check #%{2})
-第 %{1} 次检测：当前 %{2}，期望 %{3},"Check #%{1}: current %{2}, expected %{3}"
-超时：版本 %{1} 未在 %{2} 秒内生效,Timeout: version %{1} not active within %{2}s
-按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）,Apply SystemConfig from project-root deploy.env-map.php (skip if missing)
-状态：%{1}（%{2}）,Status: %{1} (%{2})
-档位：%{1},Level: %{1}
-映射文件：%{1},Map file: %{1}
-未找到映射文件，已跳过。,Map file not found; skipped.
-完整发布：Git 更新 + 后置命令 + 写版本戳 + reload,Full release: Git update + post commands + stamp + reload
-生成不执行发布的机器可读部署计划,Generate a machine-readable deployment plan without executing the deployment.
-部署环境映射文件必须返回数组。,Deploy env map file must return an array.
-部署环境映射 schema 必须为 %{1}。,Deploy env map schema must be %{1}.
-部署环境映射 rules 必须为数组。,Deploy env map rules must be an array.
-规则 #%{1} 不是数组。,Rule #%{1} is not an array.
-规则 #%{1} 缺少 module/key/scopes/values_by_level。,Rule #%{1} is missing module/key/scopes/values_by_level.
-规则 #%{1} area 无效。,Rule #%{1} has an invalid area.
-规则 #%{1} 档位 %{2} 的值必须是标量。,Rule #%{1} value for level %{2} must be scalar.
-规则 #%{1} 含非字符串 scope。,Rule #%{1} contains a non-string scope.
-写入 %{1} @ %{2} 失败：%{3},Failed writing %{1} @ %{2}: %{3}
-写入 %{1} @ %{2} 返回失败。,Writing %{1} @ %{2} returned failure.
-deploy-env-map 不支持 scopes=*，请显式列出 storage scope。,deploy-env-map does not support scopes=*; list storage scopes explicitly.
-非法 scope：%{1}（需 global 或三段 storage scope）。,Invalid scope: %{1} (use global or a three-segment storage scope).
-mdi mdi-rocket-launch-outline,mdi mdi-rocket-launch-outline
-mdi mdi-update,mdi mdi-update
-mdi mdi-rocket-launch,mdi mdi-rocket-launch
-mdi mdi-view-dashboard-outline,mdi mdi-view-dashboard-outline
-mdi mdi-source-branch-sync,mdi mdi-source-branch-sync
-mdi mdi-tune-variant,mdi mdi-tune-variant
-mdi mdi-clipboard-edit-outline,mdi mdi-clipboard-edit-outline
-mdi mdi-shield-check-outline,mdi mdi-shield-check-outline
-mdi mdi-replay,mdi mdi-replay
-mdi mdi-history,mdi mdi-history
-mdi mdi-clipboard-list-outline,mdi mdi-clipboard-list-outline
-mdi mdi-content-save,mdi mdi-content-save
-mdi mdi-shield-check,mdi mdi-shield-check
-mdi mdi-restore,mdi mdi-restore
-mdi mdi-source-branch,mdi mdi-source-branch
-从 Git 仓库增量更新框架核心代码（只更新变化的文件）,Incrementally update framework core code from Git repository (only update changed files)
-未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像,"When no warehouse is specified, GitHub is given priority; ping github.com first, and automatically switches to the Gitee mirror if it is unreachable."
+"错误：系统未检测到 Git！","Error: Git not detected on the system!"
+"请先安装 Git 后才能使用此功能。","Please install Git first to use this feature."
+安装方法：,"Installation method:"
+"Windows 系统：","Windows system:"
+"1. 访问 https://git-scm.com/download/win","1. Visit https://git-scm.com/download/win"
+"2. 下载并安装 Git for Windows","2. Download and install Git for Windows"
+"3. 安装完成后重启终端","3. Restart the terminal after installation"
+"Linux 系统：","Linux system:"
+"Ubuntu/Debian: sudo apt-get install git","Ubuntu/Debian: sudo apt-get install git"
+"CentOS/RHEL: sudo yum install git","CentOS/RHEL: sudo yum install git"
+"Fedora: sudo dnf install git","Fedora: sudo dnf install git"
+"macOS 系统：","macOS system:"
+"brew install git","brew install git"
+"或者访问 https://git-scm.com/download/mac","or visit https://git-scm.com/download/mac"
+"初始化 Git 仓库...","Initializing Git repository..."
+当前分支：%{1},"Current branch: %{1}"
+无法获取当前分支信息,"Unable to get current branch information"
+"从 %{1} 分支拉取更新...","Pulling updates from branch %{1}..."
+"⚠ 强制模式：将丢弃本地修改","⚠ Force mode: local modifications will be discarded"
+"Git 拉取失败：%{1}","Git pull failed: %{1}"
+"提示：如果有本地修改冲突，可以使用 --force 参数强制更新","Tip: If there are local modification conflicts, you can use the --force parameter to force an update."
+"✓ Git 操作完成","✓ Git operation completed"
+已清理缓存目录,"Cleaned cache directory"
+"使用 PowerShell 创建备份...","Creating backup with PowerShell..."
+"✓ PowerShell 备份创建成功","✓ PowerShell backup created successfully"
+"PowerShell 备份失败","PowerShell backup failed"
+检测可用的备份工具...,"Detecting available backup tools..."
+"使用 tar 创建备份...","Creating backup with tar..."
+"使用 zip 创建备份...","Creating backup with zip..."
+"✓ tar 备份创建成功","✓ The tar backup is created successfully"
+"tar 备份失败","tar backup failed"
+"✓ zip 备份创建成功","✓ The zip backup is created successfully"
+"zip 备份失败","zip backup failed"
+查看当前部署版本,"View current deploy version"
+当前部署版本,"Current Deploy Version"
+版本：%{1},"Version: %{1}"
+"发布 ID：%{1}","Release ID: %{1}"
+"ref 类型：%{1}","Ref type: %{1}"
+commit：%{1},"Commit: %{1}"
+tag：%{1},"Tag: %{1}"
+"Worker ID：%{1}","Worker ID: %{1}"
+部署时间：%{1},"Deployed at: %{1}"
+部署模式：%{1},"Deploy mode: %{1}"
+最近发布历史,"Recent Release History"
+"等待指定版本生效（用于 CI 门禁）","Wait for the specified version to take effect (for CI access control)"
+"缺少 --expect 参数","Missing --expect parameter"
+"等待版本：%{1}（超时 %{2} 秒）","Waiting for version: %{1} (timeout %{2}s)"
+"版本已生效：%{1}（第 %{2} 次检测）","Version active: %{1} (check #%{2})"
+"第 %{1} 次检测：当前 %{2}，期望 %{3}","Check #%{1}: current %{2}, expected %{3}"
+"超时：版本 %{1} 未在 %{2} 秒内生效","Timeout: version %{1} not active within %{2}s"
+"按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）","Apply SystemConfig from project-root deploy.env-map.php (skip if missing)"
+状态：%{1}（%{2}）,"Status: %{1} (%{2})"
+档位：%{1},"Level: %{1}"
+映射文件：%{1},"Map file: %{1}"
+未找到映射文件，已跳过。,"Map file not found; skipped."
+"完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","Full release: Git update + post commands + stamp + reload"
+生成不执行发布的机器可读部署计划,"Generate a machine-readable deployment plan without executing the deployment."
+部署环境映射文件必须返回数组。,"Deploy env map file must return an array."
+"部署环境映射 schema 必须为 %{1}。","Deploy env map schema must be %{1}."
+"部署环境映射 rules 必须为数组。","Deploy env map rules must be an array."
+"规则 #%{1} 不是数组。","Rule #%{1} is not an array."
+"规则 #%{1} 缺少 module/key/scopes/values_by_level。","Rule #%{1} is missing module/key/scopes/values_by_level."
+"规则 #%{1} area 无效。","Rule #%{1} has an invalid area."
+"规则 #%{1} 档位 %{2} 的值必须是标量。","Rule #%{1} value for level %{2} must be scalar."
+"规则 #%{1} 含非字符串 scope。","Rule #%{1} contains a non-string scope."
+"写入 %{1} @ %{2} 失败：%{3}","Failed writing %{1} @ %{2}: %{3}"
+"写入 %{1} @ %{2} 返回失败。","Writing %{1} @ %{2} returned failure."
+"deploy-env-map 不支持 scopes=*，请显式列出 storage scope。","deploy-env-map does not support scopes=*; list storage scopes explicitly."
+"非法 scope：%{1}（需 global 或三段 storage scope）。","Invalid scope: %{1} (use global or a three-segment storage scope)."
+"mdi mdi-rocket-launch-outline","mdi mdi-rocket-launch-outline"
+"mdi mdi-update","mdi mdi-update"
+"mdi mdi-rocket-launch","mdi mdi-rocket-launch"
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+"mdi mdi-source-branch-sync","mdi mdi-source-branch-sync"
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-clipboard-edit-outline","mdi mdi-clipboard-edit-outline"
+"mdi mdi-shield-check-outline","mdi mdi-shield-check-outline"
+"mdi mdi-replay","mdi mdi-replay"
+"mdi mdi-history","mdi mdi-history"
+"mdi mdi-clipboard-list-outline","mdi mdi-clipboard-list-outline"
+"mdi mdi-content-save","mdi mdi-content-save"
+"mdi mdi-shield-check","mdi mdi-shield-check"
+"mdi mdi-restore","mdi mdi-restore"
+"mdi mdi-source-branch","mdi mdi-source-branch"
+"从 Git 仓库增量更新框架核心代码（只更新变化的文件）","Incrementally update framework core code from Git repository (only update changed files)"
+"未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像","When no warehouse is specified, GitHub is given priority; ping github.com first, and automatically switches to the Gitee mirror if it is unreachable."
 默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新,"By default, all tracked, untracked, and submodule changes of the current project are detected; updates are rejected when there are uncommitted changes."
-仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录,"Skip workspace protection only when using -f/--force explicitly, overwrite target directory after deleting cache and re-cloning"
-核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理,Core update does not copy app/code/Aiweline or app/code/WeShop; these project-level modules are managed by the target project.
-步骤 1/6：检查 Git...,Step 1/6: Checking Git...
-步骤 2/6：验证参数...,Step 2/6: Validating parameters...
-步骤 3/6：准备临时目录...,Step 3/6: Preparing temporary directory...
-步骤 4/6：下载框架代码...,Step 4/6: Downloading framework code...
-步骤 5/6：更新核心文件...,Step 5/6: Updating core files...
-步骤 6/6：完成处理...,Step 6/6: Processing completion...
-保留缓存目录用于下次增量更新,Keep Cache Directory for Next Incremental Update
-⚠ 已显式启用 -f/--force，跳过本地未提交变更保护,"⚠ Explicitly enabled -f/--force, skips local uncommitted change protection"
-当前项目不是 Git 工作区，跳过未提交变更检查,"The current project is not a Git workspace, skip uncommitted change check"
+"仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录","Skip workspace protection only when using -f/--force explicitly, overwrite target directory after deleting cache and re-cloning"
+"核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理","Core update does not copy app/code/Aiweline or app/code/WeShop; these project-level modules are managed by the target project."
+"步骤 1/6：检查 Git...","Step 1/6: Checking Git..."
+"步骤 2/6：验证参数...","Step 2/6: Validating parameters..."
+"步骤 3/6：准备临时目录...","Step 3/6: Preparing temporary directory..."
+"步骤 4/6：下载框架代码...","Step 4/6: Downloading framework code..."
+"步骤 5/6：更新核心文件...","Step 5/6: Updating core files..."
+"步骤 6/6：完成处理...","Step 6/6: Processing completion..."
+保留缓存目录用于下次增量更新,"Keep Cache Directory for Next Incremental Update"
+"⚠ 已显式启用 -f/--force，跳过本地未提交变更保护","⚠ Explicitly enabled -f/--force, skips local uncommitted change protection"
+"当前项目不是 Git 工作区，跳过未提交变更检查","The current project is not a Git workspace, skip uncommitted change check"
 错误：无法确认当前项目工作区是否干净，已安全取消核心更新,"Error: Unable to confirm if current project workspace is clean, core update has been safely canceled"
-如确认允许覆盖本地变更，请显式使用 -f/--force,"To confirm that overwriting local changes is allowed, explicitly use -f/--force"
-✓ 当前项目工作区干净,✓ The current project workspace is clean
-检测到 %{1} 项未提交的本地变更，已拒绝更新核心,"%{1} uncommitted local changes detected, core update rejected"
-✓ GitHub 可达，使用 GitHub 仓库,"✓ GitHub reachable, use GitHub repository"
-增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...,"Incremental update: Detected existing repository cache, using git fetch to pull changes..."
-检测到 %{1} 个变化的文件,Detected %{1} changed files
-重置到远程分支 %{1} 最新...,Reset to Latest Remote Branch %{1}...
-✓ 已更新到分支 %{1} 最新版本,✓ Updated to branch %{1} latest version
-增量模式：Git 变更 + 内容不一致文件同步...,Incremental mode: Git changes + out-of-sync file sync...
-刷新：覆盖 %{1} 个内容与源不一致的核心文件,Refresh: overwrote %{1} core files that differ from source
+"如确认允许覆盖本地变更，请显式使用 -f/--force","To confirm that overwriting local changes is allowed, explicitly use -f/--force"
+"✓ 当前项目工作区干净","✓ The current project workspace is clean"
+"检测到 %{1} 项未提交的本地变更，已拒绝更新核心","%{1} uncommitted local changes detected, core update rejected"
+"✓ GitHub 可达，使用 GitHub 仓库","✓ GitHub reachable, use GitHub repository"
+"增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...","Incremental update: Detected existing repository cache, using git fetch to pull changes..."
+"检测到 %{1} 个变化的文件","Detected %{1} changed files"
+"重置到远程分支 %{1} 最新...","Reset to Latest Remote Branch %{1}..."
+"✓ 已更新到分支 %{1} 最新版本","✓ Updated to branch %{1} latest version"
+"增量模式：Git 变更 + 内容不一致文件同步...","Incremental mode: Git changes + out-of-sync file sync..."
+"刷新：覆盖 %{1} 个内容与源不一致的核心文件","Refresh: overwrote %{1} core files that differ from source"

@@ -1,13 +1,13 @@
-GEO feed item add,GEO feed item add
-Triggered when a GEO feed item is added.,添加 GEO feed 项目时触发。
-GEO feed item update,GEO Feed 项目更新
-Triggered when a GEO feed item is updated.,当 GEO feed 项目更新时触发。
-GEO feed item delete,GEO Feed 项目删除
-Triggered when a GEO feed item is deleted.,当删除 GEO Feed 项目时触发。
-GEO feed submit request,GEO Feed 提交请求
-Unified entrypoint for syncing new or updated URLs into GEO feeds.,用于将新的或更新的 URL 同步到 GEO 源的统一入口点。
-website_id 必须是非负整数,website_id 必须是非负整数
-website_id 不能为负数,website_id 不能为负数
+﻿"GEO feed item add","GEO feed item add"
+"Triggered when a GEO feed item is added.","添加 GEO feed 项目时触发。"
+"GEO feed item update","GEO Feed 项目更新"
+"Triggered when a GEO feed item is updated.","当 GEO feed 项目更新时触发。"
+"GEO feed item delete","GEO Feed 项目删除"
+"Triggered when a GEO feed item is deleted.","当删除 GEO Feed 项目时触发。"
+"GEO feed submit request","GEO Feed 提交请求"
+"Unified entrypoint for syncing new or updated URLs into GEO feeds.","用于将新的或更新的 URL 同步到 GEO 源的统一入口点。"
+"website_id 必须是非负整数","website_id 必须是非负整数"
+"website_id 不能为负数","website_id 不能为负数"
 加载Feed列表失败：%{1},加载Feed列表失败：%{1}
 内容源由系统维护，不可手工新建；请从列表进入启用设置。,内容源由系统维护，不可手工新建；请从列表进入启用设置。
 Feed不存在,Feed不存在
@@ -25,7 +25,7 @@ API,应用程序编程接口
 加载Feed失败：%{1},加载Feed失败：%{1}
 无效的请求方法,无效的请求方法
 内容源由系统维护，不可手工新建,内容源由系统维护，不可手工新建
-Saved successfully,保存成功
+"Saved successfully",保存成功
 保存失败：%{1},保存失败：%{1}
 请选择Feed,请选择Feed
 生成成功,生成成功
@@ -68,13 +68,13 @@ link,关联
 请选择推送平台,请选择推送平台
 内容源不存在,内容源不存在
 未知错误,未知错误
-推送完成：成功 %{1} 个，失败 %{2} 个,推送完成：成功 %{1} 个，失败 %{2} 个
+"推送完成：成功 %{1} 个，失败 %{2} 个","推送完成：成功 %{1} 个，失败 %{2} 个"
 推送失败：%{1},推送失败：%{1}
 缺少推送记录,缺少推送记录
 推送记录不存在,推送记录不存在
 仅可重试失败的定时推送,仅可重试失败的定时推送
 重试成功：%{1},重试成功：%{1}
-重试失败：%{1} — %{2},重试失败：%{1} — %{2}
+"重试失败：%{1} — %{2}","重试失败：%{1} — %{2}"
 重试失败：%{1},重试失败：%{1}
 推送管理,推送管理
 arrow-right,向右箭头
@@ -83,25 +83,25 @@ history,历史
 一键推送,一键推送
 执行推送,执行推送
 play,玩
-浏览器不支持Geolocation API,浏览器不支持Geolocation API
+"浏览器不支持Geolocation API","浏览器不支持Geolocation API"
 定位失败,定位失败
 用户拒绝了定位权限,用户拒绝了定位权限
 位置信息不可用,位置信息不可用
 定位请求超时,定位请求超时
 IP定位服务响应错误,IP定位服务响应错误
 IP定位失败,IP定位失败
-IP定位服务不可用: %{1},IP定位服务不可用: %{1}
-GEO 协议与 AI 搜索发现,GEO 协议与 AI 搜索发现
-llms.txt / ai.txt,llms.txt / ai.txt
-启用 AI 搜索发现文件,启用 AI 搜索发现文件
-GEO Feed,GEO Feed
-启用 JSON Feed / RSS Feed,启用 JSON Feed / RSS Feed
+"IP定位服务不可用: %{1}","IP定位服务不可用: %{1}"
+"GEO 协议与 AI 搜索发现","GEO 协议与 AI 搜索发现"
+"llms.txt / ai.txt","llms.txt / ai.txt"
+"启用 AI 搜索发现文件","启用 AI 搜索发现文件"
+"GEO Feed","GEO Feed"
+"启用 JSON Feed / RSS Feed","启用 JSON Feed / RSS Feed"
 自动推送,自动推送
-内容更新后由 Weline_Geo 自动处理推送,内容更新后由 Weline_Geo 自动处理推送
-站点 GEO Feed,站点 GEO Feed
-使用第一个启用 Feed,使用第一个启用 Feed
-llms.txt 站点说明,llms.txt 站点说明
-留空时由 Weline_Geo 使用站点名称和默认说明自动生成。,留空时由 Weline_Geo 使用站点名称和默认说明自动生成。
+"内容更新后由 Weline_Geo 自动处理推送","内容更新后由 Weline_Geo 自动处理推送"
+"站点 GEO Feed","站点 GEO Feed"
+"使用第一个启用 Feed","使用第一个启用 Feed"
+"llms.txt 站点说明","llms.txt 站点说明"
+"留空时由 Weline_Geo 使用站点名称和默认说明自动生成。","留空时由 Weline_Geo 使用站点名称和默认说明自动生成。"
 编辑账户,编辑账户
 添加账户,添加账户
 首页,首页
@@ -111,14 +111,14 @@ API密钥,API密钥
 请输入API密钥,请输入API密钥
 API密钥将被加密存储,API密钥将被加密存储
 API密钥（Secret）,API密钥（Secret）
-如果需要，请输入API Secret,如果需要，请输入API Secret
+"如果需要，请输入API Secret","如果需要，请输入API Secret"
 是否默认账户,是否默认账户
 设为默认,设为默认
 是否激活,是否激活
 激活,激活
 保存,保存
 返回,返回
-选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。,选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。
+"选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。","选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。"
 添加平台,添加平台
 平台,平台
 代码,代码
@@ -130,14 +130,14 @@ API密钥（Secret）,API密钥（Secret）
 禁用,禁用
 编辑,编辑
 账户,账户
-推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。,推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。
+"推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。","推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。"
 已配置,已配置
-选择内置平台后会自动填入官方推送地址与内容源格式。API 密钥请到「平台账户」配置；当前不支持一键 OAuth 授权。,选择内置平台后会自动填入官方推送地址与内容源格式。API 密钥请到「平台账户」配置；当前不支持一键 OAuth 授权。
+"选择内置平台后会自动填入官方推送地址与内容源格式。API 密钥请到「平台账户」配置；当前不支持一键 OAuth 授权。","选择内置平台后会自动填入官方推送地址与内容源格式。API 密钥请到「平台账户」配置；当前不支持一键 OAuth 授权。"
 请选择或搜索平台...,请选择或搜索平台...
 平台代码保存后不可更改,平台代码保存后不可更改
 标注「已配置」的平台再次保存会更新现有记录,标注「已配置」的平台再次保存会更新现有记录
 平台名称,平台名称
-推送 API 地址,推送 API 地址
+"推送 API 地址","推送 API 地址"
 选择平台后自动填入,选择平台后自动填入
 由内置适配器提供；一般无需手改。,由内置适配器提供；一般无需手改。
 我要自定义推送地址,我要自定义推送地址
@@ -145,15 +145,15 @@ API密钥（Secret）,API密钥（Secret）
 请选择内容源格式...,请选择内容源格式...
 是否启用,是否启用
 高级配置（JSON）,高级配置（JSON）
-密钥不写在这里。保存平台后，请到该平台的「账户」里填写 API Key。,密钥不写在这里。保存平台后，请到该平台的「账户」里填写 API Key。
+"密钥不写在这里。保存平台后，请到该平台的「账户」里填写 API Key。","密钥不写在这里。保存平台后，请到该平台的「账户」里填写 API Key。"
 取消,取消
 Success,成功
 保存失败,保存失败
 确定,确定
 请重试,请重试
 账户配置指南,账户配置指南
-API Key,API Key
-API Secret,API Secret
+"API Key","API Key"
+"API Secret","API Secret"
 官方文档,官方文档
 ID,ID
 默认,默认
@@ -176,8 +176,8 @@ ID,ID
 保存成功,保存成功
 测试成功,测试成功
 测试失败,测试失败
-请先上传服务账号 JSON 文件,请先上传服务账号 JSON 文件
-不是有效的服务账号 JSON（需含 private_key 与 client_email）,不是有效的服务账号 JSON（需含 private_key 与 client_email）
+"请先上传服务账号 JSON 文件","请先上传服务账号 JSON 文件"
+"不是有效的服务账号 JSON（需含 private_key 与 client_email）","不是有效的服务账号 JSON（需含 private_key 与 client_email）"
 已载入,已载入
 此页仅人工立即推送。定时推送请回到「推送管理」用统一配置开关开启（每天一次）。,此页仅人工立即推送。定时推送请回到「推送管理」用统一配置开关开启（每天一次）。
 没有已启用的内容源。请先到内容源管理开启。,没有已启用的内容源。请先到内容源管理开启。
@@ -191,7 +191,7 @@ ID,ID
 推送失败,推送失败
 提示,提示
 请选择内容源和至少一个平台,请选择内容源和至少一个平台
-本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。,本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。
+"本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。","本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。"
 定时推送失败,定时推送失败
 以下为最近定时推送失败，请核对平台账户与内容源后重试；成功后仍会出现在下方全部历史中。,以下为最近定时推送失败，请核对平台账户与内容源后重试；成功后仍会出现在下方全部历史中。
 内容源,内容源
@@ -226,7 +226,7 @@ Feed类型,Feed类型
 内容源由系统自动维护，元数据不可修改；此处仅可开关是否启用。,内容源由系统自动维护，元数据不可修改；此处仅可开关是否启用。
 数据源类型,数据源类型
 数据源配置（JSON）,数据源配置（JSON）
-Feed URL,Feed URL
+"Feed URL","Feed URL"
 由系统策略维护,由系统策略维护
 配置（JSON）,配置（JSON）
 定位成功,定位成功
@@ -235,126 +235,126 @@ Feed URL,Feed URL
 经纬度范围不正确,经纬度范围不正确
 获取地址成功,获取地址成功
 创建队列失败。,创建队列失败。
-合并更新 Feed 队列失败。,合并更新 Feed 队列失败。
-重开 Feed 队列失败。,重开 Feed 队列失败。
-Feed ID 无效。,Feed ID 无效。
-Feed 格式无效。,Feed 格式无效。
-Feed 推送类型无效。,Feed 推送类型无效。
-Google Indexing / SGE 账户指南,Google Indexing / SGE 账户指南
-使用 Google Cloud 服务账号调用 Indexing API；上传下载的 JSON 密钥文件即可，一般不需要 Secret。,使用 Google Cloud 服务账号调用 Indexing API；上传下载的 JSON 密钥文件即可，一般不需要 Secret。
-打开 Google Cloud Console，创建或选择项目。,打开 Google Cloud Console，创建或选择项目。
-启用「Indexing API」。,启用「Indexing API」。
-创建服务账号并下载 JSON 密钥文件。,创建服务账号并下载 JSON 密钥文件。
-在 Google Search Console 将该服务账号邮箱添加为网站所有者。,在 Google Search Console 将该服务账号邮箱添加为网站所有者。
-下方直接上传该 JSON 文件；Secret 留空即可。,下方直接上传该 JSON 文件；Secret 留空即可。
-服务账号 JSON,服务账号 JSON
-选择 Google 下载的 .json 密钥文件（含 private_key / client_email）,选择 Google 下载的 .json 密钥文件（含 private_key / client_email）
-Indexing API 通常不需要，可留空,Indexing API 通常不需要，可留空
-Google Indexing API 文档,Google Indexing API 文档
-Bing Webmaster 账户指南,Bing Webmaster 账户指南
-在 Bing Webmaster Tools 生成 API Key，用于提交站点内容。,在 Bing Webmaster Tools 生成 API Key，用于提交站点内容。
-登录 Bing Webmaster Tools 并验证网站。,登录 Bing Webmaster Tools 并验证网站。
-进入「设置 → API 访问」生成密钥。,进入「设置 → API 访问」生成密钥。
-将密钥填入「API Key」；Secret 一般留空。,将密钥填入「API Key」；Secret 一般留空。
-Bing API Key,Bing API Key
-Webmaster Tools 中生成的 API Key,Webmaster Tools 中生成的 API Key
+"合并更新 Feed 队列失败。","合并更新 Feed 队列失败。"
+"重开 Feed 队列失败。","重开 Feed 队列失败。"
+"Feed ID 无效。","Feed ID 无效。"
+"Feed 格式无效。","Feed 格式无效。"
+"Feed 推送类型无效。","Feed 推送类型无效。"
+"Google Indexing / SGE 账户指南","Google Indexing / SGE 账户指南"
+"使用 Google Cloud 服务账号调用 Indexing API；上传下载的 JSON 密钥文件即可，一般不需要 Secret。","使用 Google Cloud 服务账号调用 Indexing API；上传下载的 JSON 密钥文件即可，一般不需要 Secret。"
+"打开 Google Cloud Console，创建或选择项目。","打开 Google Cloud Console，创建或选择项目。"
+"启用「Indexing API」。","启用「Indexing API」。"
+"创建服务账号并下载 JSON 密钥文件。","创建服务账号并下载 JSON 密钥文件。"
+"在 Google Search Console 将该服务账号邮箱添加为网站所有者。","在 Google Search Console 将该服务账号邮箱添加为网站所有者。"
+"下方直接上传该 JSON 文件；Secret 留空即可。","下方直接上传该 JSON 文件；Secret 留空即可。"
+"服务账号 JSON","服务账号 JSON"
+"选择 Google 下载的 .json 密钥文件（含 private_key / client_email）","选择 Google 下载的 .json 密钥文件（含 private_key / client_email）"
+"Indexing API 通常不需要，可留空","Indexing API 通常不需要，可留空"
+"Google Indexing API 文档","Google Indexing API 文档"
+"Bing Webmaster 账户指南","Bing Webmaster 账户指南"
+"在 Bing Webmaster Tools 生成 API Key，用于提交站点内容。","在 Bing Webmaster Tools 生成 API Key，用于提交站点内容。"
+"登录 Bing Webmaster Tools 并验证网站。","登录 Bing Webmaster Tools 并验证网站。"
+"进入「设置 → API 访问」生成密钥。","进入「设置 → API 访问」生成密钥。"
+"将密钥填入「API Key」；Secret 一般留空。","将密钥填入「API Key」；Secret 一般留空。"
+"Bing API Key","Bing API Key"
+"Webmaster Tools 中生成的 API Key","Webmaster Tools 中生成的 API Key"
 通常不需要,通常不需要
-Bing URL 提交说明,Bing URL 提交说明
-Perplexity 账户指南,Perplexity 账户指南
-使用 Perplexity API Key；若控制台提供了额外密钥再填 Secret。,使用 Perplexity API Key；若控制台提供了额外密钥再填 Secret。
-登录 Perplexity 开发者/API 控制台。,登录 Perplexity 开发者/API 控制台。
-创建 API Key 并复制。,创建 API Key 并复制。
-填入「API Key」；若有第二段密钥再填 Secret。,填入「API Key」；若有第二段密钥再填 Secret。
-Perplexity API Key,Perplexity API Key
+"Bing URL 提交说明","Bing URL 提交说明"
+"Perplexity 账户指南","Perplexity 账户指南"
+"使用 Perplexity API Key；若控制台提供了额外密钥再填 Secret。","使用 Perplexity API Key；若控制台提供了额外密钥再填 Secret。"
+"登录 Perplexity 开发者/API 控制台。","登录 Perplexity 开发者/API 控制台。"
+"创建 API Key 并复制。","创建 API Key 并复制。"
+"填入「API Key」；若有第二段密钥再填 Secret。","填入「API Key」；若有第二段密钥再填 Secret。"
+"Perplexity API Key","Perplexity API Key"
 控制台创建的主密钥,控制台创建的主密钥
 仅当控制台提供时填写,仅当控制台提供时填写
-Perplexity 文档,Perplexity 文档
-OpenAI 账户指南,OpenAI 账户指南
-使用 OpenAI API Key（sk-…）；组织级若要求再填 Secret。,使用 OpenAI API Key（sk-…）；组织级若要求再填 Secret。
-打开 platform.openai.com → API keys。,打开 platform.openai.com → API keys。
+"Perplexity 文档","Perplexity 文档"
+"OpenAI 账户指南","OpenAI 账户指南"
+"使用 OpenAI API Key（sk-…）；组织级若要求再填 Secret。","使用 OpenAI API Key（sk-…）；组织级若要求再填 Secret。"
+"打开 platform.openai.com → API keys。","打开 platform.openai.com → API keys。"
 创建密钥并立即复制保存。,创建密钥并立即复制保存。
-填入「API Key」；Organization / 项目密钥如有要求再填 Secret。,填入「API Key」；Organization / 项目密钥如有要求再填 Secret。
-OpenAI API Key,OpenAI API Key
-以 sk- 开头的密钥,以 sk- 开头的密钥
-Organization / Secret,Organization / Secret
-OpenAI API Keys,OpenAI API Keys
-Claude / Anthropic 账户指南,Claude / Anthropic 账户指南
-在 Anthropic Console 创建 API Key。,在 Anthropic Console 创建 API Key。
-登录 console.anthropic.com。,登录 console.anthropic.com。
-填入「API Key」；Secret 通常留空。,填入「API Key」；Secret 通常留空。
-Anthropic API Key,Anthropic API Key
-Console 中的 API Key,Console 中的 API Key
-Anthropic Console,Anthropic Console
-百度 AI 账户指南,百度 AI 账户指南
-百度智能云应用需要 API Key 与 Secret Key。,百度智能云应用需要 API Key 与 Secret Key。
+"填入「API Key」；Organization / 项目密钥如有要求再填 Secret。","填入「API Key」；Organization / 项目密钥如有要求再填 Secret。"
+"OpenAI API Key","OpenAI API Key"
+"以 sk- 开头的密钥","以 sk- 开头的密钥"
+"Organization / Secret","Organization / Secret"
+"OpenAI API Keys","OpenAI API Keys"
+"Claude / Anthropic 账户指南","Claude / Anthropic 账户指南"
+"在 Anthropic Console 创建 API Key。","在 Anthropic Console 创建 API Key。"
+"登录 console.anthropic.com。","登录 console.anthropic.com。"
+"填入「API Key」；Secret 通常留空。","填入「API Key」；Secret 通常留空。"
+"Anthropic API Key","Anthropic API Key"
+"Console 中的 API Key","Console 中的 API Key"
+"Anthropic Console","Anthropic Console"
+"百度 AI 账户指南","百度 AI 账户指南"
+"百度智能云应用需要 API Key 与 Secret Key。","百度智能云应用需要 API Key 与 Secret Key。"
 登录百度智能云控制台，创建应用。,登录百度智能云控制台，创建应用。
-在应用详情中复制 API Key 与 Secret Key。,在应用详情中复制 API Key 与 Secret Key。
-分别填入下方两个字段（Secret 必填）。,分别填入下方两个字段（Secret 必填）。
-应用的 API Key,应用的 API Key
-Secret Key,Secret Key
-与 API Key 成对使用，必填,与 API Key 成对使用，必填
+"在应用详情中复制 API Key 与 Secret Key。","在应用详情中复制 API Key 与 Secret Key。"
+"分别填入下方两个字段（Secret 必填）。","分别填入下方两个字段（Secret 必填）。"
+"应用的 API Key","应用的 API Key"
+"Secret Key","Secret Key"
+"与 API Key 成对使用，必填","与 API Key 成对使用，必填"
 百度智能云文档,百度智能云文档
-Brave Search 账户指南,Brave Search 账户指南
-在 Brave Search API 控制台申请订阅密钥。,在 Brave Search API 控制台申请订阅密钥。
-打开 api.search.brave.com 并注册。,打开 api.search.brave.com 并注册。
-创建订阅并复制 API Key。,创建订阅并复制 API Key。
-填入「API Key」；Secret 留空。,填入「API Key」；Secret 留空。
-Brave API Key,Brave API Key
-Subscription token / API Key,Subscription token / API Key
-Brave Search API,Brave Search API
-Cohere 账户指南,Cohere 账户指南
-在 Cohere Dashboard 创建 API Key。,在 Cohere Dashboard 创建 API Key。
-登录 dashboard.cohere.com。,登录 dashboard.cohere.com。
-填入「API Key」。,填入「API Key」。
-Cohere API Key,Cohere API Key
-Dashboard 中的 API Key,Dashboard 中的 API Key
-Cohere Dashboard,Cohere Dashboard
-You.com 账户指南,You.com 账户指南
-在 You.com 开发者控制台获取 API 凭证。,在 You.com 开发者控制台获取 API 凭证。
-登录 You.com 开发者/API 后台。,登录 You.com 开发者/API 后台。
-创建或复制 API Key。,创建或复制 API Key。
-填入「API Key」；若有第二密钥再填 Secret。,填入「API Key」；若有第二密钥再填 Secret。
-You.com API Key,You.com API Key
+"Brave Search 账户指南","Brave Search 账户指南"
+"在 Brave Search API 控制台申请订阅密钥。","在 Brave Search API 控制台申请订阅密钥。"
+"打开 api.search.brave.com 并注册。","打开 api.search.brave.com 并注册。"
+"创建订阅并复制 API Key。","创建订阅并复制 API Key。"
+"填入「API Key」；Secret 留空。","填入「API Key」；Secret 留空。"
+"Brave API Key","Brave API Key"
+"Subscription token / API Key","Subscription token / API Key"
+"Brave Search API","Brave Search API"
+"Cohere 账户指南","Cohere 账户指南"
+"在 Cohere Dashboard 创建 API Key。","在 Cohere Dashboard 创建 API Key。"
+"登录 dashboard.cohere.com。","登录 dashboard.cohere.com。"
+"填入「API Key」。","填入「API Key」。"
+"Cohere API Key","Cohere API Key"
+"Dashboard 中的 API Key","Dashboard 中的 API Key"
+"Cohere Dashboard","Cohere Dashboard"
+"You.com 账户指南","You.com 账户指南"
+"在 You.com 开发者控制台获取 API 凭证。","在 You.com 开发者控制台获取 API 凭证。"
+"登录 You.com 开发者/API 后台。","登录 You.com 开发者/API 后台。"
+"创建或复制 API Key。","创建或复制 API Key。"
+"填入「API Key」；若有第二密钥再填 Secret。","填入「API Key」；若有第二密钥再填 Secret。"
+"You.com API Key","You.com API Key"
 控制台主密钥,控制台主密钥
 You.com,You.com
-DuckDuckGo 账户指南,DuckDuckGo 账户指南
-若使用 Instant Answer / 合作方 API，按控制台说明填写密钥。,若使用 Instant Answer / 合作方 API，按控制台说明填写密钥。
-确认已获得 DuckDuckGo 侧可用的 API 凭证。,确认已获得 DuckDuckGo 侧可用的 API 凭证。
-将主密钥填入「API Key」。,将主密钥填入「API Key」。
-按对方文档决定是否填写 Secret。,按对方文档决定是否填写 Secret。
+"DuckDuckGo 账户指南","DuckDuckGo 账户指南"
+"若使用 Instant Answer / 合作方 API，按控制台说明填写密钥。","若使用 Instant Answer / 合作方 API，按控制台说明填写密钥。"
+"确认已获得 DuckDuckGo 侧可用的 API 凭证。","确认已获得 DuckDuckGo 侧可用的 API 凭证。"
+"将主密钥填入「API Key」。","将主密钥填入「API Key」。"
+"按对方文档决定是否填写 Secret。","按对方文档决定是否填写 Secret。"
 合作方提供的主密钥,合作方提供的主密钥
 按文档选填,按文档选填
 DuckDuckGo,DuckDuckGo
-请按该平台控制台说明填写 API 凭证；密钥会加密保存。,请按该平台控制台说明填写 API 凭证；密钥会加密保存。
+"请按该平台控制台说明填写 API 凭证；密钥会加密保存。","请按该平台控制台说明填写 API 凭证；密钥会加密保存。"
 打开对应平台的开发者控制台。,打开对应平台的开发者控制台。
-填入下方字段；仅当平台要求时再填 Secret。,填入下方字段；仅当平台要求时再填 Secret。
+"填入下方字段；仅当平台要求时再填 Secret。","填入下方字段；仅当平台要求时再填 Secret。"
 平台主密钥,平台主密钥
-ip-api.com请求失败: %{1},ip-api.com请求失败: %{1}
-ip-api.com返回错误状态码: %{1},ip-api.com返回错误状态码: %{1}
-ip-api.com返回数据解析失败: %{1},ip-api.com返回数据解析失败: %{1}
-ip-api.com定位失败: %{1},ip-api.com定位失败: %{1}
-ipwhois.app请求失败: %{1},ipwhois.app请求失败: %{1}
-ipwhois.app返回错误状态码: %{1},ipwhois.app返回错误状态码: %{1}
-ipwhois.app返回数据解析失败: %{1},ipwhois.app返回数据解析失败: %{1}
-ipwhois.app定位失败: %{1},ipwhois.app定位失败: %{1}
-ipapi.co请求失败: %{1},ipapi.co请求失败: %{1}
-ipapi.co返回错误状态码: %{1},ipapi.co返回错误状态码: %{1}
-ipapi.co返回数据解析失败: %{1},ipapi.co返回数据解析失败: %{1}
-ipapi.co定位失败: %{1},ipapi.co定位失败: %{1}
-geojs.io请求失败: %{1},geojs.io请求失败: %{1}
-geojs.io返回错误状态码: %{1},geojs.io返回错误状态码: %{1}
-geojs.io返回数据解析失败: %{1},geojs.io返回数据解析失败: %{1}
+"ip-api.com请求失败: %{1}","ip-api.com请求失败: %{1}"
+"ip-api.com返回错误状态码: %{1}","ip-api.com返回错误状态码: %{1}"
+"ip-api.com返回数据解析失败: %{1}","ip-api.com返回数据解析失败: %{1}"
+"ip-api.com定位失败: %{1}","ip-api.com定位失败: %{1}"
+"ipwhois.app请求失败: %{1}","ipwhois.app请求失败: %{1}"
+"ipwhois.app返回错误状态码: %{1}","ipwhois.app返回错误状态码: %{1}"
+"ipwhois.app返回数据解析失败: %{1}","ipwhois.app返回数据解析失败: %{1}"
+"ipwhois.app定位失败: %{1}","ipwhois.app定位失败: %{1}"
+"ipapi.co请求失败: %{1}","ipapi.co请求失败: %{1}"
+"ipapi.co返回错误状态码: %{1}","ipapi.co返回错误状态码: %{1}"
+"ipapi.co返回数据解析失败: %{1}","ipapi.co返回数据解析失败: %{1}"
+"ipapi.co定位失败: %{1}","ipapi.co定位失败: %{1}"
+"geojs.io请求失败: %{1}","geojs.io请求失败: %{1}"
+"geojs.io返回错误状态码: %{1}","geojs.io返回错误状态码: %{1}"
+"geojs.io返回数据解析失败: %{1}","geojs.io返回数据解析失败: %{1}"
 geojs.io返回空数据,geojs.io返回空数据
 本地定位服务暂未实现，将使用备用通道,本地定位服务暂未实现，将使用备用通道
-ipinfo.io请求失败: %{1},ipinfo.io请求失败: %{1}
-ipinfo.io返回错误状态码: %{1},ipinfo.io返回错误状态码: %{1}
-ipinfo.io返回数据解析失败: %{1},ipinfo.io返回数据解析失败: %{1}
-ipinfo.io定位失败: %{1},ipinfo.io定位失败: %{1}
+"ipinfo.io请求失败: %{1}","ipinfo.io请求失败: %{1}"
+"ipinfo.io返回错误状态码: %{1}","ipinfo.io返回错误状态码: %{1}"
+"ipinfo.io返回数据解析失败: %{1}","ipinfo.io返回数据解析失败: %{1}"
+"ipinfo.io定位失败: %{1}","ipinfo.io定位失败: %{1}"
 没有可用的定位服务提供者,没有可用的定位服务提供者
-所有定位服务提供者都失败，最后错误: %{1},所有定位服务提供者都失败，最后错误: %{1}
-请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。,请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。
-Feed ID,Feed ID
-平台 ID,平台 ID
+"所有定位服务提供者都失败，最后错误: %{1}","所有定位服务提供者都失败，最后错误: %{1}"
+"请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。","请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。"
+"Feed ID","Feed ID"
+"平台 ID","平台 ID"
 平台代码,平台代码
 默认账户,默认账户
 激活状态,激活状态
@@ -365,13 +365,13 @@ API密钥（可选）,API密钥（可选）
 请填写Feed名称,请填写Feed名称
 添加Feed,添加Feed
 启用自动推送,启用自动推送
-配置 AI 搜索平台与账户后，即可把 GEO Feed 主动推送给对方。,配置 AI 搜索平台与账户后，即可把 GEO Feed 主动推送给对方。
+"配置 AI 搜索平台与账户后，即可把 GEO Feed 主动推送给对方。","配置 AI 搜索平台与账户后，即可把 GEO Feed 主动推送给对方。"
 API端点,API端点
 Feed格式,内容源格式
 请选择,请选择
 实时,实时
 推送历史,推送历史
-"""GEO feed item add""",“GEO Feed 项目添加”
+"""GEO feed item add""","“GEO Feed 项目添加”"
 中国大陆,中国大陆
 配送至,配送至
 选择配送地址,选择配送地址

@@ -1,59 +1,59 @@
-Trash 查询器不支持的操作：%{1},Unsupported Trash queryer operation: %{1}
-通用回收站模块，通过 provider 接入业务删除、恢复与原始数据查看能力。,"The universal recycle bin module provides business deletion, recovery, and original data viewing capabilities through provider integration."
-回收站记录不存在。,The recycle bin record does not exist.
-恢复成功。,Restoration successful.
-恢复失败。,Restore failed.
-已永久清理。,Permanently deleted.
-永久清理失败。,Permanent cleanup failed.
-回收站,Recycle bin
+﻿"Trash 查询器不支持的操作：%{1}","Unsupported Trash queryer operation: %{1}"
+"通用回收站模块，通过 provider 接入业务删除、恢复与原始数据查看能力。","The universal recycle bin module provides business deletion, recovery, and original data viewing capabilities through provider integration."
+回收站记录不存在。,"The recycle bin record does not exist."
+恢复成功。,"Restoration successful."
+恢复失败。,"Restore failed."
+已永久清理。,"Permanently deleted."
+永久清理失败。,"Permanent cleanup failed."
+回收站,"Recycle bin"
 trash,trash
-管理回收站记录,Manage recycle bin records
-回收站列表,Recycle bin list
+管理回收站记录,"Manage recycle bin records"
+回收站列表,"Recycle bin list"
 list,list
-查看回收站记录,View recycle bin records
-回收站详情,Recycle bin details
+查看回收站记录,"View recycle bin records"
+回收站详情,"Recycle bin details"
 eye,eye
-查看回收站原始数据,View the original data of the recycle bin
-恢复回收站记录,Restore recycle bin record
+查看回收站原始数据,"View the original data of the recycle bin"
+恢复回收站记录,"Restore recycle bin record"
 store,store
-永久清理回收站记录,Permanently purge recycle bin record
+永久清理回收站记录,"Permanently purge recycle bin record"
 待处理,Pending
 全部,All
-待恢复,To be restored.
-恢复失败,Restore failed
-清理失败,Clear failed
+待恢复,"To be restored."
+恢复失败,"Restore failed"
+清理失败,"Clear failed"
 已恢复,Restored
 已清理,Cleaned.
-搜索标题、实体或 code,"Search for titles, entities, or code."
-全部类型,All Types
+"搜索标题、实体或 code","Search for titles, entities, or code."
+全部类型,"All Types"
 筛选,Filter
 ID,ID
 类型,Type
 标题,Title
-业务实体,Business entity
+业务实体,"Business entity"
 状态,Status
-删除时间,Deletion time
+删除时间,"Deletion time"
 错误,Error
 操作,Actions
-暂无回收站记录,No recycling records found.
-实体ID,Entity ID
+暂无回收站记录,"No recycling records found."
+实体ID,"Entity ID"
 详情,Details
 恢复,Restore
-返回列表,Back to list
-回收站ID,Recycling bin ID.
+返回列表,"Back to list"
+回收站ID,"Recycling bin ID."
 Provider,Provider
-永久清理,Permanent cleanup
-摘要数据,Abstract data.
-原始存储形态,Original storage format.
-作用域与上下文,Scope and Context
-错误详情,Error details.
-回收站 provider code 不能为空。,The recycling bin provider code cannot be empty.
-回收站 provider code 重复：%{1}，冲突类：%{2} / %{3},"Recycling bin provider code duplicate: %{1}, conflicting classes: %{2} / %{3}"
+永久清理,"Permanent cleanup"
+摘要数据,"Abstract data."
+原始存储形态,"Original storage format."
+作用域与上下文,"Scope and Context"
+错误详情,"Error details."
+"回收站 provider code 不能为空。","The recycling bin provider code cannot be empty."
+"回收站 provider code 重复：%{1}，冲突类：%{2} / %{3}","Recycling bin provider code duplicate: %{1}, conflicting classes: %{2} / %{3}"
 业务删除失败，未写入回收站。,"The deletion failed, and the item was not moved to the recycle bin."
-该数据已经在回收站中。,The data is already in the recycle bin.
-已移入回收站。,Moved to the recycle bin.
+该数据已经在回收站中。,"The data is already in the recycle bin."
+已移入回收站。,"Moved to the recycle bin."
 业务已删除，但写入回收站失败：%{1},"Business deleted, but trash write failed: %{1}"
-该回收站记录当前状态不可恢复。,The recycle bin records indicate that the current state is unrecoverable.
-该回收站记录当前状态不可永久清理。,This recycle bin entry indicates that the current state cannot be permanently cleared.
-未注册的回收站 provider：%{1},Unregistered recycle bin provider: %{1}
-"""Trash 查询器不支持的操作：%{1}""",Unsupported Trash queryer operation: %{1}
+该回收站记录当前状态不可恢复。,"The recycle bin records indicate that the current state is unrecoverable."
+该回收站记录当前状态不可永久清理。,"This recycle bin entry indicates that the current state cannot be permanently cleared."
+"未注册的回收站 provider：%{1}","Unregistered recycle bin provider: %{1}"
+"""Trash 查询器不支持的操作：%{1}""","Unsupported Trash queryer operation: %{1}"

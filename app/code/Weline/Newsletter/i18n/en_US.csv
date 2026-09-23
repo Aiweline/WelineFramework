@@ -70,3 +70,6 @@ ID,ID
 订阅我们的邮件，立即获得10%折扣码！,"Subscribe and get a 10% off code!"
 立即订阅,"Subscribe now"
 去购物,"Shop now"
+组合延后（停留/滚动/退出意向）,"Deferred (dwell / scroll / exit intent)"
+最早弹出秒数,"Earliest open (seconds)"
+"任意触发源在此秒数内禁止弹出（默认 3，首访首屏不立即弹）","Block any trigger from opening within this many seconds (default 3; no first-screen instant popup)"

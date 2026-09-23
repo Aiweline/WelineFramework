@@ -1,379 +1,379 @@
-Activity theme saved,Activity theme saved
+﻿"Activity theme saved","Activity theme saved"
 "After promotion activity theme save: publish ResourceChange v1 via w_changed, clear local FPC; CDN/SEO handled by resource_changed observers.","After promotion activity theme save: publish ResourceChange v1 via w_changed, clear local FPC; CDN/SEO handled by resource_changed observers."
-促销后台接口不支持操作：%{1},Promotion admin API does not support action: %{1}
-促销后台服务暂时不可用。,Promotion admin service temporarily unavailable.
-万能促销运营,Universal Promotion Desk
-读取促销运营台快照与 campaign run 状态。,Read promotion desk snapshot and campaign run status.
-促销活动 sitemap URL 提供器,Promo campaign sitemap URL provider
-活动页商品列表前,Before campaign product list
+促销后台接口不支持操作：%{1},"Promotion admin API does not support action: %{1}"
+促销后台服务暂时不可用。,"Promotion admin service temporarily unavailable."
+万能促销运营,"Universal Promotion Desk"
+"读取促销运营台快照与 campaign run 状态。","Read promotion desk snapshot and campaign run status."
+"促销活动 sitemap URL 提供器","Promo campaign sitemap URL provider"
+活动页商品列表前,"Before campaign product list"
 在活动页商品列表渲染前输出轻量扩展内容，适合提示、活动说明或筛选入口。,"Emit light extensions before campaign product list render—tips, campaign notes, or filter entry."
-活动页商品列表后,After campaign product list
+活动页商品列表后,"After campaign product list"
 在活动页商品列表渲染后输出轻量扩展内容，适合承接推荐、权益说明或客服入口。,"Emit light extensions after campaign product list render—recommendations, benefit notes, or support entry."
-活动中心,Promotion Hub
-mdi mdi-sale-outline,mdi mdi-sale-outline
-Weline 促销运营台,Weline Promotion Desk
-查看促销运营台,View promotion desk
-查看 Weline 促销运营台,View Weline Promotion Desk
-存在交叉 SKU，请确认后保存。,Overlapping SKUs exist; confirm then save.
-保存失败。,Save failed.
-活动主题已保存。可点击各字段旁的「多语言」补全其它语言文案。,Theme saved. Click Multilingual beside each field to fill other locales.
-活动主题,Activity Theme
-mdi mdi-palette-outline,mdi mdi-palette-outline
+活动中心,"Promotion Hub"
+"mdi mdi-sale-outline","mdi mdi-sale-outline"
+"Weline 促销运营台","Weline Promotion Desk"
+查看促销运营台,"View promotion desk"
+"查看 Weline 促销运营台","View Weline Promotion Desk"
+"存在交叉 SKU，请确认后保存。","Overlapping SKUs exist; confirm then save."
+保存失败。,"Save failed."
+活动主题已保存。可点击各字段旁的「多语言」补全其它语言文案。,"Theme saved. Click Multilingual beside each field to fill other locales."
+活动主题,"Activity Theme"
+"mdi mdi-palette-outline","mdi mdi-palette-outline"
 管理前台活动主题、范围与多语言文案,"Manage storefront campaign themes, scopes, and multilingual copy"
-查看活动主题,View campaign theme
-查看并维护前台活动主题,View and maintain storefront campaign themes
-编辑活动主题,Edit campaign theme
-创建或编辑活动主题,Create or edit campaign theme
-保存活动主题,Save campaign theme
-mdi mdi-content-save-outline,mdi mdi-content-save-outline
-保存活动主题与 LocalModel 文案,Save campaign theme and LocalModel copy
-搜索活动商品,Search campaign products
-mdi mdi-magnify,mdi mdi-magnify
-按活动范围搜索可绑定商品,Search bindable products by campaign scope
-预览条件选品,Preview conditional selection
-mdi mdi-table-eye,mdi mdi-table-eye
-按筛选规则预览活动命中商品,Preview campaign hit products by filter rules
+查看活动主题,"View campaign theme"
+查看并维护前台活动主题,"View and maintain storefront campaign themes"
+编辑活动主题,"Edit campaign theme"
+创建或编辑活动主题,"Create or edit campaign theme"
+保存活动主题,"Save campaign theme"
+"mdi mdi-content-save-outline","mdi mdi-content-save-outline"
+"保存活动主题与 LocalModel 文案","Save campaign theme and LocalModel copy"
+搜索活动商品,"Search campaign products"
+"mdi mdi-magnify","mdi mdi-magnify"
+按活动范围搜索可绑定商品,"Search bindable products by campaign scope"
+预览条件选品,"Preview conditional selection"
+"mdi mdi-table-eye","mdi mdi-table-eye"
+按筛选规则预览活动命中商品,"Preview campaign hit products by filter rules"
 促销活动,Promotions
-时令新章,Seasonal new arrivals
-新的活动正在筹备,New activities are being prepared
+时令新章,"Seasonal new arrivals"
+新的活动正在筹备,"New activities are being prepared"
 当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。,"There are currently no limited-time activities to display. You can still browse the available Hanfu, accessories, and new products for this season; limited-time activities will be presented here when they are launched."
-浏览全部商品,Shop All Hanfu
-查看购物帮助,View shopping help
+浏览全部商品,"Shop All"
+查看购物帮助,"View shopping help"
 浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。,"Browse campaign pieces and continue into product detail, cart and checkout. This page never invents fake discounts — only real sellable products."
-浏览活动商品,Shop campaign pieces
-匹配商品,Matching products
-活动入口,Campaign collections
+浏览活动商品,"Shop campaign pieces"
+匹配商品,"Matching products"
+活动入口,"Campaign collections"
 打开,Explore
-活动商品,Featured Hanfu
-货架展示真实可售商品成交价，不虚构折扣。,Shelf shows sellable product prices only — no fabricated discounts.
-暂无活动商品,No campaign products yet
-当前视图没有可展示商品，请稍后再试或从商品列表继续购物。,There are no products in this collection right now. Try again later or continue from the catalog.
-浏览商品,Browse products
-营销活动运营台,Campaign Operations Desk
+活动商品,"Featured Hanfu"
+货架展示真实可售商品成交价，不虚构折扣。,"Shelf shows sellable product prices only — no fabricated discounts."
+暂无活动商品,"No campaign products yet"
+当前视图没有可展示商品，请稍后再试或从商品列表继续购物。,"There are no products in this collection right now. Try again later or continue from the catalog."
+浏览商品,"Browse products"
+营销活动运营台,"Campaign Operations Desk"
 把优惠规则、活动商品、投放入口、客服恢复和效果复盘放到同一条后台路径里。当前不伪装完整折扣引擎，先让店长知道活动上线前要核对什么、出问题找哪里、收班交接怎么写。,"Put offer rules, campaign products, spend entries, support recovery, and performance review on one admin path. This is not a full discount engine—help store managers know what to check before launch, where to go when issues hit, and how to write shift handoffs."
-前台活动页,Storefront campaign page
-营销规则,Marketing rules
-商品列表,Product list
-订单列表,Order List
-客服工作台,Customer Service Dashboard
-当前营销活动上下文,Current marketing campaign context
+前台活动页,"Storefront campaign page"
+营销规则,"Marketing rules"
+商品列表,"Product list"
+订单列表,"Order List"
+客服工作台,"Customer Service Dashboard"
+当前营销活动上下文,"Current marketing campaign context"
 Website,Website
 店铺,Store
 渠道,Channel
-重置范围,Reset scope
-生效范围,Effective scope
+重置范围,"Reset scope"
+生效范围,"Effective scope"
 站点,Site
-语言 / 货币,Language / Currency
-前台 URL,Storefront URL
-前台只展示与当前 website / 店铺 / 渠道匹配的活动主题；更具体范围会覆盖同 slug 的全局主题。,Storefront visitors only see themes matching the current website / store / channel; more specific scopes override global themes with the same slug.
-当前范围生效的活动主题,Active themes in current scope
-在此范围新建,Create in this scope
+"语言 / 货币","Language / Currency"
+"前台 URL","Storefront URL"
+"前台只展示与当前 website / 店铺 / 渠道匹配的活动主题；更具体范围会覆盖同 slug 的全局主题。","Storefront visitors only see themes matching the current website / store / channel; more specific scopes override global themes with the same slug."
+当前范围生效的活动主题,"Active themes in current scope"
+在此范围新建,"Create in this scope"
 主题,Theme
 范围,Range
 前台,Frontend
 编辑,Edit
-当前范围暂无生效中的活动主题。,No active themes in the current scope.
-在此范围新建活动主题,Create theme in this scope
+当前范围暂无生效中的活动主题。,"No active themes in the current scope."
+在此范围新建活动主题,"Create theme in this scope"
 查看,View
-投放决策闸门,Spend decision gate
-营销投放决策内容,Marketing spend decision content
-营销活动节奏,Campaign cadence
-营销活动交接包,Campaign handoff pack
-Campaign Run 记录,Campaign Run Records
-活动键,Activity key
+投放决策闸门,"Spend decision gate"
+营销投放决策内容,"Marketing spend decision content"
+营销活动节奏,"Campaign cadence"
+营销活动交接包,"Campaign handoff pack"
+"Campaign Run 记录","Campaign Run Records"
+活动键,"Activity key"
 状态,Status
 操作人,Operator
-更新时间,Last updated
+更新时间,"Last updated"
 全局,Global
 网站,Website
-按 website / store / channel 范围投放；文案写入 LocalModel，需在 I18n AI 翻译中补全其他语言。,Target by website / store / channel scope; copy is written to LocalModel and other locales need I18n AI translation.
-新建主题,New theme
-I18n AI 翻译,I18n AI translation
+"按 website / store / channel 范围投放；文案写入 LocalModel，需在 I18n AI 翻译中补全其他语言。","Target by website / store / channel scope; copy is written to LocalModel and other locales need I18n AI translation."
+新建主题,"New theme"
+"I18n AI 翻译","I18n AI translation"
 筛选,Filter
 重置,Reset
 当前后台上下文：website_id=%{1}，store=%{2}，channel=%{3},"Current admin context: website_id=%{1}, store=%{2}, channel=%{3}"
-· 列表展示当前筛选 scope 下前台会生效的活动（含全局与更宽泛范围）。,Lists themes that apply to the selected scope on the storefront (including global and broader scopes).
-暂无活动主题,No campaign themes yet
-手动多选,Manual multi-select
-单商品活动,Single-product campaign
-条件筛选,Rule-based filter
+"· 列表展示当前筛选 scope 下前台会生效的活动（含全局与更宽泛范围）。","Lists themes that apply to the selected scope on the storefront (including global and broader scopes)."
+暂无活动主题,"No campaign themes yet"
+手动多选,"Manual multi-select"
+单商品活动,"Single-product campaign"
+条件筛选,"Rule-based filter"
 多语言,Multilingual
-新建活动主题,New campaign theme
-返回列表,Back to list
-主题键,Theme key
-路径 slug,Path slug
-开始时间,Start time
-按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。,Enter in site timezone %{1} (blank=unlimited); system stores and judges in UTC.
-结束时间,End time
-商品 price band,Product price band
+新建活动主题,"New campaign theme"
+返回列表,"Back to list"
+主题键,"Theme key"
+"路径 slug","Path slug"
+开始时间,"Start time"
+"按站点时区 %{1} 录入（可空=不限制），系统以 UTC 存储与判定。","Enter in site timezone %{1} (blank=unlimited); system stores and judges in UTC."
+结束时间,"End time"
+"商品 price band","Product price band"
 不限,Unlimited.
-活动折扣,Deal discount
-无折扣（仅陈列）,No discount (shelf only)
-百分比折扣,Percentage off
-固定减额,Fixed amount off
-折扣值,Discount value
-百分比填 10 表示九折；固定减额填金额。保存后自动同步到营销折扣规则（标记来自活动）。,"Enter 10 for 10% off, or a fixed amount. Saving syncs a Marketing automatic rule tagged from this theme."
-已同步规则 ID,Synced rule ID
-范围规则：一站一活动，必须选择 Website；店铺/渠道留空表示该站下该层全部；配置渠道时必须同时选择店铺；同 slug 时更具体范围优先。,Scope rule: one Website per campaign; empty store/channel means all under that site; channel requires store; more specific scope wins for the same slug.
-字段说明与前台对应,Field notes map to the storefront
+活动折扣,"Deal discount"
+无折扣（仅陈列）,"No discount (shelf only)"
+百分比折扣,"Percentage off"
+固定减额,"Fixed amount off"
+折扣值,"Discount value"
+"百分比填 10 表示九折；固定减额填金额。保存后自动同步到营销折扣规则（标记来自活动）。","Enter 10 for 10% off, or a fixed amount. Saving syncs a Marketing automatic rule tagged from this theme."
+"已同步规则 ID","Synced rule ID"
+"范围规则：一站一活动，必须选择 Website；店铺/渠道留空表示该站下该层全部；配置渠道时必须同时选择店铺；同 slug 时更具体范围优先。","Scope rule: one Website per campaign; empty store/channel means all under that site; channel requires store; more specific scope wins for the same slug."
+字段说明与前台对应,"Field notes map to the storefront"
 保存后可在前台预览：,"After save, preview on storefront:"
-后台字段,Admin field
-前台展示位置,Storefront placement
-前台 URL：/promotion/{slug}，例如 /promotion/deals,"Storefront URL: /promotion/{slug}, e.g. /promotion/deals"
-显示在二级导航,Show in secondary navigation
-导航标签,Nav tab
-活动页顶部 Tab 文案（/promotion 与各 slug 页）,Top tab copy on campaign pages (/promotion and slug pages)
-页面标题,Page Title
-Hero 区主标题（h1）,Hero main title (h1)
-Hero 说明,Hero description
-Hero 区副文案,Hero supporting copy
-入口卡片标题 / 说明 / 按钮,Entry card title / description / button
-活动首页与其它 slug 页底部的「活动入口」卡片,Campaign entry cards at the bottom of the campaign home and other slug pages
-无手动/条件选品时的兜底货架筛选（under_200 / 300_plus）,Fallback shelf filters when no manual/conditional selection (under_200 / 300_plus)
-活动折扣 / 折扣值,Deal discount / value
-保存时同步 Marketing 自动规则；前台展示活动价，加购报价同源生效,Syncs a Marketing automatic rule on save; storefront deal price and cart quote share the same source
-活动商品 / 选品模式,Campaign products / selection mode
-Hero 下方商品货架；条件模式按规则动态解析,Product shelf under hero; condition mode resolves dynamically by rules
-Website / 店铺 / 渠道,Website / store / channel
-一站一活动：必须选 Website；店铺/渠道可留空表示该站全部；更具体范围优先,One campaign per site: Website required; blank store/channel means all on that site; more specific scope wins
-保存后可翻译多语言,Save the theme first to translate locales
-入口卡片标题,Entry card title
-入口按钮文案,Entry button copy
+后台字段,"Admin field"
+前台展示位置,"Storefront placement"
+"前台 URL：/promotion/{slug}，例如 /promotion/deals","Storefront URL: /promotion/{slug}, e.g. /promotion/deals"
+显示在二级导航,"Show in secondary navigation"
+导航标签,"Nav tab"
+"活动页顶部 Tab 文案（/promotion 与各 slug 页）","Top tab copy on campaign pages (/promotion and slug pages)"
+页面标题,"Page Title"
+"Hero 区主标题（h1）","Hero main title (h1)"
+"Hero 说明","Hero description"
+"Hero 区副文案","Hero supporting copy"
+"入口卡片标题 / 说明 / 按钮","Entry card title / description / button"
+"活动首页与其它 slug 页底部的「活动入口」卡片","Campaign entry cards at the bottom of the campaign home and other slug pages"
+"无手动/条件选品时的兜底货架筛选（under_200 / 300_plus）","Fallback shelf filters when no manual/conditional selection (under_200 / 300_plus)"
+"活动折扣 / 折扣值","Deal discount / value"
+"保存时同步 Marketing 自动规则；前台展示活动价，加购报价同源生效","Syncs a Marketing automatic rule on save; storefront deal price and cart quote share the same source"
+"活动商品 / 选品模式","Campaign products / selection mode"
+"Hero 下方商品货架；条件模式按规则动态解析","Product shelf under hero; condition mode resolves dynamically by rules"
+"Website / 店铺 / 渠道","Website / store / channel"
+"一站一活动：必须选 Website；店铺/渠道可留空表示该站全部；更具体范围优先","One campaign per site: Website required; blank store/channel means all on that site; more specific scope wins"
+保存后可翻译多语言,"Save the theme first to translate locales"
+入口卡片标题,"Entry card title"
+入口按钮文案,"Entry button copy"
 排序,Sort
-入口卡片说明,Entry card description
-手动多选 / 单商品 / 条件筛选；均在当前 Website 范围内解析。,Manual / single / filter picking all resolve within the selected Website.
-选品模式,Product pick mode
-产品类型,Product type
-发布状态,Publish status
+入口卡片说明,"Entry card description"
+"手动多选 / 单商品 / 条件筛选；均在当前 Website 范围内解析。","Manual / single / filter picking all resolve within the selected Website."
+选品模式,"Product pick mode"
+产品类型,"Product type"
+发布状态,"Publish status"
 已发布,Published
 草稿,Draft
-新品（最近 N 天）,New within N days
-7 天内上新,New within 7 days
-14 天内上新,New within 14 days
-30 天内上新,New within 30 days
-前台最多展示,Max items on storefront
-名称包含,Name contains
+"新品（最近 N 天）","New within N days"
+"7 天内上新","New within 7 days"
+"14 天内上新","New within 14 days"
+"30 天内上新","New within 30 days"
+前台最多展示,"Max items on storefront"
+名称包含,"Name contains"
 SKU,SKU
-产品编码,Product code
-预览命中商品（上限同「前台最多展示」；支持异步翻页；仅当前 Website）。,Preview matches (same cap as Max storefront display; async paging; current Website only).
-刷新预览,Refresh preview
-保存主表单后，可点击字段旁的「多语言」或顶部「一键 AI 翻译」补全其它语言（空字段与已译字段会自动跳过）。,"After saving the main form, use field-level Local labels or the top One-click AI translate button. Empty and already translated fields are skipped automatically."
-当前筛选条件下暂无命中商品，请调整规则或检查发布状态。,No products match the current filters. Adjust rules or check publication status.
-活动主题必须指定 Website（一站一活动；0 为默认网站）。,Activity themes require a Website (one site per campaign; 0 is the default website).
-预览请求失败，请刷新页面后重试。,Preview request failed. Refresh the page and try again.
-正在加载命中商品…,Loading matched products…
-共 [[total]] 条命中（前台最多展示 [[limit]] 条）,{{total}} matched (up to {{limit}} shown on storefront)
-第 [[page]] / [[page_count]] 页,Page {{page}} / {{page_count}}
+产品编码,"Product code"
+"预览命中商品（上限同「前台最多展示」；支持异步翻页；仅当前 Website）。","Preview matches (same cap as Max storefront display; async paging; current Website only)."
+刷新预览,"Refresh preview"
+"保存主表单后，可点击字段旁的「多语言」或顶部「一键 AI 翻译」补全其它语言（空字段与已译字段会自动跳过）。","After saving the main form, use field-level Local labels or the top One-click AI translate button. Empty and already translated fields are skipped automatically."
+当前筛选条件下暂无命中商品，请调整规则或检查发布状态。,"No products match the current filters. Adjust rules or check publication status."
+"活动主题必须指定 Website（一站一活动；0 为默认网站）。","Activity themes require a Website (one site per campaign; 0 is the default website)."
+预览请求失败，请刷新页面后重试。,"Preview request failed. Refresh the page and try again."
+正在加载命中商品…,"Loading matched products…"
+"共 [[total]] 条命中（前台最多展示 [[limit]] 条）","{{total}} matched (up to {{limit}} shown on storefront)"
+"第 [[page]] / [[page_count]] 页","Page {{page}} / {{page_count}}"
 上一页,Previous
 下一页,Next
 图片,Image
 ID,ID
 名称,Name
-活动首页,Promotion home
-主题键与路径 slug 不能为空。,Theme key and path slug cannot be empty.
-路径 slug 仅允许小写字母、数字、下划线或连字符。,"Path slug allows only lowercase letters, digits, underscores, or hyphens."
-不支持的主题状态。,Unsupported theme status.
-活动主题必须指定 Website（一站一活动）。,Activity themes require a Website (one site per campaign).
-活动主题 Website 无效。,Activity theme Website is invalid.
-配置渠道范围时必须同时指定店铺 code。,When configuring channel scope you must also set store code.
-以下 SKU 已出现在其他真实折扣活动中。确认后前台将允许顾客选择参考哪个活动（默认显示最强折扣）。,"The following SKUs already appear in other real discount campaigns. After confirm, customers may choose which campaign to reference (strongest discount shown by default)."
-活动结束时间必须晚于开始时间。,Campaign end time must be after start time.
-今日特价,Today's Deals
-今日特价专场,Today's Deals
+活动首页,"Promotion home"
+"主题键与路径 slug 不能为空。","Theme key and path slug cannot be empty."
+"路径 slug 仅允许小写字母、数字、下划线或连字符。","Path slug allows only lowercase letters, digits, underscores, or hyphens."
+不支持的主题状态。,"Unsupported theme status."
+"活动主题必须指定 Website（一站一活动）。","Activity themes require a Website (one site per campaign)."
+"活动主题 Website 无效。","Activity theme Website is invalid."
+"配置渠道范围时必须同时指定店铺 code。","When configuring channel scope you must also set store code."
+"以下 SKU 已出现在其他真实折扣活动中。确认后前台将允许顾客选择参考哪个活动（默认显示最强折扣）。","The following SKUs already appear in other real discount campaigns. After confirm, customers may choose which campaign to reference (strongest discount shown by default)."
+活动结束时间必须晚于开始时间。,"Campaign end time must be after start time."
+今日特价,"Today's Deals"
+今日特价专场,"Today's Deals"
 从价格友好的配饰、发冠与日常常服单品开始，引导买家进入购物车和结账路径。,"Begin with accessible accessories, hairpieces and everyday Hanfu, then move smoothly into cart and checkout."
-轻量搭配入口,Everyday Hanfu edit
-看今日特价,View today's deals
-节令主题,Festival edit
-出游常服,Outing daywear
-婚嫁礼服,Wedding attire
-节令主题陈列,Festival Hanfu edit
-出游常服专场,Outing daywear edit
-婚嫁礼服陈列,Wedding attire edit
+轻量搭配入口,"Everyday Hanfu edit"
+看今日特价,"View today's deals"
+节令主题,"Festival edit"
+出游常服,"Outing daywear"
+婚嫁礼服,"Wedding attire"
+节令主题陈列,"Festival Hanfu edit"
+出游常服专场,"Outing daywear edit"
+婚嫁礼服陈列,"Wedding attire edit"
 围绕传统节令与仪式场景，陈列节庆礼服与主题套装，展示真实成交价，不配置额外优惠。,"A festival edit for seasonal ceremonies and occasion sets, shown at real selling prices with no extra discounts."
 围绕踏青、市集与日常出游，陈列常服套装与轻便搭配，只展示真实可售商品，不虚构折扣。,"Daywear and light layering for outings, markets and everyday trips — real sellable stock, no fabricated discounts."
 围绕婚礼、订婚与敬酒仪式，陈列嫁衣与礼服套装，只展示真实成交价，不虚构折扣。,"Bridal and ceremonial Hanfu for weddings, engagements and toasts — real selling prices only, no fabricated discounts."
-节令主题搭配,Festival styling
-围绕传统节令与仪式场景，陈列节庆礼服与主题套装，不虚构折扣。,Festival and ceremonial Hanfu sets shown at real prices — no fabricated discounts.
-看节令主题,View festival edit
+节令主题搭配,"Festival styling"
+围绕传统节令与仪式场景，陈列节庆礼服与主题套装，不虚构折扣。,"Festival and ceremonial Hanfu sets shown at real prices — no fabricated discounts."
+看节令主题,"View festival edit"
 适合踏青、市集打卡与日常出行的常服套装与轻便搭配。,"Daywear sets and light layering for outings, markets and everyday trips."
-看出游常服,Explore outing daywear
-婚礼嫁衣与仪式礼服主题陈列，便于挑款与搭配。,Bridal and ceremonial attire curated for choosing and styling.
-看婚嫁礼服,View wedding attire
-活动键不能为空。,Campaign key cannot be empty.
-不支持的活动状态。,Unsupported campaign status.
-交接包格式无效。,Invalid handoff pack format.
-默认站点,Default site.
-优惠边界,Discount boundary
-先定规则,Rules first
+看出游常服,"Explore outing daywear"
+婚礼嫁衣与仪式礼服主题陈列，便于挑款与搭配。,"Bridal and ceremonial attire curated for choosing and styling."
+看婚嫁礼服,"View wedding attire"
+活动键不能为空。,"Campaign key cannot be empty."
+不支持的活动状态。,"Unsupported campaign status."
+交接包格式无效。,"Invalid handoff pack format."
+默认站点,"Default site."
+优惠边界,"Discount boundary"
+先定规则,"Rules first"
 活动必须先说明适用商品、资格门槛、叠加限制、结束时间和异常处理。,"Campaigns must first state eligible products, qualification thresholds, stacking limits, end time, and exception handling."
-先核对货品,Verify goods first
+先核对货品,"Verify goods first"
 主图、价格、库存、配送和售后承诺要先稳定，再投放活动入口。,"Stabilize main image, price, stock, shipping, and after-sales promises before launching campaign entries."
-投放入口,Campaign entry
-先统一落点,Unify landings first
+投放入口,"Campaign entry"
+先统一落点,"Unify landings first"
 活动入口要能回到商品、购物车、结账、查单和客服路径。,"Campaign entries must return to product, cart, checkout, order tracking, and support paths."
-效果复盘,Performance review
-先看信号,Signals first
+效果复盘,"Performance review"
+先看信号,"Signals first"
 把下单、支付、售后、客服问题和商品承诺一起复盘，决定继续、降温或修正。,"Review orders, payments, after-sales, support issues, and product promises together to continue, cool down, or fix."
-规则与限制,Rules and limits
-运营 / 财务,Ops / finance
-不能误导买家,Do not mislead buyers
+规则与限制,"Rules and limits"
+"运营 / 财务","Ops / finance"
+不能误导买家,"Do not mislead buyers"
 优惠是否说清了可用范围、门槛、限制、时间和不能使用时的下一步？,"Does the offer clearly state scope, thresholds, limits, timing, and next steps when it cannot be used?"
 先把折扣、包邮、赠品或会员权益写成可解释的活动规则。当前页面只做运营台，不写入折扣结算引擎。,"First write discounts, free shipping, gifts, or membership benefits as explainable campaign rules. This page is an ops desk only—it does not write the discount settlement engine."
-打开营销规则,Open marketing rules
+打开营销规则,"Open marketing rules"
 优惠券,Coupon
 适用商品、客户资格和时间窗口有明确负责人,"Eligible products, customer qualification, and time windows have clear owners"
 与现有价格、运费、税费和支付说明不冲突,"Does not conflict with existing price, shipping, tax, and payment notes"
 优惠失效时买家能回到购物车、客服或查单入口,"When offers expire, buyers can return to cart, support, or order-tracking entry"
-商品与库存,Products and inventory
-商品运营 / 仓库,Product ops / warehouse
-先保可履约,Protect fulfillability first
+商品与库存,"Products and inventory"
+"商品运营 / 仓库","Product ops / warehouse"
+先保可履约,"Protect fulfillability first"
 活动商品是否有可购买价格、可售库存、清晰主图和可履约的配送承诺？,"Do campaign products have buyable prices, sellable stock, clear main images, and deliverable shipping promises?"
 促销流量会放大商品信息问题。投放前先确认商品页、购物车、结账和履约承诺能承接新增订单。,"Promotion traffic amplifies product-info issues. Confirm product page, cart, checkout, and fulfillment promises can take new orders before spending."
-维护商品,Maintain product
-前台商品,Storefront product
+维护商品,"Maintain product"
+前台商品,"Storefront product"
 活动商品没有缺图、缺价或库存承诺不清的问题,"Campaign products have no missing images, missing prices, or unclear stock promises"
-高峰订单进入支付和履约后有人接住,Someone covers peak orders after they enter payment and fulfillment
-售后规则与活动文案一致,After-sales rules match campaign copy
-渠道与落点,Channels and landings
-市场 / 站点运营,Marketing / site ops
-先跑通主路径,Run the main path first
+高峰订单进入支付和履约后有人接住,"Someone covers peak orders after they enter payment and fulfillment"
+售后规则与活动文案一致,"After-sales rules match campaign copy"
+渠道与落点,"Channels and landings"
+"市场 / 站点运营","Marketing / site ops"
+先跑通主路径,"Run the main path first"
 买家从活动入口进入后，是否能顺畅完成浏览、加购、结账、查单和售后？,"After entering from a campaign entry, can buyers smoothly browse, add to cart, checkout, track orders, and use after-sales?"
 活动入口要统一到当前站点配置，不要让渠道文案、站点链接和后台操作分裂成几套说法。,"Unify campaign entries with the current site config—do not split channel copy, site links, and admin actions into separate stories."
-前台结账,Storefront checkout
+前台结账,"Storefront checkout"
 投放链接、站点语言、货币和结账入口一致,"Campaign links, site language, currency, and checkout entry are consistent"
-移动端路径不依赖后台说明才能完成,Mobile path can be completed without relying on admin instructions
-活动入口能回到客服和售后交接,Campaign entries can return to support and after-sales handoff
-客服与恢复,Support and recovery
-客服 / 店长,Support / store manager
-先准备解释,Prepare explanations first
+移动端路径不依赖后台说明才能完成,"Mobile path can be completed without relying on admin instructions"
+活动入口能回到客服和售后交接,"Campaign entries can return to support and after-sales handoff"
+客服与恢复,"Support and recovery"
+"客服 / 店长","Support / store manager"
+先准备解释,"Prepare explanations first"
 客服是否知道优惠失效、支付失败、订单异常和售后争议分别怎么解释？,"Does support know how to explain offer expiry, payment failure, order exceptions, and after-sales disputes?"
 活动开始前先准备可复制的话术与后台入口，降低误解和重复沟通。,"Before launch, prepare copyable scripts and admin entry points to reduce misunderstanding and repeated communication."
 优惠不可用时有可操作解释，而不是只让买家重试,"When offers are unavailable, give actionable explanations—not only retry"
 客服能快速打开订单、售后和买家查单入口,"Support can quickly open order, after-sales, and buyer tracking entry points"
-活动问题会沉淀到报表和下一轮商品说明,Campaign issues feed into reports and next-round product notes
-继续投放,Continue campaign
-绿灯,Green light
-店长 / 市场,Store manager / marketing
+活动问题会沉淀到报表和下一轮商品说明,"Campaign issues feed into reports and next-round product notes"
+继续投放,"Continue campaign"
+绿灯,"Green light"
+"店长 / 市场","Store manager / marketing"
 优惠边界、活动商品、投放入口、结账路径和客服恢复都能解释清楚时，才继续放量。,"Continue rollout only when offer boundaries, campaign products, spend entries, checkout path, and support recovery are clearly explainable."
 能从活动入口完成商品浏览、加购、结账、查单，并能说明优惠限制。,"From campaign entry, complete browse, add-to-cart, checkout, and order tracking, and explain offer limits."
-跑前台活动页,Open storefront campaign page
-暂停放量,Pause rollout
-红灯,Red light
-店长,Store manager
+跑前台活动页,"Open storefront campaign page"
+暂停放量,"Pause rollout"
+红灯,"Red light"
+店长,"Store manager"
 只要站点入口、结账、库存、支付或客服承接有一个主路径阻断，就先暂停放量。,"If any main path—site entry, checkout, stock, payment, or support take-up—is blocked, pause rollout first."
 后台能指出阻断发生在站点、商品、结账、支付、库存或客服哪一段。,"Admin can pinpoint whether the blocker is on site, product, checkout, payment, inventory, or support."
-结账会话,Checkout Session
-修正后再开,Fix then reopen
-黄灯,Yellow light
-运营 / 客服,Ops / support
+结账会话,"Checkout Session"
+修正后再开,"Fix then reopen"
+黄灯,"Yellow light"
+"运营 / 客服","Ops / support"
 如果问题集中在文案、优惠解释、客服话术或商品说明，先修正再恢复投放。,"If issues cluster in copy, offer explanation, support scripts, or product notes, fix first then resume spend."
 修正项能回到商品、营销规则、客服台或订单队列，并有负责人。,"Fix items return to products, marketing rules, support desk, or order queue with an owner."
-复盘再决策,Review then decide
+复盘再决策,"Review then decide"
 复盘,Review
-运营负责人,Ops owner
+运营负责人,"Ops owner"
 投放中把订单、支付、售后、客服问题和活动来源放在同一份复盘里决定继续还是降温。,"During spend, put orders, payments, after-sales, support issues, and campaign source in one review to decide continue vs cool-down."
 复盘包包含来源入口、订单状态、支付问题、售后争议和下一班处理人。,"The review pack includes source entry, order status, payment issues, after-sales disputes, and the next-shift owner."
-营销活动,Marketing campaign
-上线前,Before go-live
+营销活动,"Marketing campaign"
+上线前,"Before go-live"
 把规则、商品和结账路径先跑通,"Run through rules, products, and checkout path first"
 优惠承诺先经过商品、购物车、结账、支付、查单和售后路径复核，再放大流量。,"Re-check offer promises across product, cart, checkout, payment, tracking, and after-sales before scaling traffic."
 投放中,Running
-把异常交给订单和客服承接,Hand exceptions to order and support handling
+把异常交给订单和客服承接,"Hand exceptions to order and support handling"
 价格争议、支付失败、库存变化和优惠不可用，要能回到订单、客服或售后路径处理。,"Price disputes, payment failures, stock changes, and unavailable offers must route back to order, support, or after-sales paths."
-收班前,Before shift end
+收班前,"Before shift end"
 用订单信号决定继续、降温或修正,"Use order signals to continue, cool down, or fix"
 把订单、支付、售后和客服反馈放到同一个复盘包里，下一班可以接住未完成事项。,"Put orders, payments, after-sales, and support feedback in one review pack so the next shift can pick up unfinished items."
-Weline 营销投放决策,Weline marketing spend decisions
-范围：%{1},Scope: %{1}
-站点：%{1},Site: %{1}
-前台：%{1},Storefront: %{1}
-顺序：继续投放 -> 暂停放量 -> 修正后再开 -> 复盘再决策。,Order: continue spend -> pause rollout -> fix then reopen -> review then decide.
-当前范围生效主题：%{1},Active themes in scope: %{1}
-%{1}：%{2}；证据 %{3}；负责人 %{4}。,%{1}: %{2}; evidence %{3}; owner %{4}.
-Weline 营销活动交接包,Weline marketing campaign handoff pack
-语言货币：%{1},Language/currency: %{1}
+"Weline 营销投放决策","Weline marketing spend decisions"
+范围：%{1},"Scope: %{1}"
+站点：%{1},"Site: %{1}"
+前台：%{1},"Storefront: %{1}"
+"顺序：继续投放 -> 暂停放量 -> 修正后再开 -> 复盘再决策。","Order: continue spend -> pause rollout -> fix then reopen -> review then decide."
+当前范围生效主题：%{1},"Active themes in scope: %{1}"
+"%{1}：%{2}；证据 %{3}；负责人 %{4}。","%{1}: %{2}; evidence %{3}; owner %{4}."
+"Weline 营销活动交接包","Weline marketing campaign handoff pack"
+语言货币：%{1},"Language/currency: %{1}"
 优惠边界：先确认适用商品、客户资格、门槛、叠加限制和结束时间。,"Offer boundary: confirm eligible products, customer qualification, thresholds, stacking limits, and end time first."
 商品承接：活动商品必须有清晰主图、价格、库存、配送和售后说明。,"Product readiness: campaign products must have clear main image, price, stock, shipping, and after-sales notes."
 渠道落点：投放链接要回到商品、购物车、结账、查单和客服路径。,"Channel landing: campaign links must return to product, cart, checkout, order tracking, and support paths."
 客服恢复：优惠不可用、支付失败、库存变化和售后争议要有可复制解释。,"Support recovery: unavailable offers, payment failures, stock changes, and after-sales disputes need copyable explanations."
 复盘口径：订单、支付、售后、客服问题和商品承诺一起复盘。,"Review scope: orders, payments, after-sales, support issues, and product promises together."
-Promotion 清理前台/FPC 缓存失败：%{1},Promotion failed to clear storefront/FPC cache: %{1}
-Product 模块未安装，无法选品。,Product module is not installed; cannot select products.
-当前 Website 商品分片未就绪，无法预览：%{1},Product shard is not ready for the selected website; preview unavailable: %{1}
-单商品活动只能绑定 1 个商品。,Single-product campaigns can bind only one product.
-商品 #%{1} 不在网站 #%{2} 的当前活动范围内，或尚未发布。,"Product #%{1} is outside website #%{2} current campaign scope, or not published yet."
-配置渠道范围时必须同时选择店铺。,Store is required when a channel scope is set.
-店铺 code「%{1}」在当前 Website 下不存在。,"Store code \%{1}\ does not exist for the selected website."""""""""""""""
-默认网站,Default website
-全部店铺,All stores
-全部渠道,All channels
-活动主题 ResourceChange 缺少有效 id,Campaign theme ResourceChange missing valid id
-今日精选,Today's picks
-今日搭配精选,Today's Hanfu edit
-看今日精选,View today's picks
-查看商品,View product
-已接入 Weline 商品、购物车和结账链路。,"Connected to Weline product, cart, and checkout flows."
+"Promotion 清理前台/FPC 缓存失败：%{1}","Promotion failed to clear storefront/FPC cache: %{1}"
+"Product 模块未安装，无法选品。","Product module is not installed; cannot select products."
+"当前 Website 商品分片未就绪，无法预览：%{1}","Product shard is not ready for the selected website; preview unavailable: %{1}"
+"单商品活动只能绑定 1 个商品。","Single-product campaigns can bind only one product."
+"商品 #%{1} 不在网站 #%{2} 的当前活动范围内，或尚未发布。","Product #%{1} is outside website #%{2} current campaign scope, or not published yet."
+配置渠道范围时必须同时选择店铺。,"Store is required when a channel scope is set."
+"店铺 code「%{1}」在当前 Website 下不存在。","Store code \%{1}\ does not exist for the selected website."""""""""""""""
+默认网站,"Default website"
+全部店铺,"All stores"
+全部渠道,"All channels"
+"活动主题 ResourceChange 缺少有效 id","Campaign theme ResourceChange missing valid id"
+今日精选,"Today's picks"
+今日搭配精选,"Today's Hanfu edit"
+看今日精选,"View today's picks"
+查看商品,"View product"
+"已接入 Weline 商品、购物车和结账链路。","Connected to Weline product, cart, and checkout flows."
 精选,Featured
 活动,Campaign
-示例商品 A,Sample product A
-Product 模块未就绪时展示占位商品，便于验收活动页布局。,"Show placeholder products when the Product module is not ready, to accept campaign page layout."
-示例商品 B,Sample product B
+"示例商品 A","Sample product A"
+"Product 模块未就绪时展示占位商品，便于验收活动页布局。","Show placeholder products when the Product module is not ready, to accept campaign page layout."
+"示例商品 B","Sample product B"
 "接入 w_query(product, list) 后会自动替换为真实可售商品。","Products from w_query(product, list) replace placeholders once Product is ready."
-"""Activity theme saved""",Activity theme saved
-多语言翻译,Multilingual Translation
-预览命中商品（上限同「前台最多展示」；仅当前 Website）。,Preview matches (same cap as Max storefront display; current Website only).
-共 %{1} 条命中（前台最多展示 %{2} 条）,%{1} matched (up to %{2} shown on storefront)
-共 {{total}} 条命中（前台最多展示 {{limit}} 条）,{{total}} matched (up to {{limit}} shown on storefront)
-第 {{page}} / {{page_count}} 页,Page {{page}} / {{page_count}}
-范围规则：website_id=0 表示全站；store/channel 留空表示该层全部；配置渠道时必须同时选择店铺；更具体范围会覆盖同 slug 的全局主题。全站活动选手动商品时，可跨网站搜索，所选商品会绑定到对应网站。,"Scope rules: website_id=0 means sitewide; blank store/channel means all at that layer; when configuring channel, store is required; more specific scopes override same-slug global themes. For sitewide campaigns with manual products, cross-website search is allowed; selected products bind to their websites."
-决定哪些访客能看到本主题；更具体范围优先,Decide which visitors can see this theme; more specific scopes win
-支持手动多选、单商品活动或条件筛选；条件模式会在前台按 website / 店铺 / 渠道范围动态解析商品。,"Pick products manually, as a single SKU, or by rules; filter mode resolves live by website / store / channel scope."
-手动多选 / 单商品 / 条件筛选；条件模式按 website 范围动态解析。,Manual / single / filter; filter mode resolves by website scope.
-预览命中商品（上限同「前台最多展示」；全站活动按商品所属站分片）。,Preview matches (same cap as Max storefront display; site-wide themes shard by product website).
-条件筛选会在保存后写入规则 JSON，前台访问时按当前 website / 店铺 / 渠道实时解析商品。,Filter rules are saved as JSON and resolved on each storefront visit for the current website / store / channel.
-下方表格按当前筛选条件与活动范围预览命中商品（与「前台最多展示」上限一致）。,The table below previews matched products for the current rules and scope (same cap as Max storefront display).
-活动主题必须指定 Website（一站一活动，不能为空或 0）。,Activity themes require a Website (one site per campaign; empty/0 is not allowed).
-条件选品请先选择 Website（不能为全站 0）。,Pick a Website before saving filter mode (0 = all websites is not allowed).
-选品前请先选择 Website（website_id 不能为 0）。,Select a Website before picking products (website_id cannot be 0).
-全部 Website,All websites
-条件预览请先选择 Website（不能为全站 0）。,Select a Website before previewing filter matches (0 = all websites is not allowed).
-范围规则：website_id=0 表示全站；store/channel 留空表示该层全部；配置渠道时必须同时选择店铺；更具体范围会覆盖同 slug 的全局主题。,Scope rules: website_id=0 means all sites; empty store/channel means all at that layer; setting a channel requires selecting a store; more specific scopes override global themes with the same slug.
-商品 #%{1} 不在当前活动 website / 店铺范围内，或尚未发布。,Product #%{1} is outside this campaign website / store scope or is not published.
-导航文案,Navigation label
-首屏导语,Welcome message
-入口标题,Entrance title
-入口副标题,Entrance subtitle
-通过 product_admin 搜索已发布商品；请先选择 Website，再搜索名称或 SKU。,"Search published products via product_admin; select Website first, then search name or SKU."
-搜索商品,Search products
-名称或 SKU,Name or SKU
+"""Activity theme saved""","Activity theme saved"
+多语言翻译,"Multilingual Translation"
+"预览命中商品（上限同「前台最多展示」；仅当前 Website）。","Preview matches (same cap as Max storefront display; current Website only)."
+"共 %{1} 条命中（前台最多展示 %{2} 条）","%{1} matched (up to %{2} shown on storefront)"
+"共 {{total}} 条命中（前台最多展示 {{limit}} 条）","{{total}} matched (up to {{limit}} shown on storefront)"
+"第 {{page}} / {{page_count}} 页","Page {{page}} / {{page_count}}"
+"范围规则：website_id=0 表示全站；store/channel 留空表示该层全部；配置渠道时必须同时选择店铺；更具体范围会覆盖同 slug 的全局主题。全站活动选手动商品时，可跨网站搜索，所选商品会绑定到对应网站。","Scope rules: website_id=0 means sitewide; blank store/channel means all at that layer; when configuring channel, store is required; more specific scopes override same-slug global themes. For sitewide campaigns with manual products, cross-website search is allowed; selected products bind to their websites."
+决定哪些访客能看到本主题；更具体范围优先,"Decide which visitors can see this theme; more specific scopes win"
+"支持手动多选、单商品活动或条件筛选；条件模式会在前台按 website / 店铺 / 渠道范围动态解析商品。","Pick products manually, as a single SKU, or by rules; filter mode resolves live by website / store / channel scope."
+"手动多选 / 单商品 / 条件筛选；条件模式按 website 范围动态解析。","Manual / single / filter; filter mode resolves by website scope."
+预览命中商品（上限同「前台最多展示」；全站活动按商品所属站分片）。,"Preview matches (same cap as Max storefront display; site-wide themes shard by product website)."
+"条件筛选会在保存后写入规则 JSON，前台访问时按当前 website / 店铺 / 渠道实时解析商品。","Filter rules are saved as JSON and resolved on each storefront visit for the current website / store / channel."
+下方表格按当前筛选条件与活动范围预览命中商品（与「前台最多展示」上限一致）。,"The table below previews matched products for the current rules and scope (same cap as Max storefront display)."
+"活动主题必须指定 Website（一站一活动，不能为空或 0）。","Activity themes require a Website (one site per campaign; empty/0 is not allowed)."
+"条件选品请先选择 Website（不能为全站 0）。","Pick a Website before saving filter mode (0 = all websites is not allowed)."
+"选品前请先选择 Website（website_id 不能为 0）。","Select a Website before picking products (website_id cannot be 0)."
+"全部 Website","All websites"
+"条件预览请先选择 Website（不能为全站 0）。","Select a Website before previewing filter matches (0 = all websites is not allowed)."
+"范围规则：website_id=0 表示全站；store/channel 留空表示该层全部；配置渠道时必须同时选择店铺；更具体范围会覆盖同 slug 的全局主题。","Scope rules: website_id=0 means all sites; empty store/channel means all at that layer; setting a channel requires selecting a store; more specific scopes override global themes with the same slug."
+"商品 #%{1} 不在当前活动 website / 店铺范围内，或尚未发布。","Product #%{1} is outside this campaign website / store scope or is not published."
+导航文案,"Navigation label"
+首屏导语,"Welcome message"
+入口标题,"Entrance title"
+入口副标题,"Entrance subtitle"
+"通过 product_admin 搜索已发布商品；请先选择 Website，再搜索名称或 SKU。","Search published products via product_admin; select Website first, then search name or SKU."
+搜索商品,"Search products"
+"名称或 SKU","Name or SKU"
 搜索,Search
-请先保存活动主题后再翻译,Save the activity theme before translating
-没有可翻译的字段，请先填写文案,No translatable fields. Fill in copy first.
-Weline.Api bin-query 不可用,Weline.Api bin-query is unavailable
-AI 批量翻译失败,Bulk AI translation failed
-AI 批量翻译完成,Bulk AI translation completed
-一键 AI 翻译,One-click AI translate
-活动主题已保存。请在 I18n「AI 翻译」中为其他语言补全 LocalModel 文案。,Theme saved. Use the Multilingual links beside each field to fill other locales via LocalModel.
-保存后请到 I18n → AI 翻译，为 en_US 等目标语言补全 LocalModel 字段。,"After saving, use Multilingual beside each field to fill other locales via LocalModel + AI translation."
-保存主表单后，可点击字段旁的「多语言」使用 LocalModel + AI 翻译补全其它语言。,"After saving the main form, click Multilingual beside each field to translate other locales via LocalModel + AI."
+请先保存活动主题后再翻译,"Save the activity theme before translating"
+没有可翻译的字段，请先填写文案,"No translatable fields. Fill in copy first."
+"Weline.Api bin-query 不可用","Weline.Api bin-query is unavailable"
+"AI 批量翻译失败","Bulk AI translation failed"
+"AI 批量翻译完成","Bulk AI translation completed"
+"一键 AI 翻译","One-click AI translate"
+"活动主题已保存。请在 I18n「AI 翻译」中为其他语言补全 LocalModel 文案。","Theme saved. Use the Multilingual links beside each field to fill other locales via LocalModel."
+"保存后请到 I18n → AI 翻译，为 en_US 等目标语言补全 LocalModel 字段。","After saving, use Multilingual beside each field to fill other locales via LocalModel + AI translation."
+"保存主表单后，可点击字段旁的「多语言」使用 LocalModel + AI 翻译补全其它语言。","After saving the main form, click Multilingual beside each field to translate other locales via LocalModel + AI."
 移除,Remove
 添加,Add
-当前范围暂无可选商品，请检查 website / 店铺范围或商品发布状态。,No selectable products in current scope; check website/store scope or publish status.
-已选活动商品,Selected campaign products
-按活动范围搜索商品,Search products by campaign scope
-网站 ID（0=全部）,Website ID (0 = all websites)
-店铺 code（空=全部）,Store code (empty = all)
-渠道 code（空=全部）,Channel code (empty = all)
-范围规则：website_id=0 表示全站；store/channel 留空表示该层全部；配置渠道时必须同时填写店铺；更具体范围会覆盖同 slug 的全局主题。,Scope rules: website_id=0 means all sites; empty store/channel means all at that layer; setting a channel requires a store; more specific scopes override global themes with the same slug.
-仅展示当前活动 website / 店铺范围内已发布商品；留空则前台仍按 price band 自动选品。,"Only show published products in the current campaign website/store scope; if empty, storefront still auto-selects by price band."
-请先为活动指定 website_id（0 表示全站时需在后台上下文中选择网站）。,"Set website_id for the campaign first (when 0 means all sites, pick a website in admin context)."
-商品后台读取服务不可用。,Product admin read service unavailable.
-选择 Website,Select website
-选择店铺,Select store
-选择渠道,Select channel
-现货商品精选,In-stock product picks
+"当前范围暂无可选商品，请检查 website / 店铺范围或商品发布状态。","No selectable products in current scope; check website/store scope or publish status."
+已选活动商品,"Selected campaign products"
+按活动范围搜索商品,"Search products by campaign scope"
+"网站 ID（0=全部）","Website ID (0 = all websites)"
+"店铺 code（空=全部）","Store code (empty = all)"
+"渠道 code（空=全部）","Channel code (empty = all)"
+"范围规则：website_id=0 表示全站；store/channel 留空表示该层全部；配置渠道时必须同时填写店铺；更具体范围会覆盖同 slug 的全局主题。","Scope rules: website_id=0 means all sites; empty store/channel means all at that layer; setting a channel requires a store; more specific scopes override global themes with the same slug."
+"仅展示当前活动 website / 店铺范围内已发布商品；留空则前台仍按 price band 自动选品。","Only show published products in the current campaign website/store scope; if empty, storefront still auto-selects by price band."
+"请先为活动指定 website_id（0 表示全站时需在后台上下文中选择网站）。","Set website_id for the campaign first (when 0 means all sites, pick a website in admin context)."
+商品后台读取服务不可用。,"Product admin read service unavailable."
+"选择 Website","Select website"
+选择店铺,"Select store"
+选择渠道,"Select channel"
+现货商品精选,"In-stock product picks"
 优先展示有库存、可结账、可履约的商品，适合活动入口直接承接。,"Prefer in-stock, checkout-ready, fulfillable products suitable for direct campaign take-up."
-当前活动视图下可用于前台承接的商品数量。,Number of products available for storefront take-up under the current campaign view.
-列表按所选范围过滤；前台访客只会看到与其 website / 店铺 / 渠道匹配的活动。,List is filtered by the selected scope; storefront visitors only see matching campaigns.
-活动主题自动同步的折扣规则，请勿手动改归属。,Auto-synced from an activity theme; do not manually reassign ownership.
+当前活动视图下可用于前台承接的商品数量。,"Number of products available for storefront take-up under the current campaign view."
+"列表按所选范围过滤；前台访客只会看到与其 website / 店铺 / 渠道匹配的活动。","List is filtered by the selected scope; storefront visitors only see matching campaigns."
+活动主题自动同步的折扣规则，请勿手动改归属。,"Auto-synced from an activity theme; do not manually reassign ownership."
 促销,Promotion

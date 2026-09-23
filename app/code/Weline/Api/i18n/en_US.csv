@@ -1,233 +1,239 @@
-公开 API 请求不允许携带 Cookie,Public API requests must not carry cookies
-Missing authentication token.,Missing authentication token.
-Token is invalid or expired.,Token is invalid or expired.
-User has been disabled.,User has been disabled.
-IP is not allowed.,IP is not allowed.
-User agent does not match.,User agent does not match.
-This token cannot access backend APIs.,This token cannot access backend APIs.
-This token cannot access frontend customer APIs.,This token cannot access frontend customer APIs.
-用户名和密码不能为空,Username and password cannot be empty
-用户不存在,User does not exist
-用户已被禁用,User has been disabled
-密码错误,Password incorrect
-创建token失败,Failed to create token
-登录成功,Login successful
-登录失败：%{1},Login failed: %{1}
-API Key和API Secret不能为空,API Key and API Secret cannot be empty
-API Key或API Secret无效,API Key or API Secret is invalid
-令牌交换成功,Token exchange successful
-令牌交换失败：%{1},Token exchange failed: %{1}
-访问令牌和通行令牌不能为空,Access token and pass token cannot be empty
-令牌无效或已过期,Token is invalid or expired
-Token刷新成功,Token refreshed successfully
-刷新token失败：%{1},Failed to refresh token: %{1}
-Token不能为空,Token cannot be empty
-撤销token失败,Failed to revoke token
-Token已撤销,Token has been revoked
-撤销token失败：%{1},Failed to revoke token: %{1}
-Token无效或已过期,Token is invalid or expired
-获取用户信息成功,Get user information successful
-获取用户信息失败：%{1},Failed to get user information: %{1}
-Token无效,Token is invalid
-获取token信息成功,Get token information successful
-获取token信息失败：%{1},Failed to get token information: %{1}
-用户ID不能为空,User ID cannot be empty
-用户名不能为空,Username cannot be empty
-用户名长度必须在3-50字符之间,Username must be between 3-50 characters
-邮箱不能为空,Email cannot be empty
-邮箱格式不正确,Invalid email format
-密码不能为空,Password cannot be empty
-密码长度不能少于6个字符,Password length cannot be less than 6 characters
-用户名已存在,Username already exists
-邮箱已存在,Email already exists
-添加成功！,Add Success!
-API Key: %{1},API Key: %{1}
-API Secret: %{1}（请妥善保管，仅显示一次）,API Secret: %{1} (please keep it properly and only show it once)
-添加失败：%{1},Add Failed: %{1}
-修改成功！,Modification successful!
-修改失败：%{1},Modification Failed: %{1}
-删除成功！,Deletion successful!
-删除失败：%{1},Deletion failed: %{1}
-启用成功！,Enabled successfully!
-启用失败：%{1},Enable failed: %{1}
-禁用成功！,Disable successful!
-禁用失败：%{1},Disable failed: %{1}
-重新生成成功！,Regeneration succeeded!
-重新生成失败：%{1},Regeneration failed: %{1}
-该用户尚未分配角色，请先分配角色,This user has not been assigned a role yet. Please assign a role first
-权限分配成功！,Permission assignment succeeded!
-权限分配失败：%{1},Permission assignment failed: %{1}
-API用户管理,API user management
+﻿"公开 API 请求不允许携带 Cookie","Public API requests must not carry cookies"
+"Missing authentication token.","Missing authentication token."
+"Token is invalid or expired.","Token is invalid or expired."
+"User has been disabled.","User has been disabled."
+"IP is not allowed.","IP is not allowed."
+"User agent does not match.","User agent does not match."
+"This token cannot access backend APIs.","This token cannot access backend APIs."
+"This token cannot access frontend customer APIs.","This token cannot access frontend customer APIs."
+用户名和密码不能为空,"Username and password cannot be empty"
+用户不存在,"User does not exist"
+用户已被禁用,"User has been disabled"
+密码错误,"Password incorrect"
+创建token失败,"Failed to create token"
+登录成功,"Login successful"
+登录失败：%{1},"Login failed: %{1}"
+"API Key和API Secret不能为空","API Key and API Secret cannot be empty"
+"API Key或API Secret无效","API Key or API Secret is invalid"
+令牌交换成功,"Token exchange successful"
+令牌交换失败：%{1},"Token exchange failed: %{1}"
+访问令牌和通行令牌不能为空,"Access token and pass token cannot be empty"
+令牌无效或已过期,"Token is invalid or expired"
+Token刷新成功,"Token refreshed successfully"
+刷新token失败：%{1},"Failed to refresh token: %{1}"
+Token不能为空,"Token cannot be empty"
+撤销token失败,"Failed to revoke token"
+Token已撤销,"Token has been revoked"
+撤销token失败：%{1},"Failed to revoke token: %{1}"
+Token无效或已过期,"Token is invalid or expired"
+获取用户信息成功,"Get user information successful"
+获取用户信息失败：%{1},"Failed to get user information: %{1}"
+Token无效,"Token is invalid"
+获取token信息成功,"Get token information successful"
+获取token信息失败：%{1},"Failed to get token information: %{1}"
+用户ID不能为空,"User ID cannot be empty"
+用户名不能为空,"Username cannot be empty"
+用户名长度必须在3-50字符之间,"Username must be between 3-50 characters"
+邮箱不能为空,"Email cannot be empty"
+邮箱格式不正确,"Invalid email format"
+密码不能为空,"Password cannot be empty"
+密码长度不能少于6个字符,"Password length cannot be less than 6 characters"
+用户名已存在,"Username already exists"
+邮箱已存在,"Email already exists"
+添加成功！,"Add Success!"
+"API Key: %{1}","API Key: %{1}"
+"API Secret: %{1}（请妥善保管，仅显示一次）","API Secret: %{1} (please keep it properly and only show it once)"
+添加失败：%{1},"Add Failed: %{1}"
+修改成功！,"Modification successful!"
+修改失败：%{1},"Modification Failed: %{1}"
+删除成功！,"Deletion successful!"
+删除失败：%{1},"Deletion failed: %{1}"
+启用成功！,"Enabled successfully!"
+启用失败：%{1},"Enable failed: %{1}"
+禁用成功！,"Disable successful!"
+禁用失败：%{1},"Disable failed: %{1}"
+重新生成成功！,"Regeneration succeeded!"
+重新生成失败：%{1},"Regeneration failed: %{1}"
+该用户尚未分配角色，请先分配角色,"This user has not been assigned a role yet. Please assign a role first"
+权限分配成功！,"Permission assignment succeeded!"
+权限分配失败：%{1},"Permission assignment failed: %{1}"
+API用户管理,"API user management"
 users,users
-管理API用户,Manage API Users
-API用户列表,API user list
+管理API用户,"Manage API Users"
+API用户列表,"API user list"
 list,list
-添加API用户,Add API user
+添加API用户,"Add API user"
 plus,plus
-编辑API用户,Edit API user
+编辑API用户,"Edit API user"
 edit,edit
-添加API用户请求,Add API user request
+添加API用户请求,"Add API user request"
 save,save
-编辑API用户请求,Edit API user request
-删除API用户,Delete API user
+编辑API用户请求,"Edit API user request"
+删除API用户,"Delete API user"
 trash,trash
-启用API用户,Enable API users
+启用API用户,"Enable API users"
 check,check
-禁用API用户,Disable API user
+禁用API用户,"Disable API user"
 circle,circle
-重新生成API凭证,Regenerate API credentials
+重新生成API凭证,"Regenerate API credentials"
 refresh,refresh
-API用户权限分配,API user permission assignment
+API用户权限分配,"API user permission assignment"
 key,key
-API用户权限分配请求,API User Permission Assignment Request
-仅支持POST请求,Only POST requests are supported
-配置保存成功！,Configuration saved successfully!
-没有需要保存的配置,No configuration to save
-保存失败：%{1},Save failed: %{1}
-查看API接入管理失败：{1},View API access management failure: {1}
-API接入管理,API access management
-查看API接入管理,View API access management
-API模块配置,API module configuration
-配置API令牌刷新周期等参数,Configure API token refresh cycle and other parameters
-令牌刷新配置,Token refresh configuration
-令牌刷新周期（秒）,Token refresh interval (seconds)
-前端自动刷新令牌的时间间隔,Frontend Auto-Refresh Token Interval
-建议值：300秒（5分钟）。范围：60-3600秒。注意：应小于令牌过期时间,Recommended value: 300 seconds (5 minutes). Range: 60-3600 seconds. Note: Should be less than the token expiration time
-过期前刷新时间（秒）,Refresh time before expiration (seconds)
-在令牌过期前多少秒开始刷新（必须小于令牌过期时间）,Number of seconds before token expiration to start refreshing (must be less than the token expiration time)
-建议值：60-120秒（1-2分钟）。范围：30-600秒。确保在令牌过期前刷新，避免过期后请求失败,Recommended value: 60-120 seconds (1-2 minutes). Range: 30-600 seconds. Ensure refresh before token expiration to avoid request failure after expiration
-默认访问令牌过期时间（秒）,Default Access Token Expiration Time (Seconds)
-新生成的访问令牌默认过期时间,Default Expiration Time for Newly Generated Access Tokens
-建议值：3600秒（1小时）。范围：300-86400秒,Recommended value: 3600 seconds (1 hour). Range: 300-86400 seconds
-默认刷新令牌过期时间（秒）,Default Refresh Token Expiration Time (seconds)
-新生成的刷新令牌默认过期时间,Default Expiration Time for Newly Generated Refresh Tokens
-建议值：2592000秒（30天）。范围：86400-31536000秒,Recommended value: 2592000 seconds (30 days). Range: 86400-31536000 seconds
-保存配置,Save Configuration
+API用户权限分配请求,"API User Permission Assignment Request"
+仅支持POST请求,"Only POST requests are supported"
+配置保存成功！,"Configuration saved successfully!"
+没有需要保存的配置,"No configuration to save"
+保存失败：%{1},"Save failed: %{1}"
+查看API接入管理失败：{1},"View API access management failure: {1}"
+API接入管理,"API access management"
+查看API接入管理,"View API access management"
+API模块配置,"API module configuration"
+配置API令牌刷新周期等参数,"Configure API token refresh cycle and other parameters"
+令牌刷新配置,"Token refresh configuration"
+令牌刷新周期（秒）,"Token refresh interval (seconds)"
+前端自动刷新令牌的时间间隔,"Frontend Auto-Refresh Token Interval"
+建议值：300秒（5分钟）。范围：60-3600秒。注意：应小于令牌过期时间,"Recommended value: 300 seconds (5 minutes). Range: 60-3600 seconds. Note: Should be less than the token expiration time"
+过期前刷新时间（秒）,"Refresh time before expiration (seconds)"
+在令牌过期前多少秒开始刷新（必须小于令牌过期时间）,"Number of seconds before token expiration to start refreshing (must be less than the token expiration time)"
+建议值：60-120秒（1-2分钟）。范围：30-600秒。确保在令牌过期前刷新，避免过期后请求失败,"Recommended value: 60-120 seconds (1-2 minutes). Range: 30-600 seconds. Ensure refresh before token expiration to avoid request failure after expiration"
+默认访问令牌过期时间（秒）,"Default Access Token Expiration Time (Seconds)"
+新生成的访问令牌默认过期时间,"Default Expiration Time for Newly Generated Access Tokens"
+建议值：3600秒（1小时）。范围：300-86400秒,"Recommended value: 3600 seconds (1 hour). Range: 300-86400 seconds"
+默认刷新令牌过期时间（秒）,"Default Refresh Token Expiration Time (seconds)"
+新生成的刷新令牌默认过期时间,"Default Expiration Time for Newly Generated Refresh Tokens"
+建议值：2592000秒（30天）。范围：86400-31536000秒,"Recommended value: 2592000 seconds (30 days). Range: 86400-31536000 seconds"
+保存配置,"Save Configuration"
 返回,Back
 保存配置失败，请重试,"Failed to save configuration, please try again"
-API集成,API integration
-API用户,API users
-启用用户,Enable user
-沙盒账户,Sandbox account
-活跃令牌,Active Tokens
-快速操作,Quick Actions
-日常的 API 管理入口,Daily API management entry
-沙盒密钥,Sandbox key
-新建API用户,Create API User
-打开API文档,Open API documentation
-沙盒调试,Sandbox debugging
-集成提示,Integration Tips
-API用户需分配角色方可访问接口,API users need to be assigned roles to access the interface
-沙盒账户默认强制使用沙盒数据库,Sandbox account defaults to using the sandbox database
-文档中的在线调试会自动携带登录令牌,Online debugging in documents will automatically carry the login token
-最近创建的API用户,Recently created API users
-快速查看最新的授权账号,Quickly view the latest authorized accounts
-查看全部,View all
+API集成,"API integration"
+API用户,"API users"
+启用用户,"Enable user"
+沙盒账户,"Sandbox account"
+活跃令牌,"Active Tokens"
+快速操作,"Quick Actions"
+"日常的 API 管理入口","Daily API management entry"
+沙盒密钥,"Sandbox key"
+新建API用户,"Create API User"
+打开API文档,"Open API documentation"
+沙盒调试,"Sandbox debugging"
+集成提示,"Integration Tips"
+API用户需分配角色方可访问接口,"API users need to be assigned roles to access the interface"
+沙盒账户默认强制使用沙盒数据库,"Sandbox account defaults to using the sandbox database"
+文档中的在线调试会自动携带登录令牌,"Online debugging in documents will automatically carry the login token"
+最近创建的API用户,"Recently created API users"
+快速查看最新的授权账号,"Quickly view the latest authorized accounts"
+查看全部,"View all"
 用户名,Username
 邮箱,Email
 状态,Status
 沙盒,Sandbox
-创建时间,Creation time
+创建时间,"Creation time"
 启用,Enable
 禁用,Disable
 正式,Official
 暂无API用户，立即创建第一个吧。,"No API Users, Create the First One Now."
-API 用户 #%{1},API user #%{1}
-API 用户权限分配,API user permission assignment
-为 API 用户所属角色配置实际需要的权限资源。,Configure the actual required permission resources for the role of the API user.
-返回用户,return user
-API 用户,API users
+"API 用户 #%{1}","API user #%{1}"
+"API 用户权限分配","API user permission assignment"
+"为 API 用户所属角色配置实际需要的权限资源。","Configure the actual required permission resources for the role of the API user."
+返回用户,"return user"
+"API 用户","API users"
 所属角色,Role
-未命名角色,unnamed role
+未命名角色,"unnamed role"
 API,API
-请输入用户名（3-50字符）,Please enter the username (3-50 characters)
-请输入有效的邮箱地址,Please enter a valid email address
+请输入用户名（3-50字符）,"Please enter the username (3-50 characters)"
+请输入有效的邮箱地址,"Please enter a valid email address"
 密码,Password
 角色,Role
-分配权限,Assign permissions
+分配权限,"Assign permissions"
 选择角色后，可以为该角色分配权限,"After selecting a role, you can assign permissions to that role"
-访问令牌有效期（秒）,Access token validity period (seconds)
-范围：86400（1天）到 2592000（30天），默认7天,"Range: 86400 (1 day) to 2592000 (30 days), default 7 days"
-刷新令牌有效期（秒）,Refresh token validity period (seconds)
-范围：604800（7天）到 7776000（90天），默认30天,"Range: 604800 (7 days) to 7776000 (90 days), default 30 days"
-API Key,API Key
+访问令牌有效期（秒）,"Access token validity period (seconds)"
+"范围：86400（1天）到 2592000（30天），默认7天","Range: 86400 (1 day) to 2592000 (30 days), default 7 days"
+刷新令牌有效期（秒）,"Refresh token validity period (seconds)"
+"范围：604800（7天）到 7776000（90天），默认30天","Range: 604800 (7 days) to 7776000 (90 days), default 30 days"
+"API Key","API Key"
 复制,Copy
-API Key用于标识API用户,API Key is used to identify API users
-API Secret,API Secret
+"API Key用于标识API用户","API Key is used to identify API users"
+"API Secret","API Secret"
 "API Secret已加密存储，无法查看。如需重新生成，请点击""重新生成凭证""按钮。","The API Secret is stored encrypted and cannot be viewed. If you need to regenerate, please click the ""Regenerate Credentials"" button."
-重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。,"After regeneration, the old API Key and Secret will become invalid, and all related tokens will be deleted."
+"重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。","After regeneration, the old API Key and Secret will become invalid, and all related tokens will be deleted."
 保存,Save
 取消,Cancel
-新增API用户,Add API User
+新增API用户,"Add API User"
 编辑,Edit
 新增,Add
-编辑API用户信息,Edit API user information
-创建新的API用户，系统将自动生成API Key和Secret,"Create a new API user, the system will automatically generate an API Key and Secret"
-请输入邮箱,Please enter the email
-留空则不修改,Leave blank to not modify
-请输入密码（至少6个字符）,Enter password (at least 6 characters)
-请选择角色,Please select a role
+编辑API用户信息,"Edit API user information"
+"创建新的API用户，系统将自动生成API Key和Secret","Create a new API user, the system will automatically generate an API Key and Secret"
+请输入邮箱,"Please enter the email"
+留空则不修改,"Leave blank to not modify"
+请输入密码（至少6个字符）,"Enter password (at least 6 characters)"
+请选择角色,"Please select a role"
 默认604800（7天），范围：86400-2592000（1-30天）,"Default 604800 (7 days), range: 86400-2592000 (1-30 days)"
 默认2592000（30天），范围：604800-7776000（7-90天）,"Default 2592000 (30 days), range: 604800-7776000 (7-90 days)"
-已复制到剪贴板,Copied to clipboard
-应用创建成功,Application created successfully
-应用授权范围,Application authorization scope
-应用 token 不能批准新的应用授权,App token cannot approve new app authorization
-应用授权成功,Application authorization successful
-授权码或客户端凭证无效,Invalid authorization code or client credentials
-Token 发放成功,Token issued successfully
-刷新 token 无效,Refresh token is invalid
-Token 刷新成功,Token refreshed successfully
-Token 不能为空,Token cannot be empty
-Token 不存在或已失效,Token does not exist or has expired
-Token 已撤销,Token has been revoked
-创建第三方应用,Create third-party applications
-查看应用授权范围,View application authorization scope
+已复制到剪贴板,"Copied to clipboard"
+"Demo 不存在或参数无效","Demo not found or parameters invalid"
+"生成 Demo 下载包失败","Failed to build demo download package"
+应用创建成功,"Application created successfully"
+应用授权范围,"Application authorization scope"
+"应用 token 不能批准新的应用授权","App token cannot approve new app authorization"
+应用授权成功,"Application authorization successful"
+授权码或客户端凭证无效,"Invalid authorization code or client credentials"
+"Token 发放成功","Token issued successfully"
+"刷新 token 无效","Refresh token is invalid"
+"Token 刷新成功","Token refreshed successfully"
+"Token 不能为空","Token cannot be empty"
+"Token 不存在或已失效","Token does not exist or has expired"
+"Token 已撤销","Token has been revoked"
+创建第三方应用,"Create third-party applications"
+查看应用授权范围,"View application authorization scope"
 read,read
-批准应用授权,Approve application authorization
-用户未登录,User not logged in
-测试成功,Test Passed
-测试数量不能为负数,Test count cannot be negative
-API文档导入测试成功,API documentation import test successful
-测试标题不能为空,Test title cannot be empty
-测试内容不能为空,Test content cannot be empty
-创建成功,Created successfully
-测试名称不能为空,Test Name cannot be empty
-创建失败,Creation failed
-数据已写入沙盒数据库,Data has been written to sandbox database
-数据已写入正式数据库,Data has been written to production database
-数据来自沙盒数据库,Data from sandbox database
-数据来自正式数据库,Data from production database
-数据ID不能为空,Data ID cannot be empty
+批准应用授权,"Approve application authorization"
+用户未登录,"User not logged in"
+测试成功,"Test Passed"
+测试数量不能为负数,"Test count cannot be negative"
+API文档导入测试成功,"API documentation import test successful"
+测试标题不能为空,"Test title cannot be empty"
+测试内容不能为空,"Test content cannot be empty"
+创建成功,"Created successfully"
+测试名称不能为空,"Test Name cannot be empty"
+创建失败,"Creation failed"
+数据已写入沙盒数据库,"Data has been written to sandbox database"
+数据已写入正式数据库,"Data has been written to production database"
+数据来自沙盒数据库,"Data from sandbox database"
+数据来自正式数据库,"Data from production database"
+数据ID不能为空,"Data ID cannot be empty"
 删除失败，数据不存在,"Deletion failed, data does not exist"
-删除成功,Deleted successfully
-数据已从沙盒数据库删除,Data has been deleted from sandbox database
-数据已从正式数据库删除,Data has been deleted from production database
-应用名称不能为空,Application name cannot be empty
-回调地址不能为空,The callback address cannot be empty
-应用不存在或已禁用,App does not exist or is disabled
-回调地址不匹配,Callback address does not match
-安装目标无效或未注册解析器,The installation target is invalid or the resolver is not registered
-授权 scope 不能为空,Authorization scope cannot be empty
-以下 scope 不存在、已禁用或不允许外部授权：%{1},"The following scope does not exist, is disabled, or does not allow external authorization: %{1}"
-配置值不能为负数：%{1},Configuration value cannot be negative: %{1}
-"""公开 API 请求不允许携带 Cookie""",Public API requests must not include Cookie headers
-编辑用户,Edit User
-权限分配,Permission assignment
-为API用户分配权限资源,Assign permission resources to API users
-当前用户：,Current user:
+删除成功,"Deleted successfully"
+数据已从沙盒数据库删除,"Data has been deleted from sandbox database"
+数据已从正式数据库删除,"Data has been deleted from production database"
+应用名称不能为空,"Application name cannot be empty"
+回调地址不能为空,"The callback address cannot be empty"
+应用不存在或已禁用,"App does not exist or is disabled"
+回调地址不匹配,"Callback address does not match"
+安装目标无效或未注册解析器,"The installation target is invalid or the resolver is not registered"
+"授权 scope 不能为空","Authorization scope cannot be empty"
+"以下 scope 不存在、已禁用或不允许外部授权：%{1}","The following scope does not exist, is disabled, or does not allow external authorization: %{1}"
+"本 Demo 调用 Admin REST，需后台 Token；勿与 Frontend Worker / BinQuery 鉴权面混用。","This demo calls Admin REST with a backend token; do not mix with Frontend Worker / BinQuery auth."
+"请求体可传 type=phrase|meta|local_model（默认 phrase）；可用环境变量 WELINE_REMOTE_TYPE 切换。","请求体可传 type=phrase|meta|local_model（默认 phrase）；可用环境变量 WELINE_REMOTE_TYPE 切换。"
+配置值不能为负数：%{1},"Configuration value cannot be negative: %{1}"
+"""公开 API 请求不允许携带 Cookie""","Public API requests must not include Cookie headers"
+编辑用户,"Edit User"
+权限分配,"Permission assignment"
+为API用户分配权限资源,"Assign permission resources to API users"
+当前用户：,"Current user:"
 所属角色：,Role:
 菜单,Menu
 链接,Link
 其他,Other
-fa fa-users,fa fa-users
-fa fa-list,fa fa-list
-fa fa-plus,fa fa-plus
-fa fa-edit,fa fa-edit
-fa fa-save,fa fa-save
-fa fa-trash,fa fa-trash
-fa fa-check,fa fa-check
-fa fa-ban,fa fa-ban
-fa fa-refresh,fa fa-refresh
-fa fa-key,fa fa-key
-API管理,API management
+"fa fa-users","fa fa-users"
+"fa fa-list","fa fa-list"
+"fa fa-plus","fa fa-plus"
+"fa fa-edit","fa fa-edit"
+"fa fa-save","fa fa-save"
+"fa fa-trash","fa fa-trash"
+"fa fa-check","fa fa-check"
+"fa fa-ban","fa fa-ban"
+"fa fa-refresh","fa fa-refresh"
+"fa fa-key","fa fa-key"
+API管理,"API management"
+"下载 PHP Demo","Download PHP Demo"
+"下载 JS Demo","Download JS Demo"

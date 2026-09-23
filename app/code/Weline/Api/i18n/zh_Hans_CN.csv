@@ -1,11 +1,11 @@
-公开 API 请求不允许携带 Cookie,公开 API 请求不允许携带 Cookie
-Missing authentication token.,缺少身份验证令牌。
-Token is invalid or expired.,令牌无效或已过期。
-User has been disabled.,用户已被禁用。
-IP is not allowed.,不允许IP。
-User agent does not match.,用户代理不匹配。
-This token cannot access backend APIs.,该令牌无法访问后端 API。
-This token cannot access frontend customer APIs.,此令牌无法访问前端客户 API。
+﻿"公开 API 请求不允许携带 Cookie","公开 API 请求不允许携带 Cookie"
+"Missing authentication token.",缺少身份验证令牌。
+"Token is invalid or expired.",令牌无效或已过期。
+"User has been disabled.",用户已被禁用。
+"IP is not allowed.",不允许IP。
+"User agent does not match.",用户代理不匹配。
+"This token cannot access backend APIs.","该令牌无法访问后端 API。"
+"This token cannot access frontend customer APIs.","此令牌无法访问前端客户 API。"
 用户名和密码不能为空,用户名和密码不能为空
 用户不存在,用户不存在
 用户已被禁用,用户已被禁用
@@ -13,8 +13,8 @@ This token cannot access frontend customer APIs.,此令牌无法访问前端客�
 创建token失败,创建token失败
 登录成功,登录成功
 登录失败：%{1},登录失败：%{1}
-API Key和API Secret不能为空,API Key和API Secret不能为空
-API Key或API Secret无效,API Key或API Secret无效
+"API Key和API Secret不能为空","API Key和API Secret不能为空"
+"API Key或API Secret无效","API Key或API Secret无效"
 令牌交换成功,令牌交换成功
 令牌交换失败：%{1},令牌交换失败：%{1}
 访问令牌和通行令牌不能为空,访问令牌和通行令牌不能为空
@@ -41,8 +41,8 @@ Token无效,令牌无效
 用户名已存在,用户名已存在
 邮箱已存在,邮箱已存在
 添加成功！,添加成功！
-API Key: %{1},API 密钥：%{1}
-API Secret: %{1}（请妥善保管，仅显示一次）,API Secret: %{1}（请妥善保管，仅显示一次）
+"API Key: %{1}","API 密钥：%{1}"
+"API Secret: %{1}（请妥善保管，仅显示一次）","API Secret: %{1}（请妥善保管，仅显示一次）"
 添加失败：%{1},添加失败：%{1}
 修改成功！,修改成功！
 修改失败：%{1},修改失败：%{1}
@@ -111,7 +111,7 @@ API用户,API用户
 沙盒账户,沙盒账户
 活跃令牌,活跃令牌
 快速操作,快速操作
-日常的 API 管理入口,日常的 API 管理入口
+"日常的 API 管理入口","日常的 API 管理入口"
 沙盒密钥,沙盒密钥
 新建API用户,新建API用户
 打开API文档,打开API文档
@@ -132,11 +132,11 @@ API用户需分配角色方可访问接口,API用户需分配角色方可访问�
 禁用,禁用
 正式,正式
 暂无API用户，立即创建第一个吧。,暂无API用户，立即创建第一个吧。
-API 用户 #%{1},API 用户 #%{1}
-API 用户权限分配,API 用户权限分配
-为 API 用户所属角色配置实际需要的权限资源。,为 API 用户所属角色配置实际需要的权限资源。
+"API 用户 #%{1}","API 用户 #%{1}"
+"API 用户权限分配","API 用户权限分配"
+"为 API 用户所属角色配置实际需要的权限资源。","为 API 用户所属角色配置实际需要的权限资源。"
 返回用户,返回用户
-API 用户,API 用户
+"API 用户","API 用户"
 所属角色,所属角色
 未命名角色,未命名角色
 API,应用程序编程接口
@@ -147,22 +147,22 @@ API,应用程序编程接口
 分配权限,分配权限
 选择角色后，可以为该角色分配权限,选择角色后，可以为该角色分配权限
 访问令牌有效期（秒）,访问令牌有效期（秒）
-范围：86400（1天）到 2592000（30天），默认7天,范围：86400（1天）到 2592000（30天），默认7天
+"范围：86400（1天）到 2592000（30天），默认7天","范围：86400（1天）到 2592000（30天），默认7天"
 刷新令牌有效期（秒）,刷新令牌有效期（秒）
-范围：604800（7天）到 7776000（90天），默认30天,范围：604800（7天）到 7776000（90天），默认30天
-API Key,API密钥
+"范围：604800（7天）到 7776000（90天），默认30天","范围：604800（7天）到 7776000（90天），默认30天"
+"API Key",API密钥
 复制,复制
-API Key用于标识API用户,API Key用于标识API用户
-API Secret,API秘密
+"API Key用于标识API用户","API Key用于标识API用户"
+"API Secret",API秘密
 "API Secret已加密存储，无法查看。如需重新生成，请点击""重新生成凭证""按钮。","API Secret已加密存储，无法查看。如需重新生成，请点击""重新生成凭证""按钮。"
-重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。,重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。
+"重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。","重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。"
 保存,保存
 取消,取消
 新增API用户,新增API用户
 编辑,编辑
 新增,新增
 编辑API用户信息,编辑API用户信息
-创建新的API用户，系统将自动生成API Key和Secret,创建新的API用户，系统将自动生成API Key和Secret
+"创建新的API用户，系统将自动生成API Key和Secret","创建新的API用户，系统将自动生成API Key和Secret"
 请输入邮箱,请输入邮箱
 留空则不修改,留空则不修改
 请输入密码（至少6个字符）,请输入密码（至少6个字符）
@@ -170,17 +170,19 @@ API Secret,API秘密
 默认604800（7天），范围：86400-2592000（1-30天）,默认604800（7天），范围：86400-2592000（1-30天）
 默认2592000（30天），范围：604800-7776000（7-90天）,默认2592000（30天），范围：604800-7776000（7-90天）
 已复制到剪贴板,已复制到剪贴板
+"Demo 不存在或参数无效","Demo 不存在或参数无效"
+"生成 Demo 下载包失败","生成 Demo 下载包失败"
 应用创建成功,应用创建成功
 应用授权范围,应用授权范围
-应用 token 不能批准新的应用授权,应用 token 不能批准新的应用授权
+"应用 token 不能批准新的应用授权","应用 token 不能批准新的应用授权"
 应用授权成功,应用授权成功
 授权码或客户端凭证无效,授权码或客户端凭证无效
-Token 发放成功,Token 发放成功
-刷新 token 无效,刷新 token 无效
-Token 刷新成功,Token 刷新成功
-Token 不能为空,Token 不能为空
-Token 不存在或已失效,Token 不存在或已失效
-Token 已撤销,Token 已撤销
+"Token 发放成功","Token 发放成功"
+"刷新 token 无效","刷新 token 无效"
+"Token 刷新成功","Token 刷新成功"
+"Token 不能为空","Token 不能为空"
+"Token 不存在或已失效","Token 不存在或已失效"
+"Token 已撤销","Token 已撤销"
 创建第三方应用,创建第三方应用
 查看应用授权范围,查看应用授权范围
 read,读
@@ -208,10 +210,12 @@ API文档导入测试成功,API文档导入测试成功
 应用不存在或已禁用,应用不存在或已禁用
 回调地址不匹配,回调地址不匹配
 安装目标无效或未注册解析器,安装目标无效或未注册解析器
-授权 scope 不能为空,授权 scope 不能为空
-以下 scope 不存在、已禁用或不允许外部授权：%{1},以下 scope 不存在、已禁用或不允许外部授权：%{1}
+"授权 scope 不能为空","授权 scope 不能为空"
+"以下 scope 不存在、已禁用或不允许外部授权：%{1}","以下 scope 不存在、已禁用或不允许外部授权：%{1}"
+"本 Demo 调用 Admin REST，需后台 Token；勿与 Frontend Worker / BinQuery 鉴权面混用。","本 Demo 调用 Admin REST，需后台 Token；勿与 Frontend Worker / BinQuery 鉴权面混用。"
+"请求体可传 type=phrase|meta|local_model（默认 phrase）；可用环境变量 WELINE_REMOTE_TYPE 切换。","请求体可传 type=phrase|meta|local_model（默认 phrase）；可用环境变量 WELINE_REMOTE_TYPE 切换。"
 配置值不能为负数：%{1},配置值不能为负数：%{1}
-"""公开 API 请求不允许携带 Cookie""",公开 API 请求不允许携带 Cookie
+"""公开 API 请求不允许携带 Cookie""","公开 API 请求不允许携带 Cookie"
 编辑用户,编辑用户
 权限分配,权限分配
 为API用户分配权限资源,为API用户分配权限资源
@@ -220,14 +224,16 @@ API文档导入测试成功,API文档导入测试成功
 菜单,菜单
 链接,链接
 其他,其他
-fa fa-users,fa fa-users
-fa fa-list,fa fa-list
-fa fa-plus,fa fa-plus
-fa fa-edit,fa fa-edit
-fa fa-save,fa fa-save
-fa fa-trash,fa fa-trash
-fa fa-check,fa fa-check
-fa fa-ban,fa fa-ban
-fa fa-refresh,fa fa-refresh
-fa fa-key,fa fa-key
+"fa fa-users","fa fa-users"
+"fa fa-list","fa fa-list"
+"fa fa-plus","fa fa-plus"
+"fa fa-edit","fa fa-edit"
+"fa fa-save","fa fa-save"
+"fa fa-trash","fa fa-trash"
+"fa fa-check","fa fa-check"
+"fa fa-ban","fa fa-ban"
+"fa fa-refresh","fa fa-refresh"
+"fa fa-key","fa fa-key"
 API管理,API管理
+"下载 PHP Demo","下载 PHP Demo"
+"下载 JS Demo","下载 JS Demo"
