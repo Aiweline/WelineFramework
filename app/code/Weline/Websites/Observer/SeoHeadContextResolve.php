@@ -65,6 +65,12 @@ class SeoHeadContextResolve implements ObserverInterface
         $organization = is_array($headContext['organization'] ?? null) ? $headContext['organization'] : [];
         if ($siteName !== '') {
             $organization['name'] = $siteName;
+            if (empty($organization['alternateName'])) {
+                $alternate = trim((string)(WebsiteData::getOrganizationAlternateName($siteName) ?? ''));
+                if ($alternate !== '') {
+                    $organization['alternateName'] = $alternate;
+                }
+            }
         }
         if ($siteUrl !== '') {
             $organization['url'] = $siteUrl;

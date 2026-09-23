@@ -64,24 +64,90 @@ $step('pending', static function () {
         'website_id' => 0,
         'locales' => ['en_US'],
         'limit' => 2,
+        'type' => 'phrase',
     ]);
     if (!is_array($r) || !isset($r['items'], $r['has_more'], $r['limit'])) {
         throw new RuntimeException('pending schema mismatch');
+    }
+    if (($r['type'] ?? '') !== 'phrase') {
+        throw new RuntimeException('pending type mismatch');
+    }
+    foreach ($r['items'] as $item) {
+        if (str_starts_with((string)($item['source'] ?? ''), '@meta::')) {
+            throw new RuntimeException('phrase pending leaked meta key');
+        }
     }
     return [
         'items' => count($r['items']),
         'has_more' => (bool)$r['has_more'],
         'next_cursor' => $r['next_cursor'] ?? null,
+        'type' => $r['type'] ?? null,
     ];
+});
+
+$step('pending_meta', static function () {
+    $r = w_query('i18n_remote_translation', 'remoteTranslationPending', [
+        'website_id' => 0,
+        'locales' => ['en_US'],
+        'limit' => 2,
+        'type' => 'meta',
+    ]);
+    if (!is_array($r) || ($r['type'] ?? '') !== 'meta') {
+        throw new RuntimeException('meta pending schema mismatch');
+    }
+    foreach ($r['items'] as $item) {
+        if (!str_starts_with((string)($item['source'] ?? ''), '@meta::')) {
+            throw new RuntimeException('meta pending leaked non-meta key');
+        }
+    }
+    return ['items' => count($r['items']), 'type' => 'meta'];
+});
+
+$step('pending_local_model', static function () {
+    $r = w_query('i18n_remote_translation', 'remoteTranslationPending', [
+        'website_id' => 0,
+        'locales' => ['en_US'],
+        'limit' => 2,
+        'type' => 'local_model',
+    ]);
+    if (!is_array($r) || ($r['type'] ?? '') !== 'local_model') {
+        throw new RuntimeException('local_model pending schema mismatch');
+    }
+    foreach ($r['items'] as $item) {
+        foreach (['local_model', 'local_id_field', 'record_id', 'field', 'source', 'locale'] as $key) {
+            if (!array_key_exists($key, $item)) {
+                throw new RuntimeException('local_model item missing ' . $key);
+            }
+        }
+    }
+    return ['items' => count($r['items']), 'type' => 'local_model'];
+});
+
+$step('collect_local_model_422', static function () {
+    try {
+        w_query('i18n_remote_translation', 'remoteTranslationCollectStart', [
+            'owner_key' => 'rt-closeout-lm',
+            'website_id' => 0,
+            'type' => 'local_model',
+        ]);
+        throw new RuntimeException('expected 422 for local_model collect');
+    } catch (Throwable $e) {
+        if ((int)$e->getCode() !== 422 && !($e instanceof InvalidArgumentException)) {
+            throw $e;
+        }
+        return ['code' => (int)$e->getCode() ?: 422, 'message' => $e->getMessage()];
+    }
 });
 
 $step('ingest_write_and_invalid', static function () use ($source) {
     $r = w_query('i18n_remote_translation', 'remoteTranslationIngest', [
         'website_id' => 0,
+        'type' => 'phrase',
         'items' => [
             ['source' => $source, 'locale' => 'en_US', 'translation' => 'Closeout RT'],
             ['source' => $source, 'locale' => 'en_US', 'translation' => 'dup in batch'],
             ['source' => '', 'locale' => 'en_US', 'translation' => 'x'],
+            ['source' => '@meta::should_not_phrase', 'locale' => 'en_US', 'translation' => 'x'],
         ],
     ]);
     if ((int)($r['written'] ?? 0) < 1) {
@@ -89,6 +155,9 @@ $step('ingest_write_and_invalid', static function () use ($source) {
     }
     if ((int)($r['invalid'] ?? 0) < 1) {
         throw new RuntimeException('expected invalid>=1');
+    }
+    if (($r['type'] ?? '') !== 'phrase') {
+        throw new RuntimeException('ingest type mismatch');
     }
     return $r;
 });

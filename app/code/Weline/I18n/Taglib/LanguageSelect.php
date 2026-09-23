@@ -268,10 +268,15 @@ class LanguageSelect implements TaglibInterface
         $__wls_auto_submit = $bool($attributes['auto-submit'] ?? false);
         $__wls_readonly_json = \json_encode($__wls_readonly, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]';
 
-        ob_start();
-        include dirname(__DIR__) . '/view/templates/taglib/language-select-markup.phtml';
+        \Weline\Framework\Runtime\FiberOutputBuffer::beginCapture();
+        try {
+            include dirname(__DIR__) . '/view/templates/taglib/language-select-markup.phtml';
 
-        return (string)ob_get_clean();
+            return \Weline\Framework\Runtime\FiberOutputBuffer::endCapture();
+        } catch (\Throwable $e) {
+            \Weline\Framework\Runtime\FiberOutputBuffer::discardCapture();
+            throw $e;
+        }
     }
 
     public static function tag_self_close(): bool

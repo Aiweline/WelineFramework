@@ -37,12 +37,16 @@ final class HeaderChoiceSelectorAssetsContractTest extends TestCase
         self::assertStringNotContainsString('if (window.Weline?.UI) register', $content);
     }
 
-    public function testCurrencySwitcherDedupesAssetsWithRequestGlobal(): void
+    public function testCurrencySwitcherDedupesAssetsWithRequestContext(): void
     {
         $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
         $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString("\$GLOBALS[\$assetsFlagKey]", $content);
+        self::assertStringContainsString('view.i18n.header_choice_assets_rendered', $content);
+        self::assertStringContainsString('RequestContext::get($assetsFlagKey)', $content);
+        self::assertStringContainsString('RequestContext::set($assetsFlagKey, true)', $content);
+        self::assertStringContainsString('data-weline-load="currency"', $content);
+        self::assertStringNotContainsString('$GLOBALS[$assetsFlagKey]', $content);
         self::assertStringNotContainsString('$this->getData($assetsFlagKey)', $content);
     }
 }
