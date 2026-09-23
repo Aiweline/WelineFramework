@@ -65,28 +65,15 @@ $meta['showFooter'] = $meta['showFooter'] ?? true;
                 </if>
                 <w:hook>Weline_Theme::frontend::layouts::checkout::content-after</w:hook>
             </w:slot>
-            <w:slot id="checkout-trust" weline-code="theme.checkout.trust"
-                    name="结算保障说明"
-                    accept="layout-checkout-trust,trust-badges,content"
-                    multiple="true"
-                    position="content"
-                    wrapper="section"
-                    class="checkout-main__trust-slot">
-                <w:hook>Weline_Theme::frontend::layouts::checkout::trust</w:hook>
-            </w:slot>
+            <?php
+            // P0 (2026-09-23): omit SSR trust/bottom product/banner slots.
+            // LayoutSlotRenderer default_injections on these slots inflated after_ms
+            // under worker starvation (align Cart layout SSR slim-down). Header/footer
+            // Theme Partials chrome stays. Trust blocks can return via Theme later.
+            ?>
             </w:slot>
             <w:hook>Weline_Theme::frontend::layouts::checkout::main-after</w:hook>
         </main>
-
-        <w:slot id="checkout-bottom"
-                name="结算底部扩展"
-                accept="layout-checkout-bottom,banner,content,container,trust-badges"
-                reject="header,footer,navigation"
-                multiple="true"
-                append="true"
-                position="content"
-                class="checkout-layout__bottom-slot">
-        </w:slot>
 
         <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
     </div>

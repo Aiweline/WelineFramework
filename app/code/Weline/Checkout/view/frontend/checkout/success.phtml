@@ -285,7 +285,7 @@ foreach ($orderItems as $pixelItemRow) {
                     <p><span class="amz-order-confirm__meta-label"><?= $escape(__('订单总额')) ?></span> <?= $escape($orderV2TotalLabel) ?></p>
                 <?php endif; ?>
                 <?php if ($shippingMethod !== ''): ?>
-                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('配送方式')) ?></span> <?= $escape($shippingMethod) ?></p>
+                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('配送方式')) ?></span> <?= $escape(__($shippingMethod)) ?></p>
                 <?php endif; ?>
             </div>
         </div>
@@ -302,7 +302,7 @@ foreach ($orderItems as $pixelItemRow) {
         </header>
         <?php if ($shippingMethod !== ''): ?>
             <p class="amz-order-confirm__ship-method">
-                <?= $escape(__('配送方式')) ?>：<strong><?= $escape($shippingMethod) ?></strong>
+                <?= $escape(__('配送方式')) ?>：<strong><?= $escape(__($shippingMethod)) ?></strong>
             </p>
         <?php elseif (!$paymentCancelled): ?>
             <p class="amz-order-confirm__ship-method amz-order-confirm__ship-method--estimate">

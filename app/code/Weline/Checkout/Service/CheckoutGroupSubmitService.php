@@ -380,6 +380,31 @@ final class CheckoutGroupSubmitService
             trim((string)($paymentMethod ?? '')),
             $baseBeforeCod,
         );
+        $baseAfterCod = $baseBeforeCod + $codFeeMinor;
+        $existingDiscountLines = [];
+        if (is_array($discountPayload) && is_array($discountPayload['lines'] ?? null)) {
+            foreach ($discountPayload['lines'] as $discountLine) {
+                if (!is_array($discountLine)) {
+                    continue;
+                }
+                $lineMinor = (int)($discountLine['amount_minor'] ?? 0);
+                $existingDiscountLines[] = [
+                    'key' => trim((string)($discountLine['key'] ?? $discountLine['rule_id'] ?? 'coupon')),
+                    'label' => trim((string)($discountLine['label'] ?? $discountLine['name'] ?? __('优惠'))),
+                    'amount_minor' => $lineMinor > 0 ? -1 * $lineMinor : $lineMinor,
+                    'source_type' => trim((string)($discountLine['source_type'] ?? 'coupon')) ?: 'coupon',
+                ];
+            }
+        }
+        $incentiveApplied = (new CheckoutPaymentIncentiveApplier())->apply(
+            trim((string)($paymentMethod ?? '')),
+            $baseAfterCod,
+            $currency,
+            $existingDiscountLines,
+            $discountsBanned,
+            is_array($scope) ? $scope : [],
+        );
+        $incentiveSavingsMinor = max(0, (int)$incentiveApplied['savings_minor']);
         $shippingCommerce = $this->buildShippingCommerceSnapshot(
             $amountMinor,
             is_array($quoteArray) ? $quoteArray : $quote->toArray(),
@@ -422,13 +447,16 @@ final class CheckoutGroupSubmitService
             'shipping_packages' => $splitPackages,
             'shipping_commerce' => $shippingCommerce,
             'cod_fee_amount_minor' => $codFeeMinor,
+            'payment_method_incentive_amount_minor' => (int)$incentiveApplied['payment_method_incentive_amount_minor'],
+            'discount_lines' => $incentiveApplied['discount_lines'],
             'totals' => [
                 'subtotal_minor' => $goodsSubtotal,
                 'shipping_amount_minor' => $amountMinor,
                 'tax_amount_minor' => $taxMinor,
-                'discount_amount_minor' => $discountMinorPreview,
+                'discount_amount_minor' => $discountMinorPreview + $incentiveSavingsMinor,
                 'cod_fee_amount_minor' => $codFeeMinor,
-                'grand_total_minor' => $baseBeforeCod + $codFeeMinor,
+                'payment_method_incentive_amount_minor' => (int)$incentiveApplied['payment_method_incentive_amount_minor'],
+                'grand_total_minor' => (int)$incentiveApplied['grand_total_minor'],
             ],
             'tax' => $tax,
             'discount' => $discountPayload,
@@ -731,7 +759,16 @@ final class CheckoutGroupSubmitService
 
         $ownerShip = (int) ($session['allocation']['group_shipping_minor'] ?? 0);
         $discount = $discountsBanned ? [] : (is_array($session['discount'] ?? null) ? $session['discount'] : []);
-        $discountMinor = $discountsBanned ? 0 : (int)($discount['amount_minor'] ?? 0);
+        $couponDiscountMinor = $discountsBanned ? 0 : (int)($discount['amount_minor'] ?? 0);
+        $incentiveDiscountMinor = $discountsBanned
+            ? 0
+            : abs((int)($session['payment_method_incentive_amount_minor']
+                ?? $session['totals']['payment_method_incentive_amount_minor']
+                ?? 0));
+        $discountMinor = $couponDiscountMinor + $incentiveDiscountMinor;
+        $discountLines = $discountsBanned
+            ? []
+            : (is_array($session['discount_lines'] ?? null) ? $session['discount_lines'] : []);
         $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
         $guestEmail = CheckoutSessionContact::extractEmail($session);
         $guestName = CheckoutSessionContact::extractCustomerName($session);
@@ -762,7 +799,13 @@ final class CheckoutGroupSubmitService
                 'tax_amount_minor' => (int) ($tax['tax_amount_minor'] ?? 0),
                 'tax_snapshot' => $tax,
                 'discount_amount_minor' => $discountMinor,
-                'discount_snapshot' => $discount,
+                'discount_snapshot' => $discount + (
+                    $discountLines !== []
+                        ? ['discount_lines' => $discountLines, 'payment_method_incentive_amount_minor' => -1 * $incentiveDiscountMinor]
+                        : []
+                ),
+                'discount_lines' => $discountLines,
+                'payment_method_incentive_amount_minor' => -1 * $incentiveDiscountMinor,
                 'quote_token' => $token,
                 'shipping_quote' => $session['quote'],
                 'owner_item_shipping_minor' => $session['allocation']['owner_item_shipping_minor'],
@@ -788,9 +831,17 @@ final class CheckoutGroupSubmitService
                 'shipping_commerce' => is_array($session['shipping_commerce'] ?? null)
                     ? $session['shipping_commerce']
                     : [],
-                'type_payload' => is_array($session['b2b_credit_type_payload'] ?? null)
-                    ? $session['b2b_credit_type_payload']
-                    : [],
+                'type_payload' => array_replace(
+                    is_array($session['b2b_credit_type_payload'] ?? null)
+                        ? $session['b2b_credit_type_payload']
+                        : [],
+                    $discountLines !== []
+                        ? [
+                            'discount_lines' => $discountLines,
+                            'payment_method_incentive_amount_minor' => -1 * $incentiveDiscountMinor,
+                        ]
+                        : [],
+                ),
                 'type_payload_by_split' => is_array($session['b2b_credit_by_split'] ?? null)
                     ? $session['b2b_credit_by_split']
                     : [],

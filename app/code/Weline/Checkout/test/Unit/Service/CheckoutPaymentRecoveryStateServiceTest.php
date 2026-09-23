@@ -242,4 +242,31 @@ final class CheckoutPaymentRecoveryStateServiceTest extends TestCase
             ['order-drift'],
         ));
     }
+
+    public function testMarkPaidLocksRecoveryNotRetryable(): void
+    {
+        $store = new InMemoryCheckoutSessionStore();
+        $store->put('qt_paid_1', [
+            'state' => CheckoutSession::STATE_SUBMITTED,
+            'idempotency_key' => 'order-idem-paid',
+            'submitted_result' => ['order_uuids' => ['order-paid']],
+            'payment_result' => [
+                'paid' => false,
+                'outcome' => 'failed',
+                'status' => 'cancelled',
+                'recoverable' => true,
+            ],
+        ]);
+        $service = new CheckoutPaymentRecoveryStateService($store);
+
+        self::assertTrue($service->canRetry('qt_paid_1', 'order-idem-paid'));
+        self::assertTrue($service->markPaid('qt_paid_1', 'order-idem-paid', [
+            'transactions' => [['order_uuid' => 'order-paid', 'status' => 'success']],
+        ]));
+        self::assertFalse($service->canRetry('qt_paid_1', 'order-idem-paid'));
+        $payment = $service->get('qt_paid_1', 'order-idem-paid');
+        self::assertSame('paid', $payment['outcome'] ?? null);
+        self::assertFalse((bool)($payment['recoverable'] ?? true));
+        self::assertTrue((bool)($payment['paid'] ?? false));
+    }
 }

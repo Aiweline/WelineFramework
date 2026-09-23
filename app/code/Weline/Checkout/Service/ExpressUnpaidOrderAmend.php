@@ -41,7 +41,9 @@ final class ExpressUnpaidOrderAmend
 
         $address = $this->mergeAddressReadOnlyCore($existing, $profile);
         $serviceCode = trim((string) ($options['service_code'] ?? $order->getData(OrderModel::schema_fields_SHIPPING_METHOD) ?? ''));
-        $currency = strtoupper(trim((string) ($options['currency'] ?? $order->getData(OrderModel::schema_fields_CURRENCY) ?? 'CNY'))) ?: 'CNY';
+        // 未付改单：订单币种为权威。FE 默认 CNY 不得覆盖 USD 单，否则运费按 CNY 重报、
+        // 小计仍是 USD money → 混币假漂移（例 790+5900-79=6611）误杀合法 pending PayPal。
+        $currency = strtoupper(trim((string) $order->getData(OrderModel::schema_fields_CURRENCY))) ?: 'CNY';
 
         $catalog = $order->getData(OrderModel::schema_fields_CATALOG_SNAPSHOT_JSON);
         if (is_string($catalog) && $catalog !== '') {

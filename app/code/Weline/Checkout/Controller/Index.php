@@ -5,8 +5,17 @@ declare(strict_types=1);
 namespace Weline\Checkout\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * Storefront checkout page.
+ *
+ * HARD: keep Theme Partials header/footer chrome (theme_seat_integrity).
+ * Bare HTML shells that omit chrome are rejected as a performance "fix".
+ *
+ * P0 reachability: SSR is a client shell only — no currentCart/getCart/summary,
+ * template()/fetchHtml skips LayoutSlotRenderer entity fill. Address / shipping /
+ * payment hydrate via QueryBin after first paint.
+ */
 class Index extends FrontendController
 {
     public function index(): string
@@ -16,14 +25,47 @@ class Index extends FrontendController
         $this->assign('page_title', __('结账'));
         $this->assign('title', __('结账'));
         $this->layoutType = 'checkout';
+        $this->request->setGet('page_type', 'checkout');
+        $this->request->setGet('layout_type', 'checkout');
+        $this->request->setGet('layout_option', 'default');
 
-        /** @var \Weline\Checkout\Service\CheckoutPageViewModel $viewModel */
-        $viewModel = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPageViewModel::class);
-        $cart = $viewModel->currentCart();
+        // Empty SSR payload — browser QueryBin is the source of truth.
+        $cart = $this->emptyCurrentCart();
         $this->assign('checkout_items', $cart['items']);
         $this->assign('checkout_currency', $cart['currency']);
         $this->assign('checkout_items_empty_message', __('购物车为空，请先加入商品。'));
+        $this->assign(
+            'checkout_page_subtitle',
+            (string)__('确认收货地址、配送方式和支付信息后即可提交订单。')
+        );
 
-        return $this->fetch('Weline_Checkout::frontend/checkout/index.phtml');
+        $meta = [
+            'showHeader' => true,
+            'showFooter' => true,
+            'class' => 'weline-checkout-page',
+        ];
+
+        $body = $this->template('Weline_Checkout::frontend/checkout/index.phtml');
+        $meta['content'] = $body;
+        $this->assign('meta', $meta);
+        $this->assign('content', $body);
+
+        return $this->template('Weline_Checkout::theme/frontend/layouts/checkout/default.phtml');
+    }
+
+    /**
+     * @return array{items:list<array<string,mixed>>,currency:string,is_empty:bool,item_count:int,subtotal:float,grand_total:float,discount_preview:?array}
+     */
+    private function emptyCurrentCart(): array
+    {
+        return [
+            'items' => [],
+            'currency' => 'USD',
+            'is_empty' => true,
+            'item_count' => 0,
+            'subtotal' => 0.0,
+            'grand_total' => 0.0,
+            'discount_preview' => null,
+        ];
     }
 }

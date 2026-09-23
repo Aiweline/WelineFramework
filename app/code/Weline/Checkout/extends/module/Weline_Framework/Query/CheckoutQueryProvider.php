@@ -461,9 +461,12 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         }
         $address = \is_array($params['address'] ?? null) ? $params['address'] : [];
+        // 订单币种权威：不信任 FE currency（续付页常被 getData 打回默认 CNY）。
+        $orderCurrency = strtoupper(trim((string)$order->getData(\Weline\Order\Model\Order::schema_fields_CURRENCY))) ?: '';
+        $beforeGrandMinor = $this->resolveOrderGrandTotalMinor($order);
         $options = [
             'service_code' => trim((string)($params['service_code'] ?? $params['shipping_method'] ?? '')),
-            'currency' => trim((string)($params['currency'] ?? '')),
+            'currency' => $orderCurrency,
         ];
         if (\array_key_exists('coupon_code', $params)) {
             $options['coupon_code'] = strtoupper(trim((string)$params['coupon_code']));
@@ -482,9 +485,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         }
 
-        // 改券/改运费后：废掉金额漂移的 pending 支付，下次续付按新 grand 重开。
+        // 仅当 amend 前后订单权威 grand 真变了，才废掉金额漂移的 pending 支付。
         $authorityMinor = (int)($result['totals']['grand_total_minor'] ?? 0);
-        if ($authorityMinor > 0) {
+        if ($authorityMinor > 0 && $authorityMinor !== $beforeGrandMinor) {
             try {
                 /** @var \Weline\Checkout\Api\CheckoutSessionStoreInterface $sessions */
                 $sessions = ObjectManager::getInstance(\Weline\Checkout\Api\CheckoutSessionStoreInterface::class);
@@ -542,6 +545,15 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 idempotencyKey: $idempotencyKey,
                 customerId: $this->currentCustomerId(),
             );
+            // 已付 / 存在成功交易：硬收口 recovery，禁止 beginRetry 二次扣款。
+            $paidPayment = $this->claimPaidRecoveryIfSettled(
+                $quoteToken,
+                $idempotencyKey,
+                $result->orderUuids,
+            );
+            if (is_array($paidPayment)) {
+                return $this->createdCheckoutResponse($result, $quoteToken, $paidPayment);
+            }
             $existingPayment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
             if (is_array($existingPayment) && !$this->paymentRecoveryState->canRetry($quoteToken, $idempotencyKey)) {
                 // 续付改券/运费后订单权威金额变了，禁止回放旧 pending PayPal（否则会出现页 15.90、网关 16.69）。
@@ -697,26 +709,143 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 if (!(int)$order->getData(\Weline\Order\Model\Order::schema_fields_ID)) {
                     continue;
                 }
-                $moneyRaw = $order->getData(\Weline\Order\Model\Order::schema_fields_MONEY_SNAPSHOT_JSON);
-                $money = [];
-                if (is_string($moneyRaw) && $moneyRaw !== '') {
-                    $decoded = json_decode($moneyRaw, true);
-                    if (is_array($decoded)) {
-                        $money = $decoded;
-                    }
-                } elseif (is_array($moneyRaw)) {
-                    $money = $moneyRaw;
-                }
-                $minor = (int)($money['grand_total_minor'] ?? 0);
-                if ($minor <= 0) {
-                    $minor = (int)round(((float)$order->getData(\Weline\Order\Model\Order::schema_fields_GRAND_TOTAL)) * 100);
-                }
-                $sum += max(0, $minor);
+                $sum += max(0, $this->resolveOrderGrandTotalMinor($order));
             } catch (\Throwable) {
             }
         }
 
         return $sum;
+    }
+
+    private function resolveOrderGrandTotalMinor(\Weline\Order\Model\Order $order): int
+    {
+        $moneyRaw = $order->getData(\Weline\Order\Model\Order::schema_fields_MONEY_SNAPSHOT_JSON);
+        $money = [];
+        if (is_string($moneyRaw) && $moneyRaw !== '') {
+            $decoded = json_decode($moneyRaw, true);
+            if (is_array($decoded)) {
+                $money = $decoded;
+            }
+        } elseif (is_array($moneyRaw)) {
+            $money = $moneyRaw;
+        }
+        $minor = (int)($money['grand_total_minor'] ?? 0);
+        if ($minor <= 0) {
+            $minor = (int)round(((float)$order->getData(\Weline\Order\Model\Order::schema_fields_GRAND_TOTAL)) * 100);
+        }
+
+        return max(0, $minor);
+    }
+
+    /**
+     * When any order is already paid (or has a success transaction), lock recovery
+     * to outcome=paid / recoverable=false so resume cannot beginRetry again.
+     *
+     * @param list<string> $orderUuids
+     * @return array<string, mixed>|null
+     */
+    private function claimPaidRecoveryIfSettled(
+        string $quoteToken,
+        string $idempotencyKey,
+        array $orderUuids,
+    ): ?array {
+        $settled = $this->resolveSettledPaymentSnapshot($orderUuids);
+        if ($settled === null) {
+            return null;
+        }
+        try {
+            $this->paymentRecoveryState->markPaid($quoteToken, $idempotencyKey, $settled);
+        } catch (\Throwable) {
+            // Still return a paid snapshot so FE redirects even if session write fails.
+        }
+        $recorded = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
+        if (is_array($recorded)
+            && strtolower(trim((string)($recorded['outcome'] ?? ''))) === 'paid'
+        ) {
+            return $recorded;
+        }
+
+        return array_replace([
+            'paid' => true,
+            'outcome' => 'paid',
+            'status' => 'success',
+            'requires_action' => false,
+            'recoverable' => false,
+            'redirect_url' => null,
+            'transactions' => [],
+        ], $settled);
+    }
+
+    /**
+     * @param list<string> $orderUuids
+     * @return array<string, mixed>|null
+     */
+    private function resolveSettledPaymentSnapshot(array $orderUuids): ?array
+    {
+        $transactions = [];
+        $anySettled = false;
+        foreach ($orderUuids as $orderUuid) {
+            $orderUuid = trim((string)$orderUuid);
+            if ($orderUuid === '') {
+                continue;
+            }
+            try {
+                /** @var \Weline\Order\Model\Order $order */
+                $order = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+                $order->clear()
+                    ->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $orderUuid)
+                    ->find()
+                    ->fetch();
+                if (!(int)$order->getData(\Weline\Order\Model\Order::schema_fields_ID)) {
+                    continue;
+                }
+                $status = strtolower(trim((string)$order->getData(\Weline\Order\Model\Order::schema_fields_STATUS)));
+                if (in_array($status, ['paid', 'fulfilled', 'completed'], true)) {
+                    $anySettled = true;
+                    $transactions[] = [
+                        'order_uuid' => $orderUuid,
+                        'status' => 'already_paid',
+                        'method_code' => (string)$order->getData(\Weline\Order\Model\Order::schema_fields_PAYMENT_METHOD),
+                    ];
+                    continue;
+                }
+                /** @var \Weline\Payment\Model\PaymentTransaction $tx */
+                $tx = ObjectManager::getInstance(\Weline\Payment\Model\PaymentTransaction::class);
+                $rows = $tx->clear()
+                    ->where(\Weline\Payment\Model\PaymentTransaction::schema_fields_ORDER_ID, $orderUuid)
+                    ->where(
+                        \Weline\Payment\Model\PaymentTransaction::schema_fields_STATUS,
+                        \Weline\Payment\Model\PaymentTransaction::STATUS_SUCCESS,
+                    )
+                    ->order(\Weline\Payment\Model\PaymentTransaction::schema_fields_ID, 'DESC')
+                    ->limit(1)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                foreach ($rows as $row) {
+                    if (!is_object($row) || !method_exists($row, 'getData')) {
+                        continue;
+                    }
+                    $anySettled = true;
+                    $transactions[] = [
+                        'order_uuid' => $orderUuid,
+                        'transaction_id' => (int)$row->getData(\Weline\Payment\Model\PaymentTransaction::schema_fields_ID),
+                        'transaction_no' => (string)$row->getData(\Weline\Payment\Model\PaymentTransaction::schema_fields_TRANSACTION_NO),
+                        'method_code' => (string)$row->getData(\Weline\Payment\Model\PaymentTransaction::schema_fields_METHOD_CODE),
+                        'status' => \Weline\Payment\Model\PaymentTransaction::STATUS_SUCCESS,
+                    ];
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if (!$anySettled) {
+            return null;
+        }
+
+        return [
+            'transactions' => $transactions,
+        ];
     }
 
     /**
@@ -1024,7 +1153,11 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'payment_method',
                 $checkoutBlocked
                     ? $blockingMessage
-                    : (string)__('暂无可用支付方式。'),
+                    : (
+                        $items === [] || (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0) <= 0.0
+                            ? (string)__('请先加入商品后再选择支付方式。')
+                            : (string)__('暂无可用支付方式。')
+                    ),
                 $selectedPayment !== '' ? ['selected_code' => $selectedPayment] : [],
             ),
             'checkout_blocked' => $checkoutBlocked,

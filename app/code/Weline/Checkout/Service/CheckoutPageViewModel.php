@@ -29,13 +29,12 @@ final class CheckoutPageViewModel
         }
         try {
             $v2Result = w_query('cart', 'getCart', $v2Params);
+            // getCart is the durable V2 boundary. Trust success (including empty) and
+            // skip legacy summary — double QueryBin on empty carts starved the 2-worker
+            // pool (action_execute_ms 10–50s) and amplified nginx 502 on checkout SSR.
+            return $this->fromQueryResult($v2Result);
         } catch (\Throwable) {
             $v2Result = null;
-        }
-
-        $v2Cart = $this->fromQueryResult($v2Result);
-        if (!$v2Cart['is_empty']) {
-            return $v2Cart;
         }
 
         try {

@@ -127,8 +127,11 @@ final class CheckoutSuccessPresentationService
         } catch (\Throwable) {
             return $code;
         }
-
-        return $label !== '' ? $label : $code;
+        if ($label === '') {
+            return $code;
+        }
+        // Catalog may already translate; __() is idempotent when key is already target locale.
+        return (string)__($label);
     }
 
     private function images(): ?OrderCatalogImageResolverInterface

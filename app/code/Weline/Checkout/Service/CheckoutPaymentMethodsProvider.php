@@ -89,7 +89,7 @@ final class CheckoutPaymentMethodsProvider
             $label = (string) ($method['label'] ?? $method['title'] ?? $method['name'] ?? $code);
             $wallet = \is_array($method['paypal_wallet'] ?? null) ? $method['paypal_wallet'] : null;
 
-            $normalized[] = [
+            $row = [
                 'code' => $code,
                 'label' => $label !== '' ? $label : $code,
                 'title' => (string) ($method['title'] ?? $method['label'] ?? $code),
@@ -111,6 +111,7 @@ final class CheckoutPaymentMethodsProvider
                 'source' => (string) ($method['source'] ?? 'Weline_Payment'),
                 'sort_order' => (int) ($method['sort_order'] ?? 100),
             ];
+            $normalized[] = $row + $this->normalizeIncentiveFields($method);
         }
 
         usort(
@@ -284,7 +285,40 @@ final class CheckoutPaymentMethodsProvider
             'cod_fee_amount_minor' => 0,
             'source' => 'Weline_Payment',
             'sort_order' => 0,
+        ] + $this->normalizeIncentiveFields([]);
+    }
+
+    /**
+     * 透传 Payment 列表扁字段（contracts：incentive_savings_minor 等）；未给出站则默认为 0/空。
+     *
+     * @param array<string, mixed> $method
+     * @return array{
+     *   incentive_savings_minor:int,
+     *   incentive_display:string,
+     *   incentive_available:bool,
+     *   incentive_type?:string,
+     *   incentive_percent?:float|int
+     * }
+     */
+    private function normalizeIncentiveFields(array $method): array
+    {
+        $savings = max(0, (int) ($method['incentive_savings_minor'] ?? 0));
+        $available = !empty($method['incentive_available']) && $savings > 0;
+        $display = $available ? trim((string) ($method['incentive_display'] ?? '')) : '';
+        $fields = [
+            'incentive_savings_minor' => $available ? $savings : 0,
+            'incentive_display' => $display,
+            'incentive_available' => $available,
         ];
+        $type = strtolower(trim((string) ($method['incentive_type'] ?? '')));
+        if ($available && ($type === 'fixed_amount' || $type === 'percentage')) {
+            $fields['incentive_type'] = $type;
+        }
+        if ($available && \array_key_exists('incentive_percent', $method) && is_numeric($method['incentive_percent'])) {
+            $fields['incentive_percent'] = 0 + $method['incentive_percent'];
+        }
+
+        return $fields;
     }
 
     /**

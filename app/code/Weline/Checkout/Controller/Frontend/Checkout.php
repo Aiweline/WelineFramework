@@ -45,13 +45,19 @@ class Checkout extends FrontendController
     {
         // 默认允许匿名结账：未登录也直接渲染结账页。
         $this->request->setGet('theme_page_title', (string)__('结账'));
+        $this->request->setGet('page_type', 'checkout');
+        $this->request->setGet('layout_type', 'checkout');
+        $this->request->setGet('layout_option', 'default');
         $this->assign('page_title', __('结账'));
         $this->assign('title', __('结账'));
         $this->layoutType = 'checkout';
 
-        /** @var \Weline\Checkout\Service\CheckoutPageViewModel $viewModel */
-        $viewModel = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPageViewModel::class);
-        $cart = $viewModel->currentCart();
+        // P0: SSR empty shell — no currentCart/QueryBin hang; keep chrome.
+        $cart = [
+            'items' => [],
+            'currency' => 'USD',
+            'is_empty' => true,
+        ];
         $this->assign('checkout_items', $cart['items']);
         $this->assign('checkout_currency', $cart['currency']);
         $this->assign('checkout_items_empty_message', __('购物车为空，请先加入商品。'));
@@ -60,7 +66,17 @@ class Checkout extends FrontendController
             (string)__('确认收货地址、配送方式和支付信息后即可提交订单。')
         );
 
-        return $this->fetch('Weline_Checkout::frontend/checkout/index.phtml');
+        $body = $this->template('Weline_Checkout::frontend/checkout/index.phtml');
+        $meta = [
+            'showHeader' => true,
+            'showFooter' => true,
+            'class' => 'weline-checkout-page',
+            'content' => $body,
+        ];
+        $this->assign('meta', $meta);
+        $this->assign('content', $body);
+
+        return $this->template('Weline_Checkout::theme/frontend/layouts/checkout/default.phtml');
     }
 
     /**
