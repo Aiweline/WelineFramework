@@ -20,6 +20,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Template;
@@ -585,12 +586,17 @@ HTML;
                 // Missing hook registrations must not break the panel.
             }
 
-            ob_start();
-            $panelType = $isBackend ? 'backend' : 'frontend';
-            $showCloseButton = true;
-            $devToolCookieNameJs = $panelAccess->cookieName();
-            include $templatePath;
-            $html = ob_get_clean();
+            FiberOutputBuffer::beginCapture();
+            try {
+                $panelType = $isBackend ? 'backend' : 'frontend';
+                $showCloseButton = true;
+                $devToolCookieNameJs = $panelAccess->cookieName();
+                include $templatePath;
+                $html = FiberOutputBuffer::endCapture();
+            } catch (\Throwable $e) {
+                FiberOutputBuffer::discardCapture();
+                throw $e;
+            }
 
             $html = is_string($html) ? $html : '';
             if ($html !== '') {

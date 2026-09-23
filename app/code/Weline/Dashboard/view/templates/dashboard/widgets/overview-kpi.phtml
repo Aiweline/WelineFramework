@@ -1,4 +1,5 @@
 <?php
+/** @widget.source {Weline_Dashboard::css/widgets/widget-overview-kpi.css} */
 try {
     $statsService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Dashboard\Service\DashboardStatisticsService::class);
     $items = $statsService->getKpiItems();
@@ -18,13 +19,13 @@ $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUO
         <span class="w-text" data-tone="muted" data-size="sm"><?= __('Dashboard') ?></span>
     </div>
     <div class="w-card__body">
-        <div class="w-stat-tiles dashboard-widget-kpi-grid" style="--w-stat-tile-min:7.5rem;--w-gap:var(--weline-space-3);">
+        <div class="w-stat-tiles dashboard-widget-kpi-grid" data-widget-style-class="1f0e83bcbc523c43">
             <?php foreach ($items as $item): ?>
                 <div class="w-card" data-tone="muted" data-w-height="full">
-                    <div class="w-card__body" style="--w-pt:var(--weline-space-3);--w-pb:var(--weline-space-3);--w-ps:var(--weline-space-3);--w-pe:var(--weline-space-3);">
-                        <strong class="w-text" data-tone="primary" data-align="center" style="--w-font-size:1.375rem;"><?= $h($item['value'] ?? '') ?></strong>
-                        <span class="w-text" data-align="center" data-size="sm" style="--w-mt:var(--weline-space-2);"><?= $h($item['label'] ?? '') ?></span>
-                        <small class="w-text" data-tone="muted" data-align="center" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= $h($item['hint'] ?? '') ?></small>
+                    <div class="w-card__body" data-widget-style-class="425f46d8f7211ec6">
+                        <strong class="w-text" data-tone="primary" data-align="center" data-widget-style-class="b153a61d4e0fc36d"><?= $h($item['value'] ?? '') ?></strong>
+                        <span class="w-text" data-align="center" data-size="sm" data-widget-style-class="995c2ad754eca402"><?= $h($item['label'] ?? '') ?></span>
+                        <small class="w-text" data-tone="muted" data-align="center" data-size="sm" data-widget-style-class="ab3c288d4ce1a13b"><?= $h($item['hint'] ?? '') ?></small>
                     </div>
                 </div>
             <?php endforeach; ?>

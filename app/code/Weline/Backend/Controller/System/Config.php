@@ -18,6 +18,8 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Console\Cache\Clear;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Ui\FormKey;
 use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
@@ -80,7 +82,12 @@ class Config extends \Weline\Framework\App\Controller\BackendController
         /**@var Clear $cache */
         $cache = ObjectManager::getInstance(Clear::class);
         $cache->execute(['-f']);
-        if (ob_get_level() > 0 && ob_get_length() > 0) {
+        // Persistent: drop fiber frames only — never ob_clean() process-global Fiber handler.
+        if (Runtime::isPersistent()) {
+            if (FiberOutputBuffer::hasActiveCapture()) {
+                FiberOutputBuffer::resetCurrent();
+            }
+        } elseif (ob_get_level() > 0 && ob_get_length() > 0) {
             ob_clean();
         }
         try {

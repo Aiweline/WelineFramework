@@ -27,6 +27,8 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\Strategy\WlsStrategy;
@@ -792,9 +794,15 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
 
         # --8 通过 Response 输出并发送，兼容 FPM/WLS，由 Runtime 统一处理
-        ob_start();
-        $pngGenerated = imagepng($image);
-        $png = ob_get_clean();
+        FiberOutputBuffer::beginCapture();
+        try {
+            $pngGenerated = imagepng($image);
+            $png = FiberOutputBuffer::endCapture();
+        } catch (\Throwable $e) {
+            FiberOutputBuffer::discardCapture();
+            imagedestroy($image);
+            throw $e;
+        }
         imagedestroy($image);
 
         if (!$pngGenerated || !is_string($png) || $png === '') {
@@ -806,9 +814,15 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             return;
         }
 
-        // 某些运行时链路会残留输出缓冲内容，可能导致 PNG 响应被污染为破损图。
-        while (ob_get_level() > 0) {
-            ob_end_clean();
+        // Persistent: never while-drain Fiber installed handler; FPM may clear stray layers.
+        if (Runtime::isPersistent()) {
+            if (FiberOutputBuffer::hasActiveCapture()) {
+                FiberOutputBuffer::resetCurrent();
+            }
+        } else {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
         }
 
         $response = $this->request->getResponse();

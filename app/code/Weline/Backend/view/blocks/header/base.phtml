@@ -36,13 +36,14 @@ if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
     }
 }
 
-ob_start();
+\Weline\Framework\Runtime\FiberOutputBuffer::beginCapture();
 try {
     $backendThemeConfig = $themeConfig->getThemeConfig();
+    \Weline\Framework\Runtime\FiberOutputBuffer::discardCapture();
 } catch (\Throwable) {
+    \Weline\Framework\Runtime\FiberOutputBuffer::discardCapture();
     $backendThemeConfig = [];
 }
-ob_end_clean();
 if (!is_array($backendThemeConfig)) {
     $backendThemeConfig = [];
 }

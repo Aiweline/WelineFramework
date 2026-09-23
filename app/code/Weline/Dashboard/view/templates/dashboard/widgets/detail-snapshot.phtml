@@ -1,4 +1,5 @@
 <?php
+/** @widget.source {Weline_Dashboard::css/widgets/widget-detail-snapshot.css} */
 $rows = [
     [__('视图'), __('默认概览'), __('系统共享视图')],
     [__('布局'), __('4 个固定区域'), __('指标、分析、侧栏、明细')],
@@ -11,16 +12,16 @@ $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUO
         <h3 class="w-card__title"><?= __('默认明细') ?></h3>
         <span class="w-text" data-tone="muted" data-size="sm"><?= __('Dashboard') ?></span>
     </div>
-    <div class="w-card__body" style="--w-pt:0;--w-pb:0;">
+    <div class="w-card__body" data-widget-style-class="3193a18f917f0807">
         <div class="w-table-wrap">
-            <table class="w-table" style="--w-mb:0;">
+            <table class="w-table" data-widget-style-class="09af706ef7f0a0b1">
                 <tbody>
                 <?php foreach ($rows as $row): ?>
                     <tr>
                         <th scope="row"><span class="w-text" data-tone="muted"><?= $h($row[0] ?? '') ?></span></th>
                         <td>
                             <strong class="w-text" data-weight="strong"><?= $h($row[1] ?? '') ?></strong>
-                            <span class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= $h($row[2] ?? '') ?></span>
+                            <span class="w-text" data-tone="muted" data-size="sm" data-widget-style-class="7cce2aebd796ff69"><?= $h($row[2] ?? '') ?></span>
                         </td>
                     </tr>
                 <?php endforeach; ?>
