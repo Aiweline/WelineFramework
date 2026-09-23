@@ -155,6 +155,11 @@ final class SearchHubService
             $expression = $provider->expression($sectionRequest);
             $providerResult = $provider->execute($sectionRequest, $expression);
             if ($providerResult->hits === []) {
+                // Commerce primary: keep an empty product section so the UI can show「商品 0」
+                // instead of silently omitting products while blog/FAQ still inflate hitCount.
+                if ($code === 'product' && !$autocomplete) {
+                    $sections[$code] = [];
+                }
                 continue;
             }
             $sections[$code] = $providerResult->hits;

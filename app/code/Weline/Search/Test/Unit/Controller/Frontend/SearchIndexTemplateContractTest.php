@@ -38,6 +38,8 @@ final class SearchIndexTemplateContractTest extends TestCase
 
         self::assertStringContainsString('data-testid="storefront-search"', $template);
         self::assertStringContainsString('data-testid="storefront-search-empty"', $template);
+        self::assertStringContainsString('data-testid="storefront-search-product-empty"', $template);
+        self::assertStringContainsString('商品 0 条', $template);
         self::assertStringContainsString('storefront-search__results', $template);
         self::assertStringNotContainsString('search-layout__grid', $template);
         self::assertStringContainsString('search_hit_templates', $template);

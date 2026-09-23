@@ -238,6 +238,8 @@ final class SearchQueryService
         }
         if ($mode !== CommerceRolloutGateInterface::MODE_ALLOWLIST) {
             // off and shadow preserve Product current storefront serving.
+            // Cutover to index requires architect G1–G3 (fresh verify + CAS +
+            // allowlist/on); missing-row soft default must not auto-promote.
             return false;
         }
 
