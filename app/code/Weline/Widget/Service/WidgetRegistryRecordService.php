@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Widget\Model\WidgetRegistryEntry;
+use Weline\Framework\Manager\ObjectManager;
 
 class WidgetRegistryRecordService
 {
     public function __construct(
         private readonly WidgetRegistryEntry $registryEntry,
+        private readonly ?DefaultInjectionPlanRepository $planRepository = null,
     ) {
     }
 
@@ -29,6 +31,8 @@ class WidgetRegistryRecordService
             'created_count' => 0,
             'updated_count' => 0,
             'created_default_injection_count' => 0,
+            'retired_widgets' => [],
+            'retired_count' => 0,
             'error' => null,
         ];
 
@@ -61,6 +65,8 @@ class WidgetRegistryRecordService
                     }
                 }
             }
+            $this->retireAbsentDefinitions($context['scan_coverage'] ?? [], $report);
+            ($this->planRepository ?? ObjectManager::getInstance(DefaultInjectionPlanRepository::class))->clearMemo();
         } catch (\Throwable $e) {
             $report['db_available'] = false;
             $report['error'] = $e->getMessage();
@@ -68,6 +74,62 @@ class WidgetRegistryRecordService
         }
 
         return $report;
+    }
+
+    /** Only the scanner's completed module inventory can establish absence. */
+    private function retireAbsentDefinitions(array $coverage, array &$report): void
+    {
+        if (($coverage['complete'] ?? false) !== true || !is_array($coverage['identities'] ?? null)) {
+            return;
+        }
+        $present = [];
+        foreach ($coverage['identities'] as $identity) {
+            $present[$this->identityKey($identity)] = true;
+        }
+        foreach (array_unique($coverage['modules'] ?? []) as $module) {
+            $rows = (clone $this->registryEntry)->clearQuery()->clearData()
+                ->where(WidgetRegistryEntry::schema_fields_WIDGET_MODULE, $module)
+                ->where(WidgetRegistryEntry::schema_fields_IS_ACTIVE, 1)->select()->fetchArray();
+            if (!is_array($rows)) {
+                throw new \RuntimeException('Cannot read registry entries for module ' . $module);
+            }
+            if (isset($rows[WidgetRegistryEntry::schema_fields_ID])) {
+                $rows = [$rows];
+            }
+            foreach ($rows as $row) {
+                $widget = json_decode((string)($row[WidgetRegistryEntry::schema_fields_REGISTRY_JSON] ?? ''), true);
+                // Unrecognised/custom records are not evidence of a missing file definition.
+                if (!is_array($widget) || !empty($widget['is_ai_generated'])) {
+                    continue;
+                }
+                $identity = [
+                    'area' => (string)$row[WidgetRegistryEntry::schema_fields_WIDGET_AREA],
+                    'module' => (string)$row[WidgetRegistryEntry::schema_fields_WIDGET_MODULE],
+                    'type' => (string)$row[WidgetRegistryEntry::schema_fields_WIDGET_TYPE],
+                    'code' => (string)$row[WidgetRegistryEntry::schema_fields_WIDGET_CODE],
+                ];
+                if (isset($present[$this->identityKey($identity)])) {
+                    continue;
+                }
+                $id = (int)$row[WidgetRegistryEntry::schema_fields_ID];
+                (clone $this->registryEntry)->clearQuery()->clearData()->load($id)
+                    ->setData(WidgetRegistryEntry::schema_fields_IS_ACTIVE, 0)
+                    ->setData(WidgetRegistryEntry::schema_fields_COLLECTION_SOURCE, 'complete_scan_retired')
+                    ->save();
+                $report['retired_widgets'][] = ['registry_id' => $id] + $identity;
+                ++$report['retired_count'];
+                $change = DefaultInjectionStructureChanges::between(array_replace($widget, $identity), []);
+                if ($change !== null) {
+                    $change['definition_retired'] = true;
+                    $report['injection_structure_changes'][] = $change;
+                }
+            }
+        }
+    }
+
+    private function identityKey(array $identity): string
+    {
+        return implode("\0", array_map(static fn(string $key): string => (string)($identity[$key] ?? ''), ['area', 'module', 'type', 'code']));
     }
 
     /**

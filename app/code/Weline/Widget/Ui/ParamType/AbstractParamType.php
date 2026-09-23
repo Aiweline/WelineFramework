@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Widget\Ui\ParamType;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Widget\Api\Param\FileImagePreviewResolverInterface;
 use Weline\Widget\Api\Param\ParamDefinition;
 
@@ -246,8 +248,15 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
             try {
                 $pickerHtml = (string)framework_view_process_block($block);
             } catch (\Throwable) {
-                while (ob_get_level() > $obLevel) {
-                    ob_end_clean();
+                // WLS: never while-drain past Fiber installed handler (cross-fiber truncation).
+                if (Runtime::isPersistent()) {
+                    if (FiberOutputBuffer::hasActiveCapture()) {
+                        FiberOutputBuffer::resetCurrent();
+                    }
+                } else {
+                    while (ob_get_level() > $obLevel) {
+                        ob_end_clean();
+                    }
                 }
                 $pickerHtml = '';
             }

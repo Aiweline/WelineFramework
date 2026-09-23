@@ -118,7 +118,9 @@ class WidgetRegistry implements WidgetRegistryInterface
     public function refreshWithReport(array $context = []): array
     {
         $registry = $this->buildRegistryFromGenerator($this->scanner->scanAllWidgetsGenerator());
-        $saved = $this->saveRegistry($registry);
+        $coverage = $this->scanner->getScanCoverage();
+        // A skipped or failed definition read is not an authoritative empty registry.
+        $saved = ($coverage['complete'] ?? false) === true && $this->saveRegistry($registry);
         $report = [
             'success' => $saved,
             'file_saved' => $saved,
@@ -129,11 +131,15 @@ class WidgetRegistry implements WidgetRegistryInterface
             'created_count' => 0,
             'updated_count' => 0,
             'created_default_injection_count' => 0,
+            'scan_coverage' => $coverage,
+            'retired_widgets' => [],
+            'retired_count' => 0,
         ];
         if (!$saved) {
             return $report;
         }
 
+        $context['scan_coverage'] = $coverage;
         $recordReport = $this->recordService()->sync($registry, $context);
         foreach ($recordReport as $key => $value) {
             $report[$key] = $value;
