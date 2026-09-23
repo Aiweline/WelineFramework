@@ -64,6 +64,7 @@ final class ShippingSeasonalSurchargeService
                 continue;
             }
             $hits[] = [
+                'rule_id' => (int)$rule->getId(),
                 'rule_code' => (string)$rule->getData(ShippingSeasonalRule::schema_fields_RULE_CODE),
                 'rule_name' => (string)$rule->getData(ShippingSeasonalRule::schema_fields_RULE_NAME),
                 'amount_minor' => $extra,

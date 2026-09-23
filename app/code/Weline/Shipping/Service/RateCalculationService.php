@@ -241,6 +241,11 @@ class RateCalculationService
             $isLast = $i === array_key_last($brackets);
             if ($max === null) {
                 $inRange = $matchKey >= $min;
+            } elseif ($type === RateTemplate::CALC_TYPE_WEIGHT_TABLE
+                && ($template->getMixedConfig()['public_tariff']['upper_inclusive'] ?? false) === true
+            ) {
+                $inRange = ($i === 0 ? $matchKey >= $min : $matchKey > $min)
+                    && $matchKey <= (float)$max + 0.00000001;
             } elseif ($isLast) {
                 $inRange = $matchKey >= $min && $matchKey <= (float)$max + 0.0000001;
             } else {
@@ -249,6 +254,12 @@ class RateCalculationService
             if ($inRange) {
                 return $this->decimalToMinor((string)$bracket['price'], $currencyPrecision);
             }
+        }
+
+        $public = $template->getMixedConfig()['public_tariff'] ?? [];
+        if ($type === RateTemplate::CALC_TYPE_WEIGHT_TABLE && !empty($public['offers'])) {
+            $quote = (new PublicTariffTableCompiler())->quote($public['offers'], $matchKey);
+            return $this->decimalToMinor($quote['retail_cny'], $currencyPrecision);
         }
 
         throw new ShippingRateUnavailableException('no_bracket_match');

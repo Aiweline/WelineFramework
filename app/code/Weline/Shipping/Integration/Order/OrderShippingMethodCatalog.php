@@ -55,10 +55,12 @@ final class OrderShippingMethodCatalog implements OrderShippingMethodCatalogInte
                 continue;
             }
             $seen[$code] = true;
-            $label = trim((string)($row[ShippingService::schema_fields_SERVICE_NAME] ?? ''));
+            $raw = trim((string)($row[ShippingService::schema_fields_SERVICE_NAME] ?? ''));
+            // Seed/admin service_name is Chinese source; translate for active locale.
+            $label = $raw !== '' ? (string)__($raw) : $code;
             $out[] = [
                 'code' => $code,
-                'label' => $label !== '' ? $label : $code,
+                'label' => $label,
             ];
         }
 
@@ -82,9 +84,9 @@ final class OrderShippingMethodCatalog implements OrderShippingMethodCatalogInte
                 ->find()
                 ->fetch();
             if ($row instanceof ShippingService && (int)$row->getId() > 0) {
-                $label = trim((string)$row->getData(ShippingService::schema_fields_SERVICE_NAME));
+                $raw = trim((string)$row->getData(ShippingService::schema_fields_SERVICE_NAME));
 
-                return $label !== '' ? $label : $code;
+                return $raw !== '' ? (string)__($raw) : $code;
             }
         } catch (\Throwable) {
             // Soft fallthrough.
