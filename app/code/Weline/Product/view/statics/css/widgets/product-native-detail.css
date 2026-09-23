@@ -715,6 +715,24 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     margin-bottom: 0;
     align-items: stretch;
 }
+.product-native-detail__buybox .product-native-detail__add:not(:disabled),
+.product-native-detail__buybox .product-native-detail__buy-now:not(:disabled),
+.product-native-detail__actions .product-native-detail__add:not(:disabled),
+.product-native-detail__actions .product-native-detail__buy-now:not(:disabled) {
+    /* FE-01：PDP 主加购/购买保持可点，抗 sticky/叠层误伤 */
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
+    visibility: visible;
+}
+.product-native-detail__buybox-price,
+.product-native-detail__price-whole {
+    position: relative;
+    z-index: 1;
+    visibility: visible;
+    opacity: 1;
+}
+
 /* Primary CTAs: full-width equal stack (avoid content-width step + zero seam). */
 .product-native-detail__actions > .widget-wrapper:has(.product-native-detail__add),
 .product-native-detail__actions > .widget-wrapper:has(.product-native-detail__buy-now),
@@ -1417,24 +1435,43 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     font-size: 1.05rem;
     line-height: 1.75;
 }
-// lead：汉服卷名保持略宽字距；§5.3 西文负字距不覆盖古风
+/* lead：汉服卷名保持略宽字距；§5.3 西文负字距不覆盖古风 */
 .product-native-detail__description-body .weline-detail-prose.weline-detail-prose--lead > h3 {
     margin: 0 0 0.85rem;
     font-family: var(--font-family-display, var(--weline-font-display, serif));
-    font-size: clamp(1.5rem, 1.3rem + 0.7vw, 1.85rem);
+    font-size: clamp(1.65rem, 1.35rem + 0.95vw, 2.1rem);
     font-weight: var(--font-weight-semibold, 600);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.14em;
     color: var(--color-text-primary, #1c1c1c);
-    line-height: 1.35;
+    line-height: 1.32;
+}
+.product-native-detail__description-body .weline-detail-prose.weline-detail-prose--lead > .weline-detail-prose__eyebrow {
+    display: block;
+    margin: 0 0 0.85rem;
+    padding-bottom: 0.55rem;
+    font-family: var(--font-family-body, sans-serif);
+    font-size: 0.8125rem;
+    font-weight: var(--font-weight-medium, 500);
+    letter-spacing: 0.32em;
+    color: var(--color-text-tertiary, #7a7874);
+    line-height: 1.4;
+    border-bottom: 1px solid var(--color-border-subtle, #d4cfc5);
+    max-width: 18em;
 }
 .product-native-detail__description-body .weline-detail-prose.weline-detail-prose--lead > p {
-    max-width: 58ch;
-    font-size: 1.05rem;
-    line-height: 1.75;
+    max-width: 48ch;
+    font-size: 1.1rem;
+    line-height: 1.88;
+    color: var(--color-text-secondary, #4a4a48);
+}
+.product-native-detail__description-body .weline-detail-prose.weline-detail-prose--lead {
+    margin-block: clamp(1.5rem, 1rem + 1.5vw, 2.75rem) var(--spacing-xl, 1.75rem);
+    padding-block-end: clamp(1.25rem, 1rem + 1vw, 2rem);
 }
 .product-native-detail__description-body .weline-detail-feature {
-    margin-block: var(--spacing-sm, 0.5rem);
-    padding-block: var(--spacing-lg, 1.25rem);
+    margin-block: var(--spacing-md, 1rem);
+    padding-block: var(--spacing-xl, 1.75rem);
+    border-top: 1px solid var(--color-border-subtle, #d4cfc5);
 }
 .product-native-detail__description-body .weline-detail-prose ul,
 .product-native-detail__description-body .weline-detail-prose ol {
@@ -2115,5 +2152,116 @@ html.has-product-sticky-purchase body {
     .product-native-detail__sticky-purchase {
         backdrop-filter: none;
         background: var(--color-bg-primary, #fff);
+    }
+}
+
+/* §5.4 详情楼层滚轮入场（性能优先）
+ * - 默认可见，避免鬼影
+ * - 仅 .is-armed 才藏层；远处楼层不挂 will-change / opacity:0（防大图合成层风暴）
+ * - 只做短 opacity + 轻微位移；图堆禁用位移
+ */
+.product-native-detail__description-body .weline-detail-reveal {
+    opacity: 1;
+    transform: none;
+}
+.product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal.is-armed:not(.is-in):not([data-inview="1"]) {
+    opacity: 0;
+    transform: translateY(0.55rem);
+    transition: none;
+}
+.product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-figure-stack.weline-detail-reveal.is-armed:not(.is-in):not([data-inview="1"]) {
+    transform: none; /* 大图堆只淡入，避免整层位移卡顿 */
+}
+.product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal.is-in,
+.product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal[data-inview="1"] {
+    opacity: 1;
+    transform: none;
+    transition:
+        opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1) var(--weline-detail-reveal-delay, 0ms),
+        transform 0.42s cubic-bezier(0.22, 1, 0.36, 1) var(--weline-detail-reveal-delay, 0ms);
+}
+.product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal.is-in--instant,
+.product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal.is-in--instant[data-inview="1"] {
+    transition: none !important;
+}
+
+/* 三件套质感：宣纸透气、图轻触反馈、诗栏水墨留白 */
+.product-native-detail__description-body .weline-detail-quiet-spacer {
+    height: clamp(2.25rem, 1.5rem + 2vw, 3.5rem);
+    margin-block: var(--spacing-sm, 0.5rem);
+    background:
+        linear-gradient(
+            90deg,
+            transparent 0%,
+            var(--color-border-subtle, #d4cfc5) 35%,
+            var(--color-border-subtle, #d4cfc5) 65%,
+            transparent 100%
+        )
+        center / 100% 1px no-repeat;
+}
+.product-native-detail__description-body .weline-detail-prose--quiet {
+    margin-block: var(--spacing-xl, 1.75rem);
+    text-align: center;
+}
+.product-native-detail__description-body .weline-detail-prose--quiet p {
+    margin: 0 auto;
+    max-width: 28ch;
+    font-family: var(--font-family-display, var(--weline-font-display, serif));
+    font-size: clamp(1.05rem, 0.95rem + 0.35vw, 1.25rem);
+    letter-spacing: 0.18em;
+    line-height: 1.9;
+    color: var(--color-text-secondary, #4a4a48);
+}
+.product-native-detail__description-body .weline-detail-feature--poem-aside .weline-detail-feature__copy {
+    background:
+        linear-gradient(
+            165deg,
+            var(--color-bg-secondary, #f7f4ef) 0%,
+            var(--color-bg-primary, #fffefa) 55%,
+            var(--color-bg-secondary, #f3efe8) 100%
+        );
+    padding: clamp(1.5rem, 1.15rem + 1.4vw, 2.35rem);
+    border: 1px solid var(--color-border-subtle, #d4cfc5);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-bg-primary, #fffefa) 70%, transparent);
+}
+.product-native-detail__description-body .weline-detail-feature--poem-aside .weline-detail-prose--verse-vertical > p {
+    font-family: var(--font-family-display, var(--weline-font-display, serif));
+    font-size: clamp(1.15rem, 1rem + 0.45vw, 1.45rem);
+    letter-spacing: 0.22em;
+    line-height: 2.05;
+    color: var(--color-text-primary, #1c1c1c);
+}
+.product-native-detail__description-body .weline-detail-figure {
+    transition: opacity 0.2s ease-out;
+}
+.product-native-detail__description-body .weline-detail-figure:hover {
+    opacity: 0.96;
+}
+.product-native-detail__description-body .weline-detail-bento__card {
+    transition: border-color 0.22s ease-out, background-color 0.22s ease-out;
+}
+.product-native-detail__description-body .weline-detail-bento__card:hover {
+    border-color: var(--color-border-strong, #c4beb2);
+}
+.product-native-detail__description-body .weline-detail-bento__card--accent {
+    background: var(--color-bg-secondary, #f7f4ef);
+    border-color: var(--color-border-default, #c4beb2);
+}
+.product-native-detail__description-body .weline-detail-prose--checklist li::before {
+    color: var(--color-text-tertiary, #7a7874);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .product-native-detail__description-body .weline-detail-reveal,
+    .product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal.is-armed:not(.is-in):not([data-inview="1"]) {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+    }
+    .product-native-detail__description-body .weline-detail-figure,
+    .product-native-detail__description-body .weline-detail-figure:hover,
+    .product-native-detail__description-body .weline-detail-bento__card {
+        transition: none !important;
+        transform: none !important;
     }
 }

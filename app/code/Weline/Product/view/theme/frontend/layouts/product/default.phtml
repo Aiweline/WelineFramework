@@ -26,8 +26,8 @@
  * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
  * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
  *
- * 产品主信息由 Weline_Product product-info 部件经 default_injections 注入 product-main；
- * 布局只保留 slot 与预览占位，禁止内嵌 w:widget 或控制器内容模板渲染主信息。
+ * 产品主信息由同模块布局内嵌 `<w:widget type="product" name="product-info" />`（placement=layout）；
+ * 禁止再声明 required default_injections，否则会与模板壳叠成双主信息。
  */
 $meta = $this->getData('meta') ?? [];
 $colors = $this->getData('colors') ?? [];
@@ -128,25 +128,8 @@ $this->assign('meta', $meta);
                                 position="content"
                                 class="product-detail-layout__main-content">
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
-                            <!-- 仅 slot + 预览占位；product-info 由 Product default_injections 注入，禁止布局内嵌 w:widget -->
-                            <div class="product-detail-layout__placeholder product-detail-layout__placeholder--product-info"
-                                 data-placeholder="product-main">
-                                <div class="product-detail-layout__preview-mock" aria-hidden="true">
-                                    <div class="product-detail-layout__preview-media">
-                                        <span>FCDC</span>
-                                    </div>
-                                    <div class="product-detail-layout__preview-body">
-                                        <p class="product-detail-layout__preview-eyebrow"><lang>已发布商品</lang></p>
-                                        <div class="product-detail-layout__preview-title">
-                                            <span>R43</span>
-                                            <span>Storefront</span>
-                                            <span>Product</span>
-                                        </div>
-                                        <p class="product-detail-layout__preview-sku">SKU: R43-STORE-PREVIEW</p>
-                                    </div>
-                                </div>
-                                <span class="product-detail-layout__placeholder-text"><lang>产品主信息区域 - 由 Product 部件默认注入</lang></span>
-                            </div>
+                            <?php /* placement=layout：内嵌 product-info；无可用固化 bake 时靠模板渲染主信息 */ ?>
+                            <w:widget type="product" name="product-info" params='{"show_brand":true,"show_supplier":true}' />
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
                         </w:slot>
 

@@ -35,6 +35,7 @@ final class Catalog extends FrontendController
         $surface = $this->surfaceResolver->resolve(
             $requestUri,
             (string)RequestContext::getWelineUserLang(),
+            (string)RequestContext::getWelineWebsiteCode(),
         );
 
         $this->layoutType = $surface['layout_type'];

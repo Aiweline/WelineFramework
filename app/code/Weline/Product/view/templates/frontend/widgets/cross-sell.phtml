@@ -14,6 +14,7 @@
  * @widget.supports {["layout-product-cross-sell","layout-cart-recommendations","cross-sell"]}
  * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-cross-sell", "area":"content", "sort_order":3, "required":true, "reason":"商品详情默认搭配推荐槽", "config":{"title":"经常一起购买","limit":3,"show_add_all_button":true,"show_total_price":true} }]}
  *
+ * @widget.source {Weline_Product::css/widgets/cross-sell.css}
  * @param title {default="经常一起购买",type="string",label="标题"}
  * @param limit {default=3,type="number",label="搭配商品数量"}
  * @param show_add_all_button {default=true,type="bool",label="显示一键添加按钮"}
@@ -113,10 +114,6 @@ foreach ($products as $product) {
     }
 }
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Product::css/widgets/cross-sell.css)&v=20260827-orange-wave1"
-      data-no-extract="true">
-
 <section class="<?= $esc($wc) ?> weline-product-fbt<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-cross-sell"

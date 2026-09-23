@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Product::css/widgets/widget-best-sellers-hero.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * Best-sellers page hero strip (configurable copy + background image).
  *
  * @var \Weline\Framework\View\Template $this
@@ -102,7 +103,7 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
         data-uid="<?= $esc($scope->uid) ?>"
         data-js-ns="<?= $esc($scope->jsNs) ?>"
         data-testid="storefront-best-sellers-hero"
-        <?= $rootStyle !== '' ? ' style="' . $esc($rootStyle) . '"' : '' ?>>
+        <?= $rootStyle !== '' ? ' data-widget-style="' . $esc($rootStyle) . '"' : '' ?>>
     <?php if ($backgroundImageFileHtml !== ''): ?>
         <div class="bsh-bg" aria-hidden="true"><?= $backgroundImageFileHtml ?></div>
     <?php endif; ?>
@@ -121,68 +122,3 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     </div>
 </header>
 
-<style>
-.<?= $wc ?> {
-    position: relative;
-    overflow: hidden;
-    margin: 0 0 var(--weline-space-7, 1.75rem);
-    padding: clamp(1.5rem, 4vw, 2.25rem);
-    border-radius: var(--weline-radius-lg, 12px);
-    background:
-        radial-gradient(ellipse at top right, color-mix(in srgb, var(--weline-theme-warning, #f59e0b) 22%, transparent), transparent 48%),
-        linear-gradient(135deg, var(--color-bg-dark-secondary, #131921) 0%, var(--color-bg-dark, #232f3e) 100%);
-    background-size: cover;
-    background-position: center;
-    color: #ffffff;
-    box-sizing: border-box;
-}
-.<?= $wc ?> .bsh-bg,
-.<?= $wc ?> .bsh-bg figure,
-.<?= $wc ?> .bsh-bg img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-}
-.<?= $wc ?> .bsh-bg img {
-    object-fit: cover;
-    object-position: center;
-}
-.<?= $wc ?> .bsh-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        90deg,
-        color-mix(in srgb, var(--color-bg-dark-secondary, #131921) 78%, transparent) 0%,
-        color-mix(in srgb, var(--color-bg-dark, #232f3e) 42%, transparent) 55%,
-        transparent 100%
-    );
-    pointer-events: none;
-}
-.<?= $wc ?> .bsh-copy {
-    position: relative;
-    z-index: 1;
-    max-width: min(36rem, 100%);
-}
-.<?= $wc ?> .bsh-eyebrow {
-    margin: 0 0 0.35rem;
-    font-size: var(--weline-font-size-sm, 0.8rem);
-    font-weight: var(--weline-font-weight-bold, 700);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--weline-theme-warning, #ffd814);
-}
-.<?= $wc ?> .bsh-title {
-    margin: 0;
-    font-size: clamp(1.75rem, 4vw, 2.4rem);
-    line-height: 1.15;
-    font-weight: var(--weline-font-weight-bold, 700);
-    color: #ffffff;
-}
-.<?= $wc ?> .bsh-lede,
-.<?= $wc ?> .bsh-count {
-    margin: 0.65rem 0 0;
-    color: rgba(255, 255, 255, 0.88);
-}
-</style>

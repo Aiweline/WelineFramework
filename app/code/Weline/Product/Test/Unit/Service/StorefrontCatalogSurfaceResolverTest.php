@@ -72,4 +72,24 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         self::assertSame('categories', $this->resolver->resolveSupported('/categories')['code'] ?? null);
         self::assertSame('categories', $this->resolver->resolveSupported('/category')['code'] ?? null);
     }
+
+    public function testDaocharmsWebsiteUsesRitualObjectsCopyWithoutHanfuShareImage(): void
+    {
+        $surface = $this->resolver->resolve('/products', 'en_US', 'daocharms');
+
+        self::assertSame('products', $surface['code']);
+        self::assertSame('Shop Ritual Objects', $surface['heading']);
+        self::assertSame('Shop Ritual Objects', $surface['seo_title']);
+        self::assertStringNotContainsString('Hanfu', $surface['heading']);
+        self::assertStringNotContainsString('Hanfu', $surface['seo_title']);
+        self::assertSame('', $surface['share_image'] ?? null);
+    }
+
+    public function testDefaultWebsiteKeepsHanfuCopyWhenWebsiteCodeEmpty(): void
+    {
+        $surface = $this->resolver->resolve('/products', 'en_US', '');
+
+        self::assertSame('Shop All Hanfu', $surface['heading']);
+        self::assertSame(StorefrontCatalogSurfaceResolver::SHARE_IMAGE, $surface['share_image'] ?? null);
+    }
 }

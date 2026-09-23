@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Filters::css/widgets/widget-category-filters.css}
  * 部件：分类/列表左侧筛选（Filters）
  *
  * @widget.code {category-filters}
@@ -104,7 +105,11 @@ $hasActive = (bool)$panel['has_active'];
 $clearUrl = (string)$panel['clear_url'];
 $visibleOptionLimit = 6;
 ?>
-<aside class="w-filters wc-theme_widget_category_filters" data-testid="storefront-filters-panel" data-hook-source="Weline_Filters" weline-code="filters.widget.category_filters">
+<aside class="w-filters wc-theme_widget_category_filters"
+       data-widget-code="category-filters"
+       data-testid="storefront-filters-panel"
+       data-hook-source="Weline_Filters"
+       weline-code="filters.widget.category_filters">
     <?php if ($hasActive): ?>
         <div class="w-filters__clear-row">
             <a class="w-filters__clear" href="<?= $escape($clearUrl) ?>"><lang>清除筛选条件</lang></a>
@@ -227,66 +232,3 @@ $visibleOptionLimit = 6;
         <p class="w-filters__empty" data-testid="storefront-filters-empty"><lang>暂无可用筛选条件</lang></p>
     <?php endif; ?>
 </aside>
-<style>
-.w-filters { color: #0f1111; font-size: 13px; line-height: 1.35; }
-.w-filters__clear-row { margin-bottom: 12px; }
-.w-filters__clear { color: #c45500; text-decoration: none; font-weight: 600; }
-.w-filters__clear:hover { text-decoration: underline; }
-.w-filters__section + .w-filters__section { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e5e7eb; }
-.w-filters__heading { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
-.w-filters__disclosure { display: block; }
-.w-filters__summary {
-    margin: 0 0 8px;
-    color: inherit;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 700;
-}
-.w-filters__disclosure:not([open]) > .w-filters__summary { margin-bottom: 0; }
-.w-filters__summary:hover, .w-filters__summary:focus-visible { color: #c45500; }
-.w-filters__more { margin-top: 4px; }
-.w-filters__more-summary {
-    width: fit-content;
-    color: #2162a1;
-    cursor: pointer;
-    font-weight: 600;
-    padding: 4px 0;
-}
-.w-filters__more-summary:hover, .w-filters__more-summary:focus-visible { color: #c45500; }
-.w-filters__list--more { margin-top: 2px; }
-.w-filters__list { list-style: none; margin: 0; padding: 0; }
-.w-filters__dept { margin: 0; }
-.w-filters__dept[data-depth="1"] { padding-left: 12px; }
-.w-filters__dept[data-depth="2"] { padding-left: 24px; }
-.w-filters__dept[data-depth="3"] { padding-left: 36px; }
-.w-filters__dept[data-depth="4"] { padding-left: 48px; }
-.w-filters__link, .w-filters__current { display: block; padding: 4px 0; text-decoration: none; }
-.w-filters__link { color: #2162a1; }
-.w-filters__link:hover { color: #c45500; text-decoration: underline; }
-.w-filters__current { font-weight: 700; color: #0f1111; }
-.w-filters__option {
-    display: inline-grid;
-    grid-template-columns: 1rem auto auto;
-    align-items: center;
-    gap: 8px;
-    max-width: 100%;
-    padding: 5px 0;
-    color: #0f1111;
-    text-decoration: none;
-}
-.w-filters__option:hover { color: #c45500; }
-.w-filters__radio, .w-filters__check {
-    width: 14px; height: 14px; border: 1.5px solid #879596; box-sizing: border-box; flex-shrink: 0;
-}
-.w-filters__radio { border-radius: 50%; }
-.w-filters__check { border-radius: 2px; }
-.w-filters__option.is-active .w-filters__radio {
-    border-color: #e47911; box-shadow: inset 0 0 0 3px #e47911;
-}
-.w-filters__option.is-active .w-filters__check {
-    border-color: #e47911; background: #e47911;
-}
-.w-filters__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.w-filters__count { color: #565959; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.w-filters__empty { margin: 0; color: #565959; }
-</style>

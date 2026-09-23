@@ -135,6 +135,10 @@ final class HomepageShelfStagger
             if (!is_array($card)) {
                 continue;
             }
+            // WO-BUILD-HOME-ZERO：货架禁零价/无价卡（避免 SSR 出 $0.00）
+            if ((float)($card['price'] ?? 0) <= 0.0) {
+                continue;
+            }
             $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
             if ($productId <= 0 || isset($seen[$productId])) {
                 continue;

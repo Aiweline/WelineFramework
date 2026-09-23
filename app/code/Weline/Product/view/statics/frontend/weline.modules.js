@@ -40,5 +40,12 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         description: "PDP 主加购滚出视野后的悬浮代理加购条"
+    },
+    productDetailReveal: {
+        paths: [
+            "Weline_Product::js/widgets/product-detail-reveal.js?v=20260923-detail-reveal4"
+        ],
+        globalVar: null,
+        description: "PDP 详情杂志楼层滚轮入场（§5.4）"
     }
 });

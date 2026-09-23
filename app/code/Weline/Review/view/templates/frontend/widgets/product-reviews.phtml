@@ -14,6 +14,7 @@
  * @widget.supports {["layout-product-reviews","product-reviews","review","reviews"]}
  * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-reviews", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认评论容器", "config":{"title":"商品评论","intro":"支持文字、图片与视频，内容审核后公开。","page_size":10,"layout_mode":"stack","form_position":"right","form_collapsed":"1"} }]}
  *
+ * @widget.source {Weline_Review::css/widgets/product-reviews.css}
  * @param title {default="商品评论",type="string",label="标题"}
  * @param intro {default="支持文字、图片与视频，内容审核后公开。",type="string",label="简介"}
  * @param page_size {default=10,type="number",label="列表每页条数"}
@@ -129,9 +130,6 @@ if ($offer === [] && !$isPreviewMode && class_exists(\Weline\Product\Helper\Stor
 if ($offerUuid === '' && !$isPreviewMode) {
     // Keep a visible shell so DEV HTML health does not report empty_html on product-reviews.
     ?>
-<link rel="stylesheet"
-      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260915-review-compact1"
-      data-no-extract="true">
 <section class="<?= $esc($wc) ?> weline-review weline-review--unavailable"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-product-reviews-unavailable"
@@ -190,10 +188,6 @@ $messages = [
     'lightboxLabel' => __('评论媒体预览'),
 ];
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260915-review-compact1"
-      data-no-extract="true">
-
 <section class="<?= $esc($reviewRootClasses) ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-product-reviews"

@@ -13,6 +13,8 @@ return [
         'page_layouts' => ['product'],
         'position' => ['content'],
         'slot' => 'product-main',
+        // placement=layout：product 布局已内嵌 <w:widget name="product-info" />；禁止再写 default_injections。
+        'placement' => 'layout',
         'is_container' => true,
         'slots' => [
             'product-purchase-actions' => [
@@ -40,19 +42,6 @@ return [
             'product-gallery',
             'product-detail',
         ],
-        'default_injections' => [[
-            'layout_type' => 'product',
-            'layout_option' => 'default',
-            'slot' => 'product-main',
-            'area' => 'content',
-            'sort_order' => 0,
-            'required' => true,
-            'reason' => '商品详情默认在产品主内容槽展示产品主要信息',
-            'config' => [
-                'show_brand' => true,
-                'show_supplier' => true,
-            ],
-        ]],
         'params' => [
             'show_brand' => [
                 'default' => true,
@@ -76,6 +65,7 @@ return [
         'page_layouts' => ['product'],
         'position' => ['content'],
         'slot' => 'product-related-products',
+        'placement' => 'injection',
         'supports' => [
             'layout-product-related-products',
             'related-products',
@@ -139,6 +129,7 @@ return [
         'page_layouts' => ['product'],
         'position' => ['content'],
         'slot' => 'product-you-may-like',
+        'placement' => 'injection',
         'supports' => [
             'layout-product-you-may-like',
             'layout-product-related-products',
@@ -218,6 +209,7 @@ return [
         'page_layouts' => ['product', 'cart'],
         'position' => ['content'],
         'slot' => 'product-cross-sell',
+        'placement' => 'injection',
         'supports' => [
             'layout-product-cross-sell',
             'layout-cart-recommendations',
@@ -282,9 +274,12 @@ return [
         'code' => 'recommended-products',
         'area' => 'frontend',
         'template' => 'Weline_Product::templates/frontend/widgets/recommended-products.phtml',
+        'source' => 'Weline_Product::css/widgets/recommended-products.css',
         'page_layouts' => ['category', 'products', 'not_found'],
         'position' => ['content'],
+        // 顶栏 slot 偏好 category；products → list-recommendations；404 → not-found-recommendations。
         'slot' => 'category-recommendations',
+        'placement' => 'injection',
         'supports' => [
             'layout-category-recommendations',
             'layout-products-recommendations',
@@ -383,6 +378,8 @@ return [
         'page_layouts' => ['best_sellers'],
         'position' => ['content'],
         'slot' => 'best-sellers-hero',
+        // placement=layout：best_sellers 布局已内嵌 <w:widget>；禁止再写 default_injections。
+        'placement' => 'layout',
         'supports' => [
             'layout-best-sellers-hero',
             'layout-best-sellers-main',

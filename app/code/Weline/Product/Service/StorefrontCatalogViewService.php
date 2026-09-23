@@ -232,11 +232,10 @@ final class StorefrontCatalogViewService
                         $logicalKey,
                         fn(): array => RequestLifecycleTrace::measurePhase(
                             'product.catalog.build_filtered',
-                            fn(): array => $this->buildPublishedOffers(
+                            fn(): array => $this->buildTargetedPublishedOffers(
                                 $websiteId,
                                 $scope,
                                 $filterIds,
-                                true,
                                 $includeListingDetails,
                             ),
                             ['website_id' => $websiteId, 'product_ids' => count($filterIds)],
@@ -464,6 +463,134 @@ final class StorefrontCatalogViewService
         }
 
         return $this->materializeCampaignUrls($rows);
+    }
+
+    /**
+     * Targeted MISS builder: prefer warm catalog Policy / request rows, else project IDs.
+     *
+     * @param list<int> $filterIds
+     * @return list<array<string, mixed>>
+     */
+    private function buildTargetedPublishedOffers(
+        int $websiteId,
+        ScopeIdentity $scope,
+        array $filterIds,
+        bool $includeListingDetails,
+    ): array {
+        $reused = $this->sliceTargetedOffersFromWarmCatalog($websiteId, $filterIds, $includeListingDetails);
+        if ($reused !== null) {
+            RequestLifecycleTrace::recordPhase(
+                'product.catalog.targeted_reuse',
+                0.0,
+                [
+                    'website_id' => $websiteId,
+                    'product_ids' => count($filterIds),
+                    'rows' => count($reused),
+                    'listing_details' => $includeListingDetails,
+                ],
+            );
+
+            return $reused;
+        }
+
+        return $this->buildPublishedOffers(
+            $websiteId,
+            $scope,
+            $filterIds,
+            true,
+            $includeListingDetails,
+        );
+    }
+
+    /**
+     * Slice a complete targeted set from warm shared/request catalog rows only.
+     * Incomplete coverage returns null so the real builder still runs (no fake HIT).
+     *
+     * @param list<int> $filterIds
+     * @return list<array<string, mixed>>|null
+     */
+    private function sliceTargetedOffersFromWarmCatalog(
+        int $websiteId,
+        array $filterIds,
+        bool $includeListingDetails,
+    ): ?array {
+        if ($filterIds === []) {
+            return null;
+        }
+
+        if (Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
+            $requestRows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
+            if (is_array($requestRows)) {
+                $sliced = $this->sliceOffersByProductIds($requestRows, $filterIds);
+                if ($sliced !== null) {
+                    return $sliced;
+                }
+            }
+        }
+
+        $peekKeys = [];
+        if ($includeListingDetails) {
+            $peekKeys[] = [
+                StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
+                $this->catalogCache->catalogOffersLogicalKey($websiteId, 'full'),
+            ];
+        } else {
+            $peekKeys[] = [
+                StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(),
+                $this->catalogCache->catalogSummaryOffersLogicalKey($websiteId, 48),
+            ];
+            $peekKeys[] = [
+                StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
+                $this->catalogCache->catalogOffersLogicalKey($websiteId, 'summary-slug2'),
+            ];
+            $peekKeys[] = [
+                StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
+                $this->catalogCache->catalogOffersLogicalKey($websiteId, 'full'),
+            ];
+        }
+
+        foreach ($peekKeys as [$policy, $logicalKey]) {
+            $payload = $this->hotCache->peekPolicy($policy, $logicalKey);
+            if (!is_array($payload)) {
+                continue;
+            }
+            $sliced = $this->sliceOffersByProductIds($payload, $filterIds);
+            if ($sliced !== null) {
+                return $sliced;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @param list<int> $filterIds
+     * @return list<array<string, mixed>>|null
+     */
+    private function sliceOffersByProductIds(array $rows, array $filterIds): ?array
+    {
+        $byProductId = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $productId = (int)($row['product_id'] ?? 0);
+            if ($productId <= 0 || isset($byProductId[$productId])) {
+                continue;
+            }
+            $byProductId[$productId] = $row;
+        }
+
+        $sliced = [];
+        foreach ($filterIds as $productId) {
+            if (!isset($byProductId[$productId])) {
+                return null;
+            }
+            $sliced[] = $byProductId[$productId];
+        }
+
+        return $sliced;
     }
 
     /**

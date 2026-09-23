@@ -55,6 +55,27 @@ final class ProductCardContractTest extends TestCase
         self::assertSame('今日精选', $product['campaign_label']);
     }
 
+    public function testZeroUnitPriceBecomesQuoteOnlyNotSellable(): void
+    {
+        $product = ProductCardRenderer::fromStorefrontOffer([
+            'product_id' => 208,
+            'name' => 'Zero',
+            'sku' => 'SKU-208',
+            'unit_price_minor' => 0,
+            'currency' => 'USD',
+            'sellable' => true,
+            'global_offer_uuid' => 'offer-208',
+        ]);
+        self::assertSame(0.0, (float)$product['price']);
+        self::assertTrue(!empty($product['quote_only']));
+        self::assertFalse(!empty($product['sellable']));
+        $partial = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/partials/product-card.phtml'
+        );
+        self::assertStringContainsString('missingSellPrice', $partial);
+        self::assertStringContainsString('联系询价', $partial);
+    }
+
     public function testAssetsAndPartialExist(): void
     {
         $base = dirname(__DIR__, 3);
@@ -78,14 +99,21 @@ final class ProductCardContractTest extends TestCase
         self::assertStringContainsString('padding-inline: var(--weline-space-4', $css);
         self::assertStringContainsString('var(--color-link', $css);
         self::assertStringContainsString('.wpc-cta .btn-buy-now', $css);
-        self::assertStringContainsString('20260921-product-card-css-emission-heal', (string)file_get_contents(
+        self::assertStringContainsString('20260923-fe01-cta-reach', (string)file_get_contents(
             $base . '/Service/ProductCardRenderer.php'
         ));
         $partial = (string)file_get_contents($base . '/view/templates/frontend/partials/product-card.phtml');
         self::assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $partial);
+        self::assertStringContainsString('defer_card_css', $partial);
+        $renderer = (string)file_get_contents($base . '/Service/ProductCardRenderer.php');
+        self::assertStringContainsString('StorefrontProductCardFragmentCache', $renderer);
+        self::assertStringContainsString("'defer_card_css' => true", $renderer);
+        self::assertStringContainsString('projectFromOffers', $renderer);
+        self::assertStringContainsString('bucketCardIndexForFragmentReuse', $renderer);
+        self::assertStringContainsString('emitStylesheetLinkOnce() . $html', $renderer);
     }
 
-    public function testRendererDeclaresInlineProductCardStyleEmitter(): void
+    public function testRendererDeclaresExternalProductCardStylesheet(): void
     {
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/ProductCardRenderer.php'
@@ -94,20 +122,22 @@ final class ProductCardContractTest extends TestCase
         self::assertStringContainsString('buildProductCardStyleTag()', $src);
         self::assertStringContainsString('product-card.css', $src);
         self::assertStringContainsString(ProductCardRenderer::CSS_LINK_MARKER, $src);
-        self::assertStringContainsString('<style ', $src);
-        self::assertStringNotContainsString('<link rel="stylesheet"', $src);
+        self::assertStringNotContainsString("return '<style ", $src);
+        self::assertStringContainsString('data-weline-widget-asset', $src);
         // 宿主 + 卡 partial 均可 emit；禁止旧 cssLinkOnce / body <link>
         self::assertStringNotContainsString('cssLinkOnce', $src);
         self::assertStringNotContainsString('return self::cssLinkOnce()', $src);
-        self::assertStringContainsString('20260921-product-card-css-emission-heal', $src);
+        self::assertStringContainsString('20260923-fe01-cta-reach', $src);
         self::assertStringContainsString('onCaptureDiscard', $src);
 
         ProductCardRenderer::resetProductCardCssEmission();
         $tag = ProductCardRenderer::buildProductCardStyleTag();
-        self::assertStringContainsString('<style ' . ProductCardRenderer::CSS_LINK_MARKER . '="1"', $tag);
-        self::assertStringContainsString('.weline-product-card', $tag);
-        self::assertStringContainsString('a:any-link', $tag);
-        self::assertStringContainsString('.product-actions .action-btn', $tag);
+        self::assertStringContainsString('<link rel="stylesheet"', $tag);
+        self::assertStringContainsString('data-weline-widget-asset="source"', $tag);
+        self::assertStringContainsString('data-weline-source-position="head"', $tag);
+        self::assertStringContainsString('product-card.css', $tag);
+        self::assertStringNotContainsString('<style', $tag);
+
     }
 
     public function testEmitSetsFlagOnlyAfterNonEmptyStyleAndResetsOnCaptureDiscard(): void

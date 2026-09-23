@@ -34,6 +34,11 @@ final class ProductSearchProjectionQueryProvider implements QueryProviderInterfa
             'snapshotWebsite' => $this->projections->snapshotWebsite(
                 $this->websiteId($params),
             ),
+            'snapshotScope' => $this->projections->snapshotScope(
+                $this->websiteId($params),
+                $this->nonNegativeInt($params, 'store_id'),
+                $this->nonNegativeInt($params, 'channel_id'),
+            ),
             'projectChange' => $this->projections->projectChange($params),
             default => throw new \InvalidArgumentException((string)__(
                 'Product Search 投影接口不支持操作：%{1}',
@@ -74,7 +79,22 @@ final class ProductSearchProjectionQueryProvider implements QueryProviderInterfa
                         ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Read exact published Store/Channel projection snapshot',
+                    'summary' => 'Read full-website published projection snapshot (indexer/migration)',
+                ],
+                [
+                    'name' => 'snapshotScope',
+                    'frontend' => false,
+                    'external' => false,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 6,
+                    'params' => [
+                        ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                        ['name' => 'store_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                        ['name' => 'channel_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Read one Store/Channel published projection snapshot for Search direct',
                 ],
                 [
                     'name' => 'projectChange',
@@ -102,19 +122,28 @@ final class ProductSearchProjectionQueryProvider implements QueryProviderInterfa
      */
     private function websiteId(array $params): int
     {
-        if (!\array_key_exists('website_id', $params)) {
+        return $this->nonNegativeInt($params, 'website_id');
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function nonNegativeInt(array $params, string $key): int
+    {
+        if (!\array_key_exists($key, $params)) {
             throw new \InvalidArgumentException((string)__(
-                'Product Search 投影接口缺少 website_id',
+                'Product Search 投影接口缺少 %{1}',
+                [$key],
             ));
         }
-        $websiteId = (int)$params['website_id'];
-        if ($websiteId < 0) {
+        $value = (int)$params[$key];
+        if ($value < 0) {
             throw new \InvalidArgumentException((string)__(
-                'website_id 不能为负数：%{1}',
-                [$websiteId],
+                '%{1} 不能为负数：%{2}',
+                [$key, $value],
             ));
         }
 
-        return $websiteId;
+        return $value;
     }
 }

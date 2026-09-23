@@ -111,9 +111,14 @@ final class StorefrontProductWidgetCatalog
     private function buildFeaturedCandidateCards(int $limit): array
     {
         $limit = max(8, min(48, $limit));
+        // Over-fetch so zero-price / quote-only SKUs can be skipped without emptying Featured.
+        $poolLimit = max($limit * 3, 24);
         $selected = [];
         $seen = [];
-        foreach ($this->newArrivalCards($limit, 30) as $card) {
+        foreach ($this->newArrivalCards($poolLimit, 30) as $card) {
+            if (!$this->isDisplayableShelfCard($card)) {
+                continue;
+            }
             $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
             if ($productId <= 0 || isset($seen[$productId])) {
                 continue;
@@ -124,7 +129,10 @@ final class StorefrontProductWidgetCatalog
                 return $selected;
             }
         }
-        foreach ($this->cards($limit) as $card) {
+        foreach ($this->cards($poolLimit) as $card) {
+            if (!$this->isDisplayableShelfCard($card)) {
+                continue;
+            }
             $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
             if ($productId <= 0 || isset($seen[$productId])) {
                 continue;
@@ -157,6 +165,9 @@ final class StorefrontProductWidgetCatalog
         $cards = [];
         $seen = [];
         foreach ($offers as $offer) {
+            if (!$this->isDisplayableShelfOffer($offer)) {
+                continue;
+            }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
             if ($productId <= 0 || isset($seen[$productId])) {
                 continue;
@@ -225,7 +236,7 @@ final class StorefrontProductWidgetCatalog
         $selectedOffers = [];
         $seenProductIds = [];
         foreach ($offers as $offer) {
-            if (!$this->isHanfuOffer($offer)) {
+            if (!$this->isHanfuOffer($offer) || !$this->isDisplayableShelfOffer($offer)) {
                 continue;
             }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
@@ -245,6 +256,9 @@ final class StorefrontProductWidgetCatalog
         foreach ($offers as $offer) {
             if (count($selectedOffers) >= $limit) {
                 break;
+            }
+            if (!$this->isDisplayableShelfOffer($offer)) {
+                continue;
             }
             $fallbackProductId = max(0, (int)($offer['product_id'] ?? 0));
             if ($fallbackProductId <= 0 || isset($seenProductIds[$fallbackProductId])) {
@@ -325,6 +339,10 @@ final class StorefrontProductWidgetCatalog
             if (!isset($offerByProductId[$productId])) {
                 continue;
             }
+            // WO-BUILD-HOME-ZERO：点选 ID 列表同样禁零价/询价占位当可买卡（禁 $0.00）
+            if (!$this->isDisplayableShelfOffer($offerByProductId[$productId])) {
+                continue;
+            }
             $cards[] = $this->mapOffer($offerByProductId[$productId], count($cards));
             if (count($cards) >= $limit) {
                 break;
@@ -361,6 +379,10 @@ final class StorefrontProductWidgetCatalog
                 if ($productId <= 0 || isset($seenProductIds[$productId])) {
                     continue;
                 }
+                // WO-BUILD-HOME-ZERO：热销回退池同样禁零价 Offer
+                if (!$this->isDisplayableShelfOffer($offer)) {
+                    continue;
+                }
                 $seenProductIds[$productId] = true;
                 $pool[] = $this->mapOffer($offer, count($pool));
                 if (count($pool) >= max($limit * 2, 24)) {
@@ -369,7 +391,10 @@ final class StorefrontProductWidgetCatalog
             }
         }
 
-        $pool = $this->withReviewAggregates($pool);
+        $pool = array_values(array_filter(
+            $this->withReviewAggregates($pool),
+            fn(array $card): bool => $this->isDisplayableShelfCard($card),
+        ));
 
         usort(
             $pool,
@@ -442,7 +467,7 @@ final class StorefrontProductWidgetCatalog
                 );
                 $offerByProductId = [];
                 foreach ($offers as $offer) {
-                    if (!$this->isHanfuOffer($offer)) {
+                    if (!$this->isHanfuOffer($offer) || !$this->isDisplayableShelfOffer($offer)) {
                         continue;
                     }
                     $productId = (int)($offer['product_id'] ?? 0);
@@ -452,6 +477,9 @@ final class StorefrontProductWidgetCatalog
                 }
                 // New-arrivals: prefer HF-* then fill non-HF published offers (import SKUs).
                 foreach ($offers as $offer) {
+                    if (!$this->isDisplayableShelfOffer($offer)) {
+                        continue;
+                    }
                     $fallbackProductId = (int)($offer['product_id'] ?? 0);
                     if ($fallbackProductId > 0 && !isset($offerByProductId[$fallbackProductId])) {
                         $offerByProductId[$fallbackProductId] = $offer;
@@ -525,7 +553,7 @@ final class StorefrontProductWidgetCatalog
         $cards = [];
         $seenProductIds = [];
         foreach ($offers as $offer) {
-            if (!$this->isHanfuOffer($offer)) {
+            if (!$this->isHanfuOffer($offer) || !$this->isDisplayableShelfOffer($offer)) {
                 continue;
             }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
@@ -546,6 +574,9 @@ final class StorefrontProductWidgetCatalog
         // all published offers so PDP personalization never collapses empty when
         // the optional HF-* SKU convention is absent.
         foreach ($offers as $offer) {
+            if (!$this->isDisplayableShelfOffer($offer)) {
+                continue;
+            }
             $fallbackProductId = max(0, (int)($offer['product_id'] ?? 0));
             if ($excludeProductId > 0 && $fallbackProductId === $excludeProductId) {
                 continue;
@@ -589,7 +620,7 @@ final class StorefrontProductWidgetCatalog
         $companions = $this->sameCategoryCompanionOffers($excludeProductId, max($limit * 3, 12));
 
         foreach ($companions as $offer) {
-            if (!$this->isHanfuOffer($offer)) {
+            if (!$this->isHanfuOffer($offer) || !$this->isDisplayableShelfOffer($offer)) {
                 continue;
             }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
@@ -607,6 +638,9 @@ final class StorefrontProductWidgetCatalog
         }
 
         foreach ($companions as $offer) {
+            if (!$this->isDisplayableShelfOffer($offer)) {
+                continue;
+            }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
             if ($productId <= 0 || isset($seenProductIds[$productId])) {
                 continue;
@@ -806,6 +840,12 @@ final class StorefrontProductWidgetCatalog
         $productPath = $slug !== '' ? '/product/' . $slug : '/product/' . $productId;
         $route = rtrim(Url::getPrefix(), '/') . $productPath;
 
+        $quoteOnly = !empty($offer['quote_only']) || $priceMinor <= 0;
+        $sellable = !empty($offer['sellable'])
+            && empty($offer['currency_unavailable'])
+            && !$quoteOnly
+            && $priceMinor > 0;
+
         return [
             'id' => $productId,
             'product_id' => $productId,
@@ -824,8 +864,9 @@ final class StorefrontProductWidgetCatalog
             'rating' => 0.0,
             'review_count' => 0,
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
-            'sellable' => !empty($offer['sellable']) && empty($offer['currency_unavailable']),
+            'sellable' => $sellable,
             'currency_unavailable' => !empty($offer['currency_unavailable']),
+            'quote_only' => $quoteOnly,
         ];
     }
 
@@ -887,6 +928,32 @@ final class StorefrontProductWidgetCatalog
             strtoupper(trim((string)($offer['sku'] ?? ''))),
             self::HANFU_SKU_PREFIX,
         );
+    }
+
+    /**
+     * WO-BUILD-OPS-02-HOME / WO-BUILD-HOME-ZERO：店面货架只收真实可展示非零价 Offer（禁 $0.00 / 询价占位当精选）。
+     *
+     * @param array<string, mixed> $offer
+     */
+    private function isDisplayableShelfOffer(array $offer): bool
+    {
+        if (!empty($offer['currency_unavailable']) || !empty($offer['quote_only'])) {
+            return false;
+        }
+
+        return max(0, (int)($offer['unit_price_minor'] ?? 0)) > 0;
+    }
+
+    /**
+     * @param array<string, mixed> $card
+     */
+    private function isDisplayableShelfCard(array $card): bool
+    {
+        if (!empty($card['currency_unavailable']) || !empty($card['quote_only'])) {
+            return false;
+        }
+
+        return (float)($card['price'] ?? 0) > 0.0;
     }
 
     private function currentScope(): ScopeIdentity

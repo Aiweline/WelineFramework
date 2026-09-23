@@ -16,7 +16,10 @@ return [
         'template' => 'Weline_Filters::templates/frontend/widgets/category-filters.phtml',
         'page_layouts' => ['category', 'search', 'products'],
         'position' => ['sidebar'],
+        // 顶栏 slot 偏好 category；products 页注入目标见 default_injections → list-filters。
         'slot' => 'category-filters',
+        // placement=injection：宿主布局只留空槽；禁止布局内嵌 + JSON 双路径。
+        'placement' => 'injection',
         'supports' => [
             'layout-category-filters',
             'layout-products-filters',

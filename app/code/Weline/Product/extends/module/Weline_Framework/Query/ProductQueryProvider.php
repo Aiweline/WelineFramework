@@ -7,6 +7,7 @@ namespace Weline\Product\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Product\Model\Shard\Product;
+use Weline\Product\Service\PurchasePanelService;
 use Weline\Product\Service\StorefrontCatalogViewService;
 
 /**
@@ -26,6 +27,7 @@ final class ProductQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getProductByIds' => $this->getProductByIds($params),
+            'getPurchasePanel' => $this->getPurchasePanel($params),
             default => throw new \InvalidArgumentException(
                 'Product query provider does not support operation: ' . $operation
             ),
@@ -37,7 +39,7 @@ final class ProductQueryProvider implements QueryProviderInterface
         return [
             'provider' => $this->getProviderName(),
             'name' => 'Product',
-            'description' => 'Published product cards by ID for cross-module storefront consumers.',
+            'description' => 'Published product cards and listing purchase-panel HTML for storefront consumers.',
             'module' => 'Weline_Product',
             'operations' => [
                 [
@@ -53,8 +55,38 @@ final class ProductQueryProvider implements QueryProviderInterface
                     'returns' => ['type' => 'array'],
                     'summary' => 'Return published product cards keyed by product_id',
                 ],
+                [
+                    'name' => 'getPurchasePanel',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 4,
+                    'auth' => 'any',
+                    'params' => [
+                        ['name' => 'product_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                        ['name' => 'slug', 'type' => 'string', 'required' => false, 'max_length' => 200],
+                        ['name' => 'offer', 'type' => 'string', 'required' => false, 'max_length' => 80],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Render listing quick-add purchase panel HTML (gallery + specs)',
+                ],
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function getPurchasePanel(array $params): array
+    {
+        /** @var PurchasePanelService $service */
+        $service = ObjectManager::getInstance(PurchasePanelService::class);
+        $payload = $service->render($params);
+        unset($payload['http_status']);
+
+        return $payload;
     }
 
     /**
@@ -120,9 +152,6 @@ final class ProductQueryProvider implements QueryProviderInterface
         $slug = strtolower(trim($sku));
         $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
         $slug = trim($slug, '-');
-        if ($slug === '' || preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
-            return '';
-        }
 
         return $slug;
     }
