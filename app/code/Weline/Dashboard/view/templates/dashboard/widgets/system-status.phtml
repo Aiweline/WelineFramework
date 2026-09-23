@@ -1,4 +1,5 @@
 <?php
+/** @widget.source {Weline_Dashboard::css/widgets/widget-system-status.css} */
 $rows = [
     [__('Widget 注册'), __('就绪')],
     [__('Theme 布局'), __('dashboard/default')],
@@ -11,9 +12,9 @@ $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUO
         <h3 class="w-card__title"><?= __('系统状态') ?></h3>
         <span class="w-text" data-tone="muted" data-size="sm"><?= __('Backend') ?></span>
     </div>
-    <div class="w-card__body" style="--w-pt:0;--w-pb:0;">
+    <div class="w-card__body" data-widget-style-class="c0f8e0e0374898b5">
         <div class="w-table-wrap">
-            <table class="w-table" style="--w-mb:0;">
+            <table class="w-table" data-widget-style-class="870bd5109ba86ee4">
                 <tbody>
                 <?php foreach ($rows as $row): ?>
                     <tr>

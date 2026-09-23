@@ -27,6 +27,9 @@ final class ApiDocsRestFetchContractTest extends TestCase
             self::assertStringContainsString('await sendHttp(url.href', $src, $path);
             self::assertStringContainsString('await sendHttp(buildRestUrl(path, backend)', $src, $path);
             self::assertStringContainsString("credentials: 'same-origin'", $src, $path);
+            self::assertStringContainsString('function restRequestPath(api)', $src, $path);
+            self::assertStringContainsString(".filter((segment) => !/^\\{[^}]+\\}$/.test(segment))", $src, $path);
+            self::assertStringContainsString('buildRestUrl(restRequestPath(api)', $src, $path);
             self::assertStringNotContainsString('runtime.request(url.href', $src, $path);
             self::assertStringNotContainsString('runtime.request(buildRestUrl', $src, $path);
         }
