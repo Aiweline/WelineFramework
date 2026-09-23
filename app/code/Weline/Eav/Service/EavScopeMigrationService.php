@@ -640,7 +640,7 @@ SQL;
 
     private function bareTable(string $table): string
     {
-        $table = \str_replace('"', '', $table);
+        $table = \str_replace(['"', '`'], '', $table);
         if (\str_contains($table, '.')) {
             $parts = \explode('.', $table);
 

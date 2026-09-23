@@ -631,8 +631,10 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
             return \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
             )->rememberForRequest('eav.value_table.scope_columns', $key, static function () use ($table, $connector): bool {
+                // MySQL getTable() may return `db`.`tbl`; strip schema + quotes or information_schema misses.
+                $bare = \str_replace(['"', '`'], '', \preg_replace('/^.*\./', '', $table) ?? $table);
                 $sql = "SELECT 1 FROM information_schema.columns WHERE table_name = "
-                    . $connector->quote(\str_replace('"', '', \preg_replace('/^.*\./', '', $table) ?? $table))
+                    . $connector->quote($bare)
                     . " AND column_name = " . $connector->quote(EavScopeColumns::SCOPE_KIND)
                     . " LIMIT 1";
                 $result = $connector->query($sql)->fetch();
