@@ -38,7 +38,7 @@ final class FreeShippingRuleSeedContractTest extends TestCase
         foreach (['SEED_FREE_49', 'SEED_FREE_99', 'SEED_FREE_149', 'SEED_FREE_199', 'SEED_FREE_299', 'SEED_FREE_499'] as $expected) {
             self::assertContains($expected, $codes);
         }
-        self::assertSame(['SEED_FREE_99'], $activeCodes);
+        self::assertSame(['SEED_FREE_49'], $activeCodes);
         self::assertSame($codes, FreeShippingRuleSeedService::canonicalCodes());
     }
 
@@ -71,6 +71,7 @@ final class FreeShippingRuleSeedContractTest extends TestCase
         self::assertStringContainsString('shipping/backend/freeshippingrule/deactivate', $tpl);
 
         $upgrade = (string)file_get_contents(dirname(__DIR__, 3) . '/Setup/Upgrade.php');
+        self::assertStringContainsString('alignHomepageWave2Threshold49', $upgrade);
         self::assertStringContainsString('seedFreeShippingRules', $upgrade);
         self::assertStringContainsString('FreeShippingRuleSeedService', $upgrade);
 

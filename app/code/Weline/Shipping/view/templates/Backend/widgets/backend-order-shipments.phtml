@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Shipping::css/widgets/widget-backend-order-shipments.css}
  * 后台订单详情：发货/物流记录（Shipping 默认注入）。
  *
  * @var \Weline\Framework\View\Template $this
@@ -69,13 +70,13 @@ $trackingQuery = ObjectManager::getInstance(OrderShipmentTrackingQueryService::c
 $shipments = $shipmentsService->listForOrderId($orderId);
 ?>
 <div class="w-card <?= $esc($wc) ?>"
-     style="--w-mb:var(--weline-space-4);"
+     data-widget-style-class="a633806ca07c548c"
      weline-code="<?= $esc($scope->code) ?>"
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>"
      data-testid="backend-order-shipments">
     <div class="w-card__header w-cluster" data-align="center" data-justify="between">
-        <h5 class="w-card__title" style="--w-mb:0;"><?= $esc($title) ?></h5>
+        <h5 class="w-card__title" data-widget-style-class="31332dac1a0ef500"><?= $esc($title) ?></h5>
         <?php if ($showOpsLink): ?>
             <a class="w-button"
                data-tone="neutral"
@@ -85,7 +86,7 @@ $shipments = $shipmentsService->listForOrderId($orderId);
         <?php endif; ?>
     </div>
     <div class="w-card__body">
-        <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+        <div class="w-stack" data-widget-style-class="6f1f72c98234c9a2">
             <?php if ($shipments === []): ?>
                 <p class="w-text" data-tone="muted" data-size="sm" data-align="center"><?= __('暂无发货记录') ?></p>
             <?php else: ?>
@@ -100,7 +101,7 @@ $shipments = $shipmentsService->listForOrderId($orderId);
                     $trackMessage = trim((string)($track['message'] ?? ''));
                     ?>
                     <div class="w-stack"
-                         style="--w-gap:var(--weline-space-2);"
+                         data-widget-style-class="b56c3d4b7dba8cd3"
                          data-testid="backend-order-shipment-row"
                          data-shipment-id="<?= $sid ?>">
                         <div class="w-text" data-size="sm">
@@ -117,33 +118,33 @@ $shipments = $shipmentsService->listForOrderId($orderId);
                                   data-testid="backend-order-shipment-status"><?= $esc((string)($row['status_label'] ?? '')) ?></span>
                         </div>
                         <?php if ($tn === '' && $sid > 0): ?>
-                            <w:form method="post" action="@backend-url{'order/backend/shipment/execute'}" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                            <w:form method="post" action="@backend-url{'order/backend/shipment/execute'}" class="w-cluster" data-widget-style-class="fe1977536c225e55">
                                 <input type="hidden" name="shipment_action" value="update_tracking">
                                 <input type="hidden" name="shipment_id" value="<?= $sid ?>">
                                 <input type="hidden" name="expected_grant_version" value="<?= $fulfillGrantVersion ?>">
                                 <?php if ($returnUrl !== ''): ?><input type="hidden" name="return_url" value="<?= $esc($returnUrl) ?>"><?php endif; ?>
-                                <input class="w-input" type="text" name="tracking_number" required placeholder="<?= __('物流单号') ?>" data-size="sm" style="width:10rem;" data-testid="backend-order-shipment-backfill-input">
+                                <input class="w-input" type="text" name="tracking_number" required placeholder="<?= __('物流单号') ?>" data-size="sm" data-widget-style-class="c2dc5f2a875bd6a4" data-testid="backend-order-shipment-backfill-input">
                                 <label class="w-check"><input type="checkbox" name="notify_customer" value="1"> <?= __('通知') ?></label>
                                 <button class="w-button" type="submit" data-size="sm" data-testid="backend-order-shipment-backfill"><?= __('补充') ?></button>
                             </w:form>
                         <?php endif; ?>
-                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
+                        <div class="w-text" data-tone="muted" data-size="sm" data-widget-style-class="475cdc0ffbf52fdf">
                             <?= __('发货时间') ?>：<?= $esc((string)($row['shipped_at'] ?? '—')) ?>
                             · <?= __('送达') ?>：<?= $esc((string)($row['delivered_at'] ?? '—')) ?>
                         </div>
                         <?php if ($tn !== '' && $sid > 0): ?>
-                            <div class="w-stack" style="--w-gap:var(--weline-space-1);" data-testid="backend-order-shipment-progress">
-                                <h6 class="w-text" data-size="sm" style="--w-mb:0;"><?= __('物流进程记录') ?></h6>
+                            <div class="w-stack" data-widget-style-class="37a69135d6bbfeb7" data-testid="backend-order-shipment-progress">
+                                <h6 class="w-text" data-size="sm" data-widget-style-class="198fba75ccd75907"><?= __('物流进程记录') ?></h6>
                                 <?php if (!$trackOk): ?>
-                                    <p class="w-text" data-tone="warning" data-size="sm" style="--w-mb:0;" data-testid="backend-order-shipment-progress-empty">
+                                    <p class="w-text" data-tone="warning" data-size="sm" data-widget-style-class="a8f0696be08211f9" data-testid="backend-order-shipment-progress-empty">
                                         <?= $esc($trackMessage !== '' ? $trackMessage : (string)__('暂无物流进程')) ?>
                                     </p>
                                 <?php elseif ($progress === []): ?>
-                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="backend-order-shipment-progress-empty">
+                                    <p class="w-text" data-tone="muted" data-size="sm" data-widget-style-class="da86e845cdd21151" data-testid="backend-order-shipment-progress-empty">
                                         <?= __('承运方尚未回传轨迹节点') ?>
                                     </p>
                                 <?php else: ?>
-                                    <ol class="w-stack" style="--w-gap:var(--weline-space-1);list-style:none;padding:0;margin:0;" data-testid="backend-order-shipment-progress-list">
+                                    <ol class="w-stack" data-widget-style-class="8439ac01d14d3660" data-testid="backend-order-shipment-progress-list">
                                         <?php foreach ($progress as $step):
                                             $at = trim((string)($step['at'] ?? ''));
                                             $text = trim((string)($step['text'] ?? ''));
@@ -151,7 +152,7 @@ $shipments = $shipmentsService->listForOrderId($orderId);
                                                 continue;
                                             }
                                             ?>
-                                            <li class="w-text" data-size="sm" style="--w-mb:0;" data-testid="backend-order-shipment-progress-item">
+                                            <li class="w-text" data-size="sm" data-widget-style-class="f8ba8289c5d7b423" data-testid="backend-order-shipment-progress-item">
                                                 <?php if ($at !== ''): ?>
                                                     <span class="w-text" data-tone="muted"><?= $esc($at) ?></span>
                                                     ·
@@ -162,7 +163,7 @@ $shipments = $shipmentsService->listForOrderId($orderId);
                                     </ol>
                                 <?php endif; ?>
                                 <?php if ($trackingUrl !== ''): ?>
-                                    <p class="w-text" data-size="sm" style="--w-mb:0;">
+                                    <p class="w-text" data-size="sm" data-widget-style-class="d9db45a3251c15a0">
                                         <a class="w-link"
                                            href="<?= $esc($trackingUrl) ?>"
                                            target="_blank"

@@ -85,6 +85,7 @@ final class LocalTemplatePricingService
             }
             $freeReason = $this->freeReason($service, $subtotalMinor, $currencyPrecision, $destAddress);
             $baseMinor = 0;
+            $publicPolicy = null;
             $boxCount = count($boxes);
             if ($freeReason === null) {
                 $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
@@ -104,6 +105,8 @@ final class LocalTemplatePricingService
                 if ($templateCurrency === '') {
                     continue;
                 }
+                $publicPolicy = $template->getMixedConfig()['public_tariff']['surcharge_policy'] ?? null;
+                $sourcePrecision = $publicPolicy !== null && $templateCurrency === 'CNY' ? 2 : $currencyPrecision;
                 $sumMinor = 0;
                 $unavailable = false;
                 foreach ($boxes as $boxLines) {
@@ -111,7 +114,7 @@ final class LocalTemplatePricingService
                         $sumMinor += $this->rateCalculationService->calculateTemplateMinor(
                             $template,
                             $boxLines,
-                            $currencyPrecision,
+                            $sourcePrecision,
                             $subtotalMinor,
                         );
                     } catch (ShippingRateUnavailableException $e) {
@@ -132,7 +135,7 @@ final class LocalTemplatePricingService
                         $baseMinor,
                         $templateCurrency,
                         $currency,
-                        $currencyPrecision,
+                        $sourcePrecision,
                         $currencyPrecision,
                     );
                     if ($converted === null) {
@@ -148,9 +151,17 @@ final class LocalTemplatePricingService
                 $currencyPrecision,
                 $context,
             );
+            if ($publicPolicy !== null) {
+                $surchargeHits = array_values(array_filter($surchargeHits, static fn(array $hit): bool =>
+                    in_array((int)($hit['rule_id'] ?? 0), $publicPolicy['remote_rule_ids'] ?? [], true)));
+            }
             $surchargeMinor = $surchargeSvc->sumMinor($surchargeHits);
             $afterRemote = $baseMinor + $surchargeMinor;
             $seasonalHits = $seasonalSvc->matchRules($afterRemote, $currencyPrecision, $context);
+            if ($publicPolicy !== null) {
+                $seasonalHits = array_values(array_filter($seasonalHits, static fn(array $hit): bool =>
+                    in_array((int)($hit['rule_id'] ?? 0), $publicPolicy['seasonal_rule_ids'] ?? [], true)));
+            }
             $seasonalMinor = $seasonalSvc->sumMinor($seasonalHits);
             $afterSeasonal = $afterRemote + $seasonalMinor;
             $addonHits = $addonSvc->matchRequested($addons, $afterSeasonal, $currencyPrecision, $context);

@@ -1,0 +1,14 @@
+.weline-checkout-tax-identity { margin: 0; }
+.weline-checkout-tax-identity[hidden] { display: none !important; }
+.weline-checkout-tax-identity__summary {
+  cursor: pointer;
+  color: var(--checkout-link, var(--color-link, #007185));
+  font-size: 0.95rem;
+}
+.weline-checkout-tax-identity__body { margin-top: 0.75rem; }
+[data-tax-identity-host][hidden],
+[data-tax-identity-host]:has([data-tax-identity-root][hidden]) {
+  display: none !important;
+}
+
+[data-widget-style-class="9c7ef75bea1eccd2"] {--w-mb:0;}

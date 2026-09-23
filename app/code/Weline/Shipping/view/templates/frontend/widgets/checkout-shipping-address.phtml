@@ -3,6 +3,7 @@
 /**
  * @widget.code {checkout-shipping-address}
  * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-shipping-address","area":"content","sort_order":10,"required":true,"reason":"结账收货信息默认由 Shipping 地址部件提供（theme:address + 已存地址选择）","config":{"title":"收货地址"}}]}
+ * @widget.source {Weline_Shipping::css/widgets/checkout-shipping-address.css}
  */
 
 use Weline\Framework\Manager\ObjectManager;
@@ -396,5 +397,4 @@ $ui = [
     </div>
     <?php endif; ?>
 </section>
-<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260921-cpay-addr3">
 <?php // shippingCheckoutAddress：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

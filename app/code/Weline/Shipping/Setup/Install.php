@@ -98,6 +98,9 @@ class Install implements InstallInterface
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($trackingNode);
         $trackingNode->setup($modelSetup, $context);
+
+        // Fresh installs require the same current schema and data migration as upgrades.
+        ObjectManager::getInstance(Upgrade::class)->setup($setup, $context);
     }
 
     /**

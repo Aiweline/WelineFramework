@@ -138,11 +138,62 @@ final class DefaultShippingLaneSeedService
     {
     }
 
+    /** Bootstrap only missing prerequisites; never run the legacy international reset. */
+    private function ensurePublicTariffDependencies(): void
+    {
+        $scope = ['scope_type'=>'website','scope_id'=>0];
+        $find = function (string $class, array $filters) {
+            $model = $this->objectManager->getInstance($class, [], false)->reset();
+            foreach ($filters as $field=>$value) { $model->where($field, $value); }
+            $items = $model->select()->fetch()->getItems();
+            return $items[0] ?? null;
+        };
+        $carrier = $find(Carrier::class, ['carrier_code'=>self::CARRIER_CODE]);
+        $carrierId = $carrier ? (int)$carrier->getId() : $this->ensureStandardCarrier();
+        $markets = $this->loadMarkets();
+        $coverage = $this->objectManager->getInstance(CarrierCoverageAdminService::class);
+        if ($coverage->countForCarrier($carrierId) === 0) {
+            $this->ensureCarrierWorldCoverage($carrierId, $markets);
+        }
+        $destinations = $this->objectManager->getInstance(DestinationAdminService::class);
+        if ($destinations->listForScope('website', 0) === []) {
+            $this->ensureWebsiteDestinations(0, $markets);
+        }
+        $origin = $find(ShippingAddress::class, ['is_enabled'=>1,'is_default'=>1,'country_code'=>'CN']);
+        $createdOrigin = false;
+        if (!$origin && !$find(ShippingAddress::class, [])) {
+            $createdId = $this->ensureSeedShippingAddressFromWarehouse(0, true);
+            $this->objectManager->getInstance(ShippingAddressService::class)->setDefault($createdId);
+            $createdOrigin = true;
+            $origin = $find(ShippingAddress::class, ['is_enabled'=>1,'is_default'=>1,'country_code'=>'CN']);
+        }
+        if (!$origin) { throw new \RuntimeException('Public tariff seed requires the configured default CN shipping origin.'); }
+        if ($createdOrigin) { $this->bindDefaultWarehouseOrigin(0, (int)$origin->getId()); }
+        $profile = $find(\Weline\Shipping\Model\ShippingProfile::class, $scope + ['profile_code'=>\Weline\Shipping\Model\ShippingProfile::SEED_GENERAL]);
+        if (!$profile) {
+            $this->ensureProfile($scope, \Weline\Shipping\Model\ShippingProfile::SEED_GENERAL, '默认配送', true, []);
+            $profile = $find(\Weline\Shipping\Model\ShippingProfile::class, $scope + ['profile_code'=>\Weline\Shipping\Model\ShippingProfile::SEED_GENERAL]);
+        }
+        $domestic = $find(ShippingService::class, $scope + ['service_code'=>'SEED_LANE_DOMESTIC']);
+        if (!$domestic) {
+            $template = $find(RateTemplate::class, $scope + ['template_code'=>'SEED_TPL_DOMESTIC']);
+            $templateId = $template ? (int)$template->getId() : $this->upsertTemplate($scope, 'SEED_TPL_DOMESTIC', self::LANE_META['domestic']);
+            $serviceId = $this->upsertService($scope, 'SEED_LANE_DOMESTIC', self::LANE_META['domestic']['name'], $carrierId, $templateId, 0, 1, 3, 10, (int)$origin->getId());
+            $this->replaceServiceCountries($serviceId, ['CN']);
+            $this->objectManager->getInstance(\Weline\Shipping\Model\ShippingProfileService::class, [], false)
+                ->setData(['profile_id'=>(int)$profile->getId(),'service_id'=>$serviceId])->save();
+        }
+    }
+
     /**
      * @return array{carrier_id:int,coverage:int,templates:int,services:int,regions:int}
      */
     public function seedDefaultWebsite(int $websiteId = 0): array
     {
+        if ($websiteId === 0) {
+            $this->ensurePublicTariffDependencies();
+            return $this->objectManager->getInstance(PublicTariffSeedService::class)->seedDefaultWebsite(0);
+        }
         $markets = $this->loadMarkets();
         $this->clearConflictingMarketEmbargoes($markets);
         $carrierId = $this->ensureStandardCarrier();
@@ -546,7 +597,7 @@ final class DefaultShippingLaneSeedService
         $seeder = $this->objectManager->getInstance(FreeShippingRuleSeedService::class);
         $seeder->seedDefaults((string)$scope['scope_type'], (int)$scope['scope_id']);
 
-        return $seeder->findSeedId('SEED_FREE_99', (string)$scope['scope_type'], (int)$scope['scope_id']);
+        return $seeder->findSeedId('SEED_FREE_49', (string)$scope['scope_type'], (int)$scope['scope_id']);
     }
 
     /**
@@ -1236,7 +1287,7 @@ final class DefaultShippingLaneSeedService
         }
     }
 
-    private function ensureSeedShippingAddressFromWarehouse(int $websiteId): int
+    private function ensureSeedShippingAddressFromWarehouse(int $websiteId, bool $strict = false): int
     {
         $ctx = $this->resolveCurrentWarehouseContext($websiteId);
         $country = $ctx['country_code'];
@@ -1271,7 +1322,8 @@ final class DefaultShippingLaneSeedService
             $created = $addresses->create($payload);
 
             return (int)$created->getId();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            if ($strict) { throw $e; }
             // 校验/禁运可能拦种子：直接落库保证航线有明确发货地
             try {
                 /** @var ShippingAddress $create */

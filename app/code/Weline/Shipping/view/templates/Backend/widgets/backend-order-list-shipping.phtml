@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Shipping::css/widgets/widget-backend-order-list-shipping.css}
  * 后台订单列表：发货工作台摘要（Shipping 默认注入）。
  *
  * @var \Weline\Framework\View\Template $this
@@ -44,16 +45,16 @@ $pending = (int)($summary['paid_awaiting_ship'] ?? 0);
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>"
      data-testid="backend-order-list-shipping"
-     style="--w-mb:0;">
+     data-widget-style-class="e3fb2e503752b0f4">
     <div class="w-alert__content">
-        <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
-            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+        <div class="w-cluster" data-align="center" data-justify="between" data-widget-style-class="3e6d7f0cb21dcc12">
+            <div class="w-stack" data-widget-style-class="814126c324d020e6">
                 <strong><?= $esc($title) ?></strong>
                 <span class="w-text" data-size="sm" data-testid="backend-order-list-shipping-pending">
                     <?= __('已支付待发货') ?>：<?= $pending ?>
                 </span>
             </div>
-            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <div class="w-cluster" data-widget-style-class="751d826f5aca54d8">
                 <a class="w-button"
                    data-tone="primary"
                    data-size="sm"
