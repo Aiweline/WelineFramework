@@ -1,0 +1,30 @@
+.weline-product-faq { padding: var(--spacing-6, var(--weline-space-6, 1.5rem)) 0; }
+.weline-product-faq__title { margin: 0 0 var(--spacing-4, var(--weline-space-4, 1rem)); font-size: var(--font-size-xl, 1.25rem); color: var(--color-text, var(--weline-theme-color-text, inherit)); }
+.weline-product-faq__item { border-bottom: 1px solid var(--weline-theme-border-color-subtle, var(--color-border-subtle, #e5e7eb)); padding: .75rem 0; }
+.weline-product-faq__question { cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: var(--weline-space-3, .75rem); color: var(--color-text, inherit); list-style: none; }
+.weline-product-faq__question::-webkit-details-marker { display: none; }
+.weline-product-faq__question::after {
+    content: '';
+    flex: 0 0 auto;
+    width: .5rem;
+    height: .5rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    opacity: .55;
+    transition: transform .15s ease;
+}
+.weline-product-faq__item[open] .weline-product-faq__question::after { transform: rotate(225deg); }
+.weline-product-faq__question-text { flex: 1 1 auto; unicode-bidi: isolate; }
+.weline-product-faq__answer { margin-top: .5rem; color: var(--color-text-secondary, var(--weline-theme-color-text-secondary, #4b5563)); line-height: 1.6; unicode-bidi: isolate; }
+.weline-product-faq__source {
+    flex: 0 0 auto;
+    font-size: var(--font-size-xs, .75rem);
+    font-weight: 500;
+    color: var(--color-text-secondary, var(--weline-theme-color-text-secondary, #4b5563));
+    background: var(--color-surface-muted, var(--weline-theme-color-surface-muted, transparent));
+    border: 1px solid var(--weline-theme-border-color-subtle, var(--color-border-subtle, #e5e7eb));
+    border-radius: var(--radius-sm, var(--weline-radius-sm, .25rem));
+    padding: .125rem .5rem;
+}
+.weline-product-faq__empty { color: var(--color-text-tertiary, var(--weline-theme-color-text-tertiary, #9ca3af)); }

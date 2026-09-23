@@ -13,6 +13,7 @@
  * @widget.page_layouts {["blog"]}
  * @widget.supports {["layout-blog-reviews","blog-reviews","review","reviews"]}
  * @widget.default_injections {[{ "layout_type":"blog", "layout_option":"default", "slot":"blog-reviews", "area":"content", "sort_order":0, "required":true, "reason":"博客详情默认评论容器", "config":{"title":"博客评论","intro":"支持文字、图片与视频，内容审核后公开。","page_size":10,"layout_mode":"stack","form_position":"right","form_collapsed":"1"} }]}
+ * @widget.source {Weline_Review::css/widgets/product-reviews.css}
  */
 
 use Weline\Framework\Env\WelineEnv;
@@ -178,10 +179,6 @@ $messages = [
     'lightboxLabel' => __('评论媒体预览'),
 ];
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260904-review-pager2"
-      data-no-extract="true">
-
 <section class="<?= $esc($reviewRootClasses) ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-blog-reviews"
