@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-sidebar-sidebar-ads-default.css}
  * 侧栏广告部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -67,50 +68,3 @@ if (empty($ads)) {
     <?php endforeach; ?>
 </section>
 
-<style>
-.<?= $wc ?> {
-    display: flex;
-    flex-direction: column;
-    gap: var(--weline-space-4);
-}
-
-.<?= $wc ?> .ad-item {
-    position: relative;
-    border-radius: var(--weline-radius-lg);
-    overflow: hidden;
-}
-
-.<?= $wc ?> .ad-link {
-    display: block;
-}
-
-.<?= $wc ?> .ad-image,
-.<?= $wc ?> .ad-image-media img {
-    width: 100%;
-    height: auto;
-    display: block;
-    transition: transform var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .ad-item:hover .ad-image,
-.<?= $wc ?> .ad-item:hover .ad-image-media img {
-    transform: scale(1.03);
-}
-
-.<?= $wc ?> .ad-label {
-    position: absolute;
-    top: var(--weline-space-2);
-    right: var(--weline-space-2);
-    padding: var(--spacing-0_5) var(--weline-space-2);
-    background: color-mix(in srgb, var(--weline-theme-overlay) 60%, transparent);
-    color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-xs);
-    border-radius: var(--weline-radius-sm);
-    text-transform: uppercase;
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    gap: var(--weline-space-2);
-}
-</style>

@@ -23,6 +23,7 @@
  */
 
 use Weline\Theme\Helper\HeaderCommerceData;
+use Weline\Theme\Helper\HeaderNavFragment;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('category-menu');
@@ -128,7 +129,8 @@ $hanfuDemoNav = static function (): array {
         ],
         [
             'text' => '汉服配饰',
-            'url' => $searchHref('汉服配饰'),
+            // 分类页有货；勿链 /search?q=汉服配饰（QA-03）
+            'url' => '/category/accessories',
             'children' => [
                 ['text' => '发簪与发冠', 'url' => $searchHref('发簪 发冠')],
                 ['text' => '绣花鞋履', 'url' => $searchHref('汉服鞋履')],
@@ -149,7 +151,7 @@ if ($navItems === [] && $editorPreviewLight) {
      data-js-ns="<?= $esc($scope->jsNs) ?>"
      data-widget-code="category-menu"
      data-testid="category-menu">
-    <?= $this->fetch('Weline_Theme::theme/frontend/partials/header/categories-horizontal-nav.phtml', [
+    <?= HeaderNavFragment::fetchCategoriesHorizontalNav($this, [
         'items' => $navItems,
         'show_banner_with_children' => $showBannerWithChildren,
     ]) ?>

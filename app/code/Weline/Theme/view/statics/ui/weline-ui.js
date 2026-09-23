@@ -1509,7 +1509,13 @@ function mountElement(element) {
             },
             UI,
         };
-        const instance = factory(context) || {};
+        // Contract: UI.get returns null or a complete API — never an empty stub {}.
+        // Incomplete mounts used to return {} (truthy), so `get(...)?.close` still threw
+        // "close is not a function" on pagehide / language-request close paths.
+        const instance = factory(context);
+        if (instance == null || typeof instance !== 'object' || Object.keys(instance).length === 0) {
+            continue;
+        }
         if (typeof instance.destroy === 'function') localCleanups.push(() => instance.destroy());
         map.set(name, instance);
         element.dispatchEvent(new CustomEvent('weline:ui:component:ready', {
@@ -1616,13 +1622,16 @@ function whenReady(element, name, timeoutMs = 8000) {
 
 function closeTransientSurfaces(reason = 'pagehide') {
     document.querySelectorAll('[data-w-component~="menu"]').forEach((element) => {
-        get(element, 'menu')?.close(false, reason, true);
+        const api = get(element, 'menu');
+        if (typeof api?.close === 'function') api.close(false, reason, true);
     });
     document.querySelectorAll('[data-w-component~="popover"]').forEach((element) => {
-        get(element, 'popover')?.close(reason, true);
+        const api = get(element, 'popover');
+        if (typeof api?.close === 'function') api.close(reason, true);
     });
     document.querySelectorAll('[data-w-component~="tooltip"]').forEach((element) => {
-        get(element, 'tooltip')?.hide(reason, true);
+        const api = get(element, 'tooltip');
+        if (typeof api?.hide === 'function') api.hide(reason, true);
     });
 }
 
@@ -1838,7 +1847,7 @@ function registerDrawer() {
 function registerRemoteDrawer() {
     define('remote-drawer', ({ element, listen, UI: componentUI }) => {
         const frame = element.querySelector('[data-w-remote-frame]');
-        if (!(frame instanceof HTMLIFrameElement)) return {};
+        if (!(frame instanceof HTMLIFrameElement)) return null;
 
         const actionButtons = () => [...element.querySelectorAll('[data-w-remote-action]')];
         const ensureFrameHost = () => {
@@ -2005,7 +2014,7 @@ function registerMenu() {
     define('menu', ({ element, listen, emit: emitLocal }) => {
         const trigger = element.querySelector('[data-w-menu-trigger]');
         const panel = element.querySelector('[data-w-menu-panel]');
-        if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) return {};
+        if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) return null;
         let pointerReference = null;
         const portal = createFloatingPortal(panel, 'menu');
         const items = () => [...panel.querySelectorAll('[role="menuitem"]:not([aria-disabled="true"])')]
@@ -2176,7 +2185,7 @@ function registerDisclosure() {
     define('disclosure', ({ element, listen, emit: emitLocal }) => {
         const trigger = element.querySelector('[data-w-disclosure-trigger]');
         const panel = element.querySelector('[data-w-disclosure-panel]');
-        if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) return {};
+        if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) return null;
         const setOpen = (open) => {
             const phase = open ? 'before-open' : 'before-close';
             if (!emitLocal(phase)) return false;
@@ -2291,7 +2300,7 @@ function registerNavFilter() {
         const input = element.querySelector('[data-w-nav-filter-input]');
         const list = element.querySelector('[data-w-nav-filter-list]');
         const empty = element.querySelector('[data-w-nav-filter-empty]');
-        if (!(input instanceof HTMLInputElement) || !(list instanceof HTMLElement)) return {};
+        if (!(input instanceof HTMLInputElement) || !(list instanceof HTMLElement)) return null;
         const groups = [...list.querySelectorAll(':scope > .w-backend-nav__group')];
         const backendTokenPattern = /^[A-Za-z0-9_-]{16,}$/;
         const actionAliases = new Set([
@@ -3028,7 +3037,7 @@ function registerAnchoredFloat() {
         const surface = selfSurface
             ? element
             : (element.querySelector('[data-w-float-surface]') || element);
-        if (!(surface instanceof HTMLElement)) return {};
+        if (!(surface instanceof HTMLElement)) return null;
 
         const resolveAnchor = () => {
             const selector = element.dataset.wFloatAnchor || surface.dataset.wFloatAnchor || '';
@@ -3202,7 +3211,7 @@ function registerAnchoredFloat() {
 function registerTooltip() {
     define('tooltip', ({ element, listen, emit: emitLocal }) => {
         const content = element.getAttribute('data-w-tooltip') || element.getAttribute('aria-label') || '';
-        if (!content) return {};
+        if (!content) return null;
         let tooltip = null;
         let portal = null;
         const placement = () => element.dataset.wPlacement || 'bottom-start';
@@ -3269,7 +3278,7 @@ function registerPopover() {
     define('popover', ({ element, listen, emit: emitLocal }) => {
         const trigger = element.querySelector('[data-w-popover-trigger]');
         const panel = element.querySelector('[data-w-popover-panel]');
-        if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) return {};
+        if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) return null;
         let pointerReference = null;
         const portal = createFloatingPortal(panel, 'popover');
         const placement = () => element.dataset.wPlacement || 'bottom-start';
@@ -3950,8 +3959,9 @@ if (!existingRuntime) {
         const overlay = topOverlay();
         if (!overlay || overlay.dataset.wClosable === 'false') return;
         const component = componentNames(overlay).find((name) => name === 'dialog' || name === 'drawer');
-        if (component === 'dialog') ensureMounted(overlay, 'dialog')?.close('escape');
-        if (component === 'drawer') ensureMounted(overlay, 'drawer')?.close('escape');
+        if (!component) return;
+        const api = ensureMounted(overlay, component);
+        if (typeof api?.close === 'function') api.close('escape');
     });
     window.addEventListener('pagehide', () => closeTransientSurfaces('pagehide'));
     window.addEventListener('pageshow', (event) => {

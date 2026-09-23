@@ -8,10 +8,12 @@
  * @widget.position {["content","sidebar","footer"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
+ * @widget.source {Weline_Theme::css/widgets/site-blocks.css}
  * @param title {default="图片相册",type="string",label="标题"}
  * @param subtitle {default="",type="textarea",label="副标题"}
- * @param columns {default="3",type="select",label="每行列数",options={1:"1列",2:"2列",3:"3列",4:"4列"}}
+ * @param columns {default="3",type="select",label="每行列数",options={1:"1列",2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
  * @param variant {default="gallery",type="select",label="展示形态",options={gallery:"相册",looks:"买家秀图墙"}}
+ * @param cta_link {default="",type="string",label="买家秀 CTA 链接",description="looks 变体底部「晒出你的汉服穿搭」跳转；建议链到代表性 PDP #product-reviews"}
  * @param items {default=[],type="site_gallery_items",label="展示项目"}
  */
 
@@ -25,11 +27,16 @@ $esc = [Block::class, 'escape'];
 $t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
 $title = Block::text($this->getData('title') ?? '图片相册');
 $subtitle = Block::text($this->getData('subtitle'));
-$columns = Block::choice($this->getData('columns'), ['1','2','3','4'], '3');
+$columns = Block::choice($this->getData('columns'), ['1','2','3','4','5','6'], '3');
 $variant = Block::choice($this->getData('variant'), ['gallery', 'looks'], 'gallery');
 $items = Block::items($this->getData('items'));
+$ctaLink = Block::link($this->getData('cta_link') ?? '');
 $isLooks = $variant === 'looks';
 $usingLooksPlaceholders = false;
+// 买家秀默认一行 6 格（WO-HP-P3-MALL-05）；未显式配置 columns 时抬到 6
+if ($isLooks && trim((string)($this->getData('columns') ?? '')) === '') {
+    $columns = '6';
+}
 
 $currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
 $normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
@@ -74,8 +81,6 @@ if ($items === [] && $isLooks) {
     }
 }
 ?>
-
-<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block<?= $isLooks ? ' is-looks' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
@@ -117,7 +122,17 @@ if ($items === [] && $isLooks) {
     </div>
     <?php if ($items === [] && !$isLooks): ?>
         <p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p>
-    <?php elseif ($usingLooksPlaceholders): ?>
-        <p class="sb-empty sb-looks-cta"><lang>晒出你的汉服穿搭</lang></p>
+    <?php elseif ($isLooks):
+        // WO-BUYER-SHOW-02：有 cta_link 则始终可点；仅空态占位且未配置时回退代表性 PDP 评论锚
+        $looksCtaHref = $ctaLink;
+        if ($looksCtaHref === '' && $usingLooksPlaceholders) {
+            $looksCtaHref = Block::link('/product/543#product-reviews');
+        }
+        $looksCtaLabel = $subtitle !== '' ? $subtitle : '晒出你的汉服穿搭';
+        if ($looksCtaHref !== ''): ?>
+        <a class="sb-empty sb-looks-cta" href="<?= $esc($looksCtaHref) ?>"><?= $t($looksCtaLabel) ?></a>
+        <?php elseif ($usingLooksPlaceholders): ?>
+        <p class="sb-empty sb-looks-cta"><?= $t($looksCtaLabel) ?></p>
+        <?php endif; ?>
     <?php endif; ?>
 </section>

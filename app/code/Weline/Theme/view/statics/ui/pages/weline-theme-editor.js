@@ -5107,6 +5107,17 @@
                 : (state.layoutIdentity?.target_id || 0),
         })));
         url.searchParams.set('_t', String(overrides._t || Date.now()));
+        if (layoutTypeForContext === 'blank' && layoutOption === 'full' && getEffectiveEditorArea() === 'frontend') {
+            const canvasUrl = new URL(config.apiCompileLayout, window.location.origin);
+            canvasUrl.pathname = '/' + buildCanvasLocalizedStorefrontPath(canvasUrl.pathname, previewLocale);
+            url.searchParams.forEach((value, key) => canvasUrl.searchParams.set(key, value));
+            canvasUrl.searchParams.set('render', 'html');
+            canvasUrl.searchParams.set('include_html', '1');
+            canvasUrl.searchParams.set('layout_type', 'blank');
+            canvasUrl.searchParams.set('layout_option', 'full');
+            canvasUrl.searchParams.set('locale', previewLocale || 'default');
+            return canvasUrl.toString();
+        }
         return url.toString();
     }
 
@@ -7229,6 +7240,56 @@
         }
     }
 
+    // Server-generated asset descriptors survive preview sanitization; code remains external.
+    const widgetAssetLoads = new WeakMap();
+    async function loadWidgetDeclaredAssets(html, doc) {
+        if (!doc || !doc.head) return;
+        let loads = widgetAssetLoads.get(doc);
+        if (!loads) { loads = new Map(); widgetAssetLoads.set(doc, loads); }
+        const fragment = doc.createElement('template');
+        fragment.innerHTML = String(html || '');
+        const descriptors = Array.from(fragment.content.querySelectorAll('[data-weline-widget-assets]'));
+        for (const descriptor of descriptors) {
+            let assets;
+            try { assets = JSON.parse(descriptor.getAttribute('data-weline-widget-assets')); } catch (_) { continue; }
+            if (!Array.isArray(assets)) continue;
+            for (const asset of assets) {
+                let url;
+                try { url = new URL(asset.url, doc.baseURI); } catch (_) { continue; }
+                // URLs are resolved from module declarations by Template::fetchTagSource.
+                // Keep configured static/CDN origins and development view/statics routes.
+                if (!['http:', 'https:'].includes(url.protocol)) {
+                    throw new Error('Invalid widget asset URL: ' + url.href);
+                }
+                if (loads.has(url.href)) { await loads.get(url.href); continue; }
+                const present = Array.from(doc.querySelectorAll('script[src], link[rel="stylesheet"][href]'))
+                    .find(node => (node.src || node.href) === url.href);
+                if (present) {
+                    const ready = asset.type === 'css' && !present.sheet ? new Promise((resolve, reject) => {
+                        present.addEventListener('load', resolve, { once: true });
+                        present.addEventListener('error', reject, { once: true });
+                    }) : Promise.resolve();
+                    loads.set(url.href, ready); await ready; continue;
+                }
+                const promise = new Promise((resolve, reject) => {
+                    const css = asset.type === 'css';
+                    const node = doc.createElement(css ? 'link' : 'script');
+                    if (css) { node.rel = 'stylesheet'; node.href = url.href; }
+                    else { node.src = url.href; node.async = false; }
+                    node.setAttribute('data-weline-widget-asset', 'source');
+                    node.setAttribute('data-weline-source-position', asset.position || 'head');
+                    node.onload = resolve;
+                    node.onerror = () => { loads.delete(url.href); reject(new Error('Widget asset failed: ' + url.href)); };
+                    const target = asset.position === 'footer' ? (doc.querySelector('footer') || doc.body)
+                        : (asset.position === 'body' || asset.position === 'end-body') ? doc.body : doc.head;
+                    (target || doc.head).appendChild(node);
+                });
+                loads.set(url.href, promise);
+                await promise;
+            }
+        }
+    }
+
     function mountWidgetPreviewHtml(canvas, previewHtml) {
         if (!canvas) {
             return;
@@ -7239,6 +7300,7 @@
             return;
         }
         canvas.insertAdjacentHTML('beforeend', html);
+        loadWidgetDeclaredAssets(previewHtml, canvas.ownerDocument).catch(console.error);
         if (!isWidgetPreviewFallbackHtml(html)) {
             canvas.dataset.previewLoaded = '1';
         }
@@ -13640,6 +13702,7 @@
                 const previewBox = document.getElementById('modalWidgetPreview');
                 if (previewBox) {
                     previewBox.innerHTML = sanitizeHtmlForEditorPreview(result.preview_html);
+                    loadWidgetDeclaredAssets(result.preview_html, previewBox.ownerDocument).catch(console.error);
                 }
 
                 // 更新 iframe 中对应部件的预览（如果存在）
@@ -13752,6 +13815,7 @@
                     return;
                 }
 
+                loadWidgetDeclaredAssets(previewHtml, iframe.contentDocument).catch(console.error);
                 const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
 
                 if (widgetEl) {
@@ -17458,6 +17522,7 @@
                         : '<div class="te-component-preview te-component-preview-' + escapeHtml(normalizeWidgetPreviewCode(widgetCode)) + '">' + html + '</div>';
                 }
                 inners.forEach(el => { el.innerHTML = html; });
+                await loadWidgetDeclaredAssets(data.html, inners[0].ownerDocument);
             } else if (data && data.success === false) {
                 inners.forEach(el => renderPreviewError(el, data.message || ''));
             } else {
@@ -21670,6 +21735,49 @@
         window.location.reload();
     }
 
+    let resourcePreviewRefresh = Promise.resolve();
+    function refreshResourceConfigurationPreview() {
+        const requestedContext = buildTypedEditorContext('layout');
+        const contextKey = JSON.stringify(requestedContext);
+        const task = resourcePreviewRefresh.catch(() => {}).then(async () => {
+            if (!elements.previewFrame || !state.themeId) return;
+            await flushPendingEditorMutations();
+            if (JSON.stringify(buildTypedEditorContext('layout')) !== contextKey) return;
+            const current = new URL(elements.previewFrame.src, window.location.origin);
+            let frameContext = requestedContext;
+            if (current.searchParams.has('editor_context')) {
+                frameContext = JSON.parse(current.searchParams.get('editor_context'));
+                const sameIdentity = ['theme_id', 'area', 'layout_type', 'layout_option', 'target_type', 'target_id']
+                    .every(key => String(frameContext[key] ?? '') === String(requestedContext[key] ?? ''));
+                const expectedScope = requestedContext.scope?.identity || requestedContext.scope || {};
+                const actualScope = frameContext.scope?.identity || frameContext.scope || {};
+                if (!sameIdentity || Object.keys(expectedScope).some(key => String(expectedScope[key] ?? '') !== String(actualScope[key] ?? ''))) {
+                    throw new Error(window.__('预览加载失败'));
+                }
+            }
+            const overrides = { resource_refresh: true, editor_context: frameContext,
+                editor_area: frameContext.area, layout_type: frameContext.layout_type, layout_option: frameContext.layout_option,
+                locale: frameContext.locale || getPreviewLocaleForRequest({}), _t: Date.now() };
+            ['preview_mode', 'status', 'version_id', 'scope', 'target_type', 'target_id'].forEach(key => {
+                if (current.searchParams.has(key)) overrides[key] = current.searchParams.get(key);
+            });
+            // Typed iframe identities may intentionally omit the legacy scope query.
+            // Compile must use the same canonical storage scope, not the controller's default.
+            overrides.scope = frameContext.scope?.storage_scope
+                || legacyStorageScopeForIdentity(frameContext.scope?.identity || frameContext.scope);
+            const result = await fetchLayoutSlots(overrides);
+            if (!result?.success || !result.resource_materialization) throw new Error(window.__('预览加载失败'));
+            if (JSON.stringify(buildTypedEditorContext('layout')) !== contextKey) return;
+            if (elements.previewFrame.src !== current.toString()) return;
+            current.searchParams.set('_t', String(Date.now()));
+            if (elements.previewLoading) elements.previewLoading.classList.remove('hidden');
+            elements.previewFrame.src = current.toString();
+            return result.resource_materialization;
+        });
+        resourcePreviewRefresh = task;
+        return task;
+    }
+
     /**
      * 刷新预览（仅用于手动刷新按钮）
      *
@@ -21929,13 +22037,19 @@
                 url.searchParams.set('version_id', String(overrides.version_id));
             }
 
+            if (overrides.resource_refresh) {
+                url.searchParams.set('resource_refresh', '1');
+                url.searchParams.set('editor_context', JSON.stringify(overrides.editor_context || buildTypedEditorContext('layout')));
+            }
             const result = await apiJson(url.toString(), { silent: true });
             if (result.success && result.slots) {
                 state.slots = mergeSlotInfoMaps(result.slots, collectDomSlotsForInfo(result.slots));
                 state.missingSlotWarnings = Array.isArray(result.missing_slot_warnings) ? result.missing_slot_warnings : [];
                 renderSlotsInfo(state.slots, state.missingSlotWarnings);
             }
+            return result;
         } catch (err) {
+            if (overrides.resource_refresh) throw err;
             console.error('获取插槽信息失败:', err);
         }
     }
@@ -22708,6 +22822,7 @@
         collectWidgetConfigChanges,
         autosaveWidgetConfigForm,
         refreshPreview,
+        refreshResourceConfigurationPreview,
         getScopeIdentity: () => state.scopeIdentity ? { ...state.scopeIdentity } : null,
         getLegacyScope: () => legacyStorageScopeForIdentity(state.scopeIdentity),
         deselectArea,
@@ -25132,6 +25247,14 @@
         const root = document.getElementById('themeEditor');
         if (!root || root.dataset.brandBasicsBound === '1') return;
         root.dataset.brandBasicsBound = '1';
+
+        const refreshResources = () => {
+            const editor = editorApi();
+            if (typeof editor?.refreshResourceConfigurationPreview !== 'function') return;
+            editor.refreshResourceConfigurationPreview().catch(err => toast(err?.message || String(err), 'error'));
+        };
+        document.getElementById('themeBrandResourcesTab')?.addEventListener('click', refreshResources);
+        document.getElementById('themeResourceFilesConfig')?.addEventListener('weline:config-saved', refreshResources);
 
         document.getElementById('btnThemeBrandBasics')?.addEventListener('click', openDrawer);
         document.getElementById('btnThemeBrandBasicsStrip')?.addEventListener('click', openDrawer);

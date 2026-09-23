@@ -76,6 +76,30 @@ final class StorefrontHeaderNavFragmentCache
         return \is_string($html) ? $html : '';
     }
 
+    /**
+     * Whole horizontal strip (top links + all mega panels) — one Policy bag so chrome
+     * rebuilds that vary on search facade can still HIT nav HTML without re-walking
+     * the serial mega-panel waterfall.
+     *
+     * @param list<array<string, mixed>> $items
+     */
+    public function rememberCategoriesHorizontalNav(
+        array $items,
+        bool $showBannerWithChildren,
+        callable $builder,
+    ): string {
+        $html = $this->hotCache->rememberPolicy(
+            self::cachePolicy(),
+            $this->horizontalNavLogicalKey($items, $showBannerWithChildren),
+            static function () use ($builder): string {
+                $rendered = $builder();
+                return \is_string($rendered) ? $rendered : '';
+            },
+        );
+
+        return \is_string($html) ? $html : '';
+    }
+
     public function invalidateWebsite(int $websiteId): void
     {
         $this->hotCache->purgeProcessCacheForLogicalKey('theme.header.');
@@ -114,6 +138,19 @@ final class StorefrontHeaderNavFragmentCache
     {
         return 'theme.header.sidebar_nav.v7.'
             . $this->storefrontLocaleSegment()
+            . '.'
+            . $this->navListFingerprint($items);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $items
+     */
+    public function horizontalNavLogicalKey(array $items, bool $showBannerWithChildren = true): string
+    {
+        return 'theme.header.horizontal_nav.v1.'
+            . $this->storefrontLocaleSegment()
+            . '.'
+            . ($showBannerWithChildren ? 'banner1' : 'banner0')
             . '.'
             . $this->navListFingerprint($items);
     }

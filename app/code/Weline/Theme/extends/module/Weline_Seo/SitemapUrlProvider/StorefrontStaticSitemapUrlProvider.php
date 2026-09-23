@@ -19,6 +19,14 @@ final class StorefrontStaticSitemapUrlProvider implements SitemapUrlProviderInte
         ['path' => 'categories', 'priority' => '0.7', 'changefreq' => 'weekly', 'page_type' => 'category_index'],
         ['path' => 'best-sellers', 'priority' => '0.7', 'changefreq' => 'daily', 'page_type' => 'best_sellers'],
         ['path' => 'new-arrivals', 'priority' => '0.7', 'changefreq' => 'daily', 'page_type' => 'new_arrivals'],
+        // 政策/法律公开壳（与 Policy 布局白名单对齐；排除无稳定公网语义的 default）
+        ['path' => 'policy/privacy', 'priority' => '0.5', 'changefreq' => 'yearly', 'page_type' => 'policy'],
+        ['path' => 'policy/cookie', 'priority' => '0.5', 'changefreq' => 'yearly', 'page_type' => 'policy'],
+        ['path' => 'policy/term-condition', 'priority' => '0.5', 'changefreq' => 'yearly', 'page_type' => 'policy'],
+        ['path' => 'policy/refund', 'priority' => '0.5', 'changefreq' => 'yearly', 'page_type' => 'policy'],
+        ['path' => 'policy/disclaimer', 'priority' => '0.5', 'changefreq' => 'yearly', 'page_type' => 'policy'],
+        ['path' => 'policy/shipping', 'priority' => '0.5', 'changefreq' => 'yearly', 'page_type' => 'policy'],
+        ['path' => 'policy/accessibility', 'priority' => '0.5', 'changefreq' => 'yearly', 'page_type' => 'policy'],
     ];
 
     public function __construct(

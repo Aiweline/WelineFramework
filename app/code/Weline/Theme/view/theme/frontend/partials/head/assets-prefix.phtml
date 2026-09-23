@@ -1,0 +1,21 @@
+<?php
+/**
+ * Route-invariant head prefix (prepaint + disk override prep).
+ * wave9-9s: nested under storefrontHeadAssetsPolicy — never page-scoped by seo_fp.
+ *
+ * @meta.name {default="Storefront head assets prefix",name="店面 head 资源前缀"}
+ * @meta.cache.mode {default="chrome",name="缓存模式"}
+ * @meta.cache.auth {default="guest",name="鉴权维度"}
+ * @meta.cache.ttl {default="300",name="新鲜期秒"}
+ */
+$diskOverrideHtml = '';
+try {
+    $diskOverrideHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Disk\ThemeDiskHeadService::class
+    )->buildOverrideLinkHtml('frontend');
+} catch (\Throwable $e) {
+    $diskOverrideHtml = '';
+}
+$this->assign('__head_disk_override_html', $diskOverrideHtml);
+?>
+<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>

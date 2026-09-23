@@ -2554,8 +2554,13 @@ class ThemeEditor extends BackendController
             $result = false;
             $resolvedNodeUid = $this->resolveScopedNodeUidForRemoval($context, $layoutId, $nodeUid);
             if ($resolvedNodeUid !== '') {
-                if ($this->removeScopedLayoutNodeFromWorkspace($context, $resolvedNodeUid)) {
-                    $result = true;
+                $result = $this->removeScopedLayoutNodeFromWorkspace($context, $resolvedNodeUid);
+                if (!$result && $context->layoutType !== ThemeLayout::PAGE_TYPE_HOME) {
+                    $carrierContext = $context->withLayoutType(ThemeLayout::PAGE_TYPE_HOME);
+                    $result = $this->removeScopedLayoutNodeFromWorkspace($carrierContext, $resolvedNodeUid);
+                    if ($result) {
+                        $context = $carrierContext;
+                    }
                 }
                 $nodeUid = $resolvedNodeUid;
             }
@@ -4691,6 +4696,29 @@ class ThemeEditor extends BackendController
      */
     public function getCompileLayout()
     {
+        if ((string)$this->request->getParam('render', '') === 'html') {
+            // Only this registered layout lacks a public storefront route. Keep
+            // its canvas under the existing authenticated backend controller.
+            if ((string)$this->request->getParam('editor_area', '') !== 'frontend'
+                || (string)$this->request->getParam('layout_type', '') !== 'blank'
+                || (string)$this->request->getParam('layout_option', '') !== 'full') {
+                return \Weline\Framework\Http\Response::json(['success' => false, 'message' => 'theme_editor_html_layout_unsupported'], 404);
+            }
+            $previousLayoutType = $this->layoutType;
+            $this->layoutType = null;
+            try {
+                // The selected frontend template is already a complete document.
+                // Preserve fetch events for slots/assets without the backend shell.
+                $payload = $this->getCompileLayoutPayload();
+            } finally {
+                $this->layoutType = $previousLayoutType;
+            }
+            if (empty($payload['success']) || trim((string)($payload['html'] ?? '')) === '') {
+                $payload['success'] = false;
+                return \Weline\Framework\Http\Response::json($payload + ['message' => 'theme_editor_html_layout_empty'], (int)($payload['status_code'] ?? 500));
+            }
+            return \Weline\Framework\Http\Response::html((string)$payload['html']);
+        }
         return $this->fetchJson($this->getCompileLayoutPayload());
     }
 
@@ -4700,7 +4728,7 @@ class ThemeEditor extends BackendController
         $editorArea = $this->resolveRequestedEditorArea(PreviewContextService::AREA_BACKEND);
         $layoutType = (string)$this->request->getParam('layout_type', 'homepage');
         $layoutOption = (string)$this->request->getParam('layout_option', 'default');
-        $includeHtml = !in_array(
+        $includeHtml = (string)$this->request->getParam('render', '') === 'html' || !in_array(
             strtolower((string)$this->request->getParam('include_html', '1')),
             ['0', 'false', 'no'],
             true
@@ -4740,6 +4768,23 @@ class ThemeEditor extends BackendController
                 ];
             }
 
+            $resourceMaterialization = null;
+            if ((string)$this->request->getParam('resource_refresh', '') === '1'
+                || (string)$this->request->getParam('render', '') === 'html') {
+                $typed = ObjectManager::getInstance(ThemeEditorContextFactory::class)->fromInput(
+                    ['editor_context' => $this->request->getParam('editor_context', '')], ThemeEditorContext::RESOURCE_LAYOUT,
+                );
+                if ($typed->themeId !== $themeId || $typed->area !== $editorArea
+                    || $typed->layoutType !== $layoutType || $typed->layoutOption !== $layoutOption
+                    || $typed->scope->storageScope !== (string)$context['scope']) {
+                    throw new \InvalidArgumentException('theme_editor_context_mismatch');
+                }
+                if ((string)$this->request->getParam('resource_refresh', '') === '1') {
+                    $resourceMaterialization = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class)
+                        ->refreshResourceArtifacts($typed, (string)($context['status'] ?? 'draft'), (int)($context['version_id'] ?? 0));
+                }
+            }
+
             // Frontend: compile against the real layout template (storefront parity).
             // Backend: real backend layout template (not a content.phtml rewrite stub).
             $html = $editorArea === PreviewContextService::AREA_FRONTEND
@@ -4763,6 +4808,7 @@ class ThemeEditor extends BackendController
 
             return [
                 'success' => true,
+                'resource_materialization' => $resourceMaterialization,
                 'html' => $includeHtml ? $html : '',
                 'slots' => $slots,
                 'meta' => $meta,
@@ -4780,6 +4826,7 @@ class ThemeEditor extends BackendController
         } catch (\Throwable $e) {
             return [
                 'success' => false,
+                'status_code' => $e instanceof \InvalidArgumentException ? 400 : 500,
                 'message' => $e->getMessage(),
                 'html' => '',
                 'slots' => [],
@@ -7694,7 +7741,7 @@ HTML;
             $this->request->setGet('theme_id', (string)$themeId);
             $this->applyThemeLayoutRuntimeContextToRequest($context);
             if ((string)$this->request->getParam('status', '') === '') {
-                $this->request->setGet('status', ThemeLayout::STATUS_DRAFT);
+                $this->request->setGet('status', (string)($context['status'] ?? ThemeLayout::STATUS_DRAFT));
             }
             $versionId = (int)($context['version_id'] ?? $this->request->getParam('version_id', 0));
             if ($versionId > 0) {
@@ -8007,7 +8054,7 @@ HTML;
             $session = ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
             $session->setData('preview_theme_id', $themeId);
             $session->setData('preview_theme_area', PreviewContextService::AREA_FRONTEND);
-            $this->request->setGet('status', ThemeLayout::STATUS_DRAFT);
+            $this->request->setGet('status', (string)($context['status'] ?? ThemeLayout::STATUS_DRAFT));
             $this->request->setGet('editor_area', PreviewContextService::AREA_FRONTEND);
             $this->request->setGet('layout_type', $layoutType);
             $this->request->setGet('layout_option', $layoutOption);
@@ -10308,14 +10355,23 @@ HTML;
             return false;
         }
 
+        // ChromePayload is the canonical owner for shared header/footer nodes,
+        // including those shown while editing a product layout.
+        $chromeRemoval = ObjectManager::getInstance(\Weline\Theme\Service\ThemeChromeWidgetRemovalService::class)
+            ->remove($context, $nodeUid, 'backend-user:' . (string)($this->session->getUserId() ?? 0));
+        if ($chromeRemoval !== null) {
+            return true;
+        }
+
         /** @var ThemeScopedWorkspaceInterface $workspace */
         $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
         $layoutContext = $context->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
         $state = $workspace->load($layoutContext, true);
         $nodes = \is_array($state['draft_payload']['nodes'] ?? null) ? $state['draft_payload']['nodes'] : [];
-        // Idempotent: structure-view ghosts / already-removed nodes should not hard-fail the operator.
+        // Absence in this workspace is not proof of removal: the caller must
+        // still try the shared homepage carrier before reporting an outcome.
         if (!\array_key_exists($nodeUid, $nodes)) {
-            return true;
+            return false;
         }
 
         /** @var ThemeScopedLayoutWriteService $layoutWriter */

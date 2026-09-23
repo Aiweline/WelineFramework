@@ -15,6 +15,8 @@ final class ThemeAmazonProductCardWidgetContractTest extends TestCase
     {
         yield 'featured-products' => ['view/theme/frontend/widgets/product/featured-products/default.phtml'];
         yield 'new-arrivals' => ['view/theme/frontend/widgets/product/new-arrivals/default.phtml'];
+        yield 'deals-of-day' => ['view/theme/frontend/widgets/product/deals-of-day/default.phtml'];
+        yield 'bestsellers' => ['view/theme/frontend/widgets/product/bestsellers/default.phtml'];
     }
 
     /**
@@ -29,8 +31,9 @@ final class ThemeAmazonProductCardWidgetContractTest extends TestCase
 
         $this->assertStringContainsString('weline-product-card-shelf', $content);
         $this->assertStringContainsString('<w:product:card', $content);
-        $this->assertStringContainsString('density="standard"', $content);
+        $this->assertStringContainsString('density="shelf"', $content);
         $this->assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $content);
+        $this->assertStringContainsString('查看更多', $content);
         // CSS 必须落在 section 内；写在 wrapper 外层会被槽位装配剥掉。
         $this->assertMatchesRegularExpression(
             '/<section\b[\s\S]*?>\s*<\?= ProductCardRenderer::emitStylesheetLinkOnce\(\) \?>/s',

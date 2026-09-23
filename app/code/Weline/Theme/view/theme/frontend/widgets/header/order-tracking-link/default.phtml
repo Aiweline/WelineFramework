@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.layout_source {Weline_Theme::css/widgets/widget-header-order-tracking-link-default.css}
  * 页头通知条右侧：订单跟踪入口
  *
  * @var \Weline\Framework\View\Template $this
@@ -50,16 +51,3 @@ if ($url !== '' && (str_starts_with($url, 'http://') || str_starts_with($url, 'h
    data-widget-type="notice-rights"
    href="<?php if ($url !== ''): ?><?= $esc($url) ?><?php else: ?>@url{$urlPath}<?= $esc($urlHash) ?><?php endif; ?>"><?= $esc($label) ?></a>
 
-<style>
-.<?= $wc ?> {
-    color: inherit;
-    text-decoration: none;
-    font: inherit;
-    line-height: inherit;
-    opacity: 0.92;
-}
-.<?= $wc ?>:hover {
-    text-decoration: underline;
-    opacity: 1;
-}
-</style>

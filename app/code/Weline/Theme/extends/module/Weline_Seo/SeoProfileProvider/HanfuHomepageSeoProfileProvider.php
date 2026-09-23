@@ -54,9 +54,14 @@ final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterfa
         $profile = [];
         if ($merchantSiteName !== '' && $this->isSystemDefaultSiteName($contextSiteName)) {
             $profile['site_name'] = $merchantSiteName;
-            $profile['organization'] = [
+            $organization = [
                 'name' => $merchantSiteName,
             ];
+            $alternate = trim($this->siteBrand->resolveOrganizationAlternateName($merchantSiteName));
+            if ($alternate !== '') {
+                $organization['alternateName'] = $alternate;
+            }
+            $profile['organization'] = $organization;
         }
 
         $websiteDescription = trim($this->siteBrand->resolveFrontendSiteDescription(

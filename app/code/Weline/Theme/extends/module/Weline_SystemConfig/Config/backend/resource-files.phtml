@@ -1,0 +1,28 @@
+<?php
+/**
+ * @meta.title {default="资源文件配置"}
+ * @meta.description {default="配置当前作用范围的 CSS 与 JS 压缩、合并方式及合并起始部件序号。"}
+ * @config.area {backend}
+ * @config.sort {40}
+ */
+?>
+<w:config:group code="theme_resource_files" label="资源文件配置" sort="10">
+    <w:config:field key="resource_files/css_minify" label="CSS 压缩" type="select" value-type="string"
+        default="auto" options="auto:自动,on:开启,off:关闭" scope="global,website,store,channel"
+        description="自动：开发环境关闭，生产环境开启。开启或关闭可覆盖环境默认行为。" />
+    <w:config:field key="resource_files/js_minify" label="JS 压缩" type="select" value-type="string"
+        default="auto" options="auto:自动,on:开启,off:关闭" scope="global,website,store,channel"
+        description="自动：开发环境关闭，生产环境开启。开启或关闭可覆盖环境默认行为。" />
+    <w:config:field key="resource_files/css_merge" label="CSS 合并" type="select" value-type="string"
+        default="auto" options="auto:自动,on:开启,off:关闭" scope="global,website,store,channel"
+        description="自动：开发环境关闭，生产环境开启。合并从下方指定的部件序号开始。" />
+    <w:config:field key="resource_files/css_merge_start" label="CSS 合并起始部件序号" type="number" value-type="int"
+        default="6" validation="min:1" scope="global,website,store,channel"
+        description="按页面实际渲染顺序计数，包含嵌套部件。默认从第 6 个开始，前 5 个保持独立；仅合并开启时生效。" />
+    <w:config:field key="resource_files/js_merge" label="JS 合并" type="select" value-type="string"
+        default="auto" options="auto:自动,on:开启,off:关闭" scope="global,website,store,channel"
+        description="自动：开发环境关闭，生产环境开启。合并从下方指定的部件序号开始。" />
+    <w:config:field key="resource_files/js_merge_start" label="JS 合并起始部件序号" type="number" value-type="int"
+        default="6" validation="min:1" scope="global,website,store,channel"
+        description="按页面实际渲染顺序计数，包含嵌套部件。默认从第 6 个开始，前 5 个保持独立；仅合并开启时生效。" />
+</w:config:group>

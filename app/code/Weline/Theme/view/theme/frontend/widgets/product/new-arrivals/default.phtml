@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-product-new-arrivals-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js,Weline_Product::css/frontend/product-card.css}
  * 新品到达部件
  * 
  * @var \Weline\Framework\View\Template $this
@@ -15,7 +16,7 @@
  *
  * @param title {default="新品上架",type="string",label="标题"}
  * @param subtitle {default="发现最新商品",type="string",label="副标题"}
- * @param limit {default=8,type="number",label="显示数量"}
+ * @param limit {default=4,type="number",label="显示数量"}
  * @param days {default=30,type="number",label="天数范围",description="多少天内上架的算新品"}
  * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
  * @param show_new_badge {default=true,type="bool",label="显示新品标签"}
@@ -47,9 +48,17 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = WidgetI18n::label((string)($this->getData('title') ?? '新品上架'));
 $subtitle = WidgetI18n::label((string)($this->getData('subtitle') ?? '发现最新商品'));
-$limit = (int)($this->getData('limit') ?? 8);
+$limit = (int)($this->getData('limit') ?? 4);
 $days = (int)($this->getData('days') ?? 30);
-$columns = $this->getData('columns') ?? '4';
+$columns = (string)($this->getData('columns') ?? '4');
+if (!in_array($columns, ['2', '3', '4', '5', '6'], true)) {
+    $columns = '4';
+}
+$colNum = max(2, min(6, (int)$columns));
+// WO-HP-P3-MALL-04：新品货架 1 行×4–5
+if ($limit <= 0 || $limit > $colNum) {
+    $limit = $colNum;
+}
 $showNewBadge = (bool)($this->getData('show_new_badge') ?? true);
 $layout = $this->getData('layout') ?? 'grid';
 $labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
@@ -58,8 +67,22 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 $products = [];
 try {
     if (class_exists(StorefrontProductWidgetCatalog::class)) {
-        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
-            ->newArrivalCards($limit, $days);
+        // WO-BUILD-HOME-ZERO：新品货架再兜底剥零价卡
+        $rawNew = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+            ->newArrivalCards(max($limit * 3, 12), $days);
+        $products = [];
+        foreach ($rawNew as $card) {
+            if (!is_array($card) || (float)($card['price'] ?? 0) <= 0.0) {
+                continue;
+            }
+            if (!empty($card['currency_unavailable']) || !empty($card['quote_only'])) {
+                continue;
+            }
+            $products[] = $card;
+            if (count($products) >= $limit) {
+                break;
+            }
+        }
     }
 } catch (\Throwable) {
     $products = [];
@@ -89,7 +112,20 @@ if ($products === [] && $isPreviewMode) {
 if ($products === [] && !$isPreviewMode) {
     try {
         if (class_exists(StorefrontProductWidgetCatalog::class)) {
-            $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards($limit);
+            $rawFallback = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+                ->cards(max($limit * 3, 12));
+            foreach ($rawFallback as $card) {
+                if (!is_array($card) || (float)($card['price'] ?? 0) <= 0.0) {
+                    continue;
+                }
+                if (!empty($card['currency_unavailable']) || !empty($card['quote_only'])) {
+                    continue;
+                }
+                $products[] = $card;
+                if (count($products) >= $limit) {
+                    break;
+                }
+            }
         }
     } catch (\Throwable) {
         $products = [];
@@ -138,7 +174,7 @@ $showAddToCart = true;
 <section class="<?= $esc($wc) ?> weline-product-card-shelf<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
+         data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' data-widget-style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
     <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <?php if ($title || $subtitle): ?>
         <div class="widget-header">
@@ -166,8 +202,12 @@ $showAddToCart = true;
                     $product['is_demo'] = !empty($labelFlags['is_demo']);
                     $product['is_new'] = !empty($labelFlags['is_new']);
                     $product['is_sale'] = !empty($labelFlags['is_sale']);
+                    $product['is_hot'] = !empty($labelFlags['is_hot']);
+                    $product['free_shipping'] = !empty($labelFlags['is_free_shipping']);
+                    $product['discount_percent'] = (int)($labelFlags['discount_percent'] ?? 0);
+                    $product['sale_badge_text'] = (string)($labelFlags['sale_text'] ?? '');
                     ?>
-                    <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="showNewBadge" density="standard" wishlist-pixel="true" />
+                    <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="showNewBadge" density="shelf" wishlist-pixel="true" />
                 <?php endforeach; ?>
             </div>
         </div>
@@ -179,94 +219,11 @@ $showAddToCart = true;
         <?php endif; ?>
     </div>
     
-    <div class="widget-footer">
+    <div class="widget-footer" data-testid="new-arrivals-view-more">
         <a href="@url{'new-arrivals'}" class="btn-view-all">
-            <?= __('查看全部新品') ?>
+            <?= __('查看更多') ?>
             <w:icon name="arrow-right" size="sm"></w:icon>
         </a>
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    width: 100%;
-    max-width: none;
-    margin-inline: 0;
-    padding-block: var(--weline-space-8);
-    padding-inline: 0;
-    box-sizing: border-box;
-}
-
-.<?= $wc ?> .widget-header { margin-bottom: var(--weline-space-5); }
-.<?= $wc ?> .widget-title {
-    margin: 0;
-    color: var(--weline-theme-text);
-    font-size: clamp(var(--font-size-2xl), 2vw, var(--font-size-4xl));
-    font-weight: var(--weline-font-weight-bold);
-    line-height: 1.2;
-}
-.<?= $wc ?> .widget-subtitle { margin: var(--weline-space-2) 0 0; color: var(--weline-theme-text-muted); }
-.<?= $wc ?> .products-container { width: 100%; }
-.<?= $wc ?> .products-wrapper { width: 100%; overflow: visible; }
-.<?= $wc ?> .layout-carousel .products-wrapper { overflow: hidden; }
-.<?= $wc ?> .products-grid {
-    display: grid;
-    gap: var(--weline-space-4);
-    width: 100%;
-    box-sizing: border-box;
-    align-items: stretch;
-}
-.<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.<?= $wc ?> .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.<?= $wc ?> .products-grid.columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.<?= $wc ?> .products-grid.columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.<?= $wc ?> .layout-carousel .products-grid {
-    display: flex;
-    gap: var(--weline-space-4);
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-}
-.<?= $wc ?> .layout-carousel .product-card {
-    flex: 0 0 auto;
-    width: min(var(--layout-sidebar-width), calc((100% - var(--spacing-2xl)) / 4));
-    scroll-snap-align: start;
-}
-.<?= $wc ?> .widget-footer { text-align: center; margin-top: var(--weline-space-8); }
-.<?= $wc ?> .btn-view-all {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--weline-space-3) var(--weline-space-8);
-    border: var(--border-width-medium) solid var(--weline-theme-primary);
-    color: var(--weline-theme-primary);
-    text-decoration: none;
-    border-radius: var(--token-size-30px);
-    font-weight: 600;
-    transition: all 0.3s;
-}
-.<?= $wc ?> .btn-view-all:hover {
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-}
-
-@media (max-width: 980px) {
-    .<?= $wc ?> .products-grid.columns-4,
-    .<?= $wc ?> .products-grid.columns-5,
-    .<?= $wc ?> .products-grid.columns-6 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-/* Keep 2 columns through theme-editor iframe widths (~600–640px); 1-col only on true phones. */
-@media (max-width: 480px) {
-    .<?= $wc ?> .products-grid,
-    .<?= $wc ?> .products-grid.columns-2,
-    .<?= $wc ?> .products-grid.columns-3,
-    .<?= $wc ?> .products-grid.columns-4,
-    .<?= $wc ?> .products-grid.columns-5,
-    .<?= $wc ?> .products-grid.columns-6 {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-</style>

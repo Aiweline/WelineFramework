@@ -1,0 +1,221 @@
+.wc-theme_widget_cross_sell {
+    background: var(--weline-theme-surface-muted);
+    border-radius: var(--border-radius-xl);
+    padding: var(--token-size-25px);
+    margin: var(--weline-space-5) 0;
+}
+
+.wc-theme_widget_cross_sell .widget-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    margin: 0 0 var(--weline-space-5);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.wc-theme_widget_cross_sell .widget-title :is(i, svg) {
+    color: var(--weline-theme-primary);
+}
+
+.wc-theme_widget_cross_sell .cross-sell-container {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-8);
+    flex-wrap: wrap;
+}
+
+.wc-theme_widget_cross_sell .cross-sell-products {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3_5);
+    flex: 1;
+    flex-wrap: wrap;
+}
+
+.wc-theme_widget_cross_sell .plus-sign {
+    font-size: var(--font-size-2xl);
+    font-weight: 300;
+    color: var(--weline-theme-text-muted);
+}
+
+.wc-theme_widget_cross_sell .cross-product {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2_5);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--token-size-10px);
+    padding: var(--spacing-3_5);
+    border: var(--border-width-medium) solid transparent;
+    transition: all 0.3s;
+}
+
+.wc-theme_widget_cross_sell .cross-product:has(.cross-checkbox:checked) {
+    border-color: var(--weline-theme-primary);
+}
+
+.wc-theme_widget_cross_sell .product-checkbox {
+    position: relative;
+}
+
+.wc-theme_widget_cross_sell .cross-checkbox {
+    width: var(--font-size-xl);
+    height: var(--font-size-xl);
+    cursor: pointer;
+    accent-color: var(--weline-theme-primary);
+}
+
+.wc-theme_widget_cross_sell .product-link-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+.wc-theme_widget_cross_sell .product-link {
+    display: block;
+    width: var(--sidebar-collapsed-width);
+    height: var(--sidebar-collapsed-width);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+}
+.wc-theme_widget_cross_sell .product-link-wrap .product-actions {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.wc-theme_widget_cross_sell .cross-product:hover .product-actions,
+.wc-theme_widget_cross_sell .cross-product:focus-within .product-actions {
+    opacity: 1;
+}
+.wc-theme_widget_cross_sell .product-link-wrap .action-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(15, 17, 17, 0.12);
+}
+
+.wc-theme_widget_cross_sell .product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.wc-theme_widget_cross_sell .product-info {
+    flex: 1;
+    min-width: var(--token-size-100px);
+}
+
+.wc-theme_widget_cross_sell .product-name {
+    margin: 0 0 var(--spacing-1_5);
+    font-size: var(--weline-font-size-sm);
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.wc-theme_widget_cross_sell .product-name a {
+    color: var(--weline-theme-text);
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.wc-theme_widget_cross_sell .product-name a:hover {
+    color: var(--weline-theme-primary);
+}
+
+.wc-theme_widget_cross_sell .product-price {
+    font-size: var(--spacing-3_5);
+    font-weight: 600;
+    color: var(--weline-theme-danger);
+}
+
+/* 汇总区域 */
+.wc-theme_widget_cross_sell .cross-sell-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-3_5);
+    padding: var(--weline-space-5);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--token-size-10px);
+    min-width: var(--size-panel-200);
+}
+
+.wc-theme_widget_cross_sell .total-price {
+    text-align: center;
+}
+
+.wc-theme_widget_cross_sell .total-price .label {
+    display: block;
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-text-muted);
+    margin-bottom: var(--spacing-1_5);
+}
+
+.wc-theme_widget_cross_sell .total-price .value {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--weline-theme-danger);
+}
+
+.wc-theme_widget_cross_sell .btn-add-all {
+    width: 100%;
+    padding: var(--weline-space-3) var(--spacing-lg);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+    border: none;
+    border-radius: var(--border-radius-lg);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    transition: all 0.3s;
+}
+
+.wc-theme_widget_cross_sell .btn-add-all:hover {
+    background: var(--weline-theme-primary-hover);
+}
+
+.wc-theme_widget_cross_sell .cross-sell-status {
+    min-height: var(--font-size-xl);
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-text-muted);
+    text-align: center;
+}
+
+.wc-theme_widget_cross_sell .cross-sell-status.is-warning {
+    color: var(--weline-theme-warning);
+}
+
+.wc-theme_widget_cross_sell .cross-sell-status.is-success {
+    color: var(--weline-theme-success);
+}
+
+@media (max-width: 768px) {
+    .wc-theme_widget_cross_sell .cross-sell-container {
+        flex-direction: column;
+    }
+    
+    .wc-theme_widget_cross_sell .cross-sell-products {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .wc-theme_widget_cross_sell .cross-sell-summary {
+        width: 100%;
+    }
+}

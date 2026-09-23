@@ -35,14 +35,14 @@ $updatedAt = date('Y-m-d');
 $ariaNav = (string)WidgetI18n::label('退款政策目录');
 $ariaArticle = (string)WidgetI18n::label('退款政策正文');
 $toc = [
-    ['id' => 'refund-s1', 'label' => WidgetI18n::label('一、与退换政策的关系')],
-    ['id' => 'refund-s2', 'label' => WidgetI18n::label('二、可申请退款的情形')],
-    ['id' => 'refund-s3', 'label' => WidgetI18n::label('三、例外与限制')],
-    ['id' => 'refund-s4', 'label' => WidgetI18n::label('四、退款流程')],
-    ['id' => 'refund-s5', 'label' => WidgetI18n::label('五、退款方式与时效')],
-    ['id' => 'refund-s6', 'label' => WidgetI18n::label('六、运费与责任')],
-    ['id' => 'refund-s7', 'label' => WidgetI18n::label('七、特殊商品说明')],
-    ['id' => 'refund-s8', 'label' => WidgetI18n::label('八、经营者与联系')],
+    ['id' => 'refund-s1', 'label' => WidgetI18n::label('1 / 与退换政策的关系')],
+    ['id' => 'refund-s2', 'label' => WidgetI18n::label('2 / 哪些情况可以申请退款')],
+    ['id' => 'refund-s3', 'label' => WidgetI18n::label('3 / 通常不好办理的情形')],
+    ['id' => 'refund-s4', 'label' => WidgetI18n::label('4 / 退款怎么办理')],
+    ['id' => 'refund-s5', 'label' => WidgetI18n::label('5 / 退款方式与到账时间')],
+    ['id' => 'refund-s6', 'label' => WidgetI18n::label('6 / 运费怎么算')],
+    ['id' => 'refund-s7', 'label' => WidgetI18n::label('7 / 特殊商品说明')],
+    ['id' => 'refund-s8', 'label' => WidgetI18n::label('8 / 经营者与联系')],
 ];
 $tocFallbackPath = '/policy/refund';
 $contactEmail = (string)($contact['contact_email'] ?? '');
@@ -154,7 +154,8 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
             border-right: 1px solid #e3e6e6;
             background: #fafafa;
             position: sticky;
-            top: 12rem;
+            top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem));
+            align-self: start;
         }
         .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
         .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
@@ -183,7 +184,7 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
             color: #565959;
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 12rem; }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem)); }
         .amazon-policy__section h2 {
             margin: 0 0 0.75rem;
             font-size: 1.2rem;
@@ -292,7 +293,7 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
                                 <h1 id="policy-refund-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('退款政策')) ?><?php endif; ?></h1>
-                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('本站自中国大陆发往海外。请阅读退款条件、跨境回程运费与到账说明后再提交申请。')) ?></p>
+                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('我们从中国发往海外，跨境回程成本高，所以店内售后以质量问题、错发漏发、运输损坏为主。单纯不喜欢或选错色码，通常不好办理退换。')) ?></p>
                                 <div class="amazon-policy__meta">
                                     <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
                                     <a href="@url{'guide/returns'}"><?= $escape(WidgetI18n::label('退换政策')) ?></a>
@@ -312,19 +313,19 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
                                     </aside>
 
                                     <article class="amazon-policy__article" aria-label="<?= $escape($ariaNav) ?>">
-                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('本页说明退款到账、金额与流程。是否可退货/换货、期限与例外，以「退换政策」为准；二者冲突时，退换条件以退换政策及强制性法规为准。')) ?></p>
+                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('本页说明退款到账、金额与流程。能不能退换、期限与例外，以「退换政策」为准；若两页表述不一致，以退换政策及强制性法规为准。')) ?></p>
 
                                         <section class="amazon-policy__section" id="refund-s1" weline-code="theme.policy.section_2">
-                                            <h2><?= $escape(WidgetI18n::label('一、与退换政策的关系')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('1 / 与退换政策的关系')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('1.1 退货、换货的适用条件、期限与例外见「退换政策」。本页专责退款金额、路径与到账时效。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('1.2 中国大陆网购适用七日无理由退货的品类，按法律规定执行；境外买家若适用更长冷静期（如十四日），从其强制性规定。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('1.3 商品页显著标注的特殊规则（定制、清仓、不支持无理由等）在合法范围内优先适用。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('1.2 质量问题、描述不符、错发漏发或运输损坏可申请售后。对于适用欧盟或英国消费者撤回权的普通商品，您通常可在收货后14日内通知我们撤回购买，无需说明理由，并在通知后14日内寄回；依法不适用撤回权的真正个性化商品除外。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('1.3 仅按订单生产、手工制作或从标准尺码与颜色中选择，不当然构成个性化定制。特价、清仓或商品页写明不退换，也不当然取消消费者的法定撤回权与质量问题救济。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="refund-s2" weline-code="theme.policy.section_3">
-                                            <h2><?= $escape(WidgetI18n::label('二、可申请退款的情形')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('2 / 哪些情况可以申请退款')) ?></h2>
                                             <ul>
-                                                <li><?= $escape(WidgetI18n::label('（1）符合退换政策或法定无理由退货条件，且退回商品验收通过；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（1）符合退换政策（质量/错发/运输损坏等）且退回商品验收通过；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（2）商品存在质量问题、与描述明显不符、错发或漏发；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（3）未收到商品，或运输途中严重损坏经核实无法使用；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（4）因缺货、无法配送等原因我们取消订单或双方协商仅退款；')) ?></li>
@@ -333,49 +334,49 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
                                         </section>
 
                                         <section class="amazon-policy__section" id="refund-s3" weline-code="theme.policy.section_4">
-                                            <h2><?= $escape(WidgetI18n::label('三、例外与限制')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('在不减损您法定权利的前提下，下列情形可能无法办理无理由退款（质量/错发问题除外）：')) ?></p>
+                                            <h2><?= $escape(WidgetI18n::label('3 / 通常不好办理的情形')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('退换申请需结合购买时间、商品实际状态及适用消费者权利判断。以下情形可能影响退款范围，但不自动取消法定撤回权或质量问题救济：')) ?></p>
                                             <ul>
                                                 <li><?= $escape(WidgetI18n::label('（1）超过约定或法定退换期限，且不存在质量或错发问题；')) ?></li>
-                                                <li><?= $escape(WidgetI18n::label('（2）已穿着使用、洗涤、裁剪或吊牌缺失，导致无法二次销售；')) ?></li>
-                                                <li><?= $escape(WidgetI18n::label('（3）定制/来图定做、数字内容、已拆封的卫生类或贴身衣物等依法或商品页明示不适用无理由退货的品类；')) ?></li>
-                                                <li><?= $escape(WidgetI18n::label('（4）商品页明确标注不支持无理由退货的特价/清仓商品（无质量问题）；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（2）超出检查商品性质、特征及尺码所必需的使用，可能造成价值减损；正常试穿检查或吊牌缺失不自动取消法定撤回权；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（3）按您的个人尺寸、专属设计或其他个性化要求制作的商品，可能适用法定撤回权例外；须符合实际制作方式及当地法定条件，质量问题仍可申请救济；')) ?></li>
+                                                <li><?= $escape(WidgetI18n::label('（4）特价或清仓本身不是排除法定撤回权的理由；已明确告知的具体瑕疵与新出现的质量问题应分别处理；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（5）非本站出售、缺少配件/赠品或无法核对订单的商品。')) ?></li>
                                             </ul>
-                                            <p><?= $escape(WidgetI18n::label('说明：在无理由退货期限内，因尺码/颜色选错或不喜欢等个人原因提出的退货，按退换政策办理，不适用本条「禁止」；回程运费承担规则见下文及退换政策。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('说明：在适用的法定撤回期内，普通商品可因改变主意或标准尺码、颜色不合适提出退货。非质量原因的直接回程运费，仅在法律允许且下单前已告知由买家承担时由买家支付。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="refund-s4" weline-code="theme.policy.section_5">
-                                            <h2><?= $escape(WidgetI18n::label('四、退款流程')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('4 / 退款怎么办理')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('4.1 提交申请：在订单管理页或联系客服提交售后，并按提示上传照片或说明。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.2 审核处理：我们将在收到申请后1-3个工作日内完成审核；通过后告知退货地址与寄回要求。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('4.3 退回商品：请使用可追踪物流寄回并保留运单；未经同意的到付件可能被拒收。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('4.3 退回商品：请使用可追踪物流寄回并保留运单；未经事先同意的到付件，我们可能无法签收。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.4 验收与退款：收到退货并验收合格后，按原支付路径办理退款并通知结果。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="refund-s5" weline-code="theme.policy.section_6">
-                                            <h2><?= $escape(WidgetI18n::label('五、退款方式与时效')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('5 / 退款方式与到账时间')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('5.1 退款原则上原路退回至您下单时使用的支付账户。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('5.2 质检通过后通常3-15个工作日内发起退款，到账时间因支付渠道而异；超时请先查支付机构，再联系客服。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('5.2 适用欧盟或英国法定撤回权时，我们在收到撤回通知后14日内退款；在法律允许时，可等到收到退货或您提供寄回凭证（以较早者为准）再退款。支付机构的到账处理时间另计；其他退款按相应法定期限及确认方案办理。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('5.3 优惠券、积分、满减与赠品的退回或扣减以订单与活动说明为准；赠品已使用或损坏的，可能需补差或从退款中扣除相应金额。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="refund-s6" weline-code="theme.policy.section_7">
-                                            <h2><?= $escape(WidgetI18n::label('六、运费与责任')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('6 / 运费怎么算')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('6.1 因质量问题、描述不符、错发或漏发导致的退换：合理范围内寄回中国仓库的标准国际运费由我们承担（核实报销或直免）；超额加急/保价除外。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('6.2 因个人原因（尺码不合适、不喜欢、拍错）退货：寄回中国仓库的国际运费及可能税费由买家承担；包邮不含回程，除非当地强制性法规另有规定。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('6.3 因地址错误、拒收、无人签收或清关失败导致退回/销毁/二次配送的费用，由买家承担；退款时可扣除已产生费用。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('6.4 国际运输参考时效内的正常延误、海关查验或轨迹短暂空白，不单独构成自动退款事由。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('6.2 适用欧盟或英国法定撤回权的整单退货，退款包括原标准配送费用；您自行选择的加急等额外运费差额可不退。直接回程运费仅在下单前已告知且法律允许时由买家承担，不任意扣回原包邮优惠。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('6.3 因地址错误、无法签收、无人签收或清关失败导致退回/销毁/二次配送的费用，由买家承担；退款时可扣除已产生费用。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('6.4 运输延误或轨迹空白时，请联系我们查询。未按承诺发货或未在适用交付期限内送达的订单，按适用规则提供等待、取消或退款处理；清关或承运商延误不自动排除这些权利。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="refund-s7" weline-code="theme.policy.section_8">
-                                            <h2><?= $escape(WidgetI18n::label('七、特殊商品说明')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('7.1 贴身衣物、定制商品、数字内容、一经拆封无法退换的卫生类商品等，可能不适用无理由退货，请以下单页提示为准。')) ?></p>
+                                            <h2><?= $escape(WidgetI18n::label('7 / 特殊商品说明')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('7.1 个性化商品的撤回权例外仅适用于满足法定条件的实际定制。普通汉服、标准尺码选项或手工工艺不自动属于该例外；任何适用例外均不取消瑕疵、描述不符或其他法定救济。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('7.2 汉服等服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="refund-s8" weline-code="theme.policy.section_9">
-                                            <h2><?= $escape(WidgetI18n::label('八、经营者与联系')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('8 / 经营者与联系')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('8.1 本站经营者公开信息以网站页脚公示及营业执照信息为准；您也可通过下列联系方式联系我们。')) ?></p>
                                             <?php if ($contactEmail !== ''): ?>
                                             <p><?= $escape(WidgetI18n::label('邮箱：')) ?><?= $escape($contactEmail) ?></p>
@@ -394,7 +395,7 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
                                             <div class="amazon-policy__related">
                                                 <a href="@url{'guide/returns'}"><?= $escape(WidgetI18n::label('退换政策')) ?></a>
                                                 <a href="@url{'guide/shipping'}"><?= $escape(WidgetI18n::label('配送说明')) ?></a>
-                                                <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                                <a href="@url"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
                                                 <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                                             </div>
                                         </div>

@@ -28,5 +28,8 @@ final class HeaderNavFragmentBypassTest extends TestCase
         self::assertStringContainsString("'theme.header.mega_panel.cache'", $source);
         self::assertStringContainsString("'theme.header.mega_panel.render'", $source);
         self::assertStringContainsString("'theme.header.sidebar.cache'", $source);
+        self::assertStringContainsString("'theme.header.horizontal.cache'", $source);
+        self::assertStringContainsString("'theme.header.horizontal.render'", $source);
+        self::assertStringContainsString('rememberCategoriesHorizontalNav', $source);
     }
 }

@@ -35,13 +35,13 @@ $updatedAt = date('Y-m-d');
 $ariaNav = (string)WidgetI18n::label('免责声明目录');
 $ariaArticle = (string)WidgetI18n::label('免责声明正文');
 $toc = [
-    ['id' => 'disclaimer-s1', 'label' => WidgetI18n::label('一、服务中断与数据丢失')],
-    ['id' => 'disclaimer-s2', 'label' => WidgetI18n::label('二、信息内容免责')],
-    ['id' => 'disclaimer-s3', 'label' => WidgetI18n::label('三、交易风险免责')],
-    ['id' => 'disclaimer-s4', 'label' => WidgetI18n::label('四、第三方服务免责')],
-    ['id' => 'disclaimer-s5', 'label' => WidgetI18n::label('五、责任限制')],
-    ['id' => 'disclaimer-s6', 'label' => WidgetI18n::label('六、用户行为免责')],
-    ['id' => 'disclaimer-s7', 'label' => WidgetI18n::label('七、其他')],
+    ['id' => 'disclaimer-s1', 'label' => WidgetI18n::label('1 / 服务中断与数据')],
+    ['id' => 'disclaimer-s2', 'label' => WidgetI18n::label('2 / 信息内容说明')],
+    ['id' => 'disclaimer-s3', 'label' => WidgetI18n::label('3 / 交易与售后')],
+    ['id' => 'disclaimer-s4', 'label' => WidgetI18n::label('4 / 第三方服务')],
+    ['id' => 'disclaimer-s5', 'label' => WidgetI18n::label('5 / 责任限制')],
+    ['id' => 'disclaimer-s6', 'label' => WidgetI18n::label('6 / 用户行为')],
+    ['id' => 'disclaimer-s7', 'label' => WidgetI18n::label('7 / 其他说明')],
 ];
 $tocFallbackPath = '/policy/disclaimer';
 ?>
@@ -150,7 +150,8 @@ $tocFallbackPath = '/policy/disclaimer';
             border-right: 1px solid #e3e6e6;
             background: #fafafa;
             position: sticky;
-            top: 12rem;
+            top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem));
+            align-self: start;
         }
         .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
         .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
@@ -179,7 +180,7 @@ $tocFallbackPath = '/policy/disclaimer';
             color: #565959;
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 12rem; }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem)); }
         .amazon-policy__section h2 {
             margin: 0 0 0.75rem;
             font-size: 1.2rem;
@@ -288,11 +289,11 @@ $tocFallbackPath = '/policy/disclaimer';
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
                                 <h1 id="policy-disclaimer-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('免责声明')) ?><?php endif; ?></h1>
-                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('本免责声明说明本网站在提供服务过程中的责任限制与免责情形。请在使用本网站服务前仔细阅读。')) ?></p>
+                                <p class="amazon-policy__hero-lead"><?= $escape(WidgetI18n::label('我们会尽量保持网站稳定，但网络与第三方服务偶发故障时，页面可能暂时打不开——我们会尽快恢复。本页说明责任边界，供您了解。')) ?></p>
                                 <div class="amazon-policy__meta">
                                     <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
                                     <a href="@url{'terms'}"><?= $escape(WidgetI18n::label('服务条款')) ?></a>
-                                    <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                    <a href="@url"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
                                     <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                         </div>
                         </header>
@@ -308,10 +309,10 @@ $tocFallbackPath = '/policy/disclaimer';
                                     </aside>
 
                                     <article class="amazon-policy__article" aria-label="<?= $escape($ariaNav) ?>">
-                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('本声明构成服务条款的重要补充。请结合目录了解服务中断、信息内容、交易风险与责任限制等条款。')) ?></p>
+                                        <p class="amazon-policy__intro"><?= $escape(WidgetI18n::label('本说明补充服务条款中的责任边界。可按目录了解服务中断、信息内容、交易与第三方相关说明。')) ?></p>
 
                                         <section class="amazon-policy__section" id="disclaimer-s1" weline-code="theme.policy.section_2">
-                                            <h2><?= $escape(WidgetI18n::label('一、服务中断与数据丢失')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('1 / 服务中断与数据')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('1.1 本网站不对因以下原因导致的服务中断或数据丢失承担责任：')) ?></p>
                                             <ul>
                                                 <li><?= $escape(WidgetI18n::label('（1）不可抗力因素，如自然灾害、战争、罢工、政府行为等；')) ?></li>
@@ -320,45 +321,45 @@ $tocFallbackPath = '/policy/disclaimer';
                                                 <li><?= $escape(WidgetI18n::label('（4）用户操作不当或违反使用规范；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（5）其他超出我们合理控制范围的原因。')) ?></li>
                                             </ul>
-                                            <p><?= $escape(WidgetI18n::label('1.2 我们将尽力保障服务的稳定性和数据安全，但不对服务的绝对连续性、无中断性做出保证。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('1.2 我们会尽量保持网站稳定与数据安全，但不能保证永不中断。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s2" weline-code="theme.policy.section_3">
-                                            <h2><?= $escape(WidgetI18n::label('二、信息内容免责')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('2 / 信息内容说明')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('2.1 本网站不对用户发布的信息的真实性、准确性、完整性、合法性负责。用户应自行判断并承担相应风险。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('2.2 本站经营者对自营商品信息的真实性、准确性负责；因展示误差导致的订单问题，可依法或按售后政策办理退换。商品实物细节（色差、手感等）在合理范围内可能与图片存在差异。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('2.3 本网站可能包含第三方提供的内容或链接，我们不对第三方内容或链接的准确性、合法性、安全性负责。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s3" weline-code="theme.policy.section_4">
-                                            <h2><?= $escape(WidgetI18n::label('三、交易与售后责任')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('3 / 交易与售后责任')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('3.1 本站作为商品销售方，对订单履约、商品质量与售后承担经营者依法应负的责任；不因本声明免除强制性法律责任。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('3.2 支付、物流等第三方服务商的系统故障，我们将协助核实与跟进，但在法律允许范围内，对非因我方故意或重大过失造成的间接损失可不承担责任。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('3.3 交易纠纷请优先通过订单售后与客服协商；协商不成可依法投诉或起诉。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s4" weline-code="theme.policy.section_5">
-                                            <h2><?= $escape(WidgetI18n::label('四、第三方服务免责')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('4 / 第三方服务')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('4.1 本网站可能使用第三方提供的服务（如支付服务、物流服务、数据分析服务等），我们不对第三方服务的质量、安全性、可靠性负责。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.2 如因第三方服务导致的问题或损失，您应直接与第三方协商解决，我们可提供必要的协助。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s5" weline-code="theme.policy.section_6">
-                                            <h2><?= $escape(WidgetI18n::label('五、责任限制')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('5 / 责任限制')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('5.1 在法律允许的范围内，我们对因使用或无法使用本网站服务而产生的任何直接、间接、偶然、特殊或后果性损失不承担责任。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('5.2 我们的责任总额不超过您因使用本网站服务而向我们支付的费用总额。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('5.3 本免责声明不影响法律法规规定的强制性责任，也不影响因我们的故意或重大过失导致的责任。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s6" weline-code="theme.policy.section_7">
-                                            <h2><?= $escape(WidgetI18n::label('六、用户行为免责')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('6.1 如因用户违反法律法规、本网站服务条款或使用规范导致的问题或损失，由用户自行承担责任。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('6.2 如因用户提供虚假信息、恶意操作、侵犯他人权益等行为导致的问题或损失，由用户自行承担责任，我们保留追究法律责任的权利。')) ?></p>
+                                            <h2><?= $escape(WidgetI18n::label('6 / 用户行为')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('6.1 如因违反法律法规、服务条款或使用规范导致的问题或损失，通常由相关用户自行承担责任。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('6.2 如因提供虚假信息、恶意操作或侵犯他人权益导致的问题或损失，通常由相关用户自行承担责任；必要时我们会依法处理。')) ?></p>
                                         </section>
 
                                         <section class="amazon-policy__section" id="disclaimer-s7" weline-code="theme.policy.section_8">
-                                            <h2><?= $escape(WidgetI18n::label('七、其他')) ?></h2>
-                                            <p><?= $escape(WidgetI18n::label('7.1 本免责声明构成服务条款的一部分，与服务条款具有同等法律效力。')) ?></p>
+                                            <h2><?= $escape(WidgetI18n::label('7 / 其他说明')) ?></h2>
+                                            <p><?= $escape(WidgetI18n::label('7.1 本说明是服务条款的重要补充，请与服务条款一并阅读。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('7.2 我们有权根据法律法规和业务发展需要修订本声明；重大变更以本页更新为准。解释以有利于保护消费者合法权益且符合强制性法律的方式为准。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('7.3 如本免责声明的任何条款被认定为无效或不可执行，不影响其他条款的效力。')) ?></p>
                                         </section>
@@ -367,8 +368,8 @@ $tocFallbackPath = '/policy/disclaimer';
                                             <p><?= $escape(WidgetI18n::label('如对本免责声明有疑问，请先阅读服务条款，或通过帮助中心联系我们。')) ?></p>
                                             <div class="amazon-policy__related">
                                                 <a href="@url{'terms'}"><?= $escape(WidgetI18n::label('服务条款')) ?></a>
-                                                <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
-                                                <a href="@url{'refund'}"><?= $escape(WidgetI18n::label('退款政策')) ?></a>
+                                                <a href="@url"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                                <a href="@url"><?= $escape(WidgetI18n::label('退款政策')) ?></a>
                                                 <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                                             </div>
                                         </div>

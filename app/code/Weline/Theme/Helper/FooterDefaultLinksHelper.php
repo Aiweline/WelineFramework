@@ -259,14 +259,62 @@ final class FooterDefaultLinksHelper
      */
     public static function defaultSocialItems(): array
     {
-        // Demo storefront profiles (长安汉服). Keep http(s) so Organization.sameAs /
-        // footer launch readiness can emit actionable Trust signals — never `#`.
+        // Official Chang'an Hanfu profiles (ops-registered 2026-09-22). Keep http(s)
+        // so Organization.sameAs / footer launch readiness emit actionable Trust signals — never `#`.
         return [
-            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changan.hanfu'],
-            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => 'https://www.pinterest.com/changanhanfu'],
-            ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => 'https://www.tiktok.com/@changan.hanfu'],
             ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => 'https://www.youtube.com/@changanhanfu'],
+            ['name' => 'X', 'icon' => 'fab fa-twitter', 'url' => 'https://x.com/changanhanfu'],
+            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changanhanfu/'],
+            ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => 'https://www.tiktok.com/@changanhanfu_hq'],
         ];
+    }
+
+    /**
+     * Map a footer social_items row to SocialIconHelper platform code.
+     *
+     * @param array{name?:mixed,icon?:mixed,url?:mixed,platform?:mixed} $item
+     */
+    public static function resolveSocialPlatformCode(array $item): string
+    {
+        $explicit = strtolower(trim((string)($item['platform'] ?? '')));
+        if ($explicit !== '' && SocialIconHelper::getIcon($explicit) !== null) {
+            return $explicit === 'twitter' ? 'x' : $explicit;
+        }
+
+        $icon = strtolower(trim((string)($item['icon'] ?? '')));
+        $name = strtolower(trim((string)($item['name'] ?? $item['label'] ?? '')));
+        $host = strtolower((string)(parse_url(trim((string)($item['url'] ?? '')), PHP_URL_HOST) ?? ''));
+
+        $haystack = $icon . ' ' . $name . ' ' . $host;
+        $map = [
+            'youtube' => 'youtube',
+            'youtu.be' => 'youtube',
+            'instagram' => 'instagram',
+            'tiktok' => 'tiktok',
+            'pinterest' => 'pinterest',
+            'linkedin' => 'linkedin',
+            'facebook' => 'facebook',
+            'weibo' => 'weibo',
+            'wechat' => 'wechat',
+            'weixin' => 'wechat',
+            'github' => 'github',
+            'telegram' => 'telegram',
+            'whatsapp' => 'whatsapp',
+            'discord' => 'discord',
+            'reddit' => 'reddit',
+            'snapchat' => 'snapchat',
+            'x.com' => 'x',
+            'twitter' => 'x',
+            'fab fa-x' => 'x',
+            'fa-twitter' => 'x',
+        ];
+        foreach ($map as $needle => $platform) {
+            if ($needle !== '' && str_contains($haystack, $needle)) {
+                return $platform;
+            }
+        }
+
+        return 'link';
     }
 
     /**

@@ -47,7 +47,8 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
         self::assertStringContainsString('SharedChromeService::CHROME_SLOTS', $src);
         // Global chrome is authoritative: local business-layout copies must not win.
         self::assertStringContainsString('$slotWidgets[$slotId] = $widgets;', $src);
-        self::assertStringContainsString('ThemeScopeVersionService', $src);
+        // Version selection is shared with the root; behavior is covered by SlotRendererBindingAndDiagnosticsTest.
+        self::assertStringContainsString('resolveRenderSources(', $src);
         self::assertStringContainsString("\$widgetArea === 'header' || \$widgetArea === 'footer'", $src);
         self::assertStringContainsString('本页本地 chrome 副本不得覆盖全局', $src);
     }

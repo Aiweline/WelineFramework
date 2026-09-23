@@ -17,6 +17,7 @@
  * @widget.supports {["layout-header-search","layout-global-header-search"]}
  * @widget.exclusive {true}
  *
+ * @widget.source {Weline_Theme::css/widgets/header-chrome-amazon.css,Weline_Theme::css/widgets/header-search-amazon.css,Weline_Theme::css/widgets/widget-search-header-search-default.css}
  * @param placeholder {default="搜索商品...",type="string",label="占位符文字"}
  * @param show_hot_words {default=true,type="bool",label="显示热搜词"}
  * @param show_category {default=true,type="bool",label="显示分类下拉"}
@@ -39,11 +40,6 @@ $selectedType = trim((string)($this->request->getParam('type') ?? ''));
 $searchCategoryId = (int)($this->request->getParam('category_id') ?? 0);
 ?>
 
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)">
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)">
-
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
@@ -59,23 +55,5 @@ $searchCategoryId = (int)($this->request->getParam('category_id') ?? 0);
         'search_category_id' => $searchCategoryId,
     ]) ?>
 </section>
-
-<style>
-.<?= $wc ?> {
-    width: 100%;
-    max-width: none;
-    font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
-}
-
-.<?= $wc ?> .header-search-form,
-.<?= $wc ?> .w-search-form {
-    position: relative;
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    max-width: 100%;
-}
-</style>
 
 <?php // headerSearch：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

@@ -19,6 +19,10 @@ $meta = $this->getData('meta') ?? [];
 if (!is_array($meta)) {
     $meta = [];
 }
+// wave9-9s4: prevent omitted showHeader from dropping Partials chrome (Taglib ?? null).
+$meta['showHeader'] = ($meta['showHeader'] ?? $this->getData('showHeader') ?? true);
+$meta['showFooter'] = ($meta['showFooter'] ?? $this->getData('showFooter') ?? ($meta['showHeader'] !== false));
+$this->assign('meta', $meta);
 $class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
 $metaContent = (string)($meta['content'] ?? '');
 $isEditorPreview = (bool)($this->getData('editor_mode') ?? false);
@@ -151,6 +155,347 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
         .theme-layout-homepage .homepage-section:has([data-testid="new-arrivals-empty"]) {
             display: none;
         }
+
+        /*
+         * WO-BUILD-THEME-01 · work_mode=default_theme（与 hanfu design 壳对齐 · 气质加固）
+         * 矮 Hero + 信任下精选；禁 .wpc-media 有限 max-height；气质服从可买。
+         */
+        .theme-layout-homepage .homepage-hero {
+            border-block-end: var(--hanfu-rule-width, 1px) solid color-mix(
+                in srgb,
+                var(--color-primary, var(--weline-theme-primary)) 42%,
+                var(--color-border-default, var(--weline-theme-border)) 58%
+            );
+        }
+
+        .theme-layout-homepage .homepage-hero .wc-theme_widget_hero_slider,
+        .theme-layout-homepage .homepage-hero [data-widget-code="hero-slider"],
+        .theme-layout-homepage .homepage-hero .slider-container {
+            max-height: none;
+            overflow: visible;
+        }
+
+        .theme-layout-homepage .homepage-hero .slide.active {
+            max-height: min(40vh, 20rem);
+            overflow: hidden;
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-media,
+        .theme-layout-homepage .homepage-hero .slide-media :is(picture, img),
+        .theme-layout-homepage .homepage-hero .slide-media img {
+            max-height: min(40vh, 20rem) !important;
+            width: 100%;
+            height: min(40vh, 20rem) !important;
+            object-fit: cover !important;
+            object-position: center 28%;
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-overlay {
+            background:
+                linear-gradient(
+                    105deg,
+                    color-mix(in srgb, var(--color-bg-canvas, var(--weline-theme-canvas)) 82%, transparent) 0%,
+                    color-mix(in srgb, var(--color-bg-canvas, var(--weline-theme-canvas)) 34%, transparent) 40%,
+                    transparent 66%
+                ),
+                linear-gradient(
+                    180deg,
+                    transparent 55%,
+                    color-mix(in srgb, var(--color-bg-canvas, var(--weline-theme-canvas)) 28%, transparent) 100%
+                ),
+                color-mix(in srgb, var(--color-text, var(--weline-theme-text)) 14%, transparent);
+            opacity: 1;
+        }
+
+        /* 文案/CTA 叠在媒体内垂直居中，避免贴底被裁 */
+        .theme-layout-homepage .homepage-hero .slide-content {
+            align-items: center;
+            padding-block: var(--weline-space-2);
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-title,
+        .theme-layout-homepage .homepage-hero .hero-title {
+            font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
+            font-size: clamp(var(--weline-font-size-xl, 1.25rem), 2.4vw, var(--weline-font-size-2xl, 1.5rem));
+            letter-spacing: var(--hanfu-label-tracking, 0.09em);
+            margin-block-end: var(--weline-space-2);
+            text-shadow: 0 1px 0 color-mix(in srgb, var(--color-bg-canvas, #fff) 55%, transparent);
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-kicker,
+        .theme-layout-homepage .homepage-hero .slide .slide-kicker {
+            letter-spacing: var(--hanfu-heading-tracking, 0.14em);
+            color: var(--color-primary, var(--weline-theme-primary));
+        }
+
+        .theme-layout-homepage .homepage-hero .hanfu-hero-disclosure {
+            display: none; /* 店面隐藏「场景演绎/Illustrative scene」占位标 */
+        }
+
+        .theme-layout-homepage .homepage-hero + .homepage-section--trust-strip {
+            padding-block: var(--weline-space-1);
+            max-height: none;
+            overflow: visible;
+            background: color-mix(
+                in srgb,
+                var(--color-bg-canvas, var(--weline-theme-canvas)) 92%,
+                var(--color-primary, var(--weline-theme-primary)) 8%
+            );
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip .wc-theme_widget_trust_badges,
+        .theme-layout-homepage .homepage-section--trust-strip [data-widget-code="trust-badges"] {
+            padding-block: var(--weline-space-1) !important;
+            border-block-start: none;
+            border-block-end: var(--hanfu-rule-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip .badge-title,
+        .theme-layout-homepage .homepage-section--trust-strip .badge-text {
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip [data-widget-code="trust-badges"] .badge-icon {
+            border-radius: var(--hanfu-round, 2px);
+            background: var(--color-bg-primary, var(--weline-theme-surface));
+            border: var(--hanfu-rule-width, 1px) solid var(--color-primary, var(--weline-theme-primary));
+            color: var(--color-primary, var(--weline-theme-primary));
+            box-shadow: inset 0 0 0 var(--hanfu-rule-width, 1px) color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 30%, transparent);
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip + .homepage-section--featured-lead {
+            padding-block-start: var(--weline-space-2);
+            padding-block-end: var(--weline-space-2);
+            background:
+                linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 6%, transparent) 0%,
+                    transparent 2.25rem
+                ),
+                var(--weline-theme-surface-subtle, var(--color-bg-secondary, transparent));
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: var(--weline-space-3);
+        }
+
+        /*
+         * 热修：方图锁必须 absolute 铺满。现网 .wpc-image 被算成 static，
+         * 与 padding-top 方盒叠加 → 顶条图 + 中部空白（运营附图）。
+         * THEME-01：禁对 .wpc-media 写有限 max-height；略矮媒体锁便于首屏见价见买。
+         */
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card {
+            border: var(--hanfu-rule-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
+            border-radius: var(--hanfu-round, 2px);
+            background: color-mix(
+                in srgb,
+                var(--color-bg-primary, var(--weline-theme-surface)) var(--hanfu-panel-opacity, 96%),
+                transparent
+            );
+            box-shadow: none;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card:hover {
+            border-color: color-mix(
+                in srgb,
+                var(--color-border-default, var(--weline-theme-border)) 55%,
+                var(--color-primary, var(--weline-theme-primary)) 45%
+            );
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-media {
+            position: relative;
+            height: 0;
+            padding-top: 68%;
+            max-height: none; /* WO-BUILD-THEME-01：禁止有限 max-height 压塌 */
+            overflow: hidden;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-media-link {
+            position: absolute;
+            inset: 0;
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-image,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-image,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-media img {
+            position: absolute !important;
+            inset: 0 !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-height: none !important;
+            object-fit: cover !important;
+            object-position: center top;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-title {
+            position: relative;
+            padding-inline-start: calc(var(--hanfu-heading-mark, 0.32rem) + var(--weline-space-2));
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-title::before,
+        .theme-layout-homepage [data-widget-code="deals-of-day"] .widget-title::before,
+        .theme-layout-homepage [data-widget-code="new-arrivals"] .widget-title::before,
+        .theme-layout-homepage [data-widget-code="bestsellers"] .widget-title::before {
+            content: "";
+            position: absolute;
+            inset-block: 0.2em 0.2em;
+            inset-inline-start: 0;
+            width: var(--hanfu-heading-mark, 0.32rem);
+            background: var(--color-primary, var(--weline-theme-primary));
+            border-radius: var(--hanfu-round, 2px);
+        }
+
+        .theme-layout-homepage [data-widget-code="deals-of-day"] .widget-title,
+        .theme-layout-homepage [data-widget-code="new-arrivals"] .widget-title,
+        .theme-layout-homepage [data-widget-code="bestsellers"] .widget-title {
+            position: relative;
+            padding-inline-start: calc(var(--hanfu-heading-mark, 0.32rem) + var(--weline-space-2));
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-price,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-price-now,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-price {
+            color: var(--color-primary, var(--weline-theme-primary));
+            font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
+            font-weight: var(--font-weight-semibold, 600);
+            letter-spacing: 0.02em;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-title,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-name {
+            letter-spacing: var(--hanfu-label-tracking, 0.04em);
+        }
+
+        /* 店音乐悬浮头像勿挡货架标题：略缩小并确保在视口底角 */
+        .theme-layout-homepage .w-store-music__avatar {
+            width: 3.75rem;
+            height: 3.75rem;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-actions,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-actions {
+            padding-block: var(--weline-space-1);
+        }
+
+        /* THEME-01 build-02：精选 CTA 墨线主钮（与 design 对齐） */
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-actions .w-button--primary,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-actions .w-button--primary,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card [data-action="add-to-cart"],
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card [data-action="buy-now"] {
+            border: var(--hanfu-rule-width, 1px) solid var(--color-primary-border, var(--color-primary, var(--weline-theme-primary)));
+            border-radius: var(--hanfu-round, 2px);
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            min-height: var(--control-height-md, 2.25rem);
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-button,
+        .theme-layout-homepage .homepage-hero .slide-button.w-button--primary {
+            border-radius: var(--hanfu-round, 2px);
+            letter-spacing: var(--hanfu-label-tracking, 0.08em);
+            box-shadow: none;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-header,
+        .theme-layout-homepage .homepage-section--featured-lead .widget-subtitle {
+            margin-block-end: var(--weline-space-1);
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-subtitle {
+            display: none;
+        }
+
+        /* 已发布实体若仍吐出多行精选：首页首屏只露 1 行×4，保证特价 ≤1.5 屏（MALL-01/02） */
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 > :nth-child(n + 5),
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-5 > :nth-child(n + 6),
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-6 > :nth-child(n + 5) {
+            display: none;
+        }
+
+        /* WO-HP-P3-MALL-03 + THEME-01：品类矮磁贴条 · 墨线气质 */
+        .theme-layout-homepage .homepage-section--category-strip {
+            padding-block: var(--weline-space-2);
+        }
+
+        .theme-layout-homepage .homepage-section--category-strip .grid-title {
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+        }
+
+        .theme-layout-homepage .homepage-section--category-strip [data-widget-code="category-grid"] .category-card {
+            box-shadow: none;
+            border-color: color-mix(
+                in srgb,
+                var(--color-border-default, var(--weline-theme-border)) 70%,
+                var(--color-primary, var(--weline-theme-primary)) 30%
+            );
+            background: color-mix(
+                in srgb,
+                var(--color-bg-primary, var(--weline-theme-surface)) 94%,
+                var(--color-primary, var(--weline-theme-primary)) 6%
+            );
+        }
+
+        .theme-layout-homepage .homepage-section--category-strip [data-widget-code="category-grid"] .category-card:hover {
+            transform: none;
+            border-color: var(--color-primary, var(--weline-theme-primary));
+        }
+
+        /* WO-HP-P3-MALL-05：内容装饰压缩；视频靠页底 */
+        .theme-layout-homepage .homepage-section--content-compact {
+            padding-block: var(--weline-space-4) var(--weline-space-3);
+        }
+
+        .theme-layout-homepage .homepage-section--content-compact [data-widget-code="brand-logos"],
+        .theme-layout-homepage .homepage-section--content-compact [data-testid="textile-heritage"],
+        .theme-layout-homepage .homepage-section--content-compact [data-site-block="brand-logos"] {
+            padding-block: var(--weline-space-3) !important;
+        }
+
+        .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid,
+        .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+
+        .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid > :nth-child(n+7),
+        .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid > :nth-child(n+7) {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .theme-layout-homepage .homepage-hero .slide.active {
+                max-height: min(42vh, 18rem);
+            }
+
+            .theme-layout-homepage .homepage-hero .slide-media :is(picture, img),
+            .theme-layout-homepage .homepage-hero .slide-media img {
+                max-height: min(42vh, 18rem) !important;
+                height: min(42vh, 18rem) !important;
+            }
+
+            .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid,
+            .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid > :nth-child(n+7),
+            .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid > :nth-child(n+7) {
+                display: none;
+            }
+        }
     </style>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
@@ -202,15 +547,16 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                         </w:hook>
                     </w:slot>
 
-                    <w:slot id="homepage-categories"
-                            name="Homepage categories"
-                            accept="layout-homepage-categories,category-grid,category-list,category,content,cards"
+                    <?php /* WO-HP-P2-05 + Wave-3：Hero → 信任条 → 精选 → 品类磁贴 → 特价 → … → 压缩内容 → 视频页底 */ ?>
+                    <w:slot id="homepage-trust"
+                            name="Homepage trust"
+                            accept="layout-homepage-trust,trust-badges,testimonial,content"
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section" weline-code="theme.homepage.homepage_categories">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/>
-                            <w:widget type="category" name="category-grid" />
+                            class="homepage-section homepage-section--trust-strip" weline-code="theme.homepage.homepage_trust">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/>
+                            <w:widget type="content" name="trust-badges" params='{"preset_badges":["free-shipping","money-back","secure-payment"],"columns":"3","style":"icon-text"}' />
                         </w:hook>
                     </w:slot>
 
@@ -220,9 +566,21 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_featured">
+                            class="homepage-section homepage-section--soft homepage-section--featured-lead" weline-code="theme.homepage.homepage_featured">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::featured<else/>
-                            <w:widget type="product" name="featured-products" />
+                            <w:widget type="product" name="featured-products" params='{"limit":"4","columns":"4"}' />
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-categories"
+                            name="Homepage categories"
+                            accept="layout-homepage-categories,category-grid,category-list,category,content,cards"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--category-strip" weline-code="theme.homepage.homepage_categories">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/>
+                            <w:widget type="category" name="category-grid" params='{"display_mode":"strip","limit":"7","columns":"7","show_count":false,"subtitle":""}' />
                         </w:hook>
                     </w:slot>
 
@@ -280,21 +638,10 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_brands">
+                            class="homepage-section homepage-section--soft homepage-section--content-compact" weline-code="theme.homepage.homepage_brands">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
-                            <w:widget type="content" name="brand-logos" params='{"title":"合作品牌"}' />
+                            <w:widget type="content" name="brand-logos" params='{"title":"合作品牌","columns":"8","layout":"grid"}' />
                         </w:hook>
-                    </w:slot>
-
-                    <w:slot id="homepage-trust"
-                            name="Homepage trust"
-                            accept="layout-homepage-trust,trust-badges,testimonial,content"
-                            multiple="true"
-                            position="content"
-                            wrapper="section"
-                            class="homepage-section" weline-code="theme.homepage.homepage_trust">
-                        <?php /* 信任徽章由 footer-above 全站默认加载；此处仅留空槽供可选扩展，禁止再嵌默认份 */ ?>
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust</w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-testimonials"
@@ -303,10 +650,10 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_testimonials">
+                            class="homepage-section homepage-section--soft homepage-section--content-compact" weline-code="theme.homepage.homepage_testimonials">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::testimonials<else/>
-                            <?php /* WO-HP-P1-03：原证言槽改 UGC 图墙，禁止再嵌第二套星级短评三卡 */ ?>
-                            <w:widget type="content" name="image-gallery" params='{"title":"买家秀","subtitle":"晒出你的汉服穿搭","columns":"3","variant":"looks"}' />
+                            <?php /* WO-HP-P1-03 + MALL-05 + WO-BUYER-SHOW-01/02：买家秀 6 格真实竖构图 + CTA→PDP#product-reviews */ ?>
+                            <w:widget type="content" name="image-gallery" params='{"title":"买家秀","subtitle":"晒出你的汉服穿搭","columns":"6","variant":"looks","cta_link":"/product/543#product-reviews","items":[{"image":"/media/catalog/hanfu/1688/factory-huazhaoji-cx/824286376488/detail-03-c2e91b039ebb.jpg","title":"长乐公主试穿","link":"/product/543","link_label":"查看商品"},{"image":"/media/catalog/hanfu/1688/factory-huazhaoji-cx/824496857539/detail-08-fc1264c1e346.jpg","title":"刺绣大袖试穿","link":"/product/542","link_label":"查看商品"},{"image":"/media/catalog/hanfu/1688/factory-huazhaoji-cx/997742393161/detail-08-1bf03eab4ec2.jpg","title":"明制马面试穿","link":"/product/245","link_label":"查看商品"},{"image":"/media/catalog/hanfu/1688/factory-huazhaoji-cx/996206615159/detail-16-1f2f2521788f.jpg","title":"方领短袄试穿","link":"/product/241","link_label":"查看商品"},{"image":"/media/catalog/hanfu/1688/factory-huazhaoji-cx/1042500068281/detail-04-1e9a424d1582.jpg","title":"魏晋大袖试穿","link":"/product/261","link_label":"查看商品"},{"image":"/media/catalog/hanfu/1688/factory-huazhaoji-cx/824286376488/detail-08-911afef9fd09.jpg","title":"礼宴雅集留影","link":"/product/543","link_label":"查看商品"}]}' />
                         </w:hook>
                     </w:slot>
 
@@ -316,7 +663,7 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section" weline-code="theme.homepage.homepage_reviews">
+                            class="homepage-section homepage-section--content-compact" weline-code="theme.homepage.homepage_reviews">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::reviews<else/>
                             <w:widget type="testimonial" name="testimonials" params='{"title":"买家评价","subtitle":"来自顾客的星级口碑"}' />
                         </w:hook>
@@ -328,7 +675,7 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_videos">
+                            class="homepage-section homepage-section--soft homepage-section--page-bottom" weline-code="theme.homepage.homepage_videos">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::videos<else/>
                             <w:widget type="video" name="video-carousel" params='{"title":"穿搭灵感 · 视频轮播","subtitle":"滑动浏览穿搭视频，查看关联商品"}' />
                         </w:hook>

@@ -29,6 +29,8 @@
 | 模块普通模板源 | `app/code/{Vendor}/{Module}/view/templates/{frontend|backend}/...` |
 | 设计主题覆盖普通模板 | `app/design/{Vendor}/{theme}/{Module_Code}/templates/{frontend|backend}/...` |
 | 设计主题覆盖普通模板兼容路径 | `app/design/{Vendor}/{theme}/{Vendor}/{Module}/templates/{frontend|backend}/...` |
+| 模块邮件壳/邮件片段源 | `app/code/{Vendor}/{Module}/view/email/...` |
+| 设计主题覆盖邮件模板 | `app/design/{Vendor}/{theme}/{Module_Code}/email/...`（与 templates 同一 `resolveThemeTemplatePath` 继承链） |
 | 编译/生成模板 | `view/tpl/`，禁止直接修改 |
 
 ## 继承链优先级

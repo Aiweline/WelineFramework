@@ -1,5 +1,7 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-header-logo-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js,Weline_Theme::js/widgets/widget-logo-fallback.js}
+ * @widget.layout_source {Weline_Theme::css/widgets/widget-header-logo-default.css}
  * Header Logo 部件
  *
  * @var \Weline\Framework\View\Template $this
@@ -38,7 +40,7 @@ $logoText = 'Weline';
 try {
     $siteBrandForName = ObjectManager::getInstance(SiteBrand::class);
     if ($siteBrandForName instanceof SiteBrand) {
-        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText, 'Weline Store');
+        $logoText = $siteBrandForName->resolveFrontendWordmark($configuredLogoText, 'Weline Store');
     } elseif ($configuredLogoText !== '') {
         $logoText = $configuredLogoText;
     }
@@ -74,7 +76,7 @@ if ($logoImage === '' && $logoImageFileHtml === '') {
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="--wc-logo-height: <?= $logoHeight ?>px;">
+         data-widget-style="--wc-logo-height: <?= $logoHeight ?>px;">
     <a href="<?= $esc($logoLink) ?>" class="logo-link" title="<?= $esc((string)$logoText) ?>">
         <?php if ($logoImageFileHtml !== ''): ?>
             <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
@@ -85,52 +87,10 @@ if ($logoImage === '' && $logoImageFileHtml === '') {
                  width="420"
                  height="159"
                  decoding="async"
-                 style="height: var(--wc-logo-height); width: auto;"
-                 onerror="this.style.display='none'; if(this.nextElementSibling){this.nextElementSibling.style.display='inline-block';}">
-            <span class="logo-text" style="display: none;"><?= $esc((string)$logoText) ?></span>
+                 data-widget-style-class="eef44f2a1b0e4367"
+                 data-widget-logo-image>
+            <span class="logo-text" data-widget-style-class="8387420c4b8f095e"><?= $esc((string)$logoText) ?></span>
         <?php endif; ?>
     </a>
 </section>
 
-<style>
-.<?= $wc ?> {
-    display: flex;
-    align-items: center;
-}
-
-.<?= $wc ?> .logo-link {
-    display: flex;
-    align-items: center;
-    text-decoration: none;
-    color: inherit;
-}
-
-.<?= $wc ?> .logo-image {
-    max-width: var(--size-panel-200);
-    object-fit: contain;
-}
-
-.<?= $wc ?> .logo-image--asset img {
-    display: block;
-    height: var(--wc-logo-height);
-    width: auto;
-    max-width: var(--size-panel-200);
-    object-fit: contain;
-}
-
-.<?= $wc ?> .logo-text {
-    font-size: var(--weline-font-size-xl);
-    font-weight: 700;
-    color: var(--weline-theme-text);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    min-height: var(--size-control-sm);
-}
-
-.widget-preview-canvas .<?= $wc ?> .logo-text,
-.<?= $wc ?>.is-preview .logo-text {
-    font-size: var(--weline-font-size-base);
-}
-</style>

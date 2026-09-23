@@ -43,11 +43,11 @@ class ThemeComponentRenderer
         );
 
         if ($renderable->isTemplateContent()) {
-            return $this->runtimeTemplateMaterializer->renderContent((string)$renderable->templateContent, $config) . $assets;
+            return $this->wrapWidgetAssets($this->runtimeTemplateMaterializer->renderContent((string)$renderable->templateContent, $config), $assets);
         }
 
         if ($renderable->isBlockClass()) {
-            return $this->renderBlock($renderable->blockClass, $config) . $assets;
+            return $this->wrapWidgetAssets($this->renderBlock($renderable->blockClass, $config), $assets);
         }
 
         $templatePath = (string)$renderable->templatePath;
@@ -56,13 +56,18 @@ class ThemeComponentRenderer
         }
 
         if (is_file($templatePath)) {
-            return $this->runtimeTemplateMaterializer->renderFile($templatePath, $config) . $assets;
+            return $this->wrapWidgetAssets($this->runtimeTemplateMaterializer->renderFile($templatePath, $config), $assets);
         }
 
         $this->template->unsetData();
         $html = $this->template->fetchHtml($templatePath, $config);
 
-        return (is_string($html) ? $html : '') . $assets;
+        return $this->wrapWidgetAssets(is_string($html) ? $html : '', $assets);
+    }
+
+    private function wrapWidgetAssets(string $html, string $assets): string
+    {
+        return ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class)->wrap($html, $assets);
     }
 
     public function mergeConfig(ThemeComponentDefinition $definition, array $instanceConfig = [], ?WelineTheme $theme = null, string $area = 'frontend'): array

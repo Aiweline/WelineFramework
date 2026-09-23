@@ -14,6 +14,8 @@
  * @widget.slot {user-area}
  * @widget.supports {["layout-header-actions","layout-global-header-actions"]}
  *
+ * @widget.layout_source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css}
+ * @widget.source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param show_quantity {default=true,type="bool",label="显示数量"}
  * @param show_subtotal {default=true,type="bool",label="显示小计"}
  * @param icon_style {default="cart",type="select",label="图标样式",options={cart:"购物车",bag:"购物袋",basket:"购物篮"}}
@@ -34,9 +36,10 @@ $showSubtotal = (bool)($this->getData('show_subtotal') ?? true);
 $isDemoChrome = false;
 
 $currency = (string)w_env('user.currency', 'CNY');
+// WO-BUILD-HOME-ZERO / OPS-02-HOME：共享 SSR 空车禁止预格式化 $0.00 / ¥0.00（真小计由 JS 水合）
 $cart = [
     'cart_count' => 0,
-    'subtotal_formatted' => HeaderCommerceData::formatMoney(0, $currency),
+    'subtotal_formatted' => '',
     'currency' => $currency,
     'items' => [],
     'is_empty' => true,
@@ -46,6 +49,9 @@ $cartQuantity = (int)$cart['cart_count'];
 $cartSubtotal = (string)$cart['subtotal_formatted'];
 $cartItems = $cart['items'];
 $isEmpty = (bool)$cart['is_empty'];
+// 空车：可见文本与 data 属性一律留空，禁价签噪声
+$cartSubtotalVisible = $isEmpty || $cartQuantity <= 0 ? '' : $cartSubtotal;
+$cartSubtotalAttr = $isEmpty || $cartQuantity <= 0 ? '' : $cartSubtotal;
 $isDemo = (bool)$cart['is_demo'];
 $placeholder = (string)($this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '');
 
@@ -113,7 +119,8 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
         }
     }
 
-    ob_start();
+    \Weline\Framework\Runtime\FiberOutputBuffer::beginCapture();
+    try {
     ?>
     <article class="mini-cart-drawer__line"
              data-mini-cart-line="1"
@@ -141,7 +148,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                                 </button>
                             <?php elseif ($optionRow['swatch_color'] !== ''): ?>
                                 <span class="mini-cart-drawer__line-option-swatch mini-cart-drawer__line-option-swatch--color"
-                                      style="background-color: <?= $esc($optionRow['swatch_color']) ?>"
+                                      data-widget-style="background-color: <?= $esc($optionRow['swatch_color']) ?>"
                                       aria-hidden="true"></span>
                             <?php endif; ?>
                             <span class="mini-cart-drawer__line-option-text">
@@ -191,13 +198,13 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
         </div>
     </article>
     <?php
-    return (string)ob_get_clean();
+        return (string)\Weline\Framework\Runtime\FiberOutputBuffer::endCapture();
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\FiberOutputBuffer::discardCapture();
+        throw $e;
+    }
 };
 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)&v=20260915-minicart-remove-keep-open"
-      data-no-extract="true"
-      data-weline-mini-cart-drawer="1">
 <section class="header-cart header-action-item <?= $esc($wc) ?><?= $isEmpty ? ' is-empty' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
@@ -208,7 +215,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-demo-chrome="<?= $isDemoChrome ? '1' : '0' ?>"
          data-preview-mode="0"
          data-cart-count="<?= $cartQuantity ?>"
-         data-cart-subtotal="<?= $esc($cartSubtotal) ?>"
+         data-cart-subtotal="<?= $esc($cartSubtotalAttr) ?>"
          data-i18n-empty="<?= $esc(__('购物车是空的')) ?>"
          data-i18n-sibling-browse="<?= $esc(__('浏览%1 %2件商品')) ?>"
          data-i18n-continue="<?= $esc(__('继续购物')) ?>"
@@ -229,6 +236,9 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
          data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"
          data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
+         data-i18n-fs-remaining="<?= $esc(__('还差 %1 包邮')) ?>"
+         data-i18n-fs-qualified="<?= $esc(__('已享包邮')) ?>"
+         data-fs-threshold-usd="49"
          data-placeholder-image="<?= $esc($placeholder) ?>">
     <a href="@url{'cart'}"
        class="cart-link"
@@ -255,7 +265,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                 <span class="cart-label"><?= __('购物车') ?></span>
                 <span class="cart-meta" data-mini-cart-meta>
                     <span data-mini-cart-type-caption hidden></span>
-                    <span class="cart-subtotal" data-cart-subtotal-text><?= $esc($cartSubtotal) ?></span>
+                    <span class="cart-subtotal" data-cart-subtotal-text><?= $esc($cartSubtotalVisible) ?></span>
                 </span>
             </span>
         <?php else: ?>
@@ -309,16 +319,26 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                     multiple="true"
                     position="footer"
                     class="mini-cart-drawer__extras"></w:slot>
+            <div class="mini-cart-drawer__fs-progress"
+                 data-mini-cart-fs-progress
+                 hidden
+                 role="status"
+                 aria-live="polite">
+                <div class="mini-cart-drawer__fs-progress-track" aria-hidden="true">
+                    <div class="mini-cart-drawer__fs-progress-bar" data-mini-cart-fs-bar data-widget-style-class="beb8cfc5edbbbf39"></div>
+                </div>
+                <p class="mini-cart-drawer__fs-progress-text" data-mini-cart-fs-text></p>
+            </div>
             <div class="mini-cart-drawer__totals" data-mini-cart-discount-breakdown hidden>
                 <div class="mini-cart-drawer__subtotal mini-cart-drawer__subtotal--goods">
                     <span><?= __('商品小计') ?></span>
-                    <span data-cart-goods-subtotal><?= $esc($cartSubtotal) ?></span>
+                    <span data-cart-goods-subtotal><?= $esc($cartSubtotalVisible) ?></span>
                 </div>
                 <div class="mini-cart-drawer__discount-lines" data-mini-cart-discount-lines></div>
             </div>
             <div class="mini-cart-drawer__subtotal mini-cart-drawer__subtotal--payable">
                 <span><?= __('小计') ?></span>
-                <strong class="total-amount" data-cart-total-amount><?= $esc($cartSubtotal) ?></strong>
+                <strong class="total-amount" data-cart-total-amount><?= $esc($cartSubtotalVisible) ?></strong>
             </div>
             <p class="mini-cart-drawer__note" dir="auto"><?= __('税费与运费将在结算时计算') ?></p>
             <div class="mini-cart-drawer__actions">
@@ -331,97 +351,3 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
     </aside>
 </section>
 
-<style>
-.<?= $wc ?> {
-    position: relative;
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-end;
-    max-width: 100%;
-}
-
-.<?= $wc ?> .cart-link {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    text-decoration: none;
-    color: inherit;
-    padding: var(--weline-space-2) var(--weline-space-3);
-    border-radius: var(--weline-radius-md);
-    transition: background-color var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .cart-link:hover {
-    background-color: var(--color-on-dark-soft);
-}
-
-.<?= $wc ?> .cart-icon-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.<?= $wc ?> .header-cart-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7, 1.75rem));
-    block-size: var(--weline-chrome-action-icon-size, var(--spacing-7, 1.75rem));
-    color: inherit;
-}
-
-.<?= $wc ?> .header-cart-icon svg {
-    width: 100%;
-    height: 100%;
-    stroke-width: 1.75;
-}
-
-.<?= $wc ?> .cart-count {
-    position: absolute;
-    top: var(--token-size-4px);
-    right: var(--token-size-2px);
-    min-width: var(--font-size-lg);
-    height: var(--font-size-lg);
-    background: var(--weline-chrome-primary, var(--weline-theme-primary));
-    color: var(--weline-chrome-text-primary, var(--color-text-primary));
-    font-size: var(--weline-font-size-xs);
-    font-weight: 600;
-    border-radius: var(--weline-radius-round);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 var(--weline-space-1);
-}
-
-.<?= $wc ?> .cart-info {
-    display: flex;
-    flex-direction: column;
-    font-size: var(--weline-font-size-sm);
-}
-
-.<?= $wc ?> .cart-label {
-    color: var(--weline-chrome-text-light-secondary, var(--token-color-rgba-255-255-255-0-75));
-}
-
-.<?= $wc ?> .cart-subtotal {
-    font-weight: 700;
-    color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, #ffffff));
-}
-
-@media (max-width: 768px) {
-    .<?= $wc ?> .cart-info {
-        display: none;
-    }
-
-    .<?= $wc ?> .cart-link {
-        padding: var(--spacing-1_5);
-        min-width: var(--size-control-lg);
-        min-height: var(--size-control-lg);
-        justify-content: center;
-    }
-
-    .<?= $wc ?> .cart-count[hidden] {
-        display: flex !important;
-    }
-}
-</style>

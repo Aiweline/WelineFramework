@@ -15,8 +15,8 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
     private const PAGE_LABEL_ZH = '首页';
     private const PAGE_LABEL_EN = 'Home';
     private const SITE_NAME_ZH = WebsiteBrandIdentitySeedService::SEED_NAME;
-    private const SITE_NAME_EN = "Chang'an Hanfu · Hanfu Atelier";
-    private const SITE_NAME_AR = 'تشانغآن هانفو · مشغل الهانفو';
+    private const SITE_NAME_EN = "Chang'an Hanfu";
+    private const SITE_NAME_AR = 'تشانغآن هانفو';
     private const TITLE_ZH = self::SITE_NAME_ZH . ' | ' . self::PAGE_LABEL_ZH;
     private const TITLE_EN = self::SITE_NAME_EN . ' | ' . self::PAGE_LABEL_EN;
     private const TITLE_AR = self::SITE_NAME_AR . ' | ' . self::PAGE_LABEL_ZH;
@@ -24,10 +24,15 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
     private const DESCRIPTION_EN = 'Discover Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories for everyday wear, festivals, and ceremonies.';
     private const DESCRIPTION_AR = 'اكتشف أزياء هانفو من عصور مينغ وسونغ وتانغ، وتنانير ماميان والإكسسوارات التقليدية للحياة اليومية والمهرجانات والمراسم.';
 
-    /** @return array{name:string} */
-    private function org(string $name): array
+    /** @return array{name:string,alternateName?:string} */
+    private function org(string $name, string $alternate = ''): array
     {
-        return ['name' => $name];
+        $organization = ['name' => $name];
+        if ($alternate !== '') {
+            $organization['alternateName'] = $alternate;
+        }
+
+        return $organization;
     }
 
     public function testChineseRootReceivesChineseHomepageDefaults(): void
@@ -35,7 +40,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_ZH,
-                'organization' => $this->org(self::SITE_NAME_ZH),
+                'organization' => $this->org(self::SITE_NAME_ZH, self::SITE_NAME_EN),
                 'page_type' => 'home',
                 'title' => self::TITLE_ZH,
                 'description' => self::DESCRIPTION_ZH,
@@ -49,7 +54,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_EN,
-                'organization' => $this->org(self::SITE_NAME_EN),
+                'organization' => $this->org(self::SITE_NAME_EN, self::SITE_NAME_ZH),
                 'page_type' => 'home',
                 'title' => self::TITLE_EN,
                 'description' => self::DESCRIPTION_EN,
@@ -70,7 +75,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
             'locale' => 'ar_SA',
         ]);
         self::assertSame(self::SITE_NAME_AR, $profile['site_name']);
-        self::assertSame($this->org(self::SITE_NAME_AR), $profile['organization']);
+        self::assertSame($this->org(self::SITE_NAME_AR, self::SITE_NAME_EN), $profile['organization']);
         self::assertSame('home', $profile['page_type']);
         self::assertSame(self::SITE_NAME_AR . ' | الصفحة الرئيسية', $profile['title']);
         self::assertSame(self::DESCRIPTION_AR, $profile['description']);
@@ -82,7 +87,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_ZH,
-                'organization' => $this->org(self::SITE_NAME_ZH),
+                'organization' => $this->org(self::SITE_NAME_ZH, self::SITE_NAME_EN),
                 'description' => '分类 | 分类页面布局 - ' . self::SITE_NAME_ZH,
             ],
             $this->provide([
@@ -100,7 +105,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_ZH,
-                'organization' => $this->org(self::SITE_NAME_ZH),
+                'organization' => $this->org(self::SITE_NAME_ZH, self::SITE_NAME_EN),
                 'description' => '关于我们 - ' . self::SITE_NAME_ZH,
             ],
             $this->provide([
@@ -119,7 +124,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_EN,
-                'organization' => $this->org(self::SITE_NAME_EN),
+                'organization' => $this->org(self::SITE_NAME_EN, self::SITE_NAME_ZH),
                 'description' => 'About us - ' . self::SITE_NAME_EN,
             ],
             $this->provide([
@@ -139,7 +144,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_ZH,
-                'organization' => $this->org(self::SITE_NAME_ZH),
+                'organization' => $this->org(self::SITE_NAME_ZH, self::SITE_NAME_EN),
                 'description' => '关于我们 - ' . self::SITE_NAME_ZH,
             ],
             $this->provide([
@@ -163,7 +168,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_ZH,
-                'organization' => $this->org(self::SITE_NAME_ZH),
+                'organization' => $this->org(self::SITE_NAME_ZH, self::SITE_NAME_EN),
                 'page_type' => 'home',
             ],
             $this->provide([
@@ -192,7 +197,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
         self::assertSame(
             [
                 'site_name' => self::SITE_NAME_EN,
-                'organization' => $this->org(self::SITE_NAME_EN),
+                'organization' => $this->org(self::SITE_NAME_EN, self::SITE_NAME_ZH),
                 'page_type' => 'home',
                 'description' => self::DESCRIPTION_EN,
             ],
@@ -335,6 +340,19 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
                 }
 
                 return $isArabic ? self::SITE_NAME_AR : ($isChinese ? self::SITE_NAME_ZH : self::SITE_NAME_EN);
+            }
+        );
+        $siteBrand->method('resolveOrganizationAlternateName')->willReturnCallback(
+            static function (string $displayName = '') use ($isArabic, $isChinese): string {
+                $name = trim($displayName);
+                if ($name === '') {
+                    $name = $isArabic ? self::SITE_NAME_AR : ($isChinese ? self::SITE_NAME_ZH : self::SITE_NAME_EN);
+                }
+                if ($name === self::SITE_NAME_EN || str_contains(strtolower($name), 'chang')) {
+                    return self::SITE_NAME_ZH;
+                }
+
+                return self::SITE_NAME_EN;
             }
         );
         $siteBrand->method('resolveFrontendSiteDescription')->willReturn(

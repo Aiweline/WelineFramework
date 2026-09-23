@@ -1,0 +1,224 @@
+.wc-theme_widget_deals_of_day {
+    background: linear-gradient(135deg, var(--weline-theme-danger-surface) 0%, var(--weline-theme-surface-raised) 100%);
+    padding: var(--weline-space-4) var(--size-control-md);
+    border-radius: var(--border-radius-2xl);
+}
+
+.wc-theme_widget_deals_of_day .widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--weline-space-3);
+    margin-bottom: var(--weline-space-4);
+}
+
+.wc-theme_widget_deals_of_day .header-left {
+    text-align: left;
+}
+
+.wc-theme_widget_deals_of_day .widget-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2_5);
+}
+
+.wc-theme_widget_deals_of_day .products-wrapper { width: 100%; overflow: visible; }
+.wc-theme_widget_deals_of_day .layout-carousel .products-wrapper { overflow: hidden; }
+.wc-theme_widget_deals_of_day .products-grid {
+    display: grid;
+    gap: var(--weline-space-4);
+    width: 100%;
+    box-sizing: border-box;
+}
+.wc-theme_widget_deals_of_day .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wc-theme_widget_deals_of_day .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wc-theme_widget_deals_of_day .products-grid.columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wc-theme_widget_deals_of_day .product-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    background: var(--weline-theme-surface-raised);
+    box-shadow: var(--weline-theme-shadow-sm);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.wc-theme_widget_deals_of_day .product-card:hover {
+    transform: translateY(var(--spacing-neg-0_5));
+    border-color: var(--weline-theme-primary);
+    box-shadow: var(--shadow-md);
+}
+.wc-theme_widget_deals_of_day .product-image-wrapper { position: relative; overflow: hidden; background: var(--weline-theme-surface-muted); }
+.wc-theme_widget_deals_of_day .product-image-link { display: block; aspect-ratio: 1 / 1; }
+.wc-theme_widget_deals_of_day .product-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.wc-theme_widget_deals_of_day .product-actions { position: absolute; top: var(--weline-space-3); right: var(--weline-space-3); display: flex; gap: var(--spacing-sm); z-index: 3; }
+.wc-theme_widget_deals_of_day .action-btn {
+    display: inline-flex;
+    width: var(--spacing-2_25);
+    height: var(--spacing-2_25);
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--border-radius-full);
+    background: var(--color-on-dark-92);
+    color: var(--weline-theme-text);
+    cursor: pointer;
+    box-shadow: 0 var(--spacing-sm) var(--weline-space-5) var(--color-overlay-12);
+}
+.wc-theme_widget_deals_of_day .product-info {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-4);
+    box-sizing: border-box;
+}
+.wc-theme_widget_deals_of_day .product-name { margin: 0; font-size: var(--font-size-base); line-height: 1.35; }
+.wc-theme_widget_deals_of_day .product-name a { color: var(--weline-theme-text); text-decoration: none; }
+.wc-theme_widget_deals_of_day .product-rating { display: flex; align-items: center; gap: var(--spacing-0_45); color: var(--weline-theme-text-muted); font-size: var(--font-size-sm); }
+.wc-theme_widget_deals_of_day .stars { display: flex; align-items: center; gap: var(--spacing-0_5); }
+.wc-theme_widget_deals_of_day .product-price { display: flex; align-items: baseline; gap: var(--spacing-sm); margin-top: auto; }
+.wc-theme_widget_deals_of_day .price-original { color: var(--weline-theme-text-muted); text-decoration: line-through; }
+.wc-theme_widget_deals_of_day .price-current { color: var(--weline-theme-primary); font-weight: 800; }
+/* CTA 由 canonical product-card.css 拥有 */
+
+/* 倒计时 */
+.wc-theme_widget_deals_of_day .header-countdown {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3_5);
+    background: var(--weline-theme-surface-raised);
+    padding: var(--spacing-2_5) var(--weline-space-5);
+    border-radius: var(--token-size-10px);
+    box-shadow: 0 var(--spacing-0_5) var(--spacing-2_5) var(--color-overlay-05);
+}
+
+.wc-theme_widget_deals_of_day .countdown-label {
+    font-size: var(--font-size-sm);
+    color: var(--weline-theme-text-muted);
+}
+
+.wc-theme_widget_deals_of_day .countdown-timer {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1_5);
+}
+
+.wc-theme_widget_deals_of_day .time-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--weline-theme-danger);
+    color: var(--weline-theme-on-primary);
+    padding: var(--spacing-sm) var(--weline-space-3);
+    border-radius: var(--token-size-6px);
+    min-width: var(--size-control-50);
+}
+
+.wc-theme_widget_deals_of_day .time-block .time-value {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.wc-theme_widget_deals_of_day .time-block .time-label {
+    font-size: var(--spacing-2_5);
+    opacity: 0.8;
+}
+
+.wc-theme_widget_deals_of_day .time-separator {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--weline-theme-danger);
+}
+
+
+/* 库存进度条 */
+.wc-theme_widget_deals_of_day .stock-progress {
+    margin: var(--weline-space-3) 0;
+}
+
+.wc-theme_widget_deals_of_day .progress-bar {
+    height: var(--spacing-sm);
+    background: var(--weline-theme-border);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+}
+
+.wc-theme_widget_deals_of_day .progress-fill {
+    height: 100%;
+    width: calc(var(--wc-progress) * 1%);
+    background: linear-gradient(90deg, var(--weline-theme-danger), var(--weline-theme-danger));
+    border-radius: var(--border-radius-md);
+    transition: width 0.3s ease;
+}
+
+.wc-theme_widget_deals_of_day .stock-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--spacing-1_5);
+    font-size: var(--font-size-xs);
+    color: var(--weline-theme-text-muted);
+}
+
+.wc-theme_widget_deals_of_day .stock-info .sold {
+    color: var(--weline-theme-danger);
+}
+
+/* 抢购按钮 */
+.wc-theme_widget_deals_of_day .btn-deal {
+    background: linear-gradient(135deg, var(--weline-theme-danger), var(--weline-theme-danger));
+}
+
+.wc-theme_widget_deals_of_day .btn-deal:hover {
+    background: linear-gradient(135deg, var(--weline-theme-danger), var(--weline-theme-danger));
+}
+
+.wc-theme_widget_deals_of_day .product-rating .stars .w-rating-star {
+    color: var(--weline-theme-warning);
+}
+
+.wc-theme_widget_deals_of_day .product-rating .stars .w-rating-star[data-state="empty"] {
+    color: var(--weline-theme-border);
+}
+
+.wc-theme_widget_deals_of_day .widget-footer {
+    text-align: center;
+    margin-top: var(--weline-space-4);
+}
+
+.wc-theme_widget_deals_of_day .btn-view-all {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--weline-space-2) var(--weline-space-6);
+    border: var(--border-width-medium) solid var(--weline-theme-danger);
+    color: var(--weline-theme-danger);
+    text-decoration: none;
+    border-radius: var(--token-size-30px);
+    font-weight: 600;
+    background: var(--weline-theme-surface-raised);
+    transition: all 0.3s;
+}
+
+.wc-theme_widget_deals_of_day .btn-view-all:hover {
+    background: var(--weline-theme-danger);
+    color: var(--weline-theme-on-primary);
+}
+
+@media (max-width: 768px) {
+    .wc-theme_widget_deals_of_day {
+        padding: var(--weline-space-5);
+    }
+    
+    .wc-theme_widget_deals_of_day .widget-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .wc-theme_widget_deals_of_day .header-left {
+        text-align: center;
+    }
+}

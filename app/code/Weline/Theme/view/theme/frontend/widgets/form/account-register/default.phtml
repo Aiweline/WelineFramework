@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js,Weline_Customer::css/widgets/widget-account-register.css,Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Customer::js/widgets/widget-account-register-0.js}
  * 账号注册部件（Theme 归属）：与登录同款全宽舞台（左侧文案轨 + 右侧悬浮表单卡）。
  * 供 account/auth 布局 slot 模板内嵌；主题编辑器可换背景/文案（Copy-on-Write）。
  *
@@ -98,9 +99,9 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-w-component="account-login-stage"
-         style="<?= $esc($rootStyle) ?>">
+         data-widget-style="<?= $esc($rootStyle) ?>">
     <div class="account-login-widget__backdrop"
-         style="<?= $esc($backdropStyle) ?>"
+         data-widget-style="<?= $esc($backdropStyle) ?>"
          aria-hidden="true">
         <?php if ($backgroundImageFileHtml !== ''): ?>
             <div class="account-login-widget__media"><?= $backgroundImageFileHtml ?></div>

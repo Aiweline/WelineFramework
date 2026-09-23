@@ -39,6 +39,7 @@ final class ThemeLayoutEntityChrome
         private readonly ThemeLayoutEntityPointerResolver $pointers,
         private readonly ThemeLayoutEntityPaths $paths,
         private readonly ?StorefrontScopeHotCache $hotCache = null,
+        private readonly ?\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface $scopes = null,
     ) {
     }
 
@@ -54,48 +55,10 @@ final class ThemeLayoutEntityChrome
         ?int $themeVersionId = null,
         bool $preview = false,
     ): string {
-        if ($themeId < 1 || \trim($scope) === '') {
-            throw new \RuntimeException('theme_layout_entity_chrome_invalid_identity');
-        }
-
-        $selection = \Weline\Framework\Runtime\RequestContext::get('theme.layout_entity.preview_entity');
-        if (is_array($selection) && (int)($selection['theme_id'] ?? 0) === $themeId) {
-            $themeVersionId = (int)($selection['chrome_version_id'] ?? 0);
-            if ($themeVersionId < 1) {
-                throw new \RuntimeException('theme_layout_entity_preview_chrome_version_missing');
-            }
-            $scope = (string)($selection['chrome_scope'] ?? $selection['scope']);
-            $preview = true;
-        }
-        $path = null;
-        $binding = null;
-        if ($themeVersionId !== null && $themeVersionId > 0) {
-            $path = $this->paths->chromePhtml($themeId, $scope, $themeVersionId);
-        } else {
-            $pointer = $preview
-                ? $this->pointers->resolveCurrentChrome($themeId, $scope)
-                : $this->pointers->resolvePublishedChrome($themeId, $scope);
-            $path = \is_array($pointer) ? (string)($pointer['path'] ?? '') : '';
-            $themeVersionId = (int)($pointer['version_id'] ?? 0);
-            $scope = (string)($pointer['scope'] ?? $scope);
-        }
-
-        if ($themeVersionId !== null && $themeVersionId > 0) {
-            $binding = $this->readChromeBinding($themeId, $scope, $themeVersionId);
-            $path = $binding?->templatePath ?? $path;
-        }
-
-        if ($path === '' || !\is_file($path)) {
-            throw new \RuntimeException(
-                'theme_layout_entity_chrome_missing: theme=' . $themeId
-                . ' scope=' . $scope
-                . ($themeVersionId ? (' tv=' . $themeVersionId) : '')
-            );
-        }
-
-        if ($binding !== null) {
-            \Weline\Framework\Runtime\RequestContext::set('theme.layout_entity.rendered_chrome_binding', $binding);
-        }
+        $source = $this->resolveRenderSource($themeId, $scope, $themeVersionId, $preview);
+        $path = $source['path'];
+        $binding = $source['binding'];
+        $preview = $source['preview'];
         // Preview/draft always renders live so editors see unpublished chrome nodes.
         if ($preview) {
             $html = $this->includeChromePhtml($path, $binding);
@@ -126,6 +89,135 @@ final class ThemeLayoutEntityChrome
         }
 
         return $html;
+    }
+
+    /**
+     * Resolve once for the root and all nested chrome slots. Inherited bindings
+     * carry their actual owner scope; preview never falls back to published data.
+     * @return array{path:string,binding:?EntityRenderBinding,scope:string,version_id:?int,preview:bool}
+     */
+    public function resolveRenderSource(int $themeId, string $scope, ?int $themeVersionId = null, bool $preview = false): array
+    {
+        if ($themeId < 1 || \trim($scope) === '') {
+            throw new \RuntimeException('theme_layout_entity_chrome_invalid_identity');
+        }
+
+        $selection = \Weline\Framework\Runtime\RequestContext::get('theme.layout_entity.preview_entity');
+        if (is_array($selection) && (int)($selection['theme_id'] ?? 0) === $themeId) {
+            $themeVersionId = (int)($selection['chrome_version_id'] ?? 0);
+            if ($themeVersionId < 1) {
+                throw new \RuntimeException('theme_layout_entity_preview_chrome_version_missing');
+            }
+            $scope = (string)($selection['chrome_scope'] ?? $selection['scope']);
+            $preview = true;
+        }
+        $key = 'theme.layout_entity.chrome_source.' . hash('sha256', json_encode([$themeId, $scope, $themeVersionId, $preview], JSON_THROW_ON_ERROR));
+        $resolved = \Weline\Framework\Runtime\RequestContext::get($key);
+        if (is_array($resolved)) {
+            if ($resolved['binding'] instanceof EntityRenderBinding) {
+                \Weline\Framework\Runtime\RequestContext::set('theme.layout_entity.rendered_chrome_binding', $resolved['binding']);
+            }
+            return $resolved;
+        }
+        $path = null;
+        $binding = null;
+        if ($themeVersionId !== null && $themeVersionId > 0) {
+            $path = $this->paths->chromePhtml($themeId, $scope, $themeVersionId);
+        } else {
+            $pointer = $preview
+                ? $this->pointers->resolveCurrentChrome($themeId, $scope)
+                : $this->pointers->resolvePublishedChrome($themeId, $scope);
+            $path = \is_array($pointer) ? (string)($pointer['path'] ?? '') : '';
+            $themeVersionId = (int)($pointer['version_id'] ?? 0);
+            $scope = (string)($pointer['scope'] ?? $scope);
+        }
+
+        if ($themeVersionId !== null && $themeVersionId > 0) {
+            $binding = $this->readChromeBinding($themeId, $scope, $themeVersionId);
+            $path = $binding?->templatePath ?? $path;
+        }
+
+        if ($path === '' || !\is_file($path)) {
+            throw new \RuntimeException(
+                'theme_layout_entity_chrome_missing: theme=' . $themeId
+                . ' scope=' . $scope
+                . ($themeVersionId ? (' tv=' . $themeVersionId) : '')
+            );
+        }
+
+        if ($binding !== null) {
+            \Weline\Framework\Runtime\RequestContext::set('theme.layout_entity.rendered_chrome_binding', $binding);
+        }
+        $resolved = ['path' => $path, 'binding' => $binding, 'scope' => $scope,
+            'version_id' => $themeVersionId, 'preview' => $preview];
+        \Weline\Framework\Runtime\RequestContext::set($key, $resolved);
+        return $resolved;
+    }
+
+    /** @return list<array{path:string,binding:?EntityRenderBinding,scope:string,version_id:?int,preview:bool}> */
+    public function resolveRenderSources(int $themeId, string $scope, bool $preview = false): array
+    {
+        $selection = \Weline\Framework\Runtime\RequestContext::get('theme.layout_entity.preview_entity');
+        $key = 'theme.layout_entity.chrome_sources.' . hash('sha256', json_encode([$themeId, $scope, $preview, $selection], JSON_THROW_ON_ERROR));
+        $sources = \Weline\Framework\Runtime\RequestContext::get($key);
+        if (!is_array($sources)) {
+            $sources = [];
+            $lastError = null;
+            $seen = [];
+            $chain = is_array($selection) && (int)($selection['theme_id'] ?? 0) === $themeId
+                ? [$scope] : $this->scopeFallbackChain($scope);
+            foreach ($chain as $candidate) {
+                try {
+                    $source = $this->resolveRenderSource($themeId, $candidate, null, $preview);
+                } catch (\Throwable $error) {
+                    $lastError = $error;
+                    continue;
+                }
+                $identity = $source['binding']?->cacheKey() ?? $source['path'];
+                if (!isset($seen[$identity])) {
+                    $seen[$identity] = true;
+                    $sources[] = $source;
+                }
+            }
+            if ($sources === [] && $lastError !== null) {
+                throw $lastError;
+            }
+            \Weline\Framework\Runtime\RequestContext::set($key, $sources);
+        }
+        // Reinstall on cache hits too: nested reads and root HTML must have the
+        // same scope ownership, regardless of whether projection HTML was cached.
+        $bindings = array_values(array_filter(array_column($sources, 'binding'), static fn($binding): bool => $binding instanceof EntityRenderBinding));
+        \Weline\Framework\Runtime\RequestContext::set('theme.layout_entity.rendered_chrome_bindings', $bindings);
+        return $sources;
+    }
+
+    /** @return list<string> */
+    public function scopeFallbackChain(string $scope): array
+    {
+        $scope = \trim($scope);
+        $chain = [];
+        $scopes = $this->scopes ?? ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+        try {
+            $identity = $scopes->fromStorageScope($scope, true);
+            if ($identity !== null) {
+                foreach ($scopes->chainFromIdentity($identity) as $candidate) {
+                    $candidate = \trim((string)$candidate);
+                    if ($candidate !== '' && !\in_array($candidate, $chain, true)) {
+                        $chain[] = $candidate;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+        if ($chain === [] && $scope !== '') {
+            $chain[] = $scope;
+        }
+        if (!\in_array('default.default.default', $chain, true)) {
+            $chain[] = 'default.default.default';
+        }
+
+        return $chain;
     }
 
     /**

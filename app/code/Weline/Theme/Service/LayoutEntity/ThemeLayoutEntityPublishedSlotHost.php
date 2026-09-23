@@ -465,6 +465,11 @@ final class ThemeLayoutEntityPublishedSlotHost
             return self::sanitizePublishedHtml($defaultHtml);
         }
 
+        // A compiled empty slot is an explicit decision, not a missing bake.
+        if (trim($bakeInner) === '') {
+            return '';
+        }
+
         $defaultHtml = (string)$defaultHtml;
         if ($defaultHtml !== '' && (
             self::defaultCarriesNestedSlotMarkup($defaultHtml)
@@ -542,15 +547,64 @@ final class ThemeLayoutEntityPublishedSlotHost
         try {
             /** @var SlotBoundaryScanner $scanner */
             $scanner = ObjectManager::getInstance(SlotBoundaryScanner::class);
-            $inner = $scanner->extractSlotInner($pageHtml, $slotId, false, true);
-            if ($inner === null || \trim($inner) === '') {
-                return null;
-            }
-
-            return $inner;
+            return self::composePublishedPageSlot($pageHtml, $slotId, $scanner);
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Entity includes render flat slot fragments while CTX_SOLIDIFYING is set.
+     * A parent widget therefore contains unfilled nested wrappers. Assemble those
+     * wrappers from the same already-rendered entity before returning the parent;
+     * no registry lookup, widget re-render, or request-time default injection.
+     */
+    private static function composePublishedPageSlot(
+        string $pageHtml,
+        string $slotId,
+        SlotBoundaryScanner $scanner,
+        array $visiting = [],
+    ): ?string {
+        if (isset($visiting[$slotId])) {
+            return null;
+        }
+        $visiting[$slotId] = true;
+        $entityRegions = [];
+        foreach ($scanner->enumerateRegions($pageHtml, $slotId) as $region) {
+            $wrapper = substr($pageHtml, $region['wrapper_open_start'], $region['wrapper_open_end'] - $region['wrapper_open_start']);
+            if (preg_match('/\bclass=["\'][^"\']*\btheme-layout-entity-slot\b/', $wrapper) === 1) {
+                $entityRegions[] = $region;
+            }
+        }
+        if ($entityRegions !== []) {
+            usort($entityRegions, static fn(array $a, array $b): int => ($a['depth'] <=> $b['depth']) ?: ($a['region_start'] <=> $b['region_start']));
+            $region = $entityRegions[0];
+            // Prefer the flat entity owner even when intentionally empty; a
+            // nested default with the same ID must never override its decision.
+            $inner = substr($pageHtml, $region['inner_start'], $region['inner_end'] - $region['inner_start']);
+        } else {
+            $inner = $scanner->extractSlotInner($pageHtml, $slotId, false, true);
+            if ($inner === null || trim($inner) === '') {
+                return null;
+            }
+        }
+        $regions = $scanner->enumerateRegions($inner);
+        usort($regions, static fn(array $a, array $b): int => $a['region_start'] <=> $b['region_start']);
+        $replacements = [];
+        $coveredUntil = -1;
+        foreach ($regions as $region) {
+            // Recurse through direct children only; their descendants are handled
+            // in that call, so the replacements below stay disjoint.
+            if ($region['region_start'] < $coveredUntil) {
+                continue;
+            }
+            $coveredUntil = $region['region_end'];
+            $child = self::composePublishedPageSlot($pageHtml, $region['id'], $scanner, $visiting);
+            if ($child !== null) {
+                $replacements[] = ['inner_start' => $region['inner_start'], 'inner_end' => $region['inner_end'], 'new_inner' => $child];
+            }
+        }
+        return $scanner->replaceWrapperInners($inner, $replacements);
     }
 
     /**

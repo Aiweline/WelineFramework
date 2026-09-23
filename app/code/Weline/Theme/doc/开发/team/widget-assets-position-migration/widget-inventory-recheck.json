@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-09-23T13:23:09.778693",
+  "source_scope": {
+    "listed_templates": 187,
+    "module_widget_templates": 166,
+    "active_design_overrides": 8,
+    "indirect_partials": 13,
+    "unlisted_widget_roots": 0,
+    "missing_templates": 0,
+    "source_asset_declarations": 150,
+    "missing_source_assets": 0,
+    "remaining_inline_css_or_executable_js": 0
+  },
+  "registry": {
+    "file": "generated/widgets.php",
+    "total_entries": 154,
+    "entries_with_source_or_layout_source": 123,
+    "source_metadata_declarations_compared": 129,
+    "missing_template_paths": 0,
+    "missing_declared_assets_in_registry": 0
+  },
+  "http": {
+    "url": "https://p05113ef3.test.weline.com:29843/",
+    "product_cards": 24,
+    "marked_asset_tags": 59,
+    "unique_asset_urls": 56,
+    "asset_http_200_and_valid_mime": 56,
+    "instance_data_nodes": 22,
+    "javascript_initializer_anchors": 0,
+    "duplicate_assets": [
+      "widget-instance-styles.css",
+      "product-card.css",
+      "widget-instance-styles.js"
+    ],
+    "unresolved": "Compiled widget templates retain initializer anchors but HTTP response strips them; resource pipeline owner notified. Duplicate product-card recovery assets also owned by pipeline."
+  },
+  "runtime_acceptance": "Not complete; source and HTTP checks do not prove browser initialization or interaction."
+}

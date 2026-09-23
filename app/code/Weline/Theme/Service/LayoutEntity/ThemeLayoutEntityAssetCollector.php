@@ -153,7 +153,7 @@ final class ThemeLayoutEntityAssetCollector
                 $url = $this->resolveStaticUrl((string)$path);
                 if ($url === '') { continue; }
                 $attributes = ' data-weline-widget-asset="' . ($layout ? 'layout' : 'source')
-                    . '" data-weline-source-position="' . $assetPosition . '"';
+                    . '" data-weline-source-position="' . $assetPosition . '" data-weline-module-source="' . htmlspecialchars((string)$path, ENT_QUOTES, 'UTF-8') . '"';
                 $url = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
                 $chunks[] = str_ends_with($key, '_css')
                     ? '<link rel="stylesheet" href="' . $url . '"' . $attributes . '>'

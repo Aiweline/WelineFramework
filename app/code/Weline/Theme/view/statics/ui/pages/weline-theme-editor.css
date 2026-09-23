@@ -87,6 +87,20 @@ body:has(.theme-editor-container) .w-backend-main {
     overflow: hidden;
 }
 
+/* Full-shell busy during reset / factory reset — above floating panels */
+.theme-editor-container.w-busy[data-w-busy="true"] > [data-w-busy-overlay],
+.theme-editor-container > .w-busy__overlay {
+    z-index: 2147483600;
+}
+.theme-editor-container.w-busy[data-w-busy="true"] > .w-busy__overlay .w-busy__backdrop {
+    background: color-mix(in srgb, var(--w-theme-editor-bg-dark) 78%, transparent);
+}
+.theme-editor-container.w-busy[data-w-busy="true"] > .w-busy__overlay .w-busy__content {
+    background: var(--w-theme-editor-bg-card);
+    color: var(--w-theme-editor-text-primary);
+    border-color: var(--w-theme-editor-border);
+}
+
 .theme-editor-legacy-scope-alert {
     flex: 0 0 auto;
     min-inline-size: 0;

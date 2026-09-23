@@ -53,6 +53,11 @@ final class ProductCardAddToCartParamsAssetsTest extends TestCase
         $tag = ProductCardAddToCartParams::buildPurchaseActionsStyleTag();
 
         self::assertStringContainsString('data-weline-product-card-purchase-actions="1"', $tag);
+        self::assertStringContainsString('data-weline-widget-asset="source"', $tag);
+        self::assertStringContainsString('data-weline-source-position="head"', $tag);
+        self::assertStringContainsString('product-card-purchase-actions.css', $tag);
+        self::assertStringNotContainsString('<style', $tag);
+        $tag = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/css/partials/product-card-purchase-actions.css');
         self::assertStringContainsString('.product-card-purchase-actions', $tag);
         self::assertStringContainsString('.btn-buy-now', $tag);
         self::assertStringContainsString('var(--weline-theme-primary)', $tag);

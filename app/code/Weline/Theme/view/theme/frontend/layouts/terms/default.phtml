@@ -45,19 +45,19 @@ $siteName = (string)$contact['site_name'];
 $title = (string)($meta['title'] ?? WidgetI18n::label('服务条款'));
 $subtitle = trim((string)($meta['subtitle'] ?? ''));
 if ($subtitle === '') {
-    $subtitle = (string)WidgetI18n::label('欢迎使用本网站服务。在使用本网站提供的服务前，请您仔细阅读本服务条款。使用本网站即表示您已充分理解并同意接受本条款的全部内容。');
+    $subtitle = (string)WidgetI18n::label('欢迎逛店、下单。使用本站前，请花一两分钟看看账户安全与购物规则；有不清楚的地方，随时问客服。');
 }
 $customContent = trim((string)($meta['content'] ?? ''));
 $updatedAt = date('Y-m-d');
 $toc = [
-    ['id' => 'terms-section-1', 'label' => WidgetI18n::label('一、服务说明')],
-    ['id' => 'terms-section-2', 'label' => WidgetI18n::label('二、用户账户')],
-    ['id' => 'terms-section-3', 'label' => WidgetI18n::label('三、使用规范')],
-    ['id' => 'terms-section-4', 'label' => WidgetI18n::label('四、商品与交易')],
-    ['id' => 'terms-section-5', 'label' => WidgetI18n::label('五、知识产权')],
-    ['id' => 'terms-section-6', 'label' => WidgetI18n::label('六、免责声明')],
-    ['id' => 'terms-section-7', 'label' => WidgetI18n::label('七、争议解决')],
-    ['id' => 'terms-section-8', 'label' => WidgetI18n::label('八、其他')],
+    ['id' => 'terms-section-1', 'label' => WidgetI18n::label('1 / 我们提供哪些服务')],
+    ['id' => 'terms-section-2', 'label' => WidgetI18n::label('2 / 账户安全')],
+    ['id' => 'terms-section-3', 'label' => WidgetI18n::label('3 / 使用时请注意')],
+    ['id' => 'terms-section-4', 'label' => WidgetI18n::label('4 / 商品与下单')],
+    ['id' => 'terms-section-5', 'label' => WidgetI18n::label('5 / 知识产权')],
+    ['id' => 'terms-section-6', 'label' => WidgetI18n::label('6 / 免责说明')],
+    ['id' => 'terms-section-7', 'label' => WidgetI18n::label('7 / 争议如何处理')],
+    ['id' => 'terms-section-8', 'label' => WidgetI18n::label('8 / 其他说明')],
 ];
 $tocFallbackPath = '/terms';
 ?>
@@ -177,13 +177,14 @@ $tocFallbackPath = '/terms';
             /* no overflow:hidden — with <base href="/"> + sticky header, hash scroll must use document */
         }
 
-        .amazon-terms__toc {
+                .amazon-terms__toc {
             border-radius: 8px 0 0 8px;
             padding: 1.15rem 1rem 1.25rem;
             border-right: 1px solid var(--color-border-default, #e3e6e6);
-            background: var(--color-bg-secondary, #fafafa);
+            background: var(--color-bg-subtle, #fafafa);
             position: sticky;
-            top: 12rem;
+            top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem));
+            align-self: start;
         }
 
         .amazon-terms__toc h2 {
@@ -228,7 +229,7 @@ $tocFallbackPath = '/terms';
 
         .amazon-terms__section {
             margin-top: 1.5rem;
-            scroll-margin-top: 12rem;
+            scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem));
         }
 
         .amazon-terms__section h2 {
@@ -351,7 +352,7 @@ $tocFallbackPath = '/terms';
                                     <p class="amazon-terms__hero-lead"><?= $escape($subtitle) ?></p>
                                     <div class="amazon-terms__meta">
                                         <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
-                                        <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                        <a href="@url"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
                                         <a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a>
                                     </div>
                                 </header>
@@ -368,27 +369,27 @@ $tocFallbackPath = '/terms';
 
                                     <article class="amazon-terms__article" aria-label="<?= $escape(WidgetI18n::label('服务条款正文')) ?>">
                                         <p class="amazon-terms__intro">
-                                            <?= $escape(WidgetI18n::label('本服务条款构成您与本网站之间关于使用网站服务的协议。请完整阅读各章节；如有疑问，可通过帮助中心或联系方式与我们沟通。')) ?>
+                                            <?= $escape(WidgetI18n::label('下面用白话说明逛店与下单时需要留意的规则。可按目录跳转；有疑问请通过帮助中心联系我们。')) ?>
                                         </p>
 
                                         <section class="amazon-terms__section" id="terms-section-1" weline-code="theme.terms.section_1">
-                                            <h2><?= $escape(WidgetI18n::label('一、服务说明')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('1 / 我们提供哪些服务')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('1.1 本网站提供的服务包括但不限于：商品展示、在线交易、订单管理、客户服务、信息发布等。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('1.2 我们有权根据业务发展需要，调整、变更或终止部分或全部服务，无需事先通知您。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('1.3 您理解并同意，本网站可能因系统维护、升级等原因暂停服务，我们将尽力减少对您的影响。')) ?></p>
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-2" weline-code="theme.terms.section_2">
-                                            <h2><?= $escape(WidgetI18n::label('二、用户账户')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('2 / 账户安全')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('2.1 您需要注册账户才能使用本网站的某些服务。注册时，您应提供真实、准确、完整的个人信息。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('2.2 您有责任妥善保管账户信息，不得将账户出借、转让或授权他人使用。因您保管不当导致的损失，由您自行承担。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('2.2 请妥善保管账户信息，不要把账户出借、转让或交给他人使用。因保管不当造成的损失，通常需由账户持有人自行承担。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('2.3 如发现账户被盗用或存在安全风险，您应立即通知我们，我们将协助您采取相应措施。')) ?></p>
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-3" weline-code="theme.terms.section_3">
-                                            <h2><?= $escape(WidgetI18n::label('三、使用规范')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('3 / 使用时请注意')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('3.1 您在使用本网站服务时，应遵守相关法律法规，不得利用本网站从事违法违规活动。')) ?></p>
-                                            <p><?= $escape(WidgetI18n::label('3.2 您不得从事以下行为：')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('3.2 请不要从事以下行为：')) ?></p>
                                             <ul>
                                                 <li><?= $escape(WidgetI18n::label('（1）发布违法、虚假、侵权、骚扰、威胁、诽谤、色情、暴力等不当内容；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（2）侵犯他人知识产权、隐私权、名誉权等合法权益；')) ?></li>
@@ -396,11 +397,11 @@ $tocFallbackPath = '/terms';
                                                 <li><?= $escape(WidgetI18n::label('（4）利用技术手段恶意注册、刷单、作弊等；')) ?></li>
                                                 <li><?= $escape(WidgetI18n::label('（5）其他违反法律法规或本条款的行为。')) ?></li>
                                             </ul>
-                                            <p><?= $escape(WidgetI18n::label('3.3 如您违反上述规定，我们有权立即终止向您提供服务，并保留追究法律责任的权利。')) ?></p>
+                                            <p><?= $escape(WidgetI18n::label('3.3 如违反上述规定，我们可能暂停或终止相关服务，并在必要时依法处理。')) ?></p>
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-4" weline-code="theme.terms.section_4">
-                                            <h2><?= $escape(WidgetI18n::label('四、商品与交易')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('4 / 商品与下单')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('4.1 本网站展示的商品信息由本站经营者负责维护。我们将尽力保证信息真实、准确、完整；如存在明显错误，您有权在下单前或依法主张更正、取消或售后。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.2 商品价格、库存等信息可能随时变动，以实际下单时的信息为准。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('4.3 您在下单时，应仔细核对商品信息、价格、数量等，确认无误后再提交订单。')) ?></p>
@@ -408,27 +409,27 @@ $tocFallbackPath = '/terms';
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-5" weline-code="theme.terms.section_5">
-                                            <h2><?= $escape(WidgetI18n::label('五、知识产权')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('5 / 知识产权')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('5.1 本网站的所有内容，包括但不限于文字、图片、音频、视频、软件、程序、版面设计等，均受知识产权法律法规保护。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('5.2 本网站的所有知识产权归我们或相关权利人所有，未经授权，任何人不得复制、传播、展示、镜像、上传、下载或以其他方式使用。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('5.3 您在使用本网站服务时上传、发布的内容，您应保证拥有相应的知识产权或已获得合法授权。')) ?></p>
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-6" weline-code="theme.terms.section_6">
-                                            <h2><?= $escape(WidgetI18n::label('六、免责声明')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('6 / 免责说明')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('6.1 本网站不对因不可抗力、网络故障、系统维护等原因导致的服务中断或数据丢失承担责任。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('6.2 本网站不对用户发布的信息的真实性、准确性、完整性负责，用户应自行判断并承担相应风险。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('6.3 本网站不对第三方网站的内容、服务或链接负责，您访问第三方网站的风险由您自行承担。')) ?></p>
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-7" weline-code="theme.terms.section_7">
-                                            <h2><?= $escape(WidgetI18n::label('七、争议解决')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('7 / 争议如何处理')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('7.1 因本条款引起的或与本条款有关的任何争议，双方应友好协商解决。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('7.2 如协商不成，任何一方均可向经营者住所地有管辖权的人民法院提起诉讼；法律法规另有规定的除外。')) ?></p>
                                         </section>
 
                                         <section class="amazon-terms__section" id="terms-section-8" weline-code="theme.terms.section_8">
-                                            <h2><?= $escape(WidgetI18n::label('八、其他')) ?></h2>
+                                            <h2><?= $escape(WidgetI18n::label('8 / 其他说明')) ?></h2>
                                             <p><?= $escape(WidgetI18n::label('8.1 本条款自发布之日起生效，并持续有效，直至被修订或终止。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('8.2 如本条款的任何条款被认定为无效或不可执行，不影响其他条款的效力。')) ?></p>
                                             <p><?= $escape(WidgetI18n::label('8.3 我们有权根据法律法规和业务发展需要修订本条款；重大变更将通过本页更新或其他合理方式告知。本条款的解释以有利于保护消费者合法权益且符合强制性法律的方式为准。')) ?></p>
@@ -437,9 +438,9 @@ $tocFallbackPath = '/terms';
                                         <div class="amazon-terms__footer-note">
                                             <p><?= $escape(WidgetI18n::label('如对本条款有疑问，请先查阅帮助中心，或通过联系我们与支持团队沟通。')) ?></p>
                                             <div class="amazon-terms__related">
-                                                <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
-                                                <a href="@url{'cookie'}"><?= $escape(WidgetI18n::label('Cookie 政策')) ?></a>
-                                                <a href="@url{'refund'}"><?= $escape(WidgetI18n::label('退款政策')) ?></a>
+                                                <a href="@url"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
+                                                <a href="@url"><?= $escape(WidgetI18n::label('Cookie 政策')) ?></a>
+                                                <a href="@url"><?= $escape(WidgetI18n::label('退款政策')) ?></a>
                                                 <a href="@url{'contact'}"><?= $escape(WidgetI18n::label('联系我们')) ?></a>
                                             </div>
                                         </div>
