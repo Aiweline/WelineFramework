@@ -315,6 +315,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('.w-dialog.w-product-purchase-panel', $cssContent);
         self::assertStringContainsString('min-height: 0', $cssContent);
         self::assertStringContainsString('product-native-detail--quick-add', $cssContent);
+        self::assertStringContainsString('.w-product-purchase-panel__error', $cssContent);
+        self::assertStringContainsString('.w-product-purchase-panel__error-text', $cssContent);
         // Affiliate 需求：列表「快捷规格加购」弹窗须展示分销分享；禁止 CSS 整块隐藏。
         self::assertStringNotContainsString(
             '.w-product-purchase-panel .affiliate-share-panel',
