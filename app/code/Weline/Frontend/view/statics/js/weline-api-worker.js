@@ -22,7 +22,13 @@
     let handshakePromise = null;
     let handshakeCooldownUntil = 0;
     let handshakeBackoffMs = 0;
+    // Interactive commerce/UI calls (cart, purchase panel, …) must not wait behind
+    // fire-and-forget telemetry. Nonces are unique per request; handshake stays shared.
     let signedRequestChain = Promise.resolve();
+    let signedTelemetryChain = Promise.resolve();
+    const TELEMETRY_CAPABILITIES = Object.freeze({
+        'visitor.trackPixel': true,
+    });
 
     // Browser-side QueryBin response cache (TTL + in-flight dedupe).
     // HTTP fetch stays cache:'no-store'; this layer skips the signed POST when fresh.
@@ -724,15 +730,25 @@
         return handshakePromise;
     }
 
+    function sleepMs(ms) {
+        const wait = Math.max(0, Number(ms) || 0);
+        if (wait < 1) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+            setTimeout(resolve, wait);
+        });
+    }
+
     async function handshake(config) {
+        // Capacity/auth pressure sets a cooldown. Wait (capped) then retry once —
+        // never fail-fast with a synthetic "cooling down" error that spam-toasts
+        // every concurrent QueryBin caller on the same page (e.g. checkout success).
         const nowMs = Date.now();
         if (handshakeCooldownUntil > nowMs) {
             const waitMs = handshakeCooldownUntil - nowMs;
-            throw Object.assign(new Error('Weline worker handshake is cooling down after capacity/auth pressure.'), {
-                code: 'worker_capacity_exhausted',
-                status: 503,
-                retry_after_ms: waitMs,
-            });
+            // Cap so outer Weline.Api worker_timeout (~15s) can still recover.
+            await sleepMs(Math.min(waitMs, 4000));
         }
         const handshakePayload = {
             type: 'handshake',
@@ -764,7 +780,8 @@
                 body: rawBody,
             });
         } catch (error) {
-            noteHandshakePressure();
+            // Transient network: short soft backoff only (not capacity semantics).
+            noteHandshakeSoftBackoff();
             throw error;
         }
 
@@ -781,6 +798,8 @@
                 || /capacity|上限|exhausted/i.test(String(message || ''))
             ) {
                 noteHandshakePressure();
+            } else if (response.status === 401 || code === 'auth_error') {
+                noteHandshakeSoftBackoff();
             }
             throw Object.assign(new Error(message), { code, status: response.status });
         }
@@ -801,26 +820,42 @@
         return body.data;
     }
 
+    function noteHandshakeSoftBackoff() {
+        handshakeBackoffMs = Math.min(4000, Math.max(400, (handshakeBackoffMs || 200) * 2));
+        handshakeCooldownUntil = Date.now() + handshakeBackoffMs;
+    }
+
     function noteHandshakePressure() {
         handshakeBackoffMs = Math.min(30000, Math.max(1000, (handshakeBackoffMs || 500) * 2));
         handshakeCooldownUntil = Date.now() + handshakeBackoffMs;
     }
 
-    function enqueueSignedRequest(task) {
+    function isTelemetryCapability(capability) {
+        return TELEMETRY_CAPABILITIES[String(capability || '')] === true;
+    }
+
+    function enqueueSignedRequest(task, lane) {
+        const useTelemetry = lane === 'telemetry';
+        if (useTelemetry) {
+            const run = signedTelemetryChain.then(task, task);
+            signedTelemetryChain = run.catch(() => {});
+            return run;
+        }
         const run = signedRequestChain.then(task, task);
         signedRequestChain = run.catch(() => {});
         return run;
     }
 
     async function executeSignedRequest(config, payload, capability) {
-        let result = await postSigned(config, payload, capability);
+        const lane = isTelemetryCapability(capability) ? 'telemetry' : 'interactive';
+        let result = await postSigned(config, payload, capability, lane);
         if (!result.responseOk && isNonceReuse(result.status, result.body)) {
             // Nonce replay means this exact signed request was already committed.
             // The session is still valid — only mint a fresh nonce and retry once.
-            result = await postSigned(config, payload, capability);
+            result = await postSigned(config, payload, capability, lane);
         } else if (!result.responseOk && shouldInvalidateWorkerSession(result.status, result.body)) {
             workerSession = null;
-            result = await postSigned(config, payload, capability);
+            result = await postSigned(config, payload, capability, lane);
         }
         return result;
     }
@@ -848,10 +883,12 @@
         return code === 'auth_error' || code === 'backend_attestation_invalid';
     }
 
-    async function postSigned(config, payload, capability) {
+    async function postSigned(config, payload, capability, lane) {
         return enqueueSignedRequest(async () => {
             await ensureSession(config);
-            if (!workerSession || typeof workerSession.signing_secret !== 'string' || workerSession.signing_secret === '') {
+            // Snapshot for this request: dual lanes may refresh/clear workerSession concurrently.
+            const sessionSnapshot = workerSession;
+            if (!sessionSnapshot || typeof sessionSnapshot.signing_secret !== 'string' || sessionSnapshot.signing_secret === '') {
                 throw Object.assign(new Error('Weline worker session is unavailable.'), {
                     code: 'auth_error',
                     status: 401,
@@ -871,7 +908,7 @@
                 timestamp,
                 bodyHash,
             ].join('\n');
-            const signature = await hmacSha256Hex(workerSession.signing_secret, signatureBase);
+            const signature = await hmacSha256Hex(sessionSnapshot.signing_secret, signatureBase);
 
             const response = await fetch(config.endpoint, {
                 method: 'POST',
@@ -884,7 +921,7 @@
                     'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
                     'X-Weline-Deploy-Version': config.deployVersion,
                     'X-Weline-Worker-Build-Id': config.workerBuildId,
-                    'X-Weline-Worker-Session': workerSession.worker_session_token,
+                    'X-Weline-Worker-Session': sessionSnapshot.worker_session_token,
                     'X-Weline-Worker-Capability': capability,
                     'X-Weline-Worker-Nonce': nonce,
                     'X-Weline-Worker-Timestamp': timestamp,
@@ -935,7 +972,10 @@
                 }
             }
             if (shouldInvalidateWorkerSession(response.status, body)) {
-                workerSession = null;
+                // Only clear if we still own the live session (another lane may have refreshed).
+                if (workerSession === sessionSnapshot) {
+                    workerSession = null;
+                }
             }
             return {
                 responseOk: response.ok,
@@ -944,7 +984,7 @@
                 headers,
                 body,
             };
-        });
+        }, lane);
     }
 
     function headerValue(headers, name) {

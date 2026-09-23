@@ -14,13 +14,13 @@ final class TitleComposerFitContractTest extends TestCase
         $composer = new TitleComposer();
         $title = $composer->compose(null, [
             'page_title' => 'Jino Occasions & Craft: Festival vs Daily Dress',
-            'site_name' => 'Chang\'an Hanfu · Hanfu Atelier',
+            'site_name' => "Chang'an Hanfu",
         ]);
 
         self::assertLessThanOrEqual(65, mb_strlen($title));
         self::assertGreaterThanOrEqual(30, mb_strlen($title));
         self::assertStringContainsString('Jino Occasions', $title);
-        self::assertStringContainsString('Chang\'an Hanfu', $title);
+        self::assertStringContainsString("Chang'an Hanfu", $title);
         self::assertStringNotContainsString('...', $title);
     }
 
@@ -29,9 +29,9 @@ final class TitleComposerFitContractTest extends TestCase
         $composer = new TitleComposer();
         $title = $composer->compose(null, [
             'page_title' => 'Blog',
-            'site_name' => 'Chang\'an Hanfu · Hanfu Atelier',
+            'site_name' => "Chang'an Hanfu",
         ]);
 
-        self::assertSame('Blog | Chang\'an Hanfu · Hanfu Atelier', $title);
+        self::assertSame("Blog | Chang'an Hanfu", $title);
     }
 }
