@@ -112,8 +112,9 @@
         if (!scope) {
             return { url: '', text: '' };
         }
+        const resolved = resolveSameOriginUrl(scope.dataset.cartUrl || '', '/cart');
         return {
-            url: scope.dataset.cartUrl || '',
+            url: resolved ? resolved.toString() : (scope.dataset.cartUrl || ''),
             text: scope.dataset.cartLinkText || '',
         };
     }
@@ -199,6 +200,30 @@
             throw new Error('Weline.Api unavailable');
         }
         return global.Weline.Api.resource('cart');
+    }
+
+    async function waitForProductApi() {
+        if (global.Weline && global.Weline.Api && typeof global.Weline.Api.resource === 'function') {
+            return global.Weline.Api.resource('product');
+        }
+        if (global.Weline && typeof global.Weline.use === 'function') {
+            await global.Weline.use('api');
+        }
+        if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
+            throw new Error('Weline.Api unavailable');
+        }
+        return global.Weline.Api.resource('product');
+    }
+
+    function unwrapPurchasePanelPayload(result) {
+        if (!result || typeof result !== 'object') {
+            return null;
+        }
+        const nested = result.data && typeof result.data === 'object' ? result.data : null;
+        if (nested && (nested.html != null || nested.success != null)) {
+            return nested;
+        }
+        return result;
     }
 
     async function ensureGuestToken() {
@@ -779,6 +804,136 @@
         });
     }
 
+    function purchasePanelIsZh() {
+        return String(document.documentElement.lang || '').toLowerCase().startsWith('zh');
+    }
+
+    /**
+     * Rewrite absolute panel/cart URLs onto the current page origin.
+     * Product-card HTML may be reused from Worker :19655 into public :9555 pages;
+     * fetching the Worker absolute URL from HTTPS causes Failed to fetch / CSP blocks.
+     */
+    function resolveSameOriginUrl(raw, fallbackPath) {
+        const fallback = String(fallbackPath || '/').trim() || '/';
+        const input = String(raw || '').trim() || fallback;
+        try {
+            const parsed = new URL(input, global.location.origin);
+            // Always keep path+query+hash; never keep a foreign host/port from SSR.
+            return new URL(parsed.pathname + parsed.search + parsed.hash, global.location.origin);
+        } catch (e) {
+            try {
+                return new URL(fallback, global.location.origin);
+            } catch (e2) {
+                return null;
+            }
+        }
+    }
+
+    function humanizePurchaseError(error, fallback) {
+        const isZh = purchasePanelIsZh();
+        const raw = String((error && error.message) || fallback || '').trim();
+        const code = String((error && error.code) || '').trim();
+        const networkish = /failed to fetch|networkerror|load failed|network request failed|internet connection appears to be offline|fetch aborted|aborted/i
+            .test(raw);
+        const workerTimeout = code === 'worker_timeout'
+            || /worker request timed out/i.test(raw);
+        if (networkish || workerTimeout || raw === '') {
+            return isZh
+                ? '网络异常，无法打开加购面板，请稍后重试'
+                : 'Network error. Could not open options. Please try again.';
+        }
+        if (raw === 'purchase_panel_failed' || raw === 'product_id_required' || raw === 'add_failed') {
+            return fallback || (isZh ? '无法打开加购面板' : 'Could not open options.');
+        }
+        return raw;
+    }
+
+    function showPurchasePanelError(body, message) {
+        if (!body) {
+            return;
+        }
+        const isZh = purchasePanelIsZh();
+        body.textContent = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'w-product-purchase-panel__error';
+        wrap.setAttribute('role', 'alert');
+        const p = document.createElement('p');
+        p.className = 'w-product-purchase-panel__error-text';
+        p.textContent = message || (isZh ? '无法打开加购面板' : 'Could not open options.');
+        wrap.appendChild(p);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-button';
+        btn.setAttribute('data-variant', 'secondary');
+        btn.setAttribute('data-size', 'sm');
+        btn.setAttribute('data-purchase-panel-close', '');
+        btn.textContent = isZh ? '关闭' : 'Close';
+        btn.addEventListener('click', function () {
+            closePurchasePanel(document.getElementById('weline-product-purchase-panel-dialog'));
+        });
+        wrap.appendChild(btn);
+        body.appendChild(wrap);
+    }
+
+    function purchasePanelUiDialog() {
+        return global.Weline && global.Weline.UI && global.Weline.UI.dialog
+            ? global.Weline.UI.dialog
+            : null;
+    }
+
+    /**
+     * Close the shared listing purchase panel.
+     * Prefer Weline.UI.dialog so native <dialog> close also clears `hidden`
+     * (UI sets hidden on close; a bare dialog.close() alone is not enough for reopen).
+     */
+    function closePurchasePanel(dialog) {
+        if (!dialog) {
+            return;
+        }
+        const uiDialog = purchasePanelUiDialog();
+        if (uiDialog && typeof uiDialog.close === 'function') {
+            uiDialog.close(dialog);
+            return;
+        }
+        if (typeof dialog.close === 'function' && dialog.open) {
+            dialog.close();
+        }
+        dialog.setAttribute('data-state', 'closed');
+        dialog.hidden = true;
+        dialog.setAttribute('hidden', '');
+    }
+
+    /**
+     * Reveal the shared purchase panel without leaving a sticky `hidden` attribute.
+     * Weline.UI.dialog close() sets hidden on native dialogs; showModal() alone does
+     * not clear it, so the second open looks like a no-op (invisible modal + inert page).
+     */
+    function revealPurchasePanel(dialog) {
+        if (!dialog) {
+            return;
+        }
+        // Native <dialog hidden> keeps display:none even after showModal().
+        dialog.hidden = false;
+        dialog.removeAttribute('hidden');
+        dialog.setAttribute('data-state', 'open');
+        const uiDialog = purchasePanelUiDialog();
+        if (uiDialog && typeof uiDialog.open === 'function' && !dialog.open) {
+            uiDialog.open(dialog);
+            // UI.open already cleared hidden + showModal; re-assert visibility.
+            dialog.hidden = false;
+            dialog.removeAttribute('hidden');
+            dialog.setAttribute('data-state', 'open');
+            return;
+        }
+        if (typeof dialog.showModal === 'function') {
+            if (!dialog.open) {
+                dialog.showModal();
+            }
+        } else {
+            dialog.setAttribute('open', 'open');
+        }
+    }
+
     async function openPurchasePanel(button) {
         const productId = Number(button.dataset.productId || 0);
         if (productId <= 0) {
@@ -803,23 +958,24 @@
                 + '<div class="w-dialog__body w-product-purchase-panel__body" data-purchase-panel-body></div>';
             document.body.appendChild(dialog);
             dialog.querySelector('[data-purchase-panel-close]')?.addEventListener('click', function () {
-                if (typeof dialog.close === 'function') {
-                    dialog.close();
-                }
-                dialog.setAttribute('data-state', 'closed');
+                closePurchasePanel(dialog);
             });
             dialog.addEventListener('click', function (event) {
                 if (event.target === dialog) {
-                    if (typeof dialog.close === 'function') {
-                        dialog.close();
-                    }
-                    dialog.setAttribute('data-state', 'closed');
+                    closePurchasePanel(dialog);
                 }
             });
+            if (global.Weline && global.Weline.UI && typeof global.Weline.UI.mount === 'function') {
+                try {
+                    global.Weline.UI.mount(dialog);
+                } catch (e) {
+                    // Fallback reveal/close still work without the UI component.
+                }
+            }
         }
         const title = dialog.querySelector('#weline-product-purchase-panel-title');
         const body = dialog.querySelector('[data-purchase-panel-body]');
-        const isZh = String(document.documentElement.lang || '').toLowerCase().startsWith('zh');
+        const isZh = purchasePanelIsZh();
         if (title) {
             title.textContent = isZh ? '选择规格并加购' : 'Choose options';
         }
@@ -828,31 +984,35 @@
                 + (isZh ? '加载中…' : 'Loading…')
                 + '</div>';
         }
-        dialog.setAttribute('data-state', 'open');
-        if (typeof dialog.showModal === 'function') {
-            if (!dialog.open) {
-                dialog.showModal();
-            }
-        } else {
-            dialog.setAttribute('open', 'open');
-        }
+        revealPurchasePanel(dialog);
 
-        const baseUrl = String(button.dataset.purchasePanelUrl || '').trim()
-            || '/weline_product/frontend/api/purchase-panel';
-        const url = new URL(baseUrl, global.location.origin);
-        url.searchParams.set('product_id', String(productId));
+        const panelParams = { product_id: productId };
         const offerUuid = String(button.dataset.globalOfferUuid || '').trim();
         if (offerUuid) {
-            url.searchParams.set('offer', offerUuid);
+            panelParams.offer = offerUuid;
         }
-        const response = await fetch(url.toString(), {
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
-            cache: 'no-store',
-        });
-        const payload = await response.json().catch(function () { return null; });
+
+        let payload;
+        try {
+            const productApi = await waitForProductApi();
+            const result = await productApi.getPurchasePanel(panelParams, { silent: true });
+            payload = unwrapPurchasePanelPayload(result);
+        } catch (networkError) {
+            const msg = humanizePurchaseError(
+                networkError,
+                isZh ? '无法打开加购面板' : 'Could not open options.',
+            );
+            showPurchasePanelError(body, msg);
+            throw new Error(msg);
+        }
+
         if (!payload || payload.success === false || !payload.html) {
-            throw new Error((payload && payload.message) || (isZh ? '无法打开加购面板' : 'purchase_panel_failed'));
+            const msg = humanizePurchaseError(
+                { message: (payload && payload.message) || '' },
+                isZh ? '无法打开加购面板' : 'Could not open options.',
+            );
+            showPurchasePanelError(body, msg);
+            throw new Error(msg);
         }
         if (body) {
             body.innerHTML = String(payload.html);
@@ -967,9 +1127,10 @@
                 } catch (error) {
                     button.classList.remove('is-loading');
                     button.disabled = false;
-                    const errorText = error && error.message
-                        ? error.message
-                        : (resolvedOptions.errorText || '');
+                    const errorText = humanizePurchaseError(
+                        error,
+                        resolvedOptions.errorText || '',
+                    );
                     if (message) {
                         message.classList.remove('is-success', 'is-loading');
                         message.classList.add('is-error');
@@ -1019,11 +1180,7 @@
                         cartSummary,
                         readCartLinkMeta(button),
                     );
-                    const panel = document.getElementById('weline-product-purchase-panel-dialog');
-                    if (panel && panel.open && typeof panel.close === 'function') {
-                        panel.close();
-                        panel.setAttribute('data-state', 'closed');
-                    }
+                    closePurchasePanel(document.getElementById('weline-product-purchase-panel-dialog'));
                 } else if (message) {
                     message.classList.remove('is-error', 'is-loading');
                     message.textContent = resolvedOptions.successText || '';
@@ -1034,9 +1191,12 @@
             } catch (error) {
                 button.classList.remove('is-loading');
                 button.disabled = false;
-                const errorText = error && error.message && error.message !== 'add_failed'
-                    ? error.message
-                    : (resolvedOptions.errorText || '');
+                const errorText = humanizePurchaseError(
+                    error && error.message && error.message !== 'add_failed'
+                        ? error
+                        : { message: '' },
+                    resolvedOptions.errorText || '',
+                );
                 if (message) {
                     message.classList.remove('is-success', 'is-loading');
                     message.classList.add('is-error');

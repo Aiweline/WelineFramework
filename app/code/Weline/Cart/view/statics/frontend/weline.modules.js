@@ -8,11 +8,12 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     cart: {
         paths: [
-            "Weline_Cart::js/cart.js?v=20260910-payment-lifecycle-listen3",
-            "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260914-affiliate-panel-show"
+            "Weline_Cart::js/cart.js?v=20260923-remove-from-cart-pixel1",
+            "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2",
+            "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260922-purchase-panel-binquery"
         ],
         globalVar: "WelineCartPurchaseActions",
         load: "defer",
-        description: "万能购物车：优惠券事件 / 游客续期 / 加购交互"
+        description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记"
     }
 });

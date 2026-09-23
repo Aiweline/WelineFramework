@@ -10,8 +10,7 @@ $title = (string)($meta['title'] ?? __('迷你购物车'));
 <html lang="{{htmlLang}}" dir="{{htmlDir}}">
 <head>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
-    <link rel="stylesheet"
-          href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)?v=20260907-price-header-layout">
+    <?php // mini-cart-drawer.css：由 chrome bake→head，预览布局勿再 @static ?>
 </head>
 <body class="mini-cart-layout-preview">
 <main class="mini-cart-layout" data-layout="mini-cart" id="mini-cart-layout-main"

@@ -237,17 +237,46 @@ final class CartScopeResolverTest extends TestCase
         }
     }
 
-    public function testExplicitScopeRemainsAvailableWithoutRequestContext(): void
+    public function testExplicitWebsiteOnlyParamsRefineToDefaultChannelWithoutRequestContext(): void
     {
         $scope = (new CartScopeResolver())->fromParams([
             'website_id' => 7,
             'website_code' => 'worker-site',
         ]);
 
+        // Cart rows are Channel-keyed; Website-only params must not open a
+        // parallel empty website|… namespace (QueryBin website projection).
         self::assertSame(
-            ScopeIdentity::website(7, 'worker-site')->canonicalKey(),
+            ScopeIdentity::channel(
+                7,
+                'worker-site',
+                'default',
+                'default',
+                ScopeIdentity::MODE_NORMAL,
+            )->canonicalKey(),
             $scope->canonicalKey(),
         );
+    }
+
+    public function testWebsiteRequestContextRefinesToDefaultChannelWhenInstallerUnavailable(): void
+    {
+        Context::enter(new Context());
+        try {
+            RequestContext::installScopeIdentity(ScopeIdentity::website(0, 'default'));
+
+            self::assertSame(
+                ScopeIdentity::channel(
+                    0,
+                    'default',
+                    'default',
+                    'default',
+                    ScopeIdentity::MODE_NORMAL,
+                )->canonicalKey(),
+                (new CartScopeResolver())->fromParams([])->canonicalKey(),
+            );
+        } finally {
+            Context::leave();
+        }
     }
 }
 

@@ -23,6 +23,11 @@ final class CartStorefrontQueryBinContractTest extends TestCase
         self::assertStringContainsString('data-cart-state="empty"', $template);
         self::assertStringContainsString('data-cart-state="ready"', $template);
         self::assertStringContainsString('data-cart-state="error"', $template);
+        self::assertStringContainsString('data-cart-view="loading"', $template);
+        self::assertStringContainsString('data-cart-page-state', $template);
+        self::assertStringContainsString('function showState(state)', $template);
+        self::assertStringContainsString("root.setAttribute('data-cart-view', view)", $template);
+        self::assertStringContainsString("node.setAttribute('inert', '')", $template);
     }
 
     public function testCartPageAdoptsTheSharedGuestSessionBeforeIssuingANewToken(): void
