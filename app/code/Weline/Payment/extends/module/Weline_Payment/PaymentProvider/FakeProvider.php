@@ -79,6 +79,10 @@ final class FakeProvider implements ProviderInterface
                 'buy_x_get_y',
                 'gift_product',
             ],
+            // 壳侧对照透传（≠ supported_discount_actions）；create 回显 echo_breakdown
+            'amount_breakdown' => true,
+            'discount_passthrough' => true,
+            'passthrough_formats' => ['shell_echo'],
         ];
     }
 
@@ -147,14 +151,9 @@ final class FakeProvider implements ProviderInterface
 
     public function checkAvailability(AvailabilityRequest $request): AvailabilityResult
     {
-        if ($request->getAmountMinor() <= 0) {
-            return AvailabilityResult::fromArray([
-                'available' => false,
-                'disabled_reason_code' => 'amount_required',
-                'disabled_reason_text' => 'Payment amount must be greater than zero.',
-            ]);
-        }
-
+        // Local demo hydrate: allow amount_minor=0 so empty-cart / bare
+        // getCheckoutPaymentMethods still lists fake_card (enabled=true).
+        // createPayment / checkout submit still require a positive payable amount.
         if (!$this->contains($this->getConfiguredList($request, 'supported_currencies', $this->getCapabilities()['supported_currencies']), $request->getCurrencyCode())) {
             return AvailabilityResult::fromArray([
                 'available' => false,
@@ -187,15 +186,36 @@ final class FakeProvider implements ProviderInterface
             'cancelled' => 'FAKE-CANCEL-',
             default => 'FAKE-',
         };
+        $context = $request->getContext();
+        $echoBreakdown = null;
+        if (\is_array($context['amount_breakdown'] ?? null)) {
+            $echoBreakdown = $context['amount_breakdown'];
+        } elseif (\is_array($context['discount_lines'] ?? null) || \is_array($context['totals'] ?? null)) {
+            try {
+                $builder = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Payment\Service\AmountBreakdownBuilder::class
+                );
+                if ($builder instanceof \Weline\Payment\Service\AmountBreakdownBuilder) {
+                    $echoBreakdown = $builder->fromOrderData($context + [
+                        'amount_minor' => $request->getAmountMinor(),
+                        'currency' => $request->getCurrencyCode(),
+                    ]);
+                }
+            } catch (\Throwable) {
+                $echoBreakdown = null;
+            }
+        }
         $baseResult = [
             'intent_code' => $request->getIntentCode(),
             'attempt_code' => $request->getAttemptCode(),
             'provider_reference' => $request->getProviderReference() ?: $referencePrefix . $request->getIntentCode(),
-            'payload' => [
+            'payload' => array_filter([
                 'amount_minor' => $request->getAmountMinor(),
                 'currency_code' => $request->getCurrencyCode(),
                 'fake_result' => $outcome,
-            ],
+                'echo_breakdown' => $echoBreakdown,
+                'discount_lines' => \is_array($context['discount_lines'] ?? null) ? $context['discount_lines'] : null,
+            ], static fn (mixed $v): bool => $v !== null),
         ];
 
         if ($outcome === 'failed') {

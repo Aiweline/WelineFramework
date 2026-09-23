@@ -54,4 +54,11 @@
                   shared="false"
                   sort="200"/>
     </event>
+    <event name="Weline_Payment::checkout::available_methods::enrich">
+        <observer name="Weline_Payment::checkout_available_methods_incentive_enrich"
+                  instance="Weline\Payment\Observer\CheckoutAvailableMethodsIncentiveEnrichObserver"
+                  disabled="false"
+                  shared="false"
+                  sort="100"/>
+    </event>
 </config>

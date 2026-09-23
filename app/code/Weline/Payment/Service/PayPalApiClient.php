@@ -84,15 +84,28 @@ final class PayPalApiClient
             'user_action' => $userAction,
             'shipping_preference' => $shippingPreference !== '' ? $shippingPreference : null,
         ]);
+        $amount = [
+            'currency_code' => strtoupper($currencyCode),
+            'value' => $this->formatAmount($currencyCode, $amountMinor),
+        ];
+        $breakdown = $options['amount_breakdown'] ?? null;
+        if (\is_array($breakdown) && $breakdown !== []) {
+            $formatted = $this->formatAmountBreakdown($currencyCode, $breakdown);
+            if ($formatted !== []) {
+                $amount['breakdown'] = $formatted;
+            }
+        }
+        $purchaseUnit = [
+            'reference_id' => $referenceId,
+            'amount' => $amount,
+        ];
+        $description = trim((string) ($options['description'] ?? ($breakdown['description'] ?? '')));
+        if ($description !== '') {
+            $purchaseUnit['description'] = mb_substr($description, 0, 127);
+        }
         $payload = [
             'intent' => 'CAPTURE',
-            'purchase_units' => [[
-                'reference_id' => $referenceId,
-                'amount' => [
-                    'currency_code' => strtoupper($currencyCode),
-                    'value' => $this->formatAmount($currencyCode, $amountMinor),
-                ],
-            ]],
+            'purchase_units' => [$purchaseUnit],
             'application_context' => $applicationContext,
         ];
 
@@ -138,6 +151,7 @@ final class PayPalApiClient
      * Patch purchase unit amount before capture (express review total changes).
      *
      * @param array<string, mixed> $config
+     * @param array<string, mixed>|null $amountBreakdown 中性 minor DTO；有则与 value 一并 patch
      * @return array<string, mixed>
      */
     public function patchOrder(
@@ -145,16 +159,24 @@ final class PayPalApiClient
         string $orderId,
         int $amountMinor,
         string $currencyCode,
+        ?array $amountBreakdown = null,
     ): array {
         $token = $this->fetchAccessToken($config);
         $currency = strtoupper(trim($currencyCode));
+        $amountValue = [
+            'currency_code' => $currency,
+            'value' => $this->formatAmount($currency, $amountMinor),
+        ];
+        if (\is_array($amountBreakdown) && $amountBreakdown !== []) {
+            $formatted = $this->formatAmountBreakdown($currency, $amountBreakdown);
+            if ($formatted !== []) {
+                $amountValue['breakdown'] = $formatted;
+            }
+        }
         $body = [[
             'op' => 'replace',
             'path' => "/purchase_units/@reference_id=='default'/amount",
-            'value' => [
-                'currency_code' => $currency,
-                'value' => $this->formatAmount($currency, $amountMinor),
-            ],
+            'value' => $amountValue,
         ]];
         // PayPal default reference_id may be custom — also try first unit via get+patch with known id.
         $existing = $this->getOrder($config, $orderId);
@@ -703,6 +725,41 @@ final class PayPalApiClient
         }
 
         return number_format(max(0, $amountMinor) / 100, 2, '.', '');
+    }
+
+    /**
+     * @param array<string, mixed> $breakdown amount_minor DTO from AmountBreakdownBuilder
+     * @return array<string, array{currency_code:string,value:string}>
+     */
+    private function formatAmountBreakdown(string $currencyCode, array $breakdown): array
+    {
+        $currency = strtoupper(trim($currencyCode));
+        $map = [
+            'item_total' => 'item_total_minor',
+            'shipping' => 'shipping_minor',
+            'handling' => 'handling_minor',
+            'tax_total' => 'tax_total_minor',
+            'insurance' => 'insurance_minor',
+            'shipping_discount' => 'shipping_discount_minor',
+            'discount' => 'discount_minor',
+        ];
+        $out = [];
+        foreach ($map as $paypalKey => $minorKey) {
+            $minor = max(0, (int) ($breakdown[$minorKey] ?? 0));
+            // PayPal：0 值字段可省略（shipping_discount/discount/handling/insurance）；item_total 有应付时建议保留
+            if ($minor <= 0 && !in_array($paypalKey, ['item_total', 'shipping', 'tax_total'], true)) {
+                continue;
+            }
+            if ($minor <= 0 && in_array($paypalKey, ['shipping', 'tax_total'], true)) {
+                continue;
+            }
+            $out[$paypalKey] = [
+                'currency_code' => $currency,
+                'value' => $this->formatAmount($currency, $minor),
+            ];
+        }
+
+        return $out;
     }
 
     /**

@@ -280,8 +280,53 @@ final class PaymentBrowserReturnDispatcher
         }
 
         $this->notifyOrderPaidFromTransaction($transaction);
+        $this->markCheckoutRecoveryPaid($transaction);
 
         return $this->landingOrchestrator->decide($transaction);
+    }
+
+    /**
+     * Symmetry with PaymentBrowserCancelDispatcher::markCheckoutRecoveryFailed —
+     * capture success must lock checkout recovery to paid / not recoverable.
+     */
+    private function markCheckoutRecoveryPaid(PaymentTransaction $transaction): void
+    {
+        $requestData = $transaction->getRequestData();
+        if (!is_array($requestData)) {
+            $requestData = [];
+        }
+        $quoteToken = trim((string)($requestData['checkout_token'] ?? $requestData['quote_token'] ?? ''));
+        if ($quoteToken === '') {
+            $landingParams = is_array($requestData['browser_landing_params'] ?? null)
+                ? $requestData['browser_landing_params']
+                : [];
+            $quoteToken = trim((string)($landingParams['checkout_token'] ?? $landingParams['quote_token'] ?? ''));
+        }
+        if ($quoteToken === '') {
+            return;
+        }
+
+        try {
+            $recovery = $this->objectManager->getInstance(
+                \Weline\Checkout\Service\CheckoutPaymentRecoveryStateService::class
+            );
+            if (!is_object($recovery) || !method_exists($recovery, 'markPaid')) {
+                return;
+            }
+            $methodCode = trim((string)$transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
+            $recovery->markPaid($quoteToken, null, [
+                'payment_method' => $methodCode,
+                'method_code' => $methodCode,
+                'transactions' => [[
+                    'order_uuid' => trim((string)$transaction->getData(PaymentTransaction::schema_fields_ORDER_ID)),
+                    'transaction_id' => (int)$transaction->getId(),
+                    'transaction_no' => trim((string)$transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO)),
+                    'method_code' => $methodCode,
+                    'status' => PaymentTransaction::STATUS_SUCCESS,
+                ]],
+            ]);
+        } catch (\Throwable) {
+        }
     }
 
     private function ensureCaptureReader(PaymentTransaction $transaction): void

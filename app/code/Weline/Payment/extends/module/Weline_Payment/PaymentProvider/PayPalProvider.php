@@ -33,6 +33,7 @@ use Weline\Payment\Service\PaymentConfigValidationService;
 use Weline\Payment\Service\PaymentRedirectUriCatalog;
 use Weline\Payment\Service\PayPalOAuthService;
 use Weline\Payment\Service\PayPalWebhookTransitionMapper;
+use Weline\Payment\Service\AmountBreakdownBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderShipment;
@@ -119,6 +120,10 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'SE', 'NO', 'DK', 'FI', 'CH', 'PL', 'MX', 'JP', 'HK', 'SG', 'CN', 'XZ',
             ],
             'supported_discount_actions' => ['discount_fixed_amount', 'discount_percentage', 'free_shipping'],
+            // 优惠明细透传（≠ supported_discount_actions）
+            'amount_breakdown' => true,
+            'discount_passthrough' => true,
+            'passthrough_formats' => ['paypal_breakdown'],
         ];
     }
 
@@ -310,6 +315,13 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 (array_key_exists('requires_shipping', $ctx) && $ctx['requires_shipping'] === false)
                 || strtoupper(trim((string) ($ctx['shipping_preference'] ?? ''))) === 'NO_SHIPPING'
             );
+            $breakdown = $this->resolveAmountBreakdownForPayPal(
+                $ctx,
+                $request->getCurrencyCode(),
+                $request->getAmountMinor(),
+                $paypalCurrency,
+                $paypalAmountMinor,
+            );
             $order = $this->getApiClient()->createOrder(
                 $config,
                 $paypalCurrency,
@@ -317,13 +329,15 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 $referenceId,
                 $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_RETURN_URL, 'return_url', $config),
                 $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_CANCEL_URL, 'cancel_url', $config),
-                [
+                array_filter([
                     'express_checkout' => $express,
                     'shipping_preference' => $express
                         ? ($noShipping ? 'NO_SHIPPING' : 'GET_FROM_FILE')
                         : '',
                     'user_action' => $express ? 'CONTINUE' : 'PAY_NOW',
-                ],
+                    'amount_breakdown' => $breakdown,
+                    'description' => \is_array($breakdown) ? (string) ($breakdown['description'] ?? '') : '',
+                ], static fn (mixed $v): bool => $v !== null && $v !== ''),
             );
 
             return PaymentResult::fromArray([
@@ -340,6 +354,7 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                     'presentment_currency' => $request->getCurrencyCode(),
                     'paypal_currency' => $paypalCurrency,
                     'express_checkout' => $express,
+                    'amount_breakdown' => $breakdown,
                 ],
             ]);
         } catch (Throwable $throwable) {
@@ -368,6 +383,64 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
         }
 
         return ['USD', max(1, (int) round($amountMinor / 7.2))];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>|null
+     */
+    private function resolveAmountBreakdownForPayPal(
+        array $context,
+        string $presentmentCurrency,
+        int $presentmentAmountMinor,
+        string $paypalCurrency,
+        int $paypalAmountMinor,
+    ): ?array {
+        try {
+            /** @var AmountBreakdownBuilder $builder */
+            $builder = ObjectManager::getInstance(AmountBreakdownBuilder::class);
+        } catch (Throwable) {
+            return null;
+        }
+
+        $snapshot = \is_array($context['amount_snapshot'] ?? null) ? $context['amount_snapshot'] : [];
+        $lines = \is_array($context['discount_lines'] ?? null) ? $context['discount_lines'] : [];
+        if ($lines === [] && \is_array($snapshot['discount_lines'] ?? null)) {
+            $lines = $snapshot['discount_lines'];
+        }
+
+        $hasDiscount = $lines !== []
+            || (int) ($snapshot['discount_amount_minor'] ?? 0) > 0
+            || (int) ($context['totals']['discount_amount_minor'] ?? 0) > 0
+            || \is_array($context['amount_breakdown'] ?? null);
+
+        // 无优惠分项时可不带 breakdown（仅合计 value）；有优惠必须守恒 breakdown
+        if (!$hasDiscount && !\is_array($context['amount_breakdown'] ?? null)) {
+            return null;
+        }
+
+        if (\is_array($context['amount_breakdown'] ?? null) && $context['amount_breakdown'] !== []) {
+            $breakdown = $context['amount_breakdown'];
+        } elseif ($snapshot !== []) {
+            $breakdown = $builder->fromSnapshot($snapshot, $lines !== [] ? $lines : null, $presentmentCurrency);
+        } else {
+            $breakdown = $builder->fromOrderData($context + [
+                'amount_minor' => $presentmentAmountMinor,
+                'currency' => $presentmentCurrency,
+                'discount_lines' => $lines,
+            ]);
+        }
+
+        if ($paypalCurrency !== strtoupper(trim($presentmentCurrency))
+            || $paypalAmountMinor !== $presentmentAmountMinor
+        ) {
+            $breakdown = $builder->scaleToValue($breakdown, $paypalAmountMinor, $paypalCurrency);
+        } else {
+            $breakdown['currency_code'] = $paypalCurrency;
+            $breakdown['value_minor'] = $paypalAmountMinor;
+        }
+
+        return $breakdown;
     }
 
     public function resumePayment(ResumeRequest $request): PaymentResult
@@ -420,11 +493,26 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
 
             if ($express && $confirmCapture && !empty($context['patch_amount_minor'])) {
                 try {
+                    $patchCurrency = strtoupper(trim((string) ($context['patch_currency'] ?? $request->getCurrencyCode())));
+                    $patchMinor = max(0, (int) $context['patch_amount_minor']);
+                    [$paypalCurrency, $paypalAmountMinor] = $this->resolvePayPalOrderMoney(
+                        $patchCurrency,
+                        $patchMinor,
+                        $config,
+                    );
+                    $breakdown = $this->resolveAmountBreakdownForPayPal(
+                        $context,
+                        $patchCurrency,
+                        $patchMinor,
+                        $paypalCurrency,
+                        $paypalAmountMinor,
+                    );
                     $this->getApiClient()->patchOrder(
                         $config,
                         $orderId,
-                        max(0, (int) $context['patch_amount_minor']),
-                        strtoupper(trim((string) ($context['patch_currency'] ?? $request->getCurrencyCode()))),
+                        $paypalAmountMinor,
+                        $paypalCurrency,
+                        $breakdown,
                     );
                 } catch (Throwable $patchError) {
                     return PaymentResult::fromArray([

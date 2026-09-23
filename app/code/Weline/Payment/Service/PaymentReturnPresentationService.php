@@ -245,7 +245,8 @@ final class PaymentReturnPresentationService
     private function humanizeShippingMethodLabel(string $methodCode, string $storedLabel = ''): string
     {
         if ($storedLabel !== '') {
-            return $storedLabel;
+            // Stored seed/admin copy is Chinese source (e.g. 美洲); translate for active locale.
+            return (string) __($storedLabel);
         }
 
         $methodCode = trim($methodCode);
@@ -257,6 +258,6 @@ final class PaymentReturnPresentationService
             return (string) __('标准配送');
         }
 
-        return $methodCode;
+        return (string) __($methodCode);
     }
 }
