@@ -632,6 +632,7 @@ class PixelEventService
         $prepared = $this->prepare($payload);
         $eventName = (string)($prepared['data']['event'] ?? '');
         $websiteId = (int)($prepared['data']['website_id'] ?? 0);
+        $prepared = $this->normalizeSearchParamsFromUrl($eventName, $prepared);
 
         // 闭环事件门禁：进度只在客户端；无链凑齐标记则不入库（禁止直接 track 冒充）
         if ($this->shouldSkipUnsealedChainComplete($websiteId, $eventName, $prepared['post'])) {
@@ -703,8 +704,9 @@ class PixelEventService
     }
 
     /**
-     * R2a 字典 required_params 空壳门闩（服务端防御）。
-     * view_cart / begin_checkout：禁 items=[]；search：禁无 search_term；
+     * R2a/R2d 字典 required_params 空壳门闩（服务端防御）。
+     * view_cart / begin_checkout：禁 items=[] / value<=0；search：禁无 search_term；
+     * checkout_success 族：禁 items=[]；site_error：禁无 top-level error_message；
      * begin_checkout + payment-recovery URL：禁发。
      *
      * @param array<string, mixed> $post
@@ -750,14 +752,80 @@ class PixelEventService
             if ($valueRaw === null || $valueRaw === '') {
                 return 'missing_required_params_value';
             }
-            if (!\is_numeric($valueRaw)) {
+            if (!\is_numeric($valueRaw) || (float)$valueRaw <= 0) {
                 return 'missing_required_params_value';
             }
 
             return null;
         }
 
-        if ($event === 'search') {
+        if ($event === 'checkout_success'
+            || $event === 'payment_success'
+            || $event === 'purchase'
+            || (\strlen($event) > 17 && \str_ends_with($event, '_checkout_success'))
+        ) {
+            if ($items === []) {
+                return 'missing_required_params_items';
+            }
+        }
+
+        if ($event === 'select_item' || $event === 'view_item_list') {
+            if ($items === []) {
+                return 'missing_required_params_items';
+            }
+        }
+
+        if ($event === 'hero_cta_click' || $event === 'cta_click'
+            || (\strlen($event) > 10 && \str_ends_with($event, '_cta_click'))
+        ) {
+            $linkUrl = \trim((string)($post['link_url'] ?? $post['href'] ?? ''));
+            $linkText = \trim((string)($post['link_text'] ?? ''));
+            if ($linkUrl === ''
+                && isset($post['additionalInfo']['meta']['link_url'])
+            ) {
+                $linkUrl = \trim((string)$post['additionalInfo']['meta']['link_url']);
+            }
+            if ($linkText === ''
+                && isset($post['additionalInfo']['meta']['link_text'])
+            ) {
+                $linkText = \trim((string)$post['additionalInfo']['meta']['link_text']);
+            }
+            if ($linkUrl === '') {
+                return 'missing_required_params_link_url';
+            }
+            if ($linkText === '') {
+                return 'missing_required_params_link_text';
+            }
+        }
+
+        if ($event === 'search' || $event === 'search_submit' || $event === 'search_result_view') {
+            // Prefer URL ?q= over chrome country labels (China/中国) when present.
+            $urlTerm = '';
+            if ($url !== '') {
+                $parts = \parse_url($url);
+                if (\is_array($parts) && isset($parts['query'])) {
+                    \parse_str((string)$parts['query'], $qs);
+                    if (\is_array($qs)) {
+                        foreach (['q', 'search', 'keyword', 'query'] as $qk) {
+                            if (isset($qs[$qk]) && \trim((string)$qs[$qk]) !== '') {
+                                $urlTerm = \trim((string)$qs[$qk]);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if ($urlTerm === ''
+                && isset($post['additionalInfo']['meta']['url_query'])
+            ) {
+                $urlTerm = \trim((string)$post['additionalInfo']['meta']['url_query']);
+            }
+            if ($urlTerm === ''
+                && isset($post['url_query'])
+            ) {
+                $urlTerm = \trim((string)$post['url_query']);
+            }
+
             $term = \trim((string)($post['search_term'] ?? $post['query'] ?? ''));
             if ($term === ''
                 && isset($post['additionalInfo']['meta']['search_term'])
@@ -769,8 +837,61 @@ class PixelEventService
             ) {
                 $term = \trim((string)$post['additionalInfo']['meta']['query']);
             }
+            if ($urlTerm !== '') {
+                $term = $urlTerm;
+            }
             if ($term === '') {
                 return 'missing_required_params_search_term';
+            }
+            // Country chrome labels without matching URL q → reject (do not store).
+            if ($urlTerm === ''
+                && \preg_match('/^(中国|中國|China|USA|United States|日本|Japan|韩国|韓國|South Korea|法国|France|德国|Germany|英国|United Kingdom|UK)$/iu', $term)
+            ) {
+                return 'missing_required_params_search_term_chrome_label';
+            }
+        }
+
+        if ($event === 'site_error') {
+            $errorMessage = \trim((string)($post['error_message'] ?? ''));
+            if ($errorMessage === ''
+                && isset($post['additionalInfo']['incident']['error_message'])
+            ) {
+                $errorMessage = \trim((string)$post['additionalInfo']['incident']['error_message']);
+            }
+            if ($errorMessage === ''
+                && isset($post['additionalInfo']['incident']['message'])
+            ) {
+                $errorMessage = \trim((string)$post['additionalInfo']['incident']['message']);
+            }
+            // name 仅作展示别名，不得替代字典 required error_message。
+            if ($errorMessage === '') {
+                return 'missing_required_params_error_message';
+            }
+            $lower = \strtolower($errorMessage);
+            $code = \strtolower(\trim((string)(
+                $post['additionalInfo']['incident']['error_code']
+                ?? $post['error_code']
+                ?? ''
+            )));
+            $capture = \strtolower(\trim((string)(
+                $post['additionalInfo']['incident']['capture_source']
+                ?? ''
+            )));
+            // Hemostasis: auth/capability/timeout/protocol/resource noise must not flood w_pixel.
+            if (
+                \preg_match('/^not signed in\.?$/i', $errorMessage)
+                || \str_contains($errorMessage, '未登录')
+                || \str_contains($lower, 'capability_denied')
+                || \str_contains($lower, 'frontend worker')
+                || $code === 'capability_denied'
+                || $code === 'worker_timeout'
+                || $code === 'protocol_error'
+                || \str_contains($lower, 'worker request timed out')
+                || \str_contains($lower, 'invalid weline binary magic')
+                || $capture === 'resource'
+                || \str_starts_with($lower, 'resource_load_failed:')
+            ) {
+                return 'site_error_benign_noise_skipped';
             }
         }
 
@@ -851,6 +972,64 @@ class PixelEventService
         }
 
         return $response;
+    }
+
+    /**
+     * Force search_term/query from URL ?q= so country chrome (China/中国) cannot persist.
+     *
+     * @param array{post: array<string, mixed>, data: array<string, mixed>, event_id: string, received_at: int} $prepared
+     * @return array{post: array<string, mixed>, data: array<string, mixed>, event_id: string, received_at: int}
+     */
+    private function normalizeSearchParamsFromUrl(string $eventName, array $prepared): array
+    {
+        $event = \strtolower(\trim($eventName));
+        if ($event !== 'search' && $event !== 'search_submit' && $event !== 'search_result_view'
+            && !\str_starts_with($event, 'search_')
+        ) {
+            return $prepared;
+        }
+
+        $post = $prepared['post'];
+        $url = (string)($post['url'] ?? $prepared['data']['url'] ?? '');
+        $urlTerm = '';
+        if ($url !== '') {
+            $parts = \parse_url($url);
+            if (\is_array($parts) && isset($parts['query'])) {
+                \parse_str((string)$parts['query'], $qs);
+                if (\is_array($qs)) {
+                    foreach (['q', 'search', 'keyword', 'query'] as $qk) {
+                        if (isset($qs[$qk]) && \trim((string)$qs[$qk]) !== '') {
+                            $urlTerm = \trim((string)$qs[$qk]);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if ($urlTerm === ''
+            && isset($post['additionalInfo']['meta']['url_query'])
+        ) {
+            $urlTerm = \trim((string)$post['additionalInfo']['meta']['url_query']);
+        }
+        if ($urlTerm === '') {
+            return $prepared;
+        }
+
+        $post['search_term'] = $urlTerm;
+        $post['query'] = $urlTerm;
+        $post['url_query'] = $urlTerm;
+        if (!isset($post['additionalInfo']) || !\is_array($post['additionalInfo'])) {
+            $post['additionalInfo'] = [];
+        }
+        if (!isset($post['additionalInfo']['meta']) || !\is_array($post['additionalInfo']['meta'])) {
+            $post['additionalInfo']['meta'] = [];
+        }
+        $post['additionalInfo']['meta']['search_term'] = $urlTerm;
+        $post['additionalInfo']['meta']['query'] = $urlTerm;
+        $post['additionalInfo']['meta']['url_query'] = $urlTerm;
+        $prepared['post'] = $post;
+
+        return $prepared;
     }
 
     /**

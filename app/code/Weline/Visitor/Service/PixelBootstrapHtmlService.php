@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class PixelBootstrapHtmlService
 {
-    private const PIXEL_SCRIPT_VERSION = '20260922-param-shell1';
+    private const PIXEL_SCRIPT_VERSION = '20260923-list-select1';
 
     public function __construct(
         private readonly VisitorTrackingConfig $trackingConfig

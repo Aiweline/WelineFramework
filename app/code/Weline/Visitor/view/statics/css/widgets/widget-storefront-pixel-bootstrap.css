@@ -1,0 +1,2 @@
+.header-pixel-bootstrap-slot:empty { display: none !important; }
+.header-pixel-bootstrap-slot { display: contents; }

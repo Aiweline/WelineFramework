@@ -65,11 +65,19 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('PAGE_INSTANCE_ID', $monitor);
         self::assertStringContainsString('getPageInstanceId', $monitor);
         self::assertStringContainsString('displayPagePath', $monitor);
-        self::assertStringContainsString("STYLE_VERSION = '20260918-clear-stream'", $monitor);
+        self::assertStringContainsString("STYLE_VERSION = '20260922-ga4-debug1'", $monitor);
         self::assertStringContainsString('data-wesm-action="clear"', $monitor);
         self::assertStringContainsString('data-testid="wesm-clear"', $monitor);
         self::assertStringContainsString('clearSessionKeepOpen', $monitor);
         self::assertStringContainsString('点「清空」清会话记录并继续监听', $monitor);
+        self::assertStringContainsString('ga4DebugBannerHtml', $monitor);
+        self::assertStringContainsString('bridgeLineHtml', $monitor);
+        self::assertStringContainsString('wesm-ga4-debug-banner', $monitor);
+        self::assertStringContainsString('wesm-bridge-debug', $monitor);
+        self::assertStringContainsString('GA4 Debug 模式已开启', $monitor);
+        self::assertStringContainsString('不是 DebugView 送达证明', $monitor);
+        self::assertStringContainsString('readGa4DebugRuntime', $monitor);
+        self::assertStringContainsString('bridge_debug', $monitor);
         self::assertStringContainsString('CHAIN_KEY', $monitor);
         self::assertStringContainsString('chainRows', $monitor);
         self::assertStringContainsString('hitAggregate', $monitor);
@@ -134,7 +142,7 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('WelineEventSandbox', $panel);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bootstrap);
-        self::assertStringContainsString('20260918-clear-stream', $bootstrap);
+        self::assertStringContainsString('20260923-r2d-param2', $bootstrap);
         self::assertStringContainsString('weline_event_sandbox_monitor_v1', $bootstrap);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bodyEnd);

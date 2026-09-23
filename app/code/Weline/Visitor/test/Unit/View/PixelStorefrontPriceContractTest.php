@@ -31,7 +31,7 @@ final class PixelStorefrontPriceContractTest extends TestCase
             self::assertStringContainsString('price = __readStorefrontPriceMajor(element)', $src);
         }
 
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260922-param-shell1'", $bootstrap);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260923-r2d-param2'", $bootstrap);
 
         self::assertStringContainsString('data-offer-price-minor', $pdp);
         self::assertStringContainsString('data-price=', $pdp);

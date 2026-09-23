@@ -1,5 +1,6 @@
 <?php
 /**
+ * @widget.source {Weline_Visitor::css/widgets/widget-pixel-engagement.css}
  * Dashboard Widget: 像素参与度（会话/跳出/停留）
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
@@ -49,14 +50,3 @@ $items = [
         <a class="pixel-widget-detail" href="<?= $h($detailUrl) ?>"><?= __('查看细节') ?></a>
     </footer>
 </section>
-<style>
-.dashboard-widget-pixel-engagement header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.pixel-engagement-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-.pixel-engagement-grid div { border-radius:6px; background:var(--w-dashboard-surface-soft,#f8fafc); padding:12px 8px; text-align:center; }
-.pixel-engagement-grid strong { display:block; color:#0f766e; font-size:20px; line-height:1.1; }
-.pixel-engagement-grid span { display:block; margin-top:6px; color:var(--w-dashboard-muted,#6b7280); font-size:12px; }
-.pixel-widget-detail { color:var(--bs-primary,#2563eb); text-decoration:none; font-size:12px; font-weight:600; }
-.pixel-widget-detail:hover { text-decoration:underline; }
-.pixel-widget-foot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; color:var(--w-dashboard-muted,#6b7280); font-size:12px; }
-.pixel-widget-foot .pixel-widget-detail { margin-left:auto; }
-</style>

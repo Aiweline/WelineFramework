@@ -16,7 +16,7 @@ use Weline\Framework\Runtime\DeveloperAccessPolicy;
  */
 class VisitorPanelBootstrapHtmlService
 {
-    private const PANEL_SCRIPT_VERSION = '20260918-clear-stream';
+    private const PANEL_SCRIPT_VERSION = '20260922-ga4-debug1';
 
     public function shouldInject(): bool
     {

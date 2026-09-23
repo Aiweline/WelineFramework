@@ -18,12 +18,17 @@ final class PixelRequiredParamGateContractTest extends TestCase
         $pixel = (string) \file_get_contents($root . '/view/statics/js/pixel.js');
 
         self::assertStringContainsString('function __evaluateRequiredParamGate', $pixel);
-        self::assertStringContainsString("return 'payment_recovery'", $pixel);
+        self::assertStringContainsString("reason: 'payment_recovery'", $pixel);
         self::assertStringContainsString("return ['search_term']", $pixel);
         self::assertStringContainsString("return ['currency', 'value', 'items']", $pixel);
         self::assertStringContainsString('weline-cart-shell__line', $pixel);
         self::assertStringContainsString('[WelinePixel] drop incomplete', $pixel);
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.22-param-shell1'", $pixel);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.23-r2d-param2'", $pixel);
+        self::assertStringContainsString('__isChromeLocaleSearchInput', $pixel);
+        self::assertStringContainsString('__isStorefrontSearchResultPath', $pixel);
+        self::assertStringContainsString('__isBenignSiteIncident', $pixel);
+        self::assertStringContainsString("return ['error_message']", $pixel);
+        self::assertStringContainsString('valueNum <= 0', $pixel);
     }
 
     public function testPersistenceWritesPageViewAdditionalWhenUrlPresent(): void
@@ -50,5 +55,10 @@ final class PixelRequiredParamGateContractTest extends TestCase
         self::assertStringContainsString('missing_required_params_items', $src);
         self::assertStringContainsString('payment_recovery_begin_checkout_forbidden', $src);
         self::assertStringContainsString('missing_required_params_search_term', $src);
+        self::assertStringContainsString('missing_required_params_error_message', $src);
+        self::assertStringContainsString('checkout_success', $src);
+        self::assertStringContainsString('normalizeSearchParamsFromUrl', $src);
+        self::assertStringContainsString('missing_required_params_search_term_chrome_label', $src);
+        self::assertStringContainsString('site_error_benign_noise_skipped', $src);
     }
 }

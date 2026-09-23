@@ -21,7 +21,7 @@
         return;
     }
     var node = document.currentScript;
-    var src = '/Weline/Visitor/view/statics/js/event-sandbox-monitor.js?v=20260918-clear-stream';
+    var src = '/Weline/Visitor/view/statics/js/event-sandbox-monitor.js?v=20260922-ga4-debug1';
     if (node && node.src) {
         src = String(node.src).replace('lifecycle-event-assistant.js', 'event-sandbox-monitor.js');
     }
