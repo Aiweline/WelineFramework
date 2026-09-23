@@ -1,0 +1,112 @@
+.w-payment-express {
+    --express-text: var(--color-text-primary, #0f1111);
+    --express-text-secondary: var(--color-text-secondary, #565959);
+    --express-border: var(--color-border-default, #ddd);
+    --express-surface: var(--color-bg-primary, #fff);
+    --express-surface-muted: var(--color-bg-secondary, #f0f2f2);
+    --express-btn-min: 148px;
+    --express-btn-max: 200px;
+    --express-paypal-bg: #ffc439;
+    --express-paypal-bg-hover: #f2b824;
+    --express-paypal-text: #003087;
+    box-sizing: border-box;
+    display: grid;
+    gap: 14px;
+    margin: 0 0 4px;
+    padding: 16px 18px 18px;
+    border: 1px solid var(--express-border);
+    border-radius: 8px;
+    background: var(--express-surface);
+    color: var(--express-text);
+}
+.w-payment-express__header {
+    margin: 0;
+}
+.w-payment-express__title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.3;
+    font-weight: 700;
+    color: var(--express-text);
+}
+/* Shopify Express：多按钮等宽网格，单按钮不再通栏 */
+.w-payment-express__methods {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(var(--express-btn-min), var(--express-btn-max)));
+    justify-content: center;
+    gap: 10px 12px;
+}
+.w-payment-express__btn {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.w-payment-express__paypal {
+    border: 1px solid #f0b90b;
+    background: var(--express-paypal-bg);
+    color: var(--express-paypal-text);
+}
+.w-payment-express__paypal:hover:not(:disabled) {
+    background: var(--express-paypal-bg-hover);
+}
+.w-payment-express__btn:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+.w-payment-express__logo,
+.w-payment-express__logo-img {
+    display: block;
+    max-width: 96px;
+    max-height: 24px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+.w-payment-express__logo img {
+    display: block;
+    max-width: 96px;
+    max-height: 24px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+.w-payment-express__paypal-mark {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+    line-height: 1;
+}
+.w-payment-express__divider {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    color: var(--express-text-secondary);
+    font-size: 13px;
+}
+.w-payment-express__divider::before,
+.w-payment-express__divider::after {
+    content: "";
+    height: 1px;
+    background: var(--express-border);
+}
+.w-payment-express__divider span {
+    white-space: nowrap;
+}
+@media (max-width: 420px) {
+    .w-payment-express__methods {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

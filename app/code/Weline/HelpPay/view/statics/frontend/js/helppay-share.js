@@ -2465,26 +2465,36 @@
       var m = String(w.location.pathname || '').match(/\/q\/([^/?#]+)/);
       token = m ? decodeURIComponent(m[1]) : '';
     }
-    var method = String(btn.getAttribute('data-payment-method') || 'paypal').trim() || 'paypal';
+    var method = String(btn.getAttribute('data-payment-method') || 'fake_card').trim() || 'fake_card';
     if (!token) {
       setPayerPayMessage(root, t('cannotComplete', '无法完成操作'), true);
       return;
     }
     btn.disabled = true;
     try {
-      var result = await w.Weline.Api.resource('helpPay').startQuickPayment({
+      var payload = {
         token: token,
         payment_method: method,
         idempotency_key: 'quickpay_ui_' + token + '_' + Date.now(),
-      });
+      };
+      if (method === 'fake_card') {
+        payload.dynamic_form_values = { fake_result: 'paid' };
+        payload.fake_result = 'paid';
+      }
+      var result = await w.Weline.Api.resource('helpPay').startQuickPayment(payload);
       var data = (result && (result.data || result)) || {};
-      var redirect = String(data.redirect_url || data.approve_url || '').trim();
+      var redirect = String(data.redirect_url || data.approve_url || data.success_url || '').trim();
       var status = String(data.status || '').toLowerCase();
       if (redirect) {
         w.location.assign(redirect);
         return;
       }
       if (data.paid || status === 'paid' || status === 'success' || status === 'succeeded') {
+        var txn = String(data.transaction_no || '').trim();
+        if (txn) {
+          w.location.assign('/payment/success?transaction_no=' + encodeURIComponent(txn));
+          return;
+        }
         setPayerPayMessage(root, t('paySuccess', '付款已完成，感谢您的帮助。'), false);
         return;
       }

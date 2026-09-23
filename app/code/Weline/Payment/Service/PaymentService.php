@@ -13,6 +13,7 @@ use Weline\Payment\Api\Data\PaymentResult;
 use Weline\Payment\Api\Data\PayableSnapshot;
 use Weline\Payment\Api\Data\QueryRequest;
 use Weline\Payment\Api\Data\RefundResult;
+use Weline\Payment\Api\PaymentMethodIncentiveQuoteInterface;
 use Weline\Payment\Model\PaymentMethod;
 use Weline\Payment\Model\PaymentRefund;
 use Weline\Payment\Model\PaymentTransaction;
@@ -54,6 +55,28 @@ class PaymentService
             $runtimeConfig,
         );
         $runtimeCapabilities = $this->methodManager->getRuntimeCapabilities($paymentMethod, $scope);
+
+        // 支付方式激励：剔旧行 → 入 discount_lines → 下调应付（壳编排；渠道不读运营公式）
+        try {
+            /** @var PaymentMethodIncentiveQuoteInterface $incentiveQuote */
+            $incentiveQuote = $this->objectManager->getInstance(PaymentMethodIncentiveQuoteInterface::class);
+            $applied = $incentiveQuote->applyToOrderData($methodCode, $orderData, $runtimeConfig);
+            $orderData = $applied['order_data'];
+            $amountMinor = (int) ($orderData['amount_minor'] ?? $amountMinor);
+            $amount = (float) ($orderData['amount'] ?? ($amountMinor / 100));
+            $currency = strtoupper((string) ($orderData['currency'] ?? $orderData['currency_code'] ?? $currency));
+        } catch (\Throwable) {
+            // SPI 不可用时不阻断支付；无激励行
+        }
+
+        // 中性 breakdown 注入 context，供声明 amount_breakdown 的 Provider 映射
+        try {
+            /** @var AmountBreakdownBuilder $breakdownBuilder */
+            $breakdownBuilder = $this->objectManager->getInstance(AmountBreakdownBuilder::class);
+            $orderData['amount_breakdown'] = $breakdownBuilder->fromOrderData($orderData);
+        } catch (\Throwable) {
+        }
+
         $actor = $this->buildActor($orderData);
         $payableSnapshot = $this->buildPayableSnapshot($orderData, $amountMinor, $currency);
         $context = array_replace($orderData, [

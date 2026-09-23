@@ -58,8 +58,67 @@ final class QuickPay extends FrontendController
         $this->assign('share_url', $path);
         $this->assign('share_title', (string) __('跨设备支付'));
         $this->assign('share_hint', (string) __('复制链接或二维码，在另一台设备上打开并完成支付。'));
+        $this->assign('preferred_payment_method', $this->resolvePreferredQuickPaymentMethod($row, $shipping));
 
         return (string) $this->fetch('Weline_HelpPay::templates/frontend/pay/quick.phtml');
+    }
+
+    /**
+     * Prefer local fake_card when available for bill currency/country so Buy-now /q/ can Paid→success.
+     *
+     * @param array<string,mixed> $row
+     * @param array<string,mixed>|null $shipping
+     */
+    private function resolvePreferredQuickPaymentMethod(array $row, ?array $shipping): string
+    {
+        $currency = strtoupper(trim((string) ($row['currency_code'] ?? 'USD'))) ?: 'USD';
+        $amountMinor = max(0, (int) ($row['amount_minor'] ?? 0));
+        $country = '';
+        if (is_array($shipping)) {
+            $country = strtoupper(trim((string) ($shipping['country_code'] ?? $shipping['country'] ?? '')));
+            if (strlen($country) > 2) {
+                $country = strtoupper(trim((string) ($shipping['country_code'] ?? '')));
+            }
+        }
+        try {
+            /** @var \Weline\Checkout\Service\CheckoutPaymentMethodsProvider $provider */
+            $provider = ObjectManager::getInstance(
+                \Weline\Checkout\Service\CheckoutPaymentMethodsProvider::class
+            );
+            $params = [
+                'currency' => $currency,
+                'amount' => $amountMinor / 100.0,
+                'amount_minor' => $amountMinor,
+                'payable_type' => 'helppay',
+            ];
+            if ($country !== '' && strlen($country) === 2) {
+                $params['country'] = $country;
+                $params['country_code'] = $country;
+            }
+            $codes = [];
+            foreach ($provider->listMethods($params) as $method) {
+                if (!is_array($method)) {
+                    continue;
+                }
+                $code = strtolower(trim((string) ($method['code'] ?? '')));
+                if ($code !== '') {
+                    $codes[] = $code;
+                }
+            }
+            if (in_array('fake_card', $codes, true)) {
+                return 'fake_card';
+            }
+            if (in_array('paypal', $codes, true)) {
+                return 'paypal';
+            }
+            if ($codes !== []) {
+                return $codes[0];
+            }
+        } catch (\Throwable) {
+            // Fall through to local default.
+        }
+
+        return 'fake_card';
     }
 
     private function isExpiredLink(PaymentLinkServiceInterface $links, string $token): bool

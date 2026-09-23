@@ -14,6 +14,9 @@ final class PaymentBrowserReturnLandingContractTest extends TestCase
         $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserReturnDispatcher.php');
         self::assertStringNotContainsString("'redirect_path' => 'payment/frontend/checkout/return'", $src);
         self::assertStringContainsString('PaymentBrowserReturnLandingOrchestrator', $src);
+        // PayPal return 成功须收口 checkout recovery，禁止已付仍 recoverable。
+        self::assertStringContainsString('markCheckoutRecoveryPaid', $src);
+        self::assertStringContainsString('markPaid', $src);
     }
 
     public function testLandingOrchestratorDefinesL1AndL2Paths(): void

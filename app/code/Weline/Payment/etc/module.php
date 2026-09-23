@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Payment',
-    "version" => '1.9.99',
+    "version" => '1.9.106',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
@@ -29,6 +29,7 @@ return [
         \Weline\Payment\Api\PaymentEffectOutboxProcessorInterface::class => \Weline\Payment\Service\PaymentEffectOutboxProcessor::class,
         \Weline\Payment\Api\Webhook\WebhookEndpointDirectoryInterface::class => \Weline\Payment\Service\WebhookEndpointDirectory::class,
         \Weline\Payment\Api\Discount\DiscountActionSupportInterface::class => \Weline\Payment\Service\DiscountActionSupportService::class,
+        \Weline\Payment\Api\PaymentMethodIncentiveQuoteInterface::class => \Weline\Payment\Service\PaymentMethodIncentiveQuoteService::class,
         \Weline\Payment\Api\PaymentLinkServiceInterface::class => \Weline\Payment\Service\PaymentLinkService::class,
         \Weline\Payment\Api\PaymentExpressFacadeInterface::class => \Weline\Payment\Service\ExpressCheckoutOrchestrator::class,
         \Weline\Order\Api\OrderPaymentMethodCatalogInterface::class => \Weline\Payment\Integration\Order\OrderPaymentMethodCatalog::class,

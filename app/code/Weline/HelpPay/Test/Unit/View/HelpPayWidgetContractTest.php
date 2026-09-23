@@ -131,6 +131,8 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('data-testid="quick-pay-self"', $tpl);
         self::assertStringContainsString('data-weline-load="helpPayShare"', $tpl);
         self::assertStringContainsString('w-helppay-panel', $tpl);
+        self::assertStringContainsString('preferred_payment_method', $tpl);
+        self::assertStringNotContainsString('data-payment-method="paypal"', $tpl);
         self::assertStringNotContainsString('@static', $tpl);
     }
 
@@ -204,6 +206,9 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('payerBillingRequired', $js);
         self::assertStringContainsString('startPayerPayment', $js);
         self::assertStringContainsString('startQuickPayment', $js);
+        self::assertStringContainsString("method === 'fake_card'", $js);
+        self::assertStringContainsString('/payment/success?transaction_no=', $js);
+        self::assertStringContainsString("'fake_card'", $js);
         self::assertStringContainsString('onQuickSelfPayClick', $js);
         self::assertStringContainsString('onPayerPayClick', $js);
         self::assertStringContainsString('data-helppay-billing-mount', $js);

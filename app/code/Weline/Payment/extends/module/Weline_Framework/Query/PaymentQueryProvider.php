@@ -18,6 +18,7 @@ use Weline\Payment\Service\PaymentMethodManager;
 use Weline\Payment\Service\PaymentObjectScopeService;
 use Weline\Payment\Service\PaymentScopeConfigService;
 use Weline\Payment\Service\PaymentTransactionAccessService;
+use Weline\Framework\Event\EventsManager;
 
 class PaymentQueryProvider implements QueryProviderInterface
 {
@@ -124,6 +125,20 @@ class PaymentQueryProvider implements QueryProviderInterface
         }
 
         usort($methods, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 100)) <=> ((int)($right['sort_order'] ?? 100)));
+
+        $enrich = [
+            'methods' => $methods,
+            'context' => $params,
+        ];
+        try {
+            /** @var EventsManager $events */
+            $events = $this->objectManager->getInstance(EventsManager::class);
+            $events->dispatch('Weline_Payment::checkout::available_methods::enrich', $enrich);
+            if (\is_array($enrich['methods'] ?? null)) {
+                $methods = $enrich['methods'];
+            }
+        } catch (\Throwable) {
+        }
 
         return $methods;
     }
